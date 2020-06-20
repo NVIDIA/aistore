@@ -6,6 +6,7 @@ package downloader
 
 import (
 	"context"
+	"errors"
 	"path"
 	"strings"
 	"sync"
@@ -23,6 +24,10 @@ var (
 	_ DlJob = &sliceDlJob{}
 	_ DlJob = &cloudBucketDlJob{}
 	_ DlJob = &rangeDlJob{}
+)
+
+var (
+	errAISBckReq = errors.New("regular download requires ais bucket")
 )
 
 type (
@@ -64,6 +69,14 @@ type (
 		baseDlJob
 		objs    []dlObj
 		current int
+	}
+
+	singleDlJob struct {
+		*sliceDlJob
+	}
+
+	multiDlJob struct {
+		*sliceDlJob
 	}
 
 	rangeDlJob struct {
@@ -121,12 +134,18 @@ func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
 }
 
-func newBaseDlJob(id string, bck *cluster.Bck, timeout, desc string, limits DlLimits) *baseDlJob {
-	t, _ := time.ParseDuration(timeout)
+func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits DlLimits) *baseDlJob {
+	// TODO: this might be inaccurate if we download 1 or 2 objects because then
+	//  other targets will have limits but will not use them.
+	if limits.BytesPerHour > 0 {
+		limits.BytesPerHour /= t.GetSowner().Get().CountTargets()
+	}
+
+	td, _ := time.ParseDuration(timeout)
 	return &baseDlJob{
 		id:          id,
 		bck:         bck,
-		timeout:     t,
+		timeout:     td,
 		description: desc,
 		t:           newThrottler(limits),
 	}
@@ -149,11 +168,54 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool) {
 	return objs, true
 }
 
-func newSliceDlJob(base *baseDlJob, objs []dlObj) *sliceDlJob {
+func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody) (*multiDlJob, error) {
+	if !bck.IsAIS() {
+		return nil, errAISBckReq
+	}
+	var (
+		objs cmn.SimpleKVs
+		err  error
+	)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
+	if objs, err = payload.ExtractPayload(); err != nil {
+		return nil, err
+	}
+	sliceDlJob, err := newSliceDlJob(t, bck, base, objs)
+	if err != nil {
+		return nil, err
+	}
+	return &multiDlJob{sliceDlJob}, nil
+}
+
+func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody) (*singleDlJob, error) {
+	if !bck.IsAIS() {
+		return nil, errAISBckReq
+	}
+
+	var (
+		objs cmn.SimpleKVs
+		err  error
+	)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
+	if objs, err = payload.ExtractPayload(); err != nil {
+		return nil, err
+	}
+	sliceDlJob, err := newSliceDlJob(t, bck, base, objs)
+	if err != nil {
+		return nil, err
+	}
+	return &singleDlJob{sliceDlJob}, nil
+}
+
+func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects cmn.SimpleKVs) (*sliceDlJob, error) {
+	objs, err := buildDlObjs(t, bck, objects)
+	if err != nil {
+		return nil, err
+	}
 	return &sliceDlJob{
 		baseDlJob: *base,
 		objs:      objs,
-	}
+	}, nil
 }
 
 func (j *cloudBucketDlJob) Len() int   { return -1 }
@@ -266,15 +328,18 @@ func (j *rangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newCloudBucketDlJob(ctx context.Context, t cluster.Target, base *baseDlJob, sync bool, prefix, suffix string) (*cloudBucketDlJob, error) {
+func newCloudBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlCloudBody) (*cloudBucketDlJob, error) {
+	if !bck.IsCloud() {
+		return nil, errors.New("bucket download requires a cloud bucket")
+	}
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
 	job := &cloudBucketDlJob{
 		baseDlJob:  *base,
 		pageMarker: "",
 		t:          t,
 		ctx:        ctx,
-		sync:       sync,
-		prefix:     prefix,
-		suffix:     suffix,
+		prefix:     payload.Prefix,
+		suffix:     payload.Suffix,
 	}
 
 	err := job.getNextObjs()
@@ -306,8 +371,24 @@ func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *clus
 	return cnt, nil
 }
 
-func newRangeDlJob(t cluster.Target, base *baseDlJob, pt cmn.ParsedTemplate, subdir string) (*rangeDlJob, error) {
-	cnt, err := countObjects(t, pt, subdir, base.bck)
+func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody) (*rangeDlJob, error) {
+	if !bck.IsAIS() {
+		return nil, errors.New("regular download requires ais bucket")
+	}
+
+	var (
+		pt  cmn.ParsedTemplate
+		err error
+	)
+	// NOTE: Size of objects to be downloaded by a target will be unknown.
+	//  So proxy won't be able to sum sizes from all targets when calculating total size.
+	//  This should be taken care of somehow, as total is easy to know from range template anyway.
+	if pt, err = cmn.ParseBashTemplate(payload.Template); err != nil {
+		return nil, err
+	}
+
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
+	cnt, err := countObjects(t, pt, payload.Subdir, base.bck)
 	if err != nil {
 		return nil, err
 	}
@@ -315,10 +396,9 @@ func newRangeDlJob(t cluster.Target, base *baseDlJob, pt cmn.ParsedTemplate, sub
 		baseDlJob: *base,
 		t:         t,
 		iter:      pt.Iter(),
-		dir:       subdir,
+		dir:       payload.Subdir,
 		count:     cnt,
 	}
-
 	err = job.getNextObjs()
 	return job, err
 }

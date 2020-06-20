@@ -22,13 +22,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const (
-	singleDlType = iota
-	multiDlType
-	rangeDlType
-	cloudDlType
-)
-
 var (
 	startCmdsFlags = map[string][]cli.Flag{
 		subcmdStartXaction: {},
@@ -224,13 +217,13 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	// Heuristics to determine the download type.
-	var dlType int
+	var dlType downloader.DlType
 	if objectsListPath != "" {
-		dlType = multiDlType
+		dlType = downloader.DlTypeMulti
 	} else if strings.Contains(source.link, "{") && strings.Contains(source.link, "}") {
-		dlType = rangeDlType
+		dlType = downloader.DlTypeRange
 	} else if source.cloud.bck.IsEmpty() {
-		dlType = singleDlType
+		dlType = downloader.DlTypeCloud
 	} else {
 		cfg, err := getClusterConfig()
 		if err != nil {
@@ -238,7 +231,7 @@ func startDownloadHandler(c *cli.Context) error {
 		}
 		if cfg.Cloud.Provider == source.cloud.bck.Provider {
 			// Cloud is configured to requested bucket provider.
-			dlType = cloudDlType
+			dlType = downloader.DlTypeCloud
 
 			p, err := api.HeadBucket(defaultAPIParams, basePayload.Bck)
 			if err != nil {
@@ -264,12 +257,12 @@ func startDownloadHandler(c *cli.Context) error {
 			}
 			// If `prefix` is not empty then possibly it is just a single object
 			// which we can download without cloud to be configured (web link).
-			dlType = singleDlType
+			dlType = downloader.DlTypeSingle
 		}
 	}
 
 	switch dlType {
-	case singleDlType:
+	case downloader.DlTypeSingle:
 		payload := downloader.DlSingleBody{
 			DlBase: basePayload,
 			DlSingleObj: downloader.DlSingleObj{
@@ -277,8 +270,8 @@ func startDownloadHandler(c *cli.Context) error {
 				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
 			},
 		}
-		id, err = api.DownloadSingleWithParam(defaultAPIParams, payload)
-	case multiDlType:
+		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
+	case downloader.DlTypeMulti:
 		var objects []string
 		{
 			file, err := os.Open(objectsListPath)
@@ -296,21 +289,21 @@ func startDownloadHandler(c *cli.Context) error {
 			DlBase:         basePayload,
 			ObjectsPayload: objects,
 		}
-		id, err = api.DownloadMultiWithParam(defaultAPIParams, payload)
-	case rangeDlType:
+		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
+	case downloader.DlTypeRange:
 		payload := downloader.DlRangeBody{
 			DlBase:   basePayload,
 			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
 			Template: source.link,
 		}
-		id, err = api.DownloadRangeWithParam(defaultAPIParams, payload)
-	case cloudDlType:
+		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
+	case downloader.DlTypeCloud:
 		payload := downloader.DlCloudBody{
 			DlBase: basePayload,
 			Sync:   flagIsSet(c, syncFlag),
 			Prefix: source.cloud.prefix,
 		}
-		id, err = api.DownloadCloudWithParam(defaultAPIParams, payload)
+		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
 	default:
 		cmn.Assert(false)
 	}

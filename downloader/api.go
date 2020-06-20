@@ -5,6 +5,7 @@
 package downloader
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path"
@@ -13,6 +14,21 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+)
+
+// Generic Download request
+
+type DlBody struct {
+	Type DlType `json:"type"`
+	Data json.RawMessage
+}
+type DlType string
+
+const (
+	DlTypeSingle DlType = "dl-single"
+	DlTypeRange  DlType = "dl-range"
+	DlTypeMulti  DlType = "dl-multi"
+	DlTypeCloud  DlType = "dl-cloud"
 )
 
 type (
@@ -261,6 +277,9 @@ func (b *DlSingleBody) ExtractPayload() (cmn.SimpleKVs, error) {
 }
 
 func (b *DlSingleBody) Describe() string {
+	if b.Description != "" {
+		return b.Description
+	}
 	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bck, b.ObjName)
 }
 
@@ -346,6 +365,9 @@ func (b *DlMultiBody) ExtractPayload() (cmn.SimpleKVs, error) {
 }
 
 func (b *DlMultiBody) Describe() string {
+	if b.Description != "" {
+		return b.Description
+	}
 	return fmt.Sprintf("multi-download -> %s", b.Bck)
 }
 
@@ -369,5 +391,8 @@ func (b *DlCloudBody) Validate() error {
 }
 
 func (b *DlCloudBody) Describe() string {
+	if b.Description != "" {
+		return b.Description
+	}
 	return fmt.Sprintf("cloud prefetch -> %s", b.Bck)
 }

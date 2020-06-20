@@ -228,11 +228,13 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 // Helper methods
 
 func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request, body []byte) (ok bool) {
-	var (
-		payload = &downloader.DlBase{}
-	)
-	if err := jsoniter.Unmarshal(body, &payload); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	dlb := downloader.DlBody{}
+	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
+		return
+	}
+	payload := downloader.DlBase{}
+	err := jsoniter.Unmarshal(dlb.Data, &payload)
+	if err != nil {
 		return
 	}
 	bck := cluster.NewBckEmbed(payload.Bck)

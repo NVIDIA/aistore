@@ -466,16 +466,7 @@ func DownloadSingle(baseParams BaseParams, description string, bck cmn.Bck, objN
 	}
 	dlBody.Bck = bck
 	dlBody.Description = description
-	return DownloadSingleWithParam(baseParams, dlBody)
-}
-
-func DownloadSingleWithParam(baseParams BaseParams, dlBody downloader.DlSingleBody) (string, error) {
-	baseParams.Method = http.MethodPost
-	return doDlDownloadRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download),
-		Body:       cmn.MustMarshal(dlBody),
-	})
+	return DownloadWithParam(baseParams, downloader.DlTypeSingle, &dlBody)
 }
 
 func DownloadRange(baseParams BaseParams, description string, bck cmn.Bck, template string) (string, error) {
@@ -484,15 +475,15 @@ func DownloadRange(baseParams BaseParams, description string, bck cmn.Bck, templ
 	}
 	dlBody.Bck = bck
 	dlBody.Description = description
-	return DownloadRangeWithParam(baseParams, dlBody)
+	return DownloadWithParam(baseParams, downloader.DlTypeRange, dlBody)
 }
 
-func DownloadRangeWithParam(baseParams BaseParams, dlBody downloader.DlRangeBody) (string, error) {
+func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interface{}) (string, error) {
 	baseParams.Method = http.MethodPost
 	return doDlDownloadRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Download),
-		Body:       cmn.MustMarshal(dlBody),
+		Body:       cmn.MustMarshal(downloader.DlBody{Type: dlt, Data: cmn.MustMarshal(body)}),
 	})
 }
 
@@ -501,22 +492,7 @@ func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, msg i
 	dlBody.Bck = bck
 	dlBody.Description = description
 	dlBody.ObjectsPayload = msg
-
-	baseParams.Method = http.MethodPost
-	return doDlDownloadRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download),
-		Body:       cmn.MustMarshal(dlBody),
-	})
-}
-
-func DownloadMultiWithParam(baseParams BaseParams, dlBody downloader.DlMultiBody) (string, error) {
-	baseParams.Method = http.MethodPost
-	return doDlDownloadRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download),
-		Body:       cmn.MustMarshal(dlBody),
-	})
+	return DownloadWithParam(baseParams, downloader.DlTypeMulti, dlBody)
 }
 
 func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string) (string, error) {
@@ -526,16 +502,7 @@ func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefi
 	}
 	dlBody.Bck = bck
 	dlBody.Description = description
-	return DownloadCloudWithParam(baseParams, dlBody)
-}
-
-func DownloadCloudWithParam(baseParams BaseParams, dlBody downloader.DlCloudBody) (string, error) {
-	baseParams.Method = http.MethodPost
-	return doDlDownloadRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download),
-		Body:       cmn.MustMarshal(dlBody),
-	})
+	return DownloadWithParam(baseParams, downloader.DlTypeCloud, dlBody)
 }
 
 func DownloadStatus(baseParams BaseParams, id string) (downloader.DlStatusResp, error) {

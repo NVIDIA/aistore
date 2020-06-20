@@ -181,7 +181,7 @@ func downloadObjectCloud(t *testing.T, dstBck cmn.Bck, sync bool, expectedFinish
 			Sync: sync,
 		}
 	)
-	id, err := api.DownloadCloudWithParam(baseParams, dlCloudBody)
+	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeCloud, dlCloudBody)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, time.Minute)
@@ -438,7 +438,7 @@ func TestDownloadTimeout(t *testing.T) {
 	body.Description = generateDownloadDesc()
 	body.Timeout = "1ms" // super small timeout to see if the request will be canceled
 
-	id, err := api.DownloadSingleWithParam(baseParams, body)
+	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeSingle, body)
 	tassert.CheckFatal(t, err)
 
 	time.Sleep(time.Second)
@@ -545,7 +545,7 @@ func TestDownloadCloud(t *testing.T) {
 			}
 
 			tutils.Logln("starting cloud download...")
-			id, err := api.DownloadCloudWithParam(baseParams, downloader.DlCloudBody{
+			id, err := api.DownloadWithParam(baseParams, downloader.DlTypeCloud, downloader.DlCloudBody{
 				DlBase: downloader.DlBase{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
@@ -570,7 +570,7 @@ func TestDownloadCloud(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			tutils.Logln("starting cloud download...")
-			id, err = api.DownloadCloudWithParam(baseParams, downloader.DlCloudBody{
+			id, err = api.DownloadWithParam(baseParams, downloader.DlTypeCloud, downloader.DlCloudBody{
 				DlBase: downloader.DlBase{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
@@ -1173,7 +1173,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
 
-	id, err := api.DownloadRangeWithParam(baseParams, downloader.DlRangeBody{
+	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
 		DlBase: downloader.DlBase{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
@@ -1221,7 +1221,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
 
-	id1, err := api.DownloadRangeWithParam(baseParams, downloader.DlRangeBody{
+	id1, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
 		DlBase: downloader.DlBase{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
@@ -1292,7 +1292,7 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	id, err := api.DownloadSingleWithParam(baseParams, downloader.DlSingleBody{
+	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeSingle, downloader.DlSingleBody{
 		DlBase: downloader.DlBase{
 			Bck:         bck,
 			Description: generateDownloadDesc(),

@@ -7,7 +7,6 @@ package downloader
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -82,110 +81,54 @@ func normalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartDownloadRequest(ctx context.Context, r *http.Request, id string, t cluster.Target) (DlJob, error) {
-	const (
-		dlTypeSingle = iota + 1
-		dlTypeRange
-		dlTypeMulti
-		dlTypeCloud
-	)
-
-	var (
-		// link -> objName
-		objects cmn.SimpleKVs
-
-		payload       = &DlBase{}
-		singlePayload = &DlSingleBody{}
-		rangePayload  = &DlRangeBody{}
-		multiPayload  = &DlMultiBody{}
-		cloudPayload  = &DlCloudBody{}
-
-		pt          cmn.ParsedTemplate
-		description string
-		dlType      int
-	)
-
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	_ = jsoniter.Unmarshal(b, payload)
-	_ = jsoniter.Unmarshal(b, singlePayload)
-	_ = jsoniter.Unmarshal(b, rangePayload)
-	_ = jsoniter.Unmarshal(b, multiPayload)
-	_ = jsoniter.Unmarshal(b, cloudPayload)
-
-	bck := cluster.NewBckEmbed(payload.Bck)
-	if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
-		return nil, err
-	}
-	if err := bck.Allow(cmn.AccessSYNC); err != nil {
-		// TODO: return nil, err, 403
-		return nil, err
-	}
-
-	if err = singlePayload.Validate(); err == nil {
-		if objects, err = singlePayload.ExtractPayload(); err != nil {
-			return nil, err
-		}
-		description = singlePayload.Describe()
-		dlType = dlTypeSingle
-	} else if err = rangePayload.Validate(); err == nil {
-		// NOTE: Size of objects to be downloaded by a target will be unknown.
-		//  So proxy won't be able to sum sizes from all targets when calculating total size.
-		//  This should be taken care of somehow, as total is easy to know from range template anyway.
-		if pt, err = cmn.ParseBashTemplate(rangePayload.Template); err != nil {
-			return nil, err
-		}
-		description = rangePayload.Describe()
-		dlType = dlTypeRange
-	} else if err = multiPayload.Validate(); err == nil {
-		if objects, err = multiPayload.ExtractPayload(); err != nil {
-			return nil, err
-		}
-		description = multiPayload.Describe()
-		dlType = dlTypeMulti
-	} else if err = cloudPayload.Validate(); err == nil {
-		dlType = dlTypeCloud
-	} else {
-		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
-	}
-
-	if payload.Description == "" {
-		payload.Description = description
-	}
-
-	// TODO: this might be inaccurate if we download 1 or 2 objects because then
-	//  other targets will have limits but will not use them.
-	if payload.Limits.BytesPerHour > 0 {
-		payload.Limits.BytesPerHour /= t.GetSowner().Get().CountTargets()
-	}
-
-	baseJob := newBaseDlJob(id, bck, payload.Timeout, payload.Description, payload.Limits)
-	switch dlType {
-	case dlTypeCloud:
-		if !bck.IsCloud() {
-			return nil, errors.New("bucket download requires a cloud bucket")
-		}
-		return newCloudBucketDlJob(ctx, t, baseJob, cloudPayload.Sync, cloudPayload.Prefix, cloudPayload.Suffix)
-	case dlTypeRange:
-		if !bck.IsAIS() {
-			return nil, errors.New("range download requires ais bucket")
-		}
-		return newRangeDlJob(t, baseJob, pt, rangePayload.Subdir)
-	case dlTypeSingle, dlTypeMulti:
-		if !bck.IsAIS() {
-			return nil, errors.New("regular download requires ais bucket")
-		}
-		objs, err := buildDlObjs(t, bck, objects)
+func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *cluster.Bck, id string, dlb DlBody) (DlJob, error) {
+	switch dlb.Type {
+	case DlTypeCloud:
+		dp := &DlCloudBody{}
+		err := jsoniter.Unmarshal(dlb.Data, dp)
 		if err != nil {
 			return nil, err
 		}
-		return newSliceDlJob(baseJob, objs), nil
+		if err := dp.Validate(); err != nil {
+			return nil, err
+		}
+		return newCloudBucketDlJob(ctx, t, id, bck, dp)
+
+	case DlTypeMulti:
+		dp := &DlMultiBody{}
+		err := jsoniter.Unmarshal(dlb.Data, dp)
+		if err != nil {
+			return nil, err
+		}
+		if err := dp.Validate(); err != nil {
+			return nil, err
+		}
+		return newMultiDlJob(t, id, bck, dp)
+
+	case DlTypeRange:
+		dp := &DlRangeBody{}
+		err := jsoniter.Unmarshal(dlb.Data, dp)
+		if err != nil {
+			return nil, err
+		}
+		if err := dp.Validate(); err != nil {
+			return nil, err
+		}
+		return newRangeDlJob(t, id, bck, dp)
+
+	case DlTypeSingle:
+		dp := &DlSingleBody{}
+		err := jsoniter.Unmarshal(dlb.Data, dp)
+		if err != nil {
+			return nil, err
+		}
+		if err := dp.Validate(); err != nil {
+			return nil, err
+		}
+		return newSingleDlJob(t, id, bck, dp)
+
 	default:
-		cmn.Assert(false)
-		return nil, nil
+		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
 	}
 }
 

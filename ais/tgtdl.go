@@ -11,9 +11,11 @@ import (
 	"regexp"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/xaction"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // NOTE: This request is internal so we can have asserts there.
@@ -37,7 +39,27 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		uuid := r.URL.Query().Get(cmn.URLParamUUID)
 		cmn.Assert(uuid != "")
 		ctx := context.Background()
-		dlJob, err := downloader.ParseStartDownloadRequest(ctx, r, uuid, t)
+		dlb := downloader.DlBody{}
+		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
+			return
+		}
+
+		dlBodyBase := downloader.DlBase{}
+		err := jsoniter.Unmarshal(dlb.Data, &dlBodyBase)
+		if err != nil {
+			return
+		}
+		bck := cluster.NewBckEmbed(dlBodyBase.Bck)
+		if err := bck.Init(t.GetBowner(), t.Snode()); err != nil {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := bck.Allow(cmn.AccessSYNC); err != nil {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
+
+		dlJob, err := downloader.ParseStartDownloadRequest(ctx, t, bck, uuid, dlb)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
