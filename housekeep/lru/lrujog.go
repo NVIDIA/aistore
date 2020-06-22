@@ -1,5 +1,5 @@
 // Package lru provides least recently used cache replacement policy for stored objects
-// and serves as a generic garbage-collection mechanism for orhaned workfiles.
+// and serves as a generic garbage-collection mechanism for orphaned workfiles.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -8,6 +8,7 @@ package lru
 import (
 	"container/heap"
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -20,12 +21,34 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-// contextual LRU "jogger" traverses a given (cloud/ or local/) subdirectory to
-// evict or delete selected objects and workfiles
+// Contextual LRU "jogger" traverses a given mountpath:
+//  1. Initially traverses the trash directory and removes everything there.
+//  2. Traverses each bucket and tries to remove old/abandoned objects/files.
 
 func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh chan struct{}) {
 	defer wg.Done()
 	lctx.bckTypeDir = lctx.mpathInfo.MakePathBck(lctx.bck)
+	lctx.joggers = joggers
+
+	// Phase 1: (always) traverse trash directory.
+	trashDir := lctx.mpathInfo.MakePathTrash()
+	err := fs.Scanner(trashDir, func(fqn string, de fs.DirEntry) error {
+		if de.IsDir() {
+			return os.RemoveAll(fqn)
+		}
+		return os.Remove(fqn)
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return
+	}
+
+	// Do not run the rest of the LRU if not enabled.
+	if !lctx.config.LRU.Enabled {
+		return
+	}
+
+	// Calculate the size that must be evicted. We do it after evicting trash
+	// directory so maybe we don't need to walk the mountpath at all.
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
@@ -33,12 +56,12 @@ func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh ch
 		glog.Infof("%s: below threshold, nothing to do", lctx.mpathInfo)
 		return
 	}
-	lctx.joggers = joggers
 
 	lctx.heap = &fileInfoMinHeap{}
 	heap.Init(lctx.heap)
 	glog.Infof("%s: evicting %s", lctx.mpathInfo, cmn.B2S(lctx.totalSize, 2))
-	// phase 1: collect
+
+	// Phase 2: collect objects.
 	opts := &fs.Options{
 		Mpath: lctx.mpathInfo,
 		Bck:   lctx.bck,
@@ -55,7 +78,8 @@ func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh ch
 		}
 		return
 	}
-	// phase 2: evict
+
+	// Phase 3: evict collected objects.
 	if err := lctx.evict(); err != nil {
 		glog.Errorf("%s: err: %v", lctx.bckTypeDir, err)
 	}
@@ -66,7 +90,7 @@ func (lctx *lruCtx) jog(wg *sync.WaitGroup, joggers map[string]*lruCtx, errCh ch
 
 // TODO: `mirroring` and `ec` is not correctly taken into account when
 //  doing LRU. Also, in some places, we can entirely skip walking instead of just
-//  skipping single FQN (eg. LRUEnabled or AllowDELETE checks).
+//  skipping single FQN (eg. AllowDELETE checks).
 func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
@@ -97,10 +121,6 @@ func (lctx *lruCtx) walk(fqn string, de fs.DirEntry) error {
 	// TODO: extend LRU for other content types
 	cmn.Assert(lom.ParsedFQN.ContentType == fs.ObjectType)
 
-	// LRUEnabled is set by lom.Init(), no need to make FS call in Load if not enabled
-	if !lom.LRUEnabled() {
-		return nil
-	}
 	err = lom.Load(false)
 	if err != nil {
 		return nil
@@ -239,7 +259,7 @@ func (lctx *lruCtx) evictObj(lom *cluster.LOM) (ok bool) {
 }
 
 func (lctx *lruCtx) evictSize() (err error) {
-	hwm, lwm := lctx.config.LRU.HighWM, lctx.config.LRU.LowWM
+	lwm, hwm := lctx.config.LRU.LowWM, lctx.config.LRU.HighWM
 	blocks, bavail, bsize, err := lctx.ini.GetFSStats(lctx.bckTypeDir)
 	if err != nil {
 		return err
@@ -247,7 +267,10 @@ func (lctx *lruCtx) evictSize() (err error) {
 	used := blocks - bavail
 	usedPct := used * 100 / blocks
 	if glog.V(4) {
-		glog.Infof("%s: Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", lctx.mpathInfo, blocks, bavail, usedPct, hwm, lwm)
+		glog.Infof(
+			"%s: blocks: %d, bavail: %d, usedPct: %d%%, lwm: %d%%, hwm: %d%%",
+			lctx.mpathInfo, blocks, bavail, usedPct, lwm, hwm,
+		)
 	}
 	if usedPct < uint64(hwm) {
 		return
@@ -281,12 +304,6 @@ func (lctx *lruCtx) yieldTerm() error {
 	return nil
 }
 
-//=======================================================================
-//
-// fileInfoMinHeap keeps fileInfo sorted by access time with oldest
-// on top of the heap.
-//
-//=======================================================================
 func (h fileInfoMinHeap) Len() int { return len(h) }
 
 func (h fileInfoMinHeap) Less(i, j int) bool {

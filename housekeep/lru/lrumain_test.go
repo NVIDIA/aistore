@@ -1,5 +1,5 @@
 // Package lru provides least recently used cache replacement policy for stored objects
-// and serves as a generic garbage-collection mechanism for orhaned workfiles.
+// and serves as a generic garbage-collection mechanism for orphaned workfiles.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -285,6 +285,34 @@ var _ = Describe("LRU tests", func() {
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(numberOfFiles))
+			})
+		})
+
+		Describe("evict trash directory", func() {
+			It("should totally evict trash directory", func() {
+				var (
+					mpaths, _ = fs.Mountpaths.Get()
+					mpath     = mpaths[basePath]
+				)
+
+				InitAndRun(ini)
+
+				saveRandomFiles(t, filesPath, 10)
+				Expect(filesPath).To(BeADirectory())
+
+				err := mpath.MoveToTrash(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(filesPath).NotTo(BeADirectory())
+
+				files, err := ioutil.ReadDir(mpath.MakePathTrash())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(1))
+
+				InitAndRun(ini)
+
+				files, err = ioutil.ReadDir(mpath.MakePathTrash())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(files)).To(Equal(0))
 			})
 		})
 	})

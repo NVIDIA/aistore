@@ -200,10 +200,8 @@ func (r *Trunner) log(uptime time.Duration) {
 	availableMountpaths, _ := fs.Mountpaths.Get()
 	r.timecounts.capIdx++
 	if r.timecounts.capIdx >= r.timecounts.capLimit.Load() {
-		if runlru := r.UpdateCapacityOOS(availableMountpaths); runlru {
-			if cmn.GCO.Get().LRU.Enabled {
-				go r.T.RunLRU("")
-			}
+		if runLRU := r.UpdateCapacities(availableMountpaths); runLRU {
+			go r.T.RunLRU("")
 		}
 		r.timecounts.capIdx = 0
 		for mpath, fsCapacity := range r.Capacity {
@@ -221,7 +219,7 @@ func (r *Trunner) log(uptime time.Duration) {
 	}
 }
 
-func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
+func (r *Trunner) UpdateCapacities(availableMountpaths fs.MPI) (runLRU bool) {
 	if availableMountpaths == nil {
 		availableMountpaths, _ = fs.Mountpaths.Get()
 	}
@@ -232,7 +230,7 @@ func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
 		capInfoPrv = r.T.AvgCapUsed(config)
 	)
 	if l == 0 {
-		glog.Errorln("UpdateCapacity: " + cmn.NoMountpaths)
+		glog.Errorln("UpdateCapacities: " + cmn.NoMountpaths)
 		return
 	}
 
@@ -246,7 +244,7 @@ func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
 		fsCap := newFSCapacity(statfs)
 		capacities[mpath] = fsCap
 		if int64(fsCap.Usedpct) >= config.LRU.HighWM {
-			runlru = true
+			runLRU = true
 		}
 		usedNow += fsCap.Usedpct
 	}

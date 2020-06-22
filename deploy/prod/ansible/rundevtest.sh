@@ -5,8 +5,6 @@ source /etc/profile.d/aispaths.sh
 source aws.env
 
 for pid in $(ps -C aisnode -o pid=); do echo "stopping aisnode: $pid"; sudo kill $pid; done
-sudo rm -rf /home/ubuntu/.ais*
-rm -rf /tmp/ais*
 cd $AISSRC && cd ..
 
 if [[ -n $1 ]]; then
@@ -19,6 +17,7 @@ git reset --hard origin/master
 git status
 git log | head -5
 
+make clean
 MODE="debug" make deploy <<< $'6\n4\n4\n1'
 
 echo "sleep 10 seconds before checking AIStore processes"

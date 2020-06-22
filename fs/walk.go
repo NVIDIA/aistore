@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -293,4 +294,24 @@ func WalkBck(opts *WalkBckOptions) error {
 	})
 
 	return group.Wait()
+}
+
+func Scanner(dir string, cb func(fqn string, entry DirEntry) error) error {
+	scanner, err := godirwalk.NewScanner(dir)
+	if err != nil {
+		return err
+	}
+	for scanner.Scan() {
+		dirent, err := scanner.Dirent()
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		if err := cb(filepath.Join(dir, dirent.Name()), dirent); err != nil {
+			return err
+		}
+	}
+	return scanner.Err()
 }

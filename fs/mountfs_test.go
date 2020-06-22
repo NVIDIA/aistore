@@ -2,18 +2,33 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package fs
+package fs_test
 
 import (
+	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
+func assertMountpathCount(t *testing.T, mfs *fs.MountedFS, availableCount, disabledCount int) {
+	availableMountpaths, disabledMountpaths := mfs.Get()
+	if len(availableMountpaths) != availableCount ||
+		len(disabledMountpaths) != disabledCount {
+		t.Errorf(
+			"wrong mountpaths: %d/%d, %d/%d",
+			len(availableMountpaths), availableCount,
+			len(disabledMountpaths), disabledCount,
+		)
+	}
+}
+
 func TestAddNonExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/nonexistingpath")
 	if err == nil {
 		t.Error("adding non-existing mountpath succeeded")
@@ -23,7 +38,7 @@ func TestAddNonExistingMountpath(t *testing.T) {
 }
 
 func TestAddValidMountpaths(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	mfs.DisableFsIDCheck()
 	mpaths := []string{"/tmp/clouder", "/tmp/locals", "/tmp/locals/err"}
 
@@ -48,7 +63,7 @@ func TestAddValidMountpaths(t *testing.T) {
 }
 
 func TestAddExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -58,7 +73,7 @@ func TestAddExistingMountpath(t *testing.T) {
 }
 
 func TestAddIncorrectMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("tmp/not/absolute/path")
 	if err == nil {
 		t.Error("expected adding incorrect mountpath to fail")
@@ -68,7 +83,7 @@ func TestAddIncorrectMountpath(t *testing.T) {
 }
 
 func TestAddAlreadyAddedMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -85,7 +100,7 @@ func TestAddAlreadyAddedMountpath(t *testing.T) {
 }
 
 func TestRemoveNonExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Remove("/nonexistingpath")
 	if err == nil {
 		t.Error("removing non-existing mountpath succeeded")
@@ -95,7 +110,7 @@ func TestRemoveNonExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -110,7 +125,7 @@ func TestRemoveExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveDisabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -128,7 +143,7 @@ func TestRemoveDisabledMountpath(t *testing.T) {
 }
 
 func TestDisableNonExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	_, err := mfs.Disable("/tmp")
 
 	if err == nil {
@@ -139,7 +154,7 @@ func TestDisableNonExistingMountpath(t *testing.T) {
 }
 
 func TestDisableExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -155,7 +170,7 @@ func TestDisableExistingMountpath(t *testing.T) {
 }
 
 func TestDisableAlreadyDisabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -177,9 +192,8 @@ func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableNonExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	_, err := mfs.Enable("/tmp")
-
 	if err == nil {
 		t.Error("enabling nonexisting mountpath should not end with error")
 	}
@@ -188,7 +202,7 @@ func TestEnableNonExistingMountpath(t *testing.T) {
 }
 
 func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -204,7 +218,7 @@ func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableExistingAndDisabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -226,7 +240,7 @@ func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableAlreadyEnabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -256,7 +270,7 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 }
 
 func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -271,7 +285,7 @@ func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
 }
 
 func TestAddAndDisableMultipleMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	mfs := fs.NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -293,15 +307,42 @@ func TestAddAndDisableMultipleMountpath(t *testing.T) {
 	assertMountpathCount(t, mfs, 1, 1)
 }
 
-func assertMountpathCount(t *testing.T, mfs *MountedFS, availableCount, disabledCount int) {
-	availableMountpaths, disabledMountpaths := mfs.Get()
-	if len(availableMountpaths) != availableCount ||
-		len(disabledMountpaths) != disabledCount {
-		t.Errorf(
-			"wrong mountpaths: %d/%d, %d/%d",
-			len(availableMountpaths), availableCount,
-			len(disabledMountpaths), disabledCount,
-		)
+func TestMoveToTrash(t *testing.T) {
+	var (
+		mfs = fs.NewMountedFS()
+	)
+	mpathDir, err := ioutil.TempDir("", "")
+	tassert.CheckFatal(t, err)
+	err = mfs.Add(mpathDir)
+	tassert.CheckFatal(t, err)
+
+	defer os.RemoveAll(mpathDir)
+
+	mpaths, _ := mfs.Get()
+	mi := mpaths[mpathDir]
+
+	// Initially trash directory should not exist.
+	tutils.CheckPathNotExists(t, mi.MakePathTrash())
+
+	// Removing path that don't exist is still good.
+	err = mi.MoveToTrash("/path/to/wonderland")
+	tassert.CheckFatal(t, err)
+
+	for i := 0; i < 5; i++ {
+		topDir, _ := prepareDirTree(t, dirTreeDesc{
+			dirs:  10,
+			files: 10,
+			depth: 2,
+			empty: false,
+		})
+
+		tutils.CheckPathExists(t, topDir, true /*dir*/)
+
+		err = mi.MoveToTrash(topDir)
+		tassert.CheckFatal(t, err)
+
+		tutils.CheckPathNotExists(t, topDir)
+		tutils.CheckPathExists(t, mi.MakePathTrash(), true /*dir*/)
 	}
 }
 
@@ -312,14 +353,14 @@ func BenchmarkMakePathFQN(b *testing.B) {
 			Provider: cmn.ProviderAzure,
 			Ns:       cmn.Ns{Name: "name", UUID: "uuid"},
 		}
-		mi      = MountpathInfo{Path: cmn.RandString(200)}
+		mi      = fs.MountpathInfo{Path: cmn.RandString(200)}
 		objName = cmn.RandString(15)
 	)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s := mi.MakePathFQN(bck, ObjectType, objName)
+		s := mi.MakePathFQN(bck, fs.ObjectType, objName)
 		cmn.Assert(len(s) > 0)
 	}
 }

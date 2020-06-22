@@ -97,7 +97,6 @@ func (lom *LOM) GetCustomMD(key string) (string, bool) {
 	return value, exists
 }
 func (lom *LOM) ECEnabled() bool            { return lom.Bprops().EC.Enabled }
-func (lom *LOM) LRUEnabled() bool           { return lom.Bprops().LRU.Enabled }
 func (lom *LOM) IsHRW() bool                { return lom.HrwFQN == lom.FQN } // subj to resilvering
 func (lom *LOM) Bck() *Bck                  { return lom.bck }
 func (lom *LOM) BckName() string            { return lom.bck.Name }

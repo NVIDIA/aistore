@@ -1,5 +1,5 @@
 // Package lru provides least recently used cache replacement policy for stored objects
-// and serves as a generic garbage-collection mechanism for orhaned workfiles.
+// and serves as a generic garbage-collection mechanism for orphaned workfiles.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -50,6 +50,9 @@ type (
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
 		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
 	}
+
+	// fileInfoMinHeap keeps fileInfo sorted by access time with oldest
+	// on top of the heap.
 	fileInfoMinHeap []*cluster.LOM
 
 	// lruCtx represents a single LRU context that runs in a single goroutine (worker)
@@ -58,7 +61,7 @@ type (
 	lruCtx struct {
 		// runtime
 		curSize   int64
-		totalSize int64
+		totalSize int64 // difference between lowWM size and used size
 		newest    time.Time
 		heap      *fileInfoMinHeap
 		oldWork   []string

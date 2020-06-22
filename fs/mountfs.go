@@ -6,7 +6,6 @@ package fs
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/OneOfOne/xxhash"
 )
@@ -33,6 +33,10 @@ const (
 	Remove  = "remove-mp"
 	Enable  = "enable-mp"
 	Disable = "disable-mp"
+)
+
+const (
+	trashDir = "$trash"
 )
 
 // globals
@@ -72,10 +76,6 @@ type (
 		Fsid       syscall.Fsid
 		FileSystem string
 		PathDigest uint64
-
-		// atomic, only increasing counter to prevent name conflicts
-		// see: FastRemoveDir method
-		removeDirCounter atomic.Uint64
 
 		// LOM caches
 		lomCaches cmn.MultiSyncMap
@@ -124,7 +124,6 @@ func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *Mou
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, cmn.MLCG32),
 	}
-	mi.removeDirCounter.Store(uint64(time.Now().UnixNano()))
 	return mi
 }
 
@@ -140,76 +139,38 @@ func (mi *MountpathInfo) evictLomCache() {
 	}
 }
 
-// FastRemoveDir removes directory in steps:
+// MoveToTrash removes directory in steps:
 // 1. Synchronously gets temporary directory name
 // 2. Synchronously renames old folder to temporary directory
 // 3. Asynchronously deletes temporary directory
-func (mi *MountpathInfo) FastRemoveDir(dir string) error {
-	// `dir` will be renamed to non-existing bucket. Then we will
-	// try to remove it asynchronously. In case of power cycle we expect that
-	// LRU will take care of removing the rest of the bucket.
-	var (
-		counter        = mi.removeDirCounter.Inc()
-		nonExistingDir = fmt.Sprintf("$removing-%d", counter)
-		tmpDir         = filepath.Join(mi.Path, nonExistingDir)
-	)
-	// loose assumption: removing something which doesn't exist is fine
+func (mi *MountpathInfo) MoveToTrash(dir string) error {
+	// Loose assumption: removing something which doesn't exist is fine.
 	if err := Access(dir); err != nil && os.IsNotExist(err) {
 		return nil
 	}
-	if err := cmn.CreateDir(filepath.Dir(tmpDir)); err != nil {
+Retry:
+	var (
+		trashDir = mi.MakePathTrash()
+		tmpDir   = filepath.Join(trashDir, fmt.Sprintf("$dir-%d", mono.NanoTime()))
+	)
+	if err := cmn.CreateDir(trashDir); err != nil {
 		return err
 	}
 	if err := os.Rename(dir, tmpDir); err != nil {
 		if os.IsExist(err) {
-			// Slow path - `tmpDir` (or rather `nonExistingDir`) for some reason already exists...
-			//
-			// Even though `nonExistingDir` should not exist we cannot fully be sure.
-			// There are at least two cases when this might not be true:
-			//  1. `nonExistingDir` is leftover after target crash.
-			//  2. Mountpath was removed and then added again. The counter
-			//     will be reset and if we will be removing dirs quickly enough
-			//     the counter will catch up with counter of the previous mountpath.
-			//     If the directories from the previous mountpath were not yet removed
-			//     (slow disk or filesystem) we can end up with the same name.
-			//     For now we try to fight this with randomizing the initial counter.
-
-			// In background remove leftover directory.
-			go func() {
-				glog.Errorf("%s already exists, removing...", tmpDir)
-				if err := os.RemoveAll(tmpDir); err != nil {
-					glog.Errorf("removing leftover %s failed, err: %v", tmpDir, err)
-				}
-			}()
-
-			// This time generate fully unique name...
-			tmpDir, err = ioutil.TempDir(mi.Path, nonExistingDir)
-			if err != nil {
-				return err
-			}
-
-			// Retry renaming - hopefully it should succeed now.
-			err = os.Rename(dir, tmpDir)
+			// Slow path: `tmpDir` already exists so let's retry. It should
+			// never happen but who knows...
+			glog.Warningf("directory %q already exist in trash", tmpDir)
+			goto Retry
 		}
-		// Someone removed dir before os.Rename, nothing more to do.
 		if os.IsNotExist(err) {
+			// Someone removed `dir` before `os.Rename`, nothing more to do.
 			return nil
 		}
 		if err != nil {
 			return err
 		}
 	}
-
-	// Schedule removing temporary directory which is our old `dir`
-	go func() {
-		// TODO: in the future, the actual operation must be delegated to LRU
-		// that'd take of care of it while pacing itself with regards to the
-		// current disk utilization and space availability.
-		if err := os.RemoveAll(tmpDir); err != nil {
-			glog.Errorf("RemoveAll for %q failed with %v", tmpDir, err)
-		}
-	}()
-
 	return nil
 }
 
@@ -294,6 +255,10 @@ func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) s
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return *(*string)(unsafe.Pointer(&buf))
+}
+
+func (mi *MountpathInfo) MakePathTrash() string {
+	return filepath.Join(mi.Path, trashDir)
 }
 
 //
@@ -590,7 +555,7 @@ func (mfs *MountedFS) DestroyBuckets(op string, bcks ...cmn.Bck) error {
 	for _, mpathInfo := range availablePaths {
 		for _, bck := range bcks {
 			dir := mpathInfo.MakePathBck(bck)
-			if err := mpathInfo.FastRemoveDir(dir); err != nil {
+			if err := mpathInfo.MoveToTrash(dir); err != nil {
 				glog.Errorf("%s: failed to %s (dir: %q, err: %v)", op, destroyStr, dir, err)
 			} else {
 				totalDestroyedDirs++
@@ -761,7 +726,7 @@ func (mfs *MountedFS) MpathForMetadata() (mpath *MountpathInfo, err error) {
 		return nil, fmt.Errorf("failed to choose a mountpath")
 	}
 	if glog.FastV(4, glog.SmoduleFS) {
-		glog.Infof("Mountpath %q selected for storing BMD in xattrs", mpath.Path)
+		glog.Infof("mountpath %q selected for storing BMD", mpath.Path)
 	}
 	mfs.xattrMpath.Store(unsafe.Pointer(mpath))
 	return mpath, nil

@@ -318,7 +318,7 @@ func initTarget(config *cmn.Config) {
 
 	housekeep, initialInterval := cluster.LomCacheHousekeep(t.gmm, t)
 	hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)
-	_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init
+	_ = ts.UpdateCapacities(nil) // goes after fs.Mountpaths.Init
 }
 
 // Run is the 'main' where everything gets started
