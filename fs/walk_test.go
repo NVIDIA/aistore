@@ -8,9 +8,11 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -78,18 +80,20 @@ func TestWalkBck(t *testing.T) {
 				objs = make([]string, 0, 100)
 				fqns = make([]string, 0, 100)
 			)
-			err := fs.WalkBck(&fs.Options{
-				Bck:         bck,
-				CTs:         []string{fs.ObjectType},
-				ErrCallback: nil,
-				Callback: func(fqn string, de fs.DirEntry) error {
-					parsedFQN, err := fs.Mountpaths.ParseFQN(fqn)
-					tassert.CheckError(t, err)
-					objs = append(objs, parsedFQN.ObjName)
-					fqns = append(fqns, fqn)
-					return nil
+			err := fs.WalkBck(&fs.WalkBckOptions{
+				Options: fs.Options{
+					Bck:         bck,
+					CTs:         []string{fs.ObjectType},
+					ErrCallback: nil,
+					Callback: func(fqn string, de fs.DirEntry) error {
+						parsedFQN, err := fs.Mountpaths.ParseFQN(fqn)
+						tassert.CheckError(t, err)
+						objs = append(objs, parsedFQN.ObjName)
+						fqns = append(fqns, fqn)
+						return nil
+					},
+					Sorted: test.sorted,
 				},
-				Sorted: test.sorted,
 			})
 			tassert.CheckFatal(t, err)
 
@@ -101,4 +105,90 @@ func TestWalkBck(t *testing.T) {
 			tassert.Fatalf(t, reflect.DeepEqual(fqns, fileNames), "found objects don't match expected objects")
 		})
 	}
+}
+
+func TestWalkBckSkipDir(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	type (
+		mpathMeta struct {
+			total int
+			done  bool
+		}
+	)
+
+	var (
+		bck           = cmn.Bck{Name: "name", Provider: cmn.ProviderAIS}
+		mpathCnt      = 5 + rand.Int()%5
+		minObjectsCnt = 10
+		mpaths        = make(map[string]*mpathMeta)
+	)
+
+	fs.Mountpaths = fs.NewMountedFS(ios.NewIOStaterMock())
+	fs.Mountpaths.DisableFsIDCheck()
+	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+
+	defer func() {
+		for mpath := range mpaths {
+			os.RemoveAll(mpath)
+		}
+	}()
+
+	for i := 0; i < mpathCnt; i++ {
+		mpath, err := ioutil.TempDir("", "testwalk")
+		tassert.CheckFatal(t, err)
+
+		err = cmn.CreateDir(mpath)
+		tassert.CheckFatal(t, err)
+
+		err = fs.Mountpaths.Add(mpath)
+		tassert.CheckFatal(t, err)
+
+		mpaths[mpath] = &mpathMeta{total: 0, done: false}
+	}
+
+	avail, _ := fs.Mountpaths.Get()
+	for _, mpath := range avail {
+		dir := mpath.MakePathCT(bck, fs.ObjectType)
+		err := cmn.CreateDir(dir)
+		tassert.CheckFatal(t, err)
+
+		totalFilesCnt := rand.Int()%100 + minObjectsCnt
+		for i := 0; i < totalFilesCnt; i++ {
+			f, err := ioutil.TempFile(dir, "")
+			tassert.CheckFatal(t, err)
+			f.Close()
+		}
+	}
+
+	var fqns = make([]string, 0, 100)
+	err := fs.WalkBck(&fs.WalkBckOptions{
+		Options: fs.Options{
+			Bck:         bck,
+			CTs:         []string{fs.ObjectType},
+			ErrCallback: nil,
+			Callback: func(fqn string, de fs.DirEntry) error {
+				fqns = append(fqns, fqn)
+				return nil
+			},
+			Sorted: true,
+		},
+		ValidateCallback: func(fqn string, de fs.DirEntry) error {
+			parsedFQN, err := fs.Mountpaths.ParseFQN(fqn)
+			tassert.CheckError(t, err)
+			cmn.Assert(!mpaths[parsedFQN.MpathInfo.Path].done)
+			if rand.Int()%10 == 0 {
+				mpaths[parsedFQN.MpathInfo.Path].done = true
+				return filepath.SkipDir
+			}
+			mpaths[parsedFQN.MpathInfo.Path].total++
+			return nil
+		},
+	})
+	tassert.CheckFatal(t, err)
+
+	expectedTotal := 0
+	for _, meta := range mpaths {
+		expectedTotal += meta.total
+	}
+	tassert.Fatalf(t, expectedTotal == len(fqns), "expected %d objects, got %d", expectedTotal, len(fqns))
 }

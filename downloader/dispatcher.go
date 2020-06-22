@@ -163,21 +163,23 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 		go func() {
 			defer diffResolver.CloseSrc()
 
-			err := fs.WalkBck(&fs.Options{
-				Bck: job.Bck(),
-				CTs: []string{fs.ObjectType},
-				Callback: func(fqn string, de fs.DirEntry) error {
-					if diffResolver.Stopped() {
-						return cmn.NewAbortedError("stopped")
-					}
-					lom := &cluster.LOM{T: d.parent.t, FQN: fqn}
-					if err := lom.Init(job.Bck()); err != nil {
-						return err
-					}
-					diffResolver.PushSrc(lom)
-					return nil
+			err := fs.WalkBck(&fs.WalkBckOptions{
+				Options: fs.Options{
+					Bck: job.Bck(),
+					CTs: []string{fs.ObjectType},
+					Callback: func(fqn string, de fs.DirEntry) error {
+						if diffResolver.Stopped() {
+							return cmn.NewAbortedError("stopped")
+						}
+						lom := &cluster.LOM{T: d.parent.t, FQN: fqn}
+						if err := lom.Init(job.Bck()); err != nil {
+							return err
+						}
+						diffResolver.PushSrc(lom)
+						return nil
+					},
+					Sorted: true,
 				},
-				Sorted: true,
 			})
 			if err != nil && !errors.As(err, &cmn.AbortedError{}) {
 				diffResolver.Abort(err)

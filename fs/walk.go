@@ -50,6 +50,11 @@ type (
 		Sorted      bool
 	}
 
+	WalkBckOptions struct {
+		Options
+		ValidateCallback WalkFunc // should return filepath.SkipDir to skip directory without an error
+	}
+
 	errCallbackWrapper struct {
 		counter atomic.Int64
 	}
@@ -206,10 +211,11 @@ func Walk(opts *Options) error {
 	return err
 }
 
-func WalkBck(opts *Options) error {
+func WalkBck(opts *WalkBckOptions) error {
 	var (
-		mpaths, _  = Mountpaths.Get()
-		mpathChs   = make([]chan string, len(mpaths))
+		mpaths, _ = Mountpaths.Get()
+		mpathChs  = make([]chan string, len(mpaths))
+
 		group, ctx = errgroup.WithContext(context.Background())
 	)
 
@@ -232,13 +238,28 @@ func WalkBck(opts *Options) error {
 					default:
 						break
 					}
+
 					if de.IsDir() {
 						return nil
 					}
-					mpathChs[idx] <- fqn
-					return nil
+
+					if opts.ValidateCallback != nil {
+						if err := opts.ValidateCallback(fqn, de); err != nil {
+							// If err != filepath.SkipDir, Walk will propagate the error
+							// to group.Go. Then context will be canceled, which terminates
+							// all other go routines running.
+							return err
+						}
+					}
+
+					select {
+					case <-ctx.Done():
+						return cmn.NewAbortedError("mpath: " + mpath.Path)
+					case mpathChs[idx] <- fqn:
+						return nil
+					}
 				}
-				return Walk(&o)
+				return Walk(&o.Options)
 			}
 		}(idx, mpath))
 		idx++
