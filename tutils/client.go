@@ -76,9 +76,8 @@ func CheckObjExists(proxyURL string, bck cmn.Bck, objName string) bool {
 	return err == nil
 }
 
-// PutAsync sends a PUT request to the given URL
-func PutAsync(wg *sync.WaitGroup, proxyURL string, bck cmn.Bck, object string, reader readers.Reader, errCh chan error) {
-	defer wg.Done()
+// Put sends a PUT request to the given URL
+func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, errCh chan error) {
 	baseParams := BaseAPIParams(proxyURL)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,

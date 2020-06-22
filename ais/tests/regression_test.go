@@ -345,16 +345,14 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		}
 		bck = rtd.renamedBck
 	}
-	sema := cmn.NewDynSemaphore(16)
 	del := func() {
 		tutils.Logf("Deleting %d objects from %s\n", len(filesPut), bck)
-		wg := &sync.WaitGroup{}
+		wg := cmn.NewLimitedWaitGroup(16)
 		for _, fname := range filesPut {
 			wg.Add(1)
-			sema.Acquire()
 			go func(fn string) {
-				defer sema.Release()
-				tutils.Del(proxyURL, bck, "smoke/"+fn, wg, errCh, true /* silent */)
+				defer wg.Done()
+				tutils.Del(proxyURL, bck, "smoke/"+fn, nil, errCh, true /* silent */)
 			}(fname)
 		}
 		wg.Wait()
@@ -840,7 +838,10 @@ func TestDeleteList(t *testing.T) {
 			keyname := fmt.Sprintf("%s%d", prefix, i)
 
 			wg.Add(1)
-			go tutils.PutAsync(wg, proxyURL, bck, keyname, r, errCh)
+			go func() {
+				defer wg.Done()
+				tutils.Put(proxyURL, bck, keyname, r, errCh)
+			}()
 			files = append(files, keyname)
 		}
 		wg.Wait()
@@ -954,7 +955,10 @@ func TestDeleteRange(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			wg.Add(1)
-			go tutils.PutAsync(wg, proxyURL, bck, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
+			go func(i int) {
+				defer wg.Done()
+				tutils.Put(proxyURL, bck, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
+			}(i)
 		}
 		wg.Wait()
 		tassert.SelectErr(t, errCh, "put", true)

@@ -49,6 +49,13 @@ type (
 		mu   sync.Mutex
 	}
 
+	// LimitedWaitGroup is helper struct which combines standard wait group and
+	// semaphore to limit the number of goroutines created.
+	LimitedWaitGroup struct {
+		wg   *sync.WaitGroup
+		sema *DynSemaphore
+	}
+
 	MultiSyncMap struct {
 		M [MultiSyncMapCount]sync.Map
 	}
@@ -180,6 +187,27 @@ func (s *DynSemaphore) Release(cnts ...int) {
 	s.cur -= cnt
 	s.c.Signal()
 	s.mu.Unlock()
+}
+
+func NewLimitedWaitGroup(n int) *LimitedWaitGroup {
+	return &LimitedWaitGroup{
+		wg:   &sync.WaitGroup{},
+		sema: NewDynSemaphore(n),
+	}
+}
+
+func (wg *LimitedWaitGroup) Add(n int) {
+	wg.wg.Add(n)
+	wg.sema.Acquire(n)
+}
+
+func (wg *LimitedWaitGroup) Done() {
+	wg.wg.Done()
+	wg.sema.Release()
+}
+
+func (wg *LimitedWaitGroup) Wait() {
+	wg.wg.Wait()
 }
 
 func (msm *MultiSyncMap) Get(idx int) *sync.Map {

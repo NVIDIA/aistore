@@ -54,17 +54,16 @@ var (
 
 func parallelOpLoop(bck cmn.Bck, cksumType string,
 	errCh chan opRes, opFunc func(string, string, cmn.Bck) opRes) {
-	fileCount := len(fileNames)
-	sem := cmn.NewDynSemaphore(numops + 1)
-	wg := &sync.WaitGroup{}
+	var (
+		fileCount = len(fileNames)
+		wg        = cmn.NewLimitedWaitGroup(numops + 1)
+	)
 	for i := 0; i < numLoops; i++ {
 		for idx := 0; idx < fileCount; idx++ {
 			objName := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
-			sem.Acquire(1)
 			wg.Add(1)
 			go func(objName string) {
 				defer wg.Done()
-				defer sem.Release(1)
 				errCh <- opFunc(objName, cksumType, bck)
 			}(objName)
 		}

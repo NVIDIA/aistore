@@ -330,8 +330,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 			Provider: cmn.AnyCloud,
 		}
 		proxyURL = tutils.RandomProxyURL()
-		wg       = &sync.WaitGroup{}
-		sema     = cmn.NewDynSemaphore(40) // throttle DELETE
+		wg       = cmn.NewLimitedWaitGroup(40)
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
@@ -387,12 +386,8 @@ func TestCloudListObjectVersions(t *testing.T) {
 				t.Errorf("Object %s does not have version", entry.Name)
 			}
 			wg.Add(1)
-			sema.Acquire()
 			go func(name string) {
-				defer func() {
-					sema.Release()
-					wg.Done()
-				}()
+				defer wg.Done()
 				err := api.DeleteObject(baseParams, bck, name)
 				tassert.CheckError(t, err)
 			}(entry.Name)
@@ -2047,7 +2042,6 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			numGetsEachFile: 1,
 			fileSize:        uint64(100*cmn.KiB + rand.Int63n(cmn.MiB)),
 		}
-		sema         = cmn.NewDynSemaphore(40) // throttle GET
 		numCorrupted int
 	)
 	// reduce for test-short
@@ -2151,15 +2145,12 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	if cksumType != cmn.ChecksumNone {
 		tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
-		wg := &sync.WaitGroup{}
+		wg := cmn.NewLimitedWaitGroup(40)
+
 		for _, entry := range bckObjs.Entries {
 			wg.Add(1)
-			sema.Acquire()
 			go func(name string) {
-				defer func() {
-					sema.Release()
-					wg.Done()
-				}()
+				defer wg.Done()
 				_, err = api.GetObjectWithValidation(baseParams, m.bck, name)
 				tassert.CheckError(t, err)
 			}(entry.Name)

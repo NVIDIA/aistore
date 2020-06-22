@@ -498,12 +498,11 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		showProgress = flagIsSet(c, progressBarFlag)
 
 		errSb strings.Builder
-	)
 
-	wg := &sync.WaitGroup{}
-	lastReport := time.Now()
-	reportEvery := p.refresh
-	sema := cmn.NewDynSemaphore(p.workerCnt)
+		wg          = cmn.NewLimitedWaitGroup(p.workerCnt)
+		lastReport  = time.Now()
+		reportEvery = p.refresh
+	)
 
 	if showProgress {
 		sizeBarArg := progressBarArgs{total: p.totalSize, barText: "Uploaded sizes progress", barType: sizeArg}
@@ -512,7 +511,6 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	}
 
 	finalizePut := func(f fileToObj) {
-		wg.Done()
 		total := int(processedCnt.Inc())
 		size := processedSize.Add(f.size)
 
@@ -521,7 +519,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 			// size bar sie updated in putOneFile
 		}
 
-		sema.Release()
+		wg.Done()
 		if reportEvery == 0 {
 			return
 		}
@@ -593,7 +591,6 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	}
 
 	for _, f := range p.files {
-		sema.Acquire()
 		wg.Add(1)
 		go putOneFile(f)
 	}

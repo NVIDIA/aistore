@@ -77,7 +77,8 @@ func putSpecificFiles(fileSize uint64, numPuts int, bck cmn.Bck, pool chan func(
 		fname := fmt.Sprintf("l%d", i)
 		wg.Add(1)
 		pool <- func() {
-			tutils.PutAsync(wg, url, bck, "__bench/"+fname, r, errCh)
+			defer wg.Done()
+			tutils.Put(url, bck, "__bench/"+fname, r, errCh)
 		}
 	}
 	close(pool)

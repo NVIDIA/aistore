@@ -249,18 +249,15 @@ func (df *dsortFramework) start() {
 func (df *dsortFramework) createInputShards() {
 	const tmpDir = "/tmp"
 	var (
-		wg    = &sync.WaitGroup{}
-		sema  = cmn.NewDynSemaphore(40)
+		wg    = cmn.NewLimitedWaitGroup(40)
 		errCh = make(chan error, df.tarballCnt)
 	)
 
 	tutils.Logf("creating %d tarballs...\n", df.tarballCnt)
 	for i := df.tarballCntToSkip; i < df.tarballCnt; i++ {
 		wg.Add(1)
-		sema.Acquire()
 		go func(i int) {
-			defer sema.Release()
-
+			defer wg.Done()
 			var (
 				err         error
 				duplication = i < df.recordDuplicationsCnt
@@ -286,7 +283,7 @@ func (df *dsortFramework) createInputShards() {
 			reader, err := readers.NewFileReaderFromFile(fqn, cmn.ChecksumNone)
 			tassert.CheckFatal(df.m.t, err)
 
-			tutils.PutAsync(wg, df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)
+			tutils.Put(df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)
 		}(i)
 	}
 	wg.Wait()

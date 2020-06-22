@@ -230,7 +230,10 @@ func (m *ioContext) cloudPuts(evict bool) {
 		tassert.CheckFatal(m.t, err)
 		objName := fmt.Sprintf("%s%s%d", "copy/cloud_", cmn.RandString(4), i)
 		wg.Add(1)
-		go tutils.PutAsync(wg, m.proxyURL, m.bck, objName, r, errCh)
+		go func() {
+			defer wg.Done()
+			tutils.Put(m.proxyURL, m.bck, objName, r, errCh)
+		}()
 		m.objNames = append(m.objNames, objName)
 	}
 	wg.Wait()
@@ -274,7 +277,10 @@ func (m *ioContext) cloudRePuts(evict bool) {
 		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
 		wg.Add(1)
-		go tutils.PutAsync(wg, m.proxyURL, m.bck, m.objNames[i], r, errCh)
+		go func(i int) {
+			defer wg.Done()
+			tutils.Put(m.proxyURL, m.bck, m.objNames[i], r, errCh)
+		}(i)
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
@@ -328,7 +334,6 @@ func (m *ioContext) cloudDelete() {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{}
-		sema       = cmn.NewDynSemaphore(40)
 	)
 
 	cmn.Assert(m.bck.Provider == cmn.AnyCloud)
@@ -337,15 +342,11 @@ func (m *ioContext) cloudDelete() {
 
 	tutils.Logln("deleting cloud objects...")
 
-	wg := &sync.WaitGroup{}
+	wg := cmn.NewLimitedWaitGroup(40)
 	for _, obj := range objList.Entries {
 		wg.Add(1)
-		sema.Acquire()
 		go func(obj *cmn.BucketEntry) {
-			defer func() {
-				sema.Release()
-				wg.Done()
-			}()
+			defer wg.Done()
 			err := api.DeleteObject(baseParams, m.bck, obj.Name)
 			tassert.CheckError(m.t, err)
 		}(obj)
@@ -625,7 +626,10 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		}
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, bck, keyName, r, errCh)
+		go func() {
+			defer wg.Done()
+			tutils.Put(proxyURL, bck, keyName, r, errCh)
+		}()
 		fileNames = append(fileNames, fileName)
 	}
 
@@ -640,7 +644,10 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		}
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, bck, keyName, r, errCh)
+		go func() {
+			defer wg.Done()
+			tutils.Put(proxyURL, bck, keyName, r, errCh)
+		}()
 		fileNames = append(fileNames, fName)
 	}
 
@@ -764,14 +771,17 @@ func prefixLookup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string
 
 func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
 	var (
-		wg    = &sync.WaitGroup{}
+		wg    = cmn.NewLimitedWaitGroup(40)
 		errCh = make(chan error, numfiles)
 	)
 
 	for _, fileName := range fileNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
-		go tutils.Del(proxyURL, bck, keyName, wg, errCh, true)
+		go func() {
+			defer wg.Done()
+			tutils.Del(proxyURL, bck, keyName, nil, errCh, true)
+		}()
 	}
 	wg.Wait()
 
