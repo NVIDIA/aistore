@@ -566,13 +566,14 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
 func concurrentPutGetDel(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		proxyURL := tutils.RandomProxyURL()
 		smap := tutils.GetClusterMap(t, proxyURL)
 
 		var (
-			errCh = make(chan error, smap.CountProxies())
-			wg    sync.WaitGroup
+			wg        = &sync.WaitGroup{}
+			errCh     = make(chan error, smap.CountProxies())
+			cksumType = bck.Props.Cksum.Type
 		)
 
 		// cid = a goroutine ID to make filenames unique
@@ -583,7 +584,7 @@ func concurrentPutGetDel(t *testing.T) {
 			wg.Add(1)
 			go func(url string) {
 				defer wg.Done()
-				errCh <- proxyPutGetDelete(100, url, bck, cksumType)
+				errCh <- proxyPutGetDelete(100, url, bck.Bck, cksumType)
 			}(v.PublicNet.DirectURL)
 		}
 

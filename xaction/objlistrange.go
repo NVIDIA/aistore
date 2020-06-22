@@ -55,7 +55,10 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := lom.Bck().IsRemote() && !args.Evict
+	var (
+		bck          = lom.Bck()
+		delFromCloud = bck.IsRemote() && !args.Evict
+	)
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsErrObjNought(err) {
@@ -63,7 +66,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 	}
 
 	if delFromCloud {
-		if err, _ := r.t.Cloud(lom.Bck()).DeleteObj(args.Ctx, lom); err != nil {
+		if err, _ := r.t.Cloud(bck).DeleteObj(args.Ctx, lom); err != nil {
 			cloudErr = err
 		}
 	}
@@ -78,7 +81,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 			}
 		}
 		if args.Evict {
-			cmn.Assert(lom.Bck().IsRemote())
+			cmn.Assert(bck.IsRemote())
 		}
 	}
 	return cloudErr
@@ -219,7 +222,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 
 	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for !r.Aborted() {
-		if r.Bck().IsAIS() {
+		if bck.IsAIS() {
 			walk := objwalk.NewWalk(context.Background(), r.t, bck, msg)
 			bucketListPage, err = walk.LocalObjPage()
 		} else {
@@ -235,7 +238,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 			if r.Aborted() {
 				return nil
 			}
-			if r.Bck().IsRemote() {
+			if bck.IsRemote() {
 				local, err := isLocalObject(smap, r.Bck(), be.Name, sid)
 				if err != nil {
 					return err

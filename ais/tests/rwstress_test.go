@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
@@ -146,29 +147,35 @@ func cleanRWStress(bck cmn.Bck, cksumType string) {
 }
 
 func parallelPutGetStress(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
-		errChanSize := numLoops * numFiles * 2
-		errCh := make(chan opRes, errChanSize)
-		initRWStress(t, bck, cksumType)
-		parallelOpLoop(bck, cksumType, errCh, opPut)
-		parallelOpLoop(bck, cksumType, errCh, opGet)
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		var (
+			errChanSize = numLoops * numFiles * 2
+			errCh       = make(chan opRes, errChanSize)
+			cksumType   = bck.Props.Cksum.Type
+		)
+		initRWStress(t, bck.Bck, cksumType)
+		parallelOpLoop(bck.Bck, cksumType, errCh, opPut)
+		parallelOpLoop(bck.Bck, cksumType, errCh, opGet)
 		close(errCh)
 		reportErr(t, errCh, false)
-		cleanRWStress(bck, cksumType)
+		cleanRWStress(bck.Bck, cksumType)
 	})
 }
 
 func multiOpStress(opNames ...string) func(t *testing.T) {
 	return func(t *testing.T) {
-		runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+		runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+			var (
+				errChanSize = numLoops * numFiles * 3
+				errCh       = make(chan opRes, errChanSize)
+				cksumType   = bck.Props.Cksum.Type
+			)
 			var wg sync.WaitGroup
-			errChanSize := numLoops * numFiles * 3
-			errCh := make(chan opRes, errChanSize)
-			parallelOpLoop(bck, cksumType, errCh, multiOp(opNames...))
+			parallelOpLoop(bck.Bck, cksumType, errCh, multiOp(opNames...))
 			wg.Wait()
 			close(errCh)
 			reportErr(t, errCh, true)
-			cleanRWStress(bck, cksumType)
+			cleanRWStress(bck.Bck, cksumType)
 		})
 	}
 }

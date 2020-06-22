@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
@@ -411,7 +412,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 }
 
 func propsMainTest(t *testing.T, versioning bool) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			config = tutils.GetClusterConfig(t)
 		)
@@ -446,12 +447,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 			}
 		}()
 
-		props, err := api.HeadBucket(tutils.BaseAPIParams(), bck)
-		if err != nil {
-			t.Fatalf("Could not execute HeadBucket Request: %v", err)
-		}
-		versionEnabled := props.Versioning.Enabled
-		propsTestCore(t, bck, versionEnabled, cksumType)
+		propsTestCore(t, bck.Bck, bck.Props.Versioning.Enabled, bck.Props.Cksum.Type)
 	})
 }
 

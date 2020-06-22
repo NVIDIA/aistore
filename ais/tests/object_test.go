@@ -188,13 +188,14 @@ func Test_putdelete(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 	)
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			errCh      = make(chan error, numfiles)
 			filesPutCh = make(chan string, numfiles)
+			cksumType  = bck.Props.Cksum.Type
 		)
 
-		tutils.PutRandObjs(proxyURL, bck, DeleteStr, fileSize, numfiles, errCh, filesPutCh, cksumType)
+		tutils.PutRandObjs(proxyURL, bck.Bck, DeleteStr, fileSize, numfiles, errCh, filesPutCh, cksumType)
 		close(filesPutCh)
 		tassert.SelectErr(t, errCh, "put", true)
 
@@ -210,7 +211,7 @@ func Test_putdelete(t *testing.T) {
 		// Get the workers started
 		for i := 0; i < numworkers; i++ {
 			wg.Add(1)
-			go deleteFiles(proxyURL, bck, nameChans[i], wg, errCh)
+			go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
 		}
 
 		num := 0
@@ -254,7 +255,7 @@ func Test_matchdelete(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 	)
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		// Declare one channel per worker to pass the keyname
 		keynameChans := make([]chan string, numworkers)
 		for i := 0; i < numworkers; i++ {
@@ -267,13 +268,13 @@ func Test_matchdelete(t *testing.T) {
 		// Get the workers started
 		for i := 0; i < numworkers; i++ {
 			wg.Add(1)
-			go deleteFiles(proxyURL, bck, keynameChans[i], wg, errCh)
+			go deleteFiles(proxyURL, bck.Bck, keynameChans[i], wg, errCh)
 		}
 
 		// list the bucket
 		var msg = &cmn.SelectMsg{PageSize: pagesize}
 		baseParams := tutils.BaseAPIParams(proxyURL)
-		reslist, err := api.ListObjects(baseParams, bck, msg, 0)
+		reslist, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 		if err != nil {
 			t.Error(err)
 			return
@@ -310,7 +311,7 @@ func Test_matchdelete(t *testing.T) {
 	})
 }
 
-func Test_putdeleteRange(t *testing.T) {
+func TestOperationsWithRanges(t *testing.T) {
 	if numfiles < 10 || numfiles%10 != 0 {
 		t.Fatal("numfiles must be a positive multiple of 10")
 	}
@@ -323,122 +324,144 @@ func Test_putdeleteRange(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 	)
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
-		errCh := make(chan error, numfiles*5)
-		objsPutCh := make(chan string, numfiles)
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		for _, evict := range []bool{false, true} {
+			t.Run(fmt.Sprintf("evict=%t", evict), func(t *testing.T) {
+				if evict && bck.IsAIS() {
+					t.Skip("evicting not possible for AIS bucket")
+				}
 
-		objList := make([]string, 0, numfiles)
-		for i := 0; i < numfiles/2; i++ {
-			fname := fmt.Sprintf("a-%04d", i)
-			objList = append(objList, fname)
-			fname = fmt.Sprintf("b-%04d", i)
-			objList = append(objList, fname)
+				var (
+					errCh     = make(chan error, numfiles*5)
+					objsPutCh = make(chan string, numfiles)
+					objList   = make([]string, 0, numfiles)
+					cksumType = bck.Props.Cksum.Type
+				)
+
+				for i := 0; i < numfiles/2; i++ {
+					fname := fmt.Sprintf("a-%04d", i)
+					objList = append(objList, fname)
+					fname = fmt.Sprintf("b-%04d", i)
+					objList = append(objList, fname)
+				}
+				tutils.PutObjsFromList(proxyURL, bck.Bck, commonPrefix, objSize, objList, errCh, objsPutCh, cksumType)
+				tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
+				close(objsPutCh)
+
+				tests := []struct {
+					// title to print out while testing
+					name string
+					// a range of file IDs
+					rangeStr string
+					// total number of files expected to be deleted/evicted
+					delta int
+				}{
+					{
+						"Trying to delete/evict files with invalid prefix",
+						"file/a-{0..10}",
+						0,
+					},
+					{
+						"Trying to delete/evict files out of range",
+						commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", numfiles+10, numfiles+110),
+						0,
+					},
+					{
+						fmt.Sprintf("Deleting/Evicting %d files with prefix 'a-'", numfiles/10),
+						commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (numfiles-numfiles/5)/2, numfiles/2),
+						numfiles / 10,
+					},
+					{
+						fmt.Sprintf("Deleting/Evicting %d files (short range)", numfiles/5),
+						commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, numfiles/5),
+						numfiles / 5,
+					},
+					{
+						"Deleting/Evicting files with empty range",
+						commonPrefix + "/b-",
+						numfiles/2 - numfiles/5,
+					},
+				}
+
+				var (
+					totalFiles = numfiles
+					baseParams = tutils.BaseAPIParams(proxyURL)
+					xactArgs   = api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck.Bck, Timeout: rebalanceTimeout}
+				)
+				if evict {
+					xactArgs.Kind = cmn.ActEvictObjects
+				}
+				for idx, test := range tests {
+					tutils.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
+
+					var (
+						err error
+						msg = &cmn.SelectMsg{Prefix: commonPrefix + "/", Cached: evict}
+					)
+					if evict {
+						err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
+					} else {
+						err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
+					}
+					if err != nil {
+						t.Error(err)
+						continue
+					}
+					if err := api.WaitForXaction(baseParams, xactArgs); err != nil {
+						t.Error(err)
+						continue
+					}
+
+					totalFiles -= test.delta
+					objList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+					if err != nil {
+						t.Error(err)
+						continue
+					}
+					if len(objList.Entries) != totalFiles {
+						t.Errorf("Incorrect number of remaining files: %d, should be %d", len(objList.Entries), totalFiles)
+					} else {
+						tutils.Logf("  %d files have been deleted/evicted\n", test.delta)
+					}
+				}
+
+				tutils.Logf("Cleaning up remained objects...\n")
+				msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
+				bckList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+				if err != nil {
+					t.Errorf("Failed to get the list of remained files, err: %v\n", err)
+				}
+				// cleanup everything at the end
+				// Declare one channel per worker to pass the keyname
+				nameChans := make([]chan string, numworkers)
+				for i := 0; i < numworkers; i++ {
+					// Allow a bunch of messages at a time to be written asynchronously to a channel
+					nameChans[i] = make(chan string, 100)
+				}
+
+				// Start the worker pools
+				var wg = &sync.WaitGroup{}
+				// Get the workers started
+				for i := 0; i < numworkers; i++ {
+					wg.Add(1)
+					go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
+				}
+
+				num := 0
+				for _, entry := range bckList.Entries {
+					nameChans[num%numworkers] <- entry.Name
+					num++
+				}
+
+				// Close the channels after the reading is done
+				for i := 0; i < numworkers; i++ {
+					close(nameChans[i])
+				}
+
+				wg.Wait()
+				tassert.SelectErr(t, errCh, "delete", false)
+			})
 		}
-		tutils.PutObjsFromList(proxyURL, bck, commonPrefix, objSize, objList, errCh, objsPutCh, cksumType)
-		tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
-		close(objsPutCh)
-
-		tests := []struct {
-			// title to print out while testing
-			name string
-			// a range of file IDs
-			rangeStr string
-			// total number of files expected to delete
-			delta int
-		}{
-			{
-				"Trying to delete files with invalid prefix",
-				"file/a-{0..10}",
-				0,
-			},
-			{
-				"Trying to delete files out of range",
-				commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", numfiles+10, numfiles+110),
-				0,
-			},
-			{
-				fmt.Sprintf("Deleting %d files with prefix 'a-'", numfiles/10),
-				commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (numfiles-numfiles/5)/2, numfiles/2),
-				numfiles / 10,
-			},
-			{
-				fmt.Sprintf("Deleting %d files (short range)", numfiles/5),
-				commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, numfiles/5),
-				numfiles / 5,
-			},
-			{
-				"Deleting files with empty range",
-				commonPrefix + "/b-",
-				numfiles/2 - numfiles/5,
-			},
-		}
-
-		totalFiles := numfiles
-		baseParams := tutils.BaseAPIParams(proxyURL)
-		xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
-		for idx, test := range tests {
-			msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-			tutils.Logf("%d. %s\n  Range: [%s]\n",
-				idx+1, test.name, test.rangeStr)
-
-			err := api.DeleteRange(baseParams, bck, test.rangeStr)
-			if err != nil {
-				t.Error(err)
-				continue
-			}
-			if err := api.WaitForXaction(baseParams, xactArgs); err != nil {
-				t.Error(err)
-				continue
-			}
-
-			totalFiles -= test.delta
-			bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
-			if err != nil {
-				t.Error(err)
-				continue
-			}
-			if len(bktlst.Entries) != totalFiles {
-				t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), totalFiles)
-			} else {
-				tutils.Logf("  %d files have been deleted\n", test.delta)
-			}
-		}
-
-		tutils.Logf("Cleaning up remained objects...\n")
-		msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-		bckList, err := api.ListObjects(baseParams, bck, msg, 0)
-		if err != nil {
-			t.Errorf("Failed to get the list of remained files, err: %v\n", err)
-		}
-		// cleanup everything at the end
-		// Declare one channel per worker to pass the keyname
-		nameChans := make([]chan string, numworkers)
-		for i := 0; i < numworkers; i++ {
-			// Allow a bunch of messages at a time to be written asynchronously to a channel
-			nameChans[i] = make(chan string, 100)
-		}
-
-		// Start the worker pools
-		var wg = &sync.WaitGroup{}
-		// Get the workers started
-		for i := 0; i < numworkers; i++ {
-			wg.Add(1)
-			go deleteFiles(proxyURL, bck, nameChans[i], wg, errCh)
-		}
-
-		num := 0
-		for _, entry := range bckList.Entries {
-			nameChans[num%numworkers] <- entry.Name
-			num++
-		}
-
-		// Close the channels after the reading is done
-		for i := 0; i < numworkers; i++ {
-			close(nameChans[i])
-		}
-
-		wg.Wait()
-		tassert.SelectErr(t, errCh, "delete", false)
 	})
 }
 
@@ -1308,32 +1331,29 @@ func TestRangeRead(t *testing.T) {
 		fileSize = 5271
 	)
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			fileName   string
 			fileNameCh = make(chan string, numFiles)
 			errCh      = make(chan error, numFiles)
 			proxyURL   = tutils.RandomProxyURL()
 			baseParams = tutils.BaseAPIParams(proxyURL)
+			cksumProps = bck.CksumConf()
 		)
 
-		tutils.PutRandObjs(proxyURL, bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, cksumType, true)
+		tutils.PutRandObjs(proxyURL, bck.Bck, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, cksumProps.Type, true)
 		tassert.SelectErr(t, errCh, "put", false)
-
-		// Get Current Config
-		p, err := api.HeadBucket(baseParams, bck)
-		tassert.CheckFatal(t, err)
 
 		defer func() {
 			tutils.Logln("Cleaning up...")
-			err := api.DeleteObject(baseParams, bck, filepath.Join(RangeGetStr, fileName))
+			err := api.DeleteObject(baseParams, bck.Bck, filepath.Join(RangeGetStr, fileName))
 			tassert.CheckError(t, err)
 			propsToUpdate := cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
-					EnableReadRange: api.Bool(p.Cksum.EnableReadRange),
+					EnableReadRange: api.Bool(cksumProps.EnableReadRange),
 				},
 			}
-			err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+			err = api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			close(errCh)
 			close(fileNameCh)
 			tassert.CheckFatal(t, err)
@@ -1342,53 +1362,47 @@ func TestRangeRead(t *testing.T) {
 		fileName = <-fileNameCh
 		tutils.Logln("Testing valid cases.")
 		// Validate entire object checksum is being returned
-		if p.Cksum.EnableReadRange {
+		if cksumProps.EnableReadRange {
 			propsToUpdate := cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					EnableReadRange: api.Bool(false),
 				},
 			}
-			err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+			err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
-			if t.Failed() {
-				t.FailNow()
-			}
 		}
-		testValidCases(t, proxyURL, bck, cksumType, fileSize, fileName, true, RangeGetStr)
+		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, fileName, true, RangeGetStr)
 
 		// Validate only range checksum is being returned
-		if !p.Cksum.EnableReadRange {
+		if !cksumProps.EnableReadRange {
 			propsToUpdate := cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					EnableReadRange: api.Bool(true),
 				},
 			}
-			err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+			err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
-			if t.Failed() {
-				t.FailNow()
-			}
 		}
-		testValidCases(t, proxyURL, bck, cksumType, fileSize, fileName, false, RangeGetStr)
+		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, fileName, false, RangeGetStr)
 
 		tutils.Logln("Testing valid cases (query).")
-		verifyValidRangesQuery(t, proxyURL, bck, fileName, "bytes=-1", 1)
-		verifyValidRangesQuery(t, proxyURL, bck, fileName, "bytes=0-", fileSize)
-		verifyValidRangesQuery(t, proxyURL, bck, fileName, "bytes=10-", fileSize-10)
-		verifyValidRangesQuery(t, proxyURL, bck, fileName, fmt.Sprintf("bytes=-%d", fileSize), fileSize)
-		verifyValidRangesQuery(t, proxyURL, bck, fileName, fmt.Sprintf("bytes=-%d", fileSize+2), fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=-1", 1)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=0-", fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=10-", fileSize-10)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, fmt.Sprintf("bytes=-%d", fileSize), fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, fmt.Sprintf("bytes=-%d", fileSize+2), fileSize)
 
 		tutils.Logln("Testing invalid cases (query).")
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "potatoes=0-1")
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes")
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, fmt.Sprintf("bytes=%d-", fileSize+1))
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, fmt.Sprintf("bytes=%d-%d", fileSize+1, fileSize+2))
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=0--1")
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=1-0")
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=-1-0")
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=-1-2")
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=10--1")
-		verifyInvalidRangesQuery(t, proxyURL, bck, fileName, "bytes=1-2,4-6")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "potatoes=0-1")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, fmt.Sprintf("bytes=%d-", fileSize+1))
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, fmt.Sprintf("bytes=%d-%d", fileSize+1, fileSize+2))
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=0--1")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=1-0")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=-1-0")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=-1-2")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=10--1")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=1-2,4-6")
 	})
 }
 

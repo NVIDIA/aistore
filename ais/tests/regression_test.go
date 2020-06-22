@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
@@ -460,15 +461,15 @@ func TestRenameObjects(t *testing.T) {
 }
 
 func TestObjectPrefix(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			proxyURL = tutils.RandomProxyURL()
 		)
 
 		prefixFileNumber = numfiles
-		fileNames := prefixCreateFiles(t, proxyURL, bck, cksumType)
-		prefixLookup(t, proxyURL, bck, fileNames)
-		prefixCleanup(t, proxyURL, bck, fileNames)
+		fileNames := prefixCreateFiles(t, proxyURL, bck.Bck, bck.Props.Cksum.Type)
+		prefixLookup(t, proxyURL, bck.Bck, fileNames)
+		prefixCleanup(t, proxyURL, bck.Bck, fileNames)
 	})
 }
 
@@ -819,7 +820,7 @@ func TestPrefetchList(t *testing.T) {
 }
 
 func TestDeleteList(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			err        error
 			prefix     = ListRangeStr + "/tstf-"
@@ -832,7 +833,7 @@ func TestDeleteList(t *testing.T) {
 
 		// 1. Put files to delete
 		for i := 0; i < numfiles; i++ {
-			r, err := readers.NewRandReader(fileSize, cksumType)
+			r, err := readers.NewRandReader(fileSize, bck.Props.Cksum.Type)
 			tassert.CheckFatal(t, err)
 
 			keyname := fmt.Sprintf("%s%d", prefix, i)
@@ -840,7 +841,7 @@ func TestDeleteList(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				tutils.Put(proxyURL, bck, keyname, r, errCh)
+				tutils.Put(proxyURL, bck.Bck, keyname, r, errCh)
 			}()
 			files = append(files, keyname)
 		}
@@ -849,16 +850,16 @@ func TestDeleteList(t *testing.T) {
 		tutils.Logf("PUT done.\n")
 
 		// 2. Delete the objects
-		err = api.DeleteList(baseParams, bck, files)
+		err = api.DeleteList(baseParams, bck.Bck, files)
 		tassert.CheckError(t, err)
 
-		xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck.Bck, Timeout: rebalanceTimeout}
 		err = api.WaitForXaction(baseParams, xactArgs)
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that all the files have been deleted
 		msg := &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize}
-		bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
+		bktlst, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
 			t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -934,7 +935,7 @@ func TestPrefetchRange(t *testing.T) {
 }
 
 func TestDeleteRange(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			err            error
 			quarter        = numfiles / 4
@@ -951,13 +952,13 @@ func TestDeleteRange(t *testing.T) {
 
 		// 1. Put files to delete
 		for i := 0; i < numfiles; i++ {
-			r, err := readers.NewRandReader(fileSize, cksumType)
+			r, err := readers.NewRandReader(fileSize, bck.Props.Cksum.Type)
 			tassert.CheckFatal(t, err)
 
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				tutils.Put(proxyURL, bck, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
+				tutils.Put(proxyURL, bck.Bck, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
 			}(i)
 		}
 		wg.Wait()
@@ -966,15 +967,15 @@ func TestDeleteRange(t *testing.T) {
 
 		// 2. Delete the small range of objects
 		tutils.Logf("Delete in range %s\n", smallrange)
-		err = api.DeleteRange(baseParams, bck, smallrange)
+		err = api.DeleteRange(baseParams, bck.Bck, smallrange)
 		tassert.CheckError(t, err)
-		xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck, Timeout: rebalanceTimeout}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck.Bck, Timeout: rebalanceTimeout}
 		err = api.WaitForXaction(baseParams, xactArgs)
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that the correct files have been deleted
 		msg := &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize}
-		bktlst, err := api.ListObjects(baseParams, bck, msg, 0)
+		bktlst, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != numfiles-smallrangesize {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
@@ -995,13 +996,13 @@ func TestDeleteRange(t *testing.T) {
 
 		tutils.Logf("Delete in range %s\n", bigrange)
 		// 4. Delete the big range of objects
-		err = api.DeleteRange(baseParams, bck, bigrange)
+		err = api.DeleteRange(baseParams, bck.Bck, bigrange)
 		tassert.CheckError(t, err)
 		err = api.WaitForXaction(baseParams, xactArgs)
 		tassert.CheckFatal(t, err)
 
 		// 5. Check to see that all the files have been deleted
-		bktlst, err = api.ListObjects(baseParams, bck, msg, 0)
+		bktlst, err = api.ListObjects(baseParams, bck.Bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
 			t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))

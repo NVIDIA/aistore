@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -24,7 +25,7 @@ var (
 func TestSmoke(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	runProviderTests(t, func(t *testing.T, bck cmn.Bck, cksumType string) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			fp       = make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
 			proxyURL = tutils.GetPrimaryURL()
@@ -32,7 +33,9 @@ func TestSmoke(t *testing.T) {
 		for _, fs := range objSizes {
 			for _, r := range ratios {
 				s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", cmn.B2S(fs, 0), r*100)
-				t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, bck, fs, r, cksumType, fp) })
+				t.Run(s, func(t *testing.T) {
+					oneSmoke(t, proxyURL, bck.Bck, fs, r, bck.Props.Cksum.Type, fp)
+				})
 			}
 		}
 
@@ -43,7 +46,7 @@ func TestSmoke(t *testing.T) {
 		errCh := make(chan error, len(objSizes)*len(ratios)*numops*numworkers)
 		for file := range fp {
 			wg.Add(1)
-			go tutils.Del(proxyURL, bck, "smoke/"+file, wg, errCh, true)
+			go tutils.Del(proxyURL, bck.Bck, "smoke/"+file, wg, errCh, true)
 		}
 		wg.Wait()
 		select {

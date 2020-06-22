@@ -546,11 +546,12 @@ func (m *ioContext) setRandBucketProps() {
 	tassert.CheckFatal(m.t, err)
 }
 
-func runProviderTests(t *testing.T, f func(*testing.T, cmn.Bck, string)) {
+func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 	tests := []struct {
-		name     string
-		bck      cmn.Bck
-		skipArgs tutils.SkipTestArgs
+		name       string
+		bck        cmn.Bck
+		backendBck cmn.Bck
+		skipArgs   tutils.SkipTestArgs
 	}{
 		{
 			name: "local",
@@ -571,28 +572,48 @@ func runProviderTests(t *testing.T, f func(*testing.T, cmn.Bck, string)) {
 				RequiresRemote: true,
 			},
 		},
+		{
+			name:       "backend",
+			bck:        cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
+			backendBck: cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
+			skipArgs: tutils.SkipTestArgs{
+				Long:  true,
+				Cloud: true,
+			},
+		},
 	}
+
 	for _, test := range tests { // nolint:gocritic // no performance critical code
 		t.Run(test.name, func(t *testing.T) {
-			var cksumType string
-			test.skipArgs.Bck = test.bck
+			if test.backendBck.IsEmpty() {
+				test.skipArgs.Bck = test.bck
+			} else {
+				test.skipArgs.Bck = test.backendBck
+			}
 			tutils.CheckSkip(t, test.skipArgs)
 
 			baseParams := tutils.BaseAPIParams()
+
 			if test.bck.IsAIS() || test.bck.IsRemoteAIS() {
 				err := api.CreateBucket(baseParams, test.bck)
 				tassert.CheckFatal(t, err)
+
+				if !test.backendBck.IsEmpty() {
+					tutils.SetBackendBck(t, baseParams, test.bck, test.backendBck)
+				}
+
 				defer func() {
 					api.DestroyBucket(baseParams, test.bck)
 				}()
-				cksumType = cmn.DefaultBucketProps().Cksum.Type
-			} else {
-				p, err := api.HeadBucket(baseParams, test.bck)
-				tassert.CheckFatal(t, err)
-				cksumType = p.Cksum.Type
 			}
 
-			f(t, test.bck, cksumType)
+			p, err := api.HeadBucket(baseParams, test.bck)
+			tassert.CheckFatal(t, err)
+
+			bck := cluster.NewBckEmbed(test.bck)
+			bck.Props = p
+
+			f(t, bck)
 		})
 	}
 }

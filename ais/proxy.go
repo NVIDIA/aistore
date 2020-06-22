@@ -828,8 +828,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if bck.Bck.IsRemoteAIS() {
-		p.reverseReqRemote(w, r, &msg, bck.Bck)
-		return
+		switch msg.Action {
+		case cmn.ActListObjects, cmn.ActInvalListCache:
+			break
+		default:
+			p.reverseReqRemote(w, r, &msg, bck.Bck)
+			return
+		}
 	}
 
 	// 3. createlb
