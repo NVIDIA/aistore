@@ -117,29 +117,23 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 			}
-			fqn, _, err = cluster.HrwFQN(bck, SliceType, objName)
+			ct, err := cluster.NewCTFromBO(bck.Bck.Name, bck.Bck.Provider, objName, r.t.GetBowner(), SliceType)
 			if err != nil {
 				glog.Error(err)
 				return
 			}
-			metaFQN, _, err = cluster.HrwFQN(bck, MetaType, objName)
-			if err == nil {
-				md, err = LoadMetadata(metaFQN)
+			fqn = ct.FQN()
+			metaFQN = ct.Make(MetaType)
+			md, err = LoadMetadata(metaFQN)
+			if err != nil {
+				glog.Error(err)
+				return
 			}
-		} else {
-			if glog.V(4) {
-				glog.Infof("Received request for replica %s", objName)
-			}
-			// FIXME: (redundant) r.dataResponse() does not need it as it constructs
-			//        LOM right away
-			fqn, _, err = cluster.HrwFQN(bck, fs.ObjectType, objName)
-		}
-		if err != nil {
-			glog.Error(err)
-			return
+		} else if glog.V(4) {
+			glog.Infof("Received request for replica %s", objName)
 		}
 
-		if err := r.dataResponse(respPut, fqn, bck, objName, daemonID, md); err != nil {
+		if err = r.dataResponse(respPut, fqn, bck, objName, daemonID, md); err != nil {
 			glog.Errorf("%s failed to send back [GET req] %q: %v", r.t.Snode(), fqn, err)
 		}
 	default:

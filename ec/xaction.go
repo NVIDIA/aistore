@@ -157,27 +157,10 @@ func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs
 	return reader, nil
 }
 
-func (r *xactECBase) newMetafileResponse(attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
-	reader, err = cmn.NewFileHandle(fqn)
-	if err != nil {
-		return nil, err
-	}
-	var sz int64
-	if stat, err := os.Stat(fqn); err == nil {
-		sz = stat.Size()
-	}
-	if sz == 0 {
-		// empty file - no errors: send empty response
-		return nil, nil
-	}
-	attrs.Size = sz
-	return reader, nil
-}
-
 // replica/full object request
-func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
-	lom := &cluster.LOM{T: r.t, FQN: fqn}
-	err = lom.Init(cmn.Bck{})
+func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, bck *cluster.Bck, objName string) (reader cmn.ReadOpenCloser, err error) {
+	lom := &cluster.LOM{T: r.t, ObjName: objName}
+	err = lom.Init(bck.Bck)
 	if err != nil {
 		glog.Warning(err)
 		return nil, err
@@ -186,7 +169,7 @@ func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, fqn string
 		glog.Warning(err)
 		return nil, err
 	}
-	reader, err = cmn.NewFileHandle(fqn)
+	reader, err = cmn.NewFileHandle(lom.FQN)
 	if err != nil {
 		return nil, err
 	}
@@ -212,16 +195,13 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 		objAttrs transport.ObjectAttrs
 	)
 	ireq := r.newIntraReq(act, nil)
-	if md == nil {
-		// metadata request
-		reader, _ = r.newMetafileResponse(&objAttrs, fqn)
-	} else if md.SliceID != 0 {
+	if md != nil && md.SliceID != 0 {
 		// slice request
 		reader, err = r.newSliceResponse(md, &objAttrs, fqn)
 		ireq.exists = err == nil
 	} else {
 		// replica/full object request
-		reader, err = r.newReplicaResponse(&objAttrs, fqn)
+		reader, err = r.newReplicaResponse(&objAttrs, bck, objName)
 		ireq.exists = err == nil
 	}
 	cmn.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))

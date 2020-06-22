@@ -565,6 +565,10 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 		mcopy := *meta
 		mcopy.SliceID = i + 1
+		mcopy.ObjVersion = req.LOM.Version()
+		if mcopy.SliceID != 0 && slices[i].cksum != nil {
+			mcopy.CksumType, mcopy.CksumValue = slices[i].cksum.Get()
+		}
 
 		src := &dataSource{
 			reader:   reader,
@@ -577,11 +581,6 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target
 		lom := *req.LOM
-		if mcopy.SliceID != 0 && slices[i].cksum != nil {
-			mcopy.CksumType, mcopy.CksumValue = slices[i].cksum.Get()
-		}
-		mcopy.ObjVersion = lom.Version()
-
 		err = c.parent.writeRemote([]string{targets[i+1].ID()}, &lom, src, nil)
 		if err != nil {
 			ch <- err

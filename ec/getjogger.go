@@ -255,8 +255,8 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 			break
 		}
 		iReqBuf := c.parent.newIntraReq(reqGet, meta).NewPack(mm)
-		req.LOM.FQN = tmpFQN
-		n, err = c.parent.readRemote(req.LOM, node, uname, iReqBuf, w)
+		lomClone := req.LOM.Clone(tmpFQN)
+		n, err = c.parent.readRemote(lomClone, node, uname, iReqBuf, w)
 		mm.Free(iReqBuf)
 		debug.AssertNoErr(w.Close())
 
