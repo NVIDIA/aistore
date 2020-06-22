@@ -64,6 +64,7 @@ var XactsMeta = map[string]XactMetadata{
 	ActLoadLomCache: {Type: XactTypeBck, Startable: false},
 	ActPrefetch:     {Type: XactTypeBck, Startable: true},
 	ActPromote:      {Type: XactTypeBck, Startable: false},
+	ActQuery:        {Type: XactTypeBck, Startable: false},
 
 	ActListObjects:   {Type: XactTypeTask, Startable: false},
 	ActSummaryBucket: {Type: XactTypeTask, Startable: false},

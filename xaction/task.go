@@ -12,11 +12,14 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
+	"github.com/NVIDIA/aistore/objwalk/walkinfo"
+	"github.com/NVIDIA/aistore/query"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -91,8 +94,8 @@ func (t *bckListTask) IsMountpathXact() bool { return false }
 func (t *bckListTask) Run() {
 	ctx := context.WithValue(
 		t.ctx,
-		objwalk.CtxPostCallbackKey,
-		objwalk.PostCallbackFunc(func(lom *cluster.LOM) {
+		walkinfo.CtxPostCallbackKey,
+		walkinfo.PostCallbackFunc(func(lom *cluster.LOM) {
 			t.ObjectsInc()
 			t.BytesAdd(lom.Size())
 		}),
@@ -106,10 +109,44 @@ func (t *bckListTask) Run() {
 
 	walk := objwalk.NewWalk(ctx, t.t, bck, t.msg)
 	if bck.IsAIS() || t.msg.Cached {
-		t.UpdateResult(walk.LocalObjPage())
+		wi := walkinfo.NewWalkInfo(ctx, t.t, bck.Name, t.msg)
+		t.UpdateResult(t.localObjPage(wi))
 	} else {
 		t.UpdateResult(walk.CloudObjPage())
 	}
+}
+
+func (t *bckListTask) localObjPage(wi *walkinfo.WalkInfo) (*cmn.BucketList, error) {
+	bckSrc := query.BckSource(t.Bck())
+	objSrc := &query.ObjectsSource{}
+	q := query.NewQuery(objSrc, bckSrc, nil)
+
+	xact, err := Registry.RenewQueryXact(t.t, q, wi, t.msg.PersistentHandle)
+	if err != nil {
+		return nil, err
+	}
+
+	if xact.PageMarkerFulfilled(t.msg.PageMarker) {
+		// We already fetched everything target has, return empty result
+		glog.Errorf("page marker fulfilled!")
+		return &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0), PageMarker: ""}, nil
+	}
+
+	if xact.PageMarkerUnsatisfiable(t.msg.PageMarker) {
+		// We would miss some objects so we have to start from the beginning. Last fetched object by this xaction
+		// is later (in sorted order) than our page marker.
+		xact.Abort()
+		if glog.V(4) {
+			glog.Infof("page marker before last result: %q vs %q", t.msg.PageMarker, xact.LastResult())
+		}
+		query.Registry.Delete(t.msg.PersistentHandle)
+		xact, err = Registry.RenewQueryXact(t.t, q, wi, t.msg.PersistentHandle)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return objwalk.LocalObjPage(xact, t.msg.WantObjectsCnt())
 }
 
 func (t *bckListTask) UpdateResult(result interface{}, err error) {
@@ -230,7 +267,8 @@ func (t *bckSummaryTask) Run() {
 				for {
 					walk := objwalk.NewWalk(context.Background(), t.t, bck, msg)
 					if bck.IsAIS() {
-						list, err = walk.LocalObjPage()
+						wi := walkinfo.NewWalkInfo(t.ctx, t.t, bck.Name, msg)
+						list, err = walk.DefaultLocalObjPage(msg.WantObjectsCnt(), wi)
 					} else {
 						list, err = walk.CloudObjPage()
 					}

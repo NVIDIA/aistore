@@ -5,7 +5,6 @@
 package xaction
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/objwalk"
+	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 )
 
 func isLocalObject(smap *cluster.Smap, b cmn.Bck, objName, sid string) (bool, error) {
@@ -223,8 +223,9 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for !r.Aborted() {
 		if bck.IsAIS() {
-			walk := objwalk.NewWalk(context.Background(), r.t, bck, msg)
-			bucketListPage, err = walk.LocalObjPage()
+			wi := walkinfo.NewWalkInfo(args.Ctx, r.t, bck.Name, msg)
+			walk := objwalk.NewWalk(args.Ctx, r.t, bck, msg)
+			bucketListPage, err = walk.DefaultLocalObjPage(msg.WantObjectsCnt(), wi)
 		} else {
 			bucketListPage, err, _ = r.t.Cloud(bck).ListObjects(args.Ctx, bck, msg)
 		}

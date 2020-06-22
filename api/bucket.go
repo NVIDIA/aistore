@@ -416,6 +416,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		}
 
 		smsg.PageMarker = page.PageMarker
+		smsg.PersistentHandle = page.PersistentMarker
 	}
 
 	if len(invalidateCache) == 0 || invalidateCache[0] {

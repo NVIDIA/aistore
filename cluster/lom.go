@@ -63,6 +63,8 @@ type (
 		ParsedFQN fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
 		loaded    bool
 	}
+
+	ObjectFilter func(*LOM) bool
 )
 
 var (

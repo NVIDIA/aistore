@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/tar2tf"
 )
@@ -633,21 +634,22 @@ func (e *tar2TfEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 
 type queryEntry struct {
 	baseBckEntry
-	t    cluster.Target
-	xact *query.ResultSetXact
-
+	t     cluster.Target
+	xact  *query.Xact
 	query *query.ObjectsQuery
+	wi    *walkinfo.WalkInfo
 
 	handle string
 	id     string
 }
 
 func (e *queryEntry) Start(_ cmn.Bck) error {
-	xact := query.NewResultSet(e.t, e.query)
+	xact := query.NewListObjects(e.t, e.query, e.wi, e.id)
 	e.xact = xact
 	if query.Registry.Get(e.handle) != nil {
 		return fmt.Errorf("result set with handle %s already exists", e.handle)
 	}
+
 	go xact.StartWithHandle(e.handle)
 	return nil
 }
@@ -655,9 +657,13 @@ func (e *queryEntry) Start(_ cmn.Bck) error {
 func (e *queryEntry) Kind() string  { return cmn.ActQuery }
 func (e *queryEntry) Get() cmn.Xact { return e.xact }
 
-func (r *registry) RenewQueryXact(t cluster.Target, q *query.ObjectsQuery, handle string) (*query.ResultSetXact, error) {
+func (r *registry) RenewQueryXact(t cluster.Target, q *query.ObjectsQuery, wi *walkinfo.WalkInfo, handle string) (*query.Xact, error) {
 	if xact := query.Registry.Get(handle); xact != nil {
-		return xact, nil
+		if xact.Aborted() {
+			query.Registry.Delete(handle)
+		} else {
+			return xact, nil
+		}
 	}
 
 	id := cmn.GenUUID()
@@ -669,11 +675,13 @@ func (r *registry) RenewQueryXact(t cluster.Target, q *query.ObjectsQuery, handl
 		t:      t,
 		query:  q,
 		handle: handle,
+		wi:     wi,
 	}
 
 	ee, err := r.renewBucketXaction(e, cluster.NewBckEmbed(*q.BckSource.Bck))
 	if err == nil {
-		return ee.Get().(*query.ResultSetXact), nil
+		x := ee.Get().(*query.Xact)
+		return x, nil
 	}
 	return nil, err
 }

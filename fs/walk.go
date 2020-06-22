@@ -64,6 +64,7 @@ type (
 		mpathIdx int
 		fqn      string
 		objName  string
+		dirEntry DirEntry
 	}
 	objInfos []objInfo
 )
@@ -213,15 +214,20 @@ func Walk(opts *Options) error {
 }
 
 func WalkBck(opts *WalkBckOptions) error {
+	type walkEntry struct {
+		fqn      string
+		dirEntry DirEntry
+	}
+
 	var (
 		mpaths, _ = Mountpaths.Get()
-		mpathChs  = make([]chan string, len(mpaths))
+		mpathChs  = make([]chan *walkEntry, len(mpaths))
 
 		group, ctx = errgroup.WithContext(context.Background())
 	)
 
 	for i := 0; i < len(mpaths); i++ {
-		mpathChs[i] = make(chan string, mpathQueueSize)
+		mpathChs[i] = make(chan *walkEntry, mpathQueueSize)
 	}
 
 	cmn.Assert(opts.Mpath == nil)
@@ -256,7 +262,7 @@ func WalkBck(opts *WalkBckOptions) error {
 					select {
 					case <-ctx.Done():
 						return cmn.NewAbortedError("mpath: " + mpath.Path)
-					case mpathChs[idx] <- fqn:
+					case mpathChs[idx] <- &walkEntry{fqn, de}:
 						return nil
 					}
 				}
@@ -275,19 +281,19 @@ func WalkBck(opts *WalkBckOptions) error {
 		heap.Init(h)
 
 		for i := 0; i < len(mpathChs); i++ {
-			if fqn, ok := <-mpathChs[i]; ok {
-				heap.Push(h, objInfo{mpathIdx: i, fqn: fqn})
+			if pair, ok := <-mpathChs[i]; ok {
+				heap.Push(h, objInfo{mpathIdx: i, fqn: pair.fqn, dirEntry: pair.dirEntry})
 			}
 		}
 
 		for h.Len() > 0 {
 			v := heap.Pop(h)
 			info := v.(objInfo)
-			if err := opts.Callback(info.fqn, nil); err != nil {
+			if err := opts.Callback(info.fqn, info.dirEntry); err != nil {
 				return err
 			}
-			if fqn, ok := <-mpathChs[info.mpathIdx]; ok {
-				heap.Push(h, objInfo{mpathIdx: info.mpathIdx, fqn: fqn})
+			if pair, ok := <-mpathChs[info.mpathIdx]; ok {
+				heap.Push(h, objInfo{mpathIdx: info.mpathIdx, fqn: pair.fqn, dirEntry: pair.dirEntry})
 			}
 		}
 		return nil

@@ -29,7 +29,6 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
@@ -1624,6 +1623,11 @@ func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, smsg *cmn.SelectMsg, newT
 			glog.Infof("proxy: reading async task %s result", smsg.UUID)
 		}
 	}
+
+	if smsg.PersistentHandle == "" {
+		smsg.PersistentHandle = smsg.UUID
+	}
+
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	return isNew, q
 }
@@ -1684,6 +1688,10 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 		return nil, newTaskID, nil
 	}
 
+	if smsg.PersistentHandle == "" {
+		smsg.PersistentHandle = smsg.UUID
+	}
+
 	fetchResult := listCache.next(smap, smsg, bck, pageSize)
 	if fetchResult.err != nil {
 		return nil, "", fetchResult.err
@@ -1692,7 +1700,8 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 		return nil, smsg.UUID, nil
 	}
 
-	allEntries = objwalk.ConcatObjLists(fetchResult.lists, pageSize)
+	allEntries = cmn.ConcatObjLists(fetchResult.lists, pageSize)
+	allEntries.PersistentMarker = smsg.PersistentHandle
 	return allEntries, "", nil
 }
 
@@ -1801,9 +1810,9 @@ func (p *proxyrunner) listObjectsCloud(bck *cluster.Bck, smsg cmn.SelectMsg) (
 		maxSize = pageSize
 	}
 	if smsg.Cached {
-		allEntries = objwalk.ConcatObjLists(bckLists, maxSize)
+		allEntries = cmn.ConcatObjLists(bckLists, maxSize)
 	} else {
-		allEntries = objwalk.MergeObjLists(bckLists, maxSize)
+		allEntries = cmn.MergeObjLists(bckLists, maxSize)
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Errorf("Objects after merge %d, marker %s", len(allEntries.Entries), allEntries.PageMarker)

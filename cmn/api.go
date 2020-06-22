@@ -33,14 +33,15 @@ type ActValPromote struct {
 //       in one response. The result list is unsorted and contains only object
 //       names: even field `Status` is filled with zero value
 type SelectMsg struct {
-	Props      string `json:"props"`       // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"
-	TimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
-	Prefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
-	PageMarker string `json:"pagemarker"`  // marker - the last object in previous page
-	UUID       string `json:"uuid"`        // ID to identify a single multi-page request
-	PageSize   uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
-	Fast       bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
-	Cached     bool   `json:"cached"`      // for cloud buckets - list only cached objects
+	Props            string `json:"props"`       // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"
+	TimeFormat       string `json:"time_format"` // "RFC822" default - see the enum above
+	Prefix           string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
+	PageMarker       string `json:"pagemarker"`  // pageMarker - the last object in previous page
+	PersistentHandle string `json:"handle"`      // value passed between subsequent page requests
+	UUID             string `json:"uuid"`        // ID to identify a single multi-page request
+	PageSize         uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
+	Fast             bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
+	Cached           bool   `json:"cached"`      // for cloud buckets - list only cached objects
 }
 
 type PageMarker string
@@ -120,6 +121,17 @@ func (msg *SelectMsg) ListObjectsCacheID(bck Bck) string {
 	return fmt.Sprintf("%s/%s/%d", bck.String(), msg.Prefix, f)
 }
 
+func (msg *SelectMsg) WantObjectsCnt() uint {
+	if msg.Fast {
+		return msg.PageSize
+	}
+
+	if msg.PageSize == 0 {
+		return DefaultListPageSize
+	}
+	return msg.PageSize
+}
+
 // Returns true if given pageMarker includes given object name.
 // PageMarker includes an object name iff the object name would
 // be included in response having given page marker.
@@ -157,8 +169,9 @@ func (be *BucketEntry) IsStatusOK() bool {
 
 // BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'
 type BucketList struct {
-	Entries    []*BucketEntry `json:"entries"`
-	PageMarker string         `json:"pagemarker"`
+	Entries          []*BucketEntry `json:"entries"`
+	PageMarker       string         `json:"pagemarker"`
+	PersistentMarker string         `json:"handle"`
 }
 
 type BucketSummary struct {

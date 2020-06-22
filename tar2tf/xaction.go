@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/go-tfdata/tfdata/transform"
 )
@@ -42,11 +43,21 @@ func (t *Xact) Run() {
 		// is the same as tar2tf request life span. If request get's canceled,
 		// the xaction will terminate as well
 		q         = query.NewQuery(objSrc, bckSrc, nil)
-		resultSet = query.NewResultSet(t.T, q)
+		resultSet = query.NewListObjects(t.T, q, walkinfo.NewDefaultWalkInfo(t.T, bckSrc.Bck.Name), "")
 	)
 	go resultSet.Start()
 
-	err := resultSet.ForEach(func(lom *cluster.LOM) error {
+	err := resultSet.ForEach(func(entry *cmn.BucketEntry) error {
+		lom := &cluster.LOM{
+			ObjName: entry.Name,
+			T:       t.T,
+		}
+		if err := lom.Init(*bckSrc.Bck); err != nil {
+			return err
+		}
+		if err := lom.Load(); err != nil {
+			return err
+		}
 		tarReader, err := newTarSamplesReader(lom)
 		if err != nil {
 			return err

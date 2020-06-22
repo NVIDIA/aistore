@@ -57,14 +57,14 @@ func TestConcatObjLists(t *testing.T) {
 			}
 			expectedObjCnt = cmn.Min(expectedObjCnt, int(test.maxSize))
 
-			objs := ConcatObjLists(lists, test.maxSize)
+			objs := cmn.ConcatObjLists(lists, test.maxSize)
 			tassert.Errorf(
 				t, test.maxSize == 0 || len(objs.Entries) == expectedObjCnt,
 				"number of objects (%d) is different than expected (%d)", len(objs.Entries), expectedObjCnt,
 			)
 			tassert.Errorf(
 				t, (objs.PageMarker != "") == test.pageMarker,
-				"page marker expected to be set=%t", test.pageMarker,
+				"page Marker expected to be set=%t", test.pageMarker,
 			)
 		})
 	}

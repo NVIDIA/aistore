@@ -1,26 +1,24 @@
-// Package objwalk provides core functionality for reading the list of a bucket objects
+// Package cmn provides common API constants and types, and low-level utilities for all aistore projects
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package objwalk
+package cmn
 
 import (
 	"sort"
-
-	"github.com/NVIDIA/aistore/cmn"
 )
 
-func sortBckEntries(bckEntries []*cmn.BucketEntry) {
+func sortBckEntries(bckEntries []*BucketEntry) {
 	entryLess := func(i, j int) bool {
 		if bckEntries[i].Name == bckEntries[j].Name {
-			return bckEntries[i].Flags&cmn.EntryStatusMask < bckEntries[j].Flags&cmn.EntryStatusMask
+			return bckEntries[i].Flags&EntryStatusMask < bckEntries[j].Flags&EntryStatusMask
 		}
 		return bckEntries[i].Name < bckEntries[j].Name
 	}
 	sort.Slice(bckEntries, entryLess)
 }
 
-func deduplicateBckEntries(bckEntries []*cmn.BucketEntry, maxSize uint) ([]*cmn.BucketEntry, string) {
+func deduplicateBckEntries(bckEntries []*BucketEntry, maxSize uint) ([]*BucketEntry, string) {
 	objCount := uint(len(bckEntries))
 
 	j := 0
@@ -52,13 +50,13 @@ func deduplicateBckEntries(bckEntries []*cmn.BucketEntry, maxSize uint) ([]*cmn.
 // are appended to the first one.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func ConcatObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList) {
+func ConcatObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	if len(lists) == 0 {
-		return &cmn.BucketList{}
+		return &BucketList{}
 	}
 
-	objs = &cmn.BucketList{}
-	objs.Entries = make([]*cmn.BucketEntry, 0)
+	objs = &BucketList{}
+	objs.Entries = make([]*BucketEntry, 0)
 
 	for _, l := range lists {
 		objs.Entries = append(objs.Entries, l.Entries...)
@@ -87,9 +85,9 @@ func ConcatObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList
 // them to get single list with merged information for each object.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func MergeObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList) {
+func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	if len(lists) == 0 {
-		return &cmn.BucketList{}
+		return &BucketList{}
 	}
 
 	bckList := lists[0] // main list to collect all info
@@ -102,7 +100,7 @@ func MergeObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList)
 		return bckList
 	}
 
-	objSet := make(map[string]*cmn.BucketEntry, len(bckList.Entries))
+	objSet := make(map[string]*BucketEntry, len(bckList.Entries))
 	for _, l := range lists {
 		if pageMarker < l.PageMarker {
 			pageMarker = l.PageMarker
@@ -115,12 +113,12 @@ func MergeObjLists(lists []*cmn.BucketList, maxSize uint) (objs *cmn.BucketList)
 			}
 			// detect which list contains real information about the object
 			if !entry.CheckExists() && e.CheckExists() {
-				e.Version = cmn.Either(e.Version, entry.Version)
+				e.Version = Either(e.Version, entry.Version)
 				objSet[e.Name] = e
 			} else {
 				// TargetURL maybe filled even if an object is not cached
-				entry.TargetURL = cmn.Either(entry.TargetURL, e.TargetURL)
-				entry.Version = cmn.Either(entry.Version, e.Version)
+				entry.TargetURL = Either(entry.TargetURL, e.TargetURL)
+				entry.Version = Either(entry.Version, e.Version)
 			}
 		}
 	}

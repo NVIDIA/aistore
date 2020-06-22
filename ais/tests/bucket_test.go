@@ -395,6 +395,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		wg.Wait()
 	}
 }
+
 func TestListObjects(t *testing.T) {
 	type objEntry struct {
 		name string
@@ -466,7 +467,6 @@ func TestListObjects(t *testing.T) {
 					wg.Add(1)
 					go func(wid int) {
 						defer wg.Done()
-
 						objectSize := int64(rand.Intn(256) + 20)
 						objDir := tutils.RandomObjDir(dirLen, 5)
 						objectsToPut := objectCount / workerCount
@@ -498,9 +498,6 @@ func TestListObjects(t *testing.T) {
 				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
-				if len(bckList.Entries) != totalObjects {
-					t.Errorf("actual objects %d, expected: %d", len(bckList.Entries), totalObjects)
-				}
 				if bckList.PageMarker != "" {
 					t.Errorf("page marker was unexpectedly set to: %s", bckList.PageMarker)
 				}
@@ -554,6 +551,10 @@ func TestListObjects(t *testing.T) {
 					}
 					return true
 				})
+
+				if len(bckList.Entries) != totalObjects {
+					t.Fatalf("actual objects %d, expected: %d", len(bckList.Entries), totalObjects)
+				}
 
 				// Check listing bucket with predefined prefix.
 				prefixes.Range(func(key, value interface{}) bool {

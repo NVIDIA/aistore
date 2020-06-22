@@ -10,11 +10,9 @@ import (
 )
 
 type (
-	ObjectFilter func(*cluster.LOM) bool
-
 	ObjectsSource struct {
 		// regexp *regexp.Regexp // support in the future
-		pt *cmn.ParsedTemplate
+		Pt *cmn.ParsedTemplate
 	}
 
 	BucketSource struct {
@@ -25,11 +23,11 @@ type (
 	ObjectsQuery struct {
 		ObjectsSource *ObjectsSource
 		BckSource     *BucketSource
-		filter        ObjectFilter
+		filter        cluster.ObjectFilter
 	}
 )
 
-func NewQuery(source *ObjectsSource, bckSource *BucketSource, filter ObjectFilter) *ObjectsQuery {
+func NewQuery(source *ObjectsSource, bckSource *BucketSource, filter cluster.ObjectFilter) *ObjectsQuery {
 	return &ObjectsQuery{
 		ObjectsSource: source,
 		BckSource:     bckSource,
@@ -37,7 +35,7 @@ func NewQuery(source *ObjectsSource, bckSource *BucketSource, filter ObjectFilte
 	}
 }
 
-func (q *ObjectsQuery) Filter() ObjectFilter {
+func (q *ObjectsQuery) Filter() cluster.ObjectFilter {
 	if q.filter != nil {
 		return q.filter
 	}
@@ -45,7 +43,7 @@ func (q *ObjectsQuery) Filter() ObjectFilter {
 }
 
 func TemplateObjSource(pt *cmn.ParsedTemplate) *ObjectsSource {
-	return &ObjectsSource{pt: pt}
+	return &ObjectsSource{Pt: pt}
 }
 
 func BckSource(bck cmn.Bck) *BucketSource {
