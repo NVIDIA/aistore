@@ -7,7 +7,7 @@ AIS_DIR="$GOPATH/src/github.com/NVIDIA/aistore"
 NEXT_TIER=""
 
 export MODE="debug" # By default start in debug mode
-export AISNODE_FLAGS="-skip_startup"
+export AIS_NODE_FLAGS="-skip_startup"
 
 while (( "$#" )); do
   case "${1}" in
