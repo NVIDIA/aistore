@@ -7,13 +7,16 @@ package ais
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/housekeep/hk"
+	jsoniter "github.com/json-iterator/go"
 )
 
 ///////////////////////////
@@ -21,13 +24,17 @@ import (
 // see also cmn/notif.go //
 ///////////////////////////
 
+// TODO: cmn.UponProgress as periodic (byte-count, object-count)
+// TODO: batch housekeeping for pending notifications
+
 const (
 	notifsName      = ".notifications.prx"
 	notifsTimeoutGC = 2 * time.Minute
 )
 
 type (
-	notifs struct {
+	notifCallback func(n notifListener, msg interface{}, uuid string, err error)
+	notifs        struct {
 		sync.RWMutex
 		p       *proxyrunner
 		m       map[string]notifListener // table [UUID => notifListener]
@@ -41,17 +48,13 @@ type (
 		runlock()
 		notifiers() cluster.NodeMap
 		incRC() int
-		sinceLast() int64
 	}
 	notifListenerBase struct {
 		sync.RWMutex
-		srcs cluster.NodeMap                                                // expected notifiers
-		f    func(n notifListener, msg interface{}, uuid string, err error) // callback
-		time struct {
-			call     int64 // timestamp of the last callback
-			progress int64 // last successful progress check
-		}
-		rc int
+		srcs cluster.NodeMap // expected notifiers
+		f    notifCallback   // callback
+		rc   int             // refcount
+		done atomic.Bool
 	}
 	notifListenerFromTo struct {
 		notifListenerBase
@@ -61,7 +64,7 @@ type (
 	// notification messages - compare w/ cmn.XactReqMsg
 	//
 	xactPushMsg struct {
-		Stats cmn.BaseXactStatsExt `json:"stats"` // NOTE: struct to unmarshal from the interface (see below)
+		Stats cmn.BaseXactStatsExt `json:"stats"` // NOTE: struct to unmarshal from the interface (below)
 		Snode *cluster.Snode       `json:"snode"`
 		Err   error                `json:"err"`
 	}
@@ -83,8 +86,9 @@ var (
 ///////////////////////
 
 func (nl *notifListenerBase) callback(n notifListener, msg interface{}, uuid string, err error) {
-	nl.time.call = mono.NanoTime()
-	nl.f(n, msg, uuid, err)
+	if nl.done.CAS(false, true) {
+		nl.f(n, msg, uuid, err)
+	}
 }
 func (nl *notifListenerBase) lock()                      { nl.Lock() }
 func (nl *notifListenerBase) unlock()                    { nl.Unlock() }
@@ -92,9 +96,6 @@ func (nl *notifListenerBase) rlock()                     { nl.RLock() }
 func (nl *notifListenerBase) runlock()                   { nl.RUnlock() }
 func (nl *notifListenerBase) notifiers() cluster.NodeMap { return nl.srcs }
 func (nl *notifListenerBase) incRC() int                 { nl.rc++; return nl.rc }
-func (nl *notifListenerBase) sinceLast() int64 {
-	return mono.NanoTime() - cmn.MaxI64(nl.time.call, nl.time.progress)
-}
 
 ////////////
 // notifs //
@@ -118,10 +119,12 @@ func (n *notifs) add(uuid string, nl notifListener) {
 	n.Unlock()
 }
 
-// is called under lock
 func (n *notifs) del(uuid string) {
+	n.Lock()
 	delete(n.m, uuid)
-	if len(n.m) == 0 {
+	unreg := len(n.m) == 0
+	n.Unlock()
+	if unreg {
 		n.p.owner.smap.Listeners().Unreg(n)
 	}
 }
@@ -143,7 +146,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// BEGIN xacton-specific part of the notification-handling code ==================
+	// BEGIN xacton-specific ==================
 	xactMsg := xactPushMsg{}
 	if cmn.ReadJSON(w, r, &xactMsg) != nil {
 		return
@@ -163,9 +166,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	err, status, done := n.handleMsg(nl, msg, uuid, tid)
 	nl.unlock()
 	if done {
-		n.Lock()
 		n.del(uuid)
-		n.Unlock()
 	}
 	if err != nil {
 		n.p.invalmsghdlr(w, r, err.Error(), status)
@@ -200,25 +201,57 @@ func (n *notifs) housekeep() time.Duration {
 	if len(n.m) == 0 {
 		return notifsTimeoutGC
 	}
-	var pending = make([]string, 0) // UUIDs
 	n.RLock()
+	clone := make(map[string]notifListener, len(n.m))
 	for uuid, nl := range n.m {
-		if nl.sinceLast() < int64(notifsTimeoutGC) {
-			continue
-		}
-		// TODO -- FIXME: find out whether xaction is making progress
-		pending = append(pending, uuid)
+		clone[uuid] = nl
 	}
 	n.RUnlock()
-	if len(pending) == 0 {
-		return notifsTimeoutGC
+	q := make(url.Values)
+	q.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
+	req := bcastArgs{
+		req:     cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Xactions), Query: q},
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	}
-	// TODO -- FIXME: handle pending here
-	return 0
+	for uuid, nl := range clone {
+		// BEGIN xacton-specific part ==================
+		q.Set(cmn.URLParamUUID, uuid)
+		results := n.p.bcastGet(req)
+		for res := range results {
+			var (
+				msg  = &xactPushMsg{}
+				done bool
+			)
+			if res.err == nil {
+				if err := jsoniter.Unmarshal(res.outjson, &msg.Stats); err == nil {
+					if msg.Stats.Finished() {
+						nl.lock()
+						_, _, done = n.handleMsg(nl, msg, uuid, res.si.ID())
+						nl.unlock()
+					}
+				} else {
+					glog.Errorf("%s: unexpected: failed to unmarshal xaction %q from %s",
+						n.p.si, uuid, res.si)
+				}
+			} else if res.status == http.StatusNotFound { // compare w/ errNodeNotFound below
+				nl.callback(nl, nil, uuid, fmt.Errorf("%s: %q not found at %s", n.p.si, uuid, res.si))
+				done = true
+			}
+			// END xacton-specific part =======================================================
+			if done {
+				n.del(uuid)
+				break
+			}
+		}
+	}
+	return notifsTimeoutGC
 }
 
 func (n *notifs) ListenSmapChanged() {
 	if !n.p.ClusterStarted() {
+		return
+	}
+	if len(n.m) == 0 {
 		return
 	}
 	smap := n.p.owner.smap.get()
@@ -226,7 +259,8 @@ func (n *notifs) ListenSmapChanged() {
 		return
 	}
 	n.smapVer = smap.Version
-	removed := make(cmn.SimpleKVs)
+	remnl := make(map[string]notifListener)
+	remid := make(cmn.SimpleKVs)
 	n.RLock()
 	for uuid, nl := range n.m {
 		nl.rlock()
@@ -236,31 +270,29 @@ func (n *notifs) ListenSmapChanged() {
 				continue
 			}
 			if smap.GetNode(id) == nil {
-				removed[uuid] = id
+				remnl[uuid] = nl
+				remid[uuid] = id
 				break
 			}
 		}
 		nl.runlock()
 	}
-	if len(removed) == 0 {
-		n.RUnlock()
+	n.RUnlock()
+	if len(remnl) == 0 {
 		return
 	}
-	for uuid, id := range removed {
+	for uuid, nl := range remnl {
 		s := fmt.Sprintf("%s: stop waiting for %q notifications", n.p.si, uuid)
-		err := &errNodeNotFound{s, id, n.p.si, smap}
-		nl, ok := n.m[uuid]
-		if !ok {
-			continue
-		}
-		nl.lock()
+		err := &errNodeNotFound{s, remid[uuid], n.p.si, smap}
 		nl.callback(nl, nil /*msg*/, uuid, err)
-		nl.unlock()
 	}
-	n.RUnlock()
 	n.Lock()
-	for uuid := range removed {
-		n.del(uuid)
+	for uuid := range remnl {
+		delete(n.m, uuid)
 	}
+	unreg := len(n.m) == 0
 	n.Unlock()
+	if unreg {
+		go n.p.owner.smap.Listeners().Unreg(n) // cannot unreg from the same goroutine
+	}
 }
