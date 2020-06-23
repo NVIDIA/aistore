@@ -238,20 +238,18 @@ Name | Type | Description | Optional?
 **bucket.name** | **string** | Bucket where the downloaded object is saved to. | No |
 **bucket.provider** | **string** | Determines the provider of the bucket. By default, locality is determined automatically. | Yes |
 **bucket.namespace** | **string** | Determines the namespace of the bucket. | Yes |
-**source_bucket.name** | **string** | Name of the cloud bucket from which the data should be downloaded. | No |
-**source_bucket.provider** | **string** | Cloud provider of the source bucket. | No |
 **description** | **string** | Description for the download request. | Yes |
+**sync** | **bool** | Synchronizes the cloud bucket what besides regular downloading means that objects which are no longer present in the cloud will be deleted. | Yes |
 **prefix** | **string** | Prefix of the objects names to download. | Yes |
 **suffix** | **string** | Suffix of the objects names to download. | Yes |
 
 ### Sample Request
 
-#### Download a list of objects from cloud bucket
+#### Download objects from cloud bucket
 
 ```bash
 $ curl -Liv -H 'Content-Type: application/json' -d '{
-  "bucket": {"name": "test"},
-  "source_bucket": {"name": "lpr-vision", "provider": "gcp"},
+  "bucket": {"name": "lpr-vision", "provider": "gcp"},
   "prefix": "imagenet/imagenet_train-",
   "suffix": ".tgz"
 }' -X POST 'http://localhost:8080/v1/download'

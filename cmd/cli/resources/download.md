@@ -28,7 +28,7 @@ As for `DESTINATION` location, the only supported schema is `ais://` and the lin
 | --- | --- | --- | --- |
 | `--description, --desc` | `string` | Description of the download job | `""` |
 | `--timeout` | `string` | Timeout for request to external resource | `""` |
-| `--sync` | `bool` | Starts a sync job that downloads cloud objects (just like regular download) and deletes cached ones which are not longer present in the cloud | `false` |
+| `--sync` | `bool` | Starts a special kind of downloading job that synchronizes the contents of cached objects and remote objects in the cloud. In other words, in addition to downloading new objects from the cloud and updating versions of the existing objects, the sync option also entails the removal of objects that are not present (anymore) in the cloud bucket | `false` |
 | `--limit-connections,--conns` | `int` | Number of connections each target can make concurrently (each target can handle at most #mountpaths connections) | `0` (unlimited - at most #mountpaths connections) |
 | `--limit-bytes-per-hour,--limit-bph,--bph` | `string` | Number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can maximally download in hour | `""` (unlimited) |
 | `--object-list,--from` | `string` | Path to file containing JSON array of strings with object names to download | `""` |
@@ -159,6 +159,38 @@ Bucket props successfully updated
 $ ais start download gs://lpr-vision ais://lpr-vision-copy
 QdwOYMAqg
 Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
+```
+
+#### Sync whole GCP bucket
+
+There are times when we suspect or know that the content of the cloud bucket that we previously downloaded has changed.
+By default, the downloader just downloads new objects or updates the outdated ones, and it doesn't check if the cached objects are no present in the cloud.
+To change this behavior, you can specify `--sync` flag to enforce downloader to remove cached objects which are no longer present in the cloud.
+ 
+```console
+$ ais ls --no-headers gcp://lpr-vision | wc -l
+50
+$ ais set props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
+Bucket props successfully updated
+$ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
+0
+$ ais start download gs://lpr-vision ais://lpr-vision-copy
+QdwOYMAqg
+Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
+$ ais wait download QdwOYMAqg
+$ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
+50
+$ # Remove some objects from `gcp://lpr-vision`
+$ ais ls --no-headers gcp://lpr-vision | wc -l
+40
+$ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
+50
+$ ais start download --sync gs://lpr-vision ais://lpr-vision-copy
+fjwiIEMfa
+Run `ais show download fjwiIEMfa` to monitor the progress of downloading.
+$ ais wait download fjwiIEMfa
+$ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
+40
 ```
 
 #### Download GCP bucket objects with prefix
