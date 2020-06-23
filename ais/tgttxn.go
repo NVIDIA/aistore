@@ -527,10 +527,10 @@ func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 
 func (t *targetrunner) xactCallerNotify(n cmn.Notif, err error) {
 	var (
-		xactMsg = xactPushMsgTgt{Snode: t.si, Err: err}
-		notif   = n.(*cmn.NotifXact)
-		pid     = notif.Dsts[0]
+		msg   = notifMsg{Ty: notifXact, Snode: t.si, Err: err}
+		notif = n.(*cmn.NotifXact)
+		pid   = notif.Dsts[0]
 	)
-	xactMsg.Stats = notif.Xact.Stats()
-	t.notify(pid, cmn.MustMarshal(&xactMsg))
+	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
+	t.notify(pid, cmn.MustMarshal(&msg))
 }

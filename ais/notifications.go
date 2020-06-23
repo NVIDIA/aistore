@@ -26,6 +26,17 @@ import (
 
 // TODO: cmn.UponProgress as periodic (byte-count, object-count)
 // TODO: batch housekeeping for pending notifications
+// TODO: extend to handle notifications from proxies
+
+// notifMsg.Ty enum
+const (
+	notifXact = iota
+	// TODO: add more
+)
+
+var notifTyText = map[int]string{
+	notifXact: "xaction-notification",
+}
 
 const (
 	notifsName      = ".notifications.prx"
@@ -39,6 +50,7 @@ type (
 		p       *proxyrunner
 		m       map[string]notifListener // table [UUID => notifListener]
 		smapVer int64
+		inHk    atomic.Bool
 	}
 	notifListener interface {
 		callback(n notifListener, msg interface{}, uuid string, err error)
@@ -48,30 +60,29 @@ type (
 		runlock()
 		notifiers() cluster.NodeMap
 		incRC() int
+		notifTy() int
 	}
 	notifListenerBase struct {
 		sync.RWMutex
 		srcs cluster.NodeMap // expected notifiers
-		f    notifCallback   // callback
+		f    notifCallback   // the callback
 		rc   int             // refcount
-		done atomic.Bool
+		ty   int             // notifMsg.Ty enum (above)
+		done atomic.Bool     // true when done
 	}
 	notifListenerFromTo struct {
 		notifListenerBase
 		nlpFrom, nlpTo *cluster.NameLockPair
 	}
 	//
-	// notification messages - compare w/ cmn.XactReqMsg
+	// notification messages
 	//
-	xactPushMsg struct {
-		Stats cmn.BaseXactStatsExt `json:"stats"` // NOTE: struct to unmarshal from the interface (below)
-		Snode *cluster.Snode       `json:"snode"`
-		Err   error                `json:"err"`
-	}
-	xactPushMsgTgt struct {
-		Stats cmn.XactStats  `json:"stats"` // interface to marshal
-		Snode *cluster.Snode `json:"snode"`
-		Err   error          `json:"err"`
+	notifMsg struct {
+		Ty    int32          `json:"type"`    // enumerated type, one of (notifXact, et al.) - see above
+		Flags int32          `json:"flags"`   // TODO: add
+		Snode *cluster.Snode `json:"snode"`   // node
+		Data  []byte         `json:"message"` // typed message
+		Err   error          `json:"err"`     // error
 	}
 )
 
@@ -85,6 +96,7 @@ var (
 // notifListenerBase //
 ///////////////////////
 
+// is called after all notifiers will have notified OR on failure (err != nil)
 func (nl *notifListenerBase) callback(n notifListener, msg interface{}, uuid string, err error) {
 	if nl.done.CAS(false, true) {
 		nl.f(n, msg, uuid, err)
@@ -96,6 +108,15 @@ func (nl *notifListenerBase) rlock()                     { nl.RLock() }
 func (nl *notifListenerBase) runlock()                   { nl.RUnlock() }
 func (nl *notifListenerBase) notifiers() cluster.NodeMap { return nl.srcs }
 func (nl *notifListenerBase) incRC() int                 { nl.rc++; return nl.rc }
+func (nl *notifListenerBase) notifTy() int               { return nl.ty }
+
+func (msg *notifMsg) String() string {
+	text := "unknown-notification"
+	if ty, ok := notifTyText[int(msg.Ty)]; ok {
+		text = ty
+	}
+	return fmt.Sprintf("%s[%s,%v]<=%s", text, string(msg.Data), msg.Err, msg.Snode)
+}
 
 ////////////
 // notifs //
@@ -130,13 +151,12 @@ func (n *notifs) del(uuid string) {
 }
 
 // verb /v1/notifs
-// TODO: extend to handle other than `xactPushMsg` messages
-// TODO: extend to handle notifications from proxies
 func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg  interface{}
-		uuid string
-		tid  = r.Header.Get(cmn.HeaderCallerID) // sender node ID
+		notifMsg = &notifMsg{}
+		msg      interface{}
+		uuid     string
+		tid      = r.Header.Get(cmn.HeaderCallerID) // sender node ID
 	)
 	if r.Method != http.MethodPost {
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /notifs path")
@@ -145,27 +165,39 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	if _, err := n.p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Notifs); err != nil {
 		return
 	}
-
-	// BEGIN xacton-specific ==================
-	xactMsg := xactPushMsg{}
-	if cmn.ReadJSON(w, r, &xactMsg) != nil {
+	if cmn.ReadJSON(w, r, notifMsg) != nil {
 		return
 	}
-	uuid = xactMsg.Stats.IDX
-	msg = &xactMsg
-	// END xacton-specific part =======================================================
-
+	switch notifMsg.Ty {
+	case notifXact:
+		stats := &cmn.BaseXactStatsExt{}
+		if eru := jsoniter.Unmarshal(notifMsg.Data, stats); eru != nil {
+			n.p.invalmsghdlrstatusf(w, r, 0, "%s: failed to unmarshal %s: %v", n.p.si, notifMsg, eru)
+			return
+		}
+		uuid = stats.IDX
+		msg = stats
+	default:
+		n.p.invalmsghdlrstatusf(w, r, 0, "%s: unknown type %s", n.p.si, notifMsg)
+		return
+	}
 	n.RLock()
 	nl, ok := n.m[uuid]
 	n.RUnlock()
 	if !ok {
-		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: notification from %s: unknown UUID %q (%+v)", n.p.si, tid, uuid, msg)
+		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown UUID %q (%s)", n.p.si, uuid, notifMsg)
 		return
 	}
+	//
+	// notifListener and notifMsg must have the same type
+	//
+	cmn.Assert(nl.notifTy() == int(notifMsg.Ty))
+
 	nl.lock()
-	err, status, done := n.handleMsg(nl, msg, uuid, tid)
+	err, status, done := n.handleMsg(nl, uuid, tid)
 	nl.unlock()
 	if done {
+		nl.callback(nl, msg, uuid, nil)
 		n.del(uuid)
 	}
 	if err != nil {
@@ -173,7 +205,8 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (n *notifs) handleMsg(nl notifListener, msg interface{}, uuid, tid string) (err error, status int, done bool) {
+// is called under notifListener.lock()
+func (n *notifs) handleMsg(nl notifListener, uuid, tid string) (err error, status int, done bool) {
 	srcs := nl.notifiers()
 	tsi, ok := srcs[tid]
 	if !ok {
@@ -187,7 +220,6 @@ func (n *notifs) handleMsg(nl notifListener, msg interface{}, uuid, tid string) 
 	}
 	srcs[tid] = nil
 	if rc := nl.incRC(); rc >= len(srcs) {
-		nl.callback(nl, msg, uuid, nil)
 		done = true
 	}
 	return
@@ -198,51 +230,70 @@ func (n *notifs) handleMsg(nl notifListener, msg interface{}, uuid, tid string) 
 //
 
 func (n *notifs) housekeep() time.Duration {
+	if !n.inHk.CAS(false, true) {
+		return notifsTimeoutGC
+	}
+	defer n.inHk.Store(false)
 	if len(n.m) == 0 {
 		return notifsTimeoutGC
 	}
 	n.RLock()
-	clone := make(map[string]notifListener, len(n.m))
+	tempn := make(map[string]notifListener, len(n.m))
 	for uuid, nl := range n.m {
-		clone[uuid] = nl
+		tempn[uuid] = nl
 	}
 	n.RUnlock()
-	q := make(url.Values)
-	q.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
-	req := bcastArgs{
-		req:     cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Xactions), Query: q},
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-	}
-	for uuid, nl := range clone {
-		// BEGIN xacton-specific part ==================
-		q.Set(cmn.URLParamUUID, uuid)
+	req := bcastArgs{req: cmn.ReqArgs{Query: make(url.Values, 2)}, timeout: cmn.GCO.Get().Timeout.MaxKeepalive}
+	for uuid, nl := range tempn {
+		switch nl.notifTy() {
+		case notifXact:
+			req.req.Path = cmn.URLPath(cmn.Version, cmn.Xactions)
+			req.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
+			req.req.Query.Set(cmn.URLParamUUID, uuid)
+		default:
+			cmn.Assert(false)
+		}
 		results := n.p.bcastGet(req)
 		for res := range results {
 			var (
-				msg  = &xactPushMsg{}
+				msg  interface{}
+				err  error
 				done bool
 			)
 			if res.err == nil {
-				if err := jsoniter.Unmarshal(res.outjson, &msg.Stats); err == nil {
-					if msg.Stats.Finished() {
-						nl.lock()
-						_, _, done = n.handleMsg(nl, msg, uuid, res.si.ID())
-						nl.unlock()
+				switch nl.notifTy() {
+				case notifXact:
+					stats := &cmn.BaseXactStatsExt{}
+					if eru := jsoniter.Unmarshal(res.outjson, stats); eru == nil {
+						msg = stats
+						if stats.Finished() {
+							nl.lock()
+							_, _, done = n.handleMsg(nl, uuid, res.si.ID())
+							nl.unlock()
+						}
+					} else {
+						glog.Errorf("%s: unexpected: failed to unmarshal %q from %s, err: %v",
+							n.p.si, uuid, res.si, eru)
 					}
-				} else {
-					glog.Errorf("%s: unexpected: failed to unmarshal xaction %q from %s",
-						n.p.si, uuid, res.si)
+				default:
+					cmn.Assert(false)
 				}
 			} else if res.status == http.StatusNotFound { // compare w/ errNodeNotFound below
-				nl.callback(nl, nil, uuid, fmt.Errorf("%s: %q not found at %s", n.p.si, uuid, res.si))
+				err = fmt.Errorf("%s: %q not found at %s", n.p.si, uuid, res.si)
 				done = true
+			} else if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Errorf("%s: failure to get %q from %s: %v", n.p.si, uuid, res.si, res.err)
 			}
-			// END xacton-specific part =======================================================
 			if done {
+				nl.callback(nl, msg, uuid, err)
 				n.del(uuid)
 				break
 			}
 		}
+	}
+	// cleanup temp cloned notifs
+	for u := range tempn {
+		delete(tempn, u)
 	}
 	return notifsTimeoutGC
 }
@@ -282,13 +333,16 @@ func (n *notifs) ListenSmapChanged() {
 		return
 	}
 	for uuid, nl := range remnl {
-		s := fmt.Sprintf("%s: stop waiting for %q notifications", n.p.si, uuid)
+		s := fmt.Sprintf("%s: stop waiting for notifications from %q", n.p.si, uuid)
 		err := &errNodeNotFound{s, remid[uuid], n.p.si, smap}
 		nl.callback(nl, nil /*msg*/, uuid, err)
 	}
 	n.Lock()
 	for uuid := range remnl {
 		delete(n.m, uuid)
+		// cleanup
+		delete(remnl, uuid)
+		delete(remid, uuid)
 	}
 	unreg := len(n.m) == 0
 	n.Unlock()
