@@ -46,7 +46,11 @@ type (
 		// If total length (size) of download job is not known, -1 should be returned.
 		Len() int
 
-		Sync() bool // Determines if it requires also syncing
+		// Determines if it requires also syncing.
+		Sync() bool
+
+		// Checks if object name matches the request.
+		checkObj(objName string) bool
 
 		// genNext is supposed to fulfill the following protocol:
 		// ok is set to true if there is batch to process, false otherwise
@@ -127,6 +131,7 @@ func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
 func (j *baseDlJob) Sync() bool             { return false }
+func (j *baseDlJob) checkObj(string) bool   { cmn.Assert(false); return false }
 func (j *baseDlJob) throttler() *throttler  { return j.t }
 func (j *baseDlJob) cleanup() {
 	dlStore.markFinished(j.ID())
@@ -220,6 +225,9 @@ func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects 
 
 func (j *cloudBucketDlJob) Len() int   { return -1 }
 func (j *cloudBucketDlJob) Sync() bool { return j.sync }
+func (j *cloudBucketDlJob) checkObj(objName string) bool {
+	return strings.HasPrefix(objName, j.prefix) && strings.HasSuffix(objName, j.suffix)
+}
 func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
@@ -266,7 +274,7 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 		j.pageMarker = msg.PageMarker
 
 		for _, entry := range bckList.Entries {
-			if !strings.HasSuffix(entry.Name, j.suffix) {
+			if !j.checkObj(entry.Name) {
 				continue
 			}
 			obj, err := makeDlObj(smap, sid, j.bck, entry.Name, "")

@@ -170,18 +170,12 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 	tassert.Errorf(t, (status.SkippedCnt == 1) == shouldBeSkipped, "expected object to be [skipped: %t]", shouldBeSkipped)
 }
 
-func downloadObjectCloud(t *testing.T, dstBck cmn.Bck, sync bool, expectedFinished, expectedSkipped int) {
+func downloadObjectCloud(t *testing.T, body downloader.DlCloudBody, expectedFinished, expectedSkipped int) {
 	var (
-		baseParams  = tutils.BaseAPIParams()
-		dlCloudBody = downloader.DlCloudBody{
-			DlBase: downloader.DlBase{
-				Bck:         dstBck,
-				Description: generateDownloadDesc(),
-			},
-			Sync: sync,
-		}
+		baseParams = tutils.BaseAPIParams()
 	)
-	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeCloud, dlCloudBody)
+	body.Description = generateDownloadDesc()
+	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeCloud, body)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, time.Minute)
@@ -1003,6 +997,9 @@ func TestDownloadOverrideObjectCloud(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
+		dlBody = downloader.DlCloudBody{
+			DlBase: downloader.DlBase{Bck: bck},
+		}
 		m = &ioContext{
 			t:   t,
 			num: 10,
@@ -1024,9 +1021,9 @@ func TestDownloadOverrideObjectCloud(t *testing.T) {
 
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
-	downloadObjectCloud(t, bck, false /*sync*/, m.num, 0)
+	downloadObjectCloud(t, dlBody, m.num, 0)
 	m.cloudRePuts(false /*evict*/)
-	downloadObjectCloud(t, bck, false /*sync*/, m.num, 0)
+	downloadObjectCloud(t, dlBody, m.num, 0)
 }
 
 func TestDownloadSkipObject(t *testing.T) {
@@ -1066,6 +1063,9 @@ func TestDownloadSkipObjectCloud(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
+		dlBody = downloader.DlCloudBody{
+			DlBase: downloader.DlBase{Bck: bck},
+		}
 		m = &ioContext{
 			t:   t,
 			num: 10,
@@ -1087,14 +1087,14 @@ func TestDownloadSkipObjectCloud(t *testing.T) {
 
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
-	downloadObjectCloud(t, bck, false /*sync*/, m.num, 0)
-	downloadObjectCloud(t, bck, false /*sync*/, m.num, m.num)
+	downloadObjectCloud(t, dlBody, m.num, 0)
+	downloadObjectCloud(t, dlBody, m.num, m.num)
 
 	// Put some more cloud objects (we expect that only the new ones will be downloaded)
 	m.num += 10
 	m.cloudPuts(false /*evict*/)
 
-	downloadObjectCloud(t, bck, false /*sync*/, m.num, m.num-10)
+	downloadObjectCloud(t, dlBody, m.num, m.num-10)
 }
 
 func TestDownloadSync(t *testing.T) {
@@ -1104,6 +1104,9 @@ func TestDownloadSync(t *testing.T) {
 		bck        = cmn.Bck{
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
+		}
+		dlBody = downloader.DlCloudBody{
+			DlBase: downloader.DlBase{Bck: bck},
 		}
 		m = &ioContext{
 			t:   t,
@@ -1127,30 +1130,45 @@ func TestDownloadSync(t *testing.T) {
 
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
-	downloadObjectCloud(t, bck, true /*sync*/, m.num, 0)
-	downloadObjectCloud(t, bck, true /*sync*/, m.num, m.num)
+	tutils.Logln("1. initial sync of cloud bucket...")
+	dlBody.Sync = true
+	downloadObjectCloud(t, dlBody, m.num, 0)
+	downloadObjectCloud(t, dlBody, m.num, m.num)
 
-	{
-		tutils.Logln("deleting some of the objects from cloud bucket...")
-		objList, err := api.ListObjects(baseParams, m.bck, nil, 0)
-		tassert.CheckFatal(m.t, err)
+	m.cloudDelete(objsToDelete)
 
-		for _, obj := range objList.Entries[:objsToDelete] {
-			err := api.DeleteObject(baseParams, m.bck, obj.Name)
-			tassert.CheckFatal(t, err)
-		}
-	}
+	// Check that only deleted objects are replaced (deleted in this case).
+	tutils.Logln("2. re-syncing cloud bucket...")
+	downloadObjectCloud(t, dlBody, m.num, m.num-objsToDelete)
+	downloadObjectCloud(t, dlBody, m.num-objsToDelete, m.num-objsToDelete)
 
-	tutils.Logln("resyncing cloud bucket...")
-	downloadObjectCloud(t, bck, true /*sync*/, m.num, m.num-objsToDelete)
-	downloadObjectCloud(t, bck, true /*sync*/, m.num-objsToDelete, m.num-objsToDelete)
-
-	tutils.Logln("fill removed cloud objects")
+	tutils.Logln("3. filling removed cloud objects...")
 	m.cloudPuts(false /*evict*/)
 
-	downloadObjectCloud(t, bck, true /*sync*/, m.num, m.num-objsToDelete)
-	downloadObjectCloud(t, bck, true /*sync*/, m.num, m.num)
-	downloadObjectCloud(t, bck, false /*sync*/, m.num, m.num)
+	// Check that new objects are correctly downloaded.
+	tutils.Logln("4. re-syncing cloud bucket...")
+	downloadObjectCloud(t, dlBody, m.num, m.num-objsToDelete)
+	downloadObjectCloud(t, dlBody, m.num, m.num)
+	dlBody.Sync = false
+	downloadObjectCloud(t, dlBody, m.num, m.num)
+
+	tutils.Logln("5. re-putting the objects and deleting some of them...")
+	m.cloudRePuts(false /*evict*/)
+	m.cloudDelete(objsToDelete)
+
+	// Check that all objects have been replaced.
+	tutils.Logln("6. re-syncing cloud bucket...")
+	dlBody.Sync = true
+	downloadObjectCloud(t, dlBody, m.num, 0)
+	downloadObjectCloud(t, dlBody, m.num-objsToDelete, m.num-objsToDelete)
+
+	tutils.Logln("7. check that syncing with prefix and suffix works")
+	dlBody.Prefix = "someprefix-"
+	dlBody.Suffix = ""
+	downloadObjectCloud(t, dlBody, 0, 0)
+	dlBody.Prefix = ""
+	dlBody.Suffix = "somesuffix-"
+	downloadObjectCloud(t, dlBody, 0, 0)
 }
 
 func TestDownloadJobLimitConnections(t *testing.T) {

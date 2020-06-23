@@ -175,6 +175,9 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 						if err := lom.Init(job.Bck()); err != nil {
 							return err
 						}
+						if !job.checkObj(lom.ObjName) {
+							return nil
+						}
 						diffResolver.PushSrc(lom)
 						return nil
 					},

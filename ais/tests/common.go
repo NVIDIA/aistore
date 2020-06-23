@@ -223,7 +223,7 @@ func (m *ioContext) cloudPuts(evict bool) {
 	// Not enough objects in cloud bucket, need to create more.
 	var (
 		errCh = make(chan error, leftToFill)
-		wg    = &sync.WaitGroup{}
+		wg    = cmn.NewLimitedWaitGroup(20)
 	)
 	for i := 0; i < leftToFill; i++ {
 		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
@@ -330,7 +330,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 	wg.Wait()
 }
 
-func (m *ioContext) cloudDelete() {
+func (m *ioContext) cloudDelete(cnt ...int) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{}
@@ -340,10 +340,15 @@ func (m *ioContext) cloudDelete() {
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
-	tutils.Logln("deleting cloud objects...")
+	toRemove := objList.Entries
+	if len(cnt) > 0 {
+		toRemove = toRemove[:cnt[0]]
+	}
+
+	tutils.Logf("deleting %d cloud objects...\n", len(toRemove))
 
 	wg := cmn.NewLimitedWaitGroup(40)
-	for _, obj := range objList.Entries {
+	for _, obj := range toRemove {
 		wg.Add(1)
 		go func(obj *cmn.BucketEntry) {
 			defer wg.Done()
