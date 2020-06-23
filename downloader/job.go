@@ -338,6 +338,7 @@ func newCloudBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *
 		pageMarker: "",
 		t:          t,
 		ctx:        ctx,
+		sync:       payload.Sync,
 		prefix:     payload.Prefix,
 		suffix:     payload.Suffix,
 	}
