@@ -1,6 +1,6 @@
 // Package reb provides resilvering and rebalancing functionality for the AIStore object storage.
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 

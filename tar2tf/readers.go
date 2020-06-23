@@ -1,6 +1,6 @@
 // Package ta2tf provides core functionality for integrating with TensorFlow tools
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
 
 package tar2tf
