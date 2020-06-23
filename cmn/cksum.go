@@ -7,6 +7,7 @@ package cmn
 import (
 	"crypto/md5"
 	"crypto/sha512"
+	"encoding"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -27,6 +28,8 @@ const (
 )
 
 type (
+	noopHash struct{}
+
 	BadCksumError struct {
 		prefix  string
 		a, b    interface{}
@@ -52,6 +55,12 @@ var (
 		ChecksumSHA256: {},
 		ChecksumSHA512: {},
 	}
+)
+
+var (
+	_ hash.Hash                  = &noopHash{}
+	_ encoding.BinaryUnmarshaler = &noopHash{}
+	_ encoding.BinaryUnmarshaler = &noopHash{}
 )
 
 /////////////
@@ -97,7 +106,7 @@ func NewCksum(ty, value string) *Cksum {
 func NewCksumHash(ty string) *CksumHash {
 	switch ty {
 	case ChecksumNone, "":
-		return &CksumHash{Cksum{ty: ChecksumNone}, nil, nil}
+		return &CksumHash{Cksum{ty: ChecksumNone}, newNoopHash(), nil}
 	case ChecksumXXHash:
 		return &CksumHash{Cksum{ty: ty}, xxhash.New64(), nil}
 	case ChecksumMD5:
@@ -152,9 +161,14 @@ func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
 }
 
-func HashToStr(h hash.Hash) string {
-	return hex.EncodeToString(h.Sum(nil))
-}
+func newNoopHash() hash.Hash                       { return &noopHash{} }
+func (h *noopHash) Write(b []byte) (int, error)    { return len(b), nil }
+func (h *noopHash) Sum([]byte) []byte              { return nil }
+func (h *noopHash) Reset()                         {}
+func (h *noopHash) Size() int                      { return 0 }
+func (h *noopHash) BlockSize() int                 { return KiB }
+func (h *noopHash) MarshalBinary() ([]byte, error) { return nil, nil }
+func (h *noopHash) UnmarshalBinary([]byte) error   { return nil }
 
 ////////////
 // errors //

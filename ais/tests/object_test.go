@@ -111,57 +111,72 @@ func TestCloudBucketObject(t *testing.T) {
 }
 
 func TestAppendObject(t *testing.T) {
-	var (
-		proxyURL   = tutils.RandomProxyURL()
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     TestBucketName,
-			Provider: cmn.ProviderAIS,
-		}
-		objHead = "1111111111"
-		objBody = "222222222222222"
-		objTail = "333333333"
-		objName = "test/obj1"
-		content = objHead + objBody + objTail
-		objSize = len(content)
-	)
-	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+	for _, cksumType := range cmn.SupportedChecksums() {
+		t.Run(cksumType, func(t *testing.T) {
+			var (
+				proxyURL   = tutils.RandomProxyURL()
+				baseParams = tutils.BaseAPIParams(proxyURL)
+				bck        = cmn.Bck{
+					Name:     TestBucketName,
+					Provider: cmn.ProviderAIS,
+				}
+				objName = "test/obj1"
 
-	args := api.AppendArgs{
-		BaseParams: baseParams,
-		Bck:        bck,
-		Object:     objName,
-		Reader:     cmn.NewByteHandle([]byte(objHead)),
-	}
-	// First call with empty `handle` to start writing the object
-	handle, err := api.AppendObject(args)
-	tassert.CheckFatal(t, err)
-	// Use the handle returned by the first call (it never changes)
-	args.Handle = handle
-	args.Reader = cmn.NewByteHandle([]byte(objBody))
-	_, err = api.AppendObject(args)
-	tassert.CheckFatal(t, err)
-	args.Reader = cmn.NewByteHandle([]byte(objTail))
-	_, err = api.AppendObject(args)
-	tassert.CheckFatal(t, err)
-	// Flush object to make it persistent one in the bucket
-	err = api.FlushObject(api.FlushArgs{
-		BaseParams: baseParams,
-		Bck:        bck,
-		Object:     objName,
-		Handle:     handle,
-	})
-	tassert.CheckFatal(t, err)
+				objHead = "1111111111"
+				objBody = "222222222222222"
+				objTail = "333333333"
+				content = objHead + objBody + objTail
+				objSize = len(content)
+			)
+			tutils.CreateFreshBucket(t, proxyURL, bck, cmn.BucketPropsToUpdate{
+				Cksum: &cmn.CksumConfToUpdate{
+					Type: api.String(cksumType),
+				},
+			})
+			defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	// Read the object from the bucket
-	writer := bytes.NewBuffer(make([]byte, 0, objSize*2))
-	getArgs := api.GetObjectInput{Writer: writer}
-	n, err := api.GetObject(baseParams, bck, objName, getArgs)
-	tassert.CheckFatal(t, err)
-	if writer.String() != content {
-		t.Errorf("Invalid object content [%d]%q, expected [%d]%q",
-			n, writer.String(), objSize, content)
+			var (
+				err    error
+				handle string
+				cksum  = cmn.NewCksumHash(cksumType)
+			)
+			for _, body := range []string{objHead, objBody, objTail} {
+				args := api.AppendArgs{
+					BaseParams: baseParams,
+					Bck:        bck,
+					Object:     objName,
+					Handle:     handle,
+					Reader:     cmn.NewByteHandle([]byte(body)),
+				}
+				handle, err = api.AppendObject(args)
+				tassert.CheckFatal(t, err)
+
+				_, err = cksum.H.Write([]byte(body))
+				tassert.CheckFatal(t, err)
+			}
+
+			// Flush object with cksum to make it persistent in the bucket.
+			cksum.Finalize()
+			err = api.FlushObject(api.FlushArgs{
+				BaseParams: baseParams,
+				Bck:        bck,
+				Object:     objName,
+				Handle:     handle,
+				Cksum:      cksum.Clone(),
+			})
+			tassert.CheckFatal(t, err)
+
+			// Read the object from the bucket.
+			writer := bytes.NewBuffer(nil)
+			getArgs := api.GetObjectInput{Writer: writer}
+			n, err := api.GetObjectWithValidation(baseParams, bck, objName, getArgs)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(
+				t, writer.String() == content,
+				"invalid object content: [%d](%s), expected: [%d](%s)",
+				n, writer.String(), objSize, content,
+			)
+		})
 	}
 }
 

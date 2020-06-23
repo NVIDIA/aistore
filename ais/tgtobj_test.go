@@ -135,13 +135,13 @@ func BenchmarkObjAppend(b *testing.B) {
 	benches := []struct {
 		fileSize int64
 	}{
-		{cmn.KiB},
-		{512 * cmn.KiB},
-		{cmn.MiB},
-		{2 * cmn.MiB},
-		{4 * cmn.MiB},
-		{8 * cmn.MiB},
-		{16 * cmn.MiB},
+		{fileSize: cmn.KiB},
+		{fileSize: 512 * cmn.KiB},
+		{fileSize: cmn.MiB},
+		{fileSize: 2 * cmn.MiB},
+		{fileSize: 4 * cmn.MiB},
+		{fileSize: 8 * cmn.MiB},
+		{fileSize: 16 * cmn.MiB},
 	}
 
 	for _, bench := range benches {
