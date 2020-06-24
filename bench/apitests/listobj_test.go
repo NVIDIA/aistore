@@ -6,29 +6,28 @@ package apitests
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
-	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	"golang.org/x/sync/errgroup"
 )
 
 type testConfig struct {
-	numObjectsPerBucket uint
-	numBuckets          int
-	objSize             int64
-	cksumType           string
+	objectCnt uint
+	bucketCnt int
+	pageSize  uint
+	objSize   int64
+	cksumType string
 }
 
 func (tc testConfig) name() string {
-	return fmt.Sprintf("CntPerBck%d_Bcks%d_Size%d_cksum%s",
-		tc.numObjectsPerBucket,
-		tc.numBuckets,
-		tc.objSize,
-		tc.cksumType,
+	return fmt.Sprintf(
+		"objs:%d/bcks:%d/page:%d/size:%d/cksum:%s",
+		tc.objectCnt, tc.bucketCnt, tc.pageSize, tc.objSize, tc.cksumType,
 	)
 }
 
@@ -39,15 +38,13 @@ func createAndFillBucket(b *testing.B, bckName string, objCnt uint, objSize int6
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		wg         = &sync.WaitGroup{}
+
+		objCntPerWorker = int(objCnt) / workerCount
 	)
-	objCntPerWorker := int(objCnt) / workerCount
-	totalObjs := objCntPerWorker * workerCount
 
 	tutils.CreateFreshBucket(b, proxyURL, bck)
 
 	// Iterations of PUT
-	startPut := time.Now()
-	tutils.Logf("%d workers each performing PUT of %d objects of size %d\n", workerCount, objCntPerWorker, objSize)
 	for wid := uint(0); wid < workerCount; wid++ {
 		wg.Add(1)
 		go func() {
@@ -57,55 +54,77 @@ func createAndFillBucket(b *testing.B, bckName string, objCnt uint, objSize int6
 		}()
 	}
 	wg.Wait()
-	tutils.Logf("Took %v to PUT %d objects\n", time.Since(startPut), totalObjs)
 	return proxyURL, bck
 }
 
 func BenchmarkListObject(b *testing.B) {
-	defaultCkSum := cmn.DefaultBucketProps().Cksum.Type
-	configs := []testConfig{
-		{1000, 1, cmn.KiB, defaultCkSum},
-		{1000, 10, cmn.KiB, defaultCkSum},
-		{1000, 1, cmn.MiB, defaultCkSum},
-		{1000, 10, cmn.MiB, defaultCkSum},
-	}
-	for _, config := range configs {
-		b.Run(config.name(), func(b *testing.B) { runner(b, config) })
+	tutils.CheckSkip(b, tutils.SkipTestArgs{Long: true})
+
+	var (
+		defaultCksum = cmn.DefaultBucketProps().Cksum.Type
+
+		// TODO: Extend the number of cases.
+		tests = []testConfig{
+			{objectCnt: cmn.DefaultListPageSize, bucketCnt: 1, pageSize: 0, objSize: cmn.KiB, cksumType: defaultCksum},
+			{objectCnt: cmn.DefaultListPageSize, bucketCnt: 10, pageSize: 0, objSize: cmn.KiB, cksumType: defaultCksum},
+			{objectCnt: cmn.DefaultListPageSize, bucketCnt: 1, pageSize: 0, objSize: cmn.MiB, cksumType: defaultCksum},
+			{objectCnt: cmn.DefaultListPageSize, bucketCnt: 10, pageSize: 0, objSize: cmn.MiB, cksumType: defaultCksum},
+
+			{objectCnt: 5000, bucketCnt: 1, pageSize: cmn.DefaultListPageSize, objSize: 256, cksumType: defaultCksum},
+			{objectCnt: 5000, bucketCnt: 10, pageSize: cmn.DefaultListPageSize, objSize: 256, cksumType: defaultCksum},
+		}
+	)
+	for _, test := range tests {
+		b.Run(test.name(), func(b *testing.B) {
+			runner(b, test)
+		})
 	}
 }
 
 func runner(b *testing.B, tc testConfig) {
 	var (
-		numObjectsPerBucket = tc.numObjectsPerBucket
-		numBuckets          = tc.numBuckets
-		objSize             = tc.objSize
-		cksumType           = tc.cksumType
+		bps  = make([]api.BaseParams, tc.bucketCnt)
+		bcks = make([]cmn.Bck, tc.bucketCnt)
 	)
 
-	tutils.CheckSkip(b, tutils.SkipTestArgs{Long: true})
-	proxies := make([]string, numBuckets)
-	bcks := make([]cmn.Bck, numBuckets)
-	for i := 0; i < numBuckets; i++ {
-		elems := strings.Split(b.Name(), "/")
-		name := strings.Join(elems, "_")
-		bckName := fmt.Sprintf("%s_%d", name, i)
-		proxyURL, bck := createAndFillBucket(b, bckName, numObjectsPerBucket, objSize, cksumType)
-		proxies[i] = proxyURL
+	defer func() {
+		for i := 0; i < tc.bucketCnt; i++ {
+			tutils.DestroyBucket(b, bps[i].URL, bcks[i])
+		}
+	}()
+
+	for i := 0; i < tc.bucketCnt; i++ {
+		var (
+			bckName       = cmn.RandString(10)
+			proxyURL, bck = createAndFillBucket(b, bckName, tc.objectCnt, tc.objSize, tc.cksumType)
+		)
+		bps[i] = tutils.BaseAPIParams(proxyURL)
 		bcks[i] = bck
 	}
+
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			for i := 0; i < numBuckets; i++ {
-				proxyURL := proxies[i]
-				bck := bcks[i]
-				go func() {
-					objs, err := tutils.ListObjects(proxyURL, bck, "", numObjectsPerBucket)
-					tassert.CheckFatal(b, err)
-					tassert.Fatalf(b, len(objs) == int(numObjectsPerBucket),
-						"expected %d objects got % objects", numObjectsPerBucket, len(objs))
-				}()
+			group := &errgroup.Group{}
+			for i := 0; i < tc.bucketCnt; i++ {
+				var (
+					bp  = bps[i]
+					bck = bcks[i]
+				)
+				group.Go(func() error {
+					msg := &cmn.SelectMsg{PageSize: tc.pageSize}
+					objs, err := api.ListObjects(bp, bck, msg, tc.objectCnt)
+					if err != nil {
+						return err
+					}
+					if len(objs.Entries) != int(tc.objectCnt) {
+						return fmt.Errorf("expected %d objects got %d", tc.objectCnt, len(objs.Entries))
+					}
+					return nil
+				})
 			}
+			err := group.Wait()
+			tassert.CheckFatal(b, err)
 		}
 	})
 }
