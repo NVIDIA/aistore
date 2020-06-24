@@ -3,6 +3,7 @@
 set -e
 
 CLOUD=0 # By default use no cloud
+TARGETS=5
 AIS_DIR="$GOPATH/src/github.com/NVIDIA/aistore"
 NEXT_TIER=""
 
@@ -15,6 +16,7 @@ while (( "$#" )); do
     --dir) AIS_DIR=$2; shift; shift;;
     --debug) export AIS_DEBUG=$2; shift; shift;;
     --tier) NEXT_TIER="true"; shift;;
+    --ntargets) TARGETS=$2; shift; shift;;
     --https)
       export USE_HTTPS="true"
       export AIS_SKIP_VERIFY_CRT="true"
@@ -31,7 +33,7 @@ pushd $AIS_DIR
 make kill
 make clean
 
-echo -e "5\n5\n5\n${CLOUD}" | make deploy
+echo -e "${TARGETS}\n5\n5\n${CLOUD}" | make deploy
 
 make aisfs && make cli
 
