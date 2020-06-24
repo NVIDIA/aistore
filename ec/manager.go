@@ -279,8 +279,10 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 	}
 }
 
-// Encode the object. `wg` is optional - a caller passes WaitGroup when it
-// wants to be notified after the object is done
+// Encode the object:
+//   - lom - object to encode
+//   - intra - if true, it is internal request and has low priority
+//   - cb - optional callback that is called after the object is encoded
 func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) error {
 	if !lom.Bprops().EC.Enabled {
 		return ErrorECDisabled
@@ -309,9 +311,10 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	}
 
 	req := &Request{
-		Action: ActSplit,
-		IsCopy: IsECCopy(lom.Size(), &lom.Bprops().EC),
-		LOM:    lom,
+		Action:  ActSplit,
+		IsCopy:  IsECCopy(lom.Size(), &lom.Bprops().EC),
+		LOM:     lom,
+		rebuild: len(cb) != 0,
 	}
 	if len(cb) != 0 {
 		req.Callback = cb[0]

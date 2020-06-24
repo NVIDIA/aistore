@@ -142,12 +142,12 @@ type (
 		LOM      *cluster.LOM // object info
 		Action   string       // what to do with the object (see Act* consts)
 		ErrCh    chan error   // for final EC result
-		IsCopy   bool         // replicate or use erasure coding
 		Callback cluster.OnFinishObj
 
-		// private properties
 		putTime time.Time // time when the object is put into main queue
 		tm      time.Time // to measure different steps
+		IsCopy  bool      // replicate or use erasure coding
+		rebuild bool      // true - internal request to reencode, e.g., from ec-encode xaction
 	}
 
 	RequestsControlMsg struct {

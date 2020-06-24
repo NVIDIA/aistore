@@ -25,6 +25,9 @@ import (
 	"github.com/klauspost/reedsolomon"
 )
 
+// to avoid starving ecencode xaction, allow to run ecencode after every put batch
+const putBatchSize = 8
+
 // a mountpath putJogger: processes PUT/DEL requests to one mountpath
 type putJogger struct {
 	parent *XactPut
@@ -32,34 +35,62 @@ type putJogger struct {
 	buffer []byte
 	mpath  string
 
-	workCh chan *Request // channel to request TOP priority operation (restore)
+	putCh  chan *Request // top priority operation (object PUT)
+	xactCh chan *Request // low priority operation (ec-encode)
 	stopCh chan struct{} // jogger management channel: to stop it
 
 	toDisk bool // use files or SGL
 }
 
+func (c *putJogger) freeResources() {
+	c.slab.Free(c.buffer)
+	c.buffer = nil
+	c.slab = nil
+}
+
+func (c *putJogger) processRequest(req *Request) {
+	ecConf := req.LOM.Bprops().EC
+	c.parent.stats.updateWaitTime(time.Since(req.tm))
+	memRequired := req.LOM.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+	c.toDisk = useDisk(memRequired)
+	req.tm = time.Now()
+	err := c.ec(req)
+	c.parent.DecPending()
+	if req.Callback != nil {
+		req.Callback(req.LOM, err)
+	}
+}
+
 func (c *putJogger) run() {
 	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 	c.buffer, c.slab = mm.Alloc()
+	putsDone := 0
 
 	for {
+		// first, process requests with high priority
 		select {
-		case req := <-c.workCh:
-			ecConf := req.LOM.Bprops().EC
-
-			c.parent.stats.updateWaitTime(time.Since(req.tm))
-			memRequired := req.LOM.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
-			c.toDisk = useDisk(memRequired)
-			req.tm = time.Now()
-			err := c.ec(req)
-			c.parent.DecPending()
-			if req.Callback != nil {
-				req.Callback(req.LOM, err)
+		case req := <-c.putCh:
+			c.processRequest(req)
+			// repeat in case of more objects in the HIGH-priority queue
+			putsDone++
+			if putsDone < putBatchSize {
+				continue
 			}
 		case <-c.stopCh:
-			c.slab.Free(c.buffer)
-			c.buffer = nil
-			c.slab = nil
+			c.freeResources()
+			return
+		default:
+		}
+
+		putsDone = 0
+		// process all other requests
+		select {
+		case req := <-c.putCh:
+			c.processRequest(req)
+		case req := <-c.xactCh:
+			c.processRequest(req)
+		case <-c.stopCh:
+			c.freeResources()
 			return
 		}
 	}

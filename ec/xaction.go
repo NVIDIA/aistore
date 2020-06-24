@@ -22,6 +22,7 @@ import (
 const (
 	requestBufSizeGlobal = 140
 	requestBufSizeFS     = 70
+	requestBufSizeEncode = 16
 	maxBgJobsPerJogger   = 32
 )
 

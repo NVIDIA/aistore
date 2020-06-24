@@ -58,7 +58,8 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 	return &putJogger{
 		parent: r,
 		mpath:  mpath,
-		workCh: make(chan *Request, requestBufSizeFS),
+		putCh:  make(chan *Request, requestBufSizeFS),
+		xactCh: make(chan *Request, requestBufSizeEncode),
 		stopCh: make(chan struct{}, 1),
 	}
 }
@@ -215,9 +216,13 @@ func (r *XactPut) dispatchRequest(req *Request) {
 		jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
 		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
 		if glog.V(4) {
-			glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.workCh), req.LOM.Uname())
+			glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.putCh), req.LOM.Uname())
 		}
-		r.stats.updateQueue(len(jogger.workCh))
-		jogger.workCh <- req
+		if req.rebuild {
+			jogger.xactCh <- req
+		} else {
+			r.stats.updateQueue(len(jogger.putCh))
+			jogger.putCh <- req
+		}
 	}
 }
