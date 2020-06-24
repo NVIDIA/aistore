@@ -120,10 +120,13 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 		oldest     = time.Now().Add(time.Hour)
 
 		bckProvider = cmn.ProviderAIS
-		bmd         = cluster.NewBaseBownerMock()
+		bmd         = cluster.NewBaseBownerMock(
+			cluster.NewBck(
+				bck.Name, bck.Provider, bck.Ns,
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+			),
+		)
 	)
-	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
-	bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Ns, props))
 
 	if !bck.IsAIS() {
 		config := tutils.GetClusterConfig(t)

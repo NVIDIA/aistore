@@ -222,7 +222,7 @@ func (tctx *testContext) setup() {
 		return fmt.Sprintf("target:%d", i)
 	}
 
-	// Initialize smap
+	// Initialize smap.
 	smap := newTestSmap()
 	ports, err := getFreePorts(tctx.targetCnt)
 	Expect(err).ShouldNot(HaveOccurred())
@@ -243,7 +243,7 @@ func (tctx *testContext) setup() {
 	}
 	smap.InitDigests()
 
-	// Create and setup target mocks
+	// Create and setup target mocks.
 	targets := make([]*targetNodeMock, tctx.targetCnt)
 	for i := 0; i < tctx.targetCnt; i++ {
 		target := newTargetMock(genNodeID(i), smap)
@@ -256,9 +256,14 @@ func (tctx *testContext) setup() {
 	time.Sleep(time.Millisecond * 100)
 
 	ctx.smapOwner = smap
-	bmdMock := cluster.NewBaseBownerMock()
-	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
-	bmdMock.Add(cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal, props))
+
+	// Initialize BMD owner.
+	bmdMock := cluster.NewBaseBownerMock(
+		cluster.NewBck(
+			testBucket, cmn.ProviderAIS, cmn.NsGlobal,
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+		),
+	)
 	ctx.t = cluster.NewTargetMock(bmdMock)
 
 	tctx.smap = smap

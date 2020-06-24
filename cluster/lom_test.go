@@ -69,23 +69,32 @@ var _ = Describe("LOM", func() {
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
-	bmd := cluster.NewBaseBownerMock()
-	bmd.Add(cluster.NewBck(bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal,
-		&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}}))
-	bmd.Add(cluster.NewBck(bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal,
-		&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}}))
-	bmd.Add(cluster.NewBck(bucketLocalC, cmn.ProviderAIS, cmn.NsGlobal,
-		&cmn.BucketProps{
-			Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
-			LRU:    cmn.LRUConf{Enabled: true},
-			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
-		}))
-	bmd.Add(cluster.NewBck(sameBucketName, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{}))
-	bmd.Add(cluster.NewBck(bucketCloudA, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}))
-	bmd.Add(cluster.NewBck(bucketCloudB, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}))
-	bmd.Add(cluster.NewBck(sameBucketName, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}))
+	var (
+		bmd = cluster.NewBaseBownerMock(
+			cluster.NewBck(
+				bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal,
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}},
+			),
+			cluster.NewBck(
+				bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal,
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}},
+			),
 
-	tMock := cluster.NewTargetMock(bmd)
+			cluster.NewBck(
+				bucketLocalC, cmn.ProviderAIS, cmn.NsGlobal,
+				&cmn.BucketProps{
+					Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
+					LRU:    cmn.LRUConf{Enabled: true},
+					Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
+				},
+			),
+			cluster.NewBck(sameBucketName, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{}),
+			cluster.NewBck(bucketCloudA, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}),
+			cluster.NewBck(bucketCloudB, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}),
+			cluster.NewBck(sameBucketName, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}),
+		)
+		tMock = cluster.NewTargetMock(bmd)
+	)
 
 	BeforeEach(func() {
 		// Dummy cloud provider for tests involving cloud buckets

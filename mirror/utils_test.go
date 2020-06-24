@@ -42,23 +42,21 @@ var _ = Describe("Mirror", func() {
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	var (
-		bmdMock         = cluster.NewBaseBownerMock()
+		bck     = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+		bmdMock = cluster.NewBaseBownerMock(
+			&cluster.Bck{Bck: bck, Props: &cmn.BucketProps{
+				Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
+				LRU:    cmn.LRUConf{Enabled: true},
+				Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
+			}},
+		)
 		tMock           = cluster.NewTargetMock(bmdMock)
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}
-		bck             = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 		bucketPath      = mi.MakePathCT(bck, fs.ObjectType)
 		defaultObjFQN   = mi.MakePathFQN(bck, fs.ObjectType, testObjectName)
 		expectedCopyFQN = mi2.MakePathFQN(bck, fs.ObjectType, testObjectName)
 	)
-
-	cbck := cluster.NewBckEmbed(bck)
-	cbck.Props = &cmn.BucketProps{
-		Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
-		LRU:    cmn.LRUConf{Enabled: true},
-		Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
-	}
-	bmdMock.Add(cbck)
 
 	BeforeEach(func() {
 		_ = cmn.CreateDir(mpath)

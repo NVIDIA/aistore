@@ -17,24 +17,26 @@ import (
 // Smoke tests for xactions
 
 func TestXactionRenewLRU(t *testing.T) {
-	xactions := newRegistry()
+	var (
+		xactions = newRegistry()
+		xactCh   = make(chan *lru.Xaction, 10)
+		wg       = &sync.WaitGroup{}
+	)
 	defer xactions.AbortAll()
 
-	ch := make(chan *lru.Xaction, 10)
-	wg := &sync.WaitGroup{}
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			ch <- xactions.RenewLRU("")
+			xactCh <- xactions.RenewLRU("")
 		}()
 	}
 
 	wg.Wait()
-	close(ch)
+	close(xactCh)
 
 	notNilCount := 0
-	for xact := range ch {
+	for xact := range xactCh {
 		if xact != nil {
 			notNilCount++
 		}
@@ -44,13 +46,18 @@ func TestXactionRenewLRU(t *testing.T) {
 }
 
 func TestXactionRenewEvictDelete(t *testing.T) {
-	xactions := newRegistry()
-	bmd := cluster.NewBaseBownerMock()
-	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
-	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal, props)
+	var (
+		xactions = newRegistry()
+		evArgs   = &DeletePrefetchArgs{}
+
+		bmd     = cluster.NewBaseBownerMock()
+		bckFrom = cluster.NewBck(
+			"test", cmn.ProviderAIS, cmn.NsGlobal,
+			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+		)
+		tMock = cluster.NewTargetMock(bmd)
+	)
 	bmd.Add(bckFrom)
-	evArgs := &DeletePrefetchArgs{}
-	tMock := cluster.NewTargetMock(bmd)
 
 	defer xactions.AbortAll()
 
@@ -79,14 +86,16 @@ func TestXactionRenewEvictDelete(t *testing.T) {
 }
 
 func TestXactionAbortAll(t *testing.T) {
-	xactions := newRegistry()
+	var (
+		xactions = newRegistry()
 
-	bmd := cluster.NewBaseBownerMock()
-	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		bmd     = cluster.NewBaseBownerMock()
+		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		tMock   = cluster.NewTargetMock(bmd)
+	)
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
-	tMock := cluster.NewTargetMock(bmd)
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -102,13 +111,16 @@ func TestXactionAbortAll(t *testing.T) {
 }
 
 func TestXactionAbortAllGlobal(t *testing.T) {
-	xactions := newRegistry()
-	bmd := cluster.NewBaseBownerMock()
-	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+	var (
+		xactions = newRegistry()
+
+		bmd     = cluster.NewBaseBownerMock()
+		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		tMock   = cluster.NewTargetMock(bmd)
+	)
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
-	tMock := cluster.NewTargetMock(bmd)
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
@@ -125,13 +137,15 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 }
 
 func TestXactionAbortBuckets(t *testing.T) {
-	xactions := newRegistry()
-	bmd := cluster.NewBaseBownerMock()
-	bckFrom := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-	bckTo := cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+	var (
+		xactions = newRegistry()
+		bmd      = cluster.NewBaseBownerMock()
+		bckFrom  = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		bckTo    = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		tMock    = cluster.NewTargetMock(bmd)
+	)
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
-	tMock := cluster.NewTargetMock(bmd)
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")

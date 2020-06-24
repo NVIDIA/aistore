@@ -983,15 +983,18 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		filesList   = make([]string, 0, numFiles)
 		proxyURL    = tutils.RandomProxyURL()
 		baseParams  = tutils.BaseAPIParams(proxyURL)
-		bmdMock     = cluster.NewBaseBownerMock()
-		tMock       = cluster.NewTargetMock(bmdMock)
-		bck         = cmn.Bck{
+		bmdMock     = cluster.NewBaseBownerMock(
+			cluster.NewBck(
+				TestBucketName, cmn.ProviderAIS, cmn.NsGlobal,
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+			),
+		)
+		tMock = cluster.NewTargetMock(bmdMock)
+		bck   = cmn.Bck{
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
 	)
-	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
-	bmdMock.Add(cluster.NewBck(TestBucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
@@ -1206,15 +1209,18 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		errCh      = make(chan error, 100)
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bmdMock    = cluster.NewBaseBownerMock()
-		tMock      = cluster.NewTargetMock(bmdMock)
-		bck        = cmn.Bck{
+		bmdMock    = cluster.NewBaseBownerMock(
+			cluster.NewBck(
+				TestBucketName, cmn.ProviderAIS, cmn.NsGlobal,
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+			),
+		)
+		tMock = cluster.NewTargetMock(bmdMock)
+		bck   = cmn.Bck{
 			Name:     tutils.GenRandomString(15),
 			Provider: cmn.ProviderAIS,
 		}
 	)
-	props := &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}}
-	bmdMock.Add(cluster.NewBck(TestBucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires write access to xattrs, doesn't work with docker", t.Name()))

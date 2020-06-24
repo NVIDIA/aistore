@@ -70,13 +70,19 @@ func getMockGetFSStats(currentFilesNum int) func(string) (uint64, uint64, int64,
 
 func newTargetLRUMock() *cluster.TargetMock {
 	// Bucket owner mock, required for LOM
-	bmdMock := cluster.NewBaseBownerMock()
-	tMock := cluster.NewTargetMock(bmdMock)
-	props := &cmn.BucketProps{
-		Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
-		LRU:    cmn.LRUConf{Enabled: true},
-		Access: cmn.AllAccess()}
-	bmdMock.Add(cluster.NewBck(bucketName, cmn.ProviderAIS, cmn.NsGlobal, props))
+	var (
+		bmdMock = cluster.NewBaseBownerMock(
+			cluster.NewBck(
+				bucketName, cmn.ProviderAIS, cmn.NsGlobal,
+				&cmn.BucketProps{
+					Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
+					LRU:    cmn.LRUConf{Enabled: true},
+					Access: cmn.AllAccess(),
+				},
+			),
+		)
+		tMock = cluster.NewTargetMock(bmdMock)
+	)
 	return tMock
 }
 

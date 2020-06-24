@@ -16,11 +16,18 @@ type BownerMock struct {
 
 func (r BownerMock) Get() *BMD { return &r.BMD }
 
-func NewBaseBownerMock() *BownerMock {
-	providers := make(Providers)
-	namespaces := make(Namespaces)
+func NewBaseBownerMock(bcks ...*Bck) *BownerMock {
+	var (
+		providers  = make(Providers)
+		namespaces = make(Namespaces)
+		buckets    = make(Buckets)
+	)
 	providers[cmn.ProviderAIS] = namespaces
-	buckets := make(Buckets)
 	namespaces[cmn.NsGlobal.Uname()] = buckets
-	return &BownerMock{BMD: BMD{Providers: providers}}
+
+	owner := &BownerMock{BMD: BMD{Providers: providers}}
+	for _, bck := range bcks {
+		owner.Add(bck)
+	}
+	return owner
 }
