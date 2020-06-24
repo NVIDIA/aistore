@@ -42,7 +42,7 @@ func deduplicateBckEntries(bckEntries []*cmn.BucketEntry, maxSize uint) ([]*cmn.
 	for i := j; i < int(objCount); i++ {
 		bckEntries[i] = nil
 	}
-	if maxSize > 0 && objCount > maxSize {
+	if maxSize > 0 && objCount >= maxSize {
 		pageMarker = bckEntries[j-1].Name
 	}
 	return bckEntries[:j], pageMarker
