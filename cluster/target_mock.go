@@ -47,8 +47,8 @@ func (*TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error          { 
 func (*TargetMock) EvictObject(_ *LOM) error                                  { return nil }
 func (*TargetMock) GetCold(_ context.Context, _ *LOM, _ bool) (error, int)    { return nil, http.StatusOK }
 func (*TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) (bool, error) { return false, nil }
-func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _ *cmn.Cksum, _, _, _ bool) error {
-	return nil
+func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _ *cmn.Cksum, _, _, _ bool) (*LOM, error) {
+	return nil, nil
 }
 func (*TargetMock) GetDB() dbdriver.Driver                                          { return nil }
 func (*TargetMock) GetFSPRG() fs.PathRunGroup                                       { return nil }

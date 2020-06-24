@@ -233,7 +233,8 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 	return
 }
 
-func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string, computedCksum *cmn.Cksum, overwrite, safe, verbose bool) (err error) {
+func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string,
+	computedCksum *cmn.Cksum, overwrite, safe, verbose bool) (nlom *cluster.LOM, err error) {
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		return
@@ -276,6 +277,7 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 	}
 	var (
 		cksum   *cmn.CksumHash
+		fi      os.FileInfo
 		written int64
 		workFQN string
 		poi     = &putObjInfo{t: t, lom: lom}
@@ -293,9 +295,9 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		lom.SetCksum(cksum.Clone())
 	} else {
 		workFQN = srcFQN // use the file as it would be intermediate (work) file
-		fi, err := os.Stat(srcFQN)
+		fi, err = os.Stat(srcFQN)
 		if err != nil {
-			return err
+			return
 		}
 		written = fi.Size()
 
@@ -304,25 +306,26 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 			lom.SetCksum(computedCksum)
 		} else {
 			clone := lom.Clone(srcFQN)
-			cksum, err = clone.ComputeCksum()
-			if err != nil {
-				return err
+			if cksum, err = clone.ComputeCksum(); err != nil {
+				return
 			}
 			lom.SetCksum(cksum.Clone())
 		}
 	}
-
 	if computedCksum != nil && cksum != nil {
 		if !cksum.Equal(computedCksum) {
-			return cmn.NewBadDataCksumError(cksum.Clone(), computedCksum, srcFQN+" => "+lom.String())
+			err = cmn.NewBadDataCksumError(cksum.Clone(), computedCksum, srcFQN+" => "+lom.String())
+			return
 		}
 	}
 
 	cmn.Assert(workFQN != "")
 	poi.workFQN = workFQN
-
 	lom.SetSize(written)
 	err, _ = poi.finalize()
+	if err == nil {
+		nlom = lom
+	}
 	return
 }
 

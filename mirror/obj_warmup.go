@@ -82,4 +82,5 @@ func (j *xwarmJogger) jog() {
 	j.joggerBckBase.jog()
 }
 
+// note: consider j.parent.ObjectsInc() here
 func (j *xwarmJogger) noop(*cluster.LOM) error { return nil }

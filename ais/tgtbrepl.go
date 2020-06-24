@@ -90,33 +90,25 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied boo
 	}
 
 	if err = dst.Load(false); err == nil {
-		if dst.Size() == lom.Size() && lom.Cksum().Equal(dst.Cksum()) {
-			copied = true
+		if lom.Cksum().Equal(dst.Cksum()) {
 			return
 		}
 	} else if cmn.IsErrBucketNought(err) {
 		return
 	}
 
-	// do
 	dst, err = lom.CopyObject(dst.FQN, ri.buf)
 	if err == nil {
 		copied = true
 		dst.ReCache()
-
 		if ri.finalize {
-			//
-			// TODO -- FIXME: reuse poi.finalize()
-			//
 			ri.t.putMirror(dst)
 		}
 	}
 	return
 }
 
-//
-// TODO: introduce namespace refs and then reuse rebalancing logic and streams instead of PUT
-//
+// TODO: reuse rebalancing code and streams
 func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.Snode) (copied bool, err error) {
 	var file *cmn.FileHandle // Closed by `.Do()`
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {

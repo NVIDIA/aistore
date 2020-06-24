@@ -91,7 +91,8 @@ type Target interface {
 	EvictObject(lom *LOM) error
 	CopyObject(lom *LOM, bckTo *Bck, buf []byte, localOnly bool) (bool, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
-	PromoteFile(srcFQN string, bck *Bck, objName string, cksum *cmn.Cksum, overwrite, safe, verbose bool) (err error)
+	PromoteFile(srcFQN string, bck *Bck, objName string, cksum *cmn.Cksum,
+		overwrite, safe, verbose bool) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
 

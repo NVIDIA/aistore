@@ -1456,9 +1456,11 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	if objName == "" {
 		objName = filepath.Base(srcFQN)
 	}
-	if err = t.PromoteFile(srcFQN, bck, objName, nil /*expectedCksum*/, params.Overwrite, true /*safe*/, params.Verbose); err != nil {
+	if _, err = t.PromoteFile(srcFQN, bck, objName, nil, /*expectedCksum*/
+		params.Overwrite, true /*safe*/, params.Verbose); err != nil {
 		t.invalmsghdlrf(w, r, fmtErr+" %s", t.si, msg.Action, err.Error())
 	}
+	// TODO: inc stats
 }
 
 //====================== common for both cold GET and PUT ======================================

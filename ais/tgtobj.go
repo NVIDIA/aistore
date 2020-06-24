@@ -926,7 +926,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode i
 			errCode = http.StatusInternalServerError
 			return
 		}
-		if err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName, partialCksum,
+		if _, err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName, partialCksum,
 			true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
 			return "", err, 0
 		}

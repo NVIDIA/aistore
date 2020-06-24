@@ -72,7 +72,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	}
 	objName := r.params.ObjName + strings.TrimPrefix(strings.TrimPrefix(fqn, r.dir), string(filepath.Separator))
 	objName = strings.Trim(objName, string(filepath.Separator))
-	err := r.Target().PromoteFile(fqn, bck, objName, nil /*expectedCksum*/, r.params.Overwrite, true /*safe*/, r.params.Verbose)
+	lom, err := r.Target().PromoteFile(fqn, bck, objName, nil, /*expectedCksum*/
+		r.params.Overwrite, true /*safe*/, r.params.Verbose)
 	if err != nil {
 		if finfo, ers := os.Stat(fqn); ers == nil {
 			if finfo.Mode().IsRegular() {
@@ -81,6 +82,9 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		} else if !os.IsNotExist(ers) {
 			glog.Error(err)
 		}
+	} else {
+		r.ObjectsInc()
+		r.BytesAdd(lom.Size())
 	}
 	return nil
 }
