@@ -1122,12 +1122,12 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	newSmap, msg = &smapX{}, &aisMsg{}
 	smapValue := payload[revsSmapTag]
 	if err1 := jsoniter.Unmarshal(smapValue, newSmap); err1 != nil {
-		err = fmt.Errorf("failed to unmarshal new Smap, value (%+v, %T), err: %v", smapValue, smapValue, err1)
+		err = fmt.Errorf("failed to unmarshal new Smap, value (%s), err: %v", smapValue, err1)
 		return
 	}
 	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf("failed to unmarshal action message, value (%+v, %T), err: %v", msgValue, msgValue, err1)
+			err = fmt.Errorf("failed to unmarshal action message, value (%s), err: %v", msgValue, err1)
 			return
 		}
 	}
@@ -1189,8 +1189,8 @@ func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msg *aisMsg, 
 	}
 	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf("%s: failed to unmarshal action message, value (%+v, %T), err: %v",
-				h.si, msgValue, msgValue, err1)
+			err = fmt.Errorf("%s: failed to unmarshal action message, value (%s), err: %v",
+				h.si, msgValue, err1)
 			return
 		}
 	}
@@ -1217,8 +1217,8 @@ func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msg *aisMs
 	}
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf("%s: failed to unmarshal action message, value (%+v, %T), err: %v",
-				h.si, msgValue, msgValue, err1)
+			err = fmt.Errorf("%s: failed to unmarshal action message, value (%s), err: %v",
+				h.si, msgValue, err1)
 			return
 		}
 	}
@@ -1243,8 +1243,8 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 	if msgValue, ok := payload[revsTokenTag+revsActionTag]; ok {
 		if err := jsoniter.Unmarshal(msgValue, &msg); err != nil {
 			err := fmt.Errorf(
-				"failed to unmarshal action message, value (%+v, %T), err: %v",
-				msgValue, msgValue, err)
+				"failed to unmarshal action message, value (%s), err: %v",
+				msgValue, err)
 			return nil, err
 		}
 	}
