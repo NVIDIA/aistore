@@ -2566,15 +2566,30 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
-	xactMsg := cmn.XactReqMsg{}
-	if cmn.ReadJSON(w, r, &xactMsg) != nil {
-		return
+	var (
+		body    []byte
+		query   = r.URL.Query()
+		uuid    = query.Get(cmn.URLParamUUID)
+		xactMsg cmn.XactReqMsg
+	)
+	err := cmn.ReadJSON(w, r, &xactMsg)
+
+	//  Non-empty `uuid` will ignore the `cmn.XactReqMsg` if present and non-empty
+	if uuid != "" {
+		if err != io.EOF {
+			glog.Warningf("uuid: %v and xactMsg: %v both set at once", uuid, xactMsg)
+		}
+	} else {
+		if err != nil {
+			return
+		}
+		body = cmn.MustMarshal(xactMsg)
 	}
 	results := p.bcastGet(bcastArgs{
 		req: cmn.ReqArgs{
 			Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
-			Query: r.URL.Query(),
-			Body:  cmn.MustMarshal(xactMsg),
+			Query: query,
+			Body:  body,
 		},
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	})
