@@ -26,7 +26,7 @@ import (
 
 // TODO: cmn.UponProgress as periodic (byte-count, object-count)
 // TODO: batch housekeeping for pending notifications
-// TODO: extend to handle notifications from proxies
+// TODO: add an option to enforce 'if one notifier fails all fail'
 
 // notifMsg.Ty enum
 const (
@@ -35,7 +35,7 @@ const (
 )
 
 var notifTyText = map[int]string{
-	notifXact: "xaction-notification",
+	notifXact: "xaction",
 }
 
 const (
@@ -48,7 +48,7 @@ type (
 	notifs        struct {
 		sync.RWMutex
 		p       *proxyrunner
-		m       map[string]notifListener // table [UUID => notifListener]
+		m       map[string]notifListener // [UUID => notifListener]
 		smapVer int64
 		inHk    atomic.Bool
 	}
@@ -61,14 +61,20 @@ type (
 		notifiers() cluster.NodeMap
 		incRC() int
 		notifTy() int
+		addErr(string /*sid*/, error)
+		UUID() string
+		setUUID(string)
+		String() string
 	}
 	notifListenerBase struct {
 		sync.RWMutex
-		srcs cluster.NodeMap // expected notifiers
-		f    notifCallback   // the callback
-		rc   int             // refcount
-		ty   int             // notifMsg.Ty enum (above)
-		done atomic.Bool     // true when done
+		srcs cluster.NodeMap  // expected notifiers
+		errs map[string]error // [node-ID => notifMsg.Err]
+		uuid string           // UUID
+		f    notifCallback    // the callback
+		rc   int              // refcount
+		ty   int              // notifMsg.Ty enum (above)
+		done atomic.Int64     // timestamp when done
 	}
 	notifListenerFromTo struct {
 		notifListenerBase
@@ -98,8 +104,9 @@ var (
 
 // is called after all notifiers will have notified OR on failure (err != nil)
 func (nl *notifListenerBase) callback(n notifListener, msg interface{}, uuid string, err error) {
-	if nl.done.CAS(false, true) {
+	if nl.done.CAS(0, 1) {
 		nl.f(n, msg, uuid, err)
+		nl.done.Store(time.Now().UnixNano())
 	}
 }
 func (nl *notifListenerBase) lock()                      { nl.Lock() }
@@ -109,13 +116,29 @@ func (nl *notifListenerBase) runlock()                   { nl.RUnlock() }
 func (nl *notifListenerBase) notifiers() cluster.NodeMap { return nl.srcs }
 func (nl *notifListenerBase) incRC() int                 { nl.rc++; return nl.rc }
 func (nl *notifListenerBase) notifTy() int               { return nl.ty }
-
-func (msg *notifMsg) String() string {
-	text := "unknown-notification"
-	if ty, ok := notifTyText[int(msg.Ty)]; ok {
-		text = ty
+func (nl *notifListenerBase) UUID() string               { return nl.uuid }
+func (nl *notifListenerBase) setUUID(uuid string)        { cmn.Assert(nl.uuid == ""); nl.uuid = uuid }
+func (nl *notifListenerBase) addErr(sid string, err error) {
+	if nl.errs == nil {
+		nl.errs = make(map[string]error, 2)
 	}
-	return fmt.Sprintf("%s[%s,%v]<=%s", text, string(msg.Data), msg.Err, msg.Snode)
+	nl.errs[sid] = err
+}
+
+func (nl *notifListenerBase) String() string {
+	var tm, res string
+	hdr := fmt.Sprintf("%s-%q", notifText(nl.ty), nl.uuid)
+	if unixnano := nl.done.Load(); unixnano > 0 {
+		if nl.errs != nil {
+			res = fmt.Sprintf("-fail(%+v)", nl.errs)
+		}
+		tm = cmn.FormatTimestamp(time.Unix(0, unixnano))
+		return fmt.Sprintf("%s-%s%s", hdr, tm, res)
+	}
+	if nl.rc > 0 {
+		return fmt.Sprintf("%s-%d/%d", hdr, nl.rc, len(nl.srcs))
+	}
+	return hdr
 }
 
 ////////////
@@ -130,24 +153,35 @@ func (n *notifs) init(p *proxyrunner) {
 
 func (n *notifs) String() string { return notifsName }
 
+// start listening
 func (n *notifs) add(uuid string, nl notifListener) {
 	n.Lock()
 	n.m[uuid] = nl
+	nl.setUUID(uuid)
 	if len(n.m) == 1 {
 		n.smapVer = n.p.owner.smap.get().Version
 		n.p.owner.smap.Listeners().Reg(n)
 	}
 	n.Unlock()
+	glog.Infoln(nl.String())
 }
 
-func (n *notifs) del(uuid string) {
-	n.Lock()
-	delete(n.m, uuid)
-	unreg := len(n.m) == 0
-	n.Unlock()
-	if unreg {
-		n.p.owner.smap.Listeners().Unreg(n)
+func (n *notifs) del(nl notifListener, locked ...bool) {
+	var unreg bool
+	if len(locked) == 0 {
+		n.Lock()
 	}
+	if _, ok := n.m[nl.UUID()]; ok {
+		delete(n.m, nl.UUID())
+		unreg = len(n.m) == 0
+	}
+	if len(locked) == 0 {
+		n.Unlock()
+		if unreg {
+			n.p.owner.smap.Listeners().Unreg(n)
+		}
+	}
+	glog.Infoln(nl.String())
 }
 
 // verb /v1/notifs
@@ -194,11 +228,11 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	cmn.Assert(nl.notifTy() == int(notifMsg.Ty))
 
 	nl.lock()
-	err, status, done := n.handleMsg(nl, uuid, tid)
+	err, status, done := n.handleMsg(nl, uuid, tid, notifMsg.Err)
 	nl.unlock()
 	if done {
-		nl.callback(nl, msg, uuid, nil)
-		n.del(uuid)
+		nl.callback(nl, msg, uuid, nil) // well done (compare with nl.callback below)
+		n.del(nl)
 	}
 	if err != nil {
 		n.p.invalmsghdlr(w, r, err.Error(), status)
@@ -206,17 +240,20 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // is called under notifListener.lock()
-func (n *notifs) handleMsg(nl notifListener, uuid, tid string) (err error, status int, done bool) {
+func (n *notifs) handleMsg(nl notifListener, uuid, tid string, srcErr error) (err error, status int, done bool) {
 	srcs := nl.notifiers()
 	tsi, ok := srcs[tid]
 	if !ok {
-		err = fmt.Errorf("%s: notification from unknown node %s, xaction %q", n.p.si, tid, uuid)
+		err = fmt.Errorf("%s: notification for %q from unknown node %s", n.p.si, uuid, tid)
 		status = http.StatusNotFound
 		return
 	}
 	if tsi == nil {
-		err = fmt.Errorf("%s: duplicate notification from target %s, xaction %q", n.p.si, tid, uuid)
+		err = fmt.Errorf("%s: duplicate notification for %q from node %s", n.p.si, uuid, tid)
 		return
+	}
+	if srcErr != nil {
+		nl.addErr(tid, srcErr)
 	}
 	srcs[tid] = nil
 	if rc := nl.incRC(); rc >= len(srcs) {
@@ -263,30 +300,22 @@ func (n *notifs) housekeep() time.Duration {
 			if res.err == nil {
 				switch nl.notifTy() {
 				case notifXact:
-					stats := &cmn.BaseXactStatsExt{}
-					if eru := jsoniter.Unmarshal(res.outjson, stats); eru == nil {
-						msg = stats
-						if stats.Finished() {
-							nl.lock()
-							_, _, done = n.handleMsg(nl, uuid, res.si.ID())
-							nl.unlock()
-						}
-					} else {
-						glog.Errorf("%s: unexpected: failed to unmarshal %q from %s, err: %v",
-							n.p.si, uuid, res.si, eru)
-					}
+					msg, err, done = n.hkXact(nl, res)
 				default:
 					cmn.Assert(false)
 				}
-			} else if res.status == http.StatusNotFound { // compare w/ errNodeNotFound below
+			} else if res.status == http.StatusNotFound { // consider silent done at res.si
 				err = fmt.Errorf("%s: %q not found at %s", n.p.si, uuid, res.si)
-				done = true
+				nl.lock()
+				_, _, done = n.handleMsg(nl, uuid, res.si.ID(), err)
+				nl.unlock()
 			} else if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Errorf("%s: failure to get %q from %s: %v", n.p.si, uuid, res.si, res.err)
 			}
+
 			if done {
 				nl.callback(nl, msg, uuid, err)
-				n.del(uuid)
+				n.del(nl)
 				break
 			}
 		}
@@ -298,6 +327,35 @@ func (n *notifs) housekeep() time.Duration {
 	return notifsTimeoutGC
 }
 
+func (n *notifs) hkXact(nl notifListener, res callResult) (msg interface{}, err error, done bool) {
+	var (
+		stats = &cmn.BaseXactStatsExt{}
+		uuid  = nl.UUID()
+	)
+	if eru := jsoniter.Unmarshal(res.outjson, stats); eru != nil {
+		glog.Errorf("%s: unexpected: failed to unmarshal %q from %s, err: %v",
+			n.p.si, uuid, res.si, eru)
+		return
+	}
+	msg = stats
+	if stats.Finished() {
+		if stats.Aborted() {
+			detail := fmt.Sprintf("%q from %s", uuid, res.si)
+			err = cmn.NewAbortedErrorDetails(stats.Kind(), detail)
+			done = true // NOTE: one abort == all done
+			nl.lock()
+			nl.addErr(res.si.ID(), err)
+			nl.unlock()
+		} else {
+			nl.lock()
+			_, _, done = n.handleMsg(nl, uuid, res.si.ID(), err)
+			nl.unlock()
+		}
+	}
+	return
+}
+
+// TODO: consider Smap versioning per notifListener
 func (n *notifs) ListenSmapChanged() {
 	if !n.p.ClusterStarted() {
 		return
@@ -334,12 +392,16 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	for uuid, nl := range remnl {
 		s := fmt.Sprintf("%s: stop waiting for notifications from %q", n.p.si, uuid)
-		err := &errNodeNotFound{s, remid[uuid], n.p.si, smap}
+		sid := remid[uuid]
+		err := &errNodeNotFound{s, sid, n.p.si, smap}
+		nl.lock()
+		nl.addErr(sid, err)
+		nl.unlock()
 		nl.callback(nl, nil /*msg*/, uuid, err)
 	}
 	n.Lock()
-	for uuid := range remnl {
-		delete(n.m, uuid)
+	for uuid, nl := range remnl {
+		n.del(nl, true /*locked*/)
 		// cleanup
 		delete(remnl, uuid)
 		delete(remid, uuid)
@@ -349,4 +411,20 @@ func (n *notifs) ListenSmapChanged() {
 	if unreg {
 		go n.p.owner.smap.Listeners().Unreg(n) // cannot unreg from the same goroutine
 	}
+}
+
+//////////
+// misc //
+//////////
+
+func notifText(ty int) string {
+	const unk = "unknown"
+	if txt, ok := notifTyText[ty]; ok {
+		return txt
+	}
+	return unk
+}
+
+func (msg *notifMsg) String() string {
+	return fmt.Sprintf("%s[%s,%v]<=%s", notifText(int(msg.Ty)), string(msg.Data), msg.Err, msg.Snode)
 }
