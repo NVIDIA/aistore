@@ -109,8 +109,18 @@ func (j *bccJogger) jog() {
 func (j *bccJogger) copyObject(lom *cluster.LOM) error {
 	copied, err := j.parent.Target().CopyObject(lom, j.parent.bckTo, j.buf, false)
 	if copied {
-		j.parent.ObjectsInc()
+		n := j.parent.ObjectsInc()
 		j.parent.BytesAdd(lom.Size() + lom.Size())
+		if (n % throttleNumObjects) == 0 {
+			if capInfo := j.parent.Target().AvgCapUsed(j.config); capInfo.Err != nil {
+				what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
+				return cmn.NewAbortedErrorDetails(what, capInfo.Err.Error())
+			}
+		}
+	}
+	if cmn.IsErrOOS(err) {
+		what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
+		return cmn.NewAbortedErrorDetails(what, err.Error())
 	}
 	return err
 }

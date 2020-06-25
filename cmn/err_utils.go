@@ -43,6 +43,10 @@ func IsErrBrokenPipe(err error) bool {
 	return errors.Is(err, syscall.EPIPE)
 }
 
+func IsErrOOS(err error) bool {
+	return errors.Is(err, syscall.ENOSPC)
+}
+
 func IsUnreachable(err error, status int) bool {
 	return IsErrConnectionRefused(err) ||
 		errors.Is(err, context.DeadlineExceeded) ||

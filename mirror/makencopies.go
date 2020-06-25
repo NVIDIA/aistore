@@ -146,6 +146,10 @@ func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 	if os.IsNotExist(err) {
 		return nil
 	}
+	if err != nil && cmn.IsErrOOS(err) {
+		what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
+		return cmn.NewAbortedErrorDetails(what, err.Error())
+	}
 
 	j.num++
 	j.size += size
@@ -163,6 +167,10 @@ func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 		if (j.num % logNumProcessed) == 0 {
 			glog.Infof("jogger[%s/%s] processed %d objects...", j.mpathInfo, j.parent.Bck(), j.num)
 			j.config = cmn.GCO.Get()
+		}
+		if capInfo := j.parent.Target().AvgCapUsed(j.config); capInfo.Err != nil {
+			what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
+			return cmn.NewAbortedErrorDetails(what, capInfo.Err.Error())
 		}
 	} else {
 		runtime.Gosched()
