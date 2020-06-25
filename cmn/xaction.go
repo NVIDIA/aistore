@@ -167,7 +167,7 @@ func (xact *XactBase) String() string {
 		prefix += "@" + xact.bck.Name
 	}
 	if !xact.Finished() {
-		return fmt.Sprintf("%s(%s)", prefix, xact.ID())
+		return fmt.Sprintf("%s(%q)", prefix, xact.ID())
 	}
 	var (
 		stime    = xact.StartTime()
@@ -175,7 +175,7 @@ func (xact *XactBase) String() string {
 		etime    = xact.EndTime()
 		d        = etime.Sub(stime)
 	)
-	return fmt.Sprintf("%s(%s) started %s ended %s (%v)",
+	return fmt.Sprintf("%s(%q) started %s ended %s (%v)",
 		prefix, xact.ID(), stimestr, etime.Format(timeStampFormat), d)
 }
 
@@ -204,7 +204,12 @@ func (xact *XactBase) SetEndTime(e time.Time) {
 	}
 }
 
-func (xact *XactBase) Notif() Notif { return xact.notif }
+func (xact *XactBase) Notif() (n Notif) {
+	if xact.notif == nil {
+		return
+	}
+	return xact.notif
+}
 
 func (xact *XactBase) AddNotif(n Notif) {
 	var ok bool

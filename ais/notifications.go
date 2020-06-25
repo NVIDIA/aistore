@@ -76,6 +76,10 @@ type (
 		ty   int              // notifMsg.Ty enum (above)
 		done atomic.Int64     // timestamp when done
 	}
+	notifListenerBck struct {
+		notifListenerBase
+		nlp *cluster.NameLockPair
+	}
 	notifListenerFromTo struct {
 		notifListenerBase
 		nlpFrom, nlpTo *cluster.NameLockPair

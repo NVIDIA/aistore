@@ -146,13 +146,25 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 		txnMnc := txn.(*txnMakeNCopies)
 		cmn.Assert(txnMnc.newCopies == copies)
+
 		// wait for newBMD w/timeout
 		if err = t.transactions.wait(txn, c.timeout); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
+
 		// do the work in xaction
+		xact, err := xaction.Registry.RenewBckMakeNCopies(c.bck, t, c.uuid, int(copies))
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+
 		xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
-		xaction.Registry.RenewBckMakeNCopies(c.bck, t, c.uuid, int(copies))
+
+		// ask this xaction to notify via F callback when finished
+		xact.AddNotif(&cmn.NotifXact{
+			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: []string{c.callerID}, F: t.xactCallerNotify},
+		})
+		go xact.Run()
 	default:
 		cmn.Assert(false)
 	}
@@ -214,8 +226,13 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		if remirror(txnSetBprops.bprops, txnSetBprops.nprops) {
+			n := int(txnSetBprops.nprops.Mirror.Copies)
+			xact, err := xaction.Registry.RenewBckMakeNCopies(c.bck, t, c.uuid, n)
+			if err != nil {
+				return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			}
 			xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
-			xaction.Registry.RenewBckMakeNCopies(c.bck, t, c.uuid, int(txnSetBprops.nprops.Mirror.Copies))
+			go xact.Run()
 		}
 		// TODO: add reEC() logic for automatic erasure-coding upon changes in the bucket's EC conf
 	default:

@@ -150,7 +150,6 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	if !nlp.TryLock() {
 		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
 	}
-	defer nlp.Unlock()
 
 	// 1. confirm existence
 	p.owner.bmd.Lock()
@@ -191,7 +190,13 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 
 	wg.Wait()
 
-	// 5. commit
+	// 5. start waiting for `finished` notifications
+	nl := notifListenerBck{
+		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckMNC}, nlp: &nlp,
+	}
+	p.notifs.add(c.uuid, &nl)
+
+	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
@@ -624,7 +629,7 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 }
 
 //
-// notifications
+// notifications: listener-side callbacks
 //
 
 // copy-bucket done
@@ -646,6 +651,17 @@ func (p *proxyrunner) nlBckRen(n notifListener, msg interface{}, uuid string, er
 	nl.nlpFrom.Unlock()
 	if err != nil {
 		glog.Errorf("%s(%q): failed to rename bucket: %+v, err: %v", p.si, uuid, msg, err)
+	} else if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
+	}
+}
+
+// make-n-copies done
+func (p *proxyrunner) nlBckMNC(n notifListener, msg interface{}, uuid string, err error) {
+	nl := n.(*notifListenerBck)
+	nl.nlp.Unlock()
+	if err != nil {
+		glog.Errorf("%s(%q): failed to make-n-copies: %+v, err: %v", p.si, uuid, msg, err)
 	} else if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
 	}

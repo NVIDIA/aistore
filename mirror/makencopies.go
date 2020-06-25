@@ -57,7 +57,12 @@ func (r *XactBckMakeNCopies) Run() (err error) {
 		return
 	}
 	glog.Infoln(r.String(), "copies=", r.copies)
-	return r.xactBckBase.run(mpathersCount)
+	err = r.xactBckBase.run(mpathersCount)
+	// notifications
+	if n := r.Notif(); n != nil && n.Upon(cmn.UponTerm) {
+		n.Callback(n, err)
+	}
+	return
 }
 
 func ValidateNCopies(prefix string, copies int) error {

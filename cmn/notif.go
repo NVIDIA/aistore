@@ -46,4 +46,4 @@ var (
 )
 
 func (notif *NotifBase) Callback(n Notif, err error) { notif.F(n, err) }
-func (notif *NotifBase) Upon(u Upon) bool            { return notif.When&u != 0 }
+func (notif *NotifBase) Upon(u Upon) bool            { return notif != nil && notif.When&u != 0 }

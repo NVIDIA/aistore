@@ -158,7 +158,6 @@ func (e *mncEntry) Start(bck cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 	xmnc := mirror.NewXactMNC(bck, e.t, slab, e.uuid, e.copies)
-	go xmnc.Run()
 	e.xact = xmnc
 	return nil
 }
@@ -174,7 +173,10 @@ func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 	)
 	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		if bck.Props.Mirror.Enabled {
-			r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
+			xact, err := r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
+			if err == nil {
+				go xact.Run()
+			}
 		}
 		return false
 	})
@@ -184,16 +186,28 @@ func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 		namespace := cfg.Cloud.Ns
 		bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {
 			if bck.Props.Mirror.Enabled {
-				r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
+				xact, err := r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
+				if err == nil {
+					go xact.Run()
+				}
 			}
 			return false
 		})
 	}
 }
 
-func (r *registry) RenewBckMakeNCopies(bck *cluster.Bck, t cluster.Target, uuid string, copies int) {
-	e := &mncEntry{baseBckEntry: baseBckEntry{uuid}, t: t, copies: copies}
-	_, _ = r.renewBucketXaction(e, bck)
+func (r *registry) RenewBckMakeNCopies(bck *cluster.Bck, t cluster.Target,
+	uuid string, copies int) (*mirror.XactBckMakeNCopies, error) {
+	ne := &mncEntry{baseBckEntry: baseBckEntry{uuid}, t: t, copies: copies}
+	oe, err := r.renewBucketXaction(ne, bck)
+	if err != nil {
+		return nil, err
+	}
+	xact, _ := oe.Get().(*mirror.XactBckMakeNCopies)
+	if ne != oe {
+		err = fmt.Errorf("%s already running", xact)
+	}
+	return xact, err
 }
 
 //
@@ -382,10 +396,8 @@ func (r *FastRen) Run() {
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.SetEndTime(time.Now())
 	// notifications
-	if n := r.Notif(); n != nil {
-		if n.Upon(cmn.UponTerm) {
-			n.Callback(n, nil /*error*/)
-		}
+	if n := r.Notif(); n != nil && n.Upon(cmn.UponTerm) {
+		n.Callback(n, nil /*error*/)
 	}
 }
 
