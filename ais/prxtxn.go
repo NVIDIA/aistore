@@ -143,6 +143,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 		c           = p.prepTxnClient(msg, bck)
 		nlp         = bck.GetNameLockPair()
 		copies, err = p.parseNCopies(msg.Value)
+		committed   bool
 	)
 	if err != nil {
 		return err
@@ -150,6 +151,11 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	if !nlp.TryLock() {
 		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
 	}
+	defer func() {
+		if !committed {
+			nlp.Unlock()
+		}
+	}()
 
 	// 1. confirm existence
 	p.owner.bmd.Lock()
@@ -197,6 +203,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	p.notifs.add(c.uuid, &nl)
 
 	// 6. commit
+	committed = true
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
@@ -291,11 +298,12 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
-		c       *txnClientCtx
-		nlpFrom = bckFrom.GetNameLockPair()
-		nlpTo   = bckTo.GetNameLockPair()
-		nmsg    = &cmn.ActionMsg{} // + bckTo
-		pname   = p.si.String()
+		c         *txnClientCtx
+		nlpFrom   = bckFrom.GetNameLockPair()
+		nlpTo     = bckTo.GetNameLockPair()
+		nmsg      = &cmn.ActionMsg{} // + bckTo
+		pname     = p.si.String()
+		committed bool
 	)
 	if err := p.canStartRebalance(); err != nil {
 		return fmt.Errorf("bucket cannot be renamed: %w", err)
@@ -307,19 +315,22 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		nlpFrom.Unlock()
 		return cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
 	}
-	unlock := func() { nlpTo.Unlock(); nlpFrom.Unlock() }
+	defer func() {
+		if !committed {
+			nlpTo.Unlock()
+			nlpFrom.Unlock()
+		}
+	}()
 
 	// 1. confirm existence & non-existence
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
 		p.owner.bmd.Unlock()
-		unlock()
 		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
 	}
 	if _, present := bmd.Get(bckTo); present {
 		p.owner.bmd.Unlock()
-		unlock()
 		return cmn.NewErrorBucketAlreadyExists(bckTo.Bck, pname)
 	}
 	p.owner.bmd.Unlock()
@@ -336,7 +347,6 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
-			unlock()
 			return res.err
 		}
 	}
@@ -373,6 +383,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.msg.RMDVersion = clone.version()
 
 			// 5. commit
+			committed = true
 			c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 			c.body = cmn.MustMarshal(c.msg)
 			c.req.Body = c.body
@@ -399,11 +410,12 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 // copy-bucket: { confirm existence -- begin -- conditional metasync -- start waiting for copy-done -- commit }
 func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
-		c       *txnClientCtx
-		nmsg    = &cmn.ActionMsg{} // + bckTo
-		nlpFrom = bckFrom.GetNameLockPair()
-		nlpTo   = bckTo.GetNameLockPair()
-		pname   = p.si.String()
+		c         *txnClientCtx
+		nmsg      = &cmn.ActionMsg{} // + bckTo
+		nlpFrom   = bckFrom.GetNameLockPair()
+		nlpTo     = bckTo.GetNameLockPair()
+		pname     = p.si.String()
+		committed bool
 	)
 	if !nlpFrom.TryRLock() {
 		return cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
@@ -412,14 +424,18 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		nlpFrom.RUnlock()
 		return cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
 	}
-	unlock := func() { nlpTo.Unlock(); nlpFrom.RUnlock() }
+	defer func() {
+		if !committed {
+			nlpTo.Unlock()
+			nlpFrom.RUnlock()
+		}
+	}()
 
 	// 1. confirm existence
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
 		p.owner.bmd.Unlock()
-		unlock()
 		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
 	}
 	p.owner.bmd.Unlock()
@@ -436,7 +452,6 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
-			unlock()
 			return res.err
 		}
 	}
@@ -478,6 +493,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	p.notifs.add(c.uuid, &nl)
 
 	// 6. commit
+	committed = true
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	c.req.Query.Set(cmn.URLParamTxnEvent, event)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
