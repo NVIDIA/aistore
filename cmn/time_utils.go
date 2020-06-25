@@ -19,9 +19,8 @@ func FormatUnixNano(unixnano int64, format string) string {
 	}
 }
 
-func FormatTimestamp(tm time.Time) string { return tm.Format(timeStampFormat) }
+func FormatTimestamp(tm time.Time) string { return tm.Format(timestampFormat) }
 
-func Duration2S(d time.Duration) string { return strconv.FormatInt(int64(d), 10) }
 func S2Duration(s string) (time.Duration, error) {
 	d, err := strconv.ParseInt(s, 0, 64)
 	return time.Duration(d), err

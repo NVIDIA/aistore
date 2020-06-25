@@ -276,11 +276,9 @@ Loop:
 		case req := <-d.mpathReqCh:
 			err = fmt.Errorf("mountpaths have changed when downloader was running; %s: %s; aborting", req.Action, req.Path)
 			break Loop
-		case <-d.ChanCheckTimeout():
-			if d.Timeout() {
-				glog.Infof("%s has timed out. Exiting...", d.GetRunName())
-				break Loop
-			}
+		case <-d.IdleTimer():
+			glog.Infof("%s has timed out. Exiting...", d.GetRunName())
+			break Loop
 		case <-d.ChanAbort():
 			glog.Infof("%s has been aborted. Exiting...", d.GetRunName())
 			break Loop

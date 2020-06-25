@@ -12,11 +12,16 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-const timeStampFormat = "15:04:05.000000"
+const (
+	timestampFormat = "15:04:05.000000"
 
-const xactIdleTimeout = time.Minute * 2
+	// Default demand xaction idle timeout: how long the xaction must live after
+	// the end of the last request.
+	xactIdleTimeout = 2 * time.Minute
+)
 
 type (
 	XactID interface {
@@ -83,17 +88,17 @@ type (
 	//
 	XactDemand interface {
 		Xact
-		ChanCheckTimeout() <-chan time.Time
+		IdleTimer() <-chan time.Time
 		Renew()
-		Timeout() bool
 		IncPending()
 		DecPending()
+		SubPending(n int)
 	}
 	XactDemandBase struct {
 		XactBase
-		ticker  *time.Ticker
-		renew   atomic.Int64
-		pending atomic.Int64
+		idleTime time.Duration
+		timer    *time.Timer
+		pending  atomic.Int64
 	}
 	ErrXactExpired struct { // return it if called (right) after self-termination
 		msg string
@@ -106,10 +111,11 @@ type (
 	}
 )
 
-// interface guards
 var (
-	_ Xact      = &XactBase{}
-	_ XactStats = &BaseXactStats{}
+	// interface guards
+	_ Xact       = &XactBase{}
+	_ XactStats  = &BaseXactStats{}
+	_ XactDemand = &XactDemandBase{}
 )
 
 func NewErrXactExpired(msg string) *ErrXactExpired { return &ErrXactExpired{msg: msg} }
@@ -171,12 +177,12 @@ func (xact *XactBase) String() string {
 	}
 	var (
 		stime    = xact.StartTime()
-		stimestr = stime.Format(timeStampFormat)
+		stimestr = stime.Format(timestampFormat)
 		etime    = xact.EndTime()
 		d        = etime.Sub(stime)
 	)
 	return fmt.Sprintf("%s(%q) started %s ended %s (%v)",
-		prefix, xact.ID(), stimestr, etime.Format(timeStampFormat), d)
+		prefix, xact.ID(), stimestr, etime.Format(timestampFormat), d)
 }
 
 func (xact *XactBase) StartTime() time.Time {
@@ -259,33 +265,45 @@ func (xact *XactBase) Stats() XactStats {
 // XactDemandBase - partially implements XactDemand interface
 //
 
-func NewXactDemandBase(kind string, bck Bck, idleTime ...time.Duration) *XactDemandBase {
-	tickTime := xactIdleTimeout
-	if len(idleTime) != 0 {
-		tickTime = idleTime[0]
+func NewXactDemandBase(kind string, bck Bck, idleTimes ...time.Duration) *XactDemandBase {
+	idleTime := xactIdleTimeout
+	if len(idleTimes) != 0 {
+		idleTime = idleTimes[0]
 	}
-	ticker := time.NewTicker(tickTime)
 	return &XactDemandBase{
 		XactBase: *NewXactBaseWithBucket("", kind, bck),
-		ticker:   ticker,
+		idleTime: idleTime,
+		timer:    time.NewTimer(idleTime),
 	}
 }
 
-func (r *XactDemandBase) ChanCheckTimeout() <-chan time.Time { return r.ticker.C }
-func (r *XactDemandBase) Renew()                             { r.renew.Store(1) } // see Timeout()
-func (r *XactDemandBase) IncPending()                        { r.pending.Inc() }
-func (r *XactDemandBase) DecPending()                        { r.pending.Dec() }
-func (r *XactDemandBase) SubPending(n int)                   { r.pending.Sub(int64(n)) }
-func (r *XactDemandBase) Pending() int64                     { return r.pending.Load() }
-
-func (r *XactDemandBase) Timeout() bool {
-	if r.pending.Load() > 0 {
-		return false
+func (r *XactDemandBase) IdleTimer() <-chan time.Time { return r.timer.C }
+func (r *XactDemandBase) Renew() {
+	pending := r.Pending()
+	debug.Assert(pending >= 0)
+	if pending == 0 {
+		// If there are no requests yet and renew was issued then we will wait
+		// `r.idleTime` for some request to come.
+		r.timer.Reset(r.idleTime)
 	}
-	return r.renew.Dec() < 0
 }
-
-func (r *XactDemandBase) Stop() { r.ticker.Stop() }
+func (r *XactDemandBase) IncPending() {
+	if pending := r.pending.Inc(); pending == 1 {
+		// Stop the timer on the first request. It will be restarted once all
+		// jobs finish (see: `SubPending`).
+		r.timer.Stop()
+	}
+}
+func (r *XactDemandBase) DecPending() { r.SubPending(1) }
+func (r *XactDemandBase) SubPending(n int) {
+	pending := r.pending.Sub(int64(n))
+	debug.Assert(pending >= 0)
+	r.Renew()
+}
+func (r *XactDemandBase) Pending() int64 { return r.pending.Load() }
+func (r *XactDemandBase) Stop() {
+	r.timer.Stop()
+}
 
 func IsValidXaction(kind string) bool {
 	_, ok := XactsMeta[kind]

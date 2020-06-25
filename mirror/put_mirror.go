@@ -91,10 +91,8 @@ func (r *XactPutLRepl) Run() error {
 			} else {
 				glog.Errorf("failed to get mpather with path: %s", path)
 			}
-		case <-r.ChanCheckTimeout():
-			if r.Timeout() {
-				return r.stop()
-			}
+		case <-r.IdleTimer():
+			return r.stop()
 		case <-r.ChanAbort():
 			if err := r.stop(); err != nil {
 				return cmn.NewAbortedError(err.Error())

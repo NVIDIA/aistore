@@ -72,10 +72,8 @@ func (r *XactPut) Run() (err error) {
 	}
 
 	var (
-		cfg         = cmn.GCO.Get()
-		lastAction  = time.Now()
-		idleTimeout = 3 * cfg.Timeout.SendFile
-		ticker      = time.NewTicker(cfg.Periodic.StatsTime)
+		cfg    = cmn.GCO.Get()
+		ticker = time.NewTicker(cfg.Periodic.StatsTime)
 	)
 	defer ticker.Stop()
 
@@ -99,7 +97,6 @@ func (r *XactPut) Run() (err error) {
 				glog.Info(s)
 			}
 		case req := <-r.ecCh:
-			lastAction = time.Now()
 			switch req.Action {
 			case ActSplit:
 				r.stats.updateEncode(req.LOM.Size())
@@ -109,17 +106,10 @@ func (r *XactPut) Run() (err error) {
 				glog.Errorf("Invalid request's action %s for putxaction", req.Action)
 			}
 			r.dispatchRequest(req)
-		case <-r.ChanCheckTimeout():
-			idleEnds := lastAction.Add(idleTimeout)
-			if idleEnds.Before(time.Now()) && r.Timeout() {
-				if glog.V(4) {
-					glog.Infof("Idle time is over: %v. Last action at: %v",
-						time.Now(), lastAction)
-				}
-				// it's ok not to notify ecmanager, he'll just have stoped xact in a map
-				r.stop()
-				return nil
-			}
+		case <-r.IdleTimer():
+			// It's OK not to notify ecmanager, it'll just have stopped xact in a map.
+			r.stop()
+			return nil
 		case msg := <-r.controlCh:
 			if msg.Action == ActEnableRequests {
 				r.setEcRequestsEnabled()
@@ -203,26 +193,28 @@ func (r *XactPut) dispatchDecodingRequest(req *Request) {
 }
 
 func (r *XactPut) dispatchRequest(req *Request) {
+	r.IncPending()
+
 	if !r.ecRequestsEnabled() {
 		if req.ErrCh != nil {
 			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
 			close(req.ErrCh)
 		}
+		r.DecPending()
 		return
 	}
 
-	if req.Action == ActDelete || req.Action == ActSplit {
-		r.IncPending()
-		jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
-		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
-		if glog.V(4) {
-			glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.putCh), req.LOM.Uname())
-		}
-		if req.rebuild {
-			jogger.xactCh <- req
-		} else {
-			r.stats.updateQueue(len(jogger.putCh))
-			jogger.putCh <- req
-		}
+	cmn.Assert(req.Action == ActDelete || req.Action == ActSplit)
+
+	jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
+	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
+	if glog.V(4) {
+		glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.putCh), req.LOM.Uname())
+	}
+	if req.rebuild {
+		jogger.xactCh <- req
+	} else {
+		r.stats.updateQueue(len(jogger.putCh))
+		jogger.putCh <- req
 	}
 }

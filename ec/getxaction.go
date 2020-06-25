@@ -118,10 +118,8 @@ func (r *XactGet) Run() (err error) {
 	}
 
 	var (
-		cfg         = cmn.GCO.Get()
-		lastAction  = time.Now()
-		idleTimeout = 3 * cfg.Timeout.SendFile
-		ticker      = time.NewTicker(cfg.Periodic.StatsTime)
+		cfg    = cmn.GCO.Get()
+		ticker = time.NewTicker(cfg.Periodic.StatsTime)
 	)
 	defer ticker.Stop()
 
@@ -133,7 +131,6 @@ func (r *XactGet) Run() (err error) {
 				glog.Info(s)
 			}
 		case req := <-r.ecCh:
-			lastAction = time.Now()
 			if req.Action != ActRestore {
 				glog.Errorf("Invalid request's action %s for getxaction", req.Action)
 				break
@@ -148,18 +145,10 @@ func (r *XactGet) Run() (err error) {
 			case cmn.ActMountpathRemove:
 				r.removeMpath(mpathRequest.mpath)
 			}
-		case <-r.ChanCheckTimeout():
-			idleEnds := lastAction.Add(idleTimeout)
-			if idleEnds.Before(time.Now()) && r.Timeout() {
-				if glog.V(4) {
-					glog.Infof("Idle time is over: %v. Last action at: %v",
-						time.Now(), lastAction)
-				}
-				// it's ok not to notify ecmanager, he'll just have stoped xact in a map
-				r.stop()
-
-				return nil
-			}
+		case <-r.IdleTimer():
+			// It's OK not to notify ecmanager, it'll just have stopped xact in a map.
+			r.stop()
+			return nil
 		case msg := <-r.controlCh:
 			if msg.Action == ActEnableRequests {
 				r.setEcRequestsEnabled()
@@ -169,8 +158,8 @@ func (r *XactGet) Run() (err error) {
 
 			r.setEcRequestsDisabled()
 
-			// drain pending bucket's EC requests, return them with an error
-			// note: loop can't be replaced with channel range, as the channel is never closed
+			// Drain pending bucket's EC requests, return them with an error.
+			// NOTE: loop can't be replaced with channel range, as the channel is never closed.
 			for {
 				select {
 				case req := <-r.ecCh:
@@ -263,21 +252,22 @@ func (r *XactGet) dispatchEncodingRequest(req *Request) {
 }
 
 func (r *XactGet) dispatchRequest(req *Request) {
+	r.IncPending()
 	if !r.ecRequestsEnabled() {
 		if req.ErrCh != nil {
 			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
 			close(req.ErrCh)
 		}
+		r.DecPending()
 		return
 	}
 
-	r.IncPending()
-	if req.Action == ActRestore {
-		jogger, ok := r.getJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
-		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
-		r.stats.updateQueue(len(jogger.workCh))
-		jogger.workCh <- req
-	}
+	cmn.Assert(req.Action == ActRestore)
+
+	jogger, ok := r.getJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
+	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
+	r.stats.updateQueue(len(jogger.workCh))
+	jogger.workCh <- req
 }
 
 //

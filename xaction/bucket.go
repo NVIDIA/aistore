@@ -46,8 +46,11 @@ type ecGetEntry struct {
 }
 
 func (e *ecGetEntry) Start(bck cmn.Bck) error {
-	xec := ec.ECM.NewGetXact(bck)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECGet, bck)
+	var (
+		xec      = ec.ECM.NewGetXact(bck)
+		idleTime = 3 * cmn.GCO.Get().Timeout.SendFile
+	)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECGet, bck, idleTime)
 	e.xact = xec
 	go xec.Run()
 	return nil
@@ -69,8 +72,11 @@ type ecPutEntry struct {
 }
 
 func (e *ecPutEntry) Start(bck cmn.Bck) error {
-	xec := ec.ECM.NewPutXact(bck)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECPut, bck)
+	var (
+		xec      = ec.ECM.NewPutXact(bck)
+		idleTime = 3 * cmn.GCO.Get().Timeout.SendFile
+	)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECPut, bck, idleTime)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -92,8 +98,11 @@ type ecRespondEntry struct {
 }
 
 func (e *ecRespondEntry) Start(bck cmn.Bck) error {
-	xec := ec.ECM.NewRespondXact(bck)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECRespond, bck)
+	var (
+		xec      = ec.ECM.NewRespondXact(bck)
+		idleTime = 3 * cmn.GCO.Get().Timeout.SendFile
+	)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECRespond, bck, idleTime)
 	go xec.Run()
 	e.xact = xec
 	return nil

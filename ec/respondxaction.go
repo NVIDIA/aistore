@@ -18,8 +18,11 @@ import (
 )
 
 type (
-	// Xaction responsible for responding to EC requests of other targets
-	// Should not be stopped if number of known targets is small
+	// FIXME: Does `XactRespond` needs to be a `XactDemand`?
+	//  - it doesn't use `incPending()`
+
+	// Xaction responsible for responding to EC requests of other targets.
+	// Should not be stopped if number of known targets is small.
 	XactRespond struct {
 		xactECBase
 	}
@@ -39,10 +42,8 @@ func (r *XactRespond) Run() (err error) {
 	glog.Infoln(r.String())
 
 	var (
-		cfg         = cmn.GCO.Get()
-		lastAction  = time.Now()
-		idleTimeout = 3 * cfg.Timeout.SendFile
-		ticker      = time.NewTicker(cfg.Periodic.StatsTime)
+		cfg    = cmn.GCO.Get()
+		ticker = time.NewTicker(cfg.Periodic.StatsTime)
 	)
 	defer ticker.Stop()
 
@@ -53,17 +54,9 @@ func (r *XactRespond) Run() (err error) {
 			if s := fmt.Sprintf("%v", r.stats.stats()); s != "" {
 				glog.Info(s)
 			}
-		case <-r.ChanCheckTimeout():
-			idleEnds := lastAction.Add(idleTimeout)
-			if idleEnds.Before(time.Now()) && r.Timeout() {
-				if glog.V(4) {
-					glog.Infof("Idle time is over: %v. Last action at: %v",
-						time.Now(), lastAction)
-				}
-
-				r.stop()
-				return nil
-			}
+		case <-r.IdleTimer():
+			r.stop()
+			return nil
 		case <-r.ChanAbort():
 			r.stop()
 			return cmn.NewAbortedError(r.String())
