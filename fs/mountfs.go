@@ -171,6 +171,12 @@ Retry:
 			return err
 		}
 	}
+	go func() {
+		// TODO: optimize
+		if err := os.RemoveAll(tmpDir); err != nil {
+			glog.Errorf("RemoveAll for %q failed with %v", tmpDir, err)
+		}
+	}()
 	return nil
 }
 
