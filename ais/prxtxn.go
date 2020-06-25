@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // convenience structure to gather all (or most) of the relevant context in one place
@@ -501,24 +502,59 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	return
 }
 
+func parseECConf(value interface{}) (*cmn.ECConfToUpdate, error) {
+	switch v := value.(type) {
+	case string:
+		conf := &cmn.ECConfToUpdate{}
+		err := jsoniter.Unmarshal([]byte(v), conf)
+		return conf, err
+	case []byte:
+		conf := &cmn.ECConfToUpdate{}
+		err := jsoniter.Unmarshal(v, conf)
+		return conf, err
+	default:
+		return nil, errors.New("invalid request")
+	}
+}
+
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 	var (
-		pname = p.si.String()
-		c     = p.prepTxnClient(msg, bck)
-		nlp   = bck.GetNameLockPair()
+		pname       = p.si.String()
+		c           = p.prepTxnClient(msg, bck)
+		nlp         = bck.GetNameLockPair()
+		ecConf, err = parseECConf(msg.Value)
+		committed   bool
 	)
+	if err != nil {
+		return err
+	}
+	if ecConf.DataSlices == nil || *ecConf.DataSlices < 1 ||
+		ecConf.ParitySlices == nil || *ecConf.ParitySlices < 1 {
+		return errors.New("invalid number of slices")
+	}
+
 	if !nlp.TryLock() {
 		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
 	}
-	defer nlp.Unlock()
+	defer func() {
+		if !committed {
+			nlp.Unlock()
+		}
+	}()
 
 	// 1. confirm existence
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
-	if _, present := bmd.Get(bck); !present {
+	props, present := bmd.Get(bck)
+	if !present {
 		p.owner.bmd.Unlock()
 		return cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+	}
+	if props.EC.Enabled {
+		// Changing data or parity slice count on the fly is unsupported yet
+		p.owner.bmd.Unlock()
+		return fmt.Errorf("EC is already enabled for bucket %s", bck)
 	}
 	p.owner.bmd.Unlock()
 
@@ -533,10 +569,35 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 		}
 	}
 
-	// TODO: BMD must be already (and separately) updated - see "add reEC" comment
-	config := cmn.GCO.Get()
+	// 3. lock & update BMD locally
+	p.owner.bmd.Lock()
+	clone := p.owner.bmd.get().clone()
+	bprops, present := clone.Get(bck)
+	cmn.Assert(present)
+	nprops := bprops.Clone()
+	nprops.EC.Enabled = true
+	nprops.EC.DataSlices = *ecConf.DataSlices
+	nprops.EC.ParitySlices = *ecConf.ParitySlices
 
-	// 3. commit
+	clone.set(bck, nprops)
+	p.owner.bmd.put(clone)
+
+	// 4. metasync updated BMD; unlock BMD
+	c.msg.BMDVersion = clone.version()
+	wg := p.metasyncer.sync(revsPair{clone, c.msg})
+	p.owner.bmd.Unlock()
+
+	wg.Wait()
+
+	// 5. start waiting for `finished` notifications
+	nl := notifListenerBck{
+		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckECEnc}, nlp: &nlp,
+	}
+	p.notifs.add(c.uuid, &nl)
+
+	// 6. commit
+	committed = true
+	config := cmn.GCO.Get()
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
 	for res := range results {
@@ -678,6 +739,18 @@ func (p *proxyrunner) nlBckMNC(n notifListener, msg interface{}, uuid string, er
 	nl.nlp.Unlock()
 	if err != nil {
 		glog.Errorf("%s(%q): failed to make-n-copies: %+v, err: %v", p.si, uuid, msg, err)
+	} else if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
+	}
+}
+
+// ec-encode done
+func (p *proxyrunner) nlBckECEnc(n notifListener, msg interface{}, uuid string, err error) {
+	glog.Errorf("ECEncode notification received")
+	nl := n.(*notifListenerBck)
+	nl.nlp.Unlock()
+	if err != nil {
+		glog.Errorf("%s(%q): failed to ec-encode: %+v, err: %v", p.si, uuid, msg, err)
 	} else if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
 	}

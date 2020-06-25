@@ -227,6 +227,8 @@ var (
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}
+	dataSlicesFlag    = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
+	paritySlicesFlag  = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
 
 	// Daeclu
 	countFlag = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}

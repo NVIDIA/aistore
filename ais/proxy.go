@@ -877,7 +877,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 		return
-	} else if msg.Action != cmn.ActPrefetch && msg.Action != cmn.ActECEncode {
+	} else if msg.Action != cmn.ActPrefetch {
 		// All actions that may be forwarded to the primary as-is  must be
 		// forwarded before `Bck` is created. Reason: if `bck.Init` fails,
 		// it may call `syncCBMeta` that ruins the original `msg` and
@@ -1041,10 +1041,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActECEncode:
-		if !bck.Props.EC.Enabled {
-			p.invalmsghdlrf(w, r, "Could not start: bucket %q has EC disabled", bck.Name)
-			return
-		}
 		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessEC); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return

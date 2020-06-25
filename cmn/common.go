@@ -436,16 +436,6 @@ func CheckI64Range(v, low, high int64) (int64, error) {
 	return v, nil
 }
 
-// Returns first non-empty string
-func AnyString(strs ...string) string {
-	for _, s := range strs {
-		if s != "" {
-			return s
-		}
-	}
-	return ""
-}
-
 //////////////////////////////
 // config: path, load, save //
 //////////////////////////////

@@ -328,9 +328,20 @@ Start an extended action to bring a given bucket to a certain redundancy level (
 
 ## Make all objects erasure coded
 
-`ais ec-encode BUCKET_NAME`
+`ais ec-encode BUCKET_NAME --data-slices <value> --parity-slices <value>`
 
-Start an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running `ec-encode` extended action. Read more about this feature [here](../../../docs/storage_svcs.md#erasure-coding).
+Start an extended action that enables data protection for a given bucket and encodes all its objects.
+Erasure coding must be disabled for the bucket prior to running `ec-encode` extended action.
+Read more about this feature [here](../../../docs/storage_svcs.md#erasure-coding).
+
+### Options
+
+| Flag | Type | Description |
+| --- | --- | --- |
+| `--data-slices`, `--data`, `-d` | `int` | Number of data slices |
+| `--parity-slices`, `--parity`, `-p` | `int` | Number of parity slices |
+
+All options are required and must be greater than `0`.
 
 ## Show bucket props
 

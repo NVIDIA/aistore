@@ -407,7 +407,7 @@ func roleCluPermCompletions(c *cli.Context) {
 		if cmn.StringInSlice(clu.ID, args) || cmn.StringInSlice(clu.Alias, args) {
 			continue
 		}
-		fmt.Println(cmn.AnyString(clu.Alias, clu.ID))
+		fmt.Println(cmn.Either(clu.Alias, clu.ID))
 	}
 }
 
@@ -471,6 +471,6 @@ func oneClusterCompletions(c *cli.Context) {
 	}
 
 	for _, clu := range cluList {
-		fmt.Println(cmn.AnyString(clu.Alias, clu.ID))
+		fmt.Println(cmn.Either(clu.Alias, clu.ID))
 	}
 }

@@ -17,7 +17,10 @@ var (
 		commandSetCopies: {
 			copiesFlag,
 		},
-		commandECEncode: {},
+		commandECEncode: {
+			dataSlicesFlag,
+			paritySlicesFlag,
+		},
 	}
 
 	bucketSpecificCmds = []cli.Command{
@@ -57,12 +60,13 @@ func setCopiesHandler(c *cli.Context) (err error) {
 	}
 	copies := c.Int(copiesFlag.Name)
 	if p.Mirror.Copies == int64(copies) {
-		if copies > 1 {
+		if copies > 1 && p.Mirror.Enabled {
 			fmt.Fprintf(c.App.Writer, "Bucket %q is already %d-way mirror, nothing to do\n", bck, copies)
-		} else {
+			return
+		} else if copies < 2 {
 			fmt.Fprintf(c.App.Writer, "Bucket %q is already configured with no redundancy, nothing to do\n", bck)
+			return
 		}
-		return
 	}
 	return configureNCopies(c, bck, copies)
 }
@@ -82,10 +86,14 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 	if bck, p, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
-	if !p.EC.Enabled {
-		fmt.Fprintf(c.App.Writer, "Bucket %q: erasure-coding is currently disabled (%+v)\n", bck, p.EC)
-		fmt.Fprintln(c.App.Writer, "(use `set props` command to enable)")
+	dataSlices := c.Int(cleanFlag(dataSlicesFlag.Name))
+	paritySlices := c.Int(cleanFlag(paritySlicesFlag.Name))
+	if p.EC.Enabled {
+		// EC-encode is called automatically when EC is enabled. Changing
+		// data or parity numbers on the fly is unsupported yet.
+		fmt.Fprintf(c.App.Writer, "Bucket %q is already erasure-coded\n", bck)
 		return
 	}
-	return ecEncode(c, bck)
+
+	return ecEncode(c, bck, dataSlices, paritySlices)
 }

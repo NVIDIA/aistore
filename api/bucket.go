@@ -520,12 +520,14 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action, method strin
 	})
 }
 
-func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck) error {
+func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) error {
 	baseParams.Method = http.MethodPost
+	// without `string` conversion it makes base64 from []byte in `Body`
+	ecConf := string(cmn.MustMarshal(&cmn.ECConfToUpdate{DataSlices: &data, ParitySlices: &parity}))
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActECEncode}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActECEncode, Value: ecConf}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }

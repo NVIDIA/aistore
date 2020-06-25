@@ -488,7 +488,7 @@ func (m *userManager) roleList() ([]*cmn.AuthRole, error) {
 // are not returned to a caller as it is not crucial.
 func (m *userManager) createRolesForCluster(clu *cmn.AuthCluster) {
 	for _, pr := range predefinedRoles {
-		suffix := cmn.AnyString(clu.Alias, clu.ID)
+		suffix := cmn.Either(clu.Alias, clu.ID)
 		uid := pr.prefix + "-" + suffix
 		rInfo := &cmn.AuthRole{}
 		if err := m.db.Get(rolesCollection, uid, rInfo); err == nil {
