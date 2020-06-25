@@ -239,7 +239,7 @@ Name | Type | Description | Optional?
 **bucket.provider** | **string** | Determines the provider of the bucket. By default, locality is determined automatically. | Yes |
 **bucket.namespace** | **string** | Determines the namespace of the bucket. | Yes |
 **description** | **string** | Description for the download request. | Yes |
-**sync** | **bool** | Synchronizes the cloud bucket what besides regular downloading means that objects which are no longer present in the cloud will be deleted. | Yes |
+**sync** | **bool** | Synchronizes the cloud bucket: downloads new or updated objects (regular download) + checks and deletes cached objects if they are no longer present in the cloud. | Yes |
 **prefix** | **string** | Prefix of the objects names to download. | Yes |
 **suffix** | **string** | Suffix of the objects names to download. | Yes |
 

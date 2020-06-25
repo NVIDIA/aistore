@@ -191,6 +191,8 @@ Run `ais show download fjwiIEMfa` to monitor the progress of downloading.
 $ ais wait download fjwiIEMfa
 $ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
 40
+$ diff <(ais ls gcp://lpr-vision) <(ais ls --cached ais://lpr-vision-copy) | wc -l
+0
 ```
 
 #### Download GCP bucket objects with prefix
