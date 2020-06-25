@@ -225,7 +225,7 @@ func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
 
 	config := cmn.GCO.Get()
 	if prevConfig.LRU.Enabled && !config.LRU.Enabled {
-		lruRunning := xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: cmn.ActLRU})
+		lruRunning := xaction.Registry.IsXactRunning(xaction.RegistryXactFilter{Kind: cmn.ActLRU})
 		if lruRunning {
 			glog.V(3).Infof("Aborting LRU due to lru.enabled config change")
 			xaction.Registry.DoAbort(cmn.ActLRU, nil)
@@ -313,7 +313,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		tstats := getstorstatsrunner()
 
 		var rebStats *stats.RebalanceTargetStats
-		if entry := xaction.Registry.GetLatest(xaction.XactQuery{Kind: cmn.ActRebalance}); entry != nil {
+		if entry := xaction.Registry.GetLatest(xaction.RegistryXactFilter{Kind: cmn.ActRebalance}); entry != nil {
 			if xact := entry.Get(); xact != nil {
 				var ok bool
 				rebStats, ok = xact.Stats().(*stats.RebalanceTargetStats)

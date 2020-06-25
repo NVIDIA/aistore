@@ -20,7 +20,7 @@ func IsRebalancing(kind string) (aborted, running bool) {
 	if fs.MarkerExists(getMarkerName(kind)) {
 		aborted = true
 	}
-	running = xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: kind})
+	running = xaction.Registry.IsXactRunning(xaction.RegistryXactFilter{Kind: kind})
 	if !running {
 		return
 	}

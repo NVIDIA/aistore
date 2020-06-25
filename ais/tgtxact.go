@@ -47,7 +47,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactQuery := xaction.XactQuery{
+		xactQuery := xaction.RegistryXactFilter{
 			ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck,
 			OnlyRunning: !xactMsg.All, Finished: xactMsg.Finished,
 		}
@@ -101,7 +101,7 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 	t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 }
 
-func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xaction.XactQuery) {
+func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xaction.RegistryXactFilter) {
 	if what != cmn.QueryXactStats {
 		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return

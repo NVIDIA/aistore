@@ -368,7 +368,7 @@ func (r *FastRen) Run() {
 	var finished bool
 	for !finished {
 		time.Sleep(10 * time.Second)
-		rebStats, err := Registry.GetStats(XactQuery{
+		rebStats, err := Registry.GetStats(RegistryXactFilter{
 			ID:       r.ID().String(),
 			Kind:     cmn.ActRebalance,
 			Finished: true,

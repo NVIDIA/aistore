@@ -649,7 +649,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
-		vote := xaction.Registry.IsXactRunning(xaction.XactQuery{Kind: cmn.ActElection})
+		vote := xaction.Registry.IsXactRunning(xaction.RegistryXactFilter{Kind: cmn.ActElection})
 		p.invalmsghdlrf(w, r, "primary %s cannot receive cluster meta (election=%t)", p.si, vote)
 		return
 	}
