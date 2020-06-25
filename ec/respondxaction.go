@@ -185,6 +185,8 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.Header, object i
 			glog.Error(err)
 			return
 		}
+		r.ObjectsInc()
+		r.BytesAdd(hdr.ObjAttrs.Size)
 	default:
 		// should be unreachable
 		glog.Errorf("Invalid request type: %d", iReq.act)

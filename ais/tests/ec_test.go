@@ -2308,10 +2308,7 @@ func TestECBucketEncode(t *testing.T) {
 	err = api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Erasure-coding bucket %s\n", m.bck)
-	err = api.ECEncodeBucket(baseParams, m.bck)
-	tassert.CheckFatal(t, err)
-
+	tutils.Logf("EC encode must start automatically for bucket %s\n", m.bck)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
 	err = api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
