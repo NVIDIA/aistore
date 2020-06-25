@@ -809,7 +809,7 @@ func TestPrefetchList(t *testing.T) {
 
 	// 4. Ensure that all the prefetches occurred.
 	xactArgs.Latest = true
-	xactStats, err := api.GetXactionStats(baseParams, xactArgs)
+	xactStats, err := api.QueryXactionStats(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 	if xactStats.ObjCount() != n {
 		t.Errorf(
@@ -924,7 +924,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 4. Ensure that all the prefetches occurred
 	xactArgs.Latest = true
-	xactStats, err := api.GetXactionStats(baseParams, xactArgs)
+	xactStats, err := api.QueryXactionStats(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 	if xactStats.ObjCount() != int64(len(files)) {
 		t.Errorf(

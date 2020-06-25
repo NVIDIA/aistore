@@ -76,14 +76,21 @@ func waitXactionHandler(c *cli.Context) error {
 	var (
 		aborted     bool
 		refreshRate = calcRefreshRate(c)
-		xactArgs    = api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
 	)
 	for {
-		xactStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
-		if err != nil {
-			return err
+		var xactStats api.NodesXactStats
+		if xactID != "" {
+			xactStats, err = api.GetXactionStatsByID(defaultAPIParams, xactID)
+			if err != nil {
+				return err
+			}
+		} else {
+			xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Latest: !flagIsSet(c, allItemsFlag)}
+			xactStats, err = api.QueryXactionStats(defaultAPIParams, xactArgs)
+			if err != nil {
+				return err
+			}
 		}
-
 		aborted = xactStats.Aborted()
 		if aborted || xactStats.Finished() {
 			break

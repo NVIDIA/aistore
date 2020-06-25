@@ -146,7 +146,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 	xactArgs := api.XactReqArgs{Kind: cmn.ActDownload}
 	for {
 		time.Sleep(time.Second)
-		downloaderStats, err := api.GetXactionStats(baseParams, xactArgs)
+		downloaderStats, err := api.QueryXactionStats(baseParams, xactArgs)
 		tassert.CheckFatal(t, err)
 
 		if downloaderCompleted(t, targetID, downloaderStats) {

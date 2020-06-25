@@ -267,7 +267,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	// run until rebalance is completed
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance}
 	for {
-		rebStats, err := api.GetXactionStats(defaultAPIParams, xactArgs)
+		rebStats, err := api.QueryXactionStats(defaultAPIParams, xactArgs)
 		if err != nil {
 			switch err := err.(type) {
 			case *cmn.HTTPError:

@@ -2538,7 +2538,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.queryClusterStats(w, r, what)
 	case cmn.GetWhatSysInfo:
 		p.queryClusterSysinfo(w, r, what)
-	case cmn.QueryXactStats:
+	case cmn.GetWhatXactStats, cmn.QueryXactStats:
 		p.queryXaction(w, r, what)
 	case cmn.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
@@ -2578,17 +2578,23 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		xactMsg cmn.XactReqMsg
 	)
 	err := cmn.ReadJSON(w, r, &xactMsg)
-
-	//  Non-empty `uuid` will ignore the `cmn.XactReqMsg` if present and non-empty
-	if uuid != "" {
+	switch what {
+	case cmn.GetWhatXactStats:
+		if uuid == "" {
+			p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "no uuid given for `what`: %v", what)
+			return
+		}
 		if err != io.EOF {
 			glog.Warningf("uuid: %v and xactMsg: %v both set at once", uuid, xactMsg)
 		}
-	} else {
+	case cmn.QueryXactStats:
 		if err != nil {
 			return
 		}
 		body = cmn.MustMarshal(xactMsg)
+	default:
+		p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
+		return
 	}
 	results := p.bcastGet(bcastArgs{
 		req: cmn.ReqArgs{

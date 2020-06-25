@@ -109,10 +109,25 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	})
 }
 
-// GetXactionStats API
+// GetXactionStatsByID API
 //
-// GetXactionStats gets all xaction stats for given kind and bucket (optional).
-func GetXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactStats, err error) {
+// GetXactionStatsByID gets all xaction stats for given id.
+func GetXactionStatsByID(baseParams BaseParams, id string) (xactStats NodesXactStats, err error) {
+	baseParams.Method = http.MethodGet
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactStats},
+			cmn.URLParamUUID: []string{id},
+		},
+	}, &xactStats)
+	return xactStats, err
+}
+
+// QueryXactionStats API
+//
+// QueryXactionStats gets all xaction stats for given kind and bucket (optional).
+func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactStats, err error) {
 	msg := cmn.XactReqMsg{
 		ID:   args.ID,
 		Kind: args.Kind,
@@ -141,7 +156,7 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
 	}
 
 	for {
-		xactStats, err := GetXactionStats(baseParams, args)
+		xactStats, err := QueryXactionStats(baseParams, args)
 		if err != nil {
 			return err
 		}
@@ -172,7 +187,7 @@ func WaitForXactionToStart(baseParams BaseParams, args XactReqArgs) error {
 	}
 
 	for {
-		xactStats, err := GetXactionStats(baseParams, args)
+		xactStats, err := QueryXactionStats(baseParams, args)
 		if err != nil {
 			return err
 		}
