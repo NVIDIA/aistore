@@ -329,11 +329,11 @@ func TestMoveToTrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	for i := 0; i < 5; i++ {
-		topDir, _ := prepareDirTree(t, dirTreeDesc{
-			dirs:  10,
-			files: 10,
-			depth: 2,
-			empty: false,
+		topDir, _ := tutils.PrepareDirTree(t, tutils.DirTreeDesc{
+			Dirs:  10,
+			Files: 10,
+			Depth: 2,
+			Empty: false,
 		})
 
 		tutils.CheckPathExists(t, topDir, true /*dir*/)

@@ -6,48 +6,39 @@ package fs_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-	"sort"
 	"testing"
 
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-type dirTreeDesc struct {
-	initDir string // directory where the tree is created (can be empty)
-	dirs    int    // number of (initially empty) directories at each depth (we recurse into single directory at each depth)
-	files   int    // number of files at each depth
-	depth   int    // depth of tree/nesting
-	empty   bool   // determines if there is a file somewhere in the directories
-}
-
 func TestIsDirEmpty(t *testing.T) {
-	tests := []dirTreeDesc{
-		{dirs: 0, depth: 1, empty: true},
-		{dirs: 0, depth: 1, empty: false},
+	tests := []tutils.DirTreeDesc{
+		{Dirs: 0, Depth: 1, Empty: true},
+		{Dirs: 0, Depth: 1, Empty: false},
 
-		{dirs: 50, depth: 1, empty: true},
-		{dirs: 50, depth: 1, empty: false},
+		{Dirs: 50, Depth: 1, Empty: true},
+		{Dirs: 50, Depth: 1, Empty: false},
 
-		{dirs: 50, depth: 8, empty: true},
-		{dirs: 2000, depth: 2, empty: true},
+		{Dirs: 50, Depth: 8, Empty: true},
+		{Dirs: 2000, Depth: 2, Empty: true},
 
-		{dirs: 3000, depth: 2, empty: false},
+		{Dirs: 3000, Depth: 2, Empty: false},
 	}
 
 	for _, test := range tests {
-		testName := fmt.Sprintf("dirs=%d#depth=%d#empty=%t", test.dirs, test.depth, test.empty)
+		testName := fmt.Sprintf("dirs=%d#depth=%d#empty=%t", test.Dirs, test.Depth, test.Empty)
 		t.Run(testName, func(t *testing.T) {
-			topDirName, _ := prepareDirTree(t, test)
+			topDirName, _ := tutils.PrepareDirTree(t, test)
 			defer os.RemoveAll(topDirName)
 
 			_, empty, err := fs.IsDirEmpty(topDirName)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
-				t, empty == test.empty,
-				"expected directory to be empty=%t, got: empty=%t", test.empty, empty,
+				t, empty == test.Empty,
+				"expected directory to be empty=%t, got: empty=%t", test.Empty, empty,
 			)
 		})
 	}
@@ -59,28 +50,28 @@ func TestIsDirEmptyNonExist(t *testing.T) {
 }
 
 func BenchmarkIsDirEmpty(b *testing.B) {
-	benches := []dirTreeDesc{
-		{dirs: 0, depth: 1, empty: true},
-		{dirs: 0, depth: 1, empty: false},
+	benches := []tutils.DirTreeDesc{
+		{Dirs: 0, Depth: 1, Empty: true},
+		{Dirs: 0, Depth: 1, Empty: false},
 
-		{dirs: 50, depth: 1, empty: true},
-		{dirs: 50, depth: 1, empty: false},
-		{dirs: 50, depth: 8, empty: true},
-		{dirs: 50, depth: 8, empty: false},
+		{Dirs: 50, Depth: 1, Empty: true},
+		{Dirs: 50, Depth: 1, Empty: false},
+		{Dirs: 50, Depth: 8, Empty: true},
+		{Dirs: 50, Depth: 8, Empty: false},
 
-		{dirs: 2000, depth: 3, empty: true},
-		{dirs: 2000, depth: 3, empty: false},
+		{Dirs: 2000, Depth: 3, Empty: true},
+		{Dirs: 2000, Depth: 3, Empty: false},
 
-		{dirs: 3000, depth: 1, empty: true},
-		{dirs: 3000, depth: 1, empty: false},
-		{dirs: 3000, depth: 3, empty: true},
-		{dirs: 3000, depth: 3, empty: false},
+		{Dirs: 3000, Depth: 1, Empty: true},
+		{Dirs: 3000, Depth: 1, Empty: false},
+		{Dirs: 3000, Depth: 3, Empty: true},
+		{Dirs: 3000, Depth: 3, Empty: false},
 	}
 
 	for _, bench := range benches {
-		benchName := fmt.Sprintf("dirs=%d#depth=%d#empty=%t", bench.dirs, bench.depth, bench.empty)
+		benchName := fmt.Sprintf("dirs=%d#depth=%d#empty=%t", bench.Dirs, bench.Depth, bench.Empty)
 		b.Run(benchName, func(b *testing.B) {
-			topDirName, _ := prepareDirTree(b, bench)
+			topDirName, _ := tutils.PrepareDirTree(b, bench)
 			defer os.RemoveAll(topDirName)
 
 			b.ResetTimer()
@@ -88,47 +79,10 @@ func BenchmarkIsDirEmpty(b *testing.B) {
 				_, empty, err := fs.IsDirEmpty(topDirName)
 				tassert.CheckFatal(b, err)
 				tassert.Errorf(
-					b, empty == bench.empty,
-					"expected directory to be empty=%t, got: empty=%t", bench.empty, empty,
+					b, empty == bench.Empty,
+					"expected directory to be empty=%t, got: empty=%t", bench.Empty, empty,
 				)
 			}
 		})
 	}
-}
-
-func prepareDirTree(tb testing.TB, desc dirTreeDesc) (string, []string) {
-	var (
-		fileNames = make([]string, 0, 100)
-	)
-	topDirName, err := ioutil.TempDir(desc.initDir, "")
-	tassert.CheckFatal(tb, err)
-
-	nestedDirectoryName := topDirName
-	for depth := 1; depth <= desc.depth; depth++ {
-		names := make([]string, 0, desc.dirs)
-		for i := 1; i <= desc.dirs; i++ {
-			name, err := ioutil.TempDir(nestedDirectoryName, "")
-			tassert.CheckFatal(tb, err)
-			names = append(names, name)
-		}
-		for i := 1; i <= desc.files; i++ {
-			f, err := ioutil.TempFile(nestedDirectoryName, "")
-			tassert.CheckFatal(tb, err)
-			fileNames = append(fileNames, f.Name())
-			f.Close()
-		}
-		sort.Strings(names)
-		if desc.dirs > 0 {
-			// We only recurse into last directory.
-			nestedDirectoryName = names[len(names)-1]
-		}
-	}
-
-	if !desc.empty {
-		f, err := ioutil.TempFile(nestedDirectoryName, "")
-		tassert.CheckFatal(tb, err)
-		fileNames = append(fileNames, f.Name())
-		f.Close()
-	}
-	return topDirName, fileNames
 }

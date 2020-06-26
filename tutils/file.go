@@ -11,9 +11,11 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -21,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 type (
@@ -28,6 +31,14 @@ type (
 		Name    string
 		Ext     string
 		Content []byte
+	}
+
+	DirTreeDesc struct {
+		InitDir string // directory where the tree is created (can be empty)
+		Dirs    int    // number of (initially empty) directories at each depth (we recurse into single directory at each depth)
+		Files   int    // number of files at each depth
+		Depth   int    // depth of tree/nesting
+		Empty   bool   // determines if there is a file somewhere in the directories
 	}
 )
 
@@ -336,4 +347,41 @@ func CheckPathNotExists(t *testing.T, path string) {
 	if _, err := os.Stat(path); err == nil || !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
+}
+
+func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
+	var (
+		fileNames = make([]string, 0, 100)
+	)
+	topDirName, err := ioutil.TempDir(desc.InitDir, "")
+	tassert.CheckFatal(tb, err)
+
+	nestedDirectoryName := topDirName
+	for depth := 1; depth <= desc.Depth; depth++ {
+		names := make([]string, 0, desc.Dirs)
+		for i := 1; i <= desc.Dirs; i++ {
+			name, err := ioutil.TempDir(nestedDirectoryName, "")
+			tassert.CheckFatal(tb, err)
+			names = append(names, name)
+		}
+		for i := 1; i <= desc.Files; i++ {
+			f, err := ioutil.TempFile(nestedDirectoryName, "")
+			tassert.CheckFatal(tb, err)
+			fileNames = append(fileNames, f.Name())
+			f.Close()
+		}
+		sort.Strings(names)
+		if desc.Dirs > 0 {
+			// We only recurse into last directory.
+			nestedDirectoryName = names[len(names)-1]
+		}
+	}
+
+	if !desc.Empty {
+		f, err := ioutil.TempFile(nestedDirectoryName, "")
+		tassert.CheckFatal(tb, err)
+		fileNames = append(fileNames, f.Name())
+		f.Close()
+	}
+	return topDirName, fileNames
 }

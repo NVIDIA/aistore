@@ -236,12 +236,11 @@ func (r *Trunner) UpdateCapacities(availableMountpaths fs.MPI) (runLRU bool) {
 
 	capacities := make(map[string]*fscapacity, len(availableMountpaths))
 	for mpath := range availableMountpaths {
-		statfs := &syscall.Statfs_t{}
-		if err := syscall.Statfs(mpath, statfs); err != nil {
+		fsCap, err := getCapactiy(mpath)
+		if err != nil {
 			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
 			continue
 		}
-		fsCap := newFSCapacity(statfs)
 		capacities[mpath] = fsCap
 		if int64(fsCap.Usedpct) >= config.LRU.HighWM {
 			runLRU = true
@@ -319,4 +318,12 @@ func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
 		Avail:   statfs.Bavail * uint64(statfs.Bsize),
 		Usedpct: int32(pct),
 	}
+}
+
+func getCapactiy(mpath string) (*fscapacity, error) {
+	statfs := &syscall.Statfs_t{}
+	if err := syscall.Statfs(mpath, statfs); err != nil {
+		return nil, err
+	}
+	return newFSCapacity(statfs), nil
 }

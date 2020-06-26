@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -66,12 +67,12 @@ func TestWalkBck(t *testing.T) {
 				err := cmn.CreateDir(dir)
 				tassert.CheckFatal(t, err)
 
-				_, names := prepareDirTree(t, dirTreeDesc{
-					initDir: dir,
-					dirs:    rand.Int()%100 + 1,
-					files:   rand.Int()%100 + 1,
-					depth:   rand.Int()%4 + 1,
-					empty:   false,
+				_, names := tutils.PrepareDirTree(t, tutils.DirTreeDesc{
+					InitDir: dir,
+					Dirs:    rand.Int()%100 + 1,
+					Files:   rand.Int()%100 + 1,
+					Depth:   rand.Int()%4 + 1,
+					Empty:   false,
 				})
 				fileNames = append(fileNames, names...)
 			}
