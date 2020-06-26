@@ -17,14 +17,18 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
+
+var trashPattern = "/" + fs.TrashDir + "/"
 
 type (
 	FileContent struct {
@@ -384,4 +388,8 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 		f.Close()
 	}
 	return topDirName, fileNames
+}
+
+func IsTrashDir(path string) bool {
+	return strings.Contains(path, trashPattern)
 }

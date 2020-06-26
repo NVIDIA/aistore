@@ -135,10 +135,18 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 	}
 
 	tMock := cluster.NewTargetMock(bmd)
+	bckPattern := bck.Name + "/"
 
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil {
 			return nil
+		}
+		if tutils.IsTrashDir(path) {
+			return filepath.SkipDir
+		}
+		// Check if the path is of test's bucket
+		if strings.Contains(path, "%") && !strings.Contains(path, bckPattern) {
+			return filepath.SkipDir
 		}
 		if info.IsDir() {
 			return nil
@@ -2076,6 +2084,9 @@ func deleteAllFiles(t *testing.T, path string) {
 		if err != nil {
 			return nil
 		}
+		if tutils.IsTrashDir(path) {
+			return filepath.SkipDir
+		}
 		if info.IsDir() {
 			return nil
 		}
@@ -2096,6 +2107,9 @@ func moveAllFiles(t *testing.T, pathFrom, pathTo string) {
 	walkMove := func(fqn string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
+		}
+		if tutils.IsTrashDir(fqn) {
+			return filepath.SkipDir
 		}
 		if info.IsDir() {
 			return nil

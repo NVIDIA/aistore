@@ -36,7 +36,7 @@ const (
 )
 
 const (
-	trashDir = "$trash"
+	TrashDir = "$trash"
 )
 
 // globals
@@ -264,7 +264,7 @@ func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) s
 }
 
 func (mi *MountpathInfo) MakePathTrash() string {
-	return filepath.Join(mi.Path, trashDir)
+	return filepath.Join(mi.Path, TrashDir)
 }
 
 //

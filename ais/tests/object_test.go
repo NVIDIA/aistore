@@ -1715,6 +1715,9 @@ func findObjOnDisk(bck cmn.Bck, objName string) string {
 		if strings.HasSuffix(path, "/"+objName) && strings.Contains(path, "/"+bck.Name+"/") {
 			fqn = path
 		}
+		if tutils.IsTrashDir(path) {
+			return filepath.SkipDir
+		}
 		return nil
 	}
 	filepath.Walk(rootDir, fsWalkFunc)
