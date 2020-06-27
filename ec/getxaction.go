@@ -127,7 +127,7 @@ func (r *XactGet) Run() (err error) {
 	for {
 		select {
 		case <-ticker.C:
-			if s := fmt.Sprintf("%v", r.GetStats()); s != "" {
+			if s := fmt.Sprintf("%v", r.ECStats()); s != "" {
 				glog.Info(s)
 			}
 		case req := <-r.ecCh:
@@ -289,4 +289,33 @@ func (r *XactGet) removeMpath(mpath string) {
 	cmn.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
 	getJog.stop()
 	delete(r.getJoggers, mpath)
+}
+
+type GetTargetStats struct {
+	cmn.BaseXactStats
+	Ext ExtECGetStats `json:"ext"`
+}
+
+type ExtECGetStats struct {
+	AvgTime     int64   `json:"ec.decode.time,string"`
+	ErrCount    int64   `json:"ec.decode.err.n,string"`
+	AvgObjTime  int64   `json:"ec.obj.process.time,string"`
+	AvgQueueLen float64 `json:"ec.queue.len.n"`
+}
+
+var (
+	// interface guard
+	_ cmn.XactStats = &GetTargetStats{}
+)
+
+func (r *XactGet) Stats() cmn.XactStats {
+	baseStats := r.XactBase.Stats().(*cmn.BaseXactStats)
+	getStats := GetTargetStats{BaseXactStats: *baseStats}
+	st := r.stats.stats()
+	getStats.Ext.AvgTime = st.DecodeTime.Nanoseconds()
+	getStats.Ext.ErrCount = st.DecodeErr
+	getStats.ObjCountX = st.GetReq
+	getStats.Ext.AvgObjTime = st.ObjTime.Nanoseconds()
+	getStats.Ext.AvgQueueLen = st.QueueLen
+	return &getStats
 }

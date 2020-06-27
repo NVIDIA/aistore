@@ -120,50 +120,50 @@ func (s *stats) updateObjTime(d time.Duration) {
 func (s *stats) stats() *ECStats {
 	st := &ECStats{Bck: s.bck}
 
-	val := s.queueLen.Swap(0)
-	cnt := s.queueCnt.Swap(0)
+	val := s.queueLen.Load()
+	cnt := s.queueCnt.Load()
 	if cnt > 0 {
 		st.QueueLen = float64(val) / float64(cnt)
 	}
 
-	val = s.waitTime.Swap(0)
-	cnt = s.waitCnt.Swap(0)
+	val = s.waitTime.Load()
+	cnt = s.waitCnt.Load()
 	if cnt > 0 {
 		st.WaitTime = time.Duration(val / cnt)
 	}
 
-	val = s.encodeTime.Swap(0)
-	cnt = s.encodeReq.Swap(0)
-	sz := s.encodeSize.Swap(0)
+	val = s.encodeTime.Load()
+	cnt = s.encodeReq.Load()
+	sz := s.encodeSize.Load()
 	if cnt > 0 {
 		st.EncodeTime = time.Duration(val / cnt)
 		st.EncodeSize = sz / cnt
 		st.PutReq = cnt
 	}
 
-	val = s.decodeTime.Swap(0)
-	cnt = s.decodeReq.Swap(0)
+	val = s.decodeTime.Load()
+	cnt = s.decodeReq.Load()
 	if cnt > 0 {
 		st.DecodeTime = time.Duration(val / cnt)
 		st.GetReq = cnt
 	}
 
-	val = s.deleteTime.Swap(0)
-	cnt = s.deleteReq.Swap(0)
+	val = s.deleteTime.Load()
+	cnt = s.deleteReq.Load()
 	if cnt > 0 {
 		st.DeleteTime = time.Duration(val / cnt)
 		st.DelReq = cnt
 	}
 
-	val = s.objTime.Swap(0)
-	cnt = s.objCnt.Swap(0)
+	val = s.objTime.Load()
+	cnt = s.objCnt.Load()
 	if cnt > 0 {
 		st.ObjTime = time.Duration(val / cnt)
 	}
 
-	st.EncodeErr = s.encodeErr.Swap(0)
-	st.DecodeErr = s.decodeErr.Swap(0)
-	st.DeleteErr = s.deleteErr.Swap(0)
+	st.EncodeErr = s.encodeErr.Load()
+	st.DecodeErr = s.decodeErr.Load()
+	st.DeleteErr = s.deleteErr.Load()
 
 	return st
 }

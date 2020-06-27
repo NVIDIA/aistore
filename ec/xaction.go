@@ -432,7 +432,7 @@ func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transpor
 	return err
 }
 
-func (r *xactECBase) GetStats() *ECStats {
+func (r *xactECBase) ECStats() *ECStats {
 	return r.stats.stats()
 }
 

@@ -218,3 +218,44 @@ func (r *XactPut) dispatchRequest(req *Request) {
 		jogger.putCh <- req
 	}
 }
+
+type PutTargetStats struct {
+	cmn.BaseXactStats
+	Ext ExtECPutStats `json:"ext"`
+}
+
+type ExtECPutStats struct {
+	AvgEncodeTime  int64   `json:"ec.encode.time,string"`
+	AvgDeleteTime  int64   `json:"ec.delete.time,string"`
+	EncodeCount    int64   `json:"ec.encode.n,string"`
+	DeleteCount    int64   `json:"ec.delete.n,string"`
+	EncodeSize     int64   `json:"ec.encode.size,string"`
+	EncodeErrCount int64   `json:"ec.encode.err.n,string"`
+	DeleteErrCount int64   `json:"ec.delete.err.n,string"`
+	AvgObjTime     int64   `json:"ec.obj.process.time,string"`
+	AvgQueueLen    float64 `json:"ec.queue.len.n"`
+}
+
+var (
+	// interface guard
+	_ cmn.XactStats = &PutTargetStats{}
+)
+
+func (r *XactPut) Stats() cmn.XactStats {
+	baseStats := r.XactBase.Stats().(*cmn.BaseXactStats)
+	putStats := PutTargetStats{BaseXactStats: *baseStats}
+	st := r.stats.stats()
+	putStats.Ext.AvgEncodeTime = st.EncodeTime.Nanoseconds()
+	putStats.Ext.EncodeSize = st.EncodeSize
+	putStats.Ext.EncodeCount = st.PutReq
+	putStats.Ext.EncodeErrCount = st.EncodeErr
+	putStats.Ext.AvgDeleteTime = st.DeleteTime.Nanoseconds()
+	putStats.Ext.DeleteErrCount = st.DeleteErr
+	putStats.Ext.DeleteCount = st.DelReq
+	putStats.Ext.AvgObjTime = st.ObjTime.Nanoseconds()
+	putStats.Ext.AvgQueueLen = st.QueueLen
+
+	putStats.ObjCountX = st.PutReq + st.DelReq
+	putStats.BytesCountX = st.EncodeSize
+	return &putStats
+}
