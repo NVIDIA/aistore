@@ -264,6 +264,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
   - [User account and access management](cmd/cli/resources/users.md)
   - [Xaction (Job) management](cmd/cli/resources/xaction.md)
 - [On-Disk Layout](docs/on-disk-layout.md)
+- [System Files](docs/sysfiles.md)
 - [Command line parameters](docs/command_line.md)
 - [AIS Load Generator: integrated benchmark tool](bench/aisloader/README.md)
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
