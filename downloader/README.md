@@ -8,13 +8,34 @@ redirect_from:
 
 ## Why Downloader?
 
-It probably won't be much of an exaggeration to say that the majority of popular AI datasets are available on the Internet and public Clouds. Those datasets are often growing in size, thus continuously providing a wealth of information to research and analyze.
+It probably won't be much of an exaggeration to say that the majority of popular AI datasets are available on the Internet and public Clouds.
+Those datasets are often growing in size, thus continuously providing a wealth of information to research and analyze.
 
-It is, therefore, appropriate to ask a follow-up question: how to efficiently work with those datasets? And what happens if the dataset in question is *larger* than the capacity of a single host? What happens if it is large enough to require a cluster of storage servers?
+It is, therefore, appropriate to ask a follow-up question: how to efficiently work with those datasets? And what happens if the dataset in question is *larger* than the capacity of a single host?
+What happens if it is large enough to require a cluster of storage servers?
 
 > The often cited paper called [Revisiting Unreasonable Effectiveness of Data in Deep Learning Era](https://arxiv.org/abs/1707.02968) lists a good number of those large and very popular datasets, as well as the reasons to utilize them for training.
 
-Meet **Internet Downloader** - an integrated part of the AIStore. AIS clusters can be easily deployed on any commodity hardware, and AIS **downloader** can then be used to quickly populate AIS buckets with any contents from a given location.
+Meet **Internet Downloader** - an integrated part of the AIStore.
+AIS cluster can be easily deployed on any commodity hardware, and AIS **downloader** can then be used to quickly populate AIS buckets with any contents from a given location.
+
+## Features
+
+> By way of background, AIStore supports a number of [3rd party Cloud providers](/aistore/docs/providers.md) and utilizes the providers' SDKs to access the corresponding Clouds. For Amazon S3, that would be `aws-sdk-go` SDK, for Azure - `azure-storage-blob-go`, and so on. Each SDK can be **conditionally linked** into AIS executable - the decision (to link or not to link) is made prior to deployment.
+
+This has a certain implication for the Downloader. Namely:
+
+Downloadable source can be both an Internet link (or links) or a Cloud bucket accessible via the corresponding Cloud SDK. You can, for instance, download a Google Cloud bucket via its Internet location that would look something like: `https://www.googleapis.com/storage/.../bucket-name/...`.
+
+However. When downloading a Cloud bucket (**any** Cloud bucket), it is always **preferable** to have the corresponding SDK linked-in. AIS Downloader will then detect the SDK "presence" at runtime and use a wider range of options available via this SDK.
+
+Other supported features include:
+
+* can download a single file (object), a `range`, an entire bucket, **and** a virtual directory in a given Cloud bucket
+* easy to use [command line interface](/aistore/cmd/cli/resources/download.md)
+* versioning and checksum support that allows to optimally download the same source location multiple times to *incrementally* update AIS destination with source changes (if any).
+
+The rest of this document describes these and other capabilities in greater detail and illustrates them with examples.
 
 ## Example
 
@@ -45,7 +66,7 @@ AIS Downloader supports 4 (four) request types:
 * *Range* - download multiple objects based on a given naming pattern
 * *Cloud* - given optional prefix and optional suffix, download matching objects from the specified cloud bucket
 
-> Prior to downloading, make sure AIS (destination) bucket already exists.
+> Prior to downloading, make sure destination bucket already exists.
 > To create a bucket using AIS CLI, run `ais create bucket`, for instance:
 >
 > ```console
@@ -54,7 +75,6 @@ AIS Downloader supports 4 (four) request types:
 >
 > Also, see [AIS API](/aistore/docs/http_api.md) for details on how to create, destroy, and list storage buckets.
 > For Python-based clients, a better starting point could be [here](/aistore/docs/overview.md#python-client).
-> Error is returned when provided bucket does not exist.
 
 ------------
 
@@ -76,46 +96,80 @@ The rest of this document is structured around supported *types of downloading j
 The request (described below) downloads a *single* object and is considered the most basic.
 This request returns *id* on successful request which can then be used to check the status or abort the download job.
 
-### Request Query Parameters
+### Request JSON Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Bucket where the downloaded object is saved to. |
-**provider** | **string** | Determines which bucket (`ais` or `cloud`) should be used. By default, locality is determined automatically | Yes
-**description** | **string** | Description for the download request | Yes
-**timeout** | **string** | Timeout for request to external resource. | Yes
-**link** | **string** | URL of where the object is downloaded from. |
-**objname** | **string** | Name of the object the download is saved as. If no objname is provided, the name will be the last element in the URL's path. | Yes
+**bucket.name** | **string** | Bucket where the downloaded object is saved to. | No |
+**bucket.provider** | **string** | Determines the provider of the bucket. By default, locality is determined automatically. | Yes |
+**bucket.namespace** | **string** | Determines the namespace of the bucket. | Yes |
+**description** | **string** | Description for the download request. | Yes |
+**timeout** | **string** | Timeout for request to external resource. | Yes |
+**limits.connections** | **int** | Number of concurrent connections each target can make. | Yes |
+**limits.bytes_per_hour** | **int** | Number of bytes the cluster can download in one hour. | Yes |
+**link** | **string** | URL of where the object is downloaded from. | No |
+**object_name** | **string** | Name of the object the download is saved as. If no objname is provided, the name will be the last element in the URL's path. | Yes |
 
 ### Sample Request
 
-| Operation | HTTP action | Example |
-|--|--|--|
-| Single object download | POST /v1/download | `curl -Liv -X POST 'http://localhost:8080/v1/download?bucket=ubuntu&objname=ubuntu.iso&link=http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso'` |
+#### Single object download
+
+```bash
+$ curl -Liv -H 'Content-Type: application/json' -d '{
+  "bucket": {"name": "ubuntu"},
+  "object_name": "ubuntu.iso",
+  "link": "link=http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso"
+}' -X POST 'http://localhost:8080/v1/download'
+```
 
 ## Multi Download
 
 A *multi* object download requires either a map or a list in JSON body:
 * **Map** - in map, each entry should contain `custom_object_name` (key) -> `external_link` (value). This format allows object names to not depend on automatic naming as it is done in *list* format.
-* **List** - in list, each entry should contain `external_link` to resource. Objects names are created from the base of the link (query parameters are stripped).
+* **List** - in list, each entry should contain `external_link` to resource. Objects names are created from the base of the link.
 
 This request returns *id* on successful request which can then be used to check the status or abort the download job.
 
-### Request Query Parameters
+### Request JSON Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Bucket where the downloaded objects are saved to. |
-**provider** | **string** | Determines which bucket (`ais` or `cloud`) should be used. By default, locality is determined automatically. | Yes
-**description** | **string** | Description for the download request | Yes
-**timeout** | **string** | Timeout for request to external resource. | Yes
+**bucket.name** | **string** | Bucket where the downloaded object is saved to. | No |
+**bucket.provider** | **string** | Determines the provider of the bucket. By default, locality is determined automatically. | Yes |
+**bucket.namespace** | **string** | Determines the namespace of the bucket. | Yes |
+**description** | **string** | Description for the download request. | Yes |
+**timeout** | **string** | Timeout for request to external resource. | Yes |
+**limits.connections** | **int** | Number of concurrent connections each target can make. | Yes |
+**limits.bytes_per_hour** | **int** | Number of bytes the cluster can download in one hour. | Yes |
+**objects** | **array** or **map** | The payload with the objects to download. | No |
 
 ### Sample Request
 
-| Operation | HTTP action | Example |
-|--|--|--|
-| Multi download using object map | POST /v1/download | `curl -Liv -X POST -H 'Content-Type: application/json' -d '{"train-labels.gz": "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "t10k-labels-idx1.gz": "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "train-images.gz": "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"}' http://localhost:8080/v1/download?bucket=yann-lecun` |
-| Multi download using object list |  POST /v1/download | `curl -Liv -X POST -H 'Content-Type: application/json' -d '["http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"]' http://localhost:8080/v1/download?bucket=yann-lecun` |
+#### Multi Download using object map
+
+```bash
+$ curl -Liv -H 'Content-Type: application/json' -d '{
+  "bucket": {"name": "ubuntu"},
+  "objects": {
+    "train-labels.gz": "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz",
+    "t10k-labels-idx1.gz": "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz",
+    "train-images.gz": "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
+  }
+}' -X POST 'http://localhost:8080/v1/download'
+```
+
+#### Multi Download using object list
+
+```bash
+$ curl -Liv -H 'Content-Type: application/json' -d '{
+  "bucket": {"name": "ubuntu"},
+  "objects": [
+    "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz",
+    "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz",
+    "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
+  ]
+}' -X POST 'http://localhost:8080/v1/download'
+```
 
 ## Range Download
 
@@ -135,25 +189,49 @@ Consider a website named `randomwebsite.com/some_dir/` that contains the followi
 
 To populate AIStore with objects in the range from `object200log.txt` to `object300log.txt` (101 objects total), use the *range* download.
 
-### Request Query Parameters
+### Request JSON Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Bucket where the downloaded objects are saved to. |
-**subdir** | **string** | Subdirectory in the **bucket** where the downloaded objects are saved to. | Yes
-**provider** | **string** | Determines which bucket (`ais` or `cloud`) should be used. By default, locality is determined automatically. | Yes
-**description** | **string** | Description for the download request | Yes
-**timeout** | **string** | Timeout for request to external resource. | Yes
-**base** | **string** | Base URL of the object used to formulate the download URL. |
-**template** | **string** | Bash template describing names of the objects in the URL. |
+**bucket.name** | **string** | Bucket where the downloaded object is saved to. | No |
+**bucket.provider** | **string** | Determines the provider of the bucket. By default, locality is determined automatically. | Yes |
+**bucket.namespace** | **string** | Determines the namespace of the bucket. | Yes |
+**description** | **string** | Description for the download request. | Yes |
+**timeout** | **string** | Timeout for request to external resource. | Yes |
+**limits.connections** | **int** | Number of concurrent connections each target can make. | Yes |
+**limits.bytes_per_hour** | **int** | Number of bytes the cluster can download in one hour. | Yes |
+**subdir** | **string** | Subdirectory in the **bucket** where the downloaded objects are saved to. | Yes |
+**template** | **string** | Bash template describing names of the objects in the URL. | No |
 
 ### Sample Request
 
-| Operation | HTTP action | Example |
-|--|--|--|
-| Download a (range) list of objects | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&template=randomwebsite.com/some_dir/object{200..300}log.txt'` |
-| Download a (range) list of objects into a subdirectory inside a bucket | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&subdir=some/subdir/&template=randomwebsite.com/some_dir/object{200..300}log.txt'` |
-| Download a (range) list of objects, selecting every tenth | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&template=randomwebsite.com/some_dir/object{1..1000..10}log.txt'` |
+#### Download a (range) list of objects
+
+```bash
+$ curl -Livg -H 'Content-Type: application/json' -d '{
+  "bucket": {"name": "test"},
+  "template": "randomwebsite.com/some_dir/object{200..300}log.txt"
+}' -X POST 'http://localhost:8080/v1/download'
+```
+
+#### Download a (range) list of objects into a subdirectory inside a bucket
+
+```bash
+$ curl -Livg -H 'Content-Type: application/json' -d '{
+  "bucket": {"name": "test"},
+  "template": "randomwebsite.com/some_dir/object{200..300}log.txt",
+  "subdir": "some/subdir/",
+}' -X POST 'http://localhost:8080/v1/download'
+```
+
+#### Download a (range) list of objects, selecting every tenth object
+
+```bash
+$ curl -Livg -H 'Content-Type: application/json' -d '{
+  "bucket": {"name": "test"},
+  "template": "randomwebsite.com/some_dir/object{1..1000..10}log.txt"
+}' -X POST 'http://localhost:8080/v1/download'
+```
 
 **Tip:** use `-g` option in curl to turn off URL globbing parser - it will allow to use `{` and `}` without escaping them.
 
@@ -161,53 +239,65 @@ Name | Type | Description | Optional?
 
 A *cloud* download prefetches multiple objects which names match provided prefix and suffix and are contained in a given cloud bucket.
 
-### Request Query Parameters
+### Request JSON Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Cloud bucket from which the data will be prefetched |
-**timeout** | **string** | Timeout for request to external resource | Yes
-**prefix** | **string** | Prefix of the objects names | Yes
-**suffix** | **string** | Suffix of the objects names | Yes
+**bucket.name** | **string** | Bucket where the downloaded object is saved to. | No |
+**bucket.provider** | **string** | Determines the provider of the bucket. By default, locality is determined automatically. | Yes |
+**bucket.namespace** | **string** | Determines the namespace of the bucket. | Yes |
+**description** | **string** | Description for the download request. | Yes |
+**sync** | **bool** | Synchronizes the cloud bucket: downloads new or updated objects (regular download) + checks and deletes cached objects if they are no longer present in the cloud. | Yes |
+**prefix** | **string** | Prefix of the objects names to download. | Yes |
+**suffix** | **string** | Suffix of the objects names to download. | Yes |
 
 ### Sample Request
 
-| Operation | HTTP action | Example |
-|--|--|--|
-| Download a list of objects from cloud bucket | POST /v1/download | `curl -L -X POST 'http://localhost:8080/v1/download?bucket=lpr-vision&prefix=imagenet/imagenet_train-&suffix=.tgz'`|
+#### Download objects from cloud bucket
+
+```bash
+$ curl -Liv -H 'Content-Type: application/json' -d '{
+  "bucket": {"name": "lpr-vision", "provider": "gcp"},
+  "prefix": "imagenet/imagenet_train-",
+  "suffix": ".tgz"
+}' -X POST 'http://localhost:8080/v1/download'
+```
 
 ## Aborting
 
 Any download request can be aborted at any time by making a `DELETE` request to `/v1/download/abort` with provided `id` (which is returned upon job creation).
 
-### Request Query Parameters
+### Request JSON Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**id** | **string** | Unique identifier of download job returned upon job creation. |
+**id** | **string** | Unique identifier of download job returned upon job creation. | No |
 
 ### Sample Request
 
-| Operation | HTTP action | Example |
-|--|--|--|
-| Abort download | DELETE /v1/download/abort | `curl -Liv -X DELETE 'http://localhost:8080/v1/download/abort?id=5JjIuGemR'`|
+#### Abort download
+
+```console
+$ curl -Liv -H 'Content-Type: application/json' -d '{"id": "5JjIuGemR"}' -X DELETE 'http://localhost:8080/v1/download/abort'
+```
 
 ## Status
 
 The status of any download request can be queried at any time using `GET` request with provided `id` (which is returned upon job creation).
 
-### Request Query Parameters
+### Request JSON Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**id** | **string** | Unique identifier of download job returned upon job creation. |
+**id** | **string** | Unique identifier of download job returned upon job creation. | No |
 
 ### Sample Request
 
-| Operation | HTTP action | Example |
-|--|--|--|
-| Get download status | GET /v1/download | `curl -Liv -X GET 'http://localhost:8080/v1/download?id=5JjIuGemR'`|
+#### Get download status
 
+```console
+$ curl -Liv -H 'Content-Type: application/json' -d '{"id": "5JjIuGemR"}' -X GET 'http://localhost:8080/v1/download'
+```
 
 ## List of Downloads
 
@@ -217,27 +307,36 @@ The list of all download requests can be queried at any time. Note that this has
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**regex** | **string** | Regex for the description of download requests. | Yes
+**regex** | **string** | Regex for the description of download requests. | Yes |
 
 ### Sample Requests
 
-| Operation | HTTP action | Example |
-|--|--|--|
-| Get list of all downloads | GET /v1/download/ | `curl -Liv -X GET http://localhost:8080/v1/download`|
-| Get list of downloads with description starting with a digit | GET /v1/download/ | `curl -Liv -X GET 'http://localhost:8080/v1/download?regex=^[0-9]'`|
+#### Get list of all downloads
+
+```console
+$ curl -Liv -X GET 'http://localhost:8080/v1/download'
+```
+
+#### Get list of downloads with description starting with a digit
+
+```console
+$ curl -Liv -H 'Content-Type: application/json' -d '{"regex": "^[0-9]"}' -X GET 'http://localhost:8080/v1/download'
+```
 
 ## Remove from List
 
 Any aborted or finished download request can be removed from the [list of downloads](#list-of-downloads) by making a `DELETE` request to `/v1/download/remove` with provided `id` (which is returned upon job creation).
 
-### Request Query Parameters
+### Request JSON Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**id** | **string** | Unique identifier of download job returned upon job creation. |
+**id** | **string** | Unique identifier of download job returned upon job creation. | No |
 
 ### Sample Request
 
-| Operation | HTTP action | Example |
-|--|--|--|
-| Remove from list | DELETE /v1/download/remove | `curl -Liv -X DELETE 'http://localhost:8080/v1/download/remove?id=5JjIuGemR'`|
+#### Remove download job from the list
+
+```console
+$ curl -Liv -H 'Content-Type: application/json' -d '{"id": "5JjIuGemR"}' -X DELETE 'http://localhost:8080/v1/download/remove'
+```

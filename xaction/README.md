@@ -14,7 +14,8 @@ redirect_from:
 
 ## Extended Actions (xactions)
 
-Extended actions (xactions) are batch operations that may take seconds, sometimes minutes or even hours, to execute.
+Batch operations that may take many seconds (minutes, hours) to execute are called eXtended actions or *xactions*.
+
 Xactions run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics.
 Xactions start running based on a wide variety of runtime conditions that include:
 

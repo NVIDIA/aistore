@@ -180,7 +180,7 @@ An example of one configuration file:
   },
   "timeout": {
     "tcp_timeout": "60s",
-    "http_timeout": "300s"
+    "http_timeout": "0s"
   },
   "periodic": {
     "sync_interval": "20m"

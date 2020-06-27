@@ -105,10 +105,10 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `client.client_timeout` | `10s` | Default client timeout |
 | `client.client_long_timeout` | `30m` | Default _long_ client timeout |
 | `client.list_timeout` | `2m` | Client list objects timeout |
-| `checksum.type` | `xxhash` | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
-| `checksum.validate_cold_get` | `true` | Enables and disables checking the hash of received object after downloading it from the cloud |
-| `checksum.validate_warm_get` | `false` | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud-based version |
-| `checksum.enable_read_range` | `false` | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
+| `checksum.type` | `xxhash` | Checksum type. Please see [Supported Checksums and Brief Theory of Operations](checksum.md)  |
+| `checksum.validate_cold_get` | `true` | Please see [Supported Checksums and Brief Theory of Operations](checksum.md) |
+| `checksum.validate_warm_get` | `false` | See [Supported Checksums and Brief Theory of Operations](checksum.md) |
+| `checksum.enable_read_range` | `false` | See [Supported Checksums and Brief Theory of Operations](checksum.md) |
 | `versioning.enabled` | `true` | Enables and disables versioning. For Cloud-based buckets, versioning is on only when it is enabled in both places: in the Cloud for the bucket and in the AIS configuration |
 | `versioning.validate_warm_get` | `false` | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
 | `fshc.enabled` | `true` | Enables and disables filesystem health checker (FSHC) |
@@ -134,29 +134,33 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 
 ## Startup override
 
-AIS command-line allows to override (and, optionally, persist) configuration at AIS node's startup. For example:
+AIS command-line allows to override configuration at AIS node's startup. For example:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -persist=true -confjson="{\"timeout.client_timeout\": \"13s\" }"
+$ aisnode -config=/etc/ais.json -role=target -config_custom="client.timeout=13s,log.level=4"
 ```
 
-As shown above, the CLI option in-question is: `confjson`. It's value is a JSON-formatted map of string names and string values. You can *persist* the updated configuration either via `-persist` command-line option or via an additional JSON tuple:
+As shown above, the CLI option in-question is: `confjson`.
+Its value is a JSON-formatted map of string names and string values.
+By default, the config provided in `config_custom` will be persisted on the disk.
+To make it transient either add `-transient=true` flag or add additional JSON entry:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -confjson="{\"timeout.client_timeout\": \"13s\", \"persist\": \"true\" }"
+$ aisnode -config=/etc/ais.json -role=target -transient=true -config_custom="client.timeout=13s, transient=true"
 ```
 
-Another example. To temporarily override locally-configured address of the primary proxy, run:
+Another example.
+To override locally-configured address of the primary proxy, run:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -proxyurl=http://G
+$ aisnode -config=/etc/ais.json -role=target -config_custom="proxy.primary_url=http://G"
 # where G denotes the designated primary's hostname and port.
 ```
 
-To achieve the same on a more permanent basis, add `-persist=true` as follows:
+To achieve the same on temporary basis, add `-transient=true` as follows:
 
 ```console
-$ aisnode -config=/etc/ais.json -role=target -proxyurl=http://G -persist=true
+$ aisnode -config=/etc/ais.json -role=target -config_custom="proxy.primary_url=http://G"
 ```
 
 > Please see [AIS command-line](command_line.md) for other command-line options and details.
@@ -177,7 +181,7 @@ To make sure that AIStore does not utilize xattrs, configure `checksum`=`none` a
 
 ## Enabling HTTPS
 
-To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/aistore/deploy/dev/local/aisnode_config.sh)).
+To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_crt` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/aistore/deploy/dev/local/aisnode_config.sh)).
 
 ## Filesystem Health Checker
 

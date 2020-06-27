@@ -6,6 +6,8 @@ redirect_from:
  - cmd/cli/resources/object.md/
 ---
 
+# GET, PUT, APPEND, PROMOTE, and other operations on objects
+
 - [Get object](#get-object)
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
@@ -46,7 +48,7 @@ train-10.tgz has the size 946.8MiB (992791757 B)
 ```
 
 #### Get object and print it to standard output
- 
+
 Get `imagenet_train-000010.tgz` object from `imagenet` cloud bucket and write it to standard output.
 
 ```console
@@ -131,7 +133,7 @@ Display default properties of object `list.txt` from bucket `texts`.
 ```console
 $ ais show object texts/list.txt
 CHECKSUM                SIZE    ATIME                   VERSION
-2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     1      
+2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     1
 ```
 
 #### Show all object properties
@@ -141,10 +143,10 @@ Display all properties of object `list.txt` from bucket `texts`.
 ```console
 $ ais show object texts/list.txt --props=all
 CHECKSUM		 SIZE		 ATIME			 VERSION	 CACHED	 COPIES	 EC
-2d61e9b8b299c41f         7.63MiB	 06 Jan 20 14:55 PST	 2		 yes	 1	 1:1[replicated]  
+2d61e9b8b299c41f         7.63MiB	 06 Jan 20 14:55 PST	 2		 yes	 1	 1:1[replicated]
 ```
 
-#### Show selected object properties 
+#### Show selected object properties
 
 Show only selected (`size,version,ec`) properties.
 
@@ -156,27 +158,31 @@ SIZE    VERSION EC
 
 ## Put object
 
-`ais put FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
+`ais put -|FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
-Put an object or entire directory (of objects) into the specified bucket. If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty, then shows all gathered info to the user and asks for confirmation to continue. Confirmation request can be disabled with the option `--yes` for use in scripts.
+Put a file, entire directory (of files) or content from STDIN (`-`) into the specified bucket.
+If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty, then shows all gathered info to the user and asks for confirmation to continue.
+Confirmation request can be disabled with the option `--yes` for use in scripts.
 
 ### Options
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--verbose` or `-v` | `bool` | Enable printing the result of every PUT | `false` |
-| `--yes` or `-y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
+| `--verbose, -v` | `bool` | Enable printing the result of every PUT | `false` |
+| `--yes, -y` | `bool` | Answer `yes` to every confirmation prompt | `false` |
 | `--conc` | `int` | Number of concurrent `PUT` requests limit | `10` |
-| `--recursive` or `-r` | `bool` | Enable recursive directory upload | `false` |
+| `--recursive, -r` | `bool` | Enable recursive directory upload | `false` |
 | `--refresh` | `string` | Frequency of the reporting the progress (in milliseconds), may contain multiplicative suffix `s`(second) or `m`(minute). Zero value disables periodical refresh | `0` if verbose mode is on, `5s` otherwise |
 | `--dry-run` | `bool` | Do not actually perform PUT. Shows a few files to be uploaded and corresponding object names for used arguments |
 | `--progress` | `bool` | Displays progress bar. Together with `--verbose` shows upload progress for every single file | `false` |
+| `--chunk-size` | `string` | Chunk size used for each request, can contain prefix 'b', 'KiB', 'MB' (only applicable when reading from STDIN) | `10MB` |
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.
  This makes shell wildcards like `**` redundant, and the following patterns won't work in `ais`: `/home/user/img-set-*/*.tar` or `/home/user/bck/**/*.tar.gz`
 
-`FILE` must point to an existing file. File masks and directory uploading are not supported in single-file upload mode.
+`FILE` must point to an existing file.
+File masks and directory uploading are not supported in single-file upload mode.
 
 
 ### Object names
@@ -211,21 +217,65 @@ The current user HOME directory is `/home/user`.
 
 #### Put single file
 
-Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`
+Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`.
 
 ```bash
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
+#### Put single file with checksum
+
+Put a single file `img1.tar` into local bucket `mybucket`, with a content checksum flag
+to override the default bucket checksum performed at the server side.
+
+
+```bash
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --crc32c 0767345f
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --md5 e91753513c7fc873467c1f3ca061fa70
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha256 dc2bac3ba773b7bc52c20aa85e6ce3ae097dec870e7b9bda03671a1c434b7a5d
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --sha512 e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --xxhash 05967d5390ac53b0
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+```
+
+Optionally, the user can choose to provide a `--compute-cksum` flag for the checksum flag and
+let the api take care of the computation.
+
+```bash
+$ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --compute-cksum
+# PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
+```
+
 #### Put single file without explicit name
 
-Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name
+Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name.
 
 ```bash
 $ ais put "~/bck/img1.tar" mybucket/
 # PUT /home/user/bck/img1.tar => mybucket/img-set-1.tar
 ```
+
+#### Put content from STDIN
+
+Read unpacked content from STDIN and put it into local bucket `mybucket` with name `img-unpacked`.
+
+Note that content is put in chunks what can have a slight overhead.
+`--chunk-size` allows for controlling the chunk size - the bigger the chunk size the better performance (but also higher memory usage).
+
+```bash
+$ tar -xOzf ~/bck/img1.tar | ais put - ais://mybucket/img1-unpacked
+# PUT /home/user/bck/img1.tar (as stdin) => ais://mybucket/img-unpacked
+```
+
 
 #### Put directory into bucket
 
@@ -290,7 +340,7 @@ Same as above, except object names have additional prefix `test${d1}${d2}.txt`.
 
 ```bash
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
-$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket/dir/ -y 
+$ ais put "~/dir/test{0..2}{0..2}.txt" mybucket/dir/ -y
 9 objects put into "mybucket" bucket
 # PUT /home/user/dir/test00.txt => mybucket/dir/test00.txt and 8 more
 ```
@@ -308,7 +358,7 @@ $ ais put "~/dir/test{0..2}/dir/test{0..2}.txt" mybucket --dry-run
 ```
 
 #### Put multiple directories
- 
+
 Put multiple directories into the cluster with range syntax.
 
 ```bash
@@ -348,7 +398,7 @@ PROMOTE command handles object naming if its source references directories:
 ### Examples
 
 #### Promote single file
- 
+
 Promote `/tmp/examples/example1.txt` without specified object name.
 
 ```bash
@@ -366,7 +416,7 @@ $ ais promote /tmp/examples/example1.txt mybucket/example1.txt
 ```
 
 #### Promote directory
- 
+
 Make AIS objects out of `/tmp/examples` files (**one file = one object**).
 `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes.
 
@@ -379,7 +429,7 @@ $ ais promote /tmp/examples mybucket/ -r
 Promote `/tmp/examples` files to AIS objects. Objects names will have `examples/` prefix.
 
 ```console
-$ ais promote /tmp/examples mybucket/examples/ -r 
+$ ais promote /tmp/examples mybucket/examples/ -r
 ```
 
 #### Promote invalid path
@@ -391,7 +441,7 @@ $ ais create bucket testbucket
 testbucket bucket created
 $ ais show cluster
 TARGET		 MEM USED %	 MEM AVAIL	 CAP USED %	 CAP AVAIL	 CPU USED %	 REBALANCE
-1014646t8081	   0.00		 4.00GiB	 59		 375.026GiB	   0.00		 finished; 1 objs moved (2.5KiB)
+1014646t8081	   0.00		 4.00GiB	 59		 375.026GiB	   0.00		 finished; 1 moved (2.5KiB)
 ...
 $ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t8081
 (...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
@@ -519,7 +569,7 @@ See [List/Range Operations](../../../docs/batch.md#listrange-operations) for mor
 Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and stores them in the AIS cluster
 
 ```console
-$ ais prefetch aws://cloudbucket --list 'o1,o2,o3' 
+$ ais prefetch aws://cloudbucket --list 'o1,o2,o3'
 ```
 
 ## Rename object

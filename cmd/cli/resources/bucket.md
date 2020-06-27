@@ -6,7 +6,7 @@ redirect_from:
  - cmd/cli/resources/bucket.md/
 ---
 
-The CLI allows users to interact with [buckets](../../../docs/bucket.md) in the AIS cluster.
+This section lists operations on *buckets*. For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please refer to [buckets in-depth overview](/aistore/docs/bucket.md).
 
 ## Create bucket
 
@@ -50,6 +50,19 @@ Create bucket `bucket_name` in `ml` namespace of AIS remote cluster with `Bghort
 ```console
 $ ais create bucket ais://@Bghort1l#ml/bucket_name
 "ais://@Bghort1l#ml/bucket_name" bucket created
+```
+#### Create bucket with custom properties
+
+Create bucket `bucket_name` with custom properties specified.
+
+```console
+#Key-value format
+$ ais create bucket ais://@Bghort1l/bucket_name --bucket-props="mirror.enabled=true mirror.copies=2"
+"ais://@Bghort1l/bucket_name" bucket created
+
+#JSON format
+$ ais create bucket ais://@Bghort1l/bucket_name --bucket-props='{"versioning": {"enabled": true, "validate_warm_get": true}}'
+"ais://@Bghort1l/bucket_name" bucket created
 ```
 
 #### Incorrect buckets creation
@@ -116,6 +129,10 @@ Removing cloud buckets (cloud://bucket_name) is not supported
 `ais ls`
 
 List all bucket names.
+
+`ais ls --regex "ngn*"`
+
+List all bucket names matching the `ngn*` regex expression.
 
 `ais ls cloud://` or `ais ls ais://`
 
@@ -319,9 +336,20 @@ Start an extended action to bring a given bucket to a certain redundancy level (
 
 ## Make all objects erasure coded
 
-`ais ec-encode BUCKET_NAME`
+`ais ec-encode BUCKET_NAME --data-slices <value> --parity-slices <value>`
 
-Start an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running `ec-encode` extended action. Read more about this feature [here](../../../docs/storage_svcs.md#erasure-coding).
+Start an extended action that enables data protection for a given bucket and encodes all its objects.
+Erasure coding must be disabled for the bucket prior to running `ec-encode` extended action.
+Read more about this feature [here](../../../docs/storage_svcs.md#erasure-coding).
+
+### Options
+
+| Flag | Type | Description |
+| --- | --- | --- |
+| `--data-slices`, `--data`, `-d` | `int` | Number of data slices |
+| `--parity-slices`, `--parity`, `-p` | `int` | Number of parity slices |
+
+All options are required and must be greater than `0`.
 
 ## Show bucket props
 

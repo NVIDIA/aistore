@@ -60,6 +60,7 @@
     "iostat_time_short": "100ms"
   },
   "rebalance": {
+    "dont_run_time": "0m",
     "dest_retry_time": "2m",
     "quiescent": "20s",
     "compression": "never",
@@ -102,7 +103,7 @@
     "http": {
       "proto": "http",
       "rproxy": "",
-      "server_certificate": "server.crt",
+      "server_crt": "server.crt",
       "server_key": "server.key",
       "write_buffer_size": 0,
       "read_buffer_size": 0,
@@ -118,9 +119,7 @@
   },
   "auth": {
     "secret": "",
-    "creddir": "",
-    "enabled": false,
-    "allow_guest": false
+    "enabled": false
   },
   "keepalivetracker": {
     "proxy": {

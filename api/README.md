@@ -23,13 +23,13 @@ The APIs provided are separated into different levels of granularity:
 ### **Cluster**
 
 #### GetClusterMap
-Retrieves AIStore's cluster map as stored by the proxy to which this request is sent
+Retrieves AIStore's cluster map (Smap).
 
 ##### Parameters
 | Name        | Type         | Description                                                                           |
 |-------------|--------------|---------------------------------------------------------------------------------------|
 |  httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL    | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL    | string       | URL of the proxy (gateway)                                                            |
 
 ##### Return
 A copy of type `cluster.Smap` containing a map of targets, a map of proxies, proxies non-eligible for primary, the current primary proxy, and the version of the cluster map
@@ -43,7 +43,7 @@ Given a daemonID, it sets that proxy as the primary proxy of the cluster
 | Name         | Type         | Description                                                                           |
 |--------------|--------------|---------------------------------------------------------------------------------------|
 |  httpClient  | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL     | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL     | string       | URL of the proxy (gateway)                                                            |
 | newPrimaryID | string       | DaemonID of the new primary proxy                                                     |
 ##### Return
 Error from AIStore in completing the request
@@ -55,7 +55,7 @@ Given key-value pairs of configuration parameters, this operation sets the clust
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | nvs        | key-values   | Map of key-value pairs of configuration parameters to be set                          |
 
 ##### Return
@@ -69,7 +69,7 @@ Registers an existing node to the clustermap.
 | Name       | Type           | Description                                                                           |
 |------------|----------------|---------------------------------------------------------------------------------------|
 | httpClient |  *http.Client  | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string         | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string         | URL of the proxy (gateway)                                                            |
 | nodeInfo   | *cluster.Snode | Pointer to a cluster.Snode struct containing details of the new node                  |
 
 ##### Return
@@ -83,7 +83,7 @@ Unregisters an existing node from the clustermap.
 | Name          | Type         | Description                                                                           |
 |---------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient    | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL      | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL      | string       | URL of the proxy (gateway)                                                            |
 | unregisterSID | string       | DaemonID of the node to be unregistered                                               |
 
 ##### Return
@@ -99,9 +99,9 @@ Given the direct public URL of a target, `GetMountpaths` returns its mountpaths
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| targetURL  | string       | URL of the target to which the HTTP Request is sent                                   |
+| targetURL  | string       | URL of the target node                                                                |
 ##### Return
-A pointer to an instance of a `cmn.MountpathList` struct consisting of Available and Disabled mountpaths of a specific target
+`cmn.MountpathList` structure comprising available and disabled mountpaths of a specific target
 
 Error from AIStore in completing the request
 ___
@@ -112,7 +112,7 @@ Given a target and a mountpath, `AddMountpath` adds that mountpath to the specif
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| targetURL  | string       | URL of the target to which the HTTP Request is sent                                   |
+| targetURL  | string       | URL of the target node                                                                |
 | mountPath  | string       | Mountpath to be added to a target                                                     |
 ##### Return
 Error from AIStore in completing the request
@@ -125,7 +125,7 @@ Given a target and a mountpath, `RemoveMountpath` removes that mountpath from th
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| targetURL  | string       | URL of the target to which the HTTP Request is sent                                   |
+| targetURL  | string       | URL of the target node                                                                |
 | mountPath  | string       | Mountpath to be removed from a target                                                 |
 
 ##### Return
@@ -139,7 +139,7 @@ Given a target and a mountpath, `EnableMountpath` enables that mountpath on the 
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| targetURL  | string       | URL of the target to which the HTTP Request is sent                                   |
+| targetURL  | string       | URL of the target node                                                                |
 | mountPath  | string       | Mountpath to be enabled on a target                                                   |
 
 ##### Return
@@ -153,22 +153,22 @@ Given a target and a mountpath, `DisableMountpath` disables that mountpath on th
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| targetURL  | string       | URL of the target to which the HTTP Request is sent                                   |
+| targetURL  | string       | URL of the target node                                                                |
 | mountPath  | string       | Mountpath to be disabled on a target                                                  |
 ##### Return
 Error from AIStore in completing the request
 ___
 
 #### GetDaemonConfig
-Given the URL of a daemon, `GetDaemonConfig` returns the corresponding daemon's configuration settings 
+Given the URL of a daemon, `GetDaemonConfig` returns the corresponding daemon's configuration settings.
 ##### Parameters
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| daemonURL  | string       | URL of the daemon to which the HTTP Request is sent                                   |
+| daemonURL  | string       | URL of the daemon (proxy/gateway node or target node)                                 |
 
 ##### Return
-A pointer to an instance of type `cmn.Config` containing all the configuration settings applied to a specific daemon
+`cmn.Config` structure containing all the node's configuration settings (the node is specified by its `daemonURL`)
 
 Error from AIStore in completing the request
 ___
@@ -179,7 +179,7 @@ Given key-value pairs of configuration parameters, `SetDaemonConfig` sets the co
 | Name       | Type              | Description                                                                           |
 |------------|-------------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client      | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| daemonURL  | string            | URL of the daemon to which the HTTP Request is sent                                   |
+| daemonURL  | string            | URL of the daemon (proxy/gateway node or target node)                                 |
 | nvs        | key-values        | Map of key-value pairs of configuration parameters to be set                          |
 
 ##### Return
@@ -196,12 +196,12 @@ Given a bucket name, returns its properties
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket                                                                    |
 | query      | url.Values   | Optional URL query values such as [`?provider`](#url_query_values)                    |
 
 ##### Return
-A pointer to an instance of `cmn.BucketProps`, consisting of all the properties of the specified bucket
+`cmn.BucketProps` structure containing the bucket's properties
 
 Error from AIStore in completing the request
 ___
@@ -213,8 +213,8 @@ Given the url of an AIS gateway, `ListBuckets` returns the names of all existing
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
-| provider   | string       | One of "" (empty), "cloud", "ais", "aws", "gcp". If the value is empty, returns all bucket names. Otherwise, returns only "cloud" or "ais" buckets.|
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
+| provider   | string       | One of "" (empty), "cloud", "ais", "aws", "gcp", or "azure". If the value is empty, returns all bucket names. Otherwise, returns only "cloud" or "ais" buckets.|
 
 ##### Return
 Two lists: one for the names of ais buckets, and the other for the names of cloud buckets
@@ -229,7 +229,7 @@ Creates an ais bucket with a given name
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket                                                                    |
 ##### Return
 Error from AIStore in completing the request
@@ -242,7 +242,7 @@ Create new bucket and copy into it all objects from the existing (old) one
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | oldName    | string       | Name of the existing bucket                                                           |
 | newName    | string       | Name of the new bucket                                                                |
 
@@ -253,7 +253,7 @@ Rename an existing bucket to the new name provided
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | oldName    | string       | Name of the existing bucket                                                           |
 | newName    | string       | New name for the existing bucket                                                      |
 
@@ -268,7 +268,7 @@ Removes an ais bucket using its name as the identifier
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the existing bucket                                                           |
 
 ##### Return
@@ -282,7 +282,7 @@ Evicts a cloud bucket using its name as the identifier
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the existing bucket                                                           |
 | query      | url.Values   | Optional URL query values such as [`?provider`](#url_query_values)                    |
 ##### Return
@@ -297,7 +297,7 @@ Sets the properties of a bucket via action message, using the bucket name as the
 | Name       | Type            | Description                                                                           |
 |------------|-----------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client    | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string          | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string          | URL of the proxy (gateway)                                                            |
 | bucket     | string          | Name of the existing bucket                                                           |
 | props      | cmn.BucketProps | Bucket properties to be set                                                           |
 | query      | url.Values      | Optional URL query values such as [`?provider`](#url_query_values)                    |
@@ -313,7 +313,7 @@ Resets the properties of a bucket, identified by its name, to the global configu
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the existing bucket                                                           |
 | query      | url.Values   | Optional URL query values such as [`?provider`](#url_query_values)                    |
 
@@ -331,13 +331,13 @@ Returns the size and version of an object identified by a combination of its buc
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket storing the object                                                 |
 | provider   | string       | Cloud provider, one of: "", "cloud", "ais", "gcp", "aws". If not specified (""), AIS determines the value by checking bucket metadata |
 | object     | string       | Name of the object                                                                    |
 
 ##### Return
-A pointer of an instance of `cmn.ObjectProps`, containing information on the size and version of the object
+`cmn.ObjectProps` structure with object size, version, checksum, access time, number of copies, and other information about the object
 
 Error from AIStore in completing the request
 ___
@@ -352,7 +352,7 @@ Otherwise, it discards the response body read.
 | Name       | Type           | Description                                                                           |
 |------------|----------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client   | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string         | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string         | URL of the proxy (gateway)                                                            |
 | bucket     | string         | Name of the bucket storing the object                                                 |
 | object     | string         | Name of the object                                                                    |
 | options    | GetObjectInput | Optional field with a custom Writer and URL Query values                              |
@@ -370,7 +370,7 @@ Same behavior as `GetObject`, but performs checksum validation of the object by 
 | Name       | Type           | Description                                                                           |
 |------------|----------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client   | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string         | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string         | URL of the proxy (gateway)                                                            |
 | bucket     | string         | Name of the bucket storing the object                                                 |
 | object     | string         | Name of the object                                                                    |
 | options    | GetObjectInput | Optional field with a custom Writer and URL Query values                              |
@@ -387,23 +387,17 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | Name          | Type                 | Description                                                                           |
 |---------------|----------------------|---------------------------------------------------------------------------------------|
 | args          | PutObjectArgs        | A field that handles the arguments for PutObject                                      |
-| replicateOpts | ReplicateObjectInput | Used to hold optional parameters for PutObject when it is used for replication        |
 
 ##### PutObjectArgs
 | Name       | Type               | Description                                                                           |
 |------------|--------------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client       | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string             | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string             | URL of the proxy (gateway)                                                            |
 | Bucket     | string             | Name of the bucket storing the object                                                 |
 | Provider   | string             | Cloud provider, one of: "", "cloud", "ais", "gcp", "aws". If not specified (""), AIS determines it by checking bucket metadata |
 | Object     | string             | Name of the object                                                                    |
 | Hash       | string             | Hash computed for the object                                                          |
 | Reader     | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
-
-##### ReplicateObjectInput
-| Name       | Type               | Description                                                                                          |
-|------------|--------------------|------------------------------------------------------------------------------------------------------|
-| SourceURL  | string             | Used to set the request header to determine whether PUT object request is for replication in AIStore |
 
 ##### Return
 Error from AIStore in completing the request
@@ -416,7 +410,7 @@ Renames an existing object
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket storing the object                                                 |
 | oldName    | string       | Name of the existing object                                                           |
 | newName    | string       | New name for the existing object                                                      |
@@ -432,7 +426,7 @@ Replicates a given object
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket storing the object                                                 |
 | object     | string       | Name of the object to be replicated                                                   |
 
@@ -447,7 +441,7 @@ Deletes an object identified by the combination of its bucket and object name
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket storing the object                                                 |
 | object     | string       | Name of the object to be replicated                                                   |
 | provider   | string       | Cloud provider, one of "", "cloud", "ais". Other supported values include "aws" and "gcp", for Amazon and Google clouds, respectively |
@@ -463,7 +457,7 @@ Evicts an object identified by the combination of its bucket and object name
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket storing the object                                                 |
 | object     | string       | Name of the object to be evicted                                                      |
 ##### Return
@@ -501,15 +495,15 @@ func demo() error {
     if err != nil {
         return Errors.New("Getting clustermap failed, %v\n", err)
     }
- 
+
     primaryProxyURL := smap.ProxySI.PublicNet.DirectURL
- 
+
     // Create ais bucket
     err = api.CreateLocalBucket(httpClient, primaryProxyURL, bucket)
     if err != nil {
         return Errors.New("Creating ais bucket failed, %v\n", err)
     }
- 
+
     newBucketName = "DemoBucketNew"
     // Rename ais bucket
     err = api.RenameLocalBucket(httpClient, primaryProxyURL, bucket, newBucketName)

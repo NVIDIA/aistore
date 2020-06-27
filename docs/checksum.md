@@ -6,23 +6,50 @@ redirect_from:
  - docs/checksum.md/
 ---
 
-## Table of Contents
-- [Object checksums: brief theory of operations](#object-checksums-brief-theory-of-operations)
+## Supported Checksums and Brief Theory of Operations
 
-## Object checksums: brief theory of operations
+1. `xxhash` is the system-default checksum.
 
-1. objects are stored in the cluster with their content checksums and in accordance with their bucket configurations.
+2. `xxhash` can be overridden on a bucket level; the following [CLI](/aistore/cmd/cli/README.md) example configures bucket `abc` with `sha256` and bucket `xyz` without any checksum protection whatsoever:
 
-2. xxhash is the system-default checksum.
+```console
+$ ais set props ais://abc checksum.type  <TAB-TAB>
+crc32c   md5      none     sha256   sha512   xxhash
 
-3. user can override the system default on a bucket level by setting checksum=none.
+# ais set props ais://abc checksum.type sha256
+# ais set props ais://xyz checksum.type none
+```
 
-4. bucket (re)configuration can be done anytime. Bucket's checksumming option can be changed from xxhash to none and back, potentially multiple times and with no limitations.
+> AIS-own metadata, both cluster-level and object metadata, is currently always protected with `xxhash`.
 
-5. an object with a bad checksum cannot be retrieved (via GET) and cannot be replicated or migrated. Corrupted objects get eventually removed from the system.
+3. unless checksum is disabled, objects stored in this bucket are protected with the checksum; user can override the system default on a bucket level by setting checksum=`none` (see example above).
 
-6. GET and PUT operations support an option to validate checksums. The validation is done against a checksum stored with an object (GET), or a checksum provided by a user (PUT).
+4. bucket (re)configuration can be done at any time. For instance, bucket's checksumming option can be changed from `xxhash` to `sha512`,  and later to `crc32c`, and then back to `xxhash` - multiple times with no limitations.
 
-7. object replications and migrations are always checksum-protected. If an object does not have checksum (see #3 above), the latter gets computed on the fly and stored with the object, so that subsequent replications/migrations could reuse it.
+5. an object with a bad checksum cannot be read from the bucket and cannot be replicated or migrated. Corrupted objects get eventually removed from the system.
 
-8. when two objects in the cluster have identical (bucket, object) names and checksums, they are considered to be full replicas of each other - the fact that allows optimizing PUT,replication, and object migration in a variety of use cases.
+6. GET and PUT operations support an option to validate checksums; validation is done against a checksum stored with an object (GET), or a checksum provided by a user (PUT).
+
+7. Checksum configuration supports a number of options that can be changed both globally (for the entire cluster) and on a bucket level - notice the defaults below:
+
+```json
+	"checksum": {
+		"type":			"xxhash",
+		"validate_cold_get":	true,      # validate cold GET from Cloud buckets
+		"validate_warm_get":	false,     # validate warm GET
+		"validate_obj_move":	false,     # validate object migration
+		"enable_read_range":	false      # enable checksumming for ranges
+	},
+```
+
+8. In more detail:
+
+	* `checksum.type` (`string`): supports a number of checksums including `xxhash` (the current default);
+	* `checksum.validate_cold_get` (`bool`): indicates whether to perform checksum validation when cold GET-ing objects from Cloud buckets;
+	* `checksum.validate_warm_get` (`true` | `false`): prescribes whether to perform checksum validation when reading objects stored in AIS cluster;
+	* `checksum.enable_read_range` (`true` | `false`): indicates whether to generate checksums when executing GET(object, range), where `range` is offset and length (in bytes) to read;
+	* `checksum.validate_obj_move` (`true` | `false`): indicates whether to perform checksum validation upon object migration.
+
+9. object replication is always checksum-protected. If an object does not have a checksum (see #3 above), the latter gets computed on the fly and stored with the object, so that subsequent replications/migrations could reuse it.
+
+10. finally, when two objects in the cluster have identical (bucket, object) names and identical checksums, they are considered to be full replicas of each other - the fact that allows optimizing PUT, replication, and object migration in a variety of use cases.

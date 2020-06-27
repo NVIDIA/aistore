@@ -26,25 +26,17 @@ In this document, `G` - denotes a (hostname:port) pair of any gateway in the AIS
 
 ## Checksumming
 
-Checksumming on bucket level is configured by setting bucket properties:
+All cluster and object-level metadata is protected by checksums. Secondly, unless user explicitly disables checksumming for a given bucket, all user data stored in this bucket is also protected.
 
-* `checksum.type`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
-`"inherit"` indicates that the global checksumming configuration should be used.
-* `checksum.validate_cold_get`: `true` or `false` indicates
-whether to perform checksum validation during cold GET.
-* `checksum.validate_warm_get`: `true` or `false` indicates
-whether to perform checksum validation during warm GET.
-* `checksum.enable_read_range`: `true` or `false` indicates whether to perform checksum validation during byte serving.
-* `checksum.validate_obj_move`: `true` or `false` indicates
-whether to perform checksum validation during object migration(i.e., during rebalance).
+For detailed overview, theory of operations, and supported checksumms, please see this [document](checksum.md).
 
-Value for the `type` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise, the request will be rejected.
-
-Example of setting bucket properties:
+Example: configuring checksum properties for a bucket:
 
 ```console
 $ ais set props <bucket-name> checksum.validate_cold_get=true checksum.validate_warm_get=false checksum.type=xxhash checksum.enable_read_range=false
 ```
+
+For more examples, please to refer to [supported checksums and brief theory of operations](checksum.md).
 
 ## LRU
 

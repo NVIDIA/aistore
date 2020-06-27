@@ -29,7 +29,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * arbitrary number of extremely lightweight access points;
 * easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
 * automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
-* N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection;
+* N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection.
 
 Also, AIStore:
 
@@ -43,9 +43,10 @@ Also, AIStore:
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, and for the most recently added features, please see the [overview document](docs/overview.md) (where you can also find **6** alternative ways to populate AIStore with existing datasets).
+For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets).
 
 **Table of Contents**
+
 - [Prerequisites](#prerequisites)
 - [Build, Make, and Development Tools](#build-make-and-development-tools)
 - [Deployment](#deployment)
@@ -60,7 +61,8 @@ For AIStore **white paper** and design philosophy, and for the most recently add
 
 ## Prerequisites
 
-AIStore runs on commodity Linux machines with no special hardware requirements whatsoever. Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
+AIStore runs on commodity Linux machines with no special hardware requirements whatsoever.
+Deployment [options](deploy) are practically unlimited and include a spectrum with bare-metal (Kubernetes) clusters of any size, on the one hand, and a single Linux or Mac host, on the other.
 
 > It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
 
@@ -94,6 +96,7 @@ $ cd github.com/NVIDIA/aistore
 $ make deploy
 $ go test ./tests -v -run=Mirror
 ```
+
 where:
 
 * `go get` installs sources and dependencies under your [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
@@ -115,19 +118,24 @@ Select:
 0
 ```
 
-Or, you can run all of the above non-interactively:
+Or, you can run all the above non-interactively:
 
 ```console
 $ make kill; make deploy <<< $'10\n3\n2\n0'
 ```
 
->  The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems. Also notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
+> The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems.
+> Also notice the "Cloud" prompt above, and the fact that access to 3rd party Cloud storage is a deployment-time option.
 
 > `make kill` will terminate local AIStore if it's already running.
 
-Finally, the `go test` (above) will create an ais bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
-Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands. For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
+For more development options and tools, please refer to [development docs](docs/development.md).
+
+Finally, the `go test` (above) will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
+
+Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding (S3 or GCS) bucket name when running `go test` commands.
+For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
 
 ```console
 $ BUCKET=myS3bucket go test ./tests -v -run=download
@@ -139,7 +147,8 @@ Here's a minor variation of the above:
 $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
 ```
 
-This command runs a test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
+This command runs a test that matches the specified string ("download").
+The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
 
 ## Build, Make and Development Tools
 
@@ -242,7 +251,7 @@ with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh)
 
 ## Assorted Tips
 
-* To enable an optional AIStore authentication server, execute `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](cmd/authn/README.md).
+* To enable an optional AIStore authentication server, execute `$ AUTH_ENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](cmd/authn/README.md).
 * In addition to AIStore - the storage cluster, you can also deploy [aisfs](cmd/aisfs/README.md) - to access AIS objects as files, and [AIS CLI](cmd/cli/README.md) - to monitor, configure and manage AIS nodes and buckets.
 * AIS CLI is an easy-to-use command-line management tool supporting a growing number of commands and options (one of the first ones you may want to try could be `ais show cluster` - show the state and status of an AIS cluster). The CLI is documented in the [readme](cmd/cli/README.md); getting started with it boils down to running `make cli` and following the prompts.
 * For more testing commands and options, please refer to the [testing README](ais/tests/README.md).
@@ -254,6 +263,15 @@ with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh)
 
 - [AIS Overview](docs/overview.md)
 - [CLI](cmd/cli/README.md)
+  - [Create, destroy, list, and other operations on buckets](cmd/cli/resources/bucket.md)
+  - [GET, PUT, APPEND, PROMOTE, and other operations on objects](cmd/cli/resources/object.md)
+  - [Cluster and Node management](cmd/cli/resources/daeclu.md)
+  - [Mountpath (Disk) management](cmd/cli/resources/mpath.md)
+  - [Attach, Detach, and monitor remote clusters](cmd/cli/resources/remote.md)
+  - [Start, Stop, and monitor downloads](cmd/cli/resources/download.md)
+  - [Distributed Sort](cmd/cli/resources/dsort.md)
+  - [User account and access management](cmd/cli/resources/users.md)
+  - [Xaction (Job) management](cmd/cli/resources/xaction.md)
 - [On-Disk Layout](docs/on-disk-layout.md)
 - [Command line parameters](docs/command_line.md)
 - [AIS Load Generator: integrated benchmark tool](bench/aisloader/README.md)

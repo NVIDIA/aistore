@@ -26,7 +26,7 @@ A typical initialization sequence includes steps, e.g.:
 1. Construct:
 
     ```go
-    mm := &memsys.MMSA{Name: ..., TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
+    mm := &memsys.MMSA{Name: ..., TimeIval: ..., MinPctFree: ..., Name: ...}
     ```
     
     **Note** that with the only exception of `Name` all the rest member variables (above) have their system defaults and can be omitted.
