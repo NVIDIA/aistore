@@ -957,9 +957,9 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 		p = cmn.DefaultBucketProps()
 
 		objName = cmn.RandString(10)
-		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
+		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/LICENSE"
 
-		expectedSize int64 = 17173
+		expectedSize int64 = 1075
 		newSize      int64 = 10
 	)
 
