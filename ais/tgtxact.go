@@ -48,8 +48,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		xactQuery := xaction.RegistryXactFilter{
-			ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck,
-			OnlyRunning: !xactMsg.All, Finished: xactMsg.Finished,
+			ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRunning: xactMsg.OnlyRunning,
 		}
 		t.queryMatchingXact(w, r, what, xactQuery)
 	case http.MethodPut:

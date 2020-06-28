@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
@@ -93,8 +94,7 @@ type (
 		ID          string
 		Kind        string
 		Bck         *cluster.Bck
-		OnlyRunning bool
-		Finished    bool // only finished xactions (FIXME: only works when `ID` is set)
+		OnlyRunning *bool
 	}
 	registryEntries struct {
 		mtx       sync.RWMutex
@@ -110,6 +110,20 @@ type (
 		entries *registryEntries
 	}
 )
+
+func (rxf RegistryXactFilter) genericMatcher(xact cmn.Xact) bool {
+	condition := true
+	if rxf.OnlyRunning != nil {
+		condition = condition && !xact.Finished() == *rxf.OnlyRunning
+	}
+	if rxf.Kind != "" {
+		condition = condition && xact.Kind() == rxf.Kind
+	}
+	if rxf.Bck != nil {
+		condition = condition && xact.Bck().Equal(rxf.Bck.Bck)
+	}
+	return condition
+}
 
 // Registry is a global registry (see above) that keeps track of all running xactions
 // In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`
@@ -176,7 +190,7 @@ func newRegistryEntries() *registryEntries {
 }
 
 func (e *registryEntries) findUnlocked(query RegistryXactFilter) baseEntry {
-	if !query.OnlyRunning {
+	if query.OnlyRunning == nil {
 		// Loop in reverse to search for the latest (there is great chance
 		// that searched xaction at the end rather at the beginning).
 		for idx := len(e.entries) - 1; idx >= 0; idx-- {
@@ -295,7 +309,7 @@ func (r *registry) GetXact(uuid string) (xact cmn.Xact) {
 }
 
 func (r *registry) GetRunning(query RegistryXactFilter) baseEntry {
-	query.OnlyRunning = true
+	query.OnlyRunning = api.Bool(true)
 	entry := r.entries.find(query)
 	return entry
 }
@@ -391,7 +405,7 @@ func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []cmn.Xact
 
 func (r *registry) GetStats(query RegistryXactFilter) ([]cmn.XactStats, error) {
 	if query.ID != "" {
-		if !query.Finished {
+		if query.OnlyRunning == nil || (query.OnlyRunning != nil && *query.OnlyRunning) {
 			return r.matchingXactsStats(func(xact cmn.Xact) bool {
 				return xact.ID().Compare(query.ID) == 0
 			}), nil
@@ -403,69 +417,37 @@ func (r *registry) GetStats(query RegistryXactFilter) ([]cmn.XactStats, error) {
 			}
 			return xact.ID().Compare(query.ID) == 0 && xact.Finished() && !xact.Aborted()
 		}), nil
-	} else if query.Bck == nil && query.Kind == "" {
-		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			if !query.OnlyRunning || (query.OnlyRunning && !xact.Finished()) {
-				return true
-			}
-			return false
-		}), nil
-	} else if query.Bck == nil && query.Kind != "" {
-		if !cmn.IsValidXaction(query.Kind) {
+	}
+	if query.Bck != nil || query.Kind != "" {
+		// Error checks
+		if query.Kind != "" && !cmn.IsValidXaction(query.Kind) {
 			return nil, cmn.NewXactionNotFoundError(query.Kind)
 		}
-
-		if query.OnlyRunning {
-			entry := r.GetRunning(RegistryXactFilter{Kind: query.Kind})
-			if entry == nil {
-				return []cmn.XactStats{}, nil
-			}
-			xact := entry.Get()
-			return []cmn.XactStats{xact.Stats()}, nil
-		}
-		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return xact.Kind() == query.Kind
-		}), nil
-	} else if query.Bck != nil && query.Kind == "" {
-		if !query.Bck.HasProvider() {
+		if query.Bck != nil && !query.Bck.HasProvider() {
 			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", query.Kind, query.Bck.Name)
 		}
 
-		if query.OnlyRunning {
+		// TODO: investigate how does the following fare against genericMatcher
+		if query.OnlyRunning != nil && *query.OnlyRunning {
 			matching := make([]cmn.XactStats, 0, 10)
-			for kind := range cmn.XactsMeta {
-				entry := r.GetRunning(RegistryXactFilter{Kind: kind, Bck: query.Bck})
+			if query.Kind == "" {
+				for kind := range cmn.XactsMeta {
+					entry := r.GetRunning(RegistryXactFilter{Kind: kind, Bck: query.Bck})
+					if entry != nil {
+						matching = append(matching, entry.Get().Stats())
+					}
+				}
+			} else {
+				entry := r.GetRunning(RegistryXactFilter{Kind: query.Kind, Bck: query.Bck})
 				if entry != nil {
 					matching = append(matching, entry.Get().Stats())
 				}
 			}
 			return matching, nil
 		}
-		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return cmn.IsXactTypeBck(xact.Kind()) && xact.Bck().Equal(query.Bck.Bck)
-		}), nil
-	} else if query.Bck != nil && query.Kind != "" {
-		if !query.Bck.HasProvider() {
-			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", query.Kind, query.Bck)
-		} else if !cmn.IsValidXaction(query.Kind) {
-			return nil, cmn.NewXactionNotFoundError(query.Kind)
-		}
-
-		if query.OnlyRunning {
-			matching := make([]cmn.XactStats, 0, 1)
-			entry := r.GetRunning(RegistryXactFilter{Kind: query.Kind, Bck: query.Bck})
-			if entry != nil {
-				matching = append(matching, entry.Get().Stats())
-			}
-			return matching, nil
-		}
-		return r.matchingXactsStats(func(xact cmn.Xact) bool {
-			return xact.Kind() == query.Kind && xact.Bck().Equal(query.Bck.Bck)
-		}), nil
+		return r.matchingXactsStats(query.genericMatcher), nil
 	}
-
-	cmn.Assert(false)
-	return nil, nil
+	return r.matchingXactsStats(query.genericMatcher), nil
 }
 
 func (r *registry) DoAbort(kind string, bck *cluster.Bck) (aborted bool) {
@@ -541,14 +523,14 @@ func (r *registry) cleanUpFinished() time.Duration {
 		// given kind. If it is we want to keep it anyway.
 		switch cmn.XactsMeta[entry.Kind()].Type {
 		case cmn.XactTypeGlobal:
-			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), OnlyRunning: true})
+			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), OnlyRunning: api.Bool(true)})
 			if entry != nil && entry.Get().ID() == eID {
 				return true
 			}
 		case cmn.XactTypeBck:
 			bck := cluster.NewBckEmbed(xact.Bck())
 			cmn.Assert(bck.HasProvider())
-			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), Bck: bck, OnlyRunning: true})
+			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), Bck: bck, OnlyRunning: api.Bool(true)})
 			if entry != nil && entry.Get().ID() == eID {
 				return true
 			}

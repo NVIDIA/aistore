@@ -18,12 +18,11 @@ type (
 		Startable bool // determines if can be started via API
 	}
 	XactReqMsg struct {
-		Target   string `json:"target,omitempty"`
-		ID       string `json:"id"`
-		Kind     string `json:"kind"`
-		Bck      Bck    `json:"bck"`
-		All      bool   `json:"all,omitempty"`
-		Finished bool   `json:"finished"`
+		Target      string `json:"target,omitempty"`
+		ID          string `json:"id"`
+		Kind        string `json:"kind"`
+		Bck         Bck    `json:"bck"`
+		OnlyRunning *bool  `json:"show_active"`
 	}
 	BaseXactStats struct {
 		IDX         string    `json:"id"`

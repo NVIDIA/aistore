@@ -132,7 +132,9 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 		ID:   args.ID,
 		Kind: args.Kind,
 		Bck:  args.Bck,
-		All:  !args.Latest,
+	}
+	if args.Latest {
+		msg.OnlyRunning = Bool(true)
 	}
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{

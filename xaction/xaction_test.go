@@ -5,9 +5,12 @@
 package xaction
 
 import (
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/housekeep/lru"
@@ -159,4 +162,86 @@ func TestXactionAbortBuckets(t *testing.T) {
 	tassert.Errorf(t, xactBck != nil && xactBck.Aborted(),
 		"AbortAllGlobal: expected bucket xaction to be aborted")
 	xactions.AbortAll()
+}
+
+// TODO: extend this to include all cases of the Query
+func TestXactionQueryFinished(t *testing.T) {
+	var (
+		xactions = newRegistry()
+		bmd      = cluster.NewBaseBownerMock()
+		bck1     = cluster.NewBck("test1", cmn.ProviderAIS, cmn.NsGlobal)
+		bck2     = cluster.NewBck("test2", cmn.ProviderAIS, cmn.NsGlobal)
+		tMock    = cluster.NewTargetMock(bmd)
+	)
+	bmd.Add(bck1)
+	bmd.Add(bck2)
+
+	xactBck1, err := xactions.RenewBckFastRename(tMock, 123, bck1, bck1, "phase", nil)
+	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
+	xactBck2, err := xactions.RenewBckFastRename(tMock, 123, bck2, bck2, "phase", nil)
+	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
+	xactBck1.SetEndTime(time.Now())
+	xactBck1, err = xactions.RenewBckFastRename(tMock, 123, bck1, bck1, "phase", nil)
+	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
+	_, err = xactions.RenewEvictDelete(tMock, bck1, &DeletePrefetchArgs{})
+	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
+	type testConfig struct {
+		bckNil           bool
+		kindNil          bool
+		showActive       *bool
+		expectedStatsLen int
+	}
+	printStates := func(showActive *bool) string {
+		s := ""
+		if showActive == nil {
+			s += "|RUNNING|FINISHED"
+		} else {
+			if *showActive {
+				s += "|RUNNING"
+			} else {
+				s += "|FINISHED"
+			}
+		}
+		return s
+	}
+	scenarioName := func(tc testConfig) string {
+		name := ""
+		if tc.bckNil {
+			name += "bck:empty"
+		} else {
+			name += "bck:set"
+		}
+		if tc.kindNil {
+			name += "/Kind:empty"
+		} else {
+			name += "/Kind:set"
+		}
+		name += fmt.Sprintf("/States:%s", printStates(tc.showActive))
+		return name
+	}
+
+	f := func(t *testing.T, tc testConfig) {
+		t.Run(scenarioName(tc), func(t *testing.T) {
+			query := RegistryXactFilter{}
+			if !tc.bckNil {
+				query.Bck = bck1
+			}
+			if !tc.kindNil {
+				query.Kind = xactBck1.Kind()
+			}
+			query.OnlyRunning = tc.showActive
+			stats, err := xactions.GetStats(query)
+			tassert.Errorf(t, err == nil, "Error fetching Xact Stats %v for query %v", err, query)
+			tassert.Errorf(t, len(stats) == tc.expectedStatsLen, "Length of result: %d != %d", len(stats), tc.expectedStatsLen)
+		})
+	}
+	tests := []testConfig{
+		{bckNil: true, kindNil: true, showActive: api.Bool(false), expectedStatsLen: 1},
+		{bckNil: true, kindNil: false, showActive: api.Bool(false), expectedStatsLen: 1},
+		{bckNil: false, kindNil: true, showActive: api.Bool(false), expectedStatsLen: 1},
+		{bckNil: false, kindNil: false, showActive: api.Bool(false), expectedStatsLen: 1},
+	}
+	for _, test := range tests {
+		f(t, test)
+	}
 }

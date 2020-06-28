@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
@@ -393,9 +394,7 @@ func (r *FastRen) Run() {
 	for !finished {
 		time.Sleep(10 * time.Second)
 		rebStats, err := Registry.GetStats(RegistryXactFilter{
-			ID:       r.ID().String(),
-			Kind:     cmn.ActRebalance,
-			Finished: true,
+			OnlyRunning: api.Bool(false),
 		})
 		cmn.AssertNoErr(err)
 		for _, stat := range rebStats {
