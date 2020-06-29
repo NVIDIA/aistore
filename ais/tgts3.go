@@ -16,9 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tar2tf"
 )
 
@@ -44,6 +42,10 @@ func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+	if len(items) < 2 {
+		t.invalmsghdlr(w, r, "object name is undefined")
+		return
+	}
 	config := cmn.GCO.Get()
 	src := r.Header.Get(s3compat.HeaderObjSrc)
 	src = strings.Trim(src, "/") // in AWS examples the path starts with "/"
@@ -73,39 +75,23 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	bckDst := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bckDst.Init(t.owner.bmd, nil); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if len(items) < 2 {
-		t.invalmsghdlr(w, r, "object name is undefined")
-		return
+
+	ri := replicInfo{
+		t:     t,
+		smap:  t.owner.smap.get(),
+		bckTo: bckDst,
 	}
-	var (
-		si   *cluster.Snode
-		smap = t.owner.smap.get()
-		err  error
-	)
 	objName := path.Join(items[1:]...)
-	si, err = cluster.HrwTarget(bckDst.MakeUname(objName), &smap.Smap)
-	if err != nil {
+	if _, err := ri.copyObject(lom, objName); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	if si.ID() == t.Snode().ID() {
-		err = t.localObjCopy(lom, bckDst.Bck, objName)
-	} else {
-		lom.Lock(false)
-		defer lom.Unlock(false)
-		err = t.sendObj(lom, si, bckDst.Bck, objName)
-	}
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
 	var cksumValue string
 	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cmn.ChecksumMD5 {
 		cksumValue = cksum.Value()
@@ -115,78 +101,6 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		ETag:         cksumValue,
 	}
 	w.Write(result.MustMarshal())
-}
-
-func (t *targetrunner) sendObj(src *cluster.LOM, si *cluster.Snode, bck cmn.Bck, objName string) error {
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("AISS3 COPY OBJECT: %s/%s => %s [%s/%s]", src.Bck().Bck, src.ObjName, si, bck, objName)
-	}
-	fh, err := cmn.NewFileHandle(src.FQN)
-	if err != nil {
-		t.FSHC(err, src.FQN)
-		return err
-	}
-	defer func() {
-		debug.AssertNoErr(fh.Close())
-	}()
-
-	var (
-		query  = cmn.AddBckToQuery(nil, bck)
-		header = src.PopulateHdr(nil)
-	)
-	query.Set(cmn.URLParamProxyID, t.GetSowner().Get().ProxySI.ID())
-	args := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   si.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
-		Query:  query,
-		Header: header,
-		BodyR:  fh,
-	}
-	req, err := args.Req()
-	if err != nil {
-		return cmn.NewFailedToCreateHTTPRequest(err)
-	}
-	req.ContentLength = src.Size()
-	resp, err := t.httpclientGetPut.Do(req)
-	if err != nil {
-		return err
-	}
-	debug.AssertNoErr(resp.Body.Close())
-	return nil
-}
-
-func (t *targetrunner) localObjCopy(src *cluster.LOM, bck cmn.Bck, objName string) error {
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("AISS3 COPY OBJECT(local): %s/%s => %s/%s", src.Bck().Bck, src.ObjName, bck, objName)
-	}
-	started := time.Now()
-	config := cmn.GCO.Get()
-	if capInfo := t.AvgCapUsed(config); capInfo.OOS {
-		return capInfo.Err
-	}
-	dstLom := &cluster.LOM{T: t, ObjName: objName}
-	if err := dstLom.Init(bck, config); err != nil {
-		return err
-	}
-
-	dstLom.SetAtimeUnix(started.UnixNano())
-	fh, err := cmn.NewFileHandle(src.FQN)
-	if err != nil {
-		t.FSHC(err, src.FQN)
-		return err
-	}
-
-	dstLom.SetVersion(src.Version())
-	poi := &putObjInfo{
-		started: started,
-		t:       t,
-		lom:     dstLom,
-		r:       fh,
-		workFQN: fs.CSM.GenContentParsedFQN(dstLom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
-	}
-	err, _ = poi.putObject()
-	return err
 }
 
 func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
