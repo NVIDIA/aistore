@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -293,7 +292,7 @@ func (d *Downloader) Stop(err error) {
 	d.t.GetFSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
 	d.dispatcher.Abort()
-	d.SetEndTime(time.Now())
+	d.Finish()
 	glog.Infof("Stopped %s", d.GetRunName())
 	if err != nil {
 		glog.Errorf("stopping downloader; %s", err.Error())

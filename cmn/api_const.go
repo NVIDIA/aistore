@@ -70,7 +70,6 @@ const (
 	ActECEncode       = "ecencode" // erasure code a bucket
 	ActStartGFN       = "metasync-start-gfn"
 	ActRecoverBck     = "recoverbck"
-	ActAsyncTask      = "task"
 	ActTar2Tf         = "tar2tf"
 	ActAttach         = "attach"
 	ActDetach         = "detach"

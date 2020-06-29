@@ -47,10 +47,7 @@ func (r *XactBckCopy) Run() (err error) {
 	mpathCount := r.init()
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
 	err = r.xactBckBase.run(mpathCount)
-	// notifications
-	if n := r.Notif(); n != nil && n.Upon(cmn.UponTerm) {
-		n.Callback(n, err)
-	}
+	r.Finish(err)
 	return
 }
 

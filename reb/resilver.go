@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -66,7 +65,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 		}
 	}
 	reb.t.GetGFN(cluster.GFNLocal).Deactivate()
-	xreb.SetEndTime(time.Now())
+	xreb.Finish()
 }
 
 //

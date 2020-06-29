@@ -266,7 +266,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	}
 	glog.Infoln(xele.String())
 	p.doProxyElection(vr, curPrimary, xele)
-	xele.SetEndTime(time.Now())
+	xele.Finish()
 }
 
 func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact *xaction.Election) {

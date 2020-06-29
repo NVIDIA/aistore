@@ -58,10 +58,7 @@ func (r *XactBckMakeNCopies) Run() (err error) {
 	}
 	glog.Infoln(r.String(), "copies=", r.copies)
 	err = r.xactBckBase.run(mpathersCount)
-	// notifications
-	if n := r.Notif(); n != nil && n.Upon(cmn.UponTerm) {
-		n.Callback(n, err)
-	}
+	r.Finish(err)
 	return
 }
 

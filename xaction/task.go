@@ -9,7 +9,6 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -155,7 +154,7 @@ func (t *bckListTask) UpdateResult(result interface{}, err error) {
 		res.Result = result
 	}
 	t.res.Store(unsafe.Pointer(res))
-	t.SetEndTime(time.Now())
+	t.Finish(err)
 }
 
 func (t *bckListTask) Result() (interface{}, error) {
@@ -359,7 +358,7 @@ func (t *bckSummaryTask) UpdateResult(result interface{}, err error) {
 		res.Result = result
 	}
 	t.res.Store(unsafe.Pointer(res))
-	t.SetEndTime(time.Now())
+	t.Finish(err)
 }
 
 func (t *bckSummaryTask) Result() (interface{}, error) {

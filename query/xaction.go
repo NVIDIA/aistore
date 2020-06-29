@@ -59,7 +59,7 @@ func (r *Xact) Start() {
 func (r *Xact) stop() {
 	close(r.resultCh)
 	r.timer.Stop()
-	r.SetEndTime(time.Now())
+	r.Finish()
 }
 
 func (r *Xact) IsMountpathXact() bool { return false } // TODO -- FIXME

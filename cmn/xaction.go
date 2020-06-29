@@ -45,13 +45,10 @@ type (
 		IsMountpathXact() bool
 		Result() (interface{}, error)
 		Stats() XactStats
-		Notif() Notif
 
 		// modifiers
-		SetStartTime(s time.Time)
-		SetEndTime(e time.Time)
-		AddNotif(n Notif)
 		Abort()
+		AddNotif(n Notif)
 	}
 
 	XactStats interface {
@@ -146,10 +143,9 @@ func (b *BaseXactStats) Finished() bool       { return !b.EndTimeX.IsZero() }
 //
 
 func NewXactBase(id XactID, kind string) *XactBase {
-	stime := time.Now()
 	Assert(kind != "")
 	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{})}
-	xact.sutime.Store(stime.UnixNano())
+	xact.setStartTime(time.Now())
 	return xact
 }
 func NewXactBaseWithBucket(id, kind string, bck Bck) *XactBase {
@@ -192,7 +188,7 @@ func (xact *XactBase) StartTime() time.Time {
 	}
 	return time.Time{}
 }
-func (xact *XactBase) SetStartTime(s time.Time) {
+func (xact *XactBase) setStartTime(s time.Time) {
 	xact.sutime.Store(s.UnixNano())
 }
 
@@ -203,9 +199,9 @@ func (xact *XactBase) EndTime() time.Time {
 	}
 	return time.Time{}
 }
-func (xact *XactBase) SetEndTime(e time.Time) {
-	xact.eutime.Store(e.UnixNano())
-	if xact.Kind() != ActAsyncTask && xact.Kind() != ActListObjects {
+func (xact *XactBase) setEndTime() {
+	xact.eutime.Store(time.Now().UnixNano())
+	if xact.Kind() != ActListObjects {
 		glog.Infoln(xact.String())
 	}
 }
@@ -231,9 +227,22 @@ func (xact *XactBase) Abort() {
 		glog.Infof("already aborted: " + xact.String())
 		return
 	}
-	xact.eutime.Store(time.Now().UnixNano())
+	xact.setEndTime()
 	close(xact.abrt)
 	glog.Infof("ABORT: " + xact.String())
+}
+
+func (xact *XactBase) Finish(errs ...error) {
+	xact.setEndTime()
+
+	// notifications
+	if n := xact.Notif(); n != nil && n.Upon(UponTerm) {
+		var err error
+		if len(errs) > 0 {
+			err = errs[0]
+		}
+		n.Callback(n, err)
+	}
 }
 
 func (xact *XactBase) Result() (interface{}, error) {

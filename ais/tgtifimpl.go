@@ -121,7 +121,7 @@ func (t *targetrunner) RunLRU(id string) {
 	}
 	lru.InitAndRun(&ini) // blocking
 
-	xlru.SetEndTime(time.Now())
+	xlru.Finish()
 }
 
 // slight variation vs t.httpobjget()

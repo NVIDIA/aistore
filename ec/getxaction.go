@@ -199,7 +199,7 @@ func (r *XactGet) stop() {
 
 	// Don't close bundles, they are shared between bucket's EC actions
 
-	r.SetEndTime(time.Now())
+	r.Finish()
 }
 
 // Decode schedules an object to be restored from existing slices.

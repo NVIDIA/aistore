@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -76,10 +75,6 @@ func (r *XactBckEncode) Run() (err error) {
 		return
 	}
 	err = r.run(numjs)
-	// notifications
-	if n := r.Notif(); n != nil && n.Upon(cmn.UponTerm) {
-		n.Callback(n, err)
-	}
 	return
 }
 
@@ -136,7 +131,7 @@ func (r *XactBckEncode) stop() {
 	for _, mpather := range r.mpathers {
 		mpather.stop()
 	}
-	r.SetEndTime(time.Now())
+	r.Finish()
 }
 
 func (j *joggerBckEncode) stop() { j.stopCh.Close() }

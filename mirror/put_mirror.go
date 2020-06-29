@@ -65,7 +65,10 @@ func RunXactPutLRepl(lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err 
 		mpathLC := mpathInfo.MakePathCT(r.Bck(), fs.ObjectType)
 		r.mpathers[mpathLC] = newXputJogger(r, mpathInfo)
 	}
-	go r.Run()
+	go func() {
+		err := r.Run()
+		r.Finish(err)
+	}()
 	for _, mpather := range r.mpathers {
 		xputJogger := mpather.(*xputJogger)
 		go xputJogger.jog()
@@ -167,7 +170,6 @@ func (r *XactPutLRepl) stop() (err error) {
 	for _, mpather := range r.mpathers {
 		n += mpather.stop()
 	}
-	r.SetEndTime(time.Now())
 	if nn := drainWorkCh(r.workCh, r.String()+" drop"); nn > 0 {
 		n += nn
 		r.SubPending(nn)

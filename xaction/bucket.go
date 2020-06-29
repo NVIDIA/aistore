@@ -403,11 +403,7 @@ func (r *FastRen) Run() {
 	}
 
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
-	r.SetEndTime(time.Now())
-	// notifications
-	if n := r.Notif(); n != nil && n.Upon(cmn.UponTerm) {
-		n.Callback(n, nil /*error*/)
-	}
+	r.Finish()
 }
 
 func (e *FastRenEntry) Start(bck cmn.Bck) error {
@@ -495,7 +491,7 @@ func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
 	} else {
 		r.listOperation(args, args.ListMsg)
 	}
-	r.SetEndTime(time.Now())
+	r.Finish()
 }
 
 func (e *evictDeleteEntry) Start(bck cmn.Bck) error {
@@ -570,7 +566,7 @@ func (r *Prefetch) Run(args *DeletePrefetchArgs) {
 	} else {
 		r.listOperation(args, args.ListMsg)
 	}
-	r.SetEndTime(time.Now())
+	r.Finish()
 }
 
 func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*Prefetch, error) {

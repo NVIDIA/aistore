@@ -79,23 +79,21 @@ func (r *xactBckBase) run(mpathersCount int) error {
 			if mpathersCount == 0 {
 				glog.Infof("%s: all done", r)
 				r.mpathers = nil
-				r.stop()
-				return nil
+				return r.stop()
 			}
 		}
 	}
 }
 
 func (r *xactBckBase) stop() (err error) {
-	var n int
 	if r.Finished() {
 		glog.Warningf("%s is (already) not running", r)
 		return
 	}
+	var n int
 	for _, mpather := range r.mpathers {
 		n += mpather.stop()
 	}
-	r.SetEndTime(time.Now())
 	if n > 0 {
 		err = fmt.Errorf("%s: dropped %d object(s)", r, n)
 	}

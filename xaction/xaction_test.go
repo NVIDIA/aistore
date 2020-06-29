@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -166,6 +165,12 @@ func TestXactionAbortBuckets(t *testing.T) {
 
 // TODO: extend this to include all cases of the Query
 func TestXactionQueryFinished(t *testing.T) {
+	type testConfig struct {
+		bckNil           bool
+		kindNil          bool
+		showActive       *bool
+		expectedStatsLen int
+	}
 	var (
 		xactions = newRegistry()
 		bmd      = cluster.NewBaseBownerMock()
@@ -180,17 +185,12 @@ func TestXactionQueryFinished(t *testing.T) {
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
 	xactBck2, err := xactions.RenewBckFastRename(tMock, 123, bck2, bck2, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
-	xactBck1.SetEndTime(time.Now())
+	xactBck1.Finish()
 	xactBck1, err = xactions.RenewBckFastRename(tMock, 123, bck1, bck1, "phase", nil)
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
 	_, err = xactions.RenewEvictDelete(tMock, bck1, &DeletePrefetchArgs{})
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
-	type testConfig struct {
-		bckNil           bool
-		kindNil          bool
-		showActive       *bool
-		expectedStatsLen int
-	}
+
 	printStates := func(showActive *bool) string {
 		s := ""
 		if showActive == nil {

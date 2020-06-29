@@ -7,7 +7,6 @@ package tar2tf
 
 import (
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -30,7 +29,7 @@ func (t *Xact) IsMountpathXact() bool { return false }
 
 func (t *Xact) Run() {
 	defer func() {
-		t.SetEndTime(time.Now())
+		t.Finish()
 		t.Job.Wg.Done()
 	}()
 
