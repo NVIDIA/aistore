@@ -59,7 +59,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &msg) != nil {
 			return
 		}
-		if err := cmn.TryUnmarshal(msg.Value, &xactMsg); err != nil {
+		if err := cmn.MorphMarshal(msg.Value, &xactMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}

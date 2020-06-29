@@ -12,7 +12,7 @@ run_test() {
     eval "${post_checkout}"
   fi
 
-  test="BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test ${verbose} -p 1 -parallel 4 -count 1 -timeout 2h -run=NONE -bench=${bench_name} ${bench_dir}"
+  test="BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test ${verbose} -p 1 -parallel 4 -count ${count} -timeout 2h -run=NONE -bench=${bench_name} ${bench_dir}"
   if [[ -n ${verbose} ]]; then
     eval $test | tee -a $results
   else
@@ -20,13 +20,9 @@ run_test() {
   fi
 }
 
-# ./bench.sh cmp [OLD_COMMIT] [--dir DIRECTORY] [--bench BENCHMARK_NAME] [--post_checkout SCRIPT_NAME] [--verbose]
+# ./bench.sh cmp [--old-commit OLD_COMMIT] [--dir DIRECTORY] [--bench BENCHMARK_NAME] [--post_checkout SCRIPT_NAME] [--verbose]
 bench::compare() {
   old_commit=HEAD^
-  if [[ $# -eq 1 ]]; then
-    old_commit=$1
-    shift
-  fi
 
   # For now only support current commit.
   new_commit="@{-1}"
@@ -35,12 +31,15 @@ bench::compare() {
   bench_dir="./..." # By default run in root directory.
   bench_name="."    # By default run all benchmarks.
   verbose=""
+  count=1
   while (( "$#" )); do
     case "${1}" in
       --dir) bench_dir="$2/..."; shift; shift;;
       --bench) bench_name=$2; shift; shift;;
       --post-checkout) post_checkout=$2; shift; shift;;
       --verbose) verbose="-v"; shift;;
+      --count) count=$2; shift; shift;;
+      --old-commit) old_commit=$2; shift; shift;;
       *) echo "fatal: unknown argument '${1}'"; exit 1;;
     esac
   done
@@ -48,8 +47,9 @@ bench::compare() {
   new_results=$(mktemp)
   run_test ${old_commit} ${old_results}
   run_test ${current_hash} ${new_results}
+  benchcmp ${old_results} ${new_results}
   errs=$(grep -ae "^--- FAIL: Bench" ${old_results} ${new_results})
-  perror $1 $errs
+  perror $1 "${errs}"
 }
 
 case "${1}" in

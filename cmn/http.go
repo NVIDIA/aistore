@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -301,10 +300,7 @@ func MustMarshal(v interface{}) []byte {
 	return b
 }
 
-func TryUnmarshal(data, v interface{}) error {
-	x := reflect.ValueOf(v)
-	Assert(x.Kind() == reflect.Ptr)
-
+func MorphMarshal(data, v interface{}) error {
 	// `data` can be of type `map[string]interface{}` or just same type as `v`.
 	// Therefore, the easiest way is to marshal the `data` again and unmarshal it
 	// with hope that every field will be set correctly.

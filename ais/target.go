@@ -748,9 +748,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			UUID:  msg.UUID,
 			Evict: msg.Action == cmn.ActEvictObjects,
 		}
-		if err := cmn.TryUnmarshal(msg.Value, &rangeMsg); err == nil {
+		if err := cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-		} else if err := cmn.TryUnmarshal(msg.Value, &listMsg); err == nil {
+		} else if err := cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
 			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
@@ -873,9 +873,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			listMsg  = &cmn.ListMsg{}
 			args     = &xaction.DeletePrefetchArgs{Ctx: context.Background()}
 		)
-		if err = cmn.TryUnmarshal(msg.Value, &rangeMsg); err == nil {
+		if err = cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
-		} else if err = cmn.TryUnmarshal(msg.Value, &listMsg); err == nil {
+		} else if err = cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
 			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
@@ -1401,7 +1401,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	bucket := apiItems[0]
 
 	params := cmn.ActValPromote{}
-	if err := cmn.TryUnmarshal(msg.Value, &params); err != nil {
+	if err := cmn.MorphMarshal(msg.Value, &params); err != nil {
 		return
 	}
 

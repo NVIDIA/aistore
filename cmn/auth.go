@@ -174,7 +174,7 @@ func DecryptToken(tokenStr, secret string) (*AuthToken, error) {
 		return nil, ErrInvalidToken
 	}
 	tInfo := &AuthToken{}
-	if err := TryUnmarshal(claims, tInfo); err != nil {
+	if err := MorphMarshal(claims, tInfo); err != nil {
 		return nil, ErrInvalidToken
 	}
 	return tInfo, nil

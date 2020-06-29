@@ -298,7 +298,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		for _, daemonID := range sortedIDs {
 			st := rebStats[daemonID][0]
 			extRebStats := &stats.ExtRebalanceStats{}
-			if err := cmn.TryUnmarshal(st.Ext, &extRebStats); err != nil {
+			if err := cmn.MorphMarshal(st.Ext, &extRebStats); err != nil {
 				continue
 			}
 

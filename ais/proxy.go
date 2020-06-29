@@ -856,7 +856,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		bck.Provider = cmn.ProviderAIS
 		if msg.Value != nil {
 			propsToUpdate := cmn.BucketPropsToUpdate{}
-			if err := cmn.TryUnmarshal(msg.Value, &propsToUpdate); err != nil {
+			if err := cmn.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -1067,7 +1067,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		smsg    = cmn.SelectMsg{}
 		query   = r.URL.Query()
 	)
-	if err := cmn.TryUnmarshal(amsg.Value, &smsg); err != nil {
+	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1137,7 +1137,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 
 func (p *proxyrunner) invalidateListAISBucketCache(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg) {
 	smsg := cmn.SelectMsg{}
-	if err := cmn.TryUnmarshal(amsg.Value, &smsg); err != nil {
+	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1865,7 +1865,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	}
 
 	params := cmn.ActValPromote{}
-	if err := cmn.TryUnmarshal(msg.Value, &params); err != nil {
+	if err := cmn.MorphMarshal(msg.Value, &params); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1912,13 +1912,6 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		results chan callResult
 		wait    bool
 	)
-	if jsmap, ok := msg.Value.(map[string]interface{}); !ok {
-		return fmt.Errorf("failed to unmarshal JSMAP: Not a map[string]interface")
-	} else if waitstr, ok := jsmap["wait"]; ok {
-		if wait, ok = waitstr.(bool); !ok {
-			return fmt.Errorf("failed to read ListRangeMsgBase Wait: Not a bool")
-		}
-	}
 	var (
 		smap   = p.owner.smap.get()
 		bmd    = p.owner.bmd.get()
@@ -3140,7 +3133,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActXactStart, cmn.ActXactStop:
 		xactMsg := cmn.XactReqMsg{}
-		if err := cmn.TryUnmarshal(msg.Value, &xactMsg); err != nil {
+		if err := cmn.MorphMarshal(msg.Value, &xactMsg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}

@@ -27,7 +27,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 
 	var msg cmn.SelectMsg
-	if err := cmn.TryUnmarshal(actionMsg.Value, &msg); err != nil {
+	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
 		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -44,7 +44,7 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	}
 
 	var msg cmn.SelectMsg
-	if err := cmn.TryUnmarshal(actionMsg.Value, &msg); err != nil {
+	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
 		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, err.Error())
 		return
