@@ -7,6 +7,7 @@ package cluster
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -227,8 +228,24 @@ func (b *Bck) GetNameLockPair() (nlp NameLockPair) {
 	return
 }
 
+const nlpTryDuration = 5 * time.Second
+
 func (nlp *NameLockPair) Lock()          { nlp.nlc.Lock(nlp.uname, true) }
 func (nlp *NameLockPair) Unlock()        { nlp.nlc.Unlock(nlp.uname, true) }
-func (nlp *NameLockPair) TryLock() bool  { return nlp.nlc.TryLock(nlp.uname, true) }
-func (nlp *NameLockPair) TryRLock() bool { return nlp.nlc.TryLock(nlp.uname, false) }
+func (nlp *NameLockPair) TryLock() bool  { return nlp.withRetry(nlpTryDuration, true) }
+func (nlp *NameLockPair) TryRLock() bool { return nlp.withRetry(nlpTryDuration, false) }
 func (nlp *NameLockPair) RUnlock()       { nlp.nlc.Unlock(nlp.uname, false) }
+
+func (nlp *NameLockPair) withRetry(d time.Duration, exclusive bool) bool {
+	if nlp.nlc.TryLock(nlp.uname, exclusive) {
+		return true
+	}
+	i := d / 10
+	for j := i; j < d; j += i {
+		time.Sleep(i)
+		if nlp.nlc.TryLock(nlp.uname, exclusive) {
+			return true
+		}
+	}
+	return false
+}

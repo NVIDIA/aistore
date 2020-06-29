@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -31,7 +32,8 @@ type txnServerCtx struct {
 	callerName string
 	callerID   string
 	bck        *cluster.Bck
-	event      string
+	query      url.Values
+	t          *targetrunner
 }
 
 // verb /v1/txn
@@ -160,10 +162,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 
 		xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
 
-		// ask this xaction to notify via F callback when finished
-		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: []string{c.callerID}, F: t.xactCallerNotify},
-		})
+		c.addNotif(xact) // notify upon completion
 		go xact.Run()
 	default:
 		cmn.Assert(false)
@@ -232,6 +231,8 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 			xaction.Registry.DoAbort(cmn.ActPutCopies, c.bck)
+
+			c.addNotif(xact) // notify upon completion
 			go xact.Run()
 		}
 		if reECEncode(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
@@ -240,6 +241,8 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			if err != nil {
 				return err
 			}
+
+			c.addNotif(xact) // ditto
 			go xact.Run()
 		}
 	default:
@@ -347,10 +350,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 			return err // ditto
 		}
 
-		// ask this xaction to notify via F callback when finished
-		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: []string{c.callerID}, F: t.xactCallerNotify},
-		})
+		c.addNotif(xact) // notify upon completion
 
 		t.gfn.local.Activate()
 		t.gfn.global.activateTimed()
@@ -434,23 +434,19 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		txnCpBck := txn.(*txnCopyBucket)
-		if c.event == txnCommitEventMetasync {
-			// wait for metasync
+		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout); err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 		} else {
-			cmn.Assert(c.event == txnCommitEventNone)
 			t.transactions.find(c.uuid, true /* remove */)
 		}
 		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, c.uuid, cmn.ActCommit)
 		if err != nil {
 			return err
 		}
-		// ask this xaction to notify via F callback when finished
-		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: []string{c.callerID}, F: t.xactCallerNotify},
-		})
+
+		c.addNotif(xact) // notify upon completion
 		go xact.Run()
 	default:
 		cmn.Assert(false)
@@ -545,11 +541,12 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []st
 		return c, nil
 	}
 	c.timeout, err = cmn.S2Duration(query.Get(cmn.URLParamTxnTimeout))
-	c.event = query.Get(cmn.URLParamTxnEvent)
+	c.query = query // operation-specific values, if any
 
 	c.smapVer = t.owner.smap.get().version()
 	c.bmdVer = t.owner.bmd.get().version()
 
+	c.t = t
 	return c, err
 }
 
@@ -566,12 +563,30 @@ func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 // notifications
 //
 
-func (t *targetrunner) xactCallerNotify(n cmn.Notif, err error) {
+func (c *txnServerCtx) addNotif(xact cmn.Xact) {
+	dsts := c.query[cmn.URLParamNotifyMe]
+	if len(dsts) == 0 {
+		return
+	}
+	// validate unless the dest is the caller
+	cmn.Assert(dsts[0] != "")
+	if dsts[0] != c.callerID {
+		smap := c.t.owner.smap.get()
+		if !smap.containsID(dsts[0]) {
+			glog.Errorf("%s: unknown notification dst %s, %s", c.t.si, dsts[0], smap) // TODO: handle
+		}
+	}
+	xact.AddNotif(&cmn.NotifXact{
+		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: dsts, F: c.xactCallerNotify},
+	})
+}
+
+func (c *txnServerCtx) xactCallerNotify(n cmn.Notif, err error) {
 	var (
-		msg   = notifMsg{Ty: notifXact, Snode: t.si, Err: err}
+		msg   = notifMsg{Ty: notifXact, Snode: c.t.si, Err: err}
 		notif = n.(*cmn.NotifXact)
 		pid   = notif.Dsts[0]
 	)
 	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
-	t.notify(pid, cmn.MustMarshal(&msg))
+	c.t.notify(pid, cmn.MustMarshal(&msg))
 }

@@ -144,7 +144,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 		c           = p.prepTxnClient(msg, bck)
 		nlp         = bck.GetNameLockPair()
 		copies, err = p.parseNCopies(msg.Value)
-		committed   bool
+		unlockUpon  bool // unlock upon receiving target notifications
 	)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
 	}
 	defer func() {
-		if !committed {
+		if !unlockUpon {
 			nlp.Unlock()
 		}
 	}()
@@ -198,13 +198,14 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	wg.Wait()
 
 	// 5. start waiting for `finished` notifications
+	c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
 	nl := notifListenerBck{
-		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckMNC}, nlp: &nlp,
+		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
 	}
 	p.notifs.add(c.uuid, &nl)
 
 	// 6. commit
-	committed = true
+	unlockUpon = true
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
@@ -222,15 +223,22 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	propsToUpdate cmn.BucketPropsToUpdate) (err error) {
 	var (
-		c      *txnClientCtx
-		nlp    = bck.GetNameLockPair()
-		nprops *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
-		nmsg   = &cmn.ActionMsg{} // with nprops
+		c          *txnClientCtx
+		nlp        = bck.GetNameLockPair()
+		nprops     *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
+		nmsg       = &cmn.ActionMsg{} // with nprops
+		pname      = p.si.String()
+		unlockUpon bool
 	)
 
-	// TODO: try-lock
-	nlp.Lock()
-	defer nlp.Unlock()
+	if !nlp.TryLock() {
+		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
+	}
+	defer func() {
+		if !unlockUpon {
+			nlp.Unlock()
+		}
+	}()
 
 	// 1. confirm existence
 	p.owner.bmd.Lock()
@@ -238,7 +246,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	bprops, present := bmd.Get(bck)
 	if !present {
 		p.owner.bmd.Unlock()
-		return cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+		return cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
 	}
 	bck.Props = bprops
 	p.owner.bmd.Unlock()
@@ -246,7 +254,8 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	// 2. begin
 	switch msg.Action {
 	case cmn.ActSetBprops:
-		if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
+		// make and validate new props
+		if nprops, _, _, err = p.makeNprops(bck, propsToUpdate); err != nil {
 			return
 		}
 	case cmn.ActResetBprops:
@@ -270,14 +279,17 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	}
 
 	// 3. lock and update BMD locally
+	var remirror, reec bool
 	p.owner.bmd.Lock()
 	clone := p.owner.bmd.get().clone()
 	bprops, present = clone.Get(bck)
 	cmn.Assert(present)
 	if msg.Action == cmn.ActSetBprops {
 		bck.Props = bprops
-		nprops, err = p.makeNprops(bck, propsToUpdate)
-		cmn.AssertNoErr(err)
+		nprops, remirror, reec, err = p.makeNprops(bck, propsToUpdate) // under lock
+		if err != nil {
+			return
+		}
 	}
 	clone.set(bck, nprops)
 	p.owner.bmd.put(clone)
@@ -289,7 +301,17 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 
 	wg.Wait()
 
-	// 5. commit
+	// 5. if remirror|re-EC|TBD-storage-svc: start waiting
+	if remirror || reec {
+		c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
+		nl := notifListenerBck{
+			notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
+		}
+		p.notifs.add(c.uuid, &nl)
+		unlockUpon = true // unlock upon receiving target notifications
+	}
+
+	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
@@ -299,15 +321,15 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
-		c         *txnClientCtx
-		nlpFrom   = bckFrom.GetNameLockPair()
-		nlpTo     = bckTo.GetNameLockPair()
-		nmsg      = &cmn.ActionMsg{} // + bckTo
-		pname     = p.si.String()
-		committed bool
+		c          *txnClientCtx
+		nlpFrom    = bckFrom.GetNameLockPair()
+		nlpTo      = bckTo.GetNameLockPair()
+		nmsg       = &cmn.ActionMsg{} // + bckTo
+		pname      = p.si.String()
+		unlockUpon bool
 	)
 	if err := p.canStartRebalance(); err != nil {
-		return fmt.Errorf("bucket cannot be renamed: %w", err)
+		return fmt.Errorf("%s: bucket cannot be renamed: %w", p.si, err)
 	}
 	if !nlpFrom.TryLock() {
 		return cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
@@ -317,7 +339,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		return cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
 	}
 	defer func() {
-		if !committed {
+		if !unlockUpon {
 			nlpTo.Unlock()
 			nlpFrom.Unlock()
 		}
@@ -384,7 +406,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.msg.RMDVersion = clone.version()
 
 			// 5. commit
-			committed = true
+			unlockUpon = true
 			c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 			c.body = cmn.MustMarshal(c.msg)
 			c.req.Body = c.body
@@ -392,8 +414,9 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
 			// 6. start waiting for `finished` notifications
+			c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
 			nl := notifListenerFromTo{
-				notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckRen},
+				notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckFromToCb},
 				nlpFrom:           &nlpFrom,
 				nlpTo:             &nlpTo,
 			}
@@ -411,12 +434,12 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 // copy-bucket: { confirm existence -- begin -- conditional metasync -- start waiting for copy-done -- commit }
 func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
-		c         *txnClientCtx
-		nmsg      = &cmn.ActionMsg{} // + bckTo
-		nlpFrom   = bckFrom.GetNameLockPair()
-		nlpTo     = bckTo.GetNameLockPair()
-		pname     = p.si.String()
-		committed bool
+		c          *txnClientCtx
+		nmsg       = &cmn.ActionMsg{} // + bckTo
+		nlpFrom    = bckFrom.GetNameLockPair()
+		nlpTo      = bckTo.GetNameLockPair()
+		pname      = p.si.String()
+		unlockUpon bool
 	)
 	if !nlpFrom.TryRLock() {
 		return cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
@@ -426,7 +449,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		return cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
 	}
 	defer func() {
-		if !committed {
+		if !unlockUpon {
 			nlpTo.Unlock()
 			nlpFrom.RUnlock()
 		}
@@ -463,8 +486,6 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	bprops, present := clone.Get(bckFrom)
 	cmn.Assert(present)
 
-	event := txnCommitEventNone
-
 	// create destination bucket but only if it doesn't exist
 	if _, present = clone.Get(bckTo); !present {
 		bckFrom.Props = bprops.Clone()
@@ -480,23 +501,23 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 
 		wg.Wait()
 
-		event = txnCommitEventMetasync
+		c.req.Query.Set(cmn.URLParamWaitMetasync, "true")
 	} else {
 		p.owner.bmd.Unlock()
 	}
 
 	// 5. start waiting for `finished` notifications
+	c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
 	nl := notifListenerFromTo{
-		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCp},
+		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCopy},
 		nlpFrom:           &nlpFrom,
 		nlpTo:             &nlpTo,
 	}
 	p.notifs.add(c.uuid, &nl)
 
 	// 6. commit
-	committed = true
+	unlockUpon = true
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	c.req.Query.Set(cmn.URLParamTxnEvent, event)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
 	return
@@ -524,7 +545,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 		c           = p.prepTxnClient(msg, bck)
 		nlp         = bck.GetNameLockPair()
 		ecConf, err = parseECConf(msg.Value)
-		committed   bool
+		unlockUpon  bool
 	)
 	if err != nil {
 		return err
@@ -538,7 +559,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
 	}
 	defer func() {
-		if !committed {
+		if !unlockUpon {
 			nlp.Unlock()
 		}
 	}()
@@ -554,7 +575,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 	if props.EC.Enabled {
 		// Changing data or parity slice count on the fly is unsupported yet
 		p.owner.bmd.Unlock()
-		return fmt.Errorf("EC is already enabled for bucket %s", bck)
+		return fmt.Errorf("%s: EC is already enabled for bucket %s", p.si, bck)
 	}
 	p.owner.bmd.Unlock()
 
@@ -590,13 +611,14 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 	wg.Wait()
 
 	// 5. start waiting for `finished` notifications
+	c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
 	nl := notifListenerBck{
-		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckECEnc}, nlp: &nlp,
+		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
 	}
 	p.notifs.add(c.uuid, &nl)
 
 	// 6. commit
-	committed = true
+	unlockUpon = true
 	config := cmn.GCO.Get()
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
@@ -671,8 +693,9 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, cop
 	p.owner.bmd.Unlock()
 }
 
-func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate) (nprops *cmn.BucketProps, err error) {
-	const ers = "once enabled, EC configuration can be only disabled but cannot be changed"
+// make and validate nprops
+func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate,
+	creating ...bool) (nprops *cmn.BucketProps, remirror, reec bool, err error) {
 	var (
 		cfg    = cmn.GCO.Get()
 		bprops = bck.Props
@@ -681,7 +704,7 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	nprops.Apply(propsToUpdate)
 	if bprops.EC.Enabled && nprops.EC.Enabled {
 		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
-			err = errors.New(ers)
+			err = fmt.Errorf("%s: once enabled, EC configuration can be only disabled but cannot change", p.si)
 			return
 		}
 	} else if nprops.EC.Enabled {
@@ -691,13 +714,20 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 		if nprops.EC.ParitySlices == 0 {
 			nprops.EC.ParitySlices = 1
 		}
+		reec = true
 	}
 	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
 		if nprops.Mirror.Copies == 1 {
 			nprops.Mirror.Copies = cmn.MaxI64(cfg.Mirror.Copies, 2)
 		}
+		remirror = true
 	} else if nprops.Mirror.Copies == 1 {
 		nprops.Mirror.Enabled = false
+	}
+	if len(creating) == 0 && remirror && reec {
+		// NOTE: cannot run make-n-copies and EC on the same bucket at the same time
+		err = cmn.NewErrorBucketIsBusy(bck.Bck, p.si.String())
+		return
 	}
 
 	targetCnt := p.owner.smap.Get().CountTargets()
@@ -709,49 +739,30 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 // notifications: listener-side callbacks
 //
 
-// copy-bucket done
-func (p *proxyrunner) nlBckCp(n notifListener, msg interface{}, uuid string, err error) {
+func (p *proxyrunner) _logNotifDone(n notifListener, msg interface{}, err error) {
+	if err != nil {
+		glog.Errorf("%s: %s failed, msg: %+v, err: %v", p.si, n, msg, err)
+	} else if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: %s success", p.si, n)
+	}
+}
+
+func (p *proxyrunner) nlBckCb(n notifListener, msg interface{}, err error) {
+	nl := n.(*notifListenerBck)
+	nl.nlp.Unlock()
+	p._logNotifDone(n, msg, err)
+}
+
+func (p *proxyrunner) nlBckCopy(n notifListener, msg interface{}, err error) {
 	nl := n.(*notifListenerFromTo)
 	nl.nlpTo.Unlock()
 	nl.nlpFrom.RUnlock()
-	if err != nil {
-		glog.Errorf("%s(%q): failed to copy bucket: %+v, err: %v", p.si, uuid, msg, err)
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
-	}
+	p._logNotifDone(n, msg, err)
 }
 
-// rename-bucket done
-func (p *proxyrunner) nlBckRen(n notifListener, msg interface{}, uuid string, err error) {
+func (p *proxyrunner) nlBckFromToCb(n notifListener, msg interface{}, err error) {
 	nl := n.(*notifListenerFromTo)
 	nl.nlpTo.Unlock()
 	nl.nlpFrom.Unlock()
-	if err != nil {
-		glog.Errorf("%s(%q): failed to rename bucket: %+v, err: %v", p.si, uuid, msg, err)
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
-	}
-}
-
-// make-n-copies done
-func (p *proxyrunner) nlBckMNC(n notifListener, msg interface{}, uuid string, err error) {
-	nl := n.(*notifListenerBck)
-	nl.nlp.Unlock()
-	if err != nil {
-		glog.Errorf("%s(%q): failed to make-n-copies: %+v, err: %v", p.si, uuid, msg, err)
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
-	}
-}
-
-// ec-encode done
-func (p *proxyrunner) nlBckECEnc(n notifListener, msg interface{}, uuid string, err error) {
-	glog.Errorf("ECEncode notification received")
-	nl := n.(*notifListenerBck)
-	nl.nlp.Unlock()
-	if err != nil {
-		glog.Errorf("%s(%q): failed to ec-encode: %+v, err: %v", p.si, uuid, msg, err)
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s(%q): %+v", p.si, uuid, msg)
-	}
+	p._logNotifDone(n, msg, err)
 }

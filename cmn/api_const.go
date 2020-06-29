@@ -176,16 +176,20 @@ const (
 	URLParamAppendType   = "appendty"
 	URLParamAppendHandle = "handle"
 
-	URLParamUUID = "uuid" // action (operation, transaction, task) UUID
+	// action (operation, transaction, task) UUID
+	URLParamUUID = "uuid"
 
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"
 	URLParamTotalInputShardsExtracted = "tise"
 	URLParamTotalUncompressedSize     = "tunc"
 
-	// 2PC (control plane)
-	URLParamTxnTimeout = "txntout" // transaction timeout
-	URLParamTxnEvent   = "txnevnt" // enum { txnCommitEvent* }
+	// 2PC transactions - control plane
+	URLParamTxnTimeout   = "txntout"  // transaction timeout
+	URLParamWaitMetasync = "txnwsync" // wait for metasync (used only when there's an alternative)
+
+	// notification target's node ID (usually, the node that initiates the operation)
+	URLParamNotifyMe = "nft"
 )
 
 // enum: task action (cmn.URLParamTaskAction)

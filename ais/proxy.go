@@ -862,7 +862,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			}
 			bck.Props = cmn.DefaultBucketProps()
 			bck.Props.Provider = bck.Provider
-			bck.Props, err = p.makeNprops(bck, propsToUpdate)
+			// make and validate nprops
+			bck.Props, _, _, err = p.makeNprops(bck, propsToUpdate, true /*creating*/)
 			if err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return

@@ -46,7 +46,7 @@ const (
 )
 
 type (
-	notifCallback func(n notifListener, msg interface{}, uuid string, err error)
+	notifCallback func(n notifListener, msg interface{}, err error)
 	notifs        struct {
 		sync.RWMutex
 		p       *proxyrunner
@@ -56,7 +56,7 @@ type (
 		smapVer int64
 	}
 	notifListener interface {
-		callback(notifs *notifs, n notifListener, msg interface{}, uuid string, err error, nows ...int64)
+		callback(notifs *notifs, n notifListener, msg interface{}, err error, nows ...int64)
 		lock()
 		unlock()
 		rlock()
@@ -111,7 +111,7 @@ var (
 ///////////////////////
 
 // is called after all notifiers will have notified OR on failure (err != nil)
-func (nlb *notifListenerBase) callback(notifs *notifs, n notifListener, msg interface{}, uuid string, err error, nows ...int64) {
+func (nlb *notifListenerBase) callback(notifs *notifs, n notifListener, msg interface{}, err error, nows ...int64) {
 	if nlb.tfin.CAS(0, 1) {
 		var now int64
 		if len(nows) > 0 {
@@ -119,10 +119,10 @@ func (nlb *notifListenerBase) callback(notifs *notifs, n notifListener, msg inte
 		} else {
 			now = time.Now().UnixNano()
 		}
-		nlb.f(n, msg, uuid, err) // invoke user-supplied callback and pass user-supplied notifListener
+		nlb.f(n, msg, err) // invoke user-supplied callback and pass user-supplied notifListener
 		nlb.tfin.Store(now)
 		notifs.fmu.Lock()
-		notifs.fin[uuid] = n
+		notifs.fin[n.UUID()] = n
 		notifs.fmu.Unlock()
 	}
 }
@@ -174,6 +174,7 @@ func (n *notifs) String() string { return notifsName }
 
 // start listening
 func (n *notifs) add(uuid string, nl notifListener) {
+	cmn.Assert(uuid != "")
 	n.Lock()
 	n.m[uuid] = nl
 	nl.setUUID(uuid)
@@ -257,7 +258,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	err, status, done := n.handleMsg(nl, tid, notifMsg.Err)
 	nl.unlock()
 	if done {
-		nl.callback(n, nl, msg, uuid, nil)
+		nl.callback(n, nl, msg, nil)
 		n.del(nl)
 	}
 	if err != nil {
@@ -345,7 +346,7 @@ func (n *notifs) housekeep() time.Duration {
 			}
 
 			if done {
-				nl.callback(n, nl, msg, uuid, err, now)
+				nl.callback(n, nl, msg, err, now)
 				n.del(nl)
 				break
 			}
@@ -425,7 +426,7 @@ func (n *notifs) ListenSmapChanged() {
 		nl.lock()
 		nl.addErr(sid, err)
 		nl.unlock()
-		nl.callback(n, nl, nil /*msg*/, uuid, err, now)
+		nl.callback(n, nl, nil /*msg*/, err, now)
 	}
 	n.Lock()
 	for uuid, nl := range remnl {

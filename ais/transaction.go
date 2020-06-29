@@ -21,11 +21,6 @@ const (
 	txnsNumKeep   = 16
 )
 
-const (
-	txnCommitEventNone     = "none"
-	txnCommitEventMetasync = "metasync"
-)
-
 type (
 	txn interface {
 		// accessors

@@ -75,7 +75,12 @@ func (r *XactBckEncode) Run() (err error) {
 	if numjs, err = r.init(); err != nil {
 		return
 	}
-	return r.run(numjs)
+	err = r.run(numjs)
+	// notifications
+	if n := r.Notif(); n != nil && n.Upon(cmn.UponTerm) {
+		n.Callback(n, err)
+	}
+	return
 }
 
 func (r *XactBckEncode) init() (int, error) {
