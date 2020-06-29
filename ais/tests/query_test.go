@@ -25,7 +25,7 @@ func checkQueryDone(t *testing.T, handle string) {
 	tassert.Fatalf(t, err != nil, "expected an error to occur")
 	httpErr, ok := err.(*cmn.HTTPError)
 	tassert.Errorf(t, ok, "expected the error to be an http error")
-	tassert.Errorf(t, httpErr.Status == http.StatusNotFound, "expected 404 on finished query")
+	tassert.Errorf(t, httpErr.Status == http.StatusGone, "expected 410 on finished query")
 }
 
 func TestQueryBck(t *testing.T) {
@@ -55,7 +55,11 @@ func TestQueryBck(t *testing.T) {
 
 	objectsLeft := numObjects
 	for objectsLeft > 0 {
-		requestedCnt := cmn.Min(chunkSize, objectsLeft)
+		var (
+			// Get random proxy for next request to simulate load balancer.
+			baseParams   = tutils.BaseAPIParams()
+			requestedCnt = cmn.Min(chunkSize, objectsLeft)
+		)
 		objects, err := api.NextQueryResults(baseParams, handle, uint(requestedCnt))
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, len(objects) == requestedCnt, "expected %d to be returned, got %d", requestedCnt, len(objects))

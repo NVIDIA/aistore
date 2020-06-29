@@ -22,7 +22,7 @@ import (
 func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := query.Get(cmn.URLParamProxyID)
+		pid := query.Get(cmn.HeaderCallerID)
 		glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
 	}
 
@@ -39,7 +39,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := query.Get(cmn.URLParamProxyID)
+		pid := query.Get(cmn.HeaderCallerID)
 		glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
 	}
 

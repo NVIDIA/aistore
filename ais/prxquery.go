@@ -66,6 +66,8 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	p.jtx.addEntry(handle)
+
 	w.Write([]byte(handle))
 }
 
@@ -84,9 +86,22 @@ func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bcastResults := p.callTargets(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Query, cmn.Peek), cmn.MustMarshal(msg))
-	allNotFound := true
-	lists := make([]*cmn.BucketList, 0, p.owner.smap.Get().CountTargets())
+	if redirected := p.jtx.redirectToOwner(w, r, msg.Handle, msg); redirected {
+		return
+	}
+	if entry, exists := p.jtx.entry(msg.Handle); !exists {
+		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", msg.Handle)
+		return
+	} else if entry.finished() {
+		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
+		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", msg.Handle)
+		return
+	}
+
+	var (
+		lists        = make([]*cmn.BucketList, 0, p.owner.smap.Get().CountTargets())
+		bcastResults = p.callTargets(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Query, cmn.Peek), cmn.MustMarshal(msg))
+	)
 
 	for res := range bcastResults {
 		if res.err != nil {
@@ -96,7 +111,6 @@ func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, res.err.Error(), res.status)
 			return
 		}
-		allNotFound = false
 		list := &cmn.BucketList{}
 		if err := jsoniter.Unmarshal(res.outjson, list); err != nil {
 			p.invalmsghdlr(w, r, "failed to unmarshal target query response", http.StatusInternalServerError)
@@ -106,15 +120,10 @@ func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 		lists = append(lists, list)
 	}
 
-	// TODO: distinguish between invalid handle and not found once query owner is present
-	if allNotFound {
-		p.invalmsghdlr(w, r, "all targets responded with not found", http.StatusNotFound)
-		return
-	}
-
 	result := cmn.ConcatObjLists(lists, msg.Size)
 	if len(result.Entries) == 0 {
-		p.invalmsghdlr(w, r, "all targets responded with empty result", http.StatusNotFound)
+		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
+		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", msg.Handle)
 		return
 	}
 

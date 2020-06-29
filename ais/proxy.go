@@ -65,6 +65,7 @@ type (
 		metasyncer *metasyncer
 		rproxy     reverseProxy
 		notifs     notifs
+		jtx        *jtx
 		gmm        *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	}
 	remBckAddArgs struct {
@@ -125,6 +126,7 @@ func (p *proxyrunner) Run() error {
 	initListObjectsCache(p)
 
 	p.notifs.init(p)
+	p.jtx = newJTX(p)
 
 	//
 	// REST API: register proxy handlers and start listening
@@ -147,6 +149,7 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: cmn.Notifs, h: p.notifs.handler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Jtx, h: p.jtx.handler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
 	}

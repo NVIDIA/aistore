@@ -33,8 +33,6 @@ import (
 
 var _ cluster.Target = &targetrunner{}
 
-func (t *targetrunner) GetBowner() cluster.Bowner   { return t.owner.bmd }
-func (t *targetrunner) GetSowner() cluster.Sowner   { return t.owner.smap }
 func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
 func (t *targetrunner) GetMMSA() *memsys.MMSA       { return t.gmm }
 func (t *targetrunner) GetSmallMMSA() *memsys.MMSA  { return t.smm }

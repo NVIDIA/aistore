@@ -38,7 +38,10 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handle := r.Header.Get(cmn.HeaderHandle) // TODO: should it be from header or from body?
+	var (
+		handle = r.Header.Get(cmn.HeaderHandle) // TODO: should it be from header or from body?
+		owner  = r.Header.Get(cmn.HeaderCallerID)
+	)
 	msg := &query.InitMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -52,10 +55,36 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 
 	wi := walkinfo.NewDefaultWalkInfo(t, msg.QueryMsg.From.Bck.Name)
 	wi.SetObjectFilter(q.Filter())
-	if _, err = xaction.Registry.RenewObjectsListingXact(t, q, wi, handle); err != nil {
+
+	xact, isNew, err := xaction.Registry.RenewObjectsListingXact(t, q, wi, handle)
+	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
+	if !isNew {
+		return
+	}
+
+	xact.AddNotif(&cmn.NotifXact{
+		NotifBase: cmn.NotifBase{
+			When: cmn.UponTerm,
+			Dsts: []string{owner},
+			F: func(n cmn.Notif, err error) {
+				// FIXME: we cannot use `t.xactCallerNotify` because `xact.ID() != handle`
+				var (
+					msg   = notifMsg{Ty: notifXact, Snode: t.si, Err: err}
+					notif = n.(*cmn.NotifXact)
+					pid   = notif.Dsts[0]
+				)
+				stats := notif.Xact.Stats().(*cmn.BaseXactStats)
+				stats.IDX = handle
+				msg.Data = cmn.MustMarshal(stats)
+				t.notify(pid, cmn.MustMarshal(&msg))
+			},
+		},
+	})
+
+	go xact.StartWithHandle(handle)
 }
 
 func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {

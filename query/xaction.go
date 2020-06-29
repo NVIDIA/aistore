@@ -64,7 +64,6 @@ func (r *ObjectsListingXact) Start() {
 func (r *ObjectsListingXact) stop() {
 	close(r.resultCh)
 	r.timer.Stop()
-	r.Finish()
 }
 
 func (r *ObjectsListingXact) IsMountpathXact() bool { return false } // TODO -- FIXME
@@ -229,6 +228,7 @@ func (r *ObjectsListingXact) discardN(n uint) {
 
 	if r.fetchingDone && len(r.buff) == 0 {
 		Registry.Delete(r.handle)
+		r.Finish()
 	}
 }
 

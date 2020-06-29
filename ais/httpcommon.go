@@ -312,6 +312,8 @@ func (server *netServer) shutdown() {
 ////////////////
 
 func (h *httprunner) Snode() *cluster.Snode      { return h.si }
+func (h *httprunner) GetBowner() cluster.Bowner  { return h.owner.bmd }
+func (h *httprunner) GetSowner() cluster.Sowner  { return h.owner.smap }
 func (h *httprunner) ClusterStarted() bool       { return h.startup.cluster.Load() }
 func (h *httprunner) NodeStarted() bool          { return !h.startup.node.time.Load().IsZero() }
 func (h *httprunner) NodeStartedTime() time.Time { return h.startup.node.time.Load() }
@@ -737,6 +739,7 @@ func (h *httprunner) call(args callArgs) callResult {
 // intra-cluster IPC, control plane: notify another node
 // TODO: bcastNotify
 //
+
 func (h *httprunner) notify(sid string, msgBody []byte, dstIsTarget ...bool) {
 	var (
 		smap = h.owner.smap.get()
@@ -759,6 +762,16 @@ func (h *httprunner) notify(sid string, msgBody []byte, dstIsTarget ...bool) {
 		timeout: cmn.DefaultTimeout,
 	}
 	_ = h.call(args)
+}
+
+func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
+	var (
+		msg   = notifMsg{Ty: notifXact, Snode: h.si, Err: err}
+		notif = n.(*cmn.NotifXact)
+		pid   = notif.Dsts[0]
+	)
+	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
+	h.notify(pid, cmn.MustMarshal(&msg))
 }
 
 ///////////////
@@ -833,7 +846,6 @@ func (h *httprunner) callTargets(method, path string, body []byte, query ...url.
 	return h.callBcast(method, path, body, cluster.Targets, query...)
 }
 
-// nolint:unused // integral with callTargets and callAll
 func (h *httprunner) callProxies(method, path string, body []byte, query ...url.Values) chan callResult {
 	return h.callBcast(method, path, body, cluster.Proxies, query...)
 }

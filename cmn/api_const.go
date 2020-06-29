@@ -285,6 +285,7 @@ const (
 	Clusters  = "clusters" // AuthN
 	Roles     = "roles"    // AuthN
 	Query     = "query"
+	Jtx       = "jtx"
 
 	// l3
 	SyncSmap     = "syncsmap"

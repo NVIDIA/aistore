@@ -121,9 +121,12 @@ func (t *bckListTask) localObjPage(wi *walkinfo.WalkInfo) (*cmn.BucketList, erro
 	objSrc := &query.ObjectsSource{}
 	q := query.NewQuery(objSrc, bckSrc, nil)
 
-	xact, err := Registry.RenewObjectsListingXact(t.t, q, wi, t.msg.PersistentHandle)
+	xact, isNew, err := Registry.RenewObjectsListingXact(t.t, q, wi, t.msg.PersistentHandle)
 	if err != nil {
 		return nil, err
+	}
+	if isNew {
+		go xact.StartWithHandle(t.msg.PersistentHandle)
 	}
 
 	if xact.PageMarkerFulfilled(t.msg.PageMarker) {
@@ -139,9 +142,12 @@ func (t *bckListTask) localObjPage(wi *walkinfo.WalkInfo) (*cmn.BucketList, erro
 			glog.Infof("page marker before last result: %q vs %q", t.msg.PageMarker, xact.LastDiscardedResult())
 		}
 		query.Registry.Delete(t.msg.PersistentHandle)
-		xact, err = Registry.RenewObjectsListingXact(t.t, q, wi, t.msg.PersistentHandle)
+		xact, isNew, err = Registry.RenewObjectsListingXact(t.t, q, wi, t.msg.PersistentHandle)
 		if err != nil {
 			return nil, err
+		}
+		if isNew {
+			go xact.StartWithHandle(t.msg.PersistentHandle)
 		}
 	}
 

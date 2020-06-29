@@ -577,16 +577,6 @@ func (c *txnServerCtx) addNotif(xact cmn.Xact) {
 		}
 	}
 	xact.AddNotif(&cmn.NotifXact{
-		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: dsts, F: c.xactCallerNotify},
+		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: dsts, F: c.t.xactCallerNotify},
 	})
-}
-
-func (c *txnServerCtx) xactCallerNotify(n cmn.Notif, err error) {
-	var (
-		msg   = notifMsg{Ty: notifXact, Snode: c.t.si, Err: err}
-		notif = n.(*cmn.NotifXact)
-		pid   = notif.Dsts[0]
-	)
-	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
-	c.t.notify(pid, cmn.MustMarshal(&msg))
 }

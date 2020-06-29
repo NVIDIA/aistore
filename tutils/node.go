@@ -7,6 +7,7 @@ package tutils
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"testing"
@@ -95,7 +96,8 @@ while503:
 	if err != nil {
 		return ""
 	}
-	return ExtractProxyNodes(smap)[0].URL(cmn.NetworkPublic)
+	proxies := ExtractProxyNodes(smap)
+	return proxies[rand.Intn(len(proxies))].URL(cmn.NetworkPublic)
 }
 
 // WaitForPrimaryProxy reads the current primary proxy(which is proxyurl)'s smap until its

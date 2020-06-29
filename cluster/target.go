@@ -66,6 +66,8 @@ type PutObjectParams struct {
 
 type node interface {
 	Snode() *Snode
+	GetBowner() Bowner
+	GetSowner() Sowner
 	ClusterStarted() bool
 	NodeStarted() bool
 	NodeStartedTime() time.Time
@@ -74,8 +76,6 @@ type node interface {
 // NOTE: For implementations, please refer to ais/tgtifimpl.go and ais/httpcommon.go
 type Target interface {
 	node
-	GetBowner() Bowner
-	GetSowner() Sowner
 	FSHC(err error, path string)
 	GetMMSA() *memsys.MMSA
 	GetSmallMMSA() *memsys.MMSA
