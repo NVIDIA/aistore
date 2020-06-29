@@ -169,7 +169,7 @@ type DlBase struct {
 
 func (b *DlBase) Validate() error {
 	if b.Bck.Name == "" {
-		return fmt.Errorf("missing the %q", cmn.URLParamBucket)
+		return errors.New("missing 'bucket.name'")
 	}
 	if b.Timeout != "" {
 		if _, err := time.ParseDuration(b.Timeout); err != nil {
@@ -177,10 +177,10 @@ func (b *DlBase) Validate() error {
 		}
 	}
 	if b.Limits.Connections < 0 {
-		return fmt.Errorf("connection limit must be non-negative (got: %d)", b.Limits.Connections)
+		return fmt.Errorf("'limit.connections' must be non-negative (got: %d)", b.Limits.Connections)
 	}
 	if b.Limits.BytesPerHour < 0 {
-		return fmt.Errorf("bytes per hour limit must be non-negative (got: %d)", b.Limits.BytesPerHour)
+		return fmt.Errorf("'limit.bytes_per_hour' must be non-negative (got: %d)", b.Limits.BytesPerHour)
 	}
 	return nil
 }
@@ -195,15 +195,15 @@ func (b *DlSingleObj) Validate() error {
 	if b.ObjName == "" {
 		objName := path.Base(b.Link)
 		if objName == "." || objName == "/" {
-			return fmt.Errorf("can not extract a valid %q from the provided download link", cmn.URLParamObjName)
+			return errors.New("can not extract a valid 'object_name' from the provided download 'link'")
 		}
 		b.ObjName = objName
 	}
 	if b.Link == "" && !b.FromCloud {
-		return fmt.Errorf("missing the %q from the request body", cmn.URLParamLink)
+		return errors.New("missing 'link' in the request body")
 	}
 	if b.ObjName == "" {
-		return fmt.Errorf("missing the %q from the request body", cmn.URLParamObjName)
+		return fmt.Errorf("missing 'object_name' in the request body")
 	}
 	return nil
 }
@@ -299,7 +299,7 @@ func (b *DlRangeBody) Validate() error {
 		return err
 	}
 	if b.Template == "" {
-		return fmt.Errorf("no %q for range found, %q is required", cmn.URLParamTemplate, cmn.URLParamTemplate)
+		return errors.New("missing 'template' in the request body")
 	}
 	return nil
 }
@@ -351,7 +351,7 @@ func (b *DlMultiBody) ExtractPayload() (cmn.SimpleKVs, error) {
 				objName := path.Base(link)
 				if objName == "." || objName == "/" {
 					// should we continue and let the use worry about this after?
-					return nil, fmt.Errorf("can not extract a valid `object name` from the provided download link: %q", link)
+					return nil, fmt.Errorf("can not extract a valid `object_name` from the provided download 'link': %q", link)
 				}
 				objects[objName] = link
 			default:

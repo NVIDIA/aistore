@@ -183,18 +183,6 @@ const (
 	URLParamTotalInputShardsExtracted = "tise"
 	URLParamTotalUncompressedSize     = "tunc"
 
-	// downloader - FIXME: name collisions, consistency, usage beyond downloader
-	URLParamBucket            = "bucket"
-	URLParamLink              = "link"
-	URLParamObjName           = "objname"
-	URLParamSuffix            = "suffix"
-	URLParamTemplate          = "template"
-	URLParamSubdir            = "subdir"
-	URLParamTimeout           = "timeout"
-	URLParamDescription       = "description"
-	URLParamLimitConnections  = "limit_conn"
-	URLParamLimitBytesPerHour = "limit_bph"
-
 	// 2PC (control plane)
 	URLParamTxnTimeout = "txntout" // transaction timeout
 	URLParamTxnEvent   = "txnevnt" // enum { txnCommitEvent* }
