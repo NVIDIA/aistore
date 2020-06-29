@@ -64,6 +64,9 @@ var (
 			jsonFlag,
 			noHeaderFlag,
 		),
+		subcmdSmap: {
+			jsonFlag,
+		},
 		subcmdShowXaction: {
 			jsonFlag,
 			allItemsFlag,
