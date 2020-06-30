@@ -31,6 +31,7 @@ type (
 	}
 
 	Xact interface {
+		Run() error
 		ID() XactID
 		Kind() string
 		Bck() Bck
@@ -154,6 +155,7 @@ func NewXactBaseWithBucket(id, kind string, bck Bck) *XactBase {
 	return xact
 }
 
+func (xact *XactBase) Run() error                 { Assert(false); return nil }
 func (xact *XactBase) ID() XactID                 { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bck() Bck                   { return xact.bck }

@@ -90,7 +90,7 @@ func (e *bckSummaryTaskEntry) Get() cmn.Xact { return e.xact }
 
 func (t *bckListTask) IsMountpathXact() bool { return false }
 
-func (t *bckListTask) Run() {
+func (t *bckListTask) Run() error {
 	ctx := context.WithValue(
 		t.ctx,
 		walkinfo.CtxPostCallbackKey,
@@ -103,7 +103,7 @@ func (t *bckListTask) Run() {
 	bck := cluster.NewBckEmbed(t.Bck())
 	if err := bck.Init(t.t.GetBowner(), t.t.Snode()); err != nil {
 		t.UpdateResult(nil, err)
-		return
+		return err
 	}
 
 	walk := objwalk.NewWalk(ctx, t.t, bck, t.msg)
@@ -113,6 +113,7 @@ func (t *bckListTask) Run() {
 	} else {
 		t.UpdateResult(walk.CloudObjPage())
 	}
+	return nil
 }
 
 func (t *bckListTask) localObjPage(wi *walkinfo.WalkInfo) (*cmn.BucketList, error) {
@@ -171,7 +172,7 @@ func (t *bckListTask) Result() (interface{}, error) {
 
 func (t *bckSummaryTask) IsMountpathXact() bool { return false }
 
-func (t *bckSummaryTask) Run() {
+func (t *bckSummaryTask) Run() error {
 	var (
 		buckets []*cluster.Bck
 		bmd     = t.t.GetBowner().Get()
@@ -210,13 +211,13 @@ func (t *bckSummaryTask) Run() {
 	totalDisksSize, err := fs.GetTotalDisksSize()
 	if err != nil {
 		t.UpdateResult(nil, err)
-		return
+		return err
 	}
 
 	si, err := cluster.HrwTargetTask(t.msg.UUID, t.t.GetSowner().Get())
 	if err != nil {
 		t.UpdateResult(nil, err)
-		return
+		return err
 	}
 
 	// Check if we are the target that needs to list cloud bucket (we only want
@@ -309,10 +310,11 @@ func (t *bckSummaryTask) Run() {
 	close(errCh)
 	for err := range errCh {
 		t.UpdateResult(nil, err)
-		return
+		return err
 	}
 
 	t.UpdateResult(summaries, nil)
+	return nil
 }
 
 func (t *bckSummaryTask) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {

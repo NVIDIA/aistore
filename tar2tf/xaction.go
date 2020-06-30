@@ -27,7 +27,7 @@ type (
 
 func (t *Xact) IsMountpathXact() bool { return false }
 
-func (t *Xact) Run() {
+func (t *Xact) Run() error {
 	defer func() {
 		t.Finish()
 		t.Job.Wg.Done()
@@ -71,4 +71,5 @@ func (t *Xact) Run() {
 	if err != nil {
 		glog.Error(err)
 	}
+	return err
 }

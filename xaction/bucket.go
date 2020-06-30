@@ -386,7 +386,7 @@ type (
 func (r *FastRen) IsMountpathXact() bool { return true }
 func (r *FastRen) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
-func (r *FastRen) Run() {
+func (r *FastRen) Run() error {
 	glog.Infoln(r.String())
 
 	// FIXME: smart wait for resilver. For now assuming that rebalance takes longer than resilver.
@@ -404,6 +404,7 @@ func (r *FastRen) Run() {
 
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.Finish()
+	return nil
 }
 
 func (e *FastRenEntry) Start(bck cmn.Bck) error {
@@ -468,7 +469,8 @@ type (
 	}
 	listRangeBase struct {
 		cmn.XactBase
-		t cluster.Target
+		args *DeletePrefetchArgs
+		t    cluster.Target
 	}
 	EvictDelete struct {
 		listRangeBase
@@ -485,13 +487,15 @@ type (
 
 func (r *EvictDelete) IsMountpathXact() bool { return false }
 
-func (r *EvictDelete) Run(args *DeletePrefetchArgs) {
-	if args.RangeMsg != nil {
-		r.iterateBucketRange(args)
+func (r *EvictDelete) Run() error {
+	var err error
+	if r.args.RangeMsg != nil {
+		err = r.iterateBucketRange(r.args)
 	} else {
-		r.listOperation(args, args.ListMsg)
+		err = r.listOperation(r.args, r.args.ListMsg)
 	}
 	r.Finish()
+	return err
 }
 
 func (e *evictDeleteEntry) Start(bck cmn.Bck) error {
@@ -499,6 +503,7 @@ func (e *evictDeleteEntry) Start(bck cmn.Bck) error {
 		listRangeBase: listRangeBase{
 			XactBase: *cmn.NewXactBaseWithBucket(e.uuid, e.Kind(), bck),
 			t:        e.t,
+			args:     e.args,
 		},
 	}
 	return nil
@@ -553,6 +558,7 @@ func (e *prefetchEntry) Start(bck cmn.Bck) error {
 		listRangeBase: listRangeBase{
 			XactBase: *cmn.NewXactBaseWithBucket(e.uuid, e.Kind(), bck),
 			t:        e.t,
+			args:     e.args,
 		},
 	}
 	return nil
@@ -560,13 +566,15 @@ func (e *prefetchEntry) Start(bck cmn.Bck) error {
 
 func (r *Prefetch) IsMountpathXact() bool { return false }
 
-func (r *Prefetch) Run(args *DeletePrefetchArgs) {
-	if args.RangeMsg != nil {
-		r.iterateBucketRange(args)
+func (r *Prefetch) Run() error {
+	var err error
+	if r.args.RangeMsg != nil {
+		err = r.iterateBucketRange(r.args)
 	} else {
-		r.listOperation(args, args.ListMsg)
+		err = r.listOperation(r.args, r.args.ListMsg)
 	}
 	r.Finish()
+	return err
 }
 
 func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (*Prefetch, error) {

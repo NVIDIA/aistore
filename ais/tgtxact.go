@@ -145,7 +145,7 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		if err != nil {
 			return err
 		}
-		go xact.Run(args)
+		go xact.Run()
 	// 3. cannot start
 	case cmn.ActPutCopies:
 		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", xactMsg.Kind)

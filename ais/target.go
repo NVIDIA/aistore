@@ -761,7 +761,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		go xact.Run(args)
+		go xact.Run()
 	default:
 		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
@@ -887,7 +887,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		go xact.Run(args)
+		go xact.Run()
 	case cmn.ActListObjects:
 		// list the bucket and return
 		begin := mono.NanoTime()
