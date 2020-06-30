@@ -543,6 +543,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 			continue
 		}
 		if cksums[idx] != nil {
+			cksums[idx].Finalize()
 			rst.cksum = cksums[idx].Clone()
 		}
 		if version == "" && rst.version != "" {
@@ -628,7 +629,6 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 
 	// generate the list of targets that should have a slice and find out
 	// the targets without any one
-	// FIXME: when fewer targets than sliceCnt+1, send slices to those available anyway
 	targets, err := cluster.HrwTargetList(req.LOM.Uname(), c.parent.smap.Get(), sliceCnt+1)
 	if err != nil {
 		glog.Warning(err)

@@ -1203,52 +1203,22 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	// Create different disable/enable actions to test if system persists behaving well
-	go func() {
-		err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
-			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
-		})
-		tassert.CheckError(t, err)
-	}()
+	tutils.Logf("Disabling EC for the bucket %s\n", bck)
+	err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+	})
+	tassert.CheckError(t, err)
 
-	time.Sleep(5 * time.Millisecond)
-
-	go func() {
-		err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
-			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
-		})
-		tassert.CheckError(t, err)
-	}()
-
-	time.Sleep(5 * time.Millisecond)
-
-	go func() {
-		err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
-			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
-		})
-		tassert.CheckError(t, err)
-	}()
-
-	time.Sleep(5 * time.Millisecond)
-
-	go func() {
-		err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
-			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
-		})
-		tassert.CheckError(t, err)
-	}()
-
-	time.Sleep(300 * time.Millisecond)
-
-	go func() {
-		err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
-			EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
-		})
-		tassert.CheckError(t, err)
-	}()
+	time.Sleep(15 * time.Millisecond)
+	tutils.Logf("Enabling EC for the bucket %s\n", bck)
+	err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
+	})
+	tassert.CheckError(t, err)
+	reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck, Latest: true}
+	api.WaitForXaction(baseParams, reqArgs)
 
 	close(abortCh)
-	time.Sleep(1 * time.Second) // wait for everything to settle down
 
 	if t.Failed() {
 		t.FailNow()

@@ -31,7 +31,5 @@ func (wf *MetaSpec) PermToProcess() bool { return false }
 
 func (wf *MetaSpec) GenUniqueFQN(base, _ string) string { return base }
 func (wf *MetaSpec) ParseUniqueFQN(base string) (orig string, old, ok bool) {
-	// TODO: old can mean that there is no corresponding replica/slice but it
-	// seems a heavy operation
 	return base, false, true
 }

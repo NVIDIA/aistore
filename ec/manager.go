@@ -288,6 +288,10 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 		return ErrorECDisabled
 	}
 
+	if capInfo := lom.T.AvgCapUsed(nil); capInfo.OOS {
+		return capInfo.Err
+	}
+
 	isECCopy := IsECCopy(lom.Size(), &lom.Bprops().EC)
 	targetCnt := mgr.targetCnt.Load()
 
@@ -300,11 +304,6 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 
 	cmn.Assert(lom.FQN != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
-
-	// TODO -- FIXME: all targets must check t.AvgCapUsed() for high watermark *prior* to starting
-	if capInfo := lom.T.AvgCapUsed(nil); capInfo.OOS {
-		return capInfo.Err
-	}
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
 		return nil
@@ -344,6 +343,9 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 		return ErrorECDisabled
 	}
 
+	if capInfo := lom.T.AvgCapUsed(nil); capInfo.OOS {
+		return capInfo.Err
+	}
 	targetCnt := mgr.targetCnt.Load()
 	// note: restore replica object is done with GFN, safe to always abort
 	if required := lom.Bprops().EC.RequiredRestoreTargets(); int(targetCnt) < required {

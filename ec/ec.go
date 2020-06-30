@@ -226,9 +226,8 @@ func (s *slice) release() {
 }
 
 var (
-	mm           *memsys.MMSA       // memory manager and slab/SGL allocator
-	slicePadding = make([]byte, 64) // for padding EC slices
-	XactCount    atomic.Int32       // the number of currently active EC xactions
+	mm        *memsys.MMSA // memory manager and slab/SGL allocator
+	XactCount atomic.Int32 // the number of currently active EC xactions
 
 	ErrorECDisabled          = errors.New("EC is disabled for bucket")
 	ErrorNoMetafile          = errors.New("no metafile")
@@ -237,7 +236,7 @@ var (
 )
 
 func Init(t cluster.Target, reg XactRegistry) {
-	mm = t.GetMMSA() // TODO: try to introduce and benchmark a separate MMSA for EC
+	mm = t.GetMMSA()
 	fs.CSM.RegisterContentType(SliceType, &SliceSpec{})
 	fs.CSM.RegisterContentType(MetaType, &MetaSpec{})
 	if err := initManager(t, reg); err != nil {
@@ -256,28 +255,6 @@ func SliceSize(fileSize int64, slices int) int64 {
 // extra prefix - an identifier of the destination - solves the issue
 func unique(prefix string, bck *cluster.Bck, objName string) string {
 	return prefix + string(filepath.Separator) + bck.MakeUname(objName)
-}
-
-// Reads local file to SGL
-// Used by a target when responding to request for metafile/replica/slice
-func readFile(lom *cluster.LOM) (sgl *memsys.SGL, err error) {
-	f, err := os.Open(lom.FQN)
-	if err != nil {
-		return nil, err
-	}
-
-	sgl = mm.NewSGL(lom.Size())
-	buf, slab := mm.Alloc()
-	_, err = io.CopyBuffer(sgl, f, buf)
-	debug.AssertNoErr(f.Close())
-	slab.Free(buf)
-
-	if err != nil {
-		sgl.Free()
-		return nil, err
-	}
-
-	return sgl, nil
 }
 
 func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
