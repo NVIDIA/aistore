@@ -51,54 +51,92 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should register multiple callbacks and fire it in correct order", func() {
 		fired := make([]bool, 2)
-		Housekeeper.Register("", func() time.Duration {
+		Housekeeper.Register("foo", func() time.Duration {
 			fired[0] = true
 			return 2 * time.Second
 		})
-		Housekeeper.Register("", func() time.Duration {
+		Housekeeper.Register("bar", func() time.Duration {
 			fired[1] = true
-			return time.Second
+			return time.Second + 500*time.Millisecond
 		})
 
 		time.Sleep(20 * time.Millisecond)
+		// "foo" and "bar" should fire at the start (no initial interval)
 		for idx := 0; idx < len(fired); idx++ {
-			Expect(fired[idx]).To(BeTrue()) // callback should be fired at the start
+			Expect(fired[idx]).To(BeTrue())
 			fired[idx] = false
 		}
 
-		time.Sleep(500 * time.Millisecond)
-		Expect(fired[0] || fired[1]).To(BeFalse()) // no callback should be fired
+		time.Sleep(600 * time.Millisecond) // ~600ms
 
-		time.Sleep(600 * time.Millisecond)
-		Expect(fired[1]).To(BeTrue()) // the later callback has shorter duration
+		// "foo" nor "bar" should fire
+		Expect(fired[0] || fired[1]).To(BeFalse())
+
+		time.Sleep(time.Second) // ~1.6s
+
+		// "bar" should fire
 		Expect(fired[0]).To(BeFalse())
+		Expect(fired[1]).To(BeTrue())
+		fired[1] = false
 
-		time.Sleep(time.Second)
-		Expect(fired[0] && fired[1]).To(BeTrue()) // after ~2sec both callback should fire
+		time.Sleep(500 * time.Millisecond) // ~2.1s
+
+		// "foo" should fire
+		Expect(fired[0]).To(BeTrue())
+		Expect(fired[1]).To(BeFalse())
+
+		time.Sleep(time.Second) // ~3.1s
+
+		// "bar" should fire once again
+		Expect(fired[0] && fired[1]).To(BeTrue())
 	})
 
 	It("should unregister callback", func() {
 		fired := make([]bool, 2)
-		Housekeeper.Register("second", func() time.Duration {
+		Housekeeper.Register("bar", func() time.Duration {
 			fired[0] = true
 			return 400 * time.Millisecond
-		})
-		Housekeeper.Register("first", func() time.Duration {
+		}, 400*time.Millisecond)
+		Housekeeper.Register("foo", func() time.Duration {
 			fired[1] = true
 			return 200 * time.Millisecond
-		})
+		}, 200*time.Millisecond)
 
-		time.Sleep(time.Second)
+		time.Sleep(500 * time.Millisecond)
 		Expect(fired[0] && fired[1]).To(BeTrue()) // after ~2sec both callback should fire
 
 		fired[0] = false
 		fired[1] = false
-		Housekeeper.Unregister("first")
+		Housekeeper.Unregister("foo")
 
 		time.Sleep(time.Second)
 		Expect(fired[1]).To(BeFalse())
 		Expect(fired[0]).To(BeTrue())
 
-		Housekeeper.Unregister("second")
+		Housekeeper.Unregister("bar")
+	})
+
+	It("should register and unregister multiple callbacks", func() {
+		var fired bool
+		f := func(name string) {
+			Expect(fired).To(BeFalse())
+			Housekeeper.Register(name, func() time.Duration {
+				fired = true
+				return 100 * time.Millisecond
+			}, 100*time.Millisecond)
+
+			time.Sleep(110 * time.Millisecond)
+			Expect(fired).To(BeTrue())
+
+			Housekeeper.Unregister(name)
+			fired = false
+		}
+
+		f("foo")
+		f("bar")
+		f("baz")
+
+		time.Sleep(time.Second)
+		Expect(fired).To(BeFalse())
 	})
 })

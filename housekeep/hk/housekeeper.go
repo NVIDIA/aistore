@@ -6,11 +6,11 @@
 package hk
 
 import (
-	"fmt"
-	"sort"
+	"container/heap"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -30,10 +30,11 @@ type (
 		f          CleanupFunc
 		updateTime time.Time
 	}
+	timedCleanups []timedCleanup
 
 	housekeeper struct {
 		stopCh   *cmn.StopCh
-		cleanups []timedCleanup
+		cleanups *timedCleanups
 		timer    *time.Timer
 		workCh   chan request
 	}
@@ -51,10 +52,26 @@ func init() {
 
 func initCleaner() {
 	Housekeeper = &housekeeper{
-		workCh: make(chan request, 10),
-		stopCh: cmn.NewStopCh(),
+		workCh:   make(chan request, 10),
+		stopCh:   cmn.NewStopCh(),
+		cleanups: &timedCleanups{},
 	}
+	heap.Init(Housekeeper.cleanups)
+
 	go Housekeeper.run()
+}
+
+func (tc timedCleanups) Len() int            { return len(tc) }
+func (tc timedCleanups) Less(i, j int) bool  { return tc[i].updateTime.After(tc[j].updateTime) }
+func (tc timedCleanups) Swap(i, j int)       { tc[i], tc[j] = tc[j], tc[i] }
+func (tc timedCleanups) Peek() *timedCleanup { return &tc[len(tc)-1] }
+func (tc *timedCleanups) Push(x interface{}) { *tc = append(*tc, x.(timedCleanup)) }
+func (tc *timedCleanups) Pop() interface{} {
+	old := *tc
+	n := len(old)
+	item := old[n-1]
+	*tc = old[0 : n-1]
+	return item
 }
 
 func (hk *housekeeper) Register(name string, f CleanupFunc, initialInterval ...time.Duration) {
@@ -86,36 +103,39 @@ func (hk *housekeeper) run() {
 		case <-hk.stopCh.Listen():
 			return
 		case <-hk.timer.C:
-			if len(hk.cleanups) == 0 {
+			if hk.cleanups.Len() == 0 {
 				break
 			}
 
-			interval := hk.cleanups[0].f()
-			hk.cleanups[0].updateTime = time.Now().Add(interval)
+			// Run callback and update the item in the heap.
+			item := hk.cleanups.Peek()
+			interval := item.f()
+			item.updateTime = time.Now().Add(interval)
+			heap.Fix(hk.cleanups, hk.cleanups.Len()-1)
+
 			hk.updateTimer()
 		case req := <-hk.workCh:
 			if req.registering {
+				cmn.AssertMsg(req.f != nil, req.name)
 				initialInterval := req.initialInterval
 				if req.initialInterval == 0 {
-					cmn.AssertMsg(req.f != nil, req.name)
 					initialInterval = req.f()
 				}
-				hk.cleanups = append(hk.cleanups, timedCleanup{
+				heap.Push(hk.cleanups, timedCleanup{
 					name:       req.name,
 					f:          req.f,
 					updateTime: time.Now().Add(initialInterval),
 				})
 			} else {
 				foundIdx := -1
-				for idx, tc := range hk.cleanups {
+				for idx, tc := range *hk.cleanups {
 					if tc.name == req.name {
-						cmn.AssertMsg(foundIdx == -1,
-							fmt.Sprintf("multiple cleanup funcs with the same name %q", req.name))
 						foundIdx = idx
+						break
 					}
 				}
-				cmn.AssertMsg(foundIdx != -1, fmt.Sprintf("cleanup func %q does not exist", req.name))
-				hk.cleanups = append(hk.cleanups[:foundIdx], hk.cleanups[foundIdx+1:]...)
+				debug.Assertf(foundIdx != -1, "cleanup func %q does not exist", req.name)
+				heap.Remove(hk.cleanups, foundIdx)
 			}
 
 			hk.updateTimer()
@@ -124,15 +144,11 @@ func (hk *housekeeper) run() {
 }
 
 func (hk *housekeeper) updateTimer() {
-	if len(hk.cleanups) == 0 {
-		hk.timer.Reset(time.Hour)
+	if hk.cleanups.Len() == 0 {
+		hk.timer.Stop()
 		return
 	}
-
-	sort.Slice(hk.cleanups, func(i, j int) bool {
-		return hk.cleanups[i].updateTime.Before(hk.cleanups[j].updateTime)
-	})
-	hk.timer.Reset(time.Until(hk.cleanups[0].updateTime))
+	hk.timer.Reset(time.Until(hk.cleanups.Peek().updateTime))
 }
 
 func (hk *housekeeper) Abort() {
