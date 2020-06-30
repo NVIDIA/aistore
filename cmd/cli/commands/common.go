@@ -39,6 +39,7 @@ const (
 	commandStart     = cmn.ActXactStart
 	commandStop      = cmn.ActXactStop
 	commandWait      = "wait"
+	commandSearch    = "search"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase
@@ -196,6 +197,9 @@ const (
 	showAuthRoleArgument      = "[ROLE]"
 	addAuthRoleArgument       = "ROLE [CLUSTER_ID PERMISSION ...]"
 	deleteRoleArgument        = "ROLE"
+
+	// Search
+	searchArgument = "KEYWORD"
 )
 
 // Flags

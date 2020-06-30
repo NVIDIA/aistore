@@ -158,6 +158,13 @@ func (aisCLI *AISCLI) setupCommands() {
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	setupCommandHelp(app.Commands)
+	aisCLI.enableSearch()
+}
+
+func (aisCLI *AISCLI) enableSearch() {
+	app := aisCLI.app
+	initSearch(app)
+	app.Commands = append(app.Commands, searchCommands...)
 }
 
 func setupCommandHelp(commands []cli.Command) {

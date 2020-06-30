@@ -312,6 +312,9 @@ const (
 		"{{ range $user := . }}" +
 		"{{ $user.ID }}\t{{ JoinList $user.Roles }}\n" +
 		"{{end}}"
+
+	// Command Search
+	SearchTmpl = "{{ JoinListNL . }}\n"
 )
 
 var (
@@ -357,6 +360,7 @@ var (
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":          fmtBool,
 		"JoinList":            fmtStringList,
+		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -564,10 +568,14 @@ func fmtStringList(lst []string) string {
 	if len(lst) == 0 {
 		return "-"
 	}
+	return fmtStringListGeneric(lst, ",")
+}
+
+func fmtStringListGeneric(lst []string, sep string) string {
 	var s strings.Builder
 	for idx, url := range lst {
 		if idx != 0 {
-			fmt.Fprint(&s, ",")
+			fmt.Fprint(&s, sep)
 		}
 		fmt.Fprint(&s, url)
 	}

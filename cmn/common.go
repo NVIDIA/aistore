@@ -251,14 +251,19 @@ func (kv SimpleKVs) Compare(other SimpleKVs) bool {
 }
 
 func (ss StringSet) String() string {
+	keys := ss.Keys()
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
+}
+
+func (ss StringSet) Keys() []string {
 	keys := make([]string, len(ss))
 	idx := 0
 	for key := range ss {
 		keys[idx] = key
 		idx++
 	}
-	sort.Strings(keys)
-	return strings.Join(keys, ",")
+	return keys
 }
 
 func (ss StringSet) Add(key string) {
@@ -268,6 +273,16 @@ func (ss StringSet) Add(key string) {
 func (ss StringSet) Contains(key string) bool {
 	_, ok := ss[key]
 	return ok
+}
+
+func (ss StringSet) Intersection(other StringSet) StringSet {
+	result := make(StringSet)
+	for key := range ss {
+		if other.Contains(key) {
+			result.Add(key)
+		}
+	}
+	return result
 }
 
 // Exitf writes formatted message to STDOUT and exits with non-zero status code.
