@@ -62,9 +62,9 @@ func initCleaner() {
 }
 
 func (tc timedActions) Len() int            { return len(tc) }
-func (tc timedActions) Less(i, j int) bool  { return tc[i].updateTime.After(tc[j].updateTime) }
+func (tc timedActions) Less(i, j int) bool  { return tc[i].updateTime.Before(tc[j].updateTime) }
 func (tc timedActions) Swap(i, j int)       { tc[i], tc[j] = tc[j], tc[i] }
-func (tc timedActions) Peek() *timedAction  { return &tc[len(tc)-1] }
+func (tc timedActions) Peek() *timedAction  { return &tc[0] }
 func (tc *timedActions) Push(x interface{}) { *tc = append(*tc, x.(timedAction)) }
 func (tc *timedActions) Pop() interface{} {
 	old := *tc
@@ -111,7 +111,7 @@ func (hk *housekeeper) run() {
 			item := hk.actions.Peek()
 			interval := item.f()
 			item.updateTime = time.Now().Add(interval)
-			heap.Fix(hk.actions, hk.actions.Len()-1)
+			heap.Fix(hk.actions, 0)
 
 			hk.updateTimer()
 		case req := <-hk.workCh:

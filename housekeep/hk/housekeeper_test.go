@@ -6,8 +6,11 @@
 package hk
 
 import (
+	"fmt"
+	"math/rand"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -138,5 +141,48 @@ var _ = Describe("Housekeeper", func() {
 
 		time.Sleep(time.Second)
 		Expect(fired).To(BeFalse())
+	})
+
+	It("should correctly call multiple callbacks", func() {
+		type action struct {
+			d       time.Duration
+			origIdx int
+		}
+		const (
+			actionCnt = 30
+		)
+		var (
+			counter atomic.Int32
+			durs    = make([]action, 0, actionCnt)
+			fired   = make([]int32, actionCnt)
+		)
+
+		for i := 0; i < actionCnt; i++ {
+			durs = append(durs, action{
+				d:       50*time.Millisecond + 40*time.Duration(i)*time.Millisecond,
+				origIdx: i,
+			})
+			fired[i] = -1
+		}
+
+		rand.Shuffle(actionCnt, func(i, j int) {
+			durs[i], durs[j] = durs[j], durs[i]
+		})
+
+		for i := 0; i < actionCnt; i++ {
+			index := i
+			Housekeeper.Register(fmt.Sprintf("%d", index), func() time.Duration {
+				if fired[index] == -1 {
+					fired[index] = counter.Inc() - 1
+				}
+				return durs[index].d
+			}, durs[index].d)
+		}
+
+		time.Sleep(actionCnt * 100 * time.Millisecond)
+
+		for i := 0; i < actionCnt; i++ {
+			Expect(durs[i].origIdx).To(BeEquivalentTo(fired[i]))
+		}
 	})
 })
