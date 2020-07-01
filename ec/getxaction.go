@@ -186,11 +186,6 @@ func (r *XactGet) abortECRequestWhenDisabled(req *Request) {
 func (r *XactGet) Stop(error) { r.Abort() }
 
 func (r *XactGet) stop() {
-	if r.Finished() {
-		glog.Warningf("%s - not running, nothing to do", r)
-		return
-	}
-
 	XactCount.Dec()
 	r.XactDemandBase.Stop()
 	for _, jog := range r.getJoggers {

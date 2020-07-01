@@ -86,10 +86,6 @@ func (r *xactBckBase) run(mpathersCount int) error {
 }
 
 func (r *xactBckBase) stop() (err error) {
-	if r.Finished() {
-		glog.Warningf("%s is (already) not running", r)
-		return
-	}
 	var n int
 	for _, mpather := range r.mpathers {
 		n += mpather.stop()

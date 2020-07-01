@@ -124,10 +124,6 @@ func (r *XactBckEncode) run(numjs int) error {
 }
 
 func (r *XactBckEncode) stop() {
-	if r.Finished() {
-		glog.Warningf("%s is (already) not running", r)
-		return
-	}
 	for _, mpather := range r.mpathers {
 		mpather.stop()
 	}

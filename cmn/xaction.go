@@ -235,7 +235,10 @@ func (xact *XactBase) Abort() {
 }
 
 func (xact *XactBase) Finish(errs ...error) {
-	xact.setEndTime()
+	if !xact.Aborted() {
+		Assert(xact.EndTime().IsZero())
+		xact.setEndTime()
+	}
 
 	// notifications
 	if n := xact.Notif(); n != nil && n.Upon(UponTerm) {

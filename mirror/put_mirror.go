@@ -161,12 +161,8 @@ func (r *XactPutLRepl) Stop(error) { r.Abort() } // call base method
 // =================== load balancing and self-throttling ========================
 
 func (r *XactPutLRepl) stop() (err error) {
-	var n int
-	if r.Finished() {
-		glog.Warningf("%s is (already) not running", r)
-		return
-	}
 	r.XactDemandBase.Stop()
+	var n int
 	for _, mpather := range r.mpathers {
 		n += mpather.stop()
 	}

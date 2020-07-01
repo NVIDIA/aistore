@@ -189,11 +189,6 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.Header, object i
 func (r *XactRespond) Stop(error) { r.Abort() }
 
 func (r *XactRespond) stop() {
-	if r.Finished() {
-		glog.Warningf("%s - not running, nothing to do", r)
-		return
-	}
-
 	XactCount.Dec()
 	r.XactDemandBase.Stop()
 	r.Finish()
