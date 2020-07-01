@@ -159,3 +159,87 @@ func TestQueryVersionAndAtime(t *testing.T) {
 
 	checkQueryDone(t, handle)
 }
+
+func TestQueryWorkersTargets(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     "TESTQUERYWORKERBUCKET",
+			Provider: cmn.ProviderAIS,
+		}
+		smapDaemonIDs = cmn.StringSet{}
+		objName       = "object.txt"
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	smap, err := api.GetClusterMap(baseParams)
+	tassert.CheckError(t, err)
+	for _, t := range smap.Tmap {
+		smapDaemonIDs.Add(t.DaemonID)
+	}
+
+	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	handle, err := api.InitQuery(baseParams, "", bck, nil, uint(smap.CountTargets()))
+	tassert.CheckFatal(t, err)
+	for i := 1; i <= smap.CountTargets(); i++ {
+		daemonID, err := api.QueryWorkerTarget(baseParams, handle, uint(i))
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, smapDaemonIDs.Contains(daemonID), "unexpected daemonID %s", daemonID)
+		smapDaemonIDs.Delete(daemonID)
+	}
+
+	entries, err := api.NextQueryResults(baseParams, handle, 1)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(entries) == 1, "expected query to have 1 object, got %d", len(entries))
+	tassert.Errorf(t, entries[0].Name == objName, "expected object name to be %q, got %q", objName, entries[0].Name)
+}
+
+func TestQueryWorkersTargetDown(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     "TESTQUERYWORKERBUCKET",
+			Provider: cmn.ProviderAIS,
+		}
+		smapDaemonIDs = cmn.StringSet{}
+		objName       = "object.txt"
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	smap, err := api.GetClusterMap(baseParams)
+	tassert.CheckError(t, err)
+	for _, t := range smap.Tmap {
+		smapDaemonIDs.Add(t.DaemonID)
+	}
+
+	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
+	handle, err := api.InitQuery(baseParams, "", bck, nil, uint(smap.CountTargets()))
+	tassert.CheckFatal(t, err)
+
+	_, err = api.QueryWorkerTarget(baseParams, handle, 1)
+	tassert.CheckFatal(t, err)
+
+	target, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	err = tutils.UnregisterNode(proxyURL, target.DaemonID)
+	tassert.CheckError(t, err)
+
+	smap, err = tutils.WaitForPrimaryProxy(
+		proxyURL,
+		"target is gone",
+		smap.Version, testing.Verbose(),
+		smap.CountProxies(),
+		smap.CountTargets()-1,
+	)
+	tassert.CheckError(t, err)
+	defer tutils.RegisterNode(proxyURL, target, smap)
+
+	_, err = api.QueryWorkerTarget(baseParams, handle, 1)
+	tassert.Errorf(t, err != nil, "expected error to occur when target went down")
+}

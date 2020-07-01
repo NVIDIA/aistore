@@ -88,6 +88,28 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Query)
+	if err != nil {
+		return
+	}
+
+	switch apiItems[0] {
+	case cmn.Next, cmn.Peek:
+		t.httpquerygetobjects(w, r)
+	case cmn.WorkerOwner:
+		t.httpquerygetworkertarget(w, r)
+	default:
+		t.invalmsghdlrf(w, r, "unknown path /%s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
+	}
+}
+
+// /v1/query/worker
+// TODO: change an endpoint and use the logic when #833 is done
+func (t *targetrunner) httpquerygetworkertarget(w http.ResponseWriter, _ *http.Request) {
+	w.Write([]byte(t.si.DaemonID))
+}
+
+func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Request) {
 	var (
 		entries []*cmn.BucketEntry
 	)

@@ -14,12 +14,14 @@ const (
 
 type (
 	InitMsg struct {
-		QueryMsg DefMsg `json:"query"`
+		QueryMsg   DefMsg `json:"query"`
+		WorkersCnt uint   `json:"workers"`
 	}
 
 	NextMsg struct {
-		Handle string `json:"handle"`
-		Size   uint   `json:"size"` // how many objects to fetch
+		Handle   string `json:"handle"`
+		Size     uint   `json:"size"` // how many objects to fetch
+		WorkerID uint   `json:"worker_id"`
 	}
 
 	// Definition of a query

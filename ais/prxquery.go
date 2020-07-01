@@ -5,13 +5,51 @@
 package ais
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/query"
 	jsoniter "github.com/json-iterator/go"
 )
+
+type (
+	// TODO: add more, like target finished, query aborted by user etc.
+	queryState struct {
+		initialSmap *cluster.Smap // smap in proxy at the moment of query-init
+		targets     []*cluster.Snode
+		workersCnt  uint
+		err         error
+	}
+)
+
+func newQueryState(smap *cluster.Smap, workersCnt uint) (*queryState, error) {
+	if workersCnt != 0 && workersCnt < uint(smap.CountTargets()) {
+		// FIXME: this should not be necessary. Proxy could know that if worker's
+		//  target is done, worker should be redirected to the next not-done target.
+		//  However, it should be done once query is able to keep more detailed
+		//  information about targets.
+		return nil, fmt.Errorf("expected workersCnt to be at least %d", smap.CountTargets())
+	}
+	targets := make([]*cluster.Snode, 0, smap.CountTargets())
+	for _, t := range smap.Tmap {
+		targets = append(targets, t)
+	}
+	return &queryState{initialSmap: smap, workersCnt: workersCnt, targets: targets}, nil
+}
+
+func (q *queryState) workersTarget(workerID uint) (*cluster.Snode, error) {
+	if q.workersCnt == 0 {
+		return nil, errors.New("query registered with 0 workers")
+	}
+	if workerID == 0 {
+		return nil, errors.New("workerID cannot be empty")
+	}
+	return q.targets[workerID%uint(len(q.targets))], nil
+}
 
 // Proxy exposes 2 methods:
 // - Init(query) -> handle - initializes a query on proxy and targets
@@ -66,12 +104,72 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	p.jtx.addEntry(handle)
+	state, err := newQueryState(&smap.Smap, msg.WorkersCnt)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	p.jtx.addEntry(handle, state)
 
 	w.Write([]byte(handle))
 }
 
 func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Query)
+	if err != nil {
+		return
+	}
+
+	switch apiItems[0] {
+	case cmn.Next:
+		p.httpquerygetnext(w, r)
+	case cmn.WorkerOwner:
+		p.httpquerygetworkertarget(w, r)
+	default:
+		p.invalmsghdlrf(w, r, "unknown path /%s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
+	}
+}
+
+// /v1/query/worker
+// TODO: change an endpoint and the name
+func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	msg := &query.NextMsg{}
+	if err := cmn.ReadJSON(w, r, msg); err != nil {
+		return
+	}
+	if msg.Handle == "" {
+		p.invalmsghdlr(w, r, "handle cannot be empty", http.StatusBadRequest)
+		return
+	}
+	if redirected := p.jtx.redirectToOwner(w, r, msg.Handle, msg); redirected {
+		return
+	}
+	entry, exists := p.jtx.entry(msg.Handle)
+	if !exists {
+		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", msg.Handle)
+		return
+	} else if entry.finished() {
+		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
+		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", msg.Handle)
+		return
+	}
+	state := entry.state.(*queryState)
+	if state.err != nil {
+		p.invalmsghdlr(w, r, state.err.Error())
+		return
+	}
+
+	target, err := state.workersTarget(msg.WorkerID)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	url := p.redirectURL(r, target, started, cmn.NetworkIntraControl)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	// get next query
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Query, cmn.Next); err != nil {
 		return

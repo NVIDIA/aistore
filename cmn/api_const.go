@@ -314,6 +314,7 @@ const (
 	Next        = "next"
 	Peek        = "peek"
 	Discard     = "discard"
+	WorkerOwner = "worker" // TODO: it should be removed once get-next-bytes endpoint is ready
 
 	// CLI
 	Target = "target"

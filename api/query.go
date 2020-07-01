@@ -11,18 +11,27 @@ import (
 	"github.com/NVIDIA/aistore/query"
 )
 
-func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filter *query.FilterMsg) (string, error) {
-	baseParams.Method = http.MethodPost
-	outerSelectMsg := query.OuterSelectMsg{Template: objectsTemplate}
-	fromMsg := query.FromMsg{Bck: bck}
-	qMsg := query.DefMsg{
-		OuterSelect: outerSelectMsg,
-		From:        fromMsg,
-		Where:       query.WhereMsg{Filter: filter},
-	}
-	initMsg := query.InitMsg{QueryMsg: qMsg}
+func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filter *query.FilterMsg, workersCnts ...uint) (string, error) {
+	var (
+		outerSelectMsg = query.OuterSelectMsg{Template: objectsTemplate}
+		fromMsg        = query.FromMsg{Bck: bck}
+		qMsg           = query.DefMsg{
+			OuterSelect: outerSelectMsg,
+			From:        fromMsg,
+			Where:       query.WhereMsg{Filter: filter},
+		}
 
-	var handle string
+		workersCnt uint
+		handle     string
+	)
+
+	baseParams.Method = http.MethodPost
+	if len(workersCnts) > 0 {
+		workersCnt = workersCnts[0]
+	}
+
+	initMsg := query.InitMsg{QueryMsg: qMsg, WorkersCnt: workersCnt}
+
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Query, cmn.Init),
@@ -32,7 +41,10 @@ func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filte
 }
 
 func NextQueryResults(baseParams BaseParams, handle string, size uint) ([]*cmn.BucketEntry, error) {
-	var objectsNames []*cmn.BucketEntry
+	var (
+		objectsNames []*cmn.BucketEntry
+	)
+
 	baseParams.Method = http.MethodGet
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -41,4 +53,14 @@ func NextQueryResults(baseParams BaseParams, handle string, size uint) ([]*cmn.B
 	}, &objectsNames)
 
 	return objectsNames, err
+}
+
+func QueryWorkerTarget(baseParams BaseParams, handle string, workerID uint) (daemonID string, err error) {
+	baseParams.Method = http.MethodGet
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Query, cmn.WorkerOwner),
+		Body:       cmn.MustMarshal(query.NextMsg{Handle: handle, WorkerID: workerID}),
+	}, &daemonID)
+	return
 }

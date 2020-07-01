@@ -74,6 +74,7 @@ type (
 		owners       []*cluster.Snode
 		startedTime  time.Time
 		finishedTime atomic.Time
+		state        interface{}
 	}
 
 	jtxNotifListener struct {
@@ -106,7 +107,7 @@ func newJTX(p *proxyrunner) *jtx {
 	return v
 }
 
-func (o *jtx) addEntry(uuid string) {
+func (o *jtx) addEntry(uuid string, state interface{}) {
 	var (
 		smap = o.p.GetSowner().Get()
 	)
@@ -119,6 +120,7 @@ func (o *jtx) addEntry(uuid string) {
 		// NOTE: Currently assume that the owner is the one that started.
 		owners:      []*cluster.Snode{o.p.Snode()},
 		startedTime: time.Now(),
+		state:       state,
 	}
 
 	o.p.notifs.add(uuid, &jtxNotifListener{
@@ -164,6 +166,23 @@ func (o *jtx) ListenSmapChanged() {
 		// TODO: check all owners.
 		if smap.GetProxy(entry.owners[0].ID()) == nil {
 			o.removeEntry(uuid)
+		}
+
+		if entry.state != nil {
+			switch s := entry.state.(type) {
+			case *queryState:
+				if s.initialSmap.Version >= smap.Version {
+					break
+				}
+				for _, t := range s.initialSmap.Tmap {
+					if smap.GetTarget(t.DaemonID) == nil {
+						s.err = fmt.Errorf("query %q failed, target %s has left the cluster", uuid, t.DaemonType)
+						break
+					}
+				}
+			default:
+				cmn.Assert(false)
+			}
 		}
 	}
 	o.mtx.Unlock()
