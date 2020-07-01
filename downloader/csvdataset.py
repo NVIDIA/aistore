@@ -1,9 +1,12 @@
-# pylint: disable=undefined-variable # for raw_input
-
 # pylint: disable=unused-variable
 from __future__ import print_function
 import csv, os, sys, itertools
 import ais_client
+
+try:
+    raw_input
+except NameError:
+    raw_input = input
 
 bucket_name = raw_input("Which local bucket would you like to save these files to: ")
 if not bucket_name:
