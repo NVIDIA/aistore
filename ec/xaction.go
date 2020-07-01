@@ -469,16 +469,16 @@ func (xacts *BckXacts) SetReq(xact *XactRespond) {
 	xacts.req.Store(unsafe.Pointer(xact))
 }
 
-func (xacts *BckXacts) StopGet() {
+func (xacts *BckXacts) AbortGet() {
 	xact := (*XactGet)(xacts.get.Load())
 	if xact != nil && !xact.Finished() {
-		xact.stop()
+		xact.Abort()
 	}
 }
 
-func (xacts *BckXacts) StopPut() {
+func (xacts *BckXacts) AbortPut() {
 	xact := (*XactPut)(xacts.put.Load())
 	if xact != nil && !xact.Finished() {
-		xact.stop()
+		xact.Abort()
 	}
 }

@@ -439,7 +439,7 @@ func (mgr *Manager) ListenSmapChanged() {
 		if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
 			glog.Warningf("not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
 				bckName, targetCnt, required)
-			bckXacts.StopPut()
+			bckXacts.AbortPut()
 		}
 		// NOTE: this doesn't guarantee that present targets are sufficient to restore an object
 		// if one target was killed, and a new one joined, this condition will be satisfied even though
@@ -447,7 +447,7 @@ func (mgr *Manager) ListenSmapChanged() {
 		if required := bckProps.EC.RequiredRestoreTargets(); targetCnt < required {
 			glog.Warningf("not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
 				bckName, targetCnt, required)
-			bckXacts.StopGet()
+			bckXacts.AbortGet()
 		}
 		return false
 	})
