@@ -331,6 +331,7 @@ func generateSlicesToMemory(lom *cluster.LOM, dataSlices, paritySlices int) (cmn
 	}
 
 	err = finalizeSlices(ctx, lom, sliceWriters, dataSlices, paritySlices)
+	ctx.wgCksmReaders.Wait()
 	return ctx.fh, ctx.slices, err
 }
 
@@ -389,8 +390,8 @@ func initializeSlices(lom *cluster.LOM, dataSlices, paritySlices int) (*encodeCt
 	ctx.wgCksmReaders.Add(1)
 	ctx.errCksumCh = make(chan error, 1)
 	if conf.Type != cmn.ChecksumNone {
-		go checksumDataSlices(ctx.slices, ctx.wgCksmReaders, ctx.errCksumCh, ctx.cksmReaders, conf.Type, ctx.sliceSize)
 		ctx.cksums = make([]*cmn.CksumHash, paritySlices)
+		go checksumDataSlices(ctx.slices, ctx.wgCksmReaders, ctx.errCksumCh, ctx.cksmReaders, conf.Type, ctx.sliceSize)
 	}
 	return ctx, nil
 }

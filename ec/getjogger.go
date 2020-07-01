@@ -419,7 +419,7 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice, cksums 
 	return nil
 }
 
-func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGroup, errCh chan int, i int, sliceSize int64) {
+func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGroup, errCh chan int, i int, sliceSize int64, objName string) {
 	defer wg.Done()
 
 	cksumType := recvCksm.Type()
@@ -438,7 +438,7 @@ func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGrou
 	}
 
 	if !actualCksm.Equal(recvCksm) {
-		err := cmn.NewBadDataCksumError(recvCksm, &actualCksm.Cksum, fmt.Sprintf("slice %d", i))
+		err := cmn.NewBadDataCksumError(recvCksm, &actualCksm.Cksum, fmt.Sprintf("%s, slice %d", objName, i))
 		glog.Error(err)
 		errCh <- i
 	}
@@ -503,7 +503,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 			}
 
 			cksmWg.Add(1)
-			go checkSliceChecksum(cksmReader, sl.cksum, cksmWg, cksmErrCh, i, sliceSize)
+			go checkSliceChecksum(cksmReader, sl.cksum, cksmWg, cksmErrCh, i, sliceSize, req.LOM.ObjName)
 		}
 	}
 
