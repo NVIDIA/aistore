@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/housekeep/lru"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction/demand"
 )
 
 type globalEntry interface {
@@ -23,7 +24,7 @@ type globalEntry interface {
 	// pre-renew: returns true iff the current active one exists and is either
 	// - ok to keep running as is, or
 	// - has been renew(ed) and is still ok
-	preRenewHook(previousEntry globalEntry) (done bool)
+	preRenewHook(previousEntry globalEntry) (keep bool)
 	// post-renew hook
 	postRenewHook(previousEntry globalEntry)
 }
@@ -200,12 +201,9 @@ type (
 	baseGlobalEntry struct{}
 )
 
-func (b *baseGlobalEntry) preRenewHook(previousEntry globalEntry) (done bool) {
+func (b *baseGlobalEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
 	e := previousEntry.Get()
-	if demandEntry, ok := e.(cmn.XactDemand); ok {
-		demandEntry.Renew()
-		done = true
-	}
+	_, keep = e.(demand.XactDemand)
 	return
 }
 

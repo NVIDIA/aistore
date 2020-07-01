@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/tar2tf"
+	"github.com/NVIDIA/aistore/xaction/demand"
 )
 
 type (
@@ -49,9 +50,9 @@ type ecGetEntry struct {
 func (e *ecGetEntry) Start(bck cmn.Bck) error {
 	var (
 		xec      = ec.ECM.NewGetXact(bck)
-		idleTime = 3 * cmn.GCO.Get().Timeout.SendFile
+		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECGet, bck, idleTime)
+	xec.XactDemandBase = *demand.NewXactDemandBase(cmn.ActECGet, bck, idleTime)
 	e.xact = xec
 	go xec.Run()
 	return nil
@@ -75,9 +76,9 @@ type ecPutEntry struct {
 func (e *ecPutEntry) Start(bck cmn.Bck) error {
 	var (
 		xec      = ec.ECM.NewPutXact(bck)
-		idleTime = 3 * cmn.GCO.Get().Timeout.SendFile
+		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECPut, bck, idleTime)
+	xec.XactDemandBase = *demand.NewXactDemandBase(cmn.ActECPut, bck, idleTime)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -101,9 +102,9 @@ type ecRespondEntry struct {
 func (e *ecRespondEntry) Start(bck cmn.Bck) error {
 	var (
 		xec      = ec.ECM.NewRespondXact(bck)
-		idleTime = 3 * cmn.GCO.Get().Timeout.SendFile
+		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(cmn.ActECRespond, bck, idleTime)
+	xec.XactDemandBase = *demand.NewXactDemandBase(cmn.ActECRespond, bck, idleTime)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -712,10 +713,7 @@ type baseBckEntry struct {
 // nolint:unparam // `err` is set in different implementations
 func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
 	e := previousEntry.Get()
-	if demandEntry, ok := e.(cmn.XactDemand); ok {
-		demandEntry.Renew()
-		keep = true
-	}
+	_, keep = e.(demand.XactDemand)
 	return
 }
 

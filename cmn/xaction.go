@@ -12,15 +12,10 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
 	timestampFormat = "15:04:05.000000"
-
-	// Default demand xaction idle timeout: how long the xaction must live after
-	// the end of the last request.
-	xactIdleTimeout = 2 * time.Minute
 )
 
 type (
@@ -80,24 +75,6 @@ type (
 
 	XactBaseID string
 
-	//
-	// xaction that self-terminates after staying idle for a while
-	// with an added capability to renew itself and ref-count its pending work
-	//
-	XactDemand interface {
-		Xact
-		IdleTimer() <-chan time.Time
-		Renew()
-		IncPending()
-		DecPending()
-		SubPending(n int)
-	}
-	XactDemandBase struct {
-		XactBase
-		idleTime time.Duration
-		timer    *time.Timer
-		pending  atomic.Int64
-	}
 	ErrXactExpired struct { // return it if called (right) after self-termination
 		msg string
 	}
@@ -111,9 +88,8 @@ type (
 
 var (
 	// interface guards
-	_ Xact       = &XactBase{}
-	_ XactStats  = &BaseXactStats{}
-	_ XactDemand = &XactDemandBase{}
+	_ Xact      = &XactBase{}
+	_ XactStats = &BaseXactStats{}
 )
 
 func NewErrXactExpired(msg string) *ErrXactExpired { return &ErrXactExpired{msg: msg} }
@@ -273,50 +249,6 @@ func (xact *XactBase) Stats() XactStats {
 		BytesCountX: xact.BytesCount(),
 		AbortedX:    xact.Aborted(),
 	}
-}
-
-//
-// XactDemandBase - partially implements XactDemand interface
-//
-
-func NewXactDemandBase(kind string, bck Bck, idleTimes ...time.Duration) *XactDemandBase {
-	idleTime := xactIdleTimeout
-	if len(idleTimes) != 0 {
-		idleTime = idleTimes[0]
-	}
-	return &XactDemandBase{
-		XactBase: *NewXactBaseWithBucket("", kind, bck),
-		idleTime: idleTime,
-		timer:    time.NewTimer(idleTime),
-	}
-}
-
-func (r *XactDemandBase) IdleTimer() <-chan time.Time { return r.timer.C }
-func (r *XactDemandBase) Renew() {
-	pending := r.Pending()
-	debug.Assert(pending >= 0)
-	if pending == 0 {
-		// If there are no requests yet and renew was issued then we will wait
-		// `r.idleTime` for some request to come.
-		r.timer.Reset(r.idleTime)
-	}
-}
-func (r *XactDemandBase) IncPending() {
-	if pending := r.pending.Inc(); pending == 1 {
-		// Stop the timer on the first request. It will be restarted once all
-		// jobs finish (see: `SubPending`).
-		r.timer.Stop()
-	}
-}
-func (r *XactDemandBase) DecPending() { r.SubPending(1) }
-func (r *XactDemandBase) SubPending(n int) {
-	pending := r.pending.Sub(int64(n))
-	debug.Assert(pending >= 0)
-	r.Renew()
-}
-func (r *XactDemandBase) Pending() int64 { return r.pending.Load() }
-func (r *XactDemandBase) Stop() {
-	r.timer.Stop()
 }
 
 func IsValidXaction(kind string) bool {
