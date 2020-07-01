@@ -293,6 +293,20 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional 
 	return nil
 }
 
+// WriteJSON writes a struct or byte slice to an HTTP response.
+// If `v` is a byte slice, it is passed as-is(already JSON-encoded data).
+// In other cases, `v` is encoded to JSON and then passed.
+// The function returns an error if writing to the response fails.
+func WriteJSON(w http.ResponseWriter, v interface{}) error {
+	w.Header().Set("Content-Type", "application/json")
+	bytes, isByteArray := v.([]byte)
+	if isByteArray {
+		_, err := w.Write(bytes)
+		return err
+	}
+	return jsoniter.NewEncoder(w).Encode(v)
+}
+
 // MustMarshal marshals v and panics if error occurs.
 func MustMarshal(v interface{}) []byte {
 	b, err := jsonAPI.Marshal(v)

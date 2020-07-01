@@ -243,7 +243,7 @@ func (reb *Manager) rebalanceRun(md *rebArgs) error {
 // 2. Multi-bucket rebalance may start up to two rebalances in parallel and
 //    wait for all finishes.
 func (reb *Manager) rebSyncAndRun(md *rebArgs) error {
-	// 6. Capture stats, start mpath joggers TODO: currently supporting only fs.ObjectType (content-type)
+	// 6. Capture stats, start mpath joggers
 	reb.stages.stage.Store(rebStageTraverse)
 
 	// No EC-enabled buckets - run only regular rebalance
@@ -485,24 +485,39 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64) {
 	reb.rebFini(md)
 }
 
-// TODO: fix the scope of the return type
-func (reb *Manager) RebECDataStatus() (slices interface{}, status int) {
+func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		caller     = r.Header.Get(cmn.HeaderCallerName)
+		query      = r.URL.Query()
+		getRebData = cmn.IsParseBool(query.Get(cmn.URLParamRebData))
+	)
+
+	if r.Method != http.MethodGet {
+		cmn.InvalidHandlerWithMsg(w, r, "invalid method "+r.Method)
+		return
+	}
+	if !getRebData {
+		cmn.InvalidHandler(w, r)
+		return
+	}
 	rebStatus := &Status{}
 	reb.RebStatus(rebStatus)
 
 	// the target is still collecting the data, reply that the result is not ready
 	if rebStatus.Stage < rebStageECDetect {
-		return nil, http.StatusAccepted
+		w.WriteHeader(http.StatusAccepted)
+		return
 	}
 
 	// ask rebalance manager the list of all local slices
-	slices, ok := reb.ec.nodeData(reb.t.Snode().ID())
-	// no local slices found. It is possible if the number of object is small
-	if !ok {
-		return nil, http.StatusNoContent
+	if slices, ok := reb.ec.nodeData(reb.t.Snode().ID()); ok {
+		if err := cmn.WriteJSON(w, slices); err != nil {
+			glog.Errorf("Failed to send data to %s", caller)
+		}
+		return
 	}
-
-	return slices, http.StatusOK
+	// no local slices found. It is possible if the number of object is small
+	w.WriteHeader(http.StatusNoContent)
 }
 
 //

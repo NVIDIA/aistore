@@ -27,7 +27,6 @@ type (
 	}
 )
 
-// TODO: support non-object content types
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()

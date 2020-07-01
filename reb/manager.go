@@ -368,7 +368,7 @@ func (reb *Manager) beginStreams(md *rebArgs) {
 }
 
 func (reb *Manager) endStreams() {
-	if reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) { // TODO: must always succeed?
+	if reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) {
 		reb.streams.Close(true /* graceful */)
 		reb.streams = nil
 		reb.acks.Close(true)

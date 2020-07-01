@@ -137,7 +137,7 @@ func (req *pushReq) Pack(packer *cmn.BytePack) {
 	}
 }
 
-func (req *pushReq) NewPack(mm *memsys.MMSA) []byte {
+func (req *pushReq) NewPack(mm *memsys.MMSA, kind byte) []byte {
 	var (
 		buf []byte
 		l   = rebMsgKindSize + req.PackedSize()
@@ -146,7 +146,7 @@ func (req *pushReq) NewPack(mm *memsys.MMSA) []byte {
 		buf, _ = mm.Alloc(int64(l))
 	}
 	packer := cmn.NewPacker(buf, l)
-	packer.WriteByte(rebMsgEC)
+	packer.WriteByte(kind)
 	packer.WriteAny(req)
 	return packer.Bytes()
 }
@@ -186,14 +186,8 @@ func (req *pushReq) Unpack(unpacker *cmn.ByteUnpack) error {
 // so there is no need for a caller to read the first byte and decide
 // which unpacker to call.
 // The function below is to simplify sending/receiving push notifications
-// TODO -- FIXME: copy-paste vs `(req *pushReq) NewPack`
 func (reb *Manager) encodePushReq(req *pushReq, mm *memsys.MMSA) []byte {
-	l := rebMsgKindSize + req.PackedSize()
-	buf, _ := mm.Alloc(int64(l))
-	packer := cmn.NewPacker(buf, l)
-	packer.WriteByte(rebMsgPushStage)
-	packer.WriteAny(req)
-	return packer.Bytes()
+	return req.NewPack(mm, rebMsgPushStage)
 }
 
 func (reb *Manager) decodePushReq(buf []byte) (*pushReq, error) {

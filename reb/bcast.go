@@ -434,7 +434,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *rebArgs) bool {
 // has been aborted, indicating that no need to do extra pull requests.
 func (reb *Manager) waitForPushReqs(md *rebArgs, stage uint32, timeout ...time.Duration) bool {
 	const defaultWaitTime = time.Minute
-	maxMissing := len(md.smap.Tmap) / 2 // TODO: is it OK to wait for half of them?
+	maxMissing := len(md.smap.Tmap) / 2
 	curWait := time.Duration(0)
 	sleep := md.config.Timeout.CplaneOperation * 2
 	maxWait := defaultWaitTime

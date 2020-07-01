@@ -478,7 +478,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 		hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
 	}
 	reb.ec.onAir.Inc()
-	hdr.Opaque = req.NewPack(nil)
+	hdr.Opaque = req.NewPack(nil, rebMsgEC)
 
 	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, target); err != nil {
 		reb.ec.onAir.Dec()
@@ -522,7 +522,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 		}
 	)
 	newMeta.SliceID = sliceID
-	hdr.Opaque = req.NewPack(nil)
+	hdr.Opaque = req.NewPack(nil, rebMsgEC)
 	if cksum != nil {
 		hdr.ObjAttrs.CksumValue = cksum.Value()
 		hdr.ObjAttrs.CksumType = cksum.Type()
@@ -934,7 +934,6 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 	// do not touch directories for buckets with EC disabled (for now)
-	// TODO: what to do if we found metafile on a bucket with EC disabled?
 	if !ct.Bprops().EC.Enabled {
 		return filepath.SkipDir
 	}
@@ -1058,7 +1057,7 @@ func (reb *Manager) exchange(md *rebArgs) error {
 			rebID:    rebID,
 		}
 		body   = cmn.MustMarshal(cts)
-		opaque = req.NewPack(nil)
+		opaque = req.NewPack(nil, rebMsgEC)
 		hdr    = transport.Header{
 			ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
 			Opaque:   opaque,

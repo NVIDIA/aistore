@@ -281,9 +281,8 @@ func (t *targetrunner) Run() error {
 	if config.Net.UseIntraData {
 		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.mux)
 	}
-	t.initRecvHandlers()
-
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
+	t.initRecvHandlers()
 	ec.Init(t, xaction.Registry)
 
 	aborted, _ := reb.IsRebalancing(cmn.ActResilver)
@@ -340,7 +339,7 @@ func (t *targetrunner) initRecvHandlers() {
 			{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
 			{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
 			{r: cmn.Xactions, h: t.xactHandler, net: []string{cmn.NetworkIntraControl}},
-			{r: cmn.Rebalance, h: t.rebalanceHandler, net: []string{cmn.NetworkIntraData}},
+			{r: cmn.Rebalance, h: t.rebManager.RespHandler, net: []string{cmn.NetworkIntraData}},
 			{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
 			{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
 			{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
@@ -1094,35 +1093,6 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return nil, false
 	})
 	cmn.AssertNoErr(err)
-}
-
-// GET /v1/rebalance (cmn.Rebalance)
-// Handles internal data requests while rebalance is running (pull notifications):
-//   - request collected slice list for a given target
-//     Returns: StatusAccepted if this target has not finished collecting local
-//     data yet; StatusNoContent if this target finished collecting local data but
-//     it found no slices that belong to a given target. Response body is empty.
-//     In case of StatusOK it returns a JSON with all found slices for a given target.
-func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		caller     = r.Header.Get(cmn.HeaderCallerName)
-		query      = r.URL.Query()
-		getRebData = cmn.IsParseBool(query.Get(cmn.URLParamRebData))
-	)
-	if !getRebData {
-		t.invalmsghdlr(w, r, "invalid request", http.StatusBadRequest)
-		return
-	}
-
-	data, status := t.rebManager.RebECDataStatus()
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-		return
-	}
-
-	if ok := t.writeJSON(w, r, data, "rebalance-data"); !ok {
-		glog.Errorf("Failed to send data to %s", caller)
-	}
 }
 
 //
