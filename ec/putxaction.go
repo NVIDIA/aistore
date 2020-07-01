@@ -220,15 +220,15 @@ type PutTargetStats struct {
 }
 
 type ExtECPutStats struct {
-	AvgEncodeTime  int64   `json:"ec.encode.time,string"`
-	AvgDeleteTime  int64   `json:"ec.delete.time,string"`
-	EncodeCount    int64   `json:"ec.encode.n,string"`
-	DeleteCount    int64   `json:"ec.delete.n,string"`
-	EncodeSize     int64   `json:"ec.encode.size,string"`
-	EncodeErrCount int64   `json:"ec.encode.err.n,string"`
-	DeleteErrCount int64   `json:"ec.delete.err.n,string"`
-	AvgObjTime     int64   `json:"ec.obj.process.time,string"`
-	AvgQueueLen    float64 `json:"ec.queue.len.n"`
+	AvgEncodeTime  cmn.DurationJSON `json:"ec.encode.time,string"`
+	AvgDeleteTime  cmn.DurationJSON `json:"ec.delete.time,string"`
+	EncodeCount    int64            `json:"ec.encode.n,string"`
+	DeleteCount    int64            `json:"ec.delete.n,string"`
+	EncodeSize     cmn.SizeJSON     `json:"ec.encode.size,string"`
+	EncodeErrCount int64            `json:"ec.encode.err.n,string"`
+	DeleteErrCount int64            `json:"ec.delete.err.n,string"`
+	AvgObjTime     cmn.DurationJSON `json:"ec.obj.process.time,string"`
+	AvgQueueLen    float64          `json:"ec.queue.len.n"`
 }
 
 var (
@@ -240,14 +240,14 @@ func (r *XactPut) Stats() cmn.XactStats {
 	baseStats := r.XactBase.Stats().(*cmn.BaseXactStats)
 	putStats := PutTargetStats{BaseXactStats: *baseStats}
 	st := r.stats.stats()
-	putStats.Ext.AvgEncodeTime = st.EncodeTime.Nanoseconds()
-	putStats.Ext.EncodeSize = st.EncodeSize
+	putStats.Ext.AvgEncodeTime = cmn.DurationJSON(st.EncodeTime.Nanoseconds())
+	putStats.Ext.EncodeSize = cmn.SizeJSON(st.EncodeSize)
 	putStats.Ext.EncodeCount = st.PutReq
 	putStats.Ext.EncodeErrCount = st.EncodeErr
-	putStats.Ext.AvgDeleteTime = st.DeleteTime.Nanoseconds()
+	putStats.Ext.AvgDeleteTime = cmn.DurationJSON(st.DeleteTime.Nanoseconds())
 	putStats.Ext.DeleteErrCount = st.DeleteErr
 	putStats.Ext.DeleteCount = st.DelReq
-	putStats.Ext.AvgObjTime = st.ObjTime.Nanoseconds()
+	putStats.Ext.AvgObjTime = cmn.DurationJSON(st.ObjTime.Nanoseconds())
 	putStats.Ext.AvgQueueLen = st.QueueLen
 
 	putStats.ObjCountX = st.PutReq + st.DelReq

@@ -133,7 +133,17 @@ type (
 		Type  string
 		Value uint64
 	}
+	DurationJSON time.Duration
+	SizeJSON     int64
 )
+
+func (tj DurationJSON) MarshalJSON() ([]byte, error) {
+	return []byte(time.Duration(tj).String()), nil
+}
+
+func (sj SizeJSON) MarshalJSON() ([]byte, error) {
+	return []byte(B2S(int64(sj), 2)), nil
+}
 
 var (
 	bucketReg *regexp.Regexp

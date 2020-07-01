@@ -292,10 +292,10 @@ type GetTargetStats struct {
 }
 
 type ExtECGetStats struct {
-	AvgTime     int64   `json:"ec.decode.time,string"`
-	ErrCount    int64   `json:"ec.decode.err.n,string"`
-	AvgObjTime  int64   `json:"ec.obj.process.time,string"`
-	AvgQueueLen float64 `json:"ec.queue.len.n"`
+	AvgTime     cmn.DurationJSON `json:"ec.decode.time,string"`
+	ErrCount    int64            `json:"ec.decode.err.n,string"`
+	AvgObjTime  cmn.DurationJSON `json:"ec.obj.process.time,string"`
+	AvgQueueLen float64          `json:"ec.queue.len.n"`
 }
 
 var (
@@ -307,10 +307,10 @@ func (r *XactGet) Stats() cmn.XactStats {
 	baseStats := r.XactBase.Stats().(*cmn.BaseXactStats)
 	getStats := GetTargetStats{BaseXactStats: *baseStats}
 	st := r.stats.stats()
-	getStats.Ext.AvgTime = st.DecodeTime.Nanoseconds()
+	getStats.Ext.AvgTime = cmn.DurationJSON(st.DecodeTime.Nanoseconds())
 	getStats.Ext.ErrCount = st.DecodeErr
 	getStats.ObjCountX = st.GetReq
-	getStats.Ext.AvgObjTime = st.ObjTime.Nanoseconds()
+	getStats.Ext.AvgObjTime = cmn.DurationJSON(st.ObjTime.Nanoseconds())
 	getStats.Ext.AvgQueueLen = st.QueueLen
 	return &getStats
 }

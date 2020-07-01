@@ -245,12 +245,11 @@ const (
 	DSortListTmpl = DSortListHeader + "{{ range $value := . }}" + DSortListBody + "{{end}}"
 
 	// Xactions templates
-
-	XactionsBodyTmpl = XactionStatsHeader +
+	XactionsBodyTmpl     = XactionsBaseBodyTmpl + XactionsExtBodyTmpl
+	XactionsBaseBodyTmpl = XactionStatsHeader +
 		"{{range $daemon := $.Stats }}" + XactionBody + "{{end}}"
-	XactionStatsHeader = "DAEMON ID\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t ABORTED" +
-		"{{if $.Verbose}}\t MORE{{end}}\n"
-	XactionBody = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
+	XactionStatsHeader = "DAEMON ID\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t ABORTED\n"
+	XactionBody        = "{{range $key, $xact := $daemon.Stats}}" + XactionStatsBody + "{{end}}" +
 		"{{if $daemon.Stats}}\t \t \t \t \t \t \t \t{{if $.Verbose}} \t {{end}}\n{{end}}"
 	XactionStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xact.IDX}}{{$xact.IDX}}{{else}}-{{end}}\t " +
@@ -260,14 +259,15 @@ const (
 		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}}\t " +
 		"{{FormatTime $xact.StartTimeX}}\t " +
 		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\t " +
-		"{{$xact.AbortedX}}" +
-		"{{if $.Verbose}}\t " + XactionExtBody + "{{end}}\n"
-	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
-		"{{$first := true}}" +
-		"{{range $name, $val := $xact.Ext}}" +
-		"{{if $first}}{{$first = false}}{{else}}, {{end}}{{$name}}: {{$val | printf `%s`}}" +
+		"{{$xact.AbortedX}}\n"
+	XactionsExtBodyTmpl = "{{if $.Verbose }}" + // if not nil
+		"\n{{range $daemon := $.Stats }}" +
+		"{{if $daemon.Stats}}DAEMON ID\t {{$daemon.DaemonID}}\n" +
+		"{{range $key, $xact := $daemon.Stats}}" +
+		"{{range $name,$val := $xact.Ext}}{{ $name }}\t {{$val}}\n{{end}}" +
+		"{{end}}\n" +
 		"{{end}}" +
-		"{{else}}-{{end}}"
+		"{{end}}{{end}}"
 
 	// Buckets templates
 	BucketsSummariesFastTmpl = "NAME\t EST. OBJECTS\t EST. SIZE\t EST. USED %\n" + bucketsSummariesBody
