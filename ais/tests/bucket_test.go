@@ -1082,8 +1082,6 @@ func TestLocalMirror(t *testing.T) {
 	}
 }
 func testLocalMirror(t *testing.T, numCopies []int) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
 	var (
 		m = ioContext{
 			t:               t,
@@ -1095,6 +1093,11 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 			},
 		}
 	)
+
+	if testing.Short() {
+		m.num = 250
+		m.numGetsEachFile = 3
+	}
 
 	m.saveClusterState()
 
@@ -1143,9 +1146,6 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 	for _, copies := range numCopies {
 		makeNCopies(t, baseParams, m.bck, copies)
-		if copies > 1 {
-			time.Sleep(10 * time.Second)
-		}
 	}
 
 	// wait for all GETs to complete
