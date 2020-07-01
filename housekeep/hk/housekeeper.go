@@ -25,18 +25,18 @@ type (
 		initialInterval time.Duration
 	}
 
-	timedCleanup struct {
+	timedAction struct {
 		name       string
 		f          CleanupFunc
 		updateTime time.Time
 	}
-	timedCleanups []timedCleanup
+	timedActions []timedAction
 
 	housekeeper struct {
-		stopCh   *cmn.StopCh
-		cleanups *timedCleanups
-		timer    *time.Timer
-		workCh   chan request
+		stopCh  *cmn.StopCh
+		actions *timedActions
+		timer   *time.Timer
+		workCh  chan request
 	}
 
 	CleanupFunc = func() time.Duration
@@ -52,21 +52,21 @@ func init() {
 
 func initCleaner() {
 	Housekeeper = &housekeeper{
-		workCh:   make(chan request, 10),
-		stopCh:   cmn.NewStopCh(),
-		cleanups: &timedCleanups{},
+		workCh:  make(chan request, 10),
+		stopCh:  cmn.NewStopCh(),
+		actions: &timedActions{},
 	}
-	heap.Init(Housekeeper.cleanups)
+	heap.Init(Housekeeper.actions)
 
 	go Housekeeper.run()
 }
 
-func (tc timedCleanups) Len() int            { return len(tc) }
-func (tc timedCleanups) Less(i, j int) bool  { return tc[i].updateTime.After(tc[j].updateTime) }
-func (tc timedCleanups) Swap(i, j int)       { tc[i], tc[j] = tc[j], tc[i] }
-func (tc timedCleanups) Peek() *timedCleanup { return &tc[len(tc)-1] }
-func (tc *timedCleanups) Push(x interface{}) { *tc = append(*tc, x.(timedCleanup)) }
-func (tc *timedCleanups) Pop() interface{} {
+func (tc timedActions) Len() int            { return len(tc) }
+func (tc timedActions) Less(i, j int) bool  { return tc[i].updateTime.After(tc[j].updateTime) }
+func (tc timedActions) Swap(i, j int)       { tc[i], tc[j] = tc[j], tc[i] }
+func (tc timedActions) Peek() *timedAction  { return &tc[len(tc)-1] }
+func (tc *timedActions) Push(x interface{}) { *tc = append(*tc, x.(timedAction)) }
+func (tc *timedActions) Pop() interface{} {
 	old := *tc
 	n := len(old)
 	item := old[n-1]
@@ -103,15 +103,15 @@ func (hk *housekeeper) run() {
 		case <-hk.stopCh.Listen():
 			return
 		case <-hk.timer.C:
-			if hk.cleanups.Len() == 0 {
+			if hk.actions.Len() == 0 {
 				break
 			}
 
 			// Run callback and update the item in the heap.
-			item := hk.cleanups.Peek()
+			item := hk.actions.Peek()
 			interval := item.f()
 			item.updateTime = time.Now().Add(interval)
-			heap.Fix(hk.cleanups, hk.cleanups.Len()-1)
+			heap.Fix(hk.actions, hk.actions.Len()-1)
 
 			hk.updateTimer()
 		case req := <-hk.workCh:
@@ -121,21 +121,21 @@ func (hk *housekeeper) run() {
 				if req.initialInterval == 0 {
 					initialInterval = req.f()
 				}
-				heap.Push(hk.cleanups, timedCleanup{
+				heap.Push(hk.actions, timedAction{
 					name:       req.name,
 					f:          req.f,
 					updateTime: time.Now().Add(initialInterval),
 				})
 			} else {
 				foundIdx := -1
-				for idx, tc := range *hk.cleanups {
+				for idx, tc := range *hk.actions {
 					if tc.name == req.name {
 						foundIdx = idx
 						break
 					}
 				}
 				debug.Assertf(foundIdx != -1, "cleanup func %q does not exist", req.name)
-				heap.Remove(hk.cleanups, foundIdx)
+				heap.Remove(hk.actions, foundIdx)
 			}
 
 			hk.updateTimer()
@@ -144,11 +144,11 @@ func (hk *housekeeper) run() {
 }
 
 func (hk *housekeeper) updateTimer() {
-	if hk.cleanups.Len() == 0 {
+	if hk.actions.Len() == 0 {
 		hk.timer.Stop()
 		return
 	}
-	hk.timer.Reset(time.Until(hk.cleanups.Peek().updateTime))
+	hk.timer.Reset(time.Until(hk.actions.Peek().updateTime))
 }
 
 func (hk *housekeeper) Abort() {
