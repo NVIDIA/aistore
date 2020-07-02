@@ -78,6 +78,7 @@ To uninstall autocompletions run `bash autocomplete/uninstall.sh`.
 - [Distributed Sort](resources/dsort.md)
 - [User account and access management](resources/users.md)
 - [Xaction (Job) management](resources/xaction.md)
+- [Search CLI Commands](resources/search.md)
 
 ## Info For Developers
 

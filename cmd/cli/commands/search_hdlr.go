@@ -27,7 +27,7 @@ var (
 		commandAttach: {"mount"},
 		subcmdAuthAdd: {"register", "create"},
 		commandDetach: {"unmount", "umount"},
-		commandList:   {"list"},
+		commandList:   {"list", "dir"},
 		commandSet:    {"update"},
 		commandShow:   {"view", "display"},
 		commandRemove: {"remove", "delete"},

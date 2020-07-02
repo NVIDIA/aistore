@@ -199,7 +199,7 @@ const (
 	deleteRoleArgument        = "ROLE"
 
 	// Search
-	searchArgument = "KEYWORD"
+	searchArgument = "KEYWORD [KEYWORD...]"
 )
 
 // Flags
