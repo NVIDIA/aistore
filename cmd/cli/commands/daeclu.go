@@ -66,6 +66,14 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 
 // Displays the status of the cluster or daemon
 func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
+	body := templates.StatusTemplateHelper{
+		Smap: smap,
+		Status: templates.DaemonStatusTemplateHelper{
+			Pmap: proxy,
+			Tmap: target,
+		},
+	}
+
 	if res, proxyOK := proxy[daemonID]; proxyOK {
 		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
 		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
@@ -74,24 +82,12 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Proxy {
 		template := chooseTmpl(templates.ProxyInfoBodyTmpl, templates.ProxyInfoTmpl, hideHeader)
-		return templates.DisplayOutput(proxy, c.App.Writer, template, useJSON)
+		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Target {
 		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
-		return templates.DisplayOutput(target, c.App.Writer, template, useJSON)
+		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	} else if daemonID == "" {
-		body := templates.StatusTemplateHelper{
-			Smap:   smap,
-			Status: proxy,
-		}
-		if err := templates.DisplayOutput(body, c.App.Writer, templates.AllProxyInfoTmpl, useJSON); err != nil {
-			return err
-		}
-		fmt.Fprintf(c.App.Writer, "\n")
-		if err := templates.DisplayOutput(target, c.App.Writer, templates.TargetInfoTmpl, useJSON); err != nil {
-			return err
-		}
-		fmt.Fprintf(c.App.Writer, "\n")
-		return templates.DisplayOutput(smap, c.App.Writer, templates.ClusterSummary, useJSON)
+		return templates.DisplayOutput(body, c.App.Writer, templates.ClusterInfoTmpl, useJSON)
 	}
 	return fmt.Errorf(invalidDaemonMsg, daemonID)
 }

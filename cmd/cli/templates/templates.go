@@ -50,7 +50,7 @@ const (
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
 		"{{$value.Status}}\n"
 
-	ProxyInfoBodyTmpl       = "{{ range $key, $value := . }}" + ProxyInfoBody + "{{end}}"
+	ProxyInfoBodyTmpl       = "{{ range $key, $value := .Status.Pmap }}" + ProxyInfoBody + "{{end}}"
 	ProxyInfoTmpl           = ProxyInfoHeader + ProxyInfoBodyTmpl
 	ProxyInfoSingleBodyTmpl = "{{$value := . }}" + ProxyInfoBody
 	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
@@ -59,7 +59,7 @@ const (
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
 		"{{$value.Status}}\n"
-	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status }}" + AllProxyInfoBody + "{{end}}"
+	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status.Pmap }}" + AllProxyInfoBody + "{{end}}"
 	AllProxyInfoTmpl     = ProxyInfoHeader + AllProxyInfoBodyTmpl
 
 	// Target Info
@@ -72,13 +72,15 @@ const (
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
 		"{{$value.Status}}\n"
 
-	TargetInfoBodyTmpl       = "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}"
+	TargetInfoBodyTmpl       = "{{ range $key, $value := .Status.Tmap }}" + TargetInfoBody + "{{end}}"
 	TargetInfoTmpl           = TargetInfoHeader + TargetInfoBodyTmpl
 	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoBody
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
-	ClusterSummary = "Summary:\n Proxies:\t{{len .Pmap}} ({{len .NonElects}} - unelectable)\n Targets:\t{{len .Tmap}}\n Primary Proxy:\t{{.ProxySI.ID}}\n Smap Version:\t{{.Version}}\n"
+	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{len .Smap.NonElects}} - unelectable)\n " +
+		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.ProxySI.ID}}\n Smap Version:\t{{.Smap.Version}}\n"
 
+	ClusterInfoTmpl = AllProxyInfoTmpl + "\n" + TargetInfoTmpl + "\n" + ClusterSummary
 	// Disk Stats
 	DiskStatsHeader = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
 
@@ -391,9 +393,14 @@ type (
 		ExtendedURLs bool
 	}
 
+	DaemonStatusTemplateHelper struct {
+		Pmap map[string]*stats.DaemonStatus `json:"pmap"`
+		Tmap map[string]*stats.DaemonStatus `json:"tmap"`
+	}
+
 	StatusTemplateHelper struct {
-		Smap   *cluster.Smap
-		Status map[string]*stats.DaemonStatus
+		Smap   *cluster.Smap              `json:"smap"`
+		Status DaemonStatusTemplateHelper `json:"status"`
 	}
 )
 
