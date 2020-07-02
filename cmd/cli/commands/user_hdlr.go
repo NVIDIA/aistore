@@ -192,15 +192,11 @@ func updateUserHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	username := c.Args().Get(0)
-	if username == "" {
-		return missingArgumentsError(c, "user name")
+	username, userpass, err := parseUNamePass(c)
+	if err != nil {
+		return err
 	}
-	// TODO: allow to change only role
-	userpass := c.Args().Get(1)
-	if username == "" {
-		return missingArgumentsError(c, "user password")
-	}
+
 	roles := c.Args()[2:]
 	user := &cmn.AuthUser{
 		ID:       username,
@@ -214,13 +210,9 @@ func addUserHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	username := c.Args().Get(0)
-	if username == "" {
-		return missingArgumentsError(c, "user name")
-	}
-	userpass := c.Args().Get(1)
-	if username == "" {
-		return missingArgumentsError(c, "user password")
+	username, userpass, err := parseUNamePass(c)
+	if err != nil {
+		return err
 	}
 	roles := c.Args()[2:]
 	user := &cmn.AuthUser{
@@ -465,4 +457,17 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 		rInfo.Clusters = cluPerms
 	}
 	return api.AddRoleAuthN(authParams, rInfo)
+}
+
+func parseUNamePass(c *cli.Context) (username, userpass string, err error) {
+	username = c.Args().Get(0)
+	if username == "" {
+		err = missingArgumentsError(c, "user name")
+		return
+	}
+	userpass = c.Args().Get(1)
+	if userpass == "" {
+		err = missingArgumentsError(c, "user password")
+	}
+	return
 }
