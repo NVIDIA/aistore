@@ -145,13 +145,8 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 	if redirected := p.jtx.redirectToOwner(w, r, msg.Handle, msg); redirected {
 		return
 	}
-	entry, exists := p.jtx.entry(msg.Handle)
-	if !exists {
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", msg.Handle)
-		return
-	} else if entry.finished() {
-		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
-		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", msg.Handle)
+	entry, ok := p.jtx.checkEntry(w, r, msg.Handle)
+	if !ok {
 		return
 	}
 	state := entry.state.(*queryState)
@@ -187,12 +182,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	if redirected := p.jtx.redirectToOwner(w, r, msg.Handle, msg); redirected {
 		return
 	}
-	if entry, exists := p.jtx.entry(msg.Handle); !exists {
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", msg.Handle)
-		return
-	} else if entry.finished() {
-		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
-		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", msg.Handle)
+	if _, ok := p.jtx.checkEntry(w, r, msg.Handle); !ok {
 		return
 	}
 

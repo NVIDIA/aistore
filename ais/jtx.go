@@ -101,15 +101,19 @@ func newJTX(p *proxyrunner) *jtx {
 	return v
 }
 
-func (o *jtx) addEntry(uuid string, state interface{}) {
+func (o *jtx) addEntry(uuid string, state ...interface{}) {
 	var (
+		s    interface{}
 		smap = o.p.GetSowner().Get()
 	)
+
+	if len(state) > 0 {
+		s = state[0]
+	}
 
 	cmn.Assert(uuid != "")
 	o.mtx.Lock()
 	cmn.Assert(o.entries[uuid] == nil)
-
 	entry := &jtxEntry{
 		notifListenerBase: notifListenerBase{
 			srcs: smap.Tmap.Clone(),
@@ -118,7 +122,7 @@ func (o *jtx) addEntry(uuid string, state interface{}) {
 		kind: jtxTaskKind,
 		// NOTE: Currently assume that the owner is the one that started.
 		owners: []*cluster.Snode{o.p.Snode()},
-		state:  state,
+		state:  s,
 	}
 	o.entries[uuid] = entry
 	o.p.notifs.add(uuid, entry)
@@ -148,6 +152,7 @@ func (o *jtx) ListenSmapChanged() {
 		// TODO: check all owners.
 		if smap.GetProxy(entry.owners[0].ID()) == nil {
 			o.removeEntry(uuid)
+			continue
 		}
 
 		if entry.state != nil {
@@ -323,4 +328,18 @@ Check:
 	owner := entry.owners[rand.Intn(len(entry.owners))]
 	o.p.reverseNodeRequest(w, r, owner)
 	return true
+}
+
+func (o *jtx) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (entry *jtxEntry, ok bool) {
+	entry, exists := o.entry(uuid)
+	if !exists {
+		o.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", uuid)
+		return
+	}
+	if entry.finished() {
+		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
+		o.p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", uuid)
+		return
+	}
+	return entry, true
 }
