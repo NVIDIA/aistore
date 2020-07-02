@@ -447,7 +447,7 @@ func (sls *smapLis) run() {
 	sls.wg.Done()
 	sls.running.Store(true)
 	for ver := range sls.postCh {
-		if ver == 0 {
+		if ver == -1 {
 			break
 		}
 		sls.RLock()
@@ -490,12 +490,13 @@ func (sls *smapLis) Unreg(sl cluster.Slistener) {
 	delete(sls.listeners, sl.String())
 	if len(sls.listeners) == 0 {
 		sls.running.Store(false)
-		sls.postCh <- 0
+		sls.postCh <- -1
 	}
 	sls.Unlock()
 }
 
 func (sls *smapLis) notify(ver int64) {
+	cmn.Assert(ver >= 0)
 	if sls.running.Load() {
 		sls.postCh <- ver
 	}
