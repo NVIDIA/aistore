@@ -5,6 +5,8 @@
 package api
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -269,8 +272,10 @@ func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) e
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
 func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.SelectMsg, v interface{}) error {
+	cmn.Assert(action == cmn.ActListObjects || action == cmn.ActSummaryBucket)
 	var (
-		uuid         string
+		initRespMsg  = &cmn.InitTaskRespMsg{}
+		buff         = bytes.NewBuffer(nil)
 		sleep        = initialPollInterval
 		actMsg       = cmn.ActionMsg{Action: action, Value: smsg}
 		changeOfTask bool
@@ -279,33 +284,45 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.Selec
 		reqParams.Query = url.Values{}
 	}
 	reqParams.Body = cmn.MustMarshal(actMsg)
-	resp, err := doHTTPRequestGetResp(reqParams, &uuid)
+	resp, err := doHTTPRequestGetResp(reqParams, buff)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusAccepted {
+		if resp.StatusCode == http.StatusOK {
+			return errors.New("expected 202 response code on first call, got 200")
+		}
 		return fmt.Errorf("invalid response code: %d", resp.StatusCode)
 	}
-	if resp.StatusCode == http.StatusAccepted {
-		// receiver started async task and returned the task ID
-		actMsg = handleAsyncReqAccepted(uuid, action, smsg, reqParams)
+
+	// receiver started async task and returned the initResMsg
+	if err := jsoniter.Unmarshal(buff.Bytes(), initRespMsg); err != nil {
+		return err
 	}
+	actMsg = handleAsyncReqAccepted(initRespMsg, action, smsg, reqParams)
 
 	defer reqParams.Query.Del(cmn.URLParamUUID)
 
 	// poll async task for http.StatusOK completion
 	for {
 		reqParams.Body = cmn.MustMarshal(actMsg)
-		resp, err = doHTTPRequestGetResp(reqParams, v)
+		buff.Reset()
+		resp, err = doHTTPRequestGetResp(reqParams, buff)
 		if err != nil {
 			return err
 		}
 		if !changeOfTask && resp.StatusCode == http.StatusAccepted {
 			// NOTE: async task changed on the fly
-			actMsg = handleAsyncReqAccepted(uuid, action, smsg, reqParams)
+			if err := jsoniter.Unmarshal(buff.Bytes(), initRespMsg); err != nil {
+				return err
+			}
+			actMsg = handleAsyncReqAccepted(initRespMsg, action, smsg, reqParams)
 			changeOfTask = true
 		}
 		if resp.StatusCode == http.StatusOK {
+			if err := jsoniter.Unmarshal(buff.Bytes(), v); err != nil {
+				return err
+			}
 			break
 		}
 		time.Sleep(sleep)
@@ -316,14 +333,15 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.Selec
 	return err
 }
 
-func handleAsyncReqAccepted(uuid, action string, smsg *cmn.SelectMsg, reqParams ReqParams) (actMsg cmn.ActionMsg) {
+func handleAsyncReqAccepted(initRespMsg *cmn.InitTaskRespMsg, action string, smsg *cmn.SelectMsg, reqParams ReqParams) (actMsg cmn.ActionMsg) {
 	if smsg != nil {
 		msg := cmn.SelectMsg{}
 		msg = *smsg
-		msg.UUID = uuid
+		msg.UUID = initRespMsg.UUID
+		msg.Handle = initRespMsg.Handle
 		actMsg = cmn.ActionMsg{Action: action, Value: &msg}
 	}
-	reqParams.Query.Set(cmn.URLParamUUID, uuid)
+	reqParams.Query.Set(cmn.URLParamUUID, initRespMsg.UUID)
 	return
 }
 
@@ -416,7 +434,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		}
 
 		smsg.PageMarker = page.PageMarker
-		smsg.PersistentHandle = page.PersistentMarker
+		smsg.Handle = page.Handle
 	}
 
 	if len(invalidateCache) == 0 || invalidateCache[0] {

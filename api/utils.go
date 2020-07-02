@@ -141,7 +141,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 		var err error
 		switch t := v.(type) {
 		case *string:
-			// In some places like dSort or task, the response is just a string (id).
+			// In some places like dSort, the response is just a string (id).
 			var b []byte
 			b, err = ioutil.ReadAll(resp.Body)
 			*t = string(b)

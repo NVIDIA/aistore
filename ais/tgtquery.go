@@ -84,7 +84,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	go xact.StartWithHandle(handle)
+	go xact.Start()
 }
 
 func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {

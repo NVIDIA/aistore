@@ -18,7 +18,7 @@ import (
 
 type (
 	ObjectsListingXact struct {
-		cmn.XactBase
+		cmn.XactBase // ID() serves as well as a query handle
 		t            cluster.Target
 		timer        *time.Timer
 		wi           *walkinfo.WalkInfo
@@ -29,7 +29,6 @@ type (
 		query               *ObjectsQuery
 		resultCh            chan *Result
 		lastDiscardedResult string
-		handle              string
 	}
 
 	Result struct {
@@ -44,6 +43,7 @@ const (
 
 func NewObjectsListing(t cluster.Target, query *ObjectsQuery, wi *walkinfo.WalkInfo, id string) *ObjectsListingXact {
 	cmn.Assert(query.BckSource.Bck != nil)
+	cmn.Assert(id != "")
 	return &ObjectsListingXact{
 		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActQueryObjects, *query.BckSource.Bck),
 		t:        t,
@@ -54,13 +54,6 @@ func NewObjectsListing(t cluster.Target, query *ObjectsQuery, wi *walkinfo.WalkI
 	}
 }
 
-// Start without specified handle means that we won't be able
-// to get this specific result set if we loose a reference to it.
-// Sometimes we know that we won't and that's ok.
-func (r *ObjectsListingXact) Start() {
-	r.StartWithHandle("")
-}
-
 func (r *ObjectsListingXact) stop() {
 	close(r.resultCh)
 	r.timer.Stop()
@@ -68,7 +61,7 @@ func (r *ObjectsListingXact) stop() {
 
 func (r *ObjectsListingXact) IsMountpathXact() bool { return false } // TODO -- FIXME
 
-func (r *ObjectsListingXact) StartWithHandle(handle string) {
+func (r *ObjectsListingXact) Start() {
 	defer func() {
 		r.fetchingDone = true
 	}()
@@ -77,8 +70,7 @@ func (r *ObjectsListingXact) StartWithHandle(handle string) {
 	cmn.Assert(r.query.BckSource != nil)
 	cmn.Assert(r.query.BckSource.Bck != nil)
 
-	Registry.Put(handle, r)
-	r.handle = handle
+	Registry.Put(r.ID().String(), r)
 
 	if r.query.ObjectsSource.Pt != nil {
 		r.startFromTemplate()
@@ -227,7 +219,7 @@ func (r *ObjectsListingXact) discardN(n uint) {
 	}
 
 	if r.fetchingDone && len(r.buff) == 0 {
-		Registry.Delete(r.handle)
+		Registry.Delete(r.ID().String())
 		r.Finish()
 	}
 }

@@ -1065,11 +1065,11 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
 	amsg cmn.ActionMsg, begin int64, fast bool) {
 	var (
-		uuid    string
-		err     error
-		bckList *cmn.BucketList
-		smsg    = cmn.SelectMsg{}
-		query   = r.URL.Query()
+		initRespMsg *cmn.InitTaskRespMsg
+		err         error
+		bckList     *cmn.BucketList
+		smsg        = cmn.SelectMsg{}
+		query       = r.URL.Query()
 	)
 	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1089,10 +1089,10 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		smsg.UUID = id
 	}
 	if bck.IsAIS() || smsg.Cached {
-		bckList, uuid, err = p.listAISBucket(bck, smsg)
+		bckList, initRespMsg, err = p.listAISBucket(bck, smsg)
 	} else {
 		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
-		bckList, uuid, _, err = p.listObjectsRemote(bck, smsg)
+		bckList, initRespMsg, _, err = p.listObjectsRemote(bck, smsg)
 		// TODO: `status == http.StatusGone` At this point we know that this
 		//  cloud bucket exists and is offline. We should somehow try to list
 		//  cached objects. This isn't easy as we basically need to start a new
@@ -1105,9 +1105,9 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 
 	// uuid == "" means that async runner has completed and the result is available
 	// otherwise it is an ID of a still running task
-	if uuid != "" {
+	if initRespMsg != nil {
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(uuid))
+		w.Write(cmn.MustMarshal(initRespMsg))
 		return
 	}
 
@@ -1151,10 +1151,10 @@ func (p *proxyrunner) invalidateListAISBucketCache(w http.ResponseWriter, r *htt
 // bucket == "": all buckets for a given provider
 func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg) {
 	var (
-		uuid      string
-		err       error
-		summaries cmn.BucketsSummaries
-		smsg      = cmn.SelectMsg{}
+		initRespMsg *cmn.InitTaskRespMsg
+		err         error
+		summaries   cmn.BucketsSummaries
+		smsg        = cmn.SelectMsg{}
 	)
 	listMsgJSON := cmn.MustMarshal(amsg.Value)
 	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
@@ -1167,16 +1167,16 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		smsg.UUID = id
 	}
 
-	if summaries, uuid, err = p.gatherBucketSummary(bck, smsg); err != nil {
+	if summaries, initRespMsg, err = p.gatherBucketSummary(bck, smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	// uuid == "" means that async runner has completed and the result is available
 	// otherwise it is an ID of a still running task
-	if uuid != "" {
+	if initRespMsg != nil {
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(uuid))
+		w.Write(cmn.MustMarshal(initRespMsg))
 		return
 	}
 
@@ -1184,7 +1184,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 }
 
 func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) (
-	summaries cmn.BucketsSummaries, uuid string, err error) {
+	summaries cmn.BucketsSummaries, initRespMsg *cmn.InitTaskRespMsg, err error) {
 	var (
 		// start new async task if client did not provide taskID(neither in Headers nor in SelectMsg),
 		isNew, q = p.initAsyncQuery(bck, &smsg, cmn.GenUUID())
@@ -1208,13 +1208,13 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 	results := p.bcastPost(args)
 	allOK, _, err := p.checkBckTaskResp(smsg.UUID, results)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	// some targets are still executing their tasks or it is request to start
 	// an async task. The proxy returns only uuid to a caller
 	if !allOK || isNew {
-		return nil, smsg.UUID, nil
+		return nil, &cmn.InitTaskRespMsg{UUID: smsg.UUID}, nil
 	}
 
 	// all targets are ready, prepare the final result
@@ -1226,12 +1226,12 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 	summaries = make(cmn.BucketsSummaries, 0)
 	for result := range p.bcastPost(args) {
 		if result.err != nil {
-			return nil, "", result.err
+			return nil, nil, result.err
 		}
 
 		var targetSummary cmn.BucketsSummaries
 		if err := jsoniter.Unmarshal(result.outjson, &targetSummary); err != nil {
-			return nil, "", err
+			return nil, nil, err
 		}
 
 		for _, bckSummary := range targetSummary {
@@ -1239,7 +1239,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 		}
 	}
 
-	return summaries, "", nil
+	return summaries, nil, nil
 }
 
 // POST { action } /v1/objects/bucket-name
@@ -1628,10 +1628,6 @@ func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, smsg *cmn.SelectMsg, newT
 		}
 	}
 
-	if smsg.PersistentHandle == "" {
-		smsg.PersistentHandle = smsg.UUID
-	}
-
 	q = cmn.AddBckToQuery(q, bck.Bck)
 	return isNew, q
 }
@@ -1666,7 +1662,10 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 //      * the list of objects if the async task finished (empty uuid)
 //      * non-empty uuid if the task is still running
 //      * error
-func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, taskID string, err error) {
+//
+// cmn.SelectMsg.UUID - TaskID which changes between next page requests
+// cmn.Selectmsg.Handle - list operation handle which doesn't change between requests
+func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, msg *cmn.InitTaskRespMsg, err error) {
 	var (
 		smap     = p.owner.smap.Get()
 		pageSize uint
@@ -1685,29 +1684,31 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 
 	if smsg.UUID == "" {
 		newTaskID := cmn.GenUUID()
+		smsg.Handle = cmn.GenUUID()
 		initResults := listCache.initResults(smap, smsg, bck, pageSize, newTaskID)
 		if initResults.err != nil {
-			return nil, "", initResults.err
+			return nil, nil, initResults.err
 		}
-		return nil, newTaskID, nil
+
+		return nil, &cmn.InitTaskRespMsg{UUID: newTaskID, Handle: smsg.Handle}, nil
 	}
 
-	if smsg.PersistentHandle == "" {
-		smsg.PersistentHandle = smsg.UUID
+	if smsg.Handle == "" {
+		return nil, nil, errors.New("handle can't be empty")
 	}
 
 	fetchResult := listCache.next(smap, smsg, bck, pageSize)
 	if fetchResult.err != nil {
-		return nil, "", fetchResult.err
+		return nil, nil, fetchResult.err
 	}
 	if !fetchResult.allOK {
-		return nil, smsg.UUID, nil
+		return nil, &cmn.InitTaskRespMsg{UUID: smsg.UUID, Handle: smsg.Handle}, nil
 	}
 
 	allEntries = cmn.ConcatObjLists(fetchResult.lists, pageSize)
-	allEntries.PersistentMarker = smsg.PersistentHandle
+	allEntries.Handle = smsg.Handle
 
-	return allEntries, "", nil
+	return allEntries, nil, nil
 }
 
 // selects a random target to GET the list of objects from the remote bucket (cloud or remote AIS)
@@ -1719,7 +1720,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 //      * non-empty uuid if the task is still running
 //      * error
 func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
-	allEntries *cmn.BucketList, uuid string, status int, err error) {
+	allEntries *cmn.BucketList, initRespMsg *cmn.InitTaskRespMsg, status int, err error) {
 	if smsg.PageSize > cmn.DefaultListPageSize {
 		glog.Warningf("list_objects page size %d for bucket %s exceeds the default maximum %d ",
 			smsg.PageSize, bck, cmn.DefaultListPageSize)
@@ -1765,13 +1766,13 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
 
 	allOK, status, err := p.checkBckTaskResp(smsg.UUID, results)
 	if err != nil {
-		return nil, "", status, err
+		return nil, nil, status, err
 	}
 
 	// some targets are still executing their tasks or it is request to start
 	// an async task. The proxy returns only uuid to a caller
 	if !allOK || isNew {
-		return nil, smsg.UUID, 0, nil
+		return nil, &cmn.InitTaskRespMsg{UUID: smsg.UUID}, 0, nil
 	}
 
 	// all targets are ready, prepare the final result
@@ -1789,7 +1790,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
 			continue
 		}
 		if res.err != nil {
-			return nil, "", res.status, res.err
+			return nil, nil, res.status, res.err
 		}
 		if len(res.outjson) == 0 {
 			continue
@@ -1832,8 +1833,8 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
 		}
 	}
 
-	// no active tasks - return empty uuid
-	return allEntries, "", 0, nil
+	// no active tasks - return empty initRespMsg
+	return allEntries, nil, 0, nil
 }
 
 func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {

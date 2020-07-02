@@ -248,21 +248,22 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 		return
 	}
 	var (
-		bckList *cmn.BucketList
-		uuid    string
-		err     error
+		bckList     *cmn.BucketList
+		initRespMsg *cmn.InitTaskRespMsg
+		err         error
 	)
 	smsg := cmn.SelectMsg{Fast: false, TimeFormat: time.RFC3339}
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
-	_, uuid, err = p.listAISBucket(bck, smsg)
+	_, initRespMsg, err = p.listAISBucket(bck, smsg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smsg.UUID = uuid
+	smsg.UUID = initRespMsg.UUID
+	smsg.Handle = initRespMsg.Handle
 	for {
-		bckList, uuid, err = p.listAISBucket(bck, smsg)
+		bckList, initRespMsg, err = p.listAISBucket(bck, smsg)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -271,7 +272,8 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 			break
 		}
 		// just in case
-		smsg.UUID = uuid
+		smsg.UUID = initRespMsg.UUID
+		smsg.Handle = initRespMsg.Handle
 		time.Sleep(time.Second)
 	}
 	resp := s3compat.NewListObjectResult()
