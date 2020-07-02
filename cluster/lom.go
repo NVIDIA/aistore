@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 )

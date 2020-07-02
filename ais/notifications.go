@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -167,7 +167,7 @@ func (n *notifs) init(p *proxyrunner) {
 	n.p = p
 	n.m = make(map[string]notifListener, 64)
 	n.fin = make(map[string]notifListener, 64)
-	hk.Housekeeper.RegisterFunc(notifsName+".gc", n.housekeep, notifsHousekeepT)
+	hk.Reg(notifsName+".gc", n.housekeep, notifsHousekeepT)
 }
 
 func (n *notifs) String() string { return notifsName }

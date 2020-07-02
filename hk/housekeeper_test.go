@@ -22,7 +22,7 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should register the callback and fire it", func() {
 		fired := false
-		Housekeeper.RegisterFunc("", func() time.Duration {
+		Reg("", func() time.Duration {
 			fired = true
 			return time.Second
 		})
@@ -40,7 +40,7 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should register the callback and fire it after initial interval", func() {
 		fired := false
-		Housekeeper.RegisterFunc("", func() time.Duration {
+		Reg("", func() time.Duration {
 			fired = true
 			return time.Second
 		}, time.Second)
@@ -54,11 +54,11 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should register multiple callbacks and fire it in correct order", func() {
 		fired := make([]bool, 2)
-		Housekeeper.RegisterFunc("foo", func() time.Duration {
+		Reg("foo", func() time.Duration {
 			fired[0] = true
 			return 2 * time.Second
 		})
-		Housekeeper.RegisterFunc("bar", func() time.Duration {
+		Reg("bar", func() time.Duration {
 			fired[1] = true
 			return time.Second + 500*time.Millisecond
 		})
@@ -96,11 +96,11 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should unregister callback", func() {
 		fired := make([]bool, 2)
-		Housekeeper.RegisterFunc("bar", func() time.Duration {
+		Reg("bar", func() time.Duration {
 			fired[0] = true
 			return 400 * time.Millisecond
 		}, 400*time.Millisecond)
-		Housekeeper.RegisterFunc("foo", func() time.Duration {
+		Reg("foo", func() time.Duration {
 			fired[1] = true
 			return 200 * time.Millisecond
 		}, 200*time.Millisecond)
@@ -110,20 +110,20 @@ var _ = Describe("Housekeeper", func() {
 
 		fired[0] = false
 		fired[1] = false
-		Housekeeper.UnregisterFunc("foo")
+		Unreg("foo")
 
 		time.Sleep(time.Second)
 		Expect(fired[1]).To(BeFalse())
 		Expect(fired[0]).To(BeTrue())
 
-		Housekeeper.UnregisterFunc("bar")
+		Unreg("bar")
 	})
 
 	It("should register and unregister multiple callbacks", func() {
 		var fired bool
 		f := func(name string) {
 			Expect(fired).To(BeFalse())
-			Housekeeper.RegisterFunc(name, func() time.Duration {
+			Reg(name, func() time.Duration {
 				fired = true
 				return 100 * time.Millisecond
 			}, 100*time.Millisecond)
@@ -131,7 +131,7 @@ var _ = Describe("Housekeeper", func() {
 			time.Sleep(110 * time.Millisecond)
 			Expect(fired).To(BeTrue())
 
-			Housekeeper.UnregisterFunc(name)
+			Unreg(name)
 			fired = false
 		}
 
@@ -171,7 +171,7 @@ var _ = Describe("Housekeeper", func() {
 
 		for i := 0; i < actionCnt; i++ {
 			index := i
-			Housekeeper.RegisterFunc(fmt.Sprintf("%d", index), func() time.Duration {
+			Reg(fmt.Sprintf("%d", index), func() time.Duration {
 				if fired[index] == -1 {
 					fired[index] = counter.Inc() - 1
 				}

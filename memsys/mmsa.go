@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -337,7 +337,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 			d = 10 * time.Second
 		}
 	}
-	hk.Housekeeper.RegisterFunc(r.Name+".gc", r.garbageCollect, d)
+	hk.Reg(r.Name+".gc", r.garbageCollect, d)
 	debug.Infof("mmsa %q started", r.Name)
 	return
 }
@@ -348,7 +348,7 @@ func (r *MMSA) Terminate() {
 		freed int64
 		gced  string
 	)
-	hk.Housekeeper.UnregisterFunc(r.Name + ".gc")
+	hk.Unreg(r.Name + ".gc")
 	for _, s := range r.rings {
 		freed += s.cleanup()
 	}

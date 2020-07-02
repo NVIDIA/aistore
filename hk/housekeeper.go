@@ -49,7 +49,7 @@ type (
 )
 
 var (
-	Housekeeper *housekeeper
+	defaultHK *housekeeper
 )
 
 func init() {
@@ -57,14 +57,14 @@ func init() {
 }
 
 func initCleaner() {
-	Housekeeper = &housekeeper{
+	defaultHK = &housekeeper{
 		workCh:  make(chan request, 10),
 		stopCh:  cmn.NewStopCh(),
 		actions: &timedActions{},
 	}
-	heap.Init(Housekeeper.actions)
+	heap.Init(defaultHK.actions)
 
-	go Housekeeper.run()
+	go defaultHK.run()
 }
 
 func (tc timedActions) Len() int            { return len(tc) }
@@ -80,12 +80,12 @@ func (tc *timedActions) Pop() interface{} {
 	return item
 }
 
-func (hk *housekeeper) RegisterFunc(name string, f CleanupFunc, initialInterval ...time.Duration) {
+func Reg(name string, f CleanupFunc, initialInterval ...time.Duration) {
 	var interval time.Duration
 	if len(initialInterval) > 0 {
 		interval = initialInterval[0]
 	}
-	hk.workCh <- request{
+	defaultHK.workCh <- request{
 		registering:     true,
 		name:            name,
 		f:               f,
@@ -93,18 +93,12 @@ func (hk *housekeeper) RegisterFunc(name string, f CleanupFunc, initialInterval 
 	}
 }
 
-func (hk *housekeeper) Register(action Action, initialInterval ...time.Duration) { // nolint:interfacer // We *cannot* use `fmt.Stringer` because we need `.Housekeep`.
-	hk.RegisterFunc(action.String(), action.Housekeep, initialInterval...)
-}
-
-func (hk *housekeeper) UnregisterFunc(name string) {
-	hk.workCh <- request{
+func Unreg(name string) {
+	defaultHK.workCh <- request{
 		registering: false,
 		name:        name,
 	}
 }
-
-func (hk *housekeeper) Unregister(action Action) { hk.UnregisterFunc(action.String()) } // nolint:interfacer // We could use `fmt.Stringer` but it's better to enforce the `Action`.
 
 func (hk *housekeeper) run() {
 	hk.timer = time.NewTimer(time.Hour)
@@ -163,6 +157,6 @@ func (hk *housekeeper) updateTimer() {
 	hk.timer.Reset(time.Until(hk.actions.Peek().updateTime))
 }
 
-func (hk *housekeeper) Abort() {
-	hk.stopCh.Close()
+func Abort() {
+	defaultHK.stopCh.Close()
 }

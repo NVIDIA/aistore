@@ -10,7 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 )
 
 var (
@@ -70,7 +70,7 @@ func NewXactDemandBase(kind string, bck cmn.Bck, idleTimes ...time.Duration) *Xa
 		},
 	}
 
-	hk.Housekeeper.RegisterFunc(r.hkName, func() time.Duration {
+	hk.Reg(r.hkName, func() time.Duration {
 		active := r.active.Swap(0)
 		if r.Pending() > 0 || active > 0 {
 			r.idle.likely = false // not idle
@@ -97,6 +97,6 @@ func (r *XactDemandBase) SubPending(n int) {
 }
 
 func (r *XactDemandBase) Stop() {
-	hk.Housekeeper.UnregisterFunc(r.hkName)
+	hk.Unreg(r.hkName)
 	r.idle.ticks.Close()
 }

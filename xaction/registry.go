@@ -16,8 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
-	"github.com/NVIDIA/aistore/housekeep/hk"
-	"github.com/NVIDIA/aistore/housekeep/lru"
+	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -292,7 +292,7 @@ func newRegistry() *registry {
 	xar := &registry{
 		entries: newRegistryEntries(),
 	}
-	hk.Housekeeper.RegisterFunc("xactions", xar.cleanUpFinished)
+	hk.Reg("xactions", xar.cleanUpFinished)
 	return xar
 }
 

@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 )
 
 const (
@@ -103,7 +103,7 @@ func (txns *transactions) init(t *targetrunner) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
 	txns.rendezvous = make(map[string]rndzvs, 8)
-	hk.Housekeeper.RegisterFunc("cp.transactions.gc", txns.garbageCollect, txnsTimeoutGC)
+	hk.Reg("cp.transactions.gc", txns.garbageCollect, txnsTimeoutGC)
 }
 
 func (txns *transactions) begin(txn txn) error {

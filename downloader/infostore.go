@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dbdriver"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 )
 
 var (
@@ -43,7 +43,7 @@ func newInfoStore(driver dbdriver.Driver) *infoStore {
 		downloaderDB: db,
 		jobInfo:      make(map[string]*downloadJobInfo),
 	}
-	hk.Housekeeper.RegisterFunc("downloader", is.housekeep, hk.DayInterval)
+	hk.Reg("downloader", is.housekeep, hk.DayInterval)
 	return is
 }
 

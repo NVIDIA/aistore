@@ -11,7 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

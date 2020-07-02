@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
@@ -136,7 +136,7 @@ func Register(network, trname string, callback Receive, mems ...*memsys.MMSA) (u
 	handlers[network][trname] = h
 	mu.Unlock()
 
-	hk.Housekeeper.RegisterFunc(h.hkName, h.cleanupOldSessions)
+	hk.Reg(h.hkName, h.cleanupOldSessions)
 	return
 }
 
@@ -160,7 +160,7 @@ func Unregister(network, trname string) (err error) {
 	mux.Unhandle(upath)
 	mu.Unlock()
 
-	hk.Housekeeper.UnregisterFunc(h.hkName)
+	hk.Unreg(h.hkName)
 	return
 }
 

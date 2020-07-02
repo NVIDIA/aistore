@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dbdriver"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 )
@@ -46,7 +46,7 @@ func NewManagerGroup(db dbdriver.Driver) *ManagerGroup {
 		managers: make(map[string]*Manager, 1),
 		db:       db,
 	}
-	hk.Housekeeper.RegisterFunc(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
+	hk.Reg(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
 	return mg
 }
 

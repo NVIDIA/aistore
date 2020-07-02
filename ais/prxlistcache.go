@@ -14,7 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -114,7 +114,7 @@ func initListObjectsCache(p *proxyrunner) {
 	}
 
 	listCache = newListObjectsCache(p)
-	hk.Housekeeper.RegisterFunc(hkListObjectName, func() time.Duration { return housekeepListCache(p) }, bucketPrefixStaleTime)
+	hk.Reg(hkListObjectName, func() time.Duration { return housekeepListCache(p) }, bucketPrefixStaleTime)
 }
 
 // TODO: Remove old entries, or those which take a lot of memory

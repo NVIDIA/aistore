@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -317,7 +317,7 @@ func initTarget(config *cmn.Config) {
 	daemon.rg.add(fshc, xfshc)
 
 	housekeep, initialInterval := cluster.LomCacheHousekeep(t.gmm, t)
-	hk.Housekeeper.RegisterFunc("lom-cache", housekeep, initialInterval)
+	hk.Reg("lom-cache", housekeep, initialInterval)
 	_ = ts.UpdateCapacities(nil) // goes after fs.Mountpaths.Init
 }
 

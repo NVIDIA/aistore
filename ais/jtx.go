@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 )
 
 // jtx (Job, Task, eXtended action) takes care of ownership of these entities.
@@ -103,7 +103,7 @@ func newJTX(p *proxyrunner) *jtx {
 		entries: make(map[string]*jtxEntry),
 	}
 	p.GetSowner().Listeners().Reg(v)
-	hk.Housekeeper.Register(v)
+	hk.Reg(v.String(), v.housekeep)
 	return v
 }
 
@@ -235,7 +235,7 @@ func (o *jtx) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (o *jtx) Housekeep() time.Duration {
+func (o *jtx) housekeep() time.Duration {
 	var (
 		removedCnt     int
 		deadlineCutoff = time.Now().Add(-keepFinishedInterval)

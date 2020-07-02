@@ -27,7 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
-	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -255,7 +255,7 @@ func (p *proxyrunner) Stop(err error) {
 		isPrimary = smap.isPrimary(p.si)
 	}
 	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.GetRunName(), p.si, isPrimary, err)
-	hk.Housekeeper.Abort()
+	hk.Abort()
 	xaction.Registry.AbortAll()
 
 	if isPrimary {
