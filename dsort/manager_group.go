@@ -46,7 +46,7 @@ func NewManagerGroup(db dbdriver.Driver) *ManagerGroup {
 		managers: make(map[string]*Manager, 1),
 		db:       db,
 	}
-	hk.Housekeeper.Register(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
+	hk.Housekeeper.RegisterFunc(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
 	return mg
 }
 

@@ -102,7 +102,7 @@ func newJTX(p *proxyrunner) *jtx {
 		entries: make(map[string]*jtxEntry),
 	}
 	p.GetSowner().Listeners().Reg(v)
-	hk.Housekeeper.Register("jtx", v.housekeep)
+	hk.Housekeeper.Register(v)
 	return v
 }
 
@@ -216,7 +216,7 @@ func (o *jtx) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (o *jtx) housekeep() time.Duration {
+func (o *jtx) Housekeep() time.Duration {
 	var (
 		removedCnt     int
 		deadlineCutoff = time.Now().Add(-keepFinishedInterval)

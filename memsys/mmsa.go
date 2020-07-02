@@ -337,7 +337,7 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 			d = 10 * time.Second
 		}
 	}
-	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect, d)
+	hk.Housekeeper.RegisterFunc(r.Name+".gc", r.garbageCollect, d)
 	debug.Infof("mmsa %q started", r.Name)
 	return
 }
@@ -348,7 +348,7 @@ func (r *MMSA) Terminate() {
 		freed int64
 		gced  string
 	)
-	hk.Housekeeper.Unregister(r.Name + ".gc")
+	hk.Housekeeper.UnregisterFunc(r.Name + ".gc")
 	for _, s := range r.rings {
 		freed += s.cleanup()
 	}

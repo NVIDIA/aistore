@@ -292,7 +292,7 @@ func newRegistry() *registry {
 	xar := &registry{
 		entries: newRegistryEntries(),
 	}
-	hk.Housekeeper.Register("xactions", xar.cleanUpFinished)
+	hk.Housekeeper.RegisterFunc("xactions", xar.cleanUpFinished)
 	return xar
 }
 

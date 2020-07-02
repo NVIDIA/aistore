@@ -114,12 +114,12 @@ func initListObjectsCache(p *proxyrunner) {
 	}
 
 	listCache = newListObjectsCache(p)
-	hk.Housekeeper.Register(hkListObjectName, func() time.Duration { return houseKeepListCache(p) }, bucketPrefixStaleTime)
+	hk.Housekeeper.RegisterFunc(hkListObjectName, func() time.Duration { return housekeepListCache(p) }, bucketPrefixStaleTime)
 }
 
 // TODO: Remove old entries, or those which take a lot of memory
 // until MemPressure/PctMemUsed falls below some level.
-func houseKeepListCache(p *proxyrunner) time.Duration {
+func housekeepListCache(p *proxyrunner) time.Duration {
 	if p.gmm.MemPressure() <= memsys.MemPressureModerate {
 		return bucketPrefixStaleTime
 	}

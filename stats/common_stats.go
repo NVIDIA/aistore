@@ -453,7 +453,7 @@ dummy:
 	// for real now
 	glog.Infof("Starting %s", r.GetRunName())
 	goMaxProcs = runtime.GOMAXPROCS(0)
-	hk.Housekeeper.Register(r.GetRunName()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
+	hk.Housekeeper.RegisterFunc(r.GetRunName()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
 	r.ticker = time.NewTicker(config.Periodic.StatsTime)
 	startTime, checkNumGorHigh := time.Now(), time.Time{}
 	r.startedUp.Store(true)

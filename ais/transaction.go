@@ -103,7 +103,7 @@ func (txns *transactions) init(t *targetrunner) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
 	txns.rendezvous = make(map[string]rndzvs, 8)
-	hk.Housekeeper.Register("cp.transactions.gc", txns.garbageCollect, txnsTimeoutGC)
+	hk.Housekeeper.RegisterFunc("cp.transactions.gc", txns.garbageCollect, txnsTimeoutGC)
 }
 
 func (txns *transactions) begin(txn txn) error {

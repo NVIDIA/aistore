@@ -317,7 +317,7 @@ func initTarget(config *cmn.Config) {
 	daemon.rg.add(fshc, xfshc)
 
 	housekeep, initialInterval := cluster.LomCacheHousekeep(t.gmm, t)
-	hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)
+	hk.Housekeeper.RegisterFunc("lom-cache", housekeep, initialInterval)
 	_ = ts.UpdateCapacities(nil) // goes after fs.Mountpaths.Init
 }
 

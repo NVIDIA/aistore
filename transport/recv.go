@@ -136,7 +136,7 @@ func Register(network, trname string, callback Receive, mems ...*memsys.MMSA) (u
 	handlers[network][trname] = h
 	mu.Unlock()
 
-	hk.Housekeeper.Register(h.hkName, h.cleanupOldSessions)
+	hk.Housekeeper.RegisterFunc(h.hkName, h.cleanupOldSessions)
 	return
 }
 
@@ -160,7 +160,7 @@ func Unregister(network, trname string) (err error) {
 	mux.Unhandle(upath)
 	mu.Unlock()
 
-	hk.Housekeeper.Unregister(h.hkName)
+	hk.Housekeeper.UnregisterFunc(h.hkName)
 	return
 }
 

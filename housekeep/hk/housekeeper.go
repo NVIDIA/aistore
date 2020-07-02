@@ -7,6 +7,7 @@ package hk
 
 import (
 	"container/heap"
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,6 +19,11 @@ const (
 )
 
 type (
+	Action interface {
+		fmt.Stringer
+		Housekeep() time.Duration
+	}
+
 	request struct {
 		registering     bool
 		name            string
@@ -74,7 +80,7 @@ func (tc *timedActions) Pop() interface{} {
 	return item
 }
 
-func (hk *housekeeper) Register(name string, f CleanupFunc, initialInterval ...time.Duration) {
+func (hk *housekeeper) RegisterFunc(name string, f CleanupFunc, initialInterval ...time.Duration) {
 	var interval time.Duration
 	if len(initialInterval) > 0 {
 		interval = initialInterval[0]
@@ -87,12 +93,18 @@ func (hk *housekeeper) Register(name string, f CleanupFunc, initialInterval ...t
 	}
 }
 
-func (hk *housekeeper) Unregister(name string) {
+func (hk *housekeeper) Register(action Action, initialInterval ...time.Duration) { // nolint:interfacer // We *cannot* use `fmt.Stringer` because we need `.Housekeep`.
+	hk.RegisterFunc(action.String(), action.Housekeep, initialInterval...)
+}
+
+func (hk *housekeeper) UnregisterFunc(name string) {
 	hk.workCh <- request{
 		registering: false,
 		name:        name,
 	}
 }
+
+func (hk *housekeeper) Unregister(action Action) { hk.UnregisterFunc(action.String()) } // nolint:interfacer // We could use `fmt.Stringer` but it's better to enforce the `Action`.
 
 func (hk *housekeeper) run() {
 	hk.timer = time.NewTimer(time.Hour)

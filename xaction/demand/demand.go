@@ -70,7 +70,7 @@ func NewXactDemandBase(kind string, bck cmn.Bck, idleTimes ...time.Duration) *Xa
 		},
 	}
 
-	hk.Housekeeper.Register(r.hkName, func() time.Duration {
+	hk.Housekeeper.RegisterFunc(r.hkName, func() time.Duration {
 		active := r.active.Swap(0)
 		if r.Pending() > 0 || active > 0 {
 			r.idle.likely = false // not idle
@@ -97,6 +97,6 @@ func (r *XactDemandBase) SubPending(n int) {
 }
 
 func (r *XactDemandBase) Stop() {
-	hk.Housekeeper.Unregister(r.hkName)
+	hk.Housekeeper.UnregisterFunc(r.hkName)
 	r.idle.ticks.Close()
 }

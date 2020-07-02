@@ -43,7 +43,7 @@ func newInfoStore(driver dbdriver.Driver) *infoStore {
 		downloaderDB: db,
 		jobInfo:      make(map[string]*downloadJobInfo),
 	}
-	hk.Housekeeper.Register("downloader", is.housekeep, hk.DayInterval)
+	hk.Housekeeper.RegisterFunc("downloader", is.housekeep, hk.DayInterval)
 	return is
 }
 
