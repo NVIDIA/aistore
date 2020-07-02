@@ -121,8 +121,7 @@ func reportErr(t *testing.T, errCh chan opRes, ignoreStatusNotFound bool) {
 			errHTTP, ok := opRes.err.(*cmn.HTTPError)
 			if !ok {
 				t.Errorf("Unexpected error encountered %v", opRes.err)
-			}
-			if errHTTP.Status == http.StatusNotFound && ignoreStatusNotFound {
+			} else if errHTTP.Status == http.StatusNotFound && ignoreStatusNotFound {
 				continue
 			}
 			t.Errorf("%s failed %v", opRes.op, opRes.err)
