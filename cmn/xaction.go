@@ -250,12 +250,3 @@ func (xact *XactBase) Stats() XactStats {
 		AbortedX:    xact.Aborted(),
 	}
 }
-
-func IsValidXaction(kind string) bool {
-	_, ok := XactsMeta[kind]
-	return ok
-}
-
-func IsXactTypeBck(kind string) bool {
-	return XactsMeta[kind].Type == XactTypeBck
-}

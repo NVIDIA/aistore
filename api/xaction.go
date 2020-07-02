@@ -23,7 +23,7 @@ type (
 
 	XactReqArgs struct {
 		ID      string
-		Kind    string  // Xaction kind, see: cmn.XactsMeta
+		Kind    string  // Xaction kind, see: cmn.XactsDtor
 		Bck     cmn.Bck // Optional bucket
 		Latest  bool    // Determines if we should get latest or all xactions
 		Timeout time.Duration
@@ -67,7 +67,7 @@ func (xs NodesXactStats) ObjCount() (count int64) {
 //
 // StartXaction starts a given xaction.
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
-	if !cmn.XactsMeta[args.Kind].Startable {
+	if !cmn.XactsDtor[args.Kind].Startable {
 		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
 	}
 

@@ -291,7 +291,7 @@ func putPromoteObjectCompletions(c *cli.Context) {
 func xactionCompletions(cmd string) func(ctx *cli.Context) {
 	return func(c *cli.Context) {
 		if c.NArg() == 0 {
-			for kind, meta := range cmn.XactsMeta {
+			for kind, meta := range cmn.XactsDtor {
 				if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && meta.Startable) {
 					fmt.Println(kind)
 				}
@@ -308,8 +308,8 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 }
 
 func xactionDesc(cmd string) string {
-	xactKinds := make([]string, 0, len(cmn.XactsMeta))
-	for kind, meta := range cmn.XactsMeta {
+	xactKinds := make([]string, 0, len(cmn.XactsDtor))
+	for kind, meta := range cmn.XactsDtor {
 		if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && meta.Startable) {
 			xactKinds = append(xactKinds, kind)
 		}

@@ -667,7 +667,7 @@ func (e *queryEntry) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (e *queryEntry) Kind() string  { return cmn.ActQuery }
+func (e *queryEntry) Kind() string  { return cmn.ActQueryObjects }
 func (e *queryEntry) Get() cmn.Xact { return e.xact }
 
 func (r *registry) RenewObjectsListingXact(t cluster.Target, q *query.ObjectsQuery, wi *walkinfo.WalkInfo, handle string) (*query.ObjectsListingXact, error) {

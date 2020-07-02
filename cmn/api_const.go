@@ -29,7 +29,8 @@ const (
 	FlushOp  = "flush"
 )
 
-// ActionMsg.Action enum (includes xactions)
+// ActionMsg.Action
+// includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
 const (
 	ActShutdown       = "shutdown"
 	ActRebalance      = "rebalance"
@@ -46,6 +47,7 @@ const (
 	ActSetBprops      = "setbprops"
 	ActResetBprops    = "resetbprops"
 	ActListObjects    = "listobj"
+	ActQueryObjects   = "queryobj"
 	ActInvalListCache = "invallistobjcache"
 	ActSummaryBucket  = "summarybck"
 	ActRenameObject   = "renameobj"
@@ -73,8 +75,9 @@ const (
 	ActTar2Tf         = "tar2tf"
 	ActAttach         = "attach"
 	ActDetach         = "detach"
-	ActQuery          = "query"
+)
 
+const (
 	// Actions to manipulate mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
 	ActMountpathDisable = "disable"

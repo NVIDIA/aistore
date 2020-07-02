@@ -254,7 +254,7 @@ func (e *registryEntries) remove(id string) {
 			e.entries[idx] = e.entries[len(e.entries)-1]
 			e.entries = e.entries[:len(e.entries)-1]
 
-			if cmn.XactsMeta[entry.Kind()].Type == cmn.XactTypeTask {
+			if cmn.XactsDtor[entry.Kind()].Type == cmn.XactTypeTask {
 				e.taskCount.Dec()
 			}
 			break
@@ -277,7 +277,7 @@ func (e *registryEntries) insert(entry baseEntry) {
 
 	// Increase after cleanup to not force trigger it. If it was just added, for
 	// sure it didn't yet finish.
-	if cmn.XactsMeta[entry.Kind()].Type == cmn.XactTypeTask {
+	if cmn.XactsDtor[entry.Kind()].Type == cmn.XactTypeTask {
 		e.taskCount.Inc()
 	}
 }
@@ -362,7 +362,7 @@ func (r *registry) abort(args abortArgs) {
 			}
 		} else if args.all {
 			abort = true
-			if args.ty != "" && args.ty != cmn.XactsMeta[xact.Kind()].Type {
+			if args.ty != "" && args.ty != cmn.XactsDtor[xact.Kind()].Type {
 				abort = false
 			}
 		}
@@ -431,7 +431,7 @@ func (r *registry) GetStats(query RegistryXactFilter) ([]cmn.XactStats, error) {
 		if query.OnlyRunning != nil && *query.OnlyRunning {
 			matching := make([]cmn.XactStats, 0, 10)
 			if query.Kind == "" {
-				for kind := range cmn.XactsMeta {
+				for kind := range cmn.XactsDtor {
 					entry := r.GetRunning(RegistryXactFilter{Kind: kind, Bck: query.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Stats())
@@ -504,7 +504,6 @@ func (r *registry) cleanUpFinished() time.Duration {
 			return cleanupInterval
 		}
 	}
-	anyTaskDeleted := false
 	toRemove := make([]string, 0, 100)
 	r.entries.forEach(func(entry baseEntry) bool {
 		var (
@@ -521,7 +520,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 		//
 		// We need to check if the entry is not the most recent entry for
 		// given kind. If it is we want to keep it anyway.
-		switch cmn.XactsMeta[entry.Kind()].Type {
+		switch cmn.XactsDtor[entry.Kind()].Type {
 		case cmn.XactTypeGlobal:
 			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), OnlyRunning: api.Bool(true)})
 			if entry != nil && entry.Get().ID() == eID {
@@ -539,9 +538,6 @@ func (r *registry) cleanUpFinished() time.Duration {
 		if xact.EndTime().Add(entryOldAge).Before(startTime) {
 			// xaction has finished more than entryOldAge ago
 			toRemove = append(toRemove, eID.String())
-			if cmn.XactsMeta[entry.Kind()].Type == cmn.XactTypeTask {
-				anyTaskDeleted = true
-			}
 			return true
 		}
 		return true
@@ -551,12 +547,6 @@ func (r *registry) cleanUpFinished() time.Duration {
 		r.entries.remove(id)
 	}
 
-	// free all memory taken by cleaned up tasks
-	// Tasks like ListObjects ones may take up huge amount of memory, so they
-	// must be cleaned up as soon as possible
-	if anyTaskDeleted {
-		cmn.FreeMemToOS(time.Second)
-	}
 	return cleanupInterval
 }
 

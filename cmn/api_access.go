@@ -16,7 +16,7 @@ const (
 	AccessObjHEAD
 	AccessPUT
 	AccessAPPEND
-	AccessDownload
+	AccessDOWNLOAD
 	AccessObjDELETE
 	AccessObjRENAME
 	AccessPROMOTE
@@ -30,7 +30,7 @@ const (
 	AccessSYNC
 	AccessBckDELETE
 	// cluster
-	AccessBckCreate
+	AccessBckCREATE
 	AccessBckLIST
 	AccessADMIN
 	// must be the last one
@@ -40,8 +40,8 @@ const (
 	allowAllAccess       = ^uint64(0)
 	allowReadOnlyAccess  = AccessGET | AccessObjHEAD | AccessBckHEAD | AccessObjLIST
 	allowReadWriteAccess = allowReadOnlyAccess |
-		AccessPUT | AccessAPPEND | AccessDownload | AccessObjDELETE | AccessObjRENAME
-	allowClusterAccess = allowAllAccess & (AccessBckCreate - 1)
+		AccessPUT | AccessAPPEND | AccessDOWNLOAD | AccessObjDELETE | AccessObjRENAME
+	allowClusterAccess = allowAllAccess & (AccessBckCREATE - 1)
 
 	// Permission Operations
 	AllowAccess = "allow"
@@ -57,7 +57,7 @@ var accessOp = map[int]string{
 	AccessObjHEAD:   "HEAD-OBJECT",
 	AccessPUT:       "PUT",
 	AccessAPPEND:    "APPEND",
-	AccessDownload:  "DOWNLOAD",
+	AccessDOWNLOAD:  "DOWNLOAD",
 	AccessObjDELETE: "DELETE-OBJECT",
 	AccessObjRENAME: "RENAME-OBJECT",
 	AccessPROMOTE:   "PROMOTE",
@@ -71,7 +71,7 @@ var accessOp = map[int]string{
 	AccessSYNC:        "SYNC-BUCKET",
 	AccessBckDELETE:   "DELETE-BUCKET",
 	// cluster
-	AccessBckCreate: "CREATE-BUCKET",
+	AccessBckCREATE: "CREATE-BUCKET",
 	AccessADMIN:     "ADMIN",
 }
 
@@ -98,8 +98,8 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AccessAPPEND) {
 		accList = append(accList, accessOp[AccessAPPEND])
 	}
-	if a.Has(AccessDownload) {
-		accList = append(accList, accessOp[AccessDownload])
+	if a.Has(AccessDOWNLOAD) {
+		accList = append(accList, accessOp[AccessDOWNLOAD])
 	}
 	if a.Has(AccessObjDELETE) {
 		accList = append(accList, accessOp[AccessObjDELETE])

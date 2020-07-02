@@ -828,6 +828,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if bck.Bck.IsRemoteAIS() {
+		// forward to remote AIS as is, with a few distinct exceptions
 		switch msg.Action {
 		case cmn.ActListObjects, cmn.ActInvalListCache:
 			break
@@ -839,7 +840,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	// 3. createlb
 	if msg.Action == cmn.ActCreateLB {
-		if err := p.checkPermissions(r, nil, cmn.AccessBckCreate); err != nil {
+		if err := p.checkPermissions(r, nil, cmn.AccessBckCREATE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -878,11 +879,10 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 		return
-	} else if msg.Action != cmn.ActPrefetch {
-		// All actions that may be forwarded to the primary as-is  must be
-		// forwarded before `Bck` is created. Reason: if `bck.Init` fails,
-		// it may call `syncCBMeta` that ruins the original `msg` and
-		// replaces it with `ActionMsg{Action: cmn.RegisterCB}`.
+	}
+	// only the primary can do metasync
+	xactDtor := cmn.XactsDtor[msg.Action]
+	if xactDtor.Metasync {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
@@ -891,7 +891,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		_, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist)
 		if ok && msg.Action == cmn.ActRenameLB {
-			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "cannot %q: ais bucket %q does not exist", msg.Action, bucket)
+			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "cannot %q: ais bucket %q does not exist",
+				msg.Action, bucket)
 			return
 		}
 		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: &msg}
@@ -936,8 +937,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActCopyBucket:
-		// TODO: what permission is the best for COPY?
-		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessBckCreate); err != nil {
+		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessGET); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -970,7 +970,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActRegisterCB:
 		// TODO: choose the best permission
-		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessBckCreate); err != nil {
+		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessBckCREATE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -1089,7 +1089,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		bckList, uuid, err = p.listAISBucket(bck, smsg)
 	} else {
 		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
-		bckList, uuid, _, err = p.listObjectsCloud(bck, smsg)
+		bckList, uuid, _, err = p.listObjectsRemote(bck, smsg)
 		// TODO: `status == http.StatusGone` At this point we know that this
 		//  cloud bucket exists and is offline. We should somehow try to list
 		//  cached objects. This isn't easy as we basically need to start a new
@@ -1115,7 +1115,6 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	bckList.Entries = bckList.Entries[:0]
 	bckList.Entries = nil
 	bckList = nil
-	go cmn.FreeMemToOS(time.Second)
 
 	if p.writeJSONBytes(w, r, b, "list_objects") {
 		delta := mono.Since(begin)
@@ -1708,15 +1707,15 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	return allEntries, "", nil
 }
 
-// selects a random target to GET the list of objects from the cloud
-// - if `cached` or `atime` property is requested performs extra steps:
-//      * get list of cached files info from all targets
-//      * updates the list of objects from the cloud with cached info
+// selects a random target to GET the list of objects from the remote bucket (cloud or remote AIS)
+// if `cached` and/or `atime` is requested:
+//      * get a list of cached objects from all targets
+//      * add `cached`/`atime` to returned object metadata
 // returns:
-//      * the list of objects if the async task finished (empty uuid)
+//      * list of objects and properties if the async task has finished (empty uuid)
 //      * non-empty uuid if the task is still running
 //      * error
-func (p *proxyrunner) listObjectsCloud(bck *cluster.Bck, smsg cmn.SelectMsg) (
+func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
 	allEntries *cmn.BucketList, uuid string, status int, err error) {
 	if smsg.PageSize > cmn.DefaultListPageSize {
 		glog.Warningf("list_objects page size %d for bucket %s exceeds the default maximum %d ",

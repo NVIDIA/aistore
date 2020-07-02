@@ -13,9 +13,11 @@ const (
 )
 
 type (
-	XactMetadata struct {
-		Type      string
-		Startable bool // determines if can be started via API
+	XactDescriptor struct {
+		Type      string // XactTypeGlobal, etc. - enum above
+		Startable bool   // determines if this xaction can be started via API
+		Metasync  bool   // true: changes and metasyncs cluster-wide meta
+		Owned     bool   // true: JTX-owned
 	}
 	XactReqMsg struct {
 		Target      string `json:"target,omitempty"`
@@ -40,32 +42,38 @@ type (
 	}
 )
 
-var XactsMeta = map[string]XactMetadata{
-	// NOTE -- TODO: extend to include: run-by-primary-only | progress-bar-supported | limited-coexistence #791
-	// global kinds
+// XactsDtor is a statically declared table of the form: [xaction-kind => xaction-descriptor]
+// TODO add progress-bar-supported and  limited-coexistence(#791)
+//      consider adding on-demand column as well
+var XactsDtor = map[string]XactDescriptor{
+	// global xactions (scope = cluster)
 	ActLRU:       {Type: XactTypeGlobal, Startable: true},
 	ActElection:  {Type: XactTypeGlobal, Startable: false},
 	ActResilver:  {Type: XactTypeGlobal, Startable: true},
-	ActRebalance: {Type: XactTypeGlobal, Startable: true},
+	ActRebalance: {Type: XactTypeGlobal, Startable: true, Metasync: true, Owned: false},
 	ActDownload:  {Type: XactTypeGlobal, Startable: false},
 
-	// bucket's kinds
-	ActECGet:        {Type: XactTypeBck, Startable: false},
-	ActECPut:        {Type: XactTypeBck, Startable: false},
-	ActECRespond:    {Type: XactTypeBck, Startable: false},
-	ActMakeNCopies:  {Type: XactTypeBck, Startable: false},
-	ActPutCopies:    {Type: XactTypeBck, Startable: false},
-	ActRenameLB:     {Type: XactTypeBck, Startable: false},
-	ActCopyBucket:   {Type: XactTypeBck, Startable: false},
-	ActECEncode:     {Type: XactTypeBck, Startable: false},
-	ActEvictObjects: {Type: XactTypeBck, Startable: false},
-	ActDelete:       {Type: XactTypeBck, Startable: false},
-	ActLoadLomCache: {Type: XactTypeBck, Startable: false},
-	ActPrefetch:     {Type: XactTypeBck, Startable: true},
-	ActPromote:      {Type: XactTypeBck, Startable: false},
-	ActQuery:        {Type: XactTypeBck, Startable: false},
+	// xactions that run on a given bucket or buckets
+	ActECGet:         {Type: XactTypeBck, Startable: false},
+	ActECPut:         {Type: XactTypeBck, Startable: false},
+	ActECRespond:     {Type: XactTypeBck, Startable: false},
+	ActMakeNCopies:   {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
+	ActPutCopies:     {Type: XactTypeBck, Startable: false},
+	ActRenameLB:      {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
+	ActCopyBucket:    {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
+	ActECEncode:      {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
+	ActEvictObjects:  {Type: XactTypeBck, Startable: false},
+	ActDelete:        {Type: XactTypeBck, Startable: false},
+	ActLoadLomCache:  {Type: XactTypeBck, Startable: false},
+	ActPrefetch:      {Type: XactTypeBck, Startable: true},
+	ActPromote:       {Type: XactTypeBck, Startable: false},
+	ActQueryObjects:  {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
+	ActListObjects:   {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true},
+	ActSummaryBucket: {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true},
 
-	ActListObjects:   {Type: XactTypeTask, Startable: false},
-	ActSummaryBucket: {Type: XactTypeTask, Startable: false},
-	ActTar2Tf:        {Type: XactTypeTask, Startable: false},
+	// special
+	ActTar2Tf: {Type: XactTypeTask, Startable: false},
 }
+
+func IsValidXaction(kind string) bool { _, ok := XactsDtor[kind]; return ok }
+func IsXactTypeBck(kind string) bool  { return XactsDtor[kind].Type == XactTypeBck }
