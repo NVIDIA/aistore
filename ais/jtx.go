@@ -35,8 +35,6 @@ import (
 // request that they do not own, to the owner.
 //
 // TODO:
-//  * (easy) Wait some time before making a broadcast when the entity is unknown
-//    because most probably the table was send but it hasn't been received/updated yet.
 //  * (easy) Broadcasting the table is done at every `add` - we should do that periodically.
 //  * (hard) Broadcasting a table could be done via some gossip algorithm.
 //  * (easy) We should also broadcast the finished time (if set) so other proxies do not
@@ -55,6 +53,11 @@ const (
 const (
 	keepFinishedInterval = time.Minute              // how long we should keep finished entries
 	hkInterval           = keepFinishedInterval / 2 // how often we should check the entries
+
+	// How long we should wait to make another check to see if the entry exist.
+	// The entry could be on its way and was just added therefore we don't need
+	// to do a broadcast to other proxies to find it out (see: `redirectToOwner`).
+	reCheckInterval = time.Second
 )
 
 type (
@@ -98,6 +101,7 @@ func newJTX(p *proxyrunner) *jtx {
 		p:       p,
 		entries: make(map[string]*jtxEntry),
 	}
+	p.GetSowner().Listeners().Reg(v)
 	hk.Housekeeper.Register("jtx", v.housekeep)
 	return v
 }
@@ -164,6 +168,8 @@ func (o *jtx) ListenSmapChanged() {
 	}
 	o.mtx.Unlock()
 }
+
+func (o *jtx) String() string { return "jtx" }
 
 func (o *jtx) MarshalJSON() ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
@@ -270,8 +276,18 @@ func (o *jtx) redirectToOwner(w http.ResponseWriter, r *http.Request, uuid strin
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
 	}
 
+	reCheck := true
+Check:
 	entry, exists := o.entry(uuid)
 	if !exists {
+		// If we don't see the entry then maybe the new table is on the way in
+		// the network and we just need to give it some time to arrive.
+		if reCheck {
+			time.Sleep(reCheckInterval)
+			reCheck = false
+			goto Check
+		}
+
 		// Owner not in the table, find out...
 		var (
 			path    = cmn.URLPath(cmn.Version, cmn.Jtx)
