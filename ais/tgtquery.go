@@ -69,18 +69,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		NotifBase: cmn.NotifBase{
 			When: cmn.UponTerm,
 			Dsts: []string{owner},
-			F: func(n cmn.Notif, err error) {
-				// FIXME: we cannot use `t.xactCallerNotify` because `xact.ID() != handle`
-				var (
-					msg   = notifMsg{Ty: notifXact, Snode: t.si, Err: err}
-					notif = n.(*cmn.NotifXact)
-					pid   = notif.Dsts[0]
-				)
-				stats := notif.Xact.Stats().(*cmn.BaseXactStats)
-				stats.IDX = handle
-				msg.Data = cmn.MustMarshal(stats)
-				t.notify(pid, cmn.MustMarshal(&msg))
-			},
+			F:    t.xactCallerNotify,
 		},
 	})
 
