@@ -16,12 +16,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/hk"
 )
 
@@ -70,15 +70,10 @@ type (
 	}
 
 	jtxEntry struct {
-		kind         jtxKind
-		owners       []*cluster.Snode
-		startedTime  time.Time
-		finishedTime atomic.Time
-		state        interface{}
-	}
-
-	jtxNotifListener struct {
 		notifListenerBase
+		kind   jtxKind
+		owners []*cluster.Snode
+		state  interface{}
 	}
 )
 
@@ -87,7 +82,6 @@ var (
 	_ json.Unmarshaler = &jtx{}
 )
 
-func (e *jtxEntry) finished() bool { return !cmn.IsTimeZero(e.finishedTime.Load()) }
 func (e *jtxEntry) isOwner(si *cluster.Snode) bool {
 	for _, owner := range e.owners {
 		if owner.Equals(si) {
@@ -115,29 +109,23 @@ func (o *jtx) addEntry(uuid string, state interface{}) {
 	cmn.Assert(uuid != "")
 	o.mtx.Lock()
 	cmn.Assert(o.entries[uuid] == nil)
-	o.entries[uuid] = &jtxEntry{
+
+	entry := &jtxEntry{
+		notifListenerBase: notifListenerBase{
+			srcs: smap.Tmap.Clone(),
+			f:    func(_ notifListener, _ interface{}, _ error) {},
+		},
 		kind: jtxTaskKind,
 		// NOTE: Currently assume that the owner is the one that started.
-		owners:      []*cluster.Snode{o.p.Snode()},
-		startedTime: time.Now(),
-		state:       state,
+		owners: []*cluster.Snode{o.p.Snode()},
+		state:  state,
 	}
-
-	o.p.notifs.add(uuid, &jtxNotifListener{
-		notifListenerBase{
-			srcs: smap.Tmap.Clone(),
-			f:    o.notifCallback,
-		},
-	})
+	o.entries[uuid] = entry
+	o.p.notifs.add(uuid, entry)
 	o.mtx.Unlock()
 
 	// TODO: broadcast periodically, not on every entry
 	o.broadcastTable()
-}
-
-func (o *jtx) notifCallback(n notifListener, _ interface{}, _ error) {
-	uuid := n.UUID()
-	o.markFinished(uuid)
 }
 
 // PRE-CONDITION: Must be under `o.mtx.Lock()`.
@@ -152,15 +140,6 @@ func (o *jtx) entry(uuid string) (entry *jtxEntry, exists bool) {
 	return
 }
 
-func (o *jtx) markFinished(uuid string) {
-	o.mtx.RLock()
-	entry, exists := o.entries[uuid]
-	if exists {
-		entry.finishedTime.Store(time.Now())
-	}
-	o.mtx.RUnlock()
-}
-
 func (o *jtx) ListenSmapChanged() {
 	smap := o.p.GetSowner().Get()
 	o.mtx.Lock()
@@ -172,6 +151,7 @@ func (o *jtx) ListenSmapChanged() {
 		}
 
 		if entry.state != nil {
+			// TODO: remove this code once multiple notifiers can be registered on same uuid.
 			switch s := entry.state.(type) {
 			case *queryState:
 				if s.initialSmap.Version >= smap.Version {
@@ -241,13 +221,14 @@ func (o *jtx) UnmarshalJSON(b []byte) error {
 func (o *jtx) housekeep() time.Duration {
 	var (
 		removedCnt     int
-		deadlineCutoff = time.Now().Add(-keepFinishedInterval)
+		deadlineCutoff = mono.NanoTime() - int64(keepFinishedInterval)
 	)
 	o.mtx.Lock()
 	// Check if any entry is old enough to be removed.
+	// TODO: remove this code once `onRemove` callback in notifications is implemented.
 	for uuid, entry := range o.entries {
 		if entry.isOwner(o.p.Snode()) {
-			if entry.finishedTime.Load().Before(deadlineCutoff) {
+			if entry.finTime() < deadlineCutoff {
 				o.removeEntry(uuid)
 				removedCnt++
 			}
