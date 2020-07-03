@@ -154,7 +154,10 @@ func (o *jtx) entry(uuid string) (entry *jtxEntry, exists bool) {
 
 func (o *jtx) markFinished(uuid string) {
 	o.mtx.RLock()
-	o.entries[uuid].finishedTime.Store(time.Now())
+	entry, exists := o.entries[uuid]
+	if exists {
+		entry.finishedTime.Store(time.Now())
+	}
 	o.mtx.RUnlock()
 }
 
