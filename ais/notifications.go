@@ -68,6 +68,7 @@ type (
 		UUID() string
 		setUUID(string)
 		finTime() int64
+		finished() bool
 		String() string
 	}
 	notifListenerBase struct {
@@ -136,6 +137,7 @@ func (nlb *notifListenerBase) notifTy() int               { return nlb.ty }
 func (nlb *notifListenerBase) UUID() string               { return nlb.uuid }
 func (nlb *notifListenerBase) setUUID(uuid string)        { cmn.Assert(nlb.uuid == ""); nlb.uuid = uuid }
 func (nlb *notifListenerBase) finTime() int64             { return nlb.tfin.Load() }
+func (nlb *notifListenerBase) finished() bool             { return nlb.finTime() > 0 }
 func (nlb *notifListenerBase) addErr(sid string, err error) {
 	if nlb.errs == nil {
 		nlb.errs = make(map[string]error, 2)
@@ -204,6 +206,22 @@ func (n *notifs) del(nl notifListener, locked ...bool) {
 	glog.Infoln(nl.String())
 }
 
+func (n *notifs) entry(uuid string) (notifListener, bool) {
+	n.RLock()
+	entry, exists := n.m[uuid]
+	n.RUnlock()
+	if exists {
+		return entry, true
+	}
+	n.fmu.RLock()
+	entry, exists = n.fin[uuid]
+	n.fmu.RUnlock()
+	if exists {
+		return entry, true
+	}
+	return nil, false
+}
+
 // verb /v1/notifs
 func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -235,18 +253,12 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		n.p.invalmsghdlrstatusf(w, r, 0, "%s: unknown notification type %s", n.p.si, notifMsg)
 		return
 	}
-	n.RLock()
-	nl, ok := n.m[uuid]
-	n.RUnlock()
-	if !ok {
-		n.fmu.RLock()
-		nl, ok = n.fin[uuid]
-		n.fmu.RUnlock()
-		if !ok {
-			n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown UUID %q (%s)", n.p.si, uuid, notifMsg)
-		} else {
-			n.p.invalmsghdlrstatusf(w, r, 0, "%s: %s already finished (msg=%s)", n.p.si, nl, notifMsg)
-		}
+	nl, exists := n.entry(uuid)
+	if !exists {
+		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown UUID %q (%s)", n.p.si, uuid, notifMsg)
+		return
+	} else if nl.finished() {
+		n.p.invalmsghdlrstatusf(w, r, 0, "%s: %q already finished (msg=%s)", n.p.si, uuid, notifMsg)
 		return
 	}
 	//
