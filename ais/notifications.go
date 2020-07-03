@@ -170,6 +170,7 @@ func (n *notifs) init(p *proxyrunner) {
 	n.m = make(map[string]notifListener, 64)
 	n.fin = make(map[string]notifListener, 64)
 	hk.Reg(notifsName+".gc", n.housekeep, notifsHousekeepT)
+	n.p.GetSowner().Listeners().Reg(n)
 }
 
 func (n *notifs) String() string { return notifsName }
@@ -180,28 +181,17 @@ func (n *notifs) add(uuid string, nl notifListener) {
 	n.Lock()
 	n.m[uuid] = nl
 	nl.setUUID(uuid)
-	if len(n.m) == 1 {
-		n.smapVer = n.p.owner.smap.get().Version
-		n.p.owner.smap.Listeners().Reg(n)
-	}
 	n.Unlock()
 	glog.Infoln(nl.String())
 }
 
 func (n *notifs) del(nl notifListener, locked ...bool) {
-	var unreg bool
 	if len(locked) == 0 {
 		n.Lock()
 	}
-	if _, ok := n.m[nl.UUID()]; ok {
-		delete(n.m, nl.UUID())
-		unreg = len(n.m) == 0
-	}
+	delete(n.m, nl.UUID())
 	if len(locked) == 0 {
 		n.Unlock()
-		if unreg {
-			n.p.owner.smap.Listeners().Unreg(n)
-		}
 	}
 	glog.Infoln(nl.String())
 }
@@ -400,16 +390,20 @@ func (n *notifs) ListenSmapChanged() {
 	if !n.p.ClusterStarted() {
 		return
 	}
-	if len(n.m) == 0 {
-		return
-	}
 	smap := n.p.owner.smap.get()
 	if n.smapVer >= smap.Version {
 		return
 	}
 	n.smapVer = smap.Version
-	remnl := make(map[string]notifListener)
-	remid := make(cmn.SimpleKVs)
+
+	if len(n.m) == 0 {
+		return
+	}
+
+	var (
+		remnl = make(map[string]notifListener)
+		remid = make(cmn.SimpleKVs)
+	)
 	n.RLock()
 	for uuid, nl := range n.m {
 		nl.rlock()
@@ -447,11 +441,7 @@ func (n *notifs) ListenSmapChanged() {
 		delete(remnl, uuid)
 		delete(remid, uuid)
 	}
-	unreg := len(n.m) == 0
 	n.Unlock()
-	if unreg {
-		go n.p.owner.smap.Listeners().Unreg(n) // cannot unreg from the same goroutine
-	}
 }
 
 //////////

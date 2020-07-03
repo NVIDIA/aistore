@@ -456,10 +456,6 @@ func (sls *smapLis) run() {
 			//       may cause a trivial deadlock
 			l.ListenSmapChanged()
 		}
-		if len(sls.listeners) == 0 {
-			sls.RUnlock()
-			break
-		}
 		sls.RUnlock()
 	}
 	// drain
