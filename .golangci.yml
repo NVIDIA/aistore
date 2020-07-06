@@ -27,17 +27,18 @@ linters:
     - whitespace
     - asciicheck
     - nolintlint
+    - exportloopref
+
     # TODO: Add when available (and working):
     # - gofumpt
-    # - exhaustive
-    # - exportloopref
     # - goerr113
     #
-    # Following linters produce a lot false positives, enable only when needed:
+    # Following linters produce false positives (enable only when needed):
     # - gosec
     # - nestif
     # - scopelint
-    # not using `structcheck` since it doesn't handle embedded structs
+    # - exhaustive - doesn't produce helpful output
+    # - structcheck - doesn't handle embedded structs
 
 linters-settings:
   govet:

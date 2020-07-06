@@ -27,7 +27,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method, path string, body []byte,
 func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
 	var (
 		notFoundCnt int
-		err         *callResult
+		err         error
 	)
 	body := cmn.MustMarshal(msg)
 	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
@@ -46,11 +46,11 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 			return nil, resp.status, resp.err
 		}
 		notFoundCnt++
-		err = &resp
+		err = resp.err
 	}
 
 	if notFoundCnt == respCnt { // all responded with 404
-		return nil, http.StatusNotFound, err.err
+		return nil, http.StatusNotFound, err
 	}
 
 	switch method {

@@ -20,7 +20,7 @@ const (
 	prefixStr = "ais"
 	proxyStr  = "_proxy_"
 	targetStr = "_target_"
-	pattern   = "^\"" + prefixStr + "[0-9]+" + proxyStr + "[1-9]+\"$" // Checking '_proxy_' should suffice
+	pattern   = "^\"" + prefixStr + "\\d+" + proxyStr + "[1-9]+\"$" // Checking '_proxy_' should suffice
 )
 
 var (
@@ -35,7 +35,7 @@ func init() {
 		return
 	}
 
-	r := regexp.MustCompile(pattern) // nolint:gocritic // can re-write `^"ais[0-9]+_proxy_[1-9]+"$` as `^"ais\d+_proxy_[1-9]+"$`
+	r := regexp.MustCompile(pattern)
 	lines := strings.Split(string(bytes), "\n")
 	// Checks to see if there is any container P_proxy_{jj}" running
 	for _, line := range lines {
