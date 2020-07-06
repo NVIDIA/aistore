@@ -60,10 +60,10 @@ var _ = Describe("LOM", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.InitMountedFS()
-	fs.Mountpaths.DisableFsIDCheck()
+	fs.Init()
+	fs.DisableFsIDCheck()
 	for _, mpath := range mpaths {
-		_ = fs.Mountpaths.Add(mpath)
+		_ = fs.Add(mpath)
 	}
 
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
@@ -103,7 +103,7 @@ var _ = Describe("LOM", func() {
 		cmn.GCO.CommitUpdate(config)
 
 		for _, mpath := range mpaths {
-			_ = fs.Mountpaths.Add(mpath)
+			_ = fs.Add(mpath)
 		}
 	})
 
@@ -121,8 +121,8 @@ var _ = Describe("LOM", func() {
 
 		When("run for an ais bucket", func() {
 			It("Should populate fields from Bucket and ObjName", func() {
-				fs.Mountpaths.Disable(mpaths[1]) // Ensure that it matches desiredLocalFQN
-				fs.Mountpaths.Disable(mpaths[2]) // Ensure that it matches desiredLocalFQN
+				fs.Disable(mpaths[1]) // Ensure that it matches desiredLocalFQN
+				fs.Disable(mpaths[2]) // Ensure that it matches desiredLocalFQN
 
 				lom := &cluster.LOM{T: tMock, ObjName: testObject}
 				err := lom.Init(cmn.Bck{Name: bucketLocalA, Provider: cmn.ProviderAIS})
@@ -138,8 +138,8 @@ var _ = Describe("LOM", func() {
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
 				Expect(lom.ParsedFQN.ContentType).To(BeEquivalentTo(fs.ObjectType))
 
-				fs.Mountpaths.Enable(mpaths[1])
-				fs.Mountpaths.Enable(mpaths[2])
+				fs.Enable(mpaths[1])
+				fs.Enable(mpaths[2])
 			})
 
 			It("Should populate fields from a FQN", func() {
@@ -179,8 +179,8 @@ var _ = Describe("LOM", func() {
 
 			It("Should populate fields from Bucket and ObjName", func() {
 				// Ensure that it matches desiredCloudFQN
-				fs.Mountpaths.Disable(mpaths[1])
-				fs.Mountpaths.Disable(mpaths[2])
+				fs.Disable(mpaths[1])
+				fs.Disable(mpaths[2])
 
 				lom := &cluster.LOM{T: tMock, ObjName: testObject}
 				err := lom.Init(cmn.Bck{Name: bucketCloudA, Provider: cmn.AnyCloud, Ns: cmn.NsGlobal})
@@ -196,8 +196,8 @@ var _ = Describe("LOM", func() {
 				Expect(lom.ParsedFQN.ObjName).To(Equal(testObject))
 				Expect(lom.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
-				fs.Mountpaths.Enable(mpaths[2])
-				fs.Mountpaths.Enable(mpaths[1])
+				fs.Enable(mpaths[2])
+				fs.Enable(mpaths[1])
 			})
 
 			It("Should populate fields from a FQN", func() {
@@ -916,8 +916,8 @@ var _ = Describe("LOM", func() {
 			desiredLocalFQN := mis[0].MakePathFQN(localSameBck, fs.ObjectType, testObject)
 			desiredCloudFQN := mis[0].MakePathFQN(cloudSameBck, fs.ObjectType, testObject)
 
-			fs.Mountpaths.Disable(mpaths[1]) // Ensure that it matches desiredCloudFQN
-			fs.Mountpaths.Disable(mpaths[2]) // ditto
+			fs.Disable(mpaths[1]) // Ensure that it matches desiredCloudFQN
+			fs.Disable(mpaths[2]) // ditto
 
 			lomEmpty := &cluster.LOM{T: tMock, ObjName: testObject}
 			err := lomEmpty.Init(cmn.Bck{Name: sameBucketName})
@@ -958,8 +958,8 @@ var _ = Describe("LOM", func() {
 			Expect(lomCloud.ParsedFQN.ObjName).To(Equal(testObject))
 			Expect(lomCloud.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
-			fs.Mountpaths.Enable(mpaths[1])
-			fs.Mountpaths.Enable(mpaths[2])
+			fs.Enable(mpaths[1])
+			fs.Enable(mpaths[2])
 		})
 	})
 })

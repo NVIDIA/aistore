@@ -288,8 +288,8 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 		return ErrorECDisabled
 	}
 
-	if capInfo := lom.T.AvgCapUsed(nil); capInfo.OOS {
-		return capInfo.Err
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		return cs.Err
 	}
 
 	isECCopy := IsECCopy(lom.Size(), &lom.Bprops().EC)
@@ -343,8 +343,8 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 		return ErrorECDisabled
 	}
 
-	if capInfo := lom.T.AvgCapUsed(nil); capInfo.OOS {
-		return capInfo.Err
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		return cs.Err
 	}
 	targetCnt := mgr.targetCnt.Load()
 	// note: restore replica object is done with GFN, safe to always abort

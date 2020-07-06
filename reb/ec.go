@@ -1006,7 +1006,7 @@ func (reb *Manager) cleanupEC() {
 func (reb *Manager) runEC() {
 	var (
 		wg                = &sync.WaitGroup{}
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		cfg               = cmn.GCO.Get()
 		bck               = reb.xact().Bck()
 	)

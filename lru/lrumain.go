@@ -96,7 +96,7 @@ func InitAndRun(ini *InitLRU) {
 	config := cmn.GCO.Get()
 	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xaction, config.LRU.DontEvictTime)
 
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	startLRUJoggers := func(provider string) (aborted bool) {
 		joggers := make(map[string]*lruCtx, len(availablePaths))
 		errCh := make(chan struct{}, len(availablePaths))

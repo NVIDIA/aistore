@@ -52,8 +52,8 @@ var _ = Describe("newConcAdjuster", func() {
 		err := cmn.CreateDir(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		fs.Mountpaths = fs.NewMountedFS(mios)
-		_ = fs.Mountpaths.Add(testingConfigDir)
+		fs.Init(mios)
+		_ = fs.Add(testingConfigDir)
 
 		config := cmn.GCO.BeginUpdate()
 		config.Disk.IostatTimeShort = 10 * time.Millisecond
@@ -95,7 +95,7 @@ var _ = Describe("newConcAdjuster", func() {
 			perfectLimit = 42
 			perfectUtil  = int(cfg.Disk.DiskUtilMaxWM+cfg.Disk.DiskUtilHighWM) / 2
 		)
-		availablePaths, _ := fs.Mountpaths.Get()
+		availablePaths, _ := fs.Get()
 		mpathInfo := availablePaths[testingConfigDir]
 
 		adjuster := newConcAdjuster(0, 1)

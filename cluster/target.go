@@ -83,7 +83,6 @@ type Target interface {
 	GetDB() dbdriver.Driver
 	Cloud(*Bck) CloudProvider
 	RebalanceInfo() RebalanceInfo
-	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)
 	RunLRU(id string)
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error

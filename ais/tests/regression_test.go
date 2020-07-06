@@ -577,7 +577,7 @@ func TestGetClusterStats(t *testing.T) {
 	for k, v := range stats.Target {
 		tdstats := tutils.GetDaemonStats(t, smap.Tmap[k].PublicNet.DirectURL)
 		tdcapstats := tdstats["capacity"].(map[string]interface{})
-		dcapstats := v.Capacity
+		dcapstats := v.MPCap
 		for fspath, fstats := range dcapstats {
 			tfstats := tdcapstats[fspath].(map[string]interface{})
 			used, err := strconv.ParseInt(tfstats["used"].(string), 10, 64)
@@ -588,13 +588,14 @@ func TestGetClusterStats(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Could not decode Target Stats: fstats.Avail")
 			}
-			usedpct := int64(tfstats["usedpct"].(float64))
-			if used != int64(fstats.Used) || avail != int64(fstats.Avail) || usedpct != int64(fstats.Usedpct) {
+			pct := int64(tfstats["pct_used"].(float64))
+			if used != int64(fstats.Used) || avail != int64(fstats.Avail) || pct != int64(fstats.PctUsed) {
 				t.Errorf("Stats are different when queried from Target and Proxy: "+
 					"Used: %v, %v | Available:  %v, %v | Percentage: %v, %v",
-					tfstats["used"], fstats.Used, tfstats["avail"], fstats.Avail, tfstats["usedpct"], fstats.Usedpct)
+					tfstats["used"], fstats.Used, tfstats["avail"],
+					fstats.Avail, tfstats["pct_used"], fstats.PctUsed)
 			}
-			if fstats.Usedpct > HighWaterMark {
+			if fstats.PctUsed > HighWaterMark {
 				t.Error("Used Percentage above High Watermark")
 			}
 		}
@@ -698,8 +699,8 @@ func TestLRU(t *testing.T) {
 	for k, v := range cluStats.Target {
 		filesEvicted[k] = tutils.GetNamedTargetStats(v, "lru.evict.n")
 		bytesEvicted[k] = tutils.GetNamedTargetStats(v, "lru.evict.size")
-		for _, c := range v.Capacity {
-			usedPct = cmn.MinI32(usedPct, c.Usedpct)
+		for _, c := range v.MPCap {
+			usedPct = cmn.MinI32(usedPct, c.PctUsed)
 		}
 	}
 

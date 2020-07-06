@@ -106,14 +106,14 @@ type (
 		PctMemUsed float64 `json:"pct_mem_used"`
 		PctCPUUsed float64 `json:"pct_cpu_used"`
 	}
-	FSInfo struct {
-		FSUsed     uint64  `json:"fs_used,string"`
-		FSCapacity uint64  `json:"fs_capacity,string"`
-		PctFSUsed  float64 `json:"pct_fs_used"`
+	CapacityInfo struct {
+		Used    uint64  `json:"fs_used,string"`
+		Total   uint64  `json:"fs_capacity,string"`
+		PctUsed float64 `json:"pct_fs_used"`
 	}
 	TSysInfo struct {
 		SysInfo
-		FSInfo
+		CapacityInfo
 	}
 	ClusterSysInfo struct {
 		Proxy  map[string]*SysInfo  `json:"proxy"`
@@ -122,12 +122,6 @@ type (
 	ClusterSysInfoRaw struct {
 		Proxy  JSONRawMsgs `json:"proxy"`
 		Target JSONRawMsgs `json:"target"`
-	}
-	CapacityInfo struct {
-		Err     error
-		UsedPct int32
-		High    bool
-		OOS     bool
 	}
 	ParsedQuantity struct {
 		Type  string

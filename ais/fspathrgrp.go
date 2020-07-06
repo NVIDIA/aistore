@@ -55,7 +55,7 @@ func (g *fsprungroup) Unreg(r fs.PathRunner) {
 // change if mountpath actually was disabled.
 func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
 	gfnActive := g.t.gfn.local.Activate()
-	if enabled, err = fs.Mountpaths.Enable(mpath); err != nil || !enabled {
+	if enabled, err = fs.Enable(mpath); err != nil || !enabled {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -70,7 +70,7 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) {
 	gfnActive := g.t.gfn.local.Activate()
-	if disabled, err = fs.Mountpaths.Disable(mpath); err != nil || !disabled {
+	if disabled, err = fs.Disable(mpath); err != nil || !disabled {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -85,7 +85,7 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) 
 // if the mountpath was actually added.
 func (g *fsprungroup) addMountpath(mpath string) (err error) {
 	gfnActive := g.t.gfn.local.Activate()
-	if err = fs.Mountpaths.Add(mpath); err != nil {
+	if err = fs.Add(mpath); err != nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -100,7 +100,7 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 // change if the mountpath was actually removed.
 func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 	gfnActive := g.t.gfn.local.Activate()
-	if err = fs.Mountpaths.Remove(mpath); err != nil {
+	if err = fs.Remove(mpath); err != nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
@@ -158,7 +158,7 @@ func (g *fsprungroup) delMpathEvent(action, mpath string) {
 
 // Check for no mountpaths and unregister(disable) the target if detected.
 func (g *fsprungroup) checkZeroMountpaths(action string) (disabled bool) {
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	if len(availablePaths) > 0 {
 		return false
 	}
@@ -171,7 +171,7 @@ func (g *fsprungroup) checkZeroMountpaths(action string) (disabled bool) {
 }
 
 func (g *fsprungroup) checkEnable(action, mpath string) {
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	if len(availablePaths) > 1 {
 		glog.Infof("%s mountpath %s", action, mpath)
 	} else {

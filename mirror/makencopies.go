@@ -66,7 +66,7 @@ func ValidateNCopies(prefix string, copies int) error {
 	if _, err := cmn.CheckI64Range(int64(copies), 1, MaxNCopies); err != nil {
 		return fmt.Errorf("number of copies (%d) %s", copies, err.Error())
 	}
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	mpathCount := len(availablePaths)
 	if mpathCount == 0 {
 		return fmt.Errorf("%s: no mountpaths", prefix)
@@ -88,7 +88,7 @@ func (r *XactBckMakeNCopies) init() (mpathCount int, err error) {
 	}
 
 	var (
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		config            = cmn.GCO.Get()
 	)
 	mpathCount = len(availablePaths)
@@ -170,9 +170,9 @@ func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 			glog.Infof("jogger[%s/%s] processed %d objects...", j.mpathInfo, j.parent.Bck(), j.num)
 			j.config = cmn.GCO.Get()
 		}
-		if capInfo := j.parent.Target().AvgCapUsed(j.config); capInfo.Err != nil {
+		if cs := fs.GetCapStatus(); cs.Err != nil {
 			what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
-			return cmn.NewAbortedErrorDetails(what, capInfo.Err.Error())
+			return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
 		}
 	} else {
 		runtime.Gosched()

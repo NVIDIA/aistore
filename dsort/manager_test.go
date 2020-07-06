@@ -25,7 +25,7 @@ var _ = Describe("Init", func() {
 	BeforeEach(func() {
 		ctx.smapOwner = newTestSmap("target")
 		ctx.node = ctx.smapOwner.Get().Tmap["target"]
-		fs.InitMountedFS()
+		fs.Init()
 	})
 
 	It("should init with tar extension", func() {

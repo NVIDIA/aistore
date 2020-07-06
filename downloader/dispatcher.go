@@ -50,7 +50,7 @@ func newDispatcher(parent *Downloader) *dispatcher {
 }
 
 func (d *dispatcher) init() {
-	availablePaths, _ := d.parent.mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	for mpath := range availablePaths {
 		d.addJogger(mpath)
 	}
@@ -62,7 +62,7 @@ func (d *dispatcher) run() {
 	var (
 		// Number of concurrent job dispatches - it basically limits the number
 		// of goroutines so they won't go out of hand.
-		sema       = cmn.NewDynSemaphore(5 * fs.Mountpaths.NumAvail())
+		sema       = cmn.NewDynSemaphore(5 * fs.NumAvail())
 		group, ctx = errgroup.WithContext(context.Background())
 	)
 	for {
@@ -107,7 +107,7 @@ func (d *dispatcher) addJogger(mpath string) {
 		glog.Warningf("Attempted to add an already existing mountpath %q", mpath)
 		return
 	}
-	mpathInfo, _ := d.parent.mountpaths.Path2MpathInfo(mpath)
+	mpathInfo, _ := fs.Path2MpathInfo(mpath)
 	if mpathInfo == nil {
 		glog.Errorf("Attempted to add a mountpath %q with no corresponding filesystem", mpath)
 		return

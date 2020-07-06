@@ -50,15 +50,14 @@ func (*TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) (bool, error) { 
 func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _ *cmn.Cksum, _, _, _ bool) (*LOM, error) {
 	return nil, nil
 }
-func (*TargetMock) GetDB() dbdriver.Driver                                          { return nil }
-func (*TargetMock) GetFSPRG() fs.PathRunGroup                                       { return nil }
-func (*TargetMock) Cloud(_ *Bck) CloudProvider                                      { return nil }
-func (*TargetMock) StartTime() time.Time                                            { return time.Now() }
-func (*TargetMock) GetGFN(_ GFNType) GFN                                            { return nil }
-func (*TargetMock) LookupRemoteSingle(_ *LOM, _ *Snode) bool                        { return false }
-func (*TargetMock) AvgCapUsed(_ *cmn.Config, _ ...int32) (capInfo cmn.CapacityInfo) { return }
-func (*TargetMock) RebalanceNamespace(_ *Snode) ([]byte, int, error)                { return nil, 0, nil }
-func (*TargetMock) BMDVersionFixup(_ *http.Request, _ cmn.Bck, _ bool)              {}
+func (*TargetMock) GetDB() dbdriver.Driver                             { return nil }
+func (*TargetMock) GetFSPRG() fs.PathRunGroup                          { return nil }
+func (*TargetMock) Cloud(_ *Bck) CloudProvider                         { return nil }
+func (*TargetMock) StartTime() time.Time                               { return time.Now() }
+func (*TargetMock) GetGFN(_ GFNType) GFN                               { return nil }
+func (*TargetMock) LookupRemoteSingle(_ *LOM, _ *Snode) bool           { return false }
+func (*TargetMock) RebalanceNamespace(_ *Snode) ([]byte, int, error)   { return nil, 0, nil }
+func (*TargetMock) BMDVersionFixup(_ *http.Request, _ cmn.Bck, _ bool) {}
 
 func (*TargetMock) Health(_ *Snode, _ time.Duration, _ url.Values) ([]byte, error, int) {
 	return nil, nil, 0

@@ -96,7 +96,7 @@ func updateSysInfo() {
 
 	totalCapacity = 0
 	for _, v := range systemInfoStats.Target {
-		totalCapacity += v.FSCapacity
+		totalCapacity += v.Total
 	}
 
 	recCapacity = int64(float64(totalCapacity/100) * soakcmn.Params.RecPctCapacity)

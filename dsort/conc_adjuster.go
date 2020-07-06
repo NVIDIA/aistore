@@ -88,7 +88,7 @@ type (
 )
 
 func calcMaxLimit() int {
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	maxLimitPerDisk := cmn.Min(
 		maxConcFuncPerDiskLimit,
 		maxConcFuncPerDSortLimit/cmn.Max(len(availablePaths), 1),
@@ -109,7 +109,7 @@ func newMpathAdjuster(limit, maxLimit int) *mpathAdjuster {
 func newConcAdjuster(maxLimit, goroutineLimitCoef int) *concAdjuster {
 	limit := defaultConcFuncLimit
 
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	adjusters := make(map[string]*mpathAdjuster, len(availablePaths))
 	if maxLimit == 0 {
 		maxLimit = calcMaxLimit()
@@ -140,7 +140,7 @@ func (ca *concAdjuster) run() {
 	for {
 		select {
 		case <-ticker.C:
-			utils := fs.Mountpaths.GetAllMpathUtils(time.Now())
+			utils := fs.GetAllMpathUtils(time.Now())
 			config := cmn.GCO.Get()
 			ca.mu.RLock()
 			for mpath, adjuster := range ca.adjusters {

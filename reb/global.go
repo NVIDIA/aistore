@@ -61,7 +61,7 @@ func (reb *Manager) rebPreInit(md *rebArgs) bool {
 		md.smap = reb.t.GetSowner().Get()
 	}
 
-	md.paths, _ = fs.Mountpaths.Get()
+	md.paths, _ = fs.Get()
 	return true
 }
 
@@ -321,7 +321,7 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 		}
 
 		// NOTE: requires locally migrated objects *not* to be removed at the src
-		aPaths, _ := fs.Mountpaths.Get()
+		aPaths, _ := fs.Get()
 		if len(aPaths) > len(md.paths) {
 			glog.Warningf("%s: mountpath changes detected (%d, %d)", logHdr, len(aPaths), len(md.paths))
 		}

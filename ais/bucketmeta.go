@@ -226,7 +226,7 @@ func newBMDOwnerTgt() *bmdOwnerTgt {
 }
 
 func (bo *bmdOwnerTgt) find() (avail, curr, prev fs.MPI) {
-	avail, _ = fs.Mountpaths.Get()
+	avail, _ = fs.Get()
 	curr, prev = make(fs.MPI, 2), make(fs.MPI, 2)
 	for mpath, mpathInfo := range avail {
 		fpath := filepath.Join(mpath, bmdFname)

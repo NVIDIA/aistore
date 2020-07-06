@@ -104,7 +104,7 @@ func GetDaemonConfig(baseParams BaseParams, nodeID string) (config *cmn.Config, 
 // GetDaemonSysInfo API
 //
 // Returns the system info of a specific daemon in the cluster.
-// NOTE: `FSCapacity` will be zero if proxy.
+// NOTE: `Total` will be zero if proxy.
 func GetDaemonSysInfo(baseParams BaseParams, nodeID string) (sysInfo *cmn.TSysInfo, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{

@@ -18,7 +18,7 @@ const (
 	fsCheckerTmpDir = "/tmp/fshc"
 )
 
-func testCheckerMountPaths() *fs.MountedFS {
+func testCheckerMountPaths() {
 	cmn.CreateDir(fsCheckerTmpDir)
 	cmn.CreateDir(fsCheckerTmpDir + "/1")
 	cmn.CreateDir(fsCheckerTmpDir + "/2")
@@ -29,16 +29,15 @@ func testCheckerMountPaths() *fs.MountedFS {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.InitMountedFS()
-	fs.Mountpaths.DisableFsIDCheck()
+	fs.Init()
+	fs.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
-		fs.Mountpaths.Add(name)
+		fs.Add(name)
 	}
 
 	os.RemoveAll(fsCheckerTmpDir + "/3") // one folder is deleted
-	fs.Mountpaths.Disable(fsCheckerTmpDir + "/4")
-	return fs.Mountpaths
+	fs.Disable(fsCheckerTmpDir + "/4")
 }
 
 func updateTestConfig() {
@@ -80,11 +79,12 @@ func TestFSChecker(t *testing.T) {
 	var (
 		failedMpath = fsCheckerTmpDir + "/3"
 		dispatcher  = newMockFSDispatcher(failedMpath)
-		fshc        = NewFSHC(dispatcher, testCheckerMountPaths(), mm, fs.CSM)
+		fshc        = NewFSHC(dispatcher, mm, fs.CSM)
 	)
+	testCheckerMountPaths()
 
 	// initial state = 2 available FSes - must pass
-	availablePaths, disabledPaths := fshc.mountpaths.Get()
+	availablePaths, disabledPaths := fs.Get()
 	if len(availablePaths) != 3 || len(disabledPaths) != 1 {
 		t.Errorf("Invalid number of mountpaths at start: %v - %v",
 			availablePaths, disabledPaths)

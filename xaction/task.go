@@ -324,7 +324,7 @@ func (t *bckSummaryTask) Run() error {
 
 func (t *bckSummaryTask) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
 	var (
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		group, _          = errgroup.WithContext(context.Background())
 	)
 

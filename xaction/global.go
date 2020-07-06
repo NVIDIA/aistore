@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/demand"
@@ -185,7 +184,7 @@ type downloaderEntry struct {
 }
 
 func (e *downloaderEntry) Start(_ cmn.Bck) error {
-	xdl := downloader.NewDownloader(e.t, e.statsT, fs.Mountpaths)
+	xdl := downloader.NewDownloader(e.t, e.statsT)
 	e.xact = xdl
 	go xdl.Run()
 	return nil

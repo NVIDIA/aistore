@@ -427,7 +427,7 @@ func calcCap(daemon *stats.DaemonStatus, option string) (total uint64) {
 		case "capacity":
 			total += fs.Avail
 		case "percent":
-			total += uint64(fs.Usedpct)
+			total += uint64(fs.PctUsed)
 		}
 	}
 

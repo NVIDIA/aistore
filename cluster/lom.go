@@ -302,7 +302,7 @@ func (lom *LOM) DelExtraCopies() (err error) {
 	if lom._whingeCopy() {
 		return
 	}
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	for _, mpathInfo := range availablePaths {
 		copyFQN := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.ObjName)
 		if _, ok := lom.md.copies[copyFQN]; ok {
@@ -345,7 +345,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		return true // nothing to do
 	}
 
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	buf, slab := lom.T.GetMMSA().Alloc()
 	for path, mpathInfo := range availablePaths {
 		if path == lom.ParsedFQN.MpathInfo.Path {
@@ -484,7 +484,7 @@ func (lom *LOM) LoadBalanceGET(now time.Time) (fqn string) {
 	if !lom.HasCopies() {
 		return lom.FQN
 	}
-	return fs.Mountpaths.LoadBalanceGET(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.GetCopies(), now)
+	return fs.LoadBalanceGET(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.GetCopies(), now)
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)
@@ -995,7 +995,7 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 
 func lomCaches() []*sync.Map {
 	var (
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		cachesCnt         = len(availablePaths) * cmn.MultiSyncMapCount
 		caches            = make([]*sync.Map, cachesCnt)
 		i                 = 0

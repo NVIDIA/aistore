@@ -33,9 +33,10 @@ type (
 	}
 )
 
-//
-// Prunner
-//
+/////////////
+// Prunner //
+/////////////
+
 func (r *Prunner) Run() error                  { return r.runcommon(r) }
 func (r *Prunner) Get(name string) (val int64) { return r.Core.get(name) }
 

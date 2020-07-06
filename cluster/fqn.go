@@ -15,7 +15,7 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	var (
 		digest uint64
 	)
-	parsedFQN, err = fs.Mountpaths.ParseFQN(fqn)
+	parsedFQN, err = fs.ParseFQN(fqn)
 	if err != nil {
 		return
 	}

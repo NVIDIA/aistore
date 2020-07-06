@@ -185,8 +185,8 @@ func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCo
 	}
 	// don't allow increasing num-copies when used cap is above high wm (let alone OOS)
 	if bck.Props.Mirror.Copies < newCopies {
-		capInfo := t.AvgCapUsed(nil)
-		err = capInfo.Err
+		cs := fs.GetCapStatus()
+		err = cs.Err
 	}
 	return
 }
@@ -253,26 +253,26 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 
 func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.BucketProps, err error) {
 	var (
-		body    = cmn.MustMarshal(msg.Value)
-		capInfo = t.AvgCapUsed(cmn.GCO.Get())
+		body = cmn.MustMarshal(msg.Value)
+		cs   = fs.GetCapStatus()
 	)
 	nprops = &cmn.BucketProps{}
 	if err = jsoniter.Unmarshal(body, nprops); err != nil {
 		return
 	}
 	if nprops.Mirror.Enabled {
-		mpathCount := fs.Mountpaths.NumAvail()
+		mpathCount := fs.NumAvail()
 		if int(nprops.Mirror.Copies) > mpathCount {
 			err = fmt.Errorf("%s: number of mountpaths %d is insufficient to configure %s as a %d-way mirror",
 				t.si, mpathCount, bck, nprops.Mirror.Copies)
 			return
 		}
-		if nprops.Mirror.Copies > bck.Props.Mirror.Copies && capInfo.Err != nil {
-			return nprops, capInfo.Err
+		if nprops.Mirror.Copies > bck.Props.Mirror.Copies && cs.Err != nil {
+			return nprops, cs.Err
 		}
 	}
 	if nprops.EC.Enabled && !bck.Props.EC.Enabled {
-		err = capInfo.Err
+		err = cs.Err
 	}
 	return
 }
@@ -345,7 +345,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 			return err // must not happen at commit time
 		}
 
-		err = fs.Mountpaths.RenameBucketDirs(txnRenB.bckFrom.Bck, txnRenB.bckTo.Bck)
+		err = fs.RenameBucketDirs(txnRenB.bckFrom.Bck, txnRenB.bckTo.Bck)
 		if err != nil {
 			return err // ditto
 		}
@@ -365,14 +365,13 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 	var (
 		bTo               = &cmn.Bck{}
 		body              = cmn.MustMarshal(msg.Value)
-		config            = cmn.GCO.Get()
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 	)
 	if err = jsoniter.Unmarshal(body, bTo); err != nil {
 		return
 	}
-	if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
-		return nil, capInfo.Err
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		return nil, cs.Err
 	}
 	if err = t.coExists(bckFrom, msg); err != nil {
 		return
@@ -456,15 +455,14 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 
 func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckTo *cluster.Bck, err error) {
 	var (
-		bTo    = cmn.Bck{}
-		body   = cmn.MustMarshal(msg.Value)
-		config = cmn.GCO.Get()
+		bTo  = cmn.Bck{}
+		body = cmn.MustMarshal(msg.Value)
 	)
 	if err = jsoniter.Unmarshal(body, &bTo); err != nil {
 		return
 	}
-	if capInfo := t.AvgCapUsed(config); capInfo.Err != nil {
-		return nil, capInfo.Err
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		return nil, cs.Err
 	}
 	if err = t.coExists(bckFrom, msg); err != nil {
 		return
@@ -511,8 +509,8 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 }
 
 func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err error) {
-	if capInfo := t.AvgCapUsed(cmn.GCO.Get()); capInfo.Err != nil {
-		return capInfo.Err
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		return cs.Err
 	}
 	err = t.coExists(bck, msg)
 	return

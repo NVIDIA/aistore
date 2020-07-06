@@ -36,8 +36,8 @@ func TestWalkBck(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fs.Mountpaths = fs.NewMountedFS(ios.NewIOStaterMock())
-			fs.Mountpaths.DisableFsIDCheck()
+			fs.Init(ios.NewIOStaterMock())
+			fs.DisableFsIDCheck()
 			_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 			mpaths := make([]string, 0, test.mpathCnt)
@@ -54,13 +54,13 @@ func TestWalkBck(t *testing.T) {
 				err = cmn.CreateDir(mpath)
 				tassert.CheckFatal(t, err)
 
-				err = fs.Mountpaths.Add(mpath)
+				err = fs.Add(mpath)
 				tassert.CheckFatal(t, err)
 
 				mpaths = append(mpaths, mpath)
 			}
 
-			avail, _ := fs.Mountpaths.Get()
+			avail, _ := fs.Get()
 			var fileNames []string
 			for _, mpath := range avail {
 				dir := mpath.MakePathCT(bck, fs.ObjectType)
@@ -87,7 +87,7 @@ func TestWalkBck(t *testing.T) {
 					CTs:         []string{fs.ObjectType},
 					ErrCallback: nil,
 					Callback: func(fqn string, de fs.DirEntry) error {
-						parsedFQN, err := fs.Mountpaths.ParseFQN(fqn)
+						parsedFQN, err := fs.ParseFQN(fqn)
 						tassert.CheckError(t, err)
 						objs = append(objs, parsedFQN.ObjName)
 						fqns = append(fqns, fqn)
@@ -124,8 +124,8 @@ func TestWalkBckSkipDir(t *testing.T) {
 		mpaths        = make(map[string]*mpathMeta)
 	)
 
-	fs.Mountpaths = fs.NewMountedFS(ios.NewIOStaterMock())
-	fs.Mountpaths.DisableFsIDCheck()
+	fs.Init(ios.NewIOStaterMock())
+	fs.DisableFsIDCheck()
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	defer func() {
@@ -141,13 +141,13 @@ func TestWalkBckSkipDir(t *testing.T) {
 		err = cmn.CreateDir(mpath)
 		tassert.CheckFatal(t, err)
 
-		err = fs.Mountpaths.Add(mpath)
+		err = fs.Add(mpath)
 		tassert.CheckFatal(t, err)
 
 		mpaths[mpath] = &mpathMeta{total: 0, done: false}
 	}
 
-	avail, _ := fs.Mountpaths.Get()
+	avail, _ := fs.Get()
 	for _, mpath := range avail {
 		dir := mpath.MakePathCT(bck, fs.ObjectType)
 		err := cmn.CreateDir(dir)
@@ -174,7 +174,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 			Sorted: true,
 		},
 		ValidateCallback: func(fqn string, de fs.DirEntry) error {
-			parsedFQN, err := fs.Mountpaths.ParseFQN(fqn)
+			parsedFQN, err := fs.ParseFQN(fqn)
 			tassert.CheckError(t, err)
 			cmn.Assert(!mpaths[parsedFQN.MpathInfo.Path].done)
 			if rand.Int()%10 == 0 {

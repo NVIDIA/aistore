@@ -59,7 +59,7 @@ func (r *XactBckCopy) String() string { return fmt.Sprintf("%s <= %s", r.XactBas
 
 func (r *XactBckCopy) init() (mpathCount int) {
 	var (
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		config            = cmn.GCO.Get()
 	)
 	mpathCount = len(availablePaths)
@@ -108,9 +108,9 @@ func (j *bccJogger) copyObject(lom *cluster.LOM) error {
 		j.parent.BytesAdd(lom.Size() + lom.Size())
 		j.num++
 		if (j.num % throttleNumObjects) == 0 {
-			if capInfo := j.parent.Target().AvgCapUsed(j.config); capInfo.Err != nil {
+			if cs := fs.GetCapStatus(); cs.Err != nil {
 				what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
-				return cmn.NewAbortedErrorDetails(what, capInfo.Err.Error())
+				return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
 			}
 		}
 	}

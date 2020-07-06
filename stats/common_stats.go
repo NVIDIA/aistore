@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
@@ -119,13 +120,13 @@ type (
 	}
 
 	DaemonStatus struct {
-		Snode       *cluster.Snode         `json:"snode"`
-		Stats       *CoreStats             `json:"daemon_stats"`
-		Capacity    map[string]*fscapacity `json:"capacity"`
-		SysInfo     cmn.SysInfo            `json:"sys_info"`
-		SmapVersion int64                  `json:"smap_version,string"`
-		TStatus     *TargetStatus          `json:"target_status,omitempty"`
-		Status      string                 `json:"status"`
+		Snode       *cluster.Snode `json:"snode"`
+		Stats       *CoreStats     `json:"daemon_stats"`
+		Capacity    fs.MPCap       `json:"capacity"`
+		SysInfo     cmn.SysInfo    `json:"sys_info"`
+		SmapVersion int64          `json:"smap_version,string"`
+		TStatus     *TargetStatus  `json:"target_status,omitempty"`
+		Status      string         `json:"status"`
 	}
 )
 

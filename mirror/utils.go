@@ -107,7 +107,7 @@ func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpath
 
 		util       int64 = 101
 		now              = time.Now()
-		mpathUtils       = fs.Mountpaths.GetAllMpathUtils(now)
+		mpathUtils       = fs.GetAllMpathUtils(now)
 	)
 
 	if lom.HasCopies() {
@@ -135,7 +135,7 @@ func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpath
 			// Since we cannot relay on the fact that `mpathUtils` has all
 			// mountpaths (because it might not refresh it now) we randomly
 			// pick a mountpath.
-			availMpaths, _ := fs.Mountpaths.Get()
+			availMpaths, _ := fs.Get()
 			if _, ok := availMpaths[jpath]; ok { // ensure that mountpath actually exists
 				out = j
 			}

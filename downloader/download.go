@@ -135,13 +135,10 @@ type (
 		demand.XactDemandBase
 
 		t          cluster.Target
-		mountpaths *fs.MountedFS
 		statsT     stats.Tracker
-
 		mpathReqCh chan fs.ChangeReq
 		adminCh    chan *request
 		downloadCh chan DlJob
-
 		dispatcher *dispatcher
 	}
 )
@@ -230,12 +227,11 @@ func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.Mount
 func (d *Downloader) ReqEnableMountpath(_ string)     {}
 func (d *Downloader) ReqDisableMountpath(_ string)    {}
 
-func NewDownloader(t cluster.Target, statsT stats.Tracker, f *fs.MountedFS) (d *Downloader) {
+func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{
 		XactDemandBase: *demand.NewXactDemandBase(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
 		t:              t,
 		statsT:         statsT,
-		mountpaths:     f,
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
 		downloadCh:     make(chan DlJob, jobsChSize),

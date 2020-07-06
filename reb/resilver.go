@@ -29,7 +29,7 @@ type (
 
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 	var (
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		err               = fs.PutMarker(getMarkerName(cmn.ActResilver))
 	)
 	if err != nil {

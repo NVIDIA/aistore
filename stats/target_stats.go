@@ -7,7 +7,6 @@ package stats
 
 import (
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -69,36 +68,20 @@ const (
 type (
 	Trunner struct {
 		statsRunner
-		T        cluster.Target         `json:"-"`
-		Core     *CoreStats             `json:"core"`
-		Capacity map[string]*fscapacity `json:"capacity"`
-		// inner state
-		timecounts struct {
-			capLimit atomic.Int64
-			capIdx   int64 // update capacity: time interval counting
-		}
+		T     cluster.Target `json:"-"`
+		Core  *CoreStats     `json:"core"`
+		MPCap fs.MPCap       `json:"capacity"`
 		lines []string
 	}
 	copyRunner struct {
-		Tracker  copyTracker            `json:"core"`
-		Capacity map[string]*fscapacity `json:"capacity"`
+		Tracker copyTracker `json:"core"`
+		MPCap   fs.MPCap    `json:"capacity"`
 	}
 )
 
-//
-// private types
-//
-type (
-	fscapacity struct {
-		Used    uint64 `json:"used,string"`  // bytes
-		Avail   uint64 `json:"avail,string"` // ditto
-		Usedpct int32  `json:"usedpct"`      // redundant ok
-	}
-)
-
-//
-// Trunner
-//
+/////////////
+// Trunner //
+/////////////
 
 func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(name, kind) }
 func (r *Trunner) Run() error                  { return r.runcommon(r) }
@@ -114,8 +97,6 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 
 	config := cmn.GCO.Get()
 	r.Core.statsTime = config.Periodic.StatsTime
-	lim := cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
-	r.timecounts.capLimit.Store(lim)
 
 	r.statsRunner.daemon = t
 
@@ -125,6 +106,19 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
 	return &r.statsRunner.startedUp
+}
+
+func (r *Trunner) InitCapacity() error {
+	availableMountpaths, _ := fs.Get()
+	r.MPCap = make(fs.MPCap, len(availableMountpaths))
+	cs, err := fs.RefreshCapStatus(nil, r.MPCap)
+	if err != nil {
+		return err
+	}
+	if cs.Err != nil {
+		glog.Errorf("%s: %v", r.T.Snode(), cs.Err)
+	}
+	return nil
 }
 
 func (r *Trunner) RegisterAll() {
@@ -171,19 +165,13 @@ func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	if oldConf.Periodic.StatsTime != newConf.Periodic.StatsTime {
 		r.Core.statsTime = newConf.Periodic.StatsTime
 	}
-	if oldConf.LRU.CapacityUpdTime != newConf.LRU.CapacityUpdTime {
-		lim := cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
-		r.timecounts.capLimit.Store(lim)
-	}
+	// TODO: fs.CapPeriodic()
 }
 
-// TODO: fix the scope of the return type
 func (r *Trunner) GetWhatStats() interface{} {
 	ctracker := make(copyTracker, 48)
 	r.Core.copyCumulative(ctracker)
-
-	crunner := &copyRunner{Tracker: ctracker, Capacity: r.Capacity}
-	return crunner
+	return &copyRunner{Tracker: ctracker, MPCap: r.MPCap}
 }
 
 func (r *Trunner) log(uptime time.Duration) {
@@ -197,77 +185,24 @@ func (r *Trunner) log(uptime time.Duration) {
 	}
 
 	// 2. capacity
-	availableMountpaths, _ := fs.Mountpaths.Get()
-	r.timecounts.capIdx++
-	if r.timecounts.capIdx >= r.timecounts.capLimit.Load() {
-		if runLRU := r.UpdateCapacities(availableMountpaths); runLRU {
-			go r.T.RunLRU("")
+	cs, _, updated := fs.CapPeriodic(r.MPCap)
+	if updated {
+		if cs.Err != nil {
+			go r.T.RunLRU("" /*uuid*/)
 		}
-		r.timecounts.capIdx = 0
-		for mpath, fsCapacity := range r.Capacity {
+		for mpath, fsCapacity := range r.MPCap {
 			b := cmn.MustMarshal(fsCapacity)
 			r.lines = append(r.lines, mpath+": "+string(b))
 		}
 	}
 
 	// 3. io stats
-	r.lines = fs.Mountpaths.LogAppend(r.lines)
+	r.lines = fs.LogAppend(r.lines)
 
 	// 4. log
 	for _, ln := range r.lines {
 		glog.Infoln(ln)
 	}
-}
-
-func (r *Trunner) UpdateCapacities(availableMountpaths fs.MPI) (runLRU bool) {
-	if availableMountpaths == nil {
-		availableMountpaths, _ = fs.Mountpaths.Get()
-	}
-	var (
-		config     = cmn.GCO.Get()
-		usedNow    int32
-		l          = len(availableMountpaths)
-		capInfoPrv = r.T.AvgCapUsed(config)
-	)
-	if l == 0 {
-		glog.Errorln("UpdateCapacities: " + cmn.NoMountpaths)
-		return
-	}
-
-	capacities := make(map[string]*fscapacity, len(availableMountpaths))
-	for mpath := range availableMountpaths {
-		fsCap, err := getCapactiy(mpath)
-		if err != nil {
-			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
-			continue
-		}
-		capacities[mpath] = fsCap
-		if int64(fsCap.Usedpct) >= config.LRU.HighWM {
-			runLRU = true
-		}
-		usedNow += fsCap.Usedpct
-	}
-	r.Capacity = capacities
-
-	// handle out-of-space
-	usedNow /= int32(l)
-	capInfoNow := r.T.AvgCapUsed(config, usedNow)
-
-	if capInfoPrv.OOS && !capInfoNow.OOS {
-		lim := cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
-		r.timecounts.capLimit.Store(lim)
-		glog.Infof("OOS resolved: avg used = %d%% < (hwm %d%%) across %d mountpath(s)",
-			usedNow, config.LRU.HighWM, l)
-		t := time.Duration(lim) * config.Periodic.StatsTime
-		glog.Infof("PUTs are allowed to proceed, next capacity check in %v", t)
-	} else if !capInfoPrv.OOS && capInfoNow.OOS {
-		lim := cmn.MinI64(r.timecounts.capLimit.Load(), 2)
-		r.timecounts.capLimit.Store(lim)
-		glog.Warningf("OOS: avg used = %d%% > (oos %d%%) across %d mountpath(s)", usedNow, config.LRU.OOS, l)
-		t := time.Duration(lim) * config.Periodic.StatsTime
-		glog.Warningf("OOS: disallowing new PUTs and checking capacity every %v", t)
-	}
-	return
 }
 
 // NOTE the naming conventions (above)
@@ -305,25 +240,4 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	v.Lock()
 	v.Value += value
 	v.Unlock()
-}
-
-//
-// misc
-//
-
-func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
-	pct := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-	return &fscapacity{
-		Used:    (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize),
-		Avail:   statfs.Bavail * uint64(statfs.Bsize),
-		Usedpct: int32(pct),
-	}
-}
-
-func getCapactiy(mpath string) (*fscapacity, error) {
-	statfs := &syscall.Statfs_t{}
-	if err := syscall.Statfs(mpath, statfs); err != nil {
-		return nil, err
-	}
-	return newFSCapacity(statfs), nil
 }

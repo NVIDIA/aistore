@@ -18,7 +18,7 @@ const (
 // Tracks System Info Stats
 type SysInfoStat struct {
 	cmn.SysInfo
-	cmn.FSInfo
+	cmn.CapacityInfo
 
 	Type      string    `json:"type"` // type (proxy|target)
 	DaemonID  string    `json:"daemonid"`
@@ -31,7 +31,11 @@ func ParseClusterSysInfo(csi *cmn.ClusterSysInfo, timestamp time.Time) []*SysInf
 		result = append(result, &SysInfoStat{SysInfo: *v, Type: TypeProxy, DaemonID: k, Timestamp: timestamp})
 	}
 	for k, v := range csi.Target {
-		result = append(result, &SysInfoStat{SysInfo: v.SysInfo, FSInfo: v.FSInfo, Type: TypeTarget, DaemonID: k, Timestamp: timestamp})
+		result = append(result,
+			&SysInfoStat{
+				SysInfo: v.SysInfo, CapacityInfo: v.CapacityInfo,
+				Type: TypeTarget, DaemonID: k, Timestamp: timestamp,
+			})
 	}
 
 	return result
@@ -74,10 +78,10 @@ func (sis SysInfoStat) getContents() map[string]interface{} {
 		"pctCpuUsed": sis.PctCPUUsed,
 	}
 
-	if sis.FSCapacity > 0 {
-		contents["capUsed"] = sis.FSUsed
-		contents["capAvail"] = sis.FSCapacity
-		contents["pctCapUsed"] = sis.PctFSUsed
+	if sis.Total > 0 {
+		contents["capUsed"] = sis.Used
+		contents["capAvail"] = sis.Total
+		contents["pctCapUsed"] = sis.PctUsed
 	}
 
 	return contents

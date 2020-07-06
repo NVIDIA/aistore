@@ -119,7 +119,7 @@ func (h objInfos) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 func (h *objInfos) Push(x interface{}) {
 	info := x.(objInfo)
 	debug.Assert(info.objName == "")
-	parsedFQN, err := Mountpaths.ParseFQN(info.fqn)
+	parsedFQN, err := ParseFQN(info.fqn)
 	if err != nil {
 		return
 	}
@@ -220,7 +220,7 @@ func WalkBck(opts *WalkBckOptions) error {
 	}
 
 	var (
-		mpaths, _ = Mountpaths.Get()
+		mpaths, _ = Get()
 		mpathChs  = make([]chan *walkEntry, len(mpaths))
 
 		group, ctx = errgroup.WithContext(context.Background())

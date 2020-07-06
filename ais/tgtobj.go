@@ -379,8 +379,8 @@ write:
 
 func (goi *getObjInfo) getObject() (err error, errCode int) {
 	var (
+		cs                                            fs.CapStatus
 		doubleCheck, retry, retried, coldGet, capRead bool
-		capInfo                                       cmn.CapacityInfo
 	)
 	// under lock: lom init, restore from cluster
 	goi.lom.Lock(false)
@@ -396,12 +396,12 @@ do:
 			goi.lom.Unlock(false)
 			return err, http.StatusInternalServerError
 		}
-		capRead = true // set flag to avoid reading capUsed extra time later
-		capInfo = goi.t.AvgCapUsed(goi.lom.Config())
-		if capInfo.OOS {
+		capRead = true // set flag to avoid calling later
+		cs = fs.GetCapStatus()
+		if cs.OOS {
 			// immediate return for no space left to restore object
 			goi.lom.Unlock(false)
-			return capInfo.Err, http.StatusInternalServerError
+			return cs.Err, http.StatusInternalServerError
 		}
 	}
 
@@ -456,11 +456,11 @@ do:
 		goi.lom.Unlock(false) // `GetCold` will lock again and return with object locked
 		if !capRead {
 			capRead = true
-			capInfo = goi.t.AvgCapUsed(goi.lom.Config())
+			cs = fs.GetCapStatus()
 		}
-		if capInfo.OOS {
+		if cs.OOS {
 			// no space left to prefetch object
-			return capInfo.Err, http.StatusBadRequest
+			return cs.Err, http.StatusBadRequest
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
 		if err, errCode := goi.t.GetCold(goi.ctx, goi.lom, false /*prefetch*/); err != nil {

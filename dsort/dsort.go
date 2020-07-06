@@ -181,11 +181,11 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 			return cmn.NewAbortedErrorDetails(cmn.DSortName, m.ManagerUUID)
 		}
 		//
-		// TODO -- FIXME: all targets must check t.AvgCapUsed() for high watermark *prior* to starting
+		// FIXME: check capacity *prior* to starting
 		//
-		if capInfo := m.ctx.t.AvgCapUsed(nil); capInfo.OOS { // TODO -- FIXME: too late & not enough
+		if cs := fs.GetCapStatus(); cs.Err != nil {
 			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
-			return capInfo.Err
+			return cs.Err
 		}
 
 		lom.Lock(false)
@@ -339,9 +339,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 	defer m.dsorter.postShardCreation(lom.ParsedFQN.MpathInfo)
 
-	// TODO -- FIXME: all targets must check t.AvgCapUsed() for high watermark *prior* to starting
-	if capInfo := m.ctx.t.AvgCapUsed(nil); capInfo.OOS {
-		return capInfo.Err
+	// TODO: check capacity *prior* to starting
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		return cs.Err
 	}
 
 	beforeCreation := time.Now()

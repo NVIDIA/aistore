@@ -43,8 +43,7 @@ type (
 		fileListCh chan string
 
 		// pointers to common data
-		mountpaths *fs.MountedFS
-		mm         *memsys.MMSA
+		mm *memsys.MMSA
 
 		// listener is notified in case of a mountpath is disabled
 		dispatcher fspathDispatcher
@@ -58,9 +57,8 @@ type (
 // public API
 //
 
-func NewFSHC(dispatcher fspathDispatcher, mountpaths *fs.MountedFS, mm *memsys.MMSA, ctxResolver *fs.ContentSpecMgr) *FSHC {
+func NewFSHC(dispatcher fspathDispatcher, mm *memsys.MMSA, ctxResolver *fs.ContentSpecMgr) *FSHC {
 	return &FSHC{
-		mountpaths:  mountpaths,
 		mm:          mm,
 		stopCh:      make(chan struct{}),
 		fileListCh:  make(chan string, 100),
@@ -76,7 +74,7 @@ func (f *FSHC) Run() error {
 	for {
 		select {
 		case filePath := <-f.fileListCh:
-			mpathInfo, _ := f.mountpaths.Path2MpathInfo(filePath)
+			mpathInfo, _ := fs.Path2MpathInfo(filePath)
 			if mpathInfo == nil {
 				glog.Errorf("Failed to get mountpath for file %s", filePath)
 				break
@@ -175,7 +173,7 @@ func (f *FSHC) tryReadFile(fqn string, sgl *memsys.SGL) error {
 // checks if a given mpath is disabled. d.Path is always cleaned, that is
 // why d.Path is searching inside mpath and not vice versa
 func (f *FSHC) isMpathDisabled(mpath string) bool {
-	_, disabled := fs.Mountpaths.Get()
+	_, disabled := fs.Get()
 
 	for _, d := range disabled {
 		if strings.HasPrefix(mpath, d.Path) {

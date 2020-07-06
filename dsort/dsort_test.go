@@ -204,10 +204,10 @@ func (tctx *testContext) setup() {
 	tctx.errCh = make(chan error, tctx.targetCnt)
 	tctx.wg = &sync.WaitGroup{}
 
-	fs.InitMountedFS()
+	fs.Init()
 	err := cmn.CreateDir(testDir)
 	Expect(err).NotTo(HaveOccurred())
-	err = fs.Mountpaths.Add(testDir)
+	err = fs.Add(testDir)
 	Expect(err).NotTo(HaveOccurred())
 
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
@@ -279,7 +279,6 @@ func (tctx *testContext) teardown() {
 	}
 
 	os.RemoveAll(testDir)
-	fs.Mountpaths = nil
 }
 
 var _ = Describe("Distributed Sort", func() {

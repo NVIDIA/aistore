@@ -108,8 +108,8 @@ func initConfig() {
 
 func createAndAddMountpath(path string) {
 	cmn.CreateDir(path)
-	fs.InitMountedFS()
-	fs.Mountpaths.Add(path)
+	fs.Init()
+	fs.Add(path)
 
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
@@ -160,7 +160,7 @@ var _ = Describe("LRU tests", func() {
 			t = newTargetLRUMock()
 			ini = newInitLRU(t)
 
-			mpaths, _ := fs.Mountpaths.Get()
+			mpaths, _ := fs.Get()
 			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			filesPath = mpaths[basePath].MakePathCT(bck, fs.ObjectType)
 			cmn.CreateDir(filesPath)
@@ -291,7 +291,7 @@ var _ = Describe("LRU tests", func() {
 		Describe("evict trash directory", func() {
 			It("should totally evict trash directory", func() {
 				var (
-					mpaths, _ = fs.Mountpaths.Get()
+					mpaths, _ = fs.Get()
 					mpath     = mpaths[basePath]
 				)
 

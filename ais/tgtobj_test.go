@@ -54,9 +54,9 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	// file system
-	fs.Mountpaths = fs.NewMountedFS()
-	fs.Mountpaths.DisableFsIDCheck()
-	fs.Mountpaths.Add(testMountpath)
+	fs.Init()
+	fs.DisableFsIDCheck()
+	fs.Add(testMountpath)
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 		},
 	})
 	t.owner.bmd.put(bmd)
-	fs.Mountpaths.CreateBuckets("test", bck.Bck)
+	fs.CreateBuckets("test", bck.Bck)
 
 	os.Exit(m.Run())
 }

@@ -79,7 +79,7 @@ func (r *XactBckEncode) Run() (err error) {
 }
 
 func (r *XactBckEncode) init() (int, error) {
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := fs.Get()
 	numjs := len(availablePaths)
 	r.doneCh = make(chan struct{}, numjs)
 	r.mpathers = make(map[string]*joggerBckEncode, numjs)

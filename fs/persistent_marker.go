@@ -15,7 +15,7 @@ import (
 )
 
 func MarkerExists(marker string) bool {
-	availableMpaths, _ := Mountpaths.Get()
+	availableMpaths, _ := Get()
 	for _, mp := range availableMpaths {
 		path := filepath.Join(mp.Path, marker)
 		if err := Access(path); err == nil {
@@ -29,7 +29,7 @@ func PutMarker(marker string) error {
 	var (
 		mpath *MountpathInfo
 	)
-	availableMpaths, _ := Mountpaths.Get()
+	availableMpaths, _ := Get()
 	// get random mountpath
 	for _, mp := range availableMpaths {
 		mpath = mp
@@ -46,9 +46,10 @@ func PutMarker(marker string) error {
 
 func RemoveMarker(marker string) error {
 	var (
-		err                error
-		deleted            = false
-		availableMpaths, _ = Mountpaths.Get()
+		err     error
+		deleted bool
+
+		availableMpaths, _ = Get()
 	)
 	for _, mp := range availableMpaths {
 		path := filepath.Join(mp.Path, marker)

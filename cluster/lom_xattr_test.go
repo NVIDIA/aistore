@@ -46,17 +46,17 @@ var _ = Describe("LOM Xattributes", func() {
 		_ = cmn.CreateDir(xattrMpath)
 		_ = cmn.CreateDir(copyMpath)
 
-		fs.Mountpaths.DisableFsIDCheck()
-		_ = fs.Mountpaths.Add(xattrMpath)
-		_ = fs.Mountpaths.Add(copyMpath)
+		fs.DisableFsIDCheck()
+		_ = fs.Add(xattrMpath)
+		_ = fs.Add(copyMpath)
 
-		available, _ := fs.Mountpaths.Get()
+		available, _ := fs.Get()
 		copyMpathInfo = available[copyMpath]
 	})
 
 	AfterEach(func() {
-		_ = fs.Mountpaths.Remove(xattrMpath)
-		_ = fs.Mountpaths.Remove(copyMpath)
+		_ = fs.Remove(xattrMpath)
+		_ = fs.Remove(copyMpath)
 		_ = os.RemoveAll(tmpDir)
 	})
 

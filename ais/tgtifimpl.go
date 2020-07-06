@@ -73,32 +73,6 @@ func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
 	}
 }
 
-func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo) {
-	if config == nil {
-		config = cmn.GCO.Get()
-	}
-	if len(used) > 0 {
-		t.capUsed.Lock()
-		t.capUsed.used = used[0]
-		if t.capUsed.oos && int64(t.capUsed.used) < config.LRU.HighWM {
-			t.capUsed.oos = false
-		} else if !t.capUsed.oos && int64(t.capUsed.used) > config.LRU.OOS {
-			t.capUsed.oos = true
-		}
-		capInfo.UsedPct, capInfo.OOS = t.capUsed.used, t.capUsed.oos
-		t.capUsed.Unlock()
-	} else {
-		t.capUsed.RLock()
-		capInfo.UsedPct, capInfo.OOS = t.capUsed.used, t.capUsed.oos
-		t.capUsed.RUnlock()
-	}
-	capInfo.High = int64(capInfo.UsedPct) > config.LRU.HighWM
-	if capInfo.OOS || capInfo.High {
-		capInfo.Err = cmn.NewErrorCapacityExceeded(t.si.String(), config.LRU.HighWM, capInfo.UsedPct, capInfo.OOS)
-	}
-	return
-}
-
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU(id string) {

@@ -255,7 +255,7 @@ func (md *lmeta) unmarshal(buf []byte) (err error) {
 					return errors.New(invalid + " #5.1")
 				}
 
-				mpathInfo, _, err := fs.Mountpaths.ParseMpathInfo(copyFQN)
+				mpathInfo, _, err := fs.ParseMpathInfo(copyFQN)
 				if err != nil {
 					// Mountpath with the copy is missing.
 					if glog.V(4) {

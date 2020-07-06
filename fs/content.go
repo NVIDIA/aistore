@@ -84,7 +84,7 @@ func (f *ContentSpecMgr) RegisterContentType(contentType string, spec ContentRes
 // GenContentFQN returns a new fqn generated from given fqn. Generated fqn will
 // contain additional info which will then speed up subsequent parsing
 func (f *ContentSpecMgr) GenContentFQN(fqn, contentType, prefix string) string {
-	parsedFQN, err := Mountpaths.ParseFQN(fqn)
+	parsedFQN, err := ParseFQN(fqn)
 	cmn.AssertNoErr(err)
 	return f.GenContentParsedFQN(parsedFQN, contentType, prefix)
 }
@@ -106,7 +106,7 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 	if !strings.HasSuffix(dir, "/") || base == "" {
 		return
 	}
-	parsedFQN, err := Mountpaths.ParseFQN(fqn)
+	parsedFQN, err := ParseFQN(fqn)
 	if err != nil {
 		return
 	}

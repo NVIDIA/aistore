@@ -34,10 +34,10 @@ var _ = Describe("Mirror", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.InitMountedFS()
-	fs.Mountpaths.DisableFsIDCheck()
-	_ = fs.Mountpaths.Add(mpath)
-	_ = fs.Mountpaths.Add(mpath2)
+	fs.Init()
+	fs.DisableFsIDCheck()
+	_ = fs.Add(mpath)
+	_ = fs.Add(mpath2)
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 

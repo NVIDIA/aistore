@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tar2tf"
 )
 
@@ -106,8 +107,8 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	config := cmn.GCO.Get()
-	if capInfo := t.AvgCapUsed(config); capInfo.OOS {
-		t.invalmsghdlr(w, r, capInfo.Err.Error())
+	if cs := fs.GetCapStatus(); cs.OOS {
+		t.invalmsghdlr(w, r, cs.Err.Error())
 		return
 	}
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)

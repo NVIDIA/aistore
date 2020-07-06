@@ -44,7 +44,7 @@ func (r *XactBckLoadLomCache) Run() (err error) {
 
 func (r *XactBckLoadLomCache) init() (mpathCount int, err error) {
 	var (
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		config            = cmn.GCO.Get()
 	)
 	mpathCount = len(availablePaths)

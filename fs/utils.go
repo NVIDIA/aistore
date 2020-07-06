@@ -9,39 +9,23 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 var (
 	pid  int64 = 0xDEADBEEF   // pid of the current process
 	spid       = "0xDEADBEEF" // string version of the pid
 
-	CSM = &ContentSpecMgr{RegisteredContentTypes: make(map[string]ContentResolver, 8)}
+	CSM *ContentSpecMgr
 )
 
 func init() {
 	pid = int64(os.Getpid())
 	spid = strconv.FormatInt(pid, 16)
-}
 
-// global init
-func InitMountedFS() {
-	Mountpaths = NewMountedFS()
-}
-
-// new instance
-func NewMountedFS(iostater ...ios.IOStater) *MountedFS {
-	mfs := &MountedFS{fsIDs: make(map[syscall.Fsid]string, 10), checkFsID: true}
-	if len(iostater) > 0 {
-		mfs.ios = iostater[0]
-	} else {
-		mfs.ios = ios.NewIostatContext()
-	}
-	return mfs
+	CSM = &ContentSpecMgr{RegisteredContentTypes: make(map[string]ContentResolver, 8)}
 }
 
 // A simplified version of the filepath.Rel that determines the

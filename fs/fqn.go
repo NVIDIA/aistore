@@ -38,13 +38,13 @@ type ParsedFQN struct {
 
 // ParseFQN splits a provided FQN (created by `MakePathFQN`) or reports
 // an error.
-func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
+func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 	var (
 		rel           string
 		itemIdx, prev int
 	)
 
-	parsed.MpathInfo, rel, err = mfs.ParseMpathInfo(fqn)
+	parsed.MpathInfo, rel, err = ParseMpathInfo(fqn)
 	if err != nil {
 		return
 	}
@@ -124,7 +124,7 @@ func (mfs *MountedFS) ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 }
 
 // ParseMpathInfo matches and extracts <mpath> from the FQN and returns the rest of FQN.
-func (mfs *MountedFS) ParseMpathInfo(fqn string) (info *MountpathInfo, relativePath string, err error) {
+func ParseMpathInfo(fqn string) (info *MountpathInfo, relativePath string, err error) {
 	var (
 		available = (*MPI)(mfs.available.Load())
 		max       = 0
@@ -151,9 +151,9 @@ func (mfs *MountedFS) ParseMpathInfo(fqn string) (info *MountpathInfo, relativeP
 
 // Path2MpathInfo takes in any path (fqn or mpath) and returns the mpathInfo of the mpath
 // with the longest common prefix and the relative path to this mpath
-func (mfs *MountedFS) Path2MpathInfo(path string) (info *MountpathInfo, relativePath string) {
+func Path2MpathInfo(path string) (info *MountpathInfo, relativePath string) {
 	var (
-		availablePaths, _ = mfs.Get()
+		availablePaths, _ = Get()
 		cleanedPath       = filepath.Clean(path)
 		max               int
 	)

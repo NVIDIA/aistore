@@ -238,7 +238,7 @@ func initDaemon(version, build string) {
 	sys.UpdateMaxProcs()
 
 	// Initialize filesystem/mountpaths manager.
-	fs.InitMountedFS()
+	fs.Init()
 
 	// NOTE: Proxy and, respectively, target terminations are executed in
 	//  the same exact order as the initializations below
@@ -301,24 +301,26 @@ func initTarget(config *cmn.Config) {
 	// for mountpath definition, see fs/mountfs.go
 	if cmn.GCO.Get().TestingEnv() {
 		glog.Infof("Warning: configuring %d fspaths for testing", config.TestFSP.Count)
-		fs.Mountpaths.DisableFsIDCheck()
+		fs.DisableFsIDCheck()
 		t.testCachepathMounts()
 	} else {
 		fsPaths := make([]string, 0, len(config.FSpaths.Paths))
 		for path := range config.FSpaths.Paths {
 			fsPaths = append(fsPaths, path)
 		}
-		if err := fs.Mountpaths.Init(fsPaths); err != nil {
+		if err := fs.SetMountpaths(fsPaths); err != nil {
 			cmn.ExitLogf("%s", err)
 		}
 	}
 
-	fshc := health.NewFSHC(t, fs.Mountpaths, t.gmm, fs.CSM)
+	fshc := health.NewFSHC(t, t.gmm, fs.CSM)
 	daemon.rg.add(fshc, xfshc)
 
 	housekeep, initialInterval := cluster.LomCacheHousekeep(t.gmm, t)
 	hk.Reg("lom-cache", housekeep, initialInterval)
-	_ = ts.UpdateCapacities(nil) // goes after fs.Mountpaths.Init
+	if err := ts.InitCapacity(); err != nil { // goes after fs.Init
+		cmn.ExitLogf("%s", err)
+	}
 }
 
 // Run is the 'main' where everything gets started

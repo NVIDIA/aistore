@@ -284,8 +284,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
 		tsysinfo := cmn.TSysInfo{
-			SysInfo: sys.FetchSysInfo(),
-			FSInfo:  fs.Mountpaths.FetchFSInfo(),
+			SysInfo:      sys.FetchSysInfo(),
+			CapacityInfo: fs.CapStatusAux(),
 		}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
 	case cmn.GetWhatStats:
@@ -294,7 +294,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, ws, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
-		availablePaths, disabledPaths := fs.Mountpaths.Get()
+		availablePaths, disabledPaths := fs.Get()
 		mpList.Available = make([]string, len(availablePaths))
 		mpList.Disabled = make([]string, len(disabledPaths))
 
@@ -325,12 +325,12 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			SmapVersion: t.owner.smap.get().Version,
 			SysInfo:     sys.FetchSysInfo(),
 			Stats:       tstats.Core,
-			Capacity:    tstats.Capacity,
+			Capacity:    tstats.MPCap,
 			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
 		}
 		t.writeJSON(w, r, msg, httpdaeWhat)
 	case cmn.GetWhatDiskStats:
-		diskStats := fs.Mountpaths.GetSelectedDiskStats()
+		diskStats := fs.GetSelectedDiskStats()
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case cmn.GetWhatRemoteAIS:
 		conf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
@@ -472,7 +472,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 	}
 	var (
 		cleanMpath, _     = cmn.ValidateMpath(mountpath)
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		mi                = availablePaths[cleanMpath]
 		bmd               = t.owner.bmd.get()
 	)
@@ -521,7 +521,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 	}
 	var (
 		cleanMpath, _     = cmn.ValidateMpath(mountpath)
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		mi                = availablePaths[cleanMpath]
 		bmd               = t.owner.bmd.get()
 	)
@@ -619,7 +619,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		if _, present := bmd.Get(bck); present {
 			return false
 		}
-		errs := fs.Mountpaths.CreateBuckets("recv-bmd-"+msg.Action, bck.Bck)
+		errs := fs.CreateBuckets("recv-bmd-"+msg.Action, bck.Bck)
 		for _, err := range errs {
 			createErrs += "[" + err.Error() + "]"
 		}
@@ -657,7 +657,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		if !present {
 			bcksToDelete = append(bcksToDelete, obck)
 			// TODO: revisit error handling
-			if err := fs.Mountpaths.DestroyBuckets("recv-bmd-"+msg.Action, obck.Bck); err != nil {
+			if err := fs.DestroyBuckets("recv-bmd-"+msg.Action, obck.Bck); err != nil {
 				destroyErrs = err.Error()
 			}
 		}
@@ -778,7 +778,7 @@ func (t *targetrunner) testCachepathMounts() {
 			cmn.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
 		}
 
-		err := fs.Mountpaths.Add(mpath)
+		err := fs.Add(mpath)
 		cmn.AssertNoErr(err)
 	}
 }
@@ -801,7 +801,7 @@ func (t *targetrunner) detectMpathChanges() {
 		}
 	)
 
-	availablePaths, disabledPath := fs.Mountpaths.Get()
+	availablePaths, disabledPath := fs.Get()
 	for mpath := range availablePaths {
 		newfs.Available[mpath] = struct{}{}
 	}

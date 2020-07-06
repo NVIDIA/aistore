@@ -2339,10 +2339,10 @@ func init() {
 	config.Cloud = cfg.Cloud
 	cmn.GCO.CommitUpdate(config)
 
-	fs.InitMountedFS()
-	fs.Mountpaths.DisableFsIDCheck()
+	fs.Init()
+	fs.DisableFsIDCheck()
 	for _, mpath := range mpaths {
-		_ = fs.Mountpaths.Add(mpath)
+		_ = fs.Add(mpath)
 	}
 
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})

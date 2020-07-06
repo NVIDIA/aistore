@@ -44,7 +44,7 @@ type (
 
 func RunXactPutLRepl(lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err error) {
 	var (
-		availablePaths, _ = fs.Mountpaths.Get()
+		availablePaths, _ = fs.Get()
 		mpathCount        = len(availablePaths)
 	)
 	r = &XactPutLRepl{

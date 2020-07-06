@@ -71,11 +71,6 @@ type (
 		timedLookup atomic.Bool
 		refCount    uint32
 	}
-	capUsed struct {
-		sync.RWMutex
-		used int32
-		oos  bool
-	}
 	clouds struct {
 		ais *cloud.AisCloudProvider
 		ext cluster.CloudProvider
@@ -88,7 +83,6 @@ type (
 		fsprg        fsprungroup
 		rebManager   *reb.Manager
 		dbDriver     dbdriver.Driver
-		capUsed      capUsed
 		transactions transactions
 		gfn          struct {
 			local  localGFN
@@ -641,8 +635,8 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	config := cmn.GCO.Get()
-	if capInfo := t.AvgCapUsed(config); capInfo.OOS {
-		t.invalmsghdlr(w, r, capInfo.Err.Error())
+	if cs := fs.GetCapStatus(); cs.OOS {
+		t.invalmsghdlr(w, r, cs.Err.Error())
 		return
 	}
 	bck, err := newBckFromQuery(bucket, query)
@@ -1238,7 +1232,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	var (
 		err      error
 		mirrConf = lom.MirrorConf()
-		nmp      = fs.Mountpaths.NumAvail()
+		nmp      = fs.NumAvail()
 	)
 	if !mirrConf.Enabled {
 		return
@@ -1468,7 +1462,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 		return
 	}
 	glog.Errorf("FSHC: fqn %s, err %v", filepath, err)
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(filepath)
+	mpathInfo, _ := fs.Path2MpathInfo(filepath)
 	if mpathInfo == nil {
 		return
 	}

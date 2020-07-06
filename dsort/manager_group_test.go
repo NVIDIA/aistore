@@ -36,8 +36,8 @@ var _ = Describe("ManagerGroup", func() {
 		db := dbdriver.NewDBMock()
 		mgrp = NewManagerGroup(db)
 
-		fs.InitMountedFS()
-		fs.Mountpaths.Add(testingConfigDir)
+		fs.Init()
+		fs.Add(testingConfigDir)
 	})
 
 	AfterEach(func() {
