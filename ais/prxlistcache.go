@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -206,10 +207,74 @@ func (c *listObjectsCache) targetEntry(t *cluster.Snode, smsg cmn.SelectMsg, bck
 	return targetEntry.(*targetCacheEntry)
 }
 
+func (c *listObjectsCache) leftovers(smsg cmn.SelectMsg, bck *cluster.Bck) map[string]*targetCacheEntry {
+	id := smsg.ListObjectsCacheID(bck.Bck)
+	requestEntry, ok := c.getRequestEntry(id)
+	if !ok {
+		return nil
+	}
+
+	// find pages that are unused or partially used
+	tce := make(map[string]*targetCacheEntry)
+	requestEntry.pageMarkersCache.Range(func(k, v interface{}) bool {
+		pageMarkerEntry := v.(*pageMarkerCacheEntry)
+		pageMarkerEntry.targetsCache.Range(func(k, v interface{}) bool {
+			targetEntry := v.(*targetCacheEntry)
+			cnt := len(targetEntry.buff)
+			if cnt == 0 {
+				return true
+			}
+			// Last object is included into PageMarker = the page was already sent
+			if cmn.PageMarkerIncludesObject(smsg.PageMarker, targetEntry.buff[cnt-1].Name) {
+				return true
+			}
+			entry, ok := tce[targetEntry.t.ID()]
+			if !ok {
+				entry = &targetCacheEntry{parent: targetEntry.parent, t: targetEntry.t, buff: make([]*cmn.BucketEntry, 0)}
+				tce[targetEntry.t.ID()] = entry
+			}
+			entry.done = entry.done || targetEntry.done
+			// First case: the entire page was unused
+			if !cmn.PageMarkerIncludesObject(smsg.PageMarker, targetEntry.buff[0].Name) {
+				entry.buff = append(entry.buff, targetEntry.buff...)
+				return true
+			}
+			// Seconds case: partially used page
+			cond := func(i int) bool { return !cmn.PageMarkerIncludesObject(smsg.PageMarker, targetEntry.buff[i].Name) }
+			idx := sort.Search(len(targetEntry.buff), cond)
+			entry.buff = append(entry.buff, targetEntry.buff[idx:]...)
+			return true
+		})
+		return true
+	})
+
+	return tce
+}
+
 func (c *listObjectsCache) allTargetsEntries(smsg cmn.SelectMsg, smap *cluster.Smap, bck *cluster.Bck) []*targetCacheEntry {
 	result := make([]*targetCacheEntry, 0, len(smap.Tmap))
+	// First, get the data from the cache that was not sent yet
+	partial := c.leftovers(smsg, bck)
 	for _, t := range smap.Tmap {
-		result = append(result, c.targetEntry(t, smsg, bck))
+		var (
+			targetLeftovers *targetCacheEntry
+			ok              bool
+		)
+		if len(partial) != 0 {
+			targetLeftovers, ok = partial[t.ID()]
+		}
+		// If nothing is found for a target in the cache, initialize a new
+		// cache page. Without it, the new page leftovers can be lost.
+		if !ok || len(targetLeftovers.buff) == 0 {
+			targetEntry := c.targetEntry(t, smsg, bck)
+			result = append(result, targetEntry)
+			continue
+		}
+
+		// Order of pages in cache may be random. Sort them right away
+		less := func(i, j int) bool { return targetLeftovers.buff[i].Name < targetLeftovers.buff[j].Name }
+		sort.Slice(targetLeftovers.buff, less)
+		result = append(result, targetLeftovers)
 	}
 	return result
 }
