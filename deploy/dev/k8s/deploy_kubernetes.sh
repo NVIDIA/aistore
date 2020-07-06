@@ -240,8 +240,9 @@ kubectl create configmap collectd-config --from-file=./$COLLECTD_CONF_FILE
 echo "Starting primary proxy deployment..."
 envsubst < aisprimaryproxy_deployment.yml | kubectl apply -f -
 
-echo "Waiting for the primary proxy to be ready..."
-kubectl wait --for="condition=ready" pod aisprimaryproxy-0
+# Give some room to breathe
+echo "Waiting for primary proxy to start ..."
+sleep 10
 
 if (( PROXY_CNT > 1 )); then
   echo "Starting proxy deployment..."

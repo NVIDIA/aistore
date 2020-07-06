@@ -39,5 +39,7 @@ require (
 	golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e
 	google.golang.org/api v0.14.0
 	gopkg.in/yaml.v2 v2.2.8
-	k8s.io/apimachinery v0.18.2
+	k8s.io/api v0.18.5
+	k8s.io/apimachinery v0.18.5
+	k8s.io/client-go v11.0.0+incompatible
 )

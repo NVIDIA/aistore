@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/transforms"
 	"github.com/NVIDIA/aistore/transport"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -315,6 +316,23 @@ func initTarget(config *cmn.Config) {
 
 	fshc := health.NewFSHC(t, t.gmm, fs.CSM)
 	daemon.rg.add(fshc, xfshc)
+
+	go func() {
+		transformName, url, err := transforms.StartTransformationPod(t, transforms.HelloSpec)
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+
+		mapping := make(map[string]string, 1)
+		mapping[transformName] = url
+
+		err = transforms.DoTransform(mapping, transformName, "object_name")
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+	}()
 
 	housekeep, initialInterval := cluster.LomCacheHousekeep(t.gmm, t)
 	hk.Reg("lom-cache", housekeep, initialInterval)
