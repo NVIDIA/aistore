@@ -120,7 +120,7 @@ func initRemoteCluster() {
 func initAuthToken() {
 	home, err := os.UserHomeDir()
 	cmn.AssertNoErr(err)
-	tokenPath := filepath.Join(home, ".ais/token")
+	tokenPath := filepath.Join(home, ".ais", "token")
 
 	var token api.AuthCreds
 	jsp.Load(tokenPath, &token, jsp.Plain())

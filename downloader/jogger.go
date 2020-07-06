@@ -106,10 +106,11 @@ func (j *jogger) putCh(t *singleObjectTask) chan<- *singleObjectTask {
 	return ch
 }
 
-func (j *jogger) getTask() *singleObjectTask {
+func (j *jogger) getTask() (t *singleObjectTask) {
 	j.mtx.RLock()
-	defer j.mtx.RUnlock()
-	return j.task
+	t = j.task
+	j.mtx.RUnlock()
+	return
 }
 
 func (j *jogger) abortJob(id string) {

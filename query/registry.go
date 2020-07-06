@@ -32,10 +32,11 @@ func (r *QueryRegistry) Put(handle string, query *ObjectsListingXact) {
 	r.mtx.Unlock()
 }
 
-func (r *QueryRegistry) Get(handle string) *ObjectsListingXact {
+func (r *QueryRegistry) Get(handle string) (x *ObjectsListingXact) {
 	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	return r.m[handle]
+	x = r.m[handle]
+	r.mtx.RUnlock()
+	return
 }
 
 func (r *QueryRegistry) Delete(handle string) {

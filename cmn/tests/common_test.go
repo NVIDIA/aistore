@@ -26,9 +26,8 @@ var _ = Describe("Common file", func() {
 
 	var (
 		nonExistingFile        = filepath.Join(tmpDir, "file.txt")
-		nonExistingRenamedFile = filepath.Join(tmpDir, "some/path/fi.txt")
-
-		nonExistingPath = filepath.Join(tmpDir, "non/existing/directory")
+		nonExistingRenamedFile = filepath.Join(tmpDir, "some", "path", "fi.txt")
+		nonExistingPath        = filepath.Join(tmpDir, "non", "existing", "directory")
 	)
 
 	createFile := func(fqn string) {

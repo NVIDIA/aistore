@@ -175,10 +175,11 @@ func (gco *globalConfigOwner) SetConfigFile(path string) {
 	gco.confFile = path
 	gco.mtx.Unlock()
 }
-func (gco *globalConfigOwner) GetConfigFile() string {
+func (gco *globalConfigOwner) GetConfigFile() (s string) {
 	gco.mtx.Lock()
-	defer gco.mtx.Unlock()
-	return gco.confFile
+	s = gco.confFile
+	gco.mtx.Unlock()
+	return
 }
 
 func (gco *globalConfigOwner) notifyListeners(oldConf *Config) {

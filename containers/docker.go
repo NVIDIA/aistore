@@ -35,7 +35,7 @@ func init() {
 		return
 	}
 
-	r := regexp.MustCompile(pattern)
+	r := regexp.MustCompile(pattern) // nolint:gocritic // can re-write `^"ais[0-9]+_proxy_[1-9]+"$` as `^"ais\d+_proxy_[1-9]+"$`
 	lines := strings.Split(string(bytes), "\n")
 	// Checks to see if there is any container P_proxy_{jj}" running
 	for _, line := range lines {

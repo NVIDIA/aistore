@@ -477,7 +477,7 @@ func (r *registry) removeFinishedByID(id string) error {
 		return nil
 	}
 
-	xact := entry.(baseEntry)
+	xact := entry
 	if !xact.Get().Finished() {
 		return fmt.Errorf("xaction %s(%s, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
 	}
