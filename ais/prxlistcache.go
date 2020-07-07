@@ -208,6 +208,9 @@ func (c *listObjectsCache) targetEntry(t *cluster.Snode, smsg cmn.SelectMsg, bck
 }
 
 func (c *listObjectsCache) leftovers(smsg cmn.SelectMsg, bck *cluster.Bck) map[string]*targetCacheEntry {
+	if smsg.Passthrough {
+		return nil
+	}
 	id := smsg.ListObjectsCacheID(bck.Bck)
 	requestEntry, ok := c.getRequestEntry(id)
 	if !ok {
@@ -260,6 +263,14 @@ func (c *listObjectsCache) allTargetsEntries(smsg cmn.SelectMsg, smap *cluster.S
 			targetLeftovers *targetCacheEntry
 			ok              bool
 		)
+		if smsg.Passthrough {
+			// In passthrough mode we have to create "normal" but fake cache page.
+			reqEntry := newRequestCacheEntry(c)
+			pmEntry := newPageMarkerCacheEntry(bck, reqEntry)
+			entry := newTargetCacheEntry(pmEntry, t)
+			result = append(result, entry)
+			continue
+		}
 		if len(partial) != 0 {
 			targetLeftovers, ok = partial[t.ID()]
 		}
@@ -356,7 +367,8 @@ func (c *listObjectsCache) initAllTargets(entries []*targetCacheEntry, smsg cmn.
 /////////////////////////
 
 func (c *targetCacheEntry) init(smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, resCh chan *targetListObjsResult, newUUID string) {
-	if (uint(len(c.buff)) >= size && size != 0) || c.done {
+	cacheSufficient := (uint(len(c.buff)) >= size && size != 0) || c.done
+	if !smsg.Passthrough && cacheSufficient {
 		// Everything that is requested is already in the cache, we don't have to do any API calls.
 		// Returning StatusOK as if we did a request.
 		resCh <- &targetListObjsResult{status: http.StatusOK, err: nil}
@@ -450,6 +462,10 @@ func (c *targetCacheEntry) fetchFromRemote(smsg cmn.SelectMsg, size uint) *targe
 	res.outjson = nil
 	if len(bucketList.Entries) < int(size) || size == 0 {
 		c.done = true
+	}
+
+	if smsg.Passthrough {
+		return &targetListObjsResult{list: bucketList, status: http.StatusOK}
 	}
 
 	c.buff = append(c.buff, bucketList.Entries...)

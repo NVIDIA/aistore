@@ -170,6 +170,7 @@ List all objects contained in `BUCKET_NAME` bucket.
 | `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically (ignored in fast mode) | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
+| `--passthrough` | `bool` | Bypass proxy cache and read the fresh object list from targets | `false` |
 
 ### Examples
 
@@ -237,6 +238,19 @@ $ ais ls ais://bucket_name --prefix "shard-1"
 NAME		SIZE		VERSION
 shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
+```
+
+#### Bypassing proxy cache
+
+By default, a proxy caches the list of bucket objects to speed up the next list requests to the same bucket.
+Option `--passthrough` ignores proxy cache and always fetches the fresh object list from targets.
+
+```console
+$ ais ls ais://bucket_name --passthrough
+NAME		SIZE		VERSION
+shard-0.tar	16.00KiB	1
+shard-1.tar	16.00KiB	1
+...
 ```
 
 ## Evict cloud bucket

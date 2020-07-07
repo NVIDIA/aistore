@@ -182,7 +182,12 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 		}
 	}
 
-	msg := &cmn.SelectMsg{Props: props, Prefix: prefix, Cached: flagIsSet(c, cachedFlag)}
+	msg := &cmn.SelectMsg{
+		Props:       props,
+		Prefix:      prefix,
+		Cached:      flagIsSet(c, cachedFlag),
+		Passthrough: flagIsSet(c, passthroughFlag),
+	}
 
 	if flagIsSet(c, fastFlag) {
 		msg.Fast = true

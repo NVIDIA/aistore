@@ -33,15 +33,16 @@ type ActValPromote struct {
 //       in one response. The result list is unsorted and contains only object
 //       names: even field `Status` is filled with zero value
 type SelectMsg struct {
-	Props      string `json:"props"`       // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"
-	TimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
-	Prefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
-	PageMarker string `json:"pagemarker"`  // pageMarker - the last object in previous page
-	Handle     string `json:"handle"`      // value passed between subsequent page requests
-	UUID       string `json:"uuid"`        // ID to identify a single multi-page request
-	PageSize   uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
-	Fast       bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
-	Cached     bool   `json:"cached"`      // for cloud buckets - list only cached objects
+	Props       string `json:"props"`       // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"
+	TimeFormat  string `json:"time_format"` // "RFC822" default - see the enum above
+	Prefix      string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
+	PageMarker  string `json:"pagemarker"`  // pageMarker - the last object in previous page
+	Handle      string `json:"handle"`      // value passed between subsequent page requests
+	UUID        string `json:"uuid"`        // ID to identify a single multi-page request
+	PageSize    uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
+	Fast        bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
+	Cached      bool   `json:"cached"`      // for cloud buckets - list only cached objects
+	Passthrough bool   `json:"passthrough"` // do not use cache - always request targets for fresh data
 }
 
 type PageMarker string

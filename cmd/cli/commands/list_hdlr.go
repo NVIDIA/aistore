@@ -28,6 +28,7 @@ var (
 		maxPagesFlag,
 		markerFlag,
 		cachedFlag,
+		passthroughFlag,
 	}
 
 	listCmds = []cli.Command{

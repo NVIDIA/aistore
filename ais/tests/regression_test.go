@@ -1118,3 +1118,48 @@ func TestStressDeleteRange(t *testing.T) {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bckList.Entries))
 	}
 }
+
+func TestListPassthrough(t *testing.T) {
+	// listing with pages which size less than the number of targets takes
+	// much time: listing 1000 objects by 3 objects per page takes ~15s.
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	const (
+		num      = 1001
+		pagesize = 13
+		filesize = 1024
+	)
+	var (
+		filenameCh = make(chan string, num)
+		errCh      = make(chan error, num)
+		bck        = cmn.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		cksumType  = cmn.DefaultBucketProps().Cksum.Type
+	)
+	smap := tutils.GetClusterMap(t, proxyURL)
+	if smap.CountTargets() == 1 {
+		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
+	}
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh, cksumType, true)
+	tassert.SelectErr(t, errCh, "put", true)
+	close(filenameCh)
+	close(errCh)
+
+	for _, passthrough := range []bool{true, false} {
+		msg := &cmn.SelectMsg{PageSize: pagesize, Passthrough: passthrough}
+		started := time.Now()
+		bl, err := api.ListObjects(baseParams, bck, msg, num)
+		tassert.CheckFatal(t, err)
+
+		if len(bl.Entries) != num {
+			t.Errorf("Expected %d bucket list entries, found %d\n", num, len(bl.Entries))
+		}
+		tutils.Logf("Passthrough: %5t, page size: %d, time: %s\n", passthrough, pagesize, time.Since(started))
+	}
+}
