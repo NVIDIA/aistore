@@ -188,9 +188,9 @@ const (
 	listCommandArgument = "[PROVIDER://][BUCKET_NAME]"
 
 	// Auth
-	addUserArgument           = "USER_NAME USER_PASSWORD [ROLE ...]"
+	addUserArgument           = "USER_NAME [ROLE...]"
 	deleteUserArgument        = "USER_NAME"
-	userLoginArgument         = "USER_NAME USER_PASSWORD"
+	userLoginArgument         = "USER_NAME"
 	addAuthClusterArgument    = "CLUSTER_ID [ALIAS] URL [URL...]"
 	deleteAuthClusterArgument = "CLUSTER_ID"
 	showAuthClusterArgument   = "[CLUSTER_ID]"
@@ -272,6 +272,7 @@ var (
 	checksumFlags    = getCksumFlags()
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "save token to file"}
+	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 

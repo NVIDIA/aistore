@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/urfave/cli"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 const (
@@ -32,7 +33,8 @@ const (
 
 var (
 	authFlags = map[string][]cli.Flag{
-		flagsAuthUserLogin: {tokenFileFlag},
+		flagsAuthUserLogin: {tokenFileFlag, passwordFlag},
+		subcmdAuthUser:     {passwordFlag},
 		flagsAuthRoleAdd:   {descriptionFlag},
 	}
 	authCmds = []cli.Command{
@@ -48,6 +50,7 @@ var (
 							Name:         subcmdAuthUser,
 							Usage:        "add a new user",
 							ArgsUsage:    addUserArgument,
+							Flags:        authFlags[subcmdAuthUser],
 							Action:       addUserHandler,
 							BashComplete: multiRoleCompletions,
 						},
@@ -105,8 +108,9 @@ var (
 						},
 						{
 							Name:         subcmdAuthUser,
-							Usage:        "add an existing user",
+							Usage:        "update an existing user",
 							ArgsUsage:    addUserArgument,
+							Flags:        authFlags[subcmdAuthUser],
 							Action:       updateUserHandler,
 							BashComplete: multiRoleCompletions,
 						},
@@ -164,6 +168,15 @@ func readValue(c *cli.Context, prompt string) string {
 	return strings.TrimSuffix(line, "\n")
 }
 
+func readMasked(c *cli.Context, prompt string) string {
+	fmt.Fprintf(c.App.Writer, prompt+": ")
+	bytePass, err := terminal.ReadPassword(0)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(string(bytePass), "\n")
+}
+
 func cliAuthnURL(cfg *config.Config) string {
 	authURL := os.Getenv(authnServerURL)
 	if authURL == "" {
@@ -173,7 +186,7 @@ func cliAuthnURL(cfg *config.Config) string {
 }
 
 func cliAuthnUserName(c *cli.Context) string {
-	name := c.Args().Get(0)
+	name := c.Args().First()
 	if name == "" {
 		name = readValue(c, "User login")
 	}
@@ -181,9 +194,9 @@ func cliAuthnUserName(c *cli.Context) string {
 }
 
 func cliAuthnUserPassword(c *cli.Context) string {
-	pass := c.Args().Get(1)
+	pass := parseStrFlag(c, passwordFlag)
 	if pass == "" {
-		pass = readValue(c, "User password")
+		pass = readMasked(c, "User password")
 	}
 	return pass
 }
@@ -192,17 +205,7 @@ func updateUserHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	username, userpass, err := parseUNamePass(c)
-	if err != nil {
-		return err
-	}
-
-	roles := c.Args()[2:]
-	user := &cmn.AuthUser{
-		ID:       username,
-		Password: userpass,
-		Roles:    roles,
-	}
+	user := parseAuthUser(c)
 	return api.UpdateUser(authParams, user)
 }
 
@@ -210,16 +213,7 @@ func addUserHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	username, userpass, err := parseUNamePass(c)
-	if err != nil {
-		return err
-	}
-	roles := c.Args()[2:]
-	user := &cmn.AuthUser{
-		ID:       username,
-		Password: userpass,
-		Roles:    roles,
-	}
+	user := parseAuthUser(c)
 	return api.AddUser(authParams, user)
 }
 
@@ -227,7 +221,10 @@ func deleteUserHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	userName := cliAuthnUserName(c)
+	userName := c.Args().First()
+	if userName == "" {
+		return missingArgumentsError(c, "user name")
+	}
 	return api.DeleteUser(authParams, userName)
 }
 
@@ -292,34 +289,9 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	cid := c.Args().Get(0)
-	if cid == "" {
-		return missingArgumentsError(c, "cluster id")
-	}
-	urlList := make([]string, 0)
-	alias := c.Args().Get(1)
-	if strings.HasPrefix(alias, "http") {
-		urlList = append(urlList, alias)
-		alias = ""
-	}
-	for idx := 2; idx < c.NArg(); idx++ {
-		url := c.Args().Get(idx)
-		if strings.HasPrefix(url, "-") {
-			break
-		}
-		if !strings.HasPrefix(url, "http") {
-			return fmt.Errorf("URL %q does not contain protocol", url)
-		}
-		urlList = append(urlList, url)
-	}
-	if len(urlList) == 0 {
-		return missingArgumentsError(c, "cluster URL")
-	}
-
-	cluSpec := cmn.AuthCluster{
-		ID:    cid,
-		Alias: alias,
-		URLs:  urlList,
+	cluSpec, err := parseClusterSpecs(c)
+	if err != nil {
+		return
 	}
 	return api.RegisterClusterAuthN(authParams, cluSpec)
 }
@@ -328,31 +300,11 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 	if authnHTTPClient == nil {
 		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
 	}
-	cid := c.Args().Get(0)
-	if cid == "" {
-		return missingArgumentsError(c, "cluster id")
+	cluSpec, err := parseClusterSpecs(c)
+	if err != nil {
+		return
 	}
-	urlList := make([]string, 0)
-	alias := c.Args().Get(1)
-	if strings.HasPrefix(alias, "http") {
-		urlList = append(urlList, alias)
-		alias = ""
-	}
-	for idx := 2; idx < c.NArg(); idx++ {
-		url := c.Args().Get(idx)
-		if strings.HasPrefix(url, "-") {
-			break
-		}
-		if !strings.HasPrefix(url, "http") {
-			return fmt.Errorf("URL %q does not contain protocol", url)
-		}
-		urlList = append(urlList, url)
-	}
-	cluSpec := cmn.AuthCluster{
-		ID:    cid,
-		Alias: alias,
-		URLs:  urlList,
-	}
+
 	return api.UpdateClusterAuthN(authParams, cluSpec)
 }
 
@@ -459,15 +411,43 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 	return api.AddRoleAuthN(authParams, rInfo)
 }
 
-func parseUNamePass(c *cli.Context) (username, userpass string, err error) {
-	username = c.Args().Get(0)
-	if username == "" {
-		err = missingArgumentsError(c, "user name")
-		return
+func parseAuthUser(c *cli.Context) *cmn.AuthUser {
+	username := cliAuthnUserName(c)
+	userpass := cliAuthnUserPassword(c)
+	roles := c.Args().Tail()
+	user := &cmn.AuthUser{
+		ID:       username,
+		Password: userpass,
+		Roles:    roles,
 	}
-	userpass = c.Args().Get(1)
-	if userpass == "" {
-		err = missingArgumentsError(c, "user password")
+	return user
+}
+
+func parseClusterSpecs(c *cli.Context) (cluSpec cmn.AuthCluster, err error) {
+	cid := c.Args().Get(0)
+	if cid == "" {
+		err = missingArgumentsError(c, "cluster id")
+	}
+	urlList := make([]string, 0)
+	alias := c.Args().Get(1)
+	if strings.HasPrefix(alias, "http") {
+		urlList = append(urlList, alias)
+		alias = ""
+	}
+	for idx := 2; idx < c.NArg(); idx++ {
+		url := c.Args().Get(idx)
+		if strings.HasPrefix(url, "-") {
+			break
+		}
+		if !strings.HasPrefix(url, "http") {
+			err = fmt.Errorf("URL %q does not contain protocol", url)
+		}
+		urlList = append(urlList, url)
+	}
+	cluSpec = cmn.AuthCluster{
+		ID:    cid,
+		Alias: alias,
+		URLs:  urlList,
 	}
 	return
 }
