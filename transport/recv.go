@@ -68,7 +68,7 @@ const (
 	cleanupInterval = time.Minute * 10
 
 	// compressed streams perf tunables
-	slabBufferSize = 32 * cmn.KiB
+	slabBufferSize = memsys.DefaultBufSize
 	extraBuffering = false
 )
 

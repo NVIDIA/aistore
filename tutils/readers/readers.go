@@ -138,7 +138,7 @@ func NewRandReader(size int64, cksumType string) (Reader, error) {
 		err   error
 		seed  = mono.NanoTime()
 	)
-	slab, err := mmsa.GetSlab(cmn.KiB * 32)
+	slab, err := mmsa.GetSlab(memsys.DefaultBufSize)
 	if err != nil {
 		return nil, err
 	}

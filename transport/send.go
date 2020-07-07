@@ -696,7 +696,7 @@ func insAttrs(off int, to []byte, attr ObjectAttrs) int {
 // dry-run ---------------------------
 //
 func (s *Stream) dryrun() {
-	buf := make([]byte, cmn.KiB*32)
+	buf := make([]byte, memsys.DefaultBufSize)
 	scloser := ioutil.NopCloser(s)
 	it := iterator{trname: s.trname, body: scloser, headerBuf: make([]byte, maxHeaderSize)}
 	for {
