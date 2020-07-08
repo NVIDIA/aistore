@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -736,6 +737,10 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 		availablePaths, _ = Get()
 		c                 Capacity
 	)
+	if len(availablePaths) == 0 {
+		err = errors.New("no mountpaths")
+		return
+	}
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
