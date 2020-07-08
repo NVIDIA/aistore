@@ -552,3 +552,50 @@ func SetClusterConfig(t *testing.T, nvs cmn.SimpleKVs) {
 	err := api.SetClusterConfig(baseParams, nvs)
 	tassert.CheckFatal(t, err)
 }
+
+func GetXactionStatsByID(t *testing.T, id string) (stats api.NodesXactStat) {
+	var (
+		err        error
+		proxyURL   = GetPrimaryURL()
+		baseParams = BaseAPIParams(proxyURL)
+	)
+	stats, err = api.GetXactionStatsByID(baseParams, id)
+	tassert.CheckFatal(t, err)
+	return
+}
+
+func StartXaction(t *testing.T, xactKind string, bck cmn.Bck) (xactID string) {
+	var (
+		proxyURL   = GetPrimaryURL()
+		baseParams = BaseAPIParams(proxyURL)
+		xactArgs   = api.XactReqArgs{Kind: xactKind, Bck: bck}
+	)
+	xactID, err := api.StartXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
+	stats := GetXactionStatsByID(t, xactID)
+	tassert.Fatalf(t, len(stats) != 0, fmt.Sprintf("ID %q missing for xaction %q", xactID, xactKind))
+	for _, xact := range stats {
+		tassert.Fatalf(t, xact.Kind() == xactKind, fmt.Sprintf("%q != %q", xact.Kind(), xactKind))
+	}
+
+	return
+}
+
+func AbortXaction(t *testing.T, xactID, xactKind string, bck cmn.Bck) {
+	var (
+		proxyURL   = GetPrimaryURL()
+		baseParams = BaseAPIParams(proxyURL)
+		xactArgs   = api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
+	)
+	err := api.AbortXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
+	stats := GetXactionStatsByID(t, xactID)
+	tassert.Fatalf(t, len(stats) != 0, fmt.Sprintf("ID %q missing for xaction %q", xactID, xactKind))
+	for _, xact := range stats {
+		tassert.Fatalf(t, xact.Kind() == xactKind, fmt.Sprintf("%q != %q", xact.Kind(), xactKind))
+		tassert.Fatalf(t, xact.Finished() || xact.Aborted(),
+			fmt.Sprintf("Xaction(%s) ID=%q not aborted", xact.Kind(), xactID))
+	}
+}

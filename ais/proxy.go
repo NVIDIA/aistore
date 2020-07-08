@@ -2571,23 +2571,13 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
 	var (
-		body    []byte
-		query   = r.URL.Query()
-		uuid    = query.Get(cmn.URLParamUUID)
-		xactMsg cmn.XactReqMsg
+		body  []byte
+		query = r.URL.Query()
 	)
-	err := cmn.ReadJSON(w, r, &xactMsg)
 	switch what {
-	case cmn.GetWhatXactStats:
-		if uuid == "" {
-			p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "no uuid given for `what`: %v", what)
-			return
-		}
-		if err != io.EOF {
-			glog.Warningf("uuid: %v and xactMsg: %v both set at once", uuid, xactMsg)
-		}
 	case cmn.QueryXactStats:
-		if err != nil {
+		var xactMsg cmn.XactReqMsg
+		if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 			return
 		}
 		body = cmn.MustMarshal(xactMsg)

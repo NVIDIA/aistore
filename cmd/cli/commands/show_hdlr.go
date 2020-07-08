@@ -278,18 +278,17 @@ func showXactionHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	var xactStats api.NodesXactStats
+	var xactStats api.NodesXactMultiStats
+	latest := !flagIsSet(c, allItemsFlag)
 	if xactID != "" {
-		xactStats, err = api.GetXactionStatsByID(defaultAPIParams, xactID)
-		if err != nil {
-			return
-		}
-	} else {
-		xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Latest: !flagIsSet(c, allItemsFlag)}
-		xactStats, err = api.QueryXactionStats(defaultAPIParams, xactArgs)
-		if err != nil {
-			return
-		}
+		latest = false
+	}
+
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Latest: latest}
+	xactStats, err = api.QueryXactionStats(defaultAPIParams, xactArgs)
+
+	if err != nil {
+		return
 	}
 
 	if flagIsSet(c, activeFlag) {

@@ -33,10 +33,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			query = r.URL.Query()
 			what  = query.Get(cmn.URLParamWhat)
 		)
-		if uuid := query.Get(cmn.URLParamUUID); uuid != "" {
-			t.getXactByID(w, r, what, uuid)
-			return
-		}
+
 		if cmn.ReadJSON(w, r, &xactMsg) != nil {
 			return
 		}
@@ -84,20 +81,6 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /xactions path")
 	}
-}
-
-func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid string) {
-	if what != cmn.GetWhatXactStats {
-		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
-		return
-	}
-	xact := xaction.Registry.GetXact(uuid)
-	if xact != nil {
-		t.writeJSON(w, r, xact.Stats(), what)
-		return
-	}
-	err := cmn.NewXactionNotFoundError("ID='" + uuid + "'")
-	t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 }
 
 func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xaction.RegistryXactFilter) {

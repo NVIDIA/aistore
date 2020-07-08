@@ -73,24 +73,23 @@ func waitXactionHandler(c *cli.Context) error {
 		return err
 	}
 
+	latest := !flagIsSet(c, allItemsFlag)
+	if xactID != "" {
+		latest = false
+	}
+
 	var (
 		aborted     bool
 		refreshRate = calcRefreshRate(c)
 	)
 	for {
-		var xactStats api.NodesXactStats
-		if xactID != "" {
-			xactStats, err = api.GetXactionStatsByID(defaultAPIParams, xactID)
-			if err != nil {
-				return err
-			}
-		} else {
-			xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Latest: !flagIsSet(c, allItemsFlag)}
-			xactStats, err = api.QueryXactionStats(defaultAPIParams, xactArgs)
-			if err != nil {
-				return err
-			}
+		xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Latest: latest}
+		xactStats, err := api.QueryXactionStats(defaultAPIParams, xactArgs)
+
+		if err != nil {
+			return err
 		}
+
 		aborted = xactStats.Aborted()
 		if aborted || xactStats.Finished() {
 			break
@@ -98,6 +97,9 @@ func waitXactionHandler(c *cli.Context) error {
 		time.Sleep(refreshRate)
 	}
 	if aborted {
+		if xactID != "" {
+			return fmt.Errorf("xaction %q was aborted", xactID)
+		}
 		if bck.IsEmpty() {
 			return fmt.Errorf("xaction %q was aborted", xactKind)
 		}

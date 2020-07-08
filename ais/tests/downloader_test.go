@@ -120,7 +120,7 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 	)
 }
 
-func downloaderCompleted(t *testing.T, targetID string, targetsStats api.NodesXactStats) bool {
+func downloaderCompleted(t *testing.T, targetID string, targetsStats api.NodesXactMultiStats) bool {
 	downloaderStat, exists := targetsStats[targetID]
 	for _, xaction := range downloaderStat {
 		if xaction.Running() {

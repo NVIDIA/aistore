@@ -403,12 +403,20 @@ func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []cmn.Xact
 	return sts
 }
 
+func (r *registry) matchXactsStatsByID(xactID string) ([]cmn.XactStats, error) {
+	matchedStat := r.matchingXactsStats(func(xact cmn.Xact) bool {
+		return xact.ID().Compare(xactID) == 0
+	})
+	if len(matchedStat) == 0 {
+		return nil, cmn.NewXactionNotFoundError("ID=" + xactID)
+	}
+	return matchedStat, nil
+}
+
 func (r *registry) GetStats(query RegistryXactFilter) ([]cmn.XactStats, error) {
 	if query.ID != "" {
 		if query.OnlyRunning == nil || (query.OnlyRunning != nil && *query.OnlyRunning) {
-			return r.matchingXactsStats(func(xact cmn.Xact) bool {
-				return xact.ID().Compare(query.ID) == 0
-			}), nil
+			return r.matchXactsStatsByID(query.ID)
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
 			if xact.Kind() == cmn.ActRebalance {

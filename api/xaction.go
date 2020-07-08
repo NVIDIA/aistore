@@ -19,7 +19,15 @@ const (
 )
 
 type (
-	NodesXactStats map[string][]*cmn.BaseXactStatsExt
+	NodesXactStat       map[string]*cmn.BaseXactStatsExt
+	NodesXactMultiStats map[string][]*cmn.BaseXactStatsExt
+
+	XactStatsHelper interface {
+		Running() bool
+		Finished() bool
+		Aborted() bool
+		ObjCount() int64
+	}
 
 	XactReqArgs struct {
 		ID      string
@@ -30,7 +38,34 @@ type (
 	}
 )
 
-func (xs NodesXactStats) Running() bool {
+func (xs NodesXactStat) Running() bool {
+	for _, stat := range xs {
+		if stat.Running() {
+			return true
+		}
+	}
+	return false
+}
+
+func (xs NodesXactStat) Finished() bool { return !xs.Running() }
+
+func (xs NodesXactStat) Aborted() bool {
+	for _, stat := range xs {
+		if stat.Aborted() {
+			return true
+		}
+	}
+	return false
+}
+
+func (xs NodesXactStat) ObjCount() (count int64) {
+	for _, stat := range xs {
+		count += stat.ObjCount()
+	}
+	return
+}
+
+func (xs NodesXactMultiStats) Running() bool {
 	for _, targetStats := range xs {
 		for _, xaction := range targetStats {
 			if xaction.Running() {
@@ -41,9 +76,9 @@ func (xs NodesXactStats) Running() bool {
 	return false
 }
 
-func (xs NodesXactStats) Finished() bool { return !xs.Running() }
+func (xs NodesXactMultiStats) Finished() bool { return !xs.Running() }
 
-func (xs NodesXactStats) Aborted() bool {
+func (xs NodesXactMultiStats) Aborted() bool {
 	for _, targetStats := range xs {
 		for _, xaction := range targetStats {
 			if xaction.Aborted() {
@@ -54,10 +89,23 @@ func (xs NodesXactStats) Aborted() bool {
 	return false
 }
 
-func (xs NodesXactStats) ObjCount() (count int64) {
+func (xs NodesXactMultiStats) ObjCount() (count int64) {
 	for _, targetStats := range xs {
 		for _, xaction := range targetStats {
 			count += xaction.ObjCount()
+		}
+	}
+	return
+}
+
+func (xs NodesXactMultiStats) GetNodesXactStat(id string) (xactStat NodesXactStat) {
+	xactStat = make(NodesXactStat)
+	for target, stats := range xs {
+		for _, stat := range stats {
+			if stat.ID() == id {
+				xactStat[target] = stat
+				break
+			}
 		}
 	}
 	return
@@ -112,22 +160,19 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 // GetXactionStatsByID API
 //
 // GetXactionStatsByID gets all xaction stats for given id.
-func GetXactionStatsByID(baseParams BaseParams, id string) (xactStats NodesXactStats, err error) {
-	baseParams.Method = http.MethodGet
-	err = DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
-		Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXactStats},
-			cmn.URLParamUUID: []string{id},
-		},
-	}, &xactStats)
-	return xactStats, err
+func GetXactionStatsByID(baseParams BaseParams, id string) (xactStat NodesXactStat, err error) {
+	xactStats, err := QueryXactionStats(baseParams, XactReqArgs{ID: id})
+	if err != nil {
+		return
+	}
+	xactStat = xactStats.GetNodesXactStat(id)
+	return
 }
 
 // QueryXactionStats API
 //
 // QueryXactionStats gets all xaction stats for given kind and bucket (optional).
-func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactStats, err error) {
+func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactMultiStats, err error) {
 	msg := cmn.XactReqMsg{
 		ID:   args.ID,
 		Kind: args.Kind,
