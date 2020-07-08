@@ -18,12 +18,12 @@ spec:
       containers:
       - name: aisproxy
         image: ${DOCKER_HOST_IP}:5000/ais:v1
-#        livenessProbe:
-#          httpGet:
-#            path: /v1/health
-#            port: 8080
-#          initialDelaySeconds: 20
-#          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /v1/health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
         env:
          - name: AIS_NODE_ROLE
            value: "proxy"

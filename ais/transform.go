@@ -2,13 +2,13 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-
 package ais
 
 import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/transform"
 )
@@ -21,13 +21,13 @@ import (
 
 // [METHOD] /v1/transform
 func (t *targetrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
-	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Transform)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Transform)
 	if err != nil {
 		return
 	}
 
 	switch {
-	case r.Method == http.MethodPost && apitems[0] == cmn.TransformInit:
+	case r.Method == http.MethodPost && apiItems[0] == cmn.TransformInit:
 		t.initTransform(w, r)
 	default:
 		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
@@ -36,13 +36,13 @@ func (t *targetrunner) transformHandler(w http.ResponseWriter, r *http.Request) 
 
 // [METHOD] /v1/transform
 func (p *proxyrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Transform)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Transform)
 	if err != nil {
 		return
 	}
 
 	switch {
-	case r.Method == http.MethodPost && apitems[0] == cmn.TransformInit:
+	case r.Method == http.MethodPost && apiItems[0] == cmn.TransformInit:
 		p.httpproxyinittransform(w, r)
 	default:
 		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
@@ -51,15 +51,24 @@ func (p *proxyrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/transform/init
 func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Request) {
-	transformID := cmn.GenUUID()
-	// Perform validation on body
-	spec, err := ioutil.ReadAll(r.Body)
+	var (
+		transformID = cmn.GenUUID()
+		spec, err   = ioutil.ReadAll(r.Body)
+	)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
+		return
 	}
-	defer r.Body.Close()
-	results := p.callTargets(http.MethodPost, cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit),
-		cmn.MustMarshal(transform.Msg{Id: transformID, Spec: spec}))
+	r.Body.Close()
+
+	// TODO: Perform validation on body
+
+	var (
+		path    = cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit)
+		body    = cmn.MustMarshal(transform.Msg{ID: transformID, Spec: spec})
+		results = p.callTargets(http.MethodPost, path, body)
+	)
+
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
@@ -67,7 +76,6 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	w.Write([]byte(transformID))
-
 }
 
 func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +84,13 @@ func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := transform.StartTransformationPod(t, &msg); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+}
+
+func (t *targetrunner) doTransform(w http.ResponseWriter, r *http.Request, transformID string, bck *cluster.Bck, objName string) {
+	if err := transform.DoTransform(w, t, transformID, bck, objName); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

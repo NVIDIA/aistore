@@ -596,6 +596,10 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if transformID := query.Get(cmn.URLParamUUID); transformID != "" {
+		t.doTransform(w, r, transformID, bck, objName)
+		return
+	}
 	goi := &getObjInfo{
 		started: started,
 		t:       t,

@@ -1,4 +1,4 @@
-// Package query provides interface to iterate over objects with additional filtering
+// Package transform provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -8,39 +8,43 @@ import (
 	"sync"
 )
 
+const (
+	pushPullComm = "ppc"
+	putComm      = "putc"
+)
+
 type (
-	TransformRegistry struct {
-		m   map[string]string
+	entry struct {
+		url      string
+		commType string
+	}
+
+	registry struct {
+		m   map[string]entry
 		mtx sync.RWMutex
 	}
 )
 
-var Registry = newTransformRegistry()
+var reg = newRegistry()
 
-func newTransformRegistry() *TransformRegistry {
-	return &TransformRegistry{
-		m: make(map[string]string),
+func newRegistry() *registry {
+	return &registry{
+		m: make(map[string]entry),
 	}
 }
 
-func (r *TransformRegistry) Put(uuid, url string) {
+func (r *registry) put(uuid string, e entry) {
 	if uuid == "" {
 		return
 	}
 	r.mtx.Lock()
-	r.m[uuid] = url
+	r.m[uuid] = e
 	r.mtx.Unlock()
 }
 
-func (r *TransformRegistry) Get(uuid string) (url string) {
+func (r *registry) get(uuid string) (e entry) {
 	r.mtx.RLock()
-	url = r.m[url]
+	e = r.m[uuid]
 	r.mtx.RUnlock()
 	return
-}
-
-func (r *TransformRegistry) Delete(uuid string) {
-	r.mtx.Lock()
-	delete(r.m, uuid)
-	r.mtx.Unlock()
 }
