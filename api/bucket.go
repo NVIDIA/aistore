@@ -349,7 +349,7 @@ func handleAsyncReqAccepted(initRespMsg *cmn.InitTaskRespMsg, action string, sms
 
 // ListObjects returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListObjects (0 - return all objects in a bucket)
-func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint, invalidateCache ...bool) (*cmn.BucketList, error) {
+func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	var (
 		err     error
@@ -407,9 +407,6 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		}
 
 		if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &page); err != nil {
-			if len(invalidateCache) == 0 || invalidateCache[0] {
-				ListObjectsInvalidateCache(baseParams, bck, smsg)
-			}
 			return nil, err
 		}
 
@@ -437,9 +434,6 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		smsg.Handle = page.Handle
 	}
 
-	if len(invalidateCache) == 0 || invalidateCache[0] {
-		err = ListObjectsInvalidateCache(baseParams, bck, smsg)
-	}
 	return bckList, err
 }
 

@@ -96,8 +96,8 @@ func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, err
 	}
 }
 
-// ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjects(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint) ([]string, error) {
+// ListObjectNames returns a slice of object names of all objects that match the prefix in a bucket
+func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint) ([]string, error) {
 	var (
 		baseParams = BaseAPIParams(proxyURL)
 		msg        = &cmn.SelectMsg{Cached: true, Prefix: prefix}
@@ -152,7 +152,7 @@ func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 
 func CleanCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
 	bck.Provider = cmn.AnyCloud
-	toDelete, err := ListObjects(proxyURL, bck, prefix, 0)
+	toDelete, err := ListObjectNames(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
 	baseParams := BaseAPIParams(proxyURL)
 	err = api.DeleteList(baseParams, bck, toDelete)

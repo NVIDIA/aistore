@@ -112,7 +112,7 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 		resp.FinishedCnt, len(objects),
 	)
 
-	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
+	objs, err := tutils.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
 		t, reflect.DeepEqual(objs, objects),
@@ -552,7 +552,7 @@ func TestDownloadCloud(t *testing.T) {
 			tutils.Logln("wait for cloud download...")
 			waitForDownload(t, id, time.Minute)
 
-			objs, err := tutils.ListObjects(proxyURL, test.dstBck, prefix, 0)
+			objs, err := tutils.ListObjectNames(proxyURL, test.dstBck, prefix, 0)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
 
@@ -890,7 +890,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	err = api.DownloadAbort(baseParams, id)
 	tassert.CheckFatal(t, err)
 
-	objs, err := tutils.ListObjects(proxyURL, bck, "", 0)
+	objs, err := tutils.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
@@ -899,7 +899,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tutils.Logf("Started download job %s, waiting for it to finish\n", id)
 
 	waitForDownload(t, id, 2*time.Minute)
-	objs, err = tutils.ListObjects(proxyURL, bck, "", 0)
+	objs, err = tutils.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs)) // 21: from cifar10.tgz to cifar30.tgz
 }
