@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"time"
@@ -17,8 +18,21 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+)
+
+var (
+	targetPodName = os.Getenv("AIS_POD_NAME")
+)
+
+const (
+	targetPodNameLabel = "statefulset.kubernetes.io/pod-name"
+	// This topology key defines a size of a group of nodes that should satisfy pods affinity.
+	// In our case "hostname" means that transformer has to be placed on the same host - node.
+	// https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
+	topologyKey = "kubernetes.io/hostname"
 )
 
 // TODO: remove the `kubectl` with a proper go-sdk call
@@ -33,21 +47,32 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	// TODO: switch over types, v1beta1.Deployment, etc.. (is it necessary though? maybe we should enforce kind=Pod)
 	//  or maybe we could use `"k8s.io/apimachinery/pkg/apis/meta/v1".Object` but
 	//  it doesn't have affinity support...
-	pod, ok := obj.(*v1.Pod)
+	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		return errors.New("expected Pod spec")
 	}
 
-	// TODO: set affinity:
-	//  1. How can we know the target's pod name?
-	//  2. How can we know the target's node name?
-	// terms := pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
-	// terms = append(terms, corev1.NodeSelectorTerm{
-	// 	MatchExpressions: []corev1.NodeSelectorRequirement{},
-	// })		mapping := make(map[string]string, 1)
+	if targetPodName == "" {
+		return fmt.Errorf("target's pod name is empty. Make sure that cluster was deployed on kubernetes")
+	}
 
 	// Override the name (add target ID to its name).
-	pod.SetName(pod.GetName() + "-" + t.Snode().ID())
+	// TODO: check if there's already pod with this name running (?)
+	newTransformName := pod.GetName() + "-" + targetPodName
+	pod.SetName(newTransformName)
+	if err := setTransformAffinity(pod); err != nil {
+		return err
+	}
+
+	targetLabelSelector := &metav1.LabelSelector{MatchLabels: map[string]string{targetPodNameLabel: targetPodName}}
+	targetRunningAffinity := corev1.PodAffinityTerm{
+		LabelSelector: targetLabelSelector,
+		TopologyKey:   topologyKey,
+	}
+	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that transformer will be placed on the same machine
+	// as target which creates it. However, if 2 targets went down and up again at the same time, they may
+	// switch nodes, leaving transformers running on the wrong machines.
+	pod.Spec.Affinity.PodAffinity.RequiredDuringSchedulingIgnoredDuringExecution = []corev1.PodAffinityTerm{targetRunningAffinity}
 
 	// Encode the specification once again to be ready for the start.
 	b, err := jsoniter.Marshal(pod)
@@ -58,8 +83,8 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	// Start the pod.
 	cmd := exec.Command("kubectl", "apply", "-f", "-")
 	cmd.Stdin = bytes.NewBuffer(b)
-	if _, err = cmd.CombinedOutput(); err != nil {
-		return err
+	if b, err = cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%v: %s", err, string(b))
 	}
 
 	if msg.WaitTimeout == "" {
@@ -118,6 +143,21 @@ func DoTransform(w io.Writer, t cluster.Target, transformID string, bck *cluster
 		cmn.AssertMsg(false, "not yet implemented")
 	default:
 		cmn.Assert(false)
+	}
+	return nil
+}
+
+func setTransformAffinity(pod *corev1.Pod) error {
+	if pod.Spec.Affinity == nil {
+		pod.Spec.Affinity = &corev1.Affinity{}
+	}
+	if pod.Spec.Affinity.PodAffinity == nil {
+		pod.Spec.Affinity.PodAffinity = &corev1.PodAffinity{}
+	}
+
+	if len(pod.Spec.Affinity.PodAffinity.RequiredDuringSchedulingIgnoredDuringExecution) != 0 ||
+		len(pod.Spec.Affinity.PodAffinity.PreferredDuringSchedulingIgnoredDuringExecution) != 0 {
+		return fmt.Errorf("pod should not have any PodAffinities defined")
 	}
 	return nil
 }
