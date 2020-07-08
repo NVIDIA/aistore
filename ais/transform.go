@@ -6,9 +6,11 @@
 package ais
 
 import (
+	"io/ioutil"
 	"net/http"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/transform"
 )
 
 //==========
@@ -51,7 +53,13 @@ func (p *proxyrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Request) {
 	transformID := cmn.GenUUID()
 	// Perform validation on body
-	results := p.callTargets(http.MethodPost, cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit), nil)
+	spec, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+	}
+	defer r.Body.Close()
+	results := p.callTargets(http.MethodPost, cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit),
+		cmn.MustMarshal(transform.Msg{Id: transformID, Spec: spec}))
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
@@ -63,5 +71,12 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 }
 
 func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
-	return
+	var msg transform.Msg
+	if err := cmn.ReadJSON(w, r, &msg); err != nil {
+		return
+	}
+	if err := transform.StartTransformationPod(t, &msg); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
 }
