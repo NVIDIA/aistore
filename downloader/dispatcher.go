@@ -277,8 +277,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 			}
 
 			if result.Action == DiffResolverErr {
-				// FIXME t.markFailed(err.Error())
-				t.markFailed("DiffResolverErr")
+				t.markFailed(result.Err.Error())
 				continue
 			}
 
