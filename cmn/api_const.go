@@ -321,6 +321,10 @@ const (
 
 	// tar2tf
 	GetTargetObjects = "objects"
+
+	// transform
+	TransformInit = "init"
+	Transform     = "transform"
 )
 
 // enum: compression

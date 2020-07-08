@@ -41,6 +41,7 @@ func StartTransformationPod(t cluster.Target, spec []byte) (transformName string
 	// TODO: switch over types, v1beta1.Deployment, etc.. (is it necessary though? maybe we should enforce kind=Pod)
 	//  or maybe we could use `"k8s.io/apimachinery/pkg/apis/meta/v1".Object` but
 	//  it doesn't have affinity support...
+
 	pod := obj.(*v1.Pod)
 
 	{

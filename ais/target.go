@@ -327,6 +327,7 @@ func (c *clouds) init(t *targetrunner, config *cmn.Config) {
 func (t *targetrunner) initRecvHandlers() {
 	var (
 		networkHandlers = []networkHandler{
+			{r: cmn.Transform, h: t.transformHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 			{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 			{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 			{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},

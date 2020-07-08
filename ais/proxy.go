@@ -135,6 +135,7 @@ func (p *proxyrunner) Run() error {
 	networkHandlers := []networkHandler{
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
+		{r: cmn.Transform, h: p.transformHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
