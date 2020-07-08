@@ -200,9 +200,9 @@ func initDaemon(version, build string) {
 			kvs   = strings.Split(daemon.cli.confCustom, ",")
 		)
 		for _, kv := range kvs {
-			entry := strings.SplitN(kv, "=", 1)
+			entry := strings.SplitN(kv, "=", 2)
 			if len(entry) != 2 {
-				cmn.ExitLogf("Failed to parse `-config_custom` flag (invalid entry: %s)", kv)
+				cmn.ExitLogf("Failed to parse `-config_custom` flag (invalid entry: %q)", kv)
 			}
 			nvmap[entry[0]] = entry[1]
 		}
