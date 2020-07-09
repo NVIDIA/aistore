@@ -29,8 +29,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
 ENV GOLANG_VERSION 1.13
 
 # Reassign arguments to environment variables so run.sh can use them
-ARG GOBASE
-ENV GOPATH $GOBASE
+ENV GOPATH /go
 ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 

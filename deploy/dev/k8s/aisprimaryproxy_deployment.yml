@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: aisproxy
-        image: localhost:5000/ais:v1
+        image: ${DOCKER_HOST_IP}:5000/ais:v1
         livenessProbe:
           httpGet:
             path: /v1/health
@@ -43,8 +43,6 @@ spec:
            mountPath: /root/.aws/
          - name: ais-log
            mountPath: /tmp/
-         - name: ais-localbucket
-           mountPath: /usr/nvidia/
         ports:
           - containerPort: 8080
       nodeSelector:
@@ -65,10 +63,6 @@ spec:
         - name: ais-log
           hostPath:
             path: /tmp
-            type: Directory
-        - name: ais-localbucket
-          hostPath:
-            path: /usr/nvidia/
             type: Directory
 ---
 apiVersion: v1

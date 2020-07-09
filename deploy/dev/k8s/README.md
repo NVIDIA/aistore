@@ -2,17 +2,23 @@
 
 For a more robust version, the development team has switched over to Docker. If you would like to deploy AIS in a containerized environment, consider using Docker. The Docker folder can be found in [`deploy/dev/docker`](/deploy/dev/docker).
 
+## Minikube
+
+Using [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters. Minikube cannot be used for multi-node deployments due to its limitations.
+
+```console
+$ ./deploy_minikube.sh
+```
+
 ##  Kubeadm: Deploying an AIStore Cluster
 
 For development purposes, we are going to use [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) to create a simple two node cluster with any number of proxies and any number of targets. Users can also decide to deploy AIS with a single-node.
 
 <img src="/docs/images/k8s_arch.png" width="50%" >
 
-> Using [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters. It cannot be used for multi-node deployments due to its limitations.
-
 ### Prerequisites
 
-AIStore on Kubernetes utilizes a [local Docker repository](https://docs.docker.com/registry/deploying/). This allows Kubernetes nodes to build the latests AIS version directly from the source without having to fetch from a remote registry. This guide uses your local machine as the local Docker registry host. You will also need Docker-Compose installed. For more information, see [Docker and Docker-Compose installation guide](../../../docs/docker_main.md)
+AIStore on Kubernetes utilizes a [local Docker repository](https://docs.docker.com/registry/deploying/). This allows Kubernetes nodes to build the latests AIS version directly from the source without having to fetch from a remote registry. This guide uses your local machine as the local Docker registry host. You will also need Docker-Compose installed. For more information, see [Docker and Docker-Compose installation guide](/docs/docker_main.md)
 
 ### Creating a local Docker registry for local networks
 
@@ -21,7 +27,7 @@ AIStore on Kubernetes utilizes a [local Docker repository](https://docs.docker.c
     ```console
     $ sudo vim /etc/ssl/openssl.cnf
     ```
-    
+
     Add the line `subjectAltName=IP:<YOUR_IPv4_ADDRESS>` below the section labeled `[ v3_ca ]`.
 
 2. Create a certificate directory
@@ -37,7 +43,7 @@ AIStore on Kubernetes utilizes a [local Docker repository](https://docs.docker.c
       -newkey rsa:4096 -nodes -sha256 -keyout /certs/domain.key \
       -x509 -days 365 -out /certs/domain.crt
     ```
-    
+
     You'll be prompted to fill out some information for your certificate. You should end up with two files `domain.crt` and `domain.key`.
 
 4. To allow access for Docker to trust these certificates,
@@ -60,9 +66,9 @@ AIStore on Kubernetes utilizes a [local Docker repository](https://docs.docker.c
     ```console
     $ sudo mkdir -p /etc/docker/certs.d/<YOUR_IPv4_ADDRESS>:5000
     ```
-    
+
     Copy the contents of `ca.crt` to the directory and reload the Docker service with
-    
+
     ```console
     $ sudo service docker reload
     ```
@@ -109,11 +115,11 @@ We can use our local machine to host our Kubernetes cluster. For multi-node clus
     ```console
     $ sudo kubeadm init --pod-network-cidr=10.244.0.0/16
     ```
-    
+
     The `--pod-network-cidr` allocates a CIDR for every node. This is a requirement by [flannel](https://github.com/coreos/flannel).
-    
+
     > Flannel is a virtual network that gives a subnet to each node for use with container([pod](https://kubernetes.io/docs/concepts/workloads/pods/pod)) runtimes.
-    
+
     > Ensure that Docker and Kubeadm are installed on all machines in the cluster
 
 2. Once Kubeadm finishes initializing, a set of commands should appear on the screen.
@@ -123,7 +129,7 @@ We can use our local machine to host our Kubernetes cluster. For multi-node clus
     $ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
     $ sudo chown $(id -u):$(id -g) $HOME/.kube/conf
     ```
-    
+
     This allows non-root users to use `kubectl`.
 
 3. Configure the pod network add-on. This will be used to allow pods to communicate with each other.
@@ -131,9 +137,9 @@ We can use our local machine to host our Kubernetes cluster. For multi-node clus
     ```console
     $ kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
     ```
-    
+
     Also make sure that `/proc/sys/net/bridge/bridge-nf-call-iptables` is set to `1` by running
-    
+
     ```console
     $ sudo sysctl net.bridge.bridge-nf-call-iptables=1
     ```
@@ -143,7 +149,7 @@ We can use our local machine to host our Kubernetes cluster. For multi-node clus
     ```console
     $ kubeadm join <MASTER_NODE_IP> --token <TOKEN> --discovery-token-ca-cert-hash <HASH>
     ```
-    
+
     Use this to join the nodes to your cluster.
 
 5. Once that is setup, you should see that your Kubernetes nodes has been created. Check with
@@ -151,26 +157,26 @@ We can use our local machine to host our Kubernetes cluster. For multi-node clus
     ```console
     $ kubectl get nodes
     ```
-    
+
     The name of the nodes should be the the name of your machines that they are running on. If the status is `NotReady`, wait for a couple of seconds and check again.
 
 6. Once the status is `Ready`, add labels to your nodes and untaint the master node.
- 
+
    * Add a label:
-     
+
         ```console
         # Assigns the node to host the proxy Pod
         $ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais-proxy
-        
+
         # Assigns the node to host the target Pods
         $ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais-target
         ```
         This allows the pods to be assigned to particular nodes.
-    
+
         > For a single node cluster, assign the nodename to be 'ais'
-    
+
    * Untaint the node:
-    
+
         ```console
         $ kubectl taint nodes --all node-role.kubernetes.io/master-
         ```
@@ -209,7 +215,7 @@ $ ./install.sh
 ```
 
 This will create a binary named `ais` that can be used to interact with the cluster.
-Configure the CLI tool to point to the Kubernetes cluster by assigning the `AIS_ENDPOINT` environment variable to the URL of the primary proxy. 
+Configure the CLI tool to point to the Kubernetes cluster by assigning the `AIS_ENDPOINT` environment variable to the URL of the primary proxy.
 
 Example:
 
@@ -217,10 +223,10 @@ Example:
 $ export AIS_ENDPOINT=http://10.244.0.4:8080
 ```
 
-For the list of available commands, see [here](../../../cmd/cli/README.md).
+For the list of available commands, see [here](/cmd/cli/README.md).
 
  * To run tests, SSH into the primary proxy
- 
+
 ```console
 $ kubectl exec -it <AIS_PRIMARY_PROXY_NAME> -- /bin/bash
 ```
@@ -306,7 +312,7 @@ This runs the entire test suite. To run specific tests, use the [`-run`](https:/
     ```console
     $ kubectl exec <pod_name> -i -t /bin/bash
     ```
-    
+
     Example:
     ```console
     $ kubectl exec aisproxy-84999457d6-8qk6x -i -t /bin/bash

@@ -8,26 +8,20 @@ RUN apt-get clean && apt-get update &&\
       ca-certificates \
       wget \
       vim \
-      python \
       sysstat \
       attr \
       net-tools \
       iproute2 \
+      make \
       iputils-ping &&\
   apt-get -y clean all
-
-RUN wget https://bootstrap.pypa.io/get-pip.py &&\
-  python get-pip.py &&\
-  pip install awscli
-
 
 # Setting ENV variables
 ENV GOLANG_VERSION 1.13
 ENV AIS_CONF_FILE /etc/ais/ais.json
 
 # Reassign arguments to environment variables so run.sh can use them
-ARG GOBASE
-ENV GOPATH $GOBASE
+ENV GOPATH /go
 ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 ENV WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
@@ -40,30 +34,36 @@ RUN mkdir -p $GOPATH/src/github.com/NVIDIA
 RUN mkdir -p "$GOPATH/bin"
 RUN chmod -R 777 "$GOPATH"
 RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
-  tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
+  tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
+
+RUN cd tmp &&\
+    curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl &&\
+    chmod +x ./kubectl &&\
+    mv ./kubectl /usr/local/bin/kubectl &&\
+    kubectl version --client
 
 ARG AIS_CLD_PROVIDER
 ENV CLD $AIS_CLD_PROVIDER
 
-# Dry Run
-ARG AIS_NO_DISK_IO
-ENV NO_DISK $AIS_NO_DISK_IO
-
-ARG AIS_DRY_OBJ_SIZE
-ENV OBJ_SIZE $AIS_DRY_OBJ_SIZE
+COPY . $GOPATH/src/github.com/NVIDIA/aistore/
+WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
 
 ARG TARGETS
 ENV TARGET_CNT $TARGETS
-COPY ais.json $AIS_CONF_FILE
+# TODO: Maybe we can pass the file more elegantly...
+COPY deploy/dev/k8s/ais.json $AIS_CONF_FILE
+
+# Build it here so it is not done multiple times on each proxy/target: less
+# downloading and less time spent on everything.
+# TODO: maybe we can do it more elegantly?...
+RUN make node
 
 EXPOSE 8080
 
-RUN cd $GOPATH/src/github.com/NVIDIA && git clone https://github.com/NVIDIA/aistore.git && cd $WORKDIR
-
+# TODO: make it a separate `ENTRYPOINT run.sh` file (similar to `dev/docker/Dockerfile`)
 RUN echo "\
-cd $WORKDIR && AIS_CLD_PROVIDER=${CLD} make node \n \
-cd $GOBIN && $GOBIN/aisnode -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \
+$GOBIN/aisnode -config=\$1 -role=\$2 -ntargets=\$3 -alsologtostderr=true \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
-CMD ["sh","-c", "AIS_DAEMON_ID=`echo $HOSTNAME` /run/run.sh $AIS_CONF_FILE $AIS_NODE_ROLE $TARGET_CNT $NO_DISK $OBJ_SIZE"]
+CMD ["sh","-c", "AIS_DAEMON_ID=`echo $HOSTNAME` /run/run.sh $AIS_CONF_FILE $AIS_NODE_ROLE $TARGET_CNT"]

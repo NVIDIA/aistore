@@ -5,19 +5,16 @@ services:
     image: registry:2
     ports:
       - 5000:5000
-    environment:
-      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/domain.crt
-      REGISTRY_HTTP_TLS_KEY: /certs/domain.key
-    volumes:
-      - /certs:/certs
+#    environment:
+#      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/domain.crt
+#      REGISTRY_HTTP_TLS_KEY: /certs/domain.key
+#    volumes:
+#      - /certs:/certs
   ais:
     image: "localhost:5000/ais:v1"
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./../../../
+      dockerfile: ./deploy/dev/k8s/Dockerfile
       args:
-        - GOBASE=${GOPATH-/go}
         - TARGETS=${TARGET_CNT-1000}
         - AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER-}
-        - NODISKIO=${NODISKIO-false}
-        - DRYOBJSIZE=${DRYOBJSIZE-8MB}

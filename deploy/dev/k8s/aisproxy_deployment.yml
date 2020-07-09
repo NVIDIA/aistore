@@ -41,8 +41,6 @@ spec:
            mountPath: /root/.aws/
          - name: ais-log
            mountPath: /tmp/
-         - name: ais-localbucket
-           mountPath: /usr/nvidia/
         ports:
           - containerPort: 8080
       nodeSelector:
@@ -63,8 +61,4 @@ spec:
         - name: ais-log
           hostPath:
             path: /tmp
-            type: Directory
-        - name: ais-localbucket
-          hostPath:
-            path: /usr/nvidia/
             type: Directory

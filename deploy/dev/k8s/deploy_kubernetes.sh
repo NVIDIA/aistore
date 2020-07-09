@@ -5,8 +5,6 @@ GRAPHITE_SERVER="52.41.234.112"
 usage() {
     echo "Usage: $0"
     echo "   -a|--aws    : aws.env - AWS credentials"
-    echo "   -m|--multi  : multiple-node Kubernetes cluster"
-    echo "   -s|--single : single node Kubernetes cluster"
     echo "   -g          : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
     echo "   -p          : port of graphite server (default is $GRAPHITE_PORT)"
     echo "   -h|--host   : IP of your local Docker registry host"
@@ -39,18 +37,6 @@ case $i in
         shift
         ;;
 
-    -m|--multi)
-        CLUSTER_CONFIG="multi"
-        shift # past argument
-        ;;
-
-    -m|--multi)
-        if [ "${CLUSTER_CONFIG}" != "multi" ]; then
-            CLUSTER_CONFIG="single"
-        fi
-        shift # past argument
-        ;;
-
     *)
         usage
         ;;
@@ -59,14 +45,17 @@ done
 
 create_local_repo() {
     if docker ps | grep registry:2 &> /dev/null; then
-        echo "Local repository already exists ..."
+        echo "Local repository already exists..."
         docker-compose down
     fi
     echo "Creating local repository and building image..."
-    docker-compose up -d --force-recreate
+    docker-compose up -d --force-recreate --build
 
     echo "Pushing to repository..."
     docker push localhost:5000/ais:v1
+
+    # TODO: remove
+    docker push localhost:5000/hello_world_server:v1
 }
 
 
@@ -151,7 +140,7 @@ fi
 
 AIS_FS_PATHS=$fspath
 TEST_FSPATH_COUNT=$testfspathcnt
-LOCAL_AWS="/aisconfig/aws.env"
+LOCAL_AWS="/tmp/aws.env"
 AIS_CLD_PROVIDER="" # See deploy.sh for more informations about empty AIS_CLD_PROVIDER
 echo "Select:"
 echo " 0: No 3rd party Cloud"
@@ -200,9 +189,11 @@ if [ $cldprovider -eq 1 ]; then
 elif [[ $cldprovider -eq 2 ]]; then
   AIS_CLD_PROVIDER="gcp"
   echo "" > ${LOCAL_AWS}
-
 elif [[ $cldprovider -eq 3 ]]; then
   AIS_CLD_PROVIDER="azure"
+  echo "" > ${LOCAL_AWS}
+else
+  AIS_CLD_PROVIDER=""
   echo "" > ${LOCAL_AWS}
 fi
 
@@ -238,30 +229,29 @@ source $DIR/../local/aisnode_config.sh
 create_local_repo $TARGET_CNT $AIS_CLD_PROVIDER
 
 # Deploying kubernetes cluster
-echo Starting kubernetes deployment ..
-#Create AIStore configmap to attach during runtime
+echo "Starting kubernetes deployment..."
+# Create AIStore configmap to attach during runtime
 echo Creating AIStore configMap
 kubectl create configmap ais-config --from-file=./$AIS_CONF_FILE
 kubectl create configmap statsd-config --from-file=./$STATSD_CONF_FILE
 kubectl create configmap collectd-config --from-file=./$COLLECTD_CONF_FILE
 
 
-echo "Starting Primary Proxy Deployment ..."
+echo "Starting primary proxy deployment..."
 envsubst < aisprimaryproxy_deployment.yml | kubectl apply -f -
 
-#Give some room to breathe
-echo "Waiting for primary proxy to start ..."
-sleep 70
+echo "Waiting for the primary proxy to be ready..."
+kubectl wait --for="condition=ready" pod aisprimaryproxy-0
 
 if (( PROXY_CNT > 1 )); then
-  echo "Starting Proxy Deployment"
+  echo "Starting proxy deployment..."
   envsubst < aisproxy_deployment.yml | kubectl apply -f -
   PROXY_CNT=$((PROXY_CNT - 1))
   echo "Scaling proxies (${PROXY_CNT} more)"
   kubectl scale --replicas=$PROXY_CNT -f aisproxy_deployment.yml
 fi
 
-echo "Starting Target Deployment"
+echo "Starting target deployment..."
 envsubst < aistarget_deployment.yml | kubectl create -f -
 
 echo "Scaling targets"
@@ -270,5 +260,5 @@ kubectl scale --replicas="$TARGET_CNT" -f aistarget_deployment.yml
 echo "List of running pods"
 kubectl get pods -o wide
 
-rm $AIS_CONF_FILE $STATSD_CONF_FILE $COLLECTD_CONF_FILE
+rm $AIS_CONF_FILE $STATSD_CONF_FILE $COLLECTD_CONF_FILE # TODO: this should be done after building image and on CTRL-C
 echo "Done"

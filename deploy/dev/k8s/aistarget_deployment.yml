@@ -54,7 +54,7 @@ spec:
             secretName: aws-credentials
         - name: ais-fs
           hostPath:
-            path: /ais
+            path: /tmp/ais-k8s
             type: Directory
         - name: ais-log
           hostPath:
