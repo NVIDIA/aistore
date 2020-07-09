@@ -19,10 +19,10 @@ spec:
         env:
          - name: AIS_NODE_ROLE
            value: "target"
-         - name: AIS_POD_NAME
+         - name: AIS_NODE_NAME
            valueFrom:
              fieldRef:
-               fieldPath: metadata.name
+               fieldPath: spec.nodeName
         volumeMounts:
          - name: ais-config
            mountPath: /aisconfig/ais.json

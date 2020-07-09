@@ -13,31 +13,28 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
 var (
-	targetPodName = os.Getenv("AIS_POD_NAME")
+	targetsNodeName = os.Getenv("AIS_NODE_NAME")
 )
 
 const (
-	targetPodNameLabel = "statefulset.kubernetes.io/pod-name"
-	// This topology key defines a size of a group of nodes that should satisfy pods affinity.
-	// In our case "hostname" means that transformer has to be placed on the same host - node.
-	// https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
-	topologyKey = "kubernetes.io/hostname"
+	// built-in label https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
+	nodeNameLabel = "kubernetes.io/hostname"
 )
 
 // TODO: remove the `kubectl` with a proper go-sdk call
 
-func StartTransformationPod(msg *Msg) (err error) {
+func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	// Parse spec template.
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(msg.Spec, nil, nil)
 	if err != nil {
@@ -50,27 +47,18 @@ func StartTransformationPod(msg *Msg) (err error) {
 		return fmt.Errorf("expected pod spec, got: %s", kind)
 	}
 
-	if targetPodName == "" {
-		return fmt.Errorf("target's pod name is empty. Make sure that cluster was deployed on kubernetes")
+	if targetsNodeName == "" {
+		// Override the name (add target's daemon ID to its name).
+		// Don't add any affinities if target's node name is unknown.
+		pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID)
+		glog.Warningf("transformation %q starting without node affinity", pod.GetName())
+	} else {
+		// Override the name (add target's daemon ID and node ID to its name).
+		pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + targetsNodeName)
+		if err := setTransformAffinity(pod); err != nil {
+			return err
+		}
 	}
-
-	// Override the name (add target ID to its name).
-	// TODO: check if there's already pod with this name running (?)
-	pod.SetName(pod.GetName() + "-" + targetPodName)
-	if err := setTransformAffinity(pod); err != nil {
-		return err
-	}
-
-	targetLabelSelector := &metav1.LabelSelector{MatchLabels: map[string]string{targetPodNameLabel: targetPodName}}
-	targetRunningAffinity := corev1.PodAffinityTerm{
-		LabelSelector: targetLabelSelector,
-		TopologyKey:   topologyKey,
-	}
-	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that transformer
-	//  will be placed on the same machine as target which creates it. However,
-	//  if 2 targets went down and up again at the same time, they may switch nodes,
-	//  leaving transformers running on the wrong machines.
-	pod.Spec.Affinity.PodAffinity.RequiredDuringSchedulingIgnoredDuringExecution = []corev1.PodAffinityTerm{targetRunningAffinity}
 
 	// Encode the specification once again to be ready for the start.
 	b, err := jsoniter.Marshal(pod)
@@ -151,18 +139,35 @@ func DoTransform(w io.Writer, t cluster.Target, transformID string, bck *cluster
 	return nil
 }
 
+// Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func setTransformAffinity(pod *corev1.Pod) error {
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
 	}
-	if pod.Spec.Affinity.PodAffinity == nil {
-		pod.Spec.Affinity.PodAffinity = &corev1.PodAffinity{}
+	if pod.Spec.Affinity.NodeAffinity == nil {
+		pod.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
 	}
 
-	podAffinity := pod.Spec.Affinity.PodAffinity
-	if len(podAffinity.RequiredDuringSchedulingIgnoredDuringExecution) != 0 ||
-		len(podAffinity.PreferredDuringSchedulingIgnoredDuringExecution) != 0 {
-		return fmt.Errorf("pod spec should not have any PodAffinities defined")
+	reqAffinity := pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	prefAffinity := pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution
+
+	if reqAffinity != nil && len(reqAffinity.NodeSelectorTerms) > 0 || len(prefAffinity) > 0 {
+		return fmt.Errorf("pod spec should not have any NodeAffinities defined")
 	}
+
+	nodeSelector := &corev1.NodeSelector{
+		NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+			MatchExpressions: []corev1.NodeSelectorRequirement{{
+				Key:      nodeNameLabel,
+				Operator: corev1.NodeSelectorOpIn,
+				Values:   []string{targetsNodeName},
+			}}},
+		},
+	}
+	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that transformer
+	//  will be placed on the same machine as target which creates it. However,
+	//  if 2 targets went down and up again at the same time, they may switch nodes,
+	//  leaving transformers running on the wrong machines.
+	pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nodeSelector
 	return nil
 }

@@ -96,7 +96,7 @@ func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := transform.StartTransformationPod(&msg); err != nil {
+	if err := transform.StartTransformationPod(t, &msg); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
