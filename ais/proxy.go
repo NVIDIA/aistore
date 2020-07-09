@@ -1053,10 +1053,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
-		if err := p.ecEncode(bck, &msg); err != nil {
+		var xactID string
+		if xactID, err = p.ecEncode(bck, &msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		w.Write([]byte(xactID))
+
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}

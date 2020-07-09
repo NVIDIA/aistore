@@ -459,11 +459,12 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 
 // erasure code the entire bucket
 func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
-	if err = api.ECEncodeBucket(defaultAPIParams, bck, data, parity); err != nil {
+	var xactID string
+	if xactID, err = api.ECEncodeBucket(defaultAPIParams, bck, data, parity); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %q, use '%s %s %s %s %s' to monitor the progress\n",
-		bck, cliName, commandShow, subcmdXaction, cmn.ActECEncode, bck)
+	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %q, use '%s %s %s %s' to monitor the progress\n",
+		bck, cliName, commandShow, subcmdXaction, xactID)
 	return
 }
 

@@ -539,24 +539,27 @@ func parseECConf(value interface{}) (*cmn.ECConfToUpdate, error) {
 }
 
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
-func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
+func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		pname       = p.si.String()
-		c           = p.prepTxnClient(msg, bck)
-		nlp         = bck.GetNameLockPair()
-		ecConf, err = parseECConf(msg.Value)
-		unlockUpon  bool
+		pname      = p.si.String()
+		c          = p.prepTxnClient(msg, bck)
+		nlp        = bck.GetNameLockPair()
+		unlockUpon bool
 	)
+
+	ecConf, err := parseECConf(msg.Value)
 	if err != nil {
-		return err
+		return
 	}
 	if ecConf.DataSlices == nil || *ecConf.DataSlices < 1 ||
 		ecConf.ParitySlices == nil || *ecConf.ParitySlices < 1 {
-		return errors.New("invalid number of slices")
+		err = errors.New("invalid number of slices")
+		return
 	}
 
 	if !nlp.TryLock() {
-		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
+		err = cmn.NewErrorBucketIsBusy(bck.Bck, pname)
+		return
 	}
 	defer func() {
 		if !unlockUpon {
@@ -570,12 +573,14 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 	props, present := bmd.Get(bck)
 	if !present {
 		p.owner.bmd.Unlock()
-		return cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		return
 	}
 	if props.EC.Enabled {
 		// Changing data or parity slice count on the fly is unsupported yet
 		p.owner.bmd.Unlock()
-		return fmt.Errorf("%s: EC is already enabled for bucket %s", p.si, bck)
+		err = fmt.Errorf("%s: EC is already enabled for bucket %s", p.si, bck)
+		return
 	}
 	p.owner.bmd.Unlock()
 
@@ -586,7 +591,8 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
-			return res.err
+			err = res.err
+			return
 		}
 	}
 
@@ -625,10 +631,12 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) error {
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err)
-			return res.err
+			err = res.err
+			return
 		}
 	}
-	return nil
+	xactID = c.uuid
+	return
 }
 
 /////////////////////////////
