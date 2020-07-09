@@ -21,7 +21,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes/scheme"
 )
 
 var (
@@ -37,15 +36,9 @@ const (
 
 func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	// Parse spec template.
-	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(msg.Spec, nil, nil)
+	pod, err := ParsePodSpec(msg.Spec)
 	if err != nil {
-		return fmt.Errorf("failed to parse pod spec: %v", err)
-	}
-
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		kind := obj.GetObjectKind().GroupVersionKind().Kind
-		return fmt.Errorf("expected pod spec, got: %s", kind)
+		return err
 	}
 
 	if targetsNodeName == "" {
@@ -75,7 +68,7 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	}
 
 	// Wait for the pod to start.
-	cmd = exec.Command("kubectl", "wait", "--timeout", msg.WaitTimeout, "--for", "condition=ready", "pod", pod.GetName())
+	cmd = exec.Command("kubectl", "wait", "--timeout", msg.WaitTimeout.String(), "--for", "condition=ready", "pod", pod.GetName())
 	if b, err = cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to wait for %q pod to be ready (err: %v; output: %s)", pod.GetName(), err, string(b))
 	}
@@ -91,6 +84,7 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	p := pod.Spec.Containers[0].Ports[0].ContainerPort
 	port := strconv.FormatInt(int64(p), 10)
 
+	cmn.AssertNoErr(validateCommType(msg.CommType))
 	reg.put(msg.ID, entry{
 		url:      fmt.Sprintf("http://%s:%s", ip, port),
 		commType: msg.CommType,

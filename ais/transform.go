@@ -52,7 +52,6 @@ func (p *proxyrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
 // POST /v1/transform/init
 func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Request) {
 	var (
-		query       = r.URL.Query()
 		transformID = cmn.GenUUID()
 		spec, err   = ioutil.ReadAll(r.Body)
 	)
@@ -62,19 +61,28 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 	}
 	r.Body.Close()
 
-	var (
-		msg = transform.Msg{
-			ID:          transformID,
-			WaitTimeout: query.Get(cmn.URLParamTimeout),
-			CommType:    query.Get(cmn.URLParamCommType),
-			Spec:        spec,
-		}
-	)
-
-	if err := msg.Validate(); err != nil {
+	pod, err := transform.ParsePodSpec(spec)
+	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
+
+	if err = transform.ValidateSpec(pod); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	timeout, _ := transform.PodTransformTimeout(pod)
+	commType, _ := transform.PodTransformCommType(pod)
+
+	var (
+		msg = transform.Msg{
+			ID:          transformID,
+			Spec:        spec,
+			WaitTimeout: timeout,
+			CommType:    commType,
+		}
+	)
 
 	var (
 		path    = cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit)
