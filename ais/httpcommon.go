@@ -319,6 +319,7 @@ func (h *httprunner) NodeStarted() bool          { return !h.startup.node.time.L
 func (h *httprunner) NodeStartedTime() time.Time { return h.startup.node.time.Load() }
 func (h *httprunner) markClusterStarted()        { h.startup.cluster.Store(true) }
 func (h *httprunner) markNodeStarted()           { h.startup.node.time.Store(time.Now()) }
+func (h *httprunner) Client() *http.Client       { return h.httpclientGetPut }
 
 func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	config := cmn.GCO.Get()

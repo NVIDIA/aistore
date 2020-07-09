@@ -52,6 +52,7 @@ func (p *proxyrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
 // POST /v1/transform/init
 func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Request) {
 	var (
+		query       = r.URL.Query()
 		transformID = cmn.GenUUID()
 		spec, err   = ioutil.ReadAll(r.Body)
 	)
@@ -61,11 +62,23 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 	}
 	r.Body.Close()
 
-	// TODO: Perform validation on body
+	var (
+		msg = transform.Msg{
+			ID:          transformID,
+			WaitTimeout: query.Get(cmn.URLParamTimeout),
+			CommType:    query.Get(cmn.URLParamCommType),
+			Spec:        spec,
+		}
+	)
+
+	if err := msg.Validate(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
 
 	var (
 		path    = cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit)
-		body    = cmn.MustMarshal(transform.Msg{ID: transformID, Spec: spec})
+		body    = cmn.MustMarshal(msg)
 		results = p.callTargets(http.MethodPost, path, body)
 	)
 
@@ -83,7 +96,7 @@ func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := transform.StartTransformationPod(t, &msg); err != nil {
+	if err := transform.StartTransformationPod(&msg); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

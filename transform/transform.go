@@ -6,10 +6,8 @@ package transform
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -17,7 +15,9 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -37,19 +37,17 @@ const (
 
 // TODO: remove the `kubectl` with a proper go-sdk call
 
-func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
+func StartTransformationPod(msg *Msg) (err error) {
 	// Parse spec template.
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(msg.Spec, nil, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse pod spec: %v", err)
 	}
 
-	// TODO: switch over types, v1beta1.Deployment, etc.. (is it necessary though? maybe we should enforce kind=Pod)
-	//  or maybe we could use `"k8s.io/apimachinery/pkg/apis/meta/v1".Object` but
-	//  it doesn't have affinity support...
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
-		return errors.New("expected Pod spec")
+		kind := obj.GetObjectKind().GroupVersionKind().Kind
+		return fmt.Errorf("expected pod spec, got: %s", kind)
 	}
 
 	if targetPodName == "" {
@@ -58,8 +56,7 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 
 	// Override the name (add target ID to its name).
 	// TODO: check if there's already pod with this name running (?)
-	newTransformName := pod.GetName() + "-" + targetPodName
-	pod.SetName(newTransformName)
+	pod.SetName(pod.GetName() + "-" + targetPodName)
 	if err := setTransformAffinity(pod); err != nil {
 		return err
 	}
@@ -69,9 +66,10 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 		LabelSelector: targetLabelSelector,
 		TopologyKey:   topologyKey,
 	}
-	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that transformer will be placed on the same machine
-	// as target which creates it. However, if 2 targets went down and up again at the same time, they may
-	// switch nodes, leaving transformers running on the wrong machines.
+	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that transformer
+	//  will be placed on the same machine as target which creates it. However,
+	//  if 2 targets went down and up again at the same time, they may switch nodes,
+	//  leaving transformers running on the wrong machines.
 	pod.Spec.Affinity.PodAffinity.RequiredDuringSchedulingIgnoredDuringExecution = []corev1.PodAffinityTerm{targetRunningAffinity}
 
 	// Encode the specification once again to be ready for the start.
@@ -84,24 +82,19 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	cmd := exec.Command("kubectl", "apply", "-f", "-")
 	cmd.Stdin = bytes.NewBuffer(b)
 	if b, err = cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%v: %s", err, string(b))
+		return fmt.Errorf("failed to apply spec for %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
 	}
 
-	if msg.WaitTimeout == "" {
-		msg.WaitTimeout = "0"
-	}
-
-	// TODO: check if pod errored
 	// Wait for the pod to start.
 	cmd = exec.Command("kubectl", "wait", "--timeout", msg.WaitTimeout, "--for", "condition=ready", "pod", pod.GetName())
-	if _, err = cmd.CombinedOutput(); err != nil {
-		return err
+	if b, err = cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to wait for %q pod to be ready (err: %v; output: %s)", pod.GetName(), err, string(b))
 	}
 
 	// Retrieve IP of the pod.
 	output, err := exec.Command("kubectl", "get", "pod", pod.GetName(), "--template={{.status.podIP}}").Output()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get IP of %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
 	}
 	ip := string(output)
 
@@ -111,7 +104,7 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 
 	reg.put(msg.ID, entry{
 		url:      fmt.Sprintf("http://%s:%s", ip, port),
-		commType: putComm, // TODO: remove hardcoded
+		commType: msg.CommType,
 	})
 	return nil
 }
@@ -120,29 +113,40 @@ func DoTransform(w io.Writer, t cluster.Target, transformID string, bck *cluster
 	e := reg.get(transformID)
 
 	switch e.commType {
-	case putComm:
+	case putCommType:
 		lom := &cluster.LOM{T: t, ObjName: objName}
 		if err := lom.Init(bck.Bck); err != nil {
 			return err
 		}
 
-		// TODO: This is inefficient because we will retrieve full object to
-		//  memory. We probably need to start `http.Post` in separate goroutine.
-		rp, wp := io.Pipe()
-		if err := t.GetObject(wp, lom, time.Now()); err != nil {
-			return err
-		}
-		// TODO: Use `t.httpclient.Do(...)` instead of raw `http.Post`.
-		resp, err := http.Post(e.url, "application/json", rp)
+		var (
+			group  = &errgroup.Group{}
+			rp, wp = io.Pipe()
+		)
+
+		group.Go(func() error {
+			resp, err := t.Client().Post(e.url, "application/json", rp)
+			rp.CloseWithError(err)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(w, resp.Body)
+			debug.AssertNoErr(err)
+			err = resp.Body.Close()
+			debug.AssertNoErr(err)
+			return nil
+		})
+
+		err := t.GetObject(wp, lom, time.Now())
+		wp.CloseWithError(err)
 		if err != nil {
 			return err
 		}
-		io.Copy(w, resp.Body)
-		resp.Body.Close()
-	case pushPullComm:
+		return group.Wait()
+	case pushPullCommType:
 		cmn.AssertMsg(false, "not yet implemented")
 	default:
-		cmn.Assert(false)
+		cmn.AssertMsg(false, e.commType)
 	}
 	return nil
 }
@@ -155,9 +159,10 @@ func setTransformAffinity(pod *corev1.Pod) error {
 		pod.Spec.Affinity.PodAffinity = &corev1.PodAffinity{}
 	}
 
-	if len(pod.Spec.Affinity.PodAffinity.RequiredDuringSchedulingIgnoredDuringExecution) != 0 ||
-		len(pod.Spec.Affinity.PodAffinity.PreferredDuringSchedulingIgnoredDuringExecution) != 0 {
-		return fmt.Errorf("pod should not have any PodAffinities defined")
+	podAffinity := pod.Spec.Affinity.PodAffinity
+	if len(podAffinity.RequiredDuringSchedulingIgnoredDuringExecution) != 0 ||
+		len(podAffinity.PreferredDuringSchedulingIgnoredDuringExecution) != 0 {
+		return fmt.Errorf("pod spec should not have any PodAffinities defined")
 	}
 	return nil
 }

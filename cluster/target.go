@@ -71,6 +71,7 @@ type node interface {
 	ClusterStarted() bool
 	NodeStarted() bool
 	NodeStartedTime() time.Time
+	Client() *http.Client
 }
 
 // NOTE: For implementations, please refer to ais/tgtifimpl.go and ais/httpcommon.go

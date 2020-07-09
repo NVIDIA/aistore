@@ -6,11 +6,13 @@ package transform
 
 import (
 	"sync"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
-	pushPullComm = "ppc"
-	putComm      = "putc"
+	pushPullCommType = "ppc"
+	putCommType      = "putc"
 )
 
 type (
@@ -34,9 +36,7 @@ func newRegistry() *registry {
 }
 
 func (r *registry) put(uuid string, e entry) {
-	if uuid == "" {
-		return
-	}
+	cmn.Assert(uuid != "")
 	r.mtx.Lock()
 	r.m[uuid] = e
 	r.mtx.Unlock()
