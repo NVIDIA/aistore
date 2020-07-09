@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -106,6 +107,9 @@ func DoTransform(w io.Writer, t cluster.Target, transformID string, bck *cluster
 		if err := lom.Init(bck.Bck); err != nil {
 			return err
 		}
+		if err := lom.Load(); err != nil {
+			return err
+		}
 
 		var (
 			group  = &errgroup.Group{}
@@ -113,8 +117,15 @@ func DoTransform(w io.Writer, t cluster.Target, transformID string, bck *cluster
 		)
 
 		group.Go(func() error {
-			resp, err := t.Client().Post(e.url, "application/json", rp)
-			rp.CloseWithError(err)
+			req, err := http.NewRequest(http.MethodPost, e.url, rp)
+			if err != nil {
+				rp.CloseWithError(err)
+				return err
+			}
+
+			req.ContentLength = lom.Size()
+			req.Header.Set("Content-Type", "octet-stream")
+			resp, err := t.Client().Do(req)
 			if err != nil {
 				return err
 			}
