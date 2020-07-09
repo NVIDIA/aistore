@@ -15,10 +15,6 @@ import (
 
 var (
 	objectSpecificCmdsFlags = map[string][]cli.Flag{
-		commandPrefetch: append(
-			baseLstRngFlags,
-			dryRunFlag,
-		),
 		commandEvict: append(
 			baseLstRngFlags,
 			dryRunFlag,
@@ -59,14 +55,6 @@ var (
 	}
 
 	objectSpecificCmds = []cli.Command{
-		{
-			Name:         commandPrefetch,
-			Usage:        "prefetch objects from cloud buckets",
-			ArgsUsage:    bucketArgument,
-			Flags:        objectSpecificCmdsFlags[commandPrefetch],
-			Action:       prefetchHandler,
-			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.AnyCloud}),
-		},
 		{
 			Name:         commandEvict,
 			Usage:        "evict objects from the cache",

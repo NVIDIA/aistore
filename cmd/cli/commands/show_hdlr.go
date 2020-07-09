@@ -167,7 +167,7 @@ var (
 					Name:         subcmdShowXaction,
 					Usage:        "show xaction details",
 					ArgsUsage:    "[XACTION_ID|XACTION_NAME] [BUCKET_NAME]",
-					Description:  xactionDesc(""),
+					Description:  xactionDesc(false),
 					Flags:        showCmdsFlags[subcmdShowXaction],
 					Action:       showXactionHandler,
 					BashComplete: xactionCompletions(""),

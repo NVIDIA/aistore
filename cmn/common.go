@@ -270,8 +270,10 @@ func (ss StringSet) Keys() []string {
 	return keys
 }
 
-func (ss StringSet) Add(key string) {
-	ss[key] = struct{}{}
+func (ss StringSet) Add(keys ...string) {
+	for _, key := range keys {
+		ss[key] = struct{}{}
+	}
 }
 
 func (ss StringSet) Contains(key string) bool {

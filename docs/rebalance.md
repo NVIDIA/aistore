@@ -97,7 +97,7 @@ DAEMON ID        ID      KIND            BUCKET  OBJECTS         BYTES          
 
 
 ```console
-# ais start xaction rebalance
+# ais start rebalance
 ```
 
 ## Resilver

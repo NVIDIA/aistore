@@ -149,7 +149,7 @@ Objects are prefetched or evicted using [List/Range Operations](batch.md#listran
 For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from Amazon S3 cloud bucket `abc`, run:
 
 ```console
-$ ais prefetch aws://abc --list o1,o2,o3
+$ ais start prefetch aws://abc --list o1,o2,o3
 ```
 
 To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the cloud bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:

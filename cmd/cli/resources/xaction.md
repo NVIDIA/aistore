@@ -6,10 +6,10 @@ AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop 
 
 ## Start xaction
 
-`ais start xaction XACTION_NAME [BUCKET_NAME]`
+`ais start <XACTION_COMMAND> [arguments...]`
 
-Start xaction(s). Some xactions require a bucket name to execute.
-The second argument is used to determine the bucket name if it is required.
+Start xaction(s). Some xactions require additional arguments such as bucket name to execute.
+
 
 ### Examples
 
@@ -18,7 +18,7 @@ The second argument is used to determine the bucket name if it is required.
 Starts LRU xaction on all nodes
 
 ```console
-$ ais start xaction lru
+$ ais start lru
 Started "lru" xaction.
 ```
 

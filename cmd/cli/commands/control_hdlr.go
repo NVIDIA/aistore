@@ -34,6 +34,10 @@ var (
 		subcmdStartDsort: {
 			specFileFlag,
 		},
+		commandPrefetch: append(
+			baseLstRngFlags,
+			dryRunFlag,
+		),
 	}
 
 	stopCmdsFlags = map[string][]cli.Flag{
@@ -48,13 +52,12 @@ var (
 			Usage: "start jobs in the cluster",
 			Subcommands: []cli.Command{
 				{
-					Name:         subcmdStartXaction,
-					Usage:        "start an xaction",
-					ArgsUsage:    "XACTION_NAME [BUCKET_NAME]",
-					Description:  xactionDesc(cmn.ActXactStart),
-					Flags:        startCmdsFlags[subcmdStartXaction],
-					Action:       startXactionHandler,
-					BashComplete: xactionCompletions(cmn.ActXactStart),
+					Name:         commandPrefetch,
+					Usage:        "prefetch objects from cloud buckets",
+					ArgsUsage:    bucketArgument,
+					Flags:        startCmdsFlags[commandPrefetch],
+					Action:       prefetchHandler,
+					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.AnyCloud}),
 				},
 				{
 					Name:      subcmdStartDownload,
@@ -80,7 +83,7 @@ var (
 					Name:         subcmdStopXaction,
 					Usage:        "stops xactions",
 					ArgsUsage:    "XACTION_ID|XACTION_NAME [BUCKET_NAME]",
-					Description:  xactionDesc(cmn.ActXactStop),
+					Description:  xactionDesc(false),
 					Flags:        stopCmdsFlags[subcmdStopXaction],
 					Action:       stopXactionHandler,
 					BashComplete: xactionCompletions(cmn.ActXactStop),
@@ -105,18 +108,49 @@ var (
 	}
 )
 
+func init() {
+	controlCmds[0].Subcommands = append(controlCmds[0].Subcommands, bucketSpecificCmds...)
+	controlCmds[0].Subcommands = append(controlCmds[0].Subcommands, xactionCmds()...)
+}
+
+func xactionCmds() cli.Commands {
+	cmds := make(cli.Commands, 0)
+
+	splCmdKinds := make(cmn.StringSet)
+	// Add any xaction which requires a separate handler here.
+	splCmdKinds.Add(cmn.ActPrefetch, cmn.ActECEncode, cmn.ActMakeNCopies)
+
+	startable := listXactions(true)
+	for _, xaction := range startable {
+		if splCmdKinds.Contains(xaction) {
+			continue
+		}
+		cmd := cli.Command{
+			Name:   xaction,
+			Usage:  fmt.Sprintf("start %s", xaction),
+			Action: startXactionHandler,
+		}
+		if cmn.IsXactTypeBck(xaction) {
+			cmd.ArgsUsage = bucketArgument
+			cmd.BashComplete = bucketCompletions()
+		}
+		cmds = append(cmds, cmd)
+	}
+	return cmds
+}
+
 func startXactionHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, "xaction name")
+	xactKind := c.Command.Name
+	if cmn.IsXactTypeBck(xactKind) && c.NArg() == 0 {
+		return missingArgumentsError(c, bucketArgument)
 	}
 
-	xactID, xactKind, bck, err := parseXactionFromArgs(c)
+	bck, _, err := parseBckObjectURI(c.Args().First())
+
 	if err != nil {
 		return err
 	}
-	if xactID != "" {
-		return fmt.Errorf("%q is not a valid xaction", xactID)
-	}
+
 	var (
 		id       string
 		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck}

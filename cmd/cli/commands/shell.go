@@ -307,14 +307,8 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 	}
 }
 
-func xactionDesc(cmd string) string {
-	xactKinds := make([]string, 0, len(cmn.XactsDtor))
-	for kind, meta := range cmn.XactsDtor {
-		if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && meta.Startable) {
-			xactKinds = append(xactKinds, kind)
-		}
-	}
-	sort.Strings(xactKinds)
+func xactionDesc(onlyStartable bool) string {
+	xactKinds := listXactions(onlyStartable)
 	return fmt.Sprintf("%s can be one of: %q", xactionArgument, strings.Join(xactKinds, ", "))
 }
 

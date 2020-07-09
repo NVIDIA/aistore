@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -694,6 +695,18 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 		}
 	}
 	return
+}
+
+// Get list of xactions
+func listXactions(onlyStartable bool) []string {
+	xactKinds := make([]string, 0)
+	for kind, meta := range cmn.XactsDtor {
+		if !onlyStartable || (onlyStartable && meta.Startable) {
+			xactKinds = append(xactKinds, kind)
+		}
+	}
+	sort.Strings(xactKinds)
+	return xactKinds
 }
 
 func isJSON(args ...string) bool {
