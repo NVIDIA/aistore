@@ -42,9 +42,9 @@ func (r *registry) put(uuid string, e entry) {
 	r.mtx.Unlock()
 }
 
-func (r *registry) get(uuid string) (e entry) {
+func (r *registry) get(uuid string) (e entry, exists bool) {
 	r.mtx.RLock()
-	e = r.m[uuid]
+	e, exists = r.m[uuid]
 	r.mtx.RUnlock()
 	return
 }

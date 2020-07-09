@@ -565,3 +565,21 @@ func doDlStatusRequest(reqParams ReqParams) (resp downloader.DlStatusResp, err e
 	err = DoHTTPRequest(reqParams, &resp)
 	return resp, err
 }
+
+func TransformInit(baseParams BaseParams, spec []byte) (id string, err error) {
+	baseParams.Method = http.MethodPost
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Transform, cmn.Init),
+		Body:       spec,
+	}, &id)
+	return id, err
+}
+
+func TransformObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
+	_, err = GetObject(baseParams, bck, objName, GetObjectInput{
+		Writer: w,
+		Query:  url.Values{cmn.URLParamUUID: []string{id}},
+	})
+	return
+}

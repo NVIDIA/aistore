@@ -93,7 +93,10 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 }
 
 func DoTransform(w io.Writer, r *http.Request, t cluster.Target, transformID string, bck *cluster.Bck, objName string) error {
-	e := reg.get(transformID)
+	e, exists := reg.get(transformID)
+	if !exists {
+		return fmt.Errorf("transformation with %q id doesn't exist", transformID)
+	}
 
 	switch e.commType {
 	case putCommType:

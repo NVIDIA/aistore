@@ -192,7 +192,7 @@ Finally, we can use newly created pods to transform the objects for us:
 ```console
 $ ais create bucket transform
 $ echo "some text :)" | ais put - transform/shard.in
-$ ais transformation get JGHEoo89gg transform/shard.in 
+$ ais transformation object JGHEoo89gg transform/shard.in 
 393c6706efb128fbc442d3f7d084a426
 ```
 

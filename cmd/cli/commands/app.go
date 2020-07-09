@@ -154,6 +154,7 @@ func (aisCLI *AISCLI) setupCommands() {
 	app.Commands = append(app.Commands, showCmds...)
 	app.Commands = append(app.Commands, waitCmds...)
 	app.Commands = append(app.Commands, objectSpecificCmds...)
+	app.Commands = append(app.Commands, transformCmds...)
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	setupCommandHelp(app.Commands)

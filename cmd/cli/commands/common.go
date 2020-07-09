@@ -40,6 +40,7 @@ const (
 	commandStop      = cmn.ActXactStop
 	commandWait      = "wait"
 	commandSearch    = "search"
+	commandTransform = "transform"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase
@@ -59,6 +60,7 @@ const (
 	subcmdMountpath = "mountpath"
 	subcmdCluster   = "cluster"
 	subcmdPrimary   = "primary"
+	subcmdInit      = "init"
 
 	// Show subcommands
 	subcmdShowBucket    = subcmdBucket
