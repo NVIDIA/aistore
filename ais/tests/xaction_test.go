@@ -23,7 +23,7 @@ func TestXactionStartAbort(t *testing.T) {
 
 		proxyURL = tutils.RandomProxyURL()
 
-		startableKinds = []string{cmn.ActResilver, cmn.ActLRU}
+		startableKinds = []string{cmn.ActLRU}
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
