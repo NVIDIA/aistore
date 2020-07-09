@@ -138,19 +138,21 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 }
 
 // make-n-copies: { confirm existence -- begin -- update locally -- metasync -- commit }
-func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
+func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string, err error) {
 	var (
-		pname       = p.si.String()
-		c           = p.prepTxnClient(msg, bck)
-		nlp         = bck.GetNameLockPair()
-		copies, err = p.parseNCopies(msg.Value)
-		unlockUpon  bool // unlock upon receiving target notifications
+		pname      = p.si.String()
+		c          = p.prepTxnClient(msg, bck)
+		nlp        = bck.GetNameLockPair()
+		unlockUpon bool // unlock upon receiving target notifications
 	)
+
+	copies, err := p.parseNCopies(msg.Value)
 	if err != nil {
-		return err
+		return
 	}
 	if !nlp.TryLock() {
-		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
+		err = cmn.NewErrorBucketIsBusy(bck.Bck, pname)
+		return
 	}
 	defer func() {
 		if !unlockUpon {
@@ -163,7 +165,8 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bck); !present {
 		p.owner.bmd.Unlock()
-		return cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		return
 	}
 	p.owner.bmd.Unlock()
 
@@ -174,7 +177,8 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
-			return res.err
+			err = res.err
+			return
 		}
 	}
 
@@ -212,11 +216,12 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
 			p.undoUpdateCopies(msg, bck, bprops.Mirror.Copies, bprops.Mirror.Enabled)
-			return res.err
+			err = res.err
+			return
 		}
 	}
-
-	return nil
+	xactID = c.uuid
+	return
 }
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }

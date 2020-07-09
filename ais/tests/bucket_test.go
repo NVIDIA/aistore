@@ -1156,7 +1156,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies int) {
 	tutils.Logf("Set copies = %d\n", ncopies)
-	if err := api.MakeNCopies(baseParams, bck, ncopies); err != nil {
+	if _, err := api.MakeNCopies(baseParams, bck, ncopies); err != nil {
 		t.Fatalf("Failed to start copies=%d xaction, err: %v", ncopies, err)
 	}
 	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: bck, Timeout: 60 * time.Second}

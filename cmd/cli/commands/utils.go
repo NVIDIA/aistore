@@ -950,3 +950,8 @@ func (pi *progIndicator) printProgress(incr int64) {
 func newProgIndicator(objName string) *progIndicator {
 	return &progIndicator{objName, atomic.NewInt64(0)}
 }
+
+// get xaction progress message
+func xactProgressMsg(xactID string) string {
+	return fmt.Sprintf("use '%s %s %s %s' to monitor progress", cliName, commandShow, subcmdXaction, xactID)
+}

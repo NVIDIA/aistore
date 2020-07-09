@@ -259,11 +259,12 @@ func WaitForXactionToStart(baseParams BaseParams, args XactReqArgs) error {
 // MakeNCopies API
 //
 // MakeNCopies starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies)
-func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) error {
+func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
-	return DoHTTPRequest(ReqParams{
+	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
-	})
+	}, &xactID)
+	return
 }

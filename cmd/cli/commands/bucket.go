@@ -446,14 +446,17 @@ func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) e
 
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
-	if err = api.MakeNCopies(defaultAPIParams, bck, copies); err != nil {
+	var xactID string
+	if xactID, err = api.MakeNCopies(defaultAPIParams, bck, copies); err != nil {
 		return
 	}
+	var baseMsg string
 	if copies > 1 {
-		fmt.Fprintf(c.App.Writer, "Configured %q as %d-way mirror\n", bck, copies)
+		baseMsg = fmt.Sprintf("Configured %q as %d-way mirror,", bck, copies)
 	} else {
-		fmt.Fprintf(c.App.Writer, "Configured %q for single-replica (no redundancy)\n", bck)
+		baseMsg = fmt.Sprintf("Configured %q for single-replica (no redundancy),", bck)
 	}
+	fmt.Fprintln(c.App.Writer, baseMsg, xactProgressMsg(xactID))
 	return
 }
 
@@ -463,8 +466,8 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	if xactID, err = api.ECEncodeBucket(defaultAPIParams, bck, data, parity); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %q, use '%s %s %s %s' to monitor the progress\n",
-		bck, cliName, commandShow, subcmdXaction, xactID)
+	fmt.Fprintf(c.App.Writer, "Erasure-coding bucket %q, ", bck)
+	fmt.Fprintln(c.App.Writer, xactProgressMsg(xactID))
 	return
 }
 

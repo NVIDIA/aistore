@@ -1041,9 +1041,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
-		if err = p.makeNCopies(&msg, bck); err != nil {
+		var xactID string
+		if xactID, err = p.makeNCopies(&msg, bck); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
+		w.Write([]byte(xactID))
+
 	case cmn.ActECEncode:
 		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessEC); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
