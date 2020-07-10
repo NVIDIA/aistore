@@ -20,21 +20,21 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// The motivation behind listObjectsCache is to limit transportation overhead
-// between proxy and targets when exactly the same list objects requests are made.
-// This includes use-case when separate AI-training machines execute the same job,
-// ask for the same objects list.
+// The motivation behind list-objects caching is to (drastically) reduce latency
+// of listing large buckets by multiple users.
+// This includes (but is not limited to) the AI use case when training workers execute the same
+// logic and list the same dataset.
 
-// When user asks proxy for next N objects (in given order), it doesn't know where
-// those objects are. In the worst case scenario they can all be on a single target.
-// Hence, we have to query each target for N objects, merge results and select first N from it.
-// If being naive, we would have to discard the rest of the objects.
-// The cache allows us to not forget objects which we didn't use. Instead, we keep them in memory
-// for future requests.
+// When a user asks AIS proxy for the next N random objects (in a given order), the user cannot
+// know where those objects are located in the cluster. In the worst-case scenario, all objects
+// could reside on a single target. Hence, we query each target for the N (objects),
+// merge-sort the results, and select the first N from it. Naively, we would be discarding the
+// rest - cache, though, allows us /not to forget/ but use the results for the subsequent requests
+// and across multiple users.
 
-// Entry point for the cache usage is Next(N) method, which returns next N objects
-// for given (bucket, prefix, fast, page marker). If not all requested objects are present
-// in the cache, they are fetched from targets.
+// A given cache instance is defined by the (bucket, prefix, fast) tuple. The main entry point is
+// the next() method that returns the next N objects. Caches populate themselves from the storage
+// targets on as-needed basis.
 
 // The flow:
 // - User asks for N objects
