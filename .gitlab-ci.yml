@@ -74,7 +74,7 @@ test:authn:
   script:
     - make cli
     - make deploy <<< $'5\n5\n3\n0'
-    - ais auth login $AUTHN_SU_NAME $AUTHN_SU_PASS
+    - ais auth login $AUTHN_SU_NAME -p $AUTHN_SU_PASS
     - BUCKET="test" RE="TestAuth" make test-run
     - ais auth logout
 
