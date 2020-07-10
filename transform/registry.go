@@ -13,16 +13,12 @@ import (
 const (
 	pushPullCommType = "ppc"
 	putCommType      = "putc"
+	redirectCommType = "redir"
 )
 
 type (
-	entry struct {
-		url      string
-		commType string
-	}
-
 	registry struct {
-		m   map[string]entry
+		m   map[string]Communicator
 		mtx sync.RWMutex
 	}
 )
@@ -31,20 +27,20 @@ var reg = newRegistry()
 
 func newRegistry() *registry {
 	return &registry{
-		m: make(map[string]entry),
+		m: make(map[string]Communicator),
 	}
 }
 
-func (r *registry) put(uuid string, e entry) {
+func (r *registry) put(uuid string, c Communicator) {
 	cmn.Assert(uuid != "")
 	r.mtx.Lock()
-	r.m[uuid] = e
+	r.m[uuid] = c
 	r.mtx.Unlock()
 }
 
-func (r *registry) get(uuid string) (e entry, exists bool) {
+func (r *registry) get(uuid string) (c Communicator, exists bool) {
 	r.mtx.RLock()
-	e, exists = r.m[uuid]
+	c, exists = r.m[uuid]
 	r.mtx.RUnlock()
 	return
 }

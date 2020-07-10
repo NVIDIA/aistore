@@ -7,19 +7,14 @@ package transform
 import (
 	"bytes"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
-	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -34,7 +29,7 @@ const (
 
 // TODO: remove the `kubectl` with a proper go-sdk call
 
-func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
+func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 	// Parse spec template.
 	pod, err := ParsePodSpec(msg.Spec)
 	if err != nil {
@@ -85,67 +80,18 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	port := strconv.FormatInt(int64(p), 10)
 
 	cmn.AssertNoErr(validateCommType(msg.CommType))
-	reg.put(msg.ID, entry{
-		url:      fmt.Sprintf("http://%s:%s", ip, port),
-		commType: msg.CommType,
-	})
+	transformerURL := fmt.Sprintf("http://%s:%s", ip, port)
+	c := makeCommunicator(msg.CommType, transformerURL, t)
+	reg.put(msg.ID, c)
 	return nil
 }
 
-func DoTransform(w io.Writer, r *http.Request, t cluster.Target, transformID string, bck *cluster.Bck, objName string) error {
-	e, exists := reg.get(transformID)
+func GetCommunicator(transformID string) (Communicator, error) {
+	c, exists := reg.get(transformID)
 	if !exists {
-		return fmt.Errorf("transformation with %q id doesn't exist", transformID)
+		return nil, fmt.Errorf("transformation with %q id doesn't exist", transformID)
 	}
-
-	switch e.commType {
-	case putCommType:
-		lom := &cluster.LOM{T: t, ObjName: objName}
-		if err := lom.Init(bck.Bck); err != nil {
-			return err
-		}
-		if err := lom.Load(); err != nil {
-			return err
-		}
-
-		var (
-			group  = &errgroup.Group{}
-			rp, wp = io.Pipe()
-		)
-
-		group.Go(func() error {
-			req, err := http.NewRequest(http.MethodPost, e.url, rp)
-			if err != nil {
-				rp.CloseWithError(err)
-				return err
-			}
-
-			req.ContentLength = lom.Size()
-			req.Header.Set("Content-Type", "octet-stream")
-			req.URL.RawQuery = r.URL.Query().Encode()
-			resp, err := t.Client().Do(req)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(w, resp.Body)
-			debug.AssertNoErr(err)
-			err = resp.Body.Close()
-			debug.AssertNoErr(err)
-			return nil
-		})
-
-		err := t.GetObject(wp, lom, time.Now())
-		wp.CloseWithError(err)
-		if err != nil {
-			return err
-		}
-		return group.Wait()
-	case pushPullCommType:
-		cmn.AssertMsg(false, "not yet implemented")
-	default:
-		cmn.AssertMsg(false, e.commType)
-	}
-	return nil
+	return c, nil
 }
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.

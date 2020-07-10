@@ -38,7 +38,7 @@ func PodTransformCommType(pod *corev1.Pod) (string, error) {
 }
 
 func validateCommType(commType string) error {
-	if !cmn.StringInSlice(commType, []string{pushPullCommType, putCommType}) {
+	if !cmn.StringInSlice(commType, []string{pushPullCommType, putCommType, redirectCommType}) {
 		return fmt.Errorf("unknown communication type: %q", commType)
 	}
 	return nil
@@ -55,7 +55,6 @@ func ValidateSpec(pod *corev1.Pod) error {
 	if _, err := PodTransformCommType(pod); err != nil {
 		return err
 	}
-
 	_, err := PodTransformTimeout(pod)
 	return err
 }

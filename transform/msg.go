@@ -5,12 +5,12 @@
 package transform
 
 import (
-	"time"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 type Msg struct {
-	ID          string        `json:"id"`
-	WaitTimeout time.Duration `json:"wait_timeout"`
-	CommType    string        `json:"communication_type"`
-	Spec        []byte        `json:"spec"`
+	ID          string           `json:"id"`
+	Spec        []byte           `json:"spec"`
+	CommType    string           `json:"communication_type"`
+	WaitTimeout cmn.DurationJSON `json:"wait_timeout"`
 }

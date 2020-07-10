@@ -79,7 +79,7 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 		msg = transform.Msg{
 			ID:          transformID,
 			Spec:        spec,
-			WaitTimeout: timeout,
+			WaitTimeout: cmn.DurationJSON(timeout),
 			CommType:    commType,
 		}
 	)
@@ -104,14 +104,19 @@ func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := transform.StartTransformationPod(t, &msg); err != nil {
+	if err := transform.StartTransformationPod(t, msg); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 }
 
 func (t *targetrunner) doTransform(w http.ResponseWriter, r *http.Request, transformID string, bck *cluster.Bck, objName string) {
-	if err := transform.DoTransform(w, r, t, transformID, bck, objName); err != nil {
+	comm, err := transform.GetCommunicator(transformID)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if err := comm.DoTransform(w, r, bck, objName); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

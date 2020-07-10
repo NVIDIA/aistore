@@ -16,6 +16,7 @@ spec:
       containers:
       - name: aistarget
         image: ${DOCKER_HOST_IP}:5000/ais:v1
+        imagePullPolicy: Always
         env:
          - name: AIS_NODE_ROLE
            value: "target"

@@ -18,6 +18,7 @@ spec:
       containers:
       - name: aisproxy
         image: ${DOCKER_HOST_IP}:5000/ais:v1
+        imagePullPolicy: Always
         livenessProbe:
           httpGet:
             path: /v1/health
