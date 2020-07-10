@@ -293,7 +293,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 
 			err, ok := d.blockingDispatchDownloadSingle(t)
 			if err != nil {
-				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.link, err.Error())
+				glog.Errorf("Download job %q failed, couldn't download object %q, aborting; err: %s", job.ID(), obj.objName, err.Error())
 				dlStore.setAborted(job.ID())
 				return ok
 			}
