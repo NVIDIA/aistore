@@ -2036,6 +2036,10 @@ func TestAllChecksums(t *testing.T) {
 	}
 }
 func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
+	const (
+		copyCnt   = 2
+		parityCnt = 2
+	)
 	var (
 		m = ioContext{
 			t:               t,
@@ -2043,14 +2047,11 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			numGetsEachFile: 1,
 			fileSize:        uint64(100*cmn.KiB + rand.Int63n(cmn.MiB)),
 		}
-		numCorrupted int
+		numCorrupted = rand.Intn(m.num/100) + 2
 	)
-	// reduce for test-short
-	cmn.Assert(m.num > 100)
-	numCorrupted = rand.Intn(m.num/100) + 2
 	if testing.Short() {
 		m.num = 40
-		m.fileSize = 1024
+		m.fileSize = cmn.KiB
 		numCorrupted = 13
 	}
 	m.saveClusterState()
@@ -2068,12 +2069,11 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 				},
 				Mirror: &cmn.MirrorConfToUpdate{
 					Enabled: api.Bool(true),
-					Copies:  api.Int64(2),
+					Copies:  api.Int64(copyCnt),
 				},
 			})
 			tassert.CheckFatal(t, err)
 		} else if eced {
-			const parityCnt = 2
 			if m.smap.CountTargets() < parityCnt+1 {
 				t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 			}
@@ -2112,7 +2112,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			t.Fatal("failed to mirroring")
 		}
 		if eced && !p.EC.Enabled {
-			t.Fatal("failed to enable erasure conding")
+			t.Fatal("failed to enable erasure coding")
 		}
 	}
 
@@ -2120,7 +2120,13 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// wait for mirroring
 	if mirrored {
-		m.ensureNumCopies(2, cmn.ActPutCopies)
+		// TODO: there must be a better way for waiting for all copies.
+		if testing.Short() {
+			time.Sleep(5 * time.Second)
+		} else {
+			time.Sleep(10 * time.Second)
+		}
+		m.ensureNumCopies(copyCnt)
 	}
 	// wait for erasure-coding
 	if eced {
