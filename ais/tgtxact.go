@@ -107,7 +107,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	stats, err := xaction.Registry.GetStats(xactQuery) // []stats.XactStats
+	stats, err := xaction.Registry.GetStats(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what)
 		return

@@ -7,7 +7,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"reflect"
 	"strconv"
@@ -828,12 +827,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	_, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, obj)
 	tassert.Fatalf(t, err != nil, "expected an error, but got none")
 
-	httpErr, ok := err.(*cmn.HTTPError)
-	tassert.Fatalf(t, ok, "expected an error of type *cmn.HTTPError, but got: %T.", err)
-	tassert.Errorf(
-		t, httpErr.Status == http.StatusNotFound,
-		"expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status,
-	)
+	tutils.CheckErrIsNotFound(t, err)
 }
 
 func TestDownloadMpathEvents(t *testing.T) {

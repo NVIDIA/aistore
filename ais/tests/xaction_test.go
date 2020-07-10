@@ -5,23 +5,22 @@
 package integration
 
 import (
-	"net/http"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
-	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestXactionStartAbort(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     "TESTQUERYWORKERBUCKET",
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-
-		proxyURL = tutils.RandomProxyURL()
 
 		startableKinds = []string{cmn.ActLRU}
 	)
@@ -30,6 +29,10 @@ func TestXactionStartAbort(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	for _, kind := range startableKinds {
+		// Abort if there is any xaction running with this kind.
+		api.AbortXaction(baseParams, api.XactReqArgs{Kind: kind})
+		time.Sleep(time.Second)
+
 		id := tutils.StartXaction(t, kind, bck)
 		tutils.AbortXaction(t, id, kind, bck)
 	}
@@ -41,18 +44,8 @@ func TestXactionNotFound(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		missingID = "incorrect"
-
-		isNotFoundErr = func(err error) bool {
-			if err == nil {
-				return false
-			}
-			if httpEr, ok := err.(*cmn.HTTPError); ok {
-				return httpEr.Status == http.StatusNotFound
-			}
-			return false
-		}
 	)
 
 	_, err := api.GetXactionStatsByID(baseParams, missingID)
-	tassert.Fatalf(t, isNotFoundErr(err), "Should Raise: XactionNotFoundError")
+	tutils.CheckErrIsNotFound(t, err)
 }

@@ -573,10 +573,10 @@ func StartXaction(t *testing.T, xactKind string, bck cmn.Bck) (xactID string) {
 	xactID, err := api.StartXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
-	stats := GetXactionStatsByID(t, xactID)
-	tassert.Fatalf(t, len(stats) != 0, fmt.Sprintf("ID %q missing for xaction %q", xactID, xactKind))
-	for _, xact := range stats {
-		tassert.Fatalf(t, xact.Kind() == xactKind, fmt.Sprintf("%q != %q", xact.Kind(), xactKind))
+	xactStats := GetXactionStatsByID(t, xactID)
+	tassert.Fatalf(t, len(xactStats) != 0, "ID %q missing for xaction %q", xactID, xactKind)
+	for _, xact := range xactStats {
+		tassert.Fatalf(t, xact.Kind() == xactKind, "%q != %q", xact.Kind(), xactKind)
 	}
 
 	return
@@ -591,11 +591,23 @@ func AbortXaction(t *testing.T, xactID, xactKind string, bck cmn.Bck) {
 	err := api.AbortXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
-	stats := GetXactionStatsByID(t, xactID)
-	tassert.Fatalf(t, len(stats) != 0, fmt.Sprintf("ID %q missing for xaction %q", xactID, xactKind))
-	for _, xact := range stats {
-		tassert.Fatalf(t, xact.Kind() == xactKind, fmt.Sprintf("%q != %q", xact.Kind(), xactKind))
-		tassert.Fatalf(t, xact.Finished() || xact.Aborted(),
-			fmt.Sprintf("Xaction(%s) ID=%q not aborted", xact.Kind(), xactID))
+	xactStats := GetXactionStatsByID(t, xactID)
+	tassert.Fatalf(t, len(xactStats) != 0, "ID %q missing for xaction %q", xactID, xactKind)
+	for _, xact := range xactStats {
+		tassert.Fatalf(t, xact.Kind() == xactKind, "%q != %q", xact.Kind(), xactKind)
+		tassert.Fatalf(t, xact.Finished() || xact.Aborted(), "xaction(%s) ID=%q not aborted", xact.Kind(), xactID)
 	}
+}
+
+func CheckErrIsNotFound(t *testing.T, err error) {
+	if err == nil {
+		t.Errorf("expected error")
+		return
+	}
+	httpErr, ok := err.(*cmn.HTTPError)
+	tassert.Fatalf(t, ok, "expected an error of type *cmn.HTTPError, but got: %T.", err)
+	tassert.Errorf(
+		t, httpErr.Status == http.StatusNotFound,
+		"expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status,
+	)
 }
