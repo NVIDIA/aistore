@@ -92,7 +92,7 @@ func StartTransformationPod(t cluster.Target, msg *Msg) (err error) {
 	return nil
 }
 
-func DoTransform(w io.Writer, t cluster.Target, transformID string, bck *cluster.Bck, objName string) error {
+func DoTransform(w io.Writer, r *http.Request, t cluster.Target, transformID string, bck *cluster.Bck, objName string) error {
 	e := reg.get(transformID)
 
 	switch e.commType {
@@ -119,6 +119,7 @@ func DoTransform(w io.Writer, t cluster.Target, transformID string, bck *cluster
 
 			req.ContentLength = lom.Size()
 			req.Header.Set("Content-Type", "octet-stream")
+			req.URL.RawQuery = r.URL.Query().Encode()
 			resp, err := t.Client().Do(req)
 			if err != nil {
 				return err

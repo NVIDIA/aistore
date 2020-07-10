@@ -111,7 +111,7 @@ func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) doTransform(w http.ResponseWriter, r *http.Request, transformID string, bck *cluster.Bck, objName string) {
-	if err := transform.DoTransform(w, t, transformID, bck, objName); err != nil {
+	if err := transform.DoTransform(w, r, t, transformID, bck, objName); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
