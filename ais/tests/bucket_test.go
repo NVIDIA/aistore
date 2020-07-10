@@ -1298,6 +1298,10 @@ func TestRenameEmptyBucket(t *testing.T) {
 	err = api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck, Timeout: rebalanceTimeout}
+	err = api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+
 	// Check if the new bucket appears in the list
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck))
 	tassert.CheckFatal(t, err)

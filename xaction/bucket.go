@@ -395,6 +395,8 @@ func (r *FastRen) Run() error {
 	for !finished {
 		time.Sleep(10 * time.Second)
 		rebStats, err := Registry.GetStats(RegistryXactFilter{
+			ID:          r.ID().String(),
+			Kind:        cmn.ActRebalance,
 			OnlyRunning: api.Bool(false),
 		})
 		cmn.AssertNoErr(err)

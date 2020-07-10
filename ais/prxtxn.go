@@ -25,7 +25,6 @@ type txnClientCtx struct {
 	uuid    string
 	smap    *smapX
 	msg     *aisMsg
-	body    []byte
 	path    string
 	timeout time.Duration
 	req     cmn.ReqArgs
@@ -410,15 +409,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		func(clone *rebMD) {
 			c.msg.RMDVersion = clone.version()
 
-			// 5. commit
-			unlockUpon = true
-			c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-			c.body = cmn.MustMarshal(c.msg)
-			c.req.Body = c.body
-
-			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
-
-			// 6. start waiting for `finished` notifications
+			// 5. start waiting for `finished` notifications
 			c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
 			nl := notifListenerFromTo{
 				notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckFromToCb},
@@ -427,6 +418,13 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			}
 			rebUUID := strconv.FormatInt(clone.version(), 10)
 			p.notifs.add(rebUUID, &nl)
+
+			// 6. commit
+			unlockUpon = true
+			c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+			c.req.Body = cmn.MustMarshal(c.msg)
+
+			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
 			// 7. start rebalance and resilver
 			wg = p.metasyncer.sync(revsPair{clone, c.msg})
@@ -658,7 +656,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 	c.smap = p.owner.smap.get()
 
 	c.msg = p.newAisMsg(msg, c.smap, nil, c.uuid)
-	c.body = cmn.MustMarshal(c.msg)
+	body := cmn.MustMarshal(c.msg)
 
 	c.path = cmn.URLPath(cmn.Version, cmn.Txn, bck.Name)
 	if bck != nil {
@@ -667,7 +665,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 	c.timeout = cmn.GCO.Get().Timeout.CplaneOperation
 	query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
-	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: c.body}
+	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: body}
 	return c
 }
 
