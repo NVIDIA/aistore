@@ -160,8 +160,6 @@ const (
 	URLParamNamespace   = "namespace"
 	URLParamPrefix      = "prefix" // prefix for list objects in a bucket
 	URLParamRegex       = "regex"  // dsort/downloader regex
-	URLParamTimeout     = "timeout"
-	URLParamCommType    = "communication_type"
 	// internal use
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy
