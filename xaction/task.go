@@ -44,7 +44,7 @@ type bckListTaskEntry struct {
 
 func (e *bckListTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckListTask{
-		XactBase: *cmn.NewXactBaseWithBucket(e.uuid, cmn.ActListObjects, bck),
+		XactBase: *cmn.NewXactBaseBck(e.uuid, cmn.ActListObjects, bck),
 		ctx:      e.ctx,
 		t:        e.t,
 		msg:      e.msg,
@@ -71,7 +71,7 @@ type bckSummaryTaskEntry struct {
 
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckSummaryTask{
-		XactBase: *cmn.NewXactBaseWithBucket(e.uuid, cmn.ActSummaryBucket, bck),
+		XactBase: *cmn.NewXactBaseBck(e.uuid, cmn.ActSummaryBucket, bck),
 		t:        e.t,
 		msg:      e.msg,
 		ctx:      e.ctx,

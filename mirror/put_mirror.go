@@ -18,7 +18,7 @@ import (
 )
 
 type (
-	XactPutLRepl struct {
+	XactPut struct {
 		// implements cmn.Xact a cmn.Runner interfaces
 		demand.XactDemandBase
 		// runtime
@@ -31,7 +31,7 @@ type (
 		dropped int64
 	}
 	xputJogger struct { // one per mountpath
-		parent    *XactPutLRepl
+		parent    *XactPut
 		mpathInfo *fs.MountpathInfo
 		workCh    chan *cluster.LOM
 		stopCh    *cmn.StopCh
@@ -42,13 +42,13 @@ type (
 // public methods
 //
 
-func RunXactPutLRepl(lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err error) {
+func RunXactPut(lom *cluster.LOM, slab *memsys.Slab) (r *XactPut, err error) {
 	var (
 		availablePaths, _ = fs.Get()
 		mpathCount        = len(availablePaths)
 	)
-	r = &XactPutLRepl{
-		XactDemandBase: *demand.NewXactDemandBase(cmn.ActPutCopies, lom.Bck().Bck),
+	r = &XactPut{
+		XactDemandBase: *demand.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bck().Bck),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
 	}
@@ -75,9 +75,9 @@ func RunXactPutLRepl(lom *cluster.LOM, slab *memsys.Slab) (r *XactPutLRepl, err 
 	return
 }
 
-func (r *XactPutLRepl) IsMountpathXact() bool { return true }
+func (r *XactPut) IsMountpathXact() bool { return true }
 
-func (r *XactPutLRepl) Run() error {
+func (r *XactPut) Run() error {
 	glog.Infoln(r.String())
 	for {
 		select {
@@ -105,7 +105,7 @@ func (r *XactPutLRepl) Run() error {
 }
 
 // main method: replicate a given locally stored object
-func (r *XactPutLRepl) Repl(lom *cluster.LOM) (err error) {
+func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 	if r.Finished() {
 		err = cmn.NewErrXactExpired("Cannot replicate: " + r.String())
 		return
@@ -158,7 +158,7 @@ func (r *XactPutLRepl) Repl(lom *cluster.LOM) (err error) {
 // serve GETs are even less available for other extended actions than otherwise, etc.
 // =================== load balancing and self-throttling ========================
 
-func (r *XactPutLRepl) stop() (err error) {
+func (r *XactPut) stop() (err error) {
 	r.XactDemandBase.Stop()
 	var n int
 	for _, mpather := range r.mpathers {
@@ -178,7 +178,7 @@ func (r *XactPutLRepl) stop() (err error) {
 // xputJogger - main
 //
 
-func newXputJogger(parent *XactPutLRepl, mpathInfo *fs.MountpathInfo) *xputJogger {
+func newXputJogger(parent *XactPut, mpathInfo *fs.MountpathInfo) *xputJogger {
 	return &xputJogger{
 		parent:    parent,
 		mpathInfo: mpathInfo,

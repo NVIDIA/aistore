@@ -36,7 +36,7 @@ func PutMarker(marker string) error {
 		break
 	}
 	if mpath == nil {
-		return fmt.Errorf("could not create %q marker: no mountpaths", marker)
+		return fmt.Errorf("could not create %q marker: %s", marker, cmn.NoMountpaths)
 	}
 
 	path := filepath.Join(mpath.Path, marker)

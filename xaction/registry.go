@@ -637,6 +637,7 @@ func (r *registry) RenewLRU(id string) *lru.Xaction {
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*lruEntry)
 	if keep { // previous LRU is still running
+		entry.xact.Renew()
 		return nil
 	}
 	return entry.xact

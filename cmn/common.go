@@ -184,6 +184,7 @@ func init() {
 	nsReg = regexp.MustCompile(`^[a-zA-Z0-9_-]*$`)
 
 	// Config related
+	GCO = &globalConfigOwner{listeners: make(map[string]ConfigListener, 4)}
 	config := &Config{}
 	GCO.c.Store(unsafe.Pointer(config))
 

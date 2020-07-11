@@ -46,7 +46,7 @@ type (
 // TODO add progress-bar-supported and  limited-coexistence(#791)
 //      consider adding on-demand column as well
 var XactsDtor = map[string]XactDescriptor{
-	// global xactions (scope = cluster)
+	// bucket-less (aka "global") xactions with scope = (target | cluster)
 	ActLRU:       {Type: XactTypeGlobal, Startable: true},
 	ActElection:  {Type: XactTypeGlobal, Startable: false},
 	ActResilver:  {Type: XactTypeGlobal, Startable: true},

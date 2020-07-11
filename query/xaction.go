@@ -45,7 +45,7 @@ func NewObjectsListing(t cluster.Target, query *ObjectsQuery, wi *walkinfo.WalkI
 	cmn.Assert(query.BckSource.Bck != nil)
 	cmn.Assert(id != "")
 	return &ObjectsListingXact{
-		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActQueryObjects, *query.BckSource.Bck),
+		XactBase: *cmn.NewXactBaseBck(id, cmn.ActQueryObjects, *query.BckSource.Bck),
 		t:        t,
 		wi:       wi,
 		resultCh: make(chan *Result),

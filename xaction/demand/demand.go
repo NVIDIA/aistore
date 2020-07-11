@@ -52,24 +52,45 @@ var (
 	_ XactDemand = &XactDemandBase{}
 )
 
-//
-// XactDemandBase - partially implements XactDemand interface
-//
+////////////////////
+// XactDemandBase //
+////////////////////
 
-func NewXactDemandBase(kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
+func NewXactDemandBaseBck(kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
 	idleTime := xactIdleTimeout
 	if len(idleTimes) != 0 {
 		idleTime = idleTimes[0]
 	}
 	r := &XactDemandBase{
-		XactBase: *cmn.NewXactBaseWithBucket("", kind, bck),
+		XactBase: *cmn.NewXactBaseBck("", kind, bck),
 		hkName:   kind + "/" + cmn.GenUUID(),
-		idle: idleInfo{
-			dur:   idleTime,
-			ticks: cmn.NewStopCh(),
-		},
+		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
 	}
+	r.init()
+	return r
+}
 
+func NewXactDemandBase(uuid, kind string, idleTimes ...time.Duration) *XactDemandBase {
+	var hkName string
+	idleTime := xactIdleTimeout
+	if len(idleTimes) != 0 {
+		idleTime = idleTimes[0]
+	}
+	if uuid == "" {
+		hkName = kind + cmn.GenUUID()
+	} else {
+		hkName = kind + "/" + uuid
+	}
+	r := &XactDemandBase{
+		XactBase: *cmn.NewXactBase(cmn.XactBaseID(uuid), kind),
+		hkName:   hkName,
+		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
+	}
+	r.init()
+	return r
+}
+
+func (r *XactDemandBase) init() {
 	hk.Reg(r.hkName, func() time.Duration {
 		active := r.active.Swap(0)
 		if r.Pending() > 0 || active > 0 {
@@ -84,7 +105,6 @@ func NewXactDemandBase(kind string, bck cmn.Bck, idleTimes ...time.Duration) *Xa
 		}
 		return r.idle.dur
 	})
-	return r
 }
 
 func (r *XactDemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }

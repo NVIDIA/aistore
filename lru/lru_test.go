@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/xaction/demand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -87,7 +88,10 @@ func newTargetLRUMock() *cluster.TargetMock {
 }
 
 func newInitLRU(t cluster.Target) *InitLRU {
-	xlru := &Xaction{}
+	xlru := &Xaction{
+		XactDemandBase: *demand.NewXactDemandBase(cmn.GenUUID(), cmn.ActLRU, time.Second),
+		Renewed:        make(chan struct{}, 8),
+	}
 	return &InitLRU{
 		Xaction:             xlru,
 		StatsT:              stats.NewTrackerMock(),
@@ -146,7 +150,8 @@ func saveRandomFiles(t cluster.Target, filesPath string, filesNumber int) {
 }
 
 var _ = Describe("LRU tests", func() {
-	Describe("InitAndRun", func() {
+	cmn.InitShortID(0)
+	Describe("Run", func() {
 		var (
 			t   *cluster.TargetMock
 			ini *InitLRU
@@ -172,13 +177,13 @@ var _ = Describe("LRU tests", func() {
 
 		Describe("evict files", func() {
 			It("should not fail when there are no files", func() {
-				InitAndRun(ini)
+				Run(ini)
 			})
 
 			It("should evict correct number of files", func() {
 				saveRandomFiles(t, filesPath, numberOfCreatedFiles)
 
-				InitAndRun(ini)
+				Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -204,7 +209,7 @@ var _ = Describe("LRU tests", func() {
 				time.Sleep(1 * time.Second)
 				saveRandomFiles(t, filesPath, 3)
 
-				InitAndRun(ini)
+				Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -238,7 +243,7 @@ var _ = Describe("LRU tests", func() {
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
 				// Those files are 4Mb file and 16Mb file
-				InitAndRun(ini)
+				Run(ini)
 
 				filesLeft, err := ioutil.ReadDir(filesPath)
 				Expect(len(filesLeft)).To(Equal(2))
@@ -263,7 +268,7 @@ var _ = Describe("LRU tests", func() {
 
 				saveRandomFiles(t, filesPath, numberOfFiles)
 
-				InitAndRun(ini)
+				Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -280,7 +285,7 @@ var _ = Describe("LRU tests", func() {
 
 				saveRandomFiles(t, filesPath, numberOfFiles)
 
-				InitAndRun(ini)
+				Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -295,8 +300,6 @@ var _ = Describe("LRU tests", func() {
 					mpath     = mpaths[basePath]
 				)
 
-				InitAndRun(ini)
-
 				saveRandomFiles(t, filesPath, 10)
 				Expect(filesPath).To(BeADirectory())
 
@@ -308,7 +311,7 @@ var _ = Describe("LRU tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(1))
 
-				InitAndRun(ini)
+				Run(ini)
 
 				files, err = ioutil.ReadDir(mpath.MakePathTrash())
 				Expect(err).NotTo(HaveOccurred())

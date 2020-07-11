@@ -685,6 +685,11 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		ec.ECM.BucketsMDChanged()
 	}
 
+	// refresh used/avail capacity and run LRU if need be (in part, to remove $trash)
+	if _, err := fs.RefreshCapStatus(nil, nil); err != nil {
+		go t.RunLRU("" /*uuid*/)
+	}
+
 	return
 }
 

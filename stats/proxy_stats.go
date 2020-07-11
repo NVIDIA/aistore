@@ -54,7 +54,7 @@ func (r *Prunner) Init(p cluster.Proxy) *atomic.Bool {
 	r.statsRunner.workCh = make(chan NamedVal64, 256)
 
 	// subscribe to config changes
-	cmn.GCO.Subscribe(r)
+	cmn.GCO.Reg(r.GetRunName(), r)
 	return &r.statsRunner.startedUp
 }
 

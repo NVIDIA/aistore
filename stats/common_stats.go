@@ -411,6 +411,7 @@ func (tracker statsTracker) registerCommonStats() {
 // statsunner
 //
 
+// interface guard
 var (
 	_ Tracker            = &statsRunner{}
 	_ cmn.ConfigListener = &statsRunner{}

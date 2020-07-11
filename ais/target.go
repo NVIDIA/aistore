@@ -1242,7 +1242,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		return
 	}
 	for i := 0; i < retries; i++ {
-		xputlrep := xaction.Registry.RenewPutLocReplicas(lom)
+		xputlrep := xaction.Registry.RenewPutMirror(lom)
 		if xputlrep == nil {
 			return
 		}

@@ -142,18 +142,13 @@ func (mgr *Manager) closeECBundles() {
 }
 
 func (mgr *Manager) NewGetXact(bck cmn.Bck) *XactGet {
-	return NewGetXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
-		bck, mgr.reqBundle, mgr.respBundle)
+	return NewGetXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
 }
-
 func (mgr *Manager) NewPutXact(bck cmn.Bck) *XactPut {
-	return NewPutXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
-		bck, mgr.reqBundle, mgr.respBundle)
+	return NewPutXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
 }
-
 func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
-	return NewRespondXact(mgr.t, mgr.t.GetSowner(), mgr.t.Snode(),
-		bck, mgr.reqBundle, mgr.respBundle)
+	return NewRespondXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
 }
 
 func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {

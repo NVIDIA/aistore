@@ -28,9 +28,9 @@ type (
 	}
 )
 
-func NewRespondXact(t cluster.Target, smap cluster.Sowner, si *cluster.Snode,
-	bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactRespond {
+func NewRespondXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactRespond {
 	XactCount.Inc()
+	smap, si := t.GetSowner(), t.Snode()
 	runner := &XactRespond{
 		xactECBase: newXactECBase(t, smap, si, bck, reqBundle, respBundle),
 	}

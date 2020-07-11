@@ -229,7 +229,7 @@ func (d *Downloader) ReqDisableMountpath(_ string)    {}
 
 func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{
-		XactDemandBase: *demand.NewXactDemandBase(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
+		XactDemandBase: *demand.NewXactDemandBaseBck(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
 		t:              t,
 		statsT:         statsT,
 		mpathReqCh:     make(chan fs.ChangeReq, 1),

@@ -30,11 +30,11 @@ type (
 // XactGet
 //
 
-func NewPutXact(t cluster.Target, smap cluster.Sowner,
-	si *cluster.Snode, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactPut {
+func NewPutXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactPut {
 	XactCount.Inc()
 	availablePaths, disabledPaths := fs.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
+	smap, si := t.GetSowner(), t.Snode()
 	runner := &XactPut{
 		putJoggers:  make(map[string]*putJogger, totalPaths),
 		xactECBase:  newXactECBase(t, smap, si, bck, reqBundle, respBundle),

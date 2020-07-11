@@ -125,7 +125,7 @@ func NewXactBase(id XactID, kind string) *XactBase {
 	xact.setStartTime(time.Now())
 	return xact
 }
-func NewXactBaseWithBucket(id, kind string, bck Bck) *XactBase {
+func NewXactBaseBck(id, kind string, bck Bck) *XactBase {
 	xact := NewXactBase(XactBaseID(id), kind)
 	xact.bck = bck
 	return xact

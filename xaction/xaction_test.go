@@ -20,20 +20,20 @@ import (
 
 func TestXactionRenewLRU(t *testing.T) {
 	var (
+		num      = 10
 		xactions = newRegistry()
-		xactCh   = make(chan *lru.Xaction, 10)
+		xactCh   = make(chan *lru.Xaction, num)
 		wg       = &sync.WaitGroup{}
 	)
 	defer xactions.AbortAll()
-
-	wg.Add(10)
-	for i := 0; i < 10; i++ {
+	cmn.InitShortID(0)
+	wg.Add(num)
+	for i := 0; i < num; i++ {
 		go func() {
-			defer wg.Done()
 			xactCh <- xactions.RenewLRU("")
+			wg.Done()
 		}()
 	}
-
 	wg.Wait()
 	close(xactCh)
 

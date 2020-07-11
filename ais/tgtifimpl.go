@@ -91,7 +91,7 @@ func (t *targetrunner) RunLRU(id string) {
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
 		GetFSStats:          ios.GetFSStats,
 	}
-	lru.InitAndRun(&ini) // blocking
+	lru.Run(&ini) // blocking
 
 	xlru.Finish()
 }

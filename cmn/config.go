@@ -29,9 +29,9 @@ const (
 )
 
 const (
-	ThrottleSleepMin = time.Millisecond * 10
-	ThrottleSleepAvg = time.Millisecond * 100
-	ThrottleSleepMax = time.Second
+	ThrottleSleepMin = time.Millisecond
+	ThrottleSleepAvg = time.Millisecond * 10
+	ThrottleSleepMax = time.Millisecond * 100
 
 	// EC
 	MinSliceCount = 1  // minimum number of data or parity slices
@@ -88,7 +88,8 @@ type (
 		CommitUpdate(config *Config)
 		DiscardUpdate()
 
-		Subscribe(cl ConfigListener)
+		Reg(key string, cl ConfigListener)
+		Unreg(key string)
 
 		SetConfigFile(path string)
 		GetConfigFile() string
@@ -101,6 +102,13 @@ type (
 	}
 )
 
+var (
+	// GCO stands for global config owner which is responsible for updating
+	// and notifying listeners about any changes in the config. Config is loaded
+	// at startup and then can be accessed/updated by other services.
+	GCO *globalConfigOwner
+)
+
 // globalConfigOwner implements ConfigOwner interface. The implementation is
 // protecting config only from concurrent updates but does not use CoW or other
 // techniques which involves cloning and updating config. This might change when
@@ -110,16 +118,9 @@ type globalConfigOwner struct {
 	mtx       sync.Mutex // mutex for protecting updates of config
 	c         atomic.Pointer
 	lmtx      sync.Mutex // mutex for protecting listeners
-	listeners []ConfigListener
+	listeners map[string]ConfigListener
 	confFile  string
 }
-
-var (
-	// GCO stands for global config owner which is responsible for updating
-	// and notifying listeners about any changes in the config. Config is loaded
-	// at startup and then can be accessed/updated by other services.
-	GCO = &globalConfigOwner{}
-)
 
 func (gco *globalConfigOwner) Get() *Config {
 	return (*Config)(gco.c.Load())
@@ -191,10 +192,21 @@ func (gco *globalConfigOwner) notifyListeners(oldConf *Config) {
 	gco.lmtx.Unlock()
 }
 
-// Subscribe allows listeners to sign up for notifications about config updates.
-func (gco *globalConfigOwner) Subscribe(cl ConfigListener) {
+// Reg allows listeners to sign up for notifications about config updates.
+func (gco *globalConfigOwner) Reg(key string, cl ConfigListener) {
 	gco.lmtx.Lock()
-	gco.listeners = append(gco.listeners, cl)
+	_, ok := gco.listeners[key]
+	Assert(!ok)
+	gco.listeners[key] = cl
+	gco.lmtx.Unlock()
+}
+
+// Unreg
+func (gco *globalConfigOwner) Unreg(key string) {
+	gco.lmtx.Lock()
+	_, ok := gco.listeners[key]
+	Assert(ok)
+	delete(gco.listeners, key)
 	gco.lmtx.Unlock()
 }
 

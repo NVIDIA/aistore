@@ -157,7 +157,7 @@ func Walk(opts *Options) error {
 			}
 		} else {
 			// all content-type paths for all bucket subdirectories
-			fqns, err = allBckCTpaths(opts)
+			fqns, err = allMpathCTpaths(opts)
 			if len(fqns) == 0 || err != nil {
 				return err
 			}
@@ -197,12 +197,50 @@ func Walk(opts *Options) error {
 	return err
 }
 
-func allBckCTpaths(opts *Options) (fqns []string, err error) {
+func allMpathCTpaths(opts *Options) (fqns []string, err error) {
+	children, erc := mpathChildren(opts)
+	if erc != nil {
+		return nil, erc
+	}
+	if len(opts.CTs) > 1 {
+		fqns = make([]string, 0, len(children)*len(opts.CTs))
+	} else {
+		fqns = children[:0] // optimization to reuse previously allocated slice
+	}
+	bck := opts.Bck
+	for _, child := range children {
+		bck.Name = child
+		if cmn.ValidateBckName(bck.Name) != nil {
+			continue
+		}
+		for _, ct := range opts.CTs {
+			fqns = append(fqns, opts.Mpath.MakePathCT(bck, ct))
+		}
+	}
+	return
+}
+
+func AllMpathBcks(opts *Options) (bcks []cmn.Bck, err error) {
+	children, erc := mpathChildren(opts)
+	if erc != nil {
+		return nil, erc
+	}
+	bck := opts.Bck
+	for _, child := range children {
+		bck.Name = child
+		if cmn.ValidateBckName(bck.Name) != nil {
+			continue
+		}
+		bcks = append(bcks, bck)
+	}
+	return
+}
+
+func mpathChildren(opts *Options) (children []string, err error) {
 	var (
-		children []string
-		scratch  []byte
-		fqn      = opts.Mpath.MakePathBck(opts.Bck)
-		slab     = opts.Slab
+		scratch []byte
+		fqn     = opts.Mpath.MakePathBck(opts.Bck)
+		slab    = opts.Slab
 	)
 	if slab == nil {
 		mmsa := memsys.DefaultPageMM()
@@ -220,21 +258,6 @@ func allBckCTpaths(opts *Options) (fqns []string, err error) {
 	}
 	if opts.Sorted {
 		sort.Strings(children)
-	}
-	if len(opts.CTs) > 1 {
-		fqns = make([]string, 0, len(children)*len(opts.CTs))
-	} else {
-		fqns = children[:0] // optimization to reuse previously allocated slice
-	}
-	bck := opts.Bck
-	for _, child := range children {
-		bck.Name = child
-		if cmn.ValidateBckName(bck.Name) != nil {
-			continue
-		}
-		for _, ct := range opts.CTs {
-			fqns = append(fqns, opts.Mpath.MakePathCT(bck, ct))
-		}
 	}
 	return
 }

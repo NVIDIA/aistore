@@ -69,7 +69,7 @@ func ValidateNCopies(prefix string, copies int) error {
 	availablePaths, _ := fs.Get()
 	mpathCount := len(availablePaths)
 	if mpathCount == 0 {
-		return fmt.Errorf("%s: no mountpaths", prefix)
+		return fmt.Errorf("%s: %s", prefix, cmn.NoMountpaths)
 	}
 	if copies > mpathCount {
 		return fmt.Errorf("%s: number of copies (%d) exceeds the number of mountpaths (%d)", prefix, copies, mpathCount)

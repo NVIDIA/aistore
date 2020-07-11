@@ -52,7 +52,7 @@ func (e *ecGetEntry) Start(bck cmn.Bck) error {
 		xec      = ec.ECM.NewGetXact(bck)
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *demand.NewXactDemandBase(cmn.ActECGet, bck, idleTime)
+	xec.XactDemandBase = *demand.NewXactDemandBaseBck(cmn.ActECGet, bck, idleTime)
 	e.xact = xec
 	go xec.Run()
 	return nil
@@ -78,7 +78,7 @@ func (e *ecPutEntry) Start(bck cmn.Bck) error {
 		xec      = ec.ECM.NewPutXact(bck)
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *demand.NewXactDemandBase(cmn.ActECPut, bck, idleTime)
+	xec.XactDemandBase = *demand.NewXactDemandBaseBck(cmn.ActECPut, bck, idleTime)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -104,7 +104,7 @@ func (e *ecRespondEntry) Start(bck cmn.Bck) error {
 		xec      = ec.ECM.NewRespondXact(bck)
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *demand.NewXactDemandBase(cmn.ActECRespond, bck, idleTime)
+	xec.XactDemandBase = *demand.NewXactDemandBaseBck(cmn.ActECRespond, bck, idleTime)
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -280,19 +280,19 @@ func (e *loadLomCacheEntry) preRenewHook(_ bucketEntry) (bool, error) {
 }
 
 //
-// putLocReplicasEntry
+// putMirrorEntry
 //
-type putLocReplicasEntry struct {
+type putMirrorEntry struct {
 	baseBckEntry
 	t    cluster.Target
 	lom  *cluster.LOM
-	xact *mirror.XactPutLRepl
+	xact *mirror.XactPut
 }
 
-func (e *putLocReplicasEntry) Start(_ cmn.Bck) error {
+func (e *putMirrorEntry) Start(_ cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
-	x, err := mirror.RunXactPutLRepl(e.lom, slab)
+	x, err := mirror.RunXactPut(e.lom, slab)
 
 	if err != nil {
 		glog.Error(err)
@@ -302,16 +302,16 @@ func (e *putLocReplicasEntry) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (e *putLocReplicasEntry) Get() cmn.Xact { return e.xact }
-func (*putLocReplicasEntry) Kind() string    { return cmn.ActPutCopies }
+func (e *putMirrorEntry) Get() cmn.Xact { return e.xact }
+func (*putMirrorEntry) Kind() string    { return cmn.ActPutCopies }
 
-func (r *registry) RenewPutLocReplicas(lom *cluster.LOM) *mirror.XactPutLRepl {
-	e := &putLocReplicasEntry{t: lom.T, lom: lom}
+func (r *registry) RenewPutMirror(lom *cluster.LOM) *mirror.XactPut {
+	e := &putMirrorEntry{t: lom.T, lom: lom}
 	ee, err := r.renewBucketXaction(e, lom.Bck())
 	if err != nil {
 		return nil
 	}
-	return ee.Get().(*mirror.XactPutLRepl)
+	return ee.Get().(*mirror.XactPut)
 }
 
 //
@@ -410,7 +410,7 @@ func (r *FastRen) Run() error {
 
 func (e *FastRenEntry) Start(bck cmn.Bck) error {
 	e.xact = &FastRen{
-		XactBase:   *cmn.NewXactBaseWithBucket(e.uuid, e.Kind(), bck),
+		XactBase:   *cmn.NewXactBaseBck(e.uuid, e.Kind(), bck),
 		t:          e.t,
 		bckFrom:    e.bckFrom,
 		bckTo:      e.bckTo,
@@ -502,7 +502,7 @@ func (r *EvictDelete) Run() error {
 func (e *evictDeleteEntry) Start(bck cmn.Bck) error {
 	e.xact = &EvictDelete{
 		listRangeBase: listRangeBase{
-			XactBase: *cmn.NewXactBaseWithBucket(e.uuid, e.Kind(), bck),
+			XactBase: *cmn.NewXactBaseBck(e.uuid, e.Kind(), bck),
 			t:        e.t,
 			args:     e.args,
 		},
@@ -557,7 +557,7 @@ func (e *prefetchEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
 func (e *prefetchEntry) Start(bck cmn.Bck) error {
 	e.xact = &Prefetch{
 		listRangeBase: listRangeBase{
-			XactBase: *cmn.NewXactBaseWithBucket(e.uuid, e.Kind(), bck),
+			XactBase: *cmn.NewXactBaseBck(e.uuid, e.Kind(), bck),
 			t:        e.t,
 			args:     e.args,
 		},
@@ -605,7 +605,7 @@ type tar2TfEntry struct {
 
 func (e *tar2TfEntry) Start(bck cmn.Bck) error {
 	xact := &tar2tf.Xact{
-		XactBase: *cmn.NewXactBaseWithBucket(e.id, cmn.ActTar2Tf, bck),
+		XactBase: *cmn.NewXactBaseBck(e.id, cmn.ActTar2Tf, bck),
 		T:        e.t,
 		Job:      e.job,
 	}

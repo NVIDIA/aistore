@@ -172,7 +172,6 @@ func (mi *MountpathInfo) MakePathTrash() string { return filepath.Join(mi.Path, 
 // MoveToTrash removes directory in steps:
 // 1. Synchronously gets temporary directory name
 // 2. Synchronously renames old folder to temporary directory
-// 3. Asynchronously deletes temporary directory
 func (mi *MountpathInfo) MoveToTrash(dir string) error {
 	// Loose assumption: removing something which doesn't exist is fine.
 	if err := Access(dir); err != nil && os.IsNotExist(err) {
@@ -201,12 +200,6 @@ Retry:
 			return err
 		}
 	}
-	go func() {
-		// TODO: optimize
-		if err := os.RemoveAll(tmpDir); err != nil {
-			glog.Errorf("RemoveAll for %q failed with %v", tmpDir, err)
-		}
-	}()
 	return nil
 }
 
@@ -738,7 +731,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 		c                 Capacity
 	)
 	if len(availablePaths) == 0 {
-		err = errors.New("no mountpaths")
+		err = errors.New(cmn.NoMountpaths)
 		return
 	}
 	if config == nil {

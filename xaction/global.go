@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -31,6 +32,8 @@ type globalEntry interface {
 //
 // lruEntry
 //
+const lruIdleTime = 30 * time.Second
+
 type lruEntry struct {
 	baseGlobalEntry
 	id   string
@@ -38,7 +41,10 @@ type lruEntry struct {
 }
 
 func (e *lruEntry) Start(_ cmn.Bck) error {
-	e.xact = &lru.Xaction{XactBase: *cmn.NewXactBase(cmn.XactBaseID(e.id), cmn.ActLRU)}
+	e.xact = &lru.Xaction{
+		XactDemandBase: *demand.NewXactDemandBase(e.id, cmn.ActLRU, lruIdleTime),
+		Renewed:        make(chan struct{}, 10),
+	}
 	return nil
 }
 

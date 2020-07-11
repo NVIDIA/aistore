@@ -39,23 +39,17 @@ type (
 	}
 	FSHC struct {
 		cmn.Named
-		stopCh     chan struct{}
-		fileListCh chan string
-
-		// pointers to common data
-		mm *memsys.MMSA
-
-		// listener is notified in case of a mountpath is disabled
-		dispatcher fspathDispatcher
-
-		// temp file name generator
-		ctxResolver *fs.ContentSpecMgr
+		stopCh      chan struct{}
+		fileListCh  chan string
+		mm          *memsys.MMSA
+		dispatcher  fspathDispatcher   // listener is notified upon mountpath events (disabled, etc.)
+		ctxResolver *fs.ContentSpecMgr // temp filename generator
 	}
 )
 
-//
-// public API
-//
+//////////
+// FSHC //
+//////////
 
 func NewFSHC(dispatcher fspathDispatcher, mm *memsys.MMSA, ctxResolver *fs.ContentSpecMgr) *FSHC {
 	return &FSHC{
@@ -99,10 +93,6 @@ func (f *FSHC) OnErr(fqn string) {
 
 	f.fileListCh <- fqn
 }
-
-//////////
-// FSHC //
-//////////
 
 func (f *FSHC) isTestPassed(mpath string, readErrors, writeErrors int, available bool) (passed bool, err error) {
 	config := &cmn.GCO.Get().FSHC

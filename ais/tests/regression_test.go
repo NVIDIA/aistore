@@ -1163,3 +1163,15 @@ func TestListPassthrough(t *testing.T) {
 		tutils.Logf("Passthrough: %5t, page size: %d, time: %s\n", passthrough, pagesize, time.Since(started))
 	}
 }
+
+func TestXactionNotFound(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
+		missingID = "incorrect"
+	)
+
+	_, err := api.GetXactionStatsByID(baseParams, missingID)
+	tutils.CheckErrIsNotFound(t, err)
+}
