@@ -21,6 +21,13 @@ Starts LRU xaction on all nodes
 $ ais start lru
 Started "lru" xaction.
 ```
+An administrator may choose to run LRU on a subset of buckets. This can be achieved by using the `--buckets` flag to provide a comma-separated list of buckets, for instance `--buckets bck1,gcp://bck2`, on which LRU needs to be performed.
+Additionally, the `--force`(`-f`) option can be used to override the bucket's `lru.enabled` property.
+
+**Note:** To ensure safety, the force flag (`-f`) only works when a list of buckets is provided.
+```console
+$ ais start lru --buckets ais://buck1,aws://buck2 -f
+```
 
 ## Stop xaction
 

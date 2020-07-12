@@ -973,3 +973,30 @@ func propsList(props *cmn.BucketProps) (propList []prop, err error) {
 	})
 	return
 }
+
+func readValue(c *cli.Context, prompt string) string {
+	fmt.Fprintf(c.App.Writer, prompt+": ")
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(line, "\n")
+}
+
+func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
+	prompt += " [Y/N]"
+	if len(warning) != 0 {
+		fmt.Fprintln(c.App.Writer, "Warning:", warning[0])
+	}
+
+	var err error
+	for {
+		response := strings.ToLower(readValue(c, prompt))
+		if ok, err = cmn.ParseBool(response); err != nil {
+			fmt.Println("Invalid input! Choose 'Y' for 'Yes' or 'N' for 'No'")
+			continue
+		}
+		return
+	}
+}

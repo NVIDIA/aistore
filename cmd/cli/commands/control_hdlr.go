@@ -38,6 +38,10 @@ var (
 			baseLstRngFlags,
 			dryRunFlag,
 		),
+		subcmdLRU: {
+			listBucketsFlag,
+			forceFlag,
+		},
 	}
 
 	stopCmdsFlags = map[string][]cli.Flag{
@@ -72,6 +76,12 @@ var (
 					ArgsUsage: jsonSpecArgument,
 					Flags:     startCmdsFlags[subcmdStartDsort],
 					Action:    startDsortHandler,
+				},
+				{
+					Name:   subcmdLRU,
+					Usage:  fmt.Sprintf("start an %q xaction", cmn.ActLRU),
+					Flags:  startCmdsFlags[subcmdLRU],
+					Action: startLRUHandler,
 				},
 			},
 		},
@@ -118,7 +128,7 @@ func xactionCmds() cli.Commands {
 
 	splCmdKinds := make(cmn.StringSet)
 	// Add any xaction which requires a separate handler here.
-	splCmdKinds.Add(cmn.ActPrefetch, cmn.ActECEncode, cmn.ActMakeNCopies)
+	splCmdKinds.Add(cmn.ActPrefetch, cmn.ActECEncode, cmn.ActMakeNCopies, cmn.ActLRU)
 
 	startable := listXactions(true)
 	for _, xaction := range startable {
@@ -440,5 +450,39 @@ func stopDsortHandler(c *cli.Context) (err error) {
 	}
 
 	fmt.Fprintf(c.App.Writer, "%s job %q successfully stopped\n", cmn.DSortName, id)
+	return
+}
+
+func startLRUHandler(c *cli.Context) (err error) {
+	if !flagIsSet(c, listBucketsFlag) {
+		return startXactionHandler(c)
+	}
+
+	if flagIsSet(c, forceFlag) {
+		warning := "Forcing LRU will evict any bucket ignoring `lru.enabled` property"
+		if ok := confirm(c, "Would you like to continue?", warning); !ok {
+			return
+		}
+	}
+
+	bckArgs := makeList(parseStrFlag(c, listBucketsFlag), ",")
+	buckets := make([]cmn.Bck, len(bckArgs))
+	for idx, bckArg := range bckArgs {
+		bck, _, err := parseBckObjectURI(bckArg)
+		if err != nil {
+			return err
+		}
+		buckets[idx] = bck
+	}
+
+	var (
+		id       string
+		xactArgs = api.XactReqArgs{Kind: cmn.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
+	)
+	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
+		return
+	}
+
+	fmt.Fprintf(c.App.Writer, "Started %s %q, %s\n", cmn.ActLRU, id, xactProgressMsg(id))
 	return
 }

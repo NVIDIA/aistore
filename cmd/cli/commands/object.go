@@ -299,10 +299,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 
 	// ask a user for confirmation
 	if !flagIsSet(c, yesFlag) {
-		var input string
-		fmt.Fprintf(c.App.Writer, "Proceed uploading to bucket %q? [y/n]: ", bck)
-		fmt.Scanln(&input)
-		if ok := cmn.IsParseBool(input); !ok {
+		if ok := confirm(c, fmt.Sprintf("Proceed uploading to bucket %q?", bck)); !ok {
 			return errors.New("operation canceled")
 		}
 	}

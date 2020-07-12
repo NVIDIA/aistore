@@ -39,6 +39,7 @@ const (
 	blockSize            = cmn.KiB
 	basePath             = "/tmp/lru-tests"
 	bucketName           = "lru-bck"
+	bucketNameAnother    = bucketName + "-another"
 )
 
 type fileMetadata struct {
@@ -78,6 +79,14 @@ func newTargetLRUMock() *cluster.TargetMock {
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: true},
+					Access: cmn.AllAccess(),
+				},
+			),
+			cluster.NewBck(
+				bucketNameAnother, cmn.ProviderAIS, cmn.NsGlobal,
+				&cmn.BucketProps{
+					Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
+					LRU:    cmn.LRUConf{Enabled: false},
 					Access: cmn.AllAccess(),
 				},
 			),
@@ -156,7 +165,9 @@ var _ = Describe("LRU tests", func() {
 			t   *cluster.TargetMock
 			ini *InitLRU
 
-			filesPath string
+			filesPath  string
+			fpAnother  string
+			bckAnother cmn.Bck
 		)
 
 		BeforeEach(func() {
@@ -167,8 +178,11 @@ var _ = Describe("LRU tests", func() {
 
 			mpaths, _ := fs.Get()
 			bck := cmn.Bck{Name: bucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 			filesPath = mpaths[basePath].MakePathCT(bck, fs.ObjectType)
+			fpAnother = mpaths[basePath].MakePathCT(bckAnother, fs.ObjectType)
 			cmn.CreateDir(filesPath)
+			cmn.CreateDir(fpAnother)
 		})
 
 		AfterEach(func() {
@@ -254,6 +268,31 @@ var _ = Describe("LRU tests", func() {
 					Expect(cmn.StringInSlice(name.Name(), correctFilenamesLeft)).To(BeTrue())
 				}
 			})
+
+			It("should evict only files from requested bucket [ignores LRU prop]", func() {
+				saveRandomFiles(t, fpAnother, numberOfCreatedFiles)
+				saveRandomFiles(t, filesPath, numberOfCreatedFiles)
+
+				ini.Buckets = []cmn.Bck{bckAnother}
+				ini.Force = true // Ignore LRU enabled
+				Run(ini)
+
+				files, err := ioutil.ReadDir(filesPath)
+				Expect(err).NotTo(HaveOccurred())
+				filesAnother, err := ioutil.ReadDir(fpAnother)
+				Expect(err).NotTo(HaveOccurred())
+
+				numFilesLeft := len(files)
+				numFilesLeftAnother := len(filesAnother)
+
+				// files not evicted from bucket
+				Expect(numFilesLeft).To(BeNumerically("==", numberOfCreatedFiles))
+
+				// too few files evicted
+				Expect(float64(numFilesLeftAnother) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically("<=", 0.01*lwm))
+				// to many files evicted
+				Expect(float64(numFilesLeftAnother+1) / numberOfCreatedFiles * initialDiskUsagePct).To(BeNumerically(">", 0.01*lwm))
+			})
 		})
 
 		Describe("not evict files", func() {
@@ -290,6 +329,19 @@ var _ = Describe("LRU tests", func() {
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(numberOfFiles))
+			})
+
+			It("should not evict if LRU disabled and force is false", func() {
+				saveRandomFiles(t, fpAnother, numberOfCreatedFiles)
+
+				ini.Buckets = []cmn.Bck{bckAnother} // bckAnother has LRU disabled
+				Run(ini)
+
+				filesAnother, err := ioutil.ReadDir(fpAnother)
+				Expect(err).NotTo(HaveOccurred())
+
+				numFilesLeft := len(filesAnother)
+				Expect(numFilesLeft).To(BeNumerically("==", numberOfCreatedFiles))
 			})
 		})
 

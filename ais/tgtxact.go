@@ -128,7 +128,7 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
-		go t.RunLRU(xactMsg.ID)
+		go t.RunLRU(xactMsg.ID, xactMsg.Force != nil && *xactMsg.Force, xactMsg.Buckets...)
 	case cmn.ActResilver:
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)

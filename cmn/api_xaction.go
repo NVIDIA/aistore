@@ -25,6 +25,8 @@ type (
 		Kind        string `json:"kind"`
 		Bck         Bck    `json:"bck"`
 		OnlyRunning *bool  `json:"show_active"`
+		Force       *bool  `json:"force"`             // true: force LRU
+		Buckets     []Bck  `json:"buckets,omitempty"` // list of buckets on which LRU should run
 	}
 	BaseXactStats struct {
 		IDX         string    `json:"id"`

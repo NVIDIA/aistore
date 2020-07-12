@@ -31,10 +31,12 @@ type (
 
 	XactReqArgs struct {
 		ID      string
-		Kind    string  // Xaction kind, see: cmn.XactsDtor
-		Bck     cmn.Bck // Optional bucket
-		Latest  bool    // Determines if we should get latest or all xactions
+		Kind    string    // Xaction kind, see: cmn.XactsDtor
+		Bck     cmn.Bck   // Optional bucket
+		Buckets []cmn.Bck // Optional: Xaction on list of buckets
 		Timeout time.Duration
+		Force   bool // Optional: force LRU
+		Latest  bool // Determines if we should get latest or all xactions
 	}
 )
 
@@ -119,13 +121,21 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
 	}
 
+	xactMsg := cmn.XactReqMsg{
+		Kind: args.Kind,
+		Bck:  args.Bck,
+	}
+
+	if args.Buckets != nil {
+		xactMsg.Buckets = args.Buckets
+		xactMsg.Force = Bool(args.Force)
+	}
+
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStart,
-		Value: cmn.XactReqMsg{
-			Kind: args.Kind,
-			Bck:  args.Bck,
-		},
+		Value:  xactMsg,
 	}
+
 	baseParams.Method = http.MethodPut
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

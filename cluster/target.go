@@ -83,7 +83,7 @@ type Target interface {
 	GetFSPRG() fs.PathRunGroup
 	GetDB() dbdriver.Driver
 	Cloud(*Bck) CloudProvider
-	RunLRU(id string)
+	RunLRU(id string, force bool, bcks ...cmn.Bck)
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(params PutObjectParams) error

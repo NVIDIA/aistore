@@ -641,7 +641,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	config := cmn.GCO.Get()
 	if cs := fs.GetCapStatus(); cs.Err != nil {
-		go t.RunLRU("" /*uuid*/)
+		go t.RunLRU("" /*uuid*/, false)
 		if cs.OOS {
 			t.invalmsghdlr(w, r, cs.Err.Error())
 			return

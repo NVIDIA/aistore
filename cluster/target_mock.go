@@ -37,7 +37,7 @@ func (*TargetMock) ClusterStarted() bool                                      { 
 func (*TargetMock) NodeStarted() bool                                         { return true }
 func (*TargetMock) Client() *http.Client                                      { return http.DefaultClient }
 func (*TargetMock) NodeStartedTime() time.Time                                { return time.Now() }
-func (*TargetMock) RunLRU(_ string)                                           {}
+func (*TargetMock) RunLRU(_ string, _ bool, _ ...cmn.Bck)                     {}
 func (t *TargetMock) GetBowner() Bowner                                       { return t.BO }
 func (*TargetMock) GetSowner() Sowner                                         { return nil }
 func (*TargetMock) FSHC(_ error, _ string)                                    {}

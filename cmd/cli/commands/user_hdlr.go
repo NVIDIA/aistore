@@ -6,7 +6,6 @@
 package commands
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -157,16 +156,6 @@ var (
 
 	loggedUserToken api.AuthCreds
 )
-
-func readValue(c *cli.Context, prompt string) string {
-	fmt.Fprintf(c.App.Writer, prompt+": ")
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSuffix(line, "\n")
-}
 
 func readMasked(c *cli.Context, prompt string) string {
 	fmt.Fprintf(c.App.Writer, prompt+": ")

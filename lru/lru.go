@@ -54,6 +54,8 @@ type (
 		T                   cluster.Target
 		Xaction             *Xaction
 		StatsT              stats.Tracker
+		Force               bool      // Ignore LRU prop when set to be true.
+		Buckets             []cmn.Bck // list of buckets to run LRU
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
 		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
 	}
@@ -138,7 +140,27 @@ repeat:
 		parent.wg.Add(1)
 		j.joggers = joggers
 		go func(j *lruJ) {
-			if err := j.jog(providers); err != nil && !os.IsNotExist(err) {
+			var err error
+			defer j.p.wg.Done()
+			if err = j.removeTrash(); err != nil {
+				goto ex
+			}
+			// compute the size (bytes) to free up (and do it after removing the $trash)
+			if err = j.evictSize(); err != nil {
+				goto ex
+			}
+			if j.totalSize < minEvictThresh {
+				glog.Infof("%s: used cap below threshold, nothing to do", j)
+				return
+			}
+			if len(j.ini.Buckets) != 0 {
+				glog.Infof("%s: freeing-up %s", j, cmn.B2S(j.totalSize, 2))
+				err = j.jogBcks(j.ini.Buckets, j.ini.Force)
+			} else {
+				err = j.jog(providers)
+			}
+		ex:
+			if err != nil && !os.IsNotExist(err) {
 				glog.Errorf("%s: exited with err %v", j, err)
 				if fail.CAS(false, true) {
 					for _, j := range joggers {
@@ -188,20 +210,6 @@ func (j *lruJ) String() string {
 func (j *lruJ) stop() { j.stopCh <- struct{}{} }
 
 func (j *lruJ) jog(providers []string) (err error) {
-	defer j.p.wg.Done()
-
-	// first thing first
-	if err = j.removeTrash(); err != nil {
-		return
-	}
-	// compute the size (bytes) to free up (and do it after removing the $trash)
-	if err = j.evictSize(); err != nil {
-		return
-	}
-	if j.totalSize < minEvictThresh {
-		glog.Infof("%s: used cap below threshold, nothing to do", j)
-		return
-	}
 	glog.Infof("%s: freeing-up %s", j, cmn.B2S(j.totalSize, 2))
 	for _, provider := range providers { // for each provider (note: ordering is random)
 		var (
@@ -214,34 +222,44 @@ func (j *lruJ) jog(providers []string) (err error) {
 		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
 			return
 		}
-		if len(bcks) == 0 {
+
+		if err = j.jogBcks(bcks, false); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
+	if len(bcks) == 0 {
+		return
+	}
+	if len(bcks) > 1 {
+		j.sortBsize(bcks)
+	}
+
+	for _, bck := range bcks { // for each bucket under a given provider
+		var size int64
+		j.bck = bck
+		if j.allowDelObj, err = j.allow(); err != nil {
+			// TODO: add a config option to trash those "buckets"
+			glog.Errorf("%s: %v - skipping %s", j, err, bck)
+			err = nil
 			continue
 		}
-		if len(bcks) > 1 {
-			j.sortBsize(bcks)
+		j.allowDelObj = j.allowDelObj || force
+		if size, err = j.jogBck(); err != nil {
+			return
 		}
-		for _, bck := range bcks { // for each bucket under a given provider
-			var size int64
-			j.bck = bck
-			if j.allowDelObj, err = j.allow(); err != nil {
-				// TODO: add a config option to trash those "buckets"
-				glog.Errorf("%s: %v - skipping %s", j, err, bck)
-				err = nil
-				continue
-			}
-			if size, err = j.jogBck(); err != nil {
-				return
-			}
-			if size < cmn.KiB {
-				continue
-			}
-			// recompute size-to-evict
-			if err = j.evictSize(); err != nil {
-				return
-			}
-			if j.totalSize < cmn.KiB {
-				return
-			}
+		if size < cmn.KiB {
+			continue
+		}
+		// recompute size-to-evict
+		if err = j.evictSize(); err != nil {
+			return
+		}
+		if j.totalSize < cmn.KiB {
+			return
 		}
 	}
 	return

@@ -65,7 +65,7 @@ func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
-func (t *targetrunner) RunLRU(id string) {
+func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 	xlru := xaction.Registry.RenewLRU(id)
 	if xlru == nil {
 		return
@@ -74,6 +74,8 @@ func (t *targetrunner) RunLRU(id string) {
 		T:                   t,
 		Xaction:             xlru,
 		StatsT:              t.statsT,
+		Force:               force,
+		Buckets:             bcks,
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
 		GetFSStats:          ios.GetFSStats,
 	}
