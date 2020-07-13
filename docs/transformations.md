@@ -21,12 +21,37 @@ When the targets receive initialization requests they start transformation serve
 Targets use `kubectl` to initialize the pod and gather necessary information for future communication.
 
 There are 3 communication types that user can choose from to implement the transform server:
- - **post** - target issues a POST request to its transform server with the body containing the requested object.
- After finished request, target forwards the response from the transformation server to the user.
- - **push-pull** - target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using transformer server.
- - **redirect** - target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using transformer server.
 
-The communication type must be specified in the pod specification, so the target can know how to communicate with the transformer server.
+| Name | Value | Description |
+|---|---|---|
+| **post** | `hpush://` | Target issues a POST request to its transform server with the body containing the requested object. After finished request, target forwards the response from the transformation server to the user. |
+| **reverse proxy** | `hrev://` | Target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using transformer server. Transformer server should make GET request to a target, transform bytes, and return them to a target. |
+| **redirect** | `hpull://` | Target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using transformer server. Transformer server should make GET request to a target, transform bytes, and return them to a user. |
+
+The communication type must be specified in the pod specification, so the target can know how to communicate with the transformer server.  
+It is defined in as pod's annotation, under `communication_type` key:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: transformer-name
+  annotations:
+    communication_type: value
+(...)
+```
+
+Transformation specification can include `wait_timeout` value.
+It states how long a target should wait for a transformer to transition into `Ready` state.
+If the timeout is exceeded, initialization of a transformer is considered failed.
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: transformer-name
+  annotations:
+    wait_timeout: 30s
+(...)
+```
 
 ## Prerequisites
 
