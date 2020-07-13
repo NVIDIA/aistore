@@ -632,7 +632,7 @@ kind: Pod
 metadata:
   name: transformer-md5
   annotations:
-    communication_type: putc
+    communication_type: hpush://
     wait_timeout: 1m
 spec:
   containers:

@@ -25,7 +25,11 @@ type Communicator interface {
 func makeCommunicator(commType, transformerURL string, t cluster.Target) Communicator {
 	baseComm := baseComm{url: transformerURL}
 	switch commType {
-	case pushPullCommType:
+	case putCommType:
+		return &putComm{baseComm: baseComm, t: t}
+	case redirectCommType:
+		return &redirComm{baseComm: baseComm}
+	case revProxyCommType:
 		urlp, _ := url.Parse(transformerURL)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
@@ -37,10 +41,6 @@ func makeCommunicator(commType, transformerURL string, t cluster.Target) Communi
 			},
 		}
 		return &pushPullComm{rp: rp}
-	case putCommType:
-		return &putComm{baseComm: baseComm, t: t}
-	case redirectCommType:
-		return &redirComm{baseComm: baseComm}
 	}
 	cmn.AssertMsg(false, commType)
 	return nil

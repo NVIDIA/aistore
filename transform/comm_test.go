@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -50,12 +51,13 @@ func testCommunication(t *testing.T, commType string) {
 
 func TestCommunication(t *testing.T) {
 	tests := []string{
-		pushPullCommType,
 		redirectCommType,
+		revProxyCommType,
 	}
 
 	for _, commType := range tests {
-		t.Run(commType, func(t *testing.T) {
+		name := strings.TrimSuffix(commType, "://")
+		t.Run(name, func(t *testing.T) {
 			testCommunication(t, commType)
 		})
 	}

@@ -11,9 +11,16 @@ import (
 )
 
 const (
-	pushPullCommType = "ppc"
-	putCommType      = "putc"
-	redirectCommType = "redir"
+	// Transformer receives POST request from target with the data. It must read
+	// the data and return response to the target which then will be transferred
+	// to the client.
+	putCommType = "hpush://"
+	// Target redirects the GET request to the transformer. Then transformer
+	// contacts the target via `AIS_TARGET_URL` env variable to get the data.
+	// The data is then transformed and returned to the client.
+	redirectCommType = "hpull://"
+	// Similar to redirection strategy but with usage of reverse proxy.
+	revProxyCommType = "hrev://" // TODO: try to think on different naming, it is not much different than redirect
 )
 
 type (
