@@ -29,7 +29,7 @@ func ParsePodSpec(spec []byte) (*corev1.Pod, error) {
 
 func PodTransformCommType(pod *corev1.Pod) (string, error) {
 	if pod.Annotations == nil || pod.Annotations["communication_type"] == "" {
-		// By default assume `putComm`
+		// By default assume `putCommType`
 		return putCommType, nil
 	}
 

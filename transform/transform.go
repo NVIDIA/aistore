@@ -49,6 +49,10 @@ func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 		}
 	}
 
+	if err := setPodEnvVariables(pod, t); err != nil {
+		return err
+	}
+
 	// Encode the specification once again to be ready for the start.
 	b, err := jsoniter.Marshal(pod)
 	if err != nil {
@@ -56,14 +60,19 @@ func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 	}
 
 	// Start the pod.
-	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd := exec.Command("kubectl", "replace", "--force", "-f", "-")
 	cmd.Stdin = bytes.NewBuffer(b)
 	if b, err = cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to apply spec for %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
 	}
 
 	// Wait for the pod to start.
-	cmd = exec.Command("kubectl", "wait", "--timeout", msg.WaitTimeout.String(), "--for", "condition=ready", "pod", pod.GetName())
+	args := []string{"wait"}
+	if !msg.WaitTimeout.IsZero() {
+		args = append(args, "--timeout", msg.WaitTimeout.String())
+	}
+	args = append(args, "--for", "condition=ready", "pod", pod.GetName())
+	cmd = exec.Command("kubectl", args...)
 	if b, err = cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to wait for %q pod to be ready (err: %v; output: %s)", pod.GetName(), err, string(b))
 	}
@@ -124,5 +133,17 @@ func setTransformAffinity(pod *corev1.Pod) error {
 	//  if 2 targets went down and up again at the same time, they may switch nodes,
 	//  leaving transformers running on the wrong machines.
 	pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nodeSelector
+	return nil
+}
+
+// Sets environment variables that can be accessed inside the container.
+func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) error {
+	containers := pod.Spec.Containers
+	for idx := range containers {
+		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
+			Name:  "AIS_TARGET_URL",
+			Value: t.Snode().URL(cmn.NetworkPublic),
+		})
+	}
 	return nil
 }

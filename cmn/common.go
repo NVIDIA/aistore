@@ -153,6 +153,7 @@ func (d *DurationJSON) UnmarshalJSON(b []byte) error {
 	}
 }
 func (d DurationJSON) String() string { return time.Duration(d).String() }
+func (d DurationJSON) IsZero() bool   { return d == 0 }
 
 func (sj SizeJSON) MarshalJSON() ([]byte, error) {
 	return []byte(B2S(int64(sj), 2)), nil

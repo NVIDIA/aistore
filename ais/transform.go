@@ -87,7 +87,15 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 	var (
 		path    = cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit)
 		body    = cmn.MustMarshal(msg)
-		results = p.callTargets(http.MethodPost, path, body)
+		results = p.bcastTo(bcastArgs{
+			req: cmn.ReqArgs{
+				Method: http.MethodPost,
+				Path:   path,
+				Body:   body,
+			},
+			timeout: cmn.LongTimeout,
+			to:      cluster.Targets,
+		})
 	)
 
 	for res := range results {
