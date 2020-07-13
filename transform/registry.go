@@ -25,8 +25,9 @@ const (
 
 type (
 	registry struct {
-		m   map[string]Communicator
-		mtx sync.RWMutex
+		byUUID map[string]Communicator
+		byName map[string]Communicator
+		mtx    sync.RWMutex
 	}
 )
 
@@ -34,20 +35,30 @@ var reg = newRegistry()
 
 func newRegistry() *registry {
 	return &registry{
-		m: make(map[string]Communicator),
+		byUUID: make(map[string]Communicator),
+		byName: make(map[string]Communicator),
 	}
 }
 
 func (r *registry) put(uuid string, c Communicator) {
 	cmn.Assert(uuid != "")
 	r.mtx.Lock()
-	r.m[uuid] = c
+	r.byUUID[uuid] = c
+	r.byName[c.Name()] = c
 	r.mtx.Unlock()
 }
 
-func (r *registry) get(uuid string) (c Communicator, exists bool) {
+func (r *registry) getByUUID(uuid string) (c Communicator, exists bool) {
 	r.mtx.RLock()
-	c, exists = r.m[uuid]
+	c, exists = r.byUUID[uuid]
+	r.mtx.RUnlock()
+	return
+}
+
+// nolint:unused // will be used once tar2tf transformer is integrated with AIS
+func (r *registry) getByName(name string) (c Communicator, exists bool) {
+	r.mtx.RLock()
+	c, exists = r.byName[name]
 	r.mtx.RUnlock()
 	return
 }

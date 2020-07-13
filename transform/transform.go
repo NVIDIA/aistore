@@ -35,6 +35,7 @@ func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 	if err != nil {
 		return err
 	}
+	transformationName := pod.GetName()
 
 	if targetsNodeName == "" {
 		// Override the name (add target's daemon ID to its name).
@@ -90,13 +91,13 @@ func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 
 	cmn.AssertNoErr(validateCommType(msg.CommType))
 	transformerURL := fmt.Sprintf("http://%s:%s", ip, port)
-	c := makeCommunicator(msg.CommType, transformerURL, t)
+	c := makeCommunicator(msg.CommType, transformerURL, transformationName, t)
 	reg.put(msg.ID, c)
 	return nil
 }
 
 func GetCommunicator(transformID string) (Communicator, error) {
-	c, exists := reg.get(transformID)
+	c, exists := reg.getByUUID(transformID)
 	if !exists {
 		return nil, fmt.Errorf("transformation with %q id doesn't exist", transformID)
 	}

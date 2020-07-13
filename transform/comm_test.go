@@ -25,7 +25,7 @@ func testCommunication(t *testing.T, commType string) {
 	}))
 	defer transformerServer.Close()
 
-	comm := makeCommunicator(commType, transformerServer.URL, nil)
+	comm := makeCommunicator(commType, transformerServer.URL, "", nil)
 	targetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		comm.DoTransform(w, r, nil, "")
 	}))

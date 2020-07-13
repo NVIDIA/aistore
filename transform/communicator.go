@@ -20,10 +20,11 @@ import (
 
 type Communicator interface {
 	DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
+	Name() string
 }
 
-func makeCommunicator(commType, transformerURL string, t cluster.Target) Communicator {
-	baseComm := baseComm{url: transformerURL}
+func makeCommunicator(commType, transformerURL, name string, t cluster.Target) Communicator {
+	baseComm := baseComm{url: transformerURL, name: name}
 	switch commType {
 	case putCommType:
 		return &putComm{baseComm: baseComm, t: t}
@@ -40,23 +41,33 @@ func makeCommunicator(commType, transformerURL string, t cluster.Target) Communi
 				}
 			},
 		}
-		return &pushPullComm{rp: rp}
+		return &pushPullComm{rp: rp, name: name}
 	}
 	cmn.AssertMsg(false, commType)
 	return nil
 }
 
 type baseComm struct {
-	url string
+	url  string
+	name string
+}
+
+func (b *baseComm) Name() string {
+	return b.name
 }
 
 type pushPullComm struct {
-	rp *httputil.ReverseProxy
+	name string
+	rp   *httputil.ReverseProxy
 }
 
 func (ppc *pushPullComm) DoTransform(w http.ResponseWriter, r *http.Request, _ *cluster.Bck, _ string) error {
 	ppc.rp.ServeHTTP(w, r)
 	return nil
+}
+
+func (ppc *pushPullComm) Name() string {
+	return ppc.name
 }
 
 type redirComm struct {
