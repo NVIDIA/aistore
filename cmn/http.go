@@ -36,11 +36,13 @@ var (
 )
 
 const (
-	HeaderRange         = "Range"
-	HeaderContentRange  = "Content-Range"
-	HeaderAcceptRanges  = "Accept-Ranges"
-	HeaderContentType   = "Content-Type"
-	HeaderContentLength = "Content-Length"
+	HeaderRange                 = "Range" // Ref: https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35
+	HeaderRangeValPrefix        = "bytes="
+	HeaderContentRange          = "Content-Range"
+	HeaderContentRangeValPrefix = "bytes " // Ref: https://tools.ietf.org/html/rfc7233#section-4.2
+	HeaderAcceptRanges          = "Accept-Ranges"
+	HeaderContentType           = "Content-Type"
+	HeaderContentLength         = "Content-Length"
 )
 
 type (
@@ -398,21 +400,21 @@ func IsHTTPS(urlPath string) bool {
 }
 
 func (r HTTPRange) ContentRange(size int64) string {
-	return fmt.Sprintf("bytes %d-%d/%d", r.Start, r.Start+r.Length-1, size)
+	return fmt.Sprintf("%s%d-%d/%d", HeaderContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }
 
-func ParseRange(s string, size int64) (ranges []HTTPRange, err error) {
+// TODO: simplify the range logic
+func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
 	if s == "" {
 		return nil, nil // header not present
 	}
 
-	const b = "bytes="
-	if !strings.HasPrefix(s, b) {
+	if !strings.HasPrefix(s, HeaderRangeValPrefix) {
 		return nil, errors.New("invalid range")
 	}
 
 	noOverlap := false
-	for _, ra := range strings.Split(s[len(b):], ",") {
+	for _, ra := range strings.Split(s[len(HeaderRangeValPrefix):], ",") {
 		ra = strings.TrimSpace(ra)
 		if ra == "" {
 			continue
@@ -477,13 +479,11 @@ func ParseRange(s string, size int64) (ranges []HTTPRange, err error) {
 	return ranges, nil
 }
 
-func AddRangeToHdr(hdr http.Header, start, length int64) http.Header {
+func RangeHdr(start, length int64) (hdr http.Header) {
 	if start == 0 && length == 0 {
 		return hdr
 	}
-	if hdr == nil {
-		hdr = make(http.Header, 1)
-	}
-	hdr.Add(HeaderRange, fmt.Sprintf("bytes=%d-%d", start, start+length-1))
-	return hdr
+	hdr = make(http.Header, 1)
+	hdr.Add(HeaderRange, fmt.Sprintf("%s%d-%d", HeaderRangeValPrefix, start, start+length-1))
+	return
 }

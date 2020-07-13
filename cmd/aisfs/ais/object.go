@@ -50,7 +50,7 @@ func (obj *Object) Put(r cmn.ReadOpenCloser) (err error) {
 }
 
 func (obj *Object) GetChunk(w io.Writer, offset, length int64) (n int64, err error) {
-	hdr := cmn.AddRangeToHdr(nil, offset, length)
+	hdr := cmn.RangeHdr(offset, length)
 	objArgs := api.GetObjectInput{
 		Writer: w,
 		Header: hdr,

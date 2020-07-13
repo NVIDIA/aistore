@@ -236,7 +236,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
 	if length > 0 {
-		hdr = cmn.AddRangeToHdr(nil, offset, length)
+		hdr = cmn.RangeHdr(offset, length)
 	}
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
@@ -299,7 +299,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 	)
 	query = cmn.AddBckToQuery(query, bck)
 	if length > 0 {
-		hdr = cmn.AddRangeToHdr(hdr, offset, length)
+		hdr = cmn.RangeHdr(offset, length)
 	}
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,

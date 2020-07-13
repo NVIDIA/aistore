@@ -754,10 +754,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	}
 
 	if hdr != nil {
-		ranges, err := cmn.ParseRange(goi.ranges.Range, size)
+		ranges, err := cmn.ParseMultiRange(goi.ranges.Range, size)
 		if err != nil {
 			if err == cmn.ErrNoOverlap {
-				hdr.Set(cmn.HeaderContentRange, fmt.Sprintf("bytes */%d", size))
+				hdr.Set(cmn.HeaderContentRange, fmt.Sprintf("%s*/%d", cmn.HeaderContentRangeValPrefix, size))
 			}
 			return false, err, http.StatusRequestedRangeNotSatisfiable
 		}

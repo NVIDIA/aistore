@@ -1425,7 +1425,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, fi
 	offset, length, expectedLength int64, checkEntireObjCksum bool, checkDir string) {
 	var (
 		w          = bytes.NewBuffer(nil)
-		hdr        = cmn.AddRangeToHdr(nil, offset, length)
+		hdr        = cmn.RangeHdr(offset, length)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		fqn        = findObjOnDisk(bck, filepath.Join(checkDir, fileName))
 		options    = api.GetObjectInput{Writer: w, Header: hdr}

@@ -62,7 +62,7 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 	if length, err = parseByteFlagToInt(c, lengthFlag); err != nil {
 		return
 	}
-	hdr := cmn.AddRangeToHdr(nil, offset, length)
+	hdr := cmn.RangeHdr(offset, length)
 
 	if outFile == fileStdIO {
 		objArgs = api.GetObjectInput{Writer: os.Stdout, Header: hdr}
