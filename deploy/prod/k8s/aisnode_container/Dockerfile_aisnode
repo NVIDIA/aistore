@@ -9,6 +9,7 @@ RUN apt-get install -y wget sysstat python-pip curl nodejs git iputils-ping netc
 RUN apt-get install -y net-tools iproute2 tcptrack
 RUN mkdir -p /usr/local/bin
 RUN cd /opt && git clone git://github.com/etsy/statsd.git
+RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x kubectl && mv kubectl /usr/local/bin/kubectl
 COPY $start_script /ais_docker_start.sh
 COPY ais_readiness.sh /ais_readiness.sh
 RUN chmod a+x /ais_docker_start.sh /ais_readiness.sh
