@@ -12,11 +12,19 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
+)
+
+var (
+	// These parameters are not needed by the transformer
+	// WARNING: Sending UUID might cause infinite loop where we GET objects and
+	// then requests are redirected back to the transformer (since we didn't remove UUID from query parameters).
+	toBeFiltered = []string{cmn.URLParamUUID, cmn.URLParamProxyID, cmn.URLParamUnixTime}
 )
 
 type Communicator interface {
@@ -25,6 +33,17 @@ type Communicator interface {
 	DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 }
 
+func filterQueryParams(rawQuery string) string {
+	vals, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		glog.Errorf("error parsing raw query: %q", rawQuery)
+		return ""
+	}
+	for _, filtered := range toBeFiltered {
+		vals.Del(filtered)
+	}
+	return vals.Encode()
+}
 func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerURL, name string) Communicator {
 	baseComm := baseComm{
 		url:     transformerURL,
@@ -37,10 +56,13 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 	case redirectCommType:
 		return &redirComm{baseComm: baseComm}
 	case revProxyCommType:
-		urlp, _ := url.Parse(transformerURL)
+		transURL, _ := url.Parse(transformerURL)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
-				req.URL = urlp
+				// Replacing the `req.URL` host with transformer host
+				req.URL.Scheme = transURL.Scheme
+				req.URL.Host = transURL.Host
+				req.URL.RawQuery = filterQueryParams(req.URL.RawQuery)
 				if _, ok := req.Header["User-Agent"]; !ok {
 					// Explicitly disable `User-Agent` so it's not set to default value.
 					req.Header.Set("User-Agent", "")
@@ -119,6 +141,8 @@ func (putc *putComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *cl
 			return err
 		}
 		_, err = io.Copy(w, resp.Body)
+		// Copying over headers as well
+		resp.Header.Write(w)
 		debug.AssertNoErr(err)
 		err = resp.Body.Close()
 		debug.AssertNoErr(err)
