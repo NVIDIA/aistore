@@ -220,14 +220,14 @@ type PutTargetStats struct {
 }
 
 type ExtECPutStats struct {
-	AvgEncodeTime  cmn.DurationJSON `json:"ec.encode.time,string"`
-	AvgDeleteTime  cmn.DurationJSON `json:"ec.delete.time,string"`
+	AvgEncodeTime  cmn.DurationJSON `json:"ec.encode.time"`
+	AvgDeleteTime  cmn.DurationJSON `json:"ec.delete.time"`
 	EncodeCount    int64            `json:"ec.encode.n,string"`
 	DeleteCount    int64            `json:"ec.delete.n,string"`
 	EncodeSize     cmn.SizeJSON     `json:"ec.encode.size,string"`
 	EncodeErrCount int64            `json:"ec.encode.err.n,string"`
 	DeleteErrCount int64            `json:"ec.delete.err.n,string"`
-	AvgObjTime     cmn.DurationJSON `json:"ec.obj.process.time,string"`
+	AvgObjTime     cmn.DurationJSON `json:"ec.obj.process.time"`
 	AvgQueueLen    float64          `json:"ec.queue.len.n"`
 }
 

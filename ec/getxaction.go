@@ -292,9 +292,9 @@ type GetTargetStats struct {
 }
 
 type ExtECGetStats struct {
-	AvgTime     cmn.DurationJSON `json:"ec.decode.time,string"`
+	AvgTime     cmn.DurationJSON `json:"ec.decode.time"`
 	ErrCount    int64            `json:"ec.decode.err.n,string"`
-	AvgObjTime  cmn.DurationJSON `json:"ec.obj.process.time,string"`
+	AvgObjTime  cmn.DurationJSON `json:"ec.obj.process.time"`
 	AvgQueueLen float64          `json:"ec.queue.len.n"`
 }
 

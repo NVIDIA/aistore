@@ -131,9 +131,28 @@ type (
 	SizeJSON     int64
 )
 
-func (tj DurationJSON) MarshalJSON() ([]byte, error) {
-	return []byte(time.Duration(tj).String()), nil
+func (d DurationJSON) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(d.String()) }
+func (d *DurationJSON) UnmarshalJSON(b []byte) error {
+	var v interface{}
+	if err := jsoniter.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	switch value := v.(type) {
+	case float64:
+		*d = DurationJSON(time.Duration(value))
+		return nil
+	case string:
+		tmp, err := time.ParseDuration(value)
+		if err != nil {
+			return err
+		}
+		*d = DurationJSON(tmp)
+		return nil
+	default:
+		return errors.New("invalid duration")
+	}
 }
+func (d DurationJSON) String() string { return time.Duration(d).String() }
 
 func (sj SizeJSON) MarshalJSON() ([]byte, error) {
 	return []byte(B2S(int64(sj), 2)), nil
