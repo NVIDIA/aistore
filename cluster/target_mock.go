@@ -35,7 +35,7 @@ func NewTargetMock(bo Bowner) *TargetMock {
 func (*TargetMock) Snode() *Snode                                             { return nil }
 func (*TargetMock) ClusterStarted() bool                                      { return true }
 func (*TargetMock) NodeStarted() bool                                         { return true }
-func (*TargetMock) Client() *http.Client                                      { return nil }
+func (*TargetMock) Client() *http.Client                                      { return http.DefaultClient }
 func (*TargetMock) NodeStartedTime() time.Time                                { return time.Now() }
 func (*TargetMock) RunLRU(_ string)                                           {}
 func (t *TargetMock) GetBowner() Bowner                                       { return t.BO }

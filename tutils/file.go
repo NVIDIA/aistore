@@ -97,6 +97,27 @@ func addFileToZip(tw *zip.Writer, path string, fileSize int) error {
 	return nil
 }
 
+// Creates a file with random content
+func CreateRandomFile(fileName string, size int64) error {
+	b := make([]byte, size)
+	if _, err := rand.Read(b); err != nil {
+		return err
+	}
+	f, err := cmn.CreateFile(fileName)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	n, err := f.Write(b)
+	if err != nil {
+		return err
+	}
+	if int64(n) != size {
+		return fmt.Errorf("could not write %d bytes, wrote %d bytes", size, n)
+	}
+	return nil
+}
+
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar
 // is also gzipped if necessary.
 func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt, fileSize int, duplication bool, recordExts []string) error {

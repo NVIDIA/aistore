@@ -10,13 +10,11 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -51,8 +49,8 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 		podName: pod.GetName(),
 	}
 	switch commType {
-	case putCommType:
-		return &putComm{baseComm: baseComm, t: t}
+	case pushCommType:
+		return &pushComm{baseComm: baseComm, t: t}
 	case redirectCommType:
 		return &redirComm{baseComm: baseComm}
 	case revProxyCommType:
@@ -108,51 +106,41 @@ func (repc *redirComm) DoTransform(w http.ResponseWriter, r *http.Request, _ *cl
 	return nil
 }
 
-type putComm struct {
+type pushComm struct {
 	baseComm
 	t cluster.Target
 }
 
-func (putc *putComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	lom := &cluster.LOM{T: putc.t, ObjName: objName}
+func (pushc *pushComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	lom := &cluster.LOM{T: pushc.t, ObjName: objName}
 	if err := lom.Init(bck.Bck); err != nil {
 		return err
 	}
+	lom.Lock(false)
+	defer lom.Unlock(false)
 	if err := lom.Load(); err != nil {
 		return err
 	}
 
-	var (
-		group  = &errgroup.Group{}
-		rp, wp = io.Pipe()
-	)
-
-	group.Go(func() error {
-		req, err := http.NewRequest(http.MethodPost, putc.url, rp)
-		if err != nil {
-			rp.CloseWithError(err)
-			return err
-		}
-
-		req.ContentLength = lom.Size()
-		req.Header.Set("Content-Type", "octet-stream")
-		resp, err := putc.t.Client().Do(req)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(w, resp.Body)
-		// Copying over headers as well
-		resp.Header.Write(w)
-		debug.AssertNoErr(err)
-		err = resp.Body.Close()
-		debug.AssertNoErr(err)
-		return nil
-	})
-
-	err := putc.t.GetObject(wp, lom, time.Now())
-	wp.CloseWithError(err)
+	// `fh` is closed by Do(req)
+	fh, err := cmn.NewFileHandle(lom.GetFQN())
 	if err != nil {
 		return err
 	}
-	return group.Wait()
+	req, err := http.NewRequest(http.MethodPost, pushc.url, fh)
+	if err != nil {
+		return err
+	}
+
+	req.ContentLength = lom.Size()
+	req.Header.Set("Content-Type", "octet-stream")
+	resp, err := pushc.t.Client().Do(req)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(w, resp.Body)
+	debug.AssertNoErr(err)
+	err = resp.Body.Close()
+	debug.AssertNoErr(err)
+	return nil
 }
