@@ -69,6 +69,17 @@ type (
 		dirEntry DirEntry
 	}
 	objInfos []objInfo
+
+	walkEntry struct {
+		fqn      string
+		dirEntry DirEntry
+	}
+	walkCb struct {
+		mpath    *MountpathInfo
+		validate WalkFunc
+		ctx      context.Context
+		workCh   chan *walkEntry
+	}
 )
 
 // PathErrToAction is a default error callback for fast godirwalk.Walk.
@@ -263,11 +274,6 @@ func mpathChildren(opts *Options) (children []string, err error) {
 }
 
 func WalkBck(opts *WalkBckOptions) error {
-	type walkEntry struct {
-		fqn      string
-		dirEntry DirEntry
-	}
-
 	var (
 		mpaths, _ = Get()
 		mpathChs  = make([]chan *walkEntry, len(mpaths))
@@ -284,38 +290,15 @@ func WalkBck(opts *WalkBckOptions) error {
 	for _, mpath := range mpaths {
 		group.Go(func(idx int, mpath *MountpathInfo) func() error {
 			return func() error {
-				defer close(mpathChs[idx])
-				o := *opts
+				var (
+					o      = opts.Options
+					workCh = mpathChs[idx]
+				)
+				defer close(workCh)
 				o.Mpath = mpath
-				o.Callback = func(fqn string, de DirEntry) error {
-					select {
-					case <-ctx.Done():
-						return cmn.NewAbortedError("mpath: " + mpath.Path)
-					default:
-						break
-					}
-
-					if opts.ValidateCallback != nil {
-						if err := opts.ValidateCallback(fqn, de); err != nil {
-							// If err != filepath.SkipDir, Walk will propagate the error
-							// to group.Go. Then context will be canceled, which terminates
-							// all other go routines running.
-							return err
-						}
-					}
-
-					if de.IsDir() {
-						return nil
-					}
-
-					select {
-					case <-ctx.Done():
-						return cmn.NewAbortedError("mpath: " + mpath.Path)
-					case mpathChs[idx] <- &walkEntry{fqn, de}:
-						return nil
-					}
-				}
-				return Walk(&o.Options)
+				wcb := &walkCb{mpath: mpath, validate: opts.ValidateCallback, ctx: ctx, workCh: workCh}
+				o.Callback = wcb.walkBckMpath
+				return Walk(&o)
 			}
 		}(idx, mpath))
 		idx++
@@ -349,6 +332,35 @@ func WalkBck(opts *WalkBckOptions) error {
 	})
 
 	return group.Wait()
+}
+
+func (wcb *walkCb) walkBckMpath(fqn string, de DirEntry) error {
+	select {
+	case <-wcb.ctx.Done():
+		return cmn.NewAbortedError("mpath: " + wcb.mpath.Path)
+	default:
+		break
+	}
+
+	if wcb.validate != nil {
+		if err := wcb.validate(fqn, de); err != nil {
+			// If err != filepath.SkipDir, Walk will propagate the error
+			// to group.Go. Then context will be canceled, which terminates
+			// all other go routines running.
+			return err
+		}
+	}
+
+	if de.IsDir() {
+		return nil
+	}
+
+	select {
+	case <-wcb.ctx.Done():
+		return cmn.NewAbortedError("mpath: " + wcb.mpath.Path)
+	case wcb.workCh <- &walkEntry{fqn, de}:
+		return nil
+	}
 }
 
 func Scanner(dir string, cb func(fqn string, entry DirEntry) error) error {
