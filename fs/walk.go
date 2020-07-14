@@ -295,10 +295,6 @@ func WalkBck(opts *WalkBckOptions) error {
 						break
 					}
 
-					if de.IsDir() {
-						return nil
-					}
-
 					if opts.ValidateCallback != nil {
 						if err := opts.ValidateCallback(fqn, de); err != nil {
 							// If err != filepath.SkipDir, Walk will propagate the error
@@ -306,6 +302,10 @@ func WalkBck(opts *WalkBckOptions) error {
 							// all other go routines running.
 							return err
 						}
+					}
+
+					if de.IsDir() {
+						return nil
 					}
 
 					select {

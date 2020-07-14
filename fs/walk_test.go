@@ -174,6 +174,9 @@ func TestWalkBckSkipDir(t *testing.T) {
 			Sorted: true,
 		},
 		ValidateCallback: func(fqn string, de fs.DirEntry) error {
+			if de.IsDir() {
+				return nil
+			}
 			parsedFQN, err := fs.ParseFQN(fqn)
 			tassert.CheckError(t, err)
 			cmn.Assert(!mpaths[parsedFQN.MpathInfo.Path].done)
