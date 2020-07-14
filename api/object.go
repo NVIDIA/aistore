@@ -570,10 +570,19 @@ func TransformInit(baseParams BaseParams, spec []byte) (id string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Transform, cmn.Init),
+		Path:       cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit),
 		Body:       spec,
 	}, &id)
 	return id, err
+}
+
+func TransformStop(baseParams BaseParams, id string) (err error) {
+	baseParams.Method = http.MethodDelete
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformStop, id),
+	})
+	return err
 }
 
 func TransformObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {

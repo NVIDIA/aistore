@@ -28,6 +28,12 @@ var (
 					Action:    transformInitHandler,
 				},
 				{
+					Name:      subcmdStop,
+					Usage:     "stop transformation with given id",
+					ArgsUsage: "TRANSFORM_ID",
+					Action:    transformStopHandler,
+				},
+				{
 					Name:      subcmdObject,
 					Usage:     "get transformed object",
 					ArgsUsage: "TRANSFORM_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
@@ -58,6 +64,18 @@ func transformInitHandler(c *cli.Context) (err error) {
 		return err
 	}
 	fmt.Fprintf(c.App.Writer, "%s\n", id)
+	return nil
+}
+
+func transformStopHandler(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "TRANSFORM_ID")
+	}
+	id := c.Args()[0]
+	if err := api.TransformStop(defaultAPIParams, id); err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer, "Transformers stopped successfully.")
 	return nil
 }
 

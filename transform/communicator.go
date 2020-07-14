@@ -16,15 +16,21 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
 )
 
 type Communicator interface {
-	DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 	Name() string
+	PodName() string
+	DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 }
 
-func makeCommunicator(commType, transformerURL, name string, t cluster.Target) Communicator {
-	baseComm := baseComm{url: transformerURL, name: name}
+func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerURL, name string) Communicator {
+	baseComm := baseComm{
+		url:     transformerURL,
+		name:    name,
+		podName: pod.GetName(),
+	}
 	switch commType {
 	case putCommType:
 		return &putComm{baseComm: baseComm, t: t}
@@ -41,24 +47,24 @@ func makeCommunicator(commType, transformerURL, name string, t cluster.Target) C
 				}
 			},
 		}
-		return &pushPullComm{rp: rp, name: name}
+		return &pushPullComm{baseComm: baseComm, rp: rp}
 	}
 	cmn.AssertMsg(false, commType)
 	return nil
 }
 
 type baseComm struct {
-	url  string
-	name string
+	url     string
+	name    string
+	podName string
 }
 
-func (b *baseComm) Name() string {
-	return b.name
-}
+func (c baseComm) Name() string    { return c.name }
+func (c baseComm) PodName() string { return c.podName }
 
 type pushPullComm struct {
-	name string
-	rp   *httputil.ReverseProxy
+	baseComm
+	rp *httputil.ReverseProxy
 }
 
 func (ppc *pushPullComm) DoTransform(w http.ResponseWriter, r *http.Request, _ *cluster.Bck, _ string) error {

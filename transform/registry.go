@@ -62,3 +62,13 @@ func (r *registry) getByName(name string) (c Communicator, exists bool) {
 	r.mtx.RUnlock()
 	return
 }
+
+func (r *registry) removeByUUID(uuid string) {
+	cmn.Assert(uuid != "")
+	r.mtx.Lock()
+	if c, ok := r.byUUID[uuid]; ok {
+		delete(r.byUUID, uuid)
+		delete(r.byName, c.Name())
+	}
+	r.mtx.Unlock()
+}

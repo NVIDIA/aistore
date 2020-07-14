@@ -21,14 +21,11 @@ import (
 
 // [METHOD] /v1/transform
 func (t *targetrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Transform)
-	if err != nil {
-		return
-	}
-
 	switch {
-	case r.Method == http.MethodPost && apiItems[0] == cmn.TransformInit:
+	case r.Method == http.MethodPost:
 		t.initTransform(w, r)
+	case r.Method == http.MethodDelete:
+		t.stopTransform(w, r)
 	default:
 		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
@@ -36,14 +33,11 @@ func (t *targetrunner) transformHandler(w http.ResponseWriter, r *http.Request) 
 
 // [METHOD] /v1/transform
 func (p *proxyrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Transform)
-	if err != nil {
-		return
-	}
-
 	switch {
-	case r.Method == http.MethodPost && apiItems[0] == cmn.TransformInit:
+	case r.Method == http.MethodPost:
 		p.httpproxyinittransform(w, r)
+	case r.Method == http.MethodDelete:
+		p.httpproxystoptransform(w, r)
 	default:
 		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
@@ -51,10 +45,15 @@ func (p *proxyrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/transform/init
 func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Request) {
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Transform, cmn.TransformInit)
+	if err != nil {
+		return
+	}
+
 	var (
 		transformID = cmn.GenUUID()
-		spec, err   = ioutil.ReadAll(r.Body)
 	)
+	spec, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -72,26 +71,21 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	timeout, _ := transform.PodTransformTimeout(pod)
-	commType, _ := transform.PodTransformCommType(pod)
-
 	var (
-		msg = transform.Msg{
+		timeout, _  = transform.PodTransformTimeout(pod)
+		commType, _ = transform.PodTransformCommType(pod)
+		msg         = transform.Msg{
 			ID:          transformID,
 			Spec:        spec,
 			WaitTimeout: cmn.DurationJSON(timeout),
 			CommType:    commType,
 		}
-	)
 
-	var (
-		path    = cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit)
-		body    = cmn.MustMarshal(msg)
 		results = p.bcastTo(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
-				Path:   path,
-				Body:   body,
+				Path:   r.URL.RawPath,
+				Body:   cmn.MustMarshal(msg),
 			},
 			timeout: cmn.LongTimeout,
 			to:      cluster.Targets,
@@ -107,12 +101,55 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 	w.Write([]byte(transformID))
 }
 
+// DELETE /v1/transform/stop/uuid
+func (p *proxyrunner) httpproxystoptransform(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Transform, cmn.TransformStop)
+	if err != nil {
+		return
+	}
+
+	id := apiItems[0]
+	if id == "" {
+		p.invalmsghdlr(w, r, "transform id cannot be empty")
+		return
+	}
+
+	var (
+		path    = r.URL.RawPath
+		results = p.callTargets(http.MethodDelete, path, nil)
+	)
+
+	for res := range results {
+		if res.err != nil {
+			p.invalmsghdlr(w, r, res.err.Error())
+			return
+		}
+	}
+}
+
 func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
+	_, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Transform, cmn.TransformInit)
+	if err != nil {
+		return
+	}
+
 	var msg transform.Msg
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
 	if err := transform.StartTransformationPod(t, msg); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+}
+
+func (t *targetrunner) stopTransform(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Transform, cmn.TransformStop)
+	if err != nil {
+		return
+	}
+	id := apiItems[0]
+	if err := transform.StopTransformationPod(id); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

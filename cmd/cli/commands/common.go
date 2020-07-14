@@ -61,6 +61,7 @@ const (
 	subcmdCluster   = "cluster"
 	subcmdPrimary   = "primary"
 	subcmdInit      = "init"
+	subcmdStop      = "stop"
 
 	// Show subcommands
 	subcmdShowBucket    = subcmdBucket

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var (
@@ -25,7 +26,9 @@ func testCommunication(t *testing.T, commType string) {
 	}))
 	defer transformerServer.Close()
 
-	comm := makeCommunicator(commType, transformerServer.URL, "", nil)
+	pod := &corev1.Pod{}
+	pod.SetName("somename")
+	comm := makeCommunicator(nil, pod, commType, transformerServer.URL, "")
 	targetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		comm.DoTransform(w, r, nil, "")
 	}))

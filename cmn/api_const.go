@@ -323,7 +323,8 @@ const (
 	GetTargetObjects = "objects"
 
 	// transform
-	TransformInit = "init"
+	TransformInit = Init
+	TransformStop = "stop"
 	Transform     = "transform"
 )
 

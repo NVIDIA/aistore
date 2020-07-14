@@ -91,8 +91,21 @@ func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 
 	cmn.AssertNoErr(validateCommType(msg.CommType))
 	transformerURL := fmt.Sprintf("http://%s:%s", ip, port)
-	c := makeCommunicator(msg.CommType, transformerURL, transformationName, t)
+	c := makeCommunicator(t, pod, msg.CommType, transformerURL, transformationName)
 	reg.put(msg.ID, c)
+	return nil
+}
+
+func StopTransformationPod(id string) error {
+	c, exists := reg.getByUUID(id)
+	if !exists {
+		return fmt.Errorf("transformation with %q id doesn't exist", id)
+	}
+	err := exec.Command("kubectl", "delete", "pod", c.PodName()).Run()
+	if err != nil {
+		return err
+	}
+	reg.removeByUUID(id)
 	return nil
 }
 

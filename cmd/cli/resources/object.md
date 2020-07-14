@@ -645,6 +645,12 @@ $ ais transform init spec.yaml
 JGHEoo89gg
 ```
 
+## Stop transform
+
+`ais transform stop TRANSFORM_ID`
+
+Stop transformation with specified id.
+
 ## Transform object 
 
 `ais transform object TRANSFORM_ID BUCKET/OBJECT_NAME OUTPUT`
