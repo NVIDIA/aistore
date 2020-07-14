@@ -31,9 +31,9 @@ if [[ $nodes -lt 8 ]]; then
 fi
 
 echo "working with build: $(git rev-parse --short HEAD)"
-echo "run tests with cloud bucket: devtestcloud"
+echo "run tests with cloud bucket: nvais"
 
-BUCKET=devtestcloud make test-long
+BUCKET=nvais make test-long
 exit_code=$?
 
 echo "'make test-long' exit status: $exit_code"
