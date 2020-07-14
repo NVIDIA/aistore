@@ -3,7 +3,7 @@
 #TODO: this is a workaround, disconnect the vpn
 /opt/cisco/anyconnect/bin/vpn disconnect
 
-# removing registry-fwd container if preset
+# removing minikube's registry-fwd container if preset
 docker kill registry-fwd
 
 # deletes any pre-existing minikube deployment
