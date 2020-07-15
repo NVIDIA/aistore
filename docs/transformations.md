@@ -181,33 +181,33 @@ This is extremely important so that target can know what port it must contact th
 Another note is that we pass additional parameters via the `annotations` field.
 We specified the communication type and wait time (for the pod to start).
 
-After all these steps we are ready to start the transformer.
+After all these steps we are ready to start the transformers.
 Just before we do that let's take a quick look at how our pods look like:
 
 ```console
 $ kubectl get pods
 NAME                 READY   STATUS    RESTARTS   AGE
-ais-proxy-2wvhp      1/1     Running   0          46m
-ais-target-9knsb     1/1     Running   0          43m
-ais-target-fsxhp     1/1     Running   0          48m
+ais-proxy-2wvhp      1/1     Running   0          48m
+ais-target-9knsb     1/1     Running   0          46m
+ais-target-fsxhp     1/1     Running   0          46m
 ```
 
 So we see that we have 1 proxy and 2 targets.
-After we initialize the transformation we expect that we will see two more pods (`#targets == #pods`).
+After we initialize the transformation, we expect two more pods to start (`#targets == #transformation_pods`).
 
 ```console
-$ ais transformation init -f spec.yaml
+$ ais transform init spec.yaml
 JGHEoo89gg
 $ kubectl get pods
 NAME                                  READY   STATUS    RESTARTS   AGE
-ais-proxy-2wvhp                       1/1     Running   0          46m
-ais-target-9knsb                      1/1     Running   0          43m
-ais-target-fsxhp                      1/1     Running   0          48m
+ais-proxy-2wvhp                       1/1     Running   0          48m
+ais-target-9knsb                      1/1     Running   0          46m
+ais-target-fsxhp                      1/1     Running   0          46m
 transformer-md5-fgjk3-node1           1/1     Running   0          1m
 transformer-md5-vspra-node2           1/1     Running   0          1m
 ```
 
-As expected two more pods are running one for each target.
+As expected two more pods are up and running one for each target.
 
 > **Note:** transformers will be run on the same node as the targets that started them.
 This means that the transformers are close to data minimizing the latency on data transfer.
@@ -217,8 +217,20 @@ Finally, we can use newly created pods to transform the objects for us:
 ```console
 $ ais create bucket transform
 $ echo "some text :)" | ais put - transform/shard.in
-$ ais transformation object JGHEoo89gg transform/shard.in 
+$ ais transform object JGHEoo89gg transform/shard.in -
 393c6706efb128fbc442d3f7d084a426
 ```
 
 Voila! The transformer successfully computed the `md5` on the `transform/shard.in` object.
+
+Once transformation isn't needed anymore, the pods can be stopped with:
+
+```console
+$ ais transform stop JGHEoo89gg
+Transformers stopped successfully.
+$ kubectl get pods
+NAME                 READY   STATUS    RESTARTS   AGE
+ais-proxy-2wvhp      1/1     Running   0          50m
+ais-target-9knsb     1/1     Running   0          48m
+ais-target-fsxhp     1/1     Running   0          48m
+```
