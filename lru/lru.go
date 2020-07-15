@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -74,11 +75,12 @@ type (
 		// runtime
 		curSize   int64
 		totalSize int64 // difference between lowWM size and used size
-		newest    time.Time
+		newest    int64
 		heap      *minHeap
 		oldWork   []string
 		misplaced []*cluster.LOM
 		bck       cmn.Bck
+		now       int64
 		// init-time
 		p         *lruP
 		ini       *InitLRU
@@ -279,6 +281,7 @@ func (j *lruJ) jogBck() (size int64, err error) {
 		Callback: j.walk,
 		Sorted:   false,
 	}
+	j.now = time.Now().UnixNano()
 	if err = fs.Walk(opts); err != nil {
 		return
 	}
@@ -317,8 +320,7 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	if err != nil {
 		return nil
 	}
-	dontEvictTime := time.Now().Add(-j.config.LRU.DontEvictTime)
-	if lom.Atime().After(dontEvictTime) {
+	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
 		return nil
 	}
 	if lom.IsCopy() {
@@ -331,13 +333,13 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 
 	// do nothing if the heap's curSize >= totalSize and
 	// the file is more recent then the the heap's newest.
-	if j.curSize >= j.totalSize && lom.Atime().After(j.newest) {
+	if j.curSize >= j.totalSize && lom.AtimeUnix() > j.newest {
 		return nil
 	}
 	heap.Push(h, lom)
 	j.curSize += lom.Size()
-	if lom.Atime().After(j.newest) {
-		j.newest = lom.Atime()
+	if lom.AtimeUnix() > j.newest {
+		j.newest = lom.AtimeUnix()
 	}
 	return nil
 }
@@ -419,12 +421,13 @@ func (j *lruJ) postRemove(prev int64, lom *cluster.LOM) (capCheck int64, err err
 	usedPct, ok := j.ini.GetFSUsedPercentage(j.mpathInfo.Path)
 	j.throttle = false
 	j.config = cmn.GCO.Get()
-	now := time.Now()
+	j.now = time.Now().UnixNano()
+	nowTs := mono.NanoTime()
 	if ok && usedPct < j.config.LRU.HighWM {
-		if !j.mpathInfo.IsIdle(j.config, now) {
+		if !j.mpathInfo.IsIdle(j.config, nowTs) {
 			// throttle self
 			ratioCapacity := cmn.Ratio(j.config.LRU.HighWM, j.config.LRU.LowWM, usedPct)
-			curr := fs.GetMpathUtil(j.mpathInfo.Path, now)
+			curr := fs.GetMpathUtil(j.mpathInfo.Path, nowTs)
 			ratioUtilization := cmn.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
 			if ratioUtilization > ratioCapacity {
 				j.throttle = true

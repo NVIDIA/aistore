@@ -480,11 +480,11 @@ func (lom *LOM) IncVersion() error {
 }
 
 // best-effort GET load balancing (see also mirror.findLeastUtilized())
-func (lom *LOM) LoadBalanceGET(now time.Time) (fqn string) {
+func (lom *LOM) LoadBalanceGET() (fqn string) {
 	if !lom.HasCopies() {
 		return lom.FQN
 	}
-	return fs.LoadBalanceGET(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.GetCopies(), now)
+	return fs.LoadBalanceGET(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.GetCopies())
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)

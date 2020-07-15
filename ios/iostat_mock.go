@@ -6,8 +6,6 @@
 package ios
 
 import (
-	"time"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 )
 
@@ -28,8 +26,8 @@ func NewIOStaterMock() *IOStaterMock {
 	}
 }
 
-func (m *IOStaterMock) GetMpathUtil(mpath string, now time.Time) int64 { return m.Utils[mpath] }
-func (m *IOStaterMock) GetAllMpathUtils(now time.Time) (map[string]int64, map[string]*atomic.Int32) {
+func (m *IOStaterMock) GetMpathUtil(mpath string, nowTs int64) int64 { return m.Utils[mpath] }
+func (m *IOStaterMock) GetAllMpathUtils(nowTs int64) (map[string]int64, map[string]*atomic.Int32) {
 	return m.Utils, nil
 }
 func (m *IOStaterMock) AddMpath(mpath, fs string)                           {}

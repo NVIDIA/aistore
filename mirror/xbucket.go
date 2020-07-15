@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -148,7 +149,7 @@ func (j *joggerBckBase) yieldTerm() error {
 	case <-j.stopCh.Listen():
 		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.bck)
 	default:
-		curr := fs.GetMpathUtil(j.mpathInfo.Path, time.Now())
+		curr := fs.GetMpathUtil(j.mpathInfo.Path, mono.NanoTime())
 		if curr >= diskConf.DiskUtilHighWM {
 			time.Sleep(cmn.ThrottleSleepMin)
 		}

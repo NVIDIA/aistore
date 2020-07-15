@@ -6,11 +6,11 @@ package mirror
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -106,8 +106,8 @@ func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpath
 		copiesMpath cmn.StringSet
 
 		util       int64 = 101
-		now              = time.Now()
-		mpathUtils       = fs.GetAllMpathUtils(now)
+		nowTs            = mono.NanoTime()
+		mpathUtils       = fs.GetAllMpathUtils(nowTs)
 	)
 
 	if lom.HasCopies() {

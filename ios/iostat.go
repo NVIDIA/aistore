@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 const (
@@ -38,8 +39,8 @@ type (
 		RBps, WBps, Util int64
 	}
 	ioStatCache struct {
-		expireTime time.Time
-		timestamp  time.Time
+		expireTime int64
+		timestamp  int64
 
 		diskIOms   map[string]int64
 		diskUtil   map[string]int64
@@ -55,8 +56,8 @@ type (
 	}
 
 	IOStater interface {
-		GetMpathUtil(mpath string, now time.Time) int64
-		GetAllMpathUtils(now time.Time) (map[string]int64, map[string]*atomic.Int32)
+		GetMpathUtil(mpath string, nowTs int64) int64
+		GetAllMpathUtils(nowTs int64) (map[string]int64, map[string]*atomic.Int32)
 		AddMpath(mpath string, fs string)
 		RemoveMpath(mpath string)
 		LogAppend(log []string) []string
@@ -161,12 +162,12 @@ func (ctx *IostatContext) RemoveMpath(mpath string) {
 	delete(ctx.mpath2disks, mpath)
 }
 
-func (ctx *IostatContext) GetMpathUtil(mpath string, now time.Time) int64 {
-	cache := ctx.refreshIostatCache(now)
+func (ctx *IostatContext) GetMpathUtil(mpath string, nowTs int64) int64 {
+	cache := ctx.refreshIostatCache(nowTs)
 	return cache.mpathUtil[mpath]
 }
-func (ctx *IostatContext) GetAllMpathUtils(now time.Time) (map[string]int64, map[string]*atomic.Int32) {
-	cache := ctx.refreshIostatCache(now)
+func (ctx *IostatContext) GetAllMpathUtils(nowTs int64) (map[string]int64, map[string]*atomic.Int32) {
+	cache := ctx.refreshIostatCache(nowTs)
 	return cache.mpathUtil, cache.mpathRR
 }
 
@@ -207,21 +208,21 @@ func (ctx *IostatContext) LogAppend(lines []string) []string {
 
 // helper function for fetching and updating the Iostat cache
 //  assumes that the timestamp passed in is close enough to the current time
-func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
-	var now time.Time
-	if len(nows) > 0 {
-		now = nows[0]
+func (ctx *IostatContext) refreshIostatCache(nts ...int64) *ioStatCache {
+	var nowTs int64
+	if len(nts) > 0 {
+		nowTs = nts[0]
 	} else {
-		now = time.Now()
+		nowTs = mono.NanoTime()
 	}
 	statsCache := ctx.getStatsCache()
-	if statsCache.expireTime.After(now) {
+	if statsCache.expireTime > nowTs {
 		return statsCache
 	}
 
 	ctx.cacheLock.Lock()
 	statsCache = ctx.getStatsCache()
-	if statsCache.expireTime.After(now) {
+	if statsCache.expireTime > nowTs {
 		ctx.cacheLock.Unlock()
 		return statsCache
 	}
@@ -229,18 +230,18 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 	// begin
 	//
 	ctx.mpathLock.Lock() // nested lock
-	now = time.Now()
+	nowTs = mono.NanoTime()
 	disksStats := readDiskStats(ctx.disk2mpath, ctx.disk2sysfn)
 
 	ctx.cacheIdx++
 	ctx.cacheIdx %= len(ctx.cacheHst)
 	var (
 		ncache         = ctx.cacheHst[ctx.cacheIdx]
-		elapsed        = int64(now.Sub(statsCache.timestamp))
+		elapsed        = nowTs - statsCache.timestamp
 		elapsedSeconds = cmn.DivRound(elapsed, second)
 		elapsedMillis  = cmn.DivRound(elapsed, millis)
 	)
-	ncache.timestamp = now
+	ncache.timestamp = nowTs
 	for mpath := range ctx.mpath2disks {
 		ncache.mpathUtil[mpath] = 0
 		if rr, ok := ncache.mpathRR[mpath]; ok {
@@ -297,7 +298,11 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 	}
 
 	// average and max
-	var maxUtil int64
+	var (
+		maxUtil    int64
+		expireTime int64
+		config     = cmn.GCO.Get()
+	)
 	for mpath, disks := range ctx.mpath2disks {
 		numDisk := int64(len(disks))
 		ncache.mpathUtil[mpath] /= numDisk
@@ -305,10 +310,8 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 	}
 	ctx.mpathLock.Unlock()
 
-	config := cmn.GCO.Get()
-	var expireTime time.Duration
 	if missingInfo {
-		expireTime = config.Disk.IostatTimeShort
+		expireTime = int64(config.Disk.IostatTimeShort)
 	} else { // use the maximum utilization to determine expiration time
 		var (
 			lowWM     = cmn.MaxI64(config.Disk.DiskUtilLowWM, 1)
@@ -317,9 +320,9 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 			utilRatio = cmn.RatioPct(highWM, lowWM, maxUtil)
 		)
 		utilRatio = (utilRatio + 5) / 10 * 10 // round to nearest tenth
-		expireTime = config.Disk.IostatTimeShort + time.Duration(delta*(100-utilRatio)/100)
+		expireTime = int64(config.Disk.IostatTimeShort) + delta*(100-utilRatio)/100
 	}
-	ncache.expireTime = now.Add(expireTime)
+	ncache.expireTime = nowTs + expireTime
 	ctx.putStatsCache(ncache)
 	ctx.cacheLock.Unlock()
 

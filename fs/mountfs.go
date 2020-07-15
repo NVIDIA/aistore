@@ -211,11 +211,11 @@ Retry:
 	return nil
 }
 
-func (mi *MountpathInfo) IsIdle(config *cmn.Config, timestamp time.Time) bool {
+func (mi *MountpathInfo) IsIdle(config *cmn.Config, nowTs int64) bool {
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
-	curr := mfs.ios.GetMpathUtil(mi.Path, timestamp)
+	curr := mfs.ios.GetMpathUtil(mi.Path, nowTs)
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
 }
 
@@ -385,9 +385,10 @@ func SetMountpaths(fsPaths []string) error {
 	return nil
 }
 
-func LoadBalanceGET(objFQN, objMpath string, copies MPI, now time.Time) (fqn string) {
+func LoadBalanceGET(objFQN, objMpath string, copies MPI) (fqn string) {
 	var (
-		mpathUtils, mpathRRs = mfs.ios.GetAllMpathUtils(now)
+		nowTs                = mono.NanoTime()
+		mpathUtils, mpathRRs = mfs.ios.GetAllMpathUtils(nowTs)
 		objUtil, ok          = mpathUtils[objMpath]
 		rr, _                = mpathRRs[objMpath] // GET round-robin counter (zeros out every iostats refresh i-val)
 		util                 = objUtil
@@ -436,11 +437,11 @@ func LoadBalanceGET(objFQN, objMpath string, copies MPI, now time.Time) (fqn str
 }
 
 // ios delegators
-func GetMpathUtil(mpath string, now time.Time) int64 {
-	return mfs.ios.GetMpathUtil(mpath, now)
+func GetMpathUtil(mpath string, nowTs int64) int64 {
+	return mfs.ios.GetMpathUtil(mpath, nowTs)
 }
-func GetAllMpathUtils(now time.Time) (utils map[string]int64) {
-	utils, _ = mfs.ios.GetAllMpathUtils(now)
+func GetAllMpathUtils(nowTs int64) (utils map[string]int64) {
+	utils, _ = mfs.ios.GetAllMpathUtils(nowTs)
 	return
 }
 func LogAppend(lines []string) []string {
