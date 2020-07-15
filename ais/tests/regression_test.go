@@ -1154,9 +1154,19 @@ func TestListPassthrough(t *testing.T) {
 	close(errCh)
 
 	for _, passthrough := range []bool{true, false} {
+		if !passthrough {
+			tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.passthrough": "false"})
+			defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.passthrough": "true"})
+		}
 		msg := &cmn.SelectMsg{PageSize: pagesize, Passthrough: passthrough}
 		started := time.Now()
 		bl, err := api.ListObjects(baseParams, bck, msg, num)
+		if !passthrough {
+			errDiscard := api.ListObjectsInvalidateCache(baseParams, bck, msg)
+			if errDiscard != nil {
+				tutils.Logf("Discard error: %v\n", errDiscard)
+			}
+		}
 		tassert.CheckFatal(t, err)
 
 		if len(bl.Entries) != num {

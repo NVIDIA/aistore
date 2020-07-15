@@ -70,6 +70,23 @@ func NewXactDemandBaseBck(kind string, bck cmn.Bck, idleTimes ...time.Duration) 
 	return r
 }
 
+// TODO: it would be good to merge with above function but optional
+// argument is already used up
+func NewXactDemandBaseBckUUID(uuid, kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
+	cmn.Assert(uuid != "")
+	idleTime := xactIdleTimeout
+	if len(idleTimes) != 0 {
+		idleTime = idleTimes[0]
+	}
+	r := &XactDemandBase{
+		XactBase: *cmn.NewXactBaseBck(uuid, kind, bck),
+		hkName:   kind + "/" + uuid,
+		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
+	}
+	r.init()
+	return r
+}
+
 func NewXactDemandBase(uuid, kind string, idleTimes ...time.Duration) *XactDemandBase {
 	var hkName string
 	idleTime := xactIdleTimeout

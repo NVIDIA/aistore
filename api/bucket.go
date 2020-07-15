@@ -286,6 +286,7 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.Selec
 	if reqParams.Query == nil {
 		reqParams.Query = url.Values{}
 	}
+	reqParams.Query.Set(cmn.URLParamNextPage, "1")
 	reqParams.Body = cmn.MustMarshal(actMsg)
 	resp, err := doHTTPRequestGetResp(reqParams, buff)
 	if err != nil {
@@ -297,16 +298,21 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.Selec
 		}
 		return fmt.Errorf("invalid response code: %d", resp.StatusCode)
 	}
+	reqParams.Query.Del(cmn.URLParamNextPage)
 
-	// receiver started async task and returned the initResMsg
+	// Receiver started async task and returned the initResMsg
 	if err := jsoniter.Unmarshal(buff.Bytes(), initRespMsg); err != nil {
 		return err
 	}
+	if smsg.UUID == "" {
+		smsg.UUID = initRespMsg.UUID
+	}
+	if smsg.UUID != "" {
+		reqParams.Query.Set(cmn.URLParamUUID, smsg.UUID)
+	}
 	actMsg = handleAsyncReqAccepted(initRespMsg, action, smsg, reqParams)
 
-	defer reqParams.Query.Del(cmn.URLParamUUID)
-
-	// poll async task for http.StatusOK completion
+	// Poll async task for http.StatusOK completion
 	for {
 		reqParams.Body = cmn.MustMarshal(actMsg)
 		buff.Reset()
@@ -340,8 +346,9 @@ func handleAsyncReqAccepted(initRespMsg *cmn.InitTaskRespMsg, action string, sms
 	if smsg != nil {
 		msg := cmn.SelectMsg{}
 		msg = *smsg
-		msg.UUID = initRespMsg.UUID
-		msg.Handle = initRespMsg.Handle
+		if msg.UUID == "" {
+			msg.UUID = initRespMsg.UUID
+		}
 		actMsg = cmn.ActionMsg{Action: action, Value: &msg}
 	}
 	reqParams.Query.Set(cmn.URLParamUUID, initRespMsg.UUID)
@@ -400,6 +407,8 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			// On first iteration use just `bckList` to prevent additional allocations.
 			page = bckList
 		} else if iter > 1 {
+			cmn.Assert(smsg.UUID != "")
+			reqParams.Query.Set(cmn.URLParamUUID, smsg.UUID)
 			// On later iterations just allocate temporary page.
 			//
 			// NOTE: do not try to optimize this code by allocating the page
@@ -434,7 +443,6 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		}
 
 		smsg.PageMarker = page.PageMarker
-		smsg.Handle = page.Handle
 	}
 
 	return bckList, err

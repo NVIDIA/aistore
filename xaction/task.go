@@ -11,14 +11,13 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/bcklist"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
-	"github.com/NVIDIA/aistore/query"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -35,20 +34,15 @@ type baseTaskEntry struct {
 //
 
 type bckListTaskEntry struct {
-	baseTaskEntry
+	baseBckEntry
 	ctx  context.Context
-	xact *bckListTask
+	xact *bcklist.BckListTask
 	t    cluster.Target
 	msg  *cmn.SelectMsg
 }
 
 func (e *bckListTaskEntry) Start(bck cmn.Bck) error {
-	xact := &bckListTask{
-		XactBase: *cmn.NewXactBaseBck(e.uuid, cmn.ActListObjects, bck),
-		ctx:      e.ctx,
-		t:        e.t,
-		msg:      e.msg,
-	}
+	xact := bcklist.NewBckListTask(e.ctx, e.t, bck, e.msg, e.uuid)
 	e.xact = xact
 	go xact.Run()
 	return nil
@@ -83,93 +77,6 @@ func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 
 func (e *bckSummaryTaskEntry) Kind() string  { return cmn.ActSummaryBucket }
 func (e *bckSummaryTaskEntry) Get() cmn.Xact { return e.xact }
-
-//
-// bckListTask
-//
-
-func (t *bckListTask) IsMountpathXact() bool { return false }
-
-func (t *bckListTask) Run() error {
-	ctx := context.WithValue(
-		t.ctx,
-		walkinfo.CtxPostCallbackKey,
-		walkinfo.PostCallbackFunc(func(lom *cluster.LOM) {
-			t.ObjectsInc()
-			t.BytesAdd(lom.Size())
-		}),
-	)
-
-	bck := cluster.NewBckEmbed(t.Bck())
-	if err := bck.Init(t.t.GetBowner(), t.t.Snode()); err != nil {
-		t.UpdateResult(nil, err)
-		return err
-	}
-
-	walk := objwalk.NewWalk(ctx, t.t, bck, t.msg)
-	if bck.IsAIS() || t.msg.Cached {
-		wi := walkinfo.NewWalkInfo(ctx, t.t, t.msg)
-		t.UpdateResult(t.localObjPage(wi))
-	} else {
-		t.UpdateResult(walk.CloudObjPage())
-	}
-	return nil
-}
-
-func (t *bckListTask) localObjPage(wi *walkinfo.WalkInfo) (*cmn.BucketList, error) {
-	bckSrc := query.BckSource(t.Bck())
-	objSrc := &query.ObjectsSource{}
-	q := query.NewQuery(objSrc, bckSrc, nil)
-
-	xact, isNew, err := Registry.RenewObjectsListingXact(t.t, q, wi, t.msg.Handle)
-	if err != nil {
-		return nil, err
-	}
-	if isNew {
-		go xact.Start()
-	}
-
-	if xact.PageMarkerFulfilled(t.msg.PageMarker) {
-		// We already fetched everything target has, return empty result
-		return &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0), PageMarker: ""}, nil
-	}
-
-	if xact.PageMarkerUnsatisfiable(t.msg.PageMarker) {
-		// We would miss some objects so we have to start from the beginning. Last fetched object by this xaction
-		// is later (in sorted order) than our page marker.
-		xact.Abort()
-		if glog.V(4) {
-			glog.Infof("page marker before last result: %q vs %q", t.msg.PageMarker, xact.LastDiscardedResult())
-		}
-		query.Registry.Delete(t.msg.Handle)
-		xact, isNew, err = Registry.RenewObjectsListingXact(t.t, q, wi, t.msg.Handle)
-		if err != nil {
-			return nil, err
-		}
-		if isNew {
-			go xact.Start()
-		}
-	}
-
-	return objwalk.LocalObjPage(xact, t.msg.WantObjectsCnt())
-}
-
-func (t *bckListTask) UpdateResult(result interface{}, err error) {
-	res := &taskState{Err: err}
-	if err == nil {
-		res.Result = result
-	}
-	t.res.Store(unsafe.Pointer(res))
-	t.Finish(err)
-}
-
-func (t *bckListTask) Result() (interface{}, error) {
-	ts := (*taskState)(t.res.Load())
-	if ts == nil {
-		return nil, errors.New("no result to load")
-	}
-	return ts.Result, ts.Err
-}
 
 //
 // bckSummaryTask

@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/bcklist"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
@@ -713,3 +714,19 @@ func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err e
 }
 
 func (b *baseBckEntry) postRenewHook(_ bucketEntry) {}
+
+func (r *registry) RenewBckListNewXact(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.SelectMsg) (*bcklist.BckListTask, error) {
+	xact := r.GetXact(uuid)
+	if xact == nil || xact.Finished() {
+		e := &bckListTaskEntry{baseBckEntry: baseBckEntry{uuid}, t: t, msg: msg}
+		ee, err := r.renewBucketXaction(e, bck, uuid)
+		if err == nil {
+			listXact := ee.Get().(*bcklist.BckListTask)
+			return listXact, nil
+		}
+		return nil, err
+	}
+
+	listXact := xact.(*bcklist.BckListTask)
+	return listXact, nil
+}

@@ -75,7 +75,6 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 
 	msg := &cmn.SelectMsg{}
 	*msg = *w.msg
-	msg.Handle = ""
 	msg.UUID = ""
 
 	objList, err, _ := w.t.Cloud(w.bck).ListObjects(w.ctx, w.bck, msg)

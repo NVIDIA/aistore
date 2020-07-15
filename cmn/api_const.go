@@ -181,7 +181,8 @@ const (
 	URLParamAppendHandle = "handle"
 
 	// action (operation, transaction, task) UUID
-	URLParamUUID = "uuid"
+	URLParamUUID     = "uuid"
+	URLParamNextPage = "nxt"
 
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"

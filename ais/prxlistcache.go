@@ -154,7 +154,7 @@ func newTargetCacheEntry(parent *locReq, t *cluster.Snode) *locTarget {
 //   listObjCache   //
 //////////////////////////
 
-func (c *listObjCache) next(smap *cluster.Smap, smsg cmn.SelectMsg, bck *cluster.Bck, pageSize uint) (result fetchResult) {
+func (c *listObjCache) next(smap *cluster.Smap, smsg cmn.SelectMsg, bck *cluster.Bck, pageSize uint, nextPage bool) (result fetchResult) {
 	cmn.Assert(smsg.UUID != "")
 	if smap.CountTargets() == 0 {
 		return fetchResult{err: fmt.Errorf("no targets registered")}
@@ -162,15 +162,17 @@ func (c *listObjCache) next(smap *cluster.Smap, smsg cmn.SelectMsg, bck *cluster
 	entries := c.allTargetsEntries(smsg, smap, bck)
 	cmn.Assert(len(entries) > 0)
 	entries[0].parent.mtx.Lock()
-	result = c.initResultsFromEntries(entries, smsg, pageSize, smsg.UUID)
+	result = c.initResultsFromEntries(entries, smsg, pageSize, smsg.UUID, nextPage)
 	if result.allOK && result.err == nil {
 		result = c.fetchAll(entries, smsg, pageSize)
 	}
 	entries[0].parent.mtx.Unlock()
 
-	c.mtx.Lock()
-	delete(c.reqs, smsg.ListObjectsCacheID(bck.Bck))
-	c.mtx.Unlock()
+	if result.err != nil {
+		c.mtx.Lock()
+		delete(c.reqs, smsg.ListObjectsCacheID(bck.Bck))
+		c.mtx.Unlock()
+	}
 	return result
 }
 
@@ -220,9 +222,10 @@ func (c *listObjCache) leftovers(smsg cmn.SelectMsg, bck *cluster.Bck) map[strin
 		}
 		entry, ok := tce[targetEntry.t.ID()]
 		if !ok {
-			entry = &locTarget{parent: targetEntry.parent, t: targetEntry.t, buff: make([]*cmn.BucketEntry, 0)}
+			entry = newTargetCacheEntry(targetEntry.parent, targetEntry.t)
 			tce[targetEntry.t.ID()] = entry
 		}
+		entry.done = entry.done || targetEntry.done
 		// First case: the entire page was unused
 		if !cmn.PageMarkerIncludesObject(smsg.PageMarker, targetEntry.buff[0].Name) {
 			entry.buff = append(entry.buff, targetEntry.buff...)
@@ -276,13 +279,13 @@ func (c *listObjCache) allTargetsEntries(smsg cmn.SelectMsg, smap *cluster.Smap,
 
 func (c *listObjCache) initResults(smap *cluster.Smap, smsg cmn.SelectMsg, bck *cluster.Bck, size uint, newUUID string) fetchResult {
 	entries := c.allTargetsEntries(smsg, smap, bck)
-	return c.initResultsFromEntries(entries, smsg, size, newUUID)
+	return c.initResultsFromEntries(entries, smsg, size, newUUID, true)
 }
 
 // initResultsFromEntries notifies targets to prepare next objects page.
 // It returns information if all calls succeed, and if there were any errors.
-func (c *listObjCache) initResultsFromEntries(entries []*locTarget, smsg cmn.SelectMsg, size uint, newUUID string) fetchResult {
-	ch := c.initAllTargets(entries, smsg, size, newUUID)
+func (c *listObjCache) initResultsFromEntries(entries []*locTarget, smsg cmn.SelectMsg, size uint, newUUID string, nextPage bool) fetchResult {
+	ch := c.initAllTargets(entries, smsg, size, newUUID, nextPage)
 	return gatherTargetListObjsResults(smsg.UUID, ch, 0, &smsg)
 }
 
@@ -318,12 +321,12 @@ func (c *listObjCache) getRequestEntry(cacheID string) (*locReq, bool) {
 }
 
 // Gathers init results for each target on `resultCh`
-func (c *listObjCache) initAllTargets(entries []*locTarget, smsg cmn.SelectMsg, size uint, newUUID string) (resultCh chan *locTargetResp) {
+func (c *listObjCache) initAllTargets(entries []*locTarget, smsg cmn.SelectMsg, size uint, newUUID string, nextPage bool) (resultCh chan *locTargetResp) {
 	resultCh = make(chan *locTargetResp, len(entries))
 	wg := &sync.WaitGroup{}
 	wg.Add(len(entries))
 	for _, targetEntry := range entries {
-		targetEntry.init(smsg, size, wg, resultCh, newUUID)
+		targetEntry.init(smsg, size, wg, resultCh, newUUID, nextPage)
 	}
 	wg.Wait()
 	close(resultCh)
@@ -334,9 +337,12 @@ func (c *listObjCache) initAllTargets(entries []*locTarget, smsg cmn.SelectMsg, 
 //   locTarget   //
 /////////////////////////
 
-func (c *locTarget) init(smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, resCh chan *locTargetResp, newUUID string) {
-	cacheSufficient := (uint(len(c.buff)) >= size && size != 0) || c.done
-	if !smsg.Passthrough && cacheSufficient {
+func (c *locTarget) init(smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, resCh chan *locTargetResp, newUUID string, nextPage bool) {
+	cond := func(i int) bool { return !cmn.PageMarkerIncludesObject(smsg.PageMarker, c.buff[i].Name) }
+	idx := sort.Search(len(c.buff), cond)
+	remains := c.buff[idx:]
+	cacheSufficient := (uint(len(remains)) >= size && size != 0) || c.done
+	if cacheSufficient {
 		// Everything that is requested is already in the cache, we don't have to do any API calls.
 		// Returning StatusOK as if we did a request.
 		resCh <- &locTargetResp{status: http.StatusOK, err: nil}
@@ -346,16 +352,16 @@ func (c *locTarget) init(smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, resC
 
 	// Make an actual call to the target.
 	go func() {
-		resCh <- c.initOnRemote(smsg, newUUID)
+		resCh <- c.initOnRemote(smsg, newUUID, nextPage)
 		wg.Done()
 	}()
 }
 
-func (c *locTarget) initOnRemote(smsg cmn.SelectMsg, newUUID string) (result *locTargetResp) {
+func (c *locTarget) initOnRemote(smsg cmn.SelectMsg, newUUID string, nextPage bool) (result *locTargetResp) {
 	p := c.parent.parent.p
 	bck := c.parent.bck
 
-	_, q := p.initAsyncQuery(bck, &smsg, newUUID)
+	_, q := p.initAsyncQuery(bck, &smsg, newUUID, nextPage)
 	args := c.newListObjectsTaskMsg(smsg, bck, q) // Changes PageMarker to point to last element in buff.
 	status, err := c.renewTaskOnRemote(args)
 	return &locTargetResp{status: status, err: err}
@@ -378,7 +384,7 @@ func (c *locTarget) fetch(smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, res
 		} else {
 			size = uint(cmn.Min(len(bf), int(size)))
 		}
-		resCh <- &locTargetResp{list: &cmn.BucketList{Entries: bf[:size]}, status: http.StatusOK}
+		resCh <- &locTargetResp{list: &cmn.BucketList{Entries: bf[:size], UUID: smsg.UUID}, status: http.StatusOK}
 		wg.Done()
 		return
 	}
@@ -399,19 +405,41 @@ func (c *locTarget) mergePage(page []*cmn.BucketEntry) {
 		c.buff = page
 		return
 	}
-	// the page preceds items in the cache
-	if !cmn.PageMarkerIncludesObject(c.buff[0].Name, page[len(page)-1].Name) {
+	// The page preceds items in the cache
+	if cmn.PageMarkerIncludesObject(c.buff[0].Name, page[len(page)-1].Name) {
 		c.buff = append(page, c.buff...)
 		return
 	}
-	// the page follows the cache
-	if !cmn.PageMarkerIncludesObject(c.buff[l-1].Name, page[0].Name) {
+	// The page follows the cache
+	if cmn.PageMarkerIncludesObject(page[0].Name, c.buff[len(c.buff)-1].Name) {
 		c.buff = append(c.buff, page...)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Page %q : %q discarded", page[0].Name, page[len(page)-1].Name)
 	}
+}
+
+// TODO: it is a kludge called once and before another calle that looks the same.
+// Why it is required:
+//   - a target cache, when it detects that it does not have enough entries and
+//     the target is not done with sending all the data, fetches another page.
+//   - after receiving the page, the cache merges it with its list
+//   - the trouble is that the cache may be a "temporary" objects, and adding
+//     to it automatically discards the entries that are not fit page size
+//   - why it can be "temporary": before fetching new data, the proxy cache
+//     builds a list of local pages that may be real or temporary
+//   - if the target is not done yet, it is fine and the next request detects
+//     page missing objects, just requests the new page from target. The target
+//     returns the page from its local cache and everything looks good
+//   - but if the target is done with streaming. The discarded tail is lost
+//     forever, making listObjects to return a few entries fewer
+func (rq *locReq) mergeCache(node *cluster.Snode, page []*cmn.BucketEntry) {
+	tgt, ok := rq.targets[node.ID()]
+	cmn.Assert(ok)
+	tgt.mtx.Lock()
+	tgt.mergePage(page)
+	tgt.mtx.Unlock()
 }
 
 // Has to be called with Lock!
@@ -439,7 +467,7 @@ func (c *locTarget) fetchFromRemote(smsg cmn.SelectMsg, size uint) *locTargetRes
 		if s == 0 {
 			s = len(c.buff)
 		}
-		return &locTargetResp{list: &cmn.BucketList{Entries: c.buff[:s]}, status: res.status, err: res.err}
+		return &locTargetResp{list: &cmn.BucketList{Entries: c.buff[:s], UUID: smsg.UUID}, status: res.status, err: res.err}
 	}
 
 	bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
@@ -455,6 +483,8 @@ func (c *locTarget) fetchFromRemote(smsg cmn.SelectMsg, size uint) *locTargetRes
 		return &locTargetResp{list: bucketList, status: http.StatusOK}
 	}
 
+	c.parent.mergeCache(c.t, bucketList.Entries)
+
 	c.mtx.Lock()
 	c.mergePage(bucketList.Entries)
 	cond := func(i int) bool { return !cmn.PageMarkerIncludesObject(smsg.PageMarker, c.buff[i].Name) }
@@ -463,9 +493,9 @@ func (c *locTarget) fetchFromRemote(smsg cmn.SelectMsg, size uint) *locTargetRes
 	j = cmn.Max(j, 0)
 	if size != 0 {
 		last := cmn.Min(len(c.buff), int(size)+j)
-		return &locTargetResp{list: &cmn.BucketList{Entries: c.buff[j:last]}, status: http.StatusOK}
+		return &locTargetResp{list: &cmn.BucketList{Entries: c.buff[j:last], UUID: smsg.UUID}, status: http.StatusOK}
 	}
-	return &locTargetResp{list: &cmn.BucketList{Entries: c.buff[j:]}, status: http.StatusOK}
+	return &locTargetResp{list: &cmn.BucketList{Entries: c.buff[j:], UUID: smsg.UUID}, status: http.StatusOK}
 }
 
 // Prepares callArgs for list object init or list objects result call.

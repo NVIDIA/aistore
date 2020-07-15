@@ -255,15 +255,14 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	smsg := cmn.SelectMsg{Fast: false, TimeFormat: time.RFC3339}
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
-	_, initRespMsg, err = p.listAISBucket(bck, smsg)
+	_, initRespMsg, err = p.listAISBucket(bck, smsg, false)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	smsg.UUID = initRespMsg.UUID
-	smsg.Handle = initRespMsg.Handle
 	for {
-		bckList, initRespMsg, err = p.listAISBucket(bck, smsg)
+		bckList, initRespMsg, err = p.listAISBucket(bck, smsg, false)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -273,7 +272,6 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 		}
 		// just in case
 		smsg.UUID = initRespMsg.UUID
-		smsg.Handle = initRespMsg.Handle
 		time.Sleep(time.Second)
 	}
 	resp := s3compat.NewListObjectResult()

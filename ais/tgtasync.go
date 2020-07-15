@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/bcklist"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xaction"
@@ -53,6 +54,14 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	return
 }
 
+func (t *targetrunner) waitBckListResp(xact *bcklist.BckListTask, action string, msg *cmn.SelectMsg) (
+	*cmn.BucketList, int, error) {
+	ch := make(chan *bcklist.BckListResp) // unbuffered
+	xact.Do(action, msg, ch)
+	resp := <-ch
+	return resp.BckList, resp.Status, resp.Err
+}
+
 // asynchronous bucket request
 // - creates a new task that runs in background
 // - returns status of a running task by its ID
@@ -67,12 +76,17 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	)
 	if taskAction == cmn.TaskStart {
 		var (
-			err error
+			status = http.StatusInternalServerError
+			err    error
 		)
 
 		switch action {
 		case cmn.ActListObjects:
-			_, err = xaction.Registry.RenewBckListXact(ctx, t, bck, smsg)
+			var xactList *bcklist.BckListTask
+			xactList, err = xaction.Registry.RenewBckListNewXact(t, bck, smsg.UUID, smsg)
+			if err == nil {
+				_, status, err = t.waitBckListResp(xactList, taskAction, smsg)
+			}
 		case cmn.ActSummaryBucket:
 			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, smsg)
 		default:
@@ -81,7 +95,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		}
 
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+			t.invalmsghdlr(w, r, err.Error(), status)
 			return false
 		}
 
@@ -100,6 +114,33 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		}
 		return false
 	}
+	if action == cmn.ActListObjects {
+		xactList, ok := xact.(*bcklist.BckListTask)
+		if !ok {
+			// never silent
+			t.invalmsghdlrf(w, r, "%s is not bucket list task, it is %T", smsg.UUID, xact)
+			return false
+		}
+
+		bckList, status, err := t.waitBckListResp(xactList, taskAction, smsg)
+		if err != nil {
+			if silent {
+				t.invalmsghdlrsilent(w, r, err.Error(), status)
+			} else {
+				t.invalmsghdlr(w, r, err.Error(), status)
+			}
+			return false
+		}
+
+		if taskAction == cmn.TaskResult {
+			cmn.Assert(bckList.UUID != "")
+			return t.writeJSON(w, r, bckList, "")
+		}
+
+		w.WriteHeader(status)
+		return true
+	}
+
 	// task still running
 	if !xact.Finished() {
 		w.WriteHeader(http.StatusAccepted)
@@ -114,44 +155,6 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 			t.invalmsghdlr(w, r, err.Error())
 		}
 		return false
-	}
-
-	switch action {
-	case cmn.ActListObjects:
-		if !smsg.Fast {
-			break
-		}
-		if bckList, ok := result.(*cmn.BucketList); ok && bckList != nil {
-			const minLoaded = 10 // check that many randomly-selected
-			if len(bckList.Entries) > minLoaded {
-				go func(bckEntries []*cmn.BucketEntry) {
-					var (
-						l      = len(bckEntries)
-						m      = l / minLoaded
-						loaded int
-					)
-					if l < minLoaded {
-						return
-					}
-					for i := 0; i < l; i += m {
-						lom := &cluster.LOM{T: t, ObjName: bckEntries[i].Name}
-						err := lom.Init(bck.Bck)
-						if err == nil && lom.IsLoaded() { // loaded?
-							loaded++
-						}
-					}
-					renew := loaded < minLoaded/2
-					if glog.FastV(4, glog.SmoduleAIS) {
-						glog.Errorf("%s: loaded %d/%d, renew=%t", t.si, loaded, minLoaded, renew)
-					}
-					if renew {
-						xaction.Registry.RenewBckLoadLomCache(t, bck)
-					}
-				}(bckList.Entries)
-			}
-		}
-	default:
-		break
 	}
 
 	if taskAction == cmn.TaskResult {

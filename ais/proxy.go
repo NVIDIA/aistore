@@ -1089,6 +1089,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		bckList     *cmn.BucketList
 		smsg        = cmn.SelectMsg{}
 		query       = r.URL.Query()
+		nextPage    bool
 	)
 	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1103,12 +1104,17 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		smsg.Prefix = prefix
 	}
 
+	// TODO: remove when listobject cache fully works
+	clientConf := cmn.GCO.Get().Client
+	smsg.Passthrough = smsg.Passthrough || clientConf.Passthrough
+
 	id := r.URL.Query().Get(cmn.URLParamUUID)
 	if id != "" {
 		smsg.UUID = id
 	}
 	if bck.IsAIS() || smsg.Cached {
-		bckList, initRespMsg, err = p.listAISBucket(bck, smsg)
+		nextPage = cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamNextPage))
+		bckList, initRespMsg, err = p.listAISBucket(bck, smsg, nextPage)
 	} else {
 		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
 		bckList, initRespMsg, _, err = p.listObjectsRemote(bck, smsg)
@@ -1124,7 +1130,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 
 	// uuid == "" means that async runner has completed and the result is available
 	// otherwise it is an ID of a still running task
-	if initRespMsg != nil {
+	if initRespMsg != nil || nextPage {
 		w.WriteHeader(http.StatusAccepted)
 		w.Write(cmn.MustMarshal(initRespMsg))
 		return
@@ -1206,7 +1212,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 	summaries cmn.BucketsSummaries, initRespMsg *cmn.InitTaskRespMsg, err error) {
 	var (
 		// start new async task if client did not provide taskID(neither in Headers nor in SelectMsg),
-		isNew, q = p.initAsyncQuery(bck, &smsg, cmn.GenUUID())
+		isNew, q = p.initAsyncQuery(bck, &smsg, cmn.GenUUID(), false)
 		config   = cmn.GCO.Get()
 	)
 	var (
@@ -1631,11 +1637,15 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	return
 }
 
-func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, smsg *cmn.SelectMsg, newTaskID string) (bool, url.Values) {
+func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, smsg *cmn.SelectMsg, newTaskID string, nextPage bool) (bool, url.Values) {
 	isNew := smsg.UUID == ""
 	q := url.Values{}
-	if isNew {
-		smsg.UUID = newTaskID
+	if isNew || nextPage {
+		if isNew {
+			smsg.UUID = newTaskID
+		} else {
+			q.Set(cmn.URLParamUUID, smsg.UUID)
+		}
 		q.Set(cmn.URLParamTaskAction, cmn.TaskStart)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("proxy: starting new async task %s", smsg.UUID)
@@ -1684,9 +1694,8 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 //      * non-empty uuid if the task is still running
 //      * error
 //
-// cmn.SelectMsg.UUID - TaskID which changes between next page requests
-// cmn.Selectmsg.Handle - list operation handle which doesn't change between requests
-func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, msg *cmn.InitTaskRespMsg, err error) {
+// cmn.Selectmsg.UUID - list operation handle which doesn't change between requests
+func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg, nextPage bool) (allEntries *cmn.BucketList, msg *cmn.InitTaskRespMsg, err error) {
 	var (
 		smap     = p.owner.smap.Get()
 		pageSize uint
@@ -1705,30 +1714,24 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 
 	if smsg.UUID == "" {
 		newTaskID := cmn.GenUUID()
-		smsg.Handle = cmn.GenUUID()
+		smsg.UUID = newTaskID
 		initResults := listCache.initResults(smap, smsg, bck, pageSize, newTaskID)
 		if initResults.err != nil {
 			return nil, nil, initResults.err
 		}
 
-		return nil, &cmn.InitTaskRespMsg{UUID: newTaskID, Handle: smsg.Handle}, nil
+		return nil, &cmn.InitTaskRespMsg{UUID: newTaskID}, nil
 	}
 
-	if smsg.Handle == "" {
-		return nil, nil, errors.New("handle can't be empty")
-	}
-
-	fetchResult := listCache.next(smap, smsg, bck, pageSize)
+	fetchResult := listCache.next(smap, smsg, bck, pageSize, nextPage)
 	if fetchResult.err != nil {
 		return nil, nil, fetchResult.err
 	}
 	if !fetchResult.allOK {
-		return nil, &cmn.InitTaskRespMsg{UUID: smsg.UUID, Handle: smsg.Handle}, nil
+		return nil, &cmn.InitTaskRespMsg{UUID: smsg.UUID}, nil
 	}
 
 	allEntries = cmn.ConcatObjLists(fetchResult.lists, pageSize)
-	allEntries.Handle = smsg.Handle
-
 	return allEntries, nil, nil
 }
 
@@ -1752,7 +1755,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
 	}
 
 	// start new async task if client did not provide uuid (neither in headers nor in SelectMsg)
-	isNew, q := p.initAsyncQuery(bck, &smsg, cmn.GenUUID())
+	isNew, q := p.initAsyncQuery(bck, &smsg, cmn.GenUUID(), false)
 	var (
 		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Client.ListObjects

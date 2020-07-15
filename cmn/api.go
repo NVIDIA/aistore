@@ -37,7 +37,6 @@ type SelectMsg struct {
 	TimeFormat  string `json:"time_format"` // "RFC822" default - see the enum above
 	Prefix      string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 	PageMarker  string `json:"pagemarker"`  // pageMarker - the last object in previous page
-	Handle      string `json:"handle"`      // value passed between subsequent page requests
 	UUID        string `json:"uuid"`        // ID to identify a single multi-page request
 	PageSize    uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
 	Fast        bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
@@ -58,8 +57,7 @@ type RangeMsg struct {
 }
 
 type InitTaskRespMsg struct {
-	UUID   string `json:"uuid"`
-	Handle string `json:"handle"`
+	UUID string `json:"uuid"`
 }
 
 // MountpathList contains two lists:
@@ -177,7 +175,7 @@ func (be *BucketEntry) IsStatusOK() bool {
 type BucketList struct {
 	Entries    []*BucketEntry `json:"entries"`
 	PageMarker string         `json:"pagemarker"`
-	Handle     string         `json:"handle"`
+	UUID       string         `json:"uuid"`
 }
 
 type BucketSummary struct {

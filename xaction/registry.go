@@ -71,13 +71,6 @@ type (
 	Election struct {
 		cmn.XactBase
 	}
-	bckListTask struct {
-		cmn.XactBase
-		ctx context.Context
-		res atomic.Pointer
-		t   cluster.Target
-		msg *cmn.SelectMsg
-	}
 	bckSummaryTask struct {
 		cmn.XactBase
 		ctx context.Context
@@ -213,7 +206,7 @@ func (e *registryEntries) findUnlocked(flt RegistryXactFilter) baseEntry {
 			}
 		}
 	} else {
-		cmn.AssertMsg(cmn.IsValidXaction(flt.Kind), flt.Kind)
+		cmn.AssertMsg(flt.Kind == "" || cmn.IsValidXaction(flt.Kind), flt.Kind)
 		finishedCnt := 0
 		for _, entry := range e.active {
 			if entry.Get().Finished() {
@@ -578,9 +571,14 @@ func (r *registry) cleanUpFinished() time.Duration {
 // renew methods
 //
 
-func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (bucketEntry, error) {
+func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck,
+	uuids ...string) (bucketEntry, error) {
+	var uuid string
+	if len(uuids) != 0 {
+		uuid = uuids[0]
+	}
 	r.mtx.RLock()
-	if e := r.GetRunning(RegistryXactFilter{Kind: entry.Kind(), Bck: bck}); e != nil {
+	if e := r.GetRunning(RegistryXactFilter{ID: uuid, Kind: entry.Kind(), Bck: bck}); e != nil {
 		prevEntry := e.(bucketEntry)
 		if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
 			r.mtx.RUnlock()
@@ -595,7 +593,7 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck) (buck
 		running   = false
 		prevEntry bucketEntry
 	)
-	if e := r.GetRunning(RegistryXactFilter{Kind: entry.Kind(), Bck: bck}); e != nil {
+	if e := r.GetRunning(RegistryXactFilter{ID: uuid, Kind: entry.Kind(), Bck: bck}); e != nil {
 		prevEntry = e.(bucketEntry)
 		running = true
 		if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
@@ -697,24 +695,6 @@ func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*dow
 	}
 	entry := ee.(*downloaderEntry)
 	return entry.xact, nil
-}
-
-func (r *registry) RenewBckListXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,
-	smsg *cmn.SelectMsg) (*bckListTask, error) {
-	if err := r.removeFinishedByID(smsg.UUID); err != nil {
-		return nil, err
-	}
-	e := &bckListTaskEntry{
-		baseTaskEntry: baseTaskEntry{smsg.UUID},
-		ctx:           ctx,
-		t:             t,
-		msg:           smsg,
-	}
-	if err := e.Start(bck.Bck); err != nil {
-		return nil, err
-	}
-	r.storeEntry(e)
-	return e.xact, nil
 }
 
 func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,
