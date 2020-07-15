@@ -84,7 +84,7 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 		results = p.bcastTo(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
-				Path:   r.URL.RawPath,
+				Path:   r.URL.Path,
 				Body:   cmn.MustMarshal(msg),
 			},
 			timeout: cmn.LongTimeout,
@@ -114,11 +114,7 @@ func (p *proxyrunner) httpproxystoptransform(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var (
-		path    = r.URL.RawPath
-		results = p.callTargets(http.MethodDelete, path, nil)
-	)
-
+	results := p.callTargets(http.MethodDelete, r.URL.Path, nil)
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
