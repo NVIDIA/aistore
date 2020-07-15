@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&abortonerr, "abortonerr", abortonerr, "abort on error")
 	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
 	flag.BoolVar(&skipdel, "nodel", false, "Run only PUT and GET in a loop and do cleanup once at the end")
-	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
+	flag.IntVar(&numops, "numops", 40, "Number of PUT/GET per worker")
 	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
 	// When running multiple tests at the same time on different threads, ensure that
 	// They are given different seeds, as the tests are completely deterministic based on
