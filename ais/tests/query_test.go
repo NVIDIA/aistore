@@ -238,7 +238,10 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 		smap.CountTargets()-1,
 	)
 	tassert.CheckError(t, err)
-	defer tutils.RegisterNode(proxyURL, target, smap)
+	defer func() {
+		tutils.RegisterNode(proxyURL, target, smap)
+		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	}()
 
 	_, err = api.QueryWorkerTarget(baseParams, handle, 1)
 	tassert.Errorf(t, err != nil, "expected error to occur when target went down")
