@@ -57,22 +57,23 @@ func (e *lruEntry) preRenewHook(_ globalEntry) bool { return true }
 // rebalanceEntry
 //
 
-type rebID int64
+type RebID int64
 
 type rebalanceEntry struct {
-	id          rebID // rebalance id
+	id          RebID // rebalance id
 	xact        *Rebalance
 	statsRunner *stats.Trunner
 }
 
 var (
 	// interface guard
-	_ cmn.XactID = rebID(0)
+	_ cmn.XactID = RebID(0)
 )
 
-func (id rebID) String() string { return fmt.Sprintf("g%d", id) }
-func (id rebID) Int() int64     { return int64(id) }
-func (id rebID) Compare(other string) int {
+func (id RebID) String() string { return fmt.Sprintf("g%d", id) }
+
+func (id RebID) Int() int64 { return int64(id) }
+func (id RebID) Compare(other string) int {
 	var (
 		o   int64
 		err error

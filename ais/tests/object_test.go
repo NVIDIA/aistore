@@ -522,13 +522,13 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	}
 
 	tutils.Logf("PrefetchList %d\n", len(files))
-	err = api.PrefetchList(baseParams, bckCloud, files)
+	_, err = api.PrefetchList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
 	err = api.WaitForXaction(baseParams, xactArgsPrefetch)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("PrefetchRange\n")
-	err = api.PrefetchRange(baseParams, bckCloud, "r"+prefetchRange)
+	_, err = api.PrefetchRange(baseParams, bckCloud, "r"+prefetchRange)
 	tassert.CheckFatal(t, err)
 	err = api.WaitForXaction(baseParams, xactArgsPrefetch)
 	tassert.CheckFatal(t, err)
@@ -570,7 +570,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
-	err = api.PrefetchList(baseParams, bckCloud, files)
+	_, err = api.PrefetchList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
 	err = api.WaitForXaction(baseParams, xactArgsPrefetch)
 	tassert.CheckFatal(t, err)

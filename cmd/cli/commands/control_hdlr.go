@@ -159,7 +159,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 		return
 	}
 	if id != "" {
-		fmt.Fprintf(c.App.Writer, "Started %s %q\n", xactKind, id)
+		fmt.Fprintf(c.App.Writer, "Started %s %q, %s\n", xactKind, id, xactProgressMsg(id))
 	} else {
 		fmt.Fprintf(c.App.Writer, "Started %s\n", xactKind)
 	}

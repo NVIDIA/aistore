@@ -338,7 +338,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	}
 	tassert.SelectErr(t, errCh, "put", true)
 	if rtd.rename {
-		err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
+		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
 		tassert.CheckFatal(t, err)
 		tutils.Logf("Renamed %s(numobjs=%d) => %s\n", rtd.bck, numPuts, rtd.renamedBck)
 		if rtd.wait {
@@ -799,7 +799,7 @@ func TestPrefetchList(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// 3. Prefetch evicted objects
-	err = api.PrefetchList(baseParams, bck, files)
+	_, err = api.PrefetchList(baseParams, bck, files)
 	if err != nil {
 		t.Error(err)
 	}
@@ -917,7 +917,7 @@ func TestPrefetchRange(t *testing.T) {
 	err = api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
-	err = api.PrefetchRange(baseParams, bck, rng)
+	_, err = api.PrefetchRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
 	xactArgs = api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bck, Timeout: rebalanceTimeout}
 	err = api.WaitForXaction(baseParams, xactArgs)

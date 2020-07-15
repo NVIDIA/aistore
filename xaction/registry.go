@@ -405,6 +405,7 @@ func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []cmn.Xact
 
 func (r *registry) matchXactsStatsByID(xactID string) ([]cmn.XactStats, error) {
 	matchedStat := r.matchingXactsStats(func(xact cmn.Xact) bool {
+		// TODO: This will match both xaction ID of rename and rebalance.
 		return xact.ID().Compare(xactID) == 0
 	})
 	if len(matchedStat) == 0 {
@@ -644,7 +645,7 @@ func (r *registry) RenewLRU(id string) *lru.Xaction {
 }
 
 func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) *Rebalance {
-	e := &rebalanceEntry{id: rebID(id), statsRunner: statsRunner}
+	e := &rebalanceEntry{id: RebID(id), statsRunner: statsRunner}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*rebalanceEntry)
 	if keep { // previous global rebalance is still running

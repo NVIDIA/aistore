@@ -637,7 +637,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, fmtNotCloud, bucket)
 			return
 		}
-		if err = p.doListRange(http.MethodDelete, bucket, &msg, r.URL.Query()); err != nil {
+		if _, err = p.doListRange(http.MethodDelete, bucket, &msg, r.URL.Query()); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	default:
@@ -936,10 +936,12 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
-		if err := p.renameBucket(bckFrom, bckTo, &msg); err != nil {
+		var xactID string
+		if xactID, err = p.renameBucket(bckFrom, bckTo, &msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		w.Write([]byte(xactID))
 	case cmn.ActCopyBucket:
 		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessGET); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
@@ -967,11 +969,12 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-
-		if err := p.copyBucket(bckFrom, bckTo, &msg); err != nil {
+		var xactID string
+		if xactID, err = p.copyBucket(bckFrom, bckTo, &msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		w.Write([]byte(xactID))
 	case cmn.ActRegisterCB:
 		// TODO: choose the best permission
 		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessBckCREATE); err != nil {
@@ -1003,9 +1006,11 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
-		if err = p.doListRange(http.MethodPost, bucket, &msg, r.URL.Query()); err != nil {
+		var xactID string
+		if xactID, err = p.doListRange(http.MethodPost, bucket, &msg, r.URL.Query()); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
+		w.Write([]byte(xactID))
 	case cmn.ActListObjects:
 		begin := mono.NanoTime()
 		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessObjLIST); err != nil {
@@ -1048,7 +1053,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Write([]byte(xactID))
-
 	case cmn.ActECEncode:
 		if err := p.checkPermissions(r, &bck.Bck, cmn.AccessEC); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
@@ -1064,7 +1068,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Write([]byte(xactID))
-
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
@@ -1919,7 +1922,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	}
 }
 
-func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) error {
+func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) (xactID string, err error) {
 	var (
 		timeout time.Duration
 		results chan callResult
@@ -1944,11 +1947,12 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 	})
 	for res := range results {
 		if res.err != nil {
-			return fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)",
+			err = fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)",
 				res.si, msg.Action, res.err, res.status, res.details)
 		}
 	}
-	return nil
+	xactID = aisMsg.UUID
+	return
 }
 
 func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
@@ -3150,6 +3154,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			})
 			msg := &cmn.ActionMsg{Action: cmn.ActRebalance}
 			_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, nil)})
+			w.Write([]byte(xaction.RebID(clone.version()).String()))
 			return
 		}
 

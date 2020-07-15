@@ -323,7 +323,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 }
 
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
-func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (err error) {
+func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
 		c          *txnClientCtx
 		nlpFrom    = bckFrom.GetNameLockPair()
@@ -332,15 +332,18 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		pname      = p.si.String()
 		unlockUpon bool
 	)
-	if err := p.canStartRebalance(); err != nil {
-		return fmt.Errorf("%s: bucket cannot be renamed: %w", p.si, err)
+	if rebErr := p.canStartRebalance(); rebErr != nil {
+		err = fmt.Errorf("%s: bucket cannot be renamed: %w", p.si, rebErr)
+		return
 	}
 	if !nlpFrom.TryLock() {
-		return cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
+		err = cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
+		return
 	}
 	if !nlpTo.TryLock() {
 		nlpFrom.Unlock()
-		return cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
+		err = cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
+		return
 	}
 	defer func() {
 		if !unlockUpon {
@@ -354,11 +357,13 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
 		p.owner.bmd.Unlock()
-		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
+		return
 	}
 	if _, present := bmd.Get(bckTo); present {
 		p.owner.bmd.Unlock()
-		return cmn.NewErrorBucketAlreadyExists(bckTo.Bck, pname)
+		err = cmn.NewErrorBucketAlreadyExists(bckTo.Bck, pname)
+		return
 	}
 	p.owner.bmd.Unlock()
 
@@ -374,7 +379,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
-			return res.err
+			err = res.err
+			return
 		}
 	}
 
@@ -417,6 +423,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 				nlpTo:             &nlpTo,
 			}
 			rebUUID := strconv.FormatInt(clone.version(), 10)
+			xactID = rebUUID
 			p.notifs.add(rebUUID, &nl)
 
 			// 6. commit
@@ -435,7 +442,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 }
 
 // copy-bucket: { confirm existence -- begin -- conditional metasync -- start waiting for copy-done -- commit }
-func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (err error) {
+func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
 		c          *txnClientCtx
 		nmsg       = &cmn.ActionMsg{} // + bckTo
@@ -445,12 +452,15 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		unlockUpon bool
 	)
 	if !nlpFrom.TryRLock() {
-		return cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
+		err = cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
+		return
 	}
 	if !nlpTo.TryLock() {
 		nlpFrom.RUnlock()
-		return cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
+		err = cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
+		return
 	}
+
 	defer func() {
 		if !unlockUpon {
 			nlpTo.Unlock()
@@ -463,7 +473,8 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
 		p.owner.bmd.Unlock()
-		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
+		return
 	}
 	p.owner.bmd.Unlock()
 
@@ -479,7 +490,8 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
-			return res.err
+			err = res.err
+			return
 		}
 	}
 
@@ -522,7 +534,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	unlockUpon = true
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
-
+	xactID = c.uuid
 	return
 }
 

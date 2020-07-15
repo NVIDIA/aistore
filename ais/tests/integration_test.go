@@ -1400,7 +1400,7 @@ func TestAtimePrefetch(t *testing.T) {
 
 	timeAfterPut := time.Now()
 
-	err := api.PrefetchList(baseParams, bck, []string{objectName})
+	_, err := api.PrefetchList(baseParams, bck, []string{objectName})
 	tassert.CheckFatal(t, err)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bck, Timeout: rebalanceTimeout}
 	err = api.WaitForXaction(baseParams, xactArgs)

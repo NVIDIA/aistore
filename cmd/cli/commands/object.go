@@ -697,6 +697,7 @@ func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
 		fileList = makeList(parseStrFlag(c, listFlag), ",")
+		xactID   string
 	)
 
 	if flagIsSet(c, dryRunFlag) {
@@ -710,19 +711,24 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		command = "removed"
 	case commandPrefetch:
 		bck.Provider = cmn.AnyCloud
-		err = api.PrefetchList(defaultAPIParams, bck, fileList)
+		xactID, err = api.PrefetchList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	case commandEvict:
 		bck.Provider = cmn.AnyCloud
 		err = api.EvictList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	default:
-		return fmt.Errorf(invalidCmdMsg, command)
+		err = fmt.Errorf(invalidCmdMsg, command)
+		return
 	}
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%s %s from %q bucket\n", fileList, command, bck)
+	basemsg := fmt.Sprintf("%s %s from %q bucket", fileList, command, bck)
+	if xactID != "" {
+		basemsg += ", " + xactProgressMsg(xactID)
+	}
+	fmt.Fprintln(c.App.Writer, basemsg)
 	return
 }
 
@@ -731,6 +737,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
 		rangeStr = parseStrFlag(c, templateFlag)
 		pt       cmn.ParsedTemplate
+		xactID   string
 	)
 
 	if flagIsSet(c, dryRunFlag) {
@@ -753,7 +760,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		command = "removed"
 	case commandPrefetch:
 		bck.Provider = cmn.AnyCloud
-		err = api.PrefetchRange(defaultAPIParams, bck, rangeStr)
+		xactID, err = api.PrefetchRange(defaultAPIParams, bck, rangeStr)
 		command += "ed"
 	case commandEvict:
 		bck.Provider = cmn.AnyCloud
@@ -765,8 +772,14 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%s files in the range %q from %q bucket\n",
+
+	baseMsg := fmt.Sprintf("%s files in the range %q from %q bucket",
 		command, rangeStr, bck)
+
+	if xactID != "" {
+		baseMsg += ", " + xactProgressMsg(xactID)
+	}
+	fmt.Fprintln(c.App.Writer, baseMsg)
 	return
 }
 

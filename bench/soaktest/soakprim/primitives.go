@@ -143,7 +143,7 @@ func (rctx *RecipeContext) Rename(bucketName, newName string) {
 	tag := rctx.startPrim("Rename")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.RenameBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketName), bckNamePrefix(newName))
+		_, err := api.RenameBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketName), bckNamePrefix(newName))
 		cmn.AssertNoErr(err)
 	}()
 }

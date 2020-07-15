@@ -1295,7 +1295,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 
 	// Rename it
 	tutils.Logf("rename %s => %s\n", srcBck, dstBck)
-	err = api.RenameBucket(baseParams, srcBck, dstBck)
+	_, err = api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck, Timeout: rebalanceTimeout}
@@ -1361,7 +1361,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	// Rename it
 	tutils.Logf("rename %s => %s\n", srcBck, dstBck)
 	m.bck = dstBck
-	err = api.RenameBucket(baseParams, srcBck, dstBck)
+	_, err = api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck, Timeout: rebalanceTimeout}
@@ -1409,7 +1409,7 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 
 	// Rename it
 	tutils.Logf("try rename %s => %s\n", m.bck, tmpBck)
-	err := api.RenameBucket(baseParams, m.bck, tmpBck)
+	_, err := api.RenameBucket(baseParams, m.bck, tmpBck)
 	if err == nil {
 		t.Fatal("expected error on renaming already existing bucket")
 	}
@@ -1474,21 +1474,21 @@ func TestRenameBucketTwice(t *testing.T) {
 
 	// Rename to first destination
 	tutils.Logf("rename %s => %s\n", srcBck, dstBck1)
-	err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	_, err := api.RenameBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination again - already in progress
 	tutils.Logf("try rename %s => %s\n", srcBck, dstBck1)
-	err = api.RenameBucket(baseParams, srcBck, dstBck1)
+	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
-		t.Error("renaming bucket that is under renaming did not fail")
+		t.Error("multiple rename operations on same bucket should fail")
 	}
 
 	// Try to rename to second destination - this should fail
 	tutils.Logf("try rename %s => %s\n", srcBck, dstBck2)
-	err = api.RenameBucket(baseParams, srcBck, dstBck2)
+	_, err = api.RenameBucket(baseParams, srcBck, dstBck2)
 	if err == nil {
-		t.Error("renaming bucket that is under renaming did not fail")
+		t.Error("multiple rename operations on same bucket should fail")
 	}
 
 	// Wait for rename to complete
@@ -1652,7 +1652,7 @@ func TestCopyBucket(t *testing.T) {
 
 			for _, dstm := range dstms {
 				tutils.Logf("copying %s => %s\n", srcm.bck, dstm.bck)
-				err = api.CopyBucket(baseParams, srcm.bck, dstm.bck)
+				_, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck)
 				tassert.CheckFatal(t, err)
 			}
 
@@ -1761,26 +1761,26 @@ func TestRenameAndCopyBucket(t *testing.T) {
 
 	// Rename to first destination
 	tutils.Logf("rename %s => %s\n", srcBck, dstBck1)
-	err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	_, err := api.RenameBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to copy to first destination - rename in progress, both for srcBck and dstBck1
 	tutils.Logf("try copy %s => %s\n", srcBck, dstBck1)
-	err = api.CopyBucket(baseParams, srcBck, dstBck1)
+	_, err = api.CopyBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
 	}
 
 	// Try to copy to second destination - rename in progress for srcBck
 	tutils.Logf("try copy %s => %s\n", srcBck, dstBck2)
-	err = api.CopyBucket(baseParams, srcBck, dstBck2)
+	_, err = api.CopyBucket(baseParams, srcBck, dstBck2)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
 	}
 
 	// Try to copy from dstBck1 to dstBck1 - rename in progress for dstBck1
 	tutils.Logf("try copy %s => %s\n", dstBck1, dstBck2)
-	err = api.CopyBucket(baseParams, srcBck, dstBck1)
+	_, err = api.CopyBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("coping bucket that is under renaming did not fail")
 	}
@@ -1845,26 +1845,26 @@ func TestCopyAndRenameBucket(t *testing.T) {
 
 	// Rename to first destination
 	tutils.Logf("copy %s => %s\n", srcBck, dstBck1)
-	err := api.CopyBucket(baseParams, srcBck, dstBck1)
+	_, err := api.CopyBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination - copy in progress, both for srcBck and dstBck1
 	tutils.Logf("try rename %s => %s\n", srcBck, dstBck1)
-	err = api.RenameBucket(baseParams, srcBck, dstBck1)
+	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
 	}
 
 	// Try to rename to second destination - copy in progress for srcBck
 	tutils.Logf("try rename %s => %s\n", srcBck, dstBck2)
-	err = api.RenameBucket(baseParams, srcBck, dstBck2)
+	_, err = api.RenameBucket(baseParams, srcBck, dstBck2)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
 	}
 
 	// Try to rename from dstBck1 to dstBck1 - rename in progress for dstBck1
 	tutils.Logf("try rename %s => %s\n", dstBck1, dstBck2)
-	err = api.RenameBucket(baseParams, srcBck, dstBck1)
+	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
 	}

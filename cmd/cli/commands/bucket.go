@@ -97,7 +97,7 @@ func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	if _, err = headBucket(fromBck); err != nil {
 		return
 	}
-	if err = api.RenameBucket(defaultAPIParams, fromBck, toBck); err != nil {
+	if _, err = api.RenameBucket(defaultAPIParams, fromBck, toBck); err != nil {
 		return
 	}
 
@@ -108,7 +108,7 @@ func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 
 // Copy ais bucket
 func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
-	if err = api.CopyBucket(defaultAPIParams, fromBck, toBck); err != nil {
+	if _, err = api.CopyBucket(defaultAPIParams, fromBck, toBck); err != nil {
 		return
 	}
 
