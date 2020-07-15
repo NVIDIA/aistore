@@ -2047,7 +2047,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	var (
 		m = ioContext{
 			t:               t,
-			num:             100,
+			num:             1000,
 			numGetsEachFile: 1,
 			fileSize:        uint64(cmn.KiB + rand.Int63n(cmn.KiB*10)),
 		}
