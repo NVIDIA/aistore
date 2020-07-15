@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -31,7 +30,7 @@ const (
 
 func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 	// Parse spec template.
-	pod, err := ParsePodSpec(msg.Spec)
+	pod, err := parsePodSpec(msg.Spec)
 	if err != nil {
 		return err
 	}
@@ -86,11 +85,9 @@ func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 	ip := string(output)
 
 	// Retrieve port of the pod.
-	p := pod.Spec.Containers[0].Ports[0].ContainerPort
-	port := strconv.FormatInt(int64(p), 10)
+	port := pod.Spec.Containers[0].Ports[0].ContainerPort
 
-	cmn.AssertNoErr(validateCommType(msg.CommType))
-	transformerURL := fmt.Sprintf("http://%s:%s", ip, port)
+	transformerURL := fmt.Sprintf("http://%s:%d", ip, port)
 	c := makeCommunicator(t, pod, msg.CommType, transformerURL, transformationName)
 	reg.put(msg.ID, c)
 	return nil

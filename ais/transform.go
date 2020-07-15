@@ -13,12 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/transform"
 )
 
-//==========
-//
-// Handlers
-//
-//==========
-
 // [METHOD] /v1/transform
 func (t *targetrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
@@ -50,9 +44,6 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var (
-		transformID = cmn.GenUUID()
-	)
 	spec, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -60,45 +51,29 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 	}
 	r.Body.Close()
 
-	pod, err := transform.ParsePodSpec(spec)
+	msg, err := transform.ValidateSpec(spec)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
+	msg.ID = cmn.GenUUID()
 
-	if err = transform.ValidateSpec(pod); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	var (
-		timeout, _  = transform.PodTransformTimeout(pod)
-		commType, _ = transform.PodTransformCommType(pod)
-		msg         = transform.Msg{
-			ID:          transformID,
-			Spec:        spec,
-			WaitTimeout: cmn.DurationJSON(timeout),
-			CommType:    commType,
-		}
-
-		results = p.bcastTo(bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPost,
-				Path:   r.URL.Path,
-				Body:   cmn.MustMarshal(msg),
-			},
-			timeout: cmn.LongTimeout,
-			to:      cluster.Targets,
-		})
-	)
-
+	results := p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Path:   r.URL.Path,
+			Body:   cmn.MustMarshal(msg),
+		},
+		timeout: cmn.LongTimeout,
+		to:      cluster.Targets,
+	})
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
 			return
 		}
 	}
-	w.Write([]byte(transformID))
+	w.Write([]byte(msg.ID))
 }
 
 // DELETE /v1/transform/stop/uuid
