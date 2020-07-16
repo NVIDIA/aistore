@@ -65,8 +65,6 @@ type (
 		// Context used when receiving the object which is contained in cloud
 		// bucket. It usually contains credentials to access the cloud.
 		ctx context.Context
-		// tag from object name, from s3://bucket/object!tf
-		tag string
 		// Contains object range query
 		ranges cmn.RangesQuery
 		// Determines if it is GFN request
@@ -800,31 +798,27 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	}
 
 	w := goi.w
-	if goi.tag == "" {
-		if r == nil {
-			reader = file
-			if goi.chunked {
-				w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
-				buf, slab = goi.t.gmm.Alloc(goi.lom.Size())
-			}
-		} else {
-			buf, slab = goi.t.gmm.Alloc(r.Length)
-			reader = io.NewSectionReader(file, r.Start, r.Length)
-			if cksumRange {
-				var cksum *cmn.CksumHash
-				sgl = slab.MMSA().NewSGL(r.Length, slab.Size())
-				if _, cksum, err = cmn.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
-					return
-				}
-				hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
-				hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
-				reader = io.NewSectionReader(file, r.Start, r.Length)
-			}
+	if r == nil {
+		reader = file
+		if goi.chunked {
+			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
+			buf, slab = goi.t.gmm.Alloc(goi.lom.Size())
 		}
-		written, err = io.CopyBuffer(w, reader, buf)
 	} else {
-		written, err = transformTarToTFRecord(goi, r)
+		buf, slab = goi.t.gmm.Alloc(r.Length)
+		reader = io.NewSectionReader(file, r.Start, r.Length)
+		if cksumRange {
+			var cksum *cmn.CksumHash
+			sgl = slab.MMSA().NewSGL(r.Length, slab.Size())
+			if _, cksum, err = cmn.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
+				return
+			}
+			hdr.Set(cmn.HeaderObjCksumVal, cksum.Value())
+			hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
+			reader = io.NewSectionReader(file, r.Start, r.Length)
+		}
 	}
+	written, err = io.CopyBuffer(w, reader, buf)
 
 	if err != nil {
 		if cmn.IsErrConnectionReset(err) {

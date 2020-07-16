@@ -55,7 +55,6 @@ func (r *registry) getByUUID(uuid string) (c Communicator, exists bool) {
 	return
 }
 
-// nolint:unused // will be used once tar2tf transformer is integrated with AIS
 func (r *registry) getByName(name string) (c Communicator, exists bool) {
 	r.mtx.RLock()
 	c, exists = r.byName[name]
@@ -77,6 +76,9 @@ func (r *registry) list() []TransformationInfo {
 	r.mtx.RLock()
 	transformations := make([]TransformationInfo, 0, len(r.byUUID))
 	for uuid, c := range r.byUUID {
+		if IsStaticTransformer(c.Name()) {
+			uuid = "-" // Don't expose UUID of static transformers.
+		}
 		transformations = append(transformations, TransformationInfo{
 			ID:   uuid,
 			Name: c.Name(),

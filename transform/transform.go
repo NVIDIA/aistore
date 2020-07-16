@@ -19,6 +19,10 @@ import (
 
 var (
 	targetsNodeName = os.Getenv("AIS_NODE_NAME")
+
+	staticTransformers = map[string]struct{}{
+		cmn.Tar2Tf: {},
+	}
 )
 
 const (
@@ -27,14 +31,20 @@ const (
 )
 
 // TODO: remove the `kubectl` with a proper go-sdk call
-
-func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
+// If transformationName is empty, it will be replaced with name of a pod.
+func StartTransformationPod(t cluster.Target, msg Msg, transformationName string) (err error) {
 	// Parse spec template.
 	pod, err := parsePodSpec(msg.Spec)
 	if err != nil {
 		return err
 	}
-	transformationName := pod.GetName()
+
+	if transformationName == "" {
+		transformationName = pod.GetName()
+		if IsStaticTransformer(transformationName) {
+			return fmt.Errorf("can't start transformation with the same name as static transformation %q", transformationName)
+		}
+	}
 
 	if targetsNodeName == "" {
 		// Override the name (add target's daemon ID to its name).
@@ -98,6 +108,11 @@ func StopTransformationPod(id string) error {
 	if !exists {
 		return fmt.Errorf("transformation with %q id doesn't exist", id)
 	}
+
+	if IsStaticTransformer(c.Name()) {
+		return fmt.Errorf("can't stop static transformation %q", id)
+	}
+
 	err := exec.Command("kubectl", "delete", "pod", c.PodName()).Run()
 	if err != nil {
 		return err
@@ -114,7 +129,20 @@ func GetCommunicator(transformID string) (Communicator, error) {
 	return c, nil
 }
 
+func GetCommunicatorByName(transformName string) (Communicator, error) {
+	c, exists := reg.getByName(transformName)
+	if !exists {
+		return nil, fmt.Errorf("transformation with %q name doesn't exist", transformName)
+	}
+	return c, nil
+}
+
 func ListTransforms() []TransformationInfo { return reg.list() }
+
+func IsStaticTransformer(name string) bool {
+	_, ok := staticTransformers[name]
+	return ok
+}
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func setTransformAffinity(pod *corev1.Pod) error {

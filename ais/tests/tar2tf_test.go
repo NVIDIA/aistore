@@ -22,6 +22,8 @@ import (
 )
 
 func TestTarToTFRecordFile(t *testing.T) {
+	t.Skip("Should PASS when transformations are supported outside of k8s.")
+
 	const (
 		tarPath    = "data/small-mnist-3.tar"
 		tarObjName = "small-mnist-3.tar"

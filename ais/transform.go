@@ -129,7 +129,7 @@ func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := transform.StartTransformationPod(t, msg); err != nil {
+	if err := transform.StartTransformationPod(t, msg, ""); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -148,11 +148,26 @@ func (t *targetrunner) stopTransform(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) doTransform(w http.ResponseWriter, r *http.Request, transformID string, bck *cluster.Bck, objName string) {
-	comm, err := transform.GetCommunicator(transformID)
+	var (
+		comm transform.Communicator
+		err  error
+	)
+
+	if transform.IsStaticTransformer(transformID) {
+		comm, err = transform.GetCommunicatorByName(transformID)
+		// Error might have occurred, for instance transformer was not started correctly.
+	} else {
+		comm, err = transform.GetCommunicator(transformID)
+	}
+
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
+	t.doTransformComm(w, r, comm, bck, objName)
+}
+
+func (t *targetrunner) doTransformComm(w http.ResponseWriter, r *http.Request, comm transform.Communicator, bck *cluster.Bck, objName string) {
 	if err := comm.DoTransform(w, r, bck, objName); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return

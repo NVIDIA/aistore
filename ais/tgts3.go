@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/tar2tf"
 )
 
 // PUT s3/bckName/objName
@@ -172,21 +171,21 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	var (
-		err          error
-		objSize      int64
-		objName, tag string
+		err     error
+		objSize int64
+
+		objName = path.Join(items[1:]...)
 	)
-	// TODO: remove
-	if objName, tag = cmn.S3ObjNameTag(path.Join(items[1:]...)); tag != "" {
+
+	// TODO: try to get rid of "tag"
+	// It might be possible when TF S3 API allows passing a metadata to with a request (like HTTP Headers).
+	if objName, tag := cmn.S3ObjNameTag(objName); tag != "" {
 		if tag != cmn.TF {
 			t.invalmsghdlrf(w, r, "invalid tag=%q (expecting %q)", tag, cmn.TF)
 			return
 		}
-		if !cmn.HasTarExtension(objName) {
-			a := []string{cmn.ExtTar, cmn.ExtTarTgz, cmn.ExtTarTgz}
-			t.invalmsghdlrf(w, r, "invalid name %s: expecting one of %v extensions", objName, a)
-			return
-		}
+		t.doTransform(w, r, cmn.Tar2Tf, bck, objName)
+		return
 	}
 
 	lom := &cluster.LOM{T: t, ObjName: objName}
@@ -206,13 +205,6 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	}
 
 	objSize = lom.Size()
-	if tag != "" {
-		objSize, err = tar2tf.Cache.GetSize(lom)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-	}
 	goi := &getObjInfo{
 		started: started,
 		t:       t,
@@ -220,7 +212,6 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		w:       w,
 		ctx:     context.Background(),
 		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize},
-		tag:     tag,
 	}
 	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
 	if err, errCode := goi.getObject(); err != nil {

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/transform"
 	"github.com/NVIDIA/aistore/transport"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -320,6 +321,11 @@ func initTarget(config *cmn.Config) {
 	hk.Reg("lom-cache", housekeep, initialInterval)
 	if err := ts.InitCapacity(); err != nil { // goes after fs.Init
 		cmn.ExitLogf("%s", err)
+	}
+
+	// TODO: conditionally, based on build tags (?)
+	if err := transform.InitTar2TF(t); err != nil {
+		glog.Errorf("Failure starting tar2tf transformer, the transformation won't be available. Reason: %v", err)
 	}
 }
 
