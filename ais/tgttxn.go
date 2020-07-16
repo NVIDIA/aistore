@@ -339,8 +339,8 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if err = t.transactions.wait(txn, c.timeout); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		xact, err = xaction.Registry.RenewBckFastRename(t, c.msg.RMDVersion,
-			txnRenB.bckFrom, txnRenB.bckTo, cmn.ActCommit, t.rebManager)
+		xact, err = xaction.Registry.RenewBckFastRename(t, c.uuid, c.msg.RMDVersion,
+			txnRenB.bckFrom, txnRenB.bckTo, cmn.ActCommit)
 		if err != nil {
 			return err // must not happen at commit time
 		}

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -422,9 +421,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 				nlpFrom:           &nlpFrom,
 				nlpTo:             &nlpTo,
 			}
-			rebUUID := strconv.FormatInt(clone.version(), 10)
-			xactID = rebUUID
-			p.notifs.add(rebUUID, &nl)
+			xactID = c.uuid
+			p.notifs.add(c.uuid, &nl)
 
 			// 6. commit
 			unlockUpon = true

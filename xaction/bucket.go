@@ -7,7 +7,6 @@ package xaction
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -368,19 +367,19 @@ func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, u
 type (
 	FastRenEntry struct {
 		baseBckEntry
-		t          cluster.Target
-		rebManager cluster.RebManager
-		xact       *FastRen
-		bckFrom    *cluster.Bck
-		bckTo      *cluster.Bck
-		phase      string
+		t       cluster.Target
+		xact    *FastRen
+		rebID   RebID
+		bckFrom *cluster.Bck
+		bckTo   *cluster.Bck
+		phase   string
 	}
 	FastRen struct {
 		cmn.XactBase
-		rebManager cluster.RebManager
-		t          cluster.Target
-		bckFrom    *cluster.Bck
-		bckTo      *cluster.Bck
+		t       cluster.Target
+		rebID   RebID
+		bckFrom *cluster.Bck
+		bckTo   *cluster.Bck
 	}
 )
 
@@ -395,7 +394,7 @@ func (r *FastRen) Run() error {
 	for !finished {
 		time.Sleep(10 * time.Second)
 		rebStats, err := Registry.GetStats(RegistryXactFilter{
-			ID:          r.ID().String(),
+			ID:          r.rebID.String(),
 			Kind:        cmn.ActRebalance,
 			OnlyRunning: api.Bool(false),
 		})
@@ -412,11 +411,11 @@ func (r *FastRen) Run() error {
 
 func (e *FastRenEntry) Start(bck cmn.Bck) error {
 	e.xact = &FastRen{
-		XactBase:   *cmn.NewXactBaseBck(e.uuid, e.Kind(), bck),
-		t:          e.t,
-		bckFrom:    e.bckFrom,
-		bckTo:      e.bckTo,
-		rebManager: e.rebManager,
+		XactBase: *cmn.NewXactBaseBck(e.uuid, e.Kind(), bck),
+		t:        e.t,
+		rebID:    e.rebID,
+		bckFrom:  e.bckFrom,
+		bckTo:    e.bckTo,
 	}
 	return nil
 }
@@ -442,13 +441,11 @@ func (e *FastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err e
 	return
 }
 
-func (r *registry) RenewBckFastRename(t cluster.Target, rmdVersion int64, bckFrom, bckTo *cluster.Bck, phase string,
-	mgr cluster.RebManager) (*FastRen, error) {
-	uuid := strconv.FormatInt(rmdVersion, 10)
+func (r *registry) RenewBckFastRename(t cluster.Target, uuid string, rmdVersion int64, bckFrom, bckTo *cluster.Bck, phase string) (*FastRen, error) {
 	e := &FastRenEntry{
 		baseBckEntry: baseBckEntry{uuid},
 		t:            t,
-		rebManager:   mgr,
+		rebID:        RebID(rmdVersion),
 		bckFrom:      bckFrom,
 		bckTo:        bckTo,
 		phase:        phase,
