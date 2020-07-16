@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/transform"
 )
 
 const (
@@ -574,6 +575,15 @@ func TransformInit(baseParams BaseParams, spec []byte) (id string, err error) {
 		Body:       spec,
 	}, &id)
 	return id, err
+}
+
+func TransformList(baseParams BaseParams) (list []transform.TransformationInfo, err error) {
+	baseParams.Method = http.MethodGet
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformList),
+	}, &list)
+	return list, err
 }
 
 func TransformStop(baseParams BaseParams, id string) (err error) {

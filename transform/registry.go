@@ -25,9 +25,9 @@ const (
 
 type (
 	registry struct {
+		mtx    sync.RWMutex
 		byUUID map[string]Communicator
 		byName map[string]Communicator
-		mtx    sync.RWMutex
 	}
 )
 
@@ -71,4 +71,17 @@ func (r *registry) removeByUUID(uuid string) {
 		delete(r.byName, c.Name())
 	}
 	r.mtx.Unlock()
+}
+
+func (r *registry) list() []TransformationInfo {
+	r.mtx.RLock()
+	transformations := make([]TransformationInfo, 0, len(r.byUUID))
+	for uuid, c := range r.byUUID {
+		transformations = append(transformations, TransformationInfo{
+			ID:   uuid,
+			Name: c.Name(),
+		})
+	}
+	r.mtx.RUnlock()
+	return transformations
 }

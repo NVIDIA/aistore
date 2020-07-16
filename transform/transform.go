@@ -114,6 +114,8 @@ func GetCommunicator(transformID string) (Communicator, error) {
 	return c, nil
 }
 
+func ListTransforms() []TransformationInfo { return reg.list() }
+
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func setTransformAffinity(pod *corev1.Pod) error {
 	if pod.Spec.Affinity == nil {

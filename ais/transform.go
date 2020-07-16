@@ -7,6 +7,7 @@ package ais
 import (
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,6 +19,8 @@ func (t *targetrunner) transformHandler(w http.ResponseWriter, r *http.Request) 
 	switch {
 	case r.Method == http.MethodPost:
 		t.initTransform(w, r)
+	case r.Method == http.MethodGet:
+		t.listTransforms(w, r)
 	case r.Method == http.MethodDelete:
 		t.stopTransform(w, r)
 	default:
@@ -30,6 +33,8 @@ func (p *proxyrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPost:
 		p.httpproxyinittransform(w, r)
+	case r.Method == http.MethodGet:
+		p.httpproxylisttransforms(w, r)
 	case r.Method == http.MethodDelete:
 		p.httpproxystoptransform(w, r)
 	default:
@@ -74,6 +79,22 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	w.Write([]byte(msg.ID))
+}
+
+// GET /v1/transform/list
+func (p *proxyrunner) httpproxylisttransforms(w http.ResponseWriter, r *http.Request) {
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Transform, cmn.TransformList)
+	if err != nil {
+		return
+	}
+
+	si, err := p.GetSowner().Get().GetRandTarget()
+	if err != nil {
+		p.invalmsghdlrf(w, r, "failed to pick random target, err: %v", err)
+		return
+	}
+	redirectURL := p.redirectURL(r, si, time.Now(), cmn.NetworkIntraData)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 // DELETE /v1/transform/stop/uuid
@@ -136,4 +157,14 @@ func (t *targetrunner) doTransform(w http.ResponseWriter, r *http.Request, trans
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
+}
+
+func (t *targetrunner) listTransforms(w http.ResponseWriter, r *http.Request) {
+	_, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Transform, cmn.TransformList)
+	if err != nil {
+		return
+	}
+
+	ts := transform.ListTransforms()
+	t.writeJSON(w, r, ts, "list-transforms")
 }

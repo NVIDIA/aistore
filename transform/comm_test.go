@@ -6,6 +6,7 @@ package transform
 
 import (
 	"crypto/rand"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -15,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/tutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -64,7 +64,7 @@ var _ = Describe("CommunicatorTest", func() {
 		lom := &cluster.LOM{T: tMock, ObjName: objName}
 		err = lom.Init(clusterBck.Bck)
 		Expect(err).NotTo(HaveOccurred())
-		err = tutils.CreateRandomFile(lom.GetFQN(), dataSize)
+		err = createRandomFile(lom.GetFQN(), dataSize)
 		Expect(err).NotTo(HaveOccurred())
 		lom.SetSize(dataSize)
 		err = lom.Persist()
@@ -115,3 +115,24 @@ var _ = Describe("CommunicatorTest", func() {
 		})
 	}
 })
+
+// Creates a file with random content.
+func createRandomFile(fileName string, size int64) error {
+	b := make([]byte, size)
+	if _, err := rand.Read(b); err != nil {
+		return err
+	}
+	f, err := cmn.CreateFile(fileName)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	n, err := f.Write(b)
+	if err != nil {
+		return err
+	}
+	if int64(n) != size {
+		return fmt.Errorf("could not write %d bytes, wrote %d bytes", size, n)
+	}
+	return nil
+}

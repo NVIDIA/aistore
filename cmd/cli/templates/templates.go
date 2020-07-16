@@ -300,7 +300,7 @@ const (
 		"--{{FlagName $flag }}" +
 		"{{end}}{{end}}\n"
 
-	AuthNClusterTmpl = "ClUSTER ID\tALIAS\tURLs\n" +
+	AuthNClusterTmpl = "CLUSTER ID\tALIAS\tURLs\n" +
 		"{{ range $clu := . }}" +
 		"{{ $clu.ID }}\t{{ $clu.Alias }}\t{{ JoinList $clu.URLs }}\n" +
 		"{{end}}"
@@ -315,8 +315,14 @@ const (
 		"{{ $user.ID }}\t{{ JoinList $user.Roles }}\n" +
 		"{{end}}"
 
-	// Command Search
+	// Command `search`
 	SearchTmpl = "{{ JoinListNL . }}\n"
+
+	// Command `transform`
+	TransformListTmpl = "ID\tNAME\n" +
+		"{{range $transform := .}}" +
+		"{{$transform.ID}}\t{{$transform.Name}}\n" +
+		"{{end}}"
 )
 
 var (

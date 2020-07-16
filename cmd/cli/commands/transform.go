@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/urfave/cli"
 )
 
@@ -26,6 +27,11 @@ var (
 					Usage:     "initialize transformation with yaml spec",
 					ArgsUsage: "SPEC_FILE",
 					Action:    transformInitHandler,
+				},
+				{
+					Name:   subcmdList,
+					Usage:  "list all transformations",
+					Action: transformListHandler,
 				},
 				{
 					Name:      subcmdStop,
@@ -65,6 +71,14 @@ func transformInitHandler(c *cli.Context) (err error) {
 	}
 	fmt.Fprintf(c.App.Writer, "%s\n", id)
 	return nil
+}
+
+func transformListHandler(c *cli.Context) (err error) {
+	list, err := api.TransformList(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	return templates.DisplayOutput(list, c.App.Writer, templates.TransformListTmpl)
 }
 
 func transformStopHandler(c *cli.Context) (err error) {
