@@ -65,6 +65,7 @@ type (
 		incRC() int
 		notifTy() int
 		addErr(string /*sid*/, error)
+		err() error
 		UUID() string
 		setUUID(string)
 		finTime() int64
@@ -143,6 +144,12 @@ func (nlb *notifListenerBase) addErr(sid string, err error) {
 		nlb.errs = make(map[string]error, 2)
 	}
 	nlb.errs[sid] = err
+}
+func (nlb *notifListenerBase) err() error {
+	for _, err := range nlb.errs {
+		return err
+	}
+	return nil
 }
 
 func (nlb *notifListenerBase) String() string {

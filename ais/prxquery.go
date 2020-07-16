@@ -19,10 +19,9 @@ import (
 type (
 	// TODO: add more, like target finished, query aborted by user etc.
 	queryState struct {
-		initialSmap *cluster.Smap // smap in proxy at the moment of query-init
-		targets     []*cluster.Snode
-		workersCnt  uint
-		err         error
+		notifListenerBase
+		targets    []*cluster.Snode
+		workersCnt uint
 	}
 )
 
@@ -38,7 +37,14 @@ func newQueryState(smap *cluster.Smap, workersCnt uint) (*queryState, error) {
 	for _, t := range smap.Tmap {
 		targets = append(targets, t)
 	}
-	return &queryState{initialSmap: smap, workersCnt: workersCnt, targets: targets}, nil
+	return &queryState{
+		notifListenerBase: notifListenerBase{
+			srcs: smap.Tmap.Clone(),
+			f:    func(n notifListener, msg interface{}, err error) {},
+		},
+		workersCnt: workersCnt,
+		targets:    targets,
+	}, nil
 }
 
 func (q *queryState) workersTarget(workerID uint) (*cluster.Snode, error) {
@@ -149,9 +155,9 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	state := entry.state.(*queryState)
-	if state.err != nil {
-		p.invalmsghdlr(w, r, state.err.Error())
+	state := entry.nl.(*queryState)
+	if err := state.err(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 

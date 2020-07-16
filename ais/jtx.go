@@ -70,10 +70,9 @@ type (
 	}
 
 	jtxEntry struct {
-		notifListenerBase
+		nl     notifListener
 		kind   jtxKind
 		owners []*cluster.Snode
-		state  interface{}
 	}
 )
 
@@ -101,31 +100,18 @@ func newJTX(p *proxyrunner) *jtx {
 	return v
 }
 
-func (o *jtx) addEntry(uuid string, state ...interface{}) {
-	var (
-		s    interface{}
-		smap = o.p.GetSowner().Get()
-	)
-
-	if len(state) > 0 {
-		s = state[0]
-	}
-
+func (o *jtx) addEntry(uuid string, nl notifListener) {
 	cmn.Assert(uuid != "")
 	o.mtx.Lock()
 	cmn.Assert(o.entries[uuid] == nil)
 	entry := &jtxEntry{
-		notifListenerBase: notifListenerBase{
-			srcs: smap.Tmap.Clone(),
-			f:    func(_ notifListener, _ interface{}, _ error) {},
-		},
+		nl:   nl,
 		kind: jtxTaskKind,
 		// NOTE: Currently assume that the owner is the one that started.
 		owners: []*cluster.Snode{o.p.Snode()},
-		state:  s,
 	}
 	o.entries[uuid] = entry
-	o.p.notifs.add(uuid, entry)
+	o.p.notifs.add(uuid, entry.nl)
 	o.mtx.Unlock()
 
 	// TODO: broadcast periodically, not on every entry
@@ -153,24 +139,6 @@ func (o *jtx) ListenSmapChanged() {
 		if smap.GetProxy(entry.owners[0].ID()) == nil {
 			o.removeEntry(uuid)
 			continue
-		}
-
-		if entry.state != nil {
-			// TODO: remove this code once multiple notifiers can be registered on same uuid.
-			switch s := entry.state.(type) {
-			case *queryState:
-				if s.initialSmap.Version >= smap.Version {
-					break
-				}
-				for _, t := range s.initialSmap.Tmap {
-					if smap.GetTarget(t.DaemonID) == nil {
-						s.err = fmt.Errorf("query %q failed, target %s has left the cluster", uuid, t.DaemonType)
-						break
-					}
-				}
-			default:
-				cmn.Assert(false)
-			}
 		}
 	}
 	o.mtx.Unlock()
@@ -233,7 +201,7 @@ func (o *jtx) housekeep() time.Duration {
 	// TODO: remove this code once `onRemove` callback in notifications is implemented.
 	for uuid, entry := range o.entries {
 		if entry.isOwner(o.p.Snode()) {
-			if entry.finTime() < deadlineCutoff {
+			if entry.nl.finTime() < deadlineCutoff {
 				o.removeEntry(uuid)
 				removedCnt++
 			}
@@ -336,7 +304,7 @@ func (o *jtx) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (e
 		o.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", uuid)
 		return
 	}
-	if entry.finished() {
+	if entry.nl.finished() {
 		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
 		o.p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", uuid)
 		return
