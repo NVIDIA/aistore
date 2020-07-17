@@ -180,7 +180,7 @@ $ ais auth add cluster 78df35690 srv1 http://172.0.10.50
 
 # check the list of the clusters
 $ ais auth show cluster
-ClUSTER ID      ALIAS   URLs
+CLUSTER ID      ALIAS   URLs
 2xs35th89               http://172.0.10.10,http://10.0.10.10
 78df35690       srv1    http://172.0.10.50
 

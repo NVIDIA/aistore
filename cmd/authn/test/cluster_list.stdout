@@ -1,11 +1,11 @@
-ClUSTER ID      ALIAS   URLs
-ClUSTER ID      ALIAS   URLs
+CLUSTER ID      ALIAS   URLs
+CLUSTER ID      ALIAS   URLs
 srv1					http://1.1.1.1
-ClUSTER ID      ALIAS   URLs
+CLUSTER ID      ALIAS   URLs
 srv1					http://1.1.1.1
-ClUSTER ID      ALIAS   URLs
+CLUSTER ID      ALIAS   URLs
 srv0            clu0	http://2.2.2.2
 srv1					http://1.1.1.1
-ClUSTER ID      ALIAS   URLs
+CLUSTER ID      ALIAS   URLs
 srv0            clu0	http://2.2.2.2,http://4.4.4.4
 srv1					http://3.3.3.3
