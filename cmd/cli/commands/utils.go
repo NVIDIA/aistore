@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -959,18 +960,48 @@ func xactProgressMsg(xactID string) string {
 	return fmt.Sprintf("use '%s %s %s %s' to monitor progress", cliName, commandShow, subcmdXaction, xactID)
 }
 
-func propsList(props *cmn.BucketProps) (propList []prop, err error) {
-	err = cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
-		value := fmt.Sprintf("%v", field.Value())
-		if uniqueTag == cmn.HeaderBucketAccessAttrs {
-			value = props.Access.Describe()
+func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop, err error) {
+	if !verbose {
+		propList = []prop{
+			{"created", time.Unix(0, props.Created).Format(time.RFC3339)},
+			{"provider", props.Provider},
+			{"access", props.Access.Describe()},
+			{"checksum", props.Cksum.String()},
+			{"mirror", props.Mirror.String()},
+			{"ec", props.EC.String()},
+			{"lru", props.LRU.String()},
+			{"versioning", props.Versioning.String()},
 		}
-		propList = append(propList, prop{
-			Name:  uniqueTag,
-			Value: value,
+	} else {
+		err = cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
+			value := fmt.Sprintf("%v", field.Value())
+			if uniqueTag == cmn.HeaderBucketAccessAttrs {
+				value = props.Access.Describe()
+			}
+			propList = append(propList, prop{
+				Name:  uniqueTag,
+				Value: value,
+			})
+			return nil, false
 		})
-		return nil, false
+	}
+
+	sort.Slice(propList, func(i, j int) bool {
+		return propList[i].Name < propList[j].Name
 	})
+	return
+}
+
+func bckSummaryList(summary cmn.BucketSummary, approx bool) (propList []prop) {
+	var prefix string
+	if approx {
+		prefix = "Est. "
+	}
+	propList = []prop{
+		{Name: prefix + "objects", Value: strconv.FormatUint(summary.ObjCount, 10)},
+		{Name: prefix + "size", Value: cmn.UnsignedB2S(summary.Size, 2)},
+		{Name: prefix + "usage%", Value: fmt.Sprintf("%.2f", summary.UsedPct)},
+	}
 	return
 }
 

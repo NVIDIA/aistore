@@ -223,6 +223,7 @@ var (
 	ignoreErrorFlag = cli.BoolFlag{Name: "ignore-error", Usage: "ignore error on soft failures like bucket already exists, bucket does not exist etc."}
 	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "value represents custom properties of a bucket"}
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
+	allFlag         = cli.BoolFlag{Name: "all", Usage: "list all properties"}
 
 	// Bucket
 	markerFlag        = cli.StringFlag{Name: "marker", Usage: "list objects alphabetically starting from the object after the marker"}

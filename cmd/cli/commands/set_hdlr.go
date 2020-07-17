@@ -112,8 +112,8 @@ func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
 }
 
 func showDiff(c *cli.Context, origProps, newProps *cmn.BucketProps) {
-	origKV, _ := propsList(origProps)
-	newKV, _ := propsList(newProps)
+	origKV, _ := bckPropList(origProps, true)
+	newKV, _ := bckPropList(newProps, true)
 	for idx, prop := range newKV {
 		if origKV[idx].Value != prop.Value {
 			fmt.Fprintf(c.App.Writer, "%q set to:%q (was:%q)\n", prop.Name, prop.Value, origKV[idx].Value)

@@ -266,29 +266,17 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func bucketDetails(c *cli.Context, query cmn.QueryBcks) error {
-	fDetails := func() error {
-		return bucketDetailsSync(c, query)
+func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.BucketsSummaries, err error) {
+	fDetails := func() (err error) {
+		msg := &cmn.SelectMsg{
+			Fast:   fast,
+			Cached: cached,
+		}
+		summaries, err = api.GetBucketsSummaries(defaultAPIParams, query, msg)
+		return
 	}
-	return cmn.WaitForFunc(fDetails, longCommandTime)
-}
-
-// The function shows bucket details
-func bucketDetailsSync(c *cli.Context, query cmn.QueryBcks) error {
-	// Request bucket summaries
-	msg := &cmn.SelectMsg{
-		Fast:   flagIsSet(c, fastDetailsFlag),
-		Cached: flagIsSet(c, cachedFlag),
-	}
-	summaries, err := api.GetBucketsSummaries(defaultAPIParams, query, msg)
-	if err != nil {
-		return err
-	}
-	tmpl := templates.BucketsSummariesTmpl
-	if msg.Fast {
-		tmpl = templates.BucketsSummariesFastTmpl
-	}
-	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
+	err = cmn.WaitForFunc(fDetails, longCommandTime)
+	return
 }
 
 // Replace user-friendly properties like:
@@ -384,35 +372,14 @@ func showBucketProps(c *cli.Context) (err error) {
 	if flagIsSet(c, jsonFlag) {
 		return templates.DisplayOutput(p, c.App.Writer, "", true)
 	}
-
 	return printBckHeadTable(c, p, section)
 }
 
 func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) error {
 	// List instead of map to keep properties in the same order always.
 	// All names are one word ones - for easier parsing.
-	var propList []prop
-
-	if flagIsSet(c, verboseFlag) {
-		var err error
-		propList, err = propsList(props)
-		cmn.AssertNoErr(err)
-	} else {
-		propList = []prop{
-			{"created", time.Unix(0, props.Created).Format(time.RFC3339)},
-			{"provider", props.Provider},
-			{"access", props.Access.Describe()},
-			{"checksum", props.Cksum.String()},
-			{"mirror", props.Mirror.String()},
-			{"ec", props.EC.String()},
-			{"lru", props.LRU.String()},
-			{"versioning", props.Versioning.String()},
-		}
-	}
-
-	sort.Slice(propList, func(i, j int) bool {
-		return propList[i].Name < propList[j].Name
-	})
+	propList, err := bckPropList(props, flagIsSet(c, verboseFlag))
+	cmn.AssertNoErr(err)
 
 	if section != "" {
 		tmpPropList := propList[:0]
@@ -423,6 +390,7 @@ func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) e
 		}
 		propList = tmpPropList
 	}
+
 	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)
 }
 

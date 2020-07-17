@@ -1,10 +1,10 @@
 "$BUCKET_1" bucket created
 Bucket props successfully updated
 "mirror.enabled" set to:"true" (was:"false")
-PROPERTY	 VALUE
+PROPERTY	     VALUE
 access		 GET,HEAD-OBJECT,PUT,APPEND,DOWNLOAD,DELETE-OBJECT,RENAME-OBJECT,PROMOTE,HEAD-BUCKET,LIST-OBJECTS,RENAME-BUCKET,PATCH,MAKE-NCOPIES,SYNC-BUCKET,DELETE-BUCKET
 checksum	 Type: xxhash | Validate: ColdGET
-^created.*$
+^.*created.*$
 ec		 Disabled
 lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 2 copies
@@ -13,20 +13,20 @@ versioning	 Enabled | Validate on WarmGET: no
 Bucket props successfully reset
 Bucket props successfully updated
 "versioning.validate_warm_get" set to:"true" (was:"false")
-PROPERTY	 VALUE
+ PROPERTY	 VALUE
 access		 GET,HEAD-OBJECT,PUT,APPEND,DOWNLOAD,DELETE-OBJECT,RENAME-OBJECT,PROMOTE,HEAD-BUCKET,LIST-OBJECTS,RENAME-BUCKET,PATCH,MAKE-NCOPIES,SYNC-BUCKET,DELETE-BUCKET
 checksum	 Type: xxhash | Validate: ColdGET
-^created.*$
-ec		 Disabled
-lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+^.*created.*$
+ec		     Disabled
+lru		     Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
 mirror		 Disabled
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
-PROPERTY		 VALUE
+ PROPERTY		        VALUE
 lru.capacity_upd_time	 10m
-lru.dont_evict_time	 120m
-lru.enabled		 true
-lru.highwm		 90
-lru.lowwm		 75
-lru.out_of_space	 95
+lru.dont_evict_time	     120m
+lru.enabled     		 true
+lru.highwm      		 90
+lru.lowwm       		 75
+lru.out_of_space         95
 Bucket "$BUCKET_1" already has the set props, nothing to do

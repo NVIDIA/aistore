@@ -35,6 +35,8 @@ var (
 		subcmdShowBucket: {
 			fastDetailsFlag,
 			cachedFlag,
+			allFlag,
+			verboseFlag,
 		},
 		subcmdShowDisk: append(
 			longRunFlags,
@@ -216,13 +218,36 @@ func showBucketHandler(c *cli.Context) (err error) {
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}
-	if bck, _, err = validateBucket(c, bck, "", true); err != nil {
+	var props *cmn.BucketProps
+	if bck, props, err = validateBucket(c, bck, "", true); err != nil {
 		return
 	}
 
-	// TODO: show as well some of the bucket properties returned by validateBucket()
+	summaries, err := fetchSummaries(cmn.QueryBcks(bck), flagIsSet(c, fastFlag), flagIsSet(c, cachedFlag))
+	if err != nil {
+		return
+	}
 
-	return bucketDetails(c, cmn.QueryBcks(bck))
+	if flagIsSet(c, allFlag) && props != nil {
+		return displayAllProps(c, summaries[0], props)
+	}
+
+	tmpl := templates.BucketsSummariesTmpl
+	if flagIsSet(c, fastFlag) {
+		tmpl = templates.BucketsSummariesFastTmpl
+	}
+	return templates.DisplayOutput(summaries, c.App.Writer, tmpl)
+}
+
+func displayAllProps(c *cli.Context, summary cmn.BucketSummary, props *cmn.BucketProps) (err error) {
+	propList := bckSummaryList(summary, flagIsSet(c, fastFlag))
+	bckProp, err := bckPropList(props, flagIsSet(c, verboseFlag))
+	if err != nil {
+		return
+	}
+	propList = append(propList, bckProp...)
+
+	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)
 }
 
 func showDisksHandler(c *cli.Context) (err error) {
