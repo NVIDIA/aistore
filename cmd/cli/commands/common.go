@@ -160,7 +160,7 @@ const (
 	optionalBucketArgument = "[BUCKET_NAME]"
 	bucketsArgument        = "BUCKET_NAME [BUCKET_NAME...]"
 	bucketOldNewArgument   = bucketArgument + " NEW_NAME"
-	bucketPropsArgument    = bucketArgument + " " + keyValuePairsArgument
+	bucketPropsArgument    = bucketArgument + " " + jsonSpecArgument + "|" + keyValuePairsArgument
 	bucketAndPropsArgument = "BUCKET_NAME [PROP_PREFIX]"
 
 	// Objects

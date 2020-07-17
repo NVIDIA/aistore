@@ -341,11 +341,7 @@ func reformatBucketProps(nvs cmn.SimpleKVs) error {
 }
 
 // Sets bucket properties
-func setBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
-	props, err := parseBckPropsFromContext(c)
-	if err != nil {
-		return
-	}
+func setBucketProps(c *cli.Context, bck cmn.Bck, props cmn.BucketPropsToUpdate) (err error) {
 	if err = api.SetBucketProps(defaultAPIParams, bck, props); err != nil {
 		return
 	}
@@ -393,27 +389,13 @@ func showBucketProps(c *cli.Context) (err error) {
 }
 
 func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) error {
-	type prop struct {
-		Name  string
-		Value string
-	}
-
 	// List instead of map to keep properties in the same order always.
 	// All names are one word ones - for easier parsing.
 	var propList []prop
 
 	if flagIsSet(c, verboseFlag) {
-		err := cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
-			value := fmt.Sprintf("%v", field.Value())
-			if uniqueTag == cmn.HeaderBucketAccessAttrs {
-				value = props.Access.Describe()
-			}
-			propList = append(propList, prop{
-				Name:  uniqueTag,
-				Value: value,
-			})
-			return nil, false
-		})
+		var err error
+		propList, err = propsList(props)
 		cmn.AssertNoErr(err)
 	} else {
 		propList = []prop{

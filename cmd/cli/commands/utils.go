@@ -92,6 +92,11 @@ type progressBarArgs struct {
 	options []mpb.BarOption
 }
 
+type prop struct {
+	Name  string
+	Value string
+}
+
 func (e *usageError) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
 	if e.bottomMessage != "" {
@@ -709,15 +714,13 @@ func listXactions(onlyStartable bool) []string {
 	return xactKinds
 }
 
-func isJSON(args ...string) bool {
-	if len(args) == 1 {
-		possibleJSON := args[0]
-		if possibleJSON[0] == '\'' && possibleJSON[len(possibleJSON)-1] == '\'' {
-			possibleJSON = possibleJSON[1 : len(possibleJSON)-1]
-		}
-		if len(possibleJSON) >= 2 {
-			return possibleJSON[0] == '{' && possibleJSON[len(possibleJSON)-1] == '}'
-		}
+func isJSON(arg string) bool {
+	possibleJSON := arg
+	if possibleJSON[0] == '\'' && possibleJSON[len(possibleJSON)-1] == '\'' {
+		possibleJSON = possibleJSON[1 : len(possibleJSON)-1]
+	}
+	if len(possibleJSON) >= 2 {
+		return possibleJSON[0] == '{' && possibleJSON[len(possibleJSON)-1] == '}'
 	}
 	return false
 }
@@ -734,7 +737,7 @@ func parseBckPropsFromContext(c *cli.Context) (props cmn.BucketPropsToUpdate, er
 		propArgs = strings.Split(inputProps, " ")
 	}
 
-	if isJSON(propArgs...) {
+	if len(propArgs) == 1 && isJSON(propArgs[0]) {
 		err = jsoniter.Unmarshal([]byte(propArgs[0]), &props)
 		return
 	}
@@ -954,4 +957,19 @@ func newProgIndicator(objName string) *progIndicator {
 // get xaction progress message
 func xactProgressMsg(xactID string) string {
 	return fmt.Sprintf("use '%s %s %s %s' to monitor progress", cliName, commandShow, subcmdXaction, xactID)
+}
+
+func propsList(props *cmn.BucketProps) (propList []prop, err error) {
+	err = cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
+		value := fmt.Sprintf("%v", field.Value())
+		if uniqueTag == cmn.HeaderBucketAccessAttrs {
+			value = props.Access.Describe()
+		}
+		propList = append(propList, prop{
+			Name:  uniqueTag,
+			Value: value,
+		})
+		return nil, false
+	})
+	return
 }

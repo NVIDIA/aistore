@@ -1,5 +1,6 @@
 "$BUCKET_1" bucket created
 Bucket props successfully updated
+"mirror.enabled" set to:"true" (was:"false")
 PROPERTY	 VALUE
 access		 GET,HEAD-OBJECT,PUT,APPEND,DOWNLOAD,DELETE-OBJECT,RENAME-OBJECT,PROMOTE,HEAD-BUCKET,LIST-OBJECTS,RENAME-BUCKET,PATCH,MAKE-NCOPIES,SYNC-BUCKET,DELETE-BUCKET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -11,6 +12,7 @@ provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
 Bucket props successfully reset
 Bucket props successfully updated
+"versioning.validate_warm_get" set to:"true" (was:"false")
 PROPERTY	 VALUE
 access		 GET,HEAD-OBJECT,PUT,APPEND,DOWNLOAD,DELETE-OBJECT,RENAME-OBJECT,PROMOTE,HEAD-BUCKET,LIST-OBJECTS,RENAME-BUCKET,PATCH,MAKE-NCOPIES,SYNC-BUCKET,DELETE-BUCKET
 checksum	 Type: xxhash | Validate: ColdGET
@@ -27,3 +29,4 @@ lru.enabled		 true
 lru.highwm		 90
 lru.lowwm		 75
 lru.out_of_space	 95
+Bucket "$BUCKET_1" already has the set props, nothing to do

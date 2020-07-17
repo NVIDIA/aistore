@@ -156,6 +156,8 @@ Note that this feature is only available when `ais://lpr-vision-copy` is connect
 ```console
 $ ais set props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
+"backend_bck.name" set to:"lpr-vision" (was:"")
+"backend_bck.provider" set to:"gcp" (was:"")
 $ ais start download gs://lpr-vision ais://lpr-vision-copy
 QdwOYMAqg
 Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
@@ -172,6 +174,8 @@ $ ais ls --no-headers gcp://lpr-vision | wc -l
 50
 $ ais set props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
+"backend_bck.name" set to:"lpr-vision" (was:"")
+"backend_bck.provider" set to:"gcp" (was:"")
 $ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
 0
 $ ais start download gs://lpr-vision ais://lpr-vision-copy
@@ -203,6 +207,8 @@ Note that this feature is only available when `ais://lpr-vision-copy` is connect
 ```console
 $ ais set props ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
+"backend_bck.name" set to:"lpr-vision" (was:"")
+"backend_bck.provider" set to:"gcp" (was:"")
 $ ais start download gs://lpr-vision/dir/prefix- ais://lpr-vision-copy
 QdwOYMAqg
 Run `ais show download QdwOYMAqg` to monitor the progress of downloading.

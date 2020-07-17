@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -63,6 +64,7 @@ func setConfigHandler(c *cli.Context) (err error) {
 }
 
 func setPropsHandler(c *cli.Context) (err error) {
+	var origProps *cmn.BucketProps
 	bck, objName, err := parseBckObjectURI(c.Args().First())
 	if err != nil {
 		return
@@ -70,22 +72,53 @@ func setPropsHandler(c *cli.Context) (err error) {
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}
-	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
+	if bck, origProps, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
 
-	if flagIsSet(c, resetFlag) { // ignores all arguments, just resets bucket props
+	if flagIsSet(c, resetFlag) { // ignores all arguments, just resets bucket origProps
 		return resetBucketProps(c, bck)
 	}
 
-	// TODO: handle new vs existing props (returned by validateBucket() above)
+	updateProps, err := parseBckPropsFromContext(c)
+	if err != nil {
+		return
+	}
 
-	if err = setBucketProps(c, bck); err != nil {
+	newProps := origProps.Clone()
+	newProps.Apply(updateProps)
+	if newProps.Equal(origProps) { // Apply props and check for change
+		displayPropsEqMsg(c, bck)
+		return
+	}
+
+	if err = setBucketProps(c, bck, updateProps); err != nil {
 		helpMsg := fmt.Sprintf("To show bucket properties, run \"%s %s %s BUCKET_NAME -v\"",
 			cliName, commandShow, subcmdShowBckProps)
 		return newAdditionalInfoError(err, helpMsg)
 	}
+
+	showDiff(c, origProps, newProps)
 	return
+}
+
+func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
+	args := c.Args().Tail()
+	if len(args) == 1 && !isJSON(args[0]) {
+		fmt.Fprintf(c.App.Writer, "Bucket %q: property %q, nothing to do\n", bck, args[0])
+		return
+	}
+	fmt.Fprintf(c.App.Writer, "Bucket %q already has the set props, nothing to do\n", bck)
+}
+
+func showDiff(c *cli.Context, origProps, newProps *cmn.BucketProps) {
+	origKV, _ := propsList(origProps)
+	newKV, _ := propsList(newProps)
+	for idx, prop := range newKV {
+		if origKV[idx].Value != prop.Value {
+			fmt.Fprintf(c.App.Writer, "%q set to:%q (was:%q)\n", prop.Name, prop.Value, origKV[idx].Value)
+		}
+	}
 }
 
 func setPrimaryHandler(c *cli.Context) (err error) {

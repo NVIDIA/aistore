@@ -406,22 +406,22 @@ lru.out_of_space	 95
 
 ## Set bucket props
 
-`ais set props BUCKET_NAME KEY=VALUE [KEY=VALUE...]`
+`ais set props BUCKET_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
 
 Set bucket properties.
 For the available options, see [bucket-properties](../../../docs/bucket.md#properties-and-options).
 
+If JSON_SPECIFICATION is used, **all** properties of the bucket are set based on the values in the JSON object.
+
 ### Options
 
 If `--reset` flag is set, arguments are ignored and bucket properties are reset to original state.
-If `--jsonspec` option is used, **all** properties of the bucket are set based on the values in the JSON object.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--jsonspec` | `string` | Bucket properties in a JSON format | `""` |
 | `--reset` | `bool` | Reset bucket properties to original state | `false` |
 
-When `--jsonspec` is not used, some properties support user-friendly aliases:
+When JSON specification is not used, some properties support user-friendly aliases:
 
 | Property | Value alias | Description |
 | --- | --- | --- |
@@ -437,6 +437,7 @@ Set the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respec
 ```console
 $ ais set props bucket_name 'mirror.enabled=true' 'mirror.copies=2'
 Bucket props successfully updated
+"mirror.enabled" set to:"true" (was:"false")
 ```
 
 #### Make a bucket read-only
@@ -447,6 +448,7 @@ All PUT and DELETE requests will fail.
 ```console
 $ ais set props bucket_name 'access=ro'
 Bucket props successfully updated
+"access" set to:"GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS" (was:"<PREV_ACCESS_LIST>")
 ```
 
 #### Reset properties for the bucket
@@ -468,6 +470,8 @@ The only difference is that all objects will be cached into `ais://bucket_name` 
 ```console
 $ ais set props bucket_name backend_bck=gcp://cloud_bucket
 Bucket props successfully updated
+"backend_bck.name" set to:"cloud_bucket" (was:"")
+"backend_bck.provider" set to:"gcp" (was:"")
 ```
 
 To disconnect cloud bucket do:
@@ -475,6 +479,8 @@ To disconnect cloud bucket do:
 ```console
 $ ais set props bucket_name backend_bck=none
 Bucket props successfully updated
+"backend_bck.name" set to:"" (was:"cloud_bucket")
+"backend_bck.provider" set to:"" (was:"gcp")
 ```
 
 #### Set bucket properties with JSON
@@ -482,7 +488,7 @@ Bucket props successfully updated
 Set **all** bucket properties for `bucket_name` bucket based on the provided JSON specification.
 
 ```bash
-$ ais set props bucket_name --jsonspec '{
+$ ais set props bucket_name '{
     "provider": "ais",
     "versioning": {
       "enabled": true,
@@ -539,7 +545,7 @@ If not all properties are mentioned in the JSON, the missing ones are set to zer
 ```bash
 $ ais set props --reset bucket_name
 Bucket props successfully reset
-$ ais set props bucket_name --jsonspec '{
+$ ais set props bucket_name '{
   "mirror": {
     "enabled": true,
     "copies": 2
@@ -550,6 +556,8 @@ $ ais set props bucket_name --jsonspec '{
   }
 }'
 Bucket props successfully updated
+"versioning.validate_warm_get" set to:"true" (was:"false")
+"mirror.enabled" set to:"true" (was:"false")
 $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET

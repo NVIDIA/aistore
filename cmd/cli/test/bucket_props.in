@@ -11,3 +11,5 @@ ais set props --reset $BUCKET_1
 ais set props $BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'
 ais show props $BUCKET_1
 ais show props $BUCKET_1 lru -v
+
+ais set props $BUCKET_1 '{"versioning": {"enabled": true, "validate_warm_get": true}}'
