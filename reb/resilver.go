@@ -30,7 +30,7 @@ type (
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 	var (
 		availablePaths, _ = fs.Get()
-		err               = fs.PutMarker(getMarkerName(cmn.ActResilver))
+		err               = fs.PutMarker(xaction.GetMarkerName(cmn.ActResilver))
 	)
 	if err != nil {
 		glog.Errorln("failed to create resilver marker", err)
@@ -59,7 +59,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 	wg.Wait()
 
 	if !xreb.Aborted() {
-		if err := fs.RemoveMarker(getMarkerName(cmn.ActResilver)); err != nil {
+		if err := fs.RemoveMarker(xaction.GetMarkerName(cmn.ActResilver)); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode(), err)
 		}
 	}
@@ -120,7 +120,7 @@ func (rj *resilverJogger) moveSlice(fqn string, ct *cluster.CT) {
 	if err != nil {
 		return
 	}
-	// a slice without metafile - skip it as unusable, let LRU clean it up
+	// TODO: a slice without metafile - skip it as unusable, let LRU clean it up
 	if srcMetaFQN == "" {
 		return
 	}
@@ -216,7 +216,7 @@ func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 			glog.Warningf("Failed to cleanup old metafile %q: %v", metaOldPath, err)
 		}
 	}
-	if lom.HasCopies() { // TODO: punt replicated and erasure copied to LRU
+	if lom.HasCopies() { // see LRU for "misplaced"
 		return
 	}
 	// misplaced with no copies? remove right away

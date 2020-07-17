@@ -83,7 +83,6 @@ type Target interface {
 	GetFSPRG() fs.PathRunGroup
 	GetDB() dbdriver.Driver
 	Cloud(*Bck) CloudProvider
-	RebalanceInfo() RebalanceInfo
 	RunLRU(id string)
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
@@ -100,11 +99,6 @@ type Target interface {
 	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
 	RebalanceNamespace(si *Snode) ([]byte, int, error)
 	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
-}
-
-type RebalanceInfo struct {
-	RebID         int64
-	IsRebalancing bool
 }
 
 type RebManager interface {

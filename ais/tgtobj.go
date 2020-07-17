@@ -25,8 +25,8 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 type (
@@ -564,18 +564,19 @@ retry:
 // 4) Cloud
 func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode int) {
 	var (
-		tsi, gfnNode     *cluster.Snode
-		smap             = goi.t.owner.smap.get()
-		tname            = goi.t.si.String()
-		aborted, running = reb.IsRebalancing(cmn.ActResilver)
-		gfnActive        = goi.t.gfn.local.active()
-		ecEnabled        = goi.lom.Bprops().EC.Enabled
+		tsi, gfnNode         *cluster.Snode
+		smap                 = goi.t.owner.smap.get()
+		tname                = goi.t.si.String()
+		marked               = xaction.GetResilverMarked()
+		interrupted, running = marked.Interrupted, marked.Xact != nil
+		gfnActive            = goi.t.gfn.local.active()
+		ecEnabled            = goi.lom.Bprops().EC.Enabled
 	)
 	tsi, err = cluster.HrwTarget(goi.lom.Uname(), &smap.Smap)
 	if err != nil {
 		return
 	}
-	if aborted || running || gfnActive {
+	if interrupted || running || gfnActive {
 		if goi.lom.RestoreObjectFromAny() { // get-from-neighbor local (mountpaths) variety
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s restored", goi.lom)
@@ -592,7 +593,8 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= goi.t.owner.smap.Get().CountTargets()
 
 	// cluster-wide lookup ("get from neighbor")
-	aborted, running = reb.IsRebalancing(cmn.ActRebalance)
+	marked = xaction.GetRebMarked()
+	interrupted, running = marked.Interrupted, marked.Xact != nil
 	if running {
 		doubleCheck = true
 	}
@@ -603,7 +605,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 			goto gfn
 		}
 	}
-	if running || !enoughECRestoreTargets || ((aborted || gfnActive) && !ecEnabled) {
+	if running || !enoughECRestoreTargets || ((interrupted || gfnActive) && !ecEnabled) {
 		gfnNode = goi.t.lookupRemoteAll(goi.lom, smap)
 	}
 

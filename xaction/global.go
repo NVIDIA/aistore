@@ -44,6 +44,10 @@ func (e *lruEntry) Start(_ cmn.Bck) error {
 	e.xact = &lru.Xaction{
 		XactDemandBase: *demand.NewXactDemandBase(e.id, cmn.ActLRU, lruIdleTime),
 		Renewed:        make(chan struct{}, 10),
+		OkRemoveMisplaced: func() bool {
+			g, l := GetRebMarked(), GetResilverMarked()
+			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
+		},
 	}
 	return nil
 }

@@ -94,7 +94,8 @@ type (
 	}
 	Xaction struct {
 		demand.XactDemandBase
-		Renewed chan struct{}
+		Renewed           chan struct{}
+		OkRemoveMisplaced func() bool
 	}
 )
 
@@ -137,7 +138,7 @@ repeat:
 		parent.wg.Add(1)
 		j.joggers = joggers
 		go func(j *lruJ) {
-			if err := j.jog(providers); err != nil {
+			if err := j.jog(providers); err != nil && !os.IsNotExist(err) {
 				glog.Errorf("%s: exited with err %v", j, err)
 				if fail.CAS(false, true) {
 					for _, j := range joggers {
@@ -219,19 +220,15 @@ func (j *lruJ) jog(providers []string) (err error) {
 		if len(bcks) > 1 {
 			j.sortBsize(bcks)
 		}
-		bowner := j.ini.T.GetBowner()
 		for _, bck := range bcks { // for each bucket under a given provider
-			var (
-				size int64
-				b    = cluster.NewBckEmbed(bck)
-			)
-			if erb := b.Init(bowner, j.ini.T.Snode()); erb != nil {
+			var size int64
+			j.bck = bck
+			if j.allowDelObj, err = j.allow(); err != nil {
 				// TODO: add a config option to trash those "buckets"
-				glog.Errorf("%s: skipping %s (remove?)", j, b)
+				glog.Errorf("%s: %v - skipping %s", j, err, bck)
+				err = nil
 				continue
 			}
-			j.allowDelObj = b.Props.LRU.Enabled && b.Allow(cmn.AccessObjDELETE) == nil
-			j.bck = bck
 			if size, err = j.jogBck(); err != nil {
 				return
 			}
@@ -254,12 +251,20 @@ func (j *lruJ) removeTrash() (err error) {
 	trashDir := j.mpathInfo.MakePathTrash()
 	err = fs.Scanner(trashDir, func(fqn string, de fs.DirEntry) error {
 		if de.IsDir() {
-			return os.RemoveAll(fqn)
+			if err := os.RemoveAll(fqn); err == nil {
+				usedPct, ok := j.ini.GetFSUsedPercentage(j.mpathInfo.Path)
+				if ok && usedPct < j.config.LRU.HighWM {
+					if err := j._throttle(usedPct); err != nil {
+						return err
+					}
+				}
+			} else {
+				glog.Errorf("%s: %v", j, err)
+			}
+		} else if err := os.Remove(fqn); err != nil {
+			glog.Errorf("%s: %v", j, err)
 		}
-		if err := j.yieldTerm(); err != nil {
-			return err
-		}
-		return os.Remove(fqn)
+		return nil
 	})
 	if err != nil && os.IsNotExist(err) {
 		err = nil
@@ -323,7 +328,7 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
 		return nil
 	}
-	if lom.IsCopy() {
+	if lom.HasCopies() && lom.IsCopy() {
 		return nil
 	}
 	if !lom.IsHRW() {
@@ -364,28 +369,28 @@ func (j *lruJ) evict() (size int64, err error) {
 	}
 	j.oldWork = j.oldWork[:0]
 	// 2.
-	for _, lom := range j.misplaced {
-		if j.ini.T.RebalanceInfo().IsRebalancing {
-			continue
-		}
-		// 2.1: remove misplaced obj
-		if err = cmn.RemoveFile(lom.FQN); err != nil {
-			glog.Warningf("%s: %v", lom, err)
-			continue
-		}
-		lom.Uncache()
-		// 2.2: for mirrored objects: remove extra copies if any
-		lom = &cluster.LOM{T: j.ini.T, ObjName: lom.ObjName}
-		err = lom.Init(lom.Bck().Bck, lom.Config())
-		if err != nil {
-			glog.Warningf("%s: %v", lom, err)
-		} else if err = lom.Load(false); err != nil {
-			glog.Warningf("%s: %v", lom, err)
-		} else if err = lom.DelExtraCopies(); err != nil {
-			glog.Warningf("%s: %v", lom, err)
-		}
-		if capCheck, err = j.postRemove(capCheck, lom); err != nil {
-			return
+	f := j.ini.Xaction.OkRemoveMisplaced
+	if f == nil || f() {
+		for _, lom := range j.misplaced {
+			// 2.1: remove misplaced obj
+			if err = cmn.RemoveFile(lom.FQN); err != nil {
+				glog.Warningf("%s: %v", lom, err)
+				continue
+			}
+			lom.Uncache()
+			// 2.2: for mirrored objects: remove extra copies if any
+			lom = &cluster.LOM{T: j.ini.T, ObjName: lom.ObjName}
+			err = lom.Init(lom.Bck().Bck, lom.Config())
+			if err != nil {
+				glog.Warningf("%s: %v", lom, err)
+			} else if err = lom.Load(false); err != nil {
+				glog.Warningf("%s: %v", lom, err)
+			} else if err = lom.DelExtraCopies(); err != nil {
+				glog.Warningf("%s: %v", lom, err)
+			}
+			if capCheck, err = j.postRemove(capCheck, lom); err != nil {
+				return
+			}
 		}
 	}
 	j.misplaced = j.misplaced[:0]
@@ -417,23 +422,34 @@ func (j *lruJ) postRemove(prev int64, lom *cluster.LOM) (capCheck int64, err err
 	if capCheck < capCheckThresh {
 		return
 	}
+	// init, recompute, and throttle - once per capCheckThresh
 	capCheck = 0
-	usedPct, ok := j.ini.GetFSUsedPercentage(j.mpathInfo.Path)
 	j.throttle = false
+	j.allowDelObj, _ = j.allow()
 	j.config = cmn.GCO.Get()
 	j.now = time.Now().UnixNano()
-	nowTs := mono.NanoTime()
+	usedPct, ok := j.ini.GetFSUsedPercentage(j.mpathInfo.Path)
 	if ok && usedPct < j.config.LRU.HighWM {
-		if !j.mpathInfo.IsIdle(j.config, nowTs) {
-			// throttle self
-			ratioCapacity := cmn.Ratio(j.config.LRU.HighWM, j.config.LRU.LowWM, usedPct)
-			curr := fs.GetMpathUtil(j.mpathInfo.Path, nowTs)
-			ratioUtilization := cmn.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
-			if ratioUtilization > ratioCapacity {
-				j.throttle = true
-				time.Sleep(cmn.ThrottleSleepMax)
-			}
+		err = j._throttle(usedPct)
+	}
+	return
+}
+
+func (j *lruJ) _throttle(usedPct int64) (err error) {
+	nowTs := mono.NanoTime()
+	if j.mpathInfo.IsIdle(j.config, nowTs) {
+		return
+	}
+	// throttle self
+	ratioCapacity := cmn.Ratio(j.config.LRU.HighWM, j.config.LRU.LowWM, usedPct)
+	curr := fs.GetMpathUtil(j.mpathInfo.Path, nowTs)
+	ratioUtilization := cmn.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
+	if ratioUtilization > ratioCapacity {
+		if usedPct < (j.config.LRU.LowWM+j.config.LRU.HighWM)/2 {
+			j.throttle = true
 		}
+		time.Sleep(cmn.ThrottleMax)
+		err = j.yieldTerm()
 	}
 	return
 }
@@ -475,7 +491,7 @@ func (j *lruJ) yieldTerm() error {
 		return cmn.NewAbortedError(xlru.String())
 	default:
 		if j.throttle {
-			time.Sleep(cmn.ThrottleSleepMin)
+			time.Sleep(cmn.ThrottleMin)
 		}
 		break
 	}
@@ -502,6 +518,18 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 	for i := range bcks {
 		bcks[i] = sized[i].b
 	}
+}
+
+func (j *lruJ) allow() (ok bool, err error) {
+	var (
+		bowner = j.ini.T.GetBowner()
+		b      = cluster.NewBckEmbed(j.bck)
+	)
+	if err = b.Init(bowner, j.ini.T.Snode()); err != nil {
+		return
+	}
+	ok = b.Props.LRU.Enabled && b.Allow(cmn.AccessObjDELETE) == nil
+	return
 }
 
 //////////////

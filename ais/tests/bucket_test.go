@@ -2153,6 +2153,10 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	msg := &cmn.SelectMsg{}
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
+	if len(bckObjs.Entries) == 0 {
+		t.Errorf("%s is empty\n", m.bck)
+		return
+	}
 
 	if cksumType != cmn.ChecksumNone {
 		tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)

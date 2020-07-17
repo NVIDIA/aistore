@@ -550,9 +550,11 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []st
 
 // TODO: #791 "limited coexistence" - extend and unify
 func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
-	if rebInfo := t.RebalanceInfo(); rebInfo.IsRebalancing {
-		err = fmt.Errorf("%s: rebalancing(%d) is in progress, cannot run %q on bucket %s",
-			t.si, rebInfo.RebID, msg.Action, bck)
+	g, l := xaction.GetRebMarked(), xaction.GetResilverMarked()
+	if g.Xact != nil {
+		err = fmt.Errorf("%s: %s, cannot run %q on bucket %s", t.si, g.Xact, msg.Action, bck)
+	} else if l.Xact != nil {
+		err = fmt.Errorf("%s: %s, cannot run %q on bucket %s", t.si, l.Xact, msg.Action, bck)
 	}
 	return
 }

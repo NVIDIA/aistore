@@ -279,8 +279,8 @@ func (t *targetrunner) Run() error {
 	t.initRecvHandlers()
 	ec.Init(t, xaction.Registry)
 
-	aborted, _ := reb.IsRebalancing(cmn.ActResilver)
-	if aborted {
+	marked := xaction.GetResilverMarked()
+	if marked.Interrupted {
 		go func() {
 			glog.Infoln("resuming resilver...")
 			t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
@@ -640,9 +640,12 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	config := cmn.GCO.Get()
-	if cs := fs.GetCapStatus(); cs.OOS {
-		t.invalmsghdlr(w, r, cs.Err.Error())
-		return
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		go t.RunLRU("" /*uuid*/)
+		if cs.OOS {
+			t.invalmsghdlr(w, r, cs.Err.Error())
+			return
+		}
 	}
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {

@@ -396,8 +396,8 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 		glog.Error(err)
 		return
 	}
-	aborted, running := IsRebalancing(cmn.ActRebalance)
-	if aborted || !running {
+	marked := xaction.GetRebMarked()
+	if marked.Interrupted || marked.Xact == nil {
 		return
 	}
 

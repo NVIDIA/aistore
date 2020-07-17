@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -47,8 +48,9 @@ func (reb *Manager) RebStatus(status *Status) {
 		sleepRetry = cmn.KeepaliveRetryDuration(config)
 		rsmap      = (*cluster.Smap)(reb.smap.Load())
 		tsmap      = reb.t.GetSowner().Get()
+		marked     = xaction.GetRebMarked()
 	)
-	status.Aborted, status.Running = IsRebalancing(cmn.ActRebalance)
+	status.Aborted, status.Running = marked.Interrupted, marked.Xact != nil
 	status.Stage = reb.stages.stage.Load()
 	status.RebID = reb.rebID.Load()
 	status.Quiescent = reb.isQuiescent()

@@ -29,9 +29,9 @@ const (
 )
 
 const (
-	ThrottleSleepMin = time.Millisecond
-	ThrottleSleepAvg = time.Millisecond * 10
-	ThrottleSleepMax = time.Millisecond * 100
+	ThrottleMin = time.Millisecond
+	ThrottleAvg = time.Millisecond * 10
+	ThrottleMax = time.Millisecond * 100
 
 	// EC
 	MinSliceCount = 1  // minimum number of data or parity slices

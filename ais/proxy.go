@@ -653,8 +653,15 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
-		vote := xaction.Registry.IsXactRunning(xaction.RegistryXactFilter{Kind: cmn.ActElection})
-		p.invalmsghdlrf(w, r, "primary %s cannot receive cluster meta (election=%t)", p.si, vote)
+		var (
+			xact   = xaction.Registry.GetXactRunning(cmn.ActElection)
+			msg    = p.si.String() + ": is primary, cannot be on the receiving side of metasync"
+			detail string
+		)
+		if xact != nil {
+			detail = fmt.Sprintf(" (%s)", xact)
+		}
+		p.invalmsghdlrf(w, r, msg, p.si, detail)
 		return
 	}
 	var payload = make(msPayload)

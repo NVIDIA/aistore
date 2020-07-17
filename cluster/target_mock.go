@@ -63,9 +63,6 @@ func (*TargetMock) BMDVersionFixup(_ *http.Request, _ cmn.Bck, _ bool) {}
 func (*TargetMock) Health(_ *Snode, _ time.Duration, _ url.Values) ([]byte, error, int) {
 	return nil, nil, 0
 }
-func (*TargetMock) RebalanceInfo() RebalanceInfo {
-	return RebalanceInfo{IsRebalancing: false, RebID: 0}
-}
 func (*TargetMock) CheckCloudVersion(_ context.Context, _ *LOM) (bool, error, int) {
 	return false, nil, 0
 }

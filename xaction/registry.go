@@ -163,11 +163,24 @@ func (xact *Rebalance) AbortedAfter(dur time.Duration) (aborted bool) {
 	return
 }
 
-// override  - extend cmn.XactBase.Stats()
+// override/extend cmn.XactBase.Stats()
 func (xact *Rebalance) Stats() cmn.XactStats {
-	baseStats := xact.XactBase.Stats().(*cmn.BaseXactStats)
-	rebStats := stats.RebalanceTargetStats{BaseXactStats: *baseStats}
-	rebStats.FillFromTrunner(xact.statsRunner)
+	var (
+		baseStats   = xact.XactBase.Stats().(*cmn.BaseXactStats)
+		rebStats    = stats.RebalanceTargetStats{BaseXactStats: *baseStats}
+		statsRunner = xact.statsRunner
+	)
+	rebStats.Ext.RebTxCount = statsRunner.Get(stats.RebTxCount)
+	rebStats.Ext.RebTxSize = statsRunner.Get(stats.RebTxSize)
+	rebStats.Ext.RebRxCount = statsRunner.Get(stats.RebRxCount)
+	rebStats.Ext.RebRxSize = statsRunner.Get(stats.RebRxSize)
+	if marked := GetRebMarked(); marked.Xact != nil {
+		rebStats.Ext.RebID = marked.Xact.ID().Int()
+	} else {
+		rebStats.Ext.RebID = 0
+	}
+	rebStats.ObjCountX = rebStats.Ext.RebTxCount + rebStats.Ext.RebRxCount
+	rebStats.BytesCountX = rebStats.Ext.RebTxSize + rebStats.Ext.RebRxSize
 	return &rebStats
 }
 
@@ -189,25 +202,25 @@ func newRegistryEntries() *registryEntries {
 	}
 }
 
-func (e *registryEntries) findUnlocked(query RegistryXactFilter) baseEntry {
-	if query.OnlyRunning == nil {
+func (e *registryEntries) findUnlocked(flt RegistryXactFilter) baseEntry {
+	if flt.OnlyRunning == nil {
 		// Loop in reverse to search for the latest (there is great chance
 		// that searched xaction at the end rather at the beginning).
 		for idx := len(e.entries) - 1; idx >= 0; idx-- {
 			entry := e.entries[idx]
-			if matchEntry(entry, query) {
+			if matchEntry(entry, flt) {
 				return entry
 			}
 		}
 	} else {
-		cmn.AssertMsg(cmn.IsValidXaction(query.Kind), query.Kind)
+		cmn.AssertMsg(cmn.IsValidXaction(flt.Kind), flt.Kind)
 		finishedCnt := 0
 		for _, entry := range e.active {
 			if entry.Get().Finished() {
 				finishedCnt++
 				continue
 			}
-			if matchEntry(entry, query) {
+			if matchEntry(entry, flt) {
 				return entry
 			}
 		}
@@ -218,10 +231,10 @@ func (e *registryEntries) findUnlocked(query RegistryXactFilter) baseEntry {
 	return nil
 }
 
-func (e *registryEntries) find(query RegistryXactFilter) baseEntry {
+func (e *registryEntries) find(flt RegistryXactFilter) baseEntry {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
-	return e.findUnlocked(query)
+	return e.findUnlocked(flt)
 }
 
 func (e *registryEntries) housekeepActive() {
@@ -308,14 +321,22 @@ func (r *registry) GetXact(uuid string) (xact cmn.Xact) {
 	return
 }
 
-func (r *registry) GetRunning(query RegistryXactFilter) baseEntry {
-	query.OnlyRunning = api.Bool(true)
-	entry := r.entries.find(query)
+func (r *registry) GetXactRunning(kind string) (xact cmn.Xact) {
+	entry := r.entries.find(RegistryXactFilter{Kind: kind, OnlyRunning: api.Bool(true)})
+	if entry != nil {
+		xact = entry.Get()
+	}
+	return
+}
+
+func (r *registry) GetRunning(flt RegistryXactFilter) baseEntry {
+	flt.OnlyRunning = api.Bool(true)
+	entry := r.entries.find(flt)
 	return entry
 }
 
-func (r *registry) GetLatest(query RegistryXactFilter) baseEntry {
-	entry := r.entries.find(query)
+func (r *registry) GetLatest(flt RegistryXactFilter) baseEntry {
+	entry := r.entries.find(flt)
 	return entry
 }
 
@@ -379,11 +400,6 @@ func (r *registry) abort(args abortArgs) {
 	wg.Wait()
 }
 
-func (r *registry) IsXactRunning(query RegistryXactFilter) (running bool) {
-	entry := r.GetRunning(query)
-	return entry != nil
-}
-
 func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []cmn.XactStats {
 	matchingEntries := make([]baseEntry, 0, 20)
 	r.entries.forEach(func(entry baseEntry) bool {
@@ -414,49 +430,49 @@ func (r *registry) matchXactsStatsByID(xactID string) ([]cmn.XactStats, error) {
 	return matchedStat, nil
 }
 
-func (r *registry) GetStats(query RegistryXactFilter) ([]cmn.XactStats, error) {
-	if query.ID != "" {
-		if query.OnlyRunning == nil || (query.OnlyRunning != nil && *query.OnlyRunning) {
-			return r.matchXactsStatsByID(query.ID)
+func (r *registry) GetStats(flt RegistryXactFilter) ([]cmn.XactStats, error) {
+	if flt.ID != "" {
+		if flt.OnlyRunning == nil || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
+			return r.matchXactsStatsByID(flt.ID)
 		}
 		return r.matchingXactsStats(func(xact cmn.Xact) bool {
 			if xact.Kind() == cmn.ActRebalance {
 				// Any rebalance after a given ID that finished and was not aborted
-				return xact.ID().Compare(query.ID) >= 0 && xact.Finished() && !xact.Aborted()
+				return xact.ID().Compare(flt.ID) >= 0 && xact.Finished() && !xact.Aborted()
 			}
-			return xact.ID().Compare(query.ID) == 0 && xact.Finished() && !xact.Aborted()
+			return xact.ID().Compare(flt.ID) == 0 && xact.Finished() && !xact.Aborted()
 		}), nil
 	}
-	if query.Bck != nil || query.Kind != "" {
+	if flt.Bck != nil || flt.Kind != "" {
 		// Error checks
-		if query.Kind != "" && !cmn.IsValidXaction(query.Kind) {
-			return nil, cmn.NewXactionNotFoundError(query.Kind)
+		if flt.Kind != "" && !cmn.IsValidXaction(flt.Kind) {
+			return nil, cmn.NewXactionNotFoundError(flt.Kind)
 		}
-		if query.Bck != nil && !query.Bck.HasProvider() {
-			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", query.Kind, query.Bck.Name)
+		if flt.Bck != nil && !flt.Bck.HasProvider() {
+			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", flt.Kind, flt.Bck.Name)
 		}
 
 		// TODO: investigate how does the following fare against genericMatcher
-		if query.OnlyRunning != nil && *query.OnlyRunning {
+		if flt.OnlyRunning != nil && *flt.OnlyRunning {
 			matching := make([]cmn.XactStats, 0, 10)
-			if query.Kind == "" {
+			if flt.Kind == "" {
 				for kind := range cmn.XactsDtor {
-					entry := r.GetRunning(RegistryXactFilter{Kind: kind, Bck: query.Bck})
+					entry := r.GetRunning(RegistryXactFilter{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Stats())
 					}
 				}
 			} else {
-				entry := r.GetRunning(RegistryXactFilter{Kind: query.Kind, Bck: query.Bck})
+				entry := r.GetRunning(RegistryXactFilter{Kind: flt.Kind, Bck: flt.Bck})
 				if entry != nil {
 					matching = append(matching, entry.Get().Stats())
 				}
 			}
 			return matching, nil
 		}
-		return r.matchingXactsStats(query.genericMatcher), nil
+		return r.matchingXactsStats(flt.genericMatcher), nil
 	}
-	return r.matchingXactsStats(query.genericMatcher), nil
+	return r.matchingXactsStats(flt.genericMatcher), nil
 }
 
 func (r *registry) DoAbort(kind string, bck *cluster.Bck) (aborted bool) {
@@ -720,15 +736,15 @@ func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bc
 	return e.xact, nil
 }
 
-func matchEntry(entry baseEntry, query RegistryXactFilter) (matches bool) {
-	if query.ID != "" {
-		return entry.Get().ID().Compare(query.ID) == 0
+func matchEntry(entry baseEntry, flt RegistryXactFilter) (matches bool) {
+	if flt.ID != "" {
+		return entry.Get().ID().Compare(flt.ID) == 0
 	}
-	if entry.Kind() == query.Kind {
-		if query.Bck == nil || query.Bck.IsEmpty() {
+	if entry.Kind() == flt.Kind {
+		if flt.Bck == nil || flt.Bck.IsEmpty() {
 			return true
 		}
-		if !query.Bck.IsEmpty() && entry.Get().Bck().Equal(query.Bck.Bck) {
+		if !flt.Bck.IsEmpty() && entry.Get().Bck().Equal(flt.Bck.Bck) {
 			return true
 		}
 	}

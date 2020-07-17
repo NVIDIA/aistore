@@ -217,22 +217,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apite
 	}
 }
 
-func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
-	prevConfig := cmn.GCO.Get()
-	if err := jsp.SetConfigMany(kvs); err != nil {
-		return err
-	}
-
-	config := cmn.GCO.Get()
-	if prevConfig.LRU.Enabled && !config.LRU.Enabled {
-		lruRunning := xaction.Registry.IsXactRunning(xaction.RegistryXactFilter{Kind: cmn.ActLRU})
-		if lruRunning {
-			glog.V(3).Infof("Aborting LRU due to lru.enabled config change")
-			xaction.Registry.DoAbort(cmn.ActLRU, nil)
-		}
-	}
-	return
-}
+func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) { return jsp.SetConfigMany(kvs) }
 
 func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apiItems []string) {
 	var (

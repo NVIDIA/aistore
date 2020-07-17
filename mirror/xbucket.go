@@ -151,7 +151,7 @@ func (j *joggerBckBase) yieldTerm() error {
 	default:
 		curr := fs.GetMpathUtil(j.mpathInfo.Path, mono.NanoTime())
 		if curr >= diskConf.DiskUtilHighWM {
-			time.Sleep(cmn.ThrottleSleepMin)
+			time.Sleep(cmn.ThrottleMin)
 		}
 		break
 	}

@@ -133,7 +133,7 @@ func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 		// increase the chances for the burst of PUTs to subside
 		// but only to a point
 		if pending > max/2 && pending < max-max/8 {
-			time.Sleep(cmn.ThrottleSleepAvg)
+			time.Sleep(cmn.ThrottleAvg)
 		}
 	}
 	return

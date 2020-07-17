@@ -94,7 +94,7 @@ func (reb *Manager) rebInit(md *rebArgs) bool {
 	}
 
 	// 4. create persistent mark
-	err := fs.PutMarker(getMarkerName(cmn.ActRebalance))
+	err := fs.PutMarker(xaction.GetMarkerName(cmn.ActRebalance))
 	if err != nil {
 		glog.Errorf("Failed to create marker: %v", err)
 	}
@@ -403,7 +403,7 @@ func (reb *Manager) rebFini(md *rebArgs) {
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
-		if err := fs.RemoveMarker(getMarkerName(cmn.ActRebalance)); err != nil {
+		if err := fs.RemoveMarker(xaction.GetMarkerName(cmn.ActRebalance)); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.logHdr(md), err)
 		}
 	}
@@ -575,7 +575,6 @@ func (rj *rebalanceJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 		stats.NamedVal64{Name: stats.RebTxSize, Value: hdr.ObjAttrs.Size})
 }
 
-// the walking callback is executed by the LRU xaction
 func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	var (
 		lom *cluster.LOM

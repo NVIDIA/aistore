@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -64,22 +63,9 @@ func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 	return nil
 }
 
-func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
-	_, running := reb.IsRebalancing(cmn.ActRebalance)
-	_, runningLocal := reb.IsRebalancing(cmn.ActResilver)
-	return cluster.RebalanceInfo{
-		IsRebalancing: running || runningLocal,
-		RebID:         t.rebManager.RebID(),
-	}
-}
-
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU(id string) {
-	if t.RebalanceInfo().IsRebalancing {
-		glog.Infoln("Warning: rebalancing (local or global) is in progress, skipping LRU run")
-		return
-	}
 	xlru := xaction.Registry.RenewLRU(id)
 	if xlru == nil {
 		return
