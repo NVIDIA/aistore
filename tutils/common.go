@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -96,23 +97,30 @@ type SkipTestArgs struct {
 	RequiresAuth   bool
 	Long           bool
 	Cloud          bool
+	Kubernetes     bool
 	Bck            cmn.Bck
 }
 
 func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	if args.RequiresRemote && RemoteCluster.UUID == "" {
-		tb.Skip("test requires a remote cluster")
+		tb.Skipf("%s requires remote cluster", tb.Name())
 	}
 	if args.RequiresAuth && AuthToken == "" {
-		tb.Skip("test requires auth token")
+		tb.Skipf("%s requires authentication token", tb.Name())
 	}
 	if args.Long && testing.Short() {
-		tb.Skip("skipping test in short mode")
+		tb.Skipf("skipping %s in short mode", tb.Name())
 	}
 	if args.Cloud {
 		proxyURL := GetPrimaryURL()
 		if !IsCloudBucket(tb, proxyURL, args.Bck) {
-			tb.Skip("test requires a cloud bucket")
+			tb.Skipf("%s requires a Cloud bucket", tb.Name())
+		}
+	}
+	if args.Kubernetes {
+		cmd := exec.Command("kubectl", "get", "pods")
+		if err := cmd.Run(); err != nil {
+			tb.Skipf("%s requires Kubernetes", tb.Name())
 		}
 	}
 }

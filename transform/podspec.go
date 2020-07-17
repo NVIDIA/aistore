@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
-func parsePodSpec(spec []byte) (*corev1.Pod, error) {
+func ParsePodSpec(spec []byte) (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse pod spec: %v", err)
@@ -55,7 +55,7 @@ func podTransformTimeout(pod *corev1.Pod) (cmn.DurationJSON, error) {
 
 func ValidateSpec(spec []byte) (msg Msg, err error) {
 	msg.Spec = spec
-	pod, err := parsePodSpec(msg.Spec)
+	pod, err := ParsePodSpec(msg.Spec)
 	if err != nil {
 		return msg, err
 	}

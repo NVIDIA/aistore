@@ -37,6 +37,7 @@ func Errorf(tb testing.TB, cond bool, msg string, args ...interface{}) {
 	}
 }
 
+// TODO: Make this a range over `errCh` post closing it ?
 func SelectErr(tb testing.TB, errCh chan error, verb string, errIsFatal bool) {
 	if num := len(errCh); num > 0 {
 		err := <-errCh

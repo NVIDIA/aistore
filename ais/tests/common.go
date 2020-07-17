@@ -631,10 +631,13 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	const (
 		fileSize = cmn.KiB
 	)
+
+	// Create specific files to test corner cases.
 	var (
-		fileNames = make([]string, 0, prefixFileNumber)
-		wg        = &sync.WaitGroup{}
-		errCh     = make(chan error, numfiles)
+		extraNames = []string{"dir/obj01", "dir/obj02", "dir/obj03", "dir1/dir2/obj04", "dir1/dir2/obj05"}
+		fileNames  = make([]string, 0, prefixFileNumber)
+		wg         = &sync.WaitGroup{}
+		errCh      = make(chan error, numfiles+len(extraNames))
 	)
 
 	for i := 0; i < prefixFileNumber; i++ {
@@ -655,8 +658,6 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		fileNames = append(fileNames, fileName)
 	}
 
-	// Create specific files to test corner cases.
-	extraNames := []string{"dir/obj01", "dir/obj02", "dir/obj03", "dir1/dir2/obj04", "dir1/dir2/obj05"}
 	for _, fName := range extraNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
@@ -674,14 +675,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	}
 
 	wg.Wait()
-
-	select {
-	case e := <-errCh:
-		tutils.Logf("Failed to PUT: %s\n", e)
-		t.Fail()
-	default:
-	}
-
+	tassert.SelectErr(t, errCh, "put", false)
 	return fileNames
 }
 

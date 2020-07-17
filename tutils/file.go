@@ -393,3 +393,15 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 func IsTrashDir(path string) bool {
 	return strings.Contains(path, trashPattern)
 }
+
+func FilesEqual(file1, file2 string) (bool, error) {
+	f1, err := ioutil.ReadFile(file1)
+	if err != nil {
+		return false, err
+	}
+	f2, err := ioutil.ReadFile(file2)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(f1, f2), nil
+}

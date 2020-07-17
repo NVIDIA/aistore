@@ -62,7 +62,7 @@ func main() {
 
 func putSpecificFiles(fileSize uint64, numPuts int, bck cmn.Bck, pool chan func()) error {
 	var (
-		errCh = make(chan error, files)
+		errCh = make(chan error, numPuts+1)
 		wg    = &sync.WaitGroup{}
 	)
 
@@ -83,6 +83,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bck cmn.Bck, pool chan func(
 	}
 	close(pool)
 	wg.Wait()
+
 	select {
 	case err := <-errCh:
 		return err

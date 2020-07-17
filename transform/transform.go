@@ -34,7 +34,7 @@ const (
 // If transformationName is empty, it will be replaced with name of a pod.
 func StartTransformationPod(t cluster.Target, msg Msg, transformationName string) (err error) {
 	// Parse spec template.
-	pod, err := parsePodSpec(msg.Spec)
+	pod, err := ParsePodSpec(msg.Spec)
 	if err != nil {
 		return err
 	}
