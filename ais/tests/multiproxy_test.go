@@ -40,7 +40,7 @@ var (
 		{"SetPrimaryBackToOriginal", primarySetToOriginal},
 		{"proxyCrash", proxyCrash},
 		{"PrimaryAndTargetCrash", primaryAndTargetCrash},
-		//	"PrimaryAndProxyCrash", primaryAndProxyCrash
+		{"PrimaryAndProxyCrash", primaryAndProxyCrash},
 		{"CrashAndFastRestore", crashAndFastRestore},
 		{"TargetRejoin", targetRejoin},
 		{"JoinWhileVoteInProgress", joinWhileVoteInProgress},
@@ -282,7 +282,7 @@ func proxyCrash(t *testing.T) {
 
 // primaryAndProxyCrash kills primary proxy and one another proxy(not the next in line primary)
 // and restore them afterwards
-func primaryAndProxyCrash(t *testing.T) { // nolint:unused,deadcode // #849
+func primaryAndProxyCrash(t *testing.T) {
 	proxyURL := tutils.RandomProxyURL()
 	smap := tutils.GetClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
