@@ -44,6 +44,18 @@ spec:
            mountPath: /tmp/
         ports:
           - containerPort: 8080
+        command: ["bash","-c"]
+        args:
+          - export PORT=8080 &&
+            export AIS_FS_PATHS="\"\"${AIS_FS_PATHS}\"\"" &&
+            export TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT} &&
+            export IPV4LIST=${IPV4LIST} &&
+            export AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER} &&
+            export AIS_CONF_FILE=/etc/ais/ais.json &&
+            export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
+            export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
+            source /etc/ais/aisnode_config.sh &&
+            aisnode -config=/etc/ais/ais.json -role=proxy -ntargets=${TARGET_CNT} -alsologtostderr=true;
       nodeSelector:
           nodename: ${PROXY_LABEL}
       volumes:

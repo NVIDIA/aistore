@@ -15,6 +15,7 @@ spec:
         app: aisproxy-app
         primaryproxy: "true"
     spec:
+      hostNetwork: true
       containers:
       - name: aisproxy
         image: ${DOCKER_HOST_IP}:5000/ais:v1
@@ -30,28 +31,31 @@ spec:
            value: "proxy"
          - name: AIS_IS_PRIMARY
            value: "TRUE"
+         - name: AIS_DAEMON_ID
+           value: "ais-proxy"
         volumeMounts:
-         - name: ais-config
-           mountPath: /aisconfig/ais.json
-           subPath: ais.json
-         - name: collectd-config
-           mountPath: /etc/collectd/collectd.conf
-           subPath: collectd.conf
-         - name: statsd-config
-           mountPath: /opt/statsd/statsd.conf
-           subPath: statsd.conf
          - name: aws-credentials
            mountPath: /root/.aws/
          - name: ais-log
            mountPath: /tmp/
         ports:
           - containerPort: 8080
+        # TODO: fix the workaround of AIS_FS_PATHS
+        command: ["bash","-c"]
+        args:
+          - export PORT=8080 &&
+            export AIS_FS_PATHS="\"\"${AIS_FS_PATHS}\"\"" &&
+            export TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT} &&
+            export IPV4LIST=${IPV4LIST} &&
+            export AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER} &&
+            export AIS_CONF_FILE=/etc/ais/ais.json &&
+            export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
+            export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
+            source /etc/ais/aisnode_config.sh &&
+            aisnode -config=/etc/ais/ais.json -role=proxy -ntargets=${TARGET_CNT} -alsologtostderr=true;
       nodeSelector:
           nodename: ${PROXY_LABEL}
       volumes:
-        - name: ais-config
-          configMap:
-            name: ais-config
         - name: collectd-config
           configMap:
             name: collectd-config

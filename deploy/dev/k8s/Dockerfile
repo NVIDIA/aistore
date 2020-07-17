@@ -18,7 +18,7 @@ RUN apt-get clean && apt-get update &&\
 
 # Setting ENV variables
 ENV GOLANG_VERSION 1.13
-ENV AIS_CONF_FILE /etc/ais/ais.json
+COPY deploy/dev/local/aisnode_config.sh /etc/ais/aisnode_config.sh
 
 # Reassign arguments to environment variables so run.sh can use them
 ENV GOPATH /go
@@ -26,7 +26,7 @@ ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 ENV WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
 
-RUN mkdir /etc/ais
+RUN mkdir -p /etc/ais
 RUN mkdir /usr/nvidia
 RUN mkdir -p $GOPATH/src/github.com/NVIDIA
 
@@ -43,16 +43,8 @@ RUN cd tmp &&\
     mv ./kubectl /usr/local/bin/kubectl &&\
     kubectl version --client
 
-ARG AIS_CLD_PROVIDER
-ENV CLD $AIS_CLD_PROVIDER
-
 COPY . $GOPATH/src/github.com/NVIDIA/aistore/
 WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
-
-ARG TARGETS
-ENV TARGET_CNT $TARGETS
-# TODO: Maybe we can pass the file more elegantly...
-COPY deploy/dev/k8s/ais.json $AIS_CONF_FILE
 
 # Build it here so it is not done multiple times on each proxy/target: less
 # downloading and less time spent on everything.
@@ -61,9 +53,3 @@ RUN make node
 
 EXPOSE 8080
 
-# TODO: make it a separate `ENTRYPOINT run.sh` file (similar to `dev/docker/Dockerfile`)
-RUN echo "\
-$GOBIN/aisnode -config=\$1 -role=\$2 -ntargets=\$3 -alsologtostderr=true \n" \
-> /run/run.sh
-RUN chmod +x /run/run.sh
-CMD ["sh","-c", "AIS_DAEMON_ID=`echo $HOSTNAME` /run/run.sh $AIS_CONF_FILE $AIS_NODE_ROLE $TARGET_CNT"]

@@ -13,10 +13,14 @@ spec:
       labels:
         app: aistarget-app
     spec:
+      hostNetwork: true
       containers:
       - name: aistarget
         image: ${DOCKER_HOST_IP}:5000/ais:v1
         imagePullPolicy: Always
+        securityContext:
+          # Required for hostport to operate, or implement a full pod security policy
+          privileged: true
         env:
          - name: AIS_NODE_ROLE
            value: "target"
@@ -24,16 +28,9 @@ spec:
            valueFrom:
              fieldRef:
                fieldPath: spec.nodeName
+         - name: AIS_DAEMON_ID
+           value: "ais-target"
         volumeMounts:
-         - name: ais-config
-           mountPath: /aisconfig/ais.json
-           subPath: ais.json
-         - name: collectd-config
-           mountPath: /etc/collectd/collectd.conf
-           subPath: collectd.conf
-         - name: statsd-config
-           mountPath: /opt/statsd/statsd.conf
-           subPath: statsd.conf
          - name: aws-credentials
            mountPath: /root/.aws/
          - name: ais-fs
@@ -41,19 +38,26 @@ spec:
          - name: ais-log
            mountPath: /tmp/
         ports:
-          - containerPort: 8080
+          - containerPort: 8081
+            protocol: TCP
+        command: ["bash","-c"]
+        # TODO: fix the workarounf of AIS_FS_PATHS
+        args:
+          - export PORT=8081 &&
+            export AIS_FS_PATHS="\"\"${AIS_FS_PATHS}\"\"" &&
+            export AIS_PRIMARY_URL=${AIS_PRIMARY_URL} &&
+            export IPV4LIST=${IPV4LIST} &&
+            export TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT} &&
+            export AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER} &&
+            export AIS_CONF_FILE=/etc/ais/ais.json &&
+            export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
+            export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
+            source /etc/ais/aisnode_config.sh &&
+            aisnode -config=/etc/ais/ais.json -role=target -alsologtostderr=true;
+
       nodeSelector:
           nodename: ${TARGET_LABEL}
       volumes:
-        - name: ais-config
-          configMap:
-            name: ais-config
-        - name: collectd-config
-          configMap:
-            name: collectd-config
-        - name: statsd-config
-          configMap:
-            name: statsd-config
         - name: aws-credentials
           secret:
             secretName: aws-credentials

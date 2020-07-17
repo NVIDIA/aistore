@@ -43,28 +43,9 @@ case $i in
 esac
 done
 
-create_local_repo() {
-    if docker ps | grep registry:2 &> /dev/null; then
-        echo "Local repository already exists..."
-        docker-compose down
-    fi
-    echo "Creating local repository and building image..."
-    docker-compose up -d --force-recreate --build
-
-    echo "Pushing to repository..."
-    docker push localhost:5000/ais:v1
-
-    # TODO: remove
-    docker push localhost:5000/hello_world_server:v1
-}
-
-
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -P)"
 
-HOST="aisprimaryservice.default.svc.cluster.local"
-PORT=8080
-AIS_LOG_DIR="/tmp/ais/log"
-AIS_CONF_DIR="/usr/nvidia"
+HOST_URL="http://$(minikube ip):8080"
 DOCKER_HOST_IP=""
 CLUSTER_CONFIG=""
 ###################################
@@ -138,8 +119,9 @@ then
    fspath=${fspath#","}
 fi
 
-AIS_FS_PATHS=$fspath
-TEST_FSPATH_COUNT=$testfspathcnt
+export AIS_FS_PATHS=$fspath
+export TEST_FSPATH_COUNT=$testfspathcnt
+echo $AIS_FS_PATHS
 LOCAL_AWS="/tmp/aws.env"
 AIS_CLD_PROVIDER="" # See deploy.sh for more informations about empty AIS_CLD_PROVIDER
 echo "Select:"
@@ -213,29 +195,23 @@ if kubectl get secrets | grep aws > /dev/null 2>&1; then
 fi
 kubectl create secret generic aws-credentials --from-file=$LOCAL_AWS
 
-AIS_CONF_FILE="ais.json"
-STATSD_CONF_FILE="statsd.conf"
-COLLECTD_CONF_FILE="collectd.conf"
-
-export AIS_CONF_DIR=/aisconfig
-export AIS_PRIMARY_URL="http://${HOST}:${PORT}"
+export AIS_PRIMARY_URL=$HOST_URL
 export DOCKER_HOST_IP=$DOCKER_HOST_IP
 export PROXY_LABEL=$PROXY_LABEL
 export TARGET_LABEL=$TARGET_LABEL
+export IPV4LIST="$(minikube ip)"
+export AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER}
+export TARGET_CNT=${TARGET_CNT}
 
 echo $DIR
-source $DIR/../local/aisnode_config.sh
-
-create_local_repo $TARGET_CNT $AIS_CLD_PROVIDER
 
 # Deploying kubernetes cluster
 echo "Starting kubernetes deployment..."
-# Create AIStore configmap to attach during runtime
-echo Creating AIStore configMap
-kubectl create configmap ais-config --from-file=./$AIS_CONF_FILE
-kubectl create configmap statsd-config --from-file=./$STATSD_CONF_FILE
-kubectl create configmap collectd-config --from-file=./$COLLECTD_CONF_FILE
 
+echo "Building image..."
+docker-compose up -d --force-recreate --build --remove-orphans
+echo "Pushing to repository..."
+docker push localhost:5000/ais:v1
 
 echo "Starting primary proxy deployment..."
 envsubst < aisprimaryproxy_deployment.yml | kubectl apply -f -
@@ -260,5 +236,4 @@ kubectl scale --replicas="$TARGET_CNT" -f aistarget_deployment.yml
 echo "List of running pods"
 kubectl get pods -o wide
 
-rm $AIS_CONF_FILE $STATSD_CONF_FILE $COLLECTD_CONF_FILE # TODO: this should be done after building image and on CTRL-C
 echo "Done"

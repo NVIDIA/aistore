@@ -18,6 +18,3 @@ services:
     build:
       context: ./../../../
       dockerfile: ./deploy/dev/k8s/Dockerfile
-      args:
-        - TARGETS=${TARGET_CNT-1000}
-        - AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER-}
