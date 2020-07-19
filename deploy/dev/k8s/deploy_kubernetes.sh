@@ -44,10 +44,11 @@ esac
 done
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -P)"
-
-HOST_URL="http://$(minikube ip):8080"
+PRIMARY_PORT=8080
+HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"
 DOCKER_HOST_IP=""
 CLUSTER_CONFIG=""
+
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0
@@ -189,7 +190,6 @@ if [ -z "$DOCKER_HOST_IP" ]; then
     fi
 fi
 
-
 if kubectl get secrets | grep aws > /dev/null 2>&1; then
     kubectl delete secret aws-credentials
 fi
@@ -214,24 +214,27 @@ echo "Pushing to repository..."
 docker push localhost:5000/ais:v1
 
 echo "Starting primary proxy deployment..."
-envsubst < aisprimaryproxy_deployment.yml | kubectl apply -f -
+for i in $(seq 0 $(($PROXY_CNT-1))); do
+  export ID=$i
+  export PORT=$(($PRIMARY_PORT+$i))
+  if [ $PORT -eq $PRIMARY_PORT ]; then
+    export AIS_IS_PRIMARY=true
+  else
+    export AIS_IS_PRIMARY=false
+  fi
+  envsubst < aisproxy_deployment.yml | kubectl apply -f -
+done
 
 echo "Waiting for the primary proxy to be ready..."
-kubectl wait --for="condition=ready" pod aisprimaryproxy-0
-
-if (( PROXY_CNT > 1 )); then
-  echo "Starting proxy deployment..."
-  envsubst < aisproxy_deployment.yml | kubectl apply -f -
-  PROXY_CNT=$((PROXY_CNT - 1))
-  echo "Scaling proxies (${PROXY_CNT} more)"
-  kubectl scale --replicas=$PROXY_CNT -f aisproxy_deployment.yml
-fi
+kubectl wait --for="condition=ready" pod aisproxy-0
 
 echo "Starting target deployment..."
-envsubst < aistarget_deployment.yml | kubectl create -f -
 
-echo "Scaling targets"
-kubectl scale --replicas="$TARGET_CNT" -f aistarget_deployment.yml
+for i in $(seq 0 $(($TARGET_CNT-1)));do
+  export ID=$i
+  export PORT=$((9090+$i))
+  envsubst < aistarget_deployment.yml | kubectl create -f -
+done
 
 echo "List of running pods"
 kubectl get pods -o wide
