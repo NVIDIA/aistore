@@ -29,7 +29,6 @@ type (
 		Marker       string
 		markerDir    string
 		msg          *cmn.SelectMsg
-		bucket       string
 		timeFormat   string
 		fast         bool
 	}
@@ -53,7 +52,7 @@ var (
 	}
 )
 
-func NewWalkInfo(ctx context.Context, t cluster.Target, bucket string, msg *cmn.SelectMsg) *WalkInfo {
+func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *WalkInfo {
 	// Marker is always a file name, so we need to strip filename from path
 	markerDir := ""
 	if msg.PageMarker != "" {
@@ -79,14 +78,13 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, bucket string, msg *cmn.
 		Marker:       msg.PageMarker,
 		markerDir:    markerDir,
 		msg:          msg,
-		bucket:       bucket,
 		fast:         msg.Fast,
 		timeFormat:   msg.TimeFormat,
 		propNeeded:   propNeeded,
 	}
 }
 
-func NewDefaultWalkInfo(t cluster.Target, bucket string) *WalkInfo {
+func NewDefaultWalkInfo(t cluster.Target) *WalkInfo {
 	propNeeded := make(map[string]bool, len(wiProps))
 	for _, prop := range wiProps {
 		propNeeded[prop] = true
@@ -94,7 +92,6 @@ func NewDefaultWalkInfo(t cluster.Target, bucket string) *WalkInfo {
 	return &WalkInfo{
 		t:          t, // targetrunner
 		smap:       t.GetSowner().Get(),
-		bucket:     bucket,
 		propNeeded: propNeeded,
 	}
 }

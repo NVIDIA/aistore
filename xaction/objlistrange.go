@@ -223,7 +223,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 	msg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	for !r.Aborted() {
 		if bck.IsAIS() {
-			wi := walkinfo.NewWalkInfo(args.Ctx, r.t, bck.Name, msg)
+			wi := walkinfo.NewWalkInfo(args.Ctx, r.t, msg)
 			walk := objwalk.NewWalk(args.Ctx, r.t, bck, msg)
 			bucketListPage, err = walk.DefaultLocalObjPage(msg.WantObjectsCnt(), wi)
 		} else {

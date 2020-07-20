@@ -53,7 +53,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wi := walkinfo.NewDefaultWalkInfo(t, msg.QueryMsg.From.Bck.Name)
+	wi := walkinfo.NewDefaultWalkInfo(t)
 	wi.SetObjectFilter(q.Filter())
 
 	xact, isNew, err := xaction.Registry.RenewObjectsListingXact(t, q, wi, handle)

@@ -108,7 +108,7 @@ func (t *bckListTask) Run() error {
 
 	walk := objwalk.NewWalk(ctx, t.t, bck, t.msg)
 	if bck.IsAIS() || t.msg.Cached {
-		wi := walkinfo.NewWalkInfo(ctx, t.t, bck.Name, t.msg)
+		wi := walkinfo.NewWalkInfo(ctx, t.t, t.msg)
 		t.UpdateResult(t.localObjPage(wi))
 	} else {
 		t.UpdateResult(walk.CloudObjPage())
@@ -272,7 +272,7 @@ func (t *bckSummaryTask) Run() error {
 				for {
 					walk := objwalk.NewWalk(context.Background(), t.t, bck, msg)
 					if bck.IsAIS() {
-						wi := walkinfo.NewWalkInfo(t.ctx, t.t, bck.Name, msg)
+						wi := walkinfo.NewWalkInfo(t.ctx, t.t, msg)
 						list, err = walk.DefaultLocalObjPage(msg.WantObjectsCnt(), wi)
 					} else {
 						list, err = walk.CloudObjPage()

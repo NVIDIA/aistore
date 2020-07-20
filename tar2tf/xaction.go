@@ -42,7 +42,7 @@ func (t *Xact) Run() error {
 		// is the same as tar2tf request life span. If request get's canceled,
 		// the xaction will terminate as well
 		q         = query.NewQuery(objSrc, bckSrc, nil)
-		resultSet = query.NewObjectsListing(t.T, q, walkinfo.NewDefaultWalkInfo(t.T, bckSrc.Bck.Name), cmn.GenUUID())
+		resultSet = query.NewObjectsListing(t.T, q, walkinfo.NewDefaultWalkInfo(t.T), cmn.GenUUID())
 	)
 	go resultSet.Start()
 
