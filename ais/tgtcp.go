@@ -52,6 +52,14 @@ func (t *targetrunner) initHostIP() {
 	t.si.PublicNet.DaemonPort = strconv.Itoa(extPort)
 	t.si.PublicNet.DirectURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
 	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetworkPublic))
+
+	// applies to intra-cluster networks unless separately defined
+	if !config.Net.UseIntraControl {
+		t.si.IntraControlNet = t.si.PublicNet
+	}
+	if !config.Net.UseIntraData {
+		t.si.IntraDataNet = t.si.PublicNet
+	}
 }
 
 func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error) {
