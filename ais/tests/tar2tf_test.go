@@ -21,8 +21,8 @@ import (
 	"github.com/NVIDIA/go-tfdata/tfdata/transform"
 )
 
-func TestTarToTFRecordFile(t *testing.T) {
-	t.Skip("Should PASS when transformations are supported outside of k8s.")
+func TestTar2TFS3(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
 
 	const (
 		tarPath    = "data/small-mnist-3.tar"
