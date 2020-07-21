@@ -41,6 +41,7 @@ func newQueryState(smap *cluster.Smap, workersCnt uint) (*queryState, error) {
 		notifListenerBase: notifListenerBase{
 			srcs: smap.Tmap.Clone(),
 			f:    func(n notifListener, msg interface{}, err error) {},
+			ty:   notifXact,
 		},
 		workersCnt: workersCnt,
 		targets:    targets,
@@ -151,11 +152,11 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 	if redirected := p.jtx.redirectToOwner(w, r, msg.Handle, msg); redirected {
 		return
 	}
-	entry, ok := p.jtx.checkEntry(w, r, msg.Handle)
+	nl, ok := p.jtx.checkEntry(w, r, msg.Handle)
 	if !ok {
 		return
 	}
-	state := entry.nl.(*queryState)
+	state := nl.(*queryState)
 	if err := state.err(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return

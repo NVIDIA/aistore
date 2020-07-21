@@ -71,17 +71,22 @@ type (
 		finTime() int64
 		finished() bool
 		String() string
+		isOwned() bool
+		setOwned(bool)
 	}
+
 	notifListenerBase struct {
 		sync.RWMutex
-		srcs cluster.NodeMap  // expected notifiers
-		errs map[string]error // [node-ID => notifMsg.Err]
-		uuid string           // UUID
-		f    notifCallback    // actual callback
-		rc   int              // refcount
-		ty   int              // notifMsg.Ty enum (above)
-		tfin atomic.Int64     // timestamp when finished
+		srcs  cluster.NodeMap  // expected notifiers
+		errs  map[string]error // [node-ID => notifMsg.Err]
+		uuid  string           // UUID
+		f     notifCallback    // actual callback
+		rc    int              // refcount
+		ty    int              // notifMsg.Ty enum (above)
+		tfin  atomic.Int64     // timestamp when finished
+		owned bool             // used to check NL is owned by proxy
 	}
+
 	notifListenerBck struct {
 		notifListenerBase
 		nlp *cluster.NameLockPair
@@ -145,6 +150,7 @@ func (nlb *notifListenerBase) addErr(sid string, err error) {
 	}
 	nlb.errs[sid] = err
 }
+
 func (nlb *notifListenerBase) err() error {
 	for _, err := range nlb.errs {
 		return err
@@ -167,6 +173,9 @@ func (nlb *notifListenerBase) String() string {
 	}
 	return hdr
 }
+
+func (nlb *notifListenerBase) isOwned() bool       { return nlb.owned }
+func (nlb *notifListenerBase) setOwned(owned bool) { nlb.owned = owned }
 
 ////////////
 // notifs //
@@ -305,12 +314,21 @@ func (n *notifs) handleMsg(nl notifListener, tid string, srcErr error) (err erro
 func (n *notifs) housekeep() time.Duration {
 	now := time.Now().UnixNano()
 	n.fmu.Lock()
+	var ownedRmCount int
 	for uuid, nl := range n.fin {
 		if time.Duration(now-nl.finTime()) > notifsRemoveMult*notifsHousekeepT {
 			delete(n.fin, uuid)
+			if nl.isOwned() {
+				ownedRmCount++
+			}
 		}
 	}
 	n.fmu.Unlock()
+	// TODO: remove when periodic broadcast is implemented
+	if ownedRmCount > 0 {
+		n.p.jtx.broadcastTable()
+	}
+
 	if len(n.m) == 0 {
 		return notifsHousekeepT
 	}
@@ -366,6 +384,44 @@ func (n *notifs) housekeep() time.Duration {
 		delete(tempn, u)
 	}
 	return notifsHousekeepT
+}
+
+func (n *notifs) isOwner(uuid string) bool {
+	if nl, exists := n.entry(uuid); exists {
+		return nl.isOwned()
+	}
+	return false
+}
+
+func (n *notifs) _forEach(m map[string]notifListener, fn func(string, notifListener), preds ...func(notifListener) bool) {
+	var pred func(notifListener) bool
+	if len(preds) != 0 {
+		pred = preds[0]
+	}
+
+	for uuid, nl := range m {
+		if pred == nil || pred(nl) {
+			fn(uuid, nl)
+		}
+	}
+}
+
+func (n *notifs) forEachRunning(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
+	n.RLock()
+	defer n.RUnlock()
+	n._forEach(n.m, fn, preds...)
+}
+
+func (n *notifs) forEachFin(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
+	n.fmu.RLock()
+	defer n.fmu.RUnlock()
+	n._forEach(n.fin, fn, preds...)
+}
+
+// FIXME: possible race condition
+func (n *notifs) forEach(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
+	n.forEachRunning(fn, preds...)
+	n.forEachFin(fn, preds...)
 }
 
 func (n *notifs) hkXact(nl notifListener, res callResult) (msg interface{}, err error, done bool) {
@@ -465,4 +521,8 @@ func notifText(ty int) string {
 
 func (msg *notifMsg) String() string {
 	return fmt.Sprintf("%s[%s,%v]<=%s", notifText(int(msg.Ty)), string(msg.Data), msg.Err, msg.Snode)
+}
+
+func isOwned(nl notifListener) (ok bool) {
+	return nl.isOwned()
 }

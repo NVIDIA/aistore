@@ -17,12 +17,9 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/hk"
 )
 
 // jtx (Job, Task, eXtended action) takes care of ownership of these entities.
@@ -45,15 +42,6 @@ import (
 //  * (medium/hard) Decide if we should be owner or maybe we should assign other proxy.
 
 const (
-	jtxTaskKind jtxKind = iota
-	// jtxXactKind
-	// jtxJobKind
-)
-
-const (
-	keepFinishedInterval = time.Minute              // how long we should keep finished entries
-	hkInterval           = keepFinishedInterval / 2 // how often we should check the entries
-
 	// How long we should wait to make another check to see if the entry exist.
 	// The entry could be on its way and was just added therefore we don't need
 	// to do a broadcast to other proxies to find it out (see: `redirectToOwner`).
@@ -61,8 +49,6 @@ const (
 )
 
 type (
-	jtxKind uint8
-
 	jtx struct {
 		p       *proxyrunner
 		mtx     sync.RWMutex
@@ -70,9 +56,7 @@ type (
 	}
 
 	jtxEntry struct {
-		nl     notifListener
-		kind   jtxKind
-		owners []*cluster.Snode
+		owners cmn.StringSet // DaemonID of owner Snodes
 	}
 )
 
@@ -81,13 +65,8 @@ var (
 	_ json.Unmarshaler = &jtx{}
 )
 
-func (e *jtxEntry) isOwner(si *cluster.Snode) bool {
-	for _, owner := range e.owners {
-		if owner.Equals(si) {
-			return true
-		}
-	}
-	return false
+func (e *jtxEntry) isOwner(daemonID string) bool {
+	return e.owners.Contains(daemonID)
 }
 
 func newJTX(p *proxyrunner) *jtx {
@@ -96,25 +75,16 @@ func newJTX(p *proxyrunner) *jtx {
 		entries: make(map[string]*jtxEntry),
 	}
 	p.GetSowner().Listeners().Reg(v)
-	hk.Reg(v.String(), v.housekeep)
 	return v
 }
 
 func (o *jtx) addEntry(uuid string, nl notifListener) {
 	cmn.Assert(uuid != "")
-	o.mtx.Lock()
-	cmn.Assert(o.entries[uuid] == nil)
-	entry := &jtxEntry{
-		nl:   nl,
-		kind: jtxTaskKind,
-		// NOTE: Currently assume that the owner is the one that started.
-		owners: []*cluster.Snode{o.p.Snode()},
-	}
-	o.entries[uuid] = entry
-	o.p.notifs.add(uuid, entry.nl)
-	o.mtx.Unlock()
+	cmn.Assert(!o.p.notifs.isOwner(uuid))
+	nl.setOwned(true)
+	o.p.notifs.add(uuid, nl)
 
-	// TODO: broadcast periodically, not on every entry
+	// TODO: broadcast periodically, not on every entry. Remove addEntry method when this is complete.
 	o.broadcastTable()
 }
 
@@ -136,7 +106,7 @@ func (o *jtx) ListenSmapChanged() {
 	for uuid, entry := range o.entries {
 		// Remove entry if the proxy is no longer part of the cluster.
 		// TODO: check all owners.
-		if smap.GetProxy(entry.owners[0].ID()) == nil {
+		if smap.GetProxy(entry.owners.Keys()[0]) == nil {
 			o.removeEntry(uuid)
 			continue
 		}
@@ -151,14 +121,12 @@ func (o *jtx) MarshalJSON() ([]byte, error) {
 	buf.WriteByte('"')
 	buf.WriteString(o.p.Snode().DaemonID)
 	buf.WriteByte(',')
-	o.mtx.RLock()
-	for uuid, entry := range o.entries {
-		if entry.isOwner(o.p.si) {
-			buf.WriteString(uuid)
-			buf.WriteByte(',')
-		}
-	}
-	o.mtx.RUnlock()
+	o.p.notifs.forEach(func(uuid string, nl notifListener) {
+		// TODO: Also include status info RUNNING|FINISHED|ABORTED...
+		buf.WriteString(uuid)
+		buf.WriteByte(',')
+	}, isOwned)
+
 	buf.WriteByte('"')
 	return buf.Bytes(), nil
 }
@@ -169,49 +137,35 @@ func (o *jtx) UnmarshalJSON(b []byte) error {
 	if len(b) == 0 || len(parts) == 0 {
 		return errors.New("not enough parts")
 	}
-	fromProxy := o.p.GetSowner().Get().GetProxy(string(parts[0]))
-	if fromProxy == nil {
+
+	daemonID := string(parts[0])
+	if fromProxy := o.p.GetSowner().Get().GetProxy(daemonID); fromProxy == nil {
 		return fmt.Errorf("proxy %q not exist", parts[0])
 	}
 	o.mtx.Lock()
 	// 1. Remove entries which are owned by `fromProxy`.
 	for uuid, entry := range o.entries {
-		if entry.isOwner(fromProxy) {
-			o.removeEntry(uuid)
+		if entry.isOwner(daemonID) {
+			delete(entry.owners, daemonID)
+			if len(entry.owners) == 0 {
+				o.removeEntry(uuid)
+			}
 		}
 	}
+
 	// 2. Populate with entries which are owned by `fromProxy`.
 	for _, b := range parts[1:] {
 		debug.Assert(len(b) > 0)
-		o.entries[string(b)] = &jtxEntry{
-			owners: []*cluster.Snode{fromProxy},
+		uuid := string(b)
+
+		// Note: should have only one owner for now
+		cmn.Assert(!o.p.notifs.isOwner(uuid))
+		o.entries[uuid] = &jtxEntry{
+			owners: cmn.NewStringSet(daemonID),
 		}
 	}
 	o.mtx.Unlock()
 	return nil
-}
-
-func (o *jtx) housekeep() time.Duration {
-	var (
-		removedCnt     int
-		deadlineCutoff = mono.NanoTime() - int64(keepFinishedInterval)
-	)
-	o.mtx.Lock()
-	// Check if any entry is old enough to be removed.
-	// TODO: remove this code once `onRemove` callback in notifications is implemented.
-	for uuid, entry := range o.entries {
-		if entry.isOwner(o.p.Snode()) {
-			if entry.nl.finTime() < deadlineCutoff {
-				o.removeEntry(uuid)
-				removedCnt++
-			}
-		}
-	}
-	o.mtx.Unlock()
-	if removedCnt > 0 {
-		go o.broadcastTable()
-	}
-	return hkInterval
 }
 
 // HTTP STUFF
@@ -221,7 +175,7 @@ func (o *jtx) handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		uuid := r.URL.Query().Get(cmn.URLParamUUID)
-		if entry, exists := o.entry(uuid); exists && entry.isOwner(o.p.si) {
+		if o.p.notifs.isOwner(uuid) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -246,6 +200,9 @@ func (o *jtx) broadcastTable() {
 
 func (o *jtx) redirectToOwner(w http.ResponseWriter, r *http.Request, uuid string, msg interface{}) (redirected bool) {
 	cmn.Assert(uuid != "")
+	if o.p.notifs.isOwner(uuid) {
+		return
+	}
 
 	if msg != nil {
 		body := cmn.MustMarshal(msg)
@@ -287,27 +244,23 @@ Check:
 		return true
 	}
 
-	// Check if "the proxy" is the owner of the request.
-	if entry.isOwner(o.p.Snode()) {
-		return false
-	}
-
 	// Pick random owner and forward the request.
-	owner := entry.owners[rand.Intn(len(entry.owners))]
-	o.p.reverseNodeRequest(w, r, owner)
+	owner := entry.owners.Keys()[rand.Intn(len(entry.owners))]
+	ownerNode := o.p.GetSowner().Get().GetNode(owner)
+	o.p.reverseNodeRequest(w, r, ownerNode)
 	return true
 }
 
-func (o *jtx) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (entry *jtxEntry, ok bool) {
-	entry, exists := o.entry(uuid)
+func (o *jtx) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifListener, ok bool) {
+	nl, exists := o.p.notifs.entry(uuid)
 	if !exists {
 		o.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", uuid)
 		return
 	}
-	if entry.nl.finished() {
+	if nl.finished() {
 		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
 		o.p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", uuid)
 		return
 	}
-	return entry, true
+	return nl, true
 }

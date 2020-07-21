@@ -275,6 +275,12 @@ func (kv SimpleKVs) Compare(other SimpleKVs) bool {
 	return true
 }
 
+func NewStringSet(keys ...string) (ss StringSet) {
+	ss = make(StringSet, len(keys))
+	ss.Add(keys...)
+	return
+}
+
 func (ss StringSet) String() string {
 	keys := ss.Keys()
 	sort.Strings(keys)
