@@ -26,7 +26,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func TestTransformer(t *testing.T) {
+func TestKubeTransformer(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
 	tests := []testConfig{
 		{"echo", "hpull://", "", "", nil, false},
@@ -102,8 +102,8 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 		t.Log("Init transform")
 		uuid, err = api.TransformInit(defaultAPIParams, spec)
 		tassert.CheckFatal(t, err)
+		defer api.TransformStop(defaultAPIParams, uuid)
 	}
-
 	fho, err := cmn.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)
 	defer func() {

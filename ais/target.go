@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/transform"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
@@ -361,7 +362,7 @@ func (t *targetrunner) Stop(err error) {
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
 	}
-
+	transform.StopStaticTransformers()
 	t.httprunner.stop(err)
 }
 

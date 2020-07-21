@@ -110,7 +110,7 @@ test-long)
 test-run)
   echo "Running test with regex..." >&2
   errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 -timeout 2h  -run="${RE}" "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL: Bench\|^--- FAIL: Test" )
-  err_count=$(echo "${errs}" | wc -l)
+  echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
   perror $1 "${errs}"
   ;;
 

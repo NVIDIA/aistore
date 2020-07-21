@@ -128,3 +128,23 @@ test:bench:
   script:
     - go get -u golang.org/x/tools/cmd/benchcmp
     - make test-bench
+
+test:kube:
+  stage: test-long
+  only:
+    - schedules
+  variables:
+    AIS_ENDPOINT: "localhost:8080"
+    AIS_NODE_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
+  tags:
+    - ais-kube
+  script:
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    - chmod +x ./kubectl
+    - mv ./kubectl /usr/local/bin/kubectl
+    - kubectl version --client
+    - make deploy <<< $'1\n1\n3\n0'
+    - status=0
+    - BUCKET="test" RE="TestKube" make test-run || status=$?
+    - make kill
+    - exit $status # TODO: hack to prevent pod hangs on failures

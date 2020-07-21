@@ -144,6 +144,21 @@ func IsStaticTransformer(name string) bool {
 	return ok
 }
 
+// This is called for cleanup after end of execution
+func StopStaticTransformers() {
+	for staticTf := range staticTransformers {
+		c, exists := reg.getByName(staticTf)
+		if !exists {
+			glog.Errorf("transformation with name %q id doesn't exist", staticTf)
+			continue
+		}
+		err := exec.Command("kubectl", "delete", "pod", c.PodName(), "--grace-period=5").Run()
+		if err != nil {
+			glog.Errorf("error deleting static transformer: %s, err: %v", staticTf, err)
+		}
+	}
+}
+
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func setTransformAffinity(pod *corev1.Pod) error {
 	if pod.Spec.Affinity == nil {
