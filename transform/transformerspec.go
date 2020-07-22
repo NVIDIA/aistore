@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	// TODO: replace localhost registry with a public registry
 	tar2TfSpec = []byte(`
 apiVersion: v1
 kind: Pod
@@ -23,11 +22,10 @@ metadata:
 spec:
   containers:
     - name: server
-      image: localhost:5000/tar2tf:v1
+      image: aistore/tar2tf:latest
       imagePullPolicy: Always
       ports:
         - containerPort: 80
-
 `)
 )
 
