@@ -113,11 +113,11 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := h.owner.smap.get()
-	if smap.ProxySI == nil {
+	if smap.Primary == nil {
 		h.invalmsghdlrf(w, r, "Cannot vote: current primary undefined, local %s", smap)
 		return
 	}
-	currPrimaryID := smap.ProxySI.ID()
+	currPrimaryID := smap.Primary.ID()
 	if candidate == currPrimaryID {
 		h.invalmsghdlrf(w, r, "Candidate %s == the current primary %q", candidate, currPrimaryID)
 		return
@@ -183,7 +183,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 		if psi == nil {
 			return &errNodeNotFound{"cannot accept new primary election", newPrimary, h.si, clone}
 		}
-		clone.ProxySI = psi
+		clone.Primary = psi
 		if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {
 			clone.delProxy(oldPrimary)
 		}
@@ -220,7 +220,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	}
 
 	smap := p.owner.smap.get()
-	psi, err := cluster.HrwProxy(&smap.Smap, smap.ProxySI.ID())
+	psi, err := cluster.HrwProxy(&smap.Smap, smap.Primary.ID())
 	if err != nil {
 		p.invalmsghdlrf(w, r, "Error preforming HRW: %s", err)
 		return
@@ -246,7 +246,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	smap.deepCopy(&vr.Smap)
 
 	// election should be started in a goroutine as it must not hang the http handler
-	go p.proxyElection(vr, smap.ProxySI)
+	go p.proxyElection(vr, smap.Primary)
 }
 
 //===================
@@ -406,13 +406,13 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 	if !clone.isValid() {
 		return
 	}
-	glog.Infof("%s: primary %s has failed\n", p.si, clone.ProxySI.NameEx())
+	glog.Infof("%s: primary %s has failed\n", p.si, clone.Primary.NameEx())
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be
 	// elected as the primary one.
 	for {
 		// Generate the next candidate
-		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.ProxySI.ID())
+		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.Primary.ID())
 		if err != nil {
 			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", err)
 			return
@@ -425,19 +425,19 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			glog.Infof("%s: Starting election (candidate = self)", p.si)
 			vr := &VoteRecord{
 				Candidate: nextPrimaryProxy.ID(),
-				Primary:   clone.ProxySI.ID(),
+				Primary:   clone.Primary.ID(),
 				StartTime: time.Now(),
 				Initiator: p.si.ID(),
 			}
 			clone.deepCopy(&vr.Smap)
-			p.proxyElection(vr, clone.ProxySI)
+			p.proxyElection(vr, clone.Primary)
 			return
 		}
 
 		// ask the current primary candidate to start election
 		vr := &VoteInitiation{
 			Candidate: nextPrimaryProxy.ID(),
-			Primary:   clone.ProxySI.ID(),
+			Primary:   clone.Primary.ID(),
 			StartTime: time.Now(),
 			Initiator: p.si.ID(),
 		}
@@ -460,13 +460,13 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 	if !clone.isValid() {
 		return
 	}
-	glog.Infof("%s: primary %s failed\n", t.si, clone.ProxySI.NameEx())
+	glog.Infof("%s: primary %s failed\n", t.si, clone.Primary.NameEx())
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be
 	// elected as the primary one.
 	for {
 		// Generate the next candidate
-		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.ProxySI.ID())
+		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.Primary.ID())
 		if err != nil {
 			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", err)
 			return
@@ -483,7 +483,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 		// ask the current primary candidate to start election
 		vr := &VoteInitiation{
 			Candidate: nextPrimaryProxy.ID(),
-			Primary:   clone.ProxySI.ID(),
+			Primary:   clone.Primary.ID(),
 			StartTime: time.Now(),
 			Initiator: t.si.ID(),
 		}

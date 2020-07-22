@@ -41,7 +41,7 @@ const (
 		"{{ range $key, $value := .Smap.Tmap }}" + SmapBody + "{{end}}\n" +
 		"Non-Electable:\n" +
 		"{{ range $key, $ := .Smap.NonElects }} ProxyID: {{$key}}\n{{end}}\n" +
-		"PrimaryProxy: {{.Smap.ProxySI.ID}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
+		"PrimaryProxy: {{.Smap.Primary.ID}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
 	// Proxy Info
 	ProxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t CPU USED %\t UPTIME\t STATUS\n"
@@ -78,7 +78,7 @@ const (
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
 	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{len .Smap.NonElects}} - unelectable)\n " +
-		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.ProxySI.ID}}\n Smap Version:\t{{.Smap.Version}}\n"
+		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.Primary.ID}}\n Smap Version:\t{{.Smap.Version}}\n"
 
 	ClusterInfoTmpl = AllProxyInfoTmpl + "\n" + TargetInfoTmpl + "\n" + ClusterSummary
 	// Disk Stats
@@ -535,7 +535,7 @@ func fmtDuration(d int64) string {
 }
 
 func fmtDaemonID(id string, smap cluster.Smap) string {
-	if id == smap.ProxySI.ID() {
+	if id == smap.Primary.ID() {
 		return id + primarySuffix
 	}
 	if _, ok := smap.NonElects[id]; ok {

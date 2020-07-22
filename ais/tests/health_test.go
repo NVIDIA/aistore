@@ -36,7 +36,7 @@ func TestPrimaryProxyHealth(t *testing.T) {
 		smap     = tutils.GetClusterMap(t, proxyURL)
 	)
 
-	err := api.Health(tutils.BaseAPIParams(proxyURL), smap.ProxySI)
+	err := api.Health(tutils.BaseAPIParams(proxyURL), smap.Primary)
 	tassert.CheckError(t, err)
 }
 

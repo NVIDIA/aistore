@@ -53,7 +53,7 @@ type (
 		Tmap         NodeMap       `json:"tmap"`                    // targetID -> targetInfo
 		Pmap         NodeMap       `json:"pmap"`                    // proxyID -> proxyInfo
 		NonElects    cmn.SimpleKVs `json:"non_electable,omitempty"` // non-electable proxies: DaemonID => [info]
-		ProxySI      *Snode        `json:"proxy_si"`                // primary
+		Primary      *Snode        `json:"proxy_si"`                // (json tag preserved for back. compat.)
 		Version      int64         `json:"version,string"`          // version
 		UUID         string        `json:"uuid"`                    // UUID - assigned at creation time
 		CreationTime string        `json:"creation_time"`           // creation time
@@ -229,7 +229,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	if excludePrimary {
 		for _, proxy := range m.Pmap {
-			if m.ProxySI.DaemonID != proxy.DaemonID {
+			if m.Primary.DaemonID != proxy.DaemonID {
 				return proxy, nil
 			}
 		}
@@ -274,7 +274,7 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 	if m.Version != other.Version {
 		sameVersion = false
 	}
-	if m.ProxySI == nil || other.ProxySI == nil || !m.ProxySI.Equals(other.ProxySI) {
+	if m.Primary == nil || other.Primary == nil || !m.Primary.Equals(other.Primary) {
 		eq = false
 		return
 	}

@@ -141,7 +141,7 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 	if smap == nil || !smap.isValid() {
 		return
 	}
-	if stopped = tkr.register(tkr.t.sendKeepalive, smap.ProxySI.ID(), tkr.t.si.Name()); stopped {
+	if stopped = tkr.register(tkr.t.sendKeepalive, smap.Primary.ID(), tkr.t.si.Name()); stopped {
 		tkr.t.onPrimaryProxyFailure()
 	}
 	return
@@ -163,11 +163,11 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 	if smap.isPrimary(pkr.p.si) {
 		return pkr.pingAllOthers()
 	}
-	if !pkr.isTimeToPing(smap.ProxySI.ID()) {
+	if !pkr.isTimeToPing(smap.Primary.ID()) {
 		return
 	}
 
-	if stopped = pkr.register(pkr.p.sendKeepalive, smap.ProxySI.ID(), pkr.p.si.Name()); stopped {
+	if stopped = pkr.register(pkr.p.sendKeepalive, smap.Primary.ID(), pkr.p.si.Name()); stopped {
 		pkr.p.onPrimaryProxyFailure()
 	}
 	return

@@ -236,7 +236,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 func (p *proxyrunner) unregisterSelf() (int, error) {
 	smap := p.owner.smap.get()
 	args := callArgs{
-		si: smap.ProxySI,
+		si: smap.Primary,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
 			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, p.si.ID()),
@@ -778,7 +778,7 @@ func (cii *clusterInfo) fill(p *proxyrunner) {
 	cii.BMD.UUID = bmd.UUID
 	cii.Smap.Version = smap.version()
 	cii.Smap.UUID = smap.UUID
-	cii.Smap.PrimaryURL = smap.ProxySI.IntraControlNet.DirectURL
+	cii.Smap.PrimaryURL = smap.Primary.IntraControlNet.DirectURL
 }
 
 // POST { action } /v1/buckets/bucket-name
@@ -1495,9 +1495,9 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	}
 	primary := &p.rproxy.primary
 	primary.Lock()
-	if primary.url != smap.ProxySI.PublicNet.DirectURL {
-		primary.url = smap.ProxySI.PublicNet.DirectURL
-		uparsed, err := url.Parse(smap.ProxySI.PublicNet.DirectURL)
+	if primary.url != smap.Primary.PublicNet.DirectURL {
+		primary.url = smap.Primary.PublicNet.DirectURL
+		uparsed, err := url.Parse(smap.Primary.PublicNet.DirectURL)
 		cmn.AssertNoErr(err)
 		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
 		cfg := cmn.GCO.Get()
@@ -1512,9 +1512,9 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		r.ContentLength = int64(len(body)) // directly setting content-length
 	}
 	if msg != nil {
-		glog.Infof(`%s: forwarding "%s:%s" to the primary %s`, p.si, msg.Action, s, smap.ProxySI)
+		glog.Infof(`%s: forwarding "%s:%s" to the primary %s`, p.si, msg.Action, s, smap.Primary)
 	} else {
-		glog.Infof("%s: forwarding %q to the primary %s", p.si, s, smap.ProxySI)
+		glog.Infof("%s: forwarding %q to the primary %s", p.si, s, smap.Primary)
 	}
 	primary.rp.ServeHTTP(w, r)
 	return true
@@ -2281,7 +2281,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if proxyID != newSmap.ProxySI.ID() {
+	if proxyID != newSmap.Primary.ID() {
 		p.invalmsghdlrf(w, r, "%s: proxy %s is not the primary, current %s", p.si, proxyID, newSmap.pp())
 		return
 	}
@@ -2289,7 +2289,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	// notify metasync to cancel all pending sync requests
 	p.metasyncer.becomeNonPrimary()
 	p.owner.smap.put(newSmap)
-	res := p.registerToURL(newSmap.ProxySI.IntraControlNet.DirectURL, newSmap.ProxySI, cmn.DefaultTimeout, nil, false)
+	res := p.registerToURL(newSmap.Primary.IntraControlNet.DirectURL, newSmap.Primary, cmn.DefaultTimeout, nil, false)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.err.Error())
 		return
@@ -2350,7 +2350,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	err = p.owner.smap.modify(func(clone *smapX) error {
-		clone.ProxySI = psi
+		clone.Primary = psi
 		return nil
 	})
 	cmn.AssertNoErr(err)
@@ -2368,7 +2368,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 				clone.delProxy(proxyIDToRemove)
 			}
 
-			clone.ProxySI = p.si
+			clone.Primary = p.si
 			clone.Version += 100
 			return nil
 		},
@@ -2409,7 +2409,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if proxyid == p.si.ID() {
-		cmn.Assert(p.si.ID() == smap.ProxySI.ID()) // must be forwardCP-ed
+		cmn.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
 		glog.Warningf("Request to set primary = %s = self: nothing to do", proxyid)
 		return
 	}
@@ -2428,7 +2428,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	// (I.5) commit locally
 	err = p.owner.smap.modify(func(clone *smapX) error {
-		clone.ProxySI = psi
+		clone.Primary = psi
 		p.metasyncer.becomeNonPrimary()
 		return nil
 	})
@@ -2855,7 +2855,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 	smap = p.owner.smap.get()
 
 	if !smap.isPrimary(p.si) {
-		err = fmt.Errorf("%s is not the primary(%s, %s): cannot %s %s", p.si, smap.ProxySI, smap, tag, nsi)
+		err = fmt.Errorf("%s is not the primary(%s, %s): cannot %s %s", p.si, smap.Primary, smap, tag, nsi)
 		return
 	}
 
@@ -2927,7 +2927,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 			smap = p.owner.smap.get()
 			if !smap.isPrimary(p.si) {
 				return fmt.Errorf("%s is not primary(%s, %s): cannot add %s",
-					p.si, smap.ProxySI, smap, nsi)
+					p.si, smap.Primary, smap, nsi)
 			}
 			exists = clone.putNode(nsi, nonElectable)
 			if nsi.IsTarget() {

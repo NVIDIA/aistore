@@ -90,7 +90,7 @@ func newPrimary() *proxyrunner {
 	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 
 	smap.addProxy(p.si)
-	smap.ProxySI = p.si
+	smap.Primary = p.si
 	p.owner.smap.put(smap)
 
 	config := cmn.GCO.BeginUpdate()

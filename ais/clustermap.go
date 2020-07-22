@@ -133,11 +133,11 @@ func (m *smapX) isValid() bool {
 	if m == nil {
 		return false
 	}
-	if m.ProxySI == nil {
+	if m.Primary == nil {
 		return false
 	}
-	if m.isPresent(m.ProxySI) {
-		cmn.Assert(m.ProxySI.ID() != "")
+	if m.isPresent(m.Primary) {
+		cmn.Assert(m.Primary.ID() != "")
 		return true
 	}
 	return false
@@ -147,7 +147,7 @@ func (m *smapX) isPrimary(self *cluster.Snode) bool {
 	if !m.isValid() {
 		return false
 	}
-	return m.ProxySI.ID() == self.ID()
+	return m.Primary.ID() == self.ID()
 }
 
 func (m *smapX) isPresent(si *cluster.Snode) bool {
@@ -396,7 +396,7 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 	defer cmn.GCO.CommitUpdate(config)
 
 	origURL := config.Proxy.PrimaryURL
-	config.Proxy.PrimaryURL = newSmap.ProxySI.PublicNet.DirectURL
+	config.Proxy.PrimaryURL = newSmap.Primary.PublicNet.DirectURL
 	if err := jsp.Save(confFile, config, jsp.Plain()); err != nil {
 		err = fmt.Errorf("failed writing config file %s, err: %v", confFile, err)
 		config.Proxy.PrimaryURL = origURL

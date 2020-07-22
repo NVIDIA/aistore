@@ -109,7 +109,7 @@ func (t *targetrunner) unregister(_ ...string) (int, error) {
 		return 0, nil
 	}
 	args := callArgs{
-		si: smap.ProxySI,
+		si: smap.Primary,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
 			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.ID()),
@@ -261,8 +261,8 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	}
 
 	err = t.owner.smap.modify(func(clone *smapX) error {
-		if clone.ProxySI.ID() != psi.ID() {
-			clone.ProxySI = psi
+		if clone.Primary.ID() != psi.ID() {
+			clone.Primary = psi
 		}
 		return nil
 	})
@@ -697,7 +697,7 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (
 	if msg.Action != "" {
 		s = ", action " + msg.Action
 	}
-	glog.Infof("%s: receive %s%s, primary %s%s", t.si, newSmap.StringEx(), from, newSmap.ProxySI, s)
+	glog.Infof("%s: receive %s%s, primary %s%s", t.si, newSmap.StringEx(), from, newSmap.Primary, s)
 	if !newSmap.isPresent(t.si) {
 		err = fmt.Errorf("%s: not finding self in the new %s", t.si, newSmap.StringEx())
 		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
@@ -841,7 +841,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	if smap == nil || !smap.isValid() {
 		return fmt.Errorf("%s: Smap is nil or invalid", t.si)
 	}
-	psi := smap.ProxySI
+	psi := smap.Primary
 	q := url.Values{}
 	q.Add(cmn.URLParamWhat, what)
 	if renamed != "" {

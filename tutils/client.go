@@ -132,7 +132,7 @@ func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
 	if err != nil {
 		return nil, err
 	}
-	return smap.ProxySI, err
+	return smap.Primary, err
 }
 
 func CreateFreshBucket(tb testing.TB, proxyURL string, bck cmn.Bck, ops ...cmn.BucketPropsToUpdate) {

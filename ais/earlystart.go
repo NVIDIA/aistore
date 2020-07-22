@@ -71,7 +71,7 @@ func (p *proxyrunner) bootstrap() {
 	if err != nil {
 		if loaded {
 			maxVerSmap, _ := p.uncoverMeta(smap)
-			if maxVerSmap != nil && maxVerSmap.ProxySI != nil {
+			if maxVerSmap != nil && maxVerSmap.Primary != nil {
 				glog.Infof("%s: second attempt  - joining via %s...", p.si, maxVerSmap)
 				err = p.secondaryStartup(maxVerSmap)
 			}
@@ -117,12 +117,12 @@ func (p *proxyrunner) determineRole(loadedSmap *smapX) (pid string, primary bool
 				p.si, cmn.EnvVars.IsPrimary, envP.pid, loadedSmap,
 			)
 			envP.pid = ""
-		} else if loadedSmap.ProxySI.ID() != envP.pid {
+		} else if loadedSmap.Primary.ID() != envP.pid {
 			glog.Warningf(
 				"%s: new %s=%s, previous %s",
-				p.si, cmn.EnvVars.PrimaryID, envP.pid, loadedSmap.ProxySI,
+				p.si, cmn.EnvVars.PrimaryID, envP.pid, loadedSmap.Primary,
 			)
-			loadedSmap.ProxySI = primary
+			loadedSmap.Primary = primary
 		}
 	}
 	if envP.pid != "" {
@@ -141,9 +141,9 @@ func (p *proxyrunner) determineRole(loadedSmap *smapX) (pid string, primary bool
 func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 	if smap == nil {
 		smap = newSmap()
-	} else if smap.ProxySI.ID() == p.si.ID() {
+	} else if smap.Primary.ID() == p.si.ID() {
 		glog.Infof("%s: zeroing-out primary=self in %s", p.si, smap)
-		smap.ProxySI = nil
+		smap.Primary = nil
 	}
 	p.owner.smap.put(smap)
 	if err := p.withRetry(p.joinCluster, "join", true /* backoff */, primaryURLs...); err != nil {
@@ -178,7 +178,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	// 1: init Smap to accept reg-s
 	p.owner.smap.Lock()
 	smap.Pmap[p.si.ID()] = p.si
-	smap.ProxySI = p.si
+	smap.Primary = p.si
 	p.owner.smap.put(smap)
 	p.owner.smap.Unlock()
 
@@ -190,7 +190,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
-				p.si, maxVerSmap.ProxySI.ID(), maxVerSmap.ProxySI.IntraControlNet.DirectURL)
+				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.IntraControlNet.DirectURL)
 			if err := p.secondaryStartup(maxVerSmap); err != nil {
 				cmn.ExitLogf("FATAL: %v", err)
 			}
@@ -238,7 +238,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	smap = p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		p.owner.smap.Unlock()
-		glog.Infof("%s: registering with %s", p.si, smap.ProxySI.NameEx())
+		glog.Infof("%s: registering with %s", p.si, smap.Primary.NameEx())
 		if err := p.secondaryStartup(smap); err != nil {
 			cmn.ExitLogf("FATAL: %v", err)
 		}
@@ -365,12 +365,12 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	if !sameUUID {
 		// FATAL: cluster integrity error (cie)
 		cmn.ExitLogf("%s: split-brain uuid [%s %s] vs [%s %s]",
-			ciError(10), p.si, smap.StringEx(), maxVerSmap.ProxySI, maxVerSmap.StringEx())
+			ciError(10), p.si, smap.StringEx(), maxVerSmap.Primary, maxVerSmap.StringEx())
 	}
 	if eq && sameVersion {
 		return
 	}
-	if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
+	if maxVerSmap.Primary != nil && maxVerSmap.Primary.ID() != p.si.ID() {
 		if maxVerSmap.version() > smap.version() {
 			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p.si, smap.StringEx(), maxVerSmap.StringEx())
 			maxVerSmap.Pmap[p.si.ID()] = p.si
@@ -379,14 +379,14 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		}
 		// FATAL: cluster integrity error (cie)
 		cmn.ExitLogf("%s: split-brain local [%s %s] vs [%s %s]",
-			ciError(20), p.si, smap.StringEx(), maxVerSmap.ProxySI, maxVerSmap.StringEx())
+			ciError(20), p.si, smap.StringEx(), maxVerSmap.Primary, maxVerSmap.StringEx())
 	}
 	p.owner.smap.Lock()
 	clone := p.owner.smap.get().clone()
 	if !eq {
 		_, err := maxVerSmap.merge(clone, false /*err if detected (IP, port) duplicates*/)
 		if err != nil {
-			cmn.ExitLogf("%s: %v vs [%s: %s]", p.si, err, maxVerSmap.ProxySI, maxVerSmap.StringEx())
+			cmn.ExitLogf("%s: %v vs [%s: %s]", p.si, err, maxVerSmap.Primary, maxVerSmap.StringEx())
 		}
 	} else {
 		clone.UUID = smapUUID
@@ -495,8 +495,8 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 		}
 		if svm.Smap != nil && svm.VoteInProgress {
 			var s string
-			if svm.Smap.ProxySI != nil {
-				s = " of the current one " + svm.Smap.ProxySI.ID()
+			if svm.Smap.Primary != nil {
+				s = " of the current one " + svm.Smap.Primary.ID()
 			}
 			glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si, s)
 			maxVerSmap, maxVerBMD = nil, nil // zero-out as unusable
@@ -535,7 +535,7 @@ func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	)
 	if maxVerSmap != nil && !slowp {
 		if maxVerSmap.UUID == smap.UUID && maxVerSmap.version() > smap.version() {
-			if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.ID() != p.si.ID() {
+			if maxVerSmap.Primary != nil && maxVerSmap.Primary.ID() != p.si.ID() {
 				glog.Infof("%s: my %s is older than max-ver %s",
 					p.si, smap.StringEx(), maxVerSmap.StringEx())
 				return maxVerSmap

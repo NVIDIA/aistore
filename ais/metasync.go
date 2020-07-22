@@ -518,8 +518,8 @@ func (y *metasyncer) isPrimary() bool {
 		reason = "present in the Smap"
 	}
 	lead := "?"
-	if smap.ProxySI != nil {
-		lead = smap.ProxySI.ID()
+	if smap.Primary != nil {
+		lead = smap.Primary.ID()
 	}
 	glog.Errorf("%s is not %s (primary=%s, %s)", y.p.si, reason, lead, smap)
 	return false

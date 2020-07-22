@@ -1445,11 +1445,11 @@ func (h *httprunner) withRetry(call func(arg ...string) (int, error), action str
 
 func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 	smap := h.owner.smap.get()
-	if smap == nil || smap.version() == 0 || smap.ProxySI == nil || !smap.isValid() {
+	if smap == nil || smap.version() == 0 || smap.Primary == nil || !smap.isValid() {
 		url, psi = cmn.GCO.Get().Proxy.PrimaryURL, nil
 		return
 	}
-	url, psi = smap.ProxySI.IntraControlNet.DirectURL, smap.ProxySI
+	url, psi = smap.Primary.IntraControlNet.DirectURL, smap.Primary
 	return
 }
 
@@ -1460,7 +1460,7 @@ func (h *httprunner) pollClusterStarted(timeout time.Duration) {
 		if !smap.isValid() {
 			continue
 		}
-		if _, err, _ := h.Health(smap.ProxySI, timeout, nil); err == nil {
+		if _, err, _ := h.Health(smap.Primary, timeout, nil); err == nil {
 			break
 		}
 	}

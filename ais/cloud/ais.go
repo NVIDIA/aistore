@@ -158,7 +158,7 @@ func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudI
 			}
 			remAis.smap = smap
 		}
-		info.Primary = remAis.smap.ProxySI.String()
+		info.Primary = remAis.smap.Primary.String()
 		info.Smap = remAis.smap.Version
 		info.Targets = int32(remAis.smap.CountTargets())
 		cia[uuid] = info

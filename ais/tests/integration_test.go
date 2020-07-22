@@ -1191,7 +1191,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 2.
-	origID, origURL := m.smap.ProxySI.ID(), m.smap.ProxySI.PublicNet.DirectURL
+	origID, origURL := m.smap.Primary.ID(), m.smap.Primary.PublicNet.DirectURL
 	nextProxyID, nextProxyURL, _ := chooseNextProxy(m.smap)
 
 	tutils.DestroyBucket(t, m.proxyURL, m.bck)
