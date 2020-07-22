@@ -15,6 +15,8 @@ var (
 apiVersion: v1
 kind: Pod
 metadata:
+  labels:
+    app: tar2tf
   name: tar2tf
   annotations:
     communication_type: "hrev://"

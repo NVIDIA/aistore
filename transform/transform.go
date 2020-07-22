@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -87,20 +89,65 @@ func StartTransformationPod(t cluster.Target, msg Msg, transformationName string
 		return fmt.Errorf("failed to wait for %q pod to be ready (err: %v; output: %s)", pod.GetName(), err, string(b))
 	}
 
-	// Retrieve IP of the pod.
-	output, err := exec.Command("kubectl", "get", "pod", pod.GetName(), "--template={{.status.podIP}}").Output()
+	// Retrieve host IP of the pod.
+	output, err := exec.Command("kubectl", "get", "pod", pod.GetName(), "--template={{.status.hostIP}}").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get IP of %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
 	}
-	ip := string(output)
+	hostIP := string(output)
 
-	// Retrieve port of the pod.
-	port := pod.Spec.Containers[0].Ports[0].ContainerPort
+	// Proxy the pod behind a service
+	svcPod := getSvcPod(pod)
 
-	transformerURL := fmt.Sprintf("http://%s:%d", ip, port)
+	// Encode the specification for the service.
+	b, err = jsoniter.Marshal(svcPod)
+	if err != nil {
+		return err
+	}
+
+	// Creating the service
+	cmd = exec.Command("kubectl", "replace", "--force", "-f", "-")
+	cmd.Stdin = bytes.NewBuffer(b)
+	if b, err = cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to apply spec for %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
+	}
+
+	// Retrieve NodePort of the service
+	output, err = exec.Command("kubectl", "get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svcPod.GetName()).Output()
+	if err != nil {
+		return fmt.Errorf("failed to get IP of %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
+	}
+	outputStr, _ := strconv.Unquote(string(output))
+	nodePort, err := strconv.Atoi(outputStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svcPod.GetName(), err, string(output))
+	}
+
+	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
 	c := makeCommunicator(t, pod, msg.CommType, transformerURL, transformationName)
 	reg.put(msg.ID, c)
 	return nil
+}
+
+func getSvcPod(pod *corev1.Pod) *corev1.Service {
+	return &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: pod.GetName(),
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Port: pod.Spec.Containers[0].Ports[0].ContainerPort},
+			},
+			Selector: map[string]string{
+				"app": pod.Labels["app"],
+			},
+			Type: corev1.ServiceTypeNodePort,
+		},
+	}
 }
 
 func StopTransformationPod(id string) error {
