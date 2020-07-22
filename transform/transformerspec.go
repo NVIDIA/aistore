@@ -18,7 +18,7 @@ metadata:
   name: tar2tf
   annotations:
     communication_type: "hrev://"
-    wait_timeout: 30s
+    wait_timeout: 60s
 spec:
   containers:
     - name: server

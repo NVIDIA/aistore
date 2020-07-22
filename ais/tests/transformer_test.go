@@ -26,14 +26,25 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const (
+	tar2tfIn  = "data/small-mnist-3.tar"
+	tar2tfOut = "data/small-mnist-3.record"
+
+	tar2tfNonStatic = cmn.Tar2Tf + "-nonstatic"
+)
+
 func TestKubeTransformer(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
 	tests := []testConfig{
-		{"echo", "hpull://", "", "", nil, false},
-		{"echo", "hrev://", "", "", nil, false},
-		{"echo", "hpush://", "", "", nil, false},
-		{cmn.Tar2Tf, "", "data/small-mnist-3.tar", "data/small-mnist-3.record", tfRecordsEqual, true},
+		{transformer: "echo", comm: transform.RedirectCommType},
+		{transformer: "echo", comm: transform.RevProxyCommType},
+		{transformer: "echo", comm: transform.PushCommType},
+		{cmn.Tar2Tf, "", tar2tfIn, tar2tfOut, tfRecordsEqual, true},
+		{tar2tfNonStatic, transform.RedirectCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
+		{tar2tfNonStatic, transform.RevProxyCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
+		{tar2tfNonStatic, transform.PushCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
 	}
+
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
 			testTransformer(t, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual, test.isStatic)
@@ -102,7 +113,10 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 		t.Log("Init transform")
 		uuid, err = api.TransformInit(defaultAPIParams, spec)
 		tassert.CheckFatal(t, err)
-		defer api.TransformStop(defaultAPIParams, uuid)
+		defer func() {
+			t.Logf("Stop transform %q", uuid)
+			tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid))
+		}()
 	}
 	fho, err := cmn.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)
@@ -111,7 +125,7 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 		cmn.RemoveFile(outputFileName)
 	}()
 
-	t.Log("Read transform")
+	t.Logf("Read transform %q", uuid)
 	err = api.TransformObject(defaultAPIParams, uuid, bck, objName, fho)
 	tassert.CheckFatal(t, err)
 

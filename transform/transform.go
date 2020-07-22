@@ -113,7 +113,7 @@ func StopTransformationPod(id string) error {
 		return fmt.Errorf("can't stop static transformation %q", id)
 	}
 
-	err := exec.Command("kubectl", "delete", "pod", c.PodName()).Run()
+	err := exec.Command("kubectl", "delete", "pod", c.PodName(), "--force").Run()
 	if err != nil {
 		return err
 	}

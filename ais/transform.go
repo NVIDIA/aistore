@@ -110,7 +110,15 @@ func (p *proxyrunner) httpproxystoptransform(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	results := p.callTargets(http.MethodDelete, r.URL.Path, nil)
+	results := p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodDelete,
+			Path:   r.URL.Path,
+			Body:   nil,
+		},
+		timeout: cmn.LongTimeout,
+		to:      cluster.Targets,
+	})
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())

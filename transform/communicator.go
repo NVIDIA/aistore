@@ -49,11 +49,11 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 		podName: pod.GetName(),
 	}
 	switch commType {
-	case pushCommType:
+	case PushCommType:
 		return &pushComm{baseComm: baseComm, t: t}
-	case redirectCommType:
+	case RedirectCommType:
 		return &redirComm{baseComm: baseComm}
-	case revProxyCommType:
+	case RevProxyCommType:
 		transURL, _ := url.Parse(transformerURL)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {

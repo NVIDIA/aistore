@@ -29,8 +29,8 @@ func ParsePodSpec(spec []byte) (*corev1.Pod, error) {
 
 func podTransformCommType(pod *corev1.Pod) (string, error) {
 	if pod.Annotations == nil || pod.Annotations["communication_type"] == "" {
-		// By default assume `pushCommType`.
-		return pushCommType, nil
+		// By default assume `PushCommType`.
+		return PushCommType, nil
 	}
 
 	commType := pod.Annotations["communication_type"]
@@ -38,7 +38,7 @@ func podTransformCommType(pod *corev1.Pod) (string, error) {
 }
 
 func validateCommType(commType string) error {
-	if !cmn.StringInSlice(commType, []string{pushCommType, redirectCommType, revProxyCommType}) {
+	if !cmn.StringInSlice(commType, []string{PushCommType, RedirectCommType, RevProxyCommType}) {
 		return fmt.Errorf("unknown communication type: %q", commType)
 	}
 	return nil
