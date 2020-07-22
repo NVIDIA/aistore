@@ -264,3 +264,19 @@ func (o *jtx) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 	}
 	return nl, true
 }
+
+func (o *jtx) writeStatus(w http.ResponseWriter, r *http.Request, uuid string) {
+	nl, exists := o.p.notifs.entry(uuid)
+	if !exists {
+		o.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", uuid)
+		return
+	}
+
+	if err := nl.err(); err != nil {
+		o.p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	// TODO: Also send stats, eg. progress when ready
+	w.Write(cmn.MustMarshal(nl.finished()))
+}

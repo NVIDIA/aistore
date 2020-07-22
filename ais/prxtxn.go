@@ -204,7 +204,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	nl := notifListenerBck{
 		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
 	}
-	p.notifs.add(c.uuid, &nl)
+	p.jtx.addEntry(c.uuid, &nl)
 
 	// 6. commit
 	unlockUpon = true
@@ -425,7 +425,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 				nlpTo:             &nlpTo,
 			}
 			xactID = c.uuid
-			p.notifs.add(c.uuid, &nl)
+			p.jtx.addEntry(c.uuid, &nl)
 
 			// 6. commit
 			unlockUpon = true
@@ -529,7 +529,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		nlpFrom:           &nlpFrom,
 		nlpTo:             &nlpTo,
 	}
-	p.notifs.add(c.uuid, &nl)
+	p.jtx.addEntry(c.uuid, &nl)
 
 	// 6. commit
 	unlockUpon = true
@@ -637,7 +637,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	nl := notifListenerBck{
 		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
 	}
-	p.notifs.add(c.uuid, &nl)
+	p.jtx.addEntry(c.uuid, &nl)
 
 	// 6. commit
 	unlockUpon = true

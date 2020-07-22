@@ -2564,6 +2564,8 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.queryClusterSysinfo(w, r, what)
 	case cmn.QueryXactStats:
 		p.queryXaction(w, r, what)
+	case cmn.GetWhatStatus:
+		p.jtxStatus(w, r, what)
 	case cmn.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
 	case cmn.GetWhatRemoteAIS:
@@ -2592,6 +2594,26 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		s := fmt.Sprintf(fmtUnknownQue, what)
 		cmn.InvalidHandlerWithMsg(w, r, s)
 	}
+}
+
+// get jtx status
+func (p *proxyrunner) jtxStatus(w http.ResponseWriter, r *http.Request, what string) {
+	var (
+		query = r.URL.Query()
+		uuid  = query.Get(cmn.URLParamUUID)
+	)
+
+	if uuid == "" {
+		p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "no uuid given for `what`: %v", what)
+		return
+	}
+
+	// TODO: don't redirect when status information is available in jtx table
+	if redirected := p.jtx.redirectToOwner(w, r, uuid, nil); redirected {
+		return
+	}
+
+	p.jtx.writeStatus(w, r, uuid)
 }
 
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {

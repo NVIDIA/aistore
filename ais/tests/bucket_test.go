@@ -1156,11 +1156,11 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies int) {
 	tutils.Logf("Set copies = %d\n", ncopies)
-	if _, err := api.MakeNCopies(baseParams, bck, ncopies); err != nil {
-		t.Fatalf("Failed to start copies=%d xaction, err: %v", ncopies, err)
-	}
-	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: bck, Timeout: 60 * time.Second}
-	err := api.WaitForXaction(baseParams, xactArgs)
+
+	xactID, err := api.MakeNCopies(baseParams, bck, ncopies)
+	tassert.CheckFatal(t, err)
+
+	err = api.WaitForXactionJtx(baseParams, xactID)
 	tassert.CheckFatal(t, err)
 }
 
@@ -1295,11 +1295,10 @@ func TestRenameEmptyBucket(t *testing.T) {
 
 	// Rename it
 	tutils.Logf("rename %s => %s\n", srcBck, dstBck)
-	_, err = api.RenameBucket(baseParams, srcBck, dstBck)
+	uuid, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck, Timeout: rebalanceTimeout}
-	err = api.WaitForXaction(baseParams, xactArgs)
+	err = api.WaitForXactionJtx(baseParams, uuid, rebalanceTimeout)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
@@ -1361,11 +1360,10 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	// Rename it
 	tutils.Logf("rename %s => %s\n", srcBck, dstBck)
 	m.bck = dstBck
-	_, err = api.RenameBucket(baseParams, srcBck, dstBck)
+	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck, Timeout: rebalanceTimeout}
-	err = api.WaitForXaction(baseParams, xactArgs)
+	err = api.WaitForXactionJtx(baseParams, xactID, rebalanceTimeout)
 	tassert.CheckFatal(t, err)
 
 	// Gets on renamed ais bucket
@@ -1474,7 +1472,7 @@ func TestRenameBucketTwice(t *testing.T) {
 
 	// Rename to first destination
 	tutils.Logf("rename %s => %s\n", srcBck, dstBck1)
-	_, err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination again - already in progress
@@ -1492,8 +1490,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	}
 
 	// Wait for rename to complete
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck1, Timeout: rebalanceTimeout}
-	err = api.WaitForXaction(baseParams, xactArgs)
+	err = api.WaitForXactionJtx(baseParams, xactID, rebalanceTimeout)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
@@ -1650,19 +1647,16 @@ func TestCopyBucket(t *testing.T) {
 				panic(test.provider)
 			}
 
-			for _, dstm := range dstms {
+			xactIDs := make([]string, len(dstms))
+			for idx, dstm := range dstms {
 				tutils.Logf("copying %s => %s\n", srcm.bck, dstm.bck)
-				_, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck)
+				uuid, err := api.CopyBucket(baseParams, srcm.bck, dstm.bck)
+				xactIDs[idx] = uuid
 				tassert.CheckFatal(t, err)
 			}
 
-			for _, dstm := range dstms {
-				xactArgs := api.XactReqArgs{
-					Kind:    cmn.ActCopyBucket,
-					Bck:     dstm.bck,
-					Timeout: copyBucketTimeout,
-				}
-				err = api.WaitForXaction(baseParams, xactArgs)
+			for _, uuid := range xactIDs {
+				err = api.WaitForXactionJtx(baseParams, uuid, copyBucketTimeout)
 				tassert.CheckFatal(t, err)
 			}
 
@@ -1761,7 +1755,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 
 	// Rename to first destination
 	tutils.Logf("rename %s => %s\n", srcBck, dstBck1)
-	_, err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	xactID, err := api.RenameBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to copy to first destination - rename in progress, both for srcBck and dstBck1
@@ -1786,8 +1780,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	}
 
 	// Wait for rename to complete
-	xactArgs := api.XactReqArgs{Kind: cmn.ActRenameLB, Bck: dstBck1, Timeout: rebalanceTimeout}
-	err = api.WaitForXaction(baseParams, xactArgs)
+	err = api.WaitForXactionJtx(baseParams, xactID, rebalanceTimeout)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
@@ -1845,7 +1838,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 
 	// Rename to first destination
 	tutils.Logf("copy %s => %s\n", srcBck, dstBck1)
-	_, err := api.CopyBucket(baseParams, srcBck, dstBck1)
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck1)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination - copy in progress, both for srcBck and dstBck1
@@ -1870,8 +1863,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	}
 
 	// Wait for copy to complete
-	xactArgs := api.XactReqArgs{Kind: cmn.ActCopyBucket, Bck: dstBck1, Timeout: rebalanceTimeout}
-	err = api.WaitForXaction(baseParams, xactArgs)
+	err = api.WaitForXactionJtx(baseParams, xactID, rebalanceTimeout)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list

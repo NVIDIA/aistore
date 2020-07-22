@@ -232,6 +232,39 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
 	return nil
 }
 
+func WaitForXactionJtx(baseParams BaseParams, uuid string, timeout ...time.Duration) (err error) {
+	ctx := context.Background()
+	if len(timeout) > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout[0])
+		defer cancel()
+	}
+
+	for {
+		var finished bool
+		baseParams.Method = http.MethodGet
+		err = DoHTTPRequest(ReqParams{
+			BaseParams: baseParams,
+			Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+			Query: url.Values{
+				cmn.URLParamWhat: []string{cmn.GetWhatStatus},
+				cmn.URLParamUUID: []string{uuid},
+			},
+		}, &finished)
+		if err != nil || finished {
+			return
+		}
+
+		time.Sleep(xactRetryInterval)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			break
+		}
+	}
+}
+
 // WaitForXaction API
 //
 // WaitForXactionToStart waits for a given xaction to start.

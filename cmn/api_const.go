@@ -219,6 +219,7 @@ const (
 	GetWhatRemoteAIS    = "remote"
 	GetWhatXactStats    = "getxstats" // stats(xaction-by-uuid)
 	QueryXactStats      = "qryxstats" // stats(all-matching-xactions)
+	GetWhatStatus       = "status"    // JTX status by uuid
 )
 
 // SelectMsg.TimeFormat enum
