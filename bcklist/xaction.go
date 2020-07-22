@@ -13,7 +13,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -41,15 +40,14 @@ type BckListTask struct {
 	pageError  error                 // when requesting a page from Cloud bucket
 	lastMarker string                // last requested PageMarker (to detect re-requesting)
 	lastPage   []*cmn.BucketEntry    // last sent page and a little more
-	inProgress atomic.Bool           // the page is in progress
+	inProgress sync.WaitGroup        // the page is in progress
 	walkDone   bool                  // true: done walking or Cloud returned all objects
 	fromRemote bool                  // whether to request remote data (Cloud/Remote/Backend)
 }
 
 type bckListReq struct {
-	action string
-	msg    *cmn.SelectMsg
-	ch     chan *BckListResp
+	msg *cmn.SelectMsg
+	ch  chan *BckListResp
 }
 type BckListResp struct {
 	BckList *cmn.BucketList
@@ -87,16 +85,15 @@ func (r *BckListTask) String() string {
 	return fmt.Sprintf("%s: %s", r.t.Snode(), &r.XactDemandBase)
 }
 
-func (r *BckListTask) Do(action string, msg *cmn.SelectMsg, ch chan *BckListResp) {
+func (r *BckListTask) Do(msg *cmn.SelectMsg, ch chan *BckListResp) {
 	if r.Finished() {
 		ch <- &BckListResp{Err: ErrGone}
 		close(ch)
 		return
 	}
 	req := &bckListReq{
-		action: action,
-		msg:    msg,
-		ch:     ch,
+		msg: msg,
+		ch:  ch,
 	}
 	r.workCh <- req
 }
@@ -148,7 +145,7 @@ func (r *BckListTask) Run() (err error) {
 			if !r.fromRemote || req.msg.PageSize != 0 {
 				r.msg.PageSize = req.msg.PageSize
 			}
-			resp := r.dispatchRequest(req.action)
+			resp := r.dispatchRequest()
 			req.ch <- resp
 			close(req.ch)
 		case <-r.IdleTimer():
@@ -180,54 +177,43 @@ func (r *BckListTask) Stop(err error) {
 	}
 }
 
-func (r *BckListTask) dispatchRequest(action string) *BckListResp {
+func (r *BckListTask) dispatchRequest() *BckListResp {
 	cnt := int(r.msg.WantObjectsCnt())
 	marker := r.msg.PageMarker
-	switch action {
-	case cmn.TaskStart:
-		if err := r.genNextPage(marker, cnt); err != nil {
-			return &BckListResp{
-				Status: http.StatusInternalServerError,
-				Err:    err,
-			}
-		}
-		return &BckListResp{Status: http.StatusAccepted}
-	case cmn.TaskStatus, cmn.TaskResult:
-		defer r.DecPending()
-		if r.pageInProgress() {
-			return &BckListResp{Status: http.StatusAccepted}
-		}
-		if !r.pageIsValid(marker, cnt) {
-			return &BckListResp{
-				Status: http.StatusBadRequest,
-				Err:    fmt.Errorf("%s: the page for %s is not initialized", r, marker),
-			}
-		}
-		if r.pageError != nil {
-			return &BckListResp{
-				Status: http.StatusInternalServerError,
-				Err:    r.pageError,
-			}
-		}
-		if action == cmn.TaskStatus {
-			return &BckListResp{Status: http.StatusOK}
-		}
-		list, err := r.getPage(marker, cnt)
-		status := http.StatusOK
-		if err != nil {
-			status = http.StatusInternalServerError
-		}
+
+	r.IncPending()
+	defer r.DecPending()
+
+	// This is for `DecPending` that is done by `genNextPage`.
+	// TODO: This should be reworked (and removed) and we should just have a
+	//  single `IncPending` probably the `DecPending` from `genNextPage` can be
+	//  removed as now it is blocking.
+	r.IncPending()
+
+	r.genNextPage(marker, cnt)
+
+	if r.pageError != nil {
 		return &BckListResp{
-			BckList: list,
-			Status:  status,
-			Err:     err,
+			Status: http.StatusInternalServerError,
+			Err:    r.pageError,
 		}
-	default:
-		r.DecPending()
+	}
+	if !r.pageIsValid(marker, cnt) {
 		return &BckListResp{
 			Status: http.StatusBadRequest,
-			Err:    fmt.Errorf("%s: invalid action %s", r, action),
+			Err:    fmt.Errorf("the page for %s was not initialized", marker),
 		}
+	}
+
+	list, err := r.getPage(marker, cnt)
+	status := http.StatusOK
+	if err != nil {
+		status = http.StatusInternalServerError
+	}
+	return &BckListResp{
+		BckList: list,
+		Status:  status,
+		Err:     err,
 	}
 }
 
@@ -249,9 +235,7 @@ func (r *BckListTask) walkCtx() context.Context {
 func (r *BckListTask) nextPageAIS(marker string, cnt int) {
 	defer r.DecPending()
 	if r.isPageCached(marker, cnt) {
-		if !r.inProgress.CAS(true, false) {
-			cmn.Assert(false)
-		}
+		r.inProgress.Done()
 		return
 	}
 	read := 0
@@ -261,15 +245,17 @@ func (r *BckListTask) nextPageAIS(marker string, cnt int) {
 			r.walkDone = true
 			break
 		}
+		// Skip all objects until the requested marker.
+		if cmn.PageMarkerIncludesObject(marker, obj.Name) {
+			continue
+		}
 		read++
 		r.lastPage = append(r.lastPage, obj)
 	}
-	if !r.inProgress.CAS(true, false) {
-		cmn.Assert(false)
-	}
+	r.inProgress.Done()
 }
 
-// Retunrs an index of the first objects in the cache that follows marker
+// Returns an index of the first objects in the cache that follows marker
 func (r *BckListTask) findMarker(marker string) int {
 	cond := func(i int) bool { return !cmn.PageMarkerIncludesObject(marker, r.lastPage[i].Name) }
 	return sort.Search(len(r.lastPage), cond)
@@ -302,22 +288,13 @@ func (r *BckListTask) nextPageCloud(marker string, cnt int) {
 		}
 		r.lastPage = append(r.lastPage, bckList.Entries...)
 	}
-	if !r.inProgress.CAS(true, false) {
-		cmn.Assert(false)
-	}
-}
-
-func (r *BckListTask) pageInProgress() bool {
-	return r.inProgress.Load()
+	r.inProgress.Done()
 }
 
 // Called before generating a page for a proxy. It is OK if the page is
 // still in progress. If the page is done, the function ensures that the
 // local cache contains the requested data.
 func (r *BckListTask) pageIsValid(marker string, cnt int) bool {
-	if r.pageInProgress() {
-		return true
-	}
 	// The same page is re-requested
 	if r.lastMarker == marker {
 		return true
@@ -332,6 +309,7 @@ func (r *BckListTask) pageIsValid(marker string, cnt int) bool {
 }
 
 func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
+	r.inProgress.Wait()
 	var (
 		idx  = r.findMarker(marker)
 		list = r.lastPage[idx:]
@@ -339,14 +317,13 @@ func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
 	if len(list) < cnt && !r.walkDone {
 		return nil, errors.New("page is not loaded yet")
 	}
-	cmn.Assert(!r.pageInProgress())
 	cmn.Assert(r.msg.UUID != "")
 	if cnt != 0 && len(list) >= cnt {
 		entries := list[:cnt]
 		return &cmn.BucketList{
-			Entries:    entries,
-			PageMarker: entries[cnt-1].Name,
 			UUID:       r.msg.UUID,
+			Entries:    entries,
+			PageMarker: entries[cnt-1].Name, // TODO: this doesn't work for cloud
 		}, nil
 	}
 	return &cmn.BucketList{Entries: list, UUID: r.msg.UUID}, nil
@@ -355,34 +332,31 @@ func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
 // TODO: support arbitrary page marker (do restart in this case).
 // genNextPage calls DecPending either immediately on error or inside
 // a goroutine if some work must be done.
-func (r *BckListTask) genNextPage(marker string, cnt int) error {
+func (r *BckListTask) genNextPage(marker string, cnt int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: marker [%s]", r, r.msg.PageMarker)
 	}
 	if marker != "" && marker == r.lastMarker {
 		r.DecPending()
-		return nil
+		return
 	}
 	if r.walkDone {
 		r.DecPending()
-		return nil
+		return
 	}
-	if !r.inProgress.CAS(false, true) {
-		r.DecPending()
-		return errors.New("another page is in progress")
-	}
+	r.inProgress.Add(1)
 
 	r.discardObsolete(r.lastMarker)
 	if r.lastMarker < marker {
 		r.lastMarker = marker
 	}
+
 	if r.fromRemote {
 		go r.nextPageCloud(marker, cnt)
-		return nil
+		return
 	}
 
 	go r.nextPageAIS(marker, cnt)
-	return nil
 }
 
 // Removes from local cache, the objects that have been already sent

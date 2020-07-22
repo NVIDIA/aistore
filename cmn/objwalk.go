@@ -8,7 +8,7 @@ import (
 	"sort"
 )
 
-func sortBckEntries(bckEntries []*BucketEntry) {
+func SortBckEntries(bckEntries []*BucketEntry) {
 	entryLess := func(i, j int) bool {
 		if bckEntries[i].Name == bckEntries[j].Name {
 			return bckEntries[i].Flags&EntryStatusMask < bckEntries[j].Flags&EntryStatusMask
@@ -69,10 +69,11 @@ func ConcatObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	// For corner case: we have objects with replicas on page threshold
 	// we have to sort taking status into account. Otherwise wrong
 	// one(Status=moved) may get into the response
-	sortBckEntries(objs.Entries)
+	SortBckEntries(objs.Entries)
 
 	// Remove duplicates
 	objs.Entries, objs.PageMarker = deduplicateBckEntries(objs.Entries, maxSize)
+	objs.ContinuationToken = objs.PageMarker
 
 	return
 }
@@ -94,7 +95,7 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	pageMarker := bckList.PageMarker
 
 	if len(lists) == 1 {
-		sortBckEntries(bckList.Entries)
+		SortBckEntries(bckList.Entries)
 		bckList.Entries, _ = deduplicateBckEntries(bckList.Entries, maxSize)
 		bckList.PageMarker = pageMarker
 		return bckList
@@ -133,7 +134,7 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 		bckList.Entries = append(bckList.Entries, v)
 	}
 
-	sortBckEntries(bckList.Entries)
+	SortBckEntries(bckList.Entries)
 	bckList.Entries, _ = deduplicateBckEntries(bckList.Entries, maxSize)
 	bckList.PageMarker = pageMarker
 	return bckList

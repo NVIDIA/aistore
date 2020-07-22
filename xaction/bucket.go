@@ -662,18 +662,19 @@ func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err e
 
 func (b *baseBckEntry) postRenewHook(_ bucketEntry) {}
 
-func (r *registry) RenewBckListNewXact(t cluster.Target, bck *cluster.Bck, uuid string, msg *cmn.SelectMsg) (*bcklist.BckListTask, error) {
+func (r *registry) RenewBckListNewXact(t cluster.Target, bck *cluster.Bck, uuid string,
+	msg *cmn.SelectMsg) (xactTask *bcklist.BckListTask, isNew bool, err error) {
 	xact := r.GetXact(uuid)
 	if xact == nil || xact.Finished() {
 		e := &bckListTaskEntry{baseBckEntry: baseBckEntry{uuid}, t: t, msg: msg}
 		ee, err := r.renewBucketXaction(e, bck, uuid)
 		if err == nil {
 			listXact := ee.Get().(*bcklist.BckListTask)
-			return listXact, nil
+			return listXact, true, nil
 		}
-		return nil, err
+		return nil, true, err
 	}
 
 	listXact := xact.(*bcklist.BckListTask)
-	return listXact, nil
+	return listXact, false, nil
 }

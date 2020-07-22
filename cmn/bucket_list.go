@@ -38,10 +38,33 @@ func (be *BucketEntry) IsStatusOK() bool {
 
 func (be *BucketEntry) String() string { return "{" + be.Name + "}" }
 
+func (be *BucketEntry) SetProps(propsSet StringSet) {
+	if !propsSet.Contains(GetPropsChecksum) {
+		be.Checksum = ""
+	}
+	if !propsSet.Contains(GetPropsSize) {
+		be.Size = 0
+	}
+	if !propsSet.Contains(GetPropsAtime) {
+		be.Atime = ""
+	}
+	if !propsSet.Contains(GetPropsVersion) {
+		be.Version = ""
+	}
+	if !propsSet.Contains(GetTargetURL) {
+		be.TargetURL = ""
+	}
+	if !propsSet.Contains(GetPropsCopies) {
+		be.Copies = 0
+	}
+}
+
 // BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'
 type BucketList struct {
-	Entries           []*BucketEntry `json:"entries"`
-	PageMarker        string         `json:"pagemarker"`
-	UUID              string         `json:"uuid"`
-	ContinuationToken string         `json:"cont_token"` // TODO: should replace both `PageMarker` and `UUID`
+	Entries    []*BucketEntry `json:"entries"`
+	PageMarker string         `json:"pagemarker"`
+	UUID       string         `json:"uuid"`
+	// TODO: alias for page marker. Eventually it should replace `PageMarker` and
+	//  maybe `UUID` as well.
+	ContinuationToken string `json:"continuation_token"`
 }

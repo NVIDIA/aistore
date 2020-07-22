@@ -5,7 +5,7 @@
 package api
 
 import (
-	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -275,20 +274,17 @@ func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) e
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
 func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.SelectMsg, v interface{}) error {
-	cmn.Assert(action == cmn.ActListObjects || action == cmn.ActSummaryBucket)
+	cmn.Assert(action == cmn.ActSummaryBucket)
 	var (
-		initRespMsg  = &cmn.InitTaskRespMsg{}
-		buff         = bytes.NewBuffer(nil)
-		sleep        = initialPollInterval
-		actMsg       = cmn.ActionMsg{Action: action, Value: smsg}
-		changeOfTask bool
+		uuid   string
+		sleep  = initialPollInterval
+		actMsg = cmn.ActionMsg{Action: action, Value: smsg}
 	)
 	if reqParams.Query == nil {
 		reqParams.Query = url.Values{}
 	}
-	reqParams.Query.Set(cmn.URLParamNextPage, "1")
 	reqParams.Body = cmn.MustMarshal(actMsg)
-	resp, err := doHTTPRequestGetResp(reqParams, buff)
+	resp, err := doHTTPRequestGetResp(reqParams, &uuid)
 	if err != nil {
 		return err
 	}
@@ -298,40 +294,21 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.Selec
 		}
 		return fmt.Errorf("invalid response code: %d", resp.StatusCode)
 	}
-	reqParams.Query.Del(cmn.URLParamNextPage)
-
-	// Receiver started async task and returned the initResMsg
-	if err := jsoniter.Unmarshal(buff.Bytes(), initRespMsg); err != nil {
-		return err
-	}
 	if smsg.UUID == "" {
-		smsg.UUID = initRespMsg.UUID
+		smsg.UUID = uuid
 	}
 	if smsg.UUID != "" {
 		reqParams.Query.Set(cmn.URLParamUUID, smsg.UUID)
 	}
-	actMsg = handleAsyncReqAccepted(initRespMsg, action, smsg, reqParams)
 
 	// Poll async task for http.StatusOK completion
 	for {
 		reqParams.Body = cmn.MustMarshal(actMsg)
-		buff.Reset()
-		resp, err = doHTTPRequestGetResp(reqParams, buff)
+		resp, err = doHTTPRequestGetResp(reqParams, v)
 		if err != nil {
 			return err
 		}
-		if !changeOfTask && resp.StatusCode == http.StatusAccepted {
-			// NOTE: async task changed on the fly
-			if err := jsoniter.Unmarshal(buff.Bytes(), initRespMsg); err != nil {
-				return err
-			}
-			actMsg = handleAsyncReqAccepted(initRespMsg, action, smsg, reqParams)
-			changeOfTask = true
-		}
 		if resp.StatusCode == http.StatusOK {
-			if err := jsoniter.Unmarshal(buff.Bytes(), v); err != nil {
-				return err
-			}
 			break
 		}
 		time.Sleep(sleep)
@@ -340,19 +317,6 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.Selec
 		}
 	}
 	return err
-}
-
-func handleAsyncReqAccepted(initRespMsg *cmn.InitTaskRespMsg, action string, smsg *cmn.SelectMsg, reqParams ReqParams) (actMsg cmn.ActionMsg) {
-	if smsg != nil {
-		msg := cmn.SelectMsg{}
-		msg = *smsg
-		if msg.UUID == "" {
-			msg.UUID = initRespMsg.UUID
-		}
-		actMsg = cmn.ActionMsg{Action: action, Value: &msg}
-	}
-	reqParams.Query.Set(cmn.URLParamUUID, initRespMsg.UUID)
-	return
 }
 
 // ListObjects API
@@ -384,6 +348,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 	// than `pageSize`, the loop does the final request with reduced `pageSize`.
 	toRead := numObjects
 	smsg.UUID = ""
+	smsg.ContinuationToken = smsg.PageMarker
 
 	pageSize := smsg.PageSize
 	if pageSize == 0 {
@@ -395,12 +360,16 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			smsg.PageSize = toRead
 		}
 
-		reqParams := ReqParams{
-			BaseParams: baseParams,
-			Path:       path,
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-			Query:      q,
-		}
+		var (
+			actMsg    = cmn.ActionMsg{Action: cmn.ActListObjects, Value: smsg}
+			reqParams = ReqParams{
+				BaseParams: baseParams,
+				Path:       path,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Query:      q,
+				Body:       cmn.MustMarshal(actMsg),
+			}
+		)
 
 		page := tmpPage
 		if iter == 1 {
@@ -408,7 +377,6 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			page = bckList
 		} else if iter > 1 {
 			cmn.Assert(smsg.UUID != "")
-			reqParams.Query.Set(cmn.URLParamUUID, smsg.UUID)
 			// On later iterations just allocate temporary page.
 			//
 			// NOTE: do not try to optimize this code by allocating the page
@@ -418,7 +386,20 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			page.Entries = make([]*cmn.BucketEntry, 0, pageSize)
 		}
 
-		if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &page); err != nil {
+		// Retry with bigger timeout when deadline was exceeded.
+		for i := 0; i < 5; i++ {
+			if _, err = doHTTPRequestGetResp(reqParams, &page); err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					client := *reqParams.BaseParams.Client
+					client.Timeout = 2 * client.Timeout
+					reqParams.BaseParams.Client = &client
+					continue
+				}
+				return nil, err
+			}
+			break
+		}
+		if err != nil {
 			return nil, err
 		}
 
@@ -426,6 +407,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		if iter > 1 {
 			bckList.Entries = append(bckList.Entries, page.Entries...)
 			bckList.PageMarker = page.PageMarker
+			bckList.ContinuationToken = page.ContinuationToken
 		}
 
 		if page.PageMarker == "" {
@@ -442,7 +424,9 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			}
 		}
 
+		smsg.UUID = page.UUID
 		smsg.PageMarker = page.PageMarker
+		smsg.ContinuationToken = page.ContinuationToken
 	}
 
 	return bckList, err
@@ -457,20 +441,26 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 		smsg = &cmn.SelectMsg{}
 	}
 
-	reqParams := ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-		Header: http.Header{
-			"Content-Type": []string{"application/json"},
-		},
-		Query: cmn.AddBckToQuery(url.Values{}, bck),
-	}
+	var (
+		actMsg    = cmn.ActionMsg{Action: cmn.ActListObjects, Value: smsg}
+		reqParams = ReqParams{
+			BaseParams: baseParams,
+			Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+			Header: http.Header{
+				"Content-Type": []string{"application/json"},
+			},
+			Query: cmn.AddBckToQuery(url.Values{}, bck),
+			Body:  cmn.MustMarshal(actMsg),
+		}
+	)
 
 	page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &page); err != nil {
+	if _, err := doHTTPRequestGetResp(reqParams, &page); err != nil {
 		return nil, err
 	}
+	smsg.UUID = page.UUID
 	smsg.PageMarker = page.PageMarker
+	smsg.ContinuationToken = page.ContinuationToken
 	return page, nil
 }
 

@@ -149,10 +149,8 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 
 	// add the obj to the page
 	fileInfo := &cmn.BucketEntry{
-		Name:   objName,
-		Atime:  "",
-		Flags:  objStatus | cmn.EntryIsCached,
-		Copies: 1,
+		Name:  objName,
+		Flags: objStatus | cmn.EntryIsCached,
 	}
 	if wi.needAtime() {
 		fileInfo.Atime = cmn.FormatUnixNano(lom.AtimeUnix(), wi.timeFormat)
@@ -170,7 +168,9 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 	if wi.needTargetURL() {
 		fileInfo.TargetURL = wi.t.Snode().URL(cmn.NetworkPublic)
 	}
-	fileInfo.Size = lom.Size()
+	if wi.needSize() {
+		fileInfo.Size = lom.Size()
+	}
 	if wi.postCallback != nil {
 		wi.postCallback(lom)
 	}

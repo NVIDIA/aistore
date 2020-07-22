@@ -42,6 +42,8 @@ type SelectMsg struct {
 	Cached      bool   `json:"cached"`      // for cloud buckets - list only cached objects
 	Passthrough bool   `json:"passthrough"` // do not use cache - always request targets for fresh data
 	Fast        bool   `json:"fast"`        // TODO: deprecated but still required by xaction BucketSummary for its own stuff
+	// TODO: Alias for `PageMarker`, eventually this should replace `PageMarker`.
+	ContinuationToken string `json:"continuation_token"`
 }
 
 type PageMarker string
@@ -54,10 +56,6 @@ type ListMsg struct {
 // RangeMsg contains a Prefix, Regex, and Range for a Range Operation
 type RangeMsg struct {
 	Template string `json:"template"`
-}
-
-type InitTaskRespMsg struct {
-	UUID string `json:"uuid"`
 }
 
 // MountpathList contains two lists:

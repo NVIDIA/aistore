@@ -43,7 +43,6 @@ type bckListTaskEntry struct {
 func (e *bckListTaskEntry) Start(bck cmn.Bck) error {
 	xact := bcklist.NewBckListTask(e.ctx, e.t, bck, e.msg, e.uuid)
 	e.xact = xact
-	go xact.Run()
 	return nil
 }
 

@@ -257,33 +257,16 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	var (
-		bckList     *cmn.BucketList
-		initRespMsg *cmn.InitTaskRespMsg
-		err         error
-	)
 	smsg := cmn.SelectMsg{TimeFormat: time.RFC3339}
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
-	_, initRespMsg, err = p.listAISBucket(bck, smsg, false)
+
+	bckList, err := p.listAISBucket(bck, smsg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smsg.UUID = initRespMsg.UUID
-	for {
-		bckList, initRespMsg, err = p.listAISBucket(bck, smsg, false)
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		if bckList != nil {
-			break
-		}
-		// just in case
-		smsg.UUID = initRespMsg.UUID
-		time.Sleep(time.Second)
-	}
+
 	resp := s3compat.NewListObjectResult()
 	resp.PageMarker = smsg.PageMarker
 	resp.FillFromAisBckList(bckList)

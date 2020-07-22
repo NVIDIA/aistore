@@ -121,7 +121,6 @@ func (p *proxyrunner) Run() error {
 	}
 
 	p.rproxy.init()
-	initListObjectsCache(p)
 
 	p.notifs.init(p)
 
@@ -1082,12 +1081,10 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
 	amsg cmn.ActionMsg, begin int64) {
 	var (
-		initRespMsg *cmn.InitTaskRespMsg
-		err         error
-		bckList     *cmn.BucketList
-		smsg        = cmn.SelectMsg{}
-		query       = r.URL.Query()
-		nextPage    = cmn.IsParseBool(query.Get(cmn.URLParamNextPage))
+		err     error
+		bckList *cmn.BucketList
+		smsg    = cmn.SelectMsg{}
+		query   = r.URL.Query()
 	)
 	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1102,15 +1099,20 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	clientConf := cmn.GCO.Get().Client
 	smsg.Passthrough = smsg.Passthrough || clientConf.Passthrough
 
-	id := r.URL.Query().Get(cmn.URLParamUUID)
-	if id != "" {
-		smsg.UUID = id
+	if smsg.UUID == "" {
+		smsg.UUID = cmn.GenUUID()
+		smap := p.owner.smap.get()
+		nl := newNLB(smap.Tmap, cmn.ActListObjects, bck.Bck)
+		p.registerIC(smsg.UUID, nl, smap, amsg)
+	} else if redirected := p.redirectToOwner(w, r, smsg.UUID, amsg); redirected {
+		return
 	}
+
 	if bck.IsAIS() || smsg.Cached {
-		bckList, initRespMsg, err = p.listAISBucket(bck, smsg, nextPage)
+		bckList, err = p.listAISBucket(bck, smsg)
 	} else {
 		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
-		bckList, initRespMsg, _, err = p.listObjectsRemote(bck, smsg, nextPage)
+		bckList, err = p.listObjectsRemote(bck, smsg)
 		// TODO: `status == http.StatusGone` At this point we know that this
 		//  cloud bucket exists and is offline. We should somehow try to list
 		//  cached objects. This isn't easy as we basically need to start a new
@@ -1121,13 +1123,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// uuid == "" means that async runner has completed and the result is available
-	// otherwise it is an ID of a still running task
-	if initRespMsg != nil || nextPage {
-		w.WriteHeader(http.StatusAccepted)
-		w.Write(cmn.MustMarshal(initRespMsg))
-		return
-	}
+	cmn.Assert(bckList != nil)
 
 	// TODO: replace cmn.Marshal with p.writeJSON
 	b := cmn.MustMarshal(bckList)
@@ -1162,17 +1158,16 @@ func (p *proxyrunner) invalidateListAISBucketCache(w http.ResponseWriter, r *htt
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
-	listCache.discard(&smsg, bck)
+	qc.invalidate(cacheReqID{bck: bck.Bck})
 }
 
 // bucket == "": all buckets for a given provider
 func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg) {
 	var (
-		initRespMsg *cmn.InitTaskRespMsg
-		err         error
-		summaries   cmn.BucketsSummaries
-		smsg        = cmn.SelectMsg{}
+		err       error
+		uuid      string
+		summaries cmn.BucketsSummaries
+		smsg      = cmn.SelectMsg{}
 	)
 	listMsgJSON := cmn.MustMarshal(amsg.Value)
 	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
@@ -1185,16 +1180,16 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		smsg.UUID = id
 	}
 
-	if summaries, initRespMsg, err = p.gatherBucketSummary(bck, smsg); err != nil {
+	if summaries, uuid, err = p.gatherBucketSummary(bck, smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	// uuid == "" means that async runner has completed and the result is available
 	// otherwise it is an ID of a still running task
-	if initRespMsg != nil {
+	if uuid != "" {
 		w.WriteHeader(http.StatusAccepted)
-		w.Write(cmn.MustMarshal(initRespMsg))
+		w.Write([]byte(uuid))
 		return
 	}
 
@@ -1202,10 +1197,10 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 }
 
 func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) (
-	summaries cmn.BucketsSummaries, initRespMsg *cmn.InitTaskRespMsg, err error) {
+	summaries cmn.BucketsSummaries, uuid string, err error) {
 	var (
 		// start new async task if client did not provide taskID(neither in Headers nor in SelectMsg),
-		isNew, q = p.initAsyncQuery(bck, &smsg, cmn.GenUUID(), false)
+		isNew, q = p.initAsyncQuery(bck, &smsg, cmn.GenUUID())
 		config   = cmn.GCO.Get()
 	)
 	var (
@@ -1226,13 +1221,13 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 	results := p.bcastPost(args)
 	allOK, _, err := p.checkBckTaskResp(smsg.UUID, results)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
 
 	// some targets are still executing their tasks or it is request to start
 	// an async task. The proxy returns only uuid to a caller
 	if !allOK || isNew {
-		return nil, &cmn.InitTaskRespMsg{UUID: smsg.UUID}, nil
+		return nil, smsg.UUID, nil
 	}
 
 	// all targets are ready, prepare the final result
@@ -1244,12 +1239,12 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 	summaries = make(cmn.BucketsSummaries, 0)
 	for result := range p.bcastPost(args) {
 		if result.err != nil {
-			return nil, nil, result.err
+			return nil, "", result.err
 		}
 
 		var targetSummary cmn.BucketsSummaries
 		if err := jsoniter.Unmarshal(result.outjson, &targetSummary); err != nil {
-			return nil, nil, err
+			return nil, "", err
 		}
 
 		for _, bckSummary := range targetSummary {
@@ -1257,7 +1252,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 		}
 	}
 
-	return summaries, nil, nil
+	return summaries, "", nil
 }
 
 // POST { action } /v1/objects/bucket-name
@@ -1630,10 +1625,10 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	return
 }
 
-func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, smsg *cmn.SelectMsg, newTaskID string, nextPage bool) (bool, url.Values) {
+func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, smsg *cmn.SelectMsg, newTaskID string) (bool, url.Values) {
 	isNew := smsg.UUID == ""
 	q := url.Values{}
-	if isNew || nextPage {
+	if isNew {
 		if isNew {
 			smsg.UUID = newTaskID
 		} else {
@@ -1687,12 +1682,17 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 //      * non-empty uuid if the task is still running
 //      * error
 //
-// cmn.Selectmsg.UUID - list operation handle which doesn't change between requests
-func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg, nextPage bool) (allEntries *cmn.BucketList, msg *cmn.InitTaskRespMsg, err error) {
+// cmn.SelectMsg.UUID - list operation handle which doesn't change between requests
+func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	var (
-		smap     = p.owner.smap.Get()
+		aisMsg   *aisMsg
+		args     bcastArgs
 		pageSize uint
+
+		hasEnough bool
+		entries   []*cmn.BucketEntry
 	)
+
 	if smsg.PageSize != 0 {
 		// When `PageSize` is set, then regardless of the listing type (slow/fast)
 		// we need respect it.
@@ -1703,27 +1703,78 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg, nextPa
 		pageSize = cmn.DefaultListPageSize
 	}
 
-	if smsg.UUID == "" {
-		newTaskID := cmn.GenUUID()
-		smsg.UUID = newTaskID
-		initResults := listCache.initResults(smap, smsg, bck, pageSize, newTaskID)
-		if initResults.err != nil {
-			return nil, nil, initResults.err
+	// TODO: Before checking cache and buffer we should check if there is another
+	//  request already in-flight that requests the same page as we do - if yes
+	//  then we should just patiently wait for the cache to get populated.
+
+	if !smsg.Passthrough {
+		entries, hasEnough = qc.get(cacheReqID{bck: bck.Bck}, smsg.ContinuationToken, pageSize)
+		if hasEnough {
+			goto end
 		}
-
-		return nil, &cmn.InitTaskRespMsg{UUID: newTaskID}, nil
+		// Request for all the props if (cache should always have all entries).
+		smsg.Props = strings.Join(cmn.GetPropsAll, ",")
+	}
+	if qb.hasEnough(smsg.UUID, smsg.ContinuationToken, pageSize) {
+		// We have enough in the buffer to fulfill the request.
+		entries = qb.get(smsg.UUID, smsg.ContinuationToken, pageSize)
+		goto endWithCache
 	}
 
-	fetchResult := listCache.next(smap, smsg, bck, pageSize, nextPage)
-	if fetchResult.err != nil {
-		return nil, nil, fetchResult.err
-	}
-	if !fetchResult.allOK {
-		return nil, &cmn.InitTaskRespMsg{UUID: smsg.UUID}, nil
+	// User requested some page but we don't have enough (but we may have part
+	// of the full page). Therefore, we must ask targets for page starting from
+	// what we have locally, so we don't rerequest the objects.
+	smsg.PageMarker = qb.last(smsg.UUID, smsg.ContinuationToken)
+
+	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, nil, nil)
+	args = bcastArgs{
+		req: cmn.ReqArgs{
+			Path:  cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+			Query: cmn.AddBckToQuery(nil, bck.Bck),
+			Body:  cmn.MustMarshal(aisMsg),
+		},
+		timeout: cmn.LongTimeout, // TODO: should it be `Client.ListObjects`?
 	}
 
-	allEntries = cmn.ConcatObjLists(fetchResult.lists, pageSize)
-	return allEntries, nil, nil
+	// Combine the results.
+	for res := range p.bcastPost(args) {
+		if res.err != nil {
+			return nil, res.err
+		}
+		if len(res.outjson) == 0 {
+			continue
+		}
+		// TODO: we should read directly from `res.r` (`r.Body`)
+		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
+		if _, err = bucketList.UnmarshalMsg(res.outjson); err != nil {
+			return
+		}
+		res.outjson = nil
+
+		if len(bucketList.Entries) == 0 {
+			continue
+		}
+		qb.set(smsg.UUID, res.si.ID(), bucketList.Entries, pageSize)
+	}
+	entries = qb.get(smsg.UUID, smsg.ContinuationToken, pageSize)
+
+endWithCache:
+	if !smsg.Passthrough {
+		qc.set(cacheReqID{bck: bck.Bck}, smsg.ContinuationToken, entries, pageSize)
+		for idx := range entries {
+			entries[idx].SetProps(smsg.PropsSet())
+		}
+	}
+end:
+	allEntries = &cmn.BucketList{
+		UUID:    smsg.UUID,
+		Entries: entries,
+	}
+	if uint(len(entries)) >= pageSize {
+		allEntries.PageMarker = entries[len(entries)-1].Name
+		allEntries.ContinuationToken = entries[len(entries)-1].Name
+	}
+	return allEntries, nil
 }
 
 // selects a random target to GET the list of objects from the remote bucket (cloud or remote AIS)
@@ -1734,8 +1785,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg, nextPa
 //      * list of objects and properties if the async task has finished (empty uuid)
 //      * non-empty uuid if the task is still running
 //      * error
-func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg, nextPage bool) (
-	allEntries *cmn.BucketList, initRespMsg *cmn.InitTaskRespMsg, status int, err error) {
+func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	if smsg.PageSize > cmn.DefaultListPageSize {
 		glog.Warningf("list_objects page size %d for bucket %s exceeds the default maximum %d ",
 			smsg.PageSize, bck, cmn.DefaultListPageSize)
@@ -1744,30 +1794,25 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg, ne
 	if pageSize == 0 {
 		pageSize = cmn.DefaultListPageSize
 	}
-
-	// start new async task if client did not provide uuid (neither in headers nor in SelectMsg)
-	isNew, q := p.initAsyncQuery(bck, &smsg, cmn.GenUUID(), nextPage)
 	var (
 		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Client.ListObjects
-		aisMsg        = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
-		body          = cmn.MustMarshal(aisMsg)
-		needLocalData = smsg.NeedLocalData()
+		needLocalData = smsg.Cached || smsg.NeedLocalData()
+
+		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
+		args   = bcastArgs{
+			req: cmn.ReqArgs{
+				Method: http.MethodPost,
+				Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+				Query:  cmn.AddBckToQuery(nil, bck.Bck),
+				Body:   cmn.MustMarshal(aisMsg),
+			},
+			timeout: reqTimeout,
+		}
 	)
 
-	args := bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-			Query:  q,
-			Body:   body,
-		},
-		timeout: reqTimeout,
-	}
-
 	var results chan callResult
-	if needLocalData || !isNew {
-		q.Set(cmn.URLParamSilent, "true")
+	if needLocalData {
 		results = p.bcastTo(args)
 	} else {
 		// only cloud options are requested - call one random target for data
@@ -1780,33 +1825,14 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg, ne
 		}
 	}
 
-	allOK, status, err := p.checkBckTaskResp(smsg.UUID, results)
-	if err != nil {
-		return nil, nil, status, err
-	}
-
-	// some targets are still executing their tasks or it is request to start
-	// an async task. The proxy returns only uuid to a caller
-	if !allOK || isNew {
-		return nil, &cmn.InitTaskRespMsg{UUID: smsg.UUID}, 0, nil
-	}
-
-	// all targets are ready, prepare the final result
-	q = url.Values{}
-	q = cmn.AddBckToQuery(q, bck.Bck)
-	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
-	q.Set(cmn.URLParamSilent, "true")
-	args.req.Query = q
-	results = p.bcastTo(args)
-
-	// combine results
+	// Combine the results.
 	bckLists := make([]*cmn.BucketList, 0, len(results))
 	for res := range results {
 		if res.status == http.StatusNotFound { // TODO -- FIXME
 			continue
 		}
 		if res.err != nil {
-			return nil, nil, res.status, res.err
+			return nil, res.err
 		}
 		if len(res.outjson) == 0 {
 			continue
@@ -1820,7 +1846,6 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg, ne
 		if len(bucketList.Entries) == 0 {
 			continue
 		}
-
 		bckLists = append(bckLists, bucketList)
 	}
 
@@ -1828,10 +1853,10 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg, ne
 	// case of Cloud and no limit is set by a user. We cannot use
 	// the single cmn.DefaultPageSize because Azure limit differs.
 	maxSize := smsg.PageSize
-	if bck.IsAIS() || smsg.Cached {
+	if needLocalData {
 		maxSize = pageSize
 	}
-	if smsg.Cached {
+	if needLocalData {
 		allEntries = cmn.ConcatObjLists(bckLists, maxSize)
 	} else {
 		allEntries = cmn.MergeObjLists(bckLists, maxSize)
@@ -1849,8 +1874,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg, ne
 		}
 	}
 
-	// no active tasks - return empty initRespMsg
-	return allEntries, nil, 0, nil
+	return allEntries, nil
 }
 
 func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
