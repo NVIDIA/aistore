@@ -386,28 +386,29 @@ func TestOperationsWithRanges(t *testing.T) {
 				var (
 					totalFiles = numfiles
 					baseParams = tutils.BaseAPIParams(proxyURL)
-					xactArgs   = api.XactReqArgs{Kind: cmn.ActDelete, Bck: bck.Bck, Timeout: rebalanceTimeout}
+					xactArgs   = func(xactID string) api.XactReqArgs {
+						return api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
+					}
 				)
-				if evict {
-					xactArgs.Kind = cmn.ActEvictObjects
-				}
+
 				for idx, test := range tests {
 					tutils.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
 
 					var (
-						err error
-						msg = &cmn.SelectMsg{Prefix: commonPrefix + "/", Cached: evict}
+						err    error
+						xactID string
+						msg    = &cmn.SelectMsg{Prefix: commonPrefix + "/", Cached: evict}
 					)
 					if evict {
-						err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
+						xactID, err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
 					} else {
-						err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
+						xactID, err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
 					}
 					if err != nil {
 						t.Error(err)
 						continue
 					}
-					if err := api.WaitForXaction(baseParams, xactArgs); err != nil {
+					if err := api.WaitForXaction(baseParams, xactArgs(xactID)); err != nil {
 						t.Error(err)
 						continue
 					}
@@ -499,10 +500,12 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		Object:     fileName1,
 		Reader:     readers.NewBytesReader(dataCloud),
 	}
-
-	xactArgsPrefetch := api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bckCloud, Timeout: rebalanceTimeout}
-	xactArgsEvict := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: bckCloud, Timeout: rebalanceTimeout}
-	xactArgsDelete := api.XactReqArgs{Kind: cmn.ActDelete, Bck: bckCloud, Timeout: rebalanceTimeout}
+	xactArgsF := func(xactID string, timeout time.Duration) api.XactReqArgs {
+		return api.XactReqArgs{ID: xactID, Timeout: timeout}
+	}
+	xactArgsPrefetch := func(xactID string) api.XactReqArgs { return xactArgsF(xactID, rebalanceTimeout) }
+	xactArgsEvict := xactArgsPrefetch
+	xactArgsDelete := xactArgsPrefetch
 
 	// PUT/GET/DEL Without ais bucket
 	tutils.Logf("Validating responses for non-existent ais bucket...\n")
@@ -522,27 +525,27 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	}
 
 	tutils.Logf("PrefetchList %d\n", len(files))
-	_, err = api.PrefetchList(baseParams, bckCloud, files)
+	prefetchListID, err := api.PrefetchList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsPrefetch)
+	err = api.WaitForXaction(baseParams, xactArgsPrefetch(prefetchListID))
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("PrefetchRange\n")
-	_, err = api.PrefetchRange(baseParams, bckCloud, "r"+prefetchRange)
+	prefetchRangeID, err := api.PrefetchRange(baseParams, bckCloud, "r"+prefetchRange)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsPrefetch)
+	err = api.WaitForXaction(baseParams, xactArgsPrefetch(prefetchRangeID))
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("EvictList\n")
-	err = api.EvictList(baseParams, bckCloud, files)
+	evictListID, err := api.EvictList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsEvict)
+	err = api.WaitForXaction(baseParams, xactArgsEvict(evictListID))
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("EvictRange\n")
-	err = api.EvictRange(baseParams, bckCloud, prefetchRange)
+	evictRangeID, err := api.EvictRange(baseParams, bckCloud, prefetchRange)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsEvict)
+	err = api.WaitForXaction(baseParams, xactArgsEvict(evictRangeID))
 	tassert.CheckFatal(t, err)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
@@ -570,28 +573,28 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
-	_, err = api.PrefetchList(baseParams, bckCloud, files)
+	prefetchListID, err = api.PrefetchList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsPrefetch)
+	err = api.WaitForXaction(baseParams, xactArgsPrefetch(prefetchListID))
 	tassert.CheckFatal(t, err)
 
-	err = api.EvictList(baseParams, bckCloud, files)
+	evictListID, err = api.EvictList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsEvict)
+	err = api.WaitForXaction(baseParams, xactArgsEvict(evictListID))
 	tassert.CheckFatal(t, err)
 
 	// Deleting from cloud bucket
 	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
-	err = api.DeleteList(baseParams, bckCloud, files)
+	deleteID, err := api.DeleteList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsDelete)
+	err = api.WaitForXaction(baseParams, xactArgsDelete(deleteID))
 	tassert.CheckFatal(t, err)
 
 	// Deleting from ais bucket
 	tutils.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
-	err = api.DeleteList(baseParams, bckLocal, files)
+	deleteID, err = api.DeleteList(baseParams, bckLocal, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsDelete)
+	err = api.WaitForXaction(baseParams, xactArgsDelete(deleteID))
 	tassert.CheckFatal(t, err)
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1)
@@ -720,10 +723,10 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	}
 
 	// Set Props Object
-	err = api.SetBucketProps(baseParams, bckLocal, bucketPropsLocal)
+	_, err = api.SetBucketProps(baseParams, bckLocal, bucketPropsLocal)
 	tassert.CheckFatal(t, err)
 
-	err = api.SetBucketProps(baseParams, bckCloud, bucketPropsCloud)
+	_, err = api.SetBucketProps(baseParams, bckCloud, bucketPropsCloud)
 	tassert.CheckFatal(t, err)
 
 	// Validate ais bucket props are set
@@ -737,7 +740,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	validateBucketProps(t, bucketPropsCloud, cloudProps)
 
 	// Reset ais bucket props and validate they are reset
-	err = api.ResetBucketProps(baseParams, bckLocal)
+	_, err = api.ResetBucketProps(baseParams, bckLocal)
 	tassert.CheckFatal(t, err)
 	localProps, err = api.HeadBucket(baseParams, bckLocal)
 	tassert.CheckFatal(t, err)
@@ -749,7 +752,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	validateBucketProps(t, bucketPropsCloud, cloudProps)
 
 	// Reset cloud bucket props
-	err = api.ResetBucketProps(baseParams, bckCloud)
+	_, err = api.ResetBucketProps(baseParams, bckCloud)
 	tassert.CheckFatal(t, err)
 	cloudProps, err = api.HeadBucket(baseParams, bckCloud)
 	tassert.CheckFatal(t, err)
@@ -798,7 +801,7 @@ func Test_coldgetmd5(t *testing.T) {
 				ValidateColdGet: api.Bool(false),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 	start := time.Now()
@@ -818,7 +821,7 @@ func Test_coldgetmd5(t *testing.T) {
 			ValidateColdGet: api.Bool(true),
 		},
 	}
-	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 	tassert.CheckFatal(t, err)
 
 	if t.Failed() {
@@ -836,7 +839,7 @@ cleanup:
 			ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
 		},
 	}
-	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 
 	tassert.CheckFatal(t, err)
 	for _, fn := range filesList {
@@ -869,7 +872,7 @@ func TestHeadBucket(t *testing.T) {
 			Enabled: api.Bool(true),
 		},
 	}
-	err := api.SetBucketProps(baseParams, bck, bckPropsToUpdate)
+	_, err := api.SetBucketProps(baseParams, bck, bckPropsToUpdate)
 	tassert.CheckFatal(t, err)
 
 	p, err := api.HeadBucket(baseParams, bck)
@@ -899,7 +902,7 @@ func TestHeadCloudBucket(t *testing.T) {
 			Enabled: api.Bool(true),
 		},
 	}
-	err := api.SetBucketProps(baseParams, bck, bckPropsToUpdate)
+	_, err := api.SetBucketProps(baseParams, bck, bckPropsToUpdate)
 	tassert.CheckFatal(t, err)
 	defer resetBucketProps(proxyURL, bck, t)
 
@@ -1048,7 +1051,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 				ValidateWarmGet: api.Bool(true),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -1086,7 +1089,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 				Type: api.String(cmn.ChecksumNone),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -1104,7 +1107,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 			ValidateWarmGet: api.Bool(p.Cksum.ValidateWarmGet),
 		},
 	}
-	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 	tassert.CheckFatal(t, err)
 
 	wg := &sync.WaitGroup{}
@@ -1169,7 +1172,7 @@ func Test_evictCloudBucket(t *testing.T) {
 
 	// Test property, mirror is disabled for cloud bucket that hasn't been accessed,
 	// even if system config says otherwise
-	err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
@@ -1262,7 +1265,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 				ValidateWarmGet: api.Bool(true),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -1292,7 +1295,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 				Type: api.String(cmn.ChecksumNone),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -1353,7 +1356,7 @@ func TestRangeRead(t *testing.T) {
 					EnableReadRange: api.Bool(cksumProps.EnableReadRange),
 				},
 			}
-			err = api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
+			_, err = api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			close(errCh)
 			close(fileNameCh)
 			tassert.CheckFatal(t, err)
@@ -1368,7 +1371,7 @@ func TestRangeRead(t *testing.T) {
 					EnableReadRange: api.Bool(false),
 				},
 			}
-			err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
+			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
 		}
 		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, fileName, true, RangeGetStr)
@@ -1380,7 +1383,7 @@ func TestRangeRead(t *testing.T) {
 					EnableReadRange: api.Bool(true),
 				},
 			}
-			err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
+			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
 		}
 		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, fileName, false, RangeGetStr)
@@ -1563,7 +1566,7 @@ func Test_checksum(t *testing.T) {
 				Type: api.String(cmn.ChecksumNone),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 	if t.Failed() {
@@ -1576,7 +1579,7 @@ func Test_checksum(t *testing.T) {
 				ValidateColdGet: api.Bool(false),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 	if t.Failed() {
@@ -1600,7 +1603,7 @@ func Test_checksum(t *testing.T) {
 				ValidateColdGet: api.Bool(true),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 		if t.Failed() {
 			goto cleanup
@@ -1611,7 +1614,7 @@ func Test_checksum(t *testing.T) {
 				Type: api.String(cmn.ChecksumXXHash),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 		if t.Failed() {
 			goto cleanup
@@ -1622,7 +1625,7 @@ func Test_checksum(t *testing.T) {
 				ValidateColdGet: api.Bool(true),
 			},
 		}
-		err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 		if t.Failed() {
 			goto cleanup
@@ -1652,7 +1655,7 @@ cleanup:
 			ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
 		},
 	}
-	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 	tassert.CheckFatal(t, err)
 }
 
@@ -1704,7 +1707,7 @@ func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual 
 
 func resetBucketProps(proxyURL string, bck cmn.Bck, t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	if err := api.ResetBucketProps(baseParams, bck); err != nil {
+	if _, err := api.ResetBucketProps(baseParams, bck); err != nil {
 		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
 	}
 }

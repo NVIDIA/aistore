@@ -133,12 +133,12 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	}
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	err := api.EvictList(baseParams, bck, toEvictList)
+	xactID, err := api.EvictList(baseParams, bck, toEvictList)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 		t.Fail()
 	}
-	xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: bck, Timeout: rebalanceTimeout}
+	xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
 	err = api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
@@ -518,7 +518,7 @@ func TestObjProps(t *testing.T) {
 			defaultBckProp, err := api.HeadBucket(baseParams, m.bck)
 			tassert.CheckFatal(t, err)
 
-			err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+			_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 				Versioning: &cmn.VersionConfToUpdate{
 					Enabled: api.Bool(test.verEnabled),
 				},

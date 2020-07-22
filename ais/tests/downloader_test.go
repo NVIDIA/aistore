@@ -527,9 +527,9 @@ func TestDownloadCloud(t *testing.T) {
 			}
 
 			tutils.Logln("evicting cloud bucket...")
-			err := api.EvictList(baseParams, test.srcBck, expectedObjs)
+			xactID, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			xactArgs := api.XactReqArgs{Kind: cmn.ActEvictObjects, Bck: test.srcBck, Timeout: rebalanceTimeout}
+			xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
 			err = api.WaitForXaction(baseParams, xactArgs)
 			tassert.CheckFatal(t, err)
 
@@ -557,8 +557,9 @@ func TestDownloadCloud(t *testing.T) {
 
 			// Test cancellation
 			tutils.Logln("evicting cloud bucket...")
-			err = api.EvictList(baseParams, test.srcBck, expectedObjs)
+			xactID, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
+			xactArgs.ID = xactID
 			err = api.WaitForXaction(baseParams, xactArgs)
 			tassert.CheckFatal(t, err)
 
@@ -715,7 +716,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
@@ -759,7 +760,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
@@ -796,7 +797,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)

@@ -1635,7 +1635,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 2: Make the bucket redundant
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
 			Enabled: api.Bool(true),
 			Copies:  api.Int64(int64(copies)),
@@ -1696,7 +1696,7 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 2: Make the bucket redundant
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
 			Enabled: api.Bool(true),
 			Copies:  api.Int64(int64(mpathCount)),

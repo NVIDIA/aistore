@@ -27,7 +27,7 @@ const (
 // Set the properties of a bucket using the bucket name and the entire bucket
 // property structure to be set.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToUpdate, query ...url.Values) error {
+func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToUpdate, query ...url.Values) (string, error) {
 	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
 	return patchBucketProps(baseParams, bck, b, query...)
 }
@@ -35,12 +35,12 @@ func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToU
 // ResetBucketProps API
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
-func ResetBucketProps(baseParams BaseParams, bck cmn.Bck, query ...url.Values) error {
+func ResetBucketProps(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (string, error) {
 	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetBprops})
 	return patchBucketProps(baseParams, bck, b, query...)
 }
 
-func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...url.Values) error {
+func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...url.Values) (xactID string, err error) {
 	var q url.Values
 	if len(query) > 0 {
 		q = query[0]
@@ -48,7 +48,8 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodPatch
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: body, Query: q})
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: body, Query: q}, &xactID)
+	return
 }
 
 // HeadBucket API
@@ -197,25 +198,23 @@ func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) (xactID string,
 // DeleteList API
 //
 // DeleteList sends a HTTP request to remove a list of objects from a bucket
-func DeleteList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (err error) {
+func DeleteList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	deleteMsg := cmn.ListMsg{ObjNames: fileslist}
-	_, err = doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
-	return
+	return doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 // DeleteRange API
 //
 // DeleteRange sends a HTTP request to remove a range of objects from a bucket
-func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (err error) {
+func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	deleteMsg := cmn.RangeMsg{Template: rng}
-	_, err = doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
-	return
+	return doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 // PrefetchList API
 //
 // PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket
-func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (xactID string, err error) {
+func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	prefetchMsg := cmn.ListMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
@@ -223,7 +222,7 @@ func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (xactI
 // PrefetchRange API
 //
 // PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket
-func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (xactID string, err error) {
+func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	prefetchMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
@@ -231,19 +230,17 @@ func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (xactID strin
 // EvictList API
 //
 // EvictList sends a HTTP request to evict a list of objects from a cloud bucket
-func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (err error) {
+func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	evictMsg := cmn.ListMsg{ObjNames: fileslist}
-	_, err = doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
-	return
+	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
 // EvictRange API
 //
 // EvictRange sends a HTTP request to evict a range of objects from a cloud bucket
-func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (err error) {
+func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	evictMsg := cmn.RangeMsg{Template: rng}
-	_, err = doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
-	return
+	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
 // EvictCloudBucket API

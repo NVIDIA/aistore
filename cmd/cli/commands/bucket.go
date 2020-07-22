@@ -330,7 +330,7 @@ func reformatBucketProps(nvs cmn.SimpleKVs) error {
 
 // Sets bucket properties
 func setBucketProps(c *cli.Context, bck cmn.Bck, props cmn.BucketPropsToUpdate) (err error) {
-	if err = api.SetBucketProps(defaultAPIParams, bck, props); err != nil {
+	if _, err = api.SetBucketProps(defaultAPIParams, bck, props); err != nil {
 		return
 	}
 	fmt.Fprintln(c.App.Writer, "Bucket props successfully updated")
@@ -339,7 +339,7 @@ func setBucketProps(c *cli.Context, bck cmn.Bck, props cmn.BucketPropsToUpdate) 
 
 // Resets bucket props
 func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
-	if err = api.ResetBucketProps(defaultAPIParams, bck); err != nil {
+	if _, err = api.ResetBucketProps(defaultAPIParams, bck); err != nil {
 		return
 	}
 

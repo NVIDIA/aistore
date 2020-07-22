@@ -228,7 +228,7 @@ func TestResetBucketProps(t *testing.T) {
 		},
 	}
 
-	err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
 	tassert.CheckFatal(t, err)
 
 	p, err := api.HeadBucket(baseParams, bck)
@@ -236,7 +236,7 @@ func TestResetBucketProps(t *testing.T) {
 
 	// check that bucket props do get set
 	validateBucketProps(t, propsToUpdate, p)
-	err = api.ResetBucketProps(baseParams, bck)
+	_, err = api.ResetBucketProps(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
 	p, err = api.HeadBucket(baseParams, bck)
@@ -311,7 +311,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := api.SetBucketProps(baseParams, bck, test.props)
+			_, err := api.SetBucketProps(baseParams, bck, test.props)
 			if err == nil {
 				t.Error("expected error when setting bad input")
 			}
@@ -340,7 +340,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Enable local versioning management
-	err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Versioning: &cmn.VersionConfToUpdate{Enabled: api.Bool(true)},
 	})
 	if err != nil {
@@ -893,7 +893,7 @@ func TestBucketSingleProp(t *testing.T) {
 	tutils.Logf("Changing bucket %q properties...\n", m.bck)
 
 	// Enabling EC should set default value for number of slices if it is 0
-	err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -910,13 +910,13 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable EC first
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Enabling mirroring should set default value for number of copies if it is 0
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -930,13 +930,13 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable mirroring first
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Change a few more bucket properties
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
 			DataSlices:   api.Int(dataSlices),
 			ParitySlices: api.Int(paritySlices),
@@ -946,7 +946,7 @@ func TestBucketSingleProp(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Enable EC again
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -963,13 +963,13 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable EC first
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Change mirroring threshold
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{UtilThresh: api.Int64(mirrorThreshold)}},
 	)
 	tassert.CheckError(t, err)
@@ -980,7 +980,7 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Disable mirroring
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
@@ -998,7 +998,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 		Provider: cmn.AnyCloud,
 	}
 
-	err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	if err == nil {
@@ -1028,7 +1028,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 		Provider: cmn.AnyCloud,
 	}
 
-	err = api.SetBucketProps(baseParams, bck, bucketProps)
+	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	if err == nil {
 		t.Fatalf("Expected SetBucketProps error, but got none.")
 	}
@@ -1119,7 +1119,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 	{
 		baseParams := tutils.BaseAPIParams()
-		err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+		_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 			Mirror: &cmn.MirrorConfToUpdate{
 				Enabled: api.Bool(true),
 			},
@@ -1184,7 +1184,7 @@ func TestCloudMirror(t *testing.T) {
 	defer m.cloudDelete()
 
 	// enable mirror
-	err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
@@ -1241,7 +1241,7 @@ func TestBucketReadOnly(t *testing.T) {
 	// make bucket read-only
 	// NOTE: must allow PATCH - otherwise api.SetBucketProps a few lines down below won't work
 	aattrs := cmn.ReadOnlyAccess() | cmn.AccessPATCH
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)})
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)})
 	tassert.CheckFatal(t, err)
 
 	m.init()
@@ -1251,7 +1251,7 @@ func TestBucketReadOnly(t *testing.T) {
 	}
 
 	// restore write access
-	err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{Access: api.AccessAttrs(p.Access)})
+	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{Access: api.AccessAttrs(p.Access)})
 	tassert.CheckFatal(t, err)
 
 	// write some more and destroy
@@ -1928,7 +1928,7 @@ func TestBackendBucket(t *testing.T) {
 	tassert.Fatalf(t, len(cloudObjList.Entries) > 0, "empty object list")
 
 	// Connect backend bucket to a aisBck
-	err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(cloudBck.Name),
 			Provider: api.String(cloudBck.Provider),
@@ -1973,7 +1973,7 @@ func TestBackendBucket(t *testing.T) {
 	)
 
 	// Disconnect backend bucket.
-	err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(""),
 			Provider: api.String(""),
@@ -2066,7 +2066,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	{
 		if mirrored {
-			err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					Type:            api.String(cksumType),
 					ValidateWarmGet: api.Bool(true),
@@ -2081,7 +2081,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			if m.smap.CountTargets() < parityCnt+1 {
 				t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 			}
-			err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					Type:            api.String(cksumType),
 					ValidateWarmGet: api.Bool(true),
@@ -2095,7 +2095,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			})
 			tassert.CheckFatal(t, err)
 		} else {
-			err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					Type:            api.String(cksumType),
 					ValidateWarmGet: api.Bool(true),

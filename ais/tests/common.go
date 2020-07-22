@@ -538,7 +538,7 @@ func (m *ioContext) setRandBucketProps() {
 			OOS:    api.Int64(int64(rand.Intn(30) + 60)),
 		},
 	}
-	err := api.SetBucketProps(baseParams, m.bck, props)
+	_, err := api.SetBucketProps(baseParams, m.bck, props)
 	tassert.CheckFatal(m.t, err)
 }
 

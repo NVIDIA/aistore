@@ -224,7 +224,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }
 func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
-	propsToUpdate cmn.BucketPropsToUpdate) (err error) {
+	propsToUpdate cmn.BucketPropsToUpdate) (xactID string, err error) {
 	var (
 		c          *txnClientCtx
 		nlp        = bck.GetNameLockPair()
@@ -235,7 +235,8 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	)
 
 	if !nlp.TryLock() {
-		return cmn.NewErrorBucketIsBusy(bck.Bck, pname)
+		err = cmn.NewErrorBucketIsBusy(bck.Bck, pname)
+		return
 	}
 	defer func() {
 		if !unlockUpon {
@@ -249,7 +250,8 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	bprops, present := bmd.Get(bck)
 	if !present {
 		p.owner.bmd.Unlock()
-		return cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		return
 	}
 	bck.Props = bprops
 	p.owner.bmd.Unlock()
@@ -277,7 +279,8 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
 			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
-			return res.err
+			err = res.err
+			return
 		}
 	}
 
@@ -312,13 +315,13 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 		}
 		p.notifs.add(c.uuid, &nl)
 		unlockUpon = true // unlock upon receiving target notifications
+		xactID = c.uuid
 	}
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
-
-	return nil
+	return
 }
 
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }

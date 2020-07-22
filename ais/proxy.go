@@ -637,9 +637,12 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, fmtNotCloud, bucket)
 			return
 		}
-		if _, err = p.doListRange(http.MethodDelete, bucket, &msg, r.URL.Query()); err != nil {
+		var xactID string
+		if xactID, err = p.doListRange(http.MethodDelete, bucket, &msg, r.URL.Query()); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
+		w.Write([]byte(xactID))
+
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
@@ -1401,9 +1404,11 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if err = p.setBucketProps(msg, bck, propsToUpdate); err != nil {
+	var xactID string
+	if xactID, err = p.setBucketProps(msg, bck, propsToUpdate); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 	}
+	w.Write([]byte(xactID))
 }
 
 // HEAD /v1/objects/bucket-name/object-name

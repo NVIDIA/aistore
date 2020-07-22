@@ -157,7 +157,7 @@ func CleanCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string)
 	toDelete, err := ListObjectNames(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
 	baseParams := BaseAPIParams(proxyURL)
-	err = api.DeleteList(baseParams, bck, toDelete)
+	_, err = api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
 }
 
@@ -165,7 +165,7 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 	p, err := api.HeadBucket(baseParams, dstBck) // We need to know real provider of the bucket
 	tassert.CheckFatal(t, err)
 
-	err = api.SetBucketProps(baseParams, srcBck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, srcBck, cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(dstBck.Name),
 			Provider: api.String(p.Provider),
@@ -429,11 +429,11 @@ func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
 
 func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) {
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.EvictList(baseParams, bck, objList)
+	xactID, err := api.EvictList(baseParams, bck, objList)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
-	xactArgs := api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bck, Timeout: evictPrefetchTimeout}
+	xactArgs := api.XactReqArgs{ID: xactID, Timeout: evictPrefetchTimeout}
 	if err := api.WaitForXaction(baseParams, xactArgs); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}

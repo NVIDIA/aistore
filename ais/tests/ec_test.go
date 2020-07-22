@@ -540,7 +540,7 @@ func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, 
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		o.dataCnt, o.parityCnt, o.seed, o.concurrency)
-	err := api.SetBucketProps(baseParams, bck, bckProps)
+	_, err := api.SetBucketProps(baseParams, bck, bckProps)
 
 	if err != nil {
 		tutils.DestroyBucket(t, proxyURL, bck)
@@ -550,7 +550,7 @@ func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, 
 
 func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps cmn.BucketPropsToUpdate) {
 	tutils.Logf("Changing EC %d:%d\n", bckProps.EC.DataSlices, bckProps.EC.ParitySlices)
-	err := api.SetBucketProps(baseParams, bck, bckProps)
+	_, err := api.SetBucketProps(baseParams, bck, bckProps)
 	tassert.CheckFatal(t, err)
 }
 
@@ -646,43 +646,43 @@ func TestECChange(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	tutils.Logln("Resetting bucket properties")
-	err := api.ResetBucketProps(baseParams, bck)
+	_, err := api.ResetBucketProps(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to set too many slices")
 	bucketProps.EC.DataSlices = api.Int(25)
 	bucketProps.EC.ParitySlices = api.Int(25)
-	err = api.SetBucketProps(baseParams, bck, bucketProps)
+	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.Errorf(t, err != nil, "Enabling EC must fail in case of the number of targets fewer than the number of slices")
 
 	tutils.Logln("Enabling EC")
 	bucketProps.EC.DataSlices = api.Int(1)
 	bucketProps.EC.ParitySlices = api.Int(1)
-	err = api.SetBucketProps(baseParams, bck, bucketProps)
+	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to set EC options to the same values")
-	err = api.SetBucketProps(baseParams, bck, bucketProps)
+	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to disable EC")
 	bucketProps.EC.Enabled = api.Bool(false)
-	err = api.SetBucketProps(baseParams, bck, bucketProps)
+	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.Errorf(t, err == nil, "Disabling EC failed: %v", err)
 
 	tutils.Logln("Trying to re-enable EC")
 	bucketProps.EC.Enabled = api.Bool(true)
-	err = api.SetBucketProps(baseParams, bck, bucketProps)
+	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.Errorf(t, err == nil, "Enabling EC failed: %v", err)
 
 	tutils.Logln("Trying to modify EC options when EC is enabled")
 	bucketProps.EC.Enabled = api.Bool(true)
 	bucketProps.EC.ObjSizeLimit = api.Int64(300000)
-	err = api.SetBucketProps(baseParams, bck, bucketProps)
+	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.Errorf(t, err != nil, "Modifiying EC properties must fail")
 
 	tutils.Logln("Resetting bucket properties")
-	err = api.ResetBucketProps(baseParams, bck)
+	_, err = api.ResetBucketProps(baseParams, bck)
 	tassert.Errorf(t, err == nil, "Resetting properties should work")
 }
 
@@ -1099,7 +1099,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	assertBucketSize(t, baseParams, bck, o.objCount)
 
 	// Disable EC, put normal files, check if were created properly
-	err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
@@ -1122,7 +1122,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	assertBucketSize(t, baseParams, bck, o.objCount*2)
 
 	// Enable EC again, check if EC was started properly and creates files with EC correctly
-	err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -1204,14 +1204,14 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	time.Sleep(time.Second)
 
 	tutils.Logf("Disabling EC for the bucket %s\n", bck)
-	err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	time.Sleep(15 * time.Millisecond)
 	tutils.Logf("Enabling EC for the bucket %s\n", bck)
-	err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -2289,7 +2289,7 @@ func TestECBucketEncode(t *testing.T) {
 			ParitySlices: api.Int(parityCnt),
 		},
 	}
-	err = api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
+	_, err = api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("EC encode must start automatically for bucket %s\n", m.bck)

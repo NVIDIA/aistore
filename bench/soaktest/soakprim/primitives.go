@@ -66,7 +66,7 @@ func (rctx *RecipeContext) SetBucketProps(bucketname string, props cmn.BucketPro
 	tag := rctx.startPrim("SetBucketProps")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.SetBucketProps(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), props)
+		_, err := api.SetBucketProps(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), props)
 		cmn.AssertNoErr(err)
 	}()
 }

@@ -704,7 +704,7 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 
 	switch command {
 	case commandRemove:
-		err = api.DeleteList(defaultAPIParams, bck, fileList)
+		xactID, err = api.DeleteList(defaultAPIParams, bck, fileList)
 		command = "removed"
 	case commandPrefetch:
 		bck.Provider = cmn.AnyCloud
@@ -712,7 +712,7 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		command += "ed"
 	case commandEvict:
 		bck.Provider = cmn.AnyCloud
-		err = api.EvictList(defaultAPIParams, bck, fileList)
+		xactID, err = api.EvictList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	default:
 		err = fmt.Errorf(invalidCmdMsg, command)
@@ -753,7 +753,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 
 	switch command {
 	case commandRemove:
-		err = api.DeleteRange(defaultAPIParams, bck, rangeStr)
+		xactID, err = api.DeleteRange(defaultAPIParams, bck, rangeStr)
 		command = "removed"
 	case commandPrefetch:
 		bck.Provider = cmn.AnyCloud
@@ -761,7 +761,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		command += "ed"
 	case commandEvict:
 		bck.Provider = cmn.AnyCloud
-		err = api.EvictRange(defaultAPIParams, bck, rangeStr)
+		xactID, err = api.EvictRange(defaultAPIParams, bck, rangeStr)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)

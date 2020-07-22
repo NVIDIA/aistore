@@ -605,7 +605,7 @@ func setupBucket(runParams *params) error {
 		change = true
 	}
 	if change {
-		if err = api.SetBucketProps(runParams.bp, runParams.bck, propsToUpdate); err != nil {
+		if _, err = api.SetBucketProps(runParams.bp, runParams.bck, propsToUpdate); err != nil {
 			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bck, err)
 		}
 	}
@@ -1063,7 +1063,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	b := cmn.Min(t, runParams.batchSize)
 	n := t / b
 	for i := 0; i < n; i++ {
-		err := api.DeleteList(runParams.bp, runParams.bck, objs[i*b:(i+1)*b])
+		_, err := api.DeleteList(runParams.bp, runParams.bck, objs[i*b:(i+1)*b])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
@@ -1074,7 +1074,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	}
 
 	if t%b != 0 {
-		err := api.DeleteList(runParams.bp, runParams.bck,
+		_, err := api.DeleteList(runParams.bp, runParams.bck,
 			objs[n*b:])
 		if err != nil {
 			fmt.Println("delete err ", err)
