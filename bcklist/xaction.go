@@ -12,12 +12,12 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
@@ -32,15 +32,18 @@ type BckListTask struct {
 	ctx        context.Context
 	t          cluster.Target
 	msg        *cmn.SelectMsg
-	walkStopCh *cmn.StopCh
-	workCh     chan *bckListReq
-	objCache   chan *cmn.BucketEntry
-	walkWg     sync.WaitGroup
-	pageError  error
-	lastMarker string
-	lastPage   []*cmn.BucketEntry
-	inProgress atomic.Bool
-	walkDone   bool
+	walkStopCh *cmn.StopCh           // to abort file walk
+	cluBck     *cluster.Bck          // cluster.Bck made from original cmn.Bck
+	remoteBck  *cluster.Bck          // remote cluster for Cloud calls (differs from cluBck in case of backend bucket is used
+	workCh     chan *bckListReq      // incoming requests
+	objCache   chan *cmn.BucketEntry // local cache filled when idle
+	walkWg     sync.WaitGroup        // to wait for walk finishes on abort
+	pageError  error                 // Cloud error if any occurs
+	lastMarker string                // last requested PageMarker (to detect re-requesting a page)
+	lastPage   []*cmn.BucketEntry    // last sent page and a little more
+	inProgress atomic.Bool           // the page is being filled, nothing to respond
+	walkDone   bool                  // walk finishes or Cloud returned all objects
+	fromRemote bool                  // if xact must request remote data(Cloud/Remote/Backend) or traversing local FS is enough
 }
 
 type bckListReq struct {
@@ -56,8 +59,8 @@ type BckListResp struct {
 type BckListCallback = func(resp *BckListResp)
 
 const (
-	IdleTime       = 30 * time.Second
-	bckListReqSize = 32
+	bckListReqSize = 32  // the size of xaction request queue
+	cacheSize      = 128 // the size of local cache filled in advance when idle
 )
 
 var (
@@ -65,19 +68,16 @@ var (
 )
 
 func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *BckListTask {
-	initialCache := 128
-	if smsg.Passthrough {
-		initialCache = 10 // no need to have large local cache for passthrough
-	}
+	idleTime := cmn.GCO.Get().Timeout.SendFile
 	xact := &BckListTask{
 		ctx:      ctx,
 		t:        t,
 		msg:      smsg,
 		workCh:   make(chan *bckListReq, bckListReqSize),
-		objCache: make(chan *cmn.BucketEntry, initialCache),
-		lastPage: make([]*cmn.BucketEntry, 0, initialCache),
+		objCache: make(chan *cmn.BucketEntry, cacheSize),
+		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
-	xact.XactDemandBase = *demand.NewXactDemandBaseBckUUID(uuid, cmn.ActListObjects, bck, IdleTime)
+	xact.XactDemandBase = *demand.NewXactDemandBaseBckUUID(uuid, cmn.ActListObjects, bck, idleTime)
 	return xact
 }
 
@@ -92,23 +92,52 @@ func (r *BckListTask) Do(action string, msg *cmn.SelectMsg, ch chan *BckListResp
 
 // Starts fs.Walk beforehand if needed, so by the moment we read a page,
 // the local cache was populated.
-func (r *BckListTask) init() {
-	if !r.Bck().IsAIS() && !r.msg.Cached {
-		return
+func (r *BckListTask) init() error {
+	r.cluBck = cluster.NewBckEmbed(r.Bck())
+	if err := r.cluBck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+		return err
 	}
+	r.fromRemote = !r.cluBck.IsAIS() && !r.msg.Cached
+	// remote bucket listing is always paged
+	if r.fromRemote && r.msg.WantObjectsCnt() == 0 {
+		r.msg.PageSize = cmn.DefaultListPageSize
+	}
+	if r.cluBck.IsAIS() && r.cluBck.HasBackendBck() {
+		r.remoteBck = cluster.NewBckEmbed(r.cluBck.CloudBck())
+		if err := r.remoteBck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+			return err
+		}
+	} else if !r.cluBck.IsAIS() {
+		r.remoteBck = r.cluBck
+	}
+	if r.fromRemote {
+		return nil
+	}
+
 	r.walkStopCh = cmn.NewStopCh()
 	r.walkWg.Add(1)
 	go r.traverseBucket()
+	return nil
 }
 
 func (r *BckListTask) Run() (err error) {
 	glog.Infoln(r.String())
-	r.init()
+	if err := r.init(); err != nil {
+		return err
+	}
 
 	for {
 		select {
 		case req := <-r.workCh:
-			r.msg = req.msg
+			// Copy only values that can change between calls
+			debug.Assert(r.msg.Passthrough == req.msg.Passthrough)
+			debug.Assert(r.msg.Prefix == req.msg.Prefix)
+			debug.Assert(r.msg.Fast == req.msg.Fast)
+			debug.Assert(r.msg.Cached == req.msg.Cached)
+			r.msg.PageMarker = req.msg.PageMarker
+			if !r.fromRemote || req.msg.PageSize != 0 {
+				r.msg.PageSize = req.msg.PageSize
+			}
 			resp := r.dispatchRequest(req.action)
 			req.ch <- resp
 			close(req.ch)
@@ -254,7 +283,7 @@ func (r *BckListTask) nextPageCloud(marker string, cnt int) {
 		return
 	}
 
-	walk := objwalk.NewWalk(r.walkCtx(), r.t, cluster.NewBckEmbed(r.Bck()), r.msg)
+	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.remoteBck, r.msg)
 	bckList, err := walk.CloudObjPage()
 	r.pageError = err
 	if bckList.PageMarker == "" {
@@ -298,7 +327,8 @@ func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
 		return nil, errors.New("page is not loaded yet")
 	}
 	cmn.Assert(r.msg.UUID != "")
-	if cnt != 0 && len(list) > cnt {
+	// Fixup the number of objects per page for Cloud case
+	if cnt != 0 && len(list) >= cnt {
 		entries := list[:cnt]
 		return &cmn.BucketList{
 			Entries:    entries,
@@ -335,7 +365,7 @@ func (r *BckListTask) genNextPage(marker string, cnt int) error {
 	if r.lastMarker < marker {
 		r.lastMarker = marker
 	}
-	if !r.Bck().IsAIS() && !r.msg.Cached {
+	if r.fromRemote {
 		go r.nextPageCloud(marker, cnt)
 		return nil
 	}

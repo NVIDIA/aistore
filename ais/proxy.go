@@ -1089,7 +1089,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		bckList     *cmn.BucketList
 		smsg        = cmn.SelectMsg{}
 		query       = r.URL.Query()
-		nextPage    bool
+		nextPage    = cmn.IsParseBool(query.Get(cmn.URLParamNextPage))
 	)
 	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1113,11 +1113,10 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		smsg.UUID = id
 	}
 	if bck.IsAIS() || smsg.Cached {
-		nextPage = cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamNextPage))
 		bckList, initRespMsg, err = p.listAISBucket(bck, smsg, nextPage)
 	} else {
 		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
-		bckList, initRespMsg, _, err = p.listObjectsRemote(bck, smsg)
+		bckList, initRespMsg, _, err = p.listObjectsRemote(bck, smsg, nextPage)
 		// TODO: `status == http.StatusGone` At this point we know that this
 		//  cloud bucket exists and is offline. We should somehow try to list
 		//  cached objects. This isn't easy as we basically need to start a new
@@ -1743,7 +1742,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg, nextPa
 //      * list of objects and properties if the async task has finished (empty uuid)
 //      * non-empty uuid if the task is still running
 //      * error
-func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
+func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg, nextPage bool) (
 	allEntries *cmn.BucketList, initRespMsg *cmn.InitTaskRespMsg, status int, err error) {
 	if smsg.PageSize > cmn.DefaultListPageSize {
 		glog.Warningf("list_objects page size %d for bucket %s exceeds the default maximum %d ",
@@ -1755,7 +1754,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
 	}
 
 	// start new async task if client did not provide uuid (neither in headers nor in SelectMsg)
-	isNew, q := p.initAsyncQuery(bck, &smsg, cmn.GenUUID(), false)
+	isNew, q := p.initAsyncQuery(bck, &smsg, cmn.GenUUID(), nextPage)
 	var (
 		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Client.ListObjects
@@ -1784,6 +1783,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (
 			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout})
 			results = make(chan callResult, 1)
 			results <- res
+			close(results)
 			break
 		}
 	}
