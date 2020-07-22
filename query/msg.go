@@ -27,14 +27,21 @@ type (
 	// Definition of a query
 	DefMsg struct {
 		OuterSelect OuterSelectMsg `json:"outer_select"`
+		InnerSelect InnerSelectMsg `json:"inner_select"`
 		From        FromMsg        `json:"from"`
 		Where       WhereMsg       `json:"where"`
+		Fast        bool           `json:"fast"`
 	}
 
 	// OuterSelect -> Look only on objects' metadata.
 	// In the future we might have InnerSelect, which looks into objects' contents
 	OuterSelectMsg struct {
+		Prefix   string `json:"prefix"`
 		Template string `json:"objects_source"`
+	}
+
+	InnerSelectMsg struct {
+		Props string `json:"props"`
 	}
 
 	FromMsg struct {

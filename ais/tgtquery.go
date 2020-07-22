@@ -54,9 +54,15 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		ctx  = context.Background()
+		ctx = context.Background()
+		// TODO: we should use `q` directly instead of passing everything in
+		//  additional, redundant `SelectMsg`.
 		smsg = &cmn.SelectMsg{
-			UUID: handle,
+			UUID:   handle,
+			Prefix: q.ObjectsSource.Prefix,
+			Props:  q.Select.Props,
+			Fast:   q.Fast,
+			Cached: q.Cached,
 		}
 	)
 

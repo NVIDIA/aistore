@@ -5,6 +5,8 @@
 package query
 
 import (
+	"strings"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -12,7 +14,8 @@ import (
 type (
 	ObjectsSource struct {
 		// regexp *regexp.Regexp // support in the future
-		Pt *cmn.ParsedTemplate
+		Pt     *cmn.ParsedTemplate
+		Prefix string
 	}
 
 	BucketSource struct {
@@ -20,9 +23,16 @@ type (
 		Bck *cluster.Bck
 	}
 
+	InnerSelect struct {
+		Props string
+	}
+
 	ObjectsQuery struct {
 		ObjectsSource *ObjectsSource
 		BckSource     *BucketSource
+		Select        InnerSelect
+		Fast          bool
+		Cached        bool
 		filter        cluster.ObjectFilter
 	}
 )
@@ -63,13 +73,23 @@ func BckSource(bck cmn.Bck, node cluster.Node) (*BucketSource, error) {
 }
 
 func NewQueryFromMsg(node cluster.Node, msg *DefMsg) (q *ObjectsQuery, err error) {
-	q = &ObjectsQuery{}
+	q = &ObjectsQuery{
+		Fast: msg.Fast,
+	}
 	if msg.OuterSelect.Template != "" {
 		if q.ObjectsSource, err = TemplateObjSource(msg.OuterSelect.Template); err != nil {
 			return nil, err
 		}
+	} else if msg.OuterSelect.Prefix != "" {
+		q.ObjectsSource = &ObjectsSource{Prefix: msg.OuterSelect.Prefix}
 	} else {
 		q.ObjectsSource = AllObjSource()
+	}
+
+	if msg.InnerSelect.Props != "" {
+		q.Select.Props = msg.InnerSelect.Props
+	} else {
+		q.Select.Props = strings.Join(cmn.GetPropsDefault, ",")
 	}
 
 	if q.BckSource, err = BckSource(msg.From.Bck, node); err != nil {
