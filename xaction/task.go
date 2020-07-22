@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
-	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -179,8 +178,7 @@ func (t *bckSummaryTask) Run() error {
 				for {
 					walk := objwalk.NewWalk(context.Background(), t.t, bck, msg)
 					if bck.IsAIS() {
-						wi := walkinfo.NewWalkInfo(t.ctx, t.t, msg)
-						list, err = walk.DefaultLocalObjPage(msg.WantObjectsCnt(), wi)
+						list, err = walk.DefaultLocalObjPage(msg)
 					} else {
 						list, err = walk.CloudObjPage()
 					}

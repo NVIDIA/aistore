@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
-	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/tar2tf"
 	"github.com/NVIDIA/aistore/xaction/demand"
@@ -650,15 +649,15 @@ type queryEntry struct {
 	t     cluster.Target
 	xact  *query.ObjectsListingXact
 	query *query.ObjectsQuery
-	wi    *walkinfo.WalkInfo
-	id    string // serves as well as a query handle
+	ctx   context.Context
+	msg   *cmn.SelectMsg
 }
 
 func (e *queryEntry) Start(_ cmn.Bck) error {
-	xact := query.NewObjectsListing(e.t, e.query, e.wi, e.id)
+	xact := query.NewObjectsListing(e.ctx, e.t, e.query, e.msg)
 	e.xact = xact
-	if query.Registry.Get(e.id) != nil {
-		return fmt.Errorf("result set with handle %s already exists", e.id)
+	if query.Registry.Get(e.msg.UUID) != nil {
+		return fmt.Errorf("result set with handle %s already exists", e.msg.UUID)
 	}
 	return nil
 }
@@ -666,25 +665,24 @@ func (e *queryEntry) Start(_ cmn.Bck) error {
 func (e *queryEntry) Kind() string  { return cmn.ActQueryObjects }
 func (e *queryEntry) Get() cmn.Xact { return e.xact }
 
-func (r *registry) RenewObjectsListingXact(t cluster.Target, q *query.ObjectsQuery, wi *walkinfo.WalkInfo, handle string) (*query.ObjectsListingXact, bool, error) {
-	cmn.Assert(handle != "")
-	if xact := query.Registry.Get(handle); xact != nil {
+func (r *registry) RenewObjectsListingXact(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) (*query.ObjectsListingXact, bool, error) {
+	cmn.Assert(msg.UUID != "")
+	if xact := query.Registry.Get(msg.UUID); xact != nil {
 		if xact.Aborted() {
-			query.Registry.Delete(handle)
+			query.Registry.Delete(msg.UUID)
 		} else {
 			return xact, false, nil
 		}
 	}
 
-	id := handle
-	if err := r.removeFinishedByID(id); err != nil {
+	if err := r.removeFinishedByID(msg.UUID); err != nil {
 		return nil, false, err
 	}
 	e := &queryEntry{
-		id:    id,
 		t:     t,
 		query: q,
-		wi:    wi,
+		ctx:   ctx,
+		msg:   msg,
 	}
 
 	ee, err := r.renewBucketXaction(e, q.BckSource.Bck)
@@ -696,7 +694,7 @@ func (r *registry) RenewObjectsListingXact(t cluster.Target, q *query.ObjectsQue
 }
 
 func (e *queryEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
-	return query.Registry.Get(e.id) != nil, nil
+	return query.Registry.Get(e.msg.UUID) != nil, nil
 }
 
 //

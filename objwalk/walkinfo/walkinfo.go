@@ -84,18 +84,6 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *Wal
 	}
 }
 
-func NewDefaultWalkInfo(t cluster.Target) *WalkInfo {
-	propNeeded := make(map[string]bool, len(wiProps))
-	for _, prop := range wiProps {
-		propNeeded[prop] = true
-	}
-	return &WalkInfo{
-		t:          t, // targetrunner
-		smap:       t.GetSowner().Get(),
-		propNeeded: propNeeded,
-	}
-}
-
 func (wi *WalkInfo) needSize() bool      { return wi.propNeeded[cmn.GetPropsSize] }
 func (wi *WalkInfo) needAtime() bool     { return wi.propNeeded[cmn.GetPropsAtime] }
 func (wi *WalkInfo) needCksum() bool     { return wi.propNeeded[cmn.GetPropsChecksum] }

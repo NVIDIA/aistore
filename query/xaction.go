@@ -5,6 +5,7 @@
 package query
 
 import (
+	"context"
 	"io"
 	"sync"
 	"time"
@@ -20,8 +21,9 @@ type (
 	ObjectsListingXact struct {
 		cmn.XactBase // ID() serves as well as a query handle
 		t            cluster.Target
+		ctx          context.Context
+		msg          *cmn.SelectMsg
 		timer        *time.Timer
-		wi           *walkinfo.WalkInfo
 		mtx          sync.Mutex
 		buff         []*cmn.BucketEntry
 		fetchingDone bool
@@ -41,13 +43,14 @@ const (
 	xactionTTL = 10 * time.Minute // TODO: it should be Xaction argument
 )
 
-func NewObjectsListing(t cluster.Target, query *ObjectsQuery, wi *walkinfo.WalkInfo, id string) *ObjectsListingXact {
+func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuery, msg *cmn.SelectMsg) *ObjectsListingXact {
 	cmn.Assert(query.BckSource.Bck != nil)
-	cmn.Assert(id != "")
+	cmn.Assert(msg.UUID != "")
 	return &ObjectsListingXact{
-		XactBase: *cmn.NewXactBaseBck(id, cmn.ActQueryObjects, query.BckSource.Bck.Bck),
+		XactBase: *cmn.NewXactBaseBck(msg.UUID, cmn.ActQueryObjects, query.BckSource.Bck.Bck),
 		t:        t,
-		wi:       wi,
+		ctx:      ctx,
+		msg:      msg,
 		resultCh: make(chan *Result),
 		query:    query,
 		timer:    time.NewTimer(xactionTTL),
@@ -152,12 +155,17 @@ func (r *ObjectsListingXact) startFromBck() {
 		r.stop()
 	}()
 
+	cmn.Assert(r.msg != nil)
+	cmn.Assert(r.ctx != nil)
+
 	var (
 		bck = r.query.BckSource.Bck
+		wi  = walkinfo.NewWalkInfo(r.ctx, r.t, r.msg)
 	)
+	wi.SetObjectFilter(r.query.Filter())
 
 	cb := func(fqn string, de fs.DirEntry) error {
-		entry, err := r.wi.Callback(fqn, de)
+		entry, err := wi.Callback(fqn, de)
 		if entry == nil && err == nil {
 			return nil
 		}
@@ -176,7 +184,7 @@ func (r *ObjectsListingXact) startFromBck() {
 		},
 		ValidateCallback: func(fqn string, de fs.DirEntry) error {
 			if de.IsDir() {
-				return r.wi.ProcessDir(fqn)
+				return wi.ProcessDir(fqn)
 			}
 			return nil
 		},

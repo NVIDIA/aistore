@@ -34,18 +34,19 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.S
 
 // DefaultLocalObjPage should be used when there's no need to persist results for a longer period of time.
 // It's supposed to be used when results are needed immediately.
-func (w *Walk) DefaultLocalObjPage(objectsCnt uint, wi *walkinfo.WalkInfo) (*cmn.BucketList, error) {
+func (w *Walk) DefaultLocalObjPage(msg *cmn.SelectMsg) (*cmn.BucketList, error) {
 	var (
 		objSrc = &query.ObjectsSource{}
 		bckSrc = &query.BucketSource{Bck: w.bck}
 		q      = query.NewQuery(objSrc, bckSrc, nil)
 	)
 
-	xact := query.NewObjectsListing(w.t, q, wi, cmn.GenUUID())
+	msg.UUID = cmn.GenUUID()
+	xact := query.NewObjectsListing(w.ctx, w.t, q, msg)
 	go xact.Start()
 
-	cmn.Assert(!xact.PageMarkerUnsatisfiable(wi.Marker))
-	return LocalObjPage(xact, objectsCnt)
+	cmn.Assert(!xact.PageMarkerUnsatisfiable(msg.PageMarker))
+	return LocalObjPage(xact, msg.WantObjectsCnt())
 }
 
 // LocalObjPage walks local filesystems and collects objects for a given
@@ -72,7 +73,7 @@ func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketL
 // that is available only locally(copies, targetURL etc).
 func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	if w.msg.Cached {
-		return w.DefaultLocalObjPage(w.msg.WantObjectsCnt(), walkinfo.NewDefaultWalkInfo(w.t))
+		return w.DefaultLocalObjPage(w.msg)
 	}
 
 	msg := &cmn.SelectMsg{}

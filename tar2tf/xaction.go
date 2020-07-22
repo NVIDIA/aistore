@@ -6,12 +6,12 @@
 package tar2tf
 
 import (
+	"context"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/go-tfdata/tfdata/transform"
 )
@@ -40,13 +40,17 @@ func (t *Xact) Run() error {
 
 	var (
 		streamer = newSamplesStreamer(t)
-		objSrc   = &query.ObjectsSource{Pt: &t.Job.Template}
+		ctx      = context.Background()
+		msg      = &cmn.SelectMsg{
+			UUID: cmn.GenUUID(),
+		}
+		objSrc = &query.ObjectsSource{Pt: &t.Job.Template}
 
 		// doesn't use xaction registry, but it's not necessary as this xaction's life span
 		// is the same as tar2tf request life span. If request get's canceled,
 		// the xaction will terminate as well
 		q         = query.NewQuery(objSrc, bckSrc, nil)
-		resultSet = query.NewObjectsListing(t.T, q, walkinfo.NewDefaultWalkInfo(t.T), cmn.GenUUID())
+		resultSet = query.NewObjectsListing(ctx, t.T, q, msg)
 	)
 	go resultSet.Start()
 

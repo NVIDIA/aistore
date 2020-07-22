@@ -5,11 +5,11 @@
 package ais
 
 import (
+	"context"
 	"io"
 	"net/http"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -53,10 +53,14 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wi := walkinfo.NewDefaultWalkInfo(t)
-	wi.SetObjectFilter(q.Filter())
+	var (
+		ctx  = context.Background()
+		smsg = &cmn.SelectMsg{
+			UUID: handle,
+		}
+	)
 
-	xact, isNew, err := xaction.Registry.RenewObjectsListingXact(t, q, wi, handle)
+	xact, isNew, err := xaction.Registry.RenewObjectsListingXact(ctx, t, q, smsg)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
