@@ -35,9 +35,11 @@ func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.S
 // DefaultLocalObjPage should be used when there's no need to persist results for a longer period of time.
 // It's supposed to be used when results are needed immediately.
 func (w *Walk) DefaultLocalObjPage(objectsCnt uint, wi *walkinfo.WalkInfo) (*cmn.BucketList, error) {
-	bckSrc := query.BckSource(w.bck.Bck)
-	objSrc := &query.ObjectsSource{}
-	q := query.NewQuery(objSrc, bckSrc, nil)
+	var (
+		objSrc = &query.ObjectsSource{}
+		bckSrc = &query.BucketSource{Bck: w.bck}
+		q      = query.NewQuery(objSrc, bckSrc, nil)
+	)
 
 	xact := query.NewObjectsListing(w.t, q, wi, cmn.GenUUID())
 	go xact.Start()

@@ -87,7 +87,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := query.NewQueryFromMsg(&msg.QueryMsg); err != nil {
+	if _, err := query.NewQueryFromMsg(p, &msg.QueryMsg); err != nil {
 		p.invalmsghdlr(w, r, "Failed to parse query message: "+err.Error())
 		return
 	}

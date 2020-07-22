@@ -64,7 +64,7 @@ type PutObjectParams struct {
 	SkipEncode   bool // Do not run EC encode after finalizing
 }
 
-type node interface {
+type Node interface {
 	Snode() *Snode
 	GetBowner() Bowner
 	GetSowner() Sowner
@@ -76,7 +76,7 @@ type node interface {
 
 // NOTE: For implementations, please refer to ais/tgtifimpl.go and ais/httpcommon.go
 type Target interface {
-	node
+	Node
 	FSHC(err error, path string)
 	GetMMSA() *memsys.MMSA
 	GetSmallMMSA() *memsys.MMSA

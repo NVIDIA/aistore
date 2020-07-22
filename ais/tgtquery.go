@@ -47,7 +47,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q, err := query.NewQueryFromMsg(&msg.QueryMsg)
+	q, err := query.NewQueryFromMsg(t, &msg.QueryMsg)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return

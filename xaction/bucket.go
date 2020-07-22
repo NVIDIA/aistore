@@ -687,7 +687,7 @@ func (r *registry) RenewObjectsListingXact(t cluster.Target, q *query.ObjectsQue
 		wi:    wi,
 	}
 
-	ee, err := r.renewBucketXaction(e, cluster.NewBckEmbed(*q.BckSource.Bck))
+	ee, err := r.renewBucketXaction(e, q.BckSource.Bck)
 	if err == nil {
 		x := ee.Get().(*query.ObjectsListingXact)
 		return x, true, nil

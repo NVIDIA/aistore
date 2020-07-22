@@ -6,5 +6,5 @@ package cluster
 
 // NOTE: For implementations, please refer to ais/prxifimpl.go and ais/httpcommon.go
 type Proxy interface {
-	node
+	Node
 }

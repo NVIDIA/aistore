@@ -45,7 +45,7 @@ func NewObjectsListing(t cluster.Target, query *ObjectsQuery, wi *walkinfo.WalkI
 	cmn.Assert(query.BckSource.Bck != nil)
 	cmn.Assert(id != "")
 	return &ObjectsListingXact{
-		XactBase: *cmn.NewXactBaseBck(id, cmn.ActQueryObjects, *query.BckSource.Bck),
+		XactBase: *cmn.NewXactBaseBck(id, cmn.ActQueryObjects, query.BckSource.Bck.Bck),
 		t:        t,
 		wi:       wi,
 		resultCh: make(chan *Result),
@@ -104,13 +104,14 @@ func (r *ObjectsListingXact) startFromTemplate() {
 
 	var (
 		iter   = r.query.ObjectsSource.Pt.Iter()
+		bck    = r.query.BckSource.Bck
 		config = cmn.GCO.Get()
 		smap   = r.t.GetSowner().Get()
 	)
 
 	for objName, hasNext := iter(); hasNext; objName, hasNext = iter() {
 		lom := &cluster.LOM{T: r.t, ObjName: objName}
-		if err := lom.Init(*r.query.BckSource.Bck, config); err != nil {
+		if err := lom.Init(bck.Bck, config); err != nil {
 			r.putResult(&Result{err: err})
 			return
 		}
@@ -151,6 +152,10 @@ func (r *ObjectsListingXact) startFromBck() {
 		r.stop()
 	}()
 
+	var (
+		bck = r.query.BckSource.Bck
+	)
+
 	cb := func(fqn string, de fs.DirEntry) error {
 		entry, err := r.wi.Callback(fqn, de)
 		if entry == nil && err == nil {
@@ -164,7 +169,7 @@ func (r *ObjectsListingXact) startFromBck() {
 
 	opts := &fs.WalkBckOptions{
 		Options: fs.Options{
-			Bck:      *r.query.BckSource.Bck,
+			Bck:      bck.Bck,
 			CTs:      []string{fs.ObjectType},
 			Callback: cb,
 			Sorted:   true,

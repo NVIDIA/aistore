@@ -33,10 +33,14 @@ func (t *Xact) Run() error {
 		t.Job.Wg.Done()
 	}()
 
+	bckSrc, err := query.BckSource(t.Bck(), t.T)
+	if err != nil {
+		return err
+	}
+
 	var (
 		streamer = newSamplesStreamer(t)
-		objSrc   = query.TemplateObjSource(&t.Job.Template)
-		bckSrc   = query.BckSource(t.Bck())
+		objSrc   = &query.ObjectsSource{Pt: &t.Job.Template}
 
 		// doesn't use xaction registry, but it's not necessary as this xaction's life span
 		// is the same as tar2tf request life span. If request get's canceled,
@@ -46,12 +50,12 @@ func (t *Xact) Run() error {
 	)
 	go resultSet.Start()
 
-	err := resultSet.ForEach(func(entry *cmn.BucketEntry) error {
+	err = resultSet.ForEach(func(entry *cmn.BucketEntry) error {
 		lom := &cluster.LOM{
 			ObjName: entry.Name,
 			T:       t.T,
 		}
-		if err := lom.Init(*bckSrc.Bck); err != nil {
+		if err := lom.Init(bckSrc.Bck.Bck); err != nil {
 			return err
 		}
 		if err := lom.Load(); err != nil {
