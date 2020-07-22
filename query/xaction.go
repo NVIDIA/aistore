@@ -112,6 +112,8 @@ func (r *ObjectsListingXact) startFromTemplate() {
 		smap   = r.t.GetSowner().Get()
 	)
 
+	cmn.Assert(bck.IsAIS())
+
 	for objName, hasNext := iter(); hasNext; objName, hasNext = iter() {
 		lom := &cluster.LOM{T: r.t, ObjName: objName}
 		if err := lom.Init(bck.Bck, config); err != nil {
@@ -160,8 +162,42 @@ func (r *ObjectsListingXact) startFromBck() {
 
 	var (
 		bck = r.query.BckSource.Bck
-		wi  = walkinfo.NewWalkInfo(r.ctx, r.t, r.msg)
 	)
+
+	// TODO: filtering for cloud buckets is not yet supported.
+	if bck.IsCloud() && !r.msg.Cached {
+		si, err := cluster.HrwTargetTask(r.ID().String(), r.t.GetSowner().Get())
+		if err != nil {
+			// TODO: should we handle it somehow?
+			return
+		}
+		if si.ID() != r.t.Snode().ID() {
+			// We are not the target which should list the cloud objects.
+			return
+		}
+
+		for {
+			bckList, err, _ := r.t.Cloud(bck).ListObjects(r.ctx, bck, r.msg)
+			if err != nil {
+				// TODO: should we do `r.putResult(&Result{err: err})`?
+				return
+			}
+			if len(bckList.Entries) == 0 {
+				// Finished all objects.
+				return
+			}
+			for _, entry := range bckList.Entries {
+				r.putResult(&Result{entry: entry})
+			}
+			if bckList.PageMarker == "" {
+				// Empty page marker - no more pages.
+				return
+			}
+			r.msg.PageMarker = bckList.PageMarker
+		}
+	}
+
+	wi := walkinfo.NewWalkInfo(r.ctx, r.t, r.msg)
 	wi.SetObjectFilter(r.query.Filter())
 
 	cb := func(fqn string, de fs.DirEntry) error {
