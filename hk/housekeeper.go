@@ -39,6 +39,7 @@ type (
 	timedActions []timedAction
 
 	housekeeper struct {
+		cmn.Named
 		stopCh  *cmn.StopCh
 		actions *timedActions
 		timer   *time.Timer
@@ -49,22 +50,16 @@ type (
 )
 
 var (
-	defaultHK *housekeeper
+	DefaultHK *housekeeper
 )
 
 func init() {
-	initCleaner()
-}
-
-func initCleaner() {
-	defaultHK = &housekeeper{
-		workCh:  make(chan request, 10),
+	DefaultHK = &housekeeper{
+		workCh:  make(chan request, 16),
 		stopCh:  cmn.NewStopCh(),
 		actions: &timedActions{},
 	}
-	heap.Init(defaultHK.actions)
-
-	go defaultHK.run()
+	heap.Init(DefaultHK.actions)
 }
 
 func (tc timedActions) Len() int            { return len(tc) }
@@ -85,7 +80,7 @@ func Reg(name string, f CleanupFunc, initialInterval ...time.Duration) {
 	if len(initialInterval) > 0 {
 		interval = initialInterval[0]
 	}
-	defaultHK.workCh <- request{
+	DefaultHK.workCh <- request{
 		registering:     true,
 		name:            name,
 		f:               f,
@@ -94,13 +89,13 @@ func Reg(name string, f CleanupFunc, initialInterval ...time.Duration) {
 }
 
 func Unreg(name string) {
-	defaultHK.workCh <- request{
+	DefaultHK.workCh <- request{
 		registering: false,
 		name:        name,
 	}
 }
 
-func (hk *housekeeper) run() {
+func (hk *housekeeper) Run() (err error) {
 	hk.timer = time.NewTimer(time.Hour)
 	defer hk.timer.Stop()
 
@@ -157,6 +152,6 @@ func (hk *housekeeper) updateTimer() {
 	hk.timer.Reset(time.Until(hk.actions.Peek().updateTime))
 }
 
-func Abort() {
-	defaultHK.stopCh.Close()
+func (hk *housekeeper) Stop(err error) {
+	DefaultHK.stopCh.Close()
 }

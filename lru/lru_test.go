@@ -3,7 +3,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package lru
+package lru_test
 
 import (
 	"crypto/rand"
@@ -17,8 +17,11 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/demand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -26,7 +29,9 @@ import (
 
 func TestLRUMain(t *testing.T) {
 	RegisterFailHandler(Fail)
+	xaction.Init()
 	cluster.InitTarget()
+	go hk.DefaultHK.Run()
 	RunSpecs(t, "LRU Suite")
 }
 
@@ -96,12 +101,12 @@ func newTargetLRUMock() *cluster.TargetMock {
 	return tMock
 }
 
-func newInitLRU(t cluster.Target) *InitLRU {
-	xlru := &Xaction{
+func newInitLRU(t cluster.Target) *lru.InitLRU {
+	xlru := &lru.Xaction{
 		XactDemandBase: *demand.NewXactDemandBase(cmn.GenUUID(), cmn.ActLRU, time.Second),
 		Renewed:        make(chan struct{}, 8),
 	}
-	return &InitLRU{
+	return &lru.InitLRU{
 		Xaction:             xlru,
 		StatsT:              stats.NewTrackerMock(),
 		T:                   t,
@@ -163,7 +168,7 @@ var _ = Describe("LRU tests", func() {
 	Describe("Run", func() {
 		var (
 			t   *cluster.TargetMock
-			ini *InitLRU
+			ini *lru.InitLRU
 
 			filesPath  string
 			fpAnother  string
@@ -191,13 +196,13 @@ var _ = Describe("LRU tests", func() {
 
 		Describe("evict files", func() {
 			It("should not fail when there are no files", func() {
-				Run(ini)
+				lru.Run(ini)
 			})
 
 			It("should evict correct number of files", func() {
 				saveRandomFiles(t, filesPath, numberOfCreatedFiles)
 
-				Run(ini)
+				lru.Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -223,7 +228,7 @@ var _ = Describe("LRU tests", func() {
 				time.Sleep(1 * time.Second)
 				saveRandomFiles(t, filesPath, 3)
 
-				Run(ini)
+				lru.Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -257,7 +262,7 @@ var _ = Describe("LRU tests", func() {
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
 				// Those files are 4Mb file and 16Mb file
-				Run(ini)
+				lru.Run(ini)
 
 				filesLeft, err := ioutil.ReadDir(filesPath)
 				Expect(len(filesLeft)).To(Equal(2))
@@ -275,7 +280,7 @@ var _ = Describe("LRU tests", func() {
 
 				ini.Buckets = []cmn.Bck{bckAnother}
 				ini.Force = true // Ignore LRU enabled
-				Run(ini)
+				lru.Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -307,7 +312,7 @@ var _ = Describe("LRU tests", func() {
 
 				saveRandomFiles(t, filesPath, numberOfFiles)
 
-				Run(ini)
+				lru.Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -324,7 +329,7 @@ var _ = Describe("LRU tests", func() {
 
 				saveRandomFiles(t, filesPath, numberOfFiles)
 
-				Run(ini)
+				lru.Run(ini)
 
 				files, err := ioutil.ReadDir(filesPath)
 				Expect(err).NotTo(HaveOccurred())
@@ -335,7 +340,7 @@ var _ = Describe("LRU tests", func() {
 				saveRandomFiles(t, fpAnother, numberOfCreatedFiles)
 
 				ini.Buckets = []cmn.Bck{bckAnother} // bckAnother has LRU disabled
-				Run(ini)
+				lru.Run(ini)
 
 				filesAnother, err := ioutil.ReadDir(fpAnother)
 				Expect(err).NotTo(HaveOccurred())
@@ -363,7 +368,7 @@ var _ = Describe("LRU tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(files)).To(Equal(1))
 
-				Run(ini)
+				lru.Run(ini)
 
 				files, err = ioutil.ReadDir(mpath.MakePathTrash())
 				Expect(err).NotTo(HaveOccurred())

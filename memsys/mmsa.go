@@ -229,6 +229,7 @@ func DefaultPageMM() *MMSA {
 		gmm.Init(true)
 		if smm != nil {
 			smm.Sibling = gmm
+			gmm.Sibling = smm
 		}
 	})
 	return gmm
@@ -238,6 +239,7 @@ func DefaultSmallMM() *MMSA {
 		smm.Init(true)
 		if gmm != nil {
 			gmm.Sibling = smm
+			smm.Sibling = gmm
 		}
 	})
 	return smm

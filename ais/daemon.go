@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transform"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -37,6 +38,7 @@ const (
 	xtargetkeepalive = "targetkeepalive"
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
+	xhk              = "housekeeper"
 )
 
 // not to confuse with default ones, see memsys/mmsa.go
@@ -100,10 +102,8 @@ func (g *rungroup) add(r cmn.Runner, name string) {
 	g.runmap[name] = r
 }
 
-func (g *rungroup) run() error {
-	if len(g.runarr) == 0 {
-		return nil
-	}
+func (g *rungroup) run(rmain cmn.Runner) error {
+	var rdone cmn.Runner
 	g.errCh = make(chan error, len(g.runarr))
 	for _, r := range g.runarr {
 		go func(r cmn.Runner) {
@@ -111,14 +111,20 @@ func (g *rungroup) run() error {
 			if err != nil {
 				glog.Warningf("runner [%s] exited with err [%v]", r.GetRunName(), err)
 			}
+			rdone = r
 			g.errCh <- err
 		}(r)
 	}
 
-	// Wait here for (any/first) runner termination.
+	// Stop all runners, target (or proxy) first.
 	err := <-g.errCh
+	if rdone != rmain {
+		rmain.Stop(err)
+	}
 	for _, r := range g.runarr {
-		r.Stop(err)
+		if r != rmain {
+			r.Stop(err)
+		}
 	}
 	// Wait for all terminations.
 	for i := 0; i < len(g.runarr)-1; i++ {
@@ -168,7 +174,7 @@ func dryRunInit() {
 	}
 }
 
-func initDaemon(version, build string) {
+func initDaemon(version, build string) (rmain cmn.Runner) {
 	var (
 		err error
 	)
@@ -248,18 +254,19 @@ func initDaemon(version, build string) {
 		runmap: make(map[string]cmn.Runner, 8),
 	}
 
+	daemon.rg.add(hk.DefaultHK, xhk)
+	xaction.Init()
 	if daemon.cli.role == cmn.Proxy {
-		initProxy()
+		rmain = initProxy()
 	} else {
-		initTarget(config)
+		rmain = initTarget(config)
 	}
 	daemon.rg.add(&sigrunner{}, xsignal)
+	return
 }
 
-func initProxy() {
-	p := &proxyrunner{
-		gmm: &memsys.MMSA{Name: gmmName, Small: true, MinFree: 100 * cmn.MiB},
-	}
+func initProxy() cmn.Runner {
+	p := &proxyrunner{gmm: &memsys.MMSA{Name: gmmName}}
 	_ = p.gmm.Init(true /*panicOnErr*/)
 	p.initSI(cmn.Proxy)
 	p.initClusterCIDR()
@@ -271,9 +278,10 @@ func initProxy() {
 
 	daemon.rg.add(newProxyKeepaliveRunner(p, ps, startedUp), xproxykeepalive)
 	daemon.rg.add(newMetasyncer(p), xmetasyncer)
+	return p
 }
 
-func initTarget(config *cmn.Config) {
+func initTarget(config *cmn.Config) cmn.Runner {
 	t := &targetrunner{
 		gmm: &memsys.MMSA{Name: gmmName},
 		smm: &memsys.MMSA{Name: smmName, Small: true},
@@ -327,14 +335,15 @@ func initTarget(config *cmn.Config) {
 	if err := transform.InitTar2TF(t); err != nil {
 		glog.Errorf("Failure starting tar2tf transformer, the transformation won't be available. Reason: %v", err)
 	}
+	return t
 }
 
 // Run is the 'main' where everything gets started
 func Run(version, build string) int {
 	defer glog.Flush() // always flush
 
-	initDaemon(version, build)
-	err := daemon.rg.run()
+	rmain := initDaemon(version, build)
+	err := daemon.rg.run(rmain)
 
 	// NOTE: This must be done *after* `rg.run()` so we don't remove
 	//  marker on panic (which can happen in `rg.run()`).

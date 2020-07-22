@@ -13,6 +13,7 @@ import (
 )
 
 func TestHousekeeper(t *testing.T) {
+	go DefaultHK.Run()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Housekeeper Suite")
 }

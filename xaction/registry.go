@@ -129,7 +129,7 @@ func (rxf RegistryXactFilter) genericMatcher(xact cmn.Xact) bool {
 // In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`
 var Registry *registry
 
-func init() {
+func Init() {
 	Registry = newRegistry()
 }
 
