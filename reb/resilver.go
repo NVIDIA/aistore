@@ -189,42 +189,33 @@ func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 			glog.Warningf("%s: %v", lom, err)
 			return
 		}
-
 		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.ParsedFQN.MpathInfo, newMpath.MpathInfo)
 		if err != nil {
-			glog.Warningf("Failed to move metafile of %s(%q -> %q): %v",
-				lom.ObjName, lom.ParsedFQN.MpathInfo.Path, newMpath.MpathInfo.Path, err)
+			glog.Warningf("%s: failed to move metafile %q -> %q: %v",
+				lom, lom.ParsedFQN.MpathInfo.Path, newMpath.MpathInfo.Path, err)
 			return
 		}
 	}
 	copied, err := t.CopyObject(lom, lom.Bck(), rj.buf, true)
 	if err != nil || !copied {
-		// cleanup new copy of the metafile on errors
 		if err != nil {
-			glog.Warningf("%s: %v", lom, err)
+			glog.Errorf("%s: %v", lom, err)
 		}
+		// EC: cleanup new copy of the metafile
 		if metaNewPath != "" {
 			if err = os.Remove(metaNewPath); err != nil {
-				glog.Warningf("nested %s: %v", metaNewPath, err)
+				glog.Warningf("%s: nested (%s: %v)", lom, metaNewPath, err)
 			}
 		}
 		return
 	}
-	// if everything is OK, remove the original metafile
+	// EC: remove the original metafile
 	if metaOldPath != "" {
 		if err := os.Remove(metaOldPath); err != nil {
-			glog.Warningf("Failed to cleanup old metafile %q: %v", metaOldPath, err)
+			glog.Warningf("%s: failed to cleanup old metafile %q: %v", lom, metaOldPath, err)
 		}
 	}
-	if lom.HasCopies() { // see LRU for "misplaced"
-		return
-	}
-	// misplaced with no copies? remove right away
-	lom.Lock(true)
-	if err = cmn.RemoveFile(lom.FQN); err != nil {
-		glog.Warningf("%s: %v", lom, err)
-	}
-	lom.Unlock(true)
+	// NOTE: rely on LRU to remove "misplaced"
 }
 
 func (rj *resilverJogger) walk(fqn string, de fs.DirEntry) (err error) {

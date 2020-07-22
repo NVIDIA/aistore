@@ -211,7 +211,7 @@ func (lom *LOM) NumCopies() int {
 	if len(lom.md.copies) == 0 {
 		return 1
 	}
-	if debug.Enabled {
+	if debug.Enabled && lom.IsHRW() {
 		_, ok := lom.md.copies[lom.FQN]
 		debug.Assertf(ok, "md.copies does not contain itself %s, copies: %v", lom.FQN, lom.md.copies)
 	}
@@ -410,17 +410,24 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}
-	if err = dst.Persist(); err != nil {
-		if errRemove := os.Remove(dst.FQN); errRemove != nil {
-			glog.Errorf("nested err: %v", errRemove)
-		}
-		return
-	}
-	if lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck(), true /* must have same BID*/) {
+	if lom.IsHRW() && lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck(), true /* must have same BID*/) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
+			if _, ok := lom.md.copies[dst.FQN]; !ok {
+				if errRemove := os.Remove(dst.FQN); errRemove != nil {
+					glog.Errorf("nested err: %v", errRemove)
+				}
+			}
+			// as lom.syncMetaWithCopies() may have made changes
+			if errPersist := lom.Persist(); errPersist != nil {
+				glog.Errorf("nested err: %v", errPersist)
+			}
 			return
 		}
 		err = lom.Persist()
+	} else if err = dst.Persist(); err != nil {
+		if errRemove := os.Remove(dst.FQN); errRemove != nil {
+			glog.Errorf("nested err: %v", errRemove)
+		}
 	}
 	return
 }
