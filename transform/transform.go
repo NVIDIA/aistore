@@ -7,7 +7,6 @@ package transform
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 
@@ -19,98 +18,63 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var (
-	targetsNodeName = os.Getenv("AIS_NODE_NAME")
-)
-
 const (
 	// built-in label https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
 	nodeNameLabel = "kubernetes.io/hostname"
 )
 
 // TODO: remove the `kubectl` with a proper go-sdk call
-
 func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
-	// Parse spec template.
-	pod, err := ParsePodSpec(msg.Spec)
-	if err != nil {
+	if err := cmn.CheckKubernetesDeployment(); err != nil {
 		return err
 	}
-	transformationName := pod.GetName()
 
-	if targetsNodeName == "" {
-		// Override the name (add target's daemon ID to its name).
-		// Don't add any affinities if target's node name is unknown.
-		pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID)
-		glog.Warningf("transformation %q starting without node affinity", pod.GetName())
-	} else {
-		// Override the name (add target's daemon ID and node ID to its name).
-		pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + targetsNodeName)
-		if err := setTransformAffinity(pod); err != nil {
-			return err
-		}
+	var (
+		pod    *corev1.Pod
+		svc    *corev1.Service
+		hostIP string
+	)
+
+	// Parse spec template.
+	if pod, err = ParsePodSpec(msg.Spec); err != nil {
+		return err
+	}
+
+	transformationName := pod.GetName()
+	targetsNodeName := cmn.GetKubernetesNodeName()
+	cmn.Assert(targetsNodeName != "")
+	// Override the name (add target's daemon ID and node ID to its name).
+	pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + targetsNodeName)
+	if err := setTransformAffinity(pod); err != nil {
+		return err
 	}
 
 	if err := setPodEnvVariables(pod, t); err != nil {
 		return err
 	}
 
-	// Encode the specification once again to be ready for the start.
-	b, err := jsoniter.Marshal(pod)
-	if err != nil {
+	if err := startPod(pod); err != nil {
 		return err
 	}
 
-	// Start the pod.
-	cmd := exec.Command("kubectl", "replace", "--force", "-f", "-")
-	cmd.Stdin = bytes.NewBuffer(b)
-	if b, err = cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to apply spec for %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
-	}
-
-	// Wait for the pod to start.
-	args := []string{"wait"}
-	if !msg.WaitTimeout.IsZero() {
-		args = append(args, "--timeout", msg.WaitTimeout.String())
-	}
-	args = append(args, "--for", "condition=ready", "pod", pod.GetName())
-	cmd = exec.Command("kubectl", args...)
-	if b, err = cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to wait for %q pod to be ready (err: %v; output: %s)", pod.GetName(), err, string(b))
+	if err := waitForPodReady(pod, msg.WaitTimeout); err != nil {
+		return err
 	}
 
 	// Retrieve host IP of the pod.
-	output, err := exec.Command("kubectl", "get", "pod", pod.GetName(), "--template={{.status.hostIP}}").Output()
-	if err != nil {
-		return fmt.Errorf("failed to get IP of %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
-	}
-	hostIP := string(output)
-
-	// Proxy the pod behind a service
-	svcPod := getSvcPod(pod)
-
-	// Encode the specification for the service.
-	b, err = jsoniter.Marshal(svcPod)
-	if err != nil {
+	if hostIP, err = getPodHostIP(pod); err != nil {
 		return err
 	}
 
-	// Creating the service
-	cmd = exec.Command("kubectl", "replace", "--force", "-f", "-")
-	cmd.Stdin = bytes.NewBuffer(b)
-	if b, err = cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to apply spec for %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
+	// Proxy the pod behind a service
+	svc = createServiceSpec(pod)
+	if err := startService(svc); err != nil {
+		return err
 	}
 
-	// Retrieve NodePort of the service
-	output, err = exec.Command("kubectl", "get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svcPod.GetName()).Output()
+	nodePort, err := getServiceNodePort(svc)
 	if err != nil {
-		return fmt.Errorf("failed to get IP of %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
-	}
-	outputStr, _ := strconv.Unquote(string(output))
-	nodePort, err := strconv.Atoi(outputStr)
-	if err != nil {
-		return fmt.Errorf("failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svcPod.GetName(), err, string(output))
+		return err
 	}
 
 	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
@@ -119,7 +83,7 @@ func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 	return nil
 }
 
-func getSvcPod(pod *corev1.Pod) *corev1.Service {
+func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -141,12 +105,16 @@ func getSvcPod(pod *corev1.Pod) *corev1.Service {
 }
 
 func StopTransformationPod(id string) error {
-	c, exists := reg.getByUUID(id)
-	if !exists {
-		return fmt.Errorf("transformation with %q id doesn't exist", id)
+	if err := cmn.CheckKubernetesDeployment(); err != nil {
+		return err
 	}
-	err := exec.Command("kubectl", "delete", "pod", c.PodName()).Run()
+
+	c, err := GetCommunicator(id)
 	if err != nil {
+		return err
+	}
+
+	if err := deletePod(c.PodName(), true); err != nil {
 		return err
 	}
 	reg.removeByUUID(id)
@@ -156,7 +124,7 @@ func StopTransformationPod(id string) error {
 func GetCommunicator(transformID string) (Communicator, error) {
 	c, exists := reg.getByUUID(transformID)
 	if !exists {
-		return nil, fmt.Errorf("transformation with %q id doesn't exist", transformID)
+		return nil, cmn.NewNotFoundError("transformation with %q id", transformID)
 	}
 	return c, nil
 }
@@ -179,12 +147,13 @@ func setTransformAffinity(pod *corev1.Pod) error {
 		return fmt.Errorf("pod spec should not have any NodeAffinities defined")
 	}
 
+	cmn.Assert(cmn.GetKubernetesNodeName() != "")
 	nodeSelector := &corev1.NodeSelector{
 		NodeSelectorTerms: []corev1.NodeSelectorTerm{{
 			MatchExpressions: []corev1.NodeSelectorRequirement{{
 				Key:      nodeNameLabel,
 				Operator: corev1.NodeSelectorOpIn,
-				Values:   []string{targetsNodeName},
+				Values:   []string{cmn.GetKubernetesNodeName()},
 			}}},
 		},
 	}
@@ -206,4 +175,89 @@ func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) error {
 		})
 	}
 	return nil
+}
+
+func waitForPodReady(pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
+	args := []string{"wait"}
+	if !waitTimeout.IsZero() {
+		args = append(args, "--timeout", waitTimeout.String())
+	}
+	args = append(args, "--for", "condition=ready", "pod", pod.GetName())
+	cmd := exec.Command(cmn.Kubectl, args...)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		handlePodFailure(pod, "pod start failure")
+		return fmt.Errorf("failed to wait for %q pod to be ready (err: %v; output: %s)", pod.GetName(), err, string(b))
+	}
+	return nil
+}
+
+func getPodHostIP(pod *corev1.Pod) (string, error) {
+	// Retrieve host IP of the pod.
+	output, err := exec.Command("kubectl", "get", "pod", pod.GetName(), "--template={{.status.hostIP}}").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get IP of %q pod (err: %v; output: %s)", pod.GetName(), err, string(output))
+	}
+	return string(output), nil
+}
+
+func startPod(pod *corev1.Pod) error {
+	// Encode the specification once again to be ready for the start.
+	b, err := jsoniter.Marshal(pod)
+	if err != nil {
+		return err
+	}
+
+	// Start the pod.
+	cmd := exec.Command(cmn.Kubectl, "replace", "--force", "-f", "-")
+	cmd.Stdin = bytes.NewBuffer(b)
+	if b, err = cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to apply spec for %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
+	}
+	return nil
+}
+
+func deletePod(podName string, force bool) error {
+	args := []string{"delete", "pod", podName}
+	if force {
+		args = append(args, "--force")
+	}
+	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s: %v", string(output), err)
+	}
+	return nil
+}
+
+func startService(svc *corev1.Service) error {
+	b, err := jsoniter.Marshal(svc)
+	if err != nil {
+		return err
+	}
+
+	// Creating the service
+	cmd := exec.Command("kubectl", "replace", "--force", "-f", "-")
+	cmd.Stdin = bytes.NewBuffer(b)
+	if b, err = cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to apply spec for %q service (err: %v; output: %s)", svc.GetName(), err, string(b))
+	}
+	return nil
+}
+
+func getServiceNodePort(svc *corev1.Service) (int, error) {
+	output, err := exec.Command("kubectl", "get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svc.GetName()).Output()
+	if err != nil {
+		return -1, fmt.Errorf("failed to get nodePort of service %q (err: %v; output: %s)", svc.GetName(), err, string(output))
+	}
+	outputStr, _ := strconv.Unquote(string(output))
+	nodePort, err := strconv.Atoi(outputStr)
+	if err != nil {
+		return -1, fmt.Errorf("failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svc.GetName(), err, string(output))
+	}
+	return nodePort, nil
+}
+
+func handlePodFailure(pod *corev1.Pod, msg string) {
+	if deleteErr := deletePod(pod.GetName(), true); deleteErr != nil {
+		glog.Errorf("failed to delete pod %q after %s", pod.GetName(), msg)
+	}
 }

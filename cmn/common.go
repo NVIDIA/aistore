@@ -67,6 +67,8 @@ const (
 	QuantityBytes   = "bytes"
 
 	S3TagSepa = "!" // https://tools.ietf.org/html/rfc3986#page-6 using `!` as it is one of the non-special characters
+
+	Kubectl = "kubectl"
 )
 
 var (

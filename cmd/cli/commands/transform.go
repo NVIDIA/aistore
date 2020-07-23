@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -124,5 +127,13 @@ func transformObjectHandler(c *cli.Context) (err error) {
 		w = f
 		defer f.Close()
 	}
-	return api.TransformObject(defaultAPIParams, id, bck, objName, w)
+
+	err = api.TransformObject(defaultAPIParams, id, bck, objName, w)
+	if httpErr, ok := err.(*cmn.HTTPError); ok {
+		// TODO: How to find out if it's transformation not found, and not object not found?
+		if httpErr.Status == http.StatusNotFound && strings.Contains(httpErr.Error(), id) {
+			return fmt.Errorf("transformation %q not found; try starting new transformation with:\nais transform init spec", id)
+		}
+	}
+	return err
 }

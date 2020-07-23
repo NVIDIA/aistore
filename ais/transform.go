@@ -16,6 +16,11 @@ import (
 
 // [METHOD] /v1/transform
 func (t *targetrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
+	if err := cmn.CheckKubernetesDeployment(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
 	switch {
 	case r.Method == http.MethodPost:
 		t.initTransform(w, r)
@@ -150,7 +155,7 @@ func (t *targetrunner) stopTransform(w http.ResponseWriter, r *http.Request) {
 	}
 	id := apiItems[0]
 	if err := transform.StopTransformationPod(id); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.handleTransformError(w, r, err)
 		return
 	}
 }
@@ -162,7 +167,7 @@ func (t *targetrunner) doTransform(w http.ResponseWriter, r *http.Request, trans
 	)
 	comm, err = transform.GetCommunicator(transformID)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.handleTransformError(w, r, err)
 		return
 	}
 	if err := comm.DoTransform(w, r, bck, objName); err != nil {
@@ -179,4 +184,13 @@ func (t *targetrunner) listTransforms(w http.ResponseWriter, r *http.Request) {
 
 	ts := transform.ListTransforms()
 	t.writeJSON(w, r, ts, "list-transforms")
+}
+
+// TODO: It should be all-purpose function, similar to invaldmsghdlr.
+func (t *targetrunner) handleTransformError(w http.ResponseWriter, r *http.Request, err error) {
+	if _, ok := err.(*cmn.NotFoundError); ok {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+	} else {
+		t.invalmsghdlr(w, r, err.Error())
+	}
 }

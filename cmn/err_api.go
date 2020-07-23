@@ -66,6 +66,9 @@ type (
 		details string
 		cause   error
 	}
+	NotFoundError struct {
+		what string
+	}
 )
 
 func _errBucket(msg, node string) string {
@@ -212,6 +215,14 @@ func (e *AbortedError) As(target error) bool {
 
 func NewFailedToCreateHTTPRequest(err error) error {
 	return fmt.Errorf("failed to create new HTTP request, err: %v", err)
+}
+
+func NewNotFoundError(format string, a ...interface{}) *NotFoundError {
+	return &NotFoundError{fmt.Sprintf(format, a...)}
+}
+
+func (e *NotFoundError) Error() string {
+	return e.what + " not found"
 }
 
 //////////////////////////////////

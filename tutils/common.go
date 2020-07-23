@@ -118,7 +118,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		}
 	}
 	if args.Kubernetes {
-		cmd := exec.Command("kubectl", "get", "pods")
+		cmd := exec.Command(cmn.Kubectl, "get", "pods")
 		if err := cmd.Run(); err != nil {
 			tb.Skipf("%s requires Kubernetes", tb.Name())
 		}
