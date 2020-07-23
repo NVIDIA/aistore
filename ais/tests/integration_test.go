@@ -1397,7 +1397,7 @@ func TestAtimePrefetch(t *testing.T) {
 	defer tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
 
 	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, proxyURL, bck, objectName, objectContent)
-
+	time.Sleep(time.Millisecond)
 	timeAfterPut := time.Now()
 
 	_, err := api.PrefetchList(baseParams, bck, []string{objectName})
@@ -1406,11 +1406,11 @@ func TestAtimePrefetch(t *testing.T) {
 	err = api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
-	timeAfterGet := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	atime := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 
-	if !(timeAfterGet.Before(timeAfterPut)) {
+	if atime.After(timeAfterPut) {
 		t.Errorf("Atime should not be updated after prefetch (got: atime after PUT: %s, atime after GET: %s).",
-			timeAfterPut.Format(time.RFC3339Nano), timeAfterGet.Format(time.RFC3339Nano))
+			timeAfterPut.Format(time.RFC3339Nano), atime.Format(time.RFC3339Nano))
 	}
 }
 
