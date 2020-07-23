@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: aistarget-${ID}
+  name: ${POD_NAME}
   labels:
     type: aistarget
 spec:
   hostNetwork: true
   containers:
-  - name: aistarget
-    image: ${DOCKER_HOST_IP}:5000/ais:v1
+  - name: aisnode
+    image: ${DOCKER_IMAGE}
     imagePullPolicy: Always
     securityContext:
       # Required for hostport to operate, or implement a full pod security policy
@@ -21,7 +21,7 @@ spec:
          fieldRef:
            fieldPath: spec.nodeName
      - name: AIS_DAEMON_ID
-       value: "ais-target-${ID}"
+       value: "ais-${POD_NAME}"
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/
@@ -47,8 +47,6 @@ spec:
         source /etc/ais/aisnode_config.sh &&
         aisnode -config=/etc/ais/ais.json -role=target -alsologtostderr=true;
 
-  nodeSelector:
-      nodename: ${TARGET_LABEL}
   volumes:
     - name: aws-credentials
       secret:
