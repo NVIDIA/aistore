@@ -4,12 +4,12 @@ metadata:
   name: transformer-echo
   annotations:
     communication_type: "hpush://"
-    wait_timeout: 15s
+    wait_timeout: 60s
 spec:
   hostNetwork: true
   containers:
     - name: server
-      image: localhost:5000/echo_data_server:v1
+      image: aistore/transformer_echo:latest
       imagePullPolicy: Always
       ports:
         - containerPort: 80
