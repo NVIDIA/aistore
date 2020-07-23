@@ -66,8 +66,7 @@ const (
 	QuantityPercent = "percent"
 	QuantityBytes   = "bytes"
 
-	S3TagSepa = "!"
-	TF        = "tf"
+	S3TagSepa = "!" // https://tools.ietf.org/html/rfc3986#page-6 using `!` as it is one of the non-special characters
 )
 
 var (
@@ -411,9 +410,7 @@ func CopyStruct(dst, src interface{}) {
 
 func S3ObjNameTag(s string) (objName, tag string) {
 	if idx := strings.LastIndex(s, S3TagSepa); idx > 0 {
-		if s[idx+1:] == TF {
-			return s[:idx], s[idx+1:]
-		}
+		return s[:idx], s[idx+1:]
 	}
 	return s, ""
 }

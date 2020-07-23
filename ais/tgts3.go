@@ -157,7 +157,7 @@ func (t *targetrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []
 	t.copyObjS3(w, r, items)
 }
 
-// GET s3/bckName/objName[!tf]
+// GET s3/bckName/objName[!uuid]
 func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		t.invalmsghdlr(w, r, "object name is undefined")
@@ -177,14 +177,10 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		objName = path.Join(items[1:]...)
 	)
 
-	// TODO: try to get rid of "tag"
+	// TODO: try to get rid of "!" based separation of UUID
 	// It might be possible when TF S3 API allows passing a metadata to with a request (like HTTP Headers).
-	if objName, tag := cmn.S3ObjNameTag(objName); tag != "" {
-		if tag != cmn.TF {
-			t.invalmsghdlrf(w, r, "invalid tag=%q (expecting %q)", tag, cmn.TF)
-			return
-		}
-		t.doTransform(w, r, cmn.Tar2Tf, bck, objName)
+	if objName, UUID := cmn.S3ObjNameTag(objName); UUID != "" {
+		t.doTransform(w, r, UUID, bck, objName)
 		return
 	}
 

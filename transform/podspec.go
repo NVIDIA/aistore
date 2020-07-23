@@ -25,6 +25,9 @@ func ParsePodSpec(spec []byte) (*corev1.Pod, error) {
 		return nil, fmt.Errorf("expected pod spec, got: %s", kind)
 	}
 	if _, ok := pod.Labels["app"]; !ok {
+		if pod.Labels == nil {
+			pod.Labels = map[string]string{}
+		}
 		pod.Labels["app"] = pod.GetName() + "-app"
 	}
 	return pod, nil

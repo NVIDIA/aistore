@@ -21,10 +21,6 @@ import (
 
 var (
 	targetsNodeName = os.Getenv("AIS_NODE_NAME")
-
-	staticTransformers = map[string]struct{}{
-		cmn.Tar2Tf: {},
-	}
 )
 
 const (
@@ -33,20 +29,14 @@ const (
 )
 
 // TODO: remove the `kubectl` with a proper go-sdk call
-// If transformationName is empty, it will be replaced with name of a pod.
-func StartTransformationPod(t cluster.Target, msg Msg, transformationName string) (err error) {
+
+func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 	// Parse spec template.
 	pod, err := ParsePodSpec(msg.Spec)
 	if err != nil {
 		return err
 	}
-
-	if transformationName == "" {
-		transformationName = pod.GetName()
-		if IsStaticTransformer(transformationName) {
-			return fmt.Errorf("can't start transformation with the same name as static transformation %q", transformationName)
-		}
-	}
+	transformationName := pod.GetName()
 
 	if targetsNodeName == "" {
 		// Override the name (add target's daemon ID to its name).
@@ -155,12 +145,7 @@ func StopTransformationPod(id string) error {
 	if !exists {
 		return fmt.Errorf("transformation with %q id doesn't exist", id)
 	}
-
-	if IsStaticTransformer(c.Name()) {
-		return fmt.Errorf("can't stop static transformation %q", id)
-	}
-
-	err := exec.Command("kubectl", "delete", "pod", c.PodName(), "--force").Run()
+	err := exec.Command("kubectl", "delete", "pod", c.PodName()).Run()
 	if err != nil {
 		return err
 	}
@@ -176,35 +161,7 @@ func GetCommunicator(transformID string) (Communicator, error) {
 	return c, nil
 }
 
-func GetCommunicatorByName(transformName string) (Communicator, error) {
-	c, exists := reg.getByName(transformName)
-	if !exists {
-		return nil, fmt.Errorf("transformation with %q name doesn't exist", transformName)
-	}
-	return c, nil
-}
-
 func ListTransforms() []TransformationInfo { return reg.list() }
-
-func IsStaticTransformer(name string) bool {
-	_, ok := staticTransformers[name]
-	return ok
-}
-
-// This is called for cleanup after end of execution
-func StopStaticTransformers() {
-	for staticTf := range staticTransformers {
-		c, exists := reg.getByName(staticTf)
-		if !exists {
-			glog.Errorf("transformation with name %q id doesn't exist", staticTf)
-			continue
-		}
-		err := exec.Command("kubectl", "delete", "pod", c.PodName(), "--grace-period=5").Run()
-		if err != nil {
-			glog.Errorf("error deleting static transformer: %s, err: %v", staticTf, err)
-		}
-	}
-}
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func setTransformAffinity(pod *corev1.Pod) error {
