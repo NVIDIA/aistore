@@ -8,7 +8,6 @@ metadata:
     communication_type: "hpush://"
     wait_timeout: 60s
 spec:
-  hostNetwork: true
   containers:
     - name: server
       image: aistore/transformer_echo:latest

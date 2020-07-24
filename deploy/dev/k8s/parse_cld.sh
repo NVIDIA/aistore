@@ -1,5 +1,6 @@
 
 export LOCAL_AWS="/tmp/aws.env"
+touch $LOCAL_AWS
 export AIS_CLD_PROVIDER="" # See deploy.sh for more informations about empty AIS_CLD_PROVIDER
 echo "Select:"
 echo " 0: No 3rd party Cloud"

@@ -6,7 +6,6 @@ metadata:
     communication_type: "hrev://"
     wait_timeout: 2m
 spec:
-  hostNetwork: true
   containers:
     - name: server
       image: aistore/tar2tf:latest

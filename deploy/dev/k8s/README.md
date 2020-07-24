@@ -4,7 +4,7 @@ For a more robust version, the development team has switched over to Docker. If 
 
 ## Minikube
 
-Using [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters. Minikube cannot be used for multi-node deployments due to its limitations. Minikube supports a range of drivers including Virtualbox, KVM, docker etc. Virtualbox, KVM require a hypervisor.  However if you choose to use docker on a Linux machine there is no need for a hypervisor.
+Using [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters. Minikube cannot be used for multi-node deployments due to its limitations. Minikube supports a range of drivers including Virtualbox, KVM, docker etc. Virtualbox, KVM require a hypervisor.  However if you choose to use docker on a Linux machine there is no need for a hypervisor.
 
 *Note:* You could face a problem when using Minikube on [VPN](https://minikube.sigs.k8s.io/docs/handbook/vpn_and_proxy/#vpn)
 
@@ -20,7 +20,7 @@ AIStore in a local environment.
 
 ### Usage
 
-1. Install  [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/).
+1. Install  [Minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/).
 
 2. Run
 ```console
@@ -38,7 +38,7 @@ $ ./stop_ais.sh
 
 1. Deploying the cluster
 ```
-➜  k8s git:(mini-ais) ✗ ./deploy_miniais.sh**
+➜  k8s git:(mini-ais) ✗ ./deploy_miniais.sh
 
 🔥  Deleting "minikube" in docker ...
 🔥  Deleting container "minikube" ...
