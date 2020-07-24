@@ -22,7 +22,6 @@ var (
 		objLimitFlag,
 		showUnmatchedFlag,
 		allItemsFlag,
-		fastFlag,
 		noHeaderFlag,
 		pagedFlag,
 		maxPagesFlag,

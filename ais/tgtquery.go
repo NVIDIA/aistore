@@ -61,7 +61,6 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 			UUID:   handle,
 			Prefix: q.ObjectsSource.Prefix,
 			Props:  q.Select.Props,
-			Fast:   q.Fast,
 			Cached: q.Cached,
 		}
 	)

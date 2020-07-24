@@ -78,7 +78,7 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *Wal
 		Marker:       msg.PageMarker,
 		markerDir:    markerDir,
 		msg:          msg,
-		fast:         msg.Fast,
+		fast:         !msg.NeedLOMData(),
 		timeFormat:   msg.TimeFormat,
 		propNeeded:   propNeeded,
 	}
@@ -205,6 +205,9 @@ func (wi *WalkInfo) walkFastCallback(fqn string, de fs.DirEntry) (*cmn.BucketEnt
 		if err == nil {
 			fileInfo.Size = fi.Size()
 		}
+	}
+	if wi.needTargetURL() {
+		fileInfo.TargetURL = wi.t.Snode().URL(cmn.NetworkPublic)
 	}
 
 	return fileInfo, nil

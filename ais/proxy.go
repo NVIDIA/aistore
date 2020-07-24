@@ -1029,7 +1029,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
-		p.listObjectsAndCollectStats(w, r, bck, msg, begin, false /* fast listing */)
+		p.listObjectsAndCollectStats(w, r, bck, msg, begin)
 	case cmn.ActInvalListCache:
 		if err = bck.Allow(cmn.AccessObjLIST); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
@@ -1082,7 +1082,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
-	amsg cmn.ActionMsg, begin int64, fast bool) {
+	amsg cmn.ActionMsg, begin int64) {
 	var (
 		initRespMsg *cmn.InitTaskRespMsg
 		err         error
@@ -1094,10 +1094,6 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
-	}
-	// override fastListing if it set
-	if fast {
-		smsg.Fast = fast
 	}
 	// override prefix if it is set in URL query values
 	if prefix := query.Get(cmn.URLParamPrefix); prefix != "" {
@@ -1703,12 +1699,10 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg, nextPa
 		// When `PageSize` is set, then regardless of the listing type (slow/fast)
 		// we need respect it.
 		pageSize = smsg.PageSize
-	} else if !smsg.Fast {
-		// When listing slow, we need to return a single page of default size.
+	} else if bck.IsAIS() {
+		pageSize = cmn.DefaultListPageSizeAIS
+	} else {
 		pageSize = cmn.DefaultListPageSize
-	} else if smsg.Fast {
-		// When listing fast, we need to return all entries (without paging).
-		pageSize = 0
 	}
 
 	if smsg.UUID == "" {

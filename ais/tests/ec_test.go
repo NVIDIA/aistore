@@ -2271,7 +2271,7 @@ func TestECBucketEncode(t *testing.T) {
 		t.FailNow()
 	}
 
-	reslist, err := api.ListObjectsFast(baseParams, m.bck, nil)
+	reslist, err := api.ListObjects(baseParams, m.bck, nil, 0)
 	if err != nil {
 		t.Fatalf("list_objects %s failed, err = %v", m.bck, err)
 	}
@@ -2297,7 +2297,7 @@ func TestECBucketEncode(t *testing.T) {
 	err = api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
-	reslist, err = api.ListObjectsFast(baseParams, m.bck, nil)
+	reslist, err = api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
 
 	if len(reslist.Entries) != m.num {

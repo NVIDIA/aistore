@@ -66,7 +66,7 @@ func (bck *bucketAPI) ListObjects(prefix, pageMarker string, pageSize uint) (obj
 		PageMarker: pageMarker,
 		PageSize:   pageSize,
 	}
-	listResult, err := api.ListObjectsFast(bck.apiParams, bck.Bck(), selectMsg)
+	listResult, err := api.ListObjects(bck.apiParams, bck.Bck(), selectMsg, 0)
 	if err != nil {
 		return nil, "", newBucketIOError(err, "ListObjects")
 	}

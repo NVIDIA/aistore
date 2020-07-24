@@ -171,7 +171,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 					}
 				}
 				m.puts()
-				if _, err := api.ListObjectsFast(baseParams, m.bck, nil); err != nil {
+				if _, err := api.ListObjects(baseParams, m.bck, nil, 0); err != nil {
 					return err
 				}
 				m.gets()
@@ -422,30 +422,18 @@ func TestListObjects(t *testing.T) {
 	}
 
 	tests := []struct {
-		fast     bool
-		withSize bool
 		pageSize uint
 	}{
-		{fast: false, withSize: true, pageSize: 0},
-		{fast: true, withSize: false, pageSize: 0},
-		{fast: true, withSize: true, pageSize: 0},
-		{fast: true, withSize: false, pageSize: 2000},
+		{pageSize: 0},
+		{pageSize: 2000},
 	}
 
 	for _, test := range tests {
-		name := "slow"
-		if test.fast {
-			name = "fast"
-		}
-		if test.withSize {
-			name += "/with_size"
+		var name string
+		if test.pageSize == 0 {
+			name = "default_pagesize"
 		} else {
-			name += "/without_size"
-		}
-		if test.fast && test.pageSize == 0 {
-			name += "/without_paging"
-		} else {
-			name += "/with_paging"
+			name += "pagesize:" + strconv.FormatUint(uint64(test.pageSize), 10)
 		}
 		t.Run(name, func(t *testing.T) {
 			var (
@@ -489,11 +477,8 @@ func TestListObjects(t *testing.T) {
 				wg.Wait()
 
 				// Confirm PUTs by listing objects.
-				msg := &cmn.SelectMsg{Fast: test.fast, PageSize: test.pageSize}
-				msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion, cmn.GetPropsCopies)
-				if test.withSize {
-					msg.AddProps(cmn.GetPropsSize)
-				}
+				msg := &cmn.SelectMsg{PageSize: test.pageSize}
+				msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion, cmn.GetPropsCopies, cmn.GetPropsSize)
 				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, msg))
 				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(t, err)
@@ -511,32 +496,19 @@ func TestListObjects(t *testing.T) {
 					}
 
 					obj := e.(objEntry)
-					if test.withSize && obj.size != entry.Size {
+					if obj.size != entry.Size {
 						t.Errorf(
 							"sizes do not match for object %s, expected: %d, got: %d",
 							obj.name, obj.size, entry.Size,
 						)
-					} else if !test.withSize && entry.Size != 0 {
-						t.Errorf("expected the size to be set to 0 for obj: %s", obj.name)
 					}
 
-					if test.fast {
-						if entry.Checksum != empty.Checksum ||
-							entry.Atime != empty.Atime ||
-							entry.Version != empty.Version ||
-							entry.TargetURL != empty.TargetURL ||
-							entry.Flags != empty.Flags ||
-							entry.Copies != empty.Copies {
-							t.Errorf("some fields on object %q, do not have default values: %#v", entry.Name, entry)
-						}
-					} else {
-						if entry.Checksum == empty.Checksum ||
-							entry.Atime == empty.Atime ||
-							entry.Version == empty.Version ||
-							entry.Flags == empty.Flags ||
-							entry.Copies == empty.Copies {
-							t.Errorf("some fields on object %q, have default values: %#v", entry.Name, entry)
-						}
+					if entry.Checksum == empty.Checksum ||
+						entry.Atime == empty.Atime ||
+						entry.Version == empty.Version ||
+						entry.Flags == empty.Flags ||
+						entry.Copies == empty.Copies {
+						t.Errorf("some fields of object %q, have default values: %#v", entry.Name, entry)
 					}
 				}
 
@@ -564,11 +536,7 @@ func TestListObjects(t *testing.T) {
 					msg := &cmn.SelectMsg{
 						Prefix: prefix,
 					}
-					if !test.fast {
-						bckList, err = api.ListObjects(baseParams, bck, msg, 0)
-					} else {
-						bckList, err = api.ListObjectsFast(baseParams, bck, msg)
-					}
+					bckList, err = api.ListObjects(baseParams, bck, msg, 0)
 					tassert.CheckFatal(t, err)
 
 					if expectedObjCount != len(bckList.Entries) {
@@ -588,14 +556,11 @@ func TestListObjects(t *testing.T) {
 			}
 
 			prefixes.Range(func(key, value interface{}) bool {
-				msg := &cmn.SelectMsg{
-					Prefix: key.(string),
-					Fast:   test.fast,
-				}
+				msg := &cmn.SelectMsg{Prefix: key.(string)}
 				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, msg))
 				return true
 			})
-			tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, &cmn.SelectMsg{Fast: test.fast}))
+			tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, &cmn.SelectMsg{}))
 		})
 	}
 }
@@ -720,31 +685,23 @@ func TestListObjectsPrefix(t *testing.T) {
 					tutils.Logf("Bucket %s does not support custom paging. Skipping\n", bck.Name)
 					continue
 				}
-				for _, fast := range []bool{false /*slow*/, true /*fast*/} {
-					name := test.name
-					if !fast {
-						name += "/slow"
-					} else {
-						name += "/fast"
+				t.Run(test.name, func(t *testing.T) {
+					tutils.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
+					msg := &cmn.SelectMsg{PageSize: test.pageSize, Prefix: test.prefix}
+					tutils.Logf(
+						"list_objects %s [prefix: %q, page_size: %d]\n",
+						bck, msg.Prefix, msg.PageSize,
+					)
+
+					bckList, err := api.ListObjects(baseParams, bck, msg, test.limit)
+					tassert.CheckFatal(t, err)
+
+					tutils.Logf("list_objects output: %d objects\n", len(bckList.Entries))
+
+					if len(bckList.Entries) != test.expected {
+						t.Errorf("returned %d objects instead of %d", len(bckList.Entries), test.expected)
 					}
-					t.Run(name, func(t *testing.T) {
-						tutils.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
-						msg := &cmn.SelectMsg{Fast: fast, PageSize: test.pageSize, Prefix: test.prefix}
-						tutils.Logf(
-							"list_objects %s [fast: %v, prefix: %q, page_size: %d]\n",
-							bck, msg.Fast, msg.Prefix, msg.PageSize,
-						)
-
-						bckList, err := api.ListObjects(baseParams, bck, msg, test.limit)
-						tassert.CheckFatal(t, err)
-
-						tutils.Logf("list_objects output: %d objects\n", len(bckList.Entries))
-
-						if len(bckList.Entries) != test.expected {
-							t.Errorf("returned %d objects instead of %d", len(bckList.Entries), test.expected)
-						}
-					})
-				}
+				})
 			}
 		})
 	}
@@ -757,7 +714,7 @@ func TestBucketListAndSummary(t *testing.T) {
 		provider string
 		summary  bool
 		cached   bool
-		fast     bool
+		fast     bool // TODO: it makes sense only for summary
 	}
 
 	var tests []test
@@ -836,10 +793,7 @@ func TestBucketListAndSummary(t *testing.T) {
 
 			tutils.Logln("checking objects...")
 
-			msg := &cmn.SelectMsg{
-				Cached: test.cached,
-				Fast:   test.fast,
-			}
+			msg := &cmn.SelectMsg{Cached: test.cached, Fast: test.fast}
 
 			if test.summary {
 				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(m.bck), msg)
@@ -1694,7 +1648,7 @@ func TestCopyBucket(t *testing.T) {
 					expectedObjCount += dstm.num
 				}
 
-				dstBckList, err := api.ListObjectsFast(baseParams, dstm.bck, nil)
+				dstBckList, err := api.ListObjects(baseParams, dstm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
 				if len(dstBckList.Entries) != expectedObjCount {
 					t.Fatalf("list_objects: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)

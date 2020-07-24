@@ -39,9 +39,9 @@ type SelectMsg struct {
 	PageMarker  string `json:"pagemarker"`  // pageMarker - the last object in previous page
 	UUID        string `json:"uuid"`        // ID to identify a single multi-page request
 	PageSize    uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
-	Fast        bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
 	Cached      bool   `json:"cached"`      // for cloud buckets - list only cached objects
 	Passthrough bool   `json:"passthrough"` // do not use cache - always request targets for fresh data
+	Fast        bool   `json:"fast"`        // TODO: deprecated but still required by xaction BucketSummary for its own stuff
 }
 
 type PageMarker string
@@ -70,6 +70,7 @@ type MountpathList struct {
 }
 
 // GetPropsDefault is a list of default (most relevant) GetProps* options
+// DO NOT forget update `GetPropsAll` constant when a prop is added/removed
 var GetPropsDefault = []string{
 	GetPropsName, GetPropsChecksum, GetPropsSize, GetPropsAtime, GetPropsVersion,
 }
@@ -84,6 +85,16 @@ func (msg *SelectMsg) NeedLocalData() bool {
 		strings.Contains(msg.Props, GetPropsStatus) ||
 		strings.Contains(msg.Props, GetPropsCopies) ||
 		strings.Contains(msg.Props, GetPropsCached)
+}
+
+// NeedLOMData returns true if a requests wants any object property that
+// is stored in LOM(i.e, it may require extra FS reads, e.g. for xattrs)
+func (msg *SelectMsg) NeedLOMData() bool {
+	return strings.Contains(msg.Props, GetPropsAtime) ||
+		strings.Contains(msg.Props, GetPropsStatus) ||
+		strings.Contains(msg.Props, GetPropsCopies) ||
+		strings.Contains(msg.Props, GetPropsEC) ||
+		strings.Contains(msg.Props, GetPropsVersion)
 }
 
 // WantProp returns true if msg request requires to return propName property
@@ -118,18 +129,10 @@ func (msg *SelectMsg) PropsSet() (s StringSet) {
 
 // nolint:interfacer // the bucket is expected
 func (msg *SelectMsg) ListObjectsCacheID(bck Bck) string {
-	f := 0
-	if msg.Fast {
-		f = 1
-	}
-	return fmt.Sprintf("%s/%s/%d", bck.String(), msg.Prefix, f)
+	return fmt.Sprintf("%s/%s", bck.String(), msg.Prefix)
 }
 
 func (msg *SelectMsg) WantObjectsCnt() uint {
-	if msg.Fast {
-		return msg.PageSize
-	}
-
 	if msg.PageSize == 0 {
 		return DefaultListPageSize
 	}

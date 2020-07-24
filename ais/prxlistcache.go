@@ -507,8 +507,10 @@ func (c *locTarget) newListObjectsTaskMsg(smsg cmn.SelectMsg, bck *cluster.Bck, 
 		smsg.PageMarker = c.buff[len(c.buff)-1].Name
 	}
 
-	// Cache all props, filter only requested props later.
-	smsg.Props = strings.Join(cmn.GetPropsAll, ",")
+	// Cache all props, filter only requested props later. Passthrough uses as-is
+	if !smsg.Passthrough {
+		smsg.Props = strings.Join(cmn.GetPropsAll, ",")
+	}
 
 	var (
 		config = cmn.GCO.Get()

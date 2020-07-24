@@ -474,44 +474,6 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 	return page, nil
 }
 
-// ListObjectsFast returns list of objects in a bucket.
-// Build an object list with minimal set of properties: name and size.
-// All SelectMsg fields except prefix do not work and are skipped.
-// Function always returns the whole list of objects without paging
-func ListObjectsFast(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, invalidateCache ...bool) (bckList *cmn.BucketList, err error) {
-	if smsg == nil {
-		smsg = &cmn.SelectMsg{}
-	}
-
-	preallocSize := cmn.DefaultListPageSize
-	if smsg.PageSize != 0 {
-		preallocSize = smsg.PageSize
-	}
-
-	smsg.Fast = true
-	smsg.Cached = true
-
-	baseParams.Method = http.MethodPost
-	reqParams := ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Query:      cmn.AddBckToQuery(url.Values{}, bck),
-	}
-	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
-	if err = waitForAsyncReqComplete(reqParams, cmn.ActListObjects, smsg, &bckList); err != nil {
-		if len(invalidateCache) == 0 || invalidateCache[0] {
-			ListObjectsInvalidateCache(baseParams, bck, smsg)
-		}
-		return nil, err
-	}
-
-	if len(invalidateCache) == 0 || invalidateCache[0] {
-		err = ListObjectsInvalidateCache(baseParams, bck, smsg)
-	}
-	return bckList, err
-}
-
 // TODO: remove this function after introducing mechanism detecting bucket changes.
 func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck, selMsg *cmn.SelectMsg) error {
 	params.Method = http.MethodPost

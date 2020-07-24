@@ -159,15 +159,14 @@ List all objects contained in `BUCKET_NAME` bucket.
 | `--regex` | `string` | Pattern for matching object names | `""` |
 | `--template` | `string` | Template for matching object names | `""` |
 | `--prefix` | `string` | Prefix for matching object names | `""` |
-| `--fast` | `bool` | Use fast API to list all object names | `false` |
-| `--paged` | `bool` | Fetch and print objects page by page (ignored in fast mode) | `false` |
+| `--paged` | `bool` | Fetch and print objects page by page | `false` |
 | `--max-pages` | `int` | Max. number of pages to list | `0` |
 | `--page-size` | `int` | Max. number of object names per page | `1000` |
-| `--props` | `string` | Comma-separated properties to return with object names (ignored in fast mode) | `"size,version"`
-| `--limit` | `int` | Max. number of object names to list (ignored in fast mode) | `0` |
+| `--props` | `string` | Comma-separated properties to return with object names | `"size,version"`
+| `--limit` | `int` | Max. number of object names to list | `0` |
 | `--show-unmatched` | `bool` | List objects unmatched by regex and template as well, after the matched ones | `false` |
-| `--all-items` | `bool` | Show all items, including all, duplicated, etc. (ignored in fast mode) | `false` |
-| `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically (ignored in fast mode) | `""` |
+| `--all-items` | `bool` | Show all items, including all, duplicated, etc. | `false` |
+| `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
 | `--passthrough` | `bool` | Bypass proxy cache and read the fresh object list from targets | `false` |

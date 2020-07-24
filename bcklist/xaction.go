@@ -132,7 +132,6 @@ func (r *BckListTask) Run() (err error) {
 			// Copy only values that can change between calls
 			debug.Assert(r.msg.Passthrough == req.msg.Passthrough)
 			debug.Assert(r.msg.Prefix == req.msg.Prefix)
-			debug.Assert(r.msg.Fast == req.msg.Fast)
 			debug.Assert(r.msg.Cached == req.msg.Cached)
 			r.msg.PageMarker = req.msg.PageMarker
 			if !r.fromRemote || req.msg.PageSize != 0 {

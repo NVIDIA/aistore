@@ -264,7 +264,6 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 		msg := &cmn.SelectMsg{
 			Prefix:     j.prefix,
 			PageMarker: j.pageMarker,
-			Fast:       true,
 		}
 
 		bckList, err, _ := j.t.Cloud(j.bck).ListObjects(j.ctx, j.bck, msg)

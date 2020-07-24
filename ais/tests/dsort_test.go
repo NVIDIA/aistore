@@ -492,7 +492,7 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 		allShardRecords = make([]shardRecords, 0, 10)
 	)
 
-	list, err := api.ListObjectsFast(df.baseParams, bck, nil)
+	list, err := api.ListObjects(df.baseParams, bck, nil, 0)
 	tassert.CheckFatal(df.m.t, err)
 
 	if len(list.Entries) == 0 {

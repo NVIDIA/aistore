@@ -189,15 +189,6 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 		Passthrough: flagIsSet(c, passthroughFlag),
 	}
 
-	if flagIsSet(c, fastFlag) {
-		msg.Fast = true
-		objList, err := api.ListObjectsFast(defaultAPIParams, bck, msg)
-		if err != nil {
-			return err
-		}
-		return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
-	}
-
 	if flagIsSet(c, markerFlag) {
 		msg.PageMarker = parseStrFlag(c, markerFlag)
 	}
@@ -266,12 +257,10 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
+// TODO: usiing SelectMsg.Fast for summary does not seem correct
 func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.BucketsSummaries, err error) {
 	fDetails := func() (err error) {
-		msg := &cmn.SelectMsg{
-			Fast:   fast,
-			Cached: cached,
-		}
+		msg := &cmn.SelectMsg{Cached: cached, Fast: fast}
 		summaries, err = api.GetBucketsSummaries(defaultAPIParams, query, msg)
 		return
 	}
@@ -543,7 +532,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	objFilter := &objectListFilter{}
 
 	// if fastFlag is enabled, allFlag is enabled automatically because obj.Status is unset
-	if !flagIsSet(c, allItemsFlag) && !flagIsSet(c, fastFlag) {
+	if !flagIsSet(c, allItemsFlag) {
 		// Filter out files with status different than OK
 		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.IsStatusOK() })
 	}

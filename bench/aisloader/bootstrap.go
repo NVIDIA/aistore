@@ -1097,7 +1097,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
-	names, err := listObjectsFast(runParams.bp, runParams.bck, "")
+	names, err := listObjectNames(runParams.bp, runParams.bck, "")
 	if err != nil {
 		fmt.Printf("Failed to list_objects %s, proxy %s, err: %v\n",
 			runParams.bck, runParams.proxyURL, err)

@@ -227,6 +227,7 @@ const (
 )
 
 // SelectMsg.Props enum
+// DO NOT forget update `GetPropsAll` constant when a prop is added/removed
 const (
 	GetPropsName     = "name"
 	GetPropsChecksum = "checksum"
@@ -256,7 +257,8 @@ const (
 
 // List objects default page size
 const (
-	DefaultListPageSize = uint(1000)
+	DefaultListPageSize    = uint(1000)
+	DefaultListPageSizeAIS = uint(10000)
 )
 
 // RESTful URL path: l1/l2/l3

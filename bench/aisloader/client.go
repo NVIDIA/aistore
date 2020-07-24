@@ -358,9 +358,9 @@ func getConfig(server string) (httpLatencies, error) {
 }
 
 // listObjectsFast returns a slice of object names of all objects that match the prefix in a bucket
-func listObjectsFast(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
-	msg := &cmn.SelectMsg{Prefix: prefix}
-	data, err := api.ListObjectsFast(baseParams, bck, msg)
+func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
+	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: cmn.DefaultListPageSizeAIS}
+	data, err := api.ListObjects(baseParams, bck, msg, 0)
 	if err != nil {
 		return nil, err
 	}

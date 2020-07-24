@@ -154,6 +154,9 @@ func (t *bckSummaryTask) Run() error {
 
 			// Each bucket should have it's own copy of msg (we may update it).
 			cmn.CopyStruct(msg, t.msg)
+			if !msg.WantProp(cmn.GetPropsSize) {
+				msg.AddProps(cmn.GetPropsSize)
+			}
 
 			if msg.Fast && (bck.IsAIS() || msg.Cached) {
 				objCount, size, err := t.doBckSummaryFast(bck)

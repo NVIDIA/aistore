@@ -252,7 +252,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 		initRespMsg *cmn.InitTaskRespMsg
 		err         error
 	)
-	smsg := cmn.SelectMsg{Fast: false, TimeFormat: time.RFC3339}
+	smsg := cmn.SelectMsg{TimeFormat: time.RFC3339}
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
 	_, initRespMsg, err = p.listAISBucket(bck, smsg, false)
