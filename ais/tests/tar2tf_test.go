@@ -58,7 +58,7 @@ func TestKubeTar2TFS3(t *testing.T) {
 	tassert.CheckFatal(t, api.PutObject(putArgs))
 	defer api.DeleteObject(baseParams, bck, tarObjName)
 
-	transformerTemplate := filepath.Join("templates", "transformer", cmn.Tar2Tf, "pod.yaml")
+	transformerTemplate := filepath.Join("templates", "transformer", tar2tf, "pod.yaml")
 	spec, err := ioutil.ReadFile(transformerTemplate)
 	tassert.CheckError(t, err)
 

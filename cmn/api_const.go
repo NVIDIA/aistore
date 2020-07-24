@@ -72,7 +72,6 @@ const (
 	ActECEncode       = "ecencode" // erasure code a bucket
 	ActStartGFN       = "metasync-start-gfn"
 	ActRecoverBck     = "recoverbck"
-	ActTar2Tf         = "tar2tf"
 	ActAttach         = "attach"
 	ActDetach         = "detach"
 )
@@ -282,7 +281,6 @@ const (
 	S3        = "s3"
 	Txn       = "txn"      // 2PC
 	Notifs    = "notifs"   // intra-cluster notifications
-	Tar2Tf    = "tar2tf"   // TODO: move out
 	Users     = "users"    // AuthN
 	Clusters  = "clusters" // AuthN
 	Roles     = "roles"    // AuthN

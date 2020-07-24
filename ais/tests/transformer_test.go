@@ -27,6 +27,7 @@ import (
 )
 
 const (
+	tar2tf    = "tar2tf"
 	tar2tfIn  = "data/small-mnist-3.tar"
 	tar2tfOut = "data/small-mnist-3.record"
 )
@@ -37,9 +38,9 @@ func TestKubeTransformer(t *testing.T) {
 		{transformer: "echo", comm: transform.RedirectCommType},
 		{transformer: "echo", comm: transform.RevProxyCommType},
 		{transformer: "echo", comm: transform.PushCommType},
-		{cmn.Tar2Tf, transform.RedirectCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
-		{cmn.Tar2Tf, transform.RevProxyCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
-		{cmn.Tar2Tf, transform.PushCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
+		{tar2tf, transform.RedirectCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
+		{tar2tf, transform.RevProxyCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
+		{tar2tf, transform.PushCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
 	}
 
 	for _, test := range tests {

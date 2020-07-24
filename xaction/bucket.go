@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/query"
-	"github.com/NVIDIA/aistore/tar2tf"
 	"github.com/NVIDIA/aistore/xaction/demand"
 )
 
@@ -588,56 +587,6 @@ func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *Delet
 		return ee.Get().(*Prefetch), nil
 	}
 	return nil, err
-}
-
-//
-// Tar2Tf
-//
-
-type tar2TfEntry struct {
-	baseBckEntry
-	t    cluster.Target
-	xact *tar2tf.Xact
-	id   string
-	job  *tar2tf.SamplesStreamJob
-}
-
-func (e *tar2TfEntry) Start(bck cmn.Bck) error {
-	xact := &tar2tf.Xact{
-		XactBase: *cmn.NewXactBaseBck(e.id, cmn.ActTar2Tf, bck),
-		T:        e.t,
-		Job:      e.job,
-	}
-	e.xact = xact
-	go xact.Run()
-	return nil
-}
-
-func (e *tar2TfEntry) Kind() string  { return cmn.ActTar2Tf }
-func (e *tar2TfEntry) Get() cmn.Xact { return e.xact }
-
-func (r *registry) NewTar2TfXact(job *tar2tf.SamplesStreamJob, t cluster.Target, bck *cluster.Bck) (*tar2tf.Xact, error) {
-	id := cmn.GenUUID()
-	if err := r.removeFinishedByID(id); err != nil {
-		return nil, err
-	}
-	e := &tar2TfEntry{
-		id:  id,
-		t:   t,
-		job: job,
-	}
-	job.Wg.Add(1)
-
-	ee, err := r.renewBucketXaction(e, bck)
-	if err == nil {
-		return ee.Get().(*tar2tf.Xact), nil
-	}
-	return nil, err
-}
-
-func (e *tar2TfEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
-	// always create new tar2tf xaction
-	return false, nil
 }
 
 //

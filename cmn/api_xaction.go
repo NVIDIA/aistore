@@ -72,9 +72,6 @@ var XactsDtor = map[string]XactDescriptor{
 	ActQueryObjects:  {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
 	ActListObjects:   {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true},
 	ActSummaryBucket: {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true},
-
-	// special
-	ActTar2Tf: {Type: XactTypeTask, Startable: false},
 }
 
 func IsValidXaction(kind string) bool { _, ok := XactsDtor[kind]; return ok }

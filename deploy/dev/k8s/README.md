@@ -84,7 +84,6 @@ export AIS_ENDPOINT="http://192.168.0.3:8080"
 NAME                             READY   STATUS    RESTARTS   AGE
 ais-proxy                        1/1     Running   0          80s
 ais-target                       1/1     Running   0          49s
-tar2tf-ais-ais-target-minikube   1/1     Running   0          44s
 ➜  k8s git:(mini-ais) ✗ # ais is running
 ➜  k8s git:(mini-ais) ✗ ais create bucket test-bucket
 "test-bucket" bucket created
