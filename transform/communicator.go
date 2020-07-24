@@ -5,7 +5,6 @@
 package transform
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -28,6 +27,10 @@ var (
 type Communicator interface {
 	Name() string
 	PodName() string
+
+	// DoTransform can use one of 2 transformer endpoints:
+	// Method "POST", Path "/"
+	// Method "GET", Path "/bucket/object"
 	DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 }
 
@@ -44,9 +47,9 @@ func filterQueryParams(rawQuery string) string {
 }
 func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerURL, name string) Communicator {
 	baseComm := baseComm{
-		url:     transformerURL,
-		name:    name,
-		podName: pod.GetName(),
+		transformerAddress: transformerURL,
+		name:               name,
+		podName:            pod.GetName(),
 	}
 	switch commType {
 	case PushCommType:
@@ -54,7 +57,8 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 	case RedirectCommType:
 		return &redirComm{baseComm: baseComm}
 	case RevProxyCommType:
-		transURL, _ := url.Parse(transformerURL)
+		transURL, err := url.Parse(transformerURL)
+		cmn.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				// Replacing the `req.URL` host with transformer host
@@ -74,9 +78,9 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 }
 
 type baseComm struct {
-	url     string
-	name    string
-	podName string
+	transformerAddress string
+	name               string
+	podName            string
 }
 
 func (c baseComm) Name() string    { return c.name }
@@ -87,7 +91,8 @@ type pushPullComm struct {
 	rp *httputil.ReverseProxy
 }
 
-func (ppc *pushPullComm) DoTransform(w http.ResponseWriter, r *http.Request, _ *cluster.Bck, _ string) error {
+func (ppc *pushPullComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	r.URL.Path = transformerPath(bck, objName) // Reverse proxy should always use /bucket/object endpoint.
 	ppc.rp.ServeHTTP(w, r)
 	return nil
 }
@@ -100,8 +105,8 @@ type redirComm struct {
 	baseComm
 }
 
-func (repc *redirComm) DoTransform(w http.ResponseWriter, r *http.Request, _ *cluster.Bck, _ string) error {
-	redirectURL := fmt.Sprintf("%s%s", repc.url, r.URL.Path)
+func (repc *redirComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	redirectURL := repc.transformerAddress + transformerPath(bck, objName)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
 }
@@ -127,7 +132,7 @@ func (pushc *pushComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, pushc.url, fh)
+	req, err := http.NewRequest(http.MethodPost, pushc.transformerAddress, fh)
 	if err != nil {
 		return err
 	}
@@ -143,4 +148,8 @@ func (pushc *pushComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *
 	err = resp.Body.Close()
 	debug.AssertNoErr(err)
 	return nil
+}
+
+func transformerPath(bck *cluster.Bck, objName string) string {
+	return cmn.URLPath(bck.Name, objName)
 }

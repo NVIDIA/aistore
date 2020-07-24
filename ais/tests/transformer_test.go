@@ -38,9 +38,9 @@ func TestKubeTransformer(t *testing.T) {
 		{transformer: "echo", comm: transform.RedirectCommType},
 		{transformer: "echo", comm: transform.RevProxyCommType},
 		{transformer: "echo", comm: transform.PushCommType},
-		{tar2tf, transform.RedirectCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
-		{tar2tf, transform.RevProxyCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
-		{tar2tf, transform.PushCommType, tar2tfIn, tar2tfOut, tfRecordsEqual, false},
+		{tar2tf, transform.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, false},
+		{tar2tf, transform.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, false},
+		{tar2tf, transform.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, false},
 	}
 
 	for _, test := range tests {
@@ -154,7 +154,7 @@ func (tc testConfig) Name() string {
 // This function is necessary, as the same TFRecords can be different byte-wise.
 // This is caused by the fact that order of TFExamples is can de different,
 // as well as ordering of elements of a single TFExample can be different.
-func tfRecordsEqual(n1, n2 string) (bool, error) {
+func tfDataEqual(n1, n2 string) (bool, error) {
 	examples1, err := readExamples(n1)
 	if err != nil {
 		return false, err
@@ -167,7 +167,10 @@ func tfRecordsEqual(n1, n2 string) (bool, error) {
 	if len(examples1) != len(examples2) {
 		return false, nil
 	}
+	return tfRecordsEqual(examples1, examples2)
+}
 
+func tfRecordsEqual(examples1, examples2 []*core.TFExample) (bool, error) {
 	sort.SliceStable(examples1, func(i, j int) bool {
 		return examples1[i].GetFeature("__key__").String() < examples1[j].GetFeature("__key__").String()
 	})

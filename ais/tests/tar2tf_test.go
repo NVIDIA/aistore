@@ -5,7 +5,6 @@
 package integration
 
 import (
-	"bytes"
 	"io"
 	"io/ioutil"
 	"os"
@@ -14,13 +13,11 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	aistransform "github.com/NVIDIA/aistore/transform"
+	"github.com/NVIDIA/aistore/transform"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
-	"github.com/NVIDIA/go-tfdata/tfdata/archive"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
-	"github.com/NVIDIA/go-tfdata/tfdata/transform"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -28,18 +25,19 @@ func TestKubeTar2TFS3(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
 
 	const (
-		tarPath    = "data/small-mnist-3.tar"
-		tarObjName = "small-mnist-3.tar"
+		tarObjName   = "small-mnist-3.tar"
+		tfRecordFile = "small-mnist-3.record"
 	)
 
 	var (
-		proxyURL = tutils.RandomProxyURL()
-		bck      = cmn.Bck{
+		tarPath      = filepath.Join("data", tarObjName)
+		tfRecordPath = filepath.Join("data", tfRecordFile)
+		proxyURL     = tutils.RandomProxyURL()
+		bck          = cmn.Bck{
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		aisEx, ex  *core.TFExample
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -62,7 +60,7 @@ func TestKubeTar2TFS3(t *testing.T) {
 	spec, err := ioutil.ReadFile(transformerTemplate)
 	tassert.CheckError(t, err)
 
-	pod, err := aistransform.ParsePodSpec(spec)
+	pod, err := transform.ParsePodSpec(spec)
 	tassert.CheckError(t, err)
 	spec, _ = jsoniter.Marshal(pod)
 
@@ -82,31 +80,18 @@ func TestKubeTar2TFS3(t *testing.T) {
 	tassert.CheckFatal(t, outFileGet.Sync())
 	_, err = outFileGet.Seek(0, io.SeekStart)
 	tassert.CheckFatal(t, err)
-	getTFExamplesReader := core.NewTFRecordReader(outFileGet)
 
-	// locally transform TAR to TFRecord
-	sourceTar, err := os.Open(tarPath)
+	// Comparing actual vs expected
+	tfRecord, err := os.Open(tfRecordPath)
 	tassert.CheckFatal(t, err)
-	defer sourceTar.Close()
-	reader, err := archive.NewTarReader(sourceTar)
+	defer tfRecord.Close()
+
+	expectedRecords, err := core.NewTFRecordReader(tfRecord).ReadAllExamples()
 	tassert.CheckFatal(t, err)
-	tfExamplesReader := transform.SamplesToTFExample(reader)
+	actualRecords, err := core.NewTFRecordReader(outFileGet).ReadAllExamples()
+	tassert.CheckFatal(t, err)
 
-	// compare TFRecords
-	for aisEx, err = tfExamplesReader.Read(); err == nil; aisEx, err = tfExamplesReader.Read() {
-		ex, err = getTFExamplesReader.Read()
-		tassert.CheckFatal(t, err)
-
-		for k := range aisEx.GetFeatures().Feature {
-			sampleKey := string(ex.GetBytesList("__key__"))
-			tassert.Errorf(t, bytes.Equal(ex.GetBytesList(k), aisEx.GetBytesList(k)), "TFRecords different for sample %s on entry %s", sampleKey, k)
-		}
-	}
-
-	tassert.Errorf(t, err == io.EOF, "local TFRecord reader failed with %v", err)
-	_, err = getTFExamplesReader.Read()
-	if err == nil {
-		t.Errorf("TFRecord produced by the cluster should have the same length as locally created TFRecord")
-	}
-	tassert.Errorf(t, err == io.EOF, "TFRecord produced by the cluster failed with %v", err)
+	equal, err := tfRecordsEqual(expectedRecords, actualRecords)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, equal == true, "actual and expected records different")
 }
