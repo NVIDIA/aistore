@@ -136,6 +136,7 @@ func (p *proxyrunner) Run() error {
 
 		{r: cmn.Transform, h: p.transformHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.IC, h: p.listenICHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
@@ -735,6 +736,35 @@ ExtractRMD:
 	if len(errs) > 0 {
 		p.invalmsghdlrf(w, r, "%v", errs)
 		return
+	}
+}
+
+// PUT /v1/ic
+func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPut:
+		var (
+			msg  notifListenMsg
+			smap = p.owner.smap.get()
+		)
+		if selfIC, _ := p.whichIC(smap); !selfIC {
+			p.invalmsghdlrf(w, r, "%s: not IC member", p.si)
+			return
+		}
+		if err := cmn.ReadJSON(w, r, &msg); err != nil {
+			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			return
+		}
+		cmn.Assert(msg.Ty == notifXact) // TODO: support other notification types
+		nl := &notifListenerBase{}
+		for _, sid := range msg.Srcs {
+			if node, ok := smap.Tmap[sid]; ok {
+				nl.srcs.Add(node)
+			}
+		}
+		p.jtx.addEntry(msg.UUID, nl)
+	default:
+		cmn.Assert(false)
 	}
 }
 
@@ -2353,6 +2383,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 	err := p.owner.smap.modify(
 		func(clone *smapX) error {
+			var selfIC bool
 			if !clone.isPresent(p.si) {
 				cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+clone.pp())
 			}
@@ -2364,6 +2395,19 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 
 			clone.Primary = p.si
 			clone.Version += 100
+			for i, psi := range clone.IC {
+				if psi.ID() == proxyIDToRemove {
+					if i < len(clone.IC)-1 {
+						copy(clone.IC[i:], clone.IC[i+1:])
+					}
+					clone.IC = clone.IC[:len(clone.IC)-1]
+				} else if psi.ID() == p.si.ID() {
+					selfIC = true
+				}
+			}
+			if !selfIC {
+				clone.IC = append(clone.IC, p.si)
+			}
 			return nil
 		},
 		func(clone *smapX) {

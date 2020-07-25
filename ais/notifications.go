@@ -105,6 +105,12 @@ type (
 		Data  []byte         `json:"message"` // typed message
 		Err   error          `json:"err"`     // error
 	}
+	// receiver to start listening
+	notifListenMsg struct {
+		UUID string   `json:"UUID"`
+		Ty   int      `json:"Ty"`
+		Srcs []string `json:"Srcs"` // slice of DaemonIDs
+	}
 )
 
 // interface guard
@@ -126,7 +132,10 @@ func (nlb *notifListenerBase) callback(notifs *notifs, n notifListener, msg inte
 		} else {
 			now = time.Now().UnixNano()
 		}
-		nlb.f(n, msg, err) // invoke user-supplied callback and pass user-supplied notifListener
+		// TODO -- FIXME: cannot be null, must perform async-operation specific cleanup
+		if nlb.f != nil {
+			nlb.f(n, msg, err) // invoke user-supplied callback and pass user-supplied notifListener
+		}
 		nlb.tfin.Store(now)
 		notifs.fmu.Lock()
 		notifs.fin[n.UUID()] = n
@@ -525,4 +534,17 @@ func (msg *notifMsg) String() string {
 
 func isOwned(nl notifListener) (ok bool) {
 	return nl.isOwned()
+}
+
+// start listening
+// TODO: add bucket and kind = cmn.Act*
+func nlMsgFromListener(nl notifListener) notifListenMsg {
+	n := notifListenMsg{
+		UUID: nl.UUID(),
+		Ty:   nl.notifTy(),
+	}
+	for daeID := range nl.notifiers() {
+		n.Srcs = append(n.Srcs, daeID)
+	}
+	return n
 }

@@ -564,19 +564,28 @@ func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 //
 
 func (c *txnServerCtx) addNotif(xact cmn.Xact) {
-	dsts := c.query[cmn.URLParamNotifyMe]
-	if len(dsts) == 0 {
+	d := c.query[cmn.URLParamNotifyMe]
+	if len(d) == 0 {
 		return
 	}
-	// validate unless the dest is the caller
-	cmn.Assert(dsts[0] != "")
-	if dsts[0] != c.callerID {
-		smap := c.t.owner.smap.get()
-		if !smap.containsID(dsts[0]) {
-			glog.Errorf("%s: unknown notification dst %s, %s", c.t.si, dsts[0], smap) // TODO: handle
+	// validate
+	smap := c.t.owner.smap.get()
+re:
+	for i, pid := range d {
+		if !smap.containsID(pid) {
+			glog.Errorf("%s: unknown notification listener %s: %s, %s", c.t.si, pid, smap, xact)
+			if i < len(d)-1 {
+				copy(d[i:], d[i+1:])
+			}
+			d = d[:len(d)-1]
+			goto re
 		}
 	}
+	if len(d) == 0 {
+		glog.Errorf("%s: no notification listeners: %s, %s", c.t.si, smap, xact)
+		return
+	}
 	xact.AddNotif(&cmn.NotifXact{
-		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: dsts, F: c.t.xactCallerNotify},
+		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: d, F: c.t.xactCallerNotify},
 	})
 }

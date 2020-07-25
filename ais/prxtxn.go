@@ -200,11 +200,17 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	wg.Wait()
 
 	// 5. start waiting for `finished` notifications
-	c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
+	selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
 	nl := notifListenerBck{
 		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
 	}
-	p.jtx.addEntry(c.uuid, &nl)
+	if selfIC {
+		p.jtx.addEntry(c.uuid, &nl)
+	}
+	if otherIC {
+		_ = p.bcastListenIC(c, &nl)
+		// TODO: handle errors
+	}
 
 	// 6. commit
 	unlockUpon = true
@@ -680,6 +686,54 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 
 	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: body}
 	return c
+}
+
+func (p *proxyrunner) whichIC(smap *smapX, queries ...url.Values) (selfIC, otherIC bool) {
+	var (
+		q url.Values
+	)
+	if len(queries) > 0 {
+		q = queries[0]
+	}
+	cmn.Assert(len(smap.IC) > 0)
+	for _, psi := range smap.IC {
+		if q != nil {
+			q.Add(cmn.URLParamNotifyMe, psi.ID())
+		}
+		if psi.ID() == p.si.ID() {
+			selfIC = true
+		} else {
+			otherIC = true
+		}
+	}
+	cmn.Assert(selfIC || otherIC)
+	return
+}
+
+func (p *proxyrunner) bcastListenIC(c *txnClientCtx, nl notifListener) (err error) {
+	nodes := make(cluster.NodeMap)
+	for _, psi := range c.smap.IC {
+		if psi.ID() != p.si.ID() {
+			nodes.Add(psi)
+		}
+	}
+	msg := nlMsgFromListener(nl)
+	cmn.Assert(len(nodes) > 0)
+	results := p.bcast(bcastArgs{
+		req: cmn.ReqArgs{Method: http.MethodPut,
+			Path: cmn.URLPath(cmn.Version, cmn.IC),
+			Body: cmn.MustMarshal(msg)},
+		network: cmn.NetworkIntraControl,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+		nodes:   []cluster.NodeMap{nodes},
+	})
+	for res := range results {
+		if res.err != nil {
+			glog.Error(res.err)
+			err = res.err
+		}
+	}
+	return
 }
 
 // rollback create-bucket

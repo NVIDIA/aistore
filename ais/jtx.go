@@ -157,9 +157,6 @@ func (o *jtx) UnmarshalJSON(b []byte) error {
 	for _, b := range parts[1:] {
 		debug.Assert(len(b) > 0)
 		uuid := string(b)
-
-		// Note: should have only one owner for now
-		cmn.Assert(!o.p.notifs.isOwner(uuid))
 		o.entries[uuid] = &jtxEntry{
 			owners: cmn.NewStringSet(daemonID),
 		}

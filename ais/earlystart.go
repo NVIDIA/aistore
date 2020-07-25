@@ -41,6 +41,9 @@ func (p *proxyrunner) bootstrap() {
 	// 2. make the preliminary/primary decision
 	if !loaded {
 		smap = nil
+	} else if len(smap.IC) == 0 { // pre-IC version
+		smap.IC = make([]*cluster.Snode, 1, 3)
+		smap.IC[0] = p.si
 	}
 	pid, primary = p.determineRole(smap)
 
@@ -255,6 +258,13 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		clone.Version++
 		p.owner.smap.put(clone)
 		smap = clone
+	}
+	// initiate IC if not present
+	if len(smap.IC) == 0 {
+		smap.IC = make([]*cluster.Snode, 1, 3)
+		smap.IC[0] = p.si
+		smap.Version++
+		p.owner.smap.put(smap)
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
 		cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err)
