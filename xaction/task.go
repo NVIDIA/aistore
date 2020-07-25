@@ -81,7 +81,7 @@ func (e *bckSummaryTaskEntry) Get() cmn.Xact { return e.xact }
 // bckSummaryTask
 //
 
-func (t *bckSummaryTask) IsMountpathXact() bool { return false }
+func (t *bckSummaryTask) IsMountpathXact() bool { return true }
 
 func (t *bckSummaryTask) Run() error {
 	var (

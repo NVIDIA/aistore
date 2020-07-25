@@ -33,17 +33,17 @@ type BckListTask struct {
 	t          cluster.Target
 	msg        *cmn.SelectMsg
 	walkStopCh *cmn.StopCh           // to abort file walk
-	cluBck     *cluster.Bck          // cluster.Bck made from original cmn.Bck
-	remoteBck  *cluster.Bck          // remote cluster for Cloud calls (differs from cluBck in case of backend bucket is used
+	cluBck     *cluster.Bck          // cluster.Bck constructed from the original cmn.Bck
+	remoteBck  *cluster.Bck          // differs from cluBck
 	workCh     chan *bckListReq      // incoming requests
 	objCache   chan *cmn.BucketEntry // local cache filled when idle
-	walkWg     sync.WaitGroup        // to wait for walk finishes on abort
-	pageError  error                 // Cloud error if any occurs
-	lastMarker string                // last requested PageMarker (to detect re-requesting a page)
+	walkWg     sync.WaitGroup        // to wait until walk finishes
+	pageError  error                 // when requesting a page from Cloud bucket
+	lastMarker string                // last requested PageMarker (to detect re-requesting)
 	lastPage   []*cmn.BucketEntry    // last sent page and a little more
-	inProgress atomic.Bool           // the page is being filled, nothing to respond
-	walkDone   bool                  // walk finishes or Cloud returned all objects
-	fromRemote bool                  // if xact must request remote data(Cloud/Remote/Backend) or traversing local FS is enough
+	inProgress atomic.Bool           // the page is in progress
+	walkDone   bool                  // true: done walking or Cloud returned all objects
+	fromRemote bool                  // whether to request remote data (Cloud/Remote/Backend)
 }
 
 type bckListReq struct {
@@ -67,7 +67,8 @@ var (
 	errStopped = errors.New("stopped")
 )
 
-func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *BckListTask {
+func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck,
+	smsg *cmn.SelectMsg, uuid string) *BckListTask {
 	idleTime := cmn.GCO.Get().Timeout.SendFile
 	xact := &BckListTask{
 		ctx:      ctx,
@@ -81,7 +82,14 @@ func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cm
 	return xact
 }
 
+func (r *BckListTask) String() string {
+	return fmt.Sprintf("%s: %s", r.t.Snode(), &r.XactDemandBase)
+}
+
 func (r *BckListTask) Do(action string, msg *cmn.SelectMsg, ch chan *BckListResp) {
+	if r.Finished() {
+		return
+	}
 	req := &bckListReq{
 		action: action,
 		msg:    msg,
@@ -90,15 +98,15 @@ func (r *BckListTask) Do(action string, msg *cmn.SelectMsg, ch chan *BckListResp
 	r.workCh <- req
 }
 
-// Starts fs.Walk beforehand if needed, so by the moment we read a page,
-// the local cache was populated.
+// Starts fs.Walk beforehand if needed so that by the time we read the next page
+// local cache is populated.
 func (r *BckListTask) init() error {
 	r.cluBck = cluster.NewBckEmbed(r.Bck())
 	if err := r.cluBck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
 		return err
 	}
 	r.fromRemote = !r.cluBck.IsAIS() && !r.msg.Cached
-	// remote bucket listing is always paged
+	// remote bucket listing is always paginated
 	if r.fromRemote && r.msg.WantObjectsCnt() == 0 {
 		r.msg.PageSize = cmn.DefaultListPageSize
 	}
@@ -129,7 +137,7 @@ func (r *BckListTask) Run() (err error) {
 	for {
 		select {
 		case req := <-r.workCh:
-			// Copy only values that can change between calls
+			// Copy only the values that can change between calls
 			debug.Assert(r.msg.Passthrough == req.msg.Passthrough)
 			debug.Assert(r.msg.Prefix == req.msg.Prefix)
 			debug.Assert(r.msg.Cached == req.msg.Cached)
@@ -150,7 +158,6 @@ func (r *BckListTask) Run() (err error) {
 	}
 }
 
-// Cloud bucket does not start fs.Walk, so stop channel can be closed
 func (r *BckListTask) stopWalk() {
 	if r.walkStopCh != nil {
 		r.walkStopCh.Close()
@@ -160,13 +167,14 @@ func (r *BckListTask) stopWalk() {
 
 func (r *BckListTask) Stop(err error) {
 	r.XactDemandBase.Stop()
-	close(r.workCh)
-	r.stopWalk()
 	r.Finish()
-	glog.Infof("Stopped %s", "bck list")
-	if err != nil {
-		glog.Errorf("stopping bucket list; %s", err.Error())
+	r.stopWalk()
+	if err == nil {
+		glog.Infoln(r.String())
+	} else {
+		glog.Errorf("%s: stopped with err %v", r, err)
 	}
+	// TODO -- FIXME: close(r.workCh) vs Do()
 }
 
 func (r *BckListTask) dispatchRequest(action string) *BckListResp {
@@ -191,7 +199,7 @@ func (r *BckListTask) dispatchRequest(action string) *BckListResp {
 		if !r.pageIsValid(marker, cnt) {
 			return &BckListResp{
 				Status: http.StatusBadRequest,
-				Err:    fmt.Errorf("the page for %s was not initialized", marker),
+				Err:    fmt.Errorf("%s: the page for %s is not initialized", r, marker),
 			}
 		}
 		if r.pageError != nil {
@@ -216,12 +224,12 @@ func (r *BckListTask) dispatchRequest(action string) *BckListResp {
 	default:
 		return &BckListResp{
 			Status: http.StatusBadRequest,
-			Err:    fmt.Errorf("invalid action %s", action),
+			Err:    fmt.Errorf("%s: invalid action %s", r, action),
 		}
 	}
 }
 
-func (r *BckListTask) IsMountpathXact() bool { return false }
+func (r *BckListTask) IsMountpathXact() bool { return true }
 
 func (r *BckListTask) walkCallback(lom *cluster.LOM) {
 	r.ObjectsInc()
@@ -319,14 +327,15 @@ func (r *BckListTask) pageIsValid(marker string, cnt int) bool {
 }
 
 func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
-	cmn.Assert(!r.pageInProgress())
-	idx := r.findMarker(marker)
-	list := r.lastPage[idx:]
+	var (
+		idx  = r.findMarker(marker)
+		list = r.lastPage[idx:]
+	)
 	if len(list) < cnt && !r.walkDone {
 		return nil, errors.New("page is not loaded yet")
 	}
+	cmn.Assert(!r.pageInProgress())
 	cmn.Assert(r.msg.UUID != "")
-	// Fixup the number of objects per page for Cloud case
 	if cnt != 0 && len(list) >= cnt {
 		entries := list[:cnt]
 		return &cmn.BucketList{
@@ -335,17 +344,13 @@ func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
 			UUID:       r.msg.UUID,
 		}, nil
 	}
-	return &cmn.BucketList{
-		Entries:    list,
-		PageMarker: "",
-		UUID:       r.msg.UUID,
-	}, nil
+	return &cmn.BucketList{Entries: list, UUID: r.msg.UUID}, nil
 }
 
 // TODO: support arbitrary page marker (do restart in this case)
 func (r *BckListTask) genNextPage(marker string, cnt int) error {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s next page call from [%s]", r.t.Snode().ID(), r.msg.PageMarker)
+		glog.Infof("%s: marker [%s]", r, r.msg.PageMarker)
 	}
 	if marker != "" && marker == r.lastMarker {
 		r.DecPending()
@@ -427,7 +432,7 @@ func (r *BckListTask) traverseBucket() {
 
 	if err := fs.WalkBck(opts); err != nil {
 		if err != filepath.SkipDir && err != errStopped {
-			glog.Errorf("%s Walk failed: %v", r.t.Snode().ID(), err)
+			glog.Errorf("%s walk failed, err %v", r, err)
 		}
 	}
 	close(r.objCache)
