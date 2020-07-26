@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source utils/pre_check.sh
+
 #TODO: this is a workaround, disconnect the vpn
 /opt/cisco/anyconnect/bin/vpn disconnect
 
@@ -9,5 +11,5 @@ minikube delete
 # we use docker as it is simple to use
 minikube start --driver=docker
 
-source ais_minikube_setup.sh
-source minikube_registry.sh
+source utils/ais_minikube_setup.sh
+source utils/minikube_registry.sh

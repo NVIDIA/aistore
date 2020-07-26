@@ -1,33 +1,5 @@
 #!/bin/bash
 
-usage() {
-    echo "Usage: $0"
-    echo "   -a|--aws    : aws.env - AWS credentials"
-    echo "   -h|--host   : IP of your local Docker registry host"
-    echo
-    exit 1;
-}
-aws_env="";
-
-
-for i in "$@"; do
-case $i in
-    -a=*|--aws=*)
-        aws_env="${i#*=}"
-        shift # past argument=value
-        ;;
-
-    -h=*|--host=*)
-        DOCKER_HOST_IP="${i#*=}"
-        shift
-        ;;
-
-    *)
-        usage
-        ;;
-esac
-done
-
 echo Enter number of target servers:
 read TARGET_CNT
 if ! [[ "$TARGET_CNT" =~ ^[0-9]+$ ]] ; then
@@ -43,9 +15,15 @@ elif [[ $PROXY_CNT -lt 1 ]]; then
 fi
 
 
-source parse_fsparams.sh
-source parse_cld.sh
-source local_build.sh
+source utils/parse_fsparams.sh
+source utils/parse_cld.sh
+
+export DOCKER_IMAGE="aistore/aisnode:dev"
+echo "Build and push to local registry:"
+read build
+if [[ "$build" == "y" ]]; then
+  source utils/local_build.sh
+fi
 
 PRIMARY_PORT=8080
 HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"
@@ -68,7 +46,7 @@ for i in $(seq 0 $(($PROXY_CNT-1))); do
   else
     export AIS_IS_PRIMARY=false
   fi
-  envsubst < aisproxy_deployment.yml | kubectl apply -f -
+  envsubst < kube_templates/aisproxy_deployment.yml | kubectl apply -f -
 done
 
 echo "Waiting for the primary proxy to be ready..."
@@ -79,10 +57,13 @@ echo "Starting target deployment..."
 for i in $(seq 0 $(($TARGET_CNT-1))); do
   export POD_NAME="ais-target-${i}"
   export PORT=$((9090+$i))
-  envsubst < aistarget_deployment.yml | kubectl create -f -
+  envsubst < kube_templates/aistarget_deployment.yml | kubectl create -f -
 done
 
 echo "List of running pods"
 kubectl get pods -o wide
 
 echo "Done"
+
+echo "Please set the AIS_ENDPOINT for use of cli"
+echo "export AIS_ENDPOINT=\"http://$(minikube ip):8080\""

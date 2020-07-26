@@ -1,5 +1,5 @@
 # to allow running kubectl commands from within a pod (for e.g target)
-kubectl apply -f minikube_perms.yaml
+kubectl apply -f kube_templates/minikube_perms.yaml
 
 # making /var/lib/minikube/ais
 minikube ssh 'sudo mkdir -p /var/lib/minikube/ais'
