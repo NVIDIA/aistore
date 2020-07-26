@@ -400,9 +400,9 @@ func (j *lruJ) evict() (size int64, err error) {
 			} else if lom.FromFS() != nil {
 				removed = os.Remove(fqn) == nil
 			} else {
-				lom.DelExtraCopies()
+				removed, _ = lom.DelExtraCopies(fqn)
 			}
-			if !removed && lom.FQN != fqn && fs.Access(fqn) == nil {
+			if !removed && lom.FQN != fqn {
 				removed = os.Remove(fqn) == nil
 			}
 			if removed {

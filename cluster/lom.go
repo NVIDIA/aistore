@@ -298,7 +298,7 @@ func (lom *LOM) DelAllCopies() (err error) {
 }
 
 // DelExtraCopies deletes objects which are not part of lom.md.copies metadata (leftovers).
-func (lom *LOM) DelExtraCopies() (err error) {
+func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 	if lom._whingeCopy() {
 		return
 	}
@@ -311,6 +311,9 @@ func (lom *LOM) DelExtraCopies() (err error) {
 		if err1 := cmn.RemoveFile(copyFQN); err1 != nil {
 			err = err1
 			continue
+		}
+		if len(fqn) > 0 && fqn[0] == copyFQN {
+			removed = true
 		}
 	}
 	return
