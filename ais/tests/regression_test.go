@@ -755,7 +755,7 @@ func TestLRU(t *testing.T) {
 		diffFilesEvicted := tutils.GetNamedTargetStats(v, "lru.evict.n") - filesEvicted[k]
 		diffBytesEvicted := tutils.GetNamedTargetStats(v, "lru.evict.size") - bytesEvicted[k]
 		tutils.Logf(
-			"Target %s: evicted %d files - %s (%dB) total\n",
+			"Target %s: evicted %d objects - %s (%dB) total\n",
 			k, diffFilesEvicted, cmn.B2S(diffBytesEvicted, 2), diffBytesEvicted,
 		)
 

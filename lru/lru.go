@@ -390,24 +390,25 @@ func (j *lruJ) evict() (size int64, err error) {
 	f := j.ini.Xaction.OkRemoveMisplaced
 	if f == nil || f() {
 		for _, lom := range j.misplaced {
-			// 2.1: remove misplaced obj
-			if err = cmn.RemoveFile(lom.FQN); err != nil {
-				glog.Warningf("%s: %v", lom, err)
-				continue
+			var (
+				fqn     = lom.FQN
+				removed bool
+			)
+			lom = &cluster.LOM{T: j.ini.T, ObjName: lom.ObjName} // yes placed
+			if lom.Init(j.bck, j.config) != nil {
+				removed = os.Remove(fqn) == nil
+			} else if lom.FromFS() != nil {
+				removed = os.Remove(fqn) == nil
+			} else {
+				lom.DelExtraCopies()
 			}
-			lom.Uncache()
-			// 2.2: for mirrored objects: remove extra copies if any
-			lom = &cluster.LOM{T: j.ini.T, ObjName: lom.ObjName}
-			err = lom.Init(lom.Bck().Bck, lom.Config())
-			if err != nil {
-				glog.Warningf("%s: %v", lom, err)
-			} else if err = lom.Load(false); err != nil {
-				glog.Warningf("%s: %v", lom, err)
-			} else if err = lom.DelExtraCopies(); err != nil {
-				glog.Warningf("%s: %v", lom, err)
+			if !removed && lom.FQN != fqn && fs.Access(fqn) == nil {
+				removed = os.Remove(fqn) == nil
 			}
-			if capCheck, err = j.postRemove(capCheck, lom); err != nil {
-				return
+			if removed {
+				if capCheck, err = j.postRemove(capCheck, lom); err != nil {
+					return
+				}
 			}
 		}
 	}
