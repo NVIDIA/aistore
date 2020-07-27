@@ -187,15 +187,8 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	wg.Wait()
 
 	// 5. IC
-	selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
-	nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-	if selfIC {
-		p.jtx.addEntry(c.uuid, &nl)
-	}
-	if otherIC {
-		_ = p.bcastListenIC(c, &nl)
-		// TODO -- FIXME: handle errors, here and elsewhere
-	}
+	nl := &notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
+	p.registerIC(c.uuid, nl, c.smap, c.req.Query)
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -286,14 +279,8 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 
 	// 5. if remirror|re-EC|TBD-storage-svc
 	if remirror || reec {
-		selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
 		nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-		if selfIC {
-			p.jtx.addEntry(c.uuid, &nl)
-		}
-		if otherIC {
-			_ = p.bcastListenIC(c, &nl)
-		}
+		p.registerIC(c.uuid, &nl, c.smap, c.req.Query)
 		xactID = c.uuid
 	}
 
@@ -378,14 +365,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.msg.RMDVersion = clone.version()
 
 			// 5. IC
-			selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
 			nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
-			if selfIC {
-				p.jtx.addEntry(c.uuid, &nl)
-			}
-			if otherIC {
-				_ = p.bcastListenIC(c, &nl)
-			}
+			p.registerIC(xactID, &nl, c.smap, c.req.Query)
 
 			// 6. commit
 			xactID = c.uuid
@@ -463,14 +444,8 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	}
 
 	// 5. IC
-	selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
 	nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
-	if selfIC {
-		p.jtx.addEntry(c.uuid, &nl)
-	}
-	if otherIC {
-		_ = p.bcastListenIC(c, &nl)
-	}
+	p.registerIC(c.uuid, &nl, c.smap, c.req.Query)
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -573,14 +548,8 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	wg.Wait()
 
 	// 5. IC
-	selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
 	nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-	if selfIC {
-		p.jtx.addEntry(c.uuid, &nl)
-	}
-	if otherIC {
-		_ = p.bcastListenIC(c, &nl)
-	}
+	p.registerIC(c.uuid, &nl, c.smap, c.req.Query)
 
 	// 6. commit
 	unlockUpon = true
@@ -644,32 +613,6 @@ func (p *proxyrunner) whichIC(smap *smapX, queries ...url.Values) (selfIC, other
 		}
 	}
 	cmn.Assert(selfIC || otherIC)
-	return
-}
-
-func (p *proxyrunner) bcastListenIC(c *txnClientCtx, nl notifListener) (err error) {
-	nodes := make(cluster.NodeMap)
-	for _, psi := range c.smap.IC {
-		if psi.ID() != p.si.ID() {
-			nodes.Add(psi)
-		}
-	}
-	msg := nlMsgFromListener(nl)
-	cmn.Assert(len(nodes) > 0)
-	results := p.bcast(bcastArgs{
-		req: cmn.ReqArgs{Method: http.MethodPut,
-			Path: cmn.URLPath(cmn.Version, cmn.IC),
-			Body: cmn.MustMarshal(msg)},
-		network: cmn.NetworkIntraControl,
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-		nodes:   []cluster.NodeMap{nodes},
-	})
-	for res := range results {
-		if res.err != nil {
-			glog.Error(res.err)
-			err = res.err
-		}
-	}
 	return
 }
 

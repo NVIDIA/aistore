@@ -328,20 +328,12 @@ func (n *notifs) handleMsg(nl notifListener, tid string, srcErr error) (err erro
 func (n *notifs) housekeep() time.Duration {
 	now := time.Now().UnixNano()
 	n.fmu.Lock()
-	var ownedRmCount int
 	for uuid, nl := range n.fin {
 		if time.Duration(now-nl.finTime()) > notifsRemoveMult*notifsHousekeepT {
 			delete(n.fin, uuid)
-			if nl.isOwned() {
-				ownedRmCount++
-			}
 		}
 	}
 	n.fmu.Unlock()
-	// TODO: remove when periodic broadcast is implemented
-	if ownedRmCount > 0 {
-		n.p.jtx.broadcastTable()
-	}
 
 	if len(n.m) == 0 {
 		return notifsHousekeepT
@@ -407,6 +399,7 @@ func (n *notifs) isOwner(uuid string) bool {
 	return false
 }
 
+// nolint:unused // helper used by others
 func (n *notifs) _forEach(m map[string]notifListener, fn func(string, notifListener), preds ...func(notifListener) bool) {
 	var pred func(notifListener) bool
 	if len(preds) != 0 {
@@ -420,12 +413,14 @@ func (n *notifs) _forEach(m map[string]notifListener, fn func(string, notifListe
 	}
 }
 
+// nolint:unused // iterate over running listeners
 func (n *notifs) forEachRunning(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
 	n.RLock()
 	defer n.RUnlock()
 	n._forEach(n.m, fn, preds...)
 }
 
+// nolint:unused // iterate over finished listeners
 func (n *notifs) forEachFin(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
 	n.fmu.RLock()
 	defer n.fmu.RUnlock()
@@ -433,6 +428,7 @@ func (n *notifs) forEachFin(fn func(string /*uuid*/, notifListener), preds ...fu
 }
 
 // FIXME: possible race condition
+// nolint:unused // iterate over listeners
 func (n *notifs) forEach(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
 	n.forEachRunning(fn, preds...)
 	n.forEachFin(fn, preds...)
@@ -535,10 +531,6 @@ func notifText(ty int) string {
 
 func (msg *notifMsg) String() string {
 	return fmt.Sprintf("%s[%s,%v]<=%s", notifText(int(msg.Ty)), string(msg.Data), msg.Err, msg.Snode)
-}
-
-func isOwned(nl notifListener) (ok bool) {
-	return nl.isOwned()
 }
 
 // start listening

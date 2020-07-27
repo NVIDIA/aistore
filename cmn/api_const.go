@@ -287,7 +287,6 @@ const (
 	Clusters  = "clusters" // AuthN
 	Roles     = "roles"    // AuthN
 	Query     = "query"
-	Jtx       = "jtx"
 	IC        = "ic" // information center
 
 	// l3

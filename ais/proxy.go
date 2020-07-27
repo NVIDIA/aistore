@@ -64,7 +64,6 @@ type (
 		metasyncer *metasyncer
 		rproxy     reverseProxy
 		notifs     notifs
-		jtx        *jtx
 		gmm        *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	}
 	remBckAddArgs struct {
@@ -125,7 +124,6 @@ func (p *proxyrunner) Run() error {
 	initListObjectsCache(p)
 
 	p.notifs.init(p)
-	p.jtx = newJTX(p)
 
 	//
 	// REST API: register proxy handlers and start listening
@@ -150,7 +148,6 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: cmn.Notifs, h: p.notifs.handler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Jtx, h: p.jtx.handler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
 	}
@@ -736,35 +733,6 @@ ExtractRMD:
 	if len(errs) > 0 {
 		p.invalmsghdlrf(w, r, "%v", errs)
 		return
-	}
-}
-
-// PUT /v1/ic
-func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPut:
-		var (
-			msg  notifListenMsg
-			smap = p.owner.smap.get()
-		)
-		if selfIC, _ := p.whichIC(smap); !selfIC {
-			p.invalmsghdlrf(w, r, "%s: not IC member", p.si)
-			return
-		}
-		if err := cmn.ReadJSON(w, r, &msg); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error())
-			return
-		}
-		cmn.Assert(msg.Ty == notifXact) // TODO: support other notification types
-		nl := &notifListenerBase{}
-		for _, sid := range msg.Srcs {
-			if node, ok := smap.Tmap[sid]; ok {
-				nl.srcs.Add(node)
-			}
-		}
-		p.jtx.addEntry(msg.UUID, nl)
-	default:
-		cmn.Assert(false)
 	}
 }
 
@@ -2647,11 +2615,11 @@ func (p *proxyrunner) jtxStatus(w http.ResponseWriter, r *http.Request, what str
 	}
 
 	// TODO: don't redirect when status information is available in jtx table
-	if redirected := p.jtx.redirectToOwner(w, r, uuid, nil); redirected {
+	if redirected := p.redirectToOwner(w, r, uuid, nil); redirected {
 		return
 	}
 
-	p.jtx.writeStatus(w, r, uuid)
+	p.writeStatus(w, r, uuid)
 }
 
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {

@@ -847,6 +847,7 @@ func (h *httprunner) callTargets(method, path string, body []byte, query ...url.
 	return h.callBcast(method, path, body, cluster.Targets, query...)
 }
 
+// nolint:unused // integral with callTargets and callAll
 func (h *httprunner) callProxies(method, path string, body []byte, query ...url.Values) chan callResult {
 	return h.callBcast(method, path, body, cluster.Proxies, query...)
 }
