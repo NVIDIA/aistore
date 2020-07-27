@@ -176,11 +176,9 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 
 		objName = path.Join(items[1:]...)
 	)
-
-	// TODO: try to get rid of "!" based separation of UUID
-	// It might be possible when TF S3 API allows passing a metadata to with a request (like HTTP Headers).
-	if objName, UUID := cmn.S3ObjNameTag(objName); UUID != "" {
-		t.doTransform(w, r, UUID, bck, objName)
+	uuid := r.URL.Query().Get(cmn.URLParamUUID)
+	if uuid != "" {
+		t.doTransform(w, r, uuid, bck, objName)
 		return
 	}
 

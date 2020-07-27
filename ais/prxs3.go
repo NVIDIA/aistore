@@ -21,6 +21,14 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// WARNING: `reparseQuery` might affect non-tensorflow clients using S3-compatible API
+// with AIStore. To be used with caution.
+func reparseQuery(r *http.Request) {
+	if strings.Contains(r.URL.Path, "?") && len(r.URL.Query()) == 0 {
+		r.URL, _ = url.Parse(r.URL.Path)
+	}
+}
+
 // [METHOD] /s3
 func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -30,6 +38,8 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
+	reparseQuery(r)
 
 	switch r.Method {
 	case http.MethodHead:
@@ -384,7 +394,7 @@ func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []s
 	p.copyObjS3(w, r, items)
 }
 
-// GET s3/bckName/objName[!tf]
+// GET s3/bckName/objName[?uuid=<UUID for transformer>]
 func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)

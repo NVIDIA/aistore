@@ -77,11 +77,13 @@ func TestKubeTar2TFS3(t *testing.T) {
 	defer func() {
 		tassert.CheckFatal(t, api.TransformStop(baseParams, uuid))
 	}()
-
 	// GET TFRecord from TAR
 	outFileBuffer := bytes.NewBuffer(nil)
 
-	_, err = api.GetObjectS3(baseParams, bck, tarObjName+"!"+uuid, api.GetObjectInput{Writer: outFileBuffer})
+	// This is to mimic external S3 clients like Tensorflow
+	bck.Provider = ""
+
+	_, err = api.GetObjectS3(baseParams, bck, tarObjName+"%3fuuid="+uuid, api.GetObjectInput{Writer: outFileBuffer})
 	tassert.CheckFatal(t, err)
 	tassert.CheckFatal(t, err)
 
@@ -148,9 +150,12 @@ func TestKubeTar2TFRanges(t *testing.T) {
 		tassert.CheckFatal(t, api.TransformStop(baseParams, uuid))
 	}()
 
+	// This is to mimic external S3 clients like Tensorflow
+	bck.Provider = ""
+
 	// GET TFRecord from TAR
 	wholeTFRecord := bytes.NewBuffer(nil)
-	_, err = api.GetObjectS3(baseParams, bck, tarObjName+"!"+uuid, api.GetObjectInput{Writer: wholeTFRecord})
+	_, err = api.GetObjectS3(baseParams, bck, tarObjName+"%3fuuid="+uuid, api.GetObjectInput{Writer: wholeTFRecord})
 	tassert.CheckFatal(t, err)
 
 	for _, tc := range tcs {
@@ -159,7 +164,7 @@ func TestKubeTar2TFRanges(t *testing.T) {
 		// Request only a subset of bytes
 		header := http.Header{}
 		header.Set(cmn.HeaderRange, fmt.Sprintf("bytes=%d-%d", tc.start, tc.end))
-		_, err = api.GetObjectS3(baseParams, bck, tarObjName+"!"+uuid, api.GetObjectInput{Writer: rangeBytesBuff, Header: header})
+		_, err = api.GetObjectS3(baseParams, bck, tarObjName+"%3fuuid="+uuid, api.GetObjectInput{Writer: rangeBytesBuff, Header: header})
 		tassert.CheckFatal(t, err)
 
 		tassert.Errorf(t, bytes.Equal(rangeBytesBuff.Bytes(), wholeTFRecord.Bytes()[tc.start:tc.end+1]), "[start: %d, end: %d] bytes different", tc.start, tc.end)
