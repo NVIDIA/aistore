@@ -32,6 +32,8 @@ type (
 		// triggers
 		commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (bool, error)
 		rsvp(err error)
+		// cleanup
+		cleanup()
 	}
 	rndzvs struct { // rendezvous records
 		callerName string
@@ -62,7 +64,8 @@ type (
 	}
 	txnBckBase struct {
 		txnBase
-		bck cluster.Bck
+		bck  cluster.Bck
+		nlps []cmn.NLP
 	}
 	txnError struct {
 		err error
@@ -95,6 +98,11 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ txn = &txnBckBase{}
+)
+
 //////////////////
 // transactions //
 //////////////////
@@ -123,6 +131,7 @@ func (txns *transactions) find(uuid string, remove bool) (txn txn, err error) {
 	if txn, ok = txns.m[uuid]; !ok {
 		err = fmt.Errorf("%s: Txn[%s] doesn't exist (aborted?)", txns.t.si, uuid)
 	} else if remove {
+		txn.cleanup()
 		delete(txns.m, uuid)
 		delete(txns.rendezvous, uuid)
 	}
@@ -319,6 +328,18 @@ func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 // txnBckBase //
 ////////////////
 
+func newTxnBckBase(kind string, bck cluster.Bck) *txnBckBase {
+	return &txnBckBase{txnBase: txnBase{kind: kind}, bck: bck}
+}
+
+func (txn *txnBckBase) cleanup() {
+	for _, p := range txn.nlps {
+		nlp, ok := p.(*cluster.NameLockPair)
+		cmn.Assert(ok)
+		nlp.Unlock()
+	}
+}
+
 func (txn *txnBckBase) String() string {
 	var (
 		res string
@@ -365,7 +386,7 @@ var _ txn = &txnCreateBucket{}
 // c-tor
 // NOTE: errNill another kind of nil - here and elsewhere
 func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
-	txn = &txnCreateBucket{txnBckBase{txnBase{kind: "crb"}, *c.bck}}
+	txn = &txnCreateBucket{*newTxnBckBase("crb", *c.bck)}
 	txn.fillFromCtx(c)
 	return
 }
@@ -379,7 +400,7 @@ var _ txn = &txnMakeNCopies{}
 // c-tor
 func newTxnMakeNCopies(c *txnServerCtx, curCopies, newCopies int64) (txn *txnMakeNCopies) {
 	txn = &txnMakeNCopies{
-		txnBckBase{txnBase{kind: "mnc"}, *c.bck},
+		*newTxnBckBase("mnc", *c.bck),
 		curCopies,
 		newCopies,
 	}
@@ -403,7 +424,7 @@ func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSet
 	cmn.Assert(c.bck.Props != nil)
 	bprops := c.bck.Props.Clone()
 	txn = &txnSetBucketProps{
-		txnBckBase{txnBase{kind: "mnc"}, *c.bck},
+		*newTxnBckBase("spb", *c.bck),
 		bprops,
 		nprops,
 	}
@@ -420,7 +441,7 @@ var _ txn = &txnRenameBucket{}
 // c-tor
 func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnRenameBucket) {
 	txn = &txnRenameBucket{
-		txnBckBase{txnBase{kind: "rnb"}, *bckFrom},
+		*newTxnBckBase("rnb", *bckFrom),
 		bckFrom,
 		bckTo,
 	}
@@ -436,7 +457,7 @@ var _ txn = &txnCopyBucket{}
 // c-tor
 func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnCopyBucket) {
 	txn = &txnCopyBucket{
-		txnBckBase{txnBase{kind: "bcp"}, *bckFrom},
+		*newTxnBckBase("bcp", *bckFrom),
 		bckFrom,
 		bckTo,
 	}

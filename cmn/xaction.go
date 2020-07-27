@@ -211,11 +211,11 @@ func (xact *XactBase) Abort() {
 }
 
 func (xact *XactBase) Finish(errs ...error) {
-	if !xact.Aborted() {
-		Assert(xact.EndTime().IsZero())
-		xact.setEndTime()
+	if xact.Aborted() {
+		Assert(!xact.EndTime().IsZero())
+		return
 	}
-
+	xact.setEndTime()
 	// notifications
 	if n := xact.Notif(); n != nil && n.Upon(UponTerm) {
 		var err error

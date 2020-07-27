@@ -470,13 +470,13 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 	}
 	if !bp.BackendBck.IsEmpty() {
 		if bp.BackendBck.Name == "" {
-			return fmt.Errorf("backend bucket name should not be empty")
+			return fmt.Errorf("backend bucket (%q) name is empty", bp.BackendBck)
 		}
 		if !bp.BackendBck.IsCloud() {
-			return fmt.Errorf("backend bucket should point to cloud bucket")
+			return fmt.Errorf("backend bucket (%q) should be referencing a Cloud bucket", bp.BackendBck)
 		}
 		if bp.Provider != ProviderAIS {
-			return fmt.Errorf("backend bucket can only be set for AIS buckets")
+			return fmt.Errorf("backend bucket (%q) can only be set for AIS buckets", bp.BackendBck)
 		}
 	}
 

@@ -179,6 +179,8 @@ func (t *targetrunner) Run() error {
 	t.httprunner.init(getstorstatsrunner(), config)
 	t.owner.bmd = newBMDOwnerTgt()
 
+	cluster.Init()
+
 	t.statsT.RegisterAll()
 	t.httprunner.keepalive = gettargetkeepalive()
 

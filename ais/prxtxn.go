@@ -138,26 +138,13 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 // make-n-copies: { confirm existence -- begin -- update locally -- metasync -- commit }
 func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string, err error) {
 	var (
-		pname      = p.si.String()
-		c          = p.prepTxnClient(msg, bck)
-		nlp        = bck.GetNameLockPair()
-		unlockUpon bool // unlock upon receiving target notifications
+		pname = p.si.String()
+		c     = p.prepTxnClient(msg, bck)
 	)
-
 	copies, err := p.parseNCopies(msg.Value)
 	if err != nil {
 		return
 	}
-	if !nlp.TryLock() {
-		err = cmn.NewErrorBucketIsBusy(bck.Bck, pname)
-		return
-	}
-	defer func() {
-		if !unlockUpon {
-			nlp.Unlock()
-		}
-	}()
-
 	// 1. confirm existence
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
@@ -199,21 +186,18 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 
 	wg.Wait()
 
-	// 5. start waiting for `finished` notifications
+	// 5. IC
 	selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
-	nl := notifListenerBck{
-		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
-	}
+	nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
 	if selfIC {
 		p.jtx.addEntry(c.uuid, &nl)
 	}
 	if otherIC {
 		_ = p.bcastListenIC(c, &nl)
-		// TODO: handle errors
+		// TODO -- FIXME: handle errors, here and elsewhere
 	}
 
 	// 6. commit
-	unlockUpon = true
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
@@ -232,24 +216,11 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	propsToUpdate cmn.BucketPropsToUpdate) (xactID string, err error) {
 	var (
-		c          *txnClientCtx
-		nlp        = bck.GetNameLockPair()
-		nprops     *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
-		nmsg       = &cmn.ActionMsg{} // with nprops
-		pname      = p.si.String()
-		unlockUpon bool
+		c      *txnClientCtx
+		nprops *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
+		nmsg   = &cmn.ActionMsg{} // with nprops
+		pname  = p.si.String()
 	)
-
-	if !nlp.TryLock() {
-		err = cmn.NewErrorBucketIsBusy(bck.Bck, pname)
-		return
-	}
-	defer func() {
-		if !unlockUpon {
-			nlp.Unlock()
-		}
-	}()
-
 	// 1. confirm existence
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
@@ -313,14 +284,16 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 
 	wg.Wait()
 
-	// 5. if remirror|re-EC|TBD-storage-svc: start waiting
+	// 5. if remirror|re-EC|TBD-storage-svc
 	if remirror || reec {
-		c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
-		nl := notifListenerBck{
-			notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
+		selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
+		nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
+		if selfIC {
+			p.jtx.addEntry(c.uuid, &nl)
 		}
-		p.notifs.add(c.uuid, &nl)
-		unlockUpon = true // unlock upon receiving target notifications
+		if otherIC {
+			_ = p.bcastListenIC(c, &nl)
+		}
 		xactID = c.uuid
 	}
 
@@ -333,33 +306,14 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		c          *txnClientCtx
-		nlpFrom    = bckFrom.GetNameLockPair()
-		nlpTo      = bckTo.GetNameLockPair()
-		nmsg       = &cmn.ActionMsg{} // + bckTo
-		pname      = p.si.String()
-		unlockUpon bool
+		c     *txnClientCtx
+		nmsg  = &cmn.ActionMsg{} // + bckTo
+		pname = p.si.String()
 	)
 	if rebErr := p.canStartRebalance(); rebErr != nil {
 		err = fmt.Errorf("%s: bucket cannot be renamed: %w", p.si, rebErr)
 		return
 	}
-	if !nlpFrom.TryLock() {
-		err = cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
-		return
-	}
-	if !nlpTo.TryLock() {
-		nlpFrom.Unlock()
-		err = cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
-		return
-	}
-	defer func() {
-		if !unlockUpon {
-			nlpTo.Unlock()
-			nlpFrom.Unlock()
-		}
-	}()
-
 	// 1. confirm existence & non-existence
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
@@ -423,18 +377,18 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		func(clone *rebMD) {
 			c.msg.RMDVersion = clone.version()
 
-			// 5. start waiting for `finished` notifications
-			c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
-			nl := notifListenerFromTo{
-				notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckFromToCb},
-				nlpFrom:           &nlpFrom,
-				nlpTo:             &nlpTo,
+			// 5. IC
+			selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
+			nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
+			if selfIC {
+				p.jtx.addEntry(c.uuid, &nl)
 			}
-			xactID = c.uuid
-			p.jtx.addEntry(c.uuid, &nl)
+			if otherIC {
+				_ = p.bcastListenIC(c, &nl)
+			}
 
 			// 6. commit
-			unlockUpon = true
+			xactID = c.uuid
 			c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 			c.req.Body = cmn.MustMarshal(c.msg)
 
@@ -451,30 +405,10 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 // copy-bucket: { confirm existence -- begin -- conditional metasync -- start waiting for copy-done -- commit }
 func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		c          *txnClientCtx
-		nmsg       = &cmn.ActionMsg{} // + bckTo
-		nlpFrom    = bckFrom.GetNameLockPair()
-		nlpTo      = bckTo.GetNameLockPair()
-		pname      = p.si.String()
-		unlockUpon bool
+		c     *txnClientCtx
+		nmsg  = &cmn.ActionMsg{} // + bckTo
+		pname = p.si.String()
 	)
-	if !nlpFrom.TryRLock() {
-		err = cmn.NewErrorBucketIsBusy(bckFrom.Bck, pname)
-		return
-	}
-	if !nlpTo.TryLock() {
-		nlpFrom.RUnlock()
-		err = cmn.NewErrorBucketIsBusy(bckTo.Bck, pname)
-		return
-	}
-
-	defer func() {
-		if !unlockUpon {
-			nlpTo.Unlock()
-			nlpFrom.RUnlock()
-		}
-	}()
-
 	// 1. confirm existence
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
@@ -528,17 +462,17 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 		p.owner.bmd.Unlock()
 	}
 
-	// 5. start waiting for `finished` notifications
-	c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
-	nl := notifListenerFromTo{
-		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCopy},
-		nlpFrom:           &nlpFrom,
-		nlpTo:             &nlpTo,
+	// 5. IC
+	selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
+	nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
+	if selfIC {
+		p.jtx.addEntry(c.uuid, &nl)
 	}
-	p.jtx.addEntry(c.uuid, &nl)
+	if otherIC {
+		_ = p.bcastListenIC(c, &nl)
+	}
 
 	// 6. commit
-	unlockUpon = true
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	xactID = c.uuid
@@ -638,12 +572,15 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 
 	wg.Wait()
 
-	// 5. start waiting for `finished` notifications
-	c.req.Query.Set(cmn.URLParamNotifyMe, p.si.ID())
-	nl := notifListenerBck{
-		notifListenerBase: notifListenerBase{srcs: c.smap.Tmap.Clone(), f: p.nlBckCb}, nlp: &nlp,
+	// 5. IC
+	selfIC, otherIC := p.whichIC(c.smap, c.req.Query)
+	nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
+	if selfIC {
+		p.jtx.addEntry(c.uuid, &nl)
 	}
-	p.jtx.addEntry(c.uuid, &nl)
+	if otherIC {
+		_ = p.bcastListenIC(c, &nl)
+	}
 
 	// 6. commit
 	unlockUpon = true
@@ -811,36 +748,4 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	targetCnt := p.owner.smap.Get().CountTargets()
 	err = nprops.Validate(targetCnt)
 	return
-}
-
-//
-// notifications: listener-side callbacks
-//
-
-func (p *proxyrunner) _logNotifDone(n notifListener, msg interface{}, err error) {
-	if err != nil {
-		glog.Errorf("%s: %s failed, msg: %+v, err: %v", p.si, n, msg, err)
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: %s success", p.si, n)
-	}
-}
-
-func (p *proxyrunner) nlBckCb(n notifListener, msg interface{}, err error) {
-	nl := n.(*notifListenerBck)
-	nl.nlp.Unlock()
-	p._logNotifDone(n, msg, err)
-}
-
-func (p *proxyrunner) nlBckCopy(n notifListener, msg interface{}, err error) {
-	nl := n.(*notifListenerFromTo)
-	nl.nlpTo.Unlock()
-	nl.nlpFrom.RUnlock()
-	p._logNotifDone(n, msg, err)
-}
-
-func (p *proxyrunner) nlBckFromToCb(n notifListener, msg interface{}, err error) {
-	nl := n.(*notifListenerFromTo)
-	nl.nlpTo.Unlock()
-	nl.nlpFrom.Unlock()
-	p._logNotifDone(n, msg, err)
 }

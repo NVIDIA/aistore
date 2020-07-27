@@ -49,6 +49,14 @@ type (
 	QueryBcks Bck
 
 	BucketNames []Bck
+
+	// implemented by cluster.Bck
+	NLP interface {
+		Lock()
+		TryLock() bool
+		TryRLock() bool
+		Unlock()
+	}
 )
 
 var (

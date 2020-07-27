@@ -67,8 +67,8 @@ type (
 	bmdOwnerTgt struct{ bmdOwnerBase }
 )
 
+// interface guard
 var (
-	// interface guard
 	_ revs           = &bucketMD{}
 	_ cluster.Bowner = &bmdOwnerBase{}
 	_ bmdOwner       = &bmdOwnerPrx{}

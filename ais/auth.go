@@ -45,8 +45,8 @@ type (
 	}
 )
 
+// interface guard
 var (
-	// interface guard
 	_ revs = &TokenList{}
 )
 

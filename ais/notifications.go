@@ -77,23 +77,25 @@ type (
 
 	notifListenerBase struct {
 		sync.RWMutex
-		srcs  cluster.NodeMap  // expected notifiers
-		errs  map[string]error // [node-ID => notifMsg.Err]
-		uuid  string           // UUID
-		f     notifCallback    // actual callback
-		rc    int              // refcount
-		ty    int              // notifMsg.Ty enum (above)
-		tfin  atomic.Int64     // timestamp when finished
-		owned bool             // used to check NL is owned by proxy
+		srcs cluster.NodeMap  // expected notifiers
+		errs map[string]error // [node-ID => notifMsg.Err]
+		uuid string           // UUID
+		f    notifCallback    // optional listening-side callback
+		rc   int              // refcount
+		ty   int              // notifMsg.Ty enum (above)
+		tfin atomic.Int64     // timestamp when finished
+		// common info
+		action string
+		bck    []cmn.Bck
+		// ownership
+		owned bool
 	}
 
 	notifListenerBck struct {
 		notifListenerBase
-		nlp *cluster.NameLockPair
 	}
 	notifListenerFromTo struct {
 		notifListenerBase
-		nlpFrom, nlpTo *cluster.NameLockPair
 	}
 	//
 	// notification messages
@@ -119,12 +121,16 @@ var (
 	_ cluster.Slistener = &notifs{}
 )
 
+func newNLB(srcs cluster.NodeMap, action string, bck ...cmn.Bck) *notifListenerBase {
+	return &notifListenerBase{srcs: srcs.Clone(), action: action, bck: bck}
+}
+
 ///////////////////////
 // notifListenerBase //
 ///////////////////////
 
 // is called after all notifiers will have notified OR on failure (err != nil)
-func (nlb *notifListenerBase) callback(notifs *notifs, n notifListener, msg interface{}, err error, nows ...int64) {
+func (nlb *notifListenerBase) callback(notifs *notifs, nl notifListener, msg interface{}, err error, nows ...int64) {
 	if nlb.tfin.CAS(0, 1) {
 		var now int64
 		if len(nows) > 0 {
@@ -132,13 +138,13 @@ func (nlb *notifListenerBase) callback(notifs *notifs, n notifListener, msg inte
 		} else {
 			now = time.Now().UnixNano()
 		}
-		// TODO -- FIXME: cannot be null, must perform async-operation specific cleanup
+		// is optional
 		if nlb.f != nil {
-			nlb.f(n, msg, err) // invoke user-supplied callback and pass user-supplied notifListener
+			nlb.f(nl, msg, err) // invoke user-supplied callback and pass user-supplied notifListener
 		}
 		nlb.tfin.Store(now)
 		notifs.fmu.Lock()
-		notifs.fin[n.UUID()] = n
+		notifs.fin[nl.UUID()] = nl
 		notifs.fmu.Unlock()
 	}
 }
@@ -202,7 +208,6 @@ func (n *notifs) String() string { return notifsName }
 
 // start listening
 func (n *notifs) add(uuid string, nl notifListener) {
-	cmn.Assert(uuid != "")
 	n.Lock()
 	n.m[uuid] = nl
 	nl.setUUID(uuid)

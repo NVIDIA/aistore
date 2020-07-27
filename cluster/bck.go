@@ -23,17 +23,25 @@ type (
 		cmn.Bck
 		Props *cmn.BucketProps
 	}
+	noCopy       struct{}
 	NameLockPair struct {
-		uname string
-		nlc   *nlc
+		noCopy    noCopy
+		uname     string
+		nlc       *nlc
+		exclusive bool
 	}
+)
+
+// interface guard
+var (
+	_ cmn.NLP = &NameLockPair{}
 )
 
 var (
 	bckLocker nameLocker
 )
 
-func InitProxy() {
+func Init() {
 	bckLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	bckLocker.init()
 }
@@ -220,8 +228,8 @@ func (b *Bck) checkAccess(bit int) (err error) {
 // lock/unlock
 //
 
-func (b *Bck) GetNameLockPair() (nlp NameLockPair) {
-	nlp.uname = b.MakeUname("")
+func (b *Bck) GetNameLockPair() (nlp *NameLockPair) {
+	nlp = &NameLockPair{uname: b.MakeUname("")}
 	hash := xxhash.ChecksumString64S(nlp.uname, cmn.MLCG32)
 	idx := int(hash & (cmn.MultiSyncMapCount - 1))
 	nlp.nlc = &bckLocker[idx]
@@ -230,11 +238,26 @@ func (b *Bck) GetNameLockPair() (nlp NameLockPair) {
 
 const nlpTryDuration = 5 * time.Second
 
-func (nlp *NameLockPair) Lock()          { nlp.nlc.Lock(nlp.uname, true) }
-func (nlp *NameLockPair) Unlock()        { nlp.nlc.Unlock(nlp.uname, true) }
-func (nlp *NameLockPair) TryLock() bool  { return nlp.withRetry(nlpTryDuration, true) }
-func (nlp *NameLockPair) TryRLock() bool { return nlp.withRetry(nlpTryDuration, false) }
-func (nlp *NameLockPair) RUnlock()       { nlp.nlc.Unlock(nlp.uname, false) }
+func (nlp *NameLockPair) Lock() {
+	nlp.nlc.Lock(nlp.uname, true)
+	nlp.exclusive = true
+}
+func (nlp *NameLockPair) TryLock() (ok bool) {
+	ok = nlp.withRetry(nlpTryDuration, true)
+	nlp.exclusive = ok
+	return
+}
+
+// TODO: ensure single-time usage (no ref counting!)
+func (nlp *NameLockPair) TryRLock() (ok bool) {
+	ok = nlp.withRetry(nlpTryDuration, false)
+	cmn.Assert(!nlp.exclusive)
+	return
+}
+
+func (nlp *NameLockPair) Unlock() {
+	nlp.nlc.Unlock(nlp.uname, nlp.exclusive)
+}
 
 func (nlp *NameLockPair) withRetry(d time.Duration, exclusive bool) bool {
 	if nlp.nlc.TryLock(nlp.uname, exclusive) {
@@ -249,3 +272,6 @@ func (nlp *NameLockPair) withRetry(d time.Duration, exclusive bool) bool {
 	}
 	return false
 }
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}

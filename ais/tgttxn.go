@@ -134,10 +134,16 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		if err != nil {
 			return err
 		}
+		nlp := c.bck.GetNameLockPair()
+		if !nlp.TryLock() {
+			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
+		}
 		txn := newTxnMakeNCopies(c, curCopies, newCopies)
 		if err := t.transactions.begin(txn); err != nil {
+			nlp.Unlock()
 			return err
 		}
+		txn.nlps = []cmn.NLP{nlp}
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, true /* remove */)
 	case cmn.ActCommit:
@@ -208,10 +214,16 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		if nprops, err = t.validateNprops(c.bck, c.msg); err != nil {
 			return err
 		}
+		nlp := c.bck.GetNameLockPair()
+		if !nlp.TryLock() {
+			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
+		}
 		txn := newTxnSetBucketProps(c, nprops)
 		if err := t.transactions.begin(txn); err != nil {
+			nlp.Unlock()
 			return err
 		}
+		txn.nlps = []cmn.NLP{nlp}
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, true /* remove */)
 	case cmn.ActCommit:
@@ -322,10 +334,22 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if bckTo, err = t.validateBckRenTxn(bckFrom, c.msg); err != nil {
 			return err
 		}
+		nlpFrom := bckFrom.GetNameLockPair()
+		nlpTo := bckTo.GetNameLockPair()
+		if !nlpFrom.TryLock() {
+			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
+		}
+		if !nlpTo.TryLock() {
+			nlpFrom.Unlock()
+			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
+		}
 		txn := newTxnRenameBucket(c, bckFrom, bckTo)
 		if err := t.transactions.begin(txn); err != nil {
+			nlpTo.Unlock()
+			nlpFrom.Unlock()
 			return err
 		}
+		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, true /* remove */)
 	case cmn.ActCommit:
@@ -420,10 +444,22 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 		if bckTo, err = t.validateBckCpTxn(bckFrom, c.msg); err != nil {
 			return err
 		}
+		nlpFrom := bckFrom.GetNameLockPair()
+		nlpTo := bckTo.GetNameLockPair()
+		if !nlpFrom.TryRLock() {
+			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
+		}
+		if !nlpTo.TryLock() {
+			nlpFrom.Unlock()
+			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
+		}
 		txn := newTxnCopyBucket(c, bckFrom, bckTo)
 		if err := t.transactions.begin(txn); err != nil {
+			nlpTo.Unlock()
+			nlpFrom.Unlock()
 			return err
 		}
+		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, true /* remove */)
 	case cmn.ActCommit:
@@ -485,11 +521,15 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 	}
 	switch c.phase {
 	case cmn.ActBegin:
-		err := t.validateEcEncode(c.bck, c.msg)
-		if err == nil {
-			_, err = xaction.Registry.RenewECEncodeXact(t, c.bck, c.uuid, cmn.ActBegin)
+		if err := t.validateEcEncode(c.bck, c.msg); err != nil {
+			return err
 		}
-		if err != nil {
+		nlp := c.bck.GetNameLockPair()
+		if !nlp.TryLock() {
+			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
+		}
+		nlp.Unlock() // TODO -- FIXME: introduce txn, unlock when done
+		if _, err := xaction.Registry.RenewECEncodeXact(t, c.bck, c.uuid, cmn.ActBegin); err != nil {
 			return err
 		}
 	case cmn.ActAbort:
