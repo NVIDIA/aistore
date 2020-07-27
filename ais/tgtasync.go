@@ -85,7 +85,17 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 			var xactList *bcklist.BckListTask
 			xactList, err = xaction.Registry.RenewBckListNewXact(t, bck, smsg.UUID, smsg)
 			if err == nil {
+				xactList.IncPending()
 				_, status, err = t.waitBckListResp(xactList, taskAction, smsg)
+			}
+			// Double check that xaction has not gone before starting page read.
+			// Restart xaction if needed.
+			if err == bcklist.ErrGone {
+				xactList, err = xaction.Registry.RenewBckListNewXact(t, bck, smsg.UUID, smsg)
+				if err == nil {
+					xactList.IncPending()
+					_, status, err = t.waitBckListResp(xactList, taskAction, smsg)
+				}
 			}
 		case cmn.ActSummaryBucket:
 			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, smsg)
@@ -122,6 +132,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 			return false
 		}
 
+		xactList.IncPending()
 		bckList, status, err := t.waitBckListResp(xactList, taskAction, smsg)
 		if err != nil {
 			if silent {

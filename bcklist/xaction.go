@@ -65,6 +65,7 @@ const (
 
 var (
 	errStopped = errors.New("stopped")
+	ErrGone    = errors.New("gone")
 )
 
 func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck,
@@ -88,6 +89,8 @@ func (r *BckListTask) String() string {
 
 func (r *BckListTask) Do(action string, msg *cmn.SelectMsg, ch chan *BckListResp) {
 	if r.Finished() {
+		ch <- &BckListResp{Err: ErrGone}
+		close(ch)
 		return
 	}
 	req := &bckListReq{
@@ -168,13 +171,13 @@ func (r *BckListTask) stopWalk() {
 func (r *BckListTask) Stop(err error) {
 	r.XactDemandBase.Stop()
 	r.Finish()
+	close(r.workCh)
 	r.stopWalk()
 	if err == nil {
 		glog.Infoln(r.String())
 	} else {
 		glog.Errorf("%s: stopped with err %v", r, err)
 	}
-	// TODO -- FIXME: close(r.workCh) vs Do()
 }
 
 func (r *BckListTask) dispatchRequest(action string) *BckListResp {
@@ -182,7 +185,6 @@ func (r *BckListTask) dispatchRequest(action string) *BckListResp {
 	marker := r.msg.PageMarker
 	switch action {
 	case cmn.TaskStart:
-		r.IncPending() // DecPending is done inside nextPage
 		if err := r.genNextPage(marker, cnt); err != nil {
 			return &BckListResp{
 				Status: http.StatusInternalServerError,
@@ -191,7 +193,6 @@ func (r *BckListTask) dispatchRequest(action string) *BckListResp {
 		}
 		return &BckListResp{Status: http.StatusAccepted}
 	case cmn.TaskStatus, cmn.TaskResult:
-		r.IncPending()
 		defer r.DecPending()
 		if r.pageInProgress() {
 			return &BckListResp{Status: http.StatusAccepted}
@@ -222,6 +223,7 @@ func (r *BckListTask) dispatchRequest(action string) *BckListResp {
 			Err:     err,
 		}
 	default:
+		r.DecPending()
 		return &BckListResp{
 			Status: http.StatusBadRequest,
 			Err:    fmt.Errorf("%s: invalid action %s", r, action),
@@ -350,7 +352,9 @@ func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
 	return &cmn.BucketList{Entries: list, UUID: r.msg.UUID}, nil
 }
 
-// TODO: support arbitrary page marker (do restart in this case)
+// TODO: support arbitrary page marker (do restart in this case).
+// genNextPage calls DecPending either immediately on error or inside
+// a goroutine if some work must be done.
 func (r *BckListTask) genNextPage(marker string, cnt int) error {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: marker [%s]", r, r.msg.PageMarker)
