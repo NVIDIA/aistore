@@ -30,8 +30,15 @@ stages:
   - test-short
   - test-long
 
+.default_ref_template: &default_ref_def
+  only:
+    - master
+    - merge_requests
+    - schedules
+
 build:linux:
   stage: build
+  <<: *default_ref_def
   script:
     - AIS_CLD_PROVIDER="ais" make node
     - AIS_CLD_PROVIDER="aws" make node
@@ -45,6 +52,7 @@ build:linux:
 
 lint:linux:
   stage: build
+  <<: *default_ref_def
   script:
     - pip3 install yapf pylint
     - make lint
@@ -53,6 +61,7 @@ lint:linux:
 
 test:short:
   stage: test-short
+  <<: *default_ref_def
   script:
     - *aws_cli
     - make aisfs cli
@@ -130,9 +139,10 @@ test:bench:
     - make test-bench
 
 test:kube:
-  stage: test-long
-  only:
-    - schedules
+  stage: test-short
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedules"'
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*transformations.*/' # Add more labels if needed in the future
   variables:
     AIS_ENDPOINT: "localhost:8080"
     AIS_NODE_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
