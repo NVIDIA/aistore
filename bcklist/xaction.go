@@ -292,11 +292,14 @@ func (r *BckListTask) nextPageCloud(marker string, cnt int) {
 
 	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.remoteBck, r.msg)
 	bckList, err := walk.CloudObjPage()
-	r.pageError = err
-	if bckList.PageMarker == "" {
-		r.walkDone = true
+	if err != nil {
+		r.pageError = err
+	} else {
+		if bckList.PageMarker == "" {
+			r.walkDone = true
+		}
+		r.lastPage = append(r.lastPage, bckList.Entries...)
 	}
-	r.lastPage = append(r.lastPage, bckList.Entries...)
 	if !r.inProgress.CAS(true, false) {
 		cmn.Assert(false)
 	}

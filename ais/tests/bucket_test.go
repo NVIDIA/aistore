@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
@@ -394,6 +395,275 @@ func TestCloudListObjectVersions(t *testing.T) {
 		}
 		wg.Wait()
 	}
+}
+
+// Minimalistic list objects test to check that everything works correctly.
+func TestListObjectsSmoke(t *testing.T) {
+	var (
+		baseParams = tutils.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			num:      100,
+			fileSize: 5 * cmn.KiB,
+		}
+
+		iters = 5
+		msg   = &cmn.SelectMsg{PageSize: 10}
+	)
+
+	m.init()
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	m.puts()
+
+	// Run couple iterations to see that we get deterministic results.
+	tutils.Logf("run %d list objects iterations\n", iters)
+	for iter := 0; iter < iters; iter++ {
+		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(
+			t, len(objList.Entries) == m.num,
+			"unexpected number of entries (got: %d, expected: %d) on iter: %d",
+			len(objList.Entries), m.num, iter,
+		)
+	}
+}
+
+func TestListObjectsProps(t *testing.T) {
+	var (
+		baseParams = tutils.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			num:      rand.Intn(5000) + 1000,
+			fileSize: 5 * cmn.KiB,
+		}
+	)
+
+	m.init()
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	m.puts()
+
+	tutils.Logln("asking for default props...")
+
+	msg := &cmn.SelectMsg{
+		PageSize: 100,
+		Props:    strings.Join(cmn.GetPropsDefault, ","),
+	}
+	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(
+		t, len(objList.Entries) == m.num,
+		"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+	)
+	for _, entry := range objList.Entries {
+		tassert.Errorf(t, entry.Name != "", "name is not set")
+		tassert.Errorf(t, entry.Size != 0, "size is not set")
+		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+		tassert.Errorf(t, entry.Atime != "", "atime is not set")
+		tassert.Errorf(t, entry.Version != "", "version is not set")
+
+		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+		tassert.Errorf(t, entry.Copies == 0, "copies is set")
+	}
+
+	tutils.Logln("trying again with different subset of props...")
+
+	msg = &cmn.SelectMsg{
+		PageSize: 100,
+		Props:    strings.Join([]string{cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies}, ","),
+	}
+	objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(
+		t, len(objList.Entries) == m.num,
+		"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+	)
+	for _, entry := range objList.Entries {
+		tassert.Errorf(t, entry.Name != "", "name is not set")
+		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+		tassert.Errorf(t, entry.Version != "", "version is not set")
+		tassert.Errorf(t, entry.Copies == 1, "copies is not set")
+
+		tassert.Errorf(t, entry.Size == 0, "size is set")
+		tassert.Errorf(t, entry.Atime == "", "atime is set")
+		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+	}
+}
+
+// Runs cloud list objects with `cached == true`.
+func TestListObjectsCloudCached(t *testing.T) {
+	var (
+		baseParams = tutils.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			bck:      cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
+			num:      rand.Intn(100) + 10,
+			fileSize: 5 * cmn.KiB,
+		}
+	)
+
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
+	t.Skip("not working....")
+
+	m.init()
+
+	m.cloudPuts(false /*evict*/)
+	defer m.del()
+
+	msg := &cmn.SelectMsg{
+		PageSize: 10,
+		Cached:   true,
+	}
+	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(
+		t, len(objList.Entries) == m.num,
+		"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+	)
+	for _, entry := range objList.Entries {
+		tassert.Errorf(t, entry.Name != "", "name is not set")
+		tassert.Errorf(t, entry.Size != 0, "size is not set")
+		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+		tassert.Errorf(t, entry.Atime != "", "atime is not set")
+		tassert.Errorf(t, entry.Version != "", "version is not set")
+
+		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+		tassert.Errorf(t, entry.Copies == 0, "copies is set")
+	}
+}
+
+// Runs cloud list objects with subset of all props.
+func TestListObjectsCloudProps(t *testing.T) {
+	var (
+		baseParams = tutils.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			bck:      cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
+			num:      rand.Intn(100) + 10,
+			fileSize: 5 * cmn.KiB,
+		}
+	)
+
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
+	t.Skip("not working....")
+
+	m.init()
+
+	m.cloudPuts(false /*evict*/)
+	defer m.del()
+
+	msg := &cmn.SelectMsg{
+		PageSize: 10,
+		Props:    strings.Join([]string{cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies}, ","),
+	}
+	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(
+		t, len(objList.Entries) == m.num,
+		"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+	)
+	for _, entry := range objList.Entries {
+		tassert.Errorf(t, entry.Name != "", "name is not set")
+		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+		tassert.Errorf(t, entry.Version != "", "version is not set")
+		tassert.Errorf(t, entry.Copies == 1, "copies is not set")
+
+		tassert.Errorf(t, entry.Size == 0, "size is set")
+		tassert.Errorf(t, entry.Atime == "", "atime is set")
+		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+	}
+}
+
+// Runs standard list objects but selects new random proxy every page.
+func TestListObjectsRandProxy(t *testing.T) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		var (
+			m = ioContext{
+				t:        t,
+				bck:      bck.Bck,
+				num:      rand.Intn(5000) + 1000,
+				fileSize: 5 * cmn.KiB,
+			}
+
+			totalCnt = 0
+			msg      = &cmn.SelectMsg{PageSize: 100}
+		)
+
+		if !bck.IsAIS() {
+			t.Skip("not working...")
+			m.num = rand.Intn(300) + 100
+		}
+
+		m.init()
+
+		m.puts()
+		defer m.del()
+
+		for {
+			baseParams := tutils.BaseAPIParams()
+			objList, err := api.ListObjectsPage(baseParams, m.bck, msg)
+			tassert.CheckFatal(t, err)
+			totalCnt += len(objList.Entries)
+			if objList.PageMarker == "" {
+				break
+			}
+		}
+		tassert.Fatalf(
+			t, totalCnt == m.num,
+			"unexpected total number of objects (got: %d, expected: %d)", totalCnt, m.num,
+		)
+	})
+}
+
+// Runs standard list objects but changes the page size every request.
+func TestListObjectsRandPageSize(t *testing.T) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		var (
+			baseParams = tutils.BaseAPIParams()
+			m          = ioContext{
+				t:        t,
+				bck:      bck.Bck,
+				num:      rand.Intn(5000) + 1000,
+				fileSize: 5 * cmn.KiB,
+			}
+
+			totalCnt = 0
+			msg      = &cmn.SelectMsg{}
+		)
+
+		if !bck.IsAIS() {
+			t.Skip("not working...")
+			m.num = rand.Intn(300) + 100
+		}
+
+		m.init()
+
+		m.puts()
+		defer m.del()
+
+		for {
+			msg.PageSize = uint(rand.Intn(100) + 50)
+
+			objList, err := api.ListObjectsPage(baseParams, m.bck, msg)
+			tassert.CheckFatal(t, err)
+			totalCnt += len(objList.Entries)
+			if objList.PageMarker == "" {
+				break
+			}
+			tassert.Errorf(
+				t, uint(len(objList.Entries)) == msg.PageSize,
+				"unexpected size of the page returned (got: %d, expected: %d)",
+				len(objList.Entries), msg.PageSize,
+			)
+		}
+		tassert.Fatalf(
+			t, totalCnt == m.num,
+			"unexpected total number of objects (got: %d, expected: %d)", totalCnt, m.num,
+		)
+	})
 }
 
 func TestListObjects(t *testing.T) {
@@ -781,7 +1051,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 				m.cloudPuts(true /*evict*/)
-				defer m.cloudDelete()
+				defer m.del()
 
 				if test.cached {
 					m.cloudPrefetch(cacheSize)
@@ -1135,7 +1405,7 @@ func TestCloudMirror(t *testing.T) {
 
 	m.saveClusterState()
 	m.cloudPuts(true /*evict*/)
-	defer m.cloudDelete()
+	defer m.del()
 
 	// enable mirror
 	_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
@@ -1593,7 +1863,7 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			} else if bckTest.IsCloud(cmn.AnyCloud) {
 				srcm.cloudPuts(false /*evict*/)
-				defer srcm.cloudDelete()
+				defer srcm.del()
 
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
@@ -1867,7 +2137,7 @@ func TestBackendBucket(t *testing.T) {
 	cloudBck.Provider = p.Provider
 
 	m.cloudPuts(false /*evict*/)
-	defer m.cloudDelete()
+	defer m.del()
 
 	cloudObjList, err := api.ListObjects(baseParams, cloudBck, nil, 0)
 	tassert.CheckFatal(t, err)

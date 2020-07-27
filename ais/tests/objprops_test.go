@@ -527,7 +527,7 @@ func TestObjProps(t *testing.T) {
 
 			if test.cloud {
 				m.cloudPuts(test.evict)
-				defer m.cloudDelete()
+				defer m.del()
 
 				defer api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{

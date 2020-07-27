@@ -330,13 +330,12 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 	wg.Wait()
 }
 
-func (m *ioContext) cloudDelete(cnt ...int) {
+func (m *ioContext) del(cnt ...int) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{}
 	)
 
-	cmn.Assert(m.bck.Provider == cmn.AnyCloud)
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
@@ -345,7 +344,7 @@ func (m *ioContext) cloudDelete(cnt ...int) {
 		toRemove = toRemove[:cnt[0]]
 	}
 
-	tutils.Logf("deleting %d cloud objects...\n", len(toRemove))
+	tutils.Logf("deleting %d objects...\n", len(toRemove))
 
 	wg := cmn.NewLimitedWaitGroup(40)
 	for _, obj := range toRemove {

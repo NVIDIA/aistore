@@ -1009,7 +1009,7 @@ func TestDownloadOverrideObjectCloud(t *testing.T) {
 
 	m.saveClusterState()
 	m.cloudPuts(false /*evict*/)
-	defer m.cloudDelete()
+	defer m.del()
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -1075,7 +1075,7 @@ func TestDownloadSkipObjectCloud(t *testing.T) {
 
 	m.saveClusterState()
 	m.cloudPuts(false /*evict*/)
-	defer m.cloudDelete()
+	defer m.del()
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -1118,7 +1118,7 @@ func TestDownloadSync(t *testing.T) {
 
 	m.saveClusterState()
 	m.cloudPuts(false /*evict*/)
-	defer m.cloudDelete()
+	defer m.del()
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -1130,7 +1130,7 @@ func TestDownloadSync(t *testing.T) {
 	downloadObjectCloud(t, dlBody, m.num, 0)
 	downloadObjectCloud(t, dlBody, m.num, m.num)
 
-	m.cloudDelete(objsToDelete)
+	m.del(objsToDelete)
 
 	// Check that only deleted objects are replaced (deleted in this case).
 	tutils.Logln("2. re-syncing cloud bucket...")
@@ -1149,7 +1149,7 @@ func TestDownloadSync(t *testing.T) {
 
 	tutils.Logln("5. re-putting the objects and deleting some of them...")
 	m.cloudRePuts(false /*evict*/)
-	m.cloudDelete(objsToDelete)
+	m.del(objsToDelete)
 
 	// Check that all objects have been replaced.
 	tutils.Logln("6. re-syncing cloud bucket...")
