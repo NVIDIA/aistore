@@ -53,8 +53,8 @@ type (
 		Tmap         NodeMap       `json:"tmap"`                    // targetID -> targetInfo
 		Pmap         NodeMap       `json:"pmap"`                    // proxyID -> proxyInfo
 		NonElects    cmn.SimpleKVs `json:"non_electable,omitempty"` // non-electable proxies: DaemonID => [info]
+		IC           cmn.SimpleKVs `json:"ic"`                      // cluster information center: DaemonID => [info]
 		Primary      *Snode        `json:"proxy_si"`                // (json tag preserved for back. compat.)
-		IC           []*Snode      `json:"ic"`                      // cluster information center
 		Version      int64         `json:"version,string"`          // version
 		UUID         string        `json:"uuid"`                    // UUID - assigned at creation time
 		CreationTime string        `json:"creation_time"`           // creation time

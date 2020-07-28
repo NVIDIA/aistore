@@ -16,8 +16,13 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
+)
+
+const (
+	numIC = 3 // desirable gateway count in the Information Center
 )
 
 // NOTE: to access Snode, Smap and related structures, external
@@ -119,6 +124,39 @@ func (m *smapX) init(tsize, psize, elsize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
 	m.Pmap = make(cluster.NodeMap, psize)
 	m.NonElects = make(cmn.SimpleKVs, elsize)
+	m.IC = make(cmn.SimpleKVs, numIC)
+}
+
+func (m *smapX) staffIC(psi *cluster.Snode) {
+	if !m.isIC(psi) {
+		m.addIC(psi)
+		if len(m.IC) >= numIC {
+			return
+		}
+	}
+	// try to select the missing members - upto numIC - if available
+	for pid, si := range m.Pmap {
+		if _, ok := m.NonElects[pid]; ok {
+			continue
+		}
+		if !m.isIC(si) {
+			m.IC[pid] = ""
+			m.addIC(psi)
+			if len(m.IC) >= numIC {
+				break
+			}
+		}
+	}
+}
+
+func (m *smapX) addIC(psi *cluster.Snode) {
+	debug.Assert(!m.isIC(psi), psi.String())
+	m.IC[psi.ID()] = ""
+}
+
+func (m *smapX) isIC(psi *cluster.Snode) (ok bool) {
+	_, ok = m.IC[psi.ID()]
+	return
 }
 
 func (m *smapX) tag() string    { return revsSmapTag }
@@ -199,6 +237,7 @@ func (m *smapX) delProxy(pid string) {
 	}
 	delete(m.Pmap, pid)
 	delete(m.NonElects, pid)
+	delete(m.IC, pid)
 	m.Version++
 }
 
@@ -248,6 +287,9 @@ func (m *smapX) deepCopy(dst *smapX) {
 	}
 	for id, v := range m.NonElects {
 		dst.NonElects[id] = v
+	}
+	for id, v := range m.IC {
+		dst.IC[id] = v
 	}
 }
 

@@ -41,9 +41,6 @@ func (p *proxyrunner) bootstrap() {
 	// 2. make the preliminary/primary decision
 	if !loaded {
 		smap = nil
-	} else if len(smap.IC) == 0 { // pre-IC version
-		smap.IC = make([]*cluster.Snode, 1, 3)
-		smap.IC[0] = p.si
 	}
 	pid, primary = p.determineRole(smap)
 
@@ -259,10 +256,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		p.owner.smap.put(clone)
 		smap = clone
 	}
-	// initiate IC if not present
-	if len(smap.IC) == 0 {
-		smap.IC = make([]*cluster.Snode, 1, 3)
-		smap.IC[0] = p.si
+	// try to startup with a fully staffed IC
+	if len(smap.IC) < numIC {
+		smap.staffIC(p.si)
 		smap.Version++
 		p.owner.smap.put(smap)
 	}

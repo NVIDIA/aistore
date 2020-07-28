@@ -2351,7 +2351,6 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 	err := p.owner.smap.modify(
 		func(clone *smapX) error {
-			var selfIC bool
 			if !clone.isPresent(p.si) {
 				cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+clone.pp())
 			}
@@ -2363,18 +2362,10 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 
 			clone.Primary = p.si
 			clone.Version += 100
-			for i, psi := range clone.IC {
-				if psi.ID() == proxyIDToRemove {
-					if i < len(clone.IC)-1 {
-						copy(clone.IC[i:], clone.IC[i+1:])
-					}
-					clone.IC = clone.IC[:len(clone.IC)-1]
-				} else if psi.ID() == p.si.ID() {
-					selfIC = true
-				}
-			}
-			if !selfIC {
-				clone.IC = append(clone.IC, p.si)
+			delete(clone.IC, proxyIDToRemove)
+			if len(clone.IC) < numIC && !clone.isIC(p.si) {
+				clone.addIC(p.si)
+				// TODO -- FIXME: bring newly added member of the IC up to speed - here and elsewhere
 			}
 			return nil
 		},
@@ -2941,6 +2932,9 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 				aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
 				notifyPairs := revsPair{clone, aisMsg}
 				_ = p.metasyncer.notify(true, notifyPairs)
+			} else if !exists && !nonElectable && len(clone.IC) < numIC {
+				clone.addIC(nsi)
+				// TODO -- FIXME: bring newly added IC member up to speed
 			}
 			return nil
 		},

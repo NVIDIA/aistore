@@ -7,7 +7,6 @@ package ais
 import (
 	"bytes"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
@@ -62,9 +61,13 @@ func (p *proxyrunner) redirectToOwner(w http.ResponseWriter, r *http.Request, uu
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
 	}
 
-	// Pick random owner and forward the request.
-	owner := smap.IC[rand.Intn(len(smap.IC))]
-	p.reverseNodeRequest(w, r, owner)
+	// Pick a random owner and forward the request.
+	cmn.Assert(len(smap.IC) > 0)
+	for pid := range smap.IC {
+		owner := smap.GetProxy(pid)
+		p.reverseNodeRequest(w, r, owner)
+		break
+	}
 	return true
 }
 
@@ -112,8 +115,10 @@ func (p *proxyrunner) registerIC(uuid string, nl notifListener, smap *smapX, msg
 
 func (p *proxyrunner) bcastListenIC(uuid string, nl notifListener, smap *smapX, msg interface{}) (err error) {
 	nodes := make(cluster.NodeMap)
-	for _, psi := range smap.IC {
-		if psi.ID() != p.si.ID() {
+	for pid := range smap.IC {
+		if pid != p.si.ID() {
+			psi := smap.GetProxy(pid)
+			cmn.Assert(psi != nil)
 			nodes.Add(psi)
 		}
 	}

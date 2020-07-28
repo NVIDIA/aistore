@@ -602,17 +602,15 @@ func (p *proxyrunner) whichIC(smap *smapX, queries ...url.Values) (selfIC, other
 		q = queries[0]
 	}
 	cmn.Assert(len(smap.IC) > 0)
-	for _, psi := range smap.IC {
-		if q != nil {
-			q.Add(cmn.URLParamNotifyMe, psi.ID())
-		}
-		if psi.ID() == p.si.ID() {
-			selfIC = true
-		} else {
-			otherIC = true
-		}
-	}
+	selfIC = smap.isIC(p.si)
+	otherIC = len(smap.IC) > 1
 	cmn.Assert(selfIC || otherIC)
+	if q == nil {
+		return
+	}
+	for pid := range smap.IC {
+		q.Add(cmn.URLParamNotifyMe, pid)
+	}
 	return
 }
 

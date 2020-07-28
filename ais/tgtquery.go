@@ -74,11 +74,10 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d := make([]string, len(smap.IC))
-	for idx, node := range smap.IC {
-		d[idx] = node.DaemonID
+	d := make([]string, 0, len(smap.IC))
+	for pid := range smap.IC {
+		d = append(d, pid)
 	}
-
 	xact.AddNotif(&cmn.NotifXact{
 		NotifBase: cmn.NotifBase{
 			When: cmn.UponTerm,
