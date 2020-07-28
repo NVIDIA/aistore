@@ -25,8 +25,8 @@ type (
 	}
 )
 
-func newQueryState(smap *cluster.Smap, workersCnt uint) (*queryState, error) {
-	if workersCnt != 0 && workersCnt < uint(smap.CountTargets()) {
+func newQueryState(smap *cluster.Smap, msg *query.InitMsg) (*queryState, error) {
+	if msg.WorkersCnt != 0 && msg.WorkersCnt < uint(smap.CountTargets()) {
 		// FIXME: this should not be necessary. Proxy could know that if worker's
 		//  target is done, worker should be redirected to the next not-done target.
 		//  However, it should be done once query is able to keep more detailed
@@ -38,13 +38,9 @@ func newQueryState(smap *cluster.Smap, workersCnt uint) (*queryState, error) {
 		targets = append(targets, t)
 	}
 	return &queryState{
-		notifListenerBase: notifListenerBase{
-			srcs: smap.Tmap.Clone(),
-			f:    func(n notifListener, msg interface{}, err error) {},
-			ty:   notifXact,
-		},
-		workersCnt: workersCnt,
-		targets:    targets,
+		notifListenerBase: *newNLB(smap.Tmap, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+		workersCnt:        msg.WorkersCnt,
+		targets:           targets,
 	}, nil
 }
 
@@ -75,12 +71,8 @@ func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
-	// FIXME: Hack to pass the tests. Should be fixed.
 	smap := p.owner.smap.get()
-	if !smap.isPrimary(p.si) {
-		p.reverseNodeRequest(w, r, smap.Primary)
-		return
-	}
+
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Query, cmn.Init); err != nil {
 		return
 	}
@@ -116,12 +108,12 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	state, err := newQueryState(&smap.Smap, msg.WorkersCnt)
+	state, err := newQueryState(&smap.Smap, msg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	p.registerIC(handle, state, smap)
+	p.registerIC(handle, state, smap, msg)
 
 	w.Write([]byte(handle))
 }

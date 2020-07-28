@@ -64,6 +64,8 @@ type (
 		notifiers() cluster.NodeMap
 		incRC() int
 		notifTy() int
+		kind() string
+		bcks() []cmn.Bck
 		addErr(string /*sid*/, error)
 		err() error
 		UUID() string
@@ -109,9 +111,13 @@ type (
 	}
 	// receiver to start listening
 	notifListenMsg struct {
-		UUID string   `json:"UUID"`
-		Ty   int      `json:"Ty"`
-		Srcs []string `json:"Srcs"` // slice of DaemonIDs
+		UUID string   `json:"uuid"`
+		Ty   int      `json:"ty"`
+		Srcs []string `json:"srcs"` // slice of DaemonIDs
+		// common
+		Action string      `json:"action"`
+		Bck    []cmn.Bck   `json:"bck"`
+		Ext    interface{} `json:"ext"`
 	}
 )
 
@@ -191,6 +197,8 @@ func (nlb *notifListenerBase) String() string {
 
 func (nlb *notifListenerBase) isOwned() bool       { return nlb.owned }
 func (nlb *notifListenerBase) setOwned(owned bool) { nlb.owned = owned }
+func (nlb *notifListenerBase) kind() string        { return nlb.action }
+func (nlb *notifListenerBase) bcks() []cmn.Bck     { return nlb.bck }
 
 ////////////
 // notifs //
@@ -535,10 +543,12 @@ func (msg *notifMsg) String() string {
 
 // start listening
 // TODO: add bucket and kind = cmn.Act*
-func nlMsgFromListener(nl notifListener) notifListenMsg {
-	n := notifListenMsg{
-		UUID: nl.UUID(),
-		Ty:   nl.notifTy(),
+func nlMsgFromListener(nl notifListener) *notifListenMsg {
+	n := &notifListenMsg{
+		UUID:   nl.UUID(),
+		Ty:     nl.notifTy(),
+		Action: nl.kind(),
+		Bck:    nl.bcks(),
 	}
 	for daeID := range nl.notifiers() {
 		n.Srcs = append(n.Srcs, daeID)

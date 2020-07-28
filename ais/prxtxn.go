@@ -188,7 +188,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 
 	// 5. IC
 	nl := &notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-	p.registerIC(c.uuid, nl, c.smap, c.req.Query)
+	p.registerIC(c.uuid, nl, c.smap, nil, c.req.Query)
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -280,7 +280,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	// 5. if remirror|re-EC|TBD-storage-svc
 	if remirror || reec {
 		nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-		p.registerIC(c.uuid, &nl, c.smap, c.req.Query)
+		p.registerIC(c.uuid, &nl, c.smap, nil, c.req.Query)
 		xactID = c.uuid
 	}
 
@@ -366,7 +366,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 			// 5. IC
 			nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
-			p.registerIC(xactID, &nl, c.smap, c.req.Query)
+			p.registerIC(xactID, &nl, c.smap, nil, c.req.Query)
 
 			// 6. commit
 			xactID = c.uuid
@@ -445,7 +445,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 
 	// 5. IC
 	nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
-	p.registerIC(c.uuid, &nl, c.smap, c.req.Query)
+	p.registerIC(c.uuid, &nl, c.smap, nil, c.req.Query)
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -549,7 +549,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 
 	// 5. IC
 	nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-	p.registerIC(c.uuid, &nl, c.smap, c.req.Query)
+	p.registerIC(c.uuid, &nl, c.smap, nil, c.req.Query)
 
 	// 6. commit
 	unlockUpon = true

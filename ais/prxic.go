@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/query"
 )
 
 // Information Center (IC) is a group of proxies that take care of ownership of
@@ -97,32 +98,36 @@ func (p *proxyrunner) writeStatus(w http.ResponseWriter, r *http.Request, uuid s
 	w.Write(cmn.MustMarshal(nl.finished()))
 }
 
-func (p *proxyrunner) registerIC(uuid string, nl notifListener, smap *smapX, queries ...url.Values) {
+func (p *proxyrunner) registerIC(uuid string, nl notifListener, smap *smapX, msg interface{}, queries ...url.Values) {
 	selfIC, otherIC := p.whichIC(smap, queries...)
 	if selfIC {
 		nl.setOwned(true)
 		p.notifs.add(uuid, nl)
 	}
 	if otherIC {
-		_ = p.bcastListenIC(uuid, nl, smap)
+		_ = p.bcastListenIC(uuid, nl, smap, msg)
 		// TODO -- FIXME: handle errors, here and elsewhere
 	}
 }
 
-func (p *proxyrunner) bcastListenIC(uuid string, nl notifListener, smap *smapX) (err error) {
+func (p *proxyrunner) bcastListenIC(uuid string, nl notifListener, smap *smapX, msg interface{}) (err error) {
 	nodes := make(cluster.NodeMap)
 	for _, psi := range smap.IC {
 		if psi.ID() != p.si.ID() {
 			nodes.Add(psi)
 		}
 	}
-	msg := nlMsgFromListener(nl)
-	msg.UUID = uuid
+	nlMsg := nlMsgFromListener(nl)
+	nlMsg.UUID = uuid
+	if msg != nil {
+		nlMsg.Ext = msg
+	}
+
 	cmn.Assert(len(nodes) > 0)
 	results := p.bcast(bcastArgs{
 		req: cmn.ReqArgs{Method: http.MethodPost,
 			Path: cmn.URLPath(cmn.Version, cmn.IC),
-			Body: cmn.MustMarshal(msg)},
+			Body: cmn.MustMarshal(nlMsg)},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 		nodes:   []cluster.NodeMap{nodes},
@@ -155,13 +160,29 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cmn.Assert(msg.Ty == notifXact) // TODO: support other notification types
-		nl := &notifListenerBase{owned: true}
-		for _, sid := range msg.Srcs {
-			if node, ok := smap.Tmap[sid]; ok {
-				nl.srcs.Add(node)
+		switch msg.Action {
+		case cmn.ActQueryObjects:
+			initMsg := query.InitMsg{}
+			if err := cmn.MorphMarshal(msg.Ext, &initMsg); err != nil {
+				p.invalmsghdlrf(w, r, "%s: invalid msg %+v", msg.Action, msg.Ext)
+				return
 			}
+			nl, err := newQueryState(&smap.Smap, &initMsg)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			nl.owned = true
+			p.notifs.add(msg.UUID, nl)
+		default:
+			nl := &notifListenerBase{owned: true}
+			for _, sid := range msg.Srcs {
+				if node, ok := smap.Tmap[sid]; ok {
+					nl.srcs.Add(node)
+				}
+			}
+			p.notifs.add(msg.UUID, nl)
 		}
-		p.notifs.add(msg.UUID, nl)
 	default:
 		cmn.Assert(false)
 	}

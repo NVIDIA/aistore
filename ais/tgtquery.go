@@ -40,8 +40,8 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		handle = r.Header.Get(cmn.HeaderHandle) // TODO: should it be from header or from body?
-		owner  = r.Header.Get(cmn.HeaderCallerID)
 	)
+	smap := t.owner.smap.get()
 	msg := &query.InitMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -74,10 +74,15 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	d := make([]string, len(smap.IC))
+	for idx, node := range smap.IC {
+		d[idx] = node.DaemonID
+	}
+
 	xact.AddNotif(&cmn.NotifXact{
 		NotifBase: cmn.NotifBase{
 			When: cmn.UponTerm,
-			Dsts: []string{owner},
+			Dsts: d,
 			F:    t.xactCallerNotify,
 		},
 	})
