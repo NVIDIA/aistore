@@ -11,10 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-const (
-	initialBucketListSize = 128
-)
-
 func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {
 	if v := ctx.Value(cmn.CtxReadWrapper); v != nil {
 		return v.(cmn.ReadWrapperFunc)(r)

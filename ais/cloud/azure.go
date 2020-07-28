@@ -262,7 +262,7 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	if resp.StatusCode() >= http.StatusBadRequest {
 		return nil, fmt.Errorf("failed to list objects %q", cloudBck.Name), resp.StatusCode()
 	}
-	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
+	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(resp.Segment.BlobItems))}
 	for _, blob := range resp.Segment.BlobItems {
 		entry := &cmn.BucketEntry{Name: blob.Name}
 		if blob.Properties.ContentLength != nil && strings.Contains(msg.Props, cmn.GetPropsSize) {
@@ -282,8 +282,7 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		bckList.Entries = append(bckList.Entries, entry)
 	}
 	if resp.NextMarker.Val != nil {
-		msg.PageMarker = *resp.NextMarker.Val
-		bckList.PageMarker = msg.PageMarker
+		bckList.PageMarker = *resp.NextMarker.Val
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[list_bucket] count %d(marker: %s)", len(bckList.Entries), bckList.PageMarker)

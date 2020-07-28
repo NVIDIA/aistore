@@ -118,33 +118,32 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		return
 	}
 	var (
-		query     *storage.Query
-		pageToken string
-		h         = cmn.CloudHelpers.Google
-		cloudBck  = bck.CloudBck()
+		query    *storage.Query
+		h        = cmn.CloudHelpers.Google
+		cloudBck = bck.CloudBck()
 	)
 
 	if msg.Prefix != "" {
 		query = &storage.Query{Prefix: msg.Prefix}
 	}
-	if msg.PageMarker != "" {
-		pageToken = msg.PageMarker
-	}
 
-	it := gcpClient.Bucket(cloudBck.Name).Objects(gctx, query)
 	pageSize := gcpPageSize
 	if msg.PageSize != 0 {
 		pageSize = msg.PageSize
 	}
-	pager := iterator.NewPager(it, int(pageSize), pageToken)
-	objs := make([]*storage.ObjectAttrs, 0)
+
+	var (
+		it    = gcpClient.Bucket(cloudBck.Name).Objects(gctx, query)
+		pager = iterator.NewPager(it, int(pageSize), msg.PageMarker)
+		objs  = make([]*storage.ObjectAttrs, 0, pageSize)
+	)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {
 		err, errCode = gcpp.gcpErrorToAISError(err, cloudBck)
 		return
 	}
 
-	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
+	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(objs))}
 	bckList.PageMarker = nextPageToken
 	for _, attrs := range objs {
 		entry := &cmn.BucketEntry{}

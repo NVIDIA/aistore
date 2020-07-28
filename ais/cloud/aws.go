@@ -112,7 +112,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 		return
 	}
 
-	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
+	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(resp.Contents))}
 	for _, key := range resp.Contents {
 		entry := &cmn.BucketEntry{}
 		entry.Name = *(key.Key)
@@ -145,7 +145,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 	// greater than object page marker
 	// Page is limited with 500+ items, so reading them is slow
 	if strings.Contains(msg.Props, cmn.GetPropsVersion) {
-		versions := make(map[string]string, initialBucketListSize)
+		versions := make(map[string]string, len(bckList.Entries))
 		keyMarker := msg.PageMarker
 
 		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
