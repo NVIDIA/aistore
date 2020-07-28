@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/tinylib/msgp/msgp"
 )
 
 // List objects returns a list of objects in a bucket (with optional prefix)
@@ -145,7 +146,11 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 		if taskAction == cmn.TaskResult {
 			cmn.Assert(bckList.UUID != "")
-			return t.writeJSON(w, r, bckList, "")
+			mw := msgp.NewWriterSize(w, cmn.MiB)
+			if err := bckList.EncodeMsg(mw); err != nil {
+				return false
+			}
+			return mw.Flush() == nil
 		}
 
 		w.WriteHeader(status)

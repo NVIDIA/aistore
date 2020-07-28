@@ -1812,7 +1812,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg, ne
 			continue
 		}
 		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-		if err = jsoniter.Unmarshal(res.outjson, &bucketList); err != nil {
+		if _, err = bucketList.UnmarshalMsg(res.outjson); err != nil {
 			return
 		}
 		res.outjson = nil

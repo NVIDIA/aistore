@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // The motivation behind list-objects caching is to (drastically) reduce latency
@@ -471,7 +470,7 @@ func (c *locTarget) fetchFromRemote(smsg cmn.SelectMsg, size uint) *locTargetRes
 	}
 
 	bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, preallocSize)}
-	if err := jsoniter.Unmarshal(res.outjson, &bucketList); err != nil {
+	if _, err := bucketList.UnmarshalMsg(res.outjson); err != nil {
 		return &locTargetResp{list: nil, status: http.StatusInternalServerError, err: err}
 	}
 	res.outjson = nil
