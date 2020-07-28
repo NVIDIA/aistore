@@ -164,7 +164,9 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
 		}
-		cmn.Assert(msg.Ty == notifXact) // TODO: support other notification types
+		cmn.Assert(msg.Ty == notifXact)        // TODO: support other notification types
+		tmap, _ := smap.GetTargetMap(msg.Srcs) // TODO: handle if DaemonID missing
+
 		switch msg.Action {
 		case cmn.ActQueryObjects:
 			initMsg := query.InitMsg{}
@@ -172,7 +174,7 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlrf(w, r, "%s: invalid msg %+v", msg.Action, msg.Ext)
 				return
 			}
-			nl, err := newQueryState(&smap.Smap, &initMsg)
+			nl, err := newQueryState(&tmap, &initMsg)
 			if err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
@@ -180,12 +182,7 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 			nl.owned = true
 			p.notifs.add(msg.UUID, nl)
 		default:
-			nl := &notifListenerBase{owned: true}
-			for _, sid := range msg.Srcs {
-				if node, ok := smap.Tmap[sid]; ok {
-					nl.srcs.Add(node)
-				}
-			}
+			nl := &notifListenerBase{owned: true, srcs: tmap}
 			p.notifs.add(msg.UUID, nl)
 		}
 	default:

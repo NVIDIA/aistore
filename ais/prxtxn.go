@@ -366,7 +366,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 			// 5. IC
 			nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
-			p.registerIC(xactID, &nl, c.smap, nil, c.req.Query)
+			p.registerIC(c.uuid, &nl, c.smap, nil, c.req.Query)
 
 			// 6. commit
 			xactID = c.uuid

@@ -210,6 +210,19 @@ func (m *Smap) GetTarget(sid string) *Snode {
 	return tsi
 }
 
+func (m *Smap) GetTargetMap(sids []string) (np NodeMap, err error) {
+	np = make(NodeMap, len(sids))
+	for _, id := range sids {
+		node := m.GetTarget(id)
+		if node == nil {
+			err = cmn.NewNotFoundError("Daemon: %s", id)
+			continue
+		}
+		np.Add(node)
+	}
+	return
+}
+
 func (m *Smap) GetNode(id string) *Snode {
 	if node := m.GetTarget(id); node != nil {
 		return node
@@ -304,6 +317,14 @@ func (m NodeMap) Clone() (clone NodeMap) {
 		clone[id] = node
 	}
 	return
+}
+
+func (m NodeMap) Nodes() []*Snode {
+	snodes := make([]*Snode, 0, len(m))
+	for _, t := range m {
+		snodes = append(snodes, t)
+	}
+	return snodes
 }
 
 func mapsEq(a, b NodeMap) bool {

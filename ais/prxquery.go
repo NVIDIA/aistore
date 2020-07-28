@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -25,20 +26,24 @@ type (
 	}
 )
 
-func newQueryState(smap *cluster.Smap, msg *query.InitMsg) (*queryState, error) {
-	if msg.WorkersCnt != 0 && msg.WorkersCnt < uint(smap.CountTargets()) {
+func newQueryState(tmap *cluster.NodeMap, msg *query.InitMsg) (*queryState, error) {
+	numNodes := len(*tmap)
+	if msg.WorkersCnt != 0 && msg.WorkersCnt < uint(numNodes) {
 		// FIXME: this should not be necessary. Proxy could know that if worker's
 		//  target is done, worker should be redirected to the next not-done target.
 		//  However, it should be done once query is able to keep more detailed
 		//  information about targets.
-		return nil, fmt.Errorf("expected workersCnt to be at least %d", smap.CountTargets())
+		return nil, fmt.Errorf("expected workersCnt to be at least %d", numNodes)
 	}
-	targets := make([]*cluster.Snode, 0, smap.CountTargets())
-	for _, t := range smap.Tmap {
-		targets = append(targets, t)
-	}
+
+	// Ensure same order on all nodes
+	targets := tmap.Nodes()
+	sort.SliceStable(targets, func(i, j int) bool {
+		return targets[i].DaemonID < targets[j].DaemonID
+	})
+
 	return &queryState{
-		notifListenerBase: *newNLB(smap.Tmap, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+		notifListenerBase: *newNLB(*tmap, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
 		workersCnt:        msg.WorkersCnt,
 		targets:           targets,
 	}, nil
@@ -108,7 +113,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	state, err := newQueryState(&smap.Smap, msg)
+	state, err := newQueryState(&smap.Tmap, msg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
