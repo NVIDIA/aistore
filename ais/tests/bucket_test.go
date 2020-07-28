@@ -701,7 +701,7 @@ func TestListObjects(t *testing.T) {
 	for _, test := range tests {
 		var name string
 		if test.pageSize == 0 {
-			name = "default_pagesize"
+			name = "pagesize:default"
 		} else {
 			name += "pagesize:" + strconv.FormatUint(uint64(test.pageSize), 10)
 		}
@@ -838,7 +838,7 @@ func TestListObjects(t *testing.T) {
 func TestListObjectsPrefix(t *testing.T) {
 	const (
 		fileSize = 1024
-		numFiles = 20
+		numFiles = 30
 		prefix   = "some_prefix"
 	)
 
@@ -939,6 +939,11 @@ func TestListObjectsPrefix(t *testing.T) {
 					11, // obj1 and obj10..obj19
 				},
 				{
+					"full_list_overlimited_prefixed",
+					prefix + "/obj1", 0, 20,
+					11, // obj1 and obj10..obj19
+				},
+				{
 					"full_list_limited_prefixed",
 					prefix + "/obj1", 0, 2,
 					2, // obj1 and obj10
@@ -972,6 +977,60 @@ func TestListObjectsPrefix(t *testing.T) {
 						t.Errorf("returned %d objects instead of %d", len(bckList.Entries), test.expected)
 					}
 				})
+			}
+		})
+	}
+}
+
+func TestListObjectsPassthrough(t *testing.T) {
+	var (
+		baseParams = tutils.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			num:      1001,
+			fileSize: cmn.KiB,
+		}
+	)
+
+	m.init()
+
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	m.puts()
+
+	for _, passthrough := range []bool{true, false} {
+		t.Run(fmt.Sprintf("passthrough=%t", passthrough), func(t *testing.T) {
+			if !passthrough {
+				tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.passthrough": "false"})
+				defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.passthrough": "true"})
+			}
+
+			var (
+				msg = &cmn.SelectMsg{PageSize: 13, Passthrough: passthrough}
+			)
+
+			// Do it 2 times - first: fill the cache; second: use it.
+			for iter := 0; iter < 2; iter++ {
+				started := time.Now()
+				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+				tassert.CheckFatal(t, err)
+				finished := time.Now()
+
+				tutils.Logf(
+					"[iter: %d] passthrough: %5t, page_size: %d, time: %s\n",
+					iter, passthrough, msg.PageSize, finished.Sub(started),
+				)
+
+				tassert.Errorf(
+					t, len(objList.Entries) == m.num,
+					"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+				)
+			}
+
+			if !passthrough {
+				err := api.ListObjectsInvalidateCache(baseParams, m.bck, msg)
+				tassert.CheckError(t, err)
 			}
 		})
 	}
