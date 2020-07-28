@@ -1,9 +1,6 @@
 #!/bin/bash
-
+set -e
 source utils/pre_check.sh
-
-#TODO: this is a workaround, disconnect the vpn
-/opt/cisco/anyconnect/bin/vpn disconnect
 
 # deletes any pre-existing minikube deployment
 minikube delete
@@ -12,4 +9,9 @@ minikube delete
 minikube start --driver=docker
 
 source utils/ais_minikube_setup.sh
-source utils/minikube_registry.sh
+
+echo "Start local registry: (y/n) ?"
+read local_registry
+if [[ "$local_registry" == "y" ]]; then
+  source utils/minikube_registry.sh
+fi

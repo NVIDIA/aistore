@@ -6,9 +6,15 @@ Our [scripts](/deploy/dev/k8s) use Docker as the driver. This document shows how
 
 ## Prerequisites
 
-1. Have either Linux/macOS/Windows installed on your laptop/machine.
-2. [Install](https://kubernetes.io/docs/tasks/tools/install-minikube/) Minikube.
-3. [Install](https://docs.docker.com/engine/install/) Docker.
+1. Have Linux/MacOS installed on your Laptop/Machine/VirtualMachine.
+2. [Install](https://docs.docker.com/engine/install/) Docker.
+3. Ensure that your `$USER` is added to the `docker` group and re-login.
+
+```console
+$ sudo usermod -aG docker $USER && newgrp docker
+$ # relogin if needed
+$ sudo service docker start
+```
 
 >  **Note:  Running Minikube on a VPN might be [problematic](https://minikube.sigs.k8s.io/docs/handbook/vpn_and_proxy/). For smoother
    operations try running with VPN disabled.**
@@ -21,7 +27,7 @@ Our [scripts](/deploy/dev/k8s) use Docker as the driver. This document shows how
 The script [try.sh](try.sh) starts a basic and limited version (1-proxy and 1-target) of AIStore.
 
 ```console
-./try.sh
+$ ./try.sh
 ```
 
 
@@ -30,7 +36,7 @@ The script [try.sh](try.sh) starts a basic and limited version (1-proxy and 1-ta
 The script [stop.sh](/deploy/dev/k8s/stop.sh) stops the running Minikube instance.
 
 ```console
-./stop.sh
+$ ./stop.sh
 ```
 
 ## Developing AIStore on Minikube
@@ -41,7 +47,7 @@ The script [stop.sh](/deploy/dev/k8s/stop.sh) stops the running Minikube instanc
 The script [dev.sh](dev.sh) starts a development version of AIStore on Minikube.
 
 ```console
-./dev.sh
+$ ./dev.sh
 ```
 
 ### Stopping and cleanup
@@ -49,13 +55,13 @@ The script [dev.sh](dev.sh) starts a development version of AIStore on Minikube.
 The script [stop_ais.sh](stop_ais.sh) stops the AIStore cluster while keeping Minikube still running.
 
 ```console
-./stop_ais.sh
+$ ./stop_ais.sh
 ```
 
 For stopping and deleting the Minikube cluster
 
 ```console
-./stop.sh
+$ ./stop.sh
 ```
 
 ## Troubleshooting Minikube

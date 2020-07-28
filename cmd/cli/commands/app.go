@@ -218,8 +218,8 @@ func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
 func testAISURL() (err error) {
 	_, err = api.GetClusterMap(defaultAPIParams)
 	if err != nil {
-		return fmt.Errorf("AIStore proxy unreachable at %s. You may need to update URL in %s",
-			clusterURL, config.Location())
+		return fmt.Errorf("AIStore proxy unreachable at %s. You may need to update environment variable AIS_ENDPOINT",
+			clusterURL)
 	}
 	return
 }
