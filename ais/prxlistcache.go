@@ -382,7 +382,7 @@ func (c *locTarget) fetch(smsg cmn.SelectMsg, size uint, wg *sync.WaitGroup, res
 		if size == 0 {
 			size = uint(len(bf))
 		} else {
-			size = uint(cmn.Min(len(bf), int(size)))
+			size = cmn.MinUint(uint(len(bf)), size)
 		}
 		resCh <- &locTargetResp{list: &cmn.BucketList{Entries: bf[:size], UUID: smsg.UUID}, status: http.StatusOK}
 		wg.Done()

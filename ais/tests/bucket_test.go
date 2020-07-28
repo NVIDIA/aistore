@@ -1391,7 +1391,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		tassert.CheckFatal(t, err)
 
 		l := len(mpList.Available)
-		max := cmn.MaxInArray(numCopies...) + 1
+		max := cmn.Max(numCopies...) + 1
 		if l < max {
 			t.Skipf("test %q requires at least %d mountpaths (target %s has %d)", t.Name(), max, targets[0], l)
 		}

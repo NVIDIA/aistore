@@ -8,21 +8,11 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 type Bits uint8
-
-func MaxInArray(xs ...int) int {
-	Assert(len(xs) > 0)
-	curMax := xs[0]
-	for _, x := range xs[1:] {
-		if x > curMax {
-			curMax = x
-		}
-	}
-	return curMax
-}
 
 // MinU64 returns min value of a and b for uint64 types
 func MinU64(a, b uint64) uint64 {
@@ -95,25 +85,41 @@ func MinTime(a, b time.Time) time.Time {
 	return b
 }
 
-// Min returns min value from given ints
-func Min(ints ...int) int {
-	Assert(len(ints) >= 2)
-	if len(ints) == 2 {
-		if ints[0] < ints[1] {
-			return ints[0]
-		}
-		return ints[1]
+// Min returns min value from given ints.
+func Min(xs ...int) int {
+	debug.Assert(len(xs) > 0)
+	if len(xs) == 1 {
+		return xs[0]
 	}
-
-	return Min(ints[0], Min(ints[1:]...))
+	if len(xs) == 2 {
+		if xs[0] < xs[1] {
+			return xs[0]
+		}
+		return xs[1]
+	}
+	return Min(xs[0], Min(xs[1:]...))
 }
 
-// Max returns max value of a and b for int types
-func Max(a, b int) int {
-	if a > b {
+func MinUint(a, b uint) uint {
+	if a < b {
 		return a
 	}
 	return b
+}
+
+// Max returns max value from given ints.
+func Max(xs ...int) int {
+	debug.Assert(len(xs) > 0)
+	if len(xs) == 1 {
+		return xs[0]
+	}
+	if len(xs) == 2 {
+		if xs[0] > xs[1] {
+			return xs[0]
+		}
+		return xs[1]
+	}
+	return Max(xs[0], Max(xs[1:]...))
 }
 
 func MaxUint(a, b uint) uint {
