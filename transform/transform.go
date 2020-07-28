@@ -21,6 +21,7 @@ import (
 const (
 	// built-in label https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
 	nodeNameLabel = "kubernetes.io/hostname"
+	targetNode    = "target_node"
 )
 
 // TODO: remove the `kubectl` with a proper go-sdk call
@@ -45,7 +46,21 @@ func StartTransformationPod(t cluster.Target, msg Msg) (err error) {
 	cmn.Assert(targetsNodeName != "")
 	// Override the name (add target's daemon ID and node ID to its name).
 	pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + targetsNodeName)
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string, 1)
+	}
+	pod.Labels[targetNode] = targetsNodeName
+
+	// The following combination of Affinity and Anti-Affinity allows one to
+	// achieve the following:
+	// 1. The transformer pod is always scheduled on the target invoking it.
+	// 2. Not more than one transformer with the same target, is scheduled on the same node,
+	//    at a given point of time
 	if err := setTransformAffinity(pod); err != nil {
+		return err
+	}
+
+	if err := setTransformAntiAffinity(pod); err != nil {
 		return err
 	}
 
@@ -162,6 +177,36 @@ func setTransformAffinity(pod *corev1.Pod) error {
 	//  if 2 targets went down and up again at the same time, they may switch nodes,
 	//  leaving transformers running on the wrong machines.
 	pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nodeSelector
+	return nil
+}
+
+// Sets pods node anti-affinity, so no two pods with the matching criteria is scheduled on the same node
+// at the same time.
+func setTransformAntiAffinity(pod *corev1.Pod) error {
+	if pod.Spec.Affinity == nil {
+		pod.Spec.Affinity = &corev1.Affinity{}
+	}
+	if pod.Spec.Affinity.PodAntiAffinity == nil {
+		pod.Spec.Affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
+	}
+
+	reqAntiAffinities := pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	prefAntiAffinity := pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
+
+	if len(reqAntiAffinities) > 0 || len(prefAntiAffinity) > 0 {
+		return fmt.Errorf("error in spec, pod: %q should not have any NodeAntiAffinities defined", pod.Name)
+	}
+
+	cmn.Assert(cmn.GetKubernetesNodeName() != "")
+	reqAntiAffinities = []corev1.PodAffinityTerm{{
+		LabelSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				targetNode: pod.Labels[targetNode],
+			},
+		},
+		TopologyKey: nodeNameLabel,
+	}}
+	pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = reqAntiAffinities
 	return nil
 }
 
