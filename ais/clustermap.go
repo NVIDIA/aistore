@@ -140,7 +140,6 @@ func (m *smapX) staffIC(psi *cluster.Snode) {
 			continue
 		}
 		if !m.isIC(si) {
-			m.IC[pid] = ""
 			m.addIC(psi)
 			if len(m.IC) >= numIC {
 				break
