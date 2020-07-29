@@ -30,6 +30,10 @@ const (
 	tar2tf    = "tar2tf"
 	tar2tfIn  = "data/small-mnist-3.tar"
 	tar2tfOut = "data/small-mnist-3.record"
+
+	tar2tfFilters    = "tar2tf-filters"
+	tar2tfFiltersIn  = "data/single-png-cls.tar"
+	tar2tfFiltersOut = "data/single-png-cls-transformed.tfrecord"
 )
 
 func TestKubeTransformer(t *testing.T) {
@@ -38,24 +42,22 @@ func TestKubeTransformer(t *testing.T) {
 		{transformer: "echo", comm: transform.RedirectCommType},
 		{transformer: "echo", comm: transform.RevProxyCommType},
 		{transformer: "echo", comm: transform.PushCommType},
-		{tar2tf, transform.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, false},
-		{tar2tf, transform.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, false},
-		{tar2tf, transform.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, false},
+		{tar2tf, transform.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tar2tf, transform.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tar2tf, transform.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tar2tfFilters, transform.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{tar2tfFilters, transform.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{tar2tfFilters, transform.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			testTransformer(t, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual, test.isStatic)
+			testTransformer(t, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
 		})
 	}
 }
 
-func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fEq filesEqualFunc, isStatic bool) {
-	if !isStatic {
-		// Static transformers don't need init, so no new pods are started and tests are fast.
-		tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	}
-
+func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
 	var (
 		proxyURL         = tutils.RandomProxyURL()
 		defaultAPIParams = api.BaseParams{Client: http.DefaultClient, URL: proxyURL}
@@ -91,31 +93,27 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 	tutils.Put(proxyURL, bck, objName, reader, errCh)
 	tassert.SelectErr(t, errCh, "put", false)
 
-	if isStatic {
-		uuid = transformer
-	} else {
-		// Static transformer doesn't need Init()
-		t.Log("Reading template")
-		transformerTemplate := filepath.Join("templates", "transformer", transformer, "pod.yaml")
-		spec, err := ioutil.ReadFile(transformerTemplate)
-		tassert.CheckError(t, err)
+	t.Log("Reading template")
+	transformerTemplate := filepath.Join("templates", "transformer", transformer, "pod.yaml")
+	spec, err := ioutil.ReadFile(transformerTemplate)
+	tassert.CheckError(t, err)
 
-		pod, err := transform.ParsePodSpec(spec)
-		tassert.CheckError(t, err)
+	pod, err := transform.ParsePodSpec(spec)
+	tassert.CheckError(t, err)
 
-		if comm != "" {
-			pod.Annotations["communication_type"] = comm
-		}
-		spec, _ = jsoniter.Marshal(pod)
-
-		t.Log("Init transform")
-		uuid, err = api.TransformInit(defaultAPIParams, spec)
-		tassert.CheckFatal(t, err)
-		defer func() {
-			t.Logf("Stop transform %q", uuid)
-			tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid))
-		}()
+	if comm != "" {
+		pod.Annotations["communication_type"] = comm
 	}
+	spec, _ = jsoniter.Marshal(pod)
+
+	t.Log("Init transform")
+	uuid, err = api.TransformInit(defaultAPIParams, spec)
+	tassert.CheckFatal(t, err)
+	defer func() {
+		t.Logf("Stop transform %q", uuid)
+		tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid))
+	}()
+
 	fho, err := cmn.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)
 	defer func() {
@@ -142,7 +140,6 @@ type (
 		inPath      string         // optional
 		outPath     string         // optional
 		filesEqual  filesEqualFunc // optional
-		isStatic    bool
 	}
 )
 

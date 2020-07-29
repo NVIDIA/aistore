@@ -11,3 +11,6 @@ spec:
       image: aistore/tar2tf:latest
       ports:
         - containerPort: 80
+      command: ["/go/tar2tf/tar2tf"]
+      args: ["-l", "0.0.0.0", "-p", "80"]
+
