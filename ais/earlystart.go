@@ -258,13 +258,13 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	}
 	// try to start with a fully staffed IC
 	if l := len(smap.IC); l < numIC {
-		smap.staffIC(p.si)
-		if l != len(smap.IC) {
-			clone := smap.clone()
+		clone := smap.clone()
+		clone.staffIC(p.si)
+		if l != len(clone.IC) {
 			clone.Version++
 			smap = clone
+			p.owner.smap.put(smap)
 		}
-		p.owner.smap.put(smap)
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
 		cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err)
