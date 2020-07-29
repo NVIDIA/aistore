@@ -276,6 +276,14 @@ func (kv SimpleKVs) Compare(other SimpleKVs) bool {
 	return true
 }
 
+func (kv SimpleKVs) Keys() []string {
+	keys := make([]string, 0, len(kv))
+	for k := range kv {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 func NewStringSet(keys ...string) (ss StringSet) {
 	ss = make(StringSet, len(keys))
 	ss.Add(keys...)

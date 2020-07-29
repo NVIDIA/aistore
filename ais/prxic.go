@@ -174,7 +174,7 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlrf(w, r, "%s: invalid msg %+v", msg.Action, msg.Ext)
 				return
 			}
-			nl, err := newQueryState(&tmap, &initMsg)
+			nl, err := newQueryState(tmap, &initMsg)
 			if err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return

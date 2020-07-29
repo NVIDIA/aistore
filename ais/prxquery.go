@@ -26,8 +26,8 @@ type (
 	}
 )
 
-func newQueryState(tmap *cluster.NodeMap, msg *query.InitMsg) (*queryState, error) {
-	numNodes := len(*tmap)
+func newQueryState(tmap cluster.NodeMap, msg *query.InitMsg) (*queryState, error) {
+	numNodes := len(tmap)
 	if msg.WorkersCnt != 0 && msg.WorkersCnt < uint(numNodes) {
 		// FIXME: this should not be necessary. Proxy could know that if worker's
 		//  target is done, worker should be redirected to the next not-done target.
@@ -43,7 +43,7 @@ func newQueryState(tmap *cluster.NodeMap, msg *query.InitMsg) (*queryState, erro
 	})
 
 	return &queryState{
-		notifListenerBase: *newNLB(*tmap, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+		notifListenerBase: *newNLB(tmap, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
 		workersCnt:        msg.WorkersCnt,
 		targets:           targets,
 	}, nil
@@ -113,7 +113,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	state, err := newQueryState(&smap.Tmap, msg)
+	state, err := newQueryState(smap.Tmap, msg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return

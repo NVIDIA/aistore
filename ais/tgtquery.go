@@ -74,14 +74,10 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d := make([]string, 0, len(smap.IC))
-	for pid := range smap.IC {
-		d = append(d, pid)
-	}
 	xact.AddNotif(&cmn.NotifXact{
 		NotifBase: cmn.NotifBase{
 			When: cmn.UponTerm,
-			Dsts: d,
+			Dsts: smap.IC.Keys(),
 			F:    t.xactCallerNotify,
 		},
 	})
