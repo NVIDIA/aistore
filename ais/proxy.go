@@ -32,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tinylib/msgp/msgp"
 )
 
 const (
@@ -1128,30 +1129,43 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 
 	cmn.Assert(bckList != nil)
 
-	// TODO: replace cmn.Marshal with p.writeJSON
-	b := cmn.MustMarshal(bckList)
+	if strings.Contains(r.Header.Get("Accept"), "application/msgpack") {
+		w.Header().Set("Content-Type", "application/msgpack")
+		mw := msgp.NewWriterSize(w, 10*cmn.KiB)
+		if err = bckList.EncodeMsg(mw); err == nil {
+			err = mw.Flush()
+		}
+		if err != nil {
+			p.writeErrorStatus(w, r, "list_objects", err)
+			return
+		}
+	} else {
+		b := cmn.MustMarshal(bckList)
+		if !p.writeJSONBytes(w, r, b, "list_objects") {
+			return
+		}
+	}
+
 	pageMarker := bckList.PageMarker
 	// free memory allocated for temporary slice immediately as it can take up to a few GB
 	bckList.Entries = bckList.Entries[:0]
 	bckList.Entries = nil
 	bckList = nil
 
-	if p.writeJSONBytes(w, r, b, "list_objects") {
-		delta := mono.Since(begin)
-		p.statsT.AddMany(
-			stats.NamedVal64{Name: stats.ListCount, Value: 1},
-			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+	delta := mono.Since(begin)
+	p.statsT.AddMany(
+		stats.NamedVal64{Name: stats.ListCount, Value: 1},
+		stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+	)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		var (
+			lat = int64(delta / time.Microsecond)
+			s   string
 		)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			var (
-				lat = int64(delta / time.Microsecond)
-				s   string
-			)
-			if pageMarker != "" {
-				s = ", page " + pageMarker
-			}
-			glog.Infof("LIST: %s%s, %d µs", bck.Name, s, lat)
+		if pageMarker != "" {
+			s = ", page " + pageMarker
 		}
+		glog.Infof("LIST: %s%s, %d µs", bck.Name, s, lat)
 	}
 }
 

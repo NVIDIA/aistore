@@ -365,7 +365,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			reqParams = ReqParams{
 				BaseParams: baseParams,
 				Path:       path,
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Header:     http.Header{"Accept": []string{"application/msgpack"}},
 				Query:      q,
 				Body:       cmn.MustMarshal(actMsg),
 			}
@@ -388,7 +388,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 
 		// Retry with bigger timeout when deadline was exceeded.
 		for i := 0; i < 5; i++ {
-			if _, err = doHTTPRequestGetResp(reqParams, &page); err != nil {
+			if _, err = doHTTPRequestGetResp(reqParams, page); err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					client := *reqParams.BaseParams.Client
 					client.Timeout = 2 * client.Timeout
@@ -446,16 +446,14 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 		reqParams = ReqParams{
 			BaseParams: baseParams,
 			Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-			Header: http.Header{
-				"Content-Type": []string{"application/json"},
-			},
-			Query: cmn.AddBckToQuery(url.Values{}, bck),
-			Body:  cmn.MustMarshal(actMsg),
+			Header:     http.Header{"Accept": []string{"application/msgpack"}},
+			Query:      cmn.AddBckToQuery(url.Values{}, bck),
+			Body:       cmn.MustMarshal(actMsg),
 		}
 	)
 
 	page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
-	if _, err := doHTTPRequestGetResp(reqParams, &page); err != nil {
+	if _, err := doHTTPRequestGetResp(reqParams, page); err != nil {
 		return nil, err
 	}
 	smsg.UUID = page.UUID

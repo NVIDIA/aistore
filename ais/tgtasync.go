@@ -69,7 +69,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	debug.Assert(status == http.StatusOK)
 	debug.Assert(bckList.UUID != "")
 
-	mw := msgp.NewWriterSize(w, cmn.MiB)
+	mw := msgp.NewWriterSize(w, 10*cmn.KiB)
 	if err := bckList.EncodeMsg(mw); err != nil {
 		return false
 	}

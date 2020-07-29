@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tinylib/msgp/msgp"
 )
 
 type BaseParams struct {
@@ -147,7 +148,12 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 			*t = string(b)
 		default:
 			if resp.StatusCode == http.StatusOK {
-				err = jsoniter.NewDecoder(resp.Body).Decode(v)
+				if resp.Header.Get("Content-Type") == "application/msgpack" {
+					r := msgp.NewReaderSize(resp.Body, 10*cmn.KiB)
+					err = v.(msgp.Decodable).DecodeMsg(r)
+				} else {
+					err = jsoniter.NewDecoder(resp.Body).Decode(v)
+				}
 			}
 		}
 		if err != nil {
