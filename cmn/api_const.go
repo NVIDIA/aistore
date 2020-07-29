@@ -257,7 +257,7 @@ const (
 // List objects default page size
 const (
 	DefaultListPageSize    = uint(1000)
-	DefaultListPageSizeAIS = uint(1000) // TODO: increase to 10000 (somewhere there as a conflict, using 10000 now breaks some tests)
+	DefaultListPageSizeAIS = uint(10000)
 )
 
 // RESTful URL path: l1/l2/l3

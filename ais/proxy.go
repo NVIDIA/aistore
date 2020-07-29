@@ -1109,6 +1109,9 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	}
 
 	if bck.IsAIS() || smsg.Cached {
+		if smsg.PageSize == 0 {
+			smsg.PageSize = cmn.DefaultListPageSizeAIS
+		}
 		bckList, err = p.listAISBucket(bck, smsg)
 	} else {
 		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
@@ -1694,13 +1697,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	)
 
 	if smsg.PageSize != 0 {
-		// When `PageSize` is set, then regardless of the listing type (slow/fast)
-		// we need respect it.
 		pageSize = smsg.PageSize
-	} else if bck.IsAIS() {
-		pageSize = cmn.DefaultListPageSizeAIS
-	} else {
-		pageSize = cmn.DefaultListPageSize
 	}
 
 	// TODO: Before checking cache and buffer we should check if there is another
@@ -1790,10 +1787,6 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		glog.Warningf("list_objects page size %d for bucket %s exceeds the default maximum %d ",
 			smsg.PageSize, bck, cmn.DefaultListPageSize)
 	}
-	pageSize := smsg.PageSize
-	if pageSize == 0 {
-		pageSize = cmn.DefaultListPageSize
-	}
 	var (
 		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Client.ListObjects
@@ -1837,7 +1830,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		if len(res.outjson) == 0 {
 			continue
 		}
-		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
+		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, smsg.PageSize)}
 		if _, err = bucketList.UnmarshalMsg(res.outjson); err != nil {
 			return
 		}
@@ -1853,14 +1846,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	// case of Cloud and no limit is set by a user. We cannot use
 	// the single cmn.DefaultPageSize because Azure limit differs.
 	maxSize := smsg.PageSize
-	if needLocalData {
-		maxSize = pageSize
-	}
-	if needLocalData {
-		allEntries = cmn.ConcatObjLists(bckLists, maxSize)
-	} else {
-		allEntries = cmn.MergeObjLists(bckLists, maxSize)
-	}
+	allEntries = cmn.MergeObjLists(bckLists, maxSize)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Errorf("Objects after merge %d, marker %s", len(allEntries.Entries), allEntries.PageMarker)
 	}
