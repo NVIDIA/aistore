@@ -78,6 +78,10 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case cmn.ActXactStop:
+			if xactMsg.ID != "" {
+				xaction.Registry.DoAbortByID(xactMsg.ID)
+				return
+			}
 			xaction.Registry.DoAbort(xactMsg.Kind, bck)
 			return
 		default:

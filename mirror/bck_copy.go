@@ -87,6 +87,7 @@ func newBCCJogger(parent *XactBckCopy, mpathInfo *fs.MountpathInfo, config *cmn.
 			mpathInfo: mpathInfo,
 			config:    config,
 			skipLoad:  true,
+			stopCh:    cmn.NewStopCh(),
 		},
 		parent: parent,
 	}

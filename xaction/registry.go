@@ -488,6 +488,15 @@ func (r *registry) DoAbort(kind string, bck *cluster.Bck) (aborted bool) {
 	return
 }
 
+func (r *registry) DoAbortByID(uuid string) (aborted bool) {
+	entry := r.GetXact(uuid)
+	if entry == nil || entry.Finished() {
+		return false
+	}
+	entry.Abort()
+	return true
+}
+
 func (r *registry) removeFinishedByID(id string) error {
 	entry := r.entries.find(RegistryXactFilter{ID: id})
 	if entry == nil {

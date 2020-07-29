@@ -2001,6 +2001,50 @@ func TestCopyBucket(t *testing.T) {
 	}
 }
 
+func TestCopyBucketAbort(t *testing.T) {
+	var (
+		m = ioContext{
+			t:   t,
+			num: 1000,
+		}
+		baseParams = tutils.BaseAPIParams()
+		dstBck     = cmn.Bck{
+			Name:     TestBucketName + "_new1",
+			Provider: cmn.ProviderAIS,
+		}
+	)
+
+	// Initialize ioContext
+	m.init()
+
+	srcBck := m.bck
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	defer func() {
+		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		tutils.DestroyBucket(t, m.proxyURL, dstBck)
+	}()
+
+	m.puts()
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
+	tassert.CheckError(t, err)
+
+	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xactID})
+	tassert.CheckError(t, err)
+
+	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	tassert.CheckError(t, err)
+	tassert.Errorf(t, stats.Aborted(), "failed to abort copy bucket (%s)", xactID)
+
+	// TODO -- FIXME : Aborting a CopyBucket xaction should cleanup the bucket
+	// Uncomment this part after the backend logic is ready
+
+	/* // golint:ignore // should be uncommented after fixing backend
+	// bck, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck))
+	// tassert.CheckError(t, err)
+	// tassert.Errorf(t, !bck.Contains(cmn.QueryBcks(dstBck)), "should not contains bucket %s", dstBck)
+	*/
+}
+
 // Tries to rename and then copy bucket at the same time.
 // TODO: This test should be enabled (not skipped)
 func TestRenameAndCopyBucket(t *testing.T) {
