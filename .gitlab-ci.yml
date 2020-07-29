@@ -153,6 +153,7 @@ test:kube:
     - chmod +x ./kubectl
     - mv ./kubectl /usr/local/bin/kubectl
     - kubectl version --client
+    - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecylce of transformers is implemented.
     - make deploy <<< $'1\n1\n3\n0'
     - status=0
     - BUCKET="test" RE="TestKube" make test-run || status=$?
