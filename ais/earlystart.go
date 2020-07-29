@@ -256,10 +256,14 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		p.owner.smap.put(clone)
 		smap = clone
 	}
-	// try to startup with a fully staffed IC
-	if len(smap.IC) < numIC {
+	// try to start with a fully staffed IC
+	if l := len(smap.IC); l < numIC {
 		smap.staffIC(p.si)
-		smap.Version++
+		if l != len(smap.IC) {
+			clone := smap.clone()
+			clone.Version++
+			smap = clone
+		}
 		p.owner.smap.put(smap)
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
