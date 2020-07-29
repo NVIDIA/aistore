@@ -399,35 +399,37 @@ func TestCloudListObjectVersions(t *testing.T) {
 
 // Minimalistic list objects test to check that everything works correctly.
 func TestListObjectsSmoke(t *testing.T) {
-	var (
-		baseParams = tutils.BaseAPIParams()
-		m          = ioContext{
-			t:        t,
-			num:      100,
-			fileSize: 5 * cmn.KiB,
-		}
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		var (
+			baseParams = tutils.BaseAPIParams()
+			m          = ioContext{
+				t:        t,
+				num:      100,
+				bck:      bck.Bck,
+				fileSize: 5 * cmn.KiB,
+			}
 
-		iters = 5
-		msg   = &cmn.SelectMsg{PageSize: 10}
-	)
-
-	m.init()
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-
-	m.puts()
-
-	// Run couple iterations to see that we get deterministic results.
-	tutils.Logf("run %d list objects iterations\n", iters)
-	for iter := 0; iter < iters; iter++ {
-		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
-		tassert.CheckFatal(t, err)
-		tassert.Errorf(
-			t, len(objList.Entries) == m.num,
-			"unexpected number of entries (got: %d, expected: %d) on iter: %d",
-			len(objList.Entries), m.num, iter,
+			iters = 5
+			msg   = &cmn.SelectMsg{PageSize: 10}
 		)
-	}
+
+		m.init()
+
+		m.puts()
+		defer m.del()
+
+		// Run couple iterations to see that we get deterministic results.
+		tutils.Logf("run %d list objects iterations\n", iters)
+		for iter := 0; iter < iters; iter++ {
+			objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(
+				t, len(objList.Entries) == m.num,
+				"unexpected number of entries (got: %d, expected: %d) on iter: %d",
+				len(objList.Entries), m.num, iter,
+			)
+		}
+	})
 }
 
 func TestListObjectsProps(t *testing.T) {
