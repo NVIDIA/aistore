@@ -140,7 +140,7 @@ func (m *smapX) staffIC(psi *cluster.Snode) {
 			continue
 		}
 		if !m.isIC(si) {
-			m.addIC(psi)
+			m.addIC(si)
 			if len(m.IC) >= numIC {
 				break
 			}
