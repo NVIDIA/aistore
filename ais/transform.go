@@ -77,13 +77,33 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 		timeout: cmn.LongTimeout,
 		to:      cluster.Targets,
 	})
+
 	for res := range results {
 		if res.err != nil {
-			p.invalmsghdlr(w, r, res.err.Error())
-			return
+			err = res.err
+			break
 		}
 	}
-	w.Write([]byte(msg.ID))
+
+	if err == nil {
+		// All init calls have succeeded, return UUID of the transformation.
+		w.Write([]byte(msg.ID))
+		return
+	}
+
+	// At least one init call has failed. Terminate all started transformation pods.
+	// Discard the stop results. Calls may succeed (for targets that successfully started a pod),
+	// or fail (for targets that didn't start successfully a pod).
+	p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodDelete,
+			Path:   cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformStop, msg.ID),
+			Body:   nil,
+		},
+		timeout: cmn.LongTimeout,
+		to:      cluster.Targets,
+	})
+	p.invalmsghdlr(w, r, err.Error())
 }
 
 // GET /v1/transform/list
