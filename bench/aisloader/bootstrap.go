@@ -37,6 +37,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -55,6 +56,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
+	"github.com/NVIDIA/aistore/bench/aisloader/transformation"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/containers"
@@ -146,6 +148,9 @@ type (
 		statsdRequired bool
 		dryRun         bool // true: print configuration and parameters that aisloader will use at runtime
 		traceHTTP      bool // true: trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
+
+		transformerName     string // name of a transformation to apply to each object. Omitted when transformerName specified.
+		transformerSpecPath string // Path to a transformation spec to apply to each object.
 	}
 
 	// sts records accumulated puts/gets information.
@@ -189,6 +194,9 @@ var (
 	ip       string
 	port     string
 	useHTTPS bool
+
+	transformerSpec []byte
+	transformerID   string
 
 	useRandomObjName bool
 	objNameCnt       atomic.Uint64
@@ -298,6 +306,11 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
 	f.BoolVar(&p.traceHTTP, "trace-http", false, "true: trace HTTP latencies") // see httpLatencies
 	f.StringVar(&p.cksumType, "cksum-type", cmn.ChecksumXXHash, "cksum type to use for put object requests")
+
+	// Transformations
+	f.StringVar(&p.transformerName, "transformation", "", "name of a transformation applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
+	f.StringVar(&p.transformerSpecPath, "transformation-spec", "", "path to a transformation spec to be applied to each object on GET request.")
+
 	f.Parse(os.Args[1:])
 
 	if len(os.Args[1:]) == 0 {
@@ -435,6 +448,28 @@ func parseCmdLine() (params, error) {
 
 	if err := cmn.ValidateCksumType(p.cksumType); err != nil {
 		return params{}, err
+	}
+
+	if p.transformerName != "" && p.transformerSpecPath != "" {
+		return params{}, fmt.Errorf("transformation and transformation-spec flag can't be set both")
+	}
+
+	if p.transformerSpecPath != "" {
+		fh, err := os.Open(p.transformerSpecPath)
+		if err == nil {
+			transformerSpec, err = ioutil.ReadAll(fh)
+			defer fh.Close()
+		}
+		if err != nil {
+			return params{}, err
+		}
+	}
+
+	if p.transformerName != "" {
+		transformerSpec, err = transformation.GetYaml(p.transformerName)
+		if err != nil {
+			return params{}, err
+		}
 	}
 
 	if p.bPropsStr != "" {
@@ -706,6 +741,20 @@ func Start() {
 		}
 	}
 	defer statsdC.Close()
+
+	if transformerSpec != nil {
+		baseParams := api.BaseParams{
+			Client: httpClient,
+			URL:    runParams.proxyURL,
+		}
+
+		fmt.Printf("waiting for a transformation to start")
+		transformerID, err = api.TransformInit(baseParams, transformerSpec)
+		if err != nil {
+			cmn.Exitf(err.Error())
+		}
+		defer api.TransformStop(baseParams, transformerID)
+	}
 
 	workOrders = make(chan *workOrder, runParams.numWorkers)
 	workOrderResults = make(chan *workOrder, runParams.numWorkers)

@@ -226,15 +226,16 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum, reader c
 	return api.PutObject(args)
 }
 
-// same as above with HTTP trace
-func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool,
-	offset, length int64) (int64, httpLatencies, error) {
+func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, length int64) (*http.Request, error) {
 	var (
-		hdr                         http.Header
-		hdrCksumValue, hdrCksumType string
+		hdr   http.Header
+		query = url.Values{}
 	)
-	query := url.Values{}
+
 	query = cmn.AddBckToQuery(query, bck)
+	if transformerID != "" {
+		query.Add(cmn.URLParamUUID, transformerID)
+	}
 	if length > 0 {
 		hdr = cmn.RangeHdr(offset, length)
 	}
@@ -245,7 +246,18 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 		Query:  query,
 		Header: hdr,
 	}
-	req, err := reqArgs.Req()
+
+	return reqArgs.Req()
+}
+
+// same as above with HTTP trace
+func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool,
+	offset, length int64) (int64, httpLatencies, error) {
+	var (
+		hdrCksumValue, hdrCksumType string
+	)
+
+	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
 	if err != nil {
 		return 0, httpLatencies{}, err
 	}
@@ -293,22 +305,10 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 // getDiscard sends a GET request and discards returned data
 func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
 	var (
-		query                       url.Values
-		hdr                         http.Header
 		hdrCksumValue, hdrCksumType string
 	)
-	query = cmn.AddBckToQuery(query, bck)
-	if length > 0 {
-		hdr = cmn.RangeHdr(offset, length)
-	}
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodGet,
-		Base:   proxyURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bck.Name, objName),
-		Query:  query,
-		Header: hdr,
-	}
-	req, err := reqArgs.Req()
+
+	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
 	if err != nil {
 		return 0, err
 	}

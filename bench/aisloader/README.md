@@ -51,6 +51,8 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-uniquegets` - If set, GET objects randomly and equally(it makes sure *not* to GET some objects more frequently than the others). If not set, GET selects a random object every time, that may result, e.g, in reading the same object twice in a row
  - `-no-detailed-stats` - If set, disable collecting detailed HTTP latencies for PUT and GET (to minimize amount of stats sent to statsD)
  - `-dry-run` - Show the configuration and parameters that aisloader will use for benchmark and exit
+ - `-transformation` - Name of a transformation applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'. If not set, no transformation is applied.
+ - `-transformation-spec` - Path to transformation specification applied to each object on GET request. It has to be compatible with Kubernetes Pod specification.
 
 ### Examples
 
