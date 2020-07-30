@@ -129,9 +129,14 @@ func StopTransformationPod(id string) error {
 		return err
 	}
 
-	if err := deletePod(c.PodName(), true); err != nil {
+	if err := deleteEntity(cmn.KubePod, c.PodName(), true); err != nil {
 		return err
 	}
+
+	if err := deleteEntity(cmn.KubeSvc, c.SvcName(), true); err != nil {
+		return err
+	}
+
 	reg.removeByUUID(id)
 	return nil
 }
@@ -159,7 +164,7 @@ func setTransformAffinity(pod *corev1.Pod) error {
 	prefAffinity := pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if reqAffinity != nil && len(reqAffinity.NodeSelectorTerms) > 0 || len(prefAffinity) > 0 {
-		return fmt.Errorf("pod spec should not have any NodeAffinities defined")
+		return fmt.Errorf("error in spec, pod: %q should not have any NodeAffinities defined", pod)
 	}
 
 	cmn.Assert(cmn.GetKubernetesNodeName() != "")
@@ -194,7 +199,7 @@ func setTransformAntiAffinity(pod *corev1.Pod) error {
 	prefAntiAffinity := pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if len(reqAntiAffinities) > 0 || len(prefAntiAffinity) > 0 {
-		return fmt.Errorf("error in spec, pod: %q should not have any NodeAntiAffinities defined", pod.Name)
+		return fmt.Errorf("error in spec, pod: %q should not have any NodeAntiAffinities defined", pod)
 	}
 
 	cmn.Assert(cmn.GetKubernetesNodeName() != "")
@@ -261,8 +266,8 @@ func startPod(pod *corev1.Pod) error {
 	return nil
 }
 
-func deletePod(podName string, force bool) error {
-	args := []string{"delete", "pod", podName}
+func deleteEntity(entity, entityName string, force bool) error {
+	args := []string{"delete", entity, entityName}
 	if force {
 		args = append(args, "--force")
 	}
@@ -302,7 +307,7 @@ func getServiceNodePort(svc *corev1.Service) (int, error) {
 }
 
 func handlePodFailure(pod *corev1.Pod, msg string) {
-	if deleteErr := deletePod(pod.GetName(), true); deleteErr != nil {
+	if deleteErr := deleteEntity(cmn.KubePod, pod.GetName(), true); deleteErr != nil {
 		glog.Errorf("failed to delete pod %q after %s", pod.GetName(), msg)
 	}
 }

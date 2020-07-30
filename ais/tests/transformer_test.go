@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -36,6 +37,10 @@ const (
 	tar2tfFiltersOut = "data/single-png-cls-transformed.tfrecord"
 )
 
+var (
+	defaultAPIParams = api.BaseParams{Client: http.DefaultClient, URL: proxyURL}
+)
+
 func TestKubeTransformer(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
 	tests := []testConfig{
@@ -57,13 +62,30 @@ func TestKubeTransformer(t *testing.T) {
 	}
 }
 
+func transformInit(t *testing.T, name, comm string) (string, error) {
+	t.Log("Reading template")
+	transformerTemplate := filepath.Join("templates", "transformer", name, "pod.yaml")
+	spec, err := ioutil.ReadFile(transformerTemplate)
+	if err != nil {
+		return "", err
+	}
+	pod, err := transform.ParsePodSpec(spec)
+	if err != nil {
+		return "", err
+	}
+	if comm != "" {
+		pod.Annotations["communication_type"] = comm
+	}
+	spec, _ = jsoniter.Marshal(pod)
+	t.Log("Init transform")
+	return api.TransformInit(defaultAPIParams, spec)
+}
+
 func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
 	var (
-		proxyURL         = tutils.RandomProxyURL()
-		defaultAPIParams = api.BaseParams{Client: http.DefaultClient, URL: proxyURL}
-		bck              = cmn.Bck{Name: "transfomer-test", Provider: cmn.ProviderAIS}
-		testObjDir       = filepath.Join("data", "transformer", transformer)
-		objName          = fmt.Sprintf("%s-object", transformer)
+		bck        = cmn.Bck{Name: "transfomer-test", Provider: cmn.ProviderAIS}
+		testObjDir = filepath.Join("data", "transformer", transformer)
+		objName    = fmt.Sprintf("%s-object", transformer)
 
 		inputFileName          = filepath.Join(testObjDir, "object.in")
 		expectedOutputFileName = filepath.Join(testObjDir, "object.out")
@@ -92,22 +114,7 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 	errCh := make(chan error, 1)
 	tutils.Put(proxyURL, bck, objName, reader, errCh)
 	tassert.SelectErr(t, errCh, "put", false)
-
-	t.Log("Reading template")
-	transformerTemplate := filepath.Join("templates", "transformer", transformer, "pod.yaml")
-	spec, err := ioutil.ReadFile(transformerTemplate)
-	tassert.CheckError(t, err)
-
-	pod, err := transform.ParsePodSpec(spec)
-	tassert.CheckError(t, err)
-
-	if comm != "" {
-		pod.Annotations["communication_type"] = comm
-	}
-	spec, _ = jsoniter.Marshal(pod)
-
-	t.Log("Init transform")
-	uuid, err = api.TransformInit(defaultAPIParams, spec)
+	uuid, err = transformInit(t, transformer, comm)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		t.Logf("Stop transform %q", uuid)
@@ -190,4 +197,27 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 	}
 	defer f.Close()
 	return core.NewTFRecordReader(f).ReadAllExamples()
+}
+
+func TestKubeSingleTransformerAtATime(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
+	output, err := exec.Command("bash", "-c", "kubectl get nodes | grep Ready | wc -l").CombinedOutput()
+	tassert.CheckFatal(t, err)
+	if strings.Trim(string(output), "\n") != "1" {
+		t.Skip("requires a single node kubernetes cluster")
+	}
+	uuid1, err := transformInit(t, "echo", "hrev://")
+	tassert.CheckFatal(t, err)
+	if uuid1 != "" {
+		defer func() {
+			t.Logf("Stop transform %q", uuid1)
+			tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid1))
+		}()
+	}
+	uuid2, err := transformInit(t, "md5", "hrev://")
+	tassert.Fatalf(t, err != nil, "Expected err!=nil, got %v", err)
+	if uuid2 != "" {
+		t.Logf("Stop transform %q", uuid2)
+		tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid2))
+	}
 }

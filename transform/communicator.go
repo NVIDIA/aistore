@@ -27,7 +27,7 @@ var (
 type Communicator interface {
 	Name() string
 	PodName() string
-
+	SvcName() string
 	// DoTransform can use one of 2 transformer endpoints:
 	// Method "POST", Path "/"
 	// Method "GET", Path "/bucket/object"
@@ -85,6 +85,7 @@ type baseComm struct {
 
 func (c baseComm) Name() string    { return c.name }
 func (c baseComm) PodName() string { return c.podName }
+func (c baseComm) SvcName() string { return c.podName /*pod name is same as service name*/ }
 
 type pushPullComm struct {
 	baseComm

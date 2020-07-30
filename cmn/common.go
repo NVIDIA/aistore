@@ -69,6 +69,8 @@ const (
 	S3TagSepa = "!" // https://tools.ietf.org/html/rfc3986#page-6 using `!` as it is one of the non-special characters
 
 	Kubectl = "kubectl"
+	KubePod = "pod"
+	KubeSvc = "svc"
 )
 
 var (
