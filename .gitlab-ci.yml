@@ -142,7 +142,7 @@ test:kube:
   stage: test-short
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedules"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*transformations.*/' # Add more labels if needed in the future
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   variables:
     AIS_ENDPOINT: "localhost:8080"
     AIS_NODE_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
