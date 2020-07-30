@@ -249,6 +249,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 		metaction += "["
 		if clone.GetProxy(sid) != nil {
 			clone.delProxy(sid)
+			clone.staffIC()
 			metaction += cmn.Proxy
 		} else if clone.GetTarget(sid) != nil {
 			clone.delTarget(sid)

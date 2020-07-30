@@ -105,7 +105,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 		max    uint64
 		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
 	)
-	for _, pid := range smap.IC {
+	for pid := range smap.IC {
 		psi := smap.GetProxy(pid)
 		cs := xoshiro256.Hash(psi.idDigest ^ digest)
 		if cs >= max {

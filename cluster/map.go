@@ -10,6 +10,7 @@ import (
 	"net"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/OneOfOne/xxhash"
@@ -50,14 +51,14 @@ type (
 	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes
 
 	Smap struct {
-		Tmap         NodeMap       `json:"tmap"`                    // targetID -> targetInfo
-		Pmap         NodeMap       `json:"pmap"`                    // proxyID -> proxyInfo
-		NonElects    cmn.SimpleKVs `json:"non_electable,omitempty"` // non-electable proxies: DaemonID => [info]
-		IC           cmn.SimpleKVs `json:"ic"`                      // cluster information center: DaemonID => [info]
-		Primary      *Snode        `json:"proxy_si"`                // (json tag preserved for back. compat.)
-		Version      int64         `json:"version,string"`          // version
-		UUID         string        `json:"uuid"`                    // UUID - assigned at creation time
-		CreationTime string        `json:"creation_time"`           // creation time
+		Tmap         NodeMap          `json:"tmap"`                    // targetID -> targetInfo
+		Pmap         NodeMap          `json:"pmap"`                    // proxyID -> proxyInfo
+		NonElects    cmn.SimpleKVs    `json:"non_electable,omitempty"` // non-electable proxies: DaemonID => [info]
+		IC           cmn.SimpleKVsInt `json:"ic"`                      // cluster information center: DaemonID => version
+		Primary      *Snode           `json:"proxy_si"`                // (json tag preserved for back. compat.)
+		Version      int64            `json:"version,string"`          // version
+		UUID         string           `json:"uuid"`                    // UUID - assigned at creation time
+		CreationTime string           `json:"creation_time"`           // creation time
 	}
 
 	// Smap on-change listeners
@@ -298,6 +299,23 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 	}
 	eq = mapsEq(m.Tmap, other.Tmap) && mapsEq(m.Pmap, other.Pmap)
 	return
+}
+
+func (m *Smap) IsIC(psi *Snode) (ok bool) {
+	_, ok = m.IC[psi.ID()]
+	return
+}
+
+func (m *Smap) StrIC(psi *Snode) string {
+	all := make([]string, 0, len(m.IC))
+	for pid := range m.IC {
+		if pid == psi.ID() {
+			all = append(all, pid+"(*)")
+		} else {
+			all = append(all, pid)
+		}
+	}
+	return strings.Join(all, ",")
 }
 
 /////////////

@@ -12,12 +12,14 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -50,6 +52,11 @@ var (
 		{"ProxyStress", proxyStress},
 		{"NetworkFailure", networkFailure},
 		{"PrimaryAndNextCrash", primaryAndNextCrash},
+	}
+
+	icTests = []Test{
+		{"ICMemberLeaveAndRejoin", icMemberLeaveAndRejoin},
+		{"ICKillAndRestorePrimary", icKillAndRestorePrimary},
 	}
 )
 
@@ -821,7 +828,7 @@ loop:
 // directURL	- DirectURL of the proxy that we send the request to
 //           	  (not necessarily the current primary)
 // toID, toURL 	- DaemonID and DirectURL of the proxy that must become the new primary
-func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, toID string) {
+func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, toID string) (newSmap *cluster.Smap) {
 	if directURL == "" {
 		directURL = smap.Primary.PublicNet.DirectURL
 	}
@@ -832,13 +839,14 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, 
 	err := api.SetPrimaryProxy(baseParams, toID)
 	tassert.CheckFatal(t, err)
 
-	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID,
+	newSmap, err = tutils.WaitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID,
 		smap.Version, testing.Verbose())
 	tassert.CheckFatal(t, err)
-	if smap.Primary.ID() != toID {
-		t.Fatalf("Expected primary=%s, got %s", toID, smap.Primary.ID())
+	if newSmap.Primary.ID() != toID {
+		t.Fatalf("Expected primary=%s, got %s", toID, newSmap.Primary.ID())
 	}
 	checkPmapVersions(t, proxyURL)
+	return
 }
 
 func chooseNextProxy(smap *cluster.Smap) (proxyid, proxyURL string, err error) {
@@ -1316,4 +1324,129 @@ func primaryAndNextCrash(t *testing.T) {
 	_, err = tutils.WaitForPrimaryProxy(finalPrimaryURL, "to restore prev primary",
 		smap.Version, testing.Verbose(), origProxyCount)
 	tassert.CheckFatal(t, err)
+}
+
+// TODO: make it long test after IC development completes
+func TestIC(t *testing.T) {
+	proxyURL := tutils.RandomProxyURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
+	if smap.CountProxies() < 4 {
+		t.Fatal("Not enough proxies to run proxy tests, must be more than 3")
+	}
+
+	for _, test := range icTests {
+		t.Run(test.name, test.method)
+		if t.Failed() {
+			t.FailNow()
+		}
+	}
+	clusterHealthCheck(t, smap)
+}
+
+func icMemberLeaveAndRejoin(t *testing.T) {
+	smap := tutils.GetClusterMap(t, proxyURL)
+	primary := smap.Primary
+	origProxyCount := smap.CountProxies()
+	if origProxyCount < 4 {
+		t.Fatal("Not enough proxies to run proxy tests, must have at least 4")
+	}
+
+	tassert.Fatalf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
+
+	// Primary must be an IC member
+	tassert.Fatalf(t, smap.IsIC(primary), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
+
+	// killing an IC member, should add a new IC member
+	// select IC member which is not primary and kill
+	var killNode *cluster.Snode
+	for sid := range smap.IC {
+		if prx := smap.GetProxy(sid); !prx.Equals(primary) {
+			killNode = prx
+			break
+		}
+	}
+	origIC := smap.IC
+	delete(origIC, killNode.DaemonID)
+	cmd, args, err := kill(killNode.DaemonID, killNode.PublicNet.DaemonPort)
+	tassert.CheckFatal(t, err)
+
+	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
+		smap.Version, testing.Verbose(), origProxyCount-1)
+	tassert.CheckFatal(t, err)
+
+	tassert.Errorf(t, !smap.IsIC(killNode), "Killed daemon (%s) must be removed from IC", killNode.DaemonID)
+
+	// should have remaining IC nodes
+	for sid := range origIC {
+		tassert.Errorf(t, smap.IsIC(smap.GetProxy(sid)), "Should not remove existing IC members (%s)", sid)
+	}
+	tassert.Errorf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
+
+	err = restore(cmd, args, false, "proxy")
+	tassert.CheckFatal(t, err)
+
+	updatedICs := smap.IC
+	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
+		smap.Version, testing.Verbose(), origProxyCount)
+	tassert.CheckFatal(t, err)
+
+	// Adding a new node shouldn't change IC members
+	tassert.Errorf(t, reflect.DeepEqual(updatedICs, smap.IC), "shouldn't update existing IC members")
+}
+
+func icKillAndRestorePrimary(t *testing.T) {
+	proxyURL := tutils.RandomProxyURL()
+	smap := tutils.GetClusterMap(t, proxyURL)
+	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
+	newPrimary := smap.GetProxy(newPrimaryID)
+	tassert.CheckFatal(t, err)
+
+	oldIC := smap.IC
+	oldPrimary := smap.Primary
+	oldPrimaryURL := smap.Primary.PublicNet.DirectURL
+	oldPrimaryID := smap.Primary.ID()
+
+	cmd, args, err := kill(smap.Primary.ID(), smap.Primary.PublicNet.DaemonPort)
+	tassert.CheckFatal(t, err)
+
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to designate new primary",
+		smap.Version, testing.Verbose())
+	tassert.CheckFatal(t, err)
+
+	// OLD primary shouldn't be in IC
+	tassert.Errorf(t, !smap.IsIC(oldPrimary), "killed primary (%s) must be removed from IC", oldPrimaryID)
+
+	// New primary should be part of IC
+	tassert.Errorf(t, smap.IsIC(newPrimary), "new primary (%s) must be part of IC", newPrimaryID)
+
+	// remaining IC member should be unchanged
+	for sid := range oldIC {
+		if sid != oldPrimaryID {
+			tassert.Errorf(t, smap.IsIC(smap.GetProxy(sid)), "should not remove existing IC members (%s)", sid)
+		}
+	}
+
+	changedIC := smap.IC
+	_, maxVal := cmn.MaxValEntryInt(changedIC)
+	tassert.CheckError(t, err)
+
+	// Restore the killed primary back as primary
+	err = restore(cmd, args, true, "proxy")
+	tassert.CheckFatal(t, err)
+	smap, err = tutils.WaitForPrimaryProxy(oldPrimaryURL, "to designate new primary",
+		smap.Version, testing.Verbose())
+	tassert.CheckFatal(t, err)
+	smap = setPrimaryTo(t, newPrimaryURL, smap, "", oldPrimaryID)
+
+	// when a node added as primary, it should add itself to IC
+	tassert.Fatalf(t, smap.IsIC(oldPrimary), "primary (%s) should be a IC member, (were: %s)", oldPrimaryID, smap.StrIC(newPrimary))
+	tassert.Errorf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
+
+	// proxy with max version should be evicted
+	for si, v := range changedIC {
+		if _, ok := smap.IC[si]; !ok {
+			tassert.Fatalf(t, v == maxVal,
+				"should remove IC member with maxVersion v:(%d) - deleted v:(%d) instead", maxVal, v)
+		}
+	}
 }

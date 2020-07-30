@@ -94,6 +94,7 @@ var (
 type (
 	StringSet      map[string]struct{}
 	SimpleKVs      map[string]string
+	SimpleKVsInt   map[string]int64
 	JSONRawMsgs    map[string]jsoniter.RawMessage
 	SimpleKVsEntry struct {
 		Key   string
@@ -284,6 +285,26 @@ func (kv SimpleKVs) Keys() []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+func (kv SimpleKVsInt) Keys() []string {
+	keys := make([]string, 0, len(kv))
+	for k := range kv {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// only for +ve int values
+func MaxValEntryInt(kv map[string]int64) (key string, val int64) {
+	val = -1
+	for k, v := range kv {
+		if v > val {
+			key = k
+			val = v
+		}
+	}
+	return
 }
 
 func NewStringSet(keys ...string) (ss StringSet) {

@@ -9,7 +9,6 @@ import (
 	"net"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"unsafe"
 
@@ -17,13 +16,12 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	jsoniter "github.com/json-iterator/go"
 )
 
 const (
-	numIC = 3 // desirable gateway count in the Information Center
+	ICGroupSize = 3 // desirable gateway count in the Information Center
 )
 
 // NOTE: to access Snode, Smap and related structures, external
@@ -125,50 +123,55 @@ func (m *smapX) init(tsize, psize, elsize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
 	m.Pmap = make(cluster.NodeMap, psize)
 	m.NonElects = make(cmn.SimpleKVs, elsize)
-	m.IC = make(cmn.SimpleKVs, numIC)
+	m.IC = make(cmn.SimpleKVsInt, ICGroupSize)
 }
 
-func (m *smapX) staffIC(psi *cluster.Snode) {
-	if !m.isIC(psi) {
-		m.addIC(psi)
-		if len(m.IC) >= numIC {
-			return
-		}
+func (m *smapX) _fillIC() {
+	if len(m.IC) >= ICGroupSize {
+		return
 	}
-	// try to select the missing members - upto numIC - if available
+
+	// try to select the missing members - upto ICGroupSize - if available
 	for pid, si := range m.Pmap {
 		if _, ok := m.NonElects[pid]; ok {
 			continue
 		}
-		if !m.isIC(si) {
-			m.addIC(si)
-			if len(m.IC) >= numIC {
-				break
-			}
+		m.addIC(si)
+		if len(m.IC) >= ICGroupSize {
+			break
 		}
 	}
+}
+
+// only used by primary
+func (m *smapX) staffIC() {
+	m.addIC(m.Primary)
+	m._fillIC()
+	m.evictIC()
+}
+
+// ensure num IC members doesn't exceed max value
+// Evict the most recently added IC member
+func (m *smapX) evictIC() {
+	if len(m.IC) <= ICGroupSize {
+		return
+	}
+	// everything except new primary
+	var maxVer int64
+	maxSid := ""
+	for sid, ver := range m.IC {
+		if ver > maxVer && sid != m.Primary.ID() {
+			maxSid = sid
+			maxVer = ver
+		}
+	}
+	delete(m.IC, maxSid)
 }
 
 func (m *smapX) addIC(psi *cluster.Snode) {
-	debug.Assert(!m.isIC(psi), psi.String())
-	m.IC[psi.ID()] = ""
-}
-
-func (m *smapX) isIC(psi *cluster.Snode) (ok bool) {
-	_, ok = m.IC[psi.ID()]
-	return
-}
-
-func (m *smapX) strIC(psi *cluster.Snode) string {
-	all := make([]string, 0, len(m.IC))
-	for pid := range m.IC {
-		if pid == psi.ID() {
-			all = append(all, pid+"(*)")
-		} else {
-			all = append(all, pid)
-		}
+	if !m.IsIC(psi) {
+		m.IC[psi.ID()] = m.Version
 	}
-	return strings.Join(all, ",")
 }
 
 func (m *smapX) tag() string    { return revsSmapTag }

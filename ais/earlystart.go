@@ -257,9 +257,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		smap = clone
 	}
 	// try to start with a fully staffed IC
-	if l := len(smap.IC); l < numIC {
+	if l := len(smap.IC); l < ICGroupSize {
 		clone := smap.clone()
-		clone.staffIC(p.si)
+		clone.staffIC()
 		if l != len(clone.IC) {
 			clone.Version++
 			smap = clone

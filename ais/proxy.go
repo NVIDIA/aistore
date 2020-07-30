@@ -1111,13 +1111,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		smap := p.owner.smap.get()
 		// TODO -- FIXME: must be consistent vs newQueryListener
 		nl := newNLB(smsg.UUID, smap.Tmap, notifCache, cmn.ActListObjects, bck.Bck)
-
-		// TODO -- FIXME: hrw-select cache owner
-		if false {
-			nl.hrwOwner(smap)
-		} else {
-			nl.setOwner(smap.Primary.ID())
-		}
+		nl.hrwOwner(smap)
 		p.registerIC(regIC{nl: nl, smap: smap, msg: amsg})
 	} else if rev, err := p.reverseToOwner(w, r, smsg.UUID, amsg); rev || err != nil {
 		if err != nil {
@@ -2384,6 +2378,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	err = p.owner.smap.modify(func(clone *smapX) error {
 		clone.Primary = psi
+		clone.staffIC()
 		return nil
 	})
 	cmn.AssertNoErr(err)
@@ -2404,10 +2399,8 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 			clone.Primary = p.si
 			clone.Version += 100
 			delete(clone.IC, proxyIDToRemove)
-			if len(clone.IC) < numIC && !clone.isIC(p.si) {
-				clone.addIC(p.si)
-				// TODO -- FIXME: bring newly added member of the IC up to speed - here and elsewhere
-			}
+			clone.staffIC()
+			// TODO -- FIXME: bring newly added member of the IC up to speed - here and elsewhere
 			return nil
 		},
 		func(clone *smapX) {
@@ -2467,6 +2460,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	// (I.5) commit locally
 	err = p.owner.smap.modify(func(clone *smapX) error {
 		clone.Primary = psi
+		clone.staffIC()
 		p.metasyncer.becomeNonPrimary()
 		return nil
 	})
@@ -2975,10 +2969,9 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 				aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
 				notifyPairs := revsPair{clone, aisMsg}
 				_ = p.metasyncer.notify(true, notifyPairs)
-			} else if !exists && !nonElectable && len(clone.IC) < numIC {
-				clone.addIC(nsi)
-				// TODO -- FIXME: bring newly added IC member up to speed
 			}
+			clone.staffIC()
+			// TODO -- FIXME: bring newly added IC member up to speed
 			return nil
 		},
 		func(clone *smapX) {
@@ -3146,6 +3139,7 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 		clone.delTarget(sid)
 		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
 	}
+	clone.staffIC()
 
 	if !p.NodeStarted() {
 		return

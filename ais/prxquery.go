@@ -122,12 +122,8 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	// TODO -- FIXME: hrw-select cache owner
-	if false {
-		nlq.hrwOwner(smap)
-	} else {
-		nlq.setOwner(smap.Primary.ID())
-	}
+	nlq.hrwOwner(smap)
+
 	p.registerIC(regIC{nl: nlq, smap: smap, msg: msg})
 	w.Write([]byte(handle))
 }

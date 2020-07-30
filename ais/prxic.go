@@ -63,11 +63,15 @@ func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uui
 			owner, exists = p.notifs.getOwner(uuid)
 		}
 		if !exists {
-			err = fmt.Errorf("%q not found (%s)", uuid, smap.strIC(p.si))
+			err = fmt.Errorf("%q not found (%s)", uuid, smap.StrIC(p.si))
 			return
 		}
 	} else {
-		owner = smap.Primary.ID() // TODO -- FIXME: equalIC works only for non-cached; see also hrw-select
+		hrwOwner, err := cluster.HrwIC(&smap.Smap, uuid)
+		if err != nil {
+			return false, err
+		}
+		owner = hrwOwner.ID()
 	}
 outer:
 	switch owner {
@@ -80,13 +84,13 @@ outer:
 			for pid := range smap.IC {
 				owner = pid
 				psi = smap.GetProxy(owner)
-				cmn.Assert(smap.isIC(psi))
+				cmn.Assert(smap.IsIC(psi))
 				break outer
 			}
 		}
 	default: // cached + owned
 		psi = smap.GetProxy(owner)
-		cmn.AssertMsg(smap.isIC(psi), owner+", "+smap.strIC(p.si)) // TODO -- FIXME: handle
+		cmn.AssertMsg(smap.IsIC(psi), owner+", "+smap.StrIC(p.si)) // TODO -- FIXME: handle
 	}
 	if owner == p.si.ID() {
 		return
@@ -105,13 +109,13 @@ func (p *proxyrunner) checkEntry(w http.ResponseWriter, r *http.Request, uuid st
 	nl, exists := p.notifs.entry(uuid)
 	if !exists {
 		smap := p.owner.smap.get()
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.strIC(p.si))
+		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(p.si))
 		return
 	}
 	if nl.finished() {
 		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
 		smap := p.owner.smap.get()
-		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.strIC(p.si))
+		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.StrIC(p.si))
 		return
 	}
 	return nl, true
@@ -121,7 +125,7 @@ func (p *proxyrunner) writeStatus(w http.ResponseWriter, r *http.Request, uuid s
 	nl, exists := p.notifs.entry(uuid)
 	if !exists {
 		smap := p.owner.smap.get()
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.strIC(p.si))
+		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(p.si))
 		return
 	}
 
@@ -181,7 +185,7 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) whichIC(smap *smapX, query url.Values) (selfIC, otherIC bool) {
 	cmn.Assert(len(smap.IC) > 0)
-	selfIC = smap.isIC(p.si)
+	selfIC = smap.IsIC(p.si)
 	otherIC = len(smap.IC) > 1
 	cmn.Assert(selfIC || otherIC)
 	if query == nil {
