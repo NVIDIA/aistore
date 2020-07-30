@@ -65,6 +65,7 @@ type (
 		metasyncer *metasyncer
 		rproxy     reverseProxy
 		notifs     notifs
+		qm         queryMem
 		gmm        *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	}
 	remBckAddArgs struct {
@@ -124,6 +125,7 @@ func (p *proxyrunner) Run() error {
 	p.rproxy.init()
 
 	p.notifs.init(p)
+	p.qm.init()
 
 	//
 	// REST API: register proxy handlers and start listening
@@ -1199,7 +1201,7 @@ func (p *proxyrunner) invalidateListAISBucketCache(w http.ResponseWriter, r *htt
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	qc.invalidate(cacheReqID{bck: bck.Bck})
+	p.qm.c.invalidate(cacheReqID{bck: bck.Bck})
 }
 
 // bucket == "": all buckets for a given provider
@@ -1746,23 +1748,23 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	//  then we should just patiently wait for the cache to get populated.
 
 	if !smsg.Passthrough {
-		entries, hasEnough = qc.get(cacheID, smsg.ContinuationToken, pageSize)
+		entries, hasEnough = p.qm.c.get(cacheID, smsg.ContinuationToken, pageSize)
 		if hasEnough {
 			goto end
 		}
 		// Request for all the props if (cache should always have all entries).
 		smsg.AddProps(cmn.GetPropsAll...)
 	}
-	if qb.hasEnough(smsg.UUID, smsg.ContinuationToken, pageSize) {
+	if p.qm.b.hasEnough(smsg.UUID, smsg.ContinuationToken, pageSize) {
 		// We have enough in the buffer to fulfill the request.
-		entries = qb.get(smsg.UUID, smsg.ContinuationToken, pageSize)
+		entries = p.qm.b.get(smsg.UUID, smsg.ContinuationToken, pageSize)
 		goto endWithCache
 	}
 
 	// User requested some page but we don't have enough (but we may have part
 	// of the full page). Therefore, we must ask targets for page starting from
 	// what we have locally, so we don't rerequest the objects.
-	smsg.PageMarker = qb.last(smsg.UUID, smsg.ContinuationToken)
+	smsg.PageMarker = p.qm.b.last(smsg.UUID, smsg.ContinuationToken)
 
 	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, nil, nil)
 	args = bcastArgs{
@@ -1792,13 +1794,13 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 		if len(bucketList.Entries) == 0 {
 			continue
 		}
-		qb.set(smsg.UUID, res.si.ID(), bucketList.Entries, pageSize)
+		p.qm.b.set(smsg.UUID, res.si.ID(), bucketList.Entries, pageSize)
 	}
-	entries = qb.get(smsg.UUID, smsg.ContinuationToken, pageSize)
+	entries = p.qm.b.get(smsg.UUID, smsg.ContinuationToken, pageSize)
 
 endWithCache:
 	if !smsg.Passthrough {
-		qc.set(cacheID, smsg.ContinuationToken, entries, pageSize)
+		p.qm.c.set(cacheID, smsg.ContinuationToken, entries, pageSize)
 		props := smsg.PropsSet()
 		for idx := range entries {
 			entries[idx].SetProps(props)

@@ -9,8 +9,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/hk"
 )
 
 // This file contains implementation for two concepts:
@@ -35,6 +38,20 @@ import (
 // answered by a single interval is considered valid response. Otherwise cache
 // cannot be trusted (we don't know how many objects can be in the gap).
 
+const (
+	// Determines how long "cache interval" is able to live. If there was no
+	// access to given interval for this long it will be removed.
+	cacheLiveTimeout = 40 * time.Minute
+	// Determines how often cache housekeeping function is invoked.
+	cacheHkInterval = 10 * time.Minute
+
+	// Determines how long buffer is able to live. If there was no access to
+	// a given buffer for this long it will be forgotten.
+	bufferLiveTimeout = 10 * time.Minute
+	// Determines how often buffer housekeeping function is invoked.
+	bufferHkInterval = 5 * time.Minute
+)
+
 type (
 	// Single buffer per target.
 	queryBufferTarget struct {
@@ -53,6 +70,9 @@ type (
 		// Buffers for each target that are finally merged and the entries are
 		// appended to `currentBuff`.
 		leftovers map[string]*queryBufferTarget // targetID (string) -> target buffer
+		// Contains the timestamp of the last access to this buffer. If given
+		// predefined time passes the buffer will be forgotten.
+		lastAccess int64
 	}
 
 	// Contains all query buffers.
@@ -79,6 +99,9 @@ type (
 		// Determines if this is the last page/interval (this means there is no
 		// more objects after the last entry).
 		last bool
+		// Contains the timestamp of the last access to this interval. If given
+		// predefined time passes the interval will be removed.
+		lastAccess int64
 	}
 
 	// Contains additional parameters to interval request.
@@ -96,13 +119,17 @@ type (
 	queryCaches struct {
 		caches sync.Map // cache_id (string, see: `cacheReqID`) -> cache (*queryCache)
 	}
+
+	queryMem struct {
+		b *queryBuffers
+		c *queryCaches
+	}
 )
 
-// TODO: eventually these variables should not exist as a globals.
-var (
-	qb = &queryBuffers{}
-	qc = &queryCaches{}
-)
+func (qm *queryMem) init() {
+	qm.b = newQueryBuffers()
+	qm.c = newQueryCaches()
+}
 
 func mergeTargetBuffers(lists map[string]*queryBufferTarget) (entries []*cmn.BucketEntry) {
 	for _, l := range lists {
@@ -162,14 +189,22 @@ func (b *queryBuffer) get(token string, size uint) []*cmn.BucketEntry {
 	}
 	entries := b.currentBuff[:size]
 	b.currentBuff = b.currentBuff[size:]
+	b.lastAccess = mono.NanoTime()
 	return entries
 }
 
-func (b *queryBuffer) add(id string, entries []*cmn.BucketEntry, size uint) {
+func (b *queryBuffer) set(id string, entries []*cmn.BucketEntry, size uint) {
 	b.leftovers[id] = &queryBufferTarget{
 		entries: entries,
 		done:    uint(len(entries)) < size,
 	}
+	b.lastAccess = mono.NanoTime()
+}
+
+func newQueryBuffers() *queryBuffers {
+	b := &queryBuffers{}
+	hk.Reg("query-buffer", b.housekeep)
+	return b
 }
 
 func (b *queryBuffers) hasEnough(id, token string, size uint) bool {
@@ -210,7 +245,18 @@ func (b *queryBuffers) set(id, targetID string, entries []*cmn.BucketEntry, size
 	v, _ := b.buffers.LoadOrStore(id, &queryBuffer{
 		leftovers: make(map[string]*queryBufferTarget),
 	})
-	v.(*queryBuffer).add(targetID, entries, size)
+	v.(*queryBuffer).set(targetID, entries, size)
+}
+
+func (b *queryBuffers) housekeep() time.Duration {
+	b.buffers.Range(func(key, value interface{}) bool {
+		buffer := value.(*queryBuffer)
+		if mono.Since(buffer.lastAccess) > bufferLiveTimeout {
+			b.buffers.Delete(key)
+		}
+		return true
+	})
+	return bufferHkInterval
 }
 
 func (c cacheReqID) String() string { return c.bck.String() + string(filepath.Separator) + c.prefix }
@@ -226,6 +272,7 @@ func (ci *cacheInterval) contains(token string) bool {
 }
 
 func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entries []*cmn.BucketEntry, hasEnough bool) {
+	ci.lastAccess = mono.NanoTime()
 	entries = ci.entries
 
 	start := ci.find(token)
@@ -288,12 +335,14 @@ func (ci *cacheInterval) append(objs *cacheInterval) {
 	idx := ci.find(objs.token)
 	ci.entries = append(ci.entries[:idx], objs.entries...)
 	ci.last = objs.last
+	ci.lastAccess = mono.NanoTime()
 }
 
 func (ci *cacheInterval) prepend(objs *cacheInterval) {
 	cmn.Assert(!objs.last)
 	idx := objs.find(ci.token)
 	ci.entries = append(objs.entries[idx:], ci.entries...)
+	ci.lastAccess = mono.NanoTime()
 }
 
 // PRECONDITION: `c.mtx` must be rlocked.
@@ -334,6 +383,7 @@ func (c *queryCache) removeInterval(ci *cacheInterval) {
 	// TODO: this should be faster
 	for idx := range c.intervals {
 		if c.intervals[idx] == ci {
+			ci.entries = nil
 			c.intervals = append(c.intervals[:idx], c.intervals[idx+1:]...)
 			return
 		}
@@ -357,9 +407,10 @@ func (c *queryCache) set(token string, entries []*cmn.BucketEntry, size uint) {
 		start = c.findInterval(token)
 		end   *cacheInterval
 		cur   = &cacheInterval{
-			token:   token,
-			entries: entries,
-			last:    uint(len(entries)) < size,
+			token:      token,
+			entries:    entries,
+			last:       uint(len(entries)) < size,
+			lastAccess: mono.NanoTime(),
 		}
 	)
 	if len(cur.entries) > 0 {
@@ -372,6 +423,12 @@ func (c *queryCache) invalidate() {
 	c.mtx.Lock()
 	c.intervals = nil
 	c.mtx.Unlock()
+}
+
+func newQueryCaches() *queryCaches {
+	c := &queryCaches{}
+	hk.Reg("query-cache", c.housekeep)
+	return c
 }
 
 func (c *queryCaches) get(reqID cacheReqID, token string, objCnt uint) (entries []*cmn.BucketEntry, hasEnough bool) {
@@ -406,4 +463,28 @@ func (c *queryCaches) invalidate(reqID cacheReqID) {
 		return
 	}
 	v.(*queryCache).invalidate()
+}
+
+// TODO: Missing housekeep based on memory pressure.
+func (c *queryCaches) housekeep() time.Duration {
+	c.caches.Range(func(key, value interface{}) bool {
+		cache := value.(*queryCache)
+		cache.mtx.Lock()
+		defer cache.mtx.Unlock()
+
+		var toRemove []*cacheInterval
+		for _, interval := range cache.intervals {
+			if mono.Since(interval.lastAccess) > cacheLiveTimeout {
+				toRemove = append(toRemove, interval)
+			}
+		}
+		for _, interval := range toRemove {
+			cache.removeInterval(interval)
+		}
+		if len(cache.intervals) == 0 {
+			c.caches.Delete(key)
+		}
+		return true
+	})
+	return cacheHkInterval
 }
