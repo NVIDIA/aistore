@@ -32,7 +32,7 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-minsize` - Minimal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix)
  - `-maxsize` - Maximal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix)
  - `-maxputs` - Maximum number of objects to PUT
- - `-readertype` - Type of reader: sg (default) | file | inmem | rand
+ - `-readertype` - Type of reader: sg (default) | file | inmem | rand | tar
  - `-loaderid` - ID to identify a loader when multiple instances of loader running on the same host
  - `-check-statsd` - If set, checks if statsd is running before run
  - `-statsdip` - IP for statsd server

@@ -487,3 +487,12 @@ func CopyAndChecksum(w io.Writer, r io.Reader, buf []byte, cksumType string) (n 
 	cksum.Finalize()
 	return
 }
+
+// ChecksumBytes computes checksum of given bytes using additional buffer.
+func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
+	_, hash, err := CopyAndChecksum(ioutil.Discard, bytes.NewReader(b), nil, cksumType)
+	if err != nil {
+		return nil, err
+	}
+	return &hash.Cksum, nil
+}

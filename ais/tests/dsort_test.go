@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/archive"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -265,13 +266,13 @@ func (df *dsortFramework) createInputShards() {
 			)
 
 			if df.algorithm.Kind == dsort.SortKindContent {
-				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
+				err = archive.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == cmn.ExtTar {
-				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts)
+				err = archive.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts)
 			} else if df.extension == cmn.ExtTarTgz {
-				err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil)
+				err = archive.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil)
 			} else if df.extension == cmn.ExtZip {
-				err = tutils.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
+				err = archive.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
 			} else {
 				df.m.t.Fail()
 			}

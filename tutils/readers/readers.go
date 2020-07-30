@@ -16,7 +16,9 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tutils/archive"
 )
 
 const (
@@ -26,31 +28,45 @@ const (
 	ReaderTypeSG = "sg"
 	// ReaderTypeRand defines the name for rand reader
 	ReaderTypeRand = "rand"
+	// ReaderTypeTar defines the name for random TAR reader
+	ReaderTypeTar = "tar"
 )
 
 // Reader is the interface a client works with to read in data and send to a HTTP server
-type Reader interface {
-	io.ReadCloser
-	io.Seeker
-	Open() (io.ReadCloser, error)
-	Cksum() *cmn.Cksum
-}
+type (
+	Reader interface {
+		io.ReadCloser
+		io.Seeker
+		Open() (io.ReadCloser, error)
+		Cksum() *cmn.Cksum
+	}
 
-// randReader implements Reader.
-// It doesn't not use a file or allocated memory as data backing.
-type randReader struct {
-	seed   int64
-	rnd    *rand.Rand
-	size   int64
-	offset int64
-	cksum  *cmn.Cksum
-}
+	// randReader implements Reader.
+	// It doesn't not use a file or allocated memory as data backing.
+	randReader struct {
+		seed   int64
+		rnd    *rand.Rand
+		size   int64
+		offset int64
+		cksum  *cmn.Cksum
+	}
+
+	// tarReader generates TAR (uncompressed) files as a io.Reader.
+	// Content of files are random.
+	// It uses bytes.Buffer to write bytes to memory, it doesn't use sgl.
+	tarReader struct {
+		b []byte
+		bytes.Reader
+		cksum *cmn.Cksum
+	}
+)
 
 var (
 	mmsa = memsys.DefaultPageMM()
 
 	// interface guard
 	_ Reader = &randReader{}
+	_ Reader = &tarReader{}
 )
 
 // Read implements the Reader interface.
@@ -327,6 +343,8 @@ func NewReader(p ParamReader, cksumType string) (Reader, error) {
 		return NewRandReader(p.Size, cksumType)
 	case ReaderTypeFile:
 		return NewFileReader(p.Path, p.Name, p.Size, cksumType)
+	case ReaderTypeTar:
+		return NewTarReader(p.Size, cksumType)
 	default:
 		return nil, fmt.Errorf("unknown memory type for creating inmem reader")
 	}
@@ -364,4 +382,45 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand)
 		cksum.Finalize()
 	}
 	return cksum, nil
+}
+
+// To implement Reader
+func (r *tarReader) Close() error {
+	return nil
+}
+
+// To implement Reader
+func (r *tarReader) Open() (io.ReadCloser, error) {
+	return &tarReader{
+		Reader: *bytes.NewReader(r.b),
+		cksum:  r.cksum,
+		b:      r.b,
+	}, nil
+}
+
+func (r *tarReader) Cksum() *cmn.Cksum {
+	return r.cksum
+}
+
+func NewTarReader(size int64, cksumType string) (r Reader, err error) {
+	var (
+		singleFileSize = cmn.MinI64(size, int64(cmn.KiB))
+		buff           = bytes.NewBuffer(nil)
+	)
+
+	err = archive.CreateTarWithCustomFilesToWriter(buff, cmn.Max(int(size/singleFileSize), 1), int(singleFileSize), extract.FormatTypeInt, ".cls", true)
+	if err != nil {
+		return nil, err
+	}
+
+	cksum, err := cmn.ChecksumBytes(buff.Bytes(), cksumType)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tarReader{
+		b:      buff.Bytes(),
+		Reader: *bytes.NewReader(buff.Bytes()),
+		cksum:  cksum,
+	}, err
 }

@@ -260,7 +260,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.readerType, "readertype", readers.ReaderTypeSG,
-		fmt.Sprintf("Type of reader: %s(default) | %s | %s", readers.ReaderTypeSG, readers.ReaderTypeFile, readers.ReaderTypeRand))
+		fmt.Sprintf("Type of reader: %s(default) | %s | %s | %s", readers.ReaderTypeSG, readers.ReaderTypeFile, readers.ReaderTypeRand, readers.ReaderTypeTar))
 	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
