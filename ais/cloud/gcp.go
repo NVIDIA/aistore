@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -250,6 +251,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	}
 	objMeta = make(cmn.SimpleKVs)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
+	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(attrs.Size, 10)
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		objMeta[cmn.HeaderObjVersion] = v
 	}

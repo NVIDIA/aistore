@@ -1859,8 +1859,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	// Maximum objects in the final result page. Take all objects in
 	// case of Cloud and no limit is set by a user. We cannot use
 	// the single cmn.DefaultPageSize because Azure limit differs.
-	maxSize := smsg.PageSize
-	allEntries = cmn.MergeObjLists(bckLists, maxSize)
+	allEntries = cmn.MergeObjLists(bckLists, 0)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Errorf("Objects after merge %d, marker %s", len(allEntries.Entries), allEntries.PageMarker)
 	}

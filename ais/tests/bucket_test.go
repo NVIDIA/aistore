@@ -508,7 +508,6 @@ func TestListObjectsCloudCached(t *testing.T) {
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
-	t.Skip("not working....")
 
 	m.init()
 
@@ -519,6 +518,8 @@ func TestListObjectsCloudCached(t *testing.T) {
 		PageSize: 10,
 		Cached:   true,
 	}
+	msg.AddProps(cmn.GetPropsDefault...)
+	msg.AddProps(cmn.GetPropsCached, cmn.GetPropsStatus)
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
@@ -550,7 +551,6 @@ func TestListObjectsCloudProps(t *testing.T) {
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
-	t.Skip("not working....")
 
 	m.init()
 
@@ -595,7 +595,6 @@ func TestListObjectsRandProxy(t *testing.T) {
 		)
 
 		if !bck.IsAIS() {
-			t.Skip("not working...")
 			m.num = rand.Intn(300) + 100
 		}
 
@@ -637,7 +636,6 @@ func TestListObjectsRandPageSize(t *testing.T) {
 		)
 
 		if !bck.IsAIS() {
-			t.Skip("not working...")
 			m.num = rand.Intn(300) + 100
 		}
 
@@ -1294,7 +1292,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected error of *cmn.HTTPError type.")
 	}
-	if errAsHTTPError.Status != http.StatusNotFound {
+	if errAsHTTPError.Status < http.StatusBadRequest {
 		t.Errorf("Expected status: %d, but got: %d.", http.StatusNotFound, errAsHTTPError.Status)
 	}
 }
@@ -1322,7 +1320,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected error of *cmn.HTTPError type.")
 	}
-	if errAsHTTPError.Status != http.StatusNotFound {
+	if errAsHTTPError.Status < http.StatusBadRequest {
 		t.Errorf("Expected status: %d, but got: %d.", http.StatusNotFound, errAsHTTPError.Status)
 	}
 }
