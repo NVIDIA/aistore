@@ -68,10 +68,10 @@ func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error
 		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive
-	if len(res.outjson) == 0 {
+	if len(res.bytes) == 0 {
 		return
 	}
-	err = t.applyRegMeta(res.outjson, "")
+	err = t.applyRegMeta(res.bytes, "")
 	return
 }
 
@@ -863,7 +863,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 			return fmt.Errorf("%s: failed to GET(%q), err: %v", t.si, what, res.err)
 		}
 	}
-	err = jsoniter.Unmarshal(res.outjson, outStruct)
+	err = jsoniter.Unmarshal(res.bytes, outStruct)
 	if err != nil {
 		return fmt.Errorf("%s: unexpected: failed to unmarshal GET(%q) response: %v", t.si, what, err)
 	}

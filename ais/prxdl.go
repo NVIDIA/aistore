@@ -57,7 +57,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 			aggregate := make(map[string]*downloader.DlJobInfo)
 			for _, resp := range validResponses {
 				var parsedResp map[string]*downloader.DlJobInfo
-				err := jsoniter.Unmarshal(resp.outjson, &parsedResp)
+				err := jsoniter.Unmarshal(resp.bytes, &parsedResp)
 				cmn.AssertNoErr(err)
 				for k, v := range parsedResp {
 					if oldMetric, ok := aggregate[k]; ok {
@@ -77,7 +77,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 
 		stats := make([]downloader.DlStatusResp, len(validResponses))
 		for i, resp := range validResponses {
-			err := jsoniter.Unmarshal(resp.outjson, &stats[i])
+			err := jsoniter.Unmarshal(resp.bytes, &stats[i])
 			cmn.AssertNoErr(err)
 		}
 
@@ -89,8 +89,8 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		respJSON := cmn.MustMarshal(resp)
 		return respJSON, http.StatusOK, nil
 	case http.MethodDelete:
-		response := validResponses[0]
-		return response.outjson, response.status, response.err
+		res := validResponses[0]
+		return res.bytes, res.status, res.err
 	default:
 		cmn.AssertMsg(false, method)
 		return nil, http.StatusInternalServerError, nil

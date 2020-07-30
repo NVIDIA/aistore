@@ -472,7 +472,7 @@ func (n *notifs) forEach(fn func(string /*uuid*/, notifListener), preds ...func(
 
 func (n *notifs) hkXact(nl notifListener, res callResult) (msg interface{}, err error, done bool) {
 	stats := &cmn.BaseXactStatsExt{}
-	if eru := jsoniter.Unmarshal(res.outjson, stats); eru != nil {
+	if eru := jsoniter.Unmarshal(res.bytes, stats); eru != nil {
 		glog.Errorf("%s: unexpected: failure to unmarshal: %s, node %s, err: %v", n.p.si, nl, res.si, eru)
 		return
 	}

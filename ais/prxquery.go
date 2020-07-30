@@ -209,7 +209,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		list := &cmn.BucketList{}
-		if err := jsoniter.Unmarshal(res.outjson, list); err != nil {
+		if err := jsoniter.Unmarshal(res.bytes, list); err != nil {
 			p.invalmsghdlr(w, r, "failed to unmarshal target query response", http.StatusInternalServerError)
 			return
 		}

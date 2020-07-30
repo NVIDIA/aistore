@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -34,35 +35,41 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tinylib/msgp/msgp"
 )
 
-const ( //  h.call(timeout)
+const (
 	unknownDaemonID = "unknown"
 )
 
 type (
-	// callResult contains http response
+	// callResult contains HTTP response.
 	callResult struct {
 		si      *cluster.Snode
-		outjson []byte
+		bytes   []byte      // Raw bytes from response.
+		v       interface{} // Unmarshalled value (set only when requested, see: `callArgs.v`).
 		header  http.Header
 		err     error
 		details string
 		status  int
 	}
 
-	// callArgs contains arguments for a peer-to-peer control plane call
+	// callArgs contains arguments for a peer-to-peer control plane call.
 	callArgs struct {
 		req     cmn.ReqArgs
 		timeout time.Duration
 		si      *cluster.Snode
+		v       interface{} // Value that needs to be unmarshalled.
 	}
 
-	// bcastArgs contains arguments for an intra-cluster broadcast call
+	// bcastArgs contains arguments for an intra-cluster broadcast call.
 	bcastArgs struct {
 		req     cmn.ReqArgs
 		network string // on of the cmn.KnownNetworks
 		timeout time.Duration
+		// Function that returns fresh value that needs to be unmarshalled.
+		// See: `callArgs.v` field.
+		fv func() interface{}
 
 		nodes []cluster.NodeMap
 		smap  *smapX
@@ -629,19 +636,17 @@ func (h *httprunner) stop(err error) {
 // intra-cluster IPC, control plane
 // call another target or a proxy; optionally, include a json-encoded body
 //
-func (h *httprunner) call(args callArgs) callResult {
+func (h *httprunner) call(args callArgs) (res callResult) {
 	var (
-		req     *http.Request
-		sid     = unknownDaemonID
-		outjson []byte
-		err     error
-		details string
-		status  int
-		client  *http.Client
+		req    *http.Request
+		resp   *http.Response
+		client *http.Client
+		sid    = unknownDaemonID
 	)
 
 	if args.si != nil {
 		sid = args.si.ID()
+		res.si = args.si
 	}
 
 	cmn.Assert(args.si != nil || args.req.Base != "") // either we have si or base
@@ -655,23 +660,23 @@ func (h *httprunner) call(args callArgs) callResult {
 
 	switch args.timeout {
 	case cmn.DefaultTimeout:
-		req, err = args.req.Req()
-		if err != nil {
+		req, res.err = args.req.Req()
+		if res.err != nil {
 			break
 		}
 
 		client = h.httpclient
 	case cmn.LongTimeout:
-		req, err = args.req.Req()
-		if err != nil {
+		req, res.err = args.req.Req()
+		if res.err != nil {
 			break
 		}
 
 		client = h.httpclientGetPut
 	default:
 		var cancel context.CancelFunc
-		req, _, cancel, err = args.req.ReqWithTimeout(args.timeout)
-		if err != nil {
+		req, _, cancel, res.err = args.req.ReqWithTimeout(args.timeout)
+		if res.err != nil {
 			break
 		}
 		defer cancel() // timeout => context.deadlineExceededError
@@ -683,10 +688,10 @@ func (h *httprunner) call(args callArgs) callResult {
 		}
 	}
 
-	if err != nil {
-		details = fmt.Sprintf("unexpected failure to create HTTP request %s %s, err: %v",
-			args.req.Method, args.req.URL(), err)
-		return callResult{args.si, outjson, nil, err, details, status}
+	if res.err != nil {
+		res.details = fmt.Sprintf("unexpected failure to create HTTP request %s %s, err: %v",
+			args.req.Method, args.req.URL(), res.err)
+		return
 	}
 
 	req.Header.Set(cmn.HeaderCallerID, h.si.ID())
@@ -695,47 +700,54 @@ func (h *httprunner) call(args callArgs) callResult {
 		req.Header.Set(cmn.HeaderCallerSmapVersion, strconv.FormatInt(smap.version(), 10))
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		if resp != nil && resp.StatusCode > 0 {
-			details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): status %s, err %v",
-				sid, args.req.Method, args.req.URL(), resp.Status, err)
-			status = resp.StatusCode
-			return callResult{args.si, outjson, nil, err, details, status}
-		}
-		details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err %v", sid, args.req.Method, args.req.URL(), err)
-		return callResult{args.si, outjson, nil, err, details, status}
+	resp, res.err = client.Do(req)
+	if res.err != nil {
+		res.details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err %v", sid, args.req.Method, args.req.URL(), res.err)
+		return
 	}
-
-	if outjson, err = ioutil.ReadAll(resp.Body); err != nil {
-		details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): read response err: %v",
-			sid, args.req.Method, args.req.URL(), err)
-		if err == io.EOF {
-			trailer := resp.Trailer.Get("Error")
-			if trailer != "" {
-				details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err: %v, trailer: %s",
-					sid, args.req.Method, args.req.URL(), err, trailer)
-			}
-		}
-
-		resp.Body.Close()
-		return callResult{args.si, outjson, nil, err, details, status}
-	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	res.status = resp.StatusCode
+	res.header = resp.Header
 
 	// err == nil && bad status: resp.Body contains the error message
-	if resp.StatusCode >= http.StatusBadRequest {
-		err = errors.New(string(outjson))
-		details = err.Error()
-		status = resp.StatusCode
-		return callResult{args.si, outjson, nil, err, details, status}
+	if res.status >= http.StatusBadRequest {
+		var b bytes.Buffer
+		b.ReadFrom(resp.Body)
+		res.err = errors.New(b.String())
+		res.details = res.err.Error()
+		return
+	}
+
+	if args.v != nil {
+		// TODO: Add support for unmarshalling JSON values.
+		if v, ok := args.v.(msgp.Decodable); ok {
+			res.err = v.DecodeMsg(msgp.NewReaderSize(resp.Body, 10*cmn.KiB))
+		} else {
+			cmn.AssertFmt(false, "unknown type", args.v)
+		}
+		if res.err != nil {
+			res.details = fmt.Sprintf(
+				"failed to unmarshal response from %s (%s %s), read response err: %v",
+				sid, args.req.Method, args.req.URL(), res.err,
+			)
+			return
+		}
+		res.v = args.v
+	} else {
+		res.bytes, res.err = ioutil.ReadAll(resp.Body)
+		if res.err != nil {
+			res.details = fmt.Sprintf(
+				"failed to HTTP-call %s (%s %s), read response err: %v",
+				sid, args.req.Method, args.req.URL(), res.err,
+			)
+			return
+		}
 	}
 
 	if sid != unknownDaemonID {
 		h.keepalive.heardFrom(sid, false /* reset */)
 	}
-
-	return callResult{args.si, outjson, resp.Header, err, details, resp.StatusCode}
+	return
 }
 
 //
@@ -861,7 +873,6 @@ func (h *httprunner) callAll(method, path string, body []byte, query ...url.Valu
 	return h.callBcast(method, path, body, cluster.AllNodes, query...)
 }
 
-// NOTE: 'u' has only the path and query part, host portion will be set by this method.
 func (h *httprunner) bcast(bargs bcastArgs) chan callResult {
 	nodeCount := 0
 	for _, nodeMap := range bargs.nodes {
@@ -873,27 +884,31 @@ func (h *httprunner) bcast(bargs bcastArgs) chan callResult {
 		glog.Warningf("node count zero in [%+v] bcast", bargs.req)
 		return ch
 	}
-	ch := make(chan callResult, nodeCount)
-	wg := &sync.WaitGroup{}
 
+	var (
+		wg = &sync.WaitGroup{}
+		ch = make(chan callResult, nodeCount)
+	)
 	for _, nodeMap := range bargs.nodes {
-		for sid, serverInfo := range nodeMap {
+		for sid, si := range nodeMap {
 			if sid == h.si.ID() {
 				continue
 			}
 			wg.Add(1)
-			go func(di *cluster.Snode) {
+			go func(si *cluster.Snode) {
 				cargs := callArgs{
-					si:      di,
+					si:      si,
 					req:     bargs.req,
 					timeout: bargs.timeout,
 				}
-				cargs.req.Base = di.URL(bargs.network)
+				cargs.req.Base = si.URL(bargs.network)
+				if bargs.fv != nil {
+					cargs.v = bargs.fv()
+				}
 
-				res := h.call(cargs)
-				ch <- res
+				ch <- h.call(cargs)
 				wg.Done()
-			}(serverInfo)
+			}(si)
 		}
 	}
 
@@ -1066,7 +1081,7 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 		}
 	)
 	res := h.call(args)
-	return res.outjson, res.err, res.status
+	return res.bytes, res.err, res.status
 }
 
 // uses provided Smap and an extended version of the Health(clusterInfo) internal API
@@ -1391,10 +1406,10 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 		}
 		return res.status, res.err
 	}
-	if len(res.outjson) > 0 {
-		s := string(res.outjson)
-		if len(res.outjson) > 32 {
-			s = string(res.outjson[:32])
+	if len(res.bytes) > 0 {
+		s := string(res.bytes)
+		if len(res.bytes) > 32 {
+			s = string(res.bytes[:32])
 		}
 		glog.Errorf("%s: unexpected keepalive response from %s: [%s]", h.si, psi, s)
 	}

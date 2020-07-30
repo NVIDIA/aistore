@@ -316,5 +316,5 @@ func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error
 		timeout: cmn.DefaultTimeout,
 	}
 	res := t.call(args)
-	return res.outjson, res.status, res.err
+	return res.bytes, res.status, res.err
 }

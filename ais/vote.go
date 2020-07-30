@@ -354,17 +354,17 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.ID())
 	results := p.callAll(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Vote, cmn.Proxy), cmn.MustMarshal(&msg), q)
 	resCh := make(chan voteResult, len(results))
-	for r := range results {
-		if r.err != nil {
+	for res := range results {
+		if res.err != nil {
 			resCh <- voteResult{
 				yes:      false,
-				daemonID: r.si.ID(),
-				err:      r.err,
+				daemonID: res.si.ID(),
+				err:      res.err,
 			}
 		} else {
 			resCh <- voteResult{
-				yes:      VoteYes == Vote(r.outjson),
-				daemonID: r.si.ID(),
+				yes:      VoteYes == Vote(res.bytes),
+				daemonID: res.si.ID(),
 				err:      nil,
 			}
 		}

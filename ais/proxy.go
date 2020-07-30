@@ -221,10 +221,10 @@ func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error)
 		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive
-	if len(res.outjson) == 0 {
+	if len(res.bytes) == 0 {
 		return
 	}
-	err = p.applyRegMeta(res.outjson, "")
+	err = p.applyRegMeta(res.bytes, "")
 	return
 }
 
@@ -1279,7 +1279,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		}
 
 		var targetSummary cmn.BucketsSummaries
-		if err := jsoniter.Unmarshal(result.outjson, &targetSummary); err != nil {
+		if err := jsoniter.Unmarshal(result.bytes, &targetSummary); err != nil {
 			return nil, "", err
 		}
 
@@ -1763,6 +1763,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 			Body:  cmn.MustMarshal(aisMsg),
 		},
 		timeout: cmn.LongTimeout, // TODO: should it be `Client.ListObjects`?
+		fv:      func() interface{} { return &cmn.BucketList{} },
 	}
 
 	// Combine the results.
@@ -1770,16 +1771,8 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 		if res.err != nil {
 			return nil, res.err
 		}
-		if len(res.outjson) == 0 {
-			continue
-		}
-		// TODO: we should read directly from `res.r` (`r.Body`)
-		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-		if _, err = bucketList.UnmarshalMsg(res.outjson); err != nil {
-			return
-		}
-		res.outjson = nil
-		p.qm.b.set(smsg.UUID, res.si.ID(), bucketList.Entries, pageSize)
+		objList := res.v.(*cmn.BucketList)
+		p.qm.b.set(smsg.UUID, res.si.ID(), objList.Entries, pageSize)
 	}
 	entries, hasEnough = p.qm.b.get(smsg.UUID, token, pageSize)
 	cmn.Assert(hasEnough)
@@ -1834,6 +1827,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 				Body:   cmn.MustMarshal(aisMsg),
 			},
 			timeout: reqTimeout,
+			fv:      func() interface{} { return &cmn.BucketList{} },
 		}
 	)
 
@@ -1843,7 +1837,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	} else {
 		// only cloud options are requested - call one random target for data
 		for _, si := range smap.Tmap {
-			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout})
+			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout, v: &cmn.BucketList{}})
 			results = make(chan callResult, 1)
 			results <- res
 			close(results)
@@ -1860,19 +1854,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		if res.err != nil {
 			return nil, res.err
 		}
-		if len(res.outjson) == 0 {
-			continue
-		}
-		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, smsg.PageSize)}
-		if _, err = bucketList.UnmarshalMsg(res.outjson); err != nil {
-			return
-		}
-		res.outjson = nil
-
-		if len(bucketList.Entries) == 0 {
-			continue
-		}
-		bckLists = append(bckLists, bucketList)
+		bckLists = append(bckLists, res.v.(*cmn.BucketList))
 	}
 
 	// Maximum objects in the final result page. Take all objects in
@@ -2276,7 +2258,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 		return nil, fmt.Errorf("failed to get smap from %s: %v", baseURL, res.err)
 	}
 	smap = &smapX{}
-	if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
+	if err := jsoniter.Unmarshal(res.bytes, smap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal smap: %v", err)
 	}
 	if !smap.isValid() {
@@ -2633,7 +2615,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// TODO: figure out a way to switch to writeJSON
-			p.writeJSONBytes(w, r, res.outjson, what)
+			p.writeJSONBytes(w, r, res.bytes, what)
 			break
 		}
 	default:
@@ -2707,7 +2689,7 @@ func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request
 			if res.err != nil {
 				return nil, res.details
 			}
-			sysInfoMap[res.si.ID()] = res.outjson
+			sysInfoMap[res.si.ID()] = res.bytes
 		}
 		return sysInfoMap, ""
 	}
@@ -2785,7 +2767,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 			p.invalmsghdlr(w, r, res.details)
 			return nil
 		}
-		targetResults[res.si.ID()] = res.outjson
+		targetResults[res.si.ID()] = res.bytes
 	}
 	return targetResults
 }
@@ -3380,12 +3362,12 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	}
 	res := p.call(args)
-	if res.err != nil || res.outjson == nil || len(res.outjson) == 0 {
+	if res.err != nil || res.bytes == nil || len(res.bytes) == 0 {
 		// error getting response from osi
 		return false
 	}
 	si := &cluster.Snode{}
-	err := jsoniter.Unmarshal(res.outjson, si)
+	err := jsoniter.Unmarshal(res.bytes, si)
 	cmn.AssertNoErr(err)
 	return !nsi.Equals(si)
 }
@@ -3419,7 +3401,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 			glog.Errorf("%v (%d: %s)", res.err, res.status, res.details)
 			continue
 		}
-		if err = jsoniter.Unmarshal(res.outjson, bmd); err != nil {
+		if err = jsoniter.Unmarshal(res.bytes, bmd); err != nil {
 			glog.Errorf("unexpected: failed to unmarshal %s from %s: %v", bmdTermName, res.si, err)
 			continue
 		}

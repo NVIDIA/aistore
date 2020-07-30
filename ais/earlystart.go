@@ -489,7 +489,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 			continue
 		}
 		svm := SmapVoteMsg{}
-		if err = jsoniter.Unmarshal(res.outjson, &svm); err != nil {
+		if err = jsoniter.Unmarshal(res.bytes, &svm); err != nil {
 			glog.Errorf("unexpected unmarshal-error: %v", err)
 			done = false
 			continue
