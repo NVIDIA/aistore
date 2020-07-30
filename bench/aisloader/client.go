@@ -357,16 +357,16 @@ func getConfig(server string) (httpLatencies, error) {
 	return l, err
 }
 
-// listObjectsFast returns a slice of object names of all objects that match the prefix in a bucket
+// listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
 func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: cmn.DefaultListPageSizeAIS}
-	data, err := api.ListObjects(baseParams, bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	objs := make([]string, 0, len(data.Entries))
-	for _, obj := range data.Entries {
+	objs := make([]string, 0, len(objList.Entries))
+	for _, obj := range objList.Entries {
 		objs = append(objs, obj.Name)
 	}
 	return objs, nil

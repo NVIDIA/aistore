@@ -161,7 +161,6 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 				entry.Version = v
 			}
 		}
-		// TODO: other cmn.SelectMsg props TBD
 		bckList.Entries = append(bckList.Entries, entry)
 	}
 
