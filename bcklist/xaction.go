@@ -36,13 +36,11 @@ type BckListTask struct {
 	remoteBck  *cluster.Bck          // differs from cluBck
 	workCh     chan *bckListReq      // incoming requests
 	objCache   chan *cmn.BucketEntry // local cache filled when idle
-	walkWg     sync.WaitGroup        // to wait until walk finishes
-	pageError  error                 // when requesting a page from Cloud bucket
 	lastMarker string                // last requested PageMarker (to detect re-requesting)
 	lastPage   []*cmn.BucketEntry    // last sent page and a little more
-	inProgress sync.WaitGroup        // the page is in progress
 	walkDone   bool                  // true: done walking or Cloud returned all objects
 	fromRemote bool                  // whether to request remote data (Cloud/Remote/Backend)
+	walkWg     sync.WaitGroup        // to wait until walk finishes
 }
 
 type bckListReq struct {
@@ -184,18 +182,10 @@ func (r *BckListTask) dispatchRequest() *BckListResp {
 	r.IncPending()
 	defer r.DecPending()
 
-	// This is for `DecPending` that is done by `genNextPage`.
-	// TODO: This should be reworked (and removed) and we should just have a
-	//  single `IncPending` probably the `DecPending` from `genNextPage` can be
-	//  removed as now it is blocking.
-	r.IncPending()
-
-	r.genNextPage(marker, cnt)
-
-	if r.pageError != nil {
+	if err := r.genNextPage(marker, cnt); err != nil {
 		return &BckListResp{
 			Status: http.StatusInternalServerError,
-			Err:    r.pageError,
+			Err:    err,
 		}
 	}
 	if !r.pageIsValid(marker, cnt) {
@@ -232,11 +222,9 @@ func (r *BckListTask) walkCtx() context.Context {
 	)
 }
 
-func (r *BckListTask) nextPageAIS(marker string, cnt int) {
-	defer r.DecPending()
+func (r *BckListTask) nextPageAIS(marker string, cnt int) error {
 	if r.isPageCached(marker, cnt) {
-		r.inProgress.Done()
-		return
+		return nil
 	}
 	read := 0
 	for read < cnt || cnt == 0 {
@@ -252,7 +240,7 @@ func (r *BckListTask) nextPageAIS(marker string, cnt int) {
 		read++
 		r.lastPage = append(r.lastPage, obj)
 	}
-	r.inProgress.Done()
+	return nil
 }
 
 // Returns an index of the first objects in the cache that follows marker
@@ -272,23 +260,21 @@ func (r *BckListTask) isPageCached(marker string, cnt int) bool {
 	return idx+cnt < len(r.lastPage)
 }
 
-func (r *BckListTask) nextPageCloud(marker string, cnt int) {
-	defer r.DecPending()
+func (r *BckListTask) nextPageCloud(marker string, cnt int) error {
 	if r.isPageCached(marker, cnt) {
-		return
+		return nil
 	}
 
 	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.remoteBck, r.msg)
 	bckList, err := walk.CloudObjPage()
 	if err != nil {
-		r.pageError = err
-	} else {
-		if bckList.PageMarker == "" {
-			r.walkDone = true
-		}
-		r.lastPage = append(r.lastPage, bckList.Entries...)
+		return err
 	}
-	r.inProgress.Done()
+	if bckList.PageMarker == "" {
+		r.walkDone = true
+	}
+	r.lastPage = append(r.lastPage, bckList.Entries...)
+	return nil
 }
 
 // Called before generating a page for a proxy. It is OK if the page is
@@ -309,7 +295,6 @@ func (r *BckListTask) pageIsValid(marker string, cnt int) bool {
 }
 
 func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
-	r.inProgress.Wait()
 	var (
 		idx  = r.findMarker(marker)
 		list = r.lastPage[idx:]
@@ -332,19 +317,16 @@ func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
 // TODO: support arbitrary page marker (do restart in this case).
 // genNextPage calls DecPending either immediately on error or inside
 // a goroutine if some work must be done.
-func (r *BckListTask) genNextPage(marker string, cnt int) {
+func (r *BckListTask) genNextPage(marker string, cnt int) error {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: marker [%s]", r, r.msg.PageMarker)
 	}
 	if marker != "" && marker == r.lastMarker {
-		r.DecPending()
-		return
+		return nil
 	}
 	if r.walkDone {
-		r.DecPending()
-		return
+		return nil
 	}
-	r.inProgress.Add(1)
 
 	r.discardObsolete(r.lastMarker)
 	if r.lastMarker < marker {
@@ -352,11 +334,9 @@ func (r *BckListTask) genNextPage(marker string, cnt int) {
 	}
 
 	if r.fromRemote {
-		go r.nextPageCloud(marker, cnt)
-		return
+		return r.nextPageCloud(marker, cnt)
 	}
-
-	go r.nextPageAIS(marker, cnt)
+	return r.nextPageAIS(marker, cnt)
 }
 
 // Removes from local cache, the objects that have been already sent
