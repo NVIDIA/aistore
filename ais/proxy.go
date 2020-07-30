@@ -1725,6 +1725,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 
 		hasEnough bool
 		entries   []*cmn.BucketEntry
+		cacheID   = cacheReqID{bck: bck.Bck, prefix: smsg.Prefix}
 	)
 
 	if smsg.PageSize != 0 {
@@ -1736,7 +1737,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	//  then we should just patiently wait for the cache to get populated.
 
 	if !smsg.Passthrough {
-		entries, hasEnough = qc.get(cacheReqID{bck: bck.Bck}, smsg.ContinuationToken, pageSize)
+		entries, hasEnough = qc.get(cacheID, smsg.ContinuationToken, pageSize)
 		if hasEnough {
 			goto end
 		}
@@ -1788,7 +1789,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 
 endWithCache:
 	if !smsg.Passthrough {
-		qc.set(cacheReqID{bck: bck.Bck}, smsg.ContinuationToken, entries, pageSize)
+		qc.set(cacheID, smsg.ContinuationToken, entries, pageSize)
 		for idx := range entries {
 			entries[idx].SetProps(smsg.PropsSet())
 		}

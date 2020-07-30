@@ -169,6 +169,154 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			Expect(hasEnough).To(BeTrue())
 			Expect(extractNames(entries)).To(Equal([]string{"d", "e", "f"}))
 		})
+
+		Describe("prefix", func() {
+			It("should get prefixed entries from `id='bck'` cache", func() {
+				var (
+					prefixID = cacheReqID{bck: id.bck, prefix: "p-"}
+				)
+
+				cache.set(id, "", makeEntries("a", "p-b", "p-c", "p-d", "z"), 5)
+				entries, hasEnough := cache.get(id, "", 3)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"a", "p-b", "p-c"}))
+
+				// Now check that getting for prefix works.
+				entries, hasEnough = cache.get(prefixID, "", 3)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"p-b", "p-c", "p-d"}))
+
+				entries, hasEnough = cache.get(prefixID, "", 2)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"p-b", "p-c"}))
+
+				// User requests more than we have but also all the prefixes are
+				// fully contained in the interval so we are sure that there isn't
+				// more of them. Therefore, we should return what we have.
+				entries, hasEnough = cache.get(prefixID, "", 4)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"p-b", "p-c", "p-d"}))
+			})
+
+			It("should get prefixed entries from `id='bck' cache (boundaries)", func() {
+				cache.set(id, "", makeEntries("b", "d", "y"), 3)
+				entries, hasEnough := cache.get(id, "", 3)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"b", "d", "y"}))
+
+				// Get entries with prefix `y`.
+				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "y"}, "", 1)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"y"}))
+
+				_, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "y"}, "", 2)
+				Expect(hasEnough).To(BeFalse())
+
+				// Get entries with prefix `b`.
+				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "b"}, "", 1)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"b"}))
+
+				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "b"}, "", 2)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"b"}))
+
+				// Get entries with prefix `a`.
+				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "a"}, "", 1)
+				Expect(hasEnough).To(BeTrue())
+				Expect(entries).To(Equal([]*cmn.BucketEntry{}))
+
+				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "a"}, "", 2)
+				Expect(hasEnough).To(BeTrue())
+				Expect(entries).To(Equal([]*cmn.BucketEntry{}))
+
+				// Make interval "last".
+				cache.set(id, "y", makeEntries(), 1)
+
+				// Get entries with prefix `y`.
+				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "y"}, "", 1)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"y"}))
+
+				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "y"}, "", 2)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"y"}))
+
+				// Get entries with prefix `ya`.
+				entries, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "ya"}, "", 1)
+				Expect(hasEnough).To(BeTrue())
+				Expect(entries).To(Equal([]*cmn.BucketEntry{}))
+			})
+
+			It("should correctly behave in `id='bck'` cache if prefix is contained in interval but there aren't matching entries", func() {
+				var (
+					prefixID = cacheReqID{bck: id.bck, prefix: "b-"}
+				)
+
+				cache.set(id, "", makeEntries("a", "p-b", "p-c", "p-d", "z"), 5)
+				entries, hasEnough := cache.get(id, "", 3)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"a", "p-b", "p-c"}))
+
+				// It should correctly return no entries when prefixes are
+				// contained in the interval but there is no such entries.
+				entries, hasEnough = cache.get(prefixID, "", 2)
+				Expect(hasEnough).To(BeTrue())
+				Expect(entries).To(Equal([]*cmn.BucketEntry{}))
+
+				entries, hasEnough = cache.get(prefixID, "a", 2)
+				Expect(hasEnough).To(BeTrue())
+				Expect(entries).To(Equal([]*cmn.BucketEntry{}))
+			})
+
+			It("should correctly behave in `id='bck'` cache if prefix is out of the interval", func() {
+				cache.set(id, "", makeEntries("b", "m", "p", "y"), 4)
+				entries, hasEnough := cache.get(id, "", 3)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"b", "m", "p"}))
+
+				_, hasEnough = cache.get(cacheReqID{bck: id.bck, prefix: "z"}, "", 1)
+				Expect(hasEnough).To(BeFalse())
+			})
+
+			It("should get prefixed entries from `id='bck+prefix'` cache", func() {
+				var (
+					prefixID = cacheReqID{bck: id.bck, prefix: "p-"}
+				)
+
+				cache.set(id, "", makeEntries("p-a", "p-b", "p-c", "p-d", "p-e"), 5)
+				entries, hasEnough := cache.get(prefixID, "", 3)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"p-a", "p-b", "p-c"}))
+
+				// Now check that getting for prefix works.
+				entries, hasEnough = cache.get(prefixID, "p-b", 3)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"p-c", "p-d", "p-e"}))
+
+				_, hasEnough = cache.get(prefixID, "p-b", 4)
+				Expect(hasEnough).To(BeFalse())
+			})
+
+			It("should fallback to `id='bck'` cache when there is not enough entries in `id='bck+prefix'` cache", func() {
+				var (
+					prefixID = cacheReqID{bck: id.bck, prefix: "p-"}
+				)
+
+				cache.set(id, "", makeEntries("a", "p-b", "p-c", "p-d"), 4)
+				cache.set(prefixID, "", makeEntries("p-b", "p-c"), 2)
+
+				entries, hasEnough := cache.get(prefixID, "", 3)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"p-b", "p-c", "p-d"}))
+
+				// Insert more into `id="bck+prefix"` cache end check that we can get from it.
+				cache.set(prefixID, "p-c", makeEntries("p-d", "p-f", "p-g"), 3)
+				entries, hasEnough = cache.get(prefixID, "", 5)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"p-b", "p-c", "p-d", "p-f", "p-g"}))
+			})
+		})
 	})
 
 	Describe("QueryBuffer", func() {

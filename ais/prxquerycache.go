@@ -6,6 +6,7 @@ package ais
 
 import (
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -63,7 +64,8 @@ type (
 	// TODO: Having a cache per bucket may be too optimistic. We may need to take
 	//  into account other factors and `SelectMsg` parameters.
 	cacheReqID struct {
-		bck cmn.Bck
+		bck    cmn.Bck
+		prefix string
 	}
 
 	// Single (contiguous) interval of entries.
@@ -78,6 +80,11 @@ type (
 		// Determines if this is the last page/interval (this means there is no
 		// more objects after the last entry).
 		last bool
+	}
+
+	// Contains additional parameters to interval request.
+	reqParams struct {
+		prefix string
 	}
 
 	// Single cache that corresponds to single `cacheReqID`.
@@ -207,7 +214,7 @@ func (b *queryBuffers) set(id, targetID string, entries []*cmn.BucketEntry, size
 	v.(*queryBuffer).add(targetID, entries, size)
 }
 
-func (c cacheReqID) String() string { return c.bck.String() }
+func (c cacheReqID) String() string { return c.bck.String() + "/" + c.prefix }
 
 func (ci *cacheInterval) contains(token string) bool {
 	if ci.token == token {
@@ -219,27 +226,63 @@ func (ci *cacheInterval) contains(token string) bool {
 	return false
 }
 
-func (ci *cacheInterval) get(token string, objCnt uint) (entries []*cmn.BucketEntry, hasEnough bool) {
-	var (
-		start = ci.find(token)
-		end   = uint(start) + objCnt
-	)
-	if ci.last {
-		end = cmn.MinUint(uint(len(ci.entries)), end)
+func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entries []*cmn.BucketEntry, hasEnough bool) {
+	entries = ci.entries
+
+	start := ci.find(token)
+	if params.prefix != "" {
+		// Move `start` to first entry that starts with `params.prefix`.
+		for ; start < uint(len(entries)); start++ {
+			if strings.HasPrefix(entries[start].Name, params.prefix) {
+				break
+			}
+			if entries[start].Name > params.prefix {
+				// Prefix is fully contained in the interval (but there are no entries), examples:
+				//  * interval = ["a", "z"], token = "", objCnt = 1, prefix = "b"
+				//  * interval = ["a", "z"], token = "a", objCnt = 1, prefix = "b"
+				return []*cmn.BucketEntry{}, true
+			}
+		}
+		if !ci.last && start == uint(len(entries)) {
+			// Prefix is out of the interval (right boundary), examples:
+			//  * interval = ["b", "y"], token = "", objCnt = 1, prefix = "z"
+			//  * interval = ["b", "y"], token = "", objCnt = 1, prefix = "ya"
+			return nil, false
+		}
 	}
-	if end <= uint(len(ci.entries)) {
-		return ci.entries[start:end], true
+	entries = entries[start:]
+
+	end := cmn.MinUint(uint(len(entries)), objCnt)
+	if params.prefix != "" {
+		// Move `end-1` to last entry that starts with `params.prefix`.
+		for ; end > 0; end-- {
+			if strings.HasPrefix(entries[end-1].Name, params.prefix) {
+				break
+			}
+		}
+		if !ci.last && end < uint(len(entries)) {
+			// We filtered out entries that start with `params.prefix` and
+			// the entries are fully contained in the interval, examples:
+			//  * interval = ["a", "ma", "mb", "z"], token = "", objCnt = 4, prefix = "m"
+			//  * interval = ["a", "z"], token = "", objCnt = 2, prefix = "a"
+			return entries[:end], true
+		}
+	}
+	entries = entries[:end]
+
+	if ci.last || uint(len(entries)) >= objCnt {
+		return entries, true
 	}
 	return nil, false
 }
 
-func (ci *cacheInterval) find(token string) (idx int) {
+func (ci *cacheInterval) find(token string) (idx uint) {
 	if ci.token == token {
 		return 0
 	}
-	return sort.Search(len(ci.entries), func(i int) bool {
+	return uint(sort.Search(len(ci.entries), func(i int) bool {
 		return ci.entries[i].Name > token
-	})
+	}))
 }
 
 func (ci *cacheInterval) append(objs *cacheInterval) {
@@ -298,11 +341,11 @@ func (c *queryCache) removeInterval(ci *cacheInterval) {
 	}
 }
 
-func (c *queryCache) get(token string, objCnt uint) (entries []*cmn.BucketEntry, hasEnough bool) {
+func (c *queryCache) get(token string, objCnt uint, params reqParams) (entries []*cmn.BucketEntry, hasEnough bool) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
 	if interval := c.findInterval(token); interval != nil {
-		return interval.get(token, objCnt)
+		return interval.get(token, objCnt, params)
 	}
 	return nil, false
 }
@@ -333,11 +376,24 @@ func (c *queryCache) invalidate() {
 }
 
 func (c *queryCaches) get(reqID cacheReqID, token string, objCnt uint) (entries []*cmn.BucketEntry, hasEnough bool) {
-	v, ok := c.caches.Load(reqID.String())
-	if !ok {
-		return nil, false
+	if v, ok := c.caches.Load(reqID.String()); ok {
+		if entries, hasEnough = v.(*queryCache).get(token, objCnt, reqParams{}); hasEnough {
+			return
+		}
 	}
-	return v.(*queryCache).get(token, objCnt)
+
+	// When `prefix` is requested we must also check if there is enough entries
+	// in the "main" (whole bucket) cache with given prefix.
+	if reqID.prefix != "" {
+		// We must adjust parameters and cache id.
+		params := reqParams{prefix: reqID.prefix}
+		reqID = cacheReqID{bck: reqID.bck}
+
+		if v, ok := c.caches.Load(reqID.String()); ok {
+			return v.(*queryCache).get(token, objCnt, params)
+		}
+	}
+	return nil, false
 }
 
 func (c *queryCaches) set(reqID cacheReqID, token string, entries []*cmn.BucketEntry, size uint) {
