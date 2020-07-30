@@ -101,11 +101,10 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketName
 // GetBucketsSummaries API
 //
 // Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
-func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, smsg *cmn.SelectMsg) (cmn.BucketsSummaries, error) {
-	if smsg == nil {
-		smsg = &cmn.SelectMsg{}
+func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.BucketSummaryMsg) (cmn.BucketsSummaries, error) {
+	if msg == nil {
+		msg = &cmn.BucketSummaryMsg{}
 	}
-
 	baseParams.Method = http.MethodPost
 
 	reqParams := ReqParams{
@@ -115,7 +114,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, smsg *cmn.S
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
 	var summaries cmn.BucketsSummaries
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBucket, smsg, &summaries); err != nil {
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBucket, msg, &summaries); err != nil {
 		return nil, err
 	}
 	sort.Sort(summaries)
@@ -273,12 +272,12 @@ func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) e
 // 3. Breaks loop on error
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
-func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.SelectMsg, v interface{}) error {
+func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.BucketSummaryMsg, v interface{}) error {
 	cmn.Assert(action == cmn.ActSummaryBucket)
 	var (
 		uuid   string
 		sleep  = initialPollInterval
-		actMsg = cmn.ActionMsg{Action: action, Value: smsg}
+		actMsg = cmn.ActionMsg{Action: action, Value: msg}
 	)
 	if reqParams.Query == nil {
 		reqParams.Query = url.Values{}
@@ -294,11 +293,8 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, smsg *cmn.Selec
 		}
 		return fmt.Errorf("invalid response code: %d", resp.StatusCode)
 	}
-	if smsg.UUID == "" {
-		smsg.UUID = uuid
-	}
-	if smsg.UUID != "" {
-		reqParams.Query.Set(cmn.URLParamUUID, smsg.UUID)
+	if msg.UUID == "" {
+		msg.UUID = uuid
 	}
 
 	// Poll async task for http.StatusOK completion

@@ -33,20 +33,23 @@ type ActValPromote struct {
 //       in one response. The result list is unsorted and contains only object
 //       names: even field `Status` is filled with zero value
 type SelectMsg struct {
+	UUID        string `json:"uuid"`        // ID to identify a single multi-page request
 	Props       string `json:"props"`       // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"
 	TimeFormat  string `json:"time_format"` // "RFC822" default - see the enum above
 	Prefix      string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 	PageMarker  string `json:"pagemarker"`  // pageMarker - the last object in previous page
-	UUID        string `json:"uuid"`        // ID to identify a single multi-page request
 	PageSize    uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
 	Cached      bool   `json:"cached"`      // for cloud buckets - list only cached objects
 	Passthrough bool   `json:"passthrough"` // do not use cache - always request targets for fresh data
-	Fast        bool   `json:"fast"`        // TODO: deprecated but still required by xaction BucketSummary for its own stuff
 	// TODO: Alias for `PageMarker`, eventually this should replace `PageMarker`.
 	ContinuationToken string `json:"continuation_token"`
 }
 
-type PageMarker string
+type BucketSummaryMsg struct {
+	UUID   string `json:"uuid"`
+	Fast   bool   `json:"fast"`
+	Cached bool   `json:"cached"`
+}
 
 // ListMsg contains a list of files and a duration within which to get them
 type ListMsg struct {

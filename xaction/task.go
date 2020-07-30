@@ -58,7 +58,7 @@ type bckSummaryTaskEntry struct {
 	ctx  context.Context
 	xact *bckSummaryTask
 	t    cluster.Target
-	msg  *cmn.SelectMsg
+	msg  *cmn.BucketSummaryMsg
 }
 
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
@@ -144,7 +144,7 @@ func (t *bckSummaryTask) Run() error {
 			}
 
 			var (
-				msg     = &cmn.SelectMsg{}
+				msg     = cmn.BucketSummaryMsg{}
 				summary = cmn.BucketSummary{
 					Bck:            bck.Bck,
 					TotalDisksSize: totalDisksSize,
@@ -152,10 +152,7 @@ func (t *bckSummaryTask) Run() error {
 			)
 
 			// Each bucket should have it's own copy of msg (we may update it).
-			cmn.CopyStruct(msg, t.msg)
-			if !msg.WantProp(cmn.GetPropsSize) {
-				msg.AddProps(cmn.GetPropsSize)
-			}
+			cmn.CopyStruct(&msg, t.msg)
 
 			if msg.Fast && (bck.IsAIS() || msg.Cached) {
 				objCount, size, err := t.doBckSummaryFast(bck)
@@ -177,10 +174,14 @@ func (t *bckSummaryTask) Run() error {
 					msg.Cached = true
 				}
 
+				smsg := &cmn.SelectMsg{
+					Props:  cmn.GetPropsSize,
+					Cached: msg.Cached,
+				}
 				for {
-					walk := objwalk.NewWalk(context.Background(), t.t, bck, msg)
+					walk := objwalk.NewWalk(context.Background(), t.t, bck, smsg)
 					if bck.IsAIS() {
-						list, err = walk.DefaultLocalObjPage(msg)
+						list, err = walk.DefaultLocalObjPage(smsg)
 					} else {
 						list, err = walk.CloudObjPage()
 					}
@@ -208,7 +209,7 @@ func (t *bckSummaryTask) Run() error {
 					}
 
 					list.Entries = nil
-					msg.PageMarker = list.PageMarker
+					smsg.PageMarker = list.PageMarker
 				}
 			}
 

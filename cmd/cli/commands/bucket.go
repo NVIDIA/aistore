@@ -257,10 +257,9 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-// TODO: usiing SelectMsg.Fast for summary does not seem correct
 func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.BucketsSummaries, err error) {
 	fDetails := func() (err error) {
-		msg := &cmn.SelectMsg{Cached: cached, Fast: fast}
+		msg := &cmn.BucketSummaryMsg{Cached: cached, Fast: fast}
 		summaries, err = api.GetBucketsSummaries(defaultAPIParams, query, msg)
 		return
 	}

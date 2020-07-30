@@ -79,9 +79,9 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 		glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
 	}
 
-	var msg cmn.SelectMsg
+	var msg cmn.BucketSummaryMsg
 	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
-		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
+		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.BucketSummaryMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -101,7 +101,7 @@ func (t *targetrunner) waitBckListResp(xact *bcklist.BckListTask, msg *cmn.Selec
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
 func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string,
-	bck *cluster.Bck, smsg *cmn.SelectMsg) bool {
+	bck *cluster.Bck, msg *cmn.BucketSummaryMsg) bool {
 	var (
 		query      = r.URL.Query()
 		taskAction = query.Get(cmn.URLParamTaskAction)
@@ -116,7 +116,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 		switch action {
 		case cmn.ActSummaryBucket:
-			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, smsg)
+			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, msg)
 		default:
 			t.invalmsghdlrf(w, r, "invalid action: %s", action)
 			return false
@@ -131,10 +131,10 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return true
 	}
 
-	xact := xaction.Registry.GetXact(smsg.UUID)
+	xact := xaction.Registry.GetXact(msg.UUID)
 	// task never started
 	if xact == nil {
-		s := fmt.Sprintf("Task %s not found", smsg.UUID)
+		s := fmt.Sprintf("Task %s not found", msg.UUID)
 		if silent {
 			t.invalmsghdlrsilent(w, r, s, http.StatusNotFound)
 		} else {

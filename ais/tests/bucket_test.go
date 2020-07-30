@@ -1122,9 +1122,8 @@ func TestBucketListAndSummary(t *testing.T) {
 
 			tutils.Logln("checking objects...")
 
-			msg := &cmn.SelectMsg{Cached: test.cached, Fast: test.fast}
-
 			if test.summary {
+				msg := &cmn.BucketSummaryMsg{Cached: test.cached, Fast: test.fast}
 				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(m.bck), msg)
 				tassert.CheckFatal(t, err)
 
@@ -1140,6 +1139,7 @@ func TestBucketListAndSummary(t *testing.T) {
 					t.Errorf("number of objects in summary (%d) is different than expected (%d)", summary.ObjCount, expectedFiles)
 				}
 			} else {
+				msg := &cmn.SelectMsg{Cached: test.cached}
 				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 				tassert.CheckFatal(t, err)
 

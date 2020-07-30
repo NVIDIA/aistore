@@ -1195,7 +1195,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		err       error
 		uuid      string
 		summaries cmn.BucketsSummaries
-		smsg      = cmn.SelectMsg{}
+		smsg      = cmn.BucketSummaryMsg{}
 	)
 	listMsgJSON := cmn.MustMarshal(amsg.Value)
 	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
@@ -1208,7 +1208,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 		smsg.UUID = id
 	}
 
-	if summaries, uuid, err = p.gatherBucketSummary(bck, smsg); err != nil {
+	if summaries, uuid, err = p.gatherBucketSummary(bck, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1224,16 +1224,15 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 	p.writeJSON(w, r, summaries, "bucket_summary")
 }
 
-func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) (
+func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSummaryMsg) (
 	summaries cmn.BucketsSummaries, uuid string, err error) {
 	var (
-		// start new async task if client did not provide taskID(neither in Headers nor in SelectMsg),
-		isNew, q = p.initAsyncQuery(bck, &smsg, cmn.GenUUID())
+		isNew, q = p.initAsyncQuery(bck, msg, cmn.GenUUID())
 		config   = cmn.GCO.Get()
 	)
 	var (
 		smap   = p.owner.smap.get()
-		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &smsg}, smap, nil)
+		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg}, smap, nil)
 		body   = cmn.MustMarshal(aisMsg)
 		args   = bcastArgs{
 			req: cmn.ReqArgs{
@@ -1247,7 +1246,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 		}
 	)
 	results := p.bcastPost(args)
-	allOK, _, err := p.checkBckTaskResp(smsg.UUID, results)
+	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1255,7 +1254,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, smsg cmn.SelectMsg) 
 	// some targets are still executing their tasks or it is request to start
 	// an async task. The proxy returns only uuid to a caller
 	if !allOK || isNew {
-		return nil, smsg.UUID, nil
+		return nil, msg.UUID, nil
 	}
 
 	// all targets are ready, prepare the final result
@@ -1653,25 +1652,21 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	return
 }
 
-func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, smsg *cmn.SelectMsg, newTaskID string) (bool, url.Values) {
-	isNew := smsg.UUID == ""
+func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, msg *cmn.BucketSummaryMsg, newTaskID string) (bool, url.Values) {
+	isNew := msg.UUID == ""
 	q := url.Values{}
 	if isNew {
-		if isNew {
-			smsg.UUID = newTaskID
-		} else {
-			q.Set(cmn.URLParamUUID, smsg.UUID)
-		}
+		msg.UUID = newTaskID
 		q.Set(cmn.URLParamTaskAction, cmn.TaskStart)
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("proxy: starting new async task %s", smsg.UUID)
+			glog.Infof("proxy: starting new async task %s", msg.UUID)
 		}
 	} else {
 		// First request is always 'Status' to avoid wasting gigabytes of
 		// traffic in case when few targets have finished their tasks.
 		q.Set(cmn.URLParamTaskAction, cmn.TaskStatus)
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("proxy: reading async task %s result", smsg.UUID)
+			glog.Infof("proxy: reading async task %s result", msg.UUID)
 		}
 	}
 

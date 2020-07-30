@@ -75,7 +75,7 @@ type (
 		cmn.XactBase
 		ctx context.Context
 		t   cluster.Target
-		msg *cmn.SelectMsg
+		msg *cmn.BucketSummaryMsg
 		res atomic.Pointer
 	}
 	baseEntry interface {
@@ -707,15 +707,15 @@ func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*dow
 }
 
 func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,
-	smsg *cmn.SelectMsg) (*bckSummaryTask, error) {
-	if err := r.removeFinishedByID(smsg.UUID); err != nil {
+	msg *cmn.BucketSummaryMsg) (*bckSummaryTask, error) {
+	if err := r.removeFinishedByID(msg.UUID); err != nil {
 		return nil, err
 	}
 	e := &bckSummaryTaskEntry{
-		baseTaskEntry: baseTaskEntry{smsg.UUID},
+		baseTaskEntry: baseTaskEntry{msg.UUID},
 		ctx:           ctx,
 		t:             t,
-		msg:           smsg,
+		msg:           msg,
 	}
 	if err := e.Start(bck.Bck); err != nil {
 		return nil, err
