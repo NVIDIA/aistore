@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -262,16 +263,9 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
-	for tag, revs := range y.lastSynced {
-		if cowCopy, ok := y.lastClone[tag]; ok {
-			if !bytes.Equal(cowCopy, revs.marshal()) {
-				s := fmt.Sprintf("CoW violation: previously sync-ed %s v%d has been updated in-place",
-					tag, revs.version())
-				cmn.AssertMsg(false, s)
-			}
-		}
+	if debug.Enabled {
+		y.validateCoW()
 	}
-
 	if revsReqType == revsReqNotify {
 		method = http.MethodPost
 	} else if revsReqType == revsReqSync {
@@ -324,7 +318,9 @@ outer:
 
 		y.lastSynced[tag] = revs
 		revsBody := revs.marshal()
-		y.lastClone[tag] = revsBody
+		if debug.Enabled {
+			y.lastClone[tag] = revsBody
+		}
 		msgJSON := cmn.MustMarshal(msg)
 
 		if tag == revsRMDTag {
@@ -544,4 +540,17 @@ func (y *metasyncer) countNewMembers(smap *smapX) (count int) {
 		}
 	}
 	return
+}
+
+func (y *metasyncer) validateCoW() {
+	for tag, revs := range y.lastSynced {
+		if cowCopy, ok := y.lastClone[tag]; ok {
+			if bytes.Equal(cowCopy, revs.marshal()) {
+				continue
+			}
+			s := fmt.Sprintf("CoW violation: previously sync-ed %s v%d has been updated in-place",
+				tag, revs.version())
+			cmn.AssertMsg(false, s)
+		}
+	}
 }
