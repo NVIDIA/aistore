@@ -626,6 +626,6 @@ re:
 		return
 	}
 	xact.AddNotif(&cmn.NotifXact{
-		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Dsts: d, F: c.t.xactCallerNotify},
+		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifXact, Dsts: d, F: c.t.xactCallerNotify},
 	})
 }

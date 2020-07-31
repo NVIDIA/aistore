@@ -187,8 +187,9 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	wg.Wait()
 
 	// 5. IC
-	nl := &notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-	p.registerIC(c.uuid, nl, c.smap, nil, c.req.Query)
+	nl := &notifListenerBck{notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bck.Bck)}
+	nl.setOwner(equalIC)
+	p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -279,8 +280,9 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 
 	// 5. if remirror|re-EC|TBD-storage-svc
 	if remirror || reec {
-		nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-		p.registerIC(c.uuid, &nl, c.smap, nil, c.req.Query)
+		nl := &notifListenerBck{notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bck.Bck)}
+		nl.setOwner(equalIC)
+		p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 		xactID = c.uuid
 	}
 
@@ -365,8 +367,10 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.msg.RMDVersion = clone.version()
 
 			// 5. IC
-			nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
-			p.registerIC(c.uuid, &nl, c.smap, nil, c.req.Query)
+			nl := &notifListenerFromTo{
+				notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)}
+			nl.setOwner(equalIC)
+			p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 			// 6. commit
 			xactID = c.uuid
@@ -444,8 +448,9 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	}
 
 	// 5. IC
-	nl := notifListenerFromTo{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bckFrom.Bck, bckTo.Bck)}
-	p.registerIC(c.uuid, &nl, c.smap, nil, c.req.Query)
+	nl := &notifListenerFromTo{notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)}
+	nl.setOwner(equalIC)
+	p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
@@ -548,8 +553,9 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	wg.Wait()
 
 	// 5. IC
-	nl := notifListenerBck{notifListenerBase: *newNLB(c.smap.Tmap, msg.Action, bck.Bck)}
-	p.registerIC(c.uuid, &nl, c.smap, nil, c.req.Query)
+	nl := &notifListenerBck{notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bck.Bck)}
+	nl.setOwner(equalIC)
+	p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
 	unlockUpon = true
@@ -592,26 +598,6 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 
 	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: body}
 	return c
-}
-
-func (p *proxyrunner) whichIC(smap *smapX, queries ...url.Values) (selfIC, otherIC bool) {
-	var (
-		q url.Values
-	)
-	if len(queries) > 0 {
-		q = queries[0]
-	}
-	cmn.Assert(len(smap.IC) > 0)
-	selfIC = smap.isIC(p.si)
-	otherIC = len(smap.IC) > 1
-	cmn.Assert(selfIC || otherIC)
-	if q == nil {
-		return
-	}
-	for pid := range smap.IC {
-		q.Add(cmn.URLParamNotifyMe, pid)
-	}
-	return
 }
 
 // rollback create-bucket

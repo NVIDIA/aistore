@@ -785,6 +785,12 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg cmn.ActionMsg
 	)
+	if !p.ClusterStarted() {
+		if err := p.waitStarted(); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+	}
 	apiItems, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
@@ -1103,9 +1109,20 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	if smsg.UUID == "" {
 		smsg.UUID = cmn.GenUUID()
 		smap := p.owner.smap.get()
-		nl := newNLB(smap.Tmap, cmn.ActListObjects, bck.Bck)
-		p.registerIC(smsg.UUID, nl, smap, amsg)
-	} else if redirected := p.redirectToOwner(w, r, smsg.UUID, amsg); redirected {
+		// TODO -- FIXME: must be consistent vs newQueryListener
+		nl := newNLB(smsg.UUID, smap.Tmap, notifCache, cmn.ActListObjects, bck.Bck)
+
+		// TODO -- FIXME: hrw-select cache owner
+		if false {
+			nl.hrwOwner(smap)
+		} else {
+			nl.setOwner(smap.Primary.ID())
+		}
+		p.registerIC(regIC{nl: nl, smap: smap, msg: amsg})
+	} else if rev, err := p.reverseToOwner(w, r, smsg.UUID, amsg); rev || err != nil {
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 		return
 	}
 
@@ -2087,10 +2104,10 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSysInfo:
 		p.writeJSON(w, r, sys.FetchSysInfo(), what)
 	case cmn.GetWhatSmap:
+		const max = 5
 		var (
 			smap  = p.owner.smap.get()
 			sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
-			max   = 5
 		)
 		for i := 0; !smap.isValid() && i < max; i++ {
 			if !p.NodeStarted() {
@@ -2628,8 +2645,10 @@ func (p *proxyrunner) jtxStatus(w http.ResponseWriter, r *http.Request, what str
 		return
 	}
 
-	// TODO: don't redirect when status information is available in jtx table
-	if redirected := p.redirectToOwner(w, r, uuid, nil); redirected {
+	if rev, err := p.reverseToOwner(w, r, uuid, nil); rev || err != nil {
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 		return
 	}
 
@@ -3472,6 +3491,21 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 	}
 
 	return false
+}
+
+func (p *proxyrunner) waitStarted() error {
+	const max = 5
+	var (
+		sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
+	)
+	for i := 0; i < max; i++ {
+		time.Sleep(sleep)
+		if p.ClusterStarted() {
+			return nil
+		}
+	}
+	smap := p.owner.smap.get()
+	return fmt.Errorf("%s: startup is taking unusually long time, %s", p.si, smap)
 }
 
 /////////////////////////////////////////////

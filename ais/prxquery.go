@@ -19,14 +19,15 @@ import (
 
 type (
 	// TODO: add more, like target finished, query aborted by user etc.
-	queryState struct {
+	notifListenerQuery struct {
 		notifListenerBase
 		targets    []*cluster.Snode
 		workersCnt uint
 	}
 )
 
-func newQueryState(tmap cluster.NodeMap, msg *query.InitMsg) (*queryState, error) {
+func newQueryListener(uuid string, ty int, tmap cluster.NodeMap, msg *query.InitMsg) (*notifListenerQuery, error) {
+	cmn.Assert(uuid != "")
 	numNodes := len(tmap)
 	if msg.WorkersCnt != 0 && msg.WorkersCnt < uint(numNodes) {
 		// FIXME: this should not be necessary. Proxy could know that if worker's
@@ -41,15 +42,14 @@ func newQueryState(tmap cluster.NodeMap, msg *query.InitMsg) (*queryState, error
 	sort.SliceStable(targets, func(i, j int) bool {
 		return targets[i].DaemonID < targets[j].DaemonID
 	})
-
-	return &queryState{
-		notifListenerBase: *newNLB(tmap, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+	return &notifListenerQuery{
+		notifListenerBase: *newNLB(uuid, tmap, ty, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
 		workersCnt:        msg.WorkersCnt,
 		targets:           targets,
 	}, nil
 }
 
-func (q *queryState) workersTarget(workerID uint) (*cluster.Snode, error) {
+func (q *notifListenerQuery) workersTarget(workerID uint) (*cluster.Snode, error) {
 	if q.workersCnt == 0 {
 		return nil, errors.New("query registered with 0 workers")
 	}
@@ -76,8 +76,12 @@ func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
-	smap := p.owner.smap.get()
-
+	if !p.ClusterStarted() {
+		if err := p.waitStarted(); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+	}
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Query, cmn.Init); err != nil {
 		return
 	}
@@ -94,7 +98,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "Failed to parse query message: "+err.Error())
 		return
 	}
-
+	smap := p.owner.smap.get()
 	args := bcastArgs{
 		req: cmn.ReqArgs{
 			Path:   cmn.URLPath(cmn.Version, cmn.Query, cmn.Init),
@@ -113,13 +117,18 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	state, err := newQueryState(smap.Tmap, msg)
+	nlq, err := newQueryListener(handle, notifCache, smap.Tmap, msg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	p.registerIC(handle, state, smap, msg)
-
+	// TODO -- FIXME: hrw-select cache owner
+	if false {
+		nlq.hrwOwner(smap)
+	} else {
+		nlq.setOwner(smap.Primary.ID())
+	}
+	p.registerIC(regIC{nl: nlq, smap: smap, msg: msg})
 	w.Write([]byte(handle))
 }
 
@@ -151,14 +160,17 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 		p.invalmsghdlr(w, r, "handle cannot be empty", http.StatusBadRequest)
 		return
 	}
-	if redirected := p.redirectToOwner(w, r, msg.Handle, msg); redirected {
+	if rev, err := p.reverseToOwner(w, r, msg.Handle, msg); rev || err != nil {
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 		return
 	}
 	nl, ok := p.checkEntry(w, r, msg.Handle)
 	if !ok {
 		return
 	}
-	state := nl.(*queryState)
+	state := nl.(*notifListenerQuery)
 	if err := state.err(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -188,9 +200,13 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if redirected := p.redirectToOwner(w, r, msg.Handle, msg); redirected {
+	if rev, err := p.reverseToOwner(w, r, msg.Handle, msg); rev || err != nil {
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 		return
 	}
+
 	if _, ok := p.checkEntry(w, r, msg.Handle); !ok {
 		return
 	}

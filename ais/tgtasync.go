@@ -50,11 +50,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	if isNew {
 		smap := t.owner.smap.get()
 		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{
-				When: cmn.UponTerm,
-				Dsts: smap.IC.Keys(),
-				F:    t.xactCallerNotify,
-			},
+			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifCache, Dsts: smap.IC.Keys(), F: t.xactCallerNotify},
 		})
 
 		go xact.Run()

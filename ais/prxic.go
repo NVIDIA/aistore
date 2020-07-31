@@ -6,6 +6,7 @@ package ais
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -25,61 +26,92 @@ import (
 // requests to one of the IC members.
 
 const (
-	// How long we should wait to make another check to see if the entry exist.
-	// The entry could be on its way and was just added therefore we don't
-	// return http.StatusNotFound immediately
-	reCheckInterval = time.Second
+	// Implies equal ownership by all IC members and applies to all async ops
+	// that have no associated cache other than start/end timestamps and stats counters
+	// (case in point: list/query-objects that MAY be cached, etc.)
+	equalIC = "\x00"
 )
 
-func (p *proxyrunner) redirectToOwner(w http.ResponseWriter, r *http.Request, uuid string, msg interface{}) (redirected bool) {
-	cmn.Assert(uuid != "")
-	smap := p.owner.smap.get()
-	selfIC, _ := p.whichIC(smap)
+type (
+	regIC struct {
+		nl    notifListener
+		smap  *smapX
+		query url.Values
+		msg   interface{}
+	}
+)
 
+// TODO -- FIXME: add redirect-to-owner capability to support list/query caching
+func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string,
+	msg interface{}) (reversed bool, err error) {
+	var (
+		smap          = p.owner.smap.get()
+		selfIC, _     = p.whichIC(smap, nil)
+		owner, exists = p.notifs.getOwner(uuid)
+		psi           *cluster.Snode
+	)
+	if exists {
+		goto outer
+	}
 	if selfIC {
-		reCheck := true
-
-	Check:
-		if p.notifs.isOwner(uuid) {
+		const max = 5
+		var (
+			sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
+		)
+		for i := 0; i < max && !exists; i++ {
+			time.Sleep(sleep)
+			owner, exists = p.notifs.getOwner(uuid)
+		}
+		if !exists {
+			err = fmt.Errorf("%q not found (%s)", uuid, smap.strIC(p.si))
 			return
 		}
-		// TODO: if selfIC, but doesn't contain xactID
-		// Maybe we should check if other IC member have the entry?
-		// For now retry once and return 404 if not found
-		if reCheck {
-			time.Sleep(reCheckInterval)
-			reCheck = false
-			goto Check
-		}
-
-		p.invalmsghdlrf(w, r, "%q not found", uuid)
-		return true
+	} else {
+		owner = smap.Primary.ID() // TODO -- FIXME: equalIC works only for non-cached; see also hrw-select
 	}
-
+outer:
+	switch owner {
+	case "": // not owned
+		return
+	case equalIC:
+		if selfIC {
+			owner = p.si.ID()
+		} else {
+			for pid := range smap.IC {
+				owner = pid
+				psi = smap.GetProxy(owner)
+				cmn.Assert(smap.isIC(psi))
+				break outer
+			}
+		}
+	default: // cached + owned
+		psi = smap.GetProxy(owner)
+		cmn.AssertMsg(smap.isIC(psi), owner+", "+smap.strIC(p.si)) // TODO -- FIXME: handle
+	}
+	if owner == p.si.ID() {
+		return
+	}
+	// otherwise, hand it over
 	if msg != nil {
 		body := cmn.MustMarshal(msg)
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
 	}
-
-	// Pick a random owner and forward the request.
-	cmn.Assert(len(smap.IC) > 0)
-	for pid := range smap.IC {
-		owner := smap.GetProxy(pid)
-		p.reverseNodeRequest(w, r, owner)
-		break
-	}
-	return true
+	reversed = true
+	p.reverseNodeRequest(w, r, psi)
+	return
 }
 
 func (p *proxyrunner) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifListener, ok bool) {
 	nl, exists := p.notifs.entry(uuid)
 	if !exists {
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", uuid)
+		smap := p.owner.smap.get()
+		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.strIC(p.si))
 		return
 	}
 	if nl.finished() {
 		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
-		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", uuid)
+		smap := p.owner.smap.get()
+		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.strIC(p.si))
 		return
 	}
 	return nl, true
@@ -88,7 +120,8 @@ func (p *proxyrunner) checkEntry(w http.ResponseWriter, r *http.Request, uuid st
 func (p *proxyrunner) writeStatus(w http.ResponseWriter, r *http.Request, uuid string) {
 	nl, exists := p.notifs.entry(uuid)
 	if !exists {
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found", uuid)
+		smap := p.owner.smap.get()
+		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.strIC(p.si))
 		return
 	}
 
@@ -101,19 +134,77 @@ func (p *proxyrunner) writeStatus(w http.ResponseWriter, r *http.Request, uuid s
 	w.Write(cmn.MustMarshal(nl.finished()))
 }
 
-func (p *proxyrunner) registerIC(uuid string, nl notifListener, smap *smapX, msg interface{}, queries ...url.Values) {
-	selfIC, otherIC := p.whichIC(smap, queries...)
-	if selfIC {
-		nl.setOwned(true)
-		p.notifs.add(uuid, nl)
-	}
-	if otherIC {
-		_ = p.bcastListenIC(uuid, nl, smap, msg)
-		// TODO -- FIXME: handle errors, here and elsewhere
+// POST /v1/ic
+func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		var (
+			msg  notifListenMsg
+			smap = p.owner.smap.get()
+		)
+		if selfIC, _ := p.whichIC(smap, nil); !selfIC {
+			p.invalmsghdlrf(w, r, "%s: not IC member", p.si)
+			return
+		}
+		if err := cmn.ReadJSON(w, r, &msg); err != nil {
+			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			return
+		}
+		cmn.Assert(msg.Ty == notifXact || msg.Ty == notifCache)
+		cmn.Assert(smap.version() == msg.SmapVersion) // TODO -- FIXME: handle
+
+		tmap, _ := smap.GetTargetMap(msg.Srcs)
+
+		switch msg.Action {
+		case cmn.ActQueryObjects:
+			initMsg := query.InitMsg{}
+			if err := cmn.MorphMarshal(msg.Ext, &initMsg); err != nil {
+				p.invalmsghdlrf(w, r, "%s: invalid msg %+v", msg.Action, msg.Ext)
+				return
+			}
+			nlq, err := newQueryListener(msg.UUID, msg.Ty, tmap, &initMsg)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			nlq.setOwner(msg.Owner)
+			p.notifs.add(nlq)
+		default:
+			nl := &notifListenerBase{uuid: msg.UUID, ty: msg.Ty, srcs: tmap}
+			nl.setOwner(msg.Owner)
+			p.notifs.add(nl)
+		}
+	default:
+		cmn.Assert(false)
 	}
 }
 
-func (p *proxyrunner) bcastListenIC(uuid string, nl notifListener, smap *smapX, msg interface{}) (err error) {
+func (p *proxyrunner) whichIC(smap *smapX, query url.Values) (selfIC, otherIC bool) {
+	cmn.Assert(len(smap.IC) > 0)
+	selfIC = smap.isIC(p.si)
+	otherIC = len(smap.IC) > 1
+	cmn.Assert(selfIC || otherIC)
+	if query == nil {
+		return
+	}
+	for pid := range smap.IC {
+		query.Add(cmn.URLParamNotifyMe, pid)
+	}
+	return
+}
+
+func (p *proxyrunner) registerIC(a regIC) {
+	selfIC, otherIC := p.whichIC(a.smap, a.query)
+	if selfIC {
+		p.notifs.add(a.nl)
+	}
+	if otherIC {
+		// TODO -- FIXME: handle errors, here and elsewhere
+		_ = p.bcastListenIC(a.nl, a.smap, a.msg)
+	}
+}
+
+func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX, msg interface{}) (err error) {
 	nodes := make(cluster.NodeMap)
 	for pid := range smap.IC {
 		if pid != p.si.ID() {
@@ -122,8 +213,7 @@ func (p *proxyrunner) bcastListenIC(uuid string, nl notifListener, smap *smapX, 
 			nodes.Add(psi)
 		}
 	}
-	nlMsg := nlMsgFromListener(nl)
-	nlMsg.UUID = uuid
+	nlMsg := nlMsgFromListener(nl, smap)
 	if msg != nil {
 		nlMsg.Ext = msg
 	}
@@ -146,46 +236,21 @@ func (p *proxyrunner) bcastListenIC(uuid string, nl notifListener, smap *smapX, 
 	return
 }
 
-// HTTP stuff
+// helpers
 
-// POST /v1/ic
-func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		var (
-			msg  notifListenMsg
-			smap = p.owner.smap.get()
-		)
-		if selfIC, _ := p.whichIC(smap); !selfIC {
-			p.invalmsghdlrf(w, r, "%s: not IC member", p.si)
-			return
-		}
-		if err := cmn.ReadJSON(w, r, &msg); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error())
-			return
-		}
-		cmn.Assert(msg.Ty == notifXact)        // TODO: support other notification types
-		tmap, _ := smap.GetTargetMap(msg.Srcs) // TODO: handle if DaemonID missing
-
-		switch msg.Action {
-		case cmn.ActQueryObjects:
-			initMsg := query.InitMsg{}
-			if err := cmn.MorphMarshal(msg.Ext, &initMsg); err != nil {
-				p.invalmsghdlrf(w, r, "%s: invalid msg %+v", msg.Action, msg.Ext)
-				return
-			}
-			nl, err := newQueryState(tmap, &initMsg)
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			nl.owned = true
-			p.notifs.add(msg.UUID, nl)
-		default:
-			nl := &notifListenerBase{owned: true, srcs: tmap}
-			p.notifs.add(msg.UUID, nl)
-		}
-	default:
-		cmn.Assert(false)
+func nlMsgFromListener(nl notifListener, smap *smapX) *notifListenMsg {
+	cmn.Assert(nl.notifTy() > notifInvalid)
+	cmn.Assert(nl.UUID() != "")
+	n := &notifListenMsg{
+		UUID:        nl.UUID(),
+		Ty:          nl.notifTy(),
+		SmapVersion: smap.version(),
+		Action:      nl.kind(),
+		Bck:         nl.bcks(),
+		Owner:       nl.getOwner(),
 	}
+	for daeID := range nl.notifiers() {
+		n.Srcs = append(n.Srcs, daeID)
+	}
+	return n
 }

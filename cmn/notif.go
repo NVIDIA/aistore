@@ -25,10 +25,12 @@ type (
 	Notif interface {
 		Callback(n Notif, err error)
 		Upon(u Upon) bool
+		Category() int
 	}
 	// intra-cluster notification base
 	NotifBase struct {
 		When Upon                     // see the enum below
+		Ty   int                      // notification category enum
 		Dsts []string                 // node IDs to notify
 		F    func(n Notif, err error) // notification callback
 	}
@@ -47,3 +49,4 @@ var (
 
 func (notif *NotifBase) Callback(n Notif, err error) { notif.F(n, err) }
 func (notif *NotifBase) Upon(u Upon) bool            { return notif != nil && notif.When&u != 0 }
+func (notif *NotifBase) Category() int               { return notif.Ty }

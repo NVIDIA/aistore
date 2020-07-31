@@ -9,6 +9,7 @@ import (
 	"net"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -156,6 +157,18 @@ func (m *smapX) addIC(psi *cluster.Snode) {
 func (m *smapX) isIC(psi *cluster.Snode) (ok bool) {
 	_, ok = m.IC[psi.ID()]
 	return
+}
+
+func (m *smapX) strIC(psi *cluster.Snode) string {
+	all := make([]string, 0, len(m.IC))
+	for pid := range m.IC {
+		if pid == psi.ID() {
+			all = append(all, pid+"(*)")
+		} else {
+			all = append(all, pid)
+		}
+	}
+	return strings.Join(all, ",")
 }
 
 func (m *smapX) tag() string    { return revsSmapTag }

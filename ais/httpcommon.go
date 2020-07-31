@@ -767,7 +767,7 @@ func (h *httprunner) notify(sid string, msgBody []byte, dstIsTarget ...bool) {
 
 func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
 	var (
-		msg   = notifMsg{Ty: notifXact, Snode: h.si, Err: err}
+		msg   = notifMsg{Ty: int32(n.Category()), Snode: h.si, Err: err}
 		notif = n.(*cmn.NotifXact)
 		pid   = notif.Dsts[0]
 	)

@@ -100,6 +100,25 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 	return
 }
 
+func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
+	var (
+		max    uint64
+		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
+	)
+	for _, pid := range smap.IC {
+		psi := smap.GetProxy(pid)
+		cs := xoshiro256.Hash(psi.idDigest ^ digest)
+		if cs >= max {
+			max = cs
+			pi = psi
+		}
+	}
+	if pi == nil {
+		err = fmt.Errorf("IC is empty %v, %s", smap.IC, smap)
+	}
+	return
+}
+
 // Returns target which should be responsible for a given task. E.g. usage
 // to list cloud bucket (we want only one target to do it).
 func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {

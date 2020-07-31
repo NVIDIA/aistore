@@ -29,14 +29,17 @@ import (
 // TODO: add an option to enforce 'if one notifier fails all fail'
 // TODO: housekeeping: broadcast in a separate goroutine
 
-// notifMsg.Ty enum
+// notification category
 const (
-	notifXact = iota
-	// TODO: add more
+	notifInvalid = iota
+	notifXact
+	notifCache
 )
 
-var notifTyText = map[int]string{
-	notifXact: "xaction",
+var notifCatText = map[int]string{
+	notifInvalid: "invalid",
+	notifXact:    "xaction",
+	notifCache:   "cache",
 }
 
 const (
@@ -69,28 +72,29 @@ type (
 		addErr(string /*sid*/, error)
 		err() error
 		UUID() string
-		setUUID(string)
+		Category() int
 		finTime() int64
 		finished() bool
 		String() string
-		isOwned() bool
-		setOwned(bool)
+		getOwner() string
+		setOwner(string)
+		hrwOwner(smap *smapX)
 	}
 
 	notifListenerBase struct {
 		sync.RWMutex
-		srcs cluster.NodeMap  // expected notifiers
-		errs map[string]error // [node-ID => notifMsg.Err]
-		uuid string           // UUID
-		f    notifCallback    // optional listening-side callback
-		rc   int              // refcount
-		ty   int              // notifMsg.Ty enum (above)
-		tfin atomic.Int64     // timestamp when finished
+		uuid  string           // UUID
+		srcs  cluster.NodeMap  // expected notifiers
+		errs  map[string]error // [node-ID => notifMsg.Err]
+		f     notifCallback    // optional listening-side callback
+		rc    int              // refcount
+		ty    int              // notification category (above)
+		tfin  atomic.Int64     // timestamp when finished
+		owned string           // "": not owned | equalIC: IC | otherwise, pid + IC
 		// common info
 		action string
 		bck    []cmn.Bck
 		// ownership
-		owned bool
 	}
 
 	notifListenerBck struct {
@@ -111,13 +115,14 @@ type (
 	}
 	// receiver to start listening
 	notifListenMsg struct {
-		UUID string   `json:"uuid"`
-		Ty   int      `json:"ty"`
-		Srcs []string `json:"srcs"` // slice of DaemonIDs
-		// common
-		Action string      `json:"action"`
-		Bck    []cmn.Bck   `json:"bck"`
-		Ext    interface{} `json:"ext"`
+		UUID        string      `json:"uuid"`
+		Srcs        []string    `json:"srcs"` // slice of DaemonIDs
+		SmapVersion int64       `json:"smapversion,string"`
+		Owner       string      `json:"owner"`
+		Action      string      `json:"action"`
+		Bck         []cmn.Bck   `json:"bck"`
+		Ext         interface{} `json:"ext"`
+		Ty          int         `json:"ty"` // notification category (enum)
 	}
 )
 
@@ -127,8 +132,9 @@ var (
 	_ cluster.Slistener = &notifs{}
 )
 
-func newNLB(srcs cluster.NodeMap, action string, bck ...cmn.Bck) *notifListenerBase {
-	return &notifListenerBase{srcs: srcs.Clone(), action: action, bck: bck}
+func newNLB(uuid string, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *notifListenerBase {
+	cmn.Assert(ty > notifInvalid)
+	return &notifListenerBase{uuid: uuid, srcs: srcs.Clone(), ty: ty, action: action, bck: bck}
 }
 
 ///////////////////////
@@ -162,7 +168,7 @@ func (nlb *notifListenerBase) notifiers() cluster.NodeMap { return nlb.srcs }
 func (nlb *notifListenerBase) incRC() int                 { nlb.rc++; return nlb.rc }
 func (nlb *notifListenerBase) notifTy() int               { return nlb.ty }
 func (nlb *notifListenerBase) UUID() string               { return nlb.uuid }
-func (nlb *notifListenerBase) setUUID(uuid string)        { cmn.Assert(nlb.uuid == ""); nlb.uuid = uuid }
+func (nlb *notifListenerBase) Category() int              { return nlb.ty }
 func (nlb *notifListenerBase) finTime() int64             { return nlb.tfin.Load() }
 func (nlb *notifListenerBase) finished() bool             { return nlb.finTime() > 0 }
 func (nlb *notifListenerBase) addErr(sid string, err error) {
@@ -195,10 +201,17 @@ func (nlb *notifListenerBase) String() string {
 	return hdr
 }
 
-func (nlb *notifListenerBase) isOwned() bool       { return nlb.owned }
-func (nlb *notifListenerBase) setOwned(owned bool) { nlb.owned = owned }
-func (nlb *notifListenerBase) kind() string        { return nlb.action }
-func (nlb *notifListenerBase) bcks() []cmn.Bck     { return nlb.bck }
+func (nlb *notifListenerBase) getOwner() string  { return nlb.owned }
+func (nlb *notifListenerBase) setOwner(o string) { nlb.owned = o }
+func (nlb *notifListenerBase) kind() string      { return nlb.action }
+func (nlb *notifListenerBase) bcks() []cmn.Bck   { return nlb.bck }
+
+// effectively, cache owner
+func (nlb *notifListenerBase) hrwOwner(smap *smapX) {
+	psiOwner, err := cluster.HrwIC(&smap.Smap, nlb.UUID())
+	cmn.AssertNoErr(err) // TODO -- FIXME: handle
+	nlb.setOwner(psiOwner.ID())
+}
 
 ////////////
 // notifs //
@@ -215,23 +228,31 @@ func (n *notifs) init(p *proxyrunner) {
 func (n *notifs) String() string { return notifsName }
 
 // start listening
-func (n *notifs) add(uuid string, nl notifListener) {
+func (n *notifs) add(nl notifListener) {
+	cmn.Assert(nl.UUID() != "")
+	cmn.Assert(nl.Category() > notifInvalid)
 	n.Lock()
-	n.m[uuid] = nl
-	nl.setUUID(uuid)
+	_, ok := n.m[nl.UUID()]
+	cmn.AssertMsg(!ok, nl.UUID())
+	n.m[nl.UUID()] = nl
 	n.Unlock()
 	glog.Infoln(nl.String())
 }
 
 func (n *notifs) del(nl notifListener, locked ...bool) {
+	var ok bool
 	if len(locked) == 0 {
 		n.Lock()
 	}
-	delete(n.m, nl.UUID())
+	if _, ok = n.m[nl.UUID()]; ok {
+		delete(n.m, nl.UUID())
+	}
 	if len(locked) == 0 {
 		n.Unlock()
 	}
-	glog.Infoln(nl.String())
+	if ok {
+		glog.Infoln(nl.String())
+	}
 }
 
 func (n *notifs) entry(uuid string) (notifListener, bool) {
@@ -277,6 +298,8 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		uuid = stats.IDX
 		msg = stats
+	case notifCache:
+		return // TODO -- FIXME: implement
 	default:
 		n.p.invalmsghdlrstatusf(w, r, 0, "%s: unknown notification type %s", n.p.si, notifMsg)
 		return
@@ -285,7 +308,8 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown UUID %q (%s)", n.p.si, uuid, notifMsg)
 		return
-	} else if nl.finished() {
+	}
+	if nl.finished() {
 		n.p.invalmsghdlrstatusf(w, r, 0, "%s: %q already finished (msg=%s)", n.p.si, uuid, notifMsg)
 		return
 	}
@@ -354,14 +378,13 @@ func (n *notifs) housekeep() time.Duration {
 	n.RUnlock()
 	req := bcastArgs{req: cmn.ReqArgs{Query: make(url.Values, 2)}, timeout: cmn.GCO.Get().Timeout.MaxKeepalive}
 	for uuid, nl := range tempn {
-		switch nl.notifTy() {
-		case notifXact:
-			req.req.Path = cmn.URLPath(cmn.Version, cmn.Xactions)
-			req.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
-			req.req.Query.Set(cmn.URLParamUUID, uuid)
-		default:
-			cmn.Assert(false)
+		if nl.notifTy() == notifCache { // TODO -- FIXME: implement
+			continue
 		}
+		cmn.AssertMsg(nl.notifTy() == notifXact, nl.String())
+		req.req.Path = cmn.URLPath(cmn.Version, cmn.Xactions)
+		req.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
+		req.req.Query.Set(cmn.URLParamUUID, uuid)
 		results := n.p.bcastGet(req)
 		for res := range results {
 			var (
@@ -400,11 +423,12 @@ func (n *notifs) housekeep() time.Duration {
 	return notifsHousekeepT
 }
 
-func (n *notifs) isOwner(uuid string) bool {
-	if nl, exists := n.entry(uuid); exists {
-		return nl.isOwned()
+func (n *notifs) getOwner(uuid string) (o string, exists bool) {
+	var nl notifListener
+	if nl, exists = n.entry(uuid); exists {
+		o = nl.getOwner()
 	}
-	return false
+	return
 }
 
 // nolint:unused // helper used by others
@@ -531,7 +555,7 @@ func (n *notifs) ListenSmapChanged() {
 
 func notifText(ty int) string {
 	const unk = "unknown"
-	if txt, ok := notifTyText[ty]; ok {
+	if txt, ok := notifCatText[ty]; ok {
 		return txt
 	}
 	return unk
@@ -539,19 +563,4 @@ func notifText(ty int) string {
 
 func (msg *notifMsg) String() string {
 	return fmt.Sprintf("%s[%s,%v]<=%s", notifText(int(msg.Ty)), string(msg.Data), msg.Err, msg.Snode)
-}
-
-// start listening
-// TODO: add bucket and kind = cmn.Act*
-func nlMsgFromListener(nl notifListener) *notifListenMsg {
-	n := &notifListenMsg{
-		UUID:   nl.UUID(),
-		Ty:     nl.notifTy(),
-		Action: nl.kind(),
-		Bck:    nl.bcks(),
-	}
-	for daeID := range nl.notifiers() {
-		n.Srcs = append(n.Srcs, daeID)
-	}
-	return n
 }
