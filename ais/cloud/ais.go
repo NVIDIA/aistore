@@ -308,8 +308,18 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.B
 	if err != nil {
 		return nil, err, errCode
 	}
+
+	remoteMsg := &cmn.SelectMsg{}
+	cmn.CopyStruct(remoteMsg, msg)
+	// FIXME: clearing uuid is necessary otherwise the remote cluster will think
+	//  that it already knows this `uuid`. This and line with pageMarker/contToken
+	//  needs to be removed. This rights now impacts performance since we basically
+	//  restart walking every page (the very thing that we wanted to avoid).
+	remoteMsg.UUID = ""
+	remoteMsg.ContinuationToken = remoteMsg.PageMarker
+
 	err = m.try(remoteBck.Bck, func(bck cmn.Bck) error {
-		bckList, err = api.ListObjects(aisCluster.bp, bck, msg, 0)
+		bckList, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg)
 		return err
 	})
 	err, errCode = extractErrCode(err)
