@@ -1,3 +1,9 @@
+echo "Checking kubectl default sa account..."
+kubectl get sa default >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+  kubectl create sa default
+fi
+
 # to allow running kubectl commands from within a pod (for e.g target)
 kubectl apply -f kube_templates/minikube_perms.yaml
 
