@@ -30,13 +30,12 @@ type BckListTask struct {
 	demand.XactDemandBase
 	ctx        context.Context
 	t          cluster.Target
+	bck        *cluster.Bck
 	workCh     chan *bckListReq      // incoming requests
 	objCache   chan *cmn.BucketEntry // local cache filled when idle
 	lastPage   []*cmn.BucketEntry    // last sent page and a little more
 	msg        *cmn.SelectMsg
 	walkStopCh *cmn.StopCh    // to abort file walk
-	cluBck     *cluster.Bck   // cluster.Bck constructed from the original cmn.Bck
-	remoteBck  *cluster.Bck   // differs from cluBck
 	token      string         // the continuation token for the last sent page (for re-requests)
 	nextToken  string         // continuation token returned by Cloud to get the next page
 	walkWg     sync.WaitGroup // to wait until walk finishes
@@ -100,22 +99,14 @@ func (r *BckListTask) Do(msg *cmn.SelectMsg, ch chan *BckListResp) {
 // Starts fs.Walk beforehand if needed so that by the time we read the next page
 // local cache is populated.
 func (r *BckListTask) init() error {
-	r.cluBck = cluster.NewBckEmbed(r.Bck())
-	if err := r.cluBck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+	r.bck = cluster.NewBckEmbed(r.Bck())
+	if err := r.bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
 		return err
 	}
-	r.fromRemote = !r.cluBck.IsAIS() && !r.msg.Cached
+	r.fromRemote = !r.bck.IsAIS() && !r.msg.Cached
 	// remote bucket listing is always paginated
 	if r.fromRemote && r.msg.WantObjectsCnt() == 0 {
 		r.msg.PageSize = cmn.DefaultListPageSize
-	}
-	if r.cluBck.HasBackendBck() {
-		r.remoteBck = cluster.NewBckEmbed(r.cluBck.CloudBck())
-		if err := r.remoteBck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
-			return err
-		}
-	} else if !r.cluBck.IsAIS() {
-		r.remoteBck = r.cluBck
 	}
 	if r.fromRemote {
 		return nil
@@ -265,7 +256,7 @@ func (r *BckListTask) isPageCached(marker string, cnt int) bool {
 }
 
 func (r *BckListTask) nextPageCloud() error {
-	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.remoteBck, r.msg)
+	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.bck, r.msg)
 	bckList, err := walk.CloudObjPage()
 	if err != nil {
 		r.nextToken = ""

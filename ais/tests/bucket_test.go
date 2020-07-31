@@ -531,7 +531,7 @@ func TestListObjectsCloudCached(t *testing.T) {
 		tassert.Errorf(t, entry.Size != 0, "size is not set")
 		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 		tassert.Errorf(t, entry.Atime != "", "atime is not set")
-		tassert.Errorf(t, entry.Version != "", "version is not set")
+		// NOTE: `entry.Version` value depends on cloud configuration.
 
 		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
 		tassert.Errorf(t, entry.Copies == 0, "copies is set")
@@ -570,8 +570,8 @@ func TestListObjectsCloudProps(t *testing.T) {
 	for _, entry := range objList.Entries {
 		tassert.Errorf(t, entry.Name != "", "name is not set")
 		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-		tassert.Errorf(t, entry.Version != "", "version is not set")
 		tassert.Errorf(t, entry.Copies == 1, "copies is not set")
+		// NOTE: `entry.Version` value depends on cloud configuration.
 
 		tassert.Errorf(t, entry.Size == 0, "size is set")
 		tassert.Errorf(t, entry.Atime == "", "atime is set")

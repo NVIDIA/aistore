@@ -473,12 +473,6 @@ func TestObjectPrefix(t *testing.T) {
 	})
 }
 
-func TestObjectsVersions(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
-	propsMainTest(t, true /*versioning enabled*/)
-}
-
 func TestReregisterMultipleTargets(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 

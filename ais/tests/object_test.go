@@ -980,8 +980,8 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch stri
 }
 
 func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, limit uint) *cmn.BucketList {
-	tutils.Logf("LIST objects %s [prefix: %q, page_size: %d, marker: %q]\n",
-		bck, msg.Prefix, msg.PageSize, msg.PageMarker)
+	tutils.Logf("LIST objects %s [prefix: %q, page_size: %d, cached: %t, marker: %q]\n",
+		bck, msg.Prefix, msg.PageSize, msg.Cached, msg.PageMarker)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	resList, err := api.ListObjects(baseParams, bck, msg, limit)
 	if err != nil {

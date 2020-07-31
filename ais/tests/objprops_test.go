@@ -451,14 +451,14 @@ func propsMainTest(t *testing.T, versioning bool) {
 	})
 }
 
-func TestObjPropsVersionEnabled(t *testing.T) {
+func TestObjPropsVersion(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	propsMainTest(t, true)
-}
 
-func TestObjPropsVersionDisabled(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-	propsMainTest(t, false)
+	for _, versioning := range []bool{false, true} {
+		t.Run(fmt.Sprintf("enabled=%t", versioning), func(t *testing.T) {
+			propsMainTest(t, versioning)
+		})
+	}
 }
 
 func TestObjProps(t *testing.T) {
