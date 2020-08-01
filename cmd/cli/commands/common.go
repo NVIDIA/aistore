@@ -210,7 +210,11 @@ const (
 // Flags
 var (
 	// Common
-	objPropsFlag    = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
+	objPropsFlag = cli.StringSliceFlag{
+		Name:  "props",
+		Usage: "properties to return with object names, comma separated",
+		Value: &cli.StringSlice{cmn.GetPropsName, cmn.GetPropsSize, cmn.GetPropsVersion},
+	}
 	prefixFlag      = cli.StringFlag{Name: "prefix", Usage: "prefix for string matching"}
 	refreshFlag     = cli.DurationFlag{Name: "refresh", Usage: "refresh period", Value: refreshRateDefault}
 	regexFlag       = cli.StringFlag{Name: "regex", Usage: "regex pattern for matching"}

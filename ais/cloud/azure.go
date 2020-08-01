@@ -265,15 +265,15 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(resp.Segment.BlobItems))}
 	for _, blob := range resp.Segment.BlobItems {
 		entry := &cmn.BucketEntry{Name: blob.Name}
-		if blob.Properties.ContentLength != nil && strings.Contains(msg.Props, cmn.GetPropsSize) {
+		if blob.Properties.ContentLength != nil && msg.WantProp(cmn.GetPropsSize) {
 			entry.Size = *blob.Properties.ContentLength
 		}
-		if strings.Contains(msg.Props, cmn.GetPropsVersion) {
+		if msg.WantProp(cmn.GetPropsVersion) {
 			if v, ok := h.EncodeVersion(string(blob.Properties.Etag)); ok {
 				entry.Version = v
 			}
 		}
-		if strings.Contains(msg.Props, cmn.GetPropsChecksum) {
+		if msg.WantProp(cmn.GetPropsChecksum) {
 			if v, ok := h.EncodeCksum(blob.Properties.ContentMD5); ok {
 				entry.Checksum = v
 			}

@@ -428,6 +428,15 @@ func parseStrFlag(c *cli.Context, flag cli.Flag) string {
 	return c.String(flagName)
 }
 
+// Returns the value of a string slice flag (either parent or local scope)
+func parseStrSliceFlag(c *cli.Context, flag cli.Flag) []string {
+	flagName := cleanFlag(flag.GetName())
+	if c.GlobalIsSet(flagName) {
+		return c.GlobalStringSlice(flagName)
+	}
+	return c.StringSlice(flagName)
+}
+
 // Returns the value of an int flag (either parent or local scope)
 func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
 	flagName := cleanFlag(flag.GetName())

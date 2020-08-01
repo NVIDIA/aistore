@@ -1731,7 +1731,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 			goto end
 		}
 		// Request for all the props if (cache should always have all entries).
-		smsg.Props = strings.Join(cmn.GetPropsAll, ",")
+		smsg.AddProps(cmn.GetPropsAll...)
 	}
 	if qb.hasEnough(smsg.UUID, smsg.ContinuationToken, pageSize) {
 		// We have enough in the buffer to fulfill the request.
@@ -1779,8 +1779,9 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 endWithCache:
 	if !smsg.Passthrough {
 		qc.set(cacheID, smsg.ContinuationToken, entries, pageSize)
+		props := smsg.PropsSet()
 		for idx := range entries {
-			entries[idx].SetProps(smsg.PropsSet())
+			entries[idx].SetProps(props)
 		}
 	}
 end:

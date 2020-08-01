@@ -450,10 +450,8 @@ func TestListObjectsProps(t *testing.T) {
 
 	tutils.Logln("asking for default props...")
 
-	msg := &cmn.SelectMsg{
-		PageSize: 100,
-		Props:    strings.Join(cmn.GetPropsDefault, ","),
-	}
+	msg := &cmn.SelectMsg{PageSize: 100}
+	msg.AddProps(cmn.GetPropsDefault...)
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
@@ -473,10 +471,8 @@ func TestListObjectsProps(t *testing.T) {
 
 	tutils.Logln("trying again with different subset of props...")
 
-	msg = &cmn.SelectMsg{
-		PageSize: 100,
-		Props:    strings.Join([]string{cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies}, ","),
-	}
+	msg = &cmn.SelectMsg{PageSize: 100}
+	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies)
 	objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
@@ -557,10 +553,8 @@ func TestListObjectsCloudProps(t *testing.T) {
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
-	msg := &cmn.SelectMsg{
-		PageSize: 10,
-		Props:    strings.Join([]string{cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies}, ","),
-	}
+	msg := &cmn.SelectMsg{PageSize: 10}
+	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies)
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(

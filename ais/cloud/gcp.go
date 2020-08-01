@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -149,15 +148,15 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	for _, attrs := range objs {
 		entry := &cmn.BucketEntry{}
 		entry.Name = attrs.Name
-		if strings.Contains(msg.Props, cmn.GetPropsSize) {
+		if msg.WantProp(cmn.GetPropsSize) {
 			entry.Size = attrs.Size
 		}
-		if strings.Contains(msg.Props, cmn.GetPropsChecksum) {
+		if msg.WantProp(cmn.GetPropsChecksum) {
 			if v, ok := h.EncodeCksum(attrs.MD5); ok {
 				entry.Checksum = v
 			}
 		}
-		if strings.Contains(msg.Props, cmn.GetPropsVersion) {
+		if msg.WantProp(cmn.GetPropsVersion) {
 			if v, ok := h.EncodeVersion(attrs.Generation); ok {
 				entry.Version = v
 			}

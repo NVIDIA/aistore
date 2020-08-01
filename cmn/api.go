@@ -28,13 +28,10 @@ type ActValPromote struct {
 	Verbose   bool   `json:"verbose"`
 }
 
-// SelectMsg represents properties and options for requests which fetch entities
-// Note: if Fast is `true` then paging is disabled - all items are returned
-//       in one response. The result list is unsorted and contains only object
-//       names: even field `Status` is filled with zero value
+// SelectMsg represents properties and options for listing objects.
 type SelectMsg struct {
 	UUID        string `json:"uuid"`        // ID to identify a single multi-page request
-	Props       string `json:"props"`       // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"
+	Props       string `json:"props"`       // e.g. "checksum,size"
 	TimeFormat  string `json:"time_format"` // "RFC822" default - see the enum above
 	Prefix      string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 	PageMarker  string `json:"pagemarker"`  // pageMarker - the last object in previous page
@@ -45,6 +42,7 @@ type SelectMsg struct {
 	ContinuationToken string `json:"continuation_token"`
 }
 
+// BucketSummaryMsg represents options that can be set when asking for bucket summary.
 type BucketSummaryMsg struct {
 	UUID   string `json:"uuid"`
 	Fast   bool   `json:"fast"`
@@ -71,31 +69,31 @@ type MountpathList struct {
 }
 
 // GetPropsDefault is a list of default (most relevant) GetProps* options
-// DO NOT forget update `GetPropsAll` constant when a prop is added/removed
+// NOTE: do **NOT** forget update `GetPropsAll` constant when a prop is added/removed.
 var GetPropsDefault = []string{
 	GetPropsName, GetPropsChecksum, GetPropsSize, GetPropsAtime, GetPropsVersion,
 }
 
-// GetPropsAll is a list of all GetProps* options
+// GetPropsAll is a list of all GetProps* options.
 var GetPropsAll = append(GetPropsDefault, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC)
 
 // NeedLocalData returns true if ListObjects for a cloud bucket needs
 // to return object properties that can be retrieved only from local caches
 func (msg *SelectMsg) NeedLocalData() bool {
-	return strings.Contains(msg.Props, GetPropsAtime) ||
-		strings.Contains(msg.Props, GetPropsStatus) ||
-		strings.Contains(msg.Props, GetPropsCopies) ||
-		strings.Contains(msg.Props, GetPropsCached)
+	return msg.WantProp(GetPropsAtime) ||
+		msg.WantProp(GetPropsStatus) ||
+		msg.WantProp(GetPropsCopies) ||
+		msg.WantProp(GetPropsCached)
 }
 
 // NeedLOMData returns true if a requests wants any object property that
 // is stored in LOM(i.e, it may require extra FS reads, e.g. for xattrs)
 func (msg *SelectMsg) NeedLOMData() bool {
-	return strings.Contains(msg.Props, GetPropsAtime) ||
-		strings.Contains(msg.Props, GetPropsStatus) ||
-		strings.Contains(msg.Props, GetPropsCopies) ||
-		strings.Contains(msg.Props, GetPropsEC) ||
-		strings.Contains(msg.Props, GetPropsVersion)
+	return msg.WantProp(GetPropsAtime) ||
+		msg.WantProp(GetPropsStatus) ||
+		msg.WantProp(GetPropsCopies) ||
+		msg.WantProp(GetPropsEC) ||
+		msg.WantProp(GetPropsVersion)
 }
 
 // WantProp returns true if msg request requires to return propName property

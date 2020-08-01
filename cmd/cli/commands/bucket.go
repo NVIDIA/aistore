@@ -159,34 +159,33 @@ func listBucketNames(c *cli.Context, query cmn.QueryBcks) (err error) {
 
 // Lists objects in bucket
 func listBucketObj(c *cli.Context, bck cmn.Bck) error {
-	var (
-		props string
-	)
-
 	objectListFilter, err := newObjectListFilter(c)
 	if err != nil {
 		return err
 	}
 
-	prefix := parseStrFlag(c, prefixFlag)
-	showUnmatched := flagIsSet(c, showUnmatchedFlag)
-	if parseStrFlag(c, objPropsFlag) == "all" {
-		props = strings.Join(cmn.GetPropsAll, ",")
+	var (
+		prefix        = parseStrFlag(c, prefixFlag)
+		showUnmatched = flagIsSet(c, showUnmatchedFlag)
+
+		msg = &cmn.SelectMsg{
+			Prefix:      prefix,
+			Cached:      flagIsSet(c, cachedFlag),
+			Passthrough: flagIsSet(c, passthroughFlag),
+		}
+	)
+
+	props := parseStrSliceFlag(c, objPropsFlag)
+	if cmn.StringInSlice("all", props) {
+		msg.AddProps(cmn.GetPropsAll...)
 	} else {
-		props = "name,"
-		props += parseStrFlag(c, objPropsFlag)
-		if flagIsSet(c, allItemsFlag) && !strings.Contains(props, "status") {
+		msg.AddProps(cmn.GetPropsName)
+		msg.AddProps(props...)
+		if flagIsSet(c, allItemsFlag) && !msg.WantProp(cmn.GetPropsStatus) {
 			// If `all` flag is set print status of the file so that the output is easier to understand -
 			// there might be multiple files with the same name listed (e.g EC replicas)
-			props += ",status"
+			msg.AddProps(cmn.GetPropsStatus)
 		}
-	}
-
-	msg := &cmn.SelectMsg{
-		Props:       props,
-		Prefix:      prefix,
-		Cached:      flagIsSet(c, cachedFlag),
-		Passthrough: flagIsSet(c, passthroughFlag),
 	}
 
 	if flagIsSet(c, markerFlag) {
@@ -223,7 +222,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 			} else {
 				toPrint = objList.Entries
 			}
-			err = printObjectProps(c, toPrint, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
+			err = printObjectProps(c, toPrint, objectListFilter, msg.Props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 			if err != nil {
 				return err
 			}
@@ -254,7 +253,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 		return err
 	}
 
-	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
+	return printObjectProps(c, objList.Entries, objectListFilter, msg.Props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
 func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.BucketsSummaries, err error) {

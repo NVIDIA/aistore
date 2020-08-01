@@ -643,16 +643,20 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 
 // Displays object properties
 func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
-	props, propsFlag := "", ""
+	var (
+		props     string
+		propsFlag []string
+	)
 	if flagIsSet(c, objPropsFlag) {
-		propsFlag = parseStrFlag(c, objPropsFlag)
+		propsFlag = parseStrSliceFlag(c, objPropsFlag)
 	}
-	if propsFlag == "" {
-		props += strings.Join(cmn.GetPropsDefault, ",")
-	} else if propsFlag == "all" {
-		props += strings.Join(cmn.GetPropsAll, ",")
+	// TODO: we should reuse `SelectMsg.AddProps` code.
+	if len(propsFlag) == 0 {
+		props = strings.Join(cmn.GetPropsDefault, ",")
+	} else if cmn.StringInSlice("all", propsFlag) {
+		props = strings.Join(cmn.GetPropsAll, ",")
 	} else {
-		props += parseStrFlag(c, objPropsFlag)
+		props = strings.Join(propsFlag, ",")
 	}
 
 	tmpl := buildObjStatTemplate(props, !flagIsSet(c, noHeaderFlag))
