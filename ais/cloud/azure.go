@@ -18,6 +18,7 @@ import (
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -244,8 +245,8 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		cloudBck = bck.CloudBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 	)
-	if msg.PageMarker != "" {
-		marker.Val = &msg.PageMarker
+	if msg.ContinuationToken != "" {
+		marker.Val = api.String(msg.ContinuationToken)
 	}
 	// TODO: MaxResults limits the total, not the page size.
 	// So, even if a bucket has more objects, Azure returns
@@ -282,10 +283,10 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		bckList.Entries = append(bckList.Entries, entry)
 	}
 	if resp.NextMarker.Val != nil {
-		bckList.PageMarker = *resp.NextMarker.Val
+		bckList.ContinuationToken = *resp.NextMarker.Val
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[list_bucket] count %d(marker: %s)", len(bckList.Entries), bckList.PageMarker)
+		glog.Infof("[list_bucket] count %d(marker: %s)", len(bckList.Entries), bckList.ContinuationToken)
 	}
 	return
 }

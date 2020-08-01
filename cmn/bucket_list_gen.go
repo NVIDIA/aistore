@@ -306,6 +306,12 @@ func (z *BucketList) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "UUID":
+			z.UUID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "UUID")
+				return
+			}
 		case "Entries":
 			var zb0002 uint32
 			zb0002, err = dc.ReadArrayHeader()
@@ -337,18 +343,6 @@ func (z *BucketList) DecodeMsg(dc *msgp.Reader) (err error) {
 					}
 				}
 			}
-		case "PageMarker":
-			z.PageMarker, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "PageMarker")
-				return
-			}
-		case "UUID":
-			z.UUID, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "UUID")
-				return
-			}
 		case "ContinuationToken":
 			z.ContinuationToken, err = dc.ReadString()
 			if err != nil {
@@ -368,9 +362,19 @@ func (z *BucketList) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketList) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
+	// map header, size 3
+	// write "UUID"
+	err = en.Append(0x83, 0xa4, 0x55, 0x55, 0x49, 0x44)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.UUID)
+	if err != nil {
+		err = msgp.WrapError(err, "UUID")
+		return
+	}
 	// write "Entries"
-	err = en.Append(0x84, 0xa7, 0x45, 0x6e, 0x74, 0x72, 0x69, 0x65, 0x73)
+	err = en.Append(0xa7, 0x45, 0x6e, 0x74, 0x72, 0x69, 0x65, 0x73)
 	if err != nil {
 		return
 	}
@@ -393,26 +397,6 @@ func (z *BucketList) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	// write "PageMarker"
-	err = en.Append(0xaa, 0x50, 0x61, 0x67, 0x65, 0x4d, 0x61, 0x72, 0x6b, 0x65, 0x72)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.PageMarker)
-	if err != nil {
-		err = msgp.WrapError(err, "PageMarker")
-		return
-	}
-	// write "UUID"
-	err = en.Append(0xa4, 0x55, 0x55, 0x49, 0x44)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.UUID)
-	if err != nil {
-		err = msgp.WrapError(err, "UUID")
-		return
-	}
 	// write "ContinuationToken"
 	err = en.Append(0xb1, 0x43, 0x6f, 0x6e, 0x74, 0x69, 0x6e, 0x75, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x6f, 0x6b, 0x65, 0x6e)
 	if err != nil {
@@ -429,9 +413,12 @@ func (z *BucketList) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BucketList) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
+	// map header, size 3
+	// string "UUID"
+	o = append(o, 0x83, 0xa4, 0x55, 0x55, 0x49, 0x44)
+	o = msgp.AppendString(o, z.UUID)
 	// string "Entries"
-	o = append(o, 0x84, 0xa7, 0x45, 0x6e, 0x74, 0x72, 0x69, 0x65, 0x73)
+	o = append(o, 0xa7, 0x45, 0x6e, 0x74, 0x72, 0x69, 0x65, 0x73)
 	o = msgp.AppendArrayHeader(o, uint32(len(z.Entries)))
 	for za0001 := range z.Entries {
 		if z.Entries[za0001] == nil {
@@ -444,12 +431,6 @@ func (z *BucketList) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	// string "PageMarker"
-	o = append(o, 0xaa, 0x50, 0x61, 0x67, 0x65, 0x4d, 0x61, 0x72, 0x6b, 0x65, 0x72)
-	o = msgp.AppendString(o, z.PageMarker)
-	// string "UUID"
-	o = append(o, 0xa4, 0x55, 0x55, 0x49, 0x44)
-	o = msgp.AppendString(o, z.UUID)
 	// string "ContinuationToken"
 	o = append(o, 0xb1, 0x43, 0x6f, 0x6e, 0x74, 0x69, 0x6e, 0x75, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x6f, 0x6b, 0x65, 0x6e)
 	o = msgp.AppendString(o, z.ContinuationToken)
@@ -474,6 +455,12 @@ func (z *BucketList) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "UUID":
+			z.UUID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "UUID")
+				return
+			}
 		case "Entries":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -504,18 +491,6 @@ func (z *BucketList) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			}
-		case "PageMarker":
-			z.PageMarker, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "PageMarker")
-				return
-			}
-		case "UUID":
-			z.UUID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "UUID")
-				return
-			}
 		case "ContinuationToken":
 			z.ContinuationToken, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -536,7 +511,7 @@ func (z *BucketList) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketList) Msgsize() (s int) {
-	s = 1 + 8 + msgp.ArrayHeaderSize
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.UUID) + 8 + msgp.ArrayHeaderSize
 	for za0001 := range z.Entries {
 		if z.Entries[za0001] == nil {
 			s += msgp.NilSize
@@ -544,6 +519,6 @@ func (z *BucketList) Msgsize() (s int) {
 			s += z.Entries[za0001].Msgsize()
 		}
 	}
-	s += 11 + msgp.StringPrefixSize + len(z.PageMarker) + 5 + msgp.StringPrefixSize + len(z.UUID) + 18 + msgp.StringPrefixSize + len(z.ContinuationToken)
+	s += 18 + msgp.StringPrefixSize + len(z.ContinuationToken)
 	return
 }

@@ -19,7 +19,7 @@ type (
 		APIParams() api.BaseParams
 		Bck() cmn.Bck
 		HeadObject(objName string) (obj *Object, exists bool, err error)
-		ListObjects(prefix, pageMarker string, pageSize uint) (objs []*Object, newPageMarker string, err error)
+		ListObjects(prefix, token string, pageSize uint) (objs []*Object, nextToken string, err error)
 		DeleteObject(objName string) (err error)
 	}
 
@@ -59,12 +59,12 @@ func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err 
 	}, true, nil
 }
 
-func (bck *bucketAPI) ListObjects(prefix, pageMarker string, pageSize uint) (objs []*Object, newPageMarker string, err error) {
+func (bck *bucketAPI) ListObjects(prefix, token string, pageSize uint) (objs []*Object, nextToken string, err error) {
 	selectMsg := &cmn.SelectMsg{
-		Prefix:     prefix,
-		Props:      cmn.GetPropsSize,
-		PageMarker: pageMarker,
-		PageSize:   pageSize,
+		Prefix:            prefix,
+		Props:             cmn.GetPropsSize,
+		PageSize:          pageSize,
+		ContinuationToken: token,
 	}
 	listResult, err := api.ListObjects(bck.apiParams, bck.Bck(), selectMsg, 0)
 	if err != nil {
@@ -75,7 +75,7 @@ func (bck *bucketAPI) ListObjects(prefix, pageMarker string, pageSize uint) (obj
 	for _, obj := range listResult.Entries {
 		objs = append(objs, NewObject(obj.Name, bck, obj.Size))
 	}
-	newPageMarker = listResult.PageMarker
+	nextToken = listResult.ContinuationToken
 	return
 }
 

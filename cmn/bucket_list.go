@@ -61,10 +61,8 @@ func (be *BucketEntry) SetProps(propsSet StringSet) {
 
 // BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'
 type BucketList struct {
-	Entries    []*BucketEntry `json:"entries"`
-	PageMarker string         `json:"pagemarker"`
-	UUID       string         `json:"uuid"`
-	// TODO: alias for page marker. Eventually it should replace `PageMarker` and
-	//  maybe `UUID` as well.
+	UUID    string         `json:"uuid"`
+	Entries []*BucketEntry `json:"entries"`
+	// TODO: merge `UUID` into `ContinuationToken`
 	ContinuationToken string `json:"continuation_token"`
 }

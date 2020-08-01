@@ -188,8 +188,8 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 		}
 	}
 
-	if flagIsSet(c, markerFlag) {
-		msg.PageMarker = parseStrFlag(c, markerFlag)
+	if flagIsSet(c, startAfterFlag) {
+		msg.StartAfter = parseStrFlag(c, startAfterFlag)
 	}
 	pageSize := parseIntFlag(c, pageSizeFlag)
 	limit := parseIntFlag(c, objLimitFlag)
@@ -231,7 +231,7 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 			// 1. the last page is printed
 			// 2. maximum pages are printed
 			// 3. printed `limit` number of objects
-			if msg.PageMarker == "" {
+			if msg.ContinuationToken == "" {
 				return nil
 			}
 			pageCounter++

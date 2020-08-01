@@ -189,11 +189,11 @@ func (r *ObjectsListingXact) startFromBck() {
 			for _, entry := range bckList.Entries {
 				r.putResult(&Result{entry: entry})
 			}
-			if bckList.PageMarker == "" {
+			if bckList.ContinuationToken == "" {
 				// Empty page marker - no more pages.
 				return
 			}
-			r.msg.PageMarker = bckList.PageMarker
+			r.msg.ContinuationToken = bckList.ContinuationToken
 		}
 	}
 
@@ -292,7 +292,7 @@ func (r *ObjectsListingXact) DiscardUntil(last string) {
 
 	i := 0
 	for ; i < len(r.buff); i++ {
-		if !cmn.PageMarkerIncludesObject(last, r.buff[i].Name) {
+		if !cmn.TokenIncludesObject(last, r.buff[i].Name) {
 			break
 		}
 	}
@@ -342,11 +342,11 @@ func (r *ObjectsListingXact) ForEach(apply func(entry *cmn.BucketEntry) error) e
 	return nil
 }
 
-func (r *ObjectsListingXact) PageMarkerFulfilled(pageMarker string) bool {
+func (r *ObjectsListingXact) TokenFulfilled(token string) bool {
 	// Everything, that target has, has been already fetched.
-	return r.Finished() && !r.Aborted() && r.LastDiscardedResult() != "" && cmn.PageMarkerIncludesObject(pageMarker, r.LastDiscardedResult())
+	return r.Finished() && !r.Aborted() && r.LastDiscardedResult() != "" && cmn.TokenIncludesObject(token, r.LastDiscardedResult())
 }
 
-func (r *ObjectsListingXact) PageMarkerUnsatisfiable(pageMarker string) bool {
-	return pageMarker != "" && !cmn.PageMarkerIncludesObject(pageMarker, r.LastDiscardedResult())
+func (r *ObjectsListingXact) TokenUnsatisfiable(token string) bool {
+	return token != "" && !cmn.TokenIncludesObject(token, r.LastDiscardedResult())
 }

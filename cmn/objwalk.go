@@ -22,7 +22,7 @@ func deduplicateBckEntries(bckEntries []*BucketEntry, maxSize uint) ([]*BucketEn
 	objCount := uint(len(bckEntries))
 
 	j := 0
-	pageMarker := ""
+	token := ""
 	for _, obj := range bckEntries {
 		if j > 0 && bckEntries[j-1].Name == obj.Name {
 			continue
@@ -41,9 +41,9 @@ func deduplicateBckEntries(bckEntries []*BucketEntry, maxSize uint) ([]*BucketEn
 		bckEntries[i] = nil
 	}
 	if maxSize > 0 && objCount >= maxSize {
-		pageMarker = bckEntries[j-1].Name
+		token = bckEntries[j-1].Name
 	}
-	return bckEntries[:j], pageMarker
+	return bckEntries[:j], token
 }
 
 // ConcatObjLists takes a slice of object lists and concatenates them: all lists
@@ -72,9 +72,7 @@ func ConcatObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	SortBckEntries(objs.Entries)
 
 	// Remove duplicates
-	objs.Entries, objs.PageMarker = deduplicateBckEntries(objs.Entries, maxSize)
-	objs.ContinuationToken = objs.PageMarker
-
+	objs.Entries, objs.ContinuationToken = deduplicateBckEntries(objs.Entries, maxSize)
 	return
 }
 
@@ -92,19 +90,19 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	}
 
 	bckList := lists[0] // main list to collect all info
-	pageMarker := bckList.PageMarker
+	contiunationToken := bckList.ContinuationToken
 
 	if len(lists) == 1 {
 		SortBckEntries(bckList.Entries)
 		bckList.Entries, _ = deduplicateBckEntries(bckList.Entries, maxSize)
-		bckList.PageMarker = pageMarker
+		bckList.ContinuationToken = contiunationToken
 		return bckList
 	}
 
 	objSet := make(map[string]*BucketEntry, len(bckList.Entries))
 	for _, l := range lists {
-		if pageMarker < l.PageMarker {
-			pageMarker = l.PageMarker
+		if contiunationToken < l.ContinuationToken {
+			contiunationToken = l.ContinuationToken
 		}
 		for _, e := range l.Entries {
 			entry, exists := objSet[e.Name]
@@ -136,6 +134,6 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 
 	SortBckEntries(bckList.Entries)
 	bckList.Entries, _ = deduplicateBckEntries(bckList.Entries, maxSize)
-	bckList.PageMarker = pageMarker
+	bckList.ContinuationToken = contiunationToken
 	return bckList
 }

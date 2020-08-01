@@ -94,8 +94,8 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 	if msg.Prefix != "" {
 		params.Prefix = aws.String(msg.Prefix)
 	}
-	if msg.PageMarker != "" {
-		params.Marker = aws.String(msg.PageMarker)
+	if msg.ContinuationToken != "" {
+		params.Marker = aws.String(msg.ContinuationToken)
 	}
 	if msg.PageSize != 0 {
 		if msg.PageSize > awsMaxPageSize {
@@ -133,7 +133,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 	if *resp.IsTruncated {
 		// For AWS, resp.NextMarker is only set when a query has a delimiter.
 		// Without a delimiter, NextMarker should be the last returned key.
-		bckList.PageMarker = bckList.Entries[len(bckList.Entries)-1].Name
+		bckList.ContinuationToken = bckList.Entries[len(bckList.Entries)-1].Name
 	}
 
 	if len(bckList.Entries) == 0 {
@@ -146,7 +146,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 	// Page is limited with 500+ items, so reading them is slow
 	if msg.WantProp(cmn.GetPropsVersion) {
 		versions := make(map[string]string, len(bckList.Entries))
-		keyMarker := msg.PageMarker
+		keyMarker := msg.ContinuationToken
 
 		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
 		if msg.Prefix != "" {
@@ -177,7 +177,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 			}
 
 			keyMarker = *verResp.NextKeyMarker
-			if bckList.PageMarker != "" && keyMarker > bckList.PageMarker {
+			if bckList.ContinuationToken != "" && keyMarker > bckList.ContinuationToken {
 				break
 			}
 		}

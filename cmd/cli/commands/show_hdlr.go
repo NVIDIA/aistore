@@ -33,7 +33,6 @@ type (
 var (
 	showCmdsFlags = map[string][]cli.Flag{
 		subcmdShowBucket: {
-			fastDetailsFlag,
 			cachedFlag,
 			allFlag,
 			verboseFlag,

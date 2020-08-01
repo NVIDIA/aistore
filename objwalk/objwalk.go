@@ -45,7 +45,7 @@ func (w *Walk) DefaultLocalObjPage(msg *cmn.SelectMsg) (*cmn.BucketList, error) 
 	xact := query.NewObjectsListing(w.ctx, w.t, q, msg)
 	go xact.Start()
 
-	cmn.Assert(!xact.PageMarkerUnsatisfiable(msg.PageMarker))
+	cmn.Assert(!xact.TokenUnsatisfiable(msg.ContinuationToken))
 	return LocalObjPage(xact, msg.WantObjectsCnt())
 }
 

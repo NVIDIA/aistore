@@ -230,15 +230,14 @@ var (
 	allFlag         = cli.BoolFlag{Name: "all", Usage: "list all properties"}
 
 	// Bucket
-	markerFlag        = cli.StringFlag{Name: "marker", Usage: "list objects alphabetically starting from the object after the marker"}
+	startAfterFlag    = cli.StringFlag{Name: "start-after", Usage: "list objects alphabetically starting from the object after given provided key"}
 	objLimitFlag      = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0}
 	pageSizeFlag      = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}
 	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
 	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
 	allItemsFlag      = cli.BoolTFlag{Name: "all-items", Usage: "show all items including old and duplicated"}
-	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all-items', 'limit', and 'page-size' are ignored in this mode"}
-	fastDetailsFlag   = cli.BoolFlag{Name: "fast", Usage: "enforce using faster methods to find out the buckets' details, note: the output may not be accurate"}
+	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast algorithm to compute the result (warning: the result can be inaccurate)"}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}

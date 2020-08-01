@@ -53,10 +53,12 @@ var (
 )
 
 func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *WalkInfo {
+	// TODO: this should be removed.
+	// TODO: we should take care of `msg.StartAfter`.
 	// Marker is always a file name, so we need to strip filename from path
 	markerDir := ""
-	if msg.PageMarker != "" {
-		markerDir = filepath.Dir(msg.PageMarker)
+	if msg.ContinuationToken != "" {
+		markerDir = filepath.Dir(msg.ContinuationToken)
 		if markerDir == "." {
 			markerDir = ""
 		}
@@ -75,7 +77,7 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *Wal
 		smap:         t.GetSowner().Get(),
 		postCallback: postCallback,
 		prefix:       msg.Prefix,
-		Marker:       msg.PageMarker,
+		Marker:       msg.ContinuationToken,
 		markerDir:    markerDir,
 		msg:          msg,
 		fast:         !msg.NeedLOMData(),
@@ -140,7 +142,7 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 	if wi.prefix != "" && !strings.HasPrefix(objName, wi.prefix) {
 		return nil
 	}
-	if wi.Marker != "" && cmn.PageMarkerIncludesObject(wi.Marker, objName) {
+	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, objName) {
 		return nil
 	}
 	if wi.objectFilter != nil && !wi.objectFilter(lom) {
@@ -193,7 +195,7 @@ func (wi *WalkInfo) walkFastCallback(fqn string, de fs.DirEntry) (*cmn.BucketEnt
 	if wi.prefix != "" && !strings.HasPrefix(ct.ObjName(), wi.prefix) {
 		return nil, nil
 	}
-	if wi.Marker != "" && cmn.PageMarkerIncludesObject(wi.Marker, ct.ObjName()) {
+	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, ct.ObjName()) {
 		return nil, nil
 	}
 	fileInfo := &cmn.BucketEntry{

@@ -34,11 +34,12 @@ type SelectMsg struct {
 	Props       string `json:"props"`       // e.g. "checksum,size"
 	TimeFormat  string `json:"time_format"` // "RFC822" default - see the enum above
 	Prefix      string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
-	PageMarker  string `json:"pagemarker"`  // pageMarker - the last object in previous page
 	PageSize    uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
 	Cached      bool   `json:"cached"`      // for cloud buckets - list only cached objects
 	Passthrough bool   `json:"passthrough"` // do not use cache - always request targets for fresh data
-	// TODO: Alias for `PageMarker`, eventually this should replace `PageMarker`.
+	// TODO: add implementation/support for this field.
+	StartAfter string `json:"start_after"` // key after which we should start listing
+	// TODO: `UUID` should be merged into `ContinuationToken`.
 	ContinuationToken string `json:"continuation_token"`
 }
 
@@ -138,11 +139,11 @@ func (msg *SelectMsg) WantObjectsCnt() uint {
 	return msg.PageSize
 }
 
-// Returns true if given pageMarker includes given object name.
-// PageMarker includes an object name iff the object name would
-// be included in response having given page marker.
-func PageMarkerIncludesObject(pageMarker, objName string) bool {
-	return strings.Compare(pageMarker, objName) >= 0
+// Returns true if given `token` includes given object name.
+// `token` includes an object name iff the object name would
+// be included in response having given continuation token.
+func TokenIncludesObject(token, objName string) bool {
+	return strings.Compare(token, objName) >= 0
 }
 
 type BucketSummary struct {

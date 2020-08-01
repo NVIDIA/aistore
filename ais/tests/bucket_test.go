@@ -602,7 +602,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 			objList, err := api.ListObjectsPage(baseParams, m.bck, msg)
 			tassert.CheckFatal(t, err)
 			totalCnt += len(objList.Entries)
-			if objList.PageMarker == "" {
+			if objList.ContinuationToken == "" {
 				break
 			}
 		}
@@ -644,7 +644,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 			objList, err := api.ListObjectsPage(baseParams, m.bck, msg)
 			tassert.CheckFatal(t, err)
 			totalCnt += len(objList.Entries)
-			if objList.PageMarker == "" {
+			if objList.ContinuationToken == "" {
 				break
 			}
 			tassert.Errorf(
@@ -747,8 +747,8 @@ func TestListObjects(t *testing.T) {
 				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
-				if bckList.PageMarker != "" {
-					t.Errorf("page marker was unexpectedly set to: %s", bckList.PageMarker)
+				if bckList.ContinuationToken != "" {
+					t.Errorf("continuation token was unexpectedly set to: %s", bckList.ContinuationToken)
 				}
 
 				empty := &cmn.BucketEntry{}

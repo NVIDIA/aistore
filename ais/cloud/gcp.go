@@ -134,7 +134,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 
 	var (
 		it    = gcpClient.Bucket(cloudBck.Name).Objects(gctx, query)
-		pager = iterator.NewPager(it, int(pageSize), msg.PageMarker)
+		pager = iterator.NewPager(it, int(pageSize), msg.ContinuationToken)
 		objs  = make([]*storage.ObjectAttrs, 0, pageSize)
 	)
 	nextPageToken, err := pager.NextPage(&objs)
@@ -144,7 +144,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	}
 
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(objs))}
-	bckList.PageMarker = nextPageToken
+	bckList.ContinuationToken = nextPageToken
 	for _, attrs := range objs {
 		entry := &cmn.BucketEntry{}
 		entry.Name = attrs.Name

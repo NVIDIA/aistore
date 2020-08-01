@@ -230,7 +230,7 @@ func (b *queryBuffers) last(id, token string) string {
 	}
 
 	last := buffer.currentBuff[len(buffer.currentBuff)-1].Name
-	if cmn.PageMarkerIncludesObject(token, last) {
+	if cmn.TokenIncludesObject(token, last) {
 		return token
 	}
 	return last

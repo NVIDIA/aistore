@@ -25,7 +25,7 @@ var (
 		noHeaderFlag,
 		pagedFlag,
 		maxPagesFlag,
-		markerFlag,
+		startAfterFlag,
 		cachedFlag,
 		passthroughFlag,
 	}

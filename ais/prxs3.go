@@ -268,7 +268,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	}
 
 	resp := s3compat.NewListObjectResult()
-	resp.PageMarker = smsg.PageMarker
+	resp.ContinuationToken = smsg.ContinuationToken
 	resp.FillFromAisBckList(bckList)
 	b := resp.MustMarshal()
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentXML)

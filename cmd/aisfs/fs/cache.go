@@ -102,12 +102,12 @@ func (c *namespaceCache) refresh() (bool, error) {
 	newCache.m.Store(unsafe.Pointer(&cmn.MultiSyncMap{}))
 
 	var (
-		objs       []*ais.Object
-		err        error
-		pageMarker string
+		objs      []*ais.Object
+		err       error
+		nextToken string
 	)
 	for {
-		objs, pageMarker, err = c.bck.ListObjects("", pageMarker, 50_000)
+		objs, nextToken, err = c.bck.ListObjects("", nextToken, 50_000)
 		if err != nil {
 			return false, err
 		}
@@ -126,7 +126,7 @@ func (c *namespaceCache) refresh() (bool, error) {
 			})
 		}
 
-		if pageMarker == "" {
+		if nextToken == "" {
 			break
 		}
 

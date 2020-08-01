@@ -102,10 +102,10 @@ type (
 		prefix string
 		suffix string
 
-		objs       []dlObj // objects' metas which are ready to be downloaded
-		pageMarker string
-		mtx        sync.Mutex
-		pagesCnt   int
+		mtx               sync.Mutex
+		objs              []dlObj // objects' metas which are ready to be downloaded
+		continuationToken string
+		pagesCnt          int
 	}
 
 	downloadJobInfo struct {
@@ -239,9 +239,8 @@ func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool) {
 	readyToDownloadObjs := j.objs
 	if err := j.getNextObjs(); err != nil {
 		glog.Error(err)
-		// this makes genNext return ok = false in the next
-		// loop iteration
-		j.objs, j.pageMarker = []dlObj{}, ""
+		// This makes `genNext` return `ok = false` in the next loop iteration.
+		j.objs, j.continuationToken = []dlObj{}, ""
 	}
 
 	return readyToDownloadObjs, true
@@ -251,9 +250,9 @@ func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool) {
 // download found or the bucket list is over.
 func (j *cloudBucketDlJob) getNextObjs() error {
 	j.objs = []dlObj{}
-	if j.pagesCnt > 0 && j.pageMarker == "" {
-		// Cloud ListObjects returned empty pageMarker after at least one request
-		// this means there are no more objects in to list
+	if j.pagesCnt > 0 && j.continuationToken == "" {
+		// Cloud ListObjects returned empty `continuationToken` after at least
+		// one request this means there are no more objects in to list.
 		return nil
 	}
 	smap := j.t.GetSowner().Get()
@@ -262,15 +261,15 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 	for {
 		j.pagesCnt++
 		msg := &cmn.SelectMsg{
-			Prefix:     j.prefix,
-			PageMarker: j.pageMarker,
+			Prefix:            j.prefix,
+			ContinuationToken: j.continuationToken,
 		}
 
 		bckList, err, _ := j.t.Cloud(j.bck).ListObjects(j.ctx, j.bck, msg)
 		if err != nil {
 			return err
 		}
-		j.pageMarker = msg.PageMarker
+		j.continuationToken = bckList.ContinuationToken
 
 		for _, entry := range bckList.Entries {
 			if !j.checkObj(entry.Name) {
@@ -285,7 +284,7 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 			}
 			j.objs = append(j.objs, obj)
 		}
-		if j.pageMarker == "" || len(j.objs) != 0 {
+		if j.continuationToken == "" || len(j.objs) != 0 {
 			break
 		}
 	}
@@ -341,13 +340,14 @@ func newCloudBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *
 	}
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
 	job := &cloudBucketDlJob{
-		baseDlJob:  *base,
-		pageMarker: "",
-		t:          t,
-		ctx:        ctx,
-		sync:       payload.Sync,
-		prefix:     payload.Prefix,
-		suffix:     payload.Suffix,
+		baseDlJob: *base,
+		t:         t,
+		ctx:       ctx,
+		sync:      payload.Sync,
+		prefix:    payload.Prefix,
+		suffix:    payload.Suffix,
+
+		continuationToken: "",
 	}
 
 	err := job.getNextObjs()

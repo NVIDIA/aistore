@@ -1188,27 +1188,21 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		}
 	}
 
-	pageMarker := bckList.PageMarker
-	// free memory allocated for temporary slice immediately as it can take up to a few GB
+	delta := mono.Since(begin)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		lat := int64(delta / time.Microsecond)
+		glog.Infof("LIST: bck: %q, token: %q, %d µs", bck, bckList.ContinuationToken, lat)
+	}
+
+	// Free memory allocated for temporary slice immediately as it can take up to a few GB
 	bckList.Entries = bckList.Entries[:0]
 	bckList.Entries = nil
 	bckList = nil
 
-	delta := mono.Since(begin)
 	p.statsT.AddMany(
 		stats.NamedVal64{Name: stats.ListCount, Value: 1},
 		stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
 	)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		var (
-			lat = int64(delta / time.Microsecond)
-			s   string
-		)
-		if pageMarker != "" {
-			s = ", page " + pageMarker
-		}
-		glog.Infof("LIST: %s%s, %d µs", bck.Name, s, lat)
-	}
 }
 
 func (p *proxyrunner) invalidateListAISBucketCache(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg) {
@@ -1753,6 +1747,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 		hasEnough bool
 		entries   []*cmn.BucketEntry
 		cacheID   = cacheReqID{bck: bck.Bck, prefix: smsg.Prefix}
+		token     = smsg.ContinuationToken
 	)
 
 	if smsg.PageSize != 0 {
@@ -1764,23 +1759,23 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	//  then we should just patiently wait for the cache to get populated.
 
 	if !smsg.Passthrough {
-		entries, hasEnough = p.qm.c.get(cacheID, smsg.ContinuationToken, pageSize)
+		entries, hasEnough = p.qm.c.get(cacheID, token, pageSize)
 		if hasEnough {
 			goto end
 		}
 		// Request for all the props if (cache should always have all entries).
 		smsg.AddProps(cmn.GetPropsAll...)
 	}
-	if p.qm.b.hasEnough(smsg.UUID, smsg.ContinuationToken, pageSize) {
+	if p.qm.b.hasEnough(smsg.UUID, token, pageSize) {
 		// We have enough in the buffer to fulfill the request.
-		entries = p.qm.b.get(smsg.UUID, smsg.ContinuationToken, pageSize)
+		entries = p.qm.b.get(smsg.UUID, token, pageSize)
 		goto endWithCache
 	}
 
 	// User requested some page but we don't have enough (but we may have part
 	// of the full page). Therefore, we must ask targets for page starting from
 	// what we have locally, so we don't rerequest the objects.
-	smsg.PageMarker = p.qm.b.last(smsg.UUID, smsg.ContinuationToken)
+	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
 
 	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, nil, nil)
 	args = bcastArgs{
@@ -1812,11 +1807,11 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 		}
 		p.qm.b.set(smsg.UUID, res.si.ID(), bucketList.Entries, pageSize)
 	}
-	entries = p.qm.b.get(smsg.UUID, smsg.ContinuationToken, pageSize)
+	entries = p.qm.b.get(smsg.UUID, token, pageSize)
 
 endWithCache:
 	if !smsg.Passthrough {
-		p.qm.c.set(cacheID, smsg.ContinuationToken, entries, pageSize)
+		p.qm.c.set(cacheID, token, entries, pageSize)
 		props := smsg.PropsSet()
 		for idx := range entries {
 			entries[idx].SetProps(props)
@@ -1828,7 +1823,6 @@ end:
 		Entries: entries,
 	}
 	if uint(len(entries)) >= pageSize {
-		allEntries.PageMarker = entries[len(entries)-1].Name
 		allEntries.ContinuationToken = entries[len(entries)-1].Name
 	}
 	return allEntries, nil
@@ -1907,7 +1901,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	// the single cmn.DefaultPageSize because Azure limit differs.
 	allEntries = cmn.MergeObjLists(bckLists, 0)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Errorf("Objects after merge %d, marker %s", len(allEntries.Entries), allEntries.PageMarker)
+		glog.Infof("Objects after merge: %d, token: %q", len(allEntries.Entries), allEntries.ContinuationToken)
 	}
 
 	if smsg.WantProp(cmn.GetTargetURL) {

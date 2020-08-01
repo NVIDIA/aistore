@@ -204,12 +204,12 @@ func (t *bckSummaryTask) Run() error {
 						t.BytesAdd(v.Size)
 					}
 
-					if list.PageMarker == "" {
+					if list.ContinuationToken == "" {
 						break
 					}
 
 					list.Entries = nil
-					smsg.PageMarker = list.PageMarker
+					smsg.ContinuationToken = list.ContinuationToken
 				}
 			}
 

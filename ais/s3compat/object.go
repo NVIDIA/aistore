@@ -19,14 +19,14 @@ import (
 type (
 	// List objects response
 	ListObjectResult struct {
-		Ns          string     `xml:"xmlns,attr"`
-		Prefix      string     `xml:"Prefix"`
-		KeyCount    int        `xml:"KeyCount"` // number of objects in the response
-		MaxKeys     int        `xml:"MaxKeys"`
-		IsTruncated bool       `xml:"IsTruncated"`           // true if there are more pages to read
-		PageMarker  string     `xml:"ContinuationToken"`     // original PageMarker
-		NextMarker  string     `xml:"NextContinuationToken"` // PageMarker to read the next page
-		Contents    []*ObjInfo `xml:"Contents"`              // list of objects
+		Ns                    string     `xml:"xmlns,attr"`
+		Prefix                string     `xml:"Prefix"`
+		KeyCount              int        `xml:"KeyCount"` // number of objects in the response
+		MaxKeys               int        `xml:"MaxKeys"`
+		IsTruncated           bool       `xml:"IsTruncated"`           // true if there are more pages to read
+		ContinuationToken     string     `xml:"ContinuationToken"`     // original ContinuationToken
+		NextContinuationToken string     `xml:"NextContinuationToken"` // NextContinuationToken to read the next page
+		Contents              []*ObjInfo `xml:"Contents"`              // list of objects
 	}
 	ObjInfo struct {
 		Key          string `xml:"Key"`
@@ -51,14 +51,14 @@ func FillMsgFromS3Query(query url.Values, msg *cmn.SelectMsg) {
 	if prefix := query.Get("prefix"); prefix != "" {
 		msg.Prefix = prefix
 	}
-	var marker string
-	if marker = query.Get("continuation-token"); marker != "" {
-		msg.PageMarker = marker
+	var token string
+	if token = query.Get("continuation-token"); token != "" {
+		msg.ContinuationToken = token
 	}
 	// start-after makes sense only on first call. For the next call,
 	// when continuation-token is set, start-after is ignored
-	if after := query.Get("start-after"); after != "" && marker == "" {
-		msg.PageMarker = after
+	if after := query.Get("start-after"); after != "" && token == "" {
+		msg.StartAfter = after
 	}
 }
 
@@ -91,8 +91,8 @@ func entryToS3(entry *cmn.BucketEntry) *ObjInfo {
 
 func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList) {
 	r.KeyCount = len(bckList.Entries)
-	r.IsTruncated = bckList.PageMarker != ""
-	r.NextMarker = bckList.PageMarker
+	r.IsTruncated = bckList.ContinuationToken != ""
+	r.ContinuationToken = bckList.ContinuationToken
 	for _, e := range bckList.Entries {
 		r.Add(e)
 	}

@@ -344,7 +344,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 	// than `pageSize`, the loop does the final request with reduced `pageSize`.
 	toRead := numObjects
 	smsg.UUID = ""
-	smsg.ContinuationToken = smsg.PageMarker
+	smsg.ContinuationToken = ""
 
 	pageSize := smsg.PageSize
 	if pageSize == 0 {
@@ -402,12 +402,11 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		// First iteration uses `bckList` directly so there is no need to append.
 		if iter > 1 {
 			bckList.Entries = append(bckList.Entries, page.Entries...)
-			bckList.PageMarker = page.PageMarker
 			bckList.ContinuationToken = page.ContinuationToken
 		}
 
-		if page.PageMarker == "" {
-			smsg.PageMarker = ""
+		if page.ContinuationToken == "" {
+			smsg.ContinuationToken = ""
 			break
 		}
 
@@ -421,7 +420,6 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		}
 
 		smsg.UUID = page.UUID
-		smsg.PageMarker = page.PageMarker
 		smsg.ContinuationToken = page.ContinuationToken
 	}
 
@@ -429,8 +427,8 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 }
 
 // ListObjectsPage returns the first page of bucket objects
-// On success the function updates msg.PageMarker, so a client can reuse
-// the message to fetch the next page
+// On success the function updates smsg.ContinuationToken, so a client can reuse
+// the message to fetch the next page.
 func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	if smsg == nil {
@@ -453,7 +451,6 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 		return nil, err
 	}
 	smsg.UUID = page.UUID
-	smsg.PageMarker = page.PageMarker
 	smsg.ContinuationToken = page.ContinuationToken
 	return page, nil
 }

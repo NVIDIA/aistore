@@ -170,9 +170,9 @@ func (ns *namespace) listEntries(p string, cb func(nsEntry)) {
 	}
 
 	p = strings.TrimLeft(p, separator)
-	pageMarker := ""
+	token := ""
 	for {
-		objs, newPageMarker, err := ns.bck.ListObjects(p, pageMarker, listObjsPageSize)
+		objs, nextToken, err := ns.bck.ListObjects(p, token, listObjsPageSize)
 		if err != nil || len(objs) == 0 {
 			break
 		}
@@ -194,10 +194,9 @@ func (ns *namespace) listEntries(p string, cb func(nsEntry)) {
 			}
 		}
 
-		if newPageMarker == "" {
+		if nextToken == "" {
 			break
 		}
-
-		pageMarker = newPageMarker
+		token = nextToken
 	}
 }

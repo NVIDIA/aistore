@@ -209,9 +209,9 @@ func (r *listRangeBase) iterateTemplate(args *DeletePrefetchArgs, smap *cluster.
 
 func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Smap, prefix string, cb objCallback) error {
 	var (
-		bucketListPage *cmn.BucketList
-		sid            = r.t.Snode().ID()
-		err            error
+		objList *cmn.BucketList
+		sid     = r.t.Snode().ID()
+		err     error
 	)
 
 	bck := cluster.NewBckEmbed(r.Bck())
@@ -223,14 +223,14 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 	for !r.Aborted() {
 		if bck.IsAIS() {
 			walk := objwalk.NewWalk(args.Ctx, r.t, bck, msg)
-			bucketListPage, err = walk.DefaultLocalObjPage(msg)
+			objList, err = walk.DefaultLocalObjPage(msg)
 		} else {
-			bucketListPage, err, _ = r.t.Cloud(bck).ListObjects(args.Ctx, bck, msg)
+			objList, err, _ = r.t.Cloud(bck).ListObjects(args.Ctx, bck, msg)
 		}
 		if err != nil {
 			return err
 		}
-		for _, be := range bucketListPage.Entries {
+		for _, be := range objList.Entries {
 			if !be.IsStatusOK() {
 				continue
 			}
@@ -251,13 +251,14 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 				return err
 			}
 		}
-		// Stop when the last page of BucketList is reached
-		if bucketListPage.PageMarker == "" {
+
+		// Stop when the last page is reached.
+		if objList.ContinuationToken == "" {
 			break
 		}
 
-		// Update PageMarker for the next request
-		msg.PageMarker = bucketListPage.PageMarker
+		// Update `ContinuationToken` for the next request.
+		msg.ContinuationToken = objList.ContinuationToken
 	}
 	return nil
 }
