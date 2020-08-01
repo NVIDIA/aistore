@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -22,13 +23,13 @@ import (
 // Buffering was designed to work for single request and is identified by list
 // objects uuid. Each buffer consist of "main buffer", that contains entries
 // which are ready to be returned to the client (user), and "leftovers" which
-// are per target structure that consist of entries that couldn't be included to
+// are per target structures that consist of entries that couldn't be included to
 // "main buffer" yet. When buffer doesn't contain enough entries the new entries
 // are fetched and added to "leftovers". After this they are merged and put into
 // "main buffer" so they can be returned to the client.
 //
 // Caching was designed to be used by multiple requests (clients) so it is
-// concurrent-safe. Each request is identified by id (`cacheReqID`). The requests
+// thread safe. Each request is identified by id (`cacheReqID`). The requests
 // that share the same id will also share a common cache. Cache consist of
 // (contiguous) intervals which contain entries. Only when request can be fully
 // answered by a single interval is considered valid response. Otherwise cache
@@ -61,8 +62,6 @@ type (
 
 	// Cache request ID. This identifies and splits requests into
 	// multiple caches that these requests can use.
-	// TODO: Having a cache per bucket may be too optimistic. We may need to take
-	//  into account other factors and `SelectMsg` parameters.
 	cacheReqID struct {
 		bck    cmn.Bck
 		prefix string
@@ -214,7 +213,7 @@ func (b *queryBuffers) set(id, targetID string, entries []*cmn.BucketEntry, size
 	v.(*queryBuffer).add(targetID, entries, size)
 }
 
-func (c cacheReqID) String() string { return c.bck.String() + "/" + c.prefix }
+func (c cacheReqID) String() string { return c.bck.String() + string(filepath.Separator) + c.prefix }
 
 func (ci *cacheInterval) contains(token string) bool {
 	if ci.token == token {
