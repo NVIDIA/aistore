@@ -111,7 +111,7 @@ func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
 	}
 	header.Set(headerAtime, FormatTime(lom.Atime()))
 	header.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
-	header.Set(cmn.HeaderContentType, GetContentType)
+	header.Set(cmn.HeaderContentType, cmn.ContentBinary)
 	header.Set(headerVersion, lom.Version())
 }
 

@@ -148,7 +148,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 			*t = string(b)
 		default:
 			if resp.StatusCode == http.StatusOK {
-				if resp.Header.Get("Content-Type") == "application/msgpack" {
+				if resp.Header.Get(cmn.HeaderContentType) == cmn.ContentMsgPack {
 					r := msgp.NewReaderSize(resp.Body, 10*cmn.KiB)
 					err = v.(msgp.Decodable).DecodeMsg(r)
 				} else {

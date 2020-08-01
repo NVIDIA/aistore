@@ -245,7 +245,7 @@ func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {
 		ID: id,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	b := cmn.MustMarshal(resp)
 	if _, err := w.Write(b); err != nil {
 		glog.Errorf("Failed to write to http response: %v.", err)

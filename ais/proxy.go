@@ -1140,8 +1140,8 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 
 	cmn.Assert(bckList != nil)
 
-	if strings.Contains(r.Header.Get("Accept"), "application/msgpack") {
-		w.Header().Set("Content-Type", "application/msgpack")
+	if strings.Contains(r.Header.Get(cmn.HeaderAccept), cmn.ContentMsgPack) {
+		w.Header().Set(cmn.HeaderContentType, cmn.ContentMsgPack)
 		mw := msgp.NewWriterSize(w, 10*cmn.KiB)
 		if err = bckList.EncodeMsg(mw); err == nil {
 			err = mw.Flush()

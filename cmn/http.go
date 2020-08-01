@@ -43,6 +43,16 @@ const (
 	HeaderAcceptRanges          = "Accept-Ranges"
 	HeaderContentType           = "Content-Type"
 	HeaderContentLength         = "Content-Length"
+	HeaderAccept                = "Accept"
+	HeaderLocation              = "Location"
+)
+
+// Ref: https://www.iana.org/assignments/media-types/media-types.xhtml
+const (
+	ContentJSON    = "application/json"
+	ContentMsgPack = "application/msgpack"
+	ContentXML     = "application/xml"
+	ContentBinary  = "application/octet-stream"
 )
 
 type (
@@ -230,7 +240,7 @@ func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, 
 // Content type was adjusted to make sure that the caller is aware that we return
 // JSON error and not just a regular string message.
 func writeError(w http.ResponseWriter, err error, status int) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(HeaderContentType, ContentJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	fmt.Fprintln(w, err.Error())
@@ -300,10 +310,9 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional 
 // In other cases, `v` is encoded to JSON and then passed.
 // The function returns an error if writing to the response fails.
 func WriteJSON(w http.ResponseWriter, v interface{}) error {
-	w.Header().Set("Content-Type", "application/json")
-	bytes, isByteArray := v.([]byte)
-	if isByteArray {
-		_, err := w.Write(bytes)
+	w.Header().Set(HeaderContentType, ContentJSON)
+	if b, ok := v.([]byte); ok {
+		_, err := w.Write(b)
 		return err
 	}
 	return jsoniter.NewEncoder(w).Encode(v)
@@ -361,7 +370,7 @@ func (u *ReqArgs) ReqWithCancel() (*http.Request, context.Context, context.Cance
 		return nil, nil, nil, err
 	}
 	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(HeaderContentType, ContentJSON)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	req = req.WithContext(ctx)
@@ -374,7 +383,7 @@ func (u *ReqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.
 		return nil, nil, nil, err
 	}
 	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(HeaderContentType, ContentJSON)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	req = req.WithContext(ctx)

@@ -11,9 +11,6 @@ import (
 )
 
 const (
-	ContentType    = "application/xml"
-	GetContentType = "binary/octet-stream"
-
 	AISRegion = "ais"
 	AISSever  = "AIS"
 

@@ -919,7 +919,7 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 }
 
 func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	_, isByteArray := v.([]byte)
 	cmn.Assert(!isByteArray)
 	var err error
@@ -944,7 +944,7 @@ func (h *httprunner) writeBytes(w http.ResponseWriter, r *http.Request, bytes []
 }
 
 func (h *httprunner) writeJSONBytes(w http.ResponseWriter, r *http.Request, bytes []byte, tag string) (ok bool) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	return h.writeBytes(w, r, bytes, tag)
 }
 

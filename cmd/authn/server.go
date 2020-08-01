@@ -327,7 +327,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
 func (a *authServ) writeJSON(w http.ResponseWriter, val interface{}, tag string) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	var err error
 	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {
 		return
@@ -337,7 +337,7 @@ func (a *authServ) writeJSON(w http.ResponseWriter, val interface{}, tag string)
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
 func (a *authServ) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
 		return

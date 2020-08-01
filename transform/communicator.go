@@ -139,7 +139,7 @@ func (pushc *pushComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *
 	}
 
 	req.ContentLength = lom.Size()
-	req.Header.Set("Content-Type", "octet-stream")
+	req.Header.Set(cmn.HeaderContentType, cmn.ContentBinary)
 	resp, err := pushc.t.Client().Do(req)
 	if err != nil {
 		return err

@@ -110,7 +110,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.Bu
 	reqParams := ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, query.Name),
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Header:     http.Header{cmn.HeaderContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
 	var summaries cmn.BucketsSummaries
@@ -361,7 +361,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			reqParams = ReqParams{
 				BaseParams: baseParams,
 				Path:       path,
-				Header:     http.Header{"Accept": []string{"application/msgpack"}},
+				Header:     http.Header{cmn.HeaderAccept: []string{cmn.ContentMsgPack}},
 				Query:      q,
 				Body:       cmn.MustMarshal(actMsg),
 			}
@@ -442,7 +442,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 		reqParams = ReqParams{
 			BaseParams: baseParams,
 			Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-			Header:     http.Header{"Accept": []string{"application/msgpack"}},
+			Header:     http.Header{cmn.HeaderAccept: []string{cmn.ContentMsgPack}},
 			Query:      cmn.AddBckToQuery(url.Values{}, bck),
 			Body:       cmn.MustMarshal(actMsg),
 		}
@@ -484,7 +484,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action, method strin
 		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: action, Value: listRangeMsg}),
 		Header: http.Header{
-			"Content-Type": []string{"application/json"},
+			cmn.HeaderContentType: []string{cmn.ContentJSON},
 		},
 		Query: cmn.AddBckToQuery(nil, bck),
 	}, &xactID)
