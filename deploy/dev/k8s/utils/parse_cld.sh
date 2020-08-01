@@ -54,6 +54,9 @@ else
   export AIS_CLD_PROVIDER=""
 fi
 
+# TODO: The following should happen only for AWS. This is because
+# in the yaml templates this field is hardcoded. Can be solved if
+# templating engine like helm, kustomize is used.
 if kubectl get secrets | grep aws > /dev/null 2>&1; then
     kubectl delete secret aws-credentials
 fi

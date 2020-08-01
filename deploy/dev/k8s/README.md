@@ -19,6 +19,8 @@ $ sudo service docker start
 >  **Note:  Running Minikube on a VPN might be [problematic](https://minikube.sigs.k8s.io/docs/handbook/vpn_and_proxy/). For smoother
    operations try running with VPN disabled.**
 
+All commands below are running from the same directory i.e `${AISTORE_ROOT}/deploy/dev/k8s`
+
 ## Trying AIStore on Minikube
 
 
@@ -33,7 +35,7 @@ $ ./try.sh
 
 ### Stopping and cleanup
 
-The script [stop.sh](/deploy/dev/k8s/stop.sh) stops the running Minikube instance.
+The script [stop.sh](stop.sh) stops the running Minikube instance.
 
 ```console
 $ ./stop.sh

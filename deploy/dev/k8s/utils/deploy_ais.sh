@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 
-echo Enter number of target servers:
+echo Enter number of storage targets:
 read TARGET_CNT
 if ! [[ "$TARGET_CNT" =~ ^[0-9]+$ ]] ; then
   echo "Error: '$TARGET_CNT' is not a number"; exit 1
 fi
 
-echo "Enter number of proxy servers:"
+echo "Enter number of proxies (gateway):"
 read PROXY_CNT
 if ! [[ "$PROXY_CNT" =~ ^[0-9]+$ ]]; then
   echo "Error: '$PROXY_CNT' must be at least 1"; exit 1
