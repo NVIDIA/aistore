@@ -30,6 +30,8 @@ func main() {
 }
 
 func run() int {
+	flag.Parse()
+
 	if s := *cpuProfile; s != "" {
 		*cpuProfile = s + "." + strconv.Itoa(syscall.Getpid())
 		f, err := os.Create(*cpuProfile)
