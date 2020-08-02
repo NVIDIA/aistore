@@ -998,10 +998,10 @@ func (h *httprunner) checkAction(msg *cmn.ActionMsg, expectedActions ...string) 
 
 func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
-		body    interface{}
-		getWhat = r.URL.Query().Get(cmn.URLParamWhat)
+		body interface{}
+		what = r.URL.Query().Get(cmn.URLParamWhat)
 	)
-	switch getWhat {
+	switch what {
 	case cmn.GetWhatConfig:
 		body = cmn.GCO.Get()
 	case cmn.GetWhatSmap:
@@ -1015,11 +1015,11 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSnode:
 		body = h.si
 	default:
-		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
+		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", what)
 		h.invalmsghdlr(w, r, s)
 		return
 	}
-	h.writeJSON(w, r, body, "httpdaeget-"+getWhat)
+	h.writeJSON(w, r, body, "httpdaeget-"+what)
 }
 
 ////////////////////////////////////////////

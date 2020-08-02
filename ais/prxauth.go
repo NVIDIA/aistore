@@ -7,6 +7,7 @@ package ais
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -34,12 +35,12 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // TODO: better check for internal request - nid & pid are too insecure
-func (p *proxyrunner) isInternalReq(r *http.Request) bool {
-	pid := r.URL.Query().Get(cmn.URLParamProxyID)
+func (p *proxyrunner) isInternalReq(query url.Values, hdr http.Header) bool {
+	pid := query.Get(cmn.URLParamProxyID)
 	if pid != "" {
 		return true
 	}
-	nid := r.Header.Get(cmn.HeaderNodeID)
+	nid := hdr.Get(cmn.HeaderNodeID)
 	return nid != ""
 }
 
@@ -47,11 +48,11 @@ func (p *proxyrunner) isInternalReq(r *http.Request) bool {
 // Header format:
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
-func (p *proxyrunner) validateToken(r *http.Request) (*cmn.AuthToken, error) {
-	if p.isInternalReq(r) {
+func (p *proxyrunner) validateToken(query url.Values, hdr http.Header) (*cmn.AuthToken, error) {
+	if p.isInternalReq(query, hdr) {
 		return nil, nil
 	}
-	authToken := r.Header.Get(cmn.HeaderAuthorization)
+	authToken := hdr.Get(cmn.HeaderAuthorization)
 	idx := strings.Index(authToken, " ")
 	if idx == -1 || authToken[:idx] != cmn.HeaderBearer {
 		return nil, errInvalidToken
@@ -66,12 +67,12 @@ func (p *proxyrunner) validateToken(r *http.Request) (*cmn.AuthToken, error) {
 	return auth, nil
 }
 
-func (p *proxyrunner) checkPermissions(r *http.Request, bck *cmn.Bck, perms cmn.AccessAttrs) error {
+func (p *proxyrunner) checkPermissions(query url.Values, hdr http.Header, bck *cmn.Bck, perms cmn.AccessAttrs) error {
 	cfg := cmn.GCO.Get()
 	if !cfg.Auth.Enabled {
 		return nil
 	}
-	token, err := p.validateToken(r)
+	token, err := p.validateToken(query, hdr)
 	if err != nil {
 		return err
 	}

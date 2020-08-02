@@ -430,12 +430,14 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	switch apiItems[0] {
 	case cmn.AllBuckets:
-		query := r.URL.Query()
-		what := query.Get(cmn.URLParamWhat)
+		var (
+			query = r.URL.Query()
+			what  = query.Get(cmn.URLParamWhat)
+		)
 		if what == cmn.GetWhatBMD {
 			t.writeJSON(w, r, t.owner.bmd.get(), "get-what-bmd")
 		} else {
-			bck, err := newBckFromQuery("", r.URL.Query())
+			bck, err := newBckFromQuery("", query)
 			if err != nil {
 				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
@@ -580,7 +582,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsT.Add(stats.GetRedirLatency, redirDelta)
 	}
-	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
@@ -817,6 +819,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket string
 		msg    = &aisMsg{}
+		query  = r.URL.Query()
 	)
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
@@ -831,7 +834,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if len(apiItems) == 0 {
 		switch msg.Action {
 		case cmn.ActSummaryBucket:
-			bck, err := newBckFromQuery("", r.URL.Query())
+			bck, err := newBckFromQuery("", query)
 			if err != nil {
 				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
@@ -846,7 +849,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket = apiItems[0]
-	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
@@ -934,10 +937,10 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucketProps cmn.SimpleKVs
-		hdr         = w.Header()
-		query       = r.URL.Query()
 		code        int
 		inBMD       = true
+		hdr         = w.Header()
+		query       = r.URL.Query()
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -992,9 +995,9 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		query          = r.URL.Query()
 		errCode        int
 		exists         bool
+		query          = r.URL.Query()
 		checkExists    = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
 		checkExistsAny = cmn.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
 		// TODO: add cmn.URLParamHeadCloudAlways  - to always resync props from the Cloud
@@ -1169,7 +1172,8 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 		cksumValue    = r.Header.Get(cmn.HeaderObjCksumVal)
 		cksumType     = r.Header.Get(cmn.HeaderObjCksumType)
 		contentLength = r.Header.Get("Content-Length")
-		handle        = r.URL.Query().Get(cmn.URLParamAppendHandle)
+		query         = r.URL.Query()
+		handle        = query.Get(cmn.URLParamAppendHandle)
 	)
 
 	hi, err := parseAppendHandle(handle)
@@ -1182,7 +1186,7 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 		t:       t,
 		lom:     lom,
 		r:       r.Body,
-		op:      r.URL.Query().Get(cmn.URLParamAppendType),
+		op:      query.Get(cmn.URLParamAppendType),
 		hi:      hi,
 	}
 	if contentLength != "" {

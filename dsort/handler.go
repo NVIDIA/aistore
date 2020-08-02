@@ -189,7 +189,10 @@ func proxyGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/sort?regex=...
 func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
-	regexStr := r.URL.Query().Get(cmn.URLParamRegex)
+	var (
+		query    = r.URL.Query()
+		regexStr = query.Get(cmn.URLParamRegex)
+	)
 	if _, err := regexp.CompilePOSIX(regexStr); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
@@ -197,7 +200,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	targets := ctx.smapOwner.Get().Tmap
 	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.List)
-	responses := broadcast(http.MethodGet, path, r.URL.Query(), nil, targets)
+	responses := broadcast(http.MethodGet, path, query, nil, targets)
 
 	resultList := make([]*JobInfo, 0)
 	for _, r := range responses {
@@ -236,11 +239,13 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/sort?id=...
 func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	managerUUID := query.Get(cmn.URLParamUUID)
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
-	targets := ctx.smapOwner.Get().Tmap
-	responses := broadcast(http.MethodGet, path, nil, nil, targets)
+	var (
+		targets     = ctx.smapOwner.Get().Tmap
+		query       = r.URL.Query()
+		managerUUID = query.Get(cmn.URLParamUUID)
+		path        = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
+		responses   = broadcast(http.MethodGet, path, nil, nil, targets)
+	)
 
 	notFound := 0
 	allMetrics := make(map[string]*Metrics, len(targets))
@@ -286,10 +291,12 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := r.URL.Query()
-	managerUUID := query.Get(cmn.URLParamUUID)
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
-	responses := broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
+	var (
+		query       = r.URL.Query()
+		managerUUID = query.Get(cmn.URLParamUUID)
+		path        = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+		responses   = broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
+	)
 
 	allNotFound := true
 	for _, resp := range responses {
@@ -320,13 +327,15 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := r.URL.Query()
-	managerUUID := query.Get(cmn.URLParamUUID)
-	targets := ctx.smapOwner.Get().Tmap
+	var (
+		targets     = ctx.smapOwner.Get().Tmap
+		query       = r.URL.Query()
+		managerUUID = query.Get(cmn.URLParamUUID)
+		path        = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
+		responses   = broadcast(http.MethodGet, path, nil, nil, targets)
+	)
 
 	// First, broadcast to see if process is cleaned up first
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
-	responses := broadcast(http.MethodGet, path, nil, nil, targets)
 	seenOne := false
 	for _, resp := range responses {
 		if resp.statusCode == http.StatusNotFound {
@@ -569,21 +578,25 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
 			return
 		}
-		compStr := r.URL.Query().Get(cmn.URLParamTotalCompressedSize)
+		var (
+			query     = r.URL.Query()
+			compStr   = query.Get(cmn.URLParamTotalCompressedSize)
+			uncompStr = query.Get(cmn.URLParamTotalUncompressedSize)
+			dStr      = query.Get(cmn.URLParamTotalInputShardsExtracted)
+		)
+
 		compressed, err := strconv.ParseInt(compStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v", cmn.URLParamTotalCompressedSize, r.URL.String(), err)
 			cmn.InvalidHandlerWithMsg(w, r, s)
 			return
 		}
-		uncompStr := r.URL.Query().Get(cmn.URLParamTotalUncompressedSize)
 		uncompressed, err := strconv.ParseInt(uncompStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v", cmn.URLParamTotalUncompressedSize, r.URL.String(), err)
 			cmn.InvalidHandlerWithMsg(w, r, s)
 			return
 		}
-		dStr := r.URL.Query().Get(cmn.URLParamTotalInputShardsExtracted)
 		d, err := strconv.ParseUint(dStr, 10, 64)
 		if err != nil {
 			s := fmt.Sprintf("invalid %s in request to %s, err: %v", cmn.URLParamTotalInputShardsExtracted, r.URL.String(), err)

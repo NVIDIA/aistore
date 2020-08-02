@@ -121,7 +121,8 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, 
 
 // [METHOD] /v1/download
 func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	if err := p.checkPermissions(r, nil, cmn.AccessDOWNLOAD); err != nil {
+	query := r.URL.Query()
+	if err := p.checkPermissions(query, r.Header, nil, cmn.AccessDOWNLOAD); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
