@@ -4,8 +4,16 @@
  */
 package main
 
-import "github.com/NVIDIA/aistore/bench/aisloader"
+import (
+	"fmt"
+	"os"
+
+	"github.com/NVIDIA/aistore/bench/aisloader"
+)
 
 func main() {
-	aisloader.Start()
+	if err := aisloader.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "aisloader exited with error: %s", err.Error())
+		os.Exit(1)
+	}
 }

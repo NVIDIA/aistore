@@ -251,7 +251,7 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&useHTTPS, "use-https", false, "Enable HTTPS")
 	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
-	f.StringVar(&p.bck.Name, "bucket", "nvais", "Bucket name")
+	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name. If empty, a bucket with random name will be created")
 	f.StringVar(&p.bck.Provider, "provider", cmn.ProviderAIS, "ais - for AIS bucket, cloud - for Cloud bucket; other supported values include \"gcp\" and \"aws\", for Amazon and Google clouds, respectively")
 
 	cmn.DurationExtVar(f, &p.duration, "duration", time.Minute,
@@ -599,6 +599,12 @@ func setupBucket(runParams *params) error {
 	if runParams.bck.Provider != cmn.ProviderAIS || runParams.getConfig {
 		return nil
 	}
+
+	if runParams.bck.Name == "" {
+		runParams.bck.Name = cmn.GenUUID()
+		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
+	}
+
 	exists, err := api.DoesBucketExist(runParams.bp, cmn.QueryBcks(runParams.bck))
 	if err != nil {
 		return fmt.Errorf("failed to get ais bucket lists to check for %s, err = %v", runParams.bck, err)
@@ -655,12 +661,13 @@ func getIDFromString(val string, hashLen uint) uint64 {
 	return hash
 }
 
-func Start() {
+func Start() error {
 	var (
 		wg  = &sync.WaitGroup{}
 		err error
 	)
 
+	cmn.InitShortID(0)
 	runParams, err = parseCmdLine()
 	if err != nil {
 		cmn.Exitf("%s", err)
@@ -671,7 +678,7 @@ func Start() {
 		if useRandomObjName {
 			fmt.Printf("Warning: loaderID 0x%x used only for StatsD, not for object names!\n", suffixID)
 		}
-		return
+		return nil
 	}
 
 	// If neither duration nor put upper bound is specified, it is a no op.
@@ -683,7 +690,7 @@ func Start() {
 				cleanup()
 			}
 
-			return
+			return nil
 		}
 
 		runParams.duration.Val = time.Duration(math.MaxInt64)
@@ -692,8 +699,7 @@ func Start() {
 	if runParams.usingFile {
 		err = cmn.CreateDir(runParams.tmpDir + "/" + myName)
 		if err != nil {
-			fmt.Println("Failed to create local test directory", runParams.tmpDir, "err = ", err)
-			return
+			return fmt.Errorf("failed to create local test directory %q, err = %s", runParams.tmpDir, err.Error())
 		}
 	}
 
@@ -704,13 +710,12 @@ func Start() {
 	if !runParams.getConfig {
 		err = bootStrap()
 		if err != nil {
-			return
+			return err
 		}
 
 		objsLen := bucketObjsNames.Len()
 		if runParams.putPct == 0 && objsLen == 0 {
-			fmt.Println("Nothing to read, bucket is empty")
-			return
+			return errors.New("nothing to read, bucket is empty")
 		}
 
 		fmt.Printf("Found %d existing objects\n", objsLen)
@@ -727,8 +732,7 @@ func Start() {
 
 	host, err := os.Hostname()
 	if err != nil {
-		fmt.Println("Failed to get host name", err)
-		return
+		return fmt.Errorf("failed to get host name: %s", err.Error())
 	}
 
 	statsdC, err = statsd.New(runParams.statsdIP, runParams.statsdPort, fmt.Sprintf("aisloader.%s-%x", host, suffixID))
@@ -889,6 +893,8 @@ Done:
 	if runParams.cleanUp.Val {
 		cleanup()
 	}
+
+	return err
 }
 
 func sendStatsdStats(s *sts) {

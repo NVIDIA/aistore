@@ -172,7 +172,7 @@ endif
 #
 # tests
 #
-.PHONY: test-bench test-soak test-envcheck test-short test-long test-run test-docker test
+.PHONY: test-bench test-soak test-aisloader test-envcheck test-short test-long test-run test-docker test
 
 # Target for benchmark tests
 test-bench: ## Run benchmarking tests
@@ -195,6 +195,9 @@ test-short: test-envcheck ## Run short tests (requires BUCKET variable to be set
 
 test-long: test-envcheck ## Run all (long) tests (requires BUCKET variable to be set)
 	@BUCKET=$(BUCKET) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
+
+test-aisloader:
+	@./bench/aisloader/test/ci-test.sh $(FLAGS)
 
 test-run: test-envcheck # runs tests matching a specific regex
 ifeq ($(RE),)

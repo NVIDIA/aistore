@@ -64,12 +64,13 @@ test:short:
   <<: *default_ref_def
   script:
     - *aws_cli
-    - make aisfs cli
+    - make aisfs cli aisloader
     - make deploy <<< $'5\n5\n3\n0'
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\n0'
     - sleep 3
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="test" make test-short
+    - FLAGS="--duration=10s" make test-aisloader
 
 test:authn:
   stage: test-short
@@ -130,6 +131,15 @@ test:soak:
     - make deploy <<< $'5\n5\n3\n0'
     - FLAGS="--short --rec-cycles=1" make test-soak
 
+test:aisloader-long:
+  stage: test-long
+  only:
+    - schedules
+  script:
+    - make aisloader
+    - make deploy <<< $'5\n5\n3\n0'
+    - FLAGS="--duration=5m" make test-aisloader
+
 test:bench:
   stage: test-long
   only:
@@ -149,6 +159,7 @@ test:kube:
   tags:
     - ais-kube
   script:
+    - make aisloader
     - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
     - chmod +x ./kubectl
     - mv ./kubectl /usr/local/bin/kubectl
@@ -157,6 +168,6 @@ test:kube:
     - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecylce of transformers is implemented.
     - make deploy <<< $'1\n1\n3\n0'
     - status=0
-    - BUCKET="test" RE="TestKube" make test-run || status=$?
+    - (BUCKET="test" RE="TestKube" make test-run && FLAGS="--duration=5s --tar2tf" make test-aisloader) || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures

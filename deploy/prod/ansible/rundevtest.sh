@@ -18,6 +18,7 @@ git status
 git log | head -5
 
 make clean
+make aisloader
 MODE="debug" make deploy <<< $'6\n6\n4\n1'
 
 echo "sleep 10 seconds before checking AIStore processes"
@@ -33,10 +34,10 @@ fi
 echo "working with build: $(git rev-parse --short HEAD)"
 echo "run tests with cloud bucket: nvais"
 
-BUCKET=nvais make test-long
+BUCKET=nvais make test-long && make test-aisloader
 exit_code=$?
 
-echo "'make test-long' exit status: $exit_code"
+echo "'make test-long && make test-aisloader' exit status: $exit_code"
 
 for pid in $(ps -C aisnode -o pid=); do echo "stopping aisnode: $pid"; sudo kill $pid; done
 result=0
