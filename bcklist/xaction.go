@@ -128,7 +128,7 @@ func (r *BckListTask) Run() (err error) {
 		select {
 		case req := <-r.workCh:
 			// Copy only the values that can change between calls
-			debug.Assert(r.msg.Passthrough == req.msg.Passthrough)
+			debug.Assert(r.msg.UseCache == req.msg.UseCache)
 			debug.Assert(r.msg.Prefix == req.msg.Prefix)
 			debug.Assert(r.msg.Cached == req.msg.Cached)
 			r.msg.ContinuationToken = req.msg.ContinuationToken

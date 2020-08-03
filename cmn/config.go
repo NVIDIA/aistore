@@ -352,7 +352,6 @@ type ClientConf struct {
 	TimeoutLong    time.Duration `json:"-"`
 	ListObjectsStr string        `json:"list_timeout"`
 	ListObjects    time.Duration `json:"-"`
-	Passthrough    bool          `json:"passthrough"` // TODO: remove when listobject works fine with cache (as well as from deploy/dev/local/ais.json)
 }
 
 type ProxyConf struct {

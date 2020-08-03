@@ -280,7 +280,7 @@ var (
 	yesFlag          = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 	chunkSizeFlag    = cli.StringFlag{Name: "chunk-size", Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB"}
 	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
-	passthroughFlag  = cli.BoolFlag{Name: "passthrough", Usage: "read the bucket object list bypassing a proxy cache"}
+	useCacheFlag     = cli.BoolFlag{Name: "use-cache", Usage: "use proxy cache to speed up list object request"}
 	checksumFlags    = getCksumFlags()
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "save token to file"}

@@ -456,20 +456,17 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 }
 
 // TODO: remove this function after introducing mechanism detecting bucket changes.
-func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck, selMsg *cmn.SelectMsg) error {
+func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck) error {
 	params.Method = http.MethodPost
 	var (
 		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 		q    = url.Values{}
 	)
-
-	q = cmn.AddBckToQuery(q, bck)
-	actMsg := cmn.ActionMsg{Action: cmn.ActInvalListCache, Value: selMsg}
 	return DoHTTPRequest(ReqParams{
-		Query:      q,
+		Query:      cmn.AddBckToQuery(q, bck),
 		BaseParams: params,
 		Path:       path,
-		Body:       cmn.MustMarshal(actMsg),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActInvalListCache}),
 	})
 }
 

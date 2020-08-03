@@ -30,13 +30,13 @@ type ActValPromote struct {
 
 // SelectMsg represents properties and options for listing objects.
 type SelectMsg struct {
-	UUID        string `json:"uuid"`        // ID to identify a single multi-page request
-	Props       string `json:"props"`       // e.g. "checksum,size"
-	TimeFormat  string `json:"time_format"` // "RFC822" default - see the enum above
-	Prefix      string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
-	PageSize    uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
-	Cached      bool   `json:"cached"`      // for cloud buckets - list only cached objects
-	Passthrough bool   `json:"passthrough"` // do not use cache - always request targets for fresh data
+	UUID       string `json:"uuid"`        // ID to identify a single multi-page request
+	Props      string `json:"props"`       // e.g. "checksum,size"
+	TimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
+	Prefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
+	PageSize   uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
+	Cached     bool   `json:"cached"`      // for cloud buckets - list only cached objects
+	UseCache   bool   `json:"use_cache"`   // use proxy cache to speed up listing objects
 	// TODO: add implementation/support for this field.
 	StartAfter string `json:"start_after"` // key after which we should start listing
 	// TODO: `UUID` should be merged into `ContinuationToken`.

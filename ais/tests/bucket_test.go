@@ -743,7 +743,7 @@ func TestListObjects(t *testing.T) {
 				// Confirm PUTs by listing objects.
 				msg := &cmn.SelectMsg{PageSize: test.pageSize}
 				msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion, cmn.GetPropsCopies, cmn.GetPropsSize)
-				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, msg))
+				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck))
 				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
@@ -819,12 +819,7 @@ func TestListObjects(t *testing.T) {
 				})
 			}
 
-			prefixes.Range(func(key, value interface{}) bool {
-				msg := &cmn.SelectMsg{Prefix: key.(string)}
-				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, msg))
-				return true
-			})
-			tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck, &cmn.SelectMsg{}))
+			tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck))
 		})
 	}
 }
@@ -976,12 +971,12 @@ func TestListObjectsPrefix(t *testing.T) {
 	}
 }
 
-func TestListObjectsPassthrough(t *testing.T) {
+func TestListObjectsCache(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		m          = ioContext{
 			t:        t,
-			num:      1001,
+			num:      rand.Intn(3000) + 1481,
 			fileSize: cmn.KiB,
 		}
 	)
@@ -993,27 +988,24 @@ func TestListObjectsPassthrough(t *testing.T) {
 
 	m.puts()
 
-	for _, passthrough := range []bool{true, false} {
-		t.Run(fmt.Sprintf("passthrough=%t", passthrough), func(t *testing.T) {
-			if !passthrough {
-				tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.passthrough": "false"})
-				defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.passthrough": "true"})
-			}
+	for _, useCache := range []bool{true, false} {
+		t.Run(fmt.Sprintf("cache=%t", useCache), func(t *testing.T) {
+			// Do it N times - first: fill the cache; next calls: use it.
+			for iter := 0; iter < 10; iter++ {
+				var (
+					started = time.Now()
+					msg     = &cmn.SelectMsg{
+						PageSize: uint(rand.Intn(20)) + 4,
+						UseCache: useCache,
+					}
+				)
 
-			var (
-				msg = &cmn.SelectMsg{PageSize: 13, Passthrough: passthrough}
-			)
-
-			// Do it 2 times - first: fill the cache; second: use it.
-			for iter := 0; iter < 2; iter++ {
-				started := time.Now()
 				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 				tassert.CheckFatal(t, err)
-				finished := time.Now()
 
 				tutils.Logf(
-					"[iter: %d] passthrough: %5t, page_size: %d, time: %s\n",
-					iter, passthrough, msg.PageSize, finished.Sub(started),
+					"[iter: %d] cache: %5t, page_size: %d, time: %s\n",
+					iter, useCache, msg.PageSize, time.Since(started),
 				)
 
 				tassert.Errorf(
@@ -1022,8 +1014,8 @@ func TestListObjectsPassthrough(t *testing.T) {
 				)
 			}
 
-			if !passthrough {
-				err := api.ListObjectsInvalidateCache(baseParams, m.bck, msg)
+			if useCache {
+				err := api.ListObjectsInvalidateCache(baseParams, m.bck)
 				tassert.CheckError(t, err)
 			}
 		})

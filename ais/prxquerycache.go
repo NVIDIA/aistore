@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -259,8 +258,6 @@ func (b *queryBuffers) housekeep() time.Duration {
 	return bufferHkInterval
 }
 
-func (c cacheReqID) String() string { return c.bck.String() + string(filepath.Separator) + c.prefix }
-
 func (ci *cacheInterval) contains(token string) bool {
 	if ci.token == token {
 		return true
@@ -340,9 +337,8 @@ func (ci *cacheInterval) append(objs *cacheInterval) {
 
 func (ci *cacheInterval) prepend(objs *cacheInterval) {
 	cmn.Assert(!objs.last)
-	idx := objs.find(ci.token)
-	ci.entries = append(objs.entries[idx:], ci.entries...)
-	ci.lastAccess = mono.NanoTime()
+	objs.append(ci)
+	*ci = *objs
 }
 
 // PRECONDITION: `c.mtx` must be rlocked.
@@ -432,7 +428,7 @@ func newQueryCaches() *queryCaches {
 }
 
 func (c *queryCaches) get(reqID cacheReqID, token string, objCnt uint) (entries []*cmn.BucketEntry, hasEnough bool) {
-	if v, ok := c.caches.Load(reqID.String()); ok {
+	if v, ok := c.caches.Load(reqID); ok {
 		if entries, hasEnough = v.(*queryCache).get(token, objCnt, reqParams{}); hasEnough {
 			return
 		}
@@ -445,7 +441,7 @@ func (c *queryCaches) get(reqID cacheReqID, token string, objCnt uint) (entries 
 		params := reqParams{prefix: reqID.prefix}
 		reqID = cacheReqID{bck: reqID.bck}
 
-		if v, ok := c.caches.Load(reqID.String()); ok {
+		if v, ok := c.caches.Load(reqID); ok {
 			return v.(*queryCache).get(token, objCnt, params)
 		}
 	}
@@ -453,16 +449,18 @@ func (c *queryCaches) get(reqID cacheReqID, token string, objCnt uint) (entries 
 }
 
 func (c *queryCaches) set(reqID cacheReqID, token string, entries []*cmn.BucketEntry, size uint) {
-	v, _ := c.caches.LoadOrStore(reqID.String(), &queryCache{})
+	v, _ := c.caches.LoadOrStore(reqID, &queryCache{})
 	v.(*queryCache).set(token, entries, size)
 }
 
-func (c *queryCaches) invalidate(reqID cacheReqID) {
-	v, ok := c.caches.Load(reqID.String())
-	if !ok {
-		return
-	}
-	v.(*queryCache).invalidate()
+func (c *queryCaches) invalidate(bck cmn.Bck) {
+	c.caches.Range(func(key, value interface{}) bool {
+		id := key.(cacheReqID)
+		if id.bck.Equal(bck) {
+			value.(*queryCache).invalidate()
+		}
+		return true
+	})
 }
 
 // TODO: Missing housekeep based on memory pressure.

@@ -27,7 +27,7 @@ var (
 		maxPagesFlag,
 		startAfterFlag,
 		cachedFlag,
-		passthroughFlag,
+		useCacheFlag,
 	}
 
 	listCmds = []cli.Command{

@@ -1070,7 +1070,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
-		p.invalidateListAISBucketCache(w, r, bck, msg)
+		p.qm.c.invalidate(bck.Bck)
 	case cmn.ActSummaryBucket:
 		if err := p.checkPermissions(query, r.Header, &bck.Bck, cmn.AccessObjLIST); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
@@ -1132,10 +1132,6 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	if prefix := query.Get(cmn.URLParamPrefix); prefix != "" {
 		smsg.Prefix = prefix
 	}
-
-	// TODO: remove when listobject cache fully works
-	clientConf := cmn.GCO.Get().Client
-	smsg.Passthrough = smsg.Passthrough || clientConf.Passthrough
 
 	if smsg.UUID == "" {
 		smsg.UUID = cmn.GenUUID()
@@ -1203,15 +1199,6 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		stats.NamedVal64{Name: stats.ListCount, Value: 1},
 		stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
 	)
-}
-
-func (p *proxyrunner) invalidateListAISBucketCache(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg) {
-	smsg := cmn.SelectMsg{}
-	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	p.qm.c.invalidate(cacheReqID{bck: bck.Bck})
 }
 
 // bucket == "": all buckets for a given provider
@@ -1758,7 +1745,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	//  request already in-flight that requests the same page as we do - if yes
 	//  then we should just patiently wait for the cache to get populated.
 
-	if !smsg.Passthrough {
+	if smsg.UseCache {
 		entries, hasEnough = p.qm.c.get(cacheID, token, pageSize)
 		if hasEnough {
 			goto end
@@ -1810,7 +1797,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	entries = p.qm.b.get(smsg.UUID, token, pageSize)
 
 endWithCache:
-	if !smsg.Passthrough {
+	if smsg.UseCache {
 		p.qm.c.set(cacheID, token, entries, pageSize)
 		props := smsg.PropsSet()
 		for idx := range entries {

@@ -169,7 +169,7 @@ List all objects contained in `BUCKET_NAME` bucket.
 | `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
-| `--passthrough` | `bool` | Bypass proxy cache and read the fresh object list from targets | `false` |
+| `--use-cache` | `bool` | Use proxy cache to speed up list object request | `false` |
 
 ### Examples
 
@@ -239,13 +239,13 @@ shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
 ```
 
-#### Bypassing proxy cache
+#### [experimental] Using proxy cache
 
-By default, a proxy caches the list of bucket objects to speed up the next list requests to the same bucket.
-Option `--passthrough` ignores proxy cache and always fetches the fresh object list from targets.
+Experimental support for the proxy's cache can be enabled with `--use-cache` option.
+In such case the proxy will cache list object request, so the subsequent calls will be faster.
 
 ```console
-$ ais ls ais://bucket_name --passthrough
+$ ais ls ais://bucket_name --use-cache
 NAME		SIZE		VERSION
 shard-0.tar	16.00KiB	1
 shard-1.tar	16.00KiB	1

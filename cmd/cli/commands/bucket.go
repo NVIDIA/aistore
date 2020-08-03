@@ -169,9 +169,9 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 		showUnmatched = flagIsSet(c, showUnmatchedFlag)
 
 		msg = &cmn.SelectMsg{
-			Prefix:      prefix,
-			Cached:      flagIsSet(c, cachedFlag),
-			Passthrough: flagIsSet(c, passthroughFlag),
+			Prefix:   prefix,
+			Cached:   flagIsSet(c, cachedFlag),
+			UseCache: flagIsSet(c, useCacheFlag),
 		}
 	)
 

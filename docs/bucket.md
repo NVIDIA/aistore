@@ -252,7 +252,7 @@ $ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setbprop
 
 ListObjects API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor or a marker for the *next* page retrieval.
 
-Immutability of a bucket is assumed between subsequent ListObjects request, due to a local caching mechanism.
+When using proxy cache (experimental) immutability of a bucket is assumed between subsequent ListObjects request.
 If a bucket has been updated after ListObjects request, a user should call ListObjectsInvalidateCache API to get
 correct ListObjects results. This is the temporary requirement and will be removed in next AIS versions.
 

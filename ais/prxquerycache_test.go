@@ -117,6 +117,26 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			Expect(extractNames(entries)).To(Equal([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}))
 		})
 
+		Describe("prepend", func() {
+			It("should correctly prepend interval", func() {
+				cache.set(id, "c", makeEntries("d", "e", "f"), 3)
+				cache.set(id, "", makeEntries("a", "b", "c"), 3)
+
+				entries, hasEnough := cache.get(id, "", 6)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"a", "b", "c", "d", "e", "f"}))
+			})
+
+			It("should correctly prepend overlapping intervals", func() {
+				cache.set(id, "c", makeEntries("d", "e", "f"), 3)
+				cache.set(id, "", makeEntries("a", "b", "c", "d", "e"), 5)
+
+				entries, hasEnough := cache.get(id, "", 6)
+				Expect(hasEnough).To(BeTrue())
+				Expect(extractNames(entries)).To(Equal([]string{"a", "b", "c", "d", "e", "f"}))
+			})
+		})
+
 		It("should discard interval if already exists", func() {
 			cache.set(id, "", makeEntries("a", "b", "c", "d", "e"), 5)
 			cache.set(id, "a", makeEntries("b", "c", "d"), 3)
