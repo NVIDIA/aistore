@@ -1715,11 +1715,14 @@ func resetBucketProps(proxyURL string, bck cmn.Bck, t *testing.T) {
 func findObjOnDisk(bck cmn.Bck, objName string) string {
 	var fqn string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if strings.HasSuffix(path, "/"+objName) && strings.Contains(path, "/"+bck.Name+"/") {
-			fqn = path
-		}
 		if tutils.IsTrashDir(path) {
 			return filepath.SkipDir
+		}
+		if strings.Contains(path, "/%") && !strings.Contains(path, "/%ob") {
+			return filepath.SkipDir
+		}
+		if strings.HasSuffix(path, "/"+objName) && strings.Contains(path, "/"+bck.Name+"/") {
+			fqn = path
 		}
 		return nil
 	}

@@ -2464,18 +2464,20 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	m.gets()
 
 	msg := &cmn.SelectMsg{}
+	msg.AddProps(cmn.GetPropsStatus)
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	objList := filterObjListOK(bckObjs.Entries)
 	tassert.CheckFatal(t, err)
-	if len(bckObjs.Entries) == 0 {
+	if len(objList) == 0 {
 		t.Errorf("%s is empty\n", m.bck)
 		return
 	}
 
 	if cksumType != cmn.ChecksumNone {
-		tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
+		tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(objList), m.bck, cksumType)
 		wg := cmn.NewLimitedWaitGroup(40)
 
-		for _, entry := range bckObjs.Entries {
+		for _, entry := range objList {
 			wg.Add(1)
 			go func(name string) {
 				defer wg.Done()
@@ -2494,15 +2496,15 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// corrupt random and read again
 	{
-		i := rand.Intn(len(bckObjs.Entries))
-		if i+numCorrupted > len(bckObjs.Entries) {
+		i := rand.Intn(len(objList))
+		if i+numCorrupted > len(objList) {
 			i -= numCorrupted
 		}
 		objCh := make(chan string, numCorrupted)
 		tutils.Logf("Corrupting %d objects\n", numCorrupted)
 		go func() {
 			for j := i; j < i+numCorrupted; j++ {
-				objName := bckObjs.Entries[j].Name
+				objName := objList[j].Name
 				corruptSingleBitInFile(t, m.bck, objName)
 				objCh <- objName
 			}
