@@ -2156,7 +2156,8 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.FailNow()
 	}
 
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
+	msg := &cmn.SelectMsg{}
+	msg.AddProps(cmn.GetPropsSize, cmn.GetPropsStatus)
 	res, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	oldBucketList := filterObjListOK(res.Entries)
@@ -2448,6 +2449,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tutils.PutObjsFromList(proxyURL, bckReg, ecTestDir, fileSize, fileList, errCh, objsPutCh, cksumType)
 
 	msg := &cmn.SelectMsg{}
+	msg.AddProps(cmn.GetPropsStatus)
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
 	oldECList := filterObjListOK(resECOld.Entries)
@@ -2568,7 +2570,8 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.Logf("Wait for resilver to complete...\n")
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size"}
+	var msg = &cmn.SelectMsg{PageSize: pagesize}
+	msg.AddProps(cmn.GetPropsSize, cmn.GetPropsStatus)
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	newECList := filterObjListOK(resEC.Entries)
@@ -2673,6 +2676,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	}
 
 	msg := &cmn.SelectMsg{}
+	msg.AddProps(cmn.GetPropsStatus)
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
 	oldECList := filterObjListOK(resECOld.Entries)
