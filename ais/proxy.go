@@ -1727,19 +1727,17 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 // cmn.SelectMsg.UUID - list operation handle which doesn't change between requests
 func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	var (
-		aisMsg   *aisMsg
-		args     bcastArgs
-		pageSize uint
+		aisMsg *aisMsg
+		args   bcastArgs
 
 		hasEnough bool
 		entries   []*cmn.BucketEntry
 		cacheID   = cacheReqID{bck: bck.Bck, prefix: smsg.Prefix}
 		token     = smsg.ContinuationToken
+		pageSize  = smsg.PageSize
 	)
 
-	if smsg.PageSize != 0 {
-		pageSize = smsg.PageSize
-	}
+	cmn.Assert(pageSize != 0)
 
 	// TODO: Before checking cache and buffer we should check if there is another
 	//  request already in-flight that requests the same page as we do - if yes
@@ -1753,9 +1751,9 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 		// Request for all the props if (cache should always have all entries).
 		smsg.AddProps(cmn.GetPropsAll...)
 	}
-	if p.qm.b.hasEnough(smsg.UUID, token, pageSize) {
+	entries, hasEnough = p.qm.b.get(smsg.UUID, token, pageSize)
+	if hasEnough {
 		// We have enough in the buffer to fulfill the request.
-		entries = p.qm.b.get(smsg.UUID, token, pageSize)
 		goto endWithCache
 	}
 
@@ -1788,13 +1786,10 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 			return
 		}
 		res.outjson = nil
-
-		if len(bucketList.Entries) == 0 {
-			continue
-		}
 		p.qm.b.set(smsg.UUID, res.si.ID(), bucketList.Entries, pageSize)
 	}
-	entries = p.qm.b.get(smsg.UUID, token, pageSize)
+	entries, hasEnough = p.qm.b.get(smsg.UUID, token, pageSize)
+	cmn.Assert(hasEnough)
 
 endWithCache:
 	if smsg.UseCache {

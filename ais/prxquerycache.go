@@ -130,19 +130,33 @@ func (qm *queryMem) init() {
 	qm.c = newQueryCaches()
 }
 
-func mergeTargetBuffers(lists map[string]*queryBufferTarget) (entries []*cmn.BucketEntry) {
-	for _, l := range lists {
-		entries = append(entries, l.entries...)
+// mergeTargetBuffers merges `b.leftovers` buffers into `b.currentBuff`.
+// It returns `filled` equal to `true` if there was anything to merge, otherwise `false`.
+func (b *queryBuffer) mergeTargetBuffers() (filled bool) {
+	var (
+		totalCnt int
+		allDone  = true
+	)
+	// If `b.leftovers` is empty then there was no initial `set`.
+	if len(b.leftovers) == 0 {
+		return false
+	}
+	for _, list := range b.leftovers {
+		totalCnt += len(list.entries)
+		allDone = allDone && list.done
+	}
+	// If there are no entries and some targets are not yet done then there wasn't `set`.
+	if totalCnt == 0 && !allDone {
+		return false
 	}
 
-	if len(entries) == 0 {
-		return entries
-	}
+	var (
+		minObj  = ""
+		entries = make([]*cmn.BucketEntry, 0, totalCnt)
+	)
+	for _, list := range b.leftovers {
+		entries = append(entries, list.entries...)
 
-	cmn.SortBckEntries(entries)
-
-	minObj := ""
-	for _, list := range lists {
 		if list.done || len(list.entries) == 0 {
 			continue
 		}
@@ -150,49 +164,53 @@ func mergeTargetBuffers(lists map[string]*queryBufferTarget) (entries []*cmn.Buc
 			minObj = list.entries[len(list.entries)-1].Name
 		}
 	}
-	if minObj == "" {
-		return entries
+
+	cmn.SortBckEntries(entries)
+
+	if minObj != "" {
+		idx := sort.Search(len(entries), func(i int) bool {
+			return entries[i].Name > minObj
+		})
+		entries = entries[:idx]
 	}
-
-	idx := sort.Search(len(entries), func(i int) bool {
-		return entries[i].Name > minObj
-	})
-	entries = entries[:idx]
-	return entries
-}
-
-func (b *queryBuffer) hasEnough(token string, size uint) bool {
-	if size == 0 {
-		return false
-	}
-
-	idx := sort.Search(len(b.currentBuff), func(i int) bool {
-		return b.currentBuff[i].Name > token
-	})
-	return uint(len(b.currentBuff[idx:])) >= size
-}
-
-func (b *queryBuffer) get(token string, size uint) []*cmn.BucketEntry {
-	newEntries := mergeTargetBuffers(b.leftovers)
-	b.currentBuff = append(b.currentBuff, newEntries...)
 	for id := range b.leftovers {
 		b.leftovers[id].entries = nil
 	}
+	b.currentBuff = append(b.currentBuff, entries...)
+	return true
+}
+
+func (b *queryBuffer) get(token string, size uint) (entries []*cmn.BucketEntry, hasEnough bool) {
+	filled := b.mergeTargetBuffers()
+
+	// Move to first object after token.
 	idx := sort.Search(len(b.currentBuff), func(i int) bool {
 		return b.currentBuff[i].Name > token
 	})
-	b.currentBuff = b.currentBuff[idx:]
+	entries = b.currentBuff[idx:]
 
-	if size > uint(len(b.currentBuff)) {
-		size = uint(len(b.currentBuff))
+	if size > uint(len(entries)) {
+		// In case we don't have enough entries and we haven't filled anything then
+		// we must request more (if filled then we don't have enough because it's end).
+		if !filled {
+			return nil, false
+		}
+		size = uint(len(entries))
 	}
-	entries := b.currentBuff[:size]
-	b.currentBuff = b.currentBuff[size:]
+
+	// Move buffer after returned entries.
+	b.currentBuff = entries[size:]
+	// Select only the entries that need to be returned to user.
+	entries = entries[:size]
+
 	b.lastAccess = mono.NanoTime()
-	return entries
+	return entries, true
 }
 
 func (b *queryBuffer) set(id string, entries []*cmn.BucketEntry, size uint) {
+	if b.leftovers == nil {
+		b.leftovers = make(map[string]*queryBufferTarget, 5)
+	}
 	b.leftovers[id] = &queryBufferTarget{
 		entries: entries,
 		done:    uint(len(entries)) < size,
@@ -206,20 +224,8 @@ func newQueryBuffers() *queryBuffers {
 	return b
 }
 
-func (b *queryBuffers) hasEnough(id, token string, size uint) bool {
-	v, ok := b.buffers.LoadOrStore(id, &queryBuffer{
-		leftovers: make(map[string]*queryBufferTarget),
-	})
-	if !ok {
-		return false
-	}
-	return v.(*queryBuffer).hasEnough(token, size)
-}
-
 func (b *queryBuffers) last(id, token string) string {
-	v, ok := b.buffers.LoadOrStore(id, &queryBuffer{
-		leftovers: make(map[string]*queryBufferTarget),
-	})
+	v, ok := b.buffers.LoadOrStore(id, &queryBuffer{})
 	if !ok {
 		return token
 	}
@@ -235,15 +241,13 @@ func (b *queryBuffers) last(id, token string) string {
 	return last
 }
 
-func (b *queryBuffers) get(id, token string, size uint) []*cmn.BucketEntry {
-	v, _ := b.buffers.Load(id)
+func (b *queryBuffers) get(id, token string, size uint) (entries []*cmn.BucketEntry, hasEnough bool) {
+	v, _ := b.buffers.LoadOrStore(id, &queryBuffer{})
 	return v.(*queryBuffer).get(token, size)
 }
 
 func (b *queryBuffers) set(id, targetID string, entries []*cmn.BucketEntry, size uint) {
-	v, _ := b.buffers.LoadOrStore(id, &queryBuffer{
-		leftovers: make(map[string]*queryBufferTarget),
-	})
+	v, _ := b.buffers.LoadOrStore(id, &queryBuffer{})
 	v.(*queryBuffer).set(targetID, entries, size)
 }
 

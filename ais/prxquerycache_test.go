@@ -354,13 +354,16 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			buffer.set(id, "target2", makeEntries("b", "c", "h"), 3)
 			buffer.set(id, "target3", makeEntries("e", "f"), 2)
 
-			entries := buffer.get(id, "", 6)
+			entries, hasEnough := buffer.get(id, "", 6)
+			Expect(hasEnough).To(BeTrue())
 			Expect(extractNames(entries)).To(Equal([]string{"a", "b", "c", "d", "e", "f"}))
+
 			// Since `f` is the smallest of the last elements we cannot join:
 			// `g` and `h` because there might be still some elements after `f`
 			// in `target3`. Therefore, we should answer "not enough" to next calls.
-			hasEnough := buffer.hasEnough(id, "f", 1)
+			entries, hasEnough = buffer.get(id, "f", 1)
 			Expect(hasEnough).To(BeFalse())
+			Expect(entries).To(BeNil())
 		})
 
 		It("should correctly append new entries", func() {
@@ -368,10 +371,12 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			buffer.set(id, "target2", makeEntries("b", "c", "h"), 3)
 			buffer.set(id, "target3", makeEntries("e", "f"), 2)
 
-			entries := buffer.get(id, "", 3)
+			entries, hasEnough := buffer.get(id, "", 3)
+			Expect(hasEnough).To(BeTrue())
 			Expect(extractNames(entries)).To(Equal([]string{"a", "b", "c"}))
-			hasEnough := buffer.hasEnough(id, "d", 4)
+			entries, hasEnough = buffer.get(id, "d", 4)
 			Expect(hasEnough).To(BeFalse())
+			Expect(entries).To(BeNil())
 
 			last := buffer.last(id, "d")
 			// `f` is the smallest of the last elements of all targets, so it
@@ -383,17 +388,47 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			buffer.set(id, "target2", makeEntries("h", "i", "n"), 3)
 			buffer.set(id, "target3", makeEntries("j", "l"), 2)
 
-			entries = buffer.get(id, "", 9)
+			entries, hasEnough = buffer.get(id, "", 9)
+			Expect(hasEnough).To(BeTrue())
 			Expect(extractNames(entries)).To(Equal([]string{"d", "e", "f", "g", "h", "i", "j", "k", "l"}))
-			hasEnough = buffer.hasEnough(id, "l", 1)
+			entries, hasEnough = buffer.get(id, "l", 1)
 			Expect(hasEnough).To(BeFalse())
+			Expect(entries).To(BeNil())
 		})
 
 		It("should correctly identify no objects", func() {
-			hasEnough := buffer.hasEnough("id", "a", 10)
+			entries, hasEnough := buffer.get("id", "a", 10)
 			Expect(hasEnough).To(BeFalse())
-			hasEnough = buffer.hasEnough("id", "a", 10)
+			Expect(entries).To(BeNil())
+			entries, hasEnough = buffer.get("id", "a", 10)
 			Expect(hasEnough).To(BeFalse())
+			Expect(entries).To(BeNil())
+		})
+
+		It("should correctly handle end of entries", func() {
+			buffer.set(id, "target1", makeEntries("a", "d", "e"), 4)
+			buffer.set(id, "target2", makeEntries("b", "c", "f"), 4)
+
+			entries, hasEnough := buffer.get(id, "", 7)
+			Expect(hasEnough).To(BeTrue())
+			Expect(extractNames(entries)).To(Equal([]string{"a", "b", "c", "d", "e", "f"}))
+
+			entries, hasEnough = buffer.get(id, "f", 1)
+			Expect(hasEnough).To(BeTrue())
+			Expect(entries).To(HaveLen(0))
+		})
+
+		It("should correctly handle getting 0 entries", func() {
+			buffer.set(id, "target1", makeEntries(), 2)
+			buffer.set(id, "target2", makeEntries(), 2)
+
+			entries, hasEnough := buffer.get(id, "", 7)
+			Expect(hasEnough).To(BeTrue())
+			Expect(entries).To(HaveLen(0))
+
+			entries, hasEnough = buffer.get(id, "f", 1)
+			Expect(hasEnough).To(BeTrue())
+			Expect(entries).To(HaveLen(0))
 		})
 	})
 })
