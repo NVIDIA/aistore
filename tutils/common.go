@@ -39,6 +39,12 @@ func Logf(f string, a ...interface{}) {
 	}
 }
 
+func LogfCond(cond bool, f string, a ...interface{}) {
+	if cond {
+		Logf(f, a...)
+	}
+}
+
 // Generates strong random string or fallbacks to weak if error occurred
 // during generation.
 func GenRandomString(fnLen int) string {

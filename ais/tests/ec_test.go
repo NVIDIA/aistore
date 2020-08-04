@@ -726,9 +726,8 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 	if doEC {
 		ecStr = "EC"
 	}
-	if !o.silent {
-		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
-	}
+
+	tutils.LogfCond(!o.silent, "Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
@@ -737,9 +736,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	if !o.silent {
-		tutils.Logf("waiting for %s\n", objPath)
-	}
+	tutils.LogfCond(!o.silent, "waiting for %s\n", objPath)
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, bck, objName)
 
 	ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
@@ -775,7 +772,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	if delSlice {
 		delStr = "obj+slice"
 	}
-	tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
+	tutils.LogfCond(!o.silent, "Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 	r, err := readers.NewRandReader(objSize, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
@@ -784,7 +781,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("waiting for %s\n", objPath)
+	tutils.LogfCond(!o.silent, "waiting for %s\n", objPath)
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, bck, objName)
 
 	ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
@@ -793,13 +790,13 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		return
 	}
 
-	tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
+	tutils.LogfCond(!o.silent, "Damaging %s [removing %s]\n", objPath, mainObjPath)
 	tassert.CheckFatal(t, os.Remove(mainObjPath))
 
 	ct, err := cluster.NewCTFromFQN(mainObjPath, nil)
 	tassert.CheckFatal(t, err)
 	metafile := ct.Make(ec.MetaType)
-	tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
+	tutils.LogfCond(!o.silent, "Damaging %s [removing %s]\n", objPath, metafile)
 	tassert.CheckFatal(t, os.Remove(metafile))
 	if delSlice {
 		sliceToDel := ""
@@ -818,16 +815,16 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 			t.Errorf("Failed to select random slice for %s", objName)
 			return
 		}
-		tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
+		tutils.LogfCond(!o.silent, "Removing slice/replica: %s\n", sliceToDel)
 		tassert.CheckFatal(t, os.Remove(sliceToDel))
 
 		ct, err := cluster.NewCTFromFQN(sliceToDel, nil)
 		tassert.CheckFatal(t, err)
 		metafile := ct.Make(ec.MetaType)
 		if doEC {
-			tutils.Logf("Removing slice meta %s\n", metafile)
+			tutils.LogfCond(!o.silent, "Removing slice meta %s\n", metafile)
 		} else {
-			tutils.Logf("Removing replica meta %s\n", metafile)
+			tutils.LogfCond(!o.silent, "Removing replica meta %s\n", metafile)
 		}
 		tassert.CheckFatal(t, os.Remove(metafile))
 	}
@@ -839,7 +836,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		return
 	}
 
-	tutils.Logf("Restoring %s\n", objPath)
+	tutils.LogfCond(!o.silent, "Restoring %s\n", objPath)
 	_, err = api.GetObject(baseParams, bck, objPath)
 	tassert.CheckFatal(t, err)
 
@@ -928,6 +925,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		objCount:    50,
 		concurrency: 8,
 		pattern:     "obj-rest-%04d",
+		silent:      testing.Short(),
 	}.init(t, proxyURL)
 
 	for _, test := range ecTests {
