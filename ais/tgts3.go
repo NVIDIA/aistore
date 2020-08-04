@@ -22,20 +22,20 @@ import (
 
 // PUT s3/bckName/objName
 func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
-	apitems, err := t.checkRESTItems(w, r, 0, true, cmn.S3)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.S3)
 	if err != nil {
 		return
 	}
 
 	switch r.Method {
 	case http.MethodHead:
-		t.headObjS3(w, r, apitems)
+		t.headObjS3(w, r, apiItems)
 	case http.MethodGet:
-		t.getObjS3(w, r, apitems)
+		t.getObjS3(w, r, apiItems)
 	case http.MethodPut:
-		t.putObjS3(w, r, apitems)
+		t.putObjS3(w, r, apiItems)
 	case http.MethodDelete:
-		t.delObjS3(w, r, apitems)
+		t.delObjS3(w, r, apiItems)
 	default:
 		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}

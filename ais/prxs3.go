@@ -34,7 +34,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("S3Request: %s - %s", r.Method, r.URL)
 	}
-	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.S3)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.S3)
 	if err != nil {
 		return
 	}
@@ -43,52 +43,52 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodHead:
-		if len(apitems) == 0 {
+		if len(apiItems) == 0 {
 			p.invalmsghdlr(w, r, "HEAD reuires a bucket or an object")
 			return
 		}
-		if len(apitems) == 1 {
-			p.headBckS3(w, r, apitems[0])
+		if len(apiItems) == 1 {
+			p.headBckS3(w, r, apiItems[0])
 			return
 		}
-		p.headObjS3(w, r, apitems)
+		p.headObjS3(w, r, apiItems)
 	case http.MethodGet:
-		if len(apitems) == 0 {
+		if len(apiItems) == 0 {
 			// nothing  - list all the buckets
 			p.bckNamesToS3(w)
 			return
 		}
-		if len(apitems) == 1 {
+		if len(apiItems) == 1 {
 			q := r.URL.Query()
 			_, versioning := q[s3compat.URLParamVersioning]
 			if versioning {
-				p.getBckVersioningS3(w, r, apitems[0])
+				p.getBckVersioningS3(w, r, apiItems[0])
 				return
 			}
 			// only bucket name - list objects in the bucket
-			p.bckListS3(w, r, apitems[0])
+			p.bckListS3(w, r, apiItems[0])
 			return
 		}
 		// object data otherwise
-		p.getObjS3(w, r, apitems)
+		p.getObjS3(w, r, apiItems)
 	case http.MethodPut:
-		if len(apitems) == 0 {
+		if len(apiItems) == 0 {
 			p.invalmsghdlr(w, r, "object or bucket name required")
 			return
 		}
-		if len(apitems) == 1 {
+		if len(apiItems) == 1 {
 			q := r.URL.Query()
 			_, versioning := q[s3compat.URLParamVersioning]
 			if versioning {
-				p.putBckVersioningS3(w, r, apitems[0])
+				p.putBckVersioningS3(w, r, apiItems[0])
 				return
 			}
-			p.putBckS3(w, r, apitems[0])
+			p.putBckS3(w, r, apiItems[0])
 			return
 		}
-		p.putObjS3(w, r, apitems)
+		p.putObjS3(w, r, apiItems)
 	case http.MethodPost:
-		if len(apitems) != 1 {
+		if len(apiItems) != 1 {
 			p.invalmsghdlr(w, r, "bucket name expected")
 			return
 		}
@@ -97,23 +97,23 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, "invalid request")
 			return
 		}
-		p.delMultipleObjs(w, r, apitems[0])
+		p.delMultipleObjs(w, r, apiItems[0])
 	case http.MethodDelete:
-		if len(apitems) == 0 {
+		if len(apiItems) == 0 {
 			p.invalmsghdlr(w, r, "object or bucket name required")
 			return
 		}
-		if len(apitems) == 1 {
+		if len(apiItems) == 1 {
 			q := r.URL.Query()
 			_, multiple := q[s3compat.URLParamMultiDelete]
 			if multiple {
-				p.delMultipleObjs(w, r, apitems[0])
+				p.delMultipleObjs(w, r, apiItems[0])
 				return
 			}
-			p.delBckS3(w, r, apitems[0])
+			p.delBckS3(w, r, apiItems[0])
 			return
 		}
-		p.delObjS3(w, r, apitems)
+		p.delObjS3(w, r, apiItems)
 	default:
 		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}

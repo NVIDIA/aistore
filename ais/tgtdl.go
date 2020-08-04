@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
@@ -36,17 +37,21 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodPost:
-		uuid := r.URL.Query().Get(cmn.URLParamUUID)
-		cmn.Assert(uuid != "")
-		ctx := context.Background()
-		dlb := downloader.DlBody{}
+		_, err := cmn.MatchRESTItems(r.URL.Path, 0, false, cmn.Version, cmn.Download)
+		debug.AssertNoErr(err)
+
+		var (
+			ctx  = context.Background()
+			uuid = r.URL.Query().Get(cmn.URLParamUUID)
+			dlb  = downloader.DlBody{}
+		)
+		debug.Assert(uuid != "")
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
 			return
 		}
 
 		dlBodyBase := downloader.DlBase{}
-		err := jsoniter.Unmarshal(dlb.Data, &dlBodyBase)
-		if err != nil {
+		if err := jsoniter.Unmarshal(dlb.Data, &dlBodyBase); err != nil {
 			return
 		}
 		bck := cluster.NewBckEmbed(dlBodyBase.Bck)
@@ -68,13 +73,15 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("Downloading: %s", dlJob.ID())
 		}
 		response, respErr, statusCode = downloaderXact.Download(dlJob)
-
 	case http.MethodGet:
+		_, err := cmn.MatchRESTItems(r.URL.Path, 0, false, cmn.Version, cmn.Download)
+		debug.AssertNoErr(err)
+
 		payload := &downloader.DlAdminBody{}
 		if err := cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
-		cmn.AssertNoErr(payload.Validate(false /*requireID*/))
+		debug.AssertNoErr(payload.Validate(false /*requireID*/))
 
 		if payload.ID != "" {
 			if glog.FastV(4, glog.SmoduleAIS) {
@@ -94,16 +101,15 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			response, respErr, statusCode = downloaderXact.ListJobs(regex)
 		}
-
 	case http.MethodDelete:
+		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.Version, cmn.Download)
+		debug.AssertNoErr(err)
+
 		payload := &downloader.DlAdminBody{}
 		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
-		cmn.AssertNoErr(payload.Validate(true))
-
-		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.Version, cmn.Download)
-		cmn.AssertNoErr(err)
+		debug.AssertNoErr(payload.Validate(true))
 
 		switch items[0] {
 		case cmn.Abort:
@@ -122,7 +128,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 					items[0], cmn.Abort, cmn.Remove))
 			return
 		}
-
 	default:
 		cmn.AssertMsg(false,
 			fmt.Sprintf("Invalid http method %s; expected one of %s, %s, %s",
@@ -134,10 +139,10 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, respErr.Error(), statusCode)
 		return
 	}
+
 	if response != nil {
 		b := cmn.MustMarshal(response)
-		_, err = w.Write(b)
-		if err != nil {
+		if _, err := w.Write(b); err != nil {
 			glog.Errorf("Failed to write to http response: %s.", err.Error())
 		}
 	}

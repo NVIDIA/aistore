@@ -137,14 +137,14 @@ func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apitems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
 	if err != nil {
 		return
 	}
-	if len(apitems) == 0 {
+	if len(apiItems) == 0 {
 		t.daeputJSON(w, r)
 	} else {
-		t.daeputQuery(w, r, apitems)
+		t.daeputQuery(w, r, apiItems)
 	}
 }
 
@@ -174,11 +174,11 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apitems []string) {
-	switch apitems[0] {
+func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []string) {
+	switch apiItems[0] {
 	case cmn.Proxy:
 		// PUT /v1/daemon/proxy/newprimaryproxyid
-		t.httpdaesetprimaryproxy(w, r, apitems)
+		t.httpdaesetprimaryproxy(w, r, apiItems)
 	case cmn.SyncSmap:
 		var newsmap = &smapX{}
 		if cmn.ReadJSON(w, r, newsmap) != nil {
@@ -199,7 +199,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apite
 		var (
 			query  = r.URL.Query()
 			what   = query.Get(cmn.URLParamWhat)
-			action = apitems[0]
+			action = apiItems[0]
 		)
 		if what != cmn.GetWhatRemoteAIS {
 			t.invalmsghdlrf(w, r, fmtUnknownQue, what)

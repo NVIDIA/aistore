@@ -285,7 +285,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /notifs path")
 		return
 	}
-	if _, err := n.p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Notifs); err != nil {
+	if _, err := n.p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Notifs); err != nil {
 		return
 	}
 	if cmn.ReadJSON(w, r, notifMsg) != nil {

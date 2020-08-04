@@ -63,15 +63,15 @@ type (
 
 // [METHOD] /v1/vote
 func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
 	if err != nil {
 		return
 	}
 
 	switch {
-	case r.Method == http.MethodGet && apitems[0] == cmn.Proxy:
+	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
 		t.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apitems[0] == cmn.Voteres:
+	case r.Method == http.MethodPut && apiItems[0] == cmn.Voteres:
 		t.httpsetprimaryproxy(w, r)
 	default:
 		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
@@ -80,17 +80,17 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/vote
 func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
 	if err != nil {
 		return
 	}
 
 	switch {
-	case r.Method == http.MethodGet && apitems[0] == cmn.Proxy:
+	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
 		p.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apitems[0] == cmn.Voteres:
+	case r.Method == http.MethodPut && apiItems[0] == cmn.Voteres:
 		p.httpsetprimaryproxy(w, r)
-	case r.Method == http.MethodPut && apitems[0] == cmn.VoteInit:
+	case r.Method == http.MethodPut && apiItems[0] == cmn.VoteInit:
 		p.httpRequestNewPrimary(w, r)
 	default:
 		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)

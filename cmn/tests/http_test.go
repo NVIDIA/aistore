@@ -5,61 +5,83 @@
 package tests
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func TestMatchRESTItemsSmoke(t *testing.T) {
-	apiItems, err := cmn.MatchRESTItems("/some/path/to/url", 2, true, "some", "path")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(apiItems) != 2 || apiItems[0] != "to" || apiItems[1] != "url" {
-		t.Errorf("invalid API items: %v", apiItems)
-	}
-}
+func TestMatchRESTItems(t *testing.T) {
+	// nolint:maligned // no performance critical code
+	tests := []struct {
+		name string
 
-func TestMatchRESTItemsDontSplitAfter(t *testing.T) {
-	apiItems, err := cmn.MatchRESTItems("/some/path/to/url", 1, false, "some", "path")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(apiItems) != 1 || apiItems[0] != "to/url" {
-		t.Errorf("invalid API items: %v", apiItems)
-	}
-}
+		path       string
+		itemsAfter int
+		splitAfter bool
+		items      []string
 
-func TestMatchRESTItemsMoreItemsAfter(t *testing.T) {
-	apiItems, err := cmn.MatchRESTItems("/some/path/to/url/more", 2, true, "some", "path")
-	if err != nil {
-		t.Fatal(err)
+		expectedItems []string
+		expectedErr   bool
+	}{
+		{
+			name: "smoke",
+			path: "/some/path/to/url", itemsAfter: 2, splitAfter: true, items: []string{"some", "path"},
+			expectedItems: []string{"to", "url"},
+		},
+		{
+			name: "minimal",
+			path: "/some/path", itemsAfter: 0, splitAfter: false, items: []string{"some", "path"},
+			expectedItems: []string{},
+		},
+		{
+			name: "with_empty",
+			path: "/some/path/", itemsAfter: 0, splitAfter: false, items: []string{"some", "path"},
+			expectedItems: []string{},
+		},
+		{
+			name: "dont_split_after",
+			path: "/some/path/to/url", itemsAfter: 2, splitAfter: true, items: []string{"some", "path"},
+			expectedItems: []string{"to", "url"},
+		},
+		{
+			name: "more_items_after",
+			path: "/some/path/to/url/more", itemsAfter: 2, splitAfter: true, items: []string{"some", "path"},
+			expectedItems: []string{"to", "url", "more"},
+		},
+		{
+			name: "more_items_after_without_split",
+			path: "/some/path/to/url/more", itemsAfter: 2, splitAfter: false, items: []string{"some", "path"},
+			expectedItems: []string{"to", "url/more"},
+		},
+		{
+			name: "invalid_path",
+			path: "/some/to/url/path", itemsAfter: 2, splitAfter: true, items: []string{"some", "path"},
+			expectedErr: true,
+		},
+		{
+			name: "too_short",
+			path: "/some/to/url/path", itemsAfter: 3, splitAfter: false, items: []string{"some", "to"},
+			expectedErr: true,
+		},
+		{
+			name: "too_long",
+			path: "/some/path/url", itemsAfter: 0, splitAfter: false, items: []string{"some", "path"},
+			expectedErr: true,
+		},
 	}
-	if len(apiItems) != 3 || apiItems[0] != "to" || apiItems[1] != "url" || apiItems[2] != "more" {
-		t.Errorf("invalid API items: %v", apiItems)
-	}
-}
 
-func TestMatchRESTItemsMoreItemsAfterWithoutSplit(t *testing.T) {
-	apiItems, err := cmn.MatchRESTItems("/some/path/to/url/more", 2, false, "some", "path")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(apiItems) != 2 || apiItems[0] != "to" || apiItems[1] != "url/more" {
-		t.Errorf("invalid API items: %v", apiItems)
-	}
-}
-
-func TestMatchRESTItemsInvalidPath(t *testing.T) {
-	apiItems, err := cmn.MatchRESTItems("/some/to/url/path", 2, true, "some", "path")
-	if err == nil {
-		t.Errorf("expected error, apiItems returned: %v", apiItems)
-	}
-}
-
-func TestMatchRESTItemsTooShort(t *testing.T) {
-	apiItems, err := cmn.MatchRESTItems("/some/path/to/url", 3, true, "some", "path")
-	if err == nil {
-		t.Errorf("expected error, apiItems returned: %v", apiItems)
+	for _, test := range tests {
+		apiItems, err := cmn.MatchRESTItems(test.path, test.itemsAfter, test.splitAfter, test.items...)
+		if err != nil && !test.expectedErr {
+			t.Fatalf("test: %s, err: %v", test.name, err)
+		} else if err == nil && test.expectedErr {
+			t.Fatalf("test: %s, expected error", test.name)
+		} else if err != nil && test.expectedErr {
+			continue
+		}
+		if !reflect.DeepEqual(apiItems, test.expectedItems) {
+			t.Fatalf("test: %s, items are not equal (got: %v, expected: %v)", test.name, apiItems, test.expectedItems)
+		}
 	}
 }

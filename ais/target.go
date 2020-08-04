@@ -627,11 +627,11 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		query    url.Values
 		tid, pid string
 	)
-	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objName := apitems[0], apitems[1]
+	bucket, objName := apiItems[0], apiItems[1]
 	started := time.Now()
 	if tid, pid, query = t.validRedirect(w, r, r.Method, true); tid == "" && pid == "" {
 		return
@@ -699,13 +699,13 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 // (evict | delete) (list | range)
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg          = &aisMsg{}
-		apitems, err = t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+		msg           = &aisMsg{}
+		apiItems, err = t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
+	bucket := apiItems[0]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -942,11 +942,11 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		hdr         = w.Header()
 		query       = r.URL.Query()
 	)
-	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
+	bucket := apiItems[0]
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -1324,11 +1324,11 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 ///////////////////
 
 func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objNameFrom := apitems[0], apitems[1]
+	bucket, objNameFrom := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)

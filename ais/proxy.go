@@ -372,11 +372,11 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 // Used for redirecting ReverseProxy GCP/AWS GET request to target
 func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objName := apitems[0], apitems[1]
+	bucket, objName := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -424,11 +424,11 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		started = time.Now()
 		query   = r.URL.Query()
 	)
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objName := apitems[0], apitems[1]
+	bucket, objName := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -561,11 +561,11 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		started = time.Now()
 		query   = r.URL.Query()
 	)
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objName := apitems[0], apitems[1]
+	bucket, objName := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -606,14 +606,14 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		msg   cmn.ActionMsg
 		query = r.URL.Query()
 	)
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	bucket := apitems[0]
+	bucket := apiItems[0]
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -809,7 +809,7 @@ func (cii *clusterInfo) fill(p *proxyrunner) {
 	cii.Smap.PrimaryURL = smap.Primary.IntraControlNet.DirectURL
 }
 
-// POST { action } /v1/buckets/bucket-name
+// POST { action } /v1/buckets[/bucket-name]
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	const fmtErr = "cannot %s: invalid provider %q"
 	var (
@@ -822,7 +822,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	apiItems, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Buckets)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
@@ -864,6 +864,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		default:
 			p.invalmsghdlr(w, r, "URL path is too short: expecting bucket name")
 		}
+		return
+	} else if len(apiItems) > 1 {
+		p.invalmsghdlr(w, r, "URL path is too long: expecting only bucket name")
 		return
 	}
 
@@ -1291,17 +1294,17 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	return summaries, "", nil
 }
 
-// POST { action } /v1/objects/bucket-name
+// POST { action } /v1/objects/bucket-name[/object-name]
 func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg   cmn.ActionMsg
 		query = r.URL.Query()
 	)
-	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
+	bucket := apiItems[0]
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -1404,12 +1407,12 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		bck           *cluster.Bck
 		msg           *cmn.ActionMsg
 		query         = r.URL.Query()
-		apitems, err  = p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
+		apiItems, err = p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	)
 	if err != nil {
 		return
 	}
-	bucket = apitems[0]
+	bucket = apiItems[0]
 	if bck, err = newBckFromQuery(bucket, query); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
@@ -1449,15 +1452,15 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		started      = time.Now()
-		query        = r.URL.Query()
-		checkExists  = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
-		apitems, err = p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+		started       = time.Now()
+		query         = r.URL.Query()
+		checkExists   = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
+		apiItems, err = p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	)
 	if err != nil {
 		return
 	}
-	bucket, objName := apitems[0], apitems[1]
+	bucket, objName := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -1893,11 +1896,11 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 
 func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
 	started := time.Now()
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	objName := apitems[1]
+	objName := apiItems[1]
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
@@ -2140,12 +2143,12 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
 	if err != nil {
 		return
 	}
-	if len(apitems) > 0 {
-		switch apitems[0] {
+	if len(apiItems) > 0 {
+		switch apiItems[0] {
 		case cmn.Proxy:
 			p.httpdaesetprimaryproxy(w, r)
 			return
@@ -2187,7 +2190,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
 				return
 			}
-			if err := p.attachDetachRemoteAIS(query, apitems[0]); err != nil {
+			if err := p.attachDetachRemoteAIS(query, apiItems[0]); err != nil {
 				cmn.InvalidHandlerWithMsg(w, r, err.Error())
 				return
 			}
@@ -2334,14 +2337,14 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		prepare bool
 		query   = r.URL.Query()
 	)
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Daemon)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Daemon)
 	if err != nil {
 		return
 	}
-	proxyID := apitems[1]
+	proxyID := apiItems[1]
 	force := cmn.IsParseBool(query.Get(cmn.URLParamForce))
 	// forceful primary change
-	if force && apitems[0] == cmn.Proxy {
+	if force && apiItems[0] == cmn.Proxy {
 		if !p.owner.smap.get().isPrimary(p.si) {
 			p.invalmsghdlrf(w, r, "%s is not the primary", p.si)
 		}
@@ -2430,11 +2433,11 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 }
 
 func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster, cmn.Proxy)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster, cmn.Proxy)
 	if err != nil {
 		return
 	}
-	proxyid := apitems[0]
+	proxyid := apiItems[0]
 	s := "designate new primary proxy '" + proxyid + "'"
 	if p.forwardCP(w, r, nil, s, nil) {
 		return
@@ -3053,13 +3056,13 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 
 // unregister node
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster, cmn.Daemon)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster, cmn.Daemon)
 	if err != nil {
 		return
 	}
 	var (
 		msg  *cmn.ActionMsg
-		sid  = apitems[0]
+		sid  = apiItems[0]
 		smap = p.owner.smap.get()
 		node = smap.GetNode(sid)
 	)
@@ -3165,14 +3168,14 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 // '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
 	if err != nil {
 		return
 	}
-	if len(apitems) == 0 {
+	if len(apiItems) == 0 {
 		p.cluputJSON(w, r)
 	} else {
-		p.cluputQuery(w, r, apitems[0])
+		p.cluputQuery(w, r, apiItems[0])
 	}
 }
 

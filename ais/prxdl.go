@@ -21,7 +21,7 @@ import (
 func (p *proxyrunner) broadcastDownloadRequest(method, path string, body []byte, query url.Values) chan callResult {
 	query.Add(cmn.URLParamProxyID, p.si.ID())
 	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(time.Now().UnixNano()))
-	return p.callTargets(method, cmn.URLPath(cmn.Version, cmn.Download, path), body, query)
+	return p.callTargets(method, path, body, query)
 }
 
 func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
@@ -154,7 +154,6 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	path := ""
 	if r.Method == http.MethodDelete {
 		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.Version, cmn.Download)
 		if err != nil {
@@ -162,8 +161,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		path = items[0]
-		if path != cmn.Abort && path != cmn.Remove {
+		if items[0] != cmn.Abort && items[0] != cmn.Remove {
 			s := fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).",
 				items[0], cmn.Abort, cmn.Remove)
 			cmn.InvalidHandlerWithMsg(w, r, s)
@@ -175,7 +173,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 		glog.Infof("httpDownloadAdmin payload %v", payload)
 	}
 
-	resp, statusCode, err := p.broadcastDownloadAdminRequest(r.Method, path, payload)
+	resp, statusCode, err := p.broadcastDownloadAdminRequest(r.Method, r.URL.Path, payload)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), statusCode)
 		return

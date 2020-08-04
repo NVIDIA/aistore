@@ -175,11 +175,6 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 		glog.Errorf("Not authorized: %v\n", err)
 		return
 	}
-
-	if len(apiItems) == 0 {
-		cmn.InvalidHandlerWithMsg(w, r, "User name is not defined")
-		return
-	}
 	if err := a.users.delUser(apiItems[0]); err != nil {
 		glog.Errorf("Failed to delete user: %v\n", err)
 		cmn.InvalidHandlerWithMsg(w, r, "Failed to delete user: "+err.Error())

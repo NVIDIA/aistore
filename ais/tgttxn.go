@@ -47,16 +47,13 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Txn)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Txn)
 	if err != nil {
 		return
 	}
-	if len(apiItems) < 2 {
-		t.invalmsghdlr(w, r, "url too short: expecting bucket and txn phase", http.StatusBadRequest)
-		return
-	}
+	bucket, phase := apiItems[0], apiItems[1]
 	// 2. gather all context
-	c, err := t.prepTxnServer(r, msg, apiItems)
+	c, err := t.prepTxnServer(r, msg, bucket, phase)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
@@ -560,17 +557,16 @@ func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 // misc //
 //////////
 
-func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, apiItems []string) (*txnServerCtx, error) {
+func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase string) (*txnServerCtx, error) {
 	var (
-		bucket string
-		err    error
-		query  = r.URL.Query()
-		c      = &txnServerCtx{}
+		err   error
+		query = r.URL.Query()
+		c     = &txnServerCtx{}
 	)
 	c.msg = msg
 	c.callerName = r.Header.Get(cmn.HeaderCallerName)
 	c.callerID = r.Header.Get(cmn.HeaderCallerID)
-	bucket, c.phase = apiItems[0], apiItems[1]
+	c.phase = phase
 	if c.bck, err = newBckFromQuery(bucket, query); err != nil {
 		return c, err
 	}

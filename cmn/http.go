@@ -154,7 +154,7 @@ func RESTItems(unescapedPath string) []string {
 
 // MatchRESTItems splits url path into api items and match them with provided
 // items. If splitAfter is set to true all items will be split, otherwise the
-// rest of the path will be splited only to itemsAfter items. Returns all items
+// rest of the path will be split only to itemsAfter items. Returns all items
 // which come after all of the provided items
 func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items ...string) ([]string, error) {
 	var split []string
@@ -173,7 +173,6 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 			apiItems = append(apiItems, item)
 		}
 	}
-
 	if len(apiItems) < len(items) {
 		return nil, fmt.Errorf("expected %d items, but got: %d", len(items), len(apiItems))
 	}
@@ -187,6 +186,8 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 	apiItems = apiItems[len(items):]
 	if len(apiItems) < itemsAfter {
 		return nil, fmt.Errorf("path is too short: got %d items, but expected %d", len(apiItems)+len(items), itemsAfter+len(items))
+	} else if len(apiItems) > itemsAfter && !splitAfter {
+		return nil, fmt.Errorf("path is too long: got %d items, but expected %d", len(apiItems)+len(items), itemsAfter+len(items))
 	}
 
 	return apiItems, nil
