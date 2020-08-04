@@ -5,14 +5,17 @@
 package cmn
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"syscall"
 )
 
-///////////////////////////////////////////////////////
-// API errors - the errors that API calls may return //
-///////////////////////////////////////////////////////
+// This source contains common AIS node inter-module errors -
+// the errors that some AIS packages (within a given running AIS node) return
+// and other AIS packages handle.
 
 type (
 	nodeBckPair struct {
@@ -71,12 +74,50 @@ type (
 	}
 )
 
+var (
+	ErrSkip           = errors.New("skip")
+	ErrStartupTimeout = errors.New("startup timeout")
+)
+
 func _errBucket(msg, node string) string {
 	if node != "" {
 		return node + ": " + msg
 	}
 	return msg
 }
+
+///////////////////////////
+// syscall-based helpers //
+///////////////////////////
+
+func IsErrConnectionRefused(err error) (yes bool) {
+	return errors.Is(err, syscall.ECONNREFUSED)
+}
+
+// TCP RST
+func IsErrConnectionReset(err error) (yes bool) {
+	return errors.Is(err, syscall.ECONNRESET) || IsErrBrokenPipe(err)
+}
+
+// Check if a given error is a broken-pipe one.
+func IsErrBrokenPipe(err error) bool {
+	return errors.Is(err, syscall.EPIPE)
+}
+
+func IsErrOOS(err error) bool {
+	return errors.Is(err, syscall.ENOSPC)
+}
+
+func IsUnreachable(err error, status int) bool {
+	return IsErrConnectionRefused(err) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		status == http.StatusRequestTimeout ||
+		status == http.StatusServiceUnavailable
+}
+
+////////////////////////////
+// structured error types //
+////////////////////////////
 
 func NewErrorBucketAlreadyExists(bck Bck, node string) *ErrorBucketAlreadyExists {
 	return &ErrorBucketAlreadyExists{node: node, bck: bck}
@@ -132,7 +173,7 @@ func NewErrorCapacityExceeded(high int64, used int32, oos bool) *ErrorCapacityEx
 
 func (e *ErrorCapacityExceeded) Error() string {
 	if e.oos {
-		return fmt.Sprintf("out of space: used %d%% of total available capacity on at least one of the mountpaths",
+		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths",
 			e.used)
 	}
 	return fmt.Sprintf("low on free space: used capacity %d%% exceeded high watermark(%d%%)", e.used, e.high)
@@ -173,24 +214,15 @@ func (e ObjMetaErr) Error() string {
 func NewObjMetaErr(name string, err error) ObjMetaErr { return ObjMetaErr{name: name, err: err} }
 
 func NewAbortedError(what string) AbortedError {
-	return AbortedError{
-		what:    what,
-		details: "",
-	}
+	return AbortedError{what: what, details: ""}
 }
 
 func NewAbortedErrorDetails(what, details string) AbortedError {
-	return AbortedError{
-		what:    what,
-		details: details,
-	}
+	return AbortedError{what: what, details: details}
 }
 
 func NewAbortedErrorWrapped(what string, cause error) AbortedError {
-	return AbortedError{
-		what:  what,
-		cause: cause,
-	}
+	return AbortedError{what: what, cause: cause}
 }
 
 func (e AbortedError) Error() string {
@@ -205,11 +237,9 @@ func (e AbortedError) Error() string {
 
 func (e *AbortedError) As(target error) bool {
 	_, ok := target.(*AbortedError)
-
 	if e.cause == nil {
 		return ok
 	}
-
 	return ok || errors.As(e.cause, &target)
 }
 
@@ -221,16 +251,13 @@ func NewNotFoundError(format string, a ...interface{}) *NotFoundError {
 	return &NotFoundError{fmt.Sprintf(format, a...)}
 }
 
-func (e *NotFoundError) Error() string {
-	return e.what + " not found"
-}
+func (e *NotFoundError) Error() string { return e.what + " not found" }
 
-//////////////////////////////////
-// error grouping, error levels //
-//////////////////////////////////
+////////////////////////////
+// error grouping helpers //
+////////////////////////////
 
 // nought: not a thing
-
 func IsErrBucketNought(err error) bool {
 	if _, ok := err.(*ErrorBucketDoesNotExist); ok {
 		return true

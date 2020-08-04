@@ -73,7 +73,10 @@ func fileTreeByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj, e
 			if os.IsPermission(err) {
 				return nil
 			}
-			return cmn.PathWalkErr(err)
+			if cmn.IsErrObjNought(err) {
+				return nil
+			}
+			return fmt.Errorf("filepath-walk invoked with err: %v", err)
 		}
 		if info.IsDir() {
 			return nil

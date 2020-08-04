@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -102,20 +101,4 @@ func NewClient(args TransportArgs) *http.Client {
 		Timeout:   args.Timeout,
 	}
 	return client
-}
-
-func (args *TransportArgs) ConnControl(c syscall.RawConn) (cntl func(fd uintptr)) {
-	cntl = func(fd uintptr) {
-		// NOTE: is limited by /proc/sys/net/core/rmem_max
-		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, args.SndRcvBufSize)
-		AssertNoErr(err)
-		// NOTE: is limited by /proc/sys/net/core/wmem_max
-		err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, args.SndRcvBufSize)
-		AssertNoErr(err)
-	}
-	return
-}
-
-func (args *TransportArgs) setSockOpt(_, _ string, c syscall.RawConn) (err error) {
-	return c.Control(args.ConnControl(c))
 }
