@@ -1344,6 +1344,10 @@ func TestLocalMirror(t *testing.T) {
 		{[]int{2, 3}}, // first set number of copies to 2, then to 3
 	}
 
+	// FIXME: For now running only in long because it takes a lot of time to finish.
+	//  See: https://gitlab-master.nvidia.com/aistorage/aistore/-/issues/865
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test.numCopies), func(t *testing.T) {
 			testLocalMirror(t, test.numCopies)
@@ -1799,6 +1803,10 @@ func TestCopyBucket(t *testing.T) {
 		{provider: cmn.AnyCloud, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
 		{provider: cmn.AnyCloud, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 	}
+
+	// FIXME: For now running only in long because it takes a lot of time to finish.
+	//  See: https://gitlab-master.nvidia.com/aistorage/aistore/-/issues/865
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	for _, test := range tests {
 		// Bucket must exist when we require it to have objects.
