@@ -1,49 +1,80 @@
 #!/bin/bash
 
+function cleanup() {
+  make kill
+  make clean
+}
+
+function post_deploy() {
+  echo "sleep 10 seconds before checking AIStore processes"
+  sleep 10
+
+  nodes=$(ps -C aisnode -o pid= | wc -l)
+  echo "number of started aisprocs: $nodes"
+  if [[ $nodes -lt $1 ]]; then
+    echo "some of the aisnodes did not start properly"
+    exit 1
+  fi
+
+  echo "working with build: $(git rev-parse --short HEAD)"
+  export BUCKET=nvais
+  echo "run tests with cloud bucket: ${BUCKET}"
+}
+
 set -o xtrace
 source /etc/profile.d/aispaths.sh
 source aws.env
 
-for pid in $(ps -C aisnode -o pid=); do echo "stopping aisnode: $pid"; sudo kill $pid; done
 cd $AISSRC && cd ..
 
-if [[ -n $1 ]]; then
-    echo "git checkout branch: $1"
-    git checkout $1
-fi
-
 git fetch --all
-git reset --hard origin/master
+
+branch="origin/master"
+if [[ -n $1 ]]; then
+  branch=$1
+fi
+git reset --hard $branch
+
 git status
 git log | head -5
 
-make clean
-make aisloader
-MODE="debug" make deploy <<< $'6\n6\n4\n1'
+# Setting up minikube for the running kubernetes based tests.
+pushd deploy/dev/k8s
+# To disable minikube setup comment the following line
+{ echo n; } | ./utils/deploy_minikube.sh
+popd
 
-echo "sleep 10 seconds before checking AIStore processes"
-sleep 10
 
-nodes=$(ps -C aisnode -o pid= | wc -l)
-echo "number of started aisprocs: $nodes"
-if [[ $nodes -lt 8 ]]; then
-    echo "some of the aisnodes did not start properly"
-    exit 1
-fi
-
-echo "working with build: $(git rev-parse --short HEAD)"
-echo "run tests with cloud bucket: nvais"
-
-BUCKET=nvais make test-long && make test-aisloader
+# Running kubernetes based tests
+cleanup
+export AIS_NODE_NAME="minikube"
+# TODO: This requiremenet can be removed once we do not need single transformer per target.
+# We use this because minikube is a 1-node kubernetes cluster
+# and with pod anti-affinities (for enabling single transformer per target at a time) it would
+# cause failures with pods getting stuck in `Pending` state.
+num_targets=1
+num_proxies=1
+{ echo $num_targets; echo $num_proxies; echo 3; echo 0; } | MODE="debug" make deploy
+post_deploy $((num_proxies + num_targets))
+RE="TestKube" make test-run
 exit_code=$?
+result=$((result + exit_code))
+echo "'RE=TestKube make test-run' exit status: $exit_code"
 
+# Running long tests
+cleanup
+num_targets=6
+num_proxies=6
+{ echo $num_targets; echo $num_proxies; echo 4; echo 1; } | MODE="debug" make deploy
+post_deploy $((num_proxies + num_targets))
+make test-long && make test-aisloader
+exit_code=$?
+result=$((result + exit_code))
 echo "'make test-long && make test-aisloader' exit status: $exit_code"
 
-for pid in $(ps -C aisnode -o pid=); do echo "stopping aisnode: $pid"; sudo kill $pid; done
-result=0
-if [[ $exit_code -ne 0 ]]; then
-    echo "tests failed"
-    result=$((result + 1))
+cleanup
+if [[ $result -ne 0 ]]; then
+  echo "tests failed"
 fi
 
 exit $result
