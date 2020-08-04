@@ -187,7 +187,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	wg.Wait()
 
 	// 5. IC
-	nl := &notifListenerBck{notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bck.Bck)}
+	nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bck.Bck)
 	nl.setOwner(equalIC)
 	p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -280,7 +280,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 
 	// 5. if remirror|re-EC|TBD-storage-svc
 	if remirror || reec {
-		nl := &notifListenerBck{notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bck.Bck)}
+		nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bck.Bck)
 		nl.setOwner(equalIC)
 		p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 		xactID = c.uuid
@@ -367,8 +367,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.msg.RMDVersion = clone.version()
 
 			// 5. IC
-			nl := &notifListenerFromTo{
-				notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)}
+			nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)
 			nl.setOwner(equalIC)
 			p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -448,7 +447,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	}
 
 	// 5. IC
-	nl := &notifListenerFromTo{notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)}
+	nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)
 	nl.setOwner(equalIC)
 	p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -553,7 +552,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	wg.Wait()
 
 	// 5. IC
-	nl := &notifListenerBck{notifListenerBase: *newNLB(c.uuid, c.smap.Tmap, notifXact, msg.Action, bck.Bck)}
+	nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bck.Bck)
 	nl.setOwner(equalIC)
 	p.registerIC(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 

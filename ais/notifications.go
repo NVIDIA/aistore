@@ -84,26 +84,21 @@ type (
 
 	notifListenerBase struct {
 		sync.RWMutex
-		uuid  string           // UUID
-		srcs  cluster.NodeMap  // expected notifiers
-		errs  map[string]error // [node-ID => notifMsg.Err]
-		f     notifCallback    // optional listening-side callback
-		rc    int              // refcount
-		ty    int              // notification category (above)
-		tfin  atomic.Int64     // timestamp when finished
-		owned string           // "": not owned | equalIC: IC | otherwise, pid + IC
+		UUIDX       string           // UUID
+		Srcs        cluster.NodeMap  // expected notifiers
+		Errs        map[string]error // [node-ID => notifMsg.Err]
+		f           notifCallback    // optional listening-side callback
+		rc          int              // refcount
+		Ty          int              // notification category (above)
+		FinTime     atomic.Int64     // timestamp when finished
+		Owned       string           // "": not owned | equalIC: IC | otherwise, pid + IC
+		SmapVersion int64            // smap version in which NL is added
 		// common info
-		action string
-		bck    []cmn.Bck
+		Action string
+		Bck    []cmn.Bck
 		// ownership
 	}
 
-	notifListenerBck struct {
-		notifListenerBase
-	}
-	notifListenerFromTo struct {
-		notifListenerBase
-	}
 	//
 	// notification messages
 	//
@@ -115,15 +110,13 @@ type (
 		ErrMsg string         `json:"err"`     // error.Error()
 	}
 	// receiver to start listening
+	// TODO: explore other encoding formats (e.g. GOB) to simplify Marshal and Unmarshal logic
 	notifListenMsg struct {
-		UUID        string      `json:"uuid"`
-		Srcs        []string    `json:"srcs"` // slice of DaemonIDs
-		SmapVersion int64       `json:"smapversion,string"`
-		Owner       string      `json:"owner"`
-		Action      string      `json:"action"`
-		Bck         []cmn.Bck   `json:"bck"`
-		Ext         interface{} `json:"ext"`
-		Ty          int         `json:"ty"` // notification category (enum)
+		nl notifListener
+	}
+	jsonNL struct {
+		Type string              `json:"type"`
+		NL   jsoniter.RawMessage `json:"nl"`
 	}
 )
 
@@ -133,9 +126,9 @@ var (
 	_ cluster.Slistener = &notifs{}
 )
 
-func newNLB(uuid string, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *notifListenerBase {
+func newNLB(uuid string, smap *smapX, ty int, action string, bck ...cmn.Bck) *notifListenerBase {
 	cmn.Assert(ty > notifInvalid)
-	return &notifListenerBase{uuid: uuid, srcs: srcs.Clone(), ty: ty, action: action, bck: bck}
+	return &notifListenerBase{UUIDX: uuid, Srcs: smap.Tmap.Clone(), SmapVersion: smap.version(), Ty: ty, Action: action, Bck: bck}
 }
 
 ///////////////////////
@@ -144,7 +137,7 @@ func newNLB(uuid string, srcs cluster.NodeMap, ty int, action string, bck ...cmn
 
 // is called after all notifiers will have notified OR on failure (err != nil)
 func (nlb *notifListenerBase) callback(notifs *notifs, nl notifListener, msg interface{}, err error, nows ...int64) {
-	if nlb.tfin.CAS(0, 1) {
+	if nlb.FinTime.CAS(0, 1) {
 		var now int64
 		if len(nows) > 0 {
 			now = nows[0]
@@ -155,7 +148,7 @@ func (nlb *notifListenerBase) callback(notifs *notifs, nl notifListener, msg int
 		if nlb.f != nil {
 			nlb.f(nl, msg, err) // invoke user-supplied callback and pass user-supplied notifListener
 		}
-		nlb.tfin.Store(now)
+		nlb.FinTime.Store(now)
 		notifs.fmu.Lock()
 		notifs.fin[nl.UUID()] = nl
 		notifs.fmu.Unlock()
@@ -165,22 +158,22 @@ func (nlb *notifListenerBase) lock()                      { nlb.Lock() }
 func (nlb *notifListenerBase) unlock()                    { nlb.Unlock() }
 func (nlb *notifListenerBase) rlock()                     { nlb.RLock() }
 func (nlb *notifListenerBase) runlock()                   { nlb.RUnlock() }
-func (nlb *notifListenerBase) notifiers() cluster.NodeMap { return nlb.srcs }
+func (nlb *notifListenerBase) notifiers() cluster.NodeMap { return nlb.Srcs }
 func (nlb *notifListenerBase) incRC() int                 { nlb.rc++; return nlb.rc }
-func (nlb *notifListenerBase) notifTy() int               { return nlb.ty }
-func (nlb *notifListenerBase) UUID() string               { return nlb.uuid }
-func (nlb *notifListenerBase) Category() int              { return nlb.ty }
-func (nlb *notifListenerBase) finTime() int64             { return nlb.tfin.Load() }
+func (nlb *notifListenerBase) notifTy() int               { return nlb.Ty }
+func (nlb *notifListenerBase) UUID() string               { return nlb.UUIDX }
+func (nlb *notifListenerBase) Category() int              { return nlb.Ty }
+func (nlb *notifListenerBase) finTime() int64             { return nlb.FinTime.Load() }
 func (nlb *notifListenerBase) finished() bool             { return nlb.finTime() > 0 }
 func (nlb *notifListenerBase) addErr(sid string, err error) {
-	if nlb.errs == nil {
-		nlb.errs = make(map[string]error, 2)
+	if nlb.Errs == nil {
+		nlb.Errs = make(map[string]error, 2)
 	}
-	nlb.errs[sid] = err
+	nlb.Errs[sid] = err
 }
 
 func (nlb *notifListenerBase) err() error {
-	for _, err := range nlb.errs {
+	for _, err := range nlb.Errs {
 		return err
 	}
 	return nil
@@ -188,24 +181,24 @@ func (nlb *notifListenerBase) err() error {
 
 func (nlb *notifListenerBase) String() string {
 	var tm, res string
-	hdr := fmt.Sprintf("%s-%q", notifText(nlb.ty), nlb.uuid)
-	if tfin := nlb.tfin.Load(); tfin > 0 {
-		if nlb.errs != nil {
-			res = fmt.Sprintf("-fail(%+v)", nlb.errs)
+	hdr := fmt.Sprintf("%s-%q", notifText(nlb.Ty), nlb.UUIDX)
+	if tfin := nlb.FinTime.Load(); tfin > 0 {
+		if nlb.Errs != nil {
+			res = fmt.Sprintf("-fail(%+v)", nlb.Errs)
 		}
 		tm = cmn.FormatTimestamp(time.Unix(0, tfin))
 		return fmt.Sprintf("%s-%s%s", hdr, tm, res)
 	}
 	if nlb.rc > 0 {
-		return fmt.Sprintf("%s-%d/%d", hdr, nlb.rc, len(nlb.srcs))
+		return fmt.Sprintf("%s-%d/%d", hdr, nlb.rc, len(nlb.Srcs))
 	}
 	return hdr
 }
 
-func (nlb *notifListenerBase) getOwner() string  { return nlb.owned }
-func (nlb *notifListenerBase) setOwner(o string) { nlb.owned = o }
-func (nlb *notifListenerBase) kind() string      { return nlb.action }
-func (nlb *notifListenerBase) bcks() []cmn.Bck   { return nlb.bck }
+func (nlb *notifListenerBase) getOwner() string  { return nlb.Owned }
+func (nlb *notifListenerBase) setOwner(o string) { nlb.Owned = o }
+func (nlb *notifListenerBase) kind() string      { return nlb.Action }
+func (nlb *notifListenerBase) bcks() []cmn.Bck   { return nlb.Bck }
 
 // effectively, cache owner
 func (nlb *notifListenerBase) hrwOwner(smap *smapX) {
@@ -551,6 +544,33 @@ func (n *notifs) ListenSmapChanged() {
 		delete(remid, uuid)
 	}
 	n.Unlock()
+}
+
+func (n *notifListenMsg) MarshalJSON() (data []byte, err error) {
+	t := jsonNL{Type: n.nl.kind()}
+	t.NL, err = jsoniter.Marshal(n.nl)
+	if err != nil {
+		return
+	}
+	return jsoniter.Marshal(t)
+}
+
+func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
+	t := jsonNL{}
+	err = jsoniter.Unmarshal(data, &t)
+	if err != nil {
+		return
+	}
+	if t.Type == cmn.ActQueryObjects {
+		n.nl = &notifListenerQuery{}
+	} else {
+		n.nl = &notifListenerBase{}
+	}
+	err = jsoniter.Unmarshal(t.NL, &n.nl)
+	if err != nil {
+		return
+	}
+	return
 }
 
 //////////

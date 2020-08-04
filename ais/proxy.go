@@ -1134,7 +1134,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		smsg.UUID = cmn.GenUUID()
 		smap := p.owner.smap.get()
 		// TODO -- FIXME: must be consistent vs newQueryListener
-		nl := newNLB(smsg.UUID, smap.Tmap, notifCache, cmn.ActListObjects, bck.Bck)
+		nl := newNLB(smsg.UUID, smap, notifCache, cmn.ActListObjects, bck.Bck)
 		nl.hrwOwner(smap)
 		p.registerIC(regIC{nl: nl, smap: smap, msg: amsg})
 	} else if p.reverseToOwner(w, r, smsg.UUID, amsg) {

@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/query"
 )
 
 // Information Center (IC) is a group of proxies that take care of ownership of
@@ -153,30 +152,9 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
 		}
-		cmn.Assert(msg.Ty == notifXact || msg.Ty == notifCache)
-		cmn.Assert(smap.version() == msg.SmapVersion) // TODO -- FIXME: handle
 
-		tmap, _ := smap.GetTargetMap(msg.Srcs)
-
-		switch msg.Action {
-		case cmn.ActQueryObjects:
-			initMsg := query.InitMsg{}
-			if err := cmn.MorphMarshal(msg.Ext, &initMsg); err != nil {
-				p.invalmsghdlrf(w, r, "%s: invalid msg %+v", msg.Action, msg.Ext)
-				return
-			}
-			nlq, err := newQueryListener(msg.UUID, msg.Ty, tmap, &initMsg)
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			nlq.setOwner(msg.Owner)
-			p.notifs.add(nlq)
-		default:
-			nl := &notifListenerBase{uuid: msg.UUID, ty: msg.Ty, srcs: tmap}
-			nl.setOwner(msg.Owner)
-			p.notifs.add(nl)
-		}
+		cmn.Assert(msg.nl.notifTy() == notifXact || msg.nl.notifTy() == notifCache)
+		p.notifs.add(msg.nl)
 	default:
 		cmn.Assert(false)
 	}
@@ -203,11 +181,11 @@ func (p *proxyrunner) registerIC(a regIC) {
 	}
 	if otherIC {
 		// TODO -- FIXME: handle errors, here and elsewhere
-		_ = p.bcastListenIC(a.nl, a.smap, a.msg)
+		_ = p.bcastListenIC(a.nl, a.smap)
 	}
 }
 
-func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX, msg interface{}) (err error) {
+func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX) (err error) {
 	nodes := make(cluster.NodeMap)
 	for pid := range smap.IC {
 		if pid != p.si.ID() {
@@ -216,10 +194,7 @@ func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX, msg interface
 			nodes.Add(psi)
 		}
 	}
-	nlMsg := nlMsgFromListener(nl, smap)
-	if msg != nil {
-		nlMsg.Ext = msg
-	}
+	nlMsg := &notifListenMsg{nl: nl}
 
 	cmn.Assert(len(nodes) > 0)
 	results := p.bcast(bcastArgs{
@@ -237,23 +212,4 @@ func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX, msg interface
 		}
 	}
 	return
-}
-
-// helpers
-
-func nlMsgFromListener(nl notifListener, smap *smapX) *notifListenMsg {
-	cmn.Assert(nl.notifTy() > notifInvalid)
-	cmn.Assert(nl.UUID() != "")
-	n := &notifListenMsg{
-		UUID:        nl.UUID(),
-		Ty:          nl.notifTy(),
-		SmapVersion: smap.version(),
-		Action:      nl.kind(),
-		Bck:         nl.bcks(),
-		Owner:       nl.getOwner(),
-	}
-	for daeID := range nl.notifiers() {
-		n.Srcs = append(n.Srcs, daeID)
-	}
-	return n
 }

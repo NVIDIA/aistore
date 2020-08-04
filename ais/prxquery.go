@@ -21,42 +21,42 @@ type (
 	// TODO: add more, like target finished, query aborted by user etc.
 	notifListenerQuery struct {
 		notifListenerBase
-		targets    []*cluster.Snode
-		workersCnt uint
+		Targets    []*cluster.Snode
+		WorkersCnt uint
 	}
 )
 
-func newQueryListener(uuid string, ty int, tmap cluster.NodeMap, msg *query.InitMsg) (*notifListenerQuery, error) {
+func newQueryListener(uuid string, ty int, smap *smapX, msg *query.InitMsg) (*notifListenerQuery, error) {
 	cmn.Assert(uuid != "")
-	numNodes := len(tmap)
+	numNodes := len(smap.Tmap)
 	if msg.WorkersCnt != 0 && msg.WorkersCnt < uint(numNodes) {
 		// FIXME: this should not be necessary. Proxy could know that if worker's
 		//  target is done, worker should be redirected to the next not-done target.
 		//  However, it should be done once query is able to keep more detailed
 		//  information about targets.
-		return nil, fmt.Errorf("expected workersCnt to be at least %d", numNodes)
+		return nil, fmt.Errorf("expected WorkersCnt to be at least %d", numNodes)
 	}
 
 	// Ensure same order on all nodes
-	targets := tmap.Nodes()
+	targets := smap.Tmap.Nodes()
 	sort.SliceStable(targets, func(i, j int) bool {
 		return targets[i].DaemonID < targets[j].DaemonID
 	})
 	return &notifListenerQuery{
-		notifListenerBase: *newNLB(uuid, tmap, ty, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
-		workersCnt:        msg.WorkersCnt,
-		targets:           targets,
+		notifListenerBase: *newNLB(uuid, smap, ty, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+		WorkersCnt:        msg.WorkersCnt,
+		Targets:           targets,
 	}, nil
 }
 
 func (q *notifListenerQuery) workersTarget(workerID uint) (*cluster.Snode, error) {
-	if q.workersCnt == 0 {
+	if q.WorkersCnt == 0 {
 		return nil, errors.New("query registered with 0 workers")
 	}
 	if workerID == 0 {
 		return nil, errors.New("workerID cannot be empty")
 	}
-	return q.targets[workerID%uint(len(q.targets))], nil
+	return q.Targets[workerID%uint(len(q.Targets))], nil
 }
 
 // Proxy exposes 2 methods:
@@ -111,7 +111,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	nlq, err := newQueryListener(handle, notifCache, smap.Tmap, msg)
+	nlq, err := newQueryListener(handle, notifCache, smap, msg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
