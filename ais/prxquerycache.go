@@ -38,13 +38,13 @@ import (
 // cannot be trusted (we don't know how many objects can be in the gap).
 
 const (
-	// Determines how long "cache interval" is able to live. If there was no
-	// access to given interval for this long it will be removed.
+	// Determines how long "cache interval" is valid. If there was no access to
+	// given interval for this long it will be removed.
 	cacheLiveTimeout = 40 * time.Minute
 	// Determines how often cache housekeeping function is invoked.
 	cacheHkInterval = 10 * time.Minute
 
-	// Determines how long buffer is able to live. If there was no access to
+	// Determines how long buffer is valid. If there was no access to
 	// a given buffer for this long it will be forgotten.
 	bufferLiveTimeout = 10 * time.Minute
 	// Determines how often buffer housekeeping function is invoked.
@@ -52,7 +52,7 @@ const (
 )
 
 type (
-	// Single buffer per target.
+	// Request buffer per target.
 	queryBufferTarget struct {
 		// Determines if the target is done with listing.
 		done bool
@@ -61,7 +61,7 @@ type (
 		entries []*cmn.BucketEntry
 	}
 
-	// Single request buffer that corresponds to single `uuid`.
+	// Request buffer that corresponds to single `uuid`.
 	queryBuffer struct {
 		// Currently maintained buffer that keeps the entries which are sorted
 		// and ready to be dispatched to the client.
@@ -116,7 +116,7 @@ type (
 
 	// Contains all query caches.
 	queryCaches struct {
-		caches sync.Map // cache_id (string, see: `cacheReqID`) -> cache (*queryCache)
+		caches sync.Map // cache id (cacheReqID) -> cache (*queryCache)
 	}
 
 	queryMem struct {

@@ -1718,13 +1718,9 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 	return
 }
 
-// reads object list from all targets, combines, sorts and returns the list
-// returns:
-//      * the list of objects if the async task finished (empty uuid)
-//      * non-empty uuid if the task is still running
-//      * error
-//
-// cmn.SelectMsg.UUID - list operation handle which doesn't change between requests
+// listAISBucket reads object list from all targets, combines, sorts and returns
+// the final list. Excess of object entries from each target is remembered in the
+// buffer (see: `queryBuffers`) so we won't request the same objects again.
 func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	var (
 		aisMsg *aisMsg
