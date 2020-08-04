@@ -1140,10 +1140,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		nl := newNLB(smsg.UUID, smap.Tmap, notifCache, cmn.ActListObjects, bck.Bck)
 		nl.hrwOwner(smap)
 		p.registerIC(regIC{nl: nl, smap: smap, msg: amsg})
-	} else if rev, err := p.reverseToOwner(w, r, smsg.UUID, amsg); rev || err != nil {
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-		}
+	} else if p.reverseToOwner(w, r, smsg.UUID, amsg) {
 		return
 	}
 
@@ -2653,10 +2650,7 @@ func (p *proxyrunner) jtxStatus(w http.ResponseWriter, r *http.Request, what str
 		return
 	}
 
-	if rev, err := p.reverseToOwner(w, r, uuid, nil); rev || err != nil {
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-		}
+	if p.reverseToOwner(w, r, uuid, nil) {
 		return
 	}
 

@@ -156,10 +156,7 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 		p.invalmsghdlr(w, r, "handle cannot be empty", http.StatusBadRequest)
 		return
 	}
-	if rev, err := p.reverseToOwner(w, r, msg.Handle, msg); rev || err != nil {
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-		}
+	if p.reverseToOwner(w, r, msg.Handle, msg) {
 		return
 	}
 	nl, ok := p.checkEntry(w, r, msg.Handle)
@@ -196,10 +193,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rev, err := p.reverseToOwner(w, r, msg.Handle, msg); rev || err != nil {
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-		}
+	if p.reverseToOwner(w, r, msg.Handle, msg) {
 		return
 	}
 

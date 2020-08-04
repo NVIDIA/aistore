@@ -6,7 +6,6 @@ package ais
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -43,7 +42,7 @@ type (
 
 // TODO -- FIXME: add redirect-to-owner capability to support list/query caching
 func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string,
-	msg interface{}) (reversed bool, err error) {
+	msg interface{}) (reversedOrFailed bool) {
 	var (
 		smap          = p.owner.smap.get()
 		selfIC, _     = p.whichIC(smap, nil)
@@ -63,13 +62,14 @@ func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uui
 			owner, exists = p.notifs.getOwner(uuid)
 		}
 		if !exists {
-			err = fmt.Errorf("%q not found (%s)", uuid, smap.StrIC(p.si))
-			return
+			p.invalmsghdlrf(w, r, "%q not found (%s)", uuid, smap.StrIC(p.si))
+			return true
 		}
 	} else {
 		hrwOwner, err := cluster.HrwIC(&smap.Smap, uuid)
 		if err != nil {
-			return false, err
+			p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+			return true
 		}
 		owner = hrwOwner.ID()
 	}
@@ -100,9 +100,8 @@ outer:
 		body := cmn.MustMarshal(msg)
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
 	}
-	reversed = true
 	p.reverseNodeRequest(w, r, psi)
-	return
+	return true
 }
 
 func (p *proxyrunner) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifListener, ok bool) {
