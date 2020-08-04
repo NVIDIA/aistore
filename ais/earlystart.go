@@ -155,6 +155,7 @@ func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error
 
 	go func() {
 		p.pollClusterStarted(cmn.GCO.Get().Timeout.CplaneOperation)
+		glog.Infof("%s: non-primary & cluster startup complete, %s", p.si, smap.StringEx())
 		p.markClusterStarted()
 	}()
 
@@ -286,7 +287,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	_ = p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 
 	// 6: started up as primary
-	glog.Infof("%s: primary/cluster startup complete, %s", p.si, smap.StringEx())
+	glog.Infof("%s: primary & cluster startup complete, %s", p.si, smap.StringEx())
 	p.markClusterStarted()
 }
 

@@ -32,10 +32,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	body := cmn.MustMarshal(msg)
 	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
 	respCnt := len(responses)
-	if respCnt == 0 {
-		return nil, http.StatusInternalServerError, cluster.ErrNoTargets
-	}
-
+	cmn.Assert(respCnt > 0)
 	validResponses := make([]callResult, 0, respCnt)
 	for resp := range responses {
 		if resp.status == http.StatusOK {

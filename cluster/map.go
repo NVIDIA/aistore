@@ -233,7 +233,8 @@ func (m *Smap) GetNode(id string) *Snode {
 
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 	if m.CountTargets() == 0 {
-		return nil, ErrNoTargets
+		err = &NoNodesError{cmn.Target, m, ""}
+		return
 	}
 	for _, tsi = range m.Tmap {
 		break

@@ -322,14 +322,16 @@ func (h *httprunner) markNodeStarted()           { h.startup.node.time.Store(tim
 func (h *httprunner) Client() *http.Client       { return h.httpclientGetPut }
 
 func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
-	config := cmn.GCO.Get()
-
+	var (
+		path   string
+		config = cmn.GCO.Get()
+	)
 	for _, nh := range networkHandlers {
-		path := cmn.URLPath(cmn.Version, nh.r)
 		if nh.r[0] == '/' { // Check if it's an absolute path.
 			path = nh.r
+		} else {
+			path = cmn.URLPath(cmn.Version, nh.r)
 		}
-
 		if cmn.StringInSlice(cmn.NetworkPublic, nh.net) {
 			h.registerPublicNetHandler(path, nh.h)
 

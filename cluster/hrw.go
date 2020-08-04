@@ -18,13 +18,23 @@ import (
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 
-var (
-	ErrNoTargets = errors.New("no targets registered in the cluster")
+type (
+	NoNodesError struct {
+		role string
+		smap *Smap
+		skip string
+	}
 )
 
-type tsi struct {
-	node *Snode
-	hash uint64
+func (e *NoNodesError) Error() string {
+	var skip string
+	if e.skip != "" {
+		skip = fmt.Sprintf(", skip=%s", e.skip)
+	}
+	if e.role == cmn.Proxy {
+		return fmt.Sprintf("no available proxies, %s%s", e.smap.StringEx(), skip)
+	}
+	return fmt.Sprintf("no available targets, %s%s", e.smap.StringEx(), skip)
 }
 
 // Requires elements of smap.Tmap to have their idDigest initialized
@@ -42,7 +52,7 @@ func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
 		}
 	}
 	if si == nil {
-		err = ErrNoTargets
+		err = &NoNodesError{cmn.Target, smap, ""}
 	}
 	return
 }
@@ -50,22 +60,29 @@ func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
 // Sorts all targets in a cluster by their respective HRW (weights) in a descending order;
 // returns resulting subset (aka slice) that has the requested length = count.
 // Returns error if the cluster does not have enough targets.
+//
+// TODO: avoid allocating `arr`
 func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
-	cmn.Assert(count > 0)
 	cnt := smap.CountTargets()
 	if cnt < count {
-		err = fmt.Errorf("insufficient targets (%d > %d)", count, smap.CountTargets())
+		err = fmt.Errorf("insufficient targets: required %d, available %d, %s", count, cnt, smap)
 		return
 	}
 	var (
-		arr    = make([]tsi, cnt)
+		arr = make([]struct {
+			node *Snode
+			hash uint64
+		}, cnt)
 		digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
 		i      int
 	)
 	sis = make(Nodes, count)
 	for _, sinfo := range smap.Tmap {
 		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
-		arr[i] = tsi{sinfo, cs}
+		arr[i] = struct {
+			node *Snode
+			hash uint64
+		}{sinfo, cs}
 		i++
 	}
 	sort.Slice(arr, func(i, j int) bool { return arr[i].hash > arr[j].hash })
@@ -95,7 +112,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		}
 	}
 	if pi == nil {
-		err = fmt.Errorf("insufficient proxies (%d, %d)", smap.CountProxies(), skipped)
+		err = &NoNodesError{cmn.Proxy, smap, idToSkip}
 	}
 	return
 }
@@ -135,7 +152,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		}
 	}
 	if si == nil {
-		err = ErrNoTargets
+		err = &NoNodesError{cmn.Target, smap, ""}
 	}
 	return
 }

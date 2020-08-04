@@ -135,10 +135,7 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
 		{r: cmn.Transform, h: p.transformHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.IC, h: p.listenICHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
@@ -162,7 +159,7 @@ func (p *proxyrunner) Run() error {
 		})
 	} else {
 		networkHandlers = append(networkHandlers, networkHandler{
-			r: "/", h: cmn.InvalidHandler,
+			r: "/", h: p.invalidHandler,
 			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData},
 		})
 	}
@@ -182,6 +179,25 @@ func (p *proxyrunner) Run() error {
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, nil, p.statsT)
 	return p.httprunner.run()
+}
+
+func (p *proxyrunner) invalidHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	} else {
+		cmn.InvalidHandler(w, r)
+	}
+}
+
+// enable handlers that must be accessible only upon cluster-startup-done
+func (p *proxyrunner) markClusterStarted() {
+	netH := []networkHandler{
+		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
+	}
+	p.registerNetworkHandlers(netH)
+	p.httprunner.markClusterStarted()
 }
 
 func (p *proxyrunner) sendKeepalive(timeout time.Duration) (status int, err error) {
