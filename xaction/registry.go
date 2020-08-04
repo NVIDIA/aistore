@@ -581,7 +581,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 //
 
 func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck,
-	uuids ...string) (bucketEntry, error) {
+	uuids ...string) (bckEntry bucketEntry, isNew bool, err error) {
 	var uuid string
 	if len(uuids) != 0 {
 		uuid = uuids[0]
@@ -591,7 +591,7 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck,
 		prevEntry := e.(bucketEntry)
 		if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
 			r.mtx.RUnlock()
-			return prevEntry, err
+			return prevEntry, false, err
 		}
 	}
 	r.mtx.RUnlock()
@@ -606,18 +606,18 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck,
 		prevEntry = e.(bucketEntry)
 		running = true
 		if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
-			return prevEntry, err
+			return prevEntry, false, err
 		}
 	}
 
 	if err := entry.Start(bck.Bck); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	r.storeEntry(entry)
 	if running {
 		entry.postRenewHook(prevEntry)
 	}
-	return entry, nil
+	return entry, true, nil
 }
 
 func (r *registry) renewGlobalXaction(entry globalEntry) (globalEntry, bool, error) {
