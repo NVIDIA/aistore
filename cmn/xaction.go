@@ -177,8 +177,18 @@ func (xact *XactBase) EndTime() time.Time {
 	}
 	return time.Time{}
 }
-func (xact *XactBase) setEndTime() {
+func (xact *XactBase) _setEndTime(errs ...error) {
 	xact.eutime.Store(time.Now().UnixNano())
+
+	// notifications
+	if n := xact.Notif(); n != nil && n.Upon(UponTerm) {
+		var err error
+		if len(errs) > 0 {
+			err = errs[0]
+		}
+		n.Callback(n, err)
+	}
+
 	if xact.Kind() != ActListObjects {
 		glog.Infoln(xact.String())
 	}
@@ -205,7 +215,7 @@ func (xact *XactBase) Abort() {
 		glog.Infof("already aborted: " + xact.String())
 		return
 	}
-	xact.setEndTime()
+	xact._setEndTime(NewAbortedError(xact.String()))
 	close(xact.abrt)
 	glog.Infof("ABORT: " + xact.String())
 }
@@ -215,15 +225,7 @@ func (xact *XactBase) Finish(errs ...error) {
 		Assert(!xact.EndTime().IsZero())
 		return
 	}
-	xact.setEndTime()
-	// notifications
-	if n := xact.Notif(); n != nil && n.Upon(UponTerm) {
-		var err error
-		if len(errs) > 0 {
-			err = errs[0]
-		}
-		n.Callback(n, err)
-	}
+	xact._setEndTime(errs...)
 }
 
 func (xact *XactBase) Result() (interface{}, error) {

@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -107,11 +108,11 @@ type (
 	// notification messages
 	//
 	notifMsg struct {
-		Ty    int32          `json:"type"`    // enumerated type, one of (notifXact, et al.) - see above
-		Flags int32          `json:"flags"`   // TODO: add
-		Snode *cluster.Snode `json:"snode"`   // node
-		Data  []byte         `json:"message"` // typed message
-		Err   error          `json:"err"`     // error
+		Ty     int32          `json:"type"`    // enumerated type, one of (notifXact, et al.) - see above
+		Flags  int32          `json:"flags"`   // TODO: add
+		Snode  *cluster.Snode `json:"snode"`   // node
+		Data   []byte         `json:"message"` // typed message
+		ErrMsg string         `json:"err"`     // error.Error()
 	}
 	// receiver to start listening
 	notifListenMsg struct {
@@ -276,6 +277,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
 		notifMsg = &notifMsg{}
 		msg      interface{}
+		errMsg   error
 		uuid     string
 		tid      = r.Header.Get(cmn.HeaderCallerID) // sender node ID
 	)
@@ -317,9 +319,11 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	// notifListener and notifMsg must have the same type
 	//
 	cmn.Assert(nl.notifTy() == int(notifMsg.Ty))
-
+	if notifMsg.ErrMsg != "" {
+		errMsg = errors.New(notifMsg.ErrMsg)
+	}
 	nl.lock()
-	err, status, done := n.handleMsg(nl, tid, notifMsg.Err)
+	err, status, done := n.handleMsg(nl, tid, errMsg)
 	nl.unlock()
 	if done {
 		nl.callback(n, nl, msg, nil)
@@ -562,5 +566,5 @@ func notifText(ty int) string {
 }
 
 func (msg *notifMsg) String() string {
-	return fmt.Sprintf("%s[%s,%v]<=%s", notifText(int(msg.Ty)), string(msg.Data), msg.Err, msg.Snode)
+	return fmt.Sprintf("%s[%s,%v]<=%s", notifText(int(msg.Ty)), string(msg.Data), msg.ErrMsg, msg.Snode)
 }

@@ -769,10 +769,13 @@ func (h *httprunner) notify(sid string, msgBody []byte, dstIsTarget ...bool) {
 
 func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
 	var (
-		msg   = notifMsg{Ty: int32(n.Category()), Snode: h.si, Err: err}
+		msg   = notifMsg{Ty: int32(n.Category()), Snode: h.si}
 		notif = n.(*cmn.NotifXact)
 		pid   = notif.Dsts[0]
 	)
+	if err != nil {
+		msg.ErrMsg = err.Error()
+	}
 	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
 	h.notify(pid, cmn.MustMarshal(&msg))
 }
