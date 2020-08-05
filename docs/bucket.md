@@ -267,8 +267,19 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 | prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
 | pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
 | pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and ais bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html) |
-| cached | Return only objects that are cached on local drives | For ais buckets the option is ignored. For cloud buckets, if `cached` is `true`, the cluster does not retrieve any data from the cloud, it reads only information from local drives |
 | taskid | ID of the list objects operation (string) | Listing objects is an asynchronous operation. First, a client should start the operation by sending `"0"` as `taskid` - `"0"` means initialize a new list operation. In response, a proxy returns a `taskid` generated for the operation. Then the client should poll the operation status using the same JSON-encoded structure but with `taskid` set to the received value. If the operation is still in progress the proxy returns status code 202(Accepted) and an empty body. If the operation is completed, it returns 200(OK) and the list of objects. The proxy can return status 410(Gone) indicating that the operation restarted and got a new ID. In this case, the client should read new operation ID from the response body |
+| flags | Advanced filter options | A bit field of [SelectMsg extended flags](/cmn/api.go) |
+
+SelectMsg extended flags:
+
+| Name | Value | Description |
+| --- | --- | --- |
+| SelectCached | `1` | For Cloud buckets only: return only objects that are cached on local drives, i.e. objects that can be read without accessing to the Cloud |
+| SelectMisplaced | `2` | Include objects that are on incorrect target or mountpath |
+
+Note that the list generated with `SelectMisplaced` option may have duplicated entries.
+E.g, after rebalance the list can contains two entries for the same object:
+a misplaced one (from original location) and real one (from the new location).
 
 The full list of bucket properties are:
 

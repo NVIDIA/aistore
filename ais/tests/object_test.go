@@ -397,10 +397,11 @@ func TestOperationsWithRanges(t *testing.T) {
 					var (
 						err    error
 						xactID string
-						msg    = &cmn.SelectMsg{Prefix: commonPrefix + "/", Cached: evict}
+						msg    = &cmn.SelectMsg{Prefix: commonPrefix + "/"}
 					)
 					if evict {
 						xactID, err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
+						msg.Flags = cmn.SelectCached
 					} else {
 						xactID, err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
 					}
@@ -981,7 +982,7 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch stri
 
 func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, limit uint) *cmn.BucketList {
 	tutils.Logf("LIST objects %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
-		bck, msg.Prefix, msg.PageSize, msg.Cached, msg.ContinuationToken)
+		bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(cmn.SelectCached), msg.ContinuationToken)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	resList, err := api.ListObjects(baseParams, bck, msg, limit)
 	if err != nil {

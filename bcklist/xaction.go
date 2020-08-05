@@ -103,7 +103,7 @@ func (r *BckListTask) init() error {
 	if err := r.bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
 		return err
 	}
-	r.fromRemote = !r.bck.IsAIS() && !r.msg.Cached
+	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(cmn.SelectCached)
 	// remote bucket listing is always paginated
 	if r.fromRemote && r.msg.WantObjectsCnt() == 0 {
 		r.msg.PageSize = cmn.DefaultListPageSize
@@ -130,7 +130,7 @@ func (r *BckListTask) Run() (err error) {
 			// Copy only the values that can change between calls
 			debug.Assert(r.msg.UseCache == req.msg.UseCache)
 			debug.Assert(r.msg.Prefix == req.msg.Prefix)
-			debug.Assert(r.msg.Cached == req.msg.Cached)
+			debug.Assert(r.msg.Flags == req.msg.Flags)
 			r.msg.ContinuationToken = req.msg.ContinuationToken
 			if !r.fromRemote || req.msg.PageSize != 0 {
 				r.msg.PageSize = req.msg.PageSize

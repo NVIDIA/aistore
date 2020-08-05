@@ -102,7 +102,7 @@ func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, err
 func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint) ([]string, error) {
 	var (
 		baseParams = BaseAPIParams(proxyURL)
-		msg        = &cmn.SelectMsg{Cached: true, Prefix: prefix}
+		msg        = &cmn.SelectMsg{Flags: cmn.SelectCached, Prefix: prefix}
 	)
 
 	data, err := api.ListObjects(baseParams, bck, msg, objectCountLimit)

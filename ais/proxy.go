@@ -1144,7 +1144,7 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if bck.IsAIS() || smsg.Cached {
+	if bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached) {
 		if smsg.PageSize == 0 {
 			smsg.PageSize = cmn.DefaultListPageSizeAIS
 		}
@@ -1819,7 +1819,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	var (
 		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Client.ListObjects
-		needLocalData = smsg.Cached || smsg.NeedLocalData()
+		needLocalData = smsg.IsFlagSet(cmn.SelectCached) || smsg.NeedLocalData()
 
 		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
 		args   = bcastArgs{

@@ -61,9 +61,11 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 			UUID:   handle,
 			Prefix: q.ObjectsSource.Prefix,
 			Props:  q.Select.Props,
-			Cached: q.Cached,
 		}
 	)
+	if q.Cached {
+		smsg.Flags = cmn.SelectCached
+	}
 
 	xact, isNew, err := xaction.Registry.RenewObjectsListingXact(ctx, t, q, smsg)
 	if err != nil {

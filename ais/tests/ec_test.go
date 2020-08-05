@@ -202,30 +202,6 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 	return foundParts, main
 }
 
-func filterObjListOK(lst []*cmn.BucketEntry) []*cmn.BucketEntry {
-	i := 0
-	curr := 0
-
-	for i < len(lst) {
-		if !lst[i].IsStatusOK() {
-			i++
-			continue
-		}
-
-		if i != curr {
-			lst[curr] = lst[i]
-		}
-		i++
-		curr++
-	}
-
-	if i != curr {
-		return lst[:curr]
-	}
-
-	return lst
-}
-
 func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	bck cmn.Bck, objPath string, objSize, sliceSize int64, totalCnt int) {
 	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
@@ -519,8 +495,6 @@ func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	reslist.Entries = filterObjListOK(reslist.Entries)
-
 	return len(reslist.Entries)
 }
 
@@ -1270,8 +1244,6 @@ func TestECStress(t *testing.T) {
 			var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 			reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 			tassert.CheckFatal(t, err)
-			reslist.Entries = filterObjListOK(reslist.Entries)
-
 			tassert.Fatalf(t, len(reslist.Entries) == o.objCount,
 				"Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
 		})
@@ -1333,15 +1305,11 @@ func TestECStressManyBuckets(t *testing.T) {
 	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck1, msg, 0)
 	tassert.CheckFatal(t, err)
-	reslist.Entries = filterObjListOK(reslist.Entries)
-
 	tassert.Fatalf(t, len(reslist.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(reslist.Entries), o1.objCount)
 
 	msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err = api.ListObjects(baseParams, bck2, msg, 0)
 	tassert.CheckFatal(t, err)
-	reslist.Entries = filterObjListOK(reslist.Entries)
-
 	tassert.Fatalf(t, len(reslist.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2, len(reslist.Entries), o2.objCount)
 }
 
@@ -1469,8 +1437,6 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-	reslist.Entries = filterObjListOK(reslist.Entries)
-
 	tassert.Fatalf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
 }
 
@@ -1588,7 +1554,6 @@ func TestECXattrs(t *testing.T) {
 		}
 	}
 
-	reslist.Entries = filterObjListOK(reslist.Entries)
 	if len(reslist.Entries) != o.objCount {
 		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), 1)
 	}
@@ -1676,8 +1641,6 @@ func TestECDestroyBucket(t *testing.T) {
 	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
-
-	reslist.Entries = filterObjListOK(reslist.Entries)
 	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
 }
 
@@ -1788,8 +1751,6 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
-
-	reslist.Entries = filterObjListOK(reslist.Entries)
 	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
 }
 
@@ -2035,8 +1996,6 @@ func TestECEmergencyMpath(t *testing.T) {
 	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
-
-	reslist.Entries = filterObjListOK(reslist.Entries)
 	if len(reslist.Entries) != o.objCount {
 		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
 	}
@@ -2154,12 +2113,10 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.FailNow()
 	}
 
-	msg := &cmn.SelectMsg{}
-	msg.AddProps(cmn.GetPropsSize, cmn.GetPropsStatus)
-	res, err := api.ListObjects(baseParams, bck, msg, 0)
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
+	oldBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
-	oldBucketList := filterObjListOK(res.Entries)
-	tutils.Logf("%d objects created, starting rebalance\n", len(oldBucketList))
+	tutils.Logf("%d objects created, starting rebalance\n", len(oldBucketList.Entries))
 
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
@@ -2210,13 +2167,12 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	res, err = api.ListObjects(baseParams, bck, msg, 0)
+	newBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
-	newBucketList := filterObjListOK(res.Entries)
-	if len(oldBucketList) != len(newBucketList) {
-		for _, o := range oldBucketList {
+	if len(oldBucketList.Entries) != len(newBucketList.Entries) {
+		for _, o := range oldBucketList.Entries {
 			found := false
-			for _, n := range newBucketList {
+			for _, n := range newBucketList.Entries {
 				if n.Name == o.Name {
 					found = true
 					break
@@ -2227,10 +2183,10 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			}
 		}
 		t.Fatalf("%d objects before rebalance, %d objects after",
-			len(oldBucketList), len(newBucketList))
+			len(oldBucketList.Entries), len(newBucketList.Entries))
 	}
 
-	for _, entry := range newBucketList {
+	for _, entry := range newBucketList.Entries {
 		n, err := api.GetObject(baseParams, bck, entry.Name)
 		if err != nil {
 			t.Errorf("Failed to read %s: %v", entry.Name, err)
@@ -2447,15 +2403,12 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tutils.PutObjsFromList(proxyURL, bckReg, ecTestDir, fileSize, fileList, errCh, objsPutCh, cksumType)
 
 	msg := &cmn.SelectMsg{}
-	msg.AddProps(cmn.GetPropsStatus)
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
-	oldECList := filterObjListOK(resECOld.Entries)
 	resRegOld, err := api.ListObjects(baseParams, bckReg, msg, 0)
 	tassert.CheckError(t, err)
-	oldRegList := filterObjListOK(resRegOld.Entries)
 	tutils.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
-		len(oldECList), bckEC, len(oldRegList), bckReg)
+		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
 	tutils.Logf("Registering node %s\n", tgtLost)
 	err = tutils.RegisterNode(proxyURL, tgtLost, smap)
@@ -2466,21 +2419,19 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tutils.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
-	newECList := filterObjListOK(resECNew.Entries)
 	tutils.Logf("%d objects in %s after rebalance\n",
-		len(newECList), bckEC)
+		len(resECNew.Entries), bckEC)
 	resRegNew, err := api.ListObjects(baseParams, bckReg, msg, 0)
 	tassert.CheckError(t, err)
-	newRegList := filterObjListOK(resRegNew.Entries)
 	tutils.Logf("%d objects in %s after rebalance\n",
-		len(newRegList), bckReg)
+		len(resRegNew.Entries), bckReg)
 
 	tutils.Logln("Test object readability after rebalance")
-	for _, obj := range oldECList {
+	for _, obj := range resECOld.Entries {
 		_, err := api.GetObject(baseParams, bckEC, obj.Name)
 		tassert.CheckError(t, err)
 	}
-	for _, obj := range oldRegList {
+	for _, obj := range resRegOld.Entries {
 		_, err := api.GetObject(baseParams, bckReg, obj.Name)
 		tassert.CheckError(t, err)
 	}
@@ -2568,14 +2519,12 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.Logf("Wait for resilver to complete...\n")
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	var msg = &cmn.SelectMsg{PageSize: pagesize}
-	msg.AddProps(cmn.GetPropsSize, cmn.GetPropsStatus)
+	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: cmn.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
-	newECList := filterObjListOK(resEC.Entries)
-	tutils.Logf("%d objects in %s after rebalance\n", len(newECList), bck)
-	if len(newECList) != o.objCount {
-		t.Errorf("Expected %d objects after rebalance, found %d", o.objCount, len(newECList))
+	tutils.Logf("%d objects in %s after rebalance\n", len(resEC.Entries), bck)
+	if len(resEC.Entries) != o.objCount {
+		t.Errorf("Expected %d objects after rebalance, found %d", o.objCount, len(resEC.Entries))
 	}
 
 	for i := 0; i < o.objCount; i++ {
@@ -2674,11 +2623,9 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	}
 
 	msg := &cmn.SelectMsg{}
-	msg.AddProps(cmn.GetPropsStatus)
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
-	oldECList := filterObjListOK(resECOld.Entries)
-	tutils.Logf("Created %d objects in %s. Starting rebalance\n", len(oldECList), bckEC)
+	tutils.Logf("Created %d objects in %s. Starting rebalance\n", len(resECOld.Entries), bckEC)
 
 	tutils.Logf("Registering node %s\n", tgtLost.ID())
 	err = tutils.RegisterNode(proxyURL, tgtLost, smap)
@@ -2694,7 +2641,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	go func() {
 		defer wg.Done()
 		for {
-			for _, obj := range oldECList {
+			for _, obj := range resECOld.Entries {
 				_, err := api.GetObject(baseParams, bckEC, obj.Name)
 				tassert.CheckError(t, err)
 				select {
@@ -2719,15 +2666,14 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	tutils.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
-	newECList := filterObjListOK(resECNew.Entries)
 	tutils.Logf("%d objects in %s after rebalance\n",
-		len(newECList), bckEC)
-	if len(newECList) != len(oldECList) {
+		len(resECNew.Entries), bckEC)
+	if len(resECNew.Entries) != len(resECOld.Entries) {
 		t.Errorf("The number of objects before and after rebalance mismatches")
 	}
 
 	tutils.Logln("Test object readability after rebalance")
-	for _, obj := range oldECList {
+	for _, obj := range resECOld.Entries {
 		_, err := api.GetObject(baseParams, bckEC, obj.Name)
 		tassert.CheckError(t, err)
 	}
@@ -2735,11 +2681,10 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	tutils.Logln("Getting the number of objects after reading")
 	resECNew, err = api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckError(t, err)
-	newECList = filterObjListOK(resECNew.Entries)
 	tutils.Logf("%d objects in %s after reading\n",
-		len(newECList), bckEC)
-	if len(newECList) != len(oldECList) {
+		len(resECNew.Entries), bckEC)
+	if len(resECNew.Entries) != len(resECOld.Entries) {
 		t.Errorf("Incorrect number of objects: %d (expected %d)",
-			len(newECList), len(oldECList))
+			len(resECNew.Entries), len(resECOld.Entries))
 	}
 }

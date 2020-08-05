@@ -72,7 +72,7 @@ func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketL
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
 func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
-	if w.msg.Cached {
+	if w.msg.IsFlagSet(cmn.SelectCached) {
 		return w.DefaultLocalObjPage(w.msg)
 	}
 

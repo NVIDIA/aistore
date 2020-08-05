@@ -174,9 +174,9 @@ func (t *bckSummaryTask) Run() error {
 					msg.Cached = true
 				}
 
-				smsg := &cmn.SelectMsg{
-					Props:  cmn.GetPropsSize,
-					Cached: msg.Cached,
+				smsg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
+				if msg.Cached {
+					smsg.Flags = cmn.SelectCached
 				}
 				for {
 					walk := objwalk.NewWalk(context.Background(), t.t, bck, smsg)

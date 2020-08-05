@@ -165,7 +165,7 @@ func (r *ObjectsListingXact) startFromBck() {
 	)
 
 	// TODO: filtering for cloud buckets is not yet supported.
-	if bck.IsCloud() && !r.msg.Cached {
+	if bck.IsCloud() && !r.msg.IsFlagSet(cmn.SelectCached) {
 		si, err := cluster.HrwTargetTask(r.ID().String(), r.t.GetSowner().Get())
 		if err != nil {
 			// TODO: should we handle it somehow?

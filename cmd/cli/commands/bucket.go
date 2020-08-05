@@ -170,11 +170,13 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 
 		msg = &cmn.SelectMsg{
 			Prefix:   prefix,
-			Cached:   flagIsSet(c, cachedFlag),
 			UseCache: flagIsSet(c, useCacheFlag),
 		}
 	)
 
+	if flagIsSet(c, cachedFlag) {
+		msg.Flags = cmn.SelectCached
+	}
 	props := parseStrSliceFlag(c, objPropsFlag)
 	if cmn.StringInSlice("all", props) {
 		msg.AddProps(cmn.GetPropsAll...)

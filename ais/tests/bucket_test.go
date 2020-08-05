@@ -510,10 +510,7 @@ func TestListObjectsCloudCached(t *testing.T) {
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
-	msg := &cmn.SelectMsg{
-		PageSize: 10,
-		Cached:   true,
-	}
+	msg := &cmn.SelectMsg{PageSize: 10, Flags: cmn.SelectCached}
 	msg.AddProps(cmn.GetPropsDefault...)
 	msg.AddProps(cmn.GetPropsCached, cmn.GetPropsStatus)
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -1125,7 +1122,10 @@ func TestBucketListAndSummary(t *testing.T) {
 					t.Errorf("number of objects in summary (%d) is different than expected (%d)", summary.ObjCount, expectedFiles)
 				}
 			} else {
-				msg := &cmn.SelectMsg{Cached: test.cached}
+				msg := &cmn.SelectMsg{}
+				if test.cached {
+					msg.Flags = cmn.SelectCached
+				}
 				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
@@ -2277,7 +2277,8 @@ func TestBackendBucket(t *testing.T) {
 	)
 
 	// Check if cached listing works correctly.
-	aisObjList, err = api.ListObjects(baseParams, aisBck, &cmn.SelectMsg{Cached: true}, 0)
+	cacheMsg := &cmn.SelectMsg{Flags: cmn.SelectCached}
+	aisObjList, err = api.ListObjects(baseParams, aisBck, cacheMsg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
 		t, len(aisObjList.Entries) == 1,
@@ -2464,20 +2465,18 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	m.gets()
 
 	msg := &cmn.SelectMsg{}
-	msg.AddProps(cmn.GetPropsStatus)
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
-	objList := filterObjListOK(bckObjs.Entries)
 	tassert.CheckFatal(t, err)
-	if len(objList) == 0 {
+	if len(bckObjs.Entries) == 0 {
 		t.Errorf("%s is empty\n", m.bck)
 		return
 	}
 
 	if cksumType != cmn.ChecksumNone {
-		tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(objList), m.bck, cksumType)
+		tutils.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
 		wg := cmn.NewLimitedWaitGroup(40)
 
-		for _, entry := range objList {
+		for _, entry := range bckObjs.Entries {
 			wg.Add(1)
 			go func(name string) {
 				defer wg.Done()
@@ -2496,15 +2495,15 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// corrupt random and read again
 	{
-		i := rand.Intn(len(objList))
-		if i+numCorrupted > len(objList) {
+		i := rand.Intn(len(bckObjs.Entries))
+		if i+numCorrupted > len(bckObjs.Entries) {
 			i -= numCorrupted
 		}
 		objCh := make(chan string, numCorrupted)
 		tutils.Logf("Corrupting %d objects\n", numCorrupted)
 		go func() {
 			for j := i; j < i+numCorrupted; j++ {
-				objName := objList[j].Name
+				objName := bckObjs.Entries[j].Name
 				corruptSingleBitInFile(t, m.bck, objName)
 				objCh <- objName
 			}

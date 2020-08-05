@@ -449,7 +449,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
-	msg := &cmn.SelectMsg{Cached: true}
+	msg := &cmn.SelectMsg{Flags: cmn.SelectCached}
 	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsAtime, cmn.GetPropsStatus)
 	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)

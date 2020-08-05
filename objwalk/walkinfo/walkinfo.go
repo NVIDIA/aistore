@@ -6,7 +6,6 @@ package walkinfo
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -30,7 +29,6 @@ type (
 		markerDir    string
 		msg          *cmn.SelectMsg
 		timeFormat   string
-		fast         bool
 	}
 
 	PostCallbackFunc func(lom *cluster.LOM)
@@ -80,7 +78,6 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *Wal
 		Marker:       msg.ContinuationToken,
 		markerDir:    markerDir,
 		msg:          msg,
-		fast:         !msg.NeedLOMData(),
 		timeFormat:   msg.TimeFormat,
 		propNeeded:   propNeeded,
 	}
@@ -120,13 +117,6 @@ func (wi *WalkInfo) ProcessDir(fqn string) error {
 	}
 
 	return nil
-}
-
-func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, error) {
-	if !wi.fast {
-		return wi.walkCallback(fqn, de)
-	}
-	return wi.walkFastCallback(fqn, de)
 }
 
 func (wi *WalkInfo) SetObjectFilter(f cluster.ObjectFilter) {
@@ -179,43 +169,14 @@ func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntr
 	return fileInfo
 }
 
-// fast alternative of generic listwalk: do not fetch any object information
-// Returns all objects if the `msg.PageSize` was not specified. But the result
-// may have 'ghost' or duplicated  objects.
-func (wi *WalkInfo) walkFastCallback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, error) {
-	if de.IsDir() {
-		return nil, nil
-	}
-
-	ct, err := cluster.NewCTFromFQN(fqn, nil)
-	if err != nil {
-		return nil, nil
-	}
-
-	if wi.prefix != "" && !strings.HasPrefix(ct.ObjName(), wi.prefix) {
-		return nil, nil
-	}
-	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, ct.ObjName()) {
-		return nil, nil
-	}
-	fileInfo := &cmn.BucketEntry{
-		Name:  ct.ObjName(),
-		Flags: cmn.ObjStatusOK,
-	}
-	if wi.needSize() {
-		fi, err := os.Stat(fqn)
-		if err == nil {
-			fileInfo.Size = fi.Size()
-		}
-	}
-	if wi.needTargetURL() {
-		fileInfo.TargetURL = wi.t.Snode().URL(cmn.NetworkPublic)
-	}
-
-	return fileInfo, nil
-}
-
-func (wi *WalkInfo) walkCallback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, error) {
+// Since objwalk returns only "accessible" objects by default, it always needs
+// LOM to check if an object is misplaced etc. On the other hand, skipping LOM
+// loading and checking increases bucket list performance. So, when we need
+// extra speed, we can add extra Flag to SelectMsg to skip everything
+// LOM-related and decrease time taken by listing the entire bucket.
+// It may be useful only for huge buckets: reading list of a  bucket with 5
+// million objects takes about a minutes, and skipping LOM saves ~5s.
+func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, error) {
 	if de.IsDir() {
 		return nil, nil
 	}
@@ -247,6 +208,9 @@ func (wi *WalkInfo) walkCallback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, 
 		if wi.t.Snode().ID() != si.ID() {
 			objStatus = cmn.ObjStatusMoved
 		}
+	}
+	if objStatus == cmn.ObjStatusMoved && !wi.msg.IsFlagSet(cmn.SelectMisplaced) {
+		return nil, nil
 	}
 	return wi.lsObject(lom, objStatus), nil
 }
