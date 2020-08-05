@@ -16,7 +16,7 @@ import (
 
 // [METHOD] /v1/transform
 func (t *targetrunner) transformHandler(w http.ResponseWriter, r *http.Request) {
-	if err := cmn.CheckKubernetesDeployment(); err != nil {
+	if err := t.checkK8s(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -162,7 +162,7 @@ func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := transform.StartTransformationPod(t, msg); err != nil {
+	if err := transform.StartTransformationPod(t, t.k8snode, msg); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

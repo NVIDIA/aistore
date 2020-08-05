@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -88,10 +89,10 @@ type (
 			local  localGFN
 			global globalGFN
 		}
-		regstate regstate // the state of being registered with the primary, can be (en/dis)abled via API
-
-		gmm *memsys.MMSA // system pagesize-based memory manager and slab allocator
-		smm *memsys.MMSA // system MMSA for small-size allocations
+		regstate regstate     // the state of being registered with the primary, can be (en/dis)abled via API
+		gmm      *memsys.MMSA // system pagesize-based memory manager and slab allocator
+		smm      *memsys.MMSA // system MMSA for small-size allocations
+		k8snode  string       // env(cmn.K8SHostName)
 	}
 )
 
@@ -213,11 +214,13 @@ func (t *targetrunner) Run() error {
 	smap.Tmap[t.si.ID()] = t.si
 
 	cluster.InitTarget()
+
+	t.detectK8s()
+
 	//
 	// join cluster
 	//
 	t.owner.smap.put(smap)
-
 	if err := t.withRetry(t.joinCluster, "join", true /* backoff */); err != nil {
 		if loaded {
 			var (
@@ -293,6 +296,28 @@ func (t *targetrunner) Run() error {
 	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t.gmm, t, t.statsT)
 	if err := t.httprunner.run(); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (t *targetrunner) detectK8s() {
+	if t.k8snode = os.Getenv(cmn.K8SHostName); t.k8snode == "" {
+		return
+	}
+	output, err := exec.Command(cmn.Kubectl, "get", "node", t.k8snode,
+		"--template={{.metadata.name}}").Output()
+	if err != nil {
+		return
+	}
+	if s := string(output); s != t.k8snode {
+		t.k8snode = ""
+		glog.Errorf("%s: not detecting K8s: %s != %s", t.si, t.k8snode, s) // TODO: make it a Warning
+	}
+}
+
+func (t *targetrunner) checkK8s() error {
+	if t.k8snode == "" {
+		return fmt.Errorf("%s: the operation requires Kubernetes deployment", t.si)
 	}
 	return nil
 }

@@ -39,7 +39,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 }
 
 func TestKubeTar2TFS3(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 
 	const (
 		tarObjName   = "small-mnist-3.tar"
@@ -103,7 +103,7 @@ func TestKubeTar2TFS3(t *testing.T) {
 }
 
 func TestKubeTar2TFRanges(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 
 	type testCase struct {
 		start, end int64

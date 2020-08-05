@@ -42,7 +42,7 @@ var (
 )
 
 func TestKubeTransformer(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	tests := []testConfig{
 		{transformer: "echo", comm: transform.RedirectCommType},
 		{transformer: "echo", comm: transform.RevProxyCommType},
@@ -200,7 +200,7 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 }
 
 func TestKubeSingleTransformerAtATime(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Kubernetes: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	output, err := exec.Command("bash", "-c", "kubectl get nodes | grep Ready | wc -l").CombinedOutput()
 	tassert.CheckFatal(t, err)
 	if strings.Trim(string(output), "\n") != "1" {

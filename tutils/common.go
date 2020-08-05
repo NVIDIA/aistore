@@ -23,6 +23,15 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
+type SkipTestArgs struct {
+	Bck            cmn.Bck
+	RequiresRemote bool
+	RequiresAuth   bool
+	Long           bool
+	Cloud          bool
+	K8s            bool
+}
+
 func prependTime(msg string) string {
 	return fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000000"), msg)
 }
@@ -98,15 +107,6 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 	return "", errors.New("error generating bucket name: too many tries gave no result")
 }
 
-type SkipTestArgs struct {
-	RequiresRemote bool
-	RequiresAuth   bool
-	Long           bool
-	Cloud          bool
-	Kubernetes     bool
-	Bck            cmn.Bck
-}
-
 func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	if args.RequiresRemote && RemoteCluster.UUID == "" {
 		tb.Skipf("%s requires remote cluster", tb.Name())
@@ -123,7 +123,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 			tb.Skipf("%s requires a Cloud bucket", tb.Name())
 		}
 	}
-	if args.Kubernetes {
+	if args.K8s {
 		cmd := exec.Command(cmn.Kubectl, "get", "pods")
 		if err := cmd.Run(); err != nil {
 			tb.Skipf("%s requires Kubernetes", tb.Name())

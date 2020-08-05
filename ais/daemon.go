@@ -289,7 +289,6 @@ func initTarget(config *cmn.Config) cmn.Runner {
 	_ = t.smm.Init(true /*panicOnErr*/)
 	t.gmm.Sibling, t.smm.Sibling = t.smm, t.gmm
 
-	cmn.InitKubernetes()
 	t.initSI(cmn.Target)
 	t.initHostIP()
 	daemon.rg.add(t, cmn.Target)
