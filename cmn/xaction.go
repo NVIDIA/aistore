@@ -222,7 +222,6 @@ func (xact *XactBase) Abort() {
 
 func (xact *XactBase) Finish(errs ...error) {
 	if xact.Aborted() {
-		Assert(!xact.EndTime().IsZero())
 		return
 	}
 	xact._setEndTime(errs...)
