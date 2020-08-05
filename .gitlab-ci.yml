@@ -155,7 +155,7 @@ test:kube:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   variables:
     AIS_ENDPOINT: "localhost:8080"
-    AIS_NODE_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
+    K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
   tags:
     - ais-kube
   script:

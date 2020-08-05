@@ -16,7 +16,7 @@ spec:
     env:
      - name: AIS_NODE_ROLE
        value: "target"
-     - name: AIS_NODE_NAME
+     - name: K8S_HOST_NAME
        valueFrom:
          fieldRef:
            fieldPath: spec.nodeName
@@ -33,7 +33,7 @@ spec:
       - containerPort: ${PORT}
         protocol: TCP
     command: ["bash","-c"]
-    # TODO: fix the workarounf of AIS_FS_PATHS
+    # TODO: fix the workaround of AIS_FS_PATHS
     args:
       - export PORT=${PORT} &&
         export AIS_FS_PATHS="\"\"${AIS_FS_PATHS}\"\"" &&

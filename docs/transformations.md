@@ -28,7 +28,7 @@ There are 3 communication types that user can choose from to implement the trans
 | **reverse proxy** | `hrev://` | Target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using transformer server. Transformer server should make GET request to a target, transform bytes, and return them to a target. |
 | **redirect** | `hpull://` | Target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using transformer server. Transformer server should make GET request to a target, transform bytes, and return them to a user. |
 
-The communication type must be specified in the pod specification, so the target can know how to communicate with the transformer server.  
+The communication type must be specified in the pod specification, so the target can know how to communicate with the transformer server.
 It is defined in as pod's annotation, under `communication_type` key:
 ```yaml
 apiVersion: v1
@@ -57,12 +57,12 @@ metadata:
 
 There are a couple of steps that are required to make the transformation work:
 1. Target should be able to execute `kubectl` meaning that the binary should be in the `$PATH`.
-2. `AIS_NODE_NAME = spec.nodeName` variable must be set inside the target pod's container (see more [here](https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/)).
+2. `K8S_HOST_NAME = spec.nodeName` variable must be set inside the target pod's container (see more [here](https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/)).
     Example:
     ```yaml
       containers:
       - env:
-         - name: AIS_NODE_NAME
+         - name: K8S_HOST_NAME
            valueFrom:
              fieldRef:
                fieldPath: spec.nodeName
@@ -146,7 +146,7 @@ COPY server.py server.py
 EXPOSE 80
 
 ENTRYPOINT [ "/code/server.py", "--listen", "0.0.0.0", "--port", "80" ]
-``` 
+```
 
 Once we have the docker file we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/), so our Kubernetes cluster can pull this image later.
 In this example we will use [quay.io](https://quay.io/) Docker Registry.

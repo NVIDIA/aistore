@@ -7,21 +7,31 @@ package cmn
 import (
 	"fmt"
 	"os"
+	"os/exec"
 )
 
 var (
-	targetsNodeName = os.Getenv("AIS_NODE_NAME")
+	targetsNodeName = os.Getenv("K8S_HOST_NAME")
+	isKube          = false
 )
+
+func InitKubernetes() {
+	output, err := exec.Command(Kubectl, "get", "node", targetsNodeName, "--template={{.metadata.name}}").Output()
+	if err != nil {
+		return
+	}
+	if string(output) != targetsNodeName {
+		return
+	}
+	isKube = true
+}
 
 func GetKubernetesNodeName() string {
 	return targetsNodeName
 }
 
 func CheckKubernetesDeployment() error {
-	// TODO: someone might define this env variable during deployment even if
-	// it's not a kubernetes deployment. However, there doesn't seem to be any
-	// 100% confident method of checking if it's a kubernetes deployment
-	if targetsNodeName == "" {
+	if !isKube {
 		return fmt.Errorf("operation only supported with kubernetes deployment")
 	}
 	return nil
