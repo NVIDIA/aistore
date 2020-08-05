@@ -38,32 +38,8 @@ const (
 	hkFinishedCntThreshold = 50
 )
 
+// public types
 type (
-	// If any of the section is set (mountpaths, bcks, all) the other all ignored.
-	abortArgs struct {
-		// Abort all xactions matching any of the buckets.
-		bcks []*cluster.Bck
-
-		// Abort all mountpath xactions.
-		mountpaths bool
-
-		// Abort all xactions. `ty` can be set so only
-		// xactions matching type `ty` will be aborted.
-		all bool
-		ty  string
-	}
-
-	// Represents result of renewing given xaction.
-	renewRes struct {
-		entry baseEntry // Depending on situation can be new or old entry.
-		isNew bool      // Determines if new entry was created (or old one has been returned).
-		err   error     // Error that occurred during renewal.
-	}
-
-	taskState struct {
-		Result interface{} `json:"res"`
-		Err    error       `json:"error"`
-	}
 	RebBase struct {
 		cmn.XactBase
 		wg *sync.WaitGroup
@@ -78,6 +54,39 @@ type (
 	Election struct {
 		cmn.XactBase
 	}
+	RegistryXactFilter struct {
+		ID          string
+		Kind        string
+		Bck         *cluster.Bck
+		OnlyRunning *bool
+	}
+)
+
+// private types
+type (
+	// If any of the section is set (mountpaths, bcks, all) the other all ignored.
+	abortArgs struct {
+		// Abort all xactions matching any of the buckets.
+		bcks []*cluster.Bck
+
+		// Abort all mountpath xactions.
+		mountpaths bool
+
+		// Abort all xactions. `ty` can be set so only
+		// xactions matching type `ty` will be aborted.
+		all bool
+		ty  string
+	}
+	// Represents result of renewing given xaction.
+	renewRes struct {
+		entry baseEntry // Depending on situation can be new or old entry.
+		err   error     // Error that occurred during renewal.
+		isNew bool      // true: a new entry has been created; false: old one returned
+	}
+	taskState struct {
+		Result interface{} `json:"res"`
+		Err    error       `json:"error"`
+	}
 	bckSummaryTask struct {
 		cmn.XactBase
 		ctx context.Context
@@ -90,21 +99,15 @@ type (
 		Kind() string
 		Get() cmn.Xact
 	}
-	RegistryXactFilter struct {
-		ID          string
-		Kind        string
-		Bck         *cluster.Bck
-		OnlyRunning *bool
-	}
 	registryEntries struct {
 		mtx       sync.RWMutex
 		active    []baseEntry // running entries - finished entries are gradually removed
 		entries   []baseEntry
 		taskCount atomic.Int64
 	}
+	// The registry
 	registry struct {
 		mtx sync.RWMutex // lock for transactions
-
 		// All entries in the registry. The entries are periodically cleaned up
 		// to make sure that we don't keep old entries forever.
 		entries *registryEntries
