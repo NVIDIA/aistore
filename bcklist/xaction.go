@@ -72,7 +72,6 @@ func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck,
 		t:        t,
 		msg:      smsg,
 		workCh:   make(chan *bckListReq, bckListReqSize),
-		objCache: make(chan *cmn.BucketEntry, cacheSize),
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	xact.XactDemandBase = *demand.NewXactDemandBaseBckUUID(uuid, cmn.ActListObjects, bck, idleTime)
@@ -104,18 +103,25 @@ func (r *BckListTask) init() error {
 		return err
 	}
 	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(cmn.SelectCached)
-	// remote bucket listing is always paginated
-	if r.fromRemote && r.msg.WantObjectsCnt() == 0 {
-		r.msg.PageSize = cmn.DefaultListPageSize
-	}
 	if r.fromRemote {
 		return nil
 	}
 
+	r.initTraverse()
+	return nil
+}
+
+func (r *BckListTask) initTraverse() {
+	if r.walkStopCh != nil {
+		r.walkStopCh.Close()
+		r.walkWg.Wait()
+	}
+
+	r.objCache = make(chan *cmn.BucketEntry, cacheSize)
+	r.walkDone = false
 	r.walkStopCh = cmn.NewStopCh()
 	r.walkWg.Add(1)
 	go r.traverseBucket()
-	return nil
 }
 
 func (r *BckListTask) Run() (err error) {
@@ -169,9 +175,11 @@ func (r *BckListTask) Stop(err error) {
 
 func (r *BckListTask) dispatchRequest() *BckListResp {
 	var (
-		cnt   = int(r.msg.WantObjectsCnt())
+		cnt   = r.msg.PageSize
 		token = r.msg.ContinuationToken
 	)
+
+	debug.Assert(cnt != 0)
 
 	r.IncPending()
 	defer r.DecPending()
@@ -182,22 +190,14 @@ func (r *BckListTask) dispatchRequest() *BckListResp {
 			Err:    err,
 		}
 	}
-	if !r.pageIsValid(token, cnt) {
-		return &BckListResp{
-			Status: http.StatusBadRequest,
-			Err:    fmt.Errorf("the page for %q was not initialized", token),
-		}
-	}
 
-	list, err := r.getPage(token, cnt)
-	status := http.StatusOK
-	if err != nil {
-		status = http.StatusInternalServerError
-	}
+	// TODO: We should remove it at some point.
+	debug.Assert(r.pageIsValid(token, cnt))
+
+	objList := r.getPage(token, cnt)
 	return &BckListResp{
-		BckList: list,
-		Status:  status,
-		Err:     err,
+		BckList: objList,
+		Status:  http.StatusOK,
 	}
 }
 
@@ -216,19 +216,18 @@ func (r *BckListTask) walkCtx() context.Context {
 	)
 }
 
-func (r *BckListTask) nextPageAIS(marker string, cnt int) error {
-	if r.isPageCached(marker, cnt) {
+func (r *BckListTask) nextPageAIS(cnt uint) error {
+	if r.isPageCached(r.token, cnt) {
 		return nil
 	}
-	read := 0
-	for read < cnt || cnt == 0 {
+	for read := uint(0); read < cnt; {
 		obj, ok := <-r.objCache
 		if !ok {
 			r.walkDone = true
 			break
 		}
 		// Skip all objects until the requested marker.
-		if cmn.TokenIncludesObject(marker, obj.Name) {
+		if cmn.TokenIncludesObject(r.token, obj.Name) {
 			continue
 		}
 		read++
@@ -238,23 +237,21 @@ func (r *BckListTask) nextPageAIS(marker string, cnt int) error {
 }
 
 // Returns an index of the first objects in the cache that follows marker
-func (r *BckListTask) findMarker(marker string) int {
+func (r *BckListTask) findMarker(marker string) uint {
 	if r.fromRemote && r.token == marker {
 		return 0
 	}
-	cond := func(i int) bool { return !cmn.TokenIncludesObject(marker, r.lastPage[i].Name) }
-	return sort.Search(len(r.lastPage), cond)
+	return uint(sort.Search(len(r.lastPage), func(i int) bool {
+		return !cmn.TokenIncludesObject(marker, r.lastPage[i].Name)
+	}))
 }
 
-func (r *BckListTask) isPageCached(marker string, cnt int) bool {
+func (r *BckListTask) isPageCached(marker string, cnt uint) bool {
 	if r.walkDone {
 		return true
 	}
-	if cnt == 0 {
-		return false
-	}
 	idx := r.findMarker(marker)
-	return idx+cnt < len(r.lastPage)
+	return idx+cnt < uint(len(r.lastPage))
 }
 
 func (r *BckListTask) nextPageCloud() error {
@@ -276,62 +273,58 @@ func (r *BckListTask) nextPageCloud() error {
 // Called before generating a page for a proxy. It is OK if the page is
 // still in progress. If the page is done, the function ensures that the
 // local cache contains the requested data.
-func (r *BckListTask) pageIsValid(marker string, cnt int) bool {
+func (r *BckListTask) pageIsValid(marker string, cnt uint) bool {
 	// The same page is re-requested
 	if r.token == marker {
 		return true
 	}
 	if r.fromRemote {
-		return r.walkDone || len(r.lastPage) >= cnt
+		return r.walkDone || uint(len(r.lastPage)) >= cnt
 	}
 	if cmn.TokenIncludesObject(r.token, marker) {
 		// Requested a status about page returned a few pages ago
 		return false
 	}
 	idx := r.findMarker(marker)
-	inCache := idx+cnt <= len(r.lastPage)
+	inCache := idx+cnt <= uint(len(r.lastPage))
 	return inCache || r.walkDone
 }
 
-func (r *BckListTask) getPage(marker string, cnt int) (*cmn.BucketList, error) {
-	cmn.Assert(r.msg.UUID != "")
+func (r *BckListTask) getPage(marker string, cnt uint) *cmn.BucketList {
+	debug.Assert(r.msg.UUID != "")
 	if r.fromRemote {
 		return &cmn.BucketList{
 			UUID:              r.msg.UUID,
 			Entries:           r.lastPage,
 			ContinuationToken: r.nextToken,
-		}, nil
+		}
 	}
 
 	var (
 		idx  = r.findMarker(marker)
 		list = r.lastPage[idx:]
 	)
-	if len(list) < cnt && !r.walkDone {
-		return nil, errors.New("page is not loaded yet")
-	}
-	if cnt != 0 && len(list) >= cnt {
+
+	debug.Assert(uint(len(list)) >= cnt || r.walkDone)
+
+	if uint(len(list)) >= cnt {
 		entries := list[:cnt]
 		return &cmn.BucketList{
 			UUID:              r.msg.UUID,
 			Entries:           entries,
 			ContinuationToken: entries[cnt-1].Name,
-		}, nil
+		}
 	}
-	return &cmn.BucketList{Entries: list, UUID: r.msg.UUID}, nil
+	return &cmn.BucketList{Entries: list, UUID: r.msg.UUID}
 }
 
-// TODO: support arbitrary page marker (do restart in this case).
 // genNextPage calls DecPending either immediately on error or inside
 // a goroutine if some work must be done.
-func (r *BckListTask) genNextPage(token string, cnt int) error {
+func (r *BckListTask) genNextPage(token string, cnt uint) error {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[%s] token: %q", r, r.msg.ContinuationToken)
 	}
 	if token != "" && token == r.token {
-		return nil
-	}
-	if r.walkDone {
 		return nil
 	}
 
@@ -342,11 +335,18 @@ func (r *BckListTask) genNextPage(token string, cnt int) error {
 		r.token = token
 		return r.nextPageCloud()
 	}
-	r.discardObsolete(r.token)
-	if r.token < token {
-		r.token = token
+
+	if r.token > token {
+		r.initTraverse() // Restart traversing as we cannot go back in time :(.
+		r.lastPage = r.lastPage[:0]
+	} else {
+		if r.walkDone {
+			return nil
+		}
+		r.discardObsolete(token)
 	}
-	return r.nextPageAIS(token, cnt)
+	r.token = token
+	return r.nextPageAIS(cnt)
 }
 
 // Removes from local cache, the objects that have been already sent.
@@ -361,7 +361,7 @@ func (r *BckListTask) discardObsolete(token string) {
 	if j == 0 {
 		return
 	}
-	l := len(r.lastPage)
+	l := uint(len(r.lastPage))
 	// All the cache data have been sent to clients, clean it up
 	if j == l {
 		r.lastPage = r.lastPage[:0]

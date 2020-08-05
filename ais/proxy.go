@@ -1147,6 +1147,9 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 		}
 		bckList, err = p.listAISBucket(bck, smsg)
 	} else {
+		if smsg.PageSize == 0 {
+			smsg.PageSize = cmn.DefaultListPageSize
+		}
 		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
 		bckList, err = p.listObjectsRemote(bck, smsg)
 		// TODO: `status == http.StatusGone` At this point we know that this

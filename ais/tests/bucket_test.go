@@ -432,6 +432,76 @@ func TestListObjectsSmoke(t *testing.T) {
 	})
 }
 
+func TestListObjectsGoBack(t *testing.T) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		var (
+			baseParams = tutils.BaseAPIParams()
+			m          = ioContext{
+				t:        t,
+				num:      2000,
+				bck:      bck.Bck,
+				fileSize: 128,
+			}
+
+			msg = &cmn.SelectMsg{PageSize: 50}
+		)
+
+		if !bck.IsAIS() {
+			m.num = 300
+		}
+
+		m.init()
+
+		m.puts()
+		defer m.del()
+
+		var (
+			tokens          []string
+			entries         []*cmn.BucketEntry
+			expectedEntries []*cmn.BucketEntry
+		)
+		tutils.Logln("listing couple pages to move iterator on targets")
+		for page := 0; page < m.num/int(msg.PageSize); page++ {
+			tokens = append(tokens, msg.ContinuationToken)
+			objPage, err := api.ListObjectsPage(baseParams, m.bck, msg)
+			tassert.CheckFatal(t, err)
+			expectedEntries = append(expectedEntries, objPage.Entries...)
+		}
+
+		tutils.Logln("list bucket in reverse order")
+
+		for i := len(tokens) - 1; i >= 0; i-- {
+			msg.ContinuationToken = tokens[i]
+			objPage, err := api.ListObjectsPage(baseParams, m.bck, msg)
+			tassert.CheckFatal(t, err)
+			entries = append(entries, objPage.Entries...)
+		}
+
+		cmn.SortBckEntries(entries)
+		cmn.SortBckEntries(expectedEntries)
+
+		tassert.Fatalf(
+			t, len(expectedEntries) == m.num,
+			"unexpected number of expected entries (got: %d, expected: %d)",
+			len(expectedEntries), m.num,
+		)
+
+		tassert.Fatalf(
+			t, len(entries) == len(expectedEntries),
+			"unexpected number of entries (got: %d, expected: %d)",
+			len(entries), len(expectedEntries),
+		)
+
+		for idx := range expectedEntries {
+			tassert.Errorf(
+				t, entries[idx].Name == expectedEntries[idx].Name,
+				"unexpected entry (got: %q, expected: %q)",
+				entries[idx], expectedEntries[idx],
+			)
+		}
+	})
+}
+
 func TestListObjectsProps(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()

@@ -374,11 +374,11 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			entries, hasEnough := buffer.get(id, "", 3)
 			Expect(hasEnough).To(BeTrue())
 			Expect(extractNames(entries)).To(Equal([]string{"a", "b", "c"}))
-			entries, hasEnough = buffer.get(id, "d", 4)
+			entries, hasEnough = buffer.get(id, "c", 4)
 			Expect(hasEnough).To(BeFalse())
 			Expect(entries).To(BeNil())
 
-			last := buffer.last(id, "d")
+			last := buffer.last(id, "c")
 			// `f` is the smallest of the last elements of all targets, so it
 			// should be next continuation token.
 			Expect(last).To(Equal("f"))
@@ -388,7 +388,7 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			buffer.set(id, "target2", makeEntries("h", "i", "n"), 3)
 			buffer.set(id, "target3", makeEntries("j", "l"), 2)
 
-			entries, hasEnough = buffer.get(id, "", 9)
+			entries, hasEnough = buffer.get(id, "c", 9)
 			Expect(hasEnough).To(BeTrue())
 			Expect(extractNames(entries)).To(Equal([]string{"d", "e", "f", "g", "h", "i", "j", "k", "l"}))
 			entries, hasEnough = buffer.get(id, "l", 1)

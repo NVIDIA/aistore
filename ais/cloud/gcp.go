@@ -127,15 +127,10 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		query = &storage.Query{Prefix: msg.Prefix}
 	}
 
-	pageSize := gcpPageSize
-	if msg.PageSize != 0 {
-		pageSize = msg.PageSize
-	}
-
 	var (
 		it    = gcpClient.Bucket(cloudBck.Name).Objects(gctx, query)
-		pager = iterator.NewPager(it, int(pageSize), msg.ContinuationToken)
-		objs  = make([]*storage.ObjectAttrs, 0, pageSize)
+		pager = iterator.NewPager(it, int(msg.PageSize), msg.ContinuationToken)
+		objs  = make([]*storage.ObjectAttrs, 0, msg.PageSize)
 	)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {

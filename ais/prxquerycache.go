@@ -63,6 +63,8 @@ type (
 
 	// Request buffer that corresponds to single `uuid`.
 	queryBuffer struct {
+		// Contains the last entry that was returned to the user.
+		nextToken string
 		// Currently maintained buffer that keeps the entries which are sorted
 		// and ready to be dispatched to the client.
 		currentBuff []*cmn.BucketEntry
@@ -88,9 +90,9 @@ type (
 
 	// Single (contiguous) interval of entries.
 	cacheInterval struct {
-		// Contains the previous entry (`PageMarker`) that was requested to get
-		// this interval. Thanks to this we can match and merge two adjacent
-		// intervals.
+		// Contains the previous entry (`ContinuationToken`) that was requested
+		// to get this interval. Thanks to this we can match and merge two
+		// adjacent intervals.
 		token string
 		// Entries that are contained in this interval. They are sorted and ready
 		// to be dispatched to the client.
@@ -181,6 +183,17 @@ func (b *queryBuffer) mergeTargetBuffers() (filled bool) {
 }
 
 func (b *queryBuffer) get(token string, size uint) (entries []*cmn.BucketEntry, hasEnough bool) {
+	b.lastAccess = mono.NanoTime()
+
+	// If user requested something before what we have currently in the buffer
+	// then we just need to forget it.
+	if token < b.nextToken {
+		b.leftovers = nil
+		b.currentBuff = nil
+		b.nextToken = token
+		return nil, false
+	}
+
 	filled := b.mergeTargetBuffers()
 
 	// Move to first object after token.
@@ -202,8 +215,9 @@ func (b *queryBuffer) get(token string, size uint) (entries []*cmn.BucketEntry, 
 	b.currentBuff = entries[size:]
 	// Select only the entries that need to be returned to user.
 	entries = entries[:size]
-
-	b.lastAccess = mono.NanoTime()
+	if len(entries) > 0 {
+		b.nextToken = entries[len(entries)-1].Name
+	}
 	return entries, true
 }
 

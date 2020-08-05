@@ -241,20 +241,18 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (buck
 func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	var (
 		h        = cmn.CloudHelpers.Azure
-		marker   = azblob.Marker{}
 		cloudBck = bck.CloudBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
+		marker   = azblob.Marker{}
+		opts     = azblob.ListBlobsSegmentOptions{
+			Prefix:     msg.Prefix,
+			MaxResults: int32(msg.PageSize),
+		}
 	)
 	if msg.ContinuationToken != "" {
 		marker.Val = api.String(msg.ContinuationToken)
 	}
-	// TODO: MaxResults limits the total, not the page size.
-	// So, even if a bucket has more objects, Azure returns
-	// MaxResults and sets Marker to empty string
-	opts := azblob.ListBlobsSegmentOptions{Prefix: msg.Prefix}
-	if msg.PageSize != 0 {
-		opts.MaxResults = int32(msg.PageSize)
-	}
+
 	resp, err := cntURL.ListBlobsFlatSegment(ctx, marker, opts)
 	if err != nil {
 		err, status := ap.azureErrorToAISError(err, cloudBck, "")

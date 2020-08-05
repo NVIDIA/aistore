@@ -97,14 +97,12 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 	if msg.ContinuationToken != "" {
 		params.Marker = aws.String(msg.ContinuationToken)
 	}
-	if msg.PageSize != 0 {
-		if msg.PageSize > awsMaxPageSize {
-			glog.Warningf("AWS maximum page size is %d (%d requested). Returning the first %d keys",
-				awsMaxPageSize, msg.PageSize, awsMaxPageSize)
-			msg.PageSize = awsMaxPageSize
-		}
-		params.MaxKeys = aws.Int64(int64(msg.PageSize))
+	if msg.PageSize > awsMaxPageSize {
+		glog.Warningf("AWS maximum page size is %d (%d requested). Returning the first %d keys",
+			awsMaxPageSize, msg.PageSize, awsMaxPageSize)
+		msg.PageSize = awsMaxPageSize
 	}
+	params.MaxKeys = aws.Int64(int64(msg.PageSize))
 
 	resp, err := svc.ListObjects(params)
 	if err != nil {

@@ -46,7 +46,7 @@ func (w *Walk) DefaultLocalObjPage(msg *cmn.SelectMsg) (*cmn.BucketList, error) 
 	go xact.Start()
 
 	cmn.Assert(!xact.TokenUnsatisfiable(msg.ContinuationToken))
-	return LocalObjPage(xact, msg.WantObjectsCnt())
+	return LocalObjPage(xact, msg.PageSize)
 }
 
 // LocalObjPage walks local filesystems and collects objects for a given

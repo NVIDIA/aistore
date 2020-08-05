@@ -133,13 +133,6 @@ func (msg *SelectMsg) ListObjectsCacheID(bck Bck) string {
 	return fmt.Sprintf("%s/%s", bck.String(), msg.Prefix)
 }
 
-func (msg *SelectMsg) WantObjectsCnt() uint {
-	if msg.PageSize == 0 {
-		return DefaultListPageSize
-	}
-	return msg.PageSize
-}
-
 // Returns true if given `token` includes given object name.
 // `token` includes an object name iff the object name would
 // be included in response having given continuation token.
