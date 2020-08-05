@@ -28,49 +28,49 @@ func (z *BucketEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Name":
+		case "n":
 			z.Name, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Name")
 				return
 			}
-		case "Size":
+		case "s":
 			z.Size, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "Size")
 				return
 			}
-		case "Checksum":
+		case "cs":
 			z.Checksum, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Checksum")
 				return
 			}
-		case "Atime":
+		case "a":
 			z.Atime, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Atime")
 				return
 			}
-		case "Version":
+		case "v":
 			z.Version, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Version")
 				return
 			}
-		case "TargetURL":
+		case "t":
 			z.TargetURL, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "TargetURL")
 				return
 			}
-		case "Copies":
+		case "c":
 			z.Copies, err = dc.ReadInt16()
 			if err != nil {
 				err = msgp.WrapError(err, "Copies")
 				return
 			}
-		case "Flags":
+		case "f":
 			z.Flags, err = dc.ReadUint16()
 			if err != nil {
 				err = msgp.WrapError(err, "Flags")
@@ -89,9 +89,47 @@ func (z *BucketEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketEntry) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 8
-	// write "Name"
-	err = en.Append(0x88, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	// omitempty: check for empty values
+	zb0001Len := uint32(8)
+	var zb0001Mask uint8 /* 8 bits */
+	if z.Size == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.Checksum == "" {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.Atime == "" {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if z.Version == "" {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if z.TargetURL == "" {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if z.Copies == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	if z.Flags == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x80
+	}
+	// variable map header, size zb0001Len
+	err = en.Append(0x80 | uint8(zb0001Len))
+	if err != nil {
+		return
+	}
+	if zb0001Len == 0 {
+		return
+	}
+	// write "n"
+	err = en.Append(0xa1, 0x6e)
 	if err != nil {
 		return
 	}
@@ -100,191 +138,96 @@ func (z *BucketEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Name")
 		return
 	}
-	// write "Size"
-	err = en.Append(0xa4, 0x53, 0x69, 0x7a, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.Size)
-	if err != nil {
-		err = msgp.WrapError(err, "Size")
-		return
-	}
-	// write "Checksum"
-	err = en.Append(0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Checksum)
-	if err != nil {
-		err = msgp.WrapError(err, "Checksum")
-		return
-	}
-	// write "Atime"
-	err = en.Append(0xa5, 0x41, 0x74, 0x69, 0x6d, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Atime)
-	if err != nil {
-		err = msgp.WrapError(err, "Atime")
-		return
-	}
-	// write "Version"
-	err = en.Append(0xa7, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Version)
-	if err != nil {
-		err = msgp.WrapError(err, "Version")
-		return
-	}
-	// write "TargetURL"
-	err = en.Append(0xa9, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x55, 0x52, 0x4c)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.TargetURL)
-	if err != nil {
-		err = msgp.WrapError(err, "TargetURL")
-		return
-	}
-	// write "Copies"
-	err = en.Append(0xa6, 0x43, 0x6f, 0x70, 0x69, 0x65, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt16(z.Copies)
-	if err != nil {
-		err = msgp.WrapError(err, "Copies")
-		return
-	}
-	// write "Flags"
-	err = en.Append(0xa5, 0x46, 0x6c, 0x61, 0x67, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint16(z.Flags)
-	if err != nil {
-		err = msgp.WrapError(err, "Flags")
-		return
-	}
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *BucketEntry) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 8
-	// string "Name"
-	o = append(o, 0x88, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
-	o = msgp.AppendString(o, z.Name)
-	// string "Size"
-	o = append(o, 0xa4, 0x53, 0x69, 0x7a, 0x65)
-	o = msgp.AppendInt64(o, z.Size)
-	// string "Checksum"
-	o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
-	o = msgp.AppendString(o, z.Checksum)
-	// string "Atime"
-	o = append(o, 0xa5, 0x41, 0x74, 0x69, 0x6d, 0x65)
-	o = msgp.AppendString(o, z.Atime)
-	// string "Version"
-	o = append(o, 0xa7, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
-	o = msgp.AppendString(o, z.Version)
-	// string "TargetURL"
-	o = append(o, 0xa9, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x55, 0x52, 0x4c)
-	o = msgp.AppendString(o, z.TargetURL)
-	// string "Copies"
-	o = append(o, 0xa6, 0x43, 0x6f, 0x70, 0x69, 0x65, 0x73)
-	o = msgp.AppendInt16(o, z.Copies)
-	// string "Flags"
-	o = append(o, 0xa5, 0x46, 0x6c, 0x61, 0x67, 0x73)
-	o = msgp.AppendUint16(o, z.Flags)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *BucketEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// write "s"
+		err = en.Append(0xa1, 0x73)
 		if err != nil {
-			err = msgp.WrapError(err)
 			return
 		}
-		switch msgp.UnsafeString(field) {
-		case "Name":
-			z.Name, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Name")
-				return
-			}
-		case "Size":
-			z.Size, bts, err = msgp.ReadInt64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Size")
-				return
-			}
-		case "Checksum":
-			z.Checksum, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Checksum")
-				return
-			}
-		case "Atime":
-			z.Atime, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Atime")
-				return
-			}
-		case "Version":
-			z.Version, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Version")
-				return
-			}
-		case "TargetURL":
-			z.TargetURL, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TargetURL")
-				return
-			}
-		case "Copies":
-			z.Copies, bts, err = msgp.ReadInt16Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Copies")
-				return
-			}
-		case "Flags":
-			z.Flags, bts, err = msgp.ReadUint16Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Flags")
-				return
-			}
-		default:
-			bts, err = msgp.Skip(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
+		err = en.WriteInt64(z.Size)
+		if err != nil {
+			err = msgp.WrapError(err, "Size")
+			return
 		}
 	}
-	o = bts
+	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// write "cs"
+		err = en.Append(0xa2, 0x63, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteString(z.Checksum)
+		if err != nil {
+			err = msgp.WrapError(err, "Checksum")
+			return
+		}
+	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// write "a"
+		err = en.Append(0xa1, 0x61)
+		if err != nil {
+			return
+		}
+		err = en.WriteString(z.Atime)
+		if err != nil {
+			err = msgp.WrapError(err, "Atime")
+			return
+		}
+	}
+	if (zb0001Mask & 0x10) == 0 { // if not empty
+		// write "v"
+		err = en.Append(0xa1, 0x76)
+		if err != nil {
+			return
+		}
+		err = en.WriteString(z.Version)
+		if err != nil {
+			err = msgp.WrapError(err, "Version")
+			return
+		}
+	}
+	if (zb0001Mask & 0x20) == 0 { // if not empty
+		// write "t"
+		err = en.Append(0xa1, 0x74)
+		if err != nil {
+			return
+		}
+		err = en.WriteString(z.TargetURL)
+		if err != nil {
+			err = msgp.WrapError(err, "TargetURL")
+			return
+		}
+	}
+	if (zb0001Mask & 0x40) == 0 { // if not empty
+		// write "c"
+		err = en.Append(0xa1, 0x63)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt16(z.Copies)
+		if err != nil {
+			err = msgp.WrapError(err, "Copies")
+			return
+		}
+	}
+	if (zb0001Mask & 0x80) == 0 { // if not empty
+		// write "f"
+		err = en.Append(0xa1, 0x66)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint16(z.Flags)
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+	}
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketEntry) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 5 + msgp.Int64Size + 9 + msgp.StringPrefixSize + len(z.Checksum) + 6 + msgp.StringPrefixSize + len(z.Atime) + 8 + msgp.StringPrefixSize + len(z.Version) + 10 + msgp.StringPrefixSize + len(z.TargetURL) + 7 + msgp.Int16Size + 6 + msgp.Uint16Size
+	s = 1 + 2 + msgp.StringPrefixSize + len(z.Name) + 2 + msgp.Int64Size + 3 + msgp.StringPrefixSize + len(z.Checksum) + 2 + msgp.StringPrefixSize + len(z.Atime) + 2 + msgp.StringPrefixSize + len(z.Version) + 2 + msgp.StringPrefixSize + len(z.TargetURL) + 2 + msgp.Int16Size + 2 + msgp.Uint16Size
 	return
 }
 
@@ -407,105 +350,6 @@ func (z *BucketList) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ContinuationToken")
 		return
 	}
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *BucketList) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
-	// string "UUID"
-	o = append(o, 0x83, 0xa4, 0x55, 0x55, 0x49, 0x44)
-	o = msgp.AppendString(o, z.UUID)
-	// string "Entries"
-	o = append(o, 0xa7, 0x45, 0x6e, 0x74, 0x72, 0x69, 0x65, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Entries)))
-	for za0001 := range z.Entries {
-		if z.Entries[za0001] == nil {
-			o = msgp.AppendNil(o)
-		} else {
-			o, err = z.Entries[za0001].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Entries", za0001)
-				return
-			}
-		}
-	}
-	// string "ContinuationToken"
-	o = append(o, 0xb1, 0x43, 0x6f, 0x6e, 0x74, 0x69, 0x6e, 0x75, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x6f, 0x6b, 0x65, 0x6e)
-	o = msgp.AppendString(o, z.ContinuationToken)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *BucketList) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "UUID":
-			z.UUID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "UUID")
-				return
-			}
-		case "Entries":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Entries")
-				return
-			}
-			if cap(z.Entries) >= int(zb0002) {
-				z.Entries = (z.Entries)[:zb0002]
-			} else {
-				z.Entries = make([]*BucketEntry, zb0002)
-			}
-			for za0001 := range z.Entries {
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					z.Entries[za0001] = nil
-				} else {
-					if z.Entries[za0001] == nil {
-						z.Entries[za0001] = new(BucketEntry)
-					}
-					bts, err = z.Entries[za0001].UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Entries", za0001)
-						return
-					}
-				}
-			}
-		case "ContinuationToken":
-			z.ContinuationToken, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "ContinuationToken")
-				return
-			}
-		default:
-			bts, err = msgp.Skip(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
 	return
 }
 

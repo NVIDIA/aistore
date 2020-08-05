@@ -6,7 +6,7 @@ package cmn
 
 // BEWARE: change in this source MAY require re-running go generate ..
 
-//go:generate msgp -tests=false
+//go:generate msgp -tests=false -marshal=false
 
 // BucketEntry corresponds to a single entry in the BucketList and
 // contains file and directory metadata as per the SelectMsg
@@ -15,14 +15,14 @@ package cmn
 //      to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
 // 3:   CheckExists (for cloud bucket it shows if the object in local cache)
 type BucketEntry struct {
-	Name      string `json:"name"`                  // name of the object - note: does not include the bucket name
-	Size      int64  `json:"size,string,omitempty"` // size in bytes
-	Checksum  string `json:"checksum,omitempty"`    // checksum
-	Atime     string `json:"atime,omitempty"`       // formatted as per SelectMsg.TimeFormat
-	Version   string `json:"version,omitempty"`     // version/generation ID. In GCP it is int64, in AWS it is a string
-	TargetURL string `json:"target_url,omitempty"`  // URL of target which has the entry
-	Copies    int16  `json:"copies,omitempty"`      // ## copies (non-replicated = 1)
-	Flags     uint16 `json:"flags,omitempty"`       // object flags, like CheckExists, IsMoved etc
+	Name      string `json:"name" msg:"n"`                            // name of the object - note: does not include the bucket name
+	Size      int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
+	Checksum  string `json:"checksum,omitempty" msg:"cs,omitempty"`   // checksum
+	Atime     string `json:"atime,omitempty" msg:"a,omitempty"`       // formatted as per SelectMsg.TimeFormat
+	Version   string `json:"version,omitempty" msg:"v,omitempty"`     // version/generation ID. In GCP it is int64, in AWS it is a string
+	TargetURL string `json:"target_url,omitempty" msg:"t,omitempty"`  // URL of target which has the entry
+	Copies    int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (non-replicated = 1)
+	Flags     uint16 `json:"flags,omitempty" msg:"f,omitempty"`       // object flags, like CheckExists, IsMoved etc
 }
 
 func (be *BucketEntry) CheckExists() bool {
