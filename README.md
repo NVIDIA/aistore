@@ -194,7 +194,7 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 
 As is usually the case with storage clusters, there are multiple ways to monitor their performance.
 
-> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [AIS Load Generator](docs/howto_benchmark.md).
+> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [Load Generator](bench/aisloader/README.md) and [How To Benchmark AIStore](docs/howto_benchmark.md).
 
 For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](xaction/README.md), and, of course, object storage transactions.
 
