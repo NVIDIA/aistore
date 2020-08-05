@@ -141,20 +141,57 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		var (
-			msg  notifListenMsg
+			msg  aisMsg
 			smap = p.owner.smap.get()
 		)
-		if selfIC, _ := p.whichIC(smap, nil); !selfIC {
-			p.invalmsghdlrf(w, r, "%s: not IC member", p.si)
-			return
-		}
+
 		if err := cmn.ReadJSON(w, r, &msg); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 
-		cmn.Assert(msg.nl.notifTy() == notifXact || msg.nl.notifTy() == notifCache)
-		p.notifs.add(msg.nl)
+		if smap.version() < msg.SmapVersion {
+			// TODO -- FIXME handle
+			glog.Errorf("%s: SelfSmapVersion (%d) < RequestSmapVersion (%d)",
+				p.si, smap.version(), msg.SmapVersion)
+			return
+		}
+
+		if selfIC, _ := p.whichIC(smap, nil); !selfIC {
+			p.invalmsghdlrf(w, r, "%s: not an IC member", p.si)
+			return
+		}
+
+		switch msg.Action {
+		case cmn.ActSyncICOwner:
+			var daeID string
+			if err := cmn.MorphMarshal(msg.Value, &daeID); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			si := smap.GetProxy(daeID)
+			cmn.Assert(si != nil)
+			if err := p.sendOwnershipTbl(si); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+		case cmn.ActMergeOwnershipTbl:
+			if err := cmn.MorphMarshal(msg.Value, &p.notifs); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+		case cmn.ActListenToNotif:
+			nlMsg := &notifListenMsg{}
+			if err := cmn.MorphMarshal(msg.Value, nlMsg); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+
+			cmn.Assert(nlMsg.nl.notifTy() == notifXact || nlMsg.nl.notifTy() == notifCache)
+			p.notifs.add(nlMsg.nl)
+		default:
+			p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
+		}
 	default:
 		cmn.Assert(false)
 	}
@@ -192,14 +229,14 @@ func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX) (err error) {
 			nodes.Add(psi)
 		}
 	}
-	nlMsg := &notifListenMsg{nl: nl}
-
+	actMsg := cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
+	msg := p.newAisMsg(&actMsg, smap, nil)
 	cmn.Assert(len(nodes) > 0)
 	results := p.bcastToNodes(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
 			Path:   cmn.URLPath(cmn.Version, cmn.IC),
-			Body:   cmn.MustMarshal(nlMsg),
+			Body:   cmn.MustMarshal(msg),
 		},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
@@ -212,4 +249,17 @@ func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX) (err error) {
 		}
 	}
 	return
+}
+
+func (p *proxyrunner) sendOwnershipTbl(si *cluster.Snode) error {
+	smap := p.owner.smap.get()
+	actMsg := &cmn.ActionMsg{Action: cmn.ActMergeOwnershipTbl, Value: &p.notifs}
+	msg := p.newAisMsg(actMsg, smap, nil)
+	result := p.call(callArgs{si: si,
+		req: cmn.ReqArgs{Method: http.MethodPost,
+			Path: cmn.URLPath(cmn.Version, cmn.IC),
+			Body: cmn.MustMarshal(msg),
+		}, timeout: cmn.LongTimeout},
+	)
+	return result.err
 }

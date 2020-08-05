@@ -57,6 +57,7 @@ var (
 	icTests = []Test{
 		{"ICMemberLeaveAndRejoin", icMemberLeaveAndRejoin},
 		{"ICKillAndRestorePrimary", icKillAndRestorePrimary},
+		{"ICSyncOwnTbl", icSyncOwnershipTable},
 	}
 )
 
@@ -1375,13 +1376,29 @@ func TestIC(t *testing.T) {
 	clusterHealthCheck(t, smap)
 }
 
+func killRandNonPrimaryIC(t *testing.T, smap *cluster.Smap) (*cluster.Snode, *cluster.Smap, string, []string) {
+	origProxyCount := smap.CountProxies()
+	primary := smap.Primary
+	var killNode *cluster.Snode
+	for sid := range smap.IC {
+		if prx := smap.GetProxy(sid); !prx.Equals(primary) {
+			killNode = prx
+			break
+		}
+	}
+	cmd, args, err := kill(killNode.DaemonID, killNode.PublicNet.DaemonPort)
+	tassert.CheckFatal(t, err)
+
+	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
+		smap.Version, testing.Verbose(), origProxyCount-1)
+	tassert.CheckError(t, err)
+	return killNode, smap, cmd, args
+}
+
 func icMemberLeaveAndRejoin(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	primary := smap.Primary
 	origProxyCount := smap.CountProxies()
-	if origProxyCount < 4 {
-		t.Fatal("Not enough proxies to run proxy tests, must have at least 4")
-	}
 
 	tassert.Fatalf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
 
@@ -1390,21 +1407,9 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 
 	// killing an IC member, should add a new IC member
 	// select IC member which is not primary and kill
-	var killNode *cluster.Snode
-	for sid := range smap.IC {
-		if prx := smap.GetProxy(sid); !prx.Equals(primary) {
-			killNode = prx
-			break
-		}
-	}
 	origIC := smap.IC
+	killNode, smap, cmd, args := killRandNonPrimaryIC(t, smap)
 	delete(origIC, killNode.DaemonID)
-	cmd, args, err := kill(killNode.DaemonID, killNode.PublicNet.DaemonPort)
-	tassert.CheckFatal(t, err)
-
-	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
-		smap.Version, testing.Verbose(), origProxyCount-1)
-	tassert.CheckFatal(t, err)
 
 	tassert.Errorf(t, !smap.IsIC(killNode), "Killed daemon (%s) must be removed from IC", killNode.DaemonID)
 
@@ -1414,7 +1419,7 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	}
 	tassert.Errorf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
 
-	err = restore(cmd, args, false, "proxy")
+	err := restore(cmd, args, false, "proxy")
 	tassert.CheckFatal(t, err)
 
 	updatedICs := smap.IC
@@ -1481,4 +1486,78 @@ func icKillAndRestorePrimary(t *testing.T) {
 				"should remove IC member with maxVersion v:(%d) - deleted v:(%d) instead", maxVal, v)
 		}
 	}
+}
+
+func icSyncOwnershipTable(t *testing.T) {
+	var (
+		proxyURL       = tutils.RandomProxyURL()
+		baseParams     = tutils.BaseAPIParams(proxyURL)
+		smap           = tutils.GetClusterMap(t, proxyURL)
+		primary        = smap.Primary
+		origProxyCount = smap.CountProxies()
+
+		src = cmn.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
+
+		dstBck = cmn.Bck{
+			Name:     TestBucketName + "_new",
+			Provider: cmn.ProviderAIS,
+		}
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, src)
+	defer tutils.DestroyBucket(t, proxyURL, src)
+
+	// Start any xaction and get ID
+	xactID, err := api.CopyBucket(baseParams, src, dstBck)
+	tassert.CheckFatal(t, err)
+	defer tutils.DestroyBucket(t, proxyURL, dstBck)
+
+	// killing an IC member, should add a new IC member
+	// select IC member which is not primary and kill
+	origIC := smap.IC
+	killNode, smap, cmd, args := killRandNonPrimaryIC(t, smap)
+
+	// try getting xaction status from new IC member
+	var newICMemID string
+	for sid := range smap.IC {
+		if _, ok := origIC[sid]; !ok {
+			tassert.Errorf(t, newICMemID == "", "should change only one IC member")
+			newICMemID = sid
+		}
+	}
+
+	newICNode := smap.GetProxy(newICMemID)
+
+	baseParams = tutils.BaseAPIParams(newICNode.URL(cmn.NetworkPublic))
+
+	// TODO: Remove once auto sync mechanism is implemented
+	err = api.SyncICOwner(baseParams, newICMemID)
+	tassert.CheckError(t, err)
+
+	_, err = api.GetStatusJtx(baseParams, xactID)
+	tassert.CheckError(t, err)
+
+	err = restore(cmd, args, false, "proxy")
+	tassert.CheckFatal(t, err)
+	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
+		smap.Version, testing.Verbose(), origProxyCount)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, !smap.IsIC(killNode), "newly joined node shouldn't be in IC (%s)", killNode)
+
+	tutils.WaitStarted(t, killNode.URL(cmn.NetworkPublic))
+
+	// should sync ownership table when non-ic member become primary
+	smap = setPrimaryTo(t, primary.PublicNet.DirectURL, smap, "", killNode.ID())
+	tassert.Fatalf(t, smap.IsIC(killNode), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
+
+	// TODO: Remove once auto sync mechanism is implemented
+	err = api.SyncICOwner(baseParams, killNode.ID())
+	tassert.CheckError(t, err)
+
+	baseParams = tutils.BaseAPIParams(killNode.URL(cmn.NetworkPublic))
+	_, err = api.GetStatusJtx(baseParams, xactID)
+	tassert.CheckError(t, err)
 }

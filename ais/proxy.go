@@ -3226,6 +3226,42 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == cmn.ActXactStart {
 			w.Write([]byte(xactMsg.ID))
 		}
+	case cmn.ActSyncICOwner:
+		smap := p.owner.smap.get()
+		var daeID string
+		if err := cmn.MorphMarshal(msg.Value, &daeID); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		if !smap.IsIC(smap.GetProxy(daeID)) {
+			p.invalmsghdlrf(w, r, "%s: not an IC member", smap.GetProxy(daeID))
+			return
+		}
+		si, version := smap.OldestIC()
+		if si.ID() == daeID || version == smap.IC[daeID] {
+			// sync not required. daemon already has latest table
+			return
+		}
+		if si.Equals(p.si) || smap.IC[p.si.ID()] == version {
+			// handle locally
+			if err := p.sendOwnershipTbl(smap.GetProxy(daeID)); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+			}
+			return
+		}
+
+		// assign a different node to send table
+		aisMsg := p.newAisMsg(msg, smap, nil)
+		result := p.call(callArgs{si: si,
+			req: cmn.ReqArgs{Method: http.MethodPost,
+				Path: cmn.URLPath(cmn.Version, cmn.IC),
+				Body: cmn.MustMarshal(aisMsg),
+			}, timeout: cmn.LongTimeout},
+		)
+
+		if result.err != nil {
+			p.invalmsghdlr(w, r, result.err.Error())
+		}
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}

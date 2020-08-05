@@ -74,6 +74,10 @@ const (
 	ActRecoverBck     = "recoverbck"
 	ActAttach         = "attach"
 	ActDetach         = "detach"
+	// IC
+	ActSyncICOwner       = "ic-sync-ownership-tbl"
+	ActListenToNotif     = "watch-xaction"
+	ActMergeOwnershipTbl = "merge-ownership-tbl"
 )
 
 const (

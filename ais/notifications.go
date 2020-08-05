@@ -59,6 +59,12 @@ type (
 		fmu     sync.RWMutex
 		smapVer int64
 	}
+	// TODO: simplify using alternate encoding formats (e.g. GOB)
+	jsonNotifs struct {
+		Running  []*notifListenMsg `json:"running"`
+		Finished []*notifListenMsg `json:"finished"`
+	}
+
 	notifListener interface {
 		callback(notifs *notifs, n notifListener, msg interface{}, err error, nows ...int64)
 		lock()
@@ -84,15 +90,15 @@ type (
 
 	notifListenerBase struct {
 		sync.RWMutex
-		UUIDX       string           // UUID
-		Srcs        cluster.NodeMap  // expected notifiers
-		Errs        map[string]error // [node-ID => notifMsg.Err]
-		f           notifCallback    // optional listening-side callback
-		rc          int              // refcount
-		Ty          int              // notification category (above)
-		FinTime     atomic.Int64     // timestamp when finished
-		Owned       string           // "": not owned | equalIC: IC | otherwise, pid + IC
-		SmapVersion int64            // smap version in which NL is added
+		UUIDX       string            // UUID
+		Srcs        cluster.NodeMap   // expected notifiers
+		Errs        map[string]string // [node-ID => ErrMsg]
+		f           notifCallback     // optional listening-side callback
+		rc          int               // refcount
+		Ty          int               // notification category (above)
+		FinTime     atomic.Int64      // timestamp when finished
+		Owned       string            // "": not owned | equalIC: IC | otherwise, pid + IC
+		SmapVersion int64             // smap version in which NL is added
 		// common info
 		Action string
 		Bck    []cmn.Bck
@@ -167,14 +173,14 @@ func (nlb *notifListenerBase) finTime() int64             { return nlb.FinTime.L
 func (nlb *notifListenerBase) finished() bool             { return nlb.finTime() > 0 }
 func (nlb *notifListenerBase) addErr(sid string, err error) {
 	if nlb.Errs == nil {
-		nlb.Errs = make(map[string]error, 2)
+		nlb.Errs = make(map[string]string, 2)
 	}
-	nlb.Errs[sid] = err
+	nlb.Errs[sid] = err.Error()
 }
 
 func (nlb *notifListenerBase) err() error {
 	for _, err := range nlb.Errs {
-		return err
+		return errors.New(err)
 	}
 	return nil
 }
@@ -431,41 +437,6 @@ func (n *notifs) getOwner(uuid string) (o string, exists bool) {
 	return
 }
 
-// nolint:unused // helper used by others
-func (n *notifs) _forEach(m map[string]notifListener, fn func(string, notifListener), preds ...func(notifListener) bool) {
-	var pred func(notifListener) bool
-	if len(preds) != 0 {
-		pred = preds[0]
-	}
-
-	for uuid, nl := range m {
-		if pred == nil || pred(nl) {
-			fn(uuid, nl)
-		}
-	}
-}
-
-// nolint:unused // iterate over running listeners
-func (n *notifs) forEachRunning(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
-	n.RLock()
-	defer n.RUnlock()
-	n._forEach(n.m, fn, preds...)
-}
-
-// nolint:unused // iterate over finished listeners
-func (n *notifs) forEachFin(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
-	n.fmu.RLock()
-	defer n.fmu.RUnlock()
-	n._forEach(n.fin, fn, preds...)
-}
-
-// FIXME: possible race condition
-// nolint:unused // iterate over listeners
-func (n *notifs) forEach(fn func(string /*uuid*/, notifListener), preds ...func(notifListener) bool) {
-	n.forEachRunning(fn, preds...)
-	n.forEachFin(fn, preds...)
-}
-
 func (n *notifs) hkXact(nl notifListener, res callResult) (msg interface{}, err error, done bool) {
 	stats := &cmn.BaseXactStatsExt{}
 	if eru := jsoniter.Unmarshal(res.bytes, stats); eru != nil {
@@ -549,6 +520,59 @@ func (n *notifs) ListenSmapChanged() {
 	n.Unlock()
 }
 
+func (n *notifs) MarshalJSON() (data []byte, err error) {
+	t := jsonNotifs{}
+	n.RLock()
+	n.fmu.RLock()
+	defer func() {
+		n.fmu.RUnlock()
+		n.RUnlock()
+	}()
+	t.Running = make([]*notifListenMsg, 0, len(n.m))
+	t.Finished = make([]*notifListenMsg, 0, len(n.fin))
+	for _, nl := range n.m {
+		t.Running = append(t.Running, newNLMsg(nl))
+	}
+
+	for _, nl := range n.fin {
+		t.Finished = append(t.Finished, newNLMsg(nl))
+	}
+	return jsoniter.Marshal(t)
+}
+
+func (n *notifs) UnmarshalJSON(data []byte) (err error) {
+	t := jsonNotifs{}
+
+	if err = jsoniter.Unmarshal(data, &t); err != nil {
+		return
+	}
+	if len(t.Running) > 0 {
+		n.Lock()
+		_mergeNLs(n.m, t.Running)
+		n.Unlock()
+	}
+
+	if len(t.Finished) > 0 {
+		n.fmu.Lock()
+		_mergeNLs(n.fin, t.Finished)
+		n.fmu.Unlock()
+	}
+	return
+}
+
+// PRECONDITION: Lock for `nls` must be held
+func _mergeNLs(nls map[string]notifListener, msgs []*notifListenMsg) {
+	for _, m := range msgs {
+		if _, ok := nls[m.nl.UUID()]; !ok {
+			nls[m.nl.UUID()] = m.nl
+		}
+	}
+}
+
+func newNLMsg(nl notifListener) *notifListenMsg {
+	return &notifListenMsg{nl: nl}
+}
+
 func (n *notifListenMsg) MarshalJSON() (data []byte, err error) {
 	t := jsonNL{Type: n.nl.kind()}
 	t.NL, err = jsoniter.Marshal(n.nl)
@@ -560,8 +584,7 @@ func (n *notifListenMsg) MarshalJSON() (data []byte, err error) {
 
 func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	t := jsonNL{}
-	err = jsoniter.Unmarshal(data, &t)
-	if err != nil {
+	if err = jsoniter.Unmarshal(data, &t); err != nil {
 		return
 	}
 	if t.Type == cmn.ActQueryObjects {

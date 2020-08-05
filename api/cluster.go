@@ -122,6 +122,19 @@ func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 	})
 }
 
+// SyncICOwner API
+//
+// Given a daemonID of a IC member, sync the ownership table
+func SyncICOwner(baseParams BaseParams, daemonID string) error {
+	baseParams.Method = http.MethodPut
+	msg := cmn.ActionMsg{Action: cmn.ActSyncICOwner, Value: daemonID}
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Body:       cmn.MustMarshal(msg),
+	})
+}
+
 // SetClusterConfig API
 //
 // Given key-value pairs of cluster configuration parameters,

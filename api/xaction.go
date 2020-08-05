@@ -232,6 +232,21 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
 	return nil
 }
 
+// TODO: Rename this function after IC is stable
+func GetStatusJtx(baseParams BaseParams, uuid string) (finished bool, err error) {
+	baseParams.Method = http.MethodGet
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Query: url.Values{
+			cmn.URLParamWhat: []string{cmn.GetWhatStatus},
+			cmn.URLParamUUID: []string{uuid},
+		},
+	}, &finished)
+	return
+}
+
+// TODO: Rename this function after IC is stable
 func WaitForXactionJtx(baseParams BaseParams, uuid string, timeout ...time.Duration) (err error) {
 	ctx := context.Background()
 	if len(timeout) > 0 {
@@ -241,18 +256,9 @@ func WaitForXactionJtx(baseParams BaseParams, uuid string, timeout ...time.Durat
 	}
 
 	for {
-		var finished bool
-		baseParams.Method = http.MethodGet
-		err = DoHTTPRequest(ReqParams{
-			BaseParams: baseParams,
-			Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
-			Query: url.Values{
-				cmn.URLParamWhat: []string{cmn.GetWhatStatus},
-				cmn.URLParamUUID: []string{uuid},
-			},
-		}, &finished)
+		finished, err := GetStatusJtx(baseParams, uuid)
 		if err != nil || finished {
-			return
+			return err
 		}
 
 		time.Sleep(xactRetryInterval)

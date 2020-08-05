@@ -54,7 +54,7 @@ type (
 		Tmap         NodeMap          `json:"tmap"`                    // targetID -> targetInfo
 		Pmap         NodeMap          `json:"pmap"`                    // proxyID -> proxyInfo
 		NonElects    cmn.SimpleKVs    `json:"non_electable,omitempty"` // non-electable proxies: DaemonID => [info]
-		IC           cmn.SimpleKVsInt `json:"ic"`                      // cluster information center: DaemonID => version
+		IC           cmn.SimpleKVsInt `json:"ic"`                      // cluster information center: DaemonID => smap version (when added as member)
 		Primary      *Snode           `json:"proxy_si"`                // (json tag preserved for back. compat.)
 		Version      int64            `json:"version,string"`          // version
 		UUID         string           `json:"uuid"`                    // UUID - assigned at creation time
@@ -304,6 +304,17 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
 	_, ok = m.IC[psi.ID()]
+	return
+}
+
+func (m *Smap) OldestIC() (psi *Snode, version int64) {
+	version = m.Version
+	for sid, v := range m.IC {
+		if v <= version {
+			version = v
+			psi = m.GetProxy(sid)
+		}
+	}
 	return
 }
 
