@@ -502,6 +502,48 @@ func TestListObjectsGoBack(t *testing.T) {
 	})
 }
 
+func TestListObjectsStartAfter(t *testing.T) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		var (
+			baseParams = tutils.BaseAPIParams()
+			m          = ioContext{
+				t:        t,
+				num:      200,
+				bck:      bck.Bck,
+				fileSize: 128,
+			}
+		)
+
+		if !bck.IsAIS() {
+			m.num = 20
+		}
+
+		m.init()
+
+		m.puts()
+		defer m.del()
+
+		objList, err := api.ListObjects(baseParams, m.bck, nil, 0)
+		tassert.CheckFatal(t, err)
+
+		middleObjName := objList.Entries[m.num/2-1].Name
+		tutils.Logf("start listing bucket after: %q...\n", middleObjName)
+
+		msg := &cmn.SelectMsg{PageSize: 10, StartAfter: middleObjName}
+		objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
+		if bck.IsAIS() {
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(
+				t, len(objList.Entries) == m.num/2,
+				"unexpected number of entries (got: %d, expected: %d)",
+				len(objList.Entries), m.num/2,
+			)
+		} else {
+			tassert.Errorf(t, err != nil, "expected error to occur")
+		}
+	})
+}
+
 func TestListObjectsProps(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()

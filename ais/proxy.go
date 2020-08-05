@@ -1816,6 +1816,10 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		glog.Warningf("list_objects page size %d for bucket %s exceeds the default maximum %d ",
 			smsg.PageSize, bck, cmn.DefaultListPageSize)
 	}
+	if smsg.StartAfter != "" {
+		return nil, fmt.Errorf("start after for cloud buckets is not yet supported")
+	}
+
 	var (
 		smap          = p.owner.smap.get()
 		reqTimeout    = cmn.GCO.Get().Client.ListObjects

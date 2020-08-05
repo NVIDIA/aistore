@@ -380,6 +380,9 @@ func (r *BckListTask) traverseBucket() {
 		if err != nil || entry == nil {
 			return err
 		}
+		if entry.Name <= r.msg.StartAfter {
+			return nil
+		}
 		select {
 		case r.objCache <- entry:
 			/* do nothing */

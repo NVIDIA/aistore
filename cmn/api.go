@@ -35,19 +35,18 @@ const (
 	SelectDeleted               // Include marked for deletion
 )
 
+// TODO: `UUID` should be merged into `ContinuationToken`.
 // SelectMsg represents properties and options for listing objects.
 type SelectMsg struct {
-	UUID       string `json:"uuid"`        // ID to identify a single multi-page request
-	Props      string `json:"props"`       // e.g. "checksum,size"
-	TimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
-	Prefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
-	PageSize   uint   `json:"pagesize"`    // maximum number of entries returned by list objects call
-	// TODO: add implementation/support for this field.
-	StartAfter string `json:"start_after"` // key after which we should start listing
-	// TODO: `UUID` should be merged into `ContinuationToken`.
-	ContinuationToken string `json:"continuation_token"`
-	Flags             uint64 `json:"flags,string"` // advanced filtering (SelectMsg extended flags)
-	UseCache          bool   `json:"use_cache"`    // use proxy cache to speed up listing objects
+	UUID              string `json:"uuid"`               // ID to identify a single multi-page request
+	Props             string `json:"props"`              // e.g. "checksum,size"
+	TimeFormat        string `json:"time_format"`        // "RFC822" default - see the enum above
+	Prefix            string `json:"prefix"`             // object name filter: return only objects which name starts with prefix
+	PageSize          uint   `json:"pagesize"`           // maximum number of entries returned by list objects call
+	StartAfter        string `json:"start_after"`        // key after which we should start listing (only AIS buckets)
+	ContinuationToken string `json:"continuation_token"` // continuation token taken from `BucketList.ContinuationToken`
+	Flags             uint64 `json:"flags,string"`       // advanced filtering (SelectMsg extended flags)
+	UseCache          bool   `json:"use_cache"`          // use proxy cache to speed up listing objects
 }
 
 // BucketSummaryMsg represents options that can be set when asking for bucket summary.
