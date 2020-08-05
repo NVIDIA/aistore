@@ -53,6 +53,13 @@ type (
 		ty  string
 	}
 
+	// Represents result of renewing given xaction.
+	renewRes struct {
+		entry baseEntry // Depending on situation can be new or old entry.
+		isNew bool      // Determines if new entry was created (or old one has been returned).
+		err   error     // Error that occurred during renewal.
+	}
+
 	taskState struct {
 		Result interface{} `json:"res"`
 		Err    error       `json:"error"`
@@ -580,8 +587,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 // renew methods
 //
 
-func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck,
-	uuids ...string) (bckEntry bucketEntry, isNew bool, err error) {
+func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck, uuids ...string) (res renewRes) {
 	var uuid string
 	if len(uuids) != 0 {
 		uuid = uuids[0]
@@ -591,7 +597,7 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck,
 		prevEntry := e.(bucketEntry)
 		if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
 			r.mtx.RUnlock()
-			return prevEntry, false, err
+			return renewRes{entry: prevEntry, isNew: false, err: err}
 		}
 	}
 	r.mtx.RUnlock()
@@ -606,27 +612,27 @@ func (r *registry) renewBucketXaction(entry bucketEntry, bck *cluster.Bck,
 		prevEntry = e.(bucketEntry)
 		running = true
 		if keep, err := entry.preRenewHook(prevEntry); keep || err != nil {
-			return prevEntry, false, err
+			return renewRes{entry: prevEntry, isNew: false, err: err}
 		}
 	}
 
 	if err := entry.Start(bck.Bck); err != nil {
-		return nil, false, err
+		return renewRes{entry: nil, isNew: true, err: err}
 	}
 	r.storeEntry(entry)
 	if running {
 		entry.postRenewHook(prevEntry)
 	}
-	return entry, true, nil
+	return renewRes{entry: entry, isNew: true, err: nil}
 }
 
-func (r *registry) renewGlobalXaction(entry globalEntry) (globalEntry, bool, error) {
+func (r *registry) renewGlobalXaction(entry globalEntry) (res renewRes) {
 	r.mtx.RLock()
 	if e := r.GetRunning(RegistryXactFilter{Kind: entry.Kind()}); e != nil {
 		prevEntry := e.(globalEntry)
 		if entry.preRenewHook(prevEntry) {
 			r.mtx.RUnlock()
-			return prevEntry, true, nil
+			return renewRes{entry: prevEntry, isNew: false, err: nil}
 		}
 	}
 	r.mtx.RUnlock()
@@ -641,25 +647,24 @@ func (r *registry) renewGlobalXaction(entry globalEntry) (globalEntry, bool, err
 		prevEntry = e.(globalEntry)
 		running = true
 		if entry.preRenewHook(prevEntry) {
-			return prevEntry, true, nil
+			return renewRes{entry: prevEntry, isNew: false, err: nil}
 		}
 	}
 
 	if err := entry.Start(cmn.Bck{}); err != nil {
-		return nil, false, err
+		return renewRes{entry: nil, isNew: true, err: err}
 	}
 	r.storeEntry(entry)
 	if running {
 		entry.postRenewHook(prevEntry)
 	}
-	return entry, false, nil
+	return renewRes{entry: entry, isNew: true, err: nil}
 }
 
 func (r *registry) RenewLRU(id string) *lru.Xaction {
-	e := &lruEntry{id: id}
-	ee, keep, _ := r.renewGlobalXaction(e)
-	entry := ee.(*lruEntry)
-	if keep { // previous LRU is still running
+	res := r.renewGlobalXaction(&lruEntry{id: id})
+	entry := res.entry.(*lruEntry)
+	if !res.isNew { // previous LRU is still running
 		entry.xact.Renew()
 		return nil
 	}
@@ -667,28 +672,25 @@ func (r *registry) RenewLRU(id string) *lru.Xaction {
 }
 
 func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) *Rebalance {
-	e := &rebalanceEntry{id: RebID(id), statsRunner: statsRunner}
-	ee, keep, _ := r.renewGlobalXaction(e)
-	entry := ee.(*rebalanceEntry)
-	if keep { // previous global rebalance is still running
+	res := r.renewGlobalXaction(&rebalanceEntry{id: RebID(id), statsRunner: statsRunner})
+	entry := res.entry.(*rebalanceEntry)
+	if !res.isNew { // previous global rebalance is still running
 		return nil
 	}
 	return entry.xact
 }
 
 func (r *registry) RenewResilver(id string) *Resilver {
-	e := &resilverEntry{id: id}
-	ee, keep, _ := r.renewGlobalXaction(e)
-	entry := ee.(*resilverEntry)
-	cmn.Assert(!keep) // resilver must be always preempted
+	res := r.renewGlobalXaction(&resilverEntry{id: id})
+	entry := res.entry.(*resilverEntry)
+	cmn.Assert(res.isNew) // resilver must be always preempted
 	return entry.xact
 }
 
 func (r *registry) RenewElection() *Election {
-	e := &electionEntry{}
-	ee, keep, _ := r.renewGlobalXaction(e)
-	entry := ee.(*electionEntry)
-	if keep { // previous election is still running
+	res := r.renewGlobalXaction(&electionEntry{})
+	entry := res.entry.(*electionEntry)
+	if !res.isNew { // previous election is still running
 		return nil
 	}
 	return entry.xact
@@ -697,12 +699,11 @@ func (r *registry) RenewElection() *Election {
 func (e *Election) IsMountpathXact() bool { return false }
 
 func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*downloader.Downloader, error) {
-	e := &downloaderEntry{t: t, statsT: statsT}
-	ee, _, err := r.renewGlobalXaction(e)
-	if err != nil {
-		return nil, err
+	res := r.renewGlobalXaction(&downloaderEntry{t: t, statsT: statsT})
+	if res.err != nil {
+		return nil, res.err
 	}
-	entry := ee.(*downloaderEntry)
+	entry := res.entry.(*downloaderEntry)
 	return entry.xact, nil
 }
 
