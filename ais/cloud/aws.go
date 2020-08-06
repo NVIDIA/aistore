@@ -102,7 +102,9 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 			awsMaxPageSize, msg.PageSize, awsMaxPageSize)
 		msg.PageSize = awsMaxPageSize
 	}
-	params.MaxKeys = aws.Int64(int64(msg.PageSize))
+	if msg.PageSize > 0 { // TODO: use MaxPageSize from !2630
+		params.MaxKeys = aws.Int64(int64(msg.PageSize))
+	}
 
 	resp, err := svc.ListObjects(params)
 	if err != nil {
