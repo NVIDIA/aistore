@@ -163,7 +163,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSkipped bool) {
 	id, err := api.DownloadSingle(tutils.BaseAPIParams(), generateDownloadDesc(), bck, objName, link)
 	tassert.CheckError(t, err)
-	waitForDownload(t, id, 20*time.Second)
+	waitForDownload(t, id, time.Minute)
 	status, err := api.DownloadStatus(tutils.BaseAPIParams(), id)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, (status.SkippedCnt == 1) == shouldBeSkipped, "expected object to be [skipped: %t]", shouldBeSkipped)
