@@ -65,13 +65,13 @@ func BenchmarkListObject(b *testing.B) {
 
 		// TODO: Extend the number of cases.
 		tests = []testConfig{
-			{objectCnt: cmn.DefaultListPageSize, bucketCnt: 1, pageSize: 0, objSize: cmn.KiB, cksumType: defaultCksum},
-			{objectCnt: cmn.DefaultListPageSize, bucketCnt: 10, pageSize: 0, objSize: cmn.KiB, cksumType: defaultCksum},
-			{objectCnt: cmn.DefaultListPageSize, bucketCnt: 1, pageSize: 0, objSize: cmn.MiB, cksumType: defaultCksum},
-			{objectCnt: cmn.DefaultListPageSize, bucketCnt: 10, pageSize: 0, objSize: cmn.MiB, cksumType: defaultCksum},
+			{objectCnt: 1000, bucketCnt: 1, pageSize: 0, objSize: cmn.KiB, cksumType: defaultCksum},
+			{objectCnt: 1000, bucketCnt: 10, pageSize: 0, objSize: cmn.KiB, cksumType: defaultCksum},
+			{objectCnt: 1000, bucketCnt: 1, pageSize: 0, objSize: cmn.MiB, cksumType: defaultCksum},
+			{objectCnt: 1000, bucketCnt: 10, pageSize: 0, objSize: cmn.MiB, cksumType: defaultCksum},
 
-			{objectCnt: 5000, bucketCnt: 1, pageSize: cmn.DefaultListPageSize, objSize: 256, cksumType: defaultCksum},
-			{objectCnt: 5000, bucketCnt: 10, pageSize: cmn.DefaultListPageSize, objSize: 256, cksumType: defaultCksum},
+			{objectCnt: 5000, bucketCnt: 1, pageSize: 1000, objSize: 256, cksumType: defaultCksum},
+			{objectCnt: 5000, bucketCnt: 10, pageSize: 1000, objSize: 256, cksumType: defaultCksum},
 		}
 	)
 	for _, test := range tests {

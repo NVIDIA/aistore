@@ -158,9 +158,10 @@ func (ap *azureProvider) azureErrorToAISError(azureError error, bck cmn.Bck, obj
 	}
 }
 
-func (ap *azureProvider) Provider() string {
-	return cmn.ProviderAzure
-}
+func (ap *azureProvider) Provider() string { return cmn.ProviderAzure }
+
+// https://docs.microsoft.com/en-us/connectors/azureblob/#general-limits
+func (ap *azureProvider) MaxPageSize() uint { return 5000 }
 
 func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
 	var (
@@ -237,8 +238,9 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (buck
 	return bckProps, nil, http.StatusOK
 }
 
-// Default page size for Azure is 5000 blobs a page.
 func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
+
 	var (
 		h        = cmn.CloudHelpers.Azure
 		cloudBck = bck.CloudBck()
@@ -249,6 +251,9 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 			MaxResults: int32(msg.PageSize),
 		}
 	)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("list_objects %s", cloudBck.Name)
+	}
 	if msg.ContinuationToken != "" {
 		marker.Val = api.String(msg.ContinuationToken)
 	}

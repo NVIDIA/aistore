@@ -7,6 +7,7 @@ package cloud
 import (
 	"context"
 	"io"
+	"math"
 	"net/http"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -27,13 +28,9 @@ func NewDummyCloud(t cluster.Target) (cluster.CloudProvider, error) {
 	return &dummyCloudProvider{t: t}, nil
 }
 
-func (m *dummyCloudProvider) _dummyNode() string {
-	return m.t.Snode().String()
-}
-
-func (m *dummyCloudProvider) Provider() string {
-	return "dummy"
-}
+func (m *dummyCloudProvider) _dummyNode() string { return m.t.Snode().String() }
+func (m *dummyCloudProvider) Provider() string   { return "dummy" }
+func (m *dummyCloudProvider) MaxPageSize() uint  { return math.MaxUint32 }
 
 func (m *dummyCloudProvider) ListObjects(ctx context.Context, bck *cluster.Bck,
 	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {

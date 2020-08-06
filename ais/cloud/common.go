@@ -23,3 +23,10 @@ func setSize(ctx context.Context, size int64) {
 		v.(cmn.SetSizeFunc)(size)
 	}
 }
+
+func calcPageSize(pageSize, maxPageSize uint) uint {
+	if pageSize == 0 {
+		return maxPageSize
+	}
+	return pageSize
+}

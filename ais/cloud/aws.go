@@ -26,7 +26,6 @@ import (
 const (
 	awsChecksumType = "x-amz-meta-ais-cksum-type"
 	awsChecksumVal  = "x-amz-meta-ais-cksum-val"
-	awsMaxPageSize  = 1000 // AWS limitation, see also cmn.DefaultListPageSize
 )
 
 type (
@@ -72,15 +71,18 @@ func (awsp *awsProvider) awsErrorToAISError(awsError error, bck cmn.Bck) (error,
 	return awsError, http.StatusInternalServerError
 }
 
-func (awsp *awsProvider) Provider() string {
-	return cmn.ProviderAmazon
-}
+func (awsp *awsProvider) Provider() string { return cmn.ProviderAmazon }
+
+// https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
+func (awsp *awsProvider) MaxPageSize() uint { return 1000 }
 
 //////////////////
 // LIST OBJECTS //
 //////////////////
 
 func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
+
 	var (
 		h        = cmn.CloudHelpers.Amazon
 		cloudBck = bck.CloudBck()
@@ -97,14 +99,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 	if msg.ContinuationToken != "" {
 		params.Marker = aws.String(msg.ContinuationToken)
 	}
-	if msg.PageSize > awsMaxPageSize {
-		glog.Warningf("AWS maximum page size is %d (%d requested). Returning the first %d keys",
-			awsMaxPageSize, msg.PageSize, awsMaxPageSize)
-		msg.PageSize = awsMaxPageSize
-	}
-	if msg.PageSize > 0 { // TODO: use MaxPageSize from !2630
-		params.MaxKeys = aws.Int64(int64(msg.PageSize))
-	}
+	params.MaxKeys = aws.Int64(int64(msg.PageSize))
 
 	resp, err := svc.ListObjects(params)
 	if err != nil {

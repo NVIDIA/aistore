@@ -255,17 +255,21 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 		// one request this means there are no more objects in to list.
 		return nil
 	}
-	smap := j.t.GetSowner().Get()
-	sid := j.t.Snode().ID()
 
+	var (
+		sid   = j.t.Snode().ID()
+		smap  = j.t.GetSowner().Get()
+		cloud = j.t.Cloud(j.bck)
+	)
 	for {
 		j.pagesCnt++
 		msg := &cmn.SelectMsg{
 			Prefix:            j.prefix,
 			ContinuationToken: j.continuationToken,
+			PageSize:          cloud.MaxPageSize(),
 		}
 
-		bckList, err, _ := j.t.Cloud(j.bck).ListObjects(j.ctx, j.bck, msg)
+		bckList, err, _ := cloud.ListObjects(j.ctx, j.bck, msg)
 		if err != nil {
 			return err
 		}

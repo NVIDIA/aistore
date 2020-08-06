@@ -321,17 +321,6 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 // maximum number of objects returned by ListObjects (0 - return all objects in a bucket)
 func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
-	var (
-		err     error
-		q       = cmn.AddBckToQuery(url.Values{}, bck)
-		path    = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		bckList = &cmn.BucketList{
-			Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize),
-		}
-
-		// Temporary page for intermediate results
-		tmpPage = &cmn.BucketList{}
-	)
 
 	if smsg == nil {
 		smsg = &cmn.SelectMsg{}
@@ -343,13 +332,24 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 	// decreases `toRead` by the number of received objects. When `toRead` gets less
 	// than `pageSize`, the loop does the final request with reduced `pageSize`.
 	toRead := numObjects
-	smsg.UUID = ""
-	smsg.ContinuationToken = ""
-
 	pageSize := smsg.PageSize
 	if pageSize == 0 {
-		pageSize = cmn.DefaultListPageSize
+		pageSize = numObjects
 	}
+
+	// NOTE: No need to preallocate bucket entries slice, we use msgpack so it will do it for us!
+
+	var (
+		err  error
+		q    = cmn.AddBckToQuery(url.Values{}, bck)
+		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+
+		bckList = &cmn.BucketList{} // List with final result.
+		tmpPage = &cmn.BucketList{} // Temporary page for intermediate results.
+	)
+
+	smsg.UUID = ""
+	smsg.ContinuationToken = ""
 
 	for iter := 1; ; iter++ {
 		if toRead != 0 && toRead <= pageSize {
@@ -373,13 +373,11 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			page = bckList
 		} else if iter > 1 {
 			cmn.Assert(smsg.UUID != "")
-			// On later iterations just allocate temporary page.
-			//
 			// NOTE: do not try to optimize this code by allocating the page
-			// on the second iteration and reusing it - it will not work since
-			// the Unmarshaler/Decoder will reuse the entry pointers what will
-			// result in duplications and incorrect output.
-			page.Entries = make([]*cmn.BucketEntry, 0, pageSize)
+			//  on the second iteration and reusing it - it will not work since
+			//  the Unmarshaler/Decoder will reuse the entry pointers what will
+			//  result in duplications and incorrect output.
+			page.Entries = nil
 		}
 
 		// Retry with bigger timeout when deadline was exceeded.
@@ -410,7 +408,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			break
 		}
 
-		// NOTE: toRead == 0 means reading all objects with no limit
+		// NOTE: `toRead == 0` means reading all objects with no limit
 		if toRead > 0 {
 			if n := int(toRead) - len(page.Entries); n <= 0 {
 				break
@@ -426,7 +424,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 	return bckList, err
 }
 
-// ListObjectsPage returns the first page of bucket objects
+// ListObjectsPage returns the first page of bucket objects.
 // On success the function updates smsg.ContinuationToken, so a client can reuse
 // the message to fetch the next page.
 func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*cmn.BucketList, error) {
@@ -446,7 +444,8 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 		}
 	)
 
-	page := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, cmn.DefaultListPageSize)}
+	// NOTE: No need to preallocate bucket entries slice, we use msgpack so it will do it for us!
+	page := &cmn.BucketList{}
 	if _, err := doHTTPRequestGetResp(reqParams, page); err != nil {
 		return nil, err
 	}

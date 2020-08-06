@@ -31,10 +31,20 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 
 	var msg *cmn.SelectMsg
 	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
-		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
-		t.invalmsghdlr(w, r, err.Error())
+		t.invalmsghdlrf(w, r, "unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		return
 	}
+
+	if !bck.IsAIS() {
+		maxCloudPageSize := t.Cloud(bck).MaxPageSize()
+		if msg.PageSize == 0 {
+			msg.PageSize = maxCloudPageSize
+		} else if msg.PageSize > maxCloudPageSize {
+			t.invalmsghdlrf(w, r, "page size exceeds the maximum value (got: %d, max expected: %d)", msg.PageSize, maxCloudPageSize)
+			return false
+		}
+	}
+	cmn.Assert(msg.PageSize != 0)
 
 	xact, isNew, err := xaction.Registry.RenewBckListNewXact(t, bck, msg.UUID, msg)
 	// Double check that xaction has not gone before starting page read.

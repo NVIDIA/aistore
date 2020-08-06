@@ -848,6 +848,7 @@ func TestListObjects(t *testing.T) {
 	}{
 		{pageSize: 0},
 		{pageSize: 2000},
+		{pageSize: uint(rand.Intn(15000))},
 	}
 
 	for _, test := range tests {

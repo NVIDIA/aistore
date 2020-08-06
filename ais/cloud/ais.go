@@ -280,9 +280,8 @@ ad:
 // cluster.CloudProvider APIs //
 ////////////////////////////////
 
-func (m *AisCloudProvider) Provider() string {
-	return cmn.ProviderAIS
-}
+func (m *AisCloudProvider) Provider() string  { return cmn.ProviderAIS }
+func (m *AisCloudProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
 
 func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	m.mu.RLock()
@@ -312,6 +311,7 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.B
 
 	remoteMsg := &cmn.SelectMsg{}
 	cmn.CopyStruct(remoteMsg, msg)
+	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, m.MaxPageSize())
 	// TODO: This code needs to be revisited and refactored - there should be
 	//  standard functions/methods for joining and splitting continuation token
 	//  into parts.

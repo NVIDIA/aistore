@@ -27,8 +27,6 @@ const (
 	gcpChecksumType = "x-goog-meta-ais-cksum-type"
 	gcpChecksumVal  = "x-goog-meta-ais-cksum-val"
 
-	gcpPageSize = cmn.DefaultListPageSize
-
 	projectIDEnvVar = "GOOGLE_CLOUD_PROJECT"
 	credPathEnvVar  = "GOOGLE_APPLICATION_CREDENTIALS"
 )
@@ -101,27 +99,29 @@ func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *stora
 	return objErr, http.StatusNotFound
 }
 
-func (gcpp *gcpProvider) Provider() string {
-	return cmn.ProviderGoogle
-}
+func (gcpp *gcpProvider) Provider() string { return cmn.ProviderGoogle }
+
+// https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
+func (gcpp *gcpProvider) MaxPageSize() uint { return 1000 }
 
 //////////////////
 // LIST OBJECTS //
 //////////////////
 
 func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("list_bucket %s", bck.Name)
-	}
 	gcpClient, gctx, err := createClient(ctx)
 	if err != nil {
 		return
 	}
+	msg.PageSize = calcPageSize(msg.PageSize, gcpp.MaxPageSize())
 	var (
 		query    *storage.Query
 		h        = cmn.CloudHelpers.Google
 		cloudBck = bck.CloudBck()
 	)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("list_objects %s", cloudBck.Name)
+	}
 
 	if msg.Prefix != "" {
 		query = &storage.Query{Prefix: msg.Prefix}

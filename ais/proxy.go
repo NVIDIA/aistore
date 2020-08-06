@@ -1142,14 +1142,8 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	}
 
 	if bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached) {
-		if smsg.PageSize == 0 {
-			smsg.PageSize = cmn.DefaultListPageSizeAIS
-		}
 		bckList, err = p.listAISBucket(bck, smsg)
 	} else {
-		if smsg.PageSize == 0 {
-			smsg.PageSize = cmn.DefaultListPageSize
-		}
 		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
 		bckList, err = p.listObjectsRemote(bck, smsg)
 		// TODO: `status == http.StatusGone` At this point we know that this
@@ -1719,6 +1713,10 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
 func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
+	if smsg.PageSize == 0 {
+		smsg.PageSize = cmn.DefaultListPageSizeAIS
+	}
+
 	var (
 		aisMsg *aisMsg
 		args   bcastArgs
@@ -1729,8 +1727,6 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 		token     = smsg.ContinuationToken
 		pageSize  = smsg.PageSize
 	)
-
-	cmn.Assert(pageSize != 0)
 
 	// TODO: Before checking cache and buffer we should check if there is another
 	//  request already in-flight that requests the same page as we do - if yes
@@ -1805,10 +1801,6 @@ end:
 //      * non-empty uuid if the task is still running
 //      * error
 func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
-	if smsg.PageSize > cmn.DefaultListPageSize {
-		glog.Warningf("list_objects page size %d for bucket %s exceeds the default maximum %d ",
-			smsg.PageSize, bck, cmn.DefaultListPageSize)
-	}
 	if smsg.StartAfter != "" {
 		return nil, fmt.Errorf("start after for cloud buckets is not yet supported")
 	}
@@ -1858,8 +1850,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	}
 
 	// Maximum objects in the final result page. Take all objects in
-	// case of Cloud and no limit is set by a user. We cannot use
-	// the single cmn.DefaultPageSize because Azure limit differs.
+	// case of Cloud and no limit is set by a user.
 	allEntries = cmn.MergeObjLists(bckLists, 0)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Objects after merge: %d, token: %q", len(allEntries.Entries), allEntries.ContinuationToken)
