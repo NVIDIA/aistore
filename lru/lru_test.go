@@ -106,6 +106,7 @@ func newInitLRU(t cluster.Target) *lru.InitLRU {
 		XactDemandBase: *demand.NewXactDemandBase(cmn.GenUUID(), cmn.ActLRU, time.Second),
 		Renewed:        make(chan struct{}, 8),
 	}
+	xlru.InitIdle()
 	return &lru.InitLRU{
 		Xaction:             xlru,
 		StatsT:              stats.NewTrackerMock(),

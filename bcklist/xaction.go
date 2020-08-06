@@ -75,6 +75,7 @@ func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck,
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
 	xact.XactDemandBase = *demand.NewXactDemandBaseBckUUID(uuid, cmn.ActListObjects, bck, idleTime)
+	xact.InitIdle()
 	return xact
 }
 

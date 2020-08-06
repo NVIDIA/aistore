@@ -51,6 +51,7 @@ func (e *ecGetEntry) Start(bck cmn.Bck) error {
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
 	xec.XactDemandBase = *demand.NewXactDemandBaseBck(cmn.ActECGet, bck, idleTime)
+	xec.InitIdle()
 	e.xact = xec
 	go xec.Run()
 	return nil
@@ -77,6 +78,7 @@ func (e *ecPutEntry) Start(bck cmn.Bck) error {
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
 	xec.XactDemandBase = *demand.NewXactDemandBaseBck(cmn.ActECPut, bck, idleTime)
+	xec.InitIdle()
 	go xec.Run()
 	e.xact = xec
 	return nil
@@ -102,6 +104,7 @@ func (e *ecRespondEntry) Start(bck cmn.Bck) error {
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
 	xec.XactDemandBase = *demand.NewXactDemandBaseBck(cmn.ActECRespond, bck, idleTime)
+	xec.InitIdle()
 	go xec.Run()
 	e.xact = xec
 	return nil

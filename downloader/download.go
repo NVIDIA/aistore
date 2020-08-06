@@ -238,6 +238,7 @@ func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	}
 
 	downloader.dispatcher = newDispatcher(downloader)
+	downloader.InitIdle()
 	return downloader
 }
 

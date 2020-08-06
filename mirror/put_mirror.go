@@ -58,6 +58,7 @@ func RunXactPut(lom *cluster.LOM, slab *memsys.Slab) (r *XactPut, err error) {
 	}
 	r.workCh = make(chan *cluster.LOM, r.mirror.Burst)
 	r.mpathers = make(map[string]mpather, mpathCount)
+	r.InitIdle()
 
 	// Run
 	for _, mpathInfo := range availablePaths {

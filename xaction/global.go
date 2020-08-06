@@ -49,6 +49,7 @@ func (e *lruEntry) Start(_ cmn.Bck) error {
 			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
 		},
 	}
+	e.xact.InitIdle()
 	return nil
 }
 

@@ -45,6 +45,7 @@ type (
 		active  atomic.Int64
 		hkName  string
 		idle    idleInfo
+		hkReg   atomic.Bool
 	}
 )
 
@@ -56,6 +57,7 @@ var (
 // XactDemandBase //
 ////////////////////
 
+// NOTE: call xaction.InitIdle in constructor after derived xaction initialized
 func NewXactDemandBaseBck(kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
 	idleTime := xactIdleTimeout
 	if len(idleTimes) != 0 {
@@ -66,12 +68,12 @@ func NewXactDemandBaseBck(kind string, bck cmn.Bck, idleTimes ...time.Duration) 
 		hkName:   kind + "/" + cmn.GenUUID(),
 		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
 	}
-	r.init()
 	return r
 }
 
 // TODO: it would be good to merge with above function but optional
 // argument is already used up
+// NOTE: call xaction.InitIdle in constructor after derived xaction initialized
 func NewXactDemandBaseBckUUID(uuid, kind string, bck cmn.Bck, idleTimes ...time.Duration) *XactDemandBase {
 	cmn.Assert(uuid != "")
 	idleTime := xactIdleTimeout
@@ -83,10 +85,10 @@ func NewXactDemandBaseBckUUID(uuid, kind string, bck cmn.Bck, idleTimes ...time.
 		hkName:   kind + "/" + uuid,
 		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
 	}
-	r.init()
 	return r
 }
 
+// NOTE: call xaction.InitIdle in constructor after derived xaction initialized
 func NewXactDemandBase(uuid, kind string, idleTimes ...time.Duration) *XactDemandBase {
 	var hkName string
 	idleTime := xactIdleTimeout
@@ -103,11 +105,11 @@ func NewXactDemandBase(uuid, kind string, idleTimes ...time.Duration) *XactDeman
 		hkName:   hkName,
 		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
 	}
-	r.init()
 	return r
 }
 
-func (r *XactDemandBase) init() {
+func (r *XactDemandBase) InitIdle() {
+	r.hkReg.Store(true)
 	hk.Reg(r.hkName, func() time.Duration {
 		active := r.active.Swap(0)
 		if r.Pending() > 0 || active > 0 {
@@ -126,8 +128,12 @@ func (r *XactDemandBase) init() {
 
 func (r *XactDemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }
 func (r *XactDemandBase) Pending() int64             { return r.pending.Load() }
-func (r *XactDemandBase) IncPending()                { r.pending.Inc(); r.active.Inc() }
-func (r *XactDemandBase) DecPending()                { r.SubPending(1) }
+func (r *XactDemandBase) IncPending() {
+	debug.AssertMsg(r.hkReg.Load(), "unregistered at hk, forgot InitIdle?")
+	r.pending.Inc()
+	r.active.Inc()
+}
+func (r *XactDemandBase) DecPending() { r.SubPending(1) }
 func (r *XactDemandBase) SubPending(n int) {
 	r.pending.Sub(int64(n))
 	debug.Assert(r.Pending() >= 0)
