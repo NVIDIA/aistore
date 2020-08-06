@@ -720,11 +720,10 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 	}
 
 	if args.v != nil {
-		// TODO: Add support for unmarshalling JSON values.
 		if v, ok := args.v.(msgp.Decodable); ok {
 			res.err = v.DecodeMsg(msgp.NewReaderSize(resp.Body, 10*cmn.KiB))
 		} else {
-			cmn.AssertFmt(false, "unknown type", args.v)
+			res.err = jsoniter.NewDecoder(resp.Body).Decode(args.v)
 		}
 		if res.err != nil {
 			res.details = fmt.Sprintf(
@@ -1398,13 +1397,7 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 		}
 		return res.status, res.err
 	}
-	if len(res.bytes) > 0 {
-		s := string(res.bytes)
-		if len(res.bytes) > 32 {
-			s = string(res.bytes[:32])
-		}
-		glog.Errorf("%s: unexpected keepalive response from %s: [%s]", h.si, psi, s)
-	}
+	debug.Assert(len(res.bytes) == 0)
 	return
 }
 

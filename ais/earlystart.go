@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // Background:
@@ -414,18 +413,14 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 		config      = cmn.GCO.Get()
 		now         = time.Now()
 		deadline    = now.Add(config.Timeout.Startup)
-		q           = url.Values{}
-		path        = cmn.URLPath(cmn.Version, cmn.Daemon)
 		l           = bcastSmap.CountTargets() + bcastSmap.CountProxies()
 		bmds        = make(map[*cluster.Snode]*bucketMD, l)
 		smaps       = make(map[*cluster.Snode]*smapX, l)
 		done, slowp bool
 	)
-	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
-	args := bcastArgs{req: cmn.ReqArgs{Path: path, Query: q}, smap: bcastSmap, to: cluster.AllNodes}
 	for {
 		last := time.Now().After(deadline)
-		maxVerSmap, maxVerBMD, done, slowp = p.bcastMaxVer(args, bmds, smaps)
+		maxVerSmap, maxVerBMD, done, slowp = p.bcastMaxVer(bcastSmap, bmds, smaps)
 		if done || last {
 			break
 		}
@@ -467,15 +462,23 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 	return
 }
 
-func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucketMD,
+func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds map[*cluster.Snode]*bucketMD,
 	smaps map[*cluster.Snode]*smapX) (maxVerSmap *smapX, maxVerBMD *bucketMD, done, slowp bool) {
 	var (
-		results          chan callResult
 		borigin, sorigin string
-		err              error
+
+		args = bcastArgs{
+			req: cmn.ReqArgs{
+				Path:  cmn.URLPath(cmn.Version, cmn.Daemon),
+				Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmapVote}},
+			},
+			smap: bcastSmap,
+			to:   cluster.AllNodes,
+			fv:   func() interface{} { return &SmapVoteMsg{} },
+		}
+		results = p.bcastToGroup(args)
 	)
 	done = true
-	results = p.bcastToGroup(args)
 	for k := range bmds {
 		delete(bmds, k)
 	}
@@ -487,12 +490,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 			done = false
 			continue
 		}
-		svm := SmapVoteMsg{}
-		if err = jsoniter.Unmarshal(res.bytes, &svm); err != nil {
-			glog.Errorf("unexpected unmarshal-error: %v", err)
-			done = false
-			continue
-		}
+		svm := res.v.(*SmapVoteMsg)
 		if svm.BucketMD != nil && svm.BucketMD.version() > 0 {
 			if maxVerBMD == nil { // 1. init
 				borigin, maxVerBMD = svm.BucketMD.UUID, svm.BucketMD
@@ -534,15 +532,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 }
 
 func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
-	var (
-		q    = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmapVote}}
-		args = bcastArgs{
-			req:  cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Daemon), Query: q},
-			smap: smap,
-			to:   cluster.AllNodes,
-		}
-		maxVerSmap, _, _, slowp = p.bcastMaxVer(args, nil, nil)
-	)
+	maxVerSmap, _, _, slowp := p.bcastMaxVer(smap, nil, nil)
 	if maxVerSmap != nil && !slowp {
 		if maxVerSmap.UUID == smap.UUID && maxVerSmap.version() > smap.version() {
 			if maxVerSmap.Primary != nil && maxVerSmap.Primary.ID() != p.si.ID() {

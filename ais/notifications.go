@@ -391,6 +391,7 @@ func (n *notifs) housekeep() time.Duration {
 		args.req.Path = cmn.URLPath(cmn.Version, cmn.Xactions)
 		args.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
 		args.req.Query.Set(cmn.URLParamUUID, uuid)
+		args.fv = func() interface{} { return &cmn.BaseXactStatsExt{} }
 		results := n.p.bcastToGroup(args)
 		for res := range results {
 			var (
@@ -438,11 +439,7 @@ func (n *notifs) getOwner(uuid string) (o string, exists bool) {
 }
 
 func (n *notifs) hkXact(nl notifListener, res callResult) (msg interface{}, err error, done bool) {
-	stats := &cmn.BaseXactStatsExt{}
-	if eru := jsoniter.Unmarshal(res.bytes, stats); eru != nil {
-		glog.Errorf("%s: unexpected: failure to unmarshal: %s, node %s, err: %v", n.p.si, nl, res.si, eru)
-		return
-	}
+	stats := res.v.(*cmn.BaseXactStatsExt)
 	msg = stats
 	if stats.Finished() {
 		if stats.Aborted() {

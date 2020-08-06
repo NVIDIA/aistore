@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/query"
-	jsoniter "github.com/json-iterator/go"
 )
 
 type (
@@ -196,11 +195,17 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		lists        = make([]*cmn.BucketList, 0, p.owner.smap.Get().CountTargets())
-		bcastResults = p.callTargets(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Query, cmn.Peek), cmn.MustMarshal(msg))
+		results = p.bcastToGroup(bcastArgs{
+			req: cmn.ReqArgs{
+				Method: http.MethodGet,
+				Path:   cmn.URLPath(cmn.Version, cmn.Query, cmn.Peek),
+				Body:   cmn.MustMarshal(msg),
+			},
+			fv: func() interface{} { return &cmn.BucketList{} },
+		})
+		lists = make([]*cmn.BucketList, 0, len(results))
 	)
-
-	for res := range bcastResults {
+	for res := range results {
 		if res.err != nil {
 			if res.status == http.StatusNotFound {
 				continue
@@ -208,13 +213,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, res.err.Error(), res.status)
 			return
 		}
-		list := &cmn.BucketList{}
-		if err := jsoniter.Unmarshal(res.bytes, list); err != nil {
-			p.invalmsghdlr(w, r, "failed to unmarshal target query response", http.StatusInternalServerError)
-			return
-		}
-
-		lists = append(lists, list)
+		lists = append(lists, res.v.(*cmn.BucketList))
 	}
 
 	result := cmn.ConcatObjLists(lists, msg.Size)

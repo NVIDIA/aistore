@@ -1266,18 +1266,15 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	args.req.Query = q
+	args.fv = func() interface{} { return &cmn.BucketsSummaries{} }
 	summaries = make(cmn.BucketsSummaries, 0)
 	for result := range p.bcastToGroup(args) {
 		if result.err != nil {
 			return nil, "", result.err
 		}
 
-		var targetSummary cmn.BucketsSummaries
-		if err := jsoniter.Unmarshal(result.bytes, &targetSummary); err != nil {
-			return nil, "", err
-		}
-
-		for _, bckSummary := range targetSummary {
+		targetSummary := result.v.(*cmn.BucketsSummaries)
+		for _, bckSummary := range *targetSummary {
 			summaries = summaries.Aggregate(bckSummary)
 		}
 	}
@@ -2238,23 +2235,20 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
-	query := url.Values{}
-	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
-	req := cmn.ReqArgs{
-		Method: http.MethodGet,
-		Base:   baseURL,
-		Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-		Query:  query,
-	}
-	args := callArgs{req: req, timeout: cmn.DefaultTimeout}
-	res := p.call(args)
+	var (
+		req = cmn.ReqArgs{
+			Method: http.MethodGet,
+			Base:   baseURL,
+			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
+		}
+		args = callArgs{req: req, timeout: cmn.DefaultTimeout, v: &smapX{}}
+		res  = p.call(args)
+	)
 	if res.err != nil {
 		return nil, fmt.Errorf("failed to get smap from %s: %v", baseURL, res.err)
 	}
-	smap = &smapX{}
-	if err := jsoniter.Unmarshal(res.bytes, smap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal smap: %v", err)
-	}
+	smap = res.v.(*smapX)
 	if !smap.isValid() {
 		return nil, fmt.Errorf("invalid Smap from %s: %s", baseURL, smap.pp())
 	}
@@ -3378,25 +3372,23 @@ func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (
 // detectDaemonDuplicate queries osi for its daemon info in order to determine if info has changed
 // and is equal to nsi
 func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
-	query := url.Values{}
-	query.Add(cmn.URLParamWhat, cmn.GetWhatSnode)
-	args := callArgs{
-		si: osi,
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-			Query:  query,
-		},
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
-	}
-	res := p.call(args)
-	if res.err != nil || res.bytes == nil || len(res.bytes) == 0 {
-		// error getting response from osi
+	var (
+		args = callArgs{
+			si: osi,
+			req: cmn.ReqArgs{
+				Method: http.MethodGet,
+				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+				Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
+			},
+			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+			v:       &cluster.Snode{},
+		}
+		res = p.call(args)
+	)
+	if res.err != nil {
 		return false
 	}
-	si := &cluster.Snode{}
-	err := jsoniter.Unmarshal(res.bytes, si)
-	cmn.AssertNoErr(err)
+	si := res.v.(*cluster.Snode)
 	return !nsi.Equals(si)
 }
 
@@ -3418,19 +3410,19 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		return
 	}
 	var (
-		results = p.callTargets(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets), nil)
-		bmds    = make(map[*cluster.Snode]*bucketMD, len(results))
+		results = p.bcastToGroup(bcastArgs{
+			req:     cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)},
+			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+			fv:      func() interface{} { return &bucketMD{} },
+		})
+		bmds = make(map[*cluster.Snode]*bucketMD, len(results))
 	)
 	for res := range results {
-		var bmd = &bucketMD{}
-		if res.err != nil || res.status >= http.StatusBadRequest {
+		if res.err != nil {
 			glog.Errorf("%v (%d: %s)", res.err, res.status, res.details)
 			continue
 		}
-		if err = jsoniter.Unmarshal(res.bytes, bmd); err != nil {
-			glog.Errorf("unexpected: failed to unmarshal %s from %s: %v", bmdTermName, res.si, err)
-			continue
-		}
+		bmd := res.v.(*bucketMD)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s from %s", bmd, res.si)
 		}
