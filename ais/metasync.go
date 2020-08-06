@@ -7,6 +7,7 @@ package ais
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -125,6 +126,10 @@ type (
 		retryTimer   *time.Timer         // timer to sync pending
 		timerStopped bool                // true if retryTimer has been stopped, false otherwise
 	}
+)
+
+var (
+	jspMetasyncOpts = jsp.Options{Signature: true, Checksum: true}
 )
 
 //
@@ -335,14 +340,16 @@ outer:
 	// step 3: b-cast
 	var (
 		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
-		body    = jsp.EncodeBuf(payload, jsp.CCSign())
+		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
 		to      = cluster.AllNodes
 	)
+	defer body.Free()
+
 	if revsReqType == revsReqNotify {
 		to = cluster.Targets
 	}
 	res := y.p.bcastToGroup(bcastArgs{
-		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
+		req:     cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
 		smap:    smap,
 		timeout: config.Timeout.MaxKeepalive, // making exception for this critical op
 		to:      to,
@@ -402,10 +409,10 @@ func (y *metasyncer) syncDone(sid string, pairs []revsPair) {
 	}
 }
 
-func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revsPair,
+func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap, pairs []revsPair,
 	config *cmn.Config) {
 	res := y.p.bcastToNodes(bcastArgs{
-		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
+		req:     cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
 		network: cmn.NetworkIntraControl,
 		timeout: config.Timeout.MaxKeepalive,
 		nodes:   []cluster.NodeMap{refused},
@@ -483,10 +490,11 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	}
 	var (
 		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
-		body    = jsp.EncodeBuf(payload, jsp.CCSign())
+		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
 	)
+	defer body.Free()
 	res := y.p.bcastToNodes(bcastArgs{
-		req:     cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Body: body},
+		req:     cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 		nodes:   []cluster.NodeMap{pending},

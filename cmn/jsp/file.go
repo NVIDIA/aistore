@@ -13,23 +13,29 @@ import (
 )
 
 const (
+	v1 = 1 + iota
+	v2
+	vlatest = v2
+)
+
+const (
 	signature = "aistore" // file signature
-	version   = 1         // version of *this* packing format
 	//                                            0 -------------- 63   64 --------------- 127
 	prefLen = 2 * cmn.SizeofI64 // 128bit prefix [ signature, version | flags and packing info ]
 )
 
 type Options struct {
-	Compression bool // lz4 when version == 1
-	Checksum    bool // xxhash when version == 1
+	Compression bool // lz4 when [version == 1 || version == 2]
+	Checksum    bool // xxhash when [version == 1 || version == 2]
 	Signature   bool // when true, write 128bit prefix (of the layout shown above) at offset zero
+
+	Indent bool // Determines if the JSON should be indented. Useful for CLI config.
 }
 
-//
-// version 1 shortcuts to specify the most commonly used options
-//
-func Plain() Options  { return Options{} }                 // plain text
-func CCSign() Options { return Options{true, true, true} } // compress, checksum, and sign
+func Plain() Options { return Options{} }
+func CCSign() Options {
+	return Options{Compression: true, Checksum: true, Signature: true, Indent: false}
+}
 
 //////////////////
 // main methods //

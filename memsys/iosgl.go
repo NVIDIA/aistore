@@ -8,13 +8,13 @@ package memsys
 import (
 	"errors"
 	"io"
-	"runtime/debug"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 var (
+	_ cmn.WriterAt       = &SGL{}
 	_ io.ReaderFrom      = &SGL{}
 	_ io.WriterTo        = &SGL{}
 	_ cmn.ReadOpenCloser = &SGL{}
@@ -24,7 +24,7 @@ var (
 )
 
 type (
-	// implements io.ReadWriteCloser  + Reset
+	// implements io.ReadWriteCloser + Reset
 	SGL struct {
 		sgl  [][]byte
 		slab *Slab
@@ -171,6 +171,17 @@ func (z *SGL) ReadAll() (b []byte, err error) {
 	return
 }
 
+// NOTE: Not fully implemented use carefully!
+func (z *SGL) WriteAt(p []byte, off int64) (n int, err error) {
+	debug.Assert(z.woff >= off+int64(len(p)))
+
+	prevWriteOff := z.woff
+	z.woff = off
+	n, err = z.Write(p)
+	z.woff = prevWriteOff
+	return n, err
+}
+
 // reuse already allocated SGL
 func (z *SGL) Reset()     { z.woff, z.roff = 0, 0 }
 func (z *SGL) Len() int64 { return z.woff - z.roff }
@@ -180,14 +191,7 @@ func (z *SGL) Open() (io.ReadCloser, error) { return NewReader(z), nil }
 func (z *SGL) Close() error { return nil }
 
 func (z *SGL) Free() {
-	if z.slab == nil { // FIXME DEBUG
-		glog.Errorln("freeing already freed")
-		stacktrace := debug.Stack()
-		n1 := len(stacktrace)
-		s1 := string(stacktrace[:n1])
-		glog.Errorln(s1)
-		return
-	}
+	debug.Assert(z.slab != nil)
 	z.slab.Free(z.sgl...)
 	z.sgl = z.sgl[:0]
 	z.sgl, z.slab = nil, nil

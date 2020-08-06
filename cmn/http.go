@@ -84,8 +84,10 @@ type (
 		Base   string      // base URL: http://xyz.abc
 		Path   string      // path URL: /x/y/z
 		Query  url.Values  // query: ?x=y&y=z
-		Body   []byte      // body for POST, PUT, ...
-		BodyR  io.Reader
+		Body   []byte      // body for [POST, PUT, ...]
+		// BodyR is an alternative to `Body` to avoid unnecessary allocations
+		// when body for [POST, PUT, ...] is in stored `io.Reader`.
+		BodyR io.Reader
 	}
 )
 

@@ -27,6 +27,10 @@ type (
 		io.ReadCloser
 		Open() (io.ReadCloser, error)
 	}
+	WriterAt interface {
+		io.Writer
+		io.WriterAt
+	}
 	// ReadSizer is the interface that adds Size method to the basic reader.
 	ReadSizer interface {
 		io.Reader

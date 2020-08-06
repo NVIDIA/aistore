@@ -859,6 +859,7 @@ func (h *httprunner) bcastToGroup(args bcastArgs) chan callResult {
 }
 
 // bcastToNodes broadcasts a message to specific nodes (`bargs.nodes`).
+// When using `bargs.req.BodyR` it must implement `cmn.ReadOpenCloser`.
 func (h *httprunner) bcastToNodes(bargs bcastArgs) chan callResult {
 	cmn.Assert(bargs.nodes != nil)
 
@@ -890,6 +891,9 @@ func (h *httprunner) bcastToNodes(bargs bcastArgs) chan callResult {
 					timeout: bargs.timeout,
 				}
 				cargs.req.Base = si.URL(bargs.network)
+				if bargs.req.BodyR != nil {
+					cargs.req.BodyR, _ = bargs.req.BodyR.(cmn.ReadOpenCloser).Open()
+				}
 				if bargs.fv != nil {
 					cargs.v = bargs.fv()
 				}

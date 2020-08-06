@@ -620,7 +620,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var payload = make(msPayload)
-	if err := jsp.Decode(r.Body, &payload, jsp.CCSign(), "metasync put"); err != nil {
+	if err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
 		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
 	}
