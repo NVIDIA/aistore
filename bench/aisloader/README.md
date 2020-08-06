@@ -2,7 +2,7 @@
 
 AIS Loader (`aisloader`) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore). The tool was written in such a way that it can be easily extended to benchmark any S3-compatible backend.
 
-In addition, there's a certain AI "angle": AIS Loader can generate (synthetic) workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which might be preferable and/or easier/faster) and also avoid compute-side bottlenecks, if any.
+In addition, there's a certain AI "angle": AIS Loader can generate (synthetic) workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which is often preferable), and also avoid compute-side bottlenecks if there are any.
 
 ## Table of Contents
 

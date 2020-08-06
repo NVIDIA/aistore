@@ -31,9 +31,7 @@ func (p *proxyrunner) bootstrap() {
 	smap = newSmap()
 	if err := p.owner.smap.load(smap, config); err == nil {
 		loaded = true
-		if smap.CountTargets() == 0 {
-			loaded = false
-		} else if err := p.checkPresenceNetChange(smap); err != nil {
+		if err := p.checkPresenceNetChange(smap); err != nil {
 			glog.Error(err)
 			loaded = false
 		}
@@ -52,7 +50,8 @@ func (p *proxyrunner) bootstrap() {
 			var smapMaxVer int64
 			// double-check
 			if smapMaxVer, primaryURL = p.bcastHealth(smap); smapMaxVer > smap.version() {
-				glog.Infof("%s: cannot assume the primary role with older %s < v%d", p.si, smap, smapMaxVer)
+				glog.Infof("%s: cannot assume the primary role with older %s < v%d",
+					p.si, smap, smapMaxVer)
 				primary = false
 			}
 		}

@@ -6,6 +6,7 @@ package integration
 
 import (
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -23,6 +24,7 @@ func unregisteredNodeHealth(t *testing.T, si *cluster.Snode) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	defer func() {
 		err = tutils.RegisterNode(proxyURL, si, smap)
+		time.Sleep(3 * time.Second)
 		tassert.CheckFatal(t, err)
 	}()
 
