@@ -430,5 +430,36 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			Expect(hasEnough).To(BeTrue())
 			Expect(entries).To(HaveLen(0))
 		})
+
+		It("should correctly handle rerequesting the page", func() {
+			buffer.set(id, "target1", makeEntries("a", "d", "g"), 3)
+			buffer.set(id, "target2", makeEntries("b", "c", "h"), 3)
+			buffer.set(id, "target3", makeEntries("e", "f"), 2)
+
+			entries, hasEnough := buffer.get(id, "", 2)
+			Expect(hasEnough).To(BeTrue())
+			Expect(extractNames(entries)).To(Equal([]string{"a", "b"}))
+			entries, hasEnough = buffer.get(id, "b", 3)
+			Expect(hasEnough).To(BeTrue())
+			Expect(extractNames(entries)).To(Equal([]string{"c", "d", "e"}))
+
+			// Rerequest the page with token `b`.
+			_, hasEnough = buffer.get(id, "b", 3)
+			Expect(hasEnough).To(BeFalse())
+
+			// Simulate targets resending data.
+			buffer.set(id, "target1", makeEntries("d", "g"), 2)
+			buffer.set(id, "target2", makeEntries("c", "h"), 2)
+			buffer.set(id, "target3", makeEntries("e", "f"), 2)
+
+			entries, hasEnough = buffer.get(id, "b", 3)
+			Expect(hasEnough).To(BeTrue())
+			Expect(extractNames(entries)).To(Equal([]string{"c", "d", "e"}))
+			entries, hasEnough = buffer.get(id, "e", 1)
+			Expect(hasEnough).To(BeTrue())
+			Expect(extractNames(entries)).To(Equal([]string{"f"}))
+			_, hasEnough = buffer.get(id, "f", 1)
+			Expect(hasEnough).To(BeFalse())
+		})
 	})
 })

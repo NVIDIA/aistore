@@ -502,6 +502,55 @@ func TestListObjectsGoBack(t *testing.T) {
 	})
 }
 
+func TestListObjectsRerequestPage(t *testing.T) {
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		var (
+			baseParams = tutils.BaseAPIParams()
+			m          = ioContext{
+				t:        t,
+				bck:      bck.Bck,
+				num:      500,
+				fileSize: 128,
+			}
+			rerequests = 5
+		)
+
+		if !bck.IsAIS() {
+			m.num = 50
+		}
+
+		m.init()
+
+		m.puts()
+		defer m.del()
+
+		var (
+			err     error
+			objList *cmn.BucketList
+
+			totalCnt = 0
+			msg      = &cmn.SelectMsg{PageSize: 10}
+		)
+		tutils.Logln("starting rerequesting routine...")
+		for {
+			prevToken := msg.ContinuationToken
+			for i := 0; i < rerequests; i++ {
+				msg.ContinuationToken = prevToken
+				objList, err = api.ListObjectsPage(baseParams, m.bck, msg)
+				tassert.CheckFatal(t, err)
+			}
+			totalCnt += len(objList.Entries)
+			if objList.ContinuationToken == "" {
+				break
+			}
+		}
+		tassert.Fatalf(
+			t, totalCnt == m.num,
+			"unexpected total number of objects (got: %d, expected: %d)", totalCnt, m.num,
+		)
+	})
+}
+
 func TestListObjectsStartAfter(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
