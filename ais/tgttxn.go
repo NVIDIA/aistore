@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/xaction"
@@ -600,28 +601,9 @@ func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 //
 
 func (c *txnServerCtx) addNotif(xact cmn.Xact) {
-	d := c.query[cmn.URLParamNotifyMe]
-	if len(d) == 0 {
-		return
-	}
-	// validate
-	smap := c.t.owner.smap.get()
-re:
-	for i, pid := range d {
-		if !smap.containsID(pid) {
-			glog.Errorf("%s: unknown notification listener %s: %s, %s", c.t.si, pid, smap, xact)
-			if i < len(d)-1 {
-				copy(d[i:], d[i+1:])
-			}
-			d = d[:len(d)-1]
-			goto re
-		}
-	}
-	if len(d) == 0 {
-		glog.Errorf("%s: no notification listeners: %s, %s", c.t.si, smap, xact)
-		return
-	}
+	dsts := c.query[cmn.URLParamNotifyMe]
+	debug.Assert(len(dsts) != 0)
 	xact.AddNotif(&cmn.NotifXact{
-		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifXact, Dsts: d, F: c.t.xactCallerNotify},
+		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifXact, Dsts: dsts, F: c.t.xactCallerNotify},
 	})
 }

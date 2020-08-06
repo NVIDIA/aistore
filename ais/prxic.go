@@ -168,9 +168,7 @@ func (p *proxyrunner) whichIC(smap *smapX, query url.Values) (selfIC, otherIC bo
 	if query == nil {
 		return
 	}
-	for pid := range smap.IC {
-		query.Add(cmn.URLParamNotifyMe, pid)
-	}
+	query.Add(cmn.URLParamNotifyMe, equalIC)
 	return
 }
 

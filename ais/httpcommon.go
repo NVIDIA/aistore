@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/OneOfOne/xxhash"
@@ -752,44 +753,51 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 
 //
 // intra-cluster IPC, control plane: notify another node
-// TODO: bcastNotify
 //
 
-func (h *httprunner) notify(sid string, msgBody []byte, dstIsTarget ...bool) {
+func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte) {
 	var (
-		smap = h.owner.smap.get()
 		path = cmn.URLPath(cmn.Version, cmn.Notifs)
-		si   *cluster.Snode
 	)
-	if len(dstIsTarget) == 0 || !dstIsTarget[0] {
-		si = smap.GetProxy(sid)
-	} else {
-		si = smap.GetTarget(sid)
-	}
-	if si == nil {
-		err := &errNodeNotFound{"failed to notify", sid, h.si, smap}
-		glog.Error(err)
-		return
-	}
-	args := callArgs{
-		si:      si,
+
+	args := bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: msgBody},
+		network: cmn.NetworkIntraControl,
 		timeout: cmn.DefaultTimeout,
+		nodes:   []cluster.NodeMap{snodes},
 	}
-	_ = h.call(args)
+	_ = h.bcastToNodes(args)
 }
 
 func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
 	var (
+		smap  = h.owner.smap.get()
 		msg   = notifMsg{Ty: int32(n.Category()), Snode: h.si}
 		notif = n.(*cmn.NotifXact)
-		pid   = notif.Dsts[0]
 	)
 	if err != nil {
 		msg.ErrMsg = err.Error()
 	}
 	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
-	h.notify(pid, cmn.MustMarshal(&msg))
+
+	nodes := make(cluster.NodeMap)
+	for _, dst := range notif.Dsts {
+		if dst == equalIC {
+			for si := range smap.IC {
+				if si != h.si.ID() {
+					nodes.Add(smap.GetProxy(si))
+				}
+			}
+			debug.Assert(len(notif.Dsts) == 1)
+			break
+		} else if si := smap.GetNode(dst); si != nil {
+			nodes.Add(si)
+		} else {
+			err := &errNodeNotFound{"failed to notify", dst, h.si, smap}
+			glog.Error(err)
+		}
+	}
+	h.notify(nodes, cmn.MustMarshal(&msg))
 }
 
 ///////////////
