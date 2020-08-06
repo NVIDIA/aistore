@@ -432,9 +432,9 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	if err == nil {
 		t.Errorf("Enabling non-existing mountpath should return error")
 	} else {
-		httpErr := err.(*cmn.HTTPError)
-		if httpErr.Status != http.StatusNotFound {
-			t.Errorf("Expected status: %d, got: %d. Error: %s", http.StatusNotFound, httpErr.Status, err.Error())
+		status := api.HTTPStatus(err)
+		if status != http.StatusNotFound {
+			t.Errorf("Expected status %d, got %d, %v", http.StatusNotFound, status, err)
 		}
 	}
 }

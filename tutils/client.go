@@ -5,7 +5,6 @@
 package tutils
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -513,15 +512,37 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	return
 }
 
+func WaitStarted(t *testing.T, url string) {
+	var (
+		baseParams = BaseAPIParams(url)
+		err        error
+		i, max     = 0, 2
+	)
+while503:
+	err = api.Health(baseParams)
+	if err == nil {
+		return
+	}
+	if api.HTTPStatus(err) != http.StatusServiceUnavailable {
+		tassert.CheckFatal(t, err)
+	}
+	t.Logf("waiting for %q to start up...", url)
+	time.Sleep(waitClusterStartup / 2)
+	i++
+	if i > max {
+		tassert.CheckFatal(t, err)
+	}
+	goto while503
+}
+
 func GetClusterMap(t *testing.T, url string) (smap *cluster.Smap) {
 	var (
-		httpErr    = &cmn.HTTPError{}
 		baseParams = BaseAPIParams(url)
 		err        error
 	)
 while503:
 	smap, err = api.GetClusterMap(baseParams)
-	if err != nil && errors.As(err, &httpErr) && httpErr.Status == http.StatusServiceUnavailable {
+	if err != nil && api.HTTPStatus(err) == http.StatusServiceUnavailable {
 		t.Log("waiting for the cluster to start up...")
 		time.Sleep(waitClusterStartup)
 		goto while503

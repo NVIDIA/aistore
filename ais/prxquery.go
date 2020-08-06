@@ -76,12 +76,6 @@ func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStarted() {
-		if err := p.waitStarted(); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusServiceUnavailable)
-			return
-		}
-	}
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Query, cmn.Init); err != nil {
 		return
 	}

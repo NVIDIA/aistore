@@ -159,6 +159,8 @@ func primaryCrashElectRestart(t *testing.T) {
 	oldPrimaryID := smap.Primary.ID()
 	tutils.Logf("New primary: %s --> %s\n", newPrimaryID, newPrimaryURL)
 	tutils.Logf("Killing primary: %s --> %s\n", oldPrimaryURL, oldPrimaryID)
+
+	killedURL := smap.Primary.PublicNet.DirectURL
 	cmd, args, err := kill(smap.Primary.ID(), smap.Primary.PublicNet.DaemonPort)
 	// cmd and args are the original command line of how the proxy is started
 	tassert.CheckFatal(t, err)
@@ -178,6 +180,8 @@ func primaryCrashElectRestart(t *testing.T) {
 
 	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose())
 	tassert.CheckFatal(t, err)
+
+	tutils.WaitStarted(t, killedURL)
 
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
 		t.Fatalf("Previous primary proxy did not rejoin the cluster")
@@ -199,6 +203,7 @@ func primaryAndTargetCrash(t *testing.T) {
 
 	oldPrimaryURL := smap.Primary.PublicNet.DirectURL
 	tutils.Logf("Killing proxy %s - %s\n", oldPrimaryURL, smap.Primary.ID())
+	killedURL := smap.Primary.PublicNet.DirectURL
 	cmd, args, err := kill(smap.Primary.ID(), smap.Primary.PublicNet.DaemonPort)
 	tassert.CheckFatal(t, err)
 
@@ -239,6 +244,8 @@ func primaryAndTargetCrash(t *testing.T) {
 	_, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version,
 		testing.Verbose(), origProxyCount, origTargetCount)
 	tassert.CheckFatal(t, err)
+
+	tutils.WaitStarted(t, killedURL)
 }
 
 // A very simple test to check if a primary proxy can detect non-primary one
@@ -281,6 +288,8 @@ func proxyCrash(t *testing.T) {
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to restore", smap.Version,
 		testing.Verbose(), origProxyCount)
 	tassert.CheckFatal(t, err)
+
+	tutils.WaitStarted(t, secondURL)
 
 	if _, ok := smap.Pmap[secondID]; !ok {
 		t.Fatalf("Non-primary proxy did not rejoin the cluster.")
@@ -344,6 +353,9 @@ func primaryAndProxyCrash(t *testing.T) {
 	if smap.Primary.ID() != newPrimaryID {
 		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.Primary.ID(), newPrimaryID)
 	}
+
+	tutils.WaitStarted(t, oldPrimaryURL)
+	tutils.WaitStarted(t, secondURL)
 
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
 		t.Fatalf("Previous primary proxy %s did not rejoin the cluster", oldPrimaryID)
@@ -549,6 +561,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 	nextProxyID, nextProxyURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 
+	killedURL := smap.Primary.PublicNet.DirectURL
 	cmd, args, err := kill(smap.Primary.ID(), smap.Primary.PublicNet.DaemonPort)
 	tassert.CheckFatal(t, err)
 
@@ -569,6 +582,8 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 
 	_, err = tutils.WaitForPrimaryProxy(nextProxyURL, "to restore", smap.Version, testing.Verbose())
 	tassert.CheckFatal(t, err)
+
+	tutils.WaitStarted(t, killedURL)
 }
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently

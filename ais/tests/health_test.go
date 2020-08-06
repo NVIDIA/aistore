@@ -14,29 +14,27 @@ import (
 )
 
 // health should respond with 200 even is node is unregistered
-func unregisteredNodeHealth(t *testing.T, node *cluster.Snode, proxyURL string) {
-	err := api.Health(tutils.BaseAPIParams(proxyURL), node)
+func unregisteredNodeHealth(t *testing.T, si *cluster.Snode) {
+	err := api.Health(tutils.BaseAPIParams(si.PublicNet.DirectURL))
 	tassert.CheckError(t, err)
 
-	err = tutils.UnregisterNode(proxyURL, node.DaemonID)
+	err = tutils.UnregisterNode(proxyURL, si.DaemonID)
 	tassert.CheckFatal(t, err)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	defer func() {
-		err = tutils.RegisterNode(proxyURL, node, smap)
+		err = tutils.RegisterNode(proxyURL, si, smap)
 		tassert.CheckFatal(t, err)
 	}()
 
-	err = api.Health(tutils.BaseAPIParams(proxyURL), node)
+	err = api.Health(tutils.BaseAPIParams(si.PublicNet.DirectURL))
 	tassert.CheckError(t, err)
 }
 
 func TestPrimaryProxyHealth(t *testing.T) {
 	var (
-		proxyURL = tutils.GetPrimaryURL()
-		smap     = tutils.GetClusterMap(t, proxyURL)
+		smap = tutils.GetClusterMap(t, proxyURL)
 	)
-
-	err := api.Health(tutils.BaseAPIParams(proxyURL), smap.Primary)
+	err := api.Health(tutils.BaseAPIParams(smap.Primary.PublicNet.DirectURL))
 	tassert.CheckError(t, err)
 }
 
@@ -49,7 +47,7 @@ func TestUnregisteredProxyHealth(t *testing.T) {
 	proxyCnt := smap.CountProxies()
 	proxy, err := smap.GetRandProxy(true /*excludePrimary*/)
 	tassert.CheckError(t, err)
-	unregisteredNodeHealth(t, proxy, proxyURL)
+	unregisteredNodeHealth(t, proxy)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, proxyCnt == smap.CountProxies(), "expected number of proxies to be the same after the test")
@@ -60,11 +58,10 @@ func TestTargetHealth(t *testing.T) {
 		proxyURL = tutils.GetPrimaryURL()
 		smap     = tutils.GetClusterMap(t, proxyURL)
 	)
-
-	target, err := smap.GetRandTarget()
+	tsi, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, target != nil, "Expected at least one target to be present in target")
-	err = api.Health(tutils.BaseAPIParams(proxyURL), target)
+	tassert.Fatalf(t, tsi != nil, "no targets")
+	err = api.Health(tutils.BaseAPIParams(tsi.PublicNet.DirectURL))
 	tassert.CheckFatal(t, err)
 }
 
@@ -77,7 +74,7 @@ func TestUnregisteredTargetHealth(t *testing.T) {
 	targetsCnt := smap.CountTargets()
 	proxy, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	unregisteredNodeHealth(t, proxy, proxyURL)
+	unregisteredNodeHealth(t, proxy)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, targetsCnt == smap.CountTargets(), "expected number of targets to be the same after the test")

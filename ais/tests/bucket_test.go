@@ -1274,12 +1274,9 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 		t.Fatalf("Expected SetBucketProps error, but got none.")
 	}
 
-	errAsHTTPError, ok := err.(*cmn.HTTPError)
-	if !ok {
-		t.Fatalf("Expected error of *cmn.HTTPError type.")
-	}
-	if errAsHTTPError.Status < http.StatusBadRequest {
-		t.Errorf("Expected status: %d, but got: %d.", http.StatusNotFound, errAsHTTPError.Status)
+	status := api.HTTPStatus(err)
+	if status < http.StatusBadRequest {
+		t.Errorf("Expected status: %d, got %d", http.StatusNotFound, status)
 	}
 }
 
@@ -1302,12 +1299,9 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 		t.Fatalf("Expected SetBucketProps error, but got none.")
 	}
 
-	errAsHTTPError, ok := err.(*cmn.HTTPError)
-	if !ok {
-		t.Fatalf("Expected error of *cmn.HTTPError type.")
-	}
-	if errAsHTTPError.Status < http.StatusBadRequest {
-		t.Errorf("Expected status: %d, but got: %d.", http.StatusNotFound, errAsHTTPError.Status)
+	status := api.HTTPStatus(err)
+	if status < http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusNotFound, status)
 	}
 }
 

@@ -18,34 +18,46 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-type BaseParams struct {
-	Client *http.Client
-	URL    string
-	Method string
-	Token  string
-}
+type (
+	BaseParams struct {
+		Client *http.Client
+		URL    string
+		Method string
+		Token  string
+	}
+	// ReqParams is used in constructing client-side API requests to the AIStore.
+	// Stores Query and Headers for providing arguments that are not used commonly in API requests
+	ReqParams struct {
+		BaseParams BaseParams
+		Path       string
+		Body       []byte
+		Query      url.Values
+		Header     http.Header
 
-// ReqParams is used in constructing client-side API requests to the AIStore.
-// Stores Query and Headers for providing arguments that are not used commonly in API requests
-type ReqParams struct {
-	BaseParams BaseParams
-	Path       string
-	Body       []byte
-	Query      url.Values
-	Header     http.Header
+		// Authentication
+		User     string
+		Password string
 
-	// Authentication
-	User     string
-	Password string
+		// Determines if the response should be validated with the checksum
+		Validate bool
+	}
+	wrappedResp struct {
+		*http.Response
+		n          int64  // number bytes read from `resp.Body`
+		cksumValue string // checksum value of the response
+	}
+)
 
-	// Determines if the response should be validated with the checksum
-	Validate bool
-}
-
-type wrappedResp struct {
-	*http.Response
-	n          int64  // number bytes read from `resp.Body`
-	cksumValue string // checksum value of the response
+// HTTPStatus returns HTTP status or (-1) for non-HTTP error
+func HTTPStatus(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+	herr, ok := err.(*cmn.HTTPError)
+	if !ok {
+		return -1 // invalid
+	}
+	return herr.Status
 }
 
 // DoHTTPRequest sends one HTTP request and decodes the `v` structure
@@ -102,7 +114,8 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 		var httpErr *cmn.HTTPError
 		if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
 			if err := jsoniter.NewDecoder(resp.Body).Decode(&httpErr); err != nil {
-				return nil, fmt.Errorf("failed to read response (status: %d), err: %v", resp.StatusCode, err)
+				return nil,
+					fmt.Errorf("failed to read response (status: %d), err: %v", resp.StatusCode, err)
 			}
 		} else {
 			// HEAD request does not return the body - create http error

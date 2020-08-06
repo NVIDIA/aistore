@@ -154,7 +154,8 @@ func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize in
 	return api.PutObject(putArgs)
 }
 
-func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType string, bck cmn.Bck, dir string, objCount, fnlen int) []string {
+func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType string,
+	bck cmn.Bck, dir string, objCount, fnlen int) []string {
 	var (
 		objNames = make([]string, objCount)
 	)
@@ -162,7 +163,8 @@ func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType st
 		fname := GenRandomString(fnlen)
 		objName := filepath.Join(dir, fname)
 		objNames[i] = objName
-		// FIXME: Separate RandReader per object created inside PutObjRR to workaround https://github.com/golang/go/issues/30597
+		// FIXME: Separate RandReader per object created inside PutObjRR to workaround
+		// https://github.com/golang/go/issues/30597
 		err := PutObjRR(baseParams, bck, objName, objSize, cksumType)
 		tassert.CheckFatal(tb, err)
 	}

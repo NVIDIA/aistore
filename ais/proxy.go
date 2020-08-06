@@ -129,8 +129,8 @@ func (p *proxyrunner) Run() error {
 
 	//
 	// REST API: register proxy handlers and start listening
+	// NOTE: additional handlers are registered upon startup (see markClusterStarted)
 	//
-
 	networkHandlers := []networkHandler{
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
@@ -140,7 +140,6 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Sort, h: p.dsortHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Query, h: p.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 
 		{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
@@ -195,6 +194,7 @@ func (p *proxyrunner) markClusterStarted() {
 		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Query, h: p.queryHandler, net: []string{cmn.NetworkPublic}},
 	}
 	p.registerNetworkHandlers(netH)
 	p.httprunner.markClusterStarted()
@@ -816,12 +816,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		msg   cmn.ActionMsg
 		query = r.URL.Query()
 	)
-	if !p.ClusterStarted() {
-		if err := p.waitStarted(); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusServiceUnavailable)
-			return
-		}
-	}
 	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
@@ -3496,21 +3490,6 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 	}
 
 	return false
-}
-
-func (p *proxyrunner) waitStarted() error {
-	const max = 5
-	var (
-		sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
-	)
-	for i := 0; i < max; i++ {
-		time.Sleep(sleep)
-		if p.ClusterStarted() {
-			return nil
-		}
-	}
-	smap := p.owner.smap.get()
-	return fmt.Errorf("%s: startup is taking unusually long time, %s", p.si, smap)
 }
 
 /////////////////////////////////////////////

@@ -354,8 +354,8 @@ func (c *clouds) init(t *targetrunner, config *cmn.Config) {
 func (t *targetrunner) initRecvHandlers() {
 	var (
 		networkHandlers = []networkHandler{
-			{r: cmn.Transform, h: t.transformHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-			{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+			{r: cmn.Buckets, h: t.bucketHandler,
+				net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 			{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 			{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 			{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
@@ -369,12 +369,16 @@ func (t *targetrunner) initRecvHandlers() {
 			{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
 
 			{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
-			{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+			{r: cmn.Sort, h: dsort.SortHandler,
+				net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+			{r: cmn.Transform, h: t.transformHandler,
+				net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 
 			{r: cmn.Query, h: t.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-			{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 
-			{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+			{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
+			{r: "/", h: cmn.InvalidHandler,
+				net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 		}
 	)
 	t.registerNetworkHandlers(networkHandlers)

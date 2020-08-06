@@ -118,10 +118,8 @@ func multiOp(opNames ...string) func(string, string, cmn.Bck) opRes {
 func reportErr(t *testing.T, errCh chan opRes, ignoreStatusNotFound bool) {
 	for opRes := range errCh {
 		if opRes.err != nil {
-			errHTTP, ok := opRes.err.(*cmn.HTTPError)
-			if !ok {
-				t.Errorf("Unexpected error encountered %v", opRes.err)
-			} else if errHTTP.Status == http.StatusNotFound && ignoreStatusNotFound {
+			status := api.HTTPStatus(opRes.err)
+			if status == http.StatusNotFound && ignoreStatusNotFound {
 				continue
 			}
 			t.Errorf("%s failed %v", opRes.op, opRes.err)

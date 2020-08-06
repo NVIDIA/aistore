@@ -930,12 +930,10 @@ func TestHeadNonexistentBucket(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected an error, but go no errors.")
 	}
-	httpErr, ok := err.(*cmn.HTTPError)
-	if !ok {
-		t.Fatalf("Expected an error of type *cmn.HTTPError, but got: %T.", err)
-	}
-	if httpErr.Status != http.StatusNotFound {
-		t.Errorf("Expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status)
+
+	status := api.HTTPStatus(err)
+	if status != http.StatusNotFound {
+		t.Errorf("Expected status %d, got %d", http.StatusNotFound, status)
 	}
 }
 
