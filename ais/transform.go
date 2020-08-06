@@ -68,16 +68,14 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 	}
 	msg.ID = cmn.GenUUID()
 
-	results := p.bcastTo(bcastArgs{
+	results := p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
 			Path:   r.URL.Path,
 			Body:   cmn.MustMarshal(msg),
 		},
 		timeout: cmn.LongTimeout,
-		to:      cluster.Targets,
 	})
-
 	for res := range results {
 		if res.err != nil {
 			err = res.err
@@ -94,14 +92,13 @@ func (p *proxyrunner) httpproxyinittransform(w http.ResponseWriter, r *http.Requ
 	// At least one init call has failed. Terminate all started transformation pods.
 	// Discard the stop results. Calls may succeed (for targets that successfully started a pod),
 	// or fail (for targets that didn't start successfully a pod).
-	p.bcastTo(bcastArgs{
+	p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
 			Path:   cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformStop, msg.ID),
 			Body:   nil,
 		},
 		timeout: cmn.LongTimeout,
-		to:      cluster.Targets,
 	})
 	p.invalmsghdlr(w, r, err.Error())
 }
@@ -135,14 +132,13 @@ func (p *proxyrunner) httpproxystoptransform(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	results := p.bcastTo(bcastArgs{
+	results := p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
 			Path:   r.URL.Path,
 			Body:   nil,
 		},
 		timeout: cmn.LongTimeout,
-		to:      cluster.Targets,
 	})
 	for res := range results {
 		if res.err != nil {

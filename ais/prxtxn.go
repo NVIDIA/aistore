@@ -66,14 +66,14 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 3. begin
 	var (
-		c = p.prepTxnClient(msg, bck)
+		c       = p.prepTxnClient(msg, bck)
+		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
-	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
-			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			return res.err
 		}
 	}
@@ -96,7 +96,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // making exception for this critical op
 	c.req.Query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
-	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
@@ -137,10 +137,6 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 
 // make-n-copies: { confirm existence -- begin -- update locally -- metasync -- commit }
 func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID string, err error) {
-	var (
-		pname = p.si.String()
-		c     = p.prepTxnClient(msg, bck)
-	)
 	copies, err := p.parseNCopies(msg.Value)
 	if err != nil {
 		return
@@ -150,18 +146,21 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bck); !present {
 		p.owner.bmd.Unlock()
-		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
 		return
 	}
 	p.owner.bmd.Unlock()
 
 	// 2. begin
-	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	var (
+		c       = p.prepTxnClient(msg, bck)
+		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	)
 	for res := range results {
 		if res.err != nil {
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
-			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
 		}
@@ -193,7 +192,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
@@ -210,10 +209,8 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	propsToUpdate cmn.BucketPropsToUpdate) (xactID string, err error) {
 	var (
-		c      *txnClientCtx
 		nprops *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
 		nmsg   = &cmn.ActionMsg{} // with nprops
-		pname  = p.si.String()
 	)
 	// 1. confirm existence
 	p.owner.bmd.Lock()
@@ -221,7 +218,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	bprops, present := bmd.Get(bck)
 	if !present {
 		p.owner.bmd.Unlock()
-		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
 		return
 	}
 	bck.Props = bprops
@@ -242,14 +239,16 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	// msg{propsToUpdate} => nmsg{nprops} and prep context(nmsg)
 	*nmsg = *msg
 	nmsg.Value = nprops
-	c = p.prepTxnClient(nmsg, bck)
-
-	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	var (
+		c       = p.prepTxnClient(nmsg, bck)
+		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	)
+	glog.Error(c.req.Method, len(results), len(c.smap.Tmap))
 	for res := range results {
 		if res.err != nil {
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
-			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
 		}
@@ -288,16 +287,14 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	return
 }
 
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		c     *txnClientCtx
-		nmsg  = &cmn.ActionMsg{} // + bckTo
-		pname = p.si.String()
+		nmsg = &cmn.ActionMsg{} // + bckTo
 	)
 	if rebErr := p.canStartRebalance(); rebErr != nil {
 		err = fmt.Errorf("%s: bucket cannot be renamed: %w", p.si, rebErr)
@@ -308,12 +305,12 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
 		p.owner.bmd.Unlock()
-		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, p.si.String())
 		return
 	}
 	if _, present := bmd.Get(bckTo); present {
 		p.owner.bmd.Unlock()
-		err = cmn.NewErrorBucketAlreadyExists(bckTo.Bck, pname)
+		err = cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
 		return
 	}
 	p.owner.bmd.Unlock()
@@ -321,15 +318,17 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	// msg{} => nmsg{bckTo} and prep context(nmsg)
 	*nmsg = *msg
 	nmsg.Value = bckTo.Bck
-	c = p.prepTxnClient(nmsg, bckFrom)
 
 	// 2. begin
-	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	var (
+		c       = p.prepTxnClient(nmsg, bckFrom)
+		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	)
 	for res := range results {
 		if res.err != nil {
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
-			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
 		}
@@ -376,7 +375,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
 			c.req.Body = cmn.MustMarshal(c.msg)
 
-			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 
 			// 7. start rebalance and resilver
 			wg = p.metasyncer.sync(revsPair{clone, c.msg})
@@ -389,16 +388,14 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 // copy-bucket: { confirm existence -- begin -- conditional metasync -- start waiting for copy-done -- commit }
 func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		c     *txnClientCtx
-		nmsg  = &cmn.ActionMsg{} // + bckTo
-		pname = p.si.String()
+		nmsg = &cmn.ActionMsg{} // + bckTo
 	)
 	// 1. confirm existence
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
 		p.owner.bmd.Unlock()
-		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, p.si.String())
 		return
 	}
 	p.owner.bmd.Unlock()
@@ -406,15 +403,17 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 	// msg{} => nmsg{bckTo} and prep context(nmsg)
 	*nmsg = *msg
 	nmsg.Value = bckTo.Bck
-	c = p.prepTxnClient(nmsg, bckFrom)
 
 	// 2. begin
-	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	var (
+		c       = p.prepTxnClient(nmsg, bckFrom)
+		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	)
 	for res := range results {
 		if res.err != nil {
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
-			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
 		}
@@ -453,7 +452,7 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 
 	// 6. commit
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	xactID = c.uuid
 	return
 }
@@ -520,12 +519,12 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	p.owner.bmd.Unlock()
 
 	// 2. begin
-	results := p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
 			// abort
 			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
-			_ = p.bcastPost(bcastArgs{req: c.req, smap: c.smap})
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
 		}
@@ -560,7 +559,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	unlockUpon = true
 	config := cmn.GCO.Get()
 	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
-	results = p.bcastPost(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err)
@@ -595,7 +594,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 	c.timeout = cmn.GCO.Get().Timeout.CplaneOperation
 	query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
-	c.req = cmn.ReqArgs{Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: body}
+	c.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: body}
 	return c
 }
 

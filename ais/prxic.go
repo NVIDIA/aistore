@@ -186,7 +186,7 @@ func (p *proxyrunner) registerIC(a regIC) {
 }
 
 func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX) (err error) {
-	nodes := make(cluster.NodeMap)
+	nodes := make(cluster.NodeMap, len(smap.IC))
 	for pid := range smap.IC {
 		if pid != p.si.ID() {
 			psi := smap.GetProxy(pid)
@@ -197,10 +197,12 @@ func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX) (err error) {
 	nlMsg := &notifListenMsg{nl: nl}
 
 	cmn.Assert(len(nodes) > 0)
-	results := p.bcast(bcastArgs{
-		req: cmn.ReqArgs{Method: http.MethodPost,
-			Path: cmn.URLPath(cmn.Version, cmn.IC),
-			Body: cmn.MustMarshal(nlMsg)},
+	results := p.bcastToNodes(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Path:   cmn.URLPath(cmn.Version, cmn.IC),
+			Body:   cmn.MustMarshal(nlMsg),
+		},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 		nodes:   []cluster.NodeMap{nodes},

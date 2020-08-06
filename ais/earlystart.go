@@ -475,7 +475,7 @@ func (p *proxyrunner) bcastMaxVer(args bcastArgs, bmds map[*cluster.Snode]*bucke
 		err              error
 	)
 	done = true
-	results = p.bcastTo(args)
+	results = p.bcastToGroup(args)
 	for k := range bmds {
 		delete(bmds, k)
 	}

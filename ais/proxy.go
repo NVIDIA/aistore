@@ -1239,16 +1239,16 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		body   = cmn.MustMarshal(aisMsg)
 		args   = bcastArgs{
 			req: cmn.ReqArgs{
-				Path:  cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-				Query: q,
-				Body:  body,
+				Method: http.MethodPost,
+				Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+				Query:  q,
+				Body:   body,
 			},
 			smap:    smap,
 			timeout: config.Timeout.MaxHostBusy + config.Timeout.CplaneOperation,
-			to:      cluster.Targets,
 		}
 	)
-	results := p.bcastPost(args)
+	results := p.bcastToGroup(args)
 	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
 	if err != nil {
 		return nil, "", err
@@ -1267,7 +1267,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	q.Set(cmn.URLParamSilent, "true")
 	args.req.Query = q
 	summaries = make(cmn.BucketsSummaries, 0)
-	for result := range p.bcastPost(args) {
+	for result := range p.bcastToGroup(args) {
 		if result.err != nil {
 			return nil, "", result.err
 		}
@@ -1754,16 +1754,17 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, nil, nil)
 	args = bcastArgs{
 		req: cmn.ReqArgs{
-			Path:  cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-			Query: cmn.AddBckToQuery(nil, bck.Bck),
-			Body:  cmn.MustMarshal(aisMsg),
+			Method: http.MethodPost,
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+			Query:  cmn.AddBckToQuery(nil, bck.Bck),
+			Body:   cmn.MustMarshal(aisMsg),
 		},
 		timeout: cmn.LongTimeout, // TODO: should it be `Client.ListObjects`?
 		fv:      func() interface{} { return &cmn.BucketList{} },
 	}
 
 	// Combine the results.
-	for res := range p.bcastPost(args) {
+	for res := range p.bcastToGroup(args) {
 		if res.err != nil {
 			return nil, res.err
 		}
@@ -1825,7 +1826,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 
 	var results chan callResult
 	if needLocalData {
-		results = p.bcastTo(args)
+		results = p.bcastToGroup(args)
 	} else {
 		// only cloud options are requested - call one random target for data
 		for _, si := range smap.Tmap {
@@ -1960,7 +1961,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 	} else {
 		timeout = cmn.DefaultTimeout
 	}
-	results = p.bcastTo(bcastArgs{
+	results = p.bcastToGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body},
 		smap:    smap,
 		timeout: timeout,
@@ -2650,15 +2651,10 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
 		return
 	}
-	results := p.bcastGet(bcastArgs{
-		req: cmn.ReqArgs{
-			Path:  cmn.URLPath(cmn.Version, cmn.Xactions),
-			Query: query,
-			Body:  body,
-		},
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-	})
-	targetResults := p._queryResults(w, r, results)
+	var (
+		results       = p.callTargets(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Xactions), body, query)
+		targetResults = p._queryResults(w, r, results)
+	)
 	if targetResults != nil {
 		p.writeJSON(w, r, targetResults, what)
 	}
@@ -2666,7 +2662,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 
 func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
 	fetchResults := func(broadcastType int) (cmn.JSONRawMsgs, string) {
-		results := p.bcastTo(bcastArgs{
+		results := p.bcastToGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: r.Method,
 				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
@@ -2739,7 +2735,7 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 			return nil
 		}
 	}
-	results := p.bcastTo(bcastArgs{
+	results := p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: r.Method,
 			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
@@ -3217,7 +3213,10 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == cmn.ActXactStart {
 			xactMsg.ID = cmn.GenUUID()
 		}
-		results := p.callTargets(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Xactions), cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg}))
+		var (
+			body    = cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
+			results = p.callTargets(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Xactions), body)
+		)
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
@@ -3375,17 +3374,15 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		uuid         string
 		rbmd         *bucketMD
 		err          error
-		bmds         map[*cluster.Snode]*bucketMD
 		force, slowp bool
 	)
 	if p.forwardCP(w, r, msg, "recover-buckets", nil) {
 		return
 	}
-	results := p.bcastGet(bcastArgs{
-		req:     cmn.ReqArgs{Path: cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)},
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-	})
-	bmds = make(map[*cluster.Snode]*bucketMD, len(results))
+	var (
+		results = p.callTargets(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets), nil)
+		bmds    = make(map[*cluster.Snode]*bucketMD, len(results))
+	)
 	for res := range results {
 		var bmd = &bucketMD{}
 		if res.err != nil || res.status >= http.StatusBadRequest {

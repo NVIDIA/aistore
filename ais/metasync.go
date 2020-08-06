@@ -341,7 +341,7 @@ outer:
 	if revsReqType == revsReqNotify {
 		to = cluster.Targets
 	}
-	res := y.p.bcastTo(bcastArgs{
+	res := y.p.bcastToGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
 		smap:    smap,
 		timeout: config.Timeout.MaxKeepalive, // making exception for this critical op
@@ -404,7 +404,7 @@ func (y *metasyncer) syncDone(sid string, pairs []revsPair) {
 
 func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revsPair,
 	config *cmn.Config) {
-	res := y.p.bcast(bcastArgs{
+	res := y.p.bcastToNodes(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: urlPath, Body: body},
 		network: cmn.NetworkIntraControl,
 		timeout: config.Timeout.MaxKeepalive,
@@ -485,7 +485,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
 		body    = jsp.EncodeBuf(payload, jsp.CCSign())
 	)
-	res := y.p.bcast(bcastArgs{
+	res := y.p.bcastToNodes(bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Body: body},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,

@@ -95,16 +95,16 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	args := bcastArgs{
 		req: cmn.ReqArgs{
+			Method: http.MethodPost,
 			Path:   cmn.URLPath(cmn.Version, cmn.Query, cmn.Init),
 			Body:   cmn.MustMarshal(msg),
 			Header: header,
 		},
 		timeout: cmn.DefaultTimeout,
-		to:      cluster.Targets,
 		smap:    smap,
 	}
 
-	for res := range p.bcastPost(args) {
+	for res := range p.bcastToGroup(args) {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
 			return

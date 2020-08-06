@@ -796,25 +796,37 @@ func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
 // broadcast //
 ///////////////
 
-func (h *httprunner) bcastGet(args bcastArgs) chan callResult {
-	cmn.Assert(args.req.Method == "")
-	args.req.Method = http.MethodGet
-	return h.bcastTo(args)
-}
-func (h *httprunner) bcastPost(args bcastArgs) chan callResult {
-	cmn.Assert(args.req.Method == "")
-	args.req.Method = http.MethodPost
-	return h.bcastTo(args)
+// _callGroup internal helper that transforms raw message parts into `bcastToGroup`.
+func (h *httprunner) _callGroup(method, path string, body []byte, to int, query ...url.Values) chan callResult {
+	cmn.Assert(method != "" && path != "")
+	q := url.Values{}
+	if len(query) > 0 {
+		q = query[0]
+	}
+	return h.bcastToGroup(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   path,
+			Body:   body,
+			Query:  q,
+		},
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		to:      to,
+	})
 }
 
-// nolint:unused // integral with callTargets and callAll
-func (h *httprunner) bcastPut(args bcastArgs) chan callResult {
-	cmn.Assert(args.req.Method == "")
-	args.req.Method = http.MethodPut
-	return h.bcastTo(args)
+// callTargets neat one-liner method for sending a message to all targets.
+func (h *httprunner) callTargets(method, path string, body []byte, query ...url.Values) chan callResult {
+	return h._callGroup(method, path, body, cluster.Targets, query...)
 }
 
-func (h *httprunner) bcastTo(args bcastArgs) chan callResult {
+// callAll neat one-liner method for sending a message to all nodes.
+func (h *httprunner) callAll(method, path string, body []byte, query ...url.Values) chan callResult {
+	return h._callGroup(method, path, body, cluster.AllNodes, query...)
+}
+
+// bcastToGroup broadcasts a message to specific group of nodes (targets, proxies, all).
+func (h *httprunner) bcastToGroup(args bcastArgs) chan callResult {
 	if args.smap == nil {
 		args.smap = h.owner.smap.get()
 	}
@@ -839,41 +851,13 @@ func (h *httprunner) bcastTo(args bcastArgs) chan callResult {
 	if !cmn.NetworkIsKnown(args.network) {
 		cmn.AssertMsg(false, "unknown network '"+args.network+"'")
 	}
-	return h.bcast(args)
+	return h.bcastToNodes(args)
 }
 
-func (h *httprunner) callBcast(method, path string, body []byte, to int, query ...url.Values) chan callResult {
-	cmn.Assert(method != "")
-	q := url.Values{}
-	if len(query) > 0 {
-		q = query[0]
-	}
-	return h.bcastTo(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   path,
-			Body:   body,
-			Query:  q,
-		},
-		timeout: cmn.DefaultTimeout,
-		to:      to,
-	})
-}
+// bcastToNodes broadcasts a message to specific nodes (`bargs.nodes`).
+func (h *httprunner) bcastToNodes(bargs bcastArgs) chan callResult {
+	cmn.Assert(bargs.nodes != nil)
 
-func (h *httprunner) callTargets(method, path string, body []byte, query ...url.Values) chan callResult {
-	return h.callBcast(method, path, body, cluster.Targets, query...)
-}
-
-// nolint:unused // integral with callTargets and callAll
-func (h *httprunner) callProxies(method, path string, body []byte, query ...url.Values) chan callResult {
-	return h.callBcast(method, path, body, cluster.Proxies, query...)
-}
-
-func (h *httprunner) callAll(method, path string, body []byte, query ...url.Values) chan callResult {
-	return h.callBcast(method, path, body, cluster.AllNodes, query...)
-}
-
-func (h *httprunner) bcast(bargs bcastArgs) chan callResult {
 	nodeCount := 0
 	for _, nodeMap := range bargs.nodes {
 		nodeCount += len(nodeMap)

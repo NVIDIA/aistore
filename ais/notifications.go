@@ -373,16 +373,19 @@ func (n *notifs) housekeep() time.Duration {
 		tempn[uuid] = nl
 	}
 	n.RUnlock()
-	req := bcastArgs{req: cmn.ReqArgs{Query: make(url.Values, 2)}, timeout: cmn.GCO.Get().Timeout.MaxKeepalive}
+	args := bcastArgs{
+		req:     cmn.ReqArgs{Method: http.MethodGet, Query: make(url.Values, 2)},
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+	}
 	for uuid, nl := range tempn {
 		if nl.notifTy() == notifCache { // TODO -- FIXME: implement
 			continue
 		}
 		cmn.AssertMsg(nl.notifTy() == notifXact, nl.String())
-		req.req.Path = cmn.URLPath(cmn.Version, cmn.Xactions)
-		req.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
-		req.req.Query.Set(cmn.URLParamUUID, uuid)
-		results := n.p.bcastGet(req)
+		args.req.Path = cmn.URLPath(cmn.Version, cmn.Xactions)
+		args.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
+		args.req.Query.Set(cmn.URLParamUUID, uuid)
+		results := n.p.bcastToGroup(args)
 		for res := range results {
 			var (
 				msg  interface{}
