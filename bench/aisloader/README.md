@@ -291,10 +291,22 @@ $ aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
 $ aisloader -bucket=nvais -duration 0s -totalputsize=0
 ```
 
-13. Generate load on a cluster listening on custom IP address and port
+13. Generate load on a cluster listening on custom IP address and port:
 
 ```console
 $ aisloader -ip=example.com -port=8080
+```
+
+14. PUT TAR files with random files inside into a cluster:
+
+```console
+$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar
+```
+
+15. Generate load on `tar2tf` transformation. New transformation in started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
+
+```console
+$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -transformation=tar2tf
 ```
 
 ## Collecting stats
