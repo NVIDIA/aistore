@@ -7,8 +7,10 @@ package transform
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -22,10 +24,17 @@ const (
 	// built-in label https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
 	nodeNameLabel = "kubernetes.io/hostname"
 	targetNode    = "target_node"
+
+	tfProbeRetries = 5
+)
+
+var (
+	tfProbeClient = &http.Client{}
+	probe         = bytes.NewBuffer([]byte("test-data"))
 )
 
 // TODO: remove the `kubectl` with a proper go-sdk call
-func StartTransformationPod(t cluster.Target, nodeName string, msg Msg) (err error) {
+func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	var (
 		pod    *corev1.Pod
 		svc    *corev1.Service
@@ -64,7 +73,7 @@ func StartTransformationPod(t cluster.Target, nodeName string, msg Msg) (err err
 		return err
 	}
 
-	if err := waitForPodReady(pod, msg.WaitTimeout); err != nil {
+	if err := waitPodReady(pod, msg.WaitTimeout); err != nil {
 		return err
 	}
 
@@ -85,9 +94,48 @@ func StartTransformationPod(t cluster.Target, nodeName string, msg Msg) (err err
 	}
 
 	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
+
+	// TODO: Temporary workaround. Debug this further to find the root cause.
+	// Not waiting causes the first DoTransform request to fail
+	// sometimes.
+	if waitErr := waitTransformerReady(transformerURL); waitErr != nil {
+		if err := deleteEntity(cmn.KubePod, pod.Name); err != nil {
+			glog.Errorf("Unable to delete pod: %s, err: %s", pod.Name, err.Error())
+		}
+		if err := deleteEntity(cmn.KubePod, svc.Name); err != nil {
+			glog.Errorf("Unable to delete svc: %s, err: %s", svc.Name, err.Error())
+		}
+		return waitErr
+	}
+
 	c := makeCommunicator(t, pod, msg.CommType, transformerURL, nodeName)
 	reg.put(msg.ID, c)
 	return nil
+}
+
+func waitTransformerReady(url string) error {
+	// TODO -- FIXME: Decide on a proper endpoint to do the health probe
+	tfProbeSleep := cmn.GCO.Get().Timeout.MaxKeepalive
+	tfProbeClient.Timeout = tfProbeSleep
+	testReq, _ := http.NewRequest(http.MethodPost, url, probe)
+	for i := 0; i < tfProbeRetries; i++ {
+		resp, err := tfProbeClient.Do(testReq)
+		if err != nil {
+			if cmn.IsReqCanceled(err) || cmn.IsErrConnectionRefused(err) {
+				glog.Errorf("checking transformer endpoint: %s  failed, err: %s, retryCount: %d", url, err.Error(), i+1)
+				time.Sleep(tfProbeSleep)
+				continue
+			}
+			return err
+		}
+		defer resp.Body.Close()
+		err = cmn.DrainReader(resp.Body)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("waiting for transformer liveness failed for endpoint: %s", url)
 }
 
 func createServiceSpec(pod *corev1.Pod) *corev1.Service {
@@ -111,17 +159,17 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 	}
 }
 
-func StopTransformationPod(id string) error {
+func Stop(id string) error {
 	c, err := GetCommunicator(id)
 	if err != nil {
 		return err
 	}
 
-	if err := deleteEntity(cmn.KubePod, c.PodName(), true); err != nil {
+	if err := deleteEntity(cmn.KubePod, c.PodName()); err != nil {
 		return err
 	}
 
-	if err := deleteEntity(cmn.KubeSvc, c.SvcName(), true); err != nil {
+	if err := deleteEntity(cmn.KubeSvc, c.SvcName()); err != nil {
 		return err
 	}
 
@@ -215,7 +263,7 @@ func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) error {
 	return nil
 }
 
-func waitForPodReady(pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
+func waitPodReady(pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 	args := []string{"wait"}
 	if !waitTimeout.IsZero() {
 		args = append(args, "--timeout", waitTimeout.String())
@@ -254,14 +302,20 @@ func startPod(pod *corev1.Pod) error {
 	return nil
 }
 
-func deleteEntity(entity, entityName string, force bool) error {
+func deleteEntity(entity, entityName string) error {
 	args := []string{"delete", entity, entityName}
-	if force {
-		args = append(args, "--force")
-	}
+	// Doing graceful delete
 	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%s: %v", string(output), err)
+		glog.Errorf("graceful delete failed. entity: %s, entityName: %s, err: %v, out: %s",
+			entity, entityName, err, string(output))
+		// Doing force delete
+		args = append(args, "--force")
+		output, err = exec.Command(cmn.Kubectl, args...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("force delete failed. entity: %s, entityName: %s, err: %s, out: %v",
+				entity, entityName, string(output), err)
+		}
 	}
 	return nil
 }
@@ -295,7 +349,7 @@ func getServiceNodePort(svc *corev1.Service) (int, error) {
 }
 
 func handlePodFailure(pod *corev1.Pod, msg string) {
-	if deleteErr := deleteEntity(cmn.KubePod, pod.GetName(), true); deleteErr != nil {
+	if deleteErr := deleteEntity(cmn.KubePod, pod.GetName()); deleteErr != nil {
 		glog.Errorf("failed to delete pod %q after %s", pod.GetName(), msg)
 	}
 }

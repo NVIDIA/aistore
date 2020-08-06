@@ -117,7 +117,7 @@ type pushComm struct {
 	t cluster.Target
 }
 
-func (pushc *pushComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (pushc *pushComm) DoTransform(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	lom := &cluster.LOM{T: pushc.t, ObjName: objName}
 	if err := lom.Init(bck.Bck); err != nil {
 		return err

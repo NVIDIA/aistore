@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"syscall"
 )
 
@@ -106,6 +107,12 @@ func IsErrBrokenPipe(err error) bool {
 
 func IsErrOOS(err error) bool {
 	return errors.Is(err, syscall.ENOSPC)
+}
+
+func IsReqCanceled(err error) bool {
+	// TODO: find a better alternative
+	// Currently net/http does not have an exported error type for this
+	return strings.Contains(err.Error(), "net/http: request canceled")
 }
 
 func IsUnreachable(err error, status int) bool {

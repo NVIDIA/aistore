@@ -162,7 +162,7 @@ func (t *targetrunner) initTransform(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := transform.StartTransformationPod(t, t.k8snode, msg); err != nil {
+	if err := transform.Start(t, t.k8snode, msg); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -174,7 +174,7 @@ func (t *targetrunner) stopTransform(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := apiItems[0]
-	if err := transform.StopTransformationPod(id); err != nil {
+	if err := transform.Stop(id); err != nil {
 		t.handleTransformError(w, r, err)
 		return
 	}
