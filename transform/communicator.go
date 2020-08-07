@@ -133,7 +133,7 @@ func (pushc *pushComm) DoTransform(w http.ResponseWriter, _ *http.Request, bck *
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, pushc.transformerAddress, fh)
+	req, err := http.NewRequest(http.MethodPut, pushc.transformerAddress, fh)
 	if err != nil {
 		return err
 	}

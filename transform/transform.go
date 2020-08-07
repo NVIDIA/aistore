@@ -117,7 +117,7 @@ func waitTransformerReady(url string) error {
 	// TODO -- FIXME: Decide on a proper endpoint to do the health probe
 	tfProbeSleep := cmn.GCO.Get().Timeout.MaxKeepalive
 	tfProbeClient.Timeout = tfProbeSleep
-	testReq, _ := http.NewRequest(http.MethodPost, url, probe)
+	testReq, _ := http.NewRequest(http.MethodPut, url, probe)
 	for i := 0; i < tfProbeRetries; i++ {
 		resp, err := tfProbeClient.Do(testReq)
 		if err != nil {
