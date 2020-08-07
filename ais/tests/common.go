@@ -562,7 +562,8 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "remote",
-			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID}},
+			bck: cmn.Bck{Name: cmn.RandString(10),
+				Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID}},
 			skipArgs: tutils.SkipTestArgs{
 				RequiresRemote: true,
 			},
