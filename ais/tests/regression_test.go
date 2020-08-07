@@ -77,6 +77,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		cksumType  = cmn.DefaultBucketProps().Cksum.Type
+		subdir     = SmokeStr + "_" + cmn.GenTie()
 	)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountTargets() == 1 {
@@ -85,7 +86,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh, cksumType, true)
+	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType, true)
 	tassert.SelectErr(t, errCh, "put", true)
 	close(filenameCh)
 	close(errCh)
@@ -242,6 +243,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		cksumType  = cmn.DefaultBucketProps().Cksum.Type
+		subdir     = SmokeStr + "_" + cmn.GenTie()
 	)
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
@@ -250,7 +252,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tutils.PutRandObjs(proxyURL, bck, SmokeStr, filesize, num, errCh, filenameCh, cksumType)
+	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filenameCh)
 	close(errCh)
@@ -263,7 +265,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.Logf("Corrupting file data[%s]: %s\n", objName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	tassert.CheckFatal(t, err)
-	_, err = api.GetObjectWithValidation(baseParams, bck, path.Join(SmokeStr, objName))
+	_, err = api.GetObjectWithValidation(baseParams, bck, path.Join(subdir, objName))
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 	}
@@ -328,9 +330,10 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		errCh      = make(chan error, numPuts)
 		bck        = rtd.bck
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		subdir     = SmokeStr + "_" + cmn.GenTie()
 	)
 
-	tutils.PutRandObjs(proxyURL, rtd.bck, SmokeStr, filesize, numPuts, errCh, filesPutCh, cksumType)
+	tutils.PutRandObjs(proxyURL, rtd.bck, subdir, filesize, numPuts, errCh, filesPutCh, cksumType)
 	close(filesPutCh)
 	filesPut := make([]string, 0, len(filesPutCh))
 	for fname := range filesPutCh {
@@ -353,14 +356,14 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 			wg.Add(1)
 			go func(fn string) {
 				defer wg.Done()
-				tutils.Del(proxyURL, bck, "smoke/"+fn, nil, errCh, true /* silent */)
+				tutils.Del(proxyURL, bck, path.Join(subdir, fn), nil, errCh, true /* silent */)
 			}(fname)
 		}
 		wg.Wait()
 		tassert.SelectErr(t, errCh, "delete", abortonerr)
 		close(errCh)
 	}
-	getRandomFiles(proxyURL, bck, numPuts, SmokeStr+"/", t, errCh)
+	getRandomFiles(proxyURL, bck, numPuts, subdir+"/", t, errCh)
 	tassert.SelectErr(t, errCh, "get", false)
 	if !rtd.rename || rtd.wait {
 		del()
