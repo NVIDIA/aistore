@@ -243,7 +243,6 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 		c       = p.prepTxnClient(nmsg, bck)
 		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
-	glog.Error(c.req.Method, len(results), len(c.smap.Tmap))
 	for res := range results {
 		if res.err != nil {
 			// abort
