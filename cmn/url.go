@@ -36,3 +36,14 @@ func IsS3URL(link string) bool {
 func IsAzureURL(u *url.URL) bool {
 	return strings.Contains(u.Host, azBlobURL)
 }
+
+// Splits url into [(scheme)://](address).
+// It's not possible to use url.Parse as (from url.Parse() docs)
+// 'Trying to parse a hostname and path without a scheme is invalid'
+func ParseURLScheme(url string) (scheme, address string) {
+	s := strings.SplitN(url, "://", 2)
+	if len(s) == 1 {
+		return "", s[0]
+	}
+	return s[0], s[1]
+}

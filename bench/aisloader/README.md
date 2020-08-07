@@ -27,7 +27,9 @@ For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
 
 For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
 
-| Command-line option | Type | Description| Default |
+### Options via AIS Loader flags
+
+| Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
 | -batchsize | `int` | Batch size to list and delete | `100` |
 | -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
@@ -69,6 +71,11 @@ For the most recently updated command-line options and examples, please run `ais
 | -uniquegets | `bool` | true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others | `true` |
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
 | -verifyhash | `bool` | checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata | `true` |
+
+### Options via environment variables
+
+| Environment Variable | Type | Description |
+| `AIS_ENDPOINT` | `string` | Address of a cluster which aisloader will generate load on. Overrides `ip` and `port` flags. |
 
 ### Often used options explanation
 
@@ -294,16 +301,28 @@ $ aisloader -bucket=nvais -duration 0s -totalputsize=0
 13. Generate load on a cluster listening on custom IP address and port:
 
 ```console
-$ aisloader -ip=example.com -port=8080
+$ aisloader -ip="example.com" -port=8080
 ```
 
-14. PUT TAR files with random files inside into a cluster:
+14. Generate load on a cluster listening on custom IP address and port from environment variable:
+
+```console
+$ AIS_ENDPOINT="examples.com:8080" aisloader
+```
+
+15. Use HTTPS when connecting to a cluster:
+
+```console
+$ aisloader -ip="https://localhost" -port=8080
+```
+
+16. PUT TAR files with random files inside into a cluster:
 
 ```console
 $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar
 ```
 
-15. Generate load on `tar2tf` transformation. New transformation in started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
+17. Generate load on `tar2tf` transformation. New transformation in started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
 
 ```console
 $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -transformation=tar2tf

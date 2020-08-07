@@ -59,7 +59,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/aisloader/transformation"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/OneOfOne/xxhash"
@@ -72,7 +71,6 @@ const (
 	opConfig
 
 	myName           = "loader"
-	dockerEnvFile    = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 	randomObjNameLen = 32
 )
 
@@ -191,10 +189,6 @@ var (
 	flagUsage   bool
 	flagVersion bool
 
-	ip       string
-	port     string
-	useHTTPS bool
-
 	transformerSpec []byte
 	transformerID   string
 
@@ -206,9 +200,10 @@ var (
 
 	numGets atomic.Int64
 
-	envVars      = cmn.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
-	dockerHostIP = envVars["PRIMARY_HOST_IP"]           // Host IP of primary cluster
-	dockerPort   = envVars["PORT"]
+	ip          string
+	port        string
+	aisEndpoint string
+	envEndpoint = os.Getenv(cmn.EnvVars.Endpoint)
 )
 
 func (wo *workOrder) String() string {
@@ -246,13 +241,12 @@ func parseCmdLine() (params, error) {
 
 	f.BoolVar(&flagUsage, "usage", false, "Show command-line options, usage, and examples")
 	f.BoolVar(&flagVersion, "version", false, "Show aisloader version")
-	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
-	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
-	f.BoolVar(&useHTTPS, "use-https", false, "Enable HTTPS")
 	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name. If empty, a bucket with random name will be created")
 	f.StringVar(&p.bck.Provider, "provider", cmn.ProviderAIS, "ais - for AIS bucket, cloud - for Cloud bucket; other supported values include \"gcp\" and \"aws\", for Amazon and Google clouds, respectively")
+	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
+	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 
 	cmn.DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
@@ -525,23 +519,24 @@ func parseCmdLine() (params, error) {
 		p.cleanUp.Val = p.bck.IsAIS()
 	}
 
-	// For Dry-Run on Docker
-	if containers.DockerRunning() && ip == "localhost" {
-		ip = dockerHostIP
-	}
-
-	if containers.DockerRunning() && port == "8080" {
-		port = dockerPort
+	aisEndpoint = "http://" + ip + ":" + port
+	if envEndpoint != "" {
+		aisEndpoint = envEndpoint
 	}
 
 	traceHTTPSig.Store(p.traceHTTP)
 
-	if useHTTPS {
-		p.proxyURL = "https://" + ip + ":" + port
-	} else {
-		p.proxyURL = "http://" + ip + ":" + port
+	scheme, address := cmn.ParseURLScheme(aisEndpoint)
+	if scheme == "" {
+		scheme = "http"
 	}
-	transportArgs.UseHTTPS = useHTTPS
+	if scheme != "http" && scheme != "https" {
+		return params{}, fmt.Errorf("unknown scheme %q", scheme)
+	}
+
+	p.proxyURL = scheme + "://" + address
+
+	transportArgs.UseHTTPS = scheme == "https"
 	// if the primary proxy uses HTTPS, create a secure HTTP client with
 	// disabled certificate check.
 	httpClient = cmn.NewClient(transportArgs)
