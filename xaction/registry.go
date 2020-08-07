@@ -64,18 +64,16 @@ type (
 
 // private types
 type (
-	// If any of the section is set (mountpaths, bcks, all) the other all ignored.
+	// Selects subset of xactions to abort.
 	abortArgs struct {
-		// Abort all xactions matching any of the buckets.
+		// run on `bcks` buckets
 		bcks []*cluster.Bck
-
-		// Abort all mountpath xactions.
+		// mathcing `ty`
+		ty string
+		// all mountpath xactions - see cmn.IsMountpathXact()
 		mountpaths bool
-
-		// Abort all xactions. `ty` can be set so only
-		// xactions matching type `ty` will be aborted.
+		// all or all matching `ty`, if defined
 		all bool
-		ty  string
 	}
 	// Represents result of renewing given xaction.
 	renewRes struct {
