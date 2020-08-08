@@ -17,14 +17,14 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-type Vote string
-
 const (
 	VoteYes Vote = "YES"
 	VoteNo  Vote = "NO"
 )
 
 type (
+	Vote string
+
 	VoteRecord struct {
 		Candidate string    `json:"candidate"`
 		Primary   string    `json:"primary"`
@@ -55,28 +55,9 @@ type (
 	}
 )
 
-//==========
-//
-// Handlers
-//
-//==========
-
-// [METHOD] /v1/vote
-func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
-	if err != nil {
-		return
-	}
-
-	switch {
-	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
-		t.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apiItems[0] == cmn.Voteres:
-		t.httpsetprimaryproxy(w, r)
-	default:
-		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
-	}
-}
+///////////////////
+// voting: proxy //
+///////////////////
 
 // [METHOD] /v1/vote
 func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
@@ -94,104 +75,6 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpRequestNewPrimary(w, r)
 	default:
 		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
-	}
-}
-
-// GET /v1/vote/proxy
-func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Proxy); err != nil {
-		return
-	}
-
-	msg := VoteMessage{}
-	if err := cmn.ReadJSON(w, r, &msg); err != nil {
-		return
-	}
-	candidate := msg.Record.Candidate
-	if candidate == "" {
-		h.invalmsghdlr(w, r, "Cannot request vote without Candidate field")
-		return
-	}
-	smap := h.owner.smap.get()
-	if smap.Primary == nil {
-		h.invalmsghdlrf(w, r, "Cannot vote: current primary undefined, local %s", smap)
-		return
-	}
-	currPrimaryID := smap.Primary.ID()
-	if candidate == currPrimaryID {
-		h.invalmsghdlrf(w, r, "Candidate %s == the current primary %q", candidate, currPrimaryID)
-		return
-	}
-	newsmap := &msg.Record.Smap
-	psi := newsmap.GetProxy(candidate)
-	if psi == nil {
-		h.invalmsghdlrf(w, r, "Candidate %q not present in the VoteRecord %s", candidate, newsmap.pp())
-		return
-	}
-	if !newsmap.isPresent(h.si) {
-		h.invalmsghdlrf(w, r, "Self %q not present in the VoteRecord Smap %s", h.si, newsmap.pp())
-		return
-	}
-
-	if err := h.owner.smap.synchronize(newsmap, false /* lesserIsErr */); err != nil {
-		glog.Errorf("Failed to synchronize VoteRecord %s, err %s - voting No", newsmap, err)
-		if _, err := w.Write([]byte(VoteNo)); err != nil {
-			glog.Errorf("Error writing a No vote: %v", err)
-		}
-		return
-	}
-
-	vote, err := h.voteOnProxy(psi.ID(), currPrimaryID)
-	if err != nil {
-		h.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Proxy voted '%v' for %s", vote, psi)
-	}
-
-	if vote {
-		_, err = w.Write([]byte(VoteYes))
-		if err != nil {
-			h.invalmsghdlrf(w, r, "Error writing yes vote: %v", err)
-		}
-	} else {
-		_, err = w.Write([]byte(VoteNo))
-		if err != nil {
-			h.invalmsghdlrf(w, r, "Error writing no vote: %v", err)
-		}
-	}
-}
-
-// PUT /v1/vote/result
-func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Voteres); err != nil {
-		return
-	}
-
-	msg := VoteResultMessage{}
-	if err := cmn.ReadJSON(w, r, &msg); err != nil {
-		return
-	}
-
-	vr := msg.Result
-	glog.Infof("%s: received vote result: new primary %s", h.si, vr.Candidate)
-
-	newPrimary, oldPrimary := vr.Candidate, vr.Primary
-	err := h.owner.smap.modify(func(clone *smapX) error {
-		psi := clone.GetProxy(newPrimary)
-		if psi == nil {
-			return &errNodeNotFound{"cannot accept new primary election", newPrimary, h.si, clone}
-		}
-		clone.Primary = psi
-		if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {
-			clone.delProxy(oldPrimary)
-		}
-		glog.Infof("resulting %s", clone.pp())
-		return nil
-	})
-	if err != nil {
-		h.invalmsghdlr(w, r, err.Error())
 	}
 }
 
@@ -249,11 +132,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	go p.proxyElection(vr, smap.Primary)
 }
 
-//===================
-//
 // Election Functions
-//
-//===================
 
 func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	if p.owner.smap.get().isPrimary(p.si) {
@@ -290,7 +169,8 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	glog.Info("Moving to election state phase 1 (prepare)")
 	elected, votingErrors := p.electAmongProxies(vr, xact)
 	if !elected {
-		glog.Errorf("%s: election phase 1 (prepare) failed: primary remains %s, moving back to idle", p.si, curPrimary)
+		glog.Errorf("%s: election phase 1 (prepare) failed: primary remains %s, moving back to idle",
+			p.si, curPrimary)
 		return
 	}
 
@@ -319,7 +199,8 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *xaction.Election) 
 		if res.err != nil {
 			if cmn.IsErrConnectionRefused(res.err) {
 				if res.daemonID == vr.Primary {
-					glog.Infof("Expected response from %s (current/failed primary): connection refused", res.daemonID)
+					glog.Infof("Expected response from %s (failed primary): connection refused",
+						res.daemonID)
 				} else {
 					glog.Warningf("Error response from %s: connection refused", res.daemonID)
 				}
@@ -455,6 +336,27 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 	}
 }
 
+////////////////////
+// voting: target //
+////////////////////
+
+// [METHOD] /v1/vote
+func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
+	if err != nil {
+		return
+	}
+
+	switch {
+	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
+		t.httpproxyvote(w, r)
+	case r.Method == http.MethodPut && apiItems[0] == cmn.Voteres:
+		t.httpsetprimaryproxy(w, r)
+	default:
+		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+	}
+}
+
 func (t *targetrunner) onPrimaryProxyFailure() {
 	clone := t.owner.smap.get().clone()
 	if !clone.isValid() {
@@ -498,6 +400,108 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 		if clone.GetProxy(nextPrimaryProxy.ID()) != nil {
 			clone.delProxy(nextPrimaryProxy.ID())
 		}
+	}
+}
+
+////////////////////////////
+// voting: common methods //
+////////////////////////////
+
+// GET /v1/vote/proxy
+func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
+	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Proxy); err != nil {
+		return
+	}
+
+	msg := VoteMessage{}
+	if err := cmn.ReadJSON(w, r, &msg); err != nil {
+		return
+	}
+	candidate := msg.Record.Candidate
+	if candidate == "" {
+		h.invalmsghdlr(w, r, "Cannot request vote without Candidate field")
+		return
+	}
+	smap := h.owner.smap.get()
+	if smap.Primary == nil {
+		h.invalmsghdlrf(w, r, "Cannot vote: current primary undefined, local %s", smap)
+		return
+	}
+	currPrimaryID := smap.Primary.ID()
+	if candidate == currPrimaryID {
+		h.invalmsghdlrf(w, r, "Candidate %s == the current primary %q", candidate, currPrimaryID)
+		return
+	}
+	newsmap := &msg.Record.Smap
+	psi := newsmap.GetProxy(candidate)
+	if psi == nil {
+		h.invalmsghdlrf(w, r, "Candidate %q not present in the VoteRecord %s", candidate, newsmap.pp())
+		return
+	}
+	if !newsmap.isPresent(h.si) {
+		h.invalmsghdlrf(w, r, "Self %q not present in the VoteRecord Smap %s", h.si, newsmap.pp())
+		return
+	}
+
+	if err := h.owner.smap.synchronize(newsmap, false /* lesserIsErr */); err != nil {
+		glog.Errorf("Failed to synchronize VoteRecord %s, err %s - voting No", newsmap, err)
+		if _, err := w.Write([]byte(VoteNo)); err != nil {
+			glog.Errorf("Error writing a No vote: %v", err)
+		}
+		return
+	}
+
+	vote, err := h.voteOnProxy(psi.ID(), currPrimaryID)
+	if err != nil {
+		h.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Proxy voted '%v' for %s", vote, psi)
+	}
+
+	if vote {
+		_, err = w.Write([]byte(VoteYes))
+		if err != nil {
+			h.invalmsghdlrf(w, r, "Error writing yes vote: %v", err)
+		}
+	} else {
+		_, err = w.Write([]byte(VoteNo))
+		if err != nil {
+			h.invalmsghdlrf(w, r, "Error writing no vote: %v", err)
+		}
+	}
+}
+
+// PUT /v1/vote/result
+func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
+	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Voteres); err != nil {
+		return
+	}
+
+	msg := VoteResultMessage{}
+	if err := cmn.ReadJSON(w, r, &msg); err != nil {
+		return
+	}
+
+	vr := msg.Result
+	glog.Infof("%s: received vote result: new primary %s", h.si, vr.Candidate)
+
+	newPrimary, oldPrimary := vr.Candidate, vr.Primary
+	err := h.owner.smap.modify(func(clone *smapX) error {
+		psi := clone.GetProxy(newPrimary)
+		if psi == nil {
+			return &errNodeNotFound{"cannot accept new primary election", newPrimary, h.si, clone}
+		}
+		clone.Primary = psi
+		if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {
+			clone.delProxy(oldPrimary)
+		}
+		glog.Infof("resulting %s", clone.pp())
+		return nil
+	})
+	if err != nil {
+		h.invalmsghdlr(w, r, err.Error())
 	}
 }
 
@@ -558,11 +562,7 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	return nextPrimaryProxy.ID() == daemonID, nil
 }
 
-//=========================
-//
-// test
-//
-//=========================
+// test-only
 func NewVoteMsg(inp bool) SmapVoteMsg {
 	return SmapVoteMsg{VoteInProgress: inp, Smap: &smapX{cluster.Smap{Version: 1}}}
 }
