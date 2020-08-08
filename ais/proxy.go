@@ -1720,6 +1720,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	var (
 		aisMsg *aisMsg
 		args   bcastArgs
+		smap   = p.owner.smap.get()
 
 		hasEnough bool
 		entries   []*cmn.BucketEntry
@@ -1751,7 +1752,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 	// what we have locally, so we don't rerequest the objects.
 	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
 
-	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, nil, nil)
+	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
 	args = bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
@@ -1760,6 +1761,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 			Body:   cmn.MustMarshal(aisMsg),
 		},
 		timeout: cmn.LongTimeout, // TODO: should it be `Client.ListObjects`?
+		smap:    smap,
 		fv:      func() interface{} { return &cmn.BucketList{} },
 	}
 
@@ -1820,6 +1822,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 				Body:   cmn.MustMarshal(aisMsg),
 			},
 			timeout: reqTimeout,
+			smap:    smap,
 			fv:      func() interface{} { return &cmn.BucketList{} },
 		}
 	)
@@ -1951,8 +1954,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 	)
 	var (
 		smap   = p.owner.smap.get()
-		bmd    = p.owner.bmd.get()
-		aisMsg = p.newAisMsg(msg, smap, bmd, cmn.GenUUID())
+		aisMsg = p.newAisMsg(msg, smap, nil, cmn.GenUUID())
 		body   = cmn.MustMarshal(aisMsg)
 		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	)
@@ -2396,7 +2398,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 				glog.Infof("%s: distributing %s as well", p.si, rmd)
 			}
 
-			msg := p.newAisMsgStr(cmn.ActNewPrimary, clone, nil)
+			msg := p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
 			_ = p.metasyncer.sync(
 				revsPair{clone, msg},
 				revsPair{bmd, msg},
@@ -2960,7 +2962,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 				bmd    = p.owner.bmd.get()
 			)
 			// metasync
-			aisMsg := p.newAisMsg(msg, clone, nil)
+			aisMsg := p.newAisMsg(msg, clone, bmd)
 			pairs := []revsPair{{clone, aisMsg}, {bmd, aisMsg}}
 			if nsi.IsTarget() {
 				// Trigger rebalance (in case target with given ID already exists

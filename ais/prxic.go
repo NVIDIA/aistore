@@ -252,9 +252,8 @@ func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX) (err error) {
 }
 
 func (p *proxyrunner) sendOwnershipTbl(si *cluster.Snode) error {
-	smap := p.owner.smap.get()
 	actMsg := &cmn.ActionMsg{Action: cmn.ActMergeOwnershipTbl, Value: &p.notifs}
-	msg := p.newAisMsg(actMsg, smap, nil)
+	msg := p.newAisMsg(actMsg, nil, nil)
 	result := p.call(callArgs{si: si,
 		req: cmn.ReqArgs{Method: http.MethodPost,
 			Path: cmn.URLPath(cmn.Version, cmn.IC),

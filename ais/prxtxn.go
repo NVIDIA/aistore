@@ -600,25 +600,25 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 // rollback create-bucket
 func (p *proxyrunner) undoCreateBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
 	p.owner.bmd.Lock()
+	defer p.owner.bmd.Unlock()
+
 	clone := p.owner.bmd.get().clone()
 	if !clone.del(bck) { // once-in-a-million
-		p.owner.bmd.Unlock()
 		return
 	}
 	p.owner.bmd.put(clone)
 
 	_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, clone)})
-
-	p.owner.bmd.Unlock()
 }
 
 // rollback make-n-copies
 func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, copies int64, enabled bool) {
 	p.owner.bmd.Lock()
+	defer p.owner.bmd.Unlock()
+
 	clone := p.owner.bmd.get().clone()
 	nprops, present := clone.Get(bck)
 	if !present { // ditto
-		p.owner.bmd.Unlock()
 		return
 	}
 	bprops := nprops.Clone()
@@ -628,8 +628,6 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, cop
 	p.owner.bmd.put(clone)
 
 	_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, clone)})
-
-	p.owner.bmd.Unlock()
 }
 
 // make and validate nprops
