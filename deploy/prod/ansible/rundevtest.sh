@@ -3,6 +3,9 @@
 function cleanup() {
   make kill
   make clean
+  pushd deploy/dev/k8s
+  ./stop.sh
+  popd
 }
 
 function post_deploy() {

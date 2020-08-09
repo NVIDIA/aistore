@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -215,7 +214,7 @@ func (t *targetrunner) Run() error {
 
 	cluster.InitTarget()
 
-	t.detectK8s()
+	t.k8snode = cmn.DetectK8s()
 
 	//
 	// join cluster
@@ -298,21 +297,6 @@ func (t *targetrunner) Run() error {
 		return err
 	}
 	return nil
-}
-
-func (t *targetrunner) detectK8s() {
-	if t.k8snode = os.Getenv(cmn.K8SHostName); t.k8snode == "" {
-		return
-	}
-	output, err := exec.Command(cmn.Kubectl, "get", "node", t.k8snode,
-		"--template={{.metadata.name}}").Output()
-	if err != nil {
-		return
-	}
-	if s := string(output); s != t.k8snode {
-		t.k8snode = ""
-		glog.Errorf("%s: not detecting K8s: %s != %s", t.si, t.k8snode, s) // TODO: make it a Warning
-	}
 }
 
 func (t *targetrunner) checkK8s() error {

@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -124,8 +123,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		}
 	}
 	if args.K8s {
-		cmd := exec.Command(cmn.Kubectl, "get", "pods")
-		if err := cmd.Run(); err != nil {
+		if cmn.DetectK8s() == "" {
 			tb.Skipf("%s requires Kubernetes", tb.Name())
 		}
 	}

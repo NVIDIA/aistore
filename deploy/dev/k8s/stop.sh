@@ -1,4 +1,6 @@
 #!/bin/bash
 set -e
-echo "Stopping AIS Clusters, deleting minikube"
-minikube delete
+if command -v minikube &> /dev/null; then
+  echo "Stopping AIS Clusters, deleting minikube"
+  minikube delete
+fi
