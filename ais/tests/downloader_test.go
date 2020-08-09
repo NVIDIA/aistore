@@ -177,7 +177,7 @@ func downloadObjectCloud(t *testing.T, body downloader.DlCloudBody, expectedFini
 	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeCloud, body)
 	tassert.CheckFatal(t, err)
 
-	waitForDownload(t, id, time.Minute)
+	waitForDownload(t, id, 2*time.Minute)
 
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
@@ -1279,7 +1279,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	)
 }
 
-// NOTE: Test may fail if the network is slow!!
+// NOTE: Test may fail if the network is SUPER slow!!
 func TestDownloadJobBytesThrottling(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
@@ -1287,10 +1287,10 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 		link = "https://storage.googleapis.com/minikube/iso/minikube-v0.35.0.iso"
 
 		// Bytes per hour limit.
-		softLimit = 3 * cmn.MiB
+		softLimit = 5 * cmn.KiB
 		// Downloader could potentially download a little bit more but should
 		// never exceed this.
-		hardLimit = 4 * cmn.MiB
+		hardLimit = 7 * cmn.KiB
 	)
 
 	var (

@@ -199,7 +199,11 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 		}()
 
 		for {
-			objs, ok := job.genNext()
+			objs, ok, err := job.genNext()
+			if err != nil {
+				diffResolver.Abort(err)
+				return
+			}
 			if !ok || diffResolver.Stopped() {
 				return
 			}

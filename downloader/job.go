@@ -9,16 +9,17 @@ import (
 	"errors"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-const sliceDownloadBatchSize = 1000
+const (
+	// Determines the size of single batch size generated in `genNext`.
+	downloadBatchSize = 10_000
+)
 
 var (
 	_ DlJob = &sliceDlJob{}
@@ -53,8 +54,8 @@ type (
 		checkObj(objName string) bool
 
 		// genNext is supposed to fulfill the following protocol:
-		// ok is set to true if there is batch to process, false otherwise
-		genNext() (objs []dlObj, ok bool)
+		//  `ok` is set to `true` if there is batch to process, `false` otherwise
+		genNext() (objs []dlObj, ok bool, err error)
 
 		throttler() *throttler
 
@@ -98,14 +99,13 @@ type (
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
 
-		sync   bool
 		prefix string
 		suffix string
+		sync   bool
 
-		mtx               sync.Mutex
+		done              bool
 		objs              []dlObj // objects' metas which are ready to be downloaded
 		continuationToken string
-		pagesCnt          int
 	}
 
 	downloadJobInfo struct {
@@ -157,20 +157,20 @@ func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc s
 }
 
 func (j *sliceDlJob) Len() int { return len(j.objs) }
-func (j *sliceDlJob) genNext() (objs []dlObj, ok bool) {
+func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	if j.current == len(j.objs) {
-		return []dlObj{}, false
+		return nil, false, nil
 	}
 
-	if j.current+sliceDownloadBatchSize >= len(j.objs) {
+	if j.current+downloadBatchSize >= len(j.objs) {
 		objs = j.objs[j.current:]
 		j.current = len(j.objs)
-		return objs, true
+		return objs, true, nil
 	}
 
-	objs = j.objs[j.current : j.current+sliceDownloadBatchSize]
-	j.current += sliceDownloadBatchSize
-	return objs, true
+	objs = j.objs[j.current : j.current+downloadBatchSize]
+	j.current += downloadBatchSize
+	return objs, true, nil
 }
 
 func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody) (*multiDlJob, error) {
@@ -228,47 +228,31 @@ func (j *cloudBucketDlJob) Sync() bool { return j.sync }
 func (j *cloudBucketDlJob) checkObj(objName string) bool {
 	return strings.HasPrefix(objName, j.prefix) && strings.HasSuffix(objName, j.suffix)
 }
-func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool) {
-	j.mtx.Lock()
-	defer j.mtx.Unlock()
-
-	if len(j.objs) == 0 {
-		return nil, false
+func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
+	if j.done {
+		return nil, false, nil
 	}
-
-	readyToDownloadObjs := j.objs
 	if err := j.getNextObjs(); err != nil {
-		glog.Error(err)
-		// This makes `genNext` return `ok = false` in the next loop iteration.
-		j.objs, j.continuationToken = []dlObj{}, ""
+		return nil, false, err
 	}
-
-	return readyToDownloadObjs, true
+	return j.objs, true, nil
 }
 
 // Reads the content of a cloud bucket page by page until any objects to
 // download found or the bucket list is over.
 func (j *cloudBucketDlJob) getNextObjs() error {
-	j.objs = []dlObj{}
-	if j.pagesCnt > 0 && j.continuationToken == "" {
-		// Cloud ListObjects returned empty `continuationToken` after at least
-		// one request this means there are no more objects in to list.
-		return nil
-	}
-
 	var (
 		sid   = j.t.Snode().ID()
 		smap  = j.t.GetSowner().Get()
 		cloud = j.t.Cloud(j.bck)
 	)
-	for {
-		j.pagesCnt++
+	j.objs = j.objs[:0]
+	for len(j.objs) < downloadBatchSize {
 		msg := &cmn.SelectMsg{
 			Prefix:            j.prefix,
 			ContinuationToken: j.continuationToken,
 			PageSize:          cloud.MaxPageSize(),
 		}
-
 		bckList, err, _ := cloud.ListObjects(j.ctx, j.bck, msg)
 		if err != nil {
 			return err
@@ -288,40 +272,36 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 			}
 			j.objs = append(j.objs, obj)
 		}
-		if j.continuationToken == "" || len(j.objs) != 0 {
+		if j.continuationToken == "" {
+			j.done = true
 			break
 		}
 	}
-
 	return nil
 }
 
 func (j *rangeDlJob) SrcBck() cmn.Bck { return j.bck.Bck }
 func (j *rangeDlJob) Len() int        { return j.count }
-func (j *rangeDlJob) genNext() ([]dlObj, bool) {
-	readyToDownloadObjs := j.objs
+func (j *rangeDlJob) genNext() ([]dlObj, bool, error) {
 	if j.done {
-		j.objs = []dlObj{}
-		return readyToDownloadObjs, len(readyToDownloadObjs) != 0
+		return nil, false, nil
 	}
 	if err := j.getNextObjs(); err != nil {
-		return []dlObj{}, false
+		return nil, false, err
 	}
-	return readyToDownloadObjs, true
+	return j.objs, true, nil
 }
 
 func (j *rangeDlJob) getNextObjs() error {
 	var (
-		link string
 		smap = j.t.GetSowner().Get()
 		sid  = j.t.Snode().ID()
-		ok   = true
 	)
-	j.objs = []dlObj{}
-
-	for len(j.objs) < sliceDownloadBatchSize && ok {
-		link, ok = j.iter()
+	j.objs = j.objs[:0]
+	for len(j.objs) < downloadBatchSize {
+		link, ok := j.iter()
 		if !ok {
+			j.done = true
 			break
 		}
 		name := path.Join(j.dir, path.Base(link))
@@ -334,7 +314,6 @@ func (j *rangeDlJob) getNextObjs() error {
 		}
 		j.objs = append(j.objs, obj)
 	}
-	j.done = !ok
 	return nil
 }
 
@@ -350,12 +329,8 @@ func newCloudBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *
 		sync:      payload.Sync,
 		prefix:    payload.Prefix,
 		suffix:    payload.Suffix,
-
-		continuationToken: "",
 	}
-
-	err := job.getNextObjs()
-	return job, err
+	return job, nil
 }
 
 func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
@@ -411,8 +386,7 @@ func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRan
 		dir:       payload.Subdir,
 		count:     cnt,
 	}
-	err = job.getNextObjs()
-	return job, err
+	return job, nil
 }
 
 func (d *downloadJobInfo) ToDlJobInfo() DlJobInfo {
