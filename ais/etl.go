@@ -1,0 +1,202 @@
+// Package ais provides core functionality for the AIStore object storage.
+/*
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ */
+package ais
+
+import (
+	"io/ioutil"
+	"net/http"
+	"time"
+
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/etl"
+)
+
+/////////////////
+// ETL: target //
+/////////////////
+
+// [METHOD] /v1/etl
+func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
+	if err := t.checkK8s(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	switch {
+	case r.Method == http.MethodPost:
+		t.initETL(w, r)
+	case r.Method == http.MethodGet:
+		t.listETLs(w, r)
+	case r.Method == http.MethodDelete:
+		t.stopETL(w, r)
+	default:
+		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+	}
+}
+
+func (t *targetrunner) initETL(w http.ResponseWriter, r *http.Request) {
+	var msg etl.Msg
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlInit); err != nil {
+		return
+	}
+	if err := cmn.ReadJSON(w, r, &msg); err != nil {
+		return
+	}
+	if err := etl.Start(t, t.k8snode, msg); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+	}
+}
+
+func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.ETL, cmn.EtlStop)
+	if err != nil {
+		return
+	}
+	uuid := apiItems[0]
+	if err := etl.Stop(uuid); err != nil {
+		t.handleETLError(w, r, err)
+	}
+}
+
+func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string, bck *cluster.Bck, objName string) {
+	var (
+		comm etl.Communicator
+		err  error
+	)
+	comm, err = etl.GetCommunicator(uuid)
+	if err != nil {
+		t.handleETLError(w, r, err)
+		return
+	}
+	if err := comm.Do(w, r, bck, objName); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+	}
+}
+
+func (t *targetrunner) listETLs(w http.ResponseWriter, r *http.Request) {
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlList); err != nil {
+		return
+	}
+	t.writeJSON(w, r, etl.List(), "list-ETL")
+}
+
+// TODO: It should be all-purpose function, similar to invaldmsghdlr.
+func (t *targetrunner) handleETLError(w http.ResponseWriter, r *http.Request, err error) {
+	if _, ok := err.(*cmn.NotFoundError); ok {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+	} else {
+		t.invalmsghdlr(w, r, err.Error())
+	}
+}
+
+////////////////
+// ETL: proxy //
+////////////////
+
+// [METHOD] /v1/etl
+func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.Method == http.MethodPost:
+		p.initETL(w, r)
+	case r.Method == http.MethodGet:
+		p.listETL(w, r)
+	case r.Method == http.MethodDelete:
+		p.stopETL(w, r)
+	default:
+		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+	}
+}
+
+// POST /v1/etl/init
+func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlInit)
+	if err != nil {
+		return
+	}
+
+	spec, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	r.Body.Close()
+
+	msg, err := etl.ValidateSpec(spec)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	msg.ID = cmn.GenUUID()
+
+	results := p.bcastToGroup(bcastArgs{
+		req:     cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)},
+		timeout: cmn.LongTimeout,
+	})
+	for res := range results {
+		if res.err != nil {
+			err = res.err
+			glog.Error(err)
+		}
+	}
+	if err == nil {
+		// All init calls have succeeded, return UUID.
+		w.Write([]byte(msg.ID))
+		return
+	}
+
+	// At least one init call has failed. Terminate all started ETL pods.
+	// Discard the stop results. Calls may succeed (for targets that successfully started a pod),
+	// or fail (for targets that didn't start successfully a pod).
+	p.bcastToGroup(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodDelete,
+			Path:   cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlStop, msg.ID),
+			Body:   nil,
+		},
+		timeout: cmn.LongTimeout,
+	})
+	p.invalmsghdlr(w, r, err.Error())
+}
+
+// GET /v1/etl/list
+func (p *proxyrunner) listETL(w http.ResponseWriter, r *http.Request) {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlList); err != nil {
+		return
+	}
+	si, err := p.GetSowner().Get().GetRandTarget()
+	if err != nil {
+		p.invalmsghdlrf(w, r, "failed to pick random target, err: %v", err)
+		return
+	}
+	redirectURL := p.redirectURL(r, si, time.Now(), cmn.NetworkIntraData)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+// DELETE /v1/etl/stop/uuid
+func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.ETL, cmn.EtlStop)
+	if err != nil {
+		return
+	}
+	uuid := apiItems[0]
+	if uuid == "" {
+		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
+		return
+	}
+	results := p.bcastToGroup(bcastArgs{
+		req:     cmn.ReqArgs{Method: http.MethodDelete, Path: r.URL.Path, Body: nil},
+		timeout: cmn.LongTimeout,
+	})
+	for res := range results {
+		if res.err != nil {
+			err = res.err
+			glog.Error(err)
+		}
+	}
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+	}
+}

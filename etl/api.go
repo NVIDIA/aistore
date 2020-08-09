@@ -1,8 +1,8 @@
-// Package transform provides utilities to initialize and use transformation pods.
+// Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package transform
+package etl
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
@@ -16,7 +16,7 @@ type (
 		WaitTimeout cmn.DurationJSON `json:"wait_timeout"`
 	}
 
-	TransformationInfo struct {
+	Info struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	}

@@ -1,8 +1,8 @@
-// Package transform provides utilities to initialize and use transformation pods.
+// Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package transform
+package etl
 
 import (
 	"sync"
@@ -65,11 +65,11 @@ func (r *registry) removeByUUID(uuid string) {
 	r.mtx.Unlock()
 }
 
-func (r *registry) list() []TransformationInfo {
+func (r *registry) list() []Info {
 	r.mtx.RLock()
-	transformations := make([]TransformationInfo, 0, len(r.byUUID))
+	transformations := make([]Info, 0, len(r.byUUID))
 	for uuid, c := range r.byUUID {
-		transformations = append(transformations, TransformationInfo{
+		transformations = append(transformations, Info{
 			ID:   uuid,
 			Name: c.Name(),
 		})

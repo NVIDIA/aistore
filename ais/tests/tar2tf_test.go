@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/transform"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -28,7 +28,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 	spec, err := ioutil.ReadFile(transformerTemplate)
 	tassert.CheckError(t, err)
 
-	pod, err := transform.ParsePodSpec(spec)
+	pod, err := etl.ParsePodSpec(spec)
 	tassert.CheckError(t, err)
 	spec, _ = jsoniter.Marshal(pod)
 

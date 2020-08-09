@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/transform"
+	"github.com/NVIDIA/aistore/etl"
 )
 
 const (
@@ -571,17 +571,17 @@ func TransformInit(baseParams BaseParams, spec []byte) (id string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformInit),
+		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlInit),
 		Body:       spec,
 	}, &id)
 	return id, err
 }
 
-func TransformList(baseParams BaseParams) (list []transform.TransformationInfo, err error) {
+func TransformList(baseParams BaseParams) (list []etl.Info, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformList),
+		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlList),
 	}, &list)
 	return list, err
 }
@@ -590,7 +590,7 @@ func TransformStop(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Transform, cmn.TransformStop, id),
+		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlStop, id),
 	})
 	return err
 }

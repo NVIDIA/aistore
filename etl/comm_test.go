@@ -1,8 +1,8 @@
-// Package transform provides utilities to initialize and use transformation pods.
+// Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package transform
+package etl
 
 import (
 	"crypto/rand"
@@ -76,7 +76,7 @@ var _ = Describe("CommunicatorTest", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		targetServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			err := comm.DoTransform(w, r, clusterBck, objName)
+			err := comm.Do(w, r, clusterBck, objName)
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		proxyServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

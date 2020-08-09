@@ -1,8 +1,8 @@
-// Package transform provides utilities to initialize and use transformation pods.
+// Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package transform
+package etl
 
 import (
 	"io"
@@ -28,10 +28,10 @@ type Communicator interface {
 	Name() string
 	PodName() string
 	SvcName() string
-	// DoTransform can use one of 2 transformer endpoints:
+	// Do can use one of 2 transformer endpoints:
 	// Method "POST", Path "/"
 	// Method "GET", Path "/bucket/object"
-	DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
+	Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 }
 
 func filterQueryParams(rawQuery string) string {
@@ -92,7 +92,7 @@ type pushPullComm struct {
 	rp *httputil.ReverseProxy
 }
 
-func (ppc *pushPullComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (ppc *pushPullComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	r.URL.Path = transformerPath(bck, objName) // Reverse proxy should always use /bucket/object endpoint.
 	ppc.rp.ServeHTTP(w, r)
 	return nil
@@ -106,7 +106,7 @@ type redirComm struct {
 	baseComm
 }
 
-func (repc *redirComm) DoTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (repc *redirComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	redirectURL := repc.transformerAddress + transformerPath(bck, objName)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
@@ -117,7 +117,7 @@ type pushComm struct {
 	t cluster.Target
 }
 
-func (pushc *pushComm) DoTransform(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
+func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	lom := &cluster.LOM{T: pushc.t, ObjName: objName}
 	if err := lom.Init(bck.Bck); err != nil {
 		return err

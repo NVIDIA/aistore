@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/NVIDIA/aistore/transform"
+	"github.com/NVIDIA/aistore/etl"
 )
 
 const (
@@ -32,7 +32,7 @@ var (
 
 func validateTransformName(name string) error {
 	if _, ok := links[name]; !ok {
-		return fmt.Errorf("%s not a valid transform name; expected one of %s, %s, %s", name, Echo, Tar2TF, Md5)
+		return fmt.Errorf("%s invalid name; expected one of %s, %s, %s", name, Echo, Tar2TF, Md5)
 	}
 	return nil
 }
@@ -61,7 +61,7 @@ func GetYaml(name string) ([]byte, error) {
 		// Hack: Neither os.Expand, nor os.ExpandEnv supports bash env variable default-value
 		// syntax. The whole ${VAR:-default} is matched as v.
 		if strings.Contains(v, "COMMUNICATION_TYPE") {
-			return transform.RedirectCommType
+			return etl.RedirectCommType
 		}
 		if strings.Contains(v, "DOCKER_REGISTRY_URL") {
 			return "aistore"

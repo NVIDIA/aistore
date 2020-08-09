@@ -1,8 +1,8 @@
-// Package transform provides utilities to initialize and use transformation pods.
+// Package etl provides utilities to initialize and use transformation pods.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package transform
+package etl
 
 import (
 	"bytes"
@@ -96,7 +96,7 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
 
 	// TODO: Temporary workaround. Debug this further to find the root cause.
-	// Not waiting causes the first DoTransform request to fail
+	// Not waiting causes the first Do() request to fail
 	// sometimes.
 	if waitErr := waitTransformerReady(transformerURL); waitErr != nil {
 		if err := deleteEntity(cmn.KubePod, pod.Name); err != nil {
@@ -122,7 +122,8 @@ func waitTransformerReady(url string) error {
 		resp, err := tfProbeClient.Do(testReq)
 		if err != nil {
 			if cmn.IsReqCanceled(err) || cmn.IsErrConnectionRefused(err) {
-				glog.Errorf("checking transformer endpoint: %s  failed, err: %s, retryCount: %d", url, err.Error(), i+1)
+				glog.Errorf("checking transformer endpoint: %s  failed, err: %s, retryCount: %d",
+					url, err.Error(), i+1)
 				time.Sleep(tfProbeSleep)
 				continue
 			}
@@ -185,7 +186,7 @@ func GetCommunicator(transformID string) (Communicator, error) {
 	return c, nil
 }
 
-func ListTransforms() []TransformationInfo { return reg.list() }
+func List() []Info { return reg.list() }
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func setTransformAffinity(pod *corev1.Pod) error {

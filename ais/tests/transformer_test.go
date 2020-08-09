@@ -19,7 +19,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/transform"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -44,15 +44,15 @@ var (
 func TestKubeTransformer(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	tests := []testConfig{
-		{transformer: "echo", comm: transform.RedirectCommType},
-		{transformer: "echo", comm: transform.RevProxyCommType},
-		{transformer: "echo", comm: transform.PushCommType},
-		{tar2tf, transform.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tar2tf, transform.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tar2tf, transform.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tar2tfFilters, transform.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
-		{tar2tfFilters, transform.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
-		{tar2tfFilters, transform.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{transformer: "echo", comm: etl.RedirectCommType},
+		{transformer: "echo", comm: etl.RevProxyCommType},
+		{transformer: "echo", comm: etl.PushCommType},
+		{tar2tf, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tar2tf, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tar2tf, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
 	}
 
 	for _, test := range tests {
@@ -69,7 +69,7 @@ func transformInit(t *testing.T, name, comm string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	pod, err := transform.ParsePodSpec(spec)
+	pod, err := etl.ParsePodSpec(spec)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +77,7 @@ func transformInit(t *testing.T, name, comm string) (string, error) {
 		pod.Annotations["communication_type"] = comm
 	}
 	spec, _ = jsoniter.Marshal(pod)
-	t.Log("Init transform")
+	t.Log("Init ETL")
 	return api.TransformInit(defaultAPIParams, spec)
 }
 
@@ -117,7 +117,7 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 	uuid, err = transformInit(t, transformer, comm)
 	tassert.CheckFatal(t, err)
 	defer func() {
-		t.Logf("Stop transform %q", uuid)
+		t.Logf("Stop %q", uuid)
 		tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid))
 	}()
 
@@ -128,11 +128,11 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 		cmn.RemoveFile(outputFileName)
 	}()
 
-	t.Logf("Read transform %q", uuid)
+	t.Logf("Read %q", uuid)
 	err = api.TransformObject(defaultAPIParams, uuid, bck, objName, fho)
 	tassert.CheckFatal(t, err)
 
-	t.Log("Compare transform output")
+	t.Log("Compare output")
 	same, err := fEq(outputFileName, expectedOutputFileName)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, same, "file contents after transformation differ")
@@ -210,14 +210,14 @@ func TestKubeSingleTransformerAtATime(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	if uuid1 != "" {
 		defer func() {
-			t.Logf("Stop transform %q", uuid1)
+			t.Logf("Stop %q", uuid1)
 			tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid1))
 		}()
 	}
 	uuid2, err := transformInit(t, "md5", "hrev://")
 	tassert.Fatalf(t, err != nil, "Expected err!=nil, got %v", err)
 	if uuid2 != "" {
-		t.Logf("Stop transform %q", uuid2)
+		t.Logf("Stop %q", uuid2)
 		tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid2))
 	}
 }

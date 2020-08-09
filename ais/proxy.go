@@ -134,7 +134,7 @@ func (p *proxyrunner) Run() error {
 	networkHandlers := []networkHandler{
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
-		{r: cmn.Transform, h: p.transformHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.ETL, h: p.etlHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.IC, h: p.listenICHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},

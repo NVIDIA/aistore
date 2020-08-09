@@ -88,8 +88,8 @@ const (
 	ActMountpathRemove  = "remove"
 
 	// Actions on xactions
-	ActXactStop  = "stop"
-	ActXactStart = "start"
+	ActXactStop  = Stop
+	ActXactStart = Start
 
 	// auxiliary
 	ActTransient = "transient" // do not save on the disk
@@ -201,7 +201,7 @@ const (
 
 // enum: task action (cmn.URLParamTaskAction)
 const (
-	TaskStart  = "start"
+	TaskStart  = Start
 	TaskStatus = "status"
 	TaskResult = "result"
 )
@@ -304,11 +304,14 @@ const (
 	Summary      = "summary"
 	AllBuckets   = "*"
 
+	// common
+	Init  = "init"
+	Start = "start"
+	Stop  = "stop"
+	Abort = "abort"
+	Sort  = "sort"
+
 	// dSort, downloader, query
-	Init        = "init"
-	Sort        = "sort"
-	Start       = "start"
-	Abort       = "abort"
 	Metrics     = "metrics"
 	Records     = "records"
 	Shards      = "shards"
@@ -326,11 +329,11 @@ const (
 	// tar2tf
 	GetTargetObjects = "objects"
 
-	// transform
-	TransformInit = Init
-	TransformList = List
-	TransformStop = "stop"
-	Transform     = "transform"
+	// ETL
+	EtlInit = Init
+	EtlList = List
+	EtlStop = Stop
+	ETL     = "etl"
 )
 
 // enum: compression

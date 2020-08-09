@@ -371,7 +371,7 @@ func (t *targetrunner) initRecvHandlers() {
 			{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
 			{r: cmn.Sort, h: dsort.SortHandler,
 				net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
-			{r: cmn.Transform, h: t.transformHandler,
+			{r: cmn.ETL, h: t.etlHandler,
 				net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 
 			{r: cmn.Query, h: t.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
@@ -628,7 +628,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if transformID := query.Get(cmn.URLParamUUID); transformID != "" {
-		t.doTransform(w, r, transformID, bck, objName)
+		t.doETL(w, r, transformID, bck, objName)
 		return
 	}
 	goi := &getObjInfo{

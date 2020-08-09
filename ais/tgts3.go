@@ -178,7 +178,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	)
 	uuid := r.URL.Query().Get(cmn.URLParamUUID)
 	if uuid != "" {
-		t.doTransform(w, r, uuid, bck, objName)
+		t.doETL(w, r, uuid, bck, objName)
 		return
 	}
 
