@@ -263,6 +263,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 		bck.Props = bprops
 		nprops, err = p.makeNprops(bck, propsToUpdate) // under lock
 		if err != nil {
+			p.owner.bmd.Unlock()
 			return
 		}
 	}
@@ -644,7 +645,8 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	nprops.Apply(propsToUpdate)
 	if bprops.EC.Enabled && nprops.EC.Enabled {
 		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
-			err = fmt.Errorf("%s: once enabled, EC configuration can be only disabled but cannot change", p.si)
+			err = fmt.Errorf("%s: once enabled, EC configuration can be only disabled but cannot change",
+				p.si)
 			return
 		}
 	} else if nprops.EC.Enabled {
@@ -663,10 +665,10 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 		nprops.Mirror.Enabled = false
 	}
 
+	// cannot run make-n-copies and EC on the same bucket at the same time
 	remirror := reMirror(bprops, nprops)
 	reec := reEC(bprops, nprops, bck)
 	if len(creating) == 0 && remirror && reec {
-		// NOTE: cannot run make-n-copies and EC on the same bucket at the same time
 		err = cmn.NewErrorBucketIsBusy(bck.Bck, p.si.String())
 		return
 	}
