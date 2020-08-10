@@ -261,7 +261,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
 
-	bckList, err := p.listAISBucket(bck, smsg)
+	objList, err := p.listObjectsAIS(bck, smsg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -269,7 +269,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 
 	resp := s3compat.NewListObjectResult()
 	resp.ContinuationToken = smsg.ContinuationToken
-	resp.FillFromAisBckList(bckList)
+	resp.FillFromAisBckList(objList)
 	b := resp.MustMarshal()
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentXML)
 	w.Write(b)

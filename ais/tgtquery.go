@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/tinylib/msgp/msgp"
 )
 
 // There are 3 methods exposed by targets:
@@ -145,12 +144,8 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var (
-		mw      = msgp.NewWriterSize(w, 10*cmn.KiB)
-		objList = cmn.BucketList{Entries: entries}
-	)
-	objList.EncodeMsg(mw)
-	mw.Flush()
+	objList := &cmn.BucketList{Entries: entries}
+	t.writeMsgPack(w, r, objList, "query_objects")
 }
 
 // v1/query/discard/handle/value

@@ -929,29 +929,43 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 	return items, nil
 }
 
+func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
+	var (
+		err error
+		mw  = msgp.NewWriterSize(w, 10*cmn.KiB)
+	)
+	w.Header().Set(cmn.HeaderContentType, cmn.ContentMsgPack)
+	if err = v.(msgp.Encodable).EncodeMsg(mw); err == nil {
+		err = mw.Flush()
+	}
+	if err != nil {
+		h.writeErrorStatus(w, r, tag, err)
+		return
+	}
+	return true
+}
+
 func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
-	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	_, isByteArray := v.([]byte)
 	cmn.Assert(!isByteArray)
-	var err error
-	if err = jsoniter.NewEncoder(w).Encode(v); err == nil {
-		return true
+
+	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
+	if err := jsoniter.NewEncoder(w).Encode(v); err != nil {
+		h.writeErrorStatus(w, r, tag, err)
+		return
 	}
-	h.writeErrorStatus(w, r, tag, err)
-	return
+	return true
 }
 
 // NOTE: must be the last error-generating-and-handling call in the http handler
 //       writes http body and header
 //       calls invalmsghdlr() on err
 func (h *httprunner) writeBytes(w http.ResponseWriter, r *http.Request, bytes []byte, tag string) (ok bool) {
-	var err error
-	if _, err = w.Write(bytes); err == nil {
-		ok = true
+	if _, err := w.Write(bytes); err != nil {
+		h.writeErrorStatus(w, r, tag, err)
 		return
 	}
-	h.writeErrorStatus(w, r, tag, err)
-	return
+	return true
 }
 
 func (h *httprunner) writeJSONBytes(w http.ResponseWriter, r *http.Request, bytes []byte, tag string) (ok bool) {

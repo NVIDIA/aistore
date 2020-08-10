@@ -201,7 +201,8 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 				Path:   cmn.URLPath(cmn.Version, cmn.Query, cmn.Peek),
 				Body:   cmn.MustMarshal(msg),
 			},
-			fv: func() interface{} { return &cmn.BucketList{} },
+			timeout: cmn.LongTimeout,
+			fv:      func() interface{} { return &cmn.BucketList{} },
 		})
 		lists = make([]*cmn.BucketList, 0, len(results))
 	)
@@ -234,5 +235,5 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	w.Write(cmn.MustMarshal(result.Entries))
+	p.writeJSON(w, r, result.Entries, "query_objects")
 }

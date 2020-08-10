@@ -32,7 +32,6 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/tinylib/msgp/msgp"
 )
 
 const (
@@ -1061,7 +1060,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
-		p.listObjectsAndCollectStats(w, r, bck, msg, begin)
+		p.listObjects(w, r, bck, msg, begin)
 	case cmn.ActInvalListCache:
 		if err = bck.Allow(cmn.AccessObjLIST); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
@@ -1113,26 +1112,24 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
-	amsg cmn.ActionMsg, begin int64) {
+func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg, begin int64) {
 	var (
 		err     error
 		bckList *cmn.BucketList
 		smsg    = cmn.SelectMsg{}
-		query   = r.URL.Query()
+		smap    = p.owner.smap.get()
 	)
 	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	// override prefix if it is set in URL query values
-	if prefix := query.Get(cmn.URLParamPrefix); prefix != "" {
-		smsg.Prefix = prefix
+	if smap.CountTargets() < 1 {
+		p.invalmsghdlr(w, r, "No registered targets yet")
+		return
 	}
 
 	if smsg.UUID == "" {
 		smsg.UUID = cmn.GenUUID()
-		smap := p.owner.smap.get()
 		// TODO -- FIXME: must be consistent vs newQueryListener
 		nl := newNLB(smsg.UUID, smap, notifCache, cmn.ActListObjects, bck.Bck)
 		nl.hrwOwner(smap)
@@ -1142,9 +1139,8 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	}
 
 	if bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached) {
-		bckList, err = p.listAISBucket(bck, smsg)
+		bckList, err = p.listObjectsAIS(bck, smsg)
 	} else {
-		// NOTE: For async tasks, user must check for StatusAccepted and use returned uuid.
 		bckList, err = p.listObjectsRemote(bck, smsg)
 		// TODO: `status == http.StatusGone` At this point we know that this
 		//  cloud bucket exists and is offline. We should somehow try to list
@@ -1159,26 +1155,17 @@ func (p *proxyrunner) listObjectsAndCollectStats(w http.ResponseWriter, r *http.
 	cmn.Assert(bckList != nil)
 
 	if strings.Contains(r.Header.Get(cmn.HeaderAccept), cmn.ContentMsgPack) {
-		w.Header().Set(cmn.HeaderContentType, cmn.ContentMsgPack)
-		mw := msgp.NewWriterSize(w, 10*cmn.KiB)
-		if err = bckList.EncodeMsg(mw); err == nil {
-			err = mw.Flush()
-		}
-		if err != nil {
-			p.writeErrorStatus(w, r, "list_objects", err)
+		if !p.writeMsgPack(w, r, bckList, "list_objects") {
 			return
 		}
-	} else {
-		b := cmn.MustMarshal(bckList)
-		if !p.writeJSONBytes(w, r, b, "list_objects") {
-			return
-		}
+	} else if !p.writeJSON(w, r, bckList, "list_objects") {
+		return
 	}
 
 	delta := mono.Since(begin)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		lat := int64(delta / time.Microsecond)
-		glog.Infof("LIST: bck: %q, token: %q, %d µs", bck, bckList.ContinuationToken, lat)
+		latency := int64(delta / time.Microsecond)
+		glog.Infof("LIST: bck: %q, token: %q, %d µs", bck, bckList.ContinuationToken, latency)
 	}
 
 	// Free memory allocated for temporary slice immediately as it can take up to a few GB
@@ -1706,10 +1693,10 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 	return
 }
 
-// listAISBucket reads object list from all targets, combines, sorts and returns
+// listObjectsAIS reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	if smsg.PageSize == 0 {
 		smsg.PageSize = cmn.DefaultListPageSizeAIS
 	}
@@ -1746,7 +1733,7 @@ func (p *proxyrunner) listAISBucket(bck *cluster.Bck, smsg cmn.SelectMsg) (allEn
 
 	// User requested some page but we don't have enough (but we may have part
 	// of the full page). Therefore, we must ask targets for page starting from
-	// what we have locally, so we don't rerequest the objects.
+	// what we have locally, so we don't re-request the objects.
 	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
 
 	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
@@ -1792,14 +1779,10 @@ end:
 	return allEntries, nil
 }
 
-// selects a random target to GET the list of objects from the remote bucket (cloud or remote AIS)
-// if `cached` and/or `atime` is requested:
-//      * get a list of cached objects from all targets
-//      * add `cached`/`atime` to returned object metadata
-// returns:
-//      * list of objects and properties if the async task has finished (empty uuid)
-//      * non-empty uuid if the task is still running
-//      * error
+// listObjectsRemote returns the list of objects from requested remote bucket
+// (cloud or remote AIS). If request requires local data then it is broadcast
+// to all targets which perform traverse on the disks, otherwise random target
+// is chosen to perform cloud listing.
 func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	if smsg.StartAfter != "" {
 		return nil, fmt.Errorf("start after for cloud buckets is not yet supported")
@@ -1828,7 +1811,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	if needLocalData {
 		results = p.bcastToGroup(args)
 	} else {
-		// only cloud options are requested - call one random target for data
+		// Only cloud options are requested - call random target for data.
 		for _, si := range smap.Tmap {
 			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout, v: &cmn.BucketList{}})
 			results = make(chan callResult, 1)
@@ -1886,9 +1869,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 		glog.Infof("RENAME %s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
 
-	// NOTE:
-	//       code 307 is the only way to http-redirect with the
-	//       original JSON payload (SelectMsg - see pkg/api/constant.go)
+	// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
@@ -1921,9 +1902,8 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		// NOTE:
-		//       code 307 is the only way to http-redirect with the
-		//       original JSON payload (SelectMsg - see pkg/api/constant.go)
+
+		// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
 		redirectURL := p.redirectURL(r, tsi, started, cmn.NetworkIntraControl)
 		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 		return

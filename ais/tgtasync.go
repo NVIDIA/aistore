@@ -15,13 +15,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/tinylib/msgp/msgp"
 )
 
-// List objects returns a list of objects in a bucket (with optional prefix)
+// listObjects returns a list of objects in a bucket (with optional prefix).
 // Special case:
-// If URL contains cachedonly=true then the function returns the list of
-// locally cached objects. Paging is used to return a long list of objects
+//  * If URL contains `cached=true` then the function returns the list of
+//    locally cached objects.
 func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -75,11 +74,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	debug.Assert(status == http.StatusOK)
 	debug.Assert(bckList.UUID != "")
 
-	mw := msgp.NewWriterSize(w, 10*cmn.KiB)
-	if err := bckList.EncodeMsg(mw); err != nil {
-		return false
-	}
-	return mw.Flush() == nil
+	return t.writeMsgPack(w, r, bckList, "list_objects")
 }
 
 func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
