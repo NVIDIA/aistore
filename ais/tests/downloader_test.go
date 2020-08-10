@@ -196,7 +196,6 @@ func abortDownload(t *testing.T, id string) {
 	status, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, status.Aborted, "download was not marked aborted")
-	tassert.Fatalf(t, status.JobFinished(), "job should be finished")
 	tassert.Fatalf(t, len(status.CurrentTasks) == 0, "current tasks should be empty")
 }
 
