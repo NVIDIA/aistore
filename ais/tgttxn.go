@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/xaction"
@@ -601,9 +600,10 @@ func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 //
 
 func (c *txnServerCtx) addNotif(xact cmn.Xact) {
-	dsts := c.query[cmn.URLParamNotifyMe]
-	debug.Assert(len(dsts) != 0)
-	xact.AddNotif(&cmn.NotifXact{
-		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifXact, Dsts: dsts, F: c.t.xactCallerNotify},
-	})
+	dsts, ok := c.query[cmn.URLParamNotifyMe]
+	if ok {
+		xact.AddNotif(&cmn.NotifXact{
+			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifXact, Dsts: dsts, F: c.t.xactCallerNotify},
+		})
+	}
 }

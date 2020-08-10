@@ -44,7 +44,7 @@ func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uui
 	msg interface{}) (reversedOrFailed bool) {
 	var (
 		smap          = p.owner.smap.get()
-		selfIC, _     = p.whichIC(smap, nil)
+		selfIC, _     = p.whichIC(smap)
 		owner, exists = p.notifs.getOwner(uuid)
 		psi           *cluster.Snode
 	)
@@ -157,7 +157,7 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if selfIC, _ := p.whichIC(smap, nil); !selfIC {
+		if selfIC, _ := p.whichIC(smap); !selfIC {
 			p.invalmsghdlrf(w, r, "%s: not an IC member", p.si)
 			return
 		}
@@ -197,20 +197,18 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) whichIC(smap *smapX, query url.Values) (selfIC, otherIC bool) {
-	cmn.Assert(len(smap.IC) > 0)
+func (p *proxyrunner) whichIC(smap *smapX) (selfIC, otherIC bool) {
 	selfIC = smap.IsIC(p.si)
 	otherIC = len(smap.IC) > 1
 	cmn.Assert(selfIC || otherIC)
-	if query == nil {
-		return
-	}
-	query.Add(cmn.URLParamNotifyMe, equalIC)
 	return
 }
 
-func (p *proxyrunner) registerIC(a regIC) {
-	selfIC, otherIC := p.whichIC(a.smap, a.query)
+func (p *proxyrunner) registerEqualIC(a regIC) {
+	selfIC, otherIC := p.whichIC(a.smap)
+	if a.query != nil {
+		a.query.Add(cmn.URLParamNotifyMe, equalIC)
+	}
 	if selfIC {
 		p.notifs.add(a.nl)
 	}

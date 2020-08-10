@@ -1133,7 +1133,8 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		// TODO -- FIXME: must be consistent vs newQueryListener
 		nl := newNLB(smsg.UUID, smap, notifCache, cmn.ActListObjects, bck.Bck)
 		nl.hrwOwner(smap)
-		p.registerIC(regIC{nl: nl, smap: smap, msg: amsg})
+		// TODO: not "Equal" when cached
+		p.registerEqualIC(regIC{nl: nl, smap: smap, msg: amsg})
 	} else if p.reverseToOwner(w, r, smsg.UUID, amsg) {
 		return
 	}
