@@ -13,7 +13,7 @@ import (
 
 func main() {
 	if err := aisloader.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "aisloader exited with error: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "aisloader exited with error: %v\n", err)
 		os.Exit(1)
 	}
 }

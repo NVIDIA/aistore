@@ -149,7 +149,8 @@ test:aisloader-long:
 #    - go get -u golang.org/x/tools/cmd/benchcmp
 #    - make test-bench
 
-test:kube:
+
+.test_kube_template: &test_kube_def
   stage: test-short
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedules"'
@@ -159,16 +160,34 @@ test:kube:
     K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
   tags:
     - ais-kube
-  script:
-    - make aisloader
+  before_script:
+    - export PATH="$PATH:$GOPATH/bin"
+    - apt-get update -yq
+    - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools coreutils
     - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
     - chmod +x ./kubectl
     - mv ./kubectl /usr/local/bin/kubectl
     - kubectl version --client
     - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecylce of transformers is implemented.
     - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecylce of transformers is implemented.
+
+
+test:kube:
+  <<: *test_kube_def
+  script:
     - make deploy <<< $'1\n1\n3\n0'
     - status=0
-    - (BUCKET="test" RE="TestKube" make test-run && FLAGS="--duration=5s --tar2tf" make test-aisloader) || status=$?
+    - BUCKET="test" RE="TestKube" make test-run || status=$?
+    - make kill
+    - exit $status # TODO: hack to prevent pod hangs on failures
+
+test:aisloader-short:
+  <<: *test_kube_def
+  script:
+    - make aisloader
+    - make deploy <<< $'1\n1\n3\n0'
+    - sleep 10 # TODO: better alternative ? adding sleep for targets to join.
+    - status=0
+    - BUCKET="test" FLAGS="--duration=5s --tar2tf" make test-aisloader || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
