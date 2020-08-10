@@ -228,7 +228,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	switch msg.Action {
 	case cmn.ActSetBprops:
 		// make and validate new props
-		if nprops, _, _, err = p.makeNprops(bck, propsToUpdate); err != nil {
+		if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
 			return
 		}
 	case cmn.ActResetBprops:
@@ -261,11 +261,14 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	cmn.Assert(present)
 	if msg.Action == cmn.ActSetBprops {
 		bck.Props = bprops
-		nprops, remirror, reec, err = p.makeNprops(bck, propsToUpdate) // under lock
+		nprops, err = p.makeNprops(bck, propsToUpdate) // under lock
 		if err != nil {
 			return
 		}
 	}
+
+	remirror = reMirror(bprops, nprops)
+	reec = reEC(bprops, nprops, bck)
 	clone.set(bck, nprops)
 	p.owner.bmd.put(clone)
 
@@ -632,7 +635,7 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, cop
 
 // make and validate nprops
 func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate,
-	creating ...bool) (nprops *cmn.BucketProps, remirror, reec bool, err error) {
+	creating ...bool) (nprops *cmn.BucketProps, err error) {
 	var (
 		cfg    = cmn.GCO.Get()
 		bprops = bck.Props
@@ -651,16 +654,17 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 		if nprops.EC.ParitySlices == 0 {
 			nprops.EC.ParitySlices = 1
 		}
-		reec = true
 	}
 	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
 		if nprops.Mirror.Copies == 1 {
 			nprops.Mirror.Copies = cmn.MaxI64(cfg.Mirror.Copies, 2)
 		}
-		remirror = true
 	} else if nprops.Mirror.Copies == 1 {
 		nprops.Mirror.Enabled = false
 	}
+
+	remirror := reMirror(bprops, nprops)
+	reec := reEC(bprops, nprops, bck)
 	if len(creating) == 0 && remirror && reec {
 		// NOTE: cannot run make-n-copies and EC on the same bucket at the same time
 		err = cmn.NewErrorBucketIsBusy(bck.Bck, p.si.String())

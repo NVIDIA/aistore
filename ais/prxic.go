@@ -44,7 +44,7 @@ func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uui
 	msg interface{}) (reversedOrFailed bool) {
 	var (
 		smap          = p.owner.smap.get()
-		selfIC, _     = p.whichIC(smap)
+		selfIC        = smap.IsIC(p.si)
 		owner, exists = p.notifs.getOwner(uuid)
 		psi           *cluster.Snode
 	)
@@ -157,7 +157,7 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if selfIC, _ := p.whichIC(smap); !selfIC {
+		if !smap.IsIC(p.si) {
 			p.invalmsghdlrf(w, r, "%s: not an IC member", p.si)
 			return
 		}
@@ -197,22 +197,14 @@ func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) whichIC(smap *smapX) (selfIC, otherIC bool) {
-	selfIC = smap.IsIC(p.si)
-	otherIC = len(smap.IC) > 1
-	cmn.Assert(selfIC || otherIC)
-	return
-}
-
 func (p *proxyrunner) registerEqualIC(a regIC) {
-	selfIC, otherIC := p.whichIC(a.smap)
 	if a.query != nil {
 		a.query.Add(cmn.URLParamNotifyMe, equalIC)
 	}
-	if selfIC {
+	if a.smap.IsIC(p.si) {
 		p.notifs.add(a.nl)
 	}
-	if otherIC {
+	if len(a.smap.IC) > 1 {
 		// TODO -- FIXME: handle errors, here and elsewhere
 		_ = p.bcastListenIC(a.nl, a.smap)
 	}
