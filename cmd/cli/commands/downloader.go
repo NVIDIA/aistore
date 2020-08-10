@@ -368,9 +368,16 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 		return
 	}
 
-	realFinished := d.FinishedCnt + d.ErrorCnt
-	fmt.Fprintf(w, "Download progress: %d/%d (%.2f%%)\n",
-		realFinished, d.TotalCnt(), 100*float64(realFinished)/float64(d.TotalCnt()))
+	var (
+		doneCnt  = d.DoneCnt()
+		totalCnt = d.TotalCnt()
+	)
+	if totalCnt == 0 {
+		fmt.Fprintf(w, "Download progress: 0/?\n")
+	} else {
+		pctDone := 100 * float64(doneCnt) / float64(totalCnt)
+		fmt.Fprintf(w, "Download progress: %d/%d (%.2f%%)\n", doneCnt, totalCnt, pctDone)
+	}
 	if verbose {
 		if len(d.CurrentTasks) > 0 {
 			sort.Slice(d.CurrentTasks, func(i, j int) bool {

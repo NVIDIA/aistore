@@ -87,7 +87,7 @@ func (j DlJobInfo) JobFinished() bool {
 	if cmn.IsTimeZero(j.FinishedTime) {
 		return false
 	}
-	cmn.Assert(j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.FinishedCnt+j.ErrorCnt))
+	cmn.Assert(j.Aborted || (j.AllDispatched && j.ScheduledCnt == j.DoneCnt()))
 	return true
 }
 
@@ -102,11 +102,14 @@ func (j DlJobInfo) TotalCnt() int {
 	return j.ScheduledCnt
 }
 
+// DoneCnt returns number of tasks that have finished (either successfully or with an error).
+func (j DlJobInfo) DoneCnt() int { return j.FinishedCnt + j.ErrorCnt }
+
+// PendingCnt returns number of tasks which are currently being processed.
 func (j DlJobInfo) PendingCnt() int {
-	if j.Total > 0 {
-		return j.Total - j.FinishedCnt - j.ErrorCnt
-	}
-	return j.ScheduledCnt
+	pending := j.TotalCnt() - j.DoneCnt()
+	cmn.Assert(pending >= 0)
+	return pending
 }
 
 func (j DlJobInfo) String() string {
