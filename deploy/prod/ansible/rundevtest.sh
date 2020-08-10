@@ -3,9 +3,6 @@
 function cleanup() {
   make kill
   make clean
-  pushd deploy/dev/k8s
-  ./stop.sh
-  popd
 }
 
 function post_deploy() {
@@ -63,6 +60,11 @@ RE="TestKube" make test-run
 exit_code=$?
 result=$((result + exit_code))
 echo "'RE=TestKube make test-run' exit status: $exit_code"
+
+# Deleting minikube cluster
+pushd deploy/dev/k8s
+./stop.sh
+popd
 
 # Running long tests
 cleanup
