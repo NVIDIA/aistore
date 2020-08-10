@@ -596,7 +596,7 @@ func setupBucket(runParams *params) error {
 	}
 
 	if runParams.bck.Name == "" {
-		runParams.bck.Name = cmn.GenUUID()
+		runParams.bck.Name = cmn.RandString(8)
 		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
 	}
 
@@ -606,8 +606,7 @@ func setupBucket(runParams *params) error {
 	}
 
 	if !exists {
-		err := api.CreateBucket(runParams.bp, runParams.bck)
-		if err != nil {
+		if err := api.CreateBucket(runParams.bp, runParams.bck); err != nil {
 			return fmt.Errorf("failed to create ais bucket %s, err = %s", runParams.bck, err)
 		}
 	}
@@ -662,10 +661,9 @@ func Start() error {
 		err error
 	)
 
-	cmn.InitShortID(0)
 	runParams, err = parseCmdLine()
 	if err != nil {
-		cmn.Exitf("%s", err)
+		return err
 	}
 
 	if runParams.getLoaderID {
@@ -678,13 +676,12 @@ func Start() error {
 
 	// If neither duration nor put upper bound is specified, it is a no op.
 	// Note that stoppable prevents being a no op
-	// This can be used as a cleaup only run (no put no get).
+	// This can be used as a cleanup only run (no put no get).
 	if runParams.duration.Val == 0 {
 		if runParams.putSizeUpperBound == 0 && !runParams.stoppable {
 			if runParams.cleanUp.Val {
 				cleanup()
 			}
-
 			return nil
 		}
 
@@ -692,19 +689,17 @@ func Start() error {
 	}
 
 	if runParams.usingFile {
-		err = cmn.CreateDir(runParams.tmpDir + "/" + myName)
-		if err != nil {
+		if err := cmn.CreateDir(runParams.tmpDir + "/" + myName); err != nil {
 			return fmt.Errorf("failed to create local test directory %q, err = %s", runParams.tmpDir, err.Error())
 		}
 	}
 
 	if err := setupBucket(&runParams); err != nil {
-		cmn.Exitf("%s", err)
+		return err
 	}
 
 	if !runParams.getConfig {
-		err = bootStrap()
-		if err != nil {
+		if err := bootstrap(); err != nil {
 			return err
 		}
 
@@ -750,7 +745,7 @@ func Start() error {
 		fmt.Printf("waiting for a transformation to start")
 		transformerID, err = api.TransformInit(baseParams, transformerSpec)
 		if err != nil {
-			cmn.Exitf(err.Error())
+			return fmt.Errorf("failed to initialize transform: %v", err)
 		}
 		defer api.TransformStop(baseParams, transformerID)
 	}
@@ -1124,12 +1119,11 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	}
 
 	if t%b != 0 {
-		_, err := api.DeleteList(runParams.bp, runParams.bck,
-			objs[n*b:])
+		_, err := api.DeleteList(runParams.bp, runParams.bck, objs[n*b:])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
-		api.WaitForXaction(runParams.bp, xactArgs)
+		err = api.WaitForXaction(runParams.bp, xactArgs)
 		if err != nil {
 			fmt.Println("wait for xaction err ", err)
 		}
@@ -1145,8 +1139,8 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	}
 }
 
-// bootStrap boot straps existing objects in the bucket
-func bootStrap() error {
+// bootstrap bootstraps existing objects in the bucket.
+func bootstrap() error {
 	names, err := listObjectNames(runParams.bp, runParams.bck, "")
 	if err != nil {
 		fmt.Printf("Failed to list_objects %s, proxy %s, err: %v\n",
@@ -1175,8 +1169,8 @@ func bootStrap() error {
 		if runParams.putPct == 0 {
 			bucketObjsNames = &namegetter.PermutationUniqueNameGetter{}
 
-			// number from benchmarks: aisloader/tests/objNamegetter_test.go
-			// After 50k overhead on new go routine and WaitGroup becomes smaller than benefits
+			// Number from benchmarks: aisloader/tests/objnamegetter_test.go
+			// After 50k overhead on new goroutine and WaitGroup becomes smaller than benefits
 			if len(names) > 50000 {
 				bucketObjsNames = &namegetter.PermutationUniqueImprovedNameGetter{}
 			}
