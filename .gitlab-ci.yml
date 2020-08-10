@@ -140,13 +140,14 @@ test:aisloader-long:
     - make deploy <<< $'5\n5\n3\n0'
     - FLAGS="--duration=5m" make test-aisloader
 
-test:bench:
-  stage: test-long
-  only:
-    - schedules
-  script:
-    - go get -u golang.org/x/tools/cmd/benchcmp
-    - make test-bench
+# TODO: The job is for now disabled because it gets stuck on memsys benchmarks.
+#test:bench:
+#  stage: test-long
+#  only:
+#    - schedules
+#  script:
+#    - go get -u golang.org/x/tools/cmd/benchcmp
+#    - make test-bench
 
 test:kube:
   stage: test-short
