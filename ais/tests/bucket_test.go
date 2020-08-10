@@ -1486,26 +1486,22 @@ func TestBucketInvalidName(t *testing.T) {
 	}
 }
 
-//===============================================================
-//
-// n-way mirror
-//
-//===============================================================
 func TestLocalMirror(t *testing.T) {
 	tests := []struct {
 		numCopies []int // each of the number in the list represents the number of copies enforced on the bucket
+		skipArgs  tutils.SkipTestArgs
 	}{
-		{[]int{1}}, // set number copies = 1 -- no copies should be created
-		{[]int{2}},
-		{[]int{2, 3}}, // first set number of copies to 2, then to 3
+		// set number `copies = 1` - no copies should be created
+		{numCopies: []int{1}},
+		// set number `copies = 2` - one additional copy for each object should be created
+		{numCopies: []int{2}},
+		// first set number of copies to 2, then to 3
+		{numCopies: []int{2, 3}, skipArgs: tutils.SkipTestArgs{Long: true}},
 	}
-
-	// FIXME: For now running only in long because it takes a lot of time to finish.
-	//  See: https://gitlab-master.nvidia.com/aistorage/aistore/-/issues/865
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test.numCopies), func(t *testing.T) {
+			tutils.CheckSkip(t, test.skipArgs)
 			testLocalMirror(t, test.numCopies)
 		})
 	}
@@ -1938,7 +1934,6 @@ func TestRenameBucketTwice(t *testing.T) {
 }
 
 func TestCopyBucket(t *testing.T) {
-	numput := 100
 	tests := []struct {
 		provider         string
 		dstBckExist      bool // determines if destination bucket exists before copy or not
@@ -1959,10 +1954,6 @@ func TestCopyBucket(t *testing.T) {
 		{provider: cmn.AnyCloud, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
 		{provider: cmn.AnyCloud, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 	}
-
-	// FIXME: For now running only in long because it takes a lot of time to finish.
-	//  See: https://gitlab-master.nvidia.com/aistorage/aistore/-/issues/865
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	for _, test := range tests {
 		// Bucket must exist when we require it to have objects.
@@ -1987,9 +1978,10 @@ func TestCopyBucket(t *testing.T) {
 			var (
 				srcBckList *cmn.BucketList
 
-				srcm = &ioContext{
+				objCnt = 100
+				srcm   = &ioContext{
 					t:   t,
-					num: numput,
+					num: objCnt,
 					bck: cmn.Bck{
 						Name:     "src_copy_bck",
 						Provider: cmn.ProviderAIS,
@@ -1998,7 +1990,7 @@ func TestCopyBucket(t *testing.T) {
 				dstms = []*ioContext{
 					{
 						t:   t,
-						num: numput,
+						num: objCnt,
 						bck: cmn.Bck{
 							Name:     "dst_copy_bck_1",
 							Provider: cmn.ProviderAIS,
@@ -2011,7 +2003,7 @@ func TestCopyBucket(t *testing.T) {
 			if test.multipleDests {
 				dstms = append(dstms, &ioContext{
 					t:   t,
-					num: numput,
+					num: objCnt,
 					bck: cmn.Bck{
 						Name:     "dst_copy_bck_2",
 						Provider: cmn.ProviderAIS,
