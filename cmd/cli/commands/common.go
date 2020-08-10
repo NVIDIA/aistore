@@ -40,7 +40,7 @@ const (
 	commandStop      = cmn.ActXactStop
 	commandWait      = "wait"
 	commandSearch    = "search"
-	commandTransform = "transform"
+	commandETL       = cmn.ETL
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase

@@ -20,40 +20,40 @@ import (
 )
 
 var (
-	transformCmds = []cli.Command{
+	etlCmds = []cli.Command{
 		{
-			Name:  commandTransform,
-			Usage: "use transformations",
+			Name:  commandETL,
+			Usage: "use ETLs",
 			Subcommands: []cli.Command{
 				{
 					Name:      subcmdInit,
-					Usage:     "initialize transformation with yaml spec",
+					Usage:     "initialize ETL with yaml spec",
 					ArgsUsage: "SPEC_FILE",
-					Action:    transformInitHandler,
+					Action:    etlInitHandler,
 				},
 				{
 					Name:   subcmdList,
-					Usage:  "list all transformations",
-					Action: transformListHandler,
+					Usage:  "list all ETLs",
+					Action: etlListHandler,
 				},
 				{
 					Name:      subcmdStop,
-					Usage:     "stop transformation with given id",
+					Usage:     "stop ETL with given id",
 					ArgsUsage: "TRANSFORM_ID",
-					Action:    transformStopHandler,
+					Action:    etlStopHandler,
 				},
 				{
 					Name:      subcmdObject,
 					Usage:     "get transformed object",
-					ArgsUsage: "TRANSFORM_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
-					Action:    transformObjectHandler,
+					ArgsUsage: "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
+					Action:    etlObjectHandler,
 				},
 			},
 		},
 	}
 )
 
-func transformInitHandler(c *cli.Context) (err error) {
+func etlInitHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "SPEC_FILE")
 	}
@@ -76,7 +76,7 @@ func transformInitHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func transformListHandler(c *cli.Context) (err error) {
+func etlListHandler(c *cli.Context) (err error) {
 	list, err := api.TransformList(defaultAPIParams)
 	if err != nil {
 		return err
@@ -84,9 +84,9 @@ func transformListHandler(c *cli.Context) (err error) {
 	return templates.DisplayOutput(list, c.App.Writer, templates.TransformListTmpl)
 }
 
-func transformStopHandler(c *cli.Context) (err error) {
+func etlStopHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "TRANSFORM_ID")
+		return missingArgumentsError(c, "ETL_ID")
 	}
 	id := c.Args()[0]
 	if err := api.TransformStop(defaultAPIParams, id); err != nil {
@@ -96,9 +96,9 @@ func transformStopHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func transformObjectHandler(c *cli.Context) (err error) {
+func etlObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "TRANSFORM_ID")
+		return missingArgumentsError(c, "ETL_ID")
 	} else if c.NArg() == 1 {
 		return missingArgumentsError(c, "BUCKET/OBJECT_NAME")
 	} else if c.NArg() == 2 {
