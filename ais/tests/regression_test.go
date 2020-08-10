@@ -674,7 +674,8 @@ func TestLRU(t *testing.T) {
 				Name:     clibucket,
 				Provider: cmn.AnyCloud,
 			},
-			num: 100,
+			num:    100,
+			prefix: t.Name(),
 		}
 	)
 

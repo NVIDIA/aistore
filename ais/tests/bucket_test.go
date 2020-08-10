@@ -661,6 +661,7 @@ func TestListObjectsCloudCached(t *testing.T) {
 			bck:      cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
 			num:      rand.Intn(100) + 10,
 			fileSize: 5 * cmn.KiB,
+			prefix:   t.Name(),
 		}
 	)
 
@@ -671,7 +672,7 @@ func TestListObjectsCloudCached(t *testing.T) {
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
-	msg := &cmn.SelectMsg{PageSize: 10, Flags: cmn.SelectCached}
+	msg := &cmn.SelectMsg{PageSize: 10, Flags: cmn.SelectCached, Prefix: m.prefix}
 	msg.AddProps(cmn.GetPropsDefault...)
 	msg.AddProps(cmn.GetPropsCached, cmn.GetPropsStatus)
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -701,6 +702,7 @@ func TestListObjectsCloudProps(t *testing.T) {
 			bck:      cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
 			num:      rand.Intn(100) + 10,
 			fileSize: 5 * cmn.KiB,
+			prefix:   t.Name(),
 		}
 	)
 
@@ -1480,6 +1482,7 @@ func TestCloudMirror(t *testing.T) {
 				Name:     clibucket,
 				Provider: cmn.AnyCloud,
 			},
+			prefix: t.Name(),
 		}
 		baseParams = tutils.BaseAPIParams()
 	)
@@ -1500,7 +1503,8 @@ func TestCloudMirror(t *testing.T) {
 	})
 
 	// list
-	objectList, err := api.ListObjects(baseParams, m.bck, nil, 0)
+	msg := &cmn.SelectMsg{Prefix: prefix}
+	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objectList.Entries) == m.num, "insufficient number of objects in the Cloud bucket %s, required %d", m.bck, m.num)
 
@@ -2243,9 +2247,10 @@ func TestBackendBucket(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		m = ioContext{
-			t:   t,
-			num: 10,
-			bck: cloudBck,
+			t:      t,
+			num:    10,
+			bck:    cloudBck,
+			prefix: t.Name(),
 		}
 
 		proxyURL   = tutils.RandomProxyURL()
@@ -2266,7 +2271,8 @@ func TestBackendBucket(t *testing.T) {
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
-	cloudObjList, err := api.ListObjects(baseParams, cloudBck, nil, 0)
+	msg := &cmn.SelectMsg{Prefix: m.prefix}
+	cloudObjList, err := api.ListObjects(baseParams, cloudBck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(cloudObjList.Entries) > 0, "empty object list")
 
@@ -2296,7 +2302,6 @@ func TestBackendBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check if listing objects will result in listing backend bucket objects.
-	msg := &cmn.SelectMsg{}
 	msg.AddProps(cmn.GetPropsAll...)
 	aisObjList, err := api.ListObjects(baseParams, aisBck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -2307,7 +2312,7 @@ func TestBackendBucket(t *testing.T) {
 	)
 
 	// Check if cached listing works correctly.
-	cacheMsg := &cmn.SelectMsg{Flags: cmn.SelectCached}
+	cacheMsg := &cmn.SelectMsg{Flags: cmn.SelectCached, Prefix: m.prefix}
 	aisObjList, err = api.ListObjects(baseParams, aisBck, cacheMsg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
@@ -2332,7 +2337,7 @@ func TestBackendBucket(t *testing.T) {
 	_, err = api.GetObject(baseParams, aisBck, cachedObjName)
 	tassert.CheckFatal(t, err)
 
-	aisObjList, err = api.ListObjects(baseParams, aisBck, nil, 0)
+	aisObjList, err = api.ListObjects(baseParams, aisBck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(
 		t, len(aisObjList.Entries) == 1,

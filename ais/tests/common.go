@@ -73,6 +73,7 @@ type ioContext struct {
 	fixedSize           bool
 	numGetErrs          atomic.Uint64
 	proxyURL            string
+	prefix              string
 	otherTasksToTrigger int
 	originalTargetCount int
 	originalProxyCount  int
@@ -195,7 +196,7 @@ func (m *ioContext) puts(dontFail ...bool) int {
 func (m *ioContext) cloudPuts(evict bool) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{}
+		msg        = &cmn.SelectMsg{Prefix: m.prefix}
 	)
 
 	if !m.silent {
@@ -222,13 +223,18 @@ func (m *ioContext) cloudPuts(evict bool) {
 
 	// Not enough objects in cloud bucket, need to create more.
 	var (
-		errCh = make(chan error, leftToFill)
-		wg    = cmn.NewLimitedWaitGroup(20)
+		errCh     = make(chan error, leftToFill)
+		wg        = cmn.NewLimitedWaitGroup(20)
+		objPrefix = m.prefix
 	)
+	if objPrefix == "" {
+		objPrefix = "copy"
+	}
+	objPrefix += "/cloud_"
 	for i := 0; i < leftToFill; i++ {
 		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
-		objName := fmt.Sprintf("%s%s%d", "copy/cloud_", cmn.RandString(4), i)
+		objName := fmt.Sprintf("%s%s%d", objPrefix, cmn.RandString(4), i)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -306,7 +312,7 @@ func (m *ioContext) cloudRePuts(evict bool) {
 func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{}
+		msg        = &cmn.SelectMsg{Prefix: m.prefix}
 	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -333,7 +339,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 func (m *ioContext) del(cnt ...int) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{}
+		msg        = &cmn.SelectMsg{Prefix: m.prefix}
 	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -449,7 +455,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
-	msg := &cmn.SelectMsg{Flags: cmn.SelectCached}
+	msg := &cmn.SelectMsg{Flags: cmn.SelectCached, Prefix: m.prefix}
 	msg.AddProps(cmn.GetPropsCopies, cmn.GetPropsAtime, cmn.GetPropsStatus)
 	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
