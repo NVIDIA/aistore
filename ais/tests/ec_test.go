@@ -1157,9 +1157,12 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	abortCh := make(chan struct{}, 1)
 	numCreated := 0
+	wgPut := &sync.WaitGroup{}
+	wgPut.Add(1)
 
 	go func() {
 		ticker := time.NewTicker(3 * time.Millisecond)
+		defer wgPut.Done()
 		for {
 			select {
 			case <-abortCh:
@@ -1191,6 +1194,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	api.WaitForXaction(baseParams, reqArgs)
 
 	close(abortCh)
+	wgPut.Wait()
 
 	if t.Failed() {
 		t.FailNow()
