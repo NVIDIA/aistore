@@ -65,8 +65,8 @@ For the most recently updated command-line options and examples, please run `ais
 | -subdir | `string` | Virtual destination directory for all aisloader-generated objects | `""` |
 | -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |
 | -timeout | `string` | Client HTTP timeout; `0` = infinity) | `10m` |
-| -transformation | `string` | Name of a transformation applied to each object on GET request. One of `''`, `tar2tf`, `md5`, `echo` | `""` |
-| -transformation-spec | `string` | Path to transformation specification applied to each object on GET request. It has to be compatible with Kubernetes Pod specification | `""` |
+| -etl | `string` | Name of an ETL applied to each object on GET request. One of `''`, `tar2tf`, `md5`, `echo` | `""` |
+| -etl-spec | `string` | Path to an ETL specification applied to each object on GET request. It has to be compatible with Kubernetes Pod specification | `""` |
 | -totalputsize | `string`, `int` | Stop PUT workload once cumulative PUT size reaches or exceeds this value, can contain [multiplicative suffix](#bytes-multiplicative-suffix), 0 = no limit | `0` |
 | -uniquegets | `bool` | true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others | `true` |
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
@@ -322,10 +322,10 @@ $ aisloader -ip="https://localhost" -port=8080
 $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar
 ```
 
-17. Generate load on `tar2tf` transformation. New transformation in started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
+17. Generate load on `tar2tf` ETL. New ETL is started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
 
 ```console
-$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -transformation=tar2tf
+$ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -etl=tar2tf
 ```
 
 ## Collecting stats

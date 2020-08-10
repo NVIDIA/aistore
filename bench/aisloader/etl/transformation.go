@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package transformation
+package etl
 
 import (
 	"fmt"
@@ -30,7 +30,7 @@ var (
 	client = &http.Client{}
 )
 
-func validateTransformName(name string) error {
+func validateETLName(name string) error {
 	if _, ok := links[name]; !ok {
 		return fmt.Errorf("%s invalid name; expected one of %s, %s, %s", name, Echo, Tar2TF, Md5)
 	}
@@ -38,7 +38,7 @@ func validateTransformName(name string) error {
 }
 
 func GetYaml(name string) ([]byte, error) {
-	if err := validateTransformName(name); err != nil {
+	if err := validateETLName(name); err != nil {
 		return nil, err
 	}
 

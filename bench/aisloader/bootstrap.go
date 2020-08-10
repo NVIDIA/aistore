@@ -54,9 +54,9 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/bench/aisloader/etl"
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
-	"github.com/NVIDIA/aistore/bench/aisloader/transformation"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/stats/statsd"
@@ -147,8 +147,8 @@ type (
 		dryRun         bool // true: print configuration and parameters that aisloader will use at runtime
 		traceHTTP      bool // true: trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
 
-		transformerName     string // name of a transformation to apply to each object. Omitted when transformerName specified.
-		transformerSpecPath string // Path to a transformation spec to apply to each object.
+		etlName     string // name of a ETL to apply to each object. Omitted when etlSpecPath specified.
+		etlSpecPath string // Path to a ETL spec to apply to each object.
 	}
 
 	// sts records accumulated puts/gets information.
@@ -189,8 +189,8 @@ var (
 	flagUsage   bool
 	flagVersion bool
 
-	transformerSpec []byte
-	transformerID   string
+	etlSpec []byte
+	etlID   string
 
 	useRandomObjName bool
 	objNameCnt       atomic.Uint64
@@ -301,9 +301,9 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&p.traceHTTP, "trace-http", false, "true: trace HTTP latencies") // see httpLatencies
 	f.StringVar(&p.cksumType, "cksum-type", cmn.ChecksumXXHash, "cksum type to use for put object requests")
 
-	// Transformations
-	f.StringVar(&p.transformerName, "transformation", "", "name of a transformation applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
-	f.StringVar(&p.transformerSpecPath, "transformation-spec", "", "path to a transformation spec to be applied to each object on GET request.")
+	// ETL
+	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
+	f.StringVar(&p.etlSpecPath, "etl-spec", "", "path to an ETL spec to be applied to each object on GET request.")
 
 	f.Parse(os.Args[1:])
 
@@ -444,14 +444,14 @@ func parseCmdLine() (params, error) {
 		return params{}, err
 	}
 
-	if p.transformerName != "" && p.transformerSpecPath != "" {
-		return params{}, fmt.Errorf("transformation and transformation-spec flag can't be set both")
+	if p.etlName != "" && p.etlSpecPath != "" {
+		return params{}, fmt.Errorf("etl and etl-spec flag can't be set both")
 	}
 
-	if p.transformerSpecPath != "" {
-		fh, err := os.Open(p.transformerSpecPath)
+	if p.etlSpecPath != "" {
+		fh, err := os.Open(p.etlSpecPath)
 		if err == nil {
-			transformerSpec, err = ioutil.ReadAll(fh)
+			etlSpec, err = ioutil.ReadAll(fh)
 			defer fh.Close()
 		}
 		if err != nil {
@@ -459,8 +459,8 @@ func parseCmdLine() (params, error) {
 		}
 	}
 
-	if p.transformerName != "" {
-		transformerSpec, err = transformation.GetYaml(p.transformerName)
+	if p.etlName != "" {
+		etlSpec, err = etl.GetYaml(p.etlName)
 		if err != nil {
 			return params{}, err
 		}
@@ -736,18 +736,18 @@ func Start() error {
 	}
 	defer statsdC.Close()
 
-	if transformerSpec != nil {
+	if etlSpec != nil {
 		baseParams := api.BaseParams{
 			Client: httpClient,
 			URL:    runParams.proxyURL,
 		}
 
-		fmt.Printf("waiting for a transformation to start")
-		transformerID, err = api.TransformInit(baseParams, transformerSpec)
+		fmt.Printf("waiting for an ETL to start")
+		etlID, err = api.TransformInit(baseParams, etlSpec)
 		if err != nil {
 			return fmt.Errorf("failed to initialize transform: %v", err)
 		}
-		defer api.TransformStop(baseParams, transformerID)
+		defer api.TransformStop(baseParams, etlID)
 	}
 
 	workOrders = make(chan *workOrder, runParams.numWorkers)
