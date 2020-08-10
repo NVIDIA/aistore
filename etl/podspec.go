@@ -13,6 +13,9 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
+// Currently we need the `default` port (on which the application runs) to be same as the
+// `readiness` probe port in the pod spec.
+
 func ParsePodSpec(spec []byte) (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
 	if err != nil {
@@ -74,6 +77,23 @@ func ValidateSpec(spec []byte) (msg Msg, err error) {
 	container := pod.Spec.Containers[0]
 	if len(container.Ports) != 1 {
 		return msg, fmt.Errorf("unsupported number of container ports (%d), expected: 1", len(container.Ports))
+	}
+
+	// Validate that user container supports health check.
+	// Currently we need the `default` port (on which the application runs) to be same as the
+	// `readiness` probe port.
+	if container.Ports[0].Name != cmn.KubeDefault {
+		return msg, fmt.Errorf("expected port name %q got %q", cmn.KubeDefault, container.Ports[0].Name)
+	}
+	if container.ReadinessProbe == nil {
+		return msg, fmt.Errorf("readinessProbe is required in a container spec")
+	}
+	// TODO: add support for other healthchecks
+	if container.ReadinessProbe.HTTPGet == nil {
+		return msg, fmt.Errorf("httpGet missing in the readinessProbe")
+	}
+	if container.ReadinessProbe.HTTPGet.Port.StrVal != cmn.KubeDefault {
+		return msg, fmt.Errorf("readinessProbe port must be the '%q' port", cmn.KubeDefault)
 	}
 
 	// Check annotations.

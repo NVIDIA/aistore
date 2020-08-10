@@ -66,3 +66,11 @@ func ReparseQuery(r *http.Request) {
 		r.URL.RawQuery = q.Encode()
 	}
 }
+
+func JoinPath(urlBase, path string) string {
+	url := strings.TrimSuffix(urlBase, "/")
+	if !strings.HasPrefix(path, "/") {
+		url += "/"
+	}
+	return url + path
+}

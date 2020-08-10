@@ -335,11 +335,7 @@ func MorphMarshal(data, v interface{}) error {
 }
 
 func (u *ReqArgs) URL() string {
-	url := strings.TrimSuffix(u.Base, "/")
-	if !strings.HasPrefix(u.Path, "/") {
-		url += "/"
-	}
-	url += u.Path
+	url := JoinPath(u.Base, u.Path)
 	query := u.Query.Encode()
 	if query != "" {
 		url += "?" + query

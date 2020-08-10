@@ -30,10 +30,35 @@ const (
 
 var (
 	tfProbeClient = &http.Client{}
-	probe         = bytes.NewBuffer([]byte("test-data"))
 )
 
-// TODO: remove the `kubectl` with a proper go-sdk call
+// Definitions:
+//
+// ETL -> This refers to Extract-Transform-Load, which allows a user to do transformation
+//        of the objects. It is defined by an ETL spec which is a K8S yaml spec file.
+//        The operations of an ETL are executed on the ETL container.
+//
+// ETL container -> The user's K8S pod which runs the container doing the transformation of the
+//                  objects.  It is initiated by a target and runs on the same K8S node running
+//                  the target.
+// Flow:
+// 1. User initiates an ETL container, using the `Start` method.
+// 2. The ETL container starts on the same node as the target.
+// 3. The transformation is done using `Communicator.Do()`
+// 4. The ETL container is stopped using `Stop`, which deletes the K8S pod.
+//
+// Limitations of the current implementation (soon to be removed):
+//
+// * No idle timeout for a ETL container. It keeps running unless explicitly
+//   stopped by invoking the `Stop` API.
+//
+// * `kubectl delete` of a ETL container is done in two stages. First we gracefully try to terminate
+//   the pod with a 30s timeout. Upon failure to do so, we perform a force delete.
+//
+// * A single ETL container runs per target at any point of time.
+//
+// * Recreating a ETL container with the same name, will delete any containers running with
+//   the same name.
 func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	var (
 		pod    *corev1.Pod
@@ -52,10 +77,13 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	}
 	pod.Labels[targetNode] = nodeName
 
+	// Create service spec
+	svc = createServiceSpec(pod)
+
 	// The following combination of Affinity and Anti-Affinity allows one to
 	// achieve the following:
-	// 1. The transformer pod is always scheduled on the target invoking it.
-	// 2. Not more than one transformer with the same target, is scheduled on the same node,
+	// 1. The ETL container is always scheduled on the target invoking it.
+	// 2. Not more than one ETL container with the same target, is scheduled on the same node,
 	//    at a given point of time
 	if err := setTransformAffinity(pod); err != nil {
 		return err
@@ -68,8 +96,20 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	if err := setPodEnvVariables(pod, t); err != nil {
 		return err
 	}
+	// 1. Doing cleanup of any pre-existing entities
+	if err := deleteEntity(cmn.KubePod, pod.Name); err != nil {
+		return err
+	}
 
-	if err := startPod(pod); err != nil {
+	if err := deleteEntity(cmn.KubeSvc, svc.Name); err != nil {
+		return err
+	}
+
+	// 2. Creating pod
+	if err := createEntity(cmn.KubePod, pod); err != nil {
+		// Ignoring the error for deletion as it is best effort.
+		glog.Errorf("Failed creation of pod %q. Doing cleanup.", pod.Name)
+		deleteEntity(cmn.KubePod, pod.Name)
 		return err
 	}
 
@@ -82,9 +122,12 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 		return err
 	}
 
-	// Proxy the pod behind a service
-	svc = createServiceSpec(pod)
-	if err := startService(svc); err != nil {
+	// 3. Creating service
+	if err := createEntity(cmn.KubeSvc, svc); err != nil {
+		// Ignoring the error for deletion as it is best effort.
+		glog.Errorf("Failed creation of svc %q. Doing cleanup.", svc.Name)
+		deleteEntity(cmn.KubeSvc, svc.Name)
+		deleteEntity(cmn.KubePod, pod.Name)
 		return err
 	}
 
@@ -98,7 +141,8 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	// TODO: Temporary workaround. Debug this further to find the root cause.
 	// Not waiting causes the first Do() request to fail
 	// sometimes.
-	if waitErr := waitTransformerReady(transformerURL); waitErr != nil {
+	readinessPath := pod.Spec.Containers[0].ReadinessProbe.HTTPGet.Path
+	if waitErr := waitTransformerReady(transformerURL, readinessPath); waitErr != nil {
 		if err := deleteEntity(cmn.KubePod, pod.Name); err != nil {
 			glog.Errorf("Unable to delete pod: %s, err: %s", pod.Name, err.Error())
 		}
@@ -113,13 +157,13 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	return nil
 }
 
-func waitTransformerReady(url string) error {
-	// TODO -- FIXME: Decide on a proper endpoint to do the health probe
+// TODO: remove the `kubectl` calls with proper go-sdk calls.
+
+func waitTransformerReady(url, path string) error {
 	tfProbeSleep := cmn.GCO.Get().Timeout.MaxKeepalive
 	tfProbeClient.Timeout = tfProbeSleep
-	testReq, _ := http.NewRequest(http.MethodPut, url, probe)
 	for i := 0; i < tfProbeRetries; i++ {
-		resp, err := tfProbeClient.Do(testReq)
+		resp, err := tfProbeClient.Get(cmn.JoinPath(url, path))
 		if err != nil {
 			if cmn.IsReqCanceled(err) || cmn.IsErrConnectionRefused(err) {
 				glog.Errorf("checking transformer endpoint: %s  failed, err: %s, retryCount: %d",
@@ -129,14 +173,11 @@ func waitTransformerReady(url string) error {
 			}
 			return err
 		}
-		defer resp.Body.Close()
 		err = cmn.DrainReader(resp.Body)
-		if err != nil {
-			return err
-		}
-		return nil
+		resp.Body.Close()
+		return err
 	}
-	return fmt.Errorf("waiting for transformer liveness failed for endpoint: %s", url)
+	return fmt.Errorf("waiting for transformer readiness failed for endpoint: %s", url)
 }
 
 func createServiceSpec(pod *corev1.Pod) *corev1.Service {
@@ -214,10 +255,10 @@ func setTransformAffinity(pod *corev1.Pod) error {
 			}}},
 		},
 	}
-	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that transformer
+	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that ETL container
 	//  will be placed on the same machine as target which creates it. However,
 	//  if 2 targets went down and up again at the same time, they may switch nodes,
-	//  leaving transformers running on the wrong machines.
+	//  leaving ETL containers running on the wrong machines.
 	pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nodeSelector
 	return nil
 }
@@ -280,64 +321,49 @@ func waitPodReady(pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 
 func getPodHostIP(pod *corev1.Pod) (string, error) {
 	// Retrieve host IP of the pod.
-	output, err := exec.Command("kubectl", "get", "pod", pod.GetName(), "--template={{.status.hostIP}}").Output()
+	args := []string{"get", "pod", pod.GetName(), "--template={{.status.hostIP}}"}
+	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to get IP of %q pod (err: %v; output: %s)", pod.GetName(), err, string(output))
 	}
 	return string(output), nil
 }
 
-func startPod(pod *corev1.Pod) error {
-	// Encode the specification once again to be ready for the start.
-	b, err := jsoniter.Marshal(pod)
-	if err != nil {
-		return err
-	}
-
-	// Start the pod.
-	cmd := exec.Command(cmn.Kubectl, "replace", "--force", "-f", "-")
-	cmd.Stdin = bytes.NewBuffer(b)
-	if b, err = cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to apply spec for %q pod (err: %v; output: %s)", pod.GetName(), err, string(b))
-	}
-	return nil
-}
-
 func deleteEntity(entity, entityName string) error {
-	args := []string{"delete", entity, entityName}
+	args := []string{"delete", entity, entityName, "--ignore-not-found"}
 	// Doing graceful delete
 	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
 	if err != nil {
-		glog.Errorf("graceful delete failed. entity: %s, entityName: %s, err: %v, out: %s",
+		glog.Errorf("graceful delete failed. %q %s, err: %v, out: %s",
 			entity, entityName, err, string(output))
 		// Doing force delete
 		args = append(args, "--force")
 		output, err = exec.Command(cmn.Kubectl, args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("force delete failed. entity: %s, entityName: %s, err: %s, out: %v",
-				entity, entityName, string(output), err)
+			return fmt.Errorf("force delete failed. %q %s, err: %v, out: %s",
+				entity, entityName, err, string(output))
 		}
 	}
 	return nil
 }
 
-func startService(svc *corev1.Service) error {
-	b, err := jsoniter.Marshal(svc)
+func createEntity(entity string, spec interface{}) error {
+	b, err := jsoniter.Marshal(spec)
 	if err != nil {
 		return err
 	}
-
-	// Creating the service
-	cmd := exec.Command("kubectl", "replace", "--force", "-f", "-")
+	args := []string{"create", "-f", "-"}
+	cmd := exec.Command(cmn.Kubectl, args...)
 	cmd.Stdin = bytes.NewBuffer(b)
-	if b, err = cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to apply spec for %q service (err: %v; output: %s)", svc.GetName(), err, string(b))
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create %s (err: %v; output: %s)", entity, err, string(b))
 	}
 	return nil
 }
 
 func getServiceNodePort(svc *corev1.Service) (int, error) {
-	output, err := exec.Command("kubectl", "get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svc.GetName()).Output()
+	args := []string{"get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svc.GetName()}
+	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
 	if err != nil {
 		return -1, fmt.Errorf("failed to get nodePort of service %q (err: %v; output: %s)", svc.GetName(), err, string(output))
 	}

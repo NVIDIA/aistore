@@ -65,12 +65,6 @@ const (
 
 	QuantityPercent = "percent"
 	QuantityBytes   = "bytes"
-
-	S3TagSepa = "!" // https://tools.ietf.org/html/rfc3986#page-6 using `!` as it is one of the non-special characters
-
-	Kubectl = "kubectl"
-	KubePod = "pod"
-	KubeSvc = "svc"
 )
 
 var (
@@ -439,13 +433,6 @@ func CopyStruct(dst, src interface{}) {
 	starY := y.Elem()
 	starY.Set(starX)
 	reflect.ValueOf(dst).Elem().Set(y.Elem())
-}
-
-func S3ObjNameTag(s string) (objName, tag string) {
-	if idx := strings.LastIndex(s, S3TagSepa); idx > 0 {
-		return s[:idx], s[idx+1:]
-	}
-	return s, ""
 }
 
 func HasTarExtension(objName string) bool {

@@ -7,7 +7,6 @@ package integration
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -28,11 +27,9 @@ import (
 )
 
 const (
-	tar2tf    = "tar2tf"
 	tar2tfIn  = "data/small-mnist-3.tar"
 	tar2tfOut = "data/small-mnist-3.record"
 
-	tar2tfFilters    = "tar2tf-filters"
 	tar2tfFiltersIn  = "data/single-png-cls.tar"
 	tar2tfFiltersOut = "data/single-png-cls-transformed.tfrecord"
 )
@@ -44,15 +41,15 @@ var (
 func TestKubeTransformer(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	tests := []testConfig{
-		{transformer: "echo", comm: etl.RedirectCommType},
-		{transformer: "echo", comm: etl.RevProxyCommType},
-		{transformer: "echo", comm: etl.PushCommType},
-		{tar2tf, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tar2tf, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tar2tf, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
-		{tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
-		{tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{transformer: tutils.Echo, comm: etl.RedirectCommType},
+		{transformer: tutils.Echo, comm: etl.RevProxyCommType},
+		{transformer: tutils.Echo, comm: etl.PushCommType},
+		{tutils.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tutils.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tutils.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual},
+		{tutils.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{tutils.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{tutils.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
 	}
 
 	for _, test := range tests {
@@ -64,8 +61,7 @@ func TestKubeTransformer(t *testing.T) {
 
 func transformInit(t *testing.T, name, comm string) (string, error) {
 	t.Log("Reading template")
-	transformerTemplate := filepath.Join("templates", "transformer", name, "pod.yaml")
-	spec, err := ioutil.ReadFile(transformerTemplate)
+	spec, err := tutils.GetTransformYaml(name)
 	if err != nil {
 		return "", err
 	}

@@ -390,7 +390,7 @@ func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []s
 		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
-	objName, _ := cmn.S3ObjNameTag(path.Join(items[1:]...))
+	objName := path.Join(items[1:]...)
 
 	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {

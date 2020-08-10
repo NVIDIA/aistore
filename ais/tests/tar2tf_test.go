@@ -7,7 +7,6 @@ package integration
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,8 +23,7 @@ import (
 )
 
 func startTar2TfTransformer(t *testing.T) (uuid string) {
-	transformerTemplate := filepath.Join("templates", "transformer", tar2tf, "pod.yaml")
-	spec, err := ioutil.ReadFile(transformerTemplate)
+	spec, err := tutils.GetTransformYaml(tutils.Tar2TF)
 	tassert.CheckError(t, err)
 
 	pod, err := etl.ParsePodSpec(spec)

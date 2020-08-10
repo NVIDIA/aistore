@@ -18,9 +18,9 @@ import (
 )
 
 var (
-	// These parameters are not needed by the transformer
+	// These parameters are not needed by the ETL container
 	// WARNING: Sending UUID might cause infinite loop where we GET objects and
-	// then requests are redirected back to the transformer (since we didn't remove UUID from query parameters).
+	// then requests are redirected back to the ETL container (since we didn't remove UUID from query parameters).
 	toBeFiltered = []string{cmn.URLParamUUID, cmn.URLParamProxyID, cmn.URLParamUnixTime}
 )
 
@@ -28,8 +28,8 @@ type Communicator interface {
 	Name() string
 	PodName() string
 	SvcName() string
-	// Do can use one of 2 transformer endpoints:
-	// Method "POST", Path "/"
+	// Do can use one of 2 ETL container endpoints:
+	// Method "PUT", Path "/"
 	// Method "GET", Path "/bucket/object"
 	Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 }
@@ -61,7 +61,7 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 		cmn.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
-				// Replacing the `req.URL` host with transformer host
+				// Replacing the `req.URL` host with ETL container host
 				req.URL.Scheme = transURL.Scheme
 				req.URL.Host = transURL.Host
 				req.URL.RawQuery = filterQueryParams(req.URL.RawQuery)

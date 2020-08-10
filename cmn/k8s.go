@@ -13,6 +13,10 @@ import (
 
 const (
 	K8SHostName = "K8S_HOST_NAME"
+	KubeDefault = "default"
+	Kubectl     = "kubectl"
+	KubePod     = "pod"
+	KubeSvc     = "svc"
 )
 
 func GetK8sNodeName() string {

@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package etl
+package tutils
 
 import (
 	"fmt"
@@ -15,16 +15,30 @@ import (
 )
 
 const (
-	Tar2TF = "tar2tf"
-	Echo   = "echo"
-	Md5    = "md5"
+	Tar2TF        = "tar2tf"
+	Echo          = "echo"
+	Md5           = "md5"
+	Tar2tfFilters = "tar2tf-filters"
+	tar2tfFilter  = `
+{
+  "conversions": [
+    { "type": "Decode", "ext_name": "png"},
+    { "type": "Rotate", "ext_name": "png"}
+  ],
+  "selections": [
+    { "ext_name": "png" },
+    { "ext_name": "cls" }
+  ]
+}
+`
 )
 
 var (
 	links = map[string]string{
-		Md5:    "https://raw.githubusercontent.com/NVIDIA/ais-tar2tf/master/transformers/md5/pod.yaml",
-		Tar2TF: "https://raw.githubusercontent.com/NVIDIA/ais-tar2tf/master/transformers/tar2tf/pod.yaml",
-		Echo:   "https://raw.githubusercontent.com/NVIDIA/ais-tar2tf/master/transformers/echo/pod.yaml",
+		Md5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml",
+		Tar2TF:        "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
+		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
+		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/echo/pod.yaml",
 	}
 
 	client = &http.Client{}
@@ -37,7 +51,7 @@ func validateETLName(name string) error {
 	return nil
 }
 
-func GetYaml(name string) ([]byte, error) {
+func GetTransformYaml(name string) ([]byte, error) {
 	if err := validateETLName(name); err != nil {
 		return nil, err
 	}
@@ -65,6 +79,14 @@ func GetYaml(name string) ([]byte, error) {
 		}
 		if strings.Contains(v, "DOCKER_REGISTRY_URL") {
 			return "aistore"
+		}
+		if name == Tar2tfFilters {
+			if strings.Contains(v, "OPTION_KEY") {
+				return "--spec"
+			}
+			if strings.Contains(v, "OPTION_VALUE") {
+				return tar2tfFilter
+			}
 		}
 		return ""
 	})
