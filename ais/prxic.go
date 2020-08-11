@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Information Center (IC) is a group of proxies that take care of ownership of
@@ -36,11 +37,18 @@ type (
 		query url.Values
 		msg   interface{}
 	}
+
+	icBundle struct {
+		Smap   *smapX              `json:"smap"`
+		Owntbl jsoniter.RawMessage `json:"ownership_table"`
+	}
 )
 
 // TODO -- FIXME: add redirect-to-owner capability to support list/query caching
 func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string,
 	msg interface{}) (reversedOrFailed bool) {
+	retry := true
+begin:
 	var (
 		smap          = p.owner.smap.get()
 		selfIC        = smap.IsIC(p.si)
@@ -51,14 +59,20 @@ func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uui
 		goto outer
 	}
 	if selfIC {
-		withLocalRetry(func() bool {
-			owner, exists = p.notifs.getOwner(uuid)
-			return exists
-		})
-
-		if !exists {
+		if !exists && !retry {
 			p.invalmsghdlrf(w, r, "%q not found (%s)", uuid, smap.StrIC(p.si))
 			return true
+		} else if retry {
+			withLocalRetry(func() bool {
+				owner, exists = p.notifs.getOwner(uuid)
+				return exists
+			})
+
+			if !exists {
+				retry = false
+				_ = p.syncICBundle() // TODO -- handle error
+				goto begin
+			}
 		}
 	} else {
 		hrwOwner, err := cluster.HrwIC(&smap.Smap, uuid)
@@ -135,10 +149,31 @@ func (p *proxyrunner) writeStatus(w http.ResponseWriter, r *http.Request, uuid s
 // verb /v1/ic
 func (p *proxyrunner) icHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
+	case http.MethodGet:
+		p.icGet(w, r)
 	case http.MethodPost:
 		p.icPost(w, r)
 	default:
 		cmn.Assert(false)
+	}
+}
+
+// GET /v1/ic
+func (p *proxyrunner) icGet(w http.ResponseWriter, r *http.Request) {
+	var (
+		smap = p.owner.smap.get()
+		what = r.URL.Query().Get(cmn.URLParamWhat)
+	)
+	if !smap.IsIC(p.si) {
+		p.invalmsghdlrf(w, r, "%s: not an IC member", p.si)
+		return
+	}
+
+	if what == cmn.GetWhatICBundle {
+		bundle := icBundle{Smap: smap, Owntbl: cmn.MustMarshal(&p.notifs)}
+		p.writeJSON(w, r, bundle, what)
+	} else {
+		p.invalmsghdlrf(w, r, fmtUnknownQue, what)
 	}
 }
 
@@ -238,7 +273,50 @@ func (p *proxyrunner) sendOwnershipTbl(si *cluster.Snode) error {
 		req: cmn.ReqArgs{Method: http.MethodPost,
 			Path: cmn.URLPath(cmn.Version, cmn.IC),
 			Body: cmn.MustMarshal(msg),
-		}, timeout: cmn.LongTimeout},
+		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation},
 	)
+	return result.err
+}
+
+// sync ownership table
+func (p *proxyrunner) syncICBundle() error {
+	smap := p.owner.smap.get()
+	si, _ := smap.OldestIC()
+	cmn.Assert(si != nil)
+
+	if si.Equals(p.si) {
+		return nil
+	}
+
+	result := p.call(callArgs{si: si,
+		req: cmn.ReqArgs{Method: http.MethodGet,
+			Path:  cmn.URLPath(cmn.Version, cmn.IC),
+			Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
+		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation},
+	)
+
+	if result.err == nil {
+		bundle := &icBundle{}
+		if err := jsoniter.Unmarshal(result.bytes, bundle); err != nil {
+			glog.Errorf("%s: failed to marshal ic bundle", p.si)
+			return err
+		}
+
+		cmn.AssertMsg(smap.UUID == bundle.Smap.UUID, smap.StringEx()+"vs. "+bundle.Smap.StringEx())
+
+		if err := p.owner.smap.synchronize(bundle.Smap, true /* lesserIsErr */); err != nil {
+			glog.Errorf("%s: sync Smap err %v", p.si, err)
+		} else {
+			smap = p.owner.smap.get()
+			glog.Infof("%s: sync %s", p.si, p.owner.smap.get())
+		}
+
+		if !smap.IsIC(p.si) {
+			return nil
+		}
+		return jsoniter.Unmarshal(bundle.Owntbl, &p.notifs)
+	}
+	// TODO: Handle error. Should try calling another IC member maybe.
+	glog.Errorf("%s: failed to get ownership table from %s (%s)", p.si, si, result.err.Error())
 	return result.err
 }

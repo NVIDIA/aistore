@@ -201,7 +201,7 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 func withLocalRetry(pred func() bool, maxTries ...int) {
 	var (
 		sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
-		max   = 5
+		max   = 3
 	)
 
 	if len(maxTries) > 0 {

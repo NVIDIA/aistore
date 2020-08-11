@@ -222,6 +222,7 @@ const (
 	GetWhatXactStats    = "getxstats" // stats(xaction-by-uuid)
 	QueryXactStats      = "qryxstats" // stats(all-matching-xactions)
 	GetWhatStatus       = "status"    // JTX status by uuid
+	GetWhatICBundle     = "ic-bundle"
 )
 
 // SelectMsg.TimeFormat enum
