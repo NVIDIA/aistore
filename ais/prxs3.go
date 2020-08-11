@@ -21,14 +21,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// WARNING: `reparseQuery` might affect non-tensorflow clients using S3-compatible API
-// with AIStore. To be used with caution.
-func reparseQuery(r *http.Request) {
-	if strings.Contains(r.URL.Path, "?") && len(r.URL.Query()) == 0 {
-		r.URL, _ = url.Parse(r.URL.Path)
-	}
-}
-
 // [METHOD] /s3
 func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -39,7 +31,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
-	reparseQuery(r)
+	cmn.ReparseQuery(r)
 
 	switch r.Method {
 	case http.MethodHead:

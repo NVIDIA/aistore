@@ -5,9 +5,12 @@
 package cmn
 
 import (
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
@@ -46,4 +49,20 @@ func ParseURLScheme(url string) (scheme, address string) {
 		return "", s[0]
 	}
 	return s[0], s[1]
+}
+
+// WARNING: `ReparseQuery` might affect non-tensorflow clients using S3-compatible API
+// with AIStore. To be used with caution.
+func ReparseQuery(r *http.Request) {
+	if strings.ContainsRune(r.URL.Path, '?') {
+		q := r.URL.Query()
+		tmpURL, err := url.Parse(r.URL.Path)
+		debug.AssertNoErr(err)
+		for k, v := range tmpURL.Query() {
+			q.Add(k, strings.Join(v, ","))
+		}
+
+		r.URL.Path = tmpURL.Path
+		r.URL.RawQuery = q.Encode()
+	}
 }
