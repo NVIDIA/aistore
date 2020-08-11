@@ -15,7 +15,8 @@ function post_deploy() {
     echo "some of the aisnodes did not start properly"
     exit 1
   fi
-
+  echo "build all AIStore binaries from source"
+  make all
   echo "working with build: $(git rev-parse --short HEAD)"
   export BUCKET=nvais
   echo "run tests with cloud bucket: ${BUCKET}"
