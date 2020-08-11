@@ -8,6 +8,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/query"
@@ -145,7 +146,11 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 	}
 
 	objList := &cmn.BucketList{Entries: entries}
-	t.writeMsgPack(w, r, objList, "query_objects")
+	if strings.Contains(r.Header.Get(cmn.HeaderAccept), cmn.ContentMsgPack) {
+		t.writeMsgPack(w, r, objList, "query_objects")
+		return
+	}
+	t.writeJSON(w, r, objList, "query_objects")
 }
 
 // v1/query/discard/handle/value

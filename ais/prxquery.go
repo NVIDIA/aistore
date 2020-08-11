@@ -201,6 +201,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 				Method: http.MethodGet,
 				Path:   cmn.URLPath(cmn.Version, cmn.Query, cmn.Peek),
 				Body:   cmn.MustMarshal(msg),
+				Header: map[string][]string{cmn.HeaderAccept: {cmn.ContentMsgPack}},
 			},
 			timeout: cmn.LongTimeout,
 			fv:      func() interface{} { return &cmn.BucketList{} },

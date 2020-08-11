@@ -5,6 +5,7 @@
 package integration
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"sort"
@@ -16,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	jsoniter "github.com/json-iterator/go"
 )
 
 func checkQueryDone(t *testing.T, handle string) {
@@ -245,4 +247,43 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 
 	_, err = api.QueryWorkerTarget(baseParams, handle, 1)
 	tassert.Errorf(t, err != nil, "expected error to occur when target went down")
+}
+
+func TestQuerySingleWorkerNext(t *testing.T) {
+	var (
+		baseParams = tutils.BaseAPIParams()
+		m          = ioContext{
+			t:        t,
+			num:      100,
+			fileSize: 5 * cmn.KiB,
+		}
+	)
+
+	m.init()
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	m.puts()
+
+	smap, err := api.GetClusterMap(baseParams)
+	tassert.CheckError(t, err)
+
+	handle, err := api.InitQuery(baseParams, "", m.bck, nil, uint(smap.CountTargets()))
+	tassert.CheckFatal(t, err)
+
+	si, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	baseParams.URL = si.URL(cmn.NetworkPublic)
+
+	buf := bytes.NewBuffer(nil)
+	err = api.DoHTTPRequest(api.ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Query, cmn.Next),
+		Body:       cmn.MustMarshal(query.NextMsg{Handle: handle, Size: 10}),
+	}, buf)
+	tassert.CheckFatal(t, err)
+
+	objList := &cmn.BucketList{}
+	err = jsoniter.Unmarshal(buf.Bytes(), objList)
+	tassert.CheckFatal(t, err)
 }
