@@ -64,6 +64,7 @@ type (
 		metasyncer *metasyncer
 		rproxy     reverseProxy
 		notifs     notifs
+		ic         ic
 		qm         queryMem
 		gmm        *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	}
@@ -124,6 +125,7 @@ func (p *proxyrunner) Run() error {
 	p.rproxy.init()
 
 	p.notifs.init(p)
+	p.ic.init(p)
 	p.qm.init()
 
 	//
@@ -134,7 +136,7 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
 		{r: cmn.ETL, h: p.etlHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.IC, h: p.icHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.IC, h: p.ic.handler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
@@ -732,7 +734,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 			for sid := range newSmap.IC {
 				node := newSmap.GetProxy(sid)
 				if !smap.IsIC(node) {
-					if err := p.sendOwnershipTbl(node); err != nil {
+					if err := p.ic.sendOwnershipTbl(node); err != nil {
 						glog.Errorf("%s: failed to send ownership table to %s (err:%s)", p.si, node, err.Error())
 					}
 				}
@@ -1147,8 +1149,8 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		nl := newNLB(smsg.UUID, smap, notifCache, cmn.ActListObjects, bck.Bck)
 		nl.hrwOwner(smap)
 		// TODO: not "Equal" when cached
-		p.registerEqualIC(regIC{nl: nl, smap: smap, msg: amsg})
-	} else if p.reverseToOwner(w, r, smsg.UUID, amsg) {
+		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
+	} else if p.ic.reverseToOwner(w, r, smsg.UUID, amsg) {
 		return
 	}
 
@@ -2616,11 +2618,11 @@ func (p *proxyrunner) jtxStatus(w http.ResponseWriter, r *http.Request, what str
 		return
 	}
 
-	if p.reverseToOwner(w, r, uuid, nil) {
+	if p.ic.reverseToOwner(w, r, uuid, nil) {
 		return
 	}
 
-	p.writeStatus(w, r, uuid)
+	p.ic.writeStatus(w, r, uuid)
 }
 
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
@@ -3123,7 +3125,7 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
 // '{"action": cmn.ActXactStart}' /v1/cluster
 // '{"action": cmn.ActXactStop}' /v1/cluster
-// '{"action": cmn.ActSyncICOwner}' /v1/cluster
+// '{"action": cmn.ActSendOwnershipTbl}' /v1/cluster
 // '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
@@ -3146,7 +3148,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	if msg.Action != cmn.ActSyncICOwner {
+	if msg.Action != cmn.ActSendOwnershipTbl {
 		if p.forwardCP(w, r, msg, "", nil) {
 			return
 		}
@@ -3217,7 +3219,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == cmn.ActXactStart {
 			w.Write([]byte(xactMsg.ID))
 		}
-	case cmn.ActSyncICOwner:
+	case cmn.ActSendOwnershipTbl:
 		var (
 			smap  = p.owner.smap.get()
 			dstID string
@@ -3239,7 +3241,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 
 		if smap.IsIC(p.si) && smap.IC[p.si.ID()] < smap.IC[dstID] {
 			// node has older version than dst node handle locally
-			if err := p.sendOwnershipTbl(dst); err != nil {
+			if err := p.ic.sendOwnershipTbl(dst); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 			}
 			return

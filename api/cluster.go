@@ -122,12 +122,12 @@ func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 	})
 }
 
-// SyncICOwner API
+// SendOwnershipTbl API
 //
-// Given a daemonID of a IC member, sync the ownership table
-func SyncICOwner(baseParams BaseParams, daemonID string) error {
+// Given a daemonID of a IC member, send the ownership table
+func SendOwnershipTbl(baseParams BaseParams, daemonID string) error {
 	baseParams.Method = http.MethodPut
-	msg := cmn.ActionMsg{Action: cmn.ActSyncICOwner, Value: daemonID}
+	msg := cmn.ActionMsg{Action: cmn.ActSendOwnershipTbl, Value: daemonID}
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),

@@ -118,7 +118,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	nlq.hrwOwner(smap)
 
 	// TODO: not "Equal" when cached
-	p.registerEqualIC(regIC{nl: nlq, smap: smap, msg: msg})
+	p.ic.registerEqual(regIC{nl: nlq, smap: smap, msg: msg})
 	w.Write([]byte(handle))
 }
 
@@ -150,10 +150,10 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 		p.invalmsghdlr(w, r, "handle cannot be empty", http.StatusBadRequest)
 		return
 	}
-	if p.reverseToOwner(w, r, msg.Handle, msg) {
+	if p.ic.reverseToOwner(w, r, msg.Handle, msg) {
 		return
 	}
-	nl, ok := p.checkEntry(w, r, msg.Handle)
+	nl, ok := p.ic.checkEntry(w, r, msg.Handle)
 	if !ok {
 		return
 	}
@@ -187,11 +187,11 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p.reverseToOwner(w, r, msg.Handle, msg) {
+	if p.ic.reverseToOwner(w, r, msg.Handle, msg) {
 		return
 	}
 
-	if _, ok := p.checkEntry(w, r, msg.Handle); !ok {
+	if _, ok := p.ic.checkEntry(w, r, msg.Handle); !ok {
 		return
 	}
 

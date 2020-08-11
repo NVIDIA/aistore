@@ -42,17 +42,25 @@ type (
 		Smap   *smapX              `json:"smap"`
 		Owntbl jsoniter.RawMessage `json:"ownership_table"`
 	}
+
+	ic struct {
+		p *proxyrunner
+	}
 )
 
+func (ic *ic) init(p *proxyrunner) {
+	ic.p = p
+}
+
 // TODO -- FIXME: add redirect-to-owner capability to support list/query caching
-func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string,
+func (ic *ic) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string,
 	msg interface{}) (reversedOrFailed bool) {
 	retry := true
 begin:
 	var (
-		smap          = p.owner.smap.get()
-		selfIC        = smap.IsIC(p.si)
-		owner, exists = p.notifs.getOwner(uuid)
+		smap          = ic.p.owner.smap.get()
+		selfIC        = smap.IsIC(ic.p.si)
+		owner, exists = ic.p.notifs.getOwner(uuid)
 		psi           *cluster.Snode
 	)
 	if exists {
@@ -60,24 +68,24 @@ begin:
 	}
 	if selfIC {
 		if !exists && !retry {
-			p.invalmsghdlrf(w, r, "%q not found (%s)", uuid, smap.StrIC(p.si))
+			ic.p.invalmsghdlrf(w, r, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 			return true
 		} else if retry {
 			withLocalRetry(func() bool {
-				owner, exists = p.notifs.getOwner(uuid)
+				owner, exists = ic.p.notifs.getOwner(uuid)
 				return exists
 			})
 
 			if !exists {
 				retry = false
-				_ = p.syncICBundle() // TODO -- handle error
+				_ = ic.syncICBundle() // TODO -- handle error
 				goto begin
 			}
 		}
 	} else {
 		hrwOwner, err := cluster.HrwIC(&smap.Smap, uuid)
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+			ic.p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 			return true
 		}
 		owner = hrwOwner.ID()
@@ -88,7 +96,7 @@ outer:
 		return
 	case equalIC:
 		if selfIC {
-			owner = p.si.ID()
+			owner = ic.p.si.ID()
 		} else {
 			for pid := range smap.IC {
 				owner = pid
@@ -99,9 +107,9 @@ outer:
 		}
 	default: // cached + owned
 		psi = smap.GetProxy(owner)
-		cmn.AssertMsg(smap.IsIC(psi), owner+", "+smap.StrIC(p.si)) // TODO -- FIXME: handle
+		cmn.AssertMsg(smap.IsIC(psi), owner+", "+smap.StrIC(ic.p.si)) // TODO -- FIXME: handle
 	}
-	if owner == p.si.ID() {
+	if owner == ic.p.si.ID() {
 		return
 	}
 	// otherwise, hand it over
@@ -109,36 +117,36 @@ outer:
 		body := cmn.MustMarshal(msg)
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
 	}
-	p.reverseNodeRequest(w, r, psi)
+	ic.p.reverseNodeRequest(w, r, psi)
 	return true
 }
 
-func (p *proxyrunner) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifListener, ok bool) {
-	nl, exists := p.notifs.entry(uuid)
+func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifListener, ok bool) {
+	nl, exists := ic.p.notifs.entry(uuid)
 	if !exists {
-		smap := p.owner.smap.get()
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(p.si))
+		smap := ic.p.owner.smap.get()
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 		return
 	}
 	if nl.finished() {
 		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
-		smap := p.owner.smap.get()
-		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.StrIC(p.si))
+		smap := ic.p.owner.smap.get()
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.StrIC(ic.p.si))
 		return
 	}
 	return nl, true
 }
 
-func (p *proxyrunner) writeStatus(w http.ResponseWriter, r *http.Request, uuid string) {
-	nl, exists := p.notifs.entry(uuid)
+func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, uuid string) {
+	nl, exists := ic.p.notifs.entry(uuid)
 	if !exists {
-		smap := p.owner.smap.get()
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(p.si))
+		smap := ic.p.owner.smap.get()
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 		return
 	}
 
 	if err := nl.err(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		ic.p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
@@ -147,107 +155,107 @@ func (p *proxyrunner) writeStatus(w http.ResponseWriter, r *http.Request, uuid s
 }
 
 // verb /v1/ic
-func (p *proxyrunner) icHandler(w http.ResponseWriter, r *http.Request) {
+func (ic *ic) handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		p.icGet(w, r)
+		ic.handleGet(w, r)
 	case http.MethodPost:
-		p.icPost(w, r)
+		ic.handlePost(w, r)
 	default:
 		cmn.Assert(false)
 	}
 }
 
 // GET /v1/ic
-func (p *proxyrunner) icGet(w http.ResponseWriter, r *http.Request) {
+func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 	var (
-		smap = p.owner.smap.get()
+		smap = ic.p.owner.smap.get()
 		what = r.URL.Query().Get(cmn.URLParamWhat)
 	)
-	if !smap.IsIC(p.si) {
-		p.invalmsghdlrf(w, r, "%s: not an IC member", p.si)
+	if !smap.IsIC(ic.p.si) {
+		ic.p.invalmsghdlrf(w, r, "%s: not an IC member", ic.p.si)
 		return
 	}
 
 	if what == cmn.GetWhatICBundle {
-		bundle := icBundle{Smap: smap, Owntbl: cmn.MustMarshal(&p.notifs)}
-		p.writeJSON(w, r, bundle, what)
+		bundle := icBundle{Smap: smap, Owntbl: cmn.MustMarshal(&ic.p.notifs)}
+		ic.p.writeJSON(w, r, bundle, what)
 	} else {
-		p.invalmsghdlrf(w, r, fmtUnknownQue, what)
+		ic.p.invalmsghdlrf(w, r, fmtUnknownQue, what)
 	}
 }
 
 // POST /v1/ic
-func (p *proxyrunner) icPost(w http.ResponseWriter, r *http.Request) {
-	smap := p.owner.smap.get()
+func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
+	smap := ic.p.owner.smap.get()
 	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		ic.p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	reCheck := true
 check:
-	if !smap.IsIC(p.si) {
+	if !smap.IsIC(ic.p.si) {
 		if msg.SmapVersion < smap.Version || !reCheck {
-			p.invalmsghdlrf(w, r, "%s: not an IC member", p.si)
+			ic.p.invalmsghdlrf(w, r, "%s: not an IC member", ic.p.si)
 			return
 		}
 
 		reCheck = false
 		// wait for smap update
 		withLocalRetry(func() bool {
-			smap = p.owner.smap.get()
-			return smap.IsIC(p.si)
+			smap = ic.p.owner.smap.get()
+			return smap.IsIC(ic.p.si)
 		})
 		goto check
 	}
 
 	switch msg.Action {
 	case cmn.ActMergeOwnershipTbl:
-		if err := cmn.MorphMarshal(msg.Value, &p.notifs); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+		if err := cmn.MorphMarshal(msg.Value, &ic.p.notifs); err != nil {
+			ic.p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 	case cmn.ActListenToNotif:
 		nlMsg := &notifListenMsg{}
 		if err := cmn.MorphMarshal(msg.Value, nlMsg); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			ic.p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 		cmn.Assert(nlMsg.nl.notifTy() == notifXact || nlMsg.nl.notifTy() == notifCache)
-		p.notifs.add(nlMsg.nl)
+		ic.p.notifs.add(nlMsg.nl)
 	default:
-		p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
+		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
 	}
 }
 
-func (p *proxyrunner) registerEqualIC(a regIC) {
+func (ic *ic) registerEqual(a regIC) {
 	if a.query != nil {
 		a.query.Add(cmn.URLParamNotifyMe, equalIC)
 	}
-	if a.smap.IsIC(p.si) {
-		p.notifs.add(a.nl)
+	if a.smap.IsIC(ic.p.si) {
+		ic.p.notifs.add(a.nl)
 	}
 	if len(a.smap.IC) > 1 {
 		// TODO -- FIXME: handle errors, here and elsewhere
-		_ = p.bcastListenIC(a.nl, a.smap)
+		_ = ic.bcastListenIC(a.nl, a.smap)
 	}
 }
 
-func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX) (err error) {
+func (ic *ic) bcastListenIC(nl notifListener, smap *smapX) (err error) {
 	nodes := make(cluster.NodeMap, len(smap.IC))
 	for pid := range smap.IC {
-		if pid != p.si.ID() {
+		if pid != ic.p.si.ID() {
 			psi := smap.GetProxy(pid)
 			cmn.Assert(psi != nil)
 			nodes.Add(psi)
 		}
 	}
 	actMsg := cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
-	msg := p.newAisMsg(&actMsg, smap, nil)
+	msg := ic.p.newAisMsg(&actMsg, smap, nil)
 	cmn.Assert(len(nodes) > 0)
-	results := p.bcastToNodes(bcastArgs{
+	results := ic.p.bcastToNodes(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
 			Path:   cmn.URLPath(cmn.Version, cmn.IC),
@@ -266,10 +274,10 @@ func (p *proxyrunner) bcastListenIC(nl notifListener, smap *smapX) (err error) {
 	return
 }
 
-func (p *proxyrunner) sendOwnershipTbl(si *cluster.Snode) error {
-	actMsg := &cmn.ActionMsg{Action: cmn.ActMergeOwnershipTbl, Value: &p.notifs}
-	msg := p.newAisMsg(actMsg, nil, nil)
-	result := p.call(callArgs{si: si,
+func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
+	actMsg := &cmn.ActionMsg{Action: cmn.ActMergeOwnershipTbl, Value: &ic.p.notifs}
+	msg := ic.p.newAisMsg(actMsg, nil, nil)
+	result := ic.p.call(callArgs{si: si,
 		req: cmn.ReqArgs{Method: http.MethodPost,
 			Path: cmn.URLPath(cmn.Version, cmn.IC),
 			Body: cmn.MustMarshal(msg),
@@ -279,16 +287,16 @@ func (p *proxyrunner) sendOwnershipTbl(si *cluster.Snode) error {
 }
 
 // sync ownership table
-func (p *proxyrunner) syncICBundle() error {
-	smap := p.owner.smap.get()
+func (ic *ic) syncICBundle() error {
+	smap := ic.p.owner.smap.get()
 	si, _ := smap.OldestIC()
 	cmn.Assert(si != nil)
 
-	if si.Equals(p.si) {
+	if si.Equals(ic.p.si) {
 		return nil
 	}
 
-	result := p.call(callArgs{si: si,
+	result := ic.p.call(callArgs{si: si,
 		req: cmn.ReqArgs{Method: http.MethodGet,
 			Path:  cmn.URLPath(cmn.Version, cmn.IC),
 			Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
@@ -298,25 +306,25 @@ func (p *proxyrunner) syncICBundle() error {
 	if result.err == nil {
 		bundle := &icBundle{}
 		if err := jsoniter.Unmarshal(result.bytes, bundle); err != nil {
-			glog.Errorf("%s: failed to marshal ic bundle", p.si)
+			glog.Errorf("%s: failed to marshal ic bundle", ic.p.si)
 			return err
 		}
 
 		cmn.AssertMsg(smap.UUID == bundle.Smap.UUID, smap.StringEx()+"vs. "+bundle.Smap.StringEx())
 
-		if err := p.owner.smap.synchronize(bundle.Smap, true /* lesserIsErr */); err != nil {
-			glog.Errorf("%s: sync Smap err %v", p.si, err)
+		if err := ic.p.owner.smap.synchronize(bundle.Smap, true /* lesserIsErr */); err != nil {
+			glog.Errorf("%s: sync Smap err %v", ic.p.si, err)
 		} else {
-			smap = p.owner.smap.get()
-			glog.Infof("%s: sync %s", p.si, p.owner.smap.get())
+			smap = ic.p.owner.smap.get()
+			glog.Infof("%s: sync %s", ic.p.si, ic.p.owner.smap.get())
 		}
 
-		if !smap.IsIC(p.si) {
+		if !smap.IsIC(ic.p.si) {
 			return nil
 		}
-		return jsoniter.Unmarshal(bundle.Owntbl, &p.notifs)
+		return jsoniter.Unmarshal(bundle.Owntbl, &ic.p.notifs)
 	}
 	// TODO: Handle error. Should try calling another IC member maybe.
-	glog.Errorf("%s: failed to get ownership table from %s (%s)", p.si, si, result.err.Error())
+	glog.Errorf("%s: failed to get ownership table from %s (%s)", ic.p.si, si, result.err.Error())
 	return result.err
 }

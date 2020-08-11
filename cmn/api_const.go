@@ -75,7 +75,7 @@ const (
 	ActAttach         = "attach"
 	ActDetach         = "detach"
 	// IC
-	ActSyncICOwner       = "ic-sync-ownership-tbl"
+	ActSendOwnershipTbl  = "ic-send-ownership-tbl"
 	ActListenToNotif     = "watch-xaction"
 	ActMergeOwnershipTbl = "merge-ownership-tbl"
 )
