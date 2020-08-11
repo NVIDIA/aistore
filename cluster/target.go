@@ -100,6 +100,7 @@ type Target interface {
 	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
 	RebalanceNamespace(si *Snode) ([]byte, int, error)
 	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
+	K8sNodeName() string
 }
 
 type RebManager interface {

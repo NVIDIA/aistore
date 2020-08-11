@@ -73,6 +73,17 @@ type (
 	NotFoundError struct {
 		what string
 	}
+	ETLError struct {
+		Reason string
+		ETLErrorContext
+	}
+	ETLErrorContext struct {
+		Tid     string
+		UUID    string
+		ETLName string
+		PodName string
+		SvcName string
+	}
 )
 
 var (
@@ -259,6 +270,77 @@ func NewNotFoundError(format string, a ...interface{}) *NotFoundError {
 }
 
 func (e *NotFoundError) Error() string { return e.what + " not found" }
+
+func NewETLError(ctx *ETLErrorContext, format string, a ...interface{}) *ETLError {
+	e := &ETLError{
+		Reason: fmt.Sprintf(format, a...),
+	}
+	return e.WithContext(ctx)
+}
+
+func (e *ETLError) Error() string {
+	var s []string
+
+	if e.Tid != "" {
+		s = append(s, fmt.Sprintf("t[%s]", e.Tid))
+	}
+	if e.UUID != "" {
+		s = append(s, fmt.Sprintf("uuid=%q", e.UUID))
+	}
+	if e.ETLName != "" {
+		s = append(s, fmt.Sprintf("etl=%q", e.ETLName))
+	}
+	if e.PodName != "" {
+		s = append(s, fmt.Sprintf("pod=%q", e.PodName))
+	}
+	if e.SvcName != "" {
+		s = append(s, fmt.Sprintf("svc=%q", e.SvcName))
+	}
+
+	return fmt.Sprintf("[%s] %s", strings.Join(s, ","), e.Reason)
+}
+
+func (e *ETLError) withUUID(uuid string) *ETLError {
+	if uuid != "" {
+		e.UUID = uuid
+	}
+	return e
+}
+
+func (e *ETLError) withTarget(tid string) *ETLError {
+	if tid != "" {
+		e.Tid = tid
+	}
+	return e
+}
+
+func (e *ETLError) withETLName(name string) *ETLError {
+	if name != "" {
+		e.ETLName = name
+	}
+	return e
+}
+
+func (e *ETLError) withSvcName(name string) *ETLError {
+	if name != "" {
+		e.SvcName = name
+	}
+	return e
+}
+
+func (e *ETLError) WithPodName(name string) *ETLError {
+	if name != "" {
+		e.PodName = name
+	}
+	return e
+}
+
+func (e *ETLError) WithContext(ctx *ETLErrorContext) *ETLError {
+	if ctx == nil {
+		return e
+	}
+	return e.withUUID(ctx.UUID).withTarget(ctx.Tid).WithPodName(ctx.PodName).withETLName(ctx.ETLName).withSvcName(ctx.SvcName)
+}
 
 ////////////////////////////
 // error grouping helpers //

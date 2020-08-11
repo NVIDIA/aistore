@@ -28,7 +28,6 @@ type (
 	registry struct {
 		mtx    sync.RWMutex
 		byUUID map[string]Communicator
-		byName map[string]Communicator
 	}
 )
 
@@ -37,7 +36,6 @@ var reg = newRegistry()
 func newRegistry() *registry {
 	return &registry{
 		byUUID: make(map[string]Communicator),
-		byName: make(map[string]Communicator),
 	}
 }
 
@@ -49,7 +47,6 @@ func (r *registry) put(uuid string, c Communicator) error {
 		return fmt.Errorf("ETL with uuid %q already exists", uuid)
 	}
 	r.byUUID[uuid] = c
-	r.byName[c.Name()] = c
 	return nil
 }
 
@@ -68,7 +65,6 @@ func (r *registry) removeByUUID(uuid string) (c Communicator) {
 	r.mtx.Lock()
 	if c, ok = r.byUUID[uuid]; ok {
 		delete(r.byUUID, uuid)
-		delete(r.byName, c.Name())
 	}
 	r.mtx.Unlock()
 	return c
@@ -76,13 +72,13 @@ func (r *registry) removeByUUID(uuid string) (c Communicator) {
 
 func (r *registry) list() []Info {
 	r.mtx.RLock()
-	transformations := make([]Info, 0, len(r.byUUID))
+	etls := make([]Info, 0, len(r.byUUID))
 	for uuid, c := range r.byUUID {
-		transformations = append(transformations, Info{
+		etls = append(etls, Info{
 			ID:   uuid,
 			Name: c.Name(),
 		})
 	}
 	r.mtx.RUnlock()
-	return transformations
+	return etls
 }

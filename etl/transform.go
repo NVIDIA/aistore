@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -109,76 +108,97 @@ func (e *Aborter) ListenSmapChanged() {
 }
 
 // TODO: remove the `kubectl` with a proper go-sdk call
-func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
+func Start(t cluster.Target, msg Msg) (err error) {
 	var (
-		pod      *corev1.Pod
-		svc      *corev1.Service
-		hostIP   string
-		nodePort int
+		pod             *corev1.Pod
+		svc             *corev1.Service
+		hostIP          string
+		originalPodName string
+
+		errCtx = &cmn.ETLErrorContext{
+			Tid:  t.Snode().DaemonID,
+			UUID: msg.ID,
+		}
 	)
-	cmn.Assert(nodeName != "")
+	cmn.Assert(t.K8sNodeName() != "") // Corresponding 'if' done at the beginning of the request.
 	// Parse spec template.
-	if pod, err = ParsePodSpec(msg.Spec); err != nil {
+	if pod, err = ParsePodSpec(errCtx, msg.Spec); err != nil {
 		return err
 	}
+	errCtx.ETLName = pod.GetName()
+	originalPodName = pod.GetName()
+
 	// Override the name (add target's daemon ID and node ID to its name).
-	pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + nodeName)
+	pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + t.K8sNodeName())
+	errCtx.PodName = pod.GetName()
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string, 1)
 	}
-	pod.Labels[targetNode] = nodeName
+	pod.Labels[targetNode] = t.K8sNodeName()
 
 	// Create service spec
 	svc = createServiceSpec(pod)
+	errCtx.SvcName = svc.Name
 
 	// The following combination of Affinity and Anti-Affinity allows one to
 	// achieve the following:
 	// 1. The ETL container is always scheduled on the target invoking it.
 	// 2. Not more than one ETL container with the same target, is scheduled on the same node,
 	//    at a given point of time
-	if err = setTransformAffinity(pod); err != nil {
-		return
+	if err := setTransformAffinity(errCtx, t, pod); err != nil {
+		return err
 	}
 
-	if err = setTransformAntiAffinity(pod); err != nil {
-		return
+	if err := setTransformAntiAffinity(errCtx, t, pod); err != nil {
+		return err
 	}
 
 	setPodEnvVariables(pod, t)
 
 	// 1. Doing cleanup of any pre-existing entities
-	if err = deleteEntity(cmn.KubePod, pod.Name); err != nil {
-		return
+	if err := deleteEntity(errCtx, cmn.KubePod, pod.Name); err != nil {
+		return err
 	}
 
-	if err = deleteEntity(cmn.KubeSvc, svc.Name); err != nil {
-		return
+	if err := deleteEntity(errCtx, cmn.KubeSvc, svc.Name); err != nil {
+		return err
 	}
 
 	// 2. Creating pod
-	if err = createEntity(cmn.KubePod, pod); err != nil {
-		_ = deleteEntity(cmn.KubePod, pod.Name) // ignoring err
-		return
+	if err := createEntity(errCtx, cmn.KubePod, pod); err != nil {
+		// Ignoring the error for deletion as it is best effort.
+		glog.Errorf("Failed creation of pod %q. Doing cleanup.", pod.Name)
+		if deleteErr := deleteEntity(errCtx, cmn.KubePod, pod.Name); deleteErr != nil {
+			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete pod after it's failed starting")
+		}
+		return err
 	}
 
-	if err = waitPodReady(pod, msg.WaitTimeout); err != nil {
-		return
+	if err := waitPodReady(errCtx, pod, msg.WaitTimeout); err != nil {
+		return err
 	}
 
 	// Retrieve host IP of the pod.
-	if hostIP, err = getPodHostIP(pod); err != nil {
-		return
+	if hostIP, err = getPodHostIP(errCtx, pod); err != nil {
+		return err
 	}
 
 	// 3. Creating service
-	if err = createEntity(cmn.KubeSvc, svc); err != nil {
-		_ = deleteEntity(cmn.KubeSvc, svc.Name) // ignoring delete errs
-		_ = deleteEntity(cmn.KubePod, pod.Name)
-		return
+	if err := createEntity(errCtx, cmn.KubeSvc, svc); err != nil {
+		// Ignoring the error for deletion as it is best effort.
+		glog.Errorf("Failed creation of svc %q. Doing cleanup.", svc.Name)
+		if deleteErr := deleteEntity(errCtx, cmn.KubeSvc, svc.Name); deleteErr != nil {
+			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete service after it's failed starting")
+		}
+		if deleteErr := deleteEntity(errCtx, cmn.KubePod, pod.Name); deleteErr != nil {
+			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete pod after it's corresponding service failed starting")
+		}
+		return err
 	}
 
-	if nodePort, err = getServiceNodePort(svc); err != nil {
-		return
+	nodePort, err := getServiceNodePort(errCtx, svc)
+	if err != nil {
+		return err
 	}
 
 	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
@@ -187,16 +207,16 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	// (not waiting sometimes causes the first Do() to fail)
 	readinessPath := pod.Spec.Containers[0].ReadinessProbe.HTTPGet.Path
 	if waitErr := waitTransformerReady(transformerURL, readinessPath); waitErr != nil {
-		if err := deleteEntity(cmn.KubePod, pod.Name); err != nil {
+		if err := deleteEntity(errCtx, cmn.KubePod, pod.Name); err != nil {
 			glog.Error(err)
 		}
-		if err := deleteEntity(cmn.KubePod, svc.Name); err != nil {
+		if err := deleteEntity(errCtx, cmn.KubePod, svc.Name); err != nil {
 			glog.Error(err)
 		}
-		return waitErr
+		return cmn.NewETLError(errCtx, waitErr.Error())
 	}
 
-	c := makeCommunicator(t, pod, msg.CommType, transformerURL, nodeName, NewAborter(t, msg.ID))
+	c := makeCommunicator(t, pod, msg.CommType, transformerURL, originalPodName, NewAborter(t, msg.ID))
 	if err := reg.put(msg.ID, c); err != nil {
 		return err
 	}
@@ -249,16 +269,25 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
 // It unregisters ETL smap listener.
 func Stop(t cluster.Target, id string) error {
+	var (
+		errCtx = &cmn.ETLErrorContext{
+			UUID: id,
+			Tid:  t.Snode().DaemonID,
+		}
+	)
+
 	c, err := GetCommunicator(id)
 	if err != nil {
+		return cmn.NewETLError(errCtx, err.Error())
+	}
+	errCtx.PodName = c.PodName()
+	errCtx.SvcName = c.SvcName()
+
+	if err := deleteEntity(errCtx, cmn.KubePod, c.PodName()); err != nil {
 		return err
 	}
 
-	if err := deleteEntity(cmn.KubePod, c.PodName()); err != nil {
-		return err
-	}
-
-	if err := deleteEntity(cmn.KubeSvc, c.SvcName()); err != nil {
+	if err := deleteEntity(errCtx, cmn.KubeSvc, c.SvcName()); err != nil {
 		return err
 	}
 
@@ -280,7 +309,7 @@ func GetCommunicator(transformID string) (Communicator, error) {
 func List() []Info { return reg.list() }
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
-func setTransformAffinity(pod *corev1.Pod) error {
+func setTransformAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *corev1.Pod) error {
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
 	}
@@ -292,16 +321,15 @@ func setTransformAffinity(pod *corev1.Pod) error {
 	prefAffinity := pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if reqAffinity != nil && len(reqAffinity.NodeSelectorTerms) > 0 || len(prefAffinity) > 0 {
-		return fmt.Errorf("error in YAML spec: pod %q should not have any NodeAffinities defined", pod)
+		return cmn.NewETLError(errCtx, "error in YAML spec, pod should not have any NodeAffinities defined")
 	}
 
-	cmn.Assert(cmn.GetK8sNodeName() != "")
 	nodeSelector := &corev1.NodeSelector{
 		NodeSelectorTerms: []corev1.NodeSelectorTerm{{
 			MatchExpressions: []corev1.NodeSelectorRequirement{{
 				Key:      nodeNameLabel,
 				Operator: corev1.NodeSelectorOpIn,
-				Values:   []string{cmn.GetK8sNodeName()},
+				Values:   []string{t.K8sNodeName()},
 			}}},
 		},
 	}
@@ -315,7 +343,7 @@ func setTransformAffinity(pod *corev1.Pod) error {
 
 // Sets pods node anti-affinity, so no two pods with the matching criteria is scheduled on the same node
 // at the same time.
-func setTransformAntiAffinity(pod *corev1.Pod) error {
+func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *corev1.Pod) error {
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
 	}
@@ -327,14 +355,13 @@ func setTransformAntiAffinity(pod *corev1.Pod) error {
 	prefAntiAffinity := pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if len(reqAntiAffinities) > 0 || len(prefAntiAffinity) > 0 {
-		return fmt.Errorf("error in YAML spec: pod %q should not have any NodeAntiAffinities defined", pod)
+		return cmn.NewETLError(errCtx, "error in YAML spec, pod should not have any NodeAntiAffinities defined")
 	}
 
-	cmn.Assert(cmn.GetK8sNodeName() != "")
 	reqAntiAffinities = []corev1.PodAffinityTerm{{
 		LabelSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
-				targetNode: pod.Labels[targetNode],
+				targetNode: t.K8sNodeName(),
 			},
 		},
 		TopologyKey: nodeNameLabel,
@@ -354,7 +381,7 @@ func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) {
 	}
 }
 
-func waitPodReady(pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
+func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 	args := []string{"wait"}
 	if !waitTimeout.IsZero() {
 		args = append(args, "--timeout", waitTimeout.String())
@@ -362,74 +389,74 @@ func waitPodReady(pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 	args = append(args, "--for", "condition=ready", "pod", pod.GetName())
 	cmd := exec.Command(cmn.Kubectl, args...)
 	if b, err := cmd.CombinedOutput(); err != nil {
-		handlePodFailure(pod, "pod start failure")
-		return fmt.Errorf("failed waiting for pod %q to get ready (err: %v; out: %s)",
-			pod.GetName(), err, string(b))
+		handlePodFailure(errCtx, pod, "pod start failure")
+		return cmn.NewETLError(errCtx, "failed waiting for pod to get ready (err: %v; out: %s)", err, string(b))
 	}
 	return nil
 }
 
-func getPodHostIP(pod *corev1.Pod) (string, error) {
+func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
 	// Retrieve host IP of the pod.
-	args := []string{"get", "pod", pod.GetName(), "--template={{.status.hostIP}}"}
-	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
+	output, err := exec.Command(cmn.Kubectl, []string{"get", "pod", pod.GetName(), "--template={{.status.hostIP}}"}...).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to get pod %q IP addr (err: %v; out: %s)",
-			pod.GetName(), err, string(output))
+		return "", cmn.NewETLError(errCtx, "failed to get IP of pod (err: %v; output: %s)", err, string(output))
 	}
 	return string(output), nil
 }
 
-func deleteEntity(entity, entityName string) (err error) {
+func deleteEntity(errCtx *cmn.ETLErrorContext, entity, entityName string) error {
 	var (
-		output []byte
-		args   = []string{"delete", entity, entityName, "--ignore-not-found"}
+		args = []string{"delete", entity, entityName, "--ignore-not-found"}
 	)
-	if output, err = exec.Command(cmn.Kubectl, args...).CombinedOutput(); err == nil {
-		return
+
+	// Doing graceful delete
+	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
+	if err == nil {
+		return nil
 	}
-	glog.Errorf("failed to delete %q[%s] (err: %v, out: %s) - retrying with `--force`",
-		entity, entityName, err, string(output))
+
+	etlErr := cmn.NewETLError(errCtx, "failed to delete %s, err: %v, out: %s. Retrying with --force", entity, err, string(output))
+	glog.Errorf(etlErr.Error())
+
+	// Doing force delete
 	args = append(args, "--force")
 	output, err = exec.Command(cmn.Kubectl, args...).CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("failed to delete %q[%s] (err: %v, out: %s)", entity, entityName, err, string(output))
-	}
-	return
-}
-
-func createEntity(entity string, spec interface{}) error {
-	b, err := jsoniter.Marshal(spec)
-	if err != nil {
-		return fmt.Errorf("unexpected failure marshal %s spec, err: %v", entity, err)
-	}
-	args := []string{"create", "-f", "-"}
-	cmd := exec.Command(cmn.Kubectl, args...)
-	cmd.Stdin = bytes.NewBuffer(b)
-	if b, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create %s (err: %v, out: %s)", entity, err, string(b))
+		return cmn.NewETLError(errCtx, "force delete failed. %q %s, err: %v, out: %s",
+			entity, entityName, err, string(output))
 	}
 	return nil
 }
 
-func getServiceNodePort(svc *corev1.Service) (int, error) {
-	args := []string{"get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svc.GetName()}
-	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
+func createEntity(errCtx *cmn.ETLErrorContext, entity string, spec interface{}) error {
+	var (
+		b    = cmn.MustMarshal(spec)
+		args = []string{"create", "-f", "-"}
+		cmd  = exec.Command(cmn.Kubectl, args...)
+	)
+
+	cmd.Stdin = bytes.NewBuffer(b)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return cmn.NewETLError(errCtx, "failed to create %s (err: %v; output: %s)", entity, err, string(b))
+	}
+	return nil
+}
+
+func getServiceNodePort(errCtx *cmn.ETLErrorContext, svc *corev1.Service) (int, error) {
+	output, err := exec.Command(cmn.Kubectl, []string{"get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svc.GetName()}...).CombinedOutput()
 	if err != nil {
-		return -1, fmt.Errorf("failed to get nodePort for service %q (err: %v, out: %s)",
-			svc.GetName(), err, string(output))
+		return -1, cmn.NewETLError(errCtx, "failed to get nodePort for service %q (err: %v; output: %s)", svc.GetName(), err, string(output))
 	}
 	outputStr, _ := strconv.Unquote(string(output))
 	nodePort, err := strconv.Atoi(outputStr)
 	if err != nil {
-		return -1, fmt.Errorf("failed to parse nodePort for service %q (err: %v, out: %s)",
-			svc.GetName(), err, string(output))
+		return -1, cmn.NewETLError(errCtx, "failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svc.GetName(), err, string(output))
 	}
 	return nodePort, nil
 }
 
-func handlePodFailure(pod *corev1.Pod, msg string) {
-	if deleteErr := deleteEntity(cmn.KubePod, pod.GetName()); deleteErr != nil {
-		glog.Errorf("failed to delete pod %q after %s", pod.GetName(), msg)
+func handlePodFailure(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, msg string) {
+	if deleteErr := deleteEntity(errCtx, cmn.KubePod, pod.GetName()); deleteErr != nil {
+		glog.Errorf("%s: %s", deleteErr.Error(), "failed to delete pod after "+msg)
 	}
 }

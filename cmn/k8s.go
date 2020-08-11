@@ -19,10 +19,6 @@ const (
 	KubeSvc     = "svc"
 )
 
-func GetK8sNodeName() string {
-	return os.Getenv(K8SHostName)
-}
-
 func DetectK8s() (k8snode string) {
 	if k8snode = os.Getenv(K8SHostName); k8snode == "" {
 		return

@@ -26,7 +26,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 	spec, err := tutils.GetTransformYaml(tutils.Tar2TF)
 	tassert.CheckError(t, err)
 
-	pod, err := etl.ParsePodSpec(spec)
+	pod, err := etl.ParsePodSpec(nil, spec)
 	tassert.CheckError(t, err)
 	spec, _ = jsoniter.Marshal(pod)
 

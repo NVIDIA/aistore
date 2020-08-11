@@ -45,7 +45,7 @@ func (t *targetrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-	if err := etl.Start(t, t.k8snode, msg); err != nil {
+	if err := etl.Start(t, msg); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 	}
 }
@@ -71,8 +71,13 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 		t.handleETLError(w, r, err)
 		return
 	}
+
 	if err := comm.Do(w, r, bck, objName); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.invalmsghdlr(w, r, cmn.NewETLError(&cmn.ETLErrorContext{
+			UUID:    uuid,
+			PodName: comm.PodName(),
+			SvcName: comm.SvcName(),
+		}, err.Error()).Error())
 	}
 }
 
@@ -86,7 +91,9 @@ func (t *targetrunner) listETLs(w http.ResponseWriter, r *http.Request) {
 // TODO: It should be all-purpose function, similar to invaldmsghdlr.
 func (t *targetrunner) handleETLError(w http.ResponseWriter, r *http.Request, err error) {
 	if _, ok := err.(*cmn.NotFoundError); ok {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		primaryURL := t.owner.smap.Get().Primary.URL(cmn.NetworkPublic)
+		t.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s. Try starting new ETL with \"%s/v1/etl/init\" endpoint",
+			err.Error(), primaryURL)
 	} else {
 		t.invalmsghdlr(w, r, err.Error())
 	}
@@ -111,6 +118,13 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /v1/etl/init
+//
+// initETL creates new ETL following steps:
+//  * Validate user provided pod specification.
+//  * Generate UUID of an ETL.
+//  * Broadcast initETL message to all targets.
+//  * If any of targets failed starting an ETL, stop the ETL on all targets.
+//  * Return UUID to the user if all above steps succeeded.
 func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlInit)
 	if err != nil {

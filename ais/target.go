@@ -1496,3 +1496,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	t.statsT.AddMany(stats.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
 	getfshealthchecker().OnErr(filepath)
 }
+
+func (t *targetrunner) K8sNodeName() string {
+	return t.k8snode
+}

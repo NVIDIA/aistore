@@ -117,7 +117,7 @@ type redirComm struct {
 }
 
 func (repc *redirComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	redirectURL := repc.transformerAddress + transformerPath(bck, objName)
+	redirectURL := cmn.JoinPath(repc.transformerAddress, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
 }
