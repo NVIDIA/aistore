@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -52,14 +51,11 @@ func (p *proxyrunner) reverseToOwner(w http.ResponseWriter, r *http.Request, uui
 		goto outer
 	}
 	if selfIC {
-		const max = 5
-		var (
-			sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
-		)
-		for i := 0; i < max && !exists; i++ {
-			time.Sleep(sleep)
+		withLocalRetry(func() bool {
 			owner, exists = p.notifs.getOwner(uuid)
-		}
+			return exists
+		})
+
 		if !exists {
 			p.invalmsghdlrf(w, r, "%q not found (%s)", uuid, smap.StrIC(p.si))
 			return true
@@ -136,64 +132,58 @@ func (p *proxyrunner) writeStatus(w http.ResponseWriter, r *http.Request, uuid s
 	w.Write(cmn.MustMarshal(nl.finished()))
 }
 
-// POST /v1/ic
-func (p *proxyrunner) listenICHandler(w http.ResponseWriter, r *http.Request) {
+// verb /v1/ic
+func (p *proxyrunner) icHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		var (
-			msg  aisMsg
-			smap = p.owner.smap.get()
-		)
+		p.icPost(w, r)
+	default:
+		cmn.Assert(false)
+	}
+}
 
-		if err := cmn.ReadJSON(w, r, &msg); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
+// POST /v1/ic
+func (p *proxyrunner) icPost(w http.ResponseWriter, r *http.Request) {
+	smap := p.owner.smap.get()
+	msg := &aisMsg{}
+	if err := cmn.ReadJSON(w, r, msg); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
 
-		if smap.version() < msg.SmapVersion {
-			// TODO -- FIXME handle
-			glog.Errorf("%s: SelfSmapVersion (%d) < RequestSmapVersion (%d)",
-				p.si, smap.version(), msg.SmapVersion)
-			return
-		}
-
-		if !smap.IsIC(p.si) {
+	reCheck := true
+check:
+	if !smap.IsIC(p.si) {
+		if msg.SmapVersion < smap.Version || !reCheck {
 			p.invalmsghdlrf(w, r, "%s: not an IC member", p.si)
 			return
 		}
 
-		switch msg.Action {
-		case cmn.ActSyncICOwner:
-			var daeID string
-			if err := cmn.MorphMarshal(msg.Value, &daeID); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			si := smap.GetProxy(daeID)
-			cmn.Assert(si != nil)
-			if err := p.sendOwnershipTbl(si); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		case cmn.ActMergeOwnershipTbl:
-			if err := cmn.MorphMarshal(msg.Value, &p.notifs); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		case cmn.ActListenToNotif:
-			nlMsg := &notifListenMsg{}
-			if err := cmn.MorphMarshal(msg.Value, nlMsg); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
+		reCheck = false
+		// wait for smap update
+		withLocalRetry(func() bool {
+			smap = p.owner.smap.get()
+			return smap.IsIC(p.si)
+		})
+		goto check
+	}
 
-			cmn.Assert(nlMsg.nl.notifTy() == notifXact || nlMsg.nl.notifTy() == notifCache)
-			p.notifs.add(nlMsg.nl)
-		default:
-			p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
+	switch msg.Action {
+	case cmn.ActMergeOwnershipTbl:
+		if err := cmn.MorphMarshal(msg.Value, &p.notifs); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
+	case cmn.ActListenToNotif:
+		nlMsg := &notifListenMsg{}
+		if err := cmn.MorphMarshal(msg.Value, nlMsg); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		cmn.Assert(nlMsg.nl.notifTy() == notifXact || nlMsg.nl.notifTy() == notifCache)
+		p.notifs.add(nlMsg.nl)
 	default:
-		cmn.Assert(false)
+		p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
 	}
 }
 

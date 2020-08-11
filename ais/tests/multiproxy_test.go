@@ -1470,10 +1470,13 @@ func icKillAndRestorePrimary(t *testing.T) {
 	// Restore the killed primary back as primary
 	err = restore(cmd, args, true, "proxy")
 	tassert.CheckFatal(t, err)
+	tutils.WaitStarted(t, oldPrimary.URL(cmn.NetworkPublic))
+
 	smap, err = tutils.WaitForPrimaryProxy(oldPrimaryURL, "to designate new primary",
 		smap.Version, testing.Verbose())
 	tassert.CheckFatal(t, err)
-	smap = setPrimaryTo(t, newPrimaryURL, smap, "", oldPrimaryID)
+
+	smap = setPrimaryTo(t, oldPrimaryURL, smap, "", oldPrimaryID)
 
 	// when a node added as primary, it should add itself to IC
 	tassert.Fatalf(t, smap.IsIC(oldPrimary), "primary (%s) should be a IC member, (were: %s)", oldPrimaryID, smap.StrIC(newPrimary))
@@ -1533,29 +1536,21 @@ func icSyncOwnershipTable(t *testing.T) {
 
 	baseParams = tutils.BaseAPIParams(newICNode.URL(cmn.NetworkPublic))
 
-	// TODO: Remove once auto sync mechanism is implemented
-	err = api.SyncICOwner(baseParams, newICMemID)
-	tassert.CheckError(t, err)
-
 	_, err = api.GetStatusJtx(baseParams, xactID)
 	tassert.CheckError(t, err)
 
 	err = restore(cmd, args, false, "proxy")
 	tassert.CheckFatal(t, err)
+	tutils.WaitStarted(t, killNode.URL(cmn.NetworkPublic))
+
 	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
 		smap.Version, testing.Verbose(), origProxyCount)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, !smap.IsIC(killNode), "newly joined node shouldn't be in IC (%s)", killNode)
 
-	tutils.WaitStarted(t, killNode.URL(cmn.NetworkPublic))
-
 	// should sync ownership table when non-ic member become primary
 	smap = setPrimaryTo(t, primary.PublicNet.DirectURL, smap, "", killNode.ID())
 	tassert.Fatalf(t, smap.IsIC(killNode), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
-
-	// TODO: Remove once auto sync mechanism is implemented
-	err = api.SyncICOwner(baseParams, killNode.ID())
-	tassert.CheckError(t, err)
 
 	baseParams = tutils.BaseAPIParams(killNode.URL(cmn.NetworkPublic))
 	_, err = api.GetStatusJtx(baseParams, xactID)

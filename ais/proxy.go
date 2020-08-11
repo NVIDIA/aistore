@@ -134,7 +134,7 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
 		{r: cmn.ETL, h: p.etlHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.IC, h: p.listenICHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.IC, h: p.icHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
@@ -725,6 +725,19 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			return true
 		})
+
+		if smap.IsIC(p.si) && newSmap.IsIC(p.si) {
+			// node is IC member in both old and new smap
+			// send ownership table to newly added members
+			for sid := range newSmap.IC {
+				node := newSmap.GetProxy(sid)
+				if !smap.IsIC(node) {
+					if err := p.sendOwnershipTbl(node); err != nil {
+						glog.Errorf("%s: failed to send ownership table to %s (err:%s)", p.si, node, err.Error())
+					}
+				}
+			}
+		}
 	}
 
 ExtractRMD:
@@ -2339,7 +2352,6 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	err = p.owner.smap.modify(func(clone *smapX) error {
 		clone.Primary = psi
-		clone.staffIC()
 		return nil
 	})
 	cmn.AssertNoErr(err)
@@ -2421,7 +2433,6 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	// (I.5) commit locally
 	err = p.owner.smap.modify(func(clone *smapX) error {
 		clone.Primary = psi
-		clone.staffIC()
 		p.metasyncer.becomeNonPrimary()
 		return nil
 	})
@@ -3112,6 +3123,7 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
 // '{"action": cmn.ActXactStart}' /v1/cluster
 // '{"action": cmn.ActXactStop}' /v1/cluster
+// '{"action": cmn.ActSyncICOwner}' /v1/cluster
 // '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
@@ -3134,8 +3146,10 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	if p.forwardCP(w, r, msg, "", nil) {
-		return
+	if msg.Action != cmn.ActSyncICOwner {
+		if p.forwardCP(w, r, msg, "", nil) {
+			return
+		}
 	}
 	// handle the action
 	switch msg.Action {
@@ -3204,35 +3218,44 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(xactMsg.ID))
 		}
 	case cmn.ActSyncICOwner:
-		smap := p.owner.smap.get()
-		var daeID string
-		if err := cmn.MorphMarshal(msg.Value, &daeID); err != nil {
+		var (
+			smap  = p.owner.smap.get()
+			dstID string
+		)
+		if err := cmn.MorphMarshal(msg.Value, &dstID); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if !smap.IsIC(smap.GetProxy(daeID)) {
-			p.invalmsghdlrf(w, r, "%s: not an IC member", smap.GetProxy(daeID))
+		dst := smap.GetProxy(dstID)
+		if dst == nil {
+			p.invalmsghdlrf(w, r, "%s: unknown proxy node - p[%s]", p.si, dstID)
 			return
 		}
-		si, version := smap.OldestIC()
-		if si.ID() == daeID || version == smap.IC[daeID] {
-			// sync not required. daemon already has latest table
+
+		if !smap.IsIC(dst) {
+			p.invalmsghdlrf(w, r, "%s: not an IC member", dst)
 			return
 		}
-		if si.Equals(p.si) || smap.IC[p.si.ID()] == version {
-			// handle locally
-			if err := p.sendOwnershipTbl(smap.GetProxy(daeID)); err != nil {
+
+		if smap.IsIC(p.si) && smap.IC[p.si.ID()] < smap.IC[dstID] {
+			// node has older version than dst node handle locally
+			if err := p.sendOwnershipTbl(dst); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 			}
 			return
 		}
 
+		si, _ := smap.OldestIC()
+		if si.ID() == dstID {
+			// sync not required. daemon is one of the older nodes
+			return
+		}
+
 		// assign a different node to send table
-		aisMsg := p.newAisMsg(msg, smap, nil)
 		result := p.call(callArgs{si: si,
-			req: cmn.ReqArgs{Method: http.MethodPost,
-				Path: cmn.URLPath(cmn.Version, cmn.IC),
-				Body: cmn.MustMarshal(aisMsg),
+			req: cmn.ReqArgs{Method: http.MethodPut,
+				Path: cmn.URLPath(cmn.Version, cmn.Cluster),
+				Body: cmn.MustMarshal(msg),
 			}, timeout: cmn.LongTimeout},
 		)
 

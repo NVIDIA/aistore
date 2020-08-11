@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -195,4 +196,22 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 	}
 	return bprops.EC.DataSlices != nprops.EC.DataSlices ||
 		bprops.EC.ParitySlices != nprops.EC.ParitySlices
+}
+
+func withLocalRetry(pred func() bool, maxTries ...int) {
+	var (
+		sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
+		max   = 5
+	)
+
+	if len(maxTries) > 0 {
+		max = maxTries[0]
+	}
+
+	for i := 0; i < max; i++ {
+		time.Sleep(sleep)
+		if pred() {
+			return
+		}
+	}
 }
