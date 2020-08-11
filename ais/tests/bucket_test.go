@@ -1181,124 +1181,6 @@ func TestListObjectsCache(t *testing.T) {
 	}
 }
 
-func TestBucketListAndSummary(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
-	type test struct {
-		provider string
-		summary  bool
-		cached   bool
-		fast     bool // TODO: it makes sense only for summary
-	}
-
-	var tests []test
-	for _, provider := range []string{cmn.ProviderAIS, cmn.AnyCloud} {
-		for _, summary := range []bool{false, true} {
-			for _, cached := range []bool{false, true} {
-				for _, fast := range []bool{false, true} {
-					tests = append(tests, test{
-						provider: provider,
-						summary:  summary,
-						cached:   cached,
-						fast:     fast,
-					})
-				}
-			}
-		}
-	}
-
-	for _, test := range tests {
-		p := make([]string, 4)
-		p[0] = test.provider
-		p[1] = "list"
-		if test.summary {
-			p[1] = "summary"
-		}
-		p[2] = "all"
-		if test.cached {
-			p[2] = "cached"
-		}
-		p[3] = "slow"
-		if test.fast {
-			p[3] = "fast"
-		}
-		t.Run(strings.Join(p, "/"), func(t *testing.T) {
-			var (
-				m = &ioContext{
-					t: t,
-					bck: cmn.Bck{
-						Name:     cmn.RandString(10),
-						Provider: test.provider,
-					},
-
-					num: 2234,
-				}
-				cacheSize  = 1234 // determines number of objects which should be cached
-				baseParams = tutils.BaseAPIParams()
-			)
-
-			m.saveClusterState()
-			if m.originalTargetCount < 2 {
-				t.Fatalf("must have at least 2 target in the cluster")
-			}
-
-			expectedFiles := m.num
-			bckTest := cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}
-			if bckTest.IsAIS() {
-				tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-				defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-
-				m.puts()
-			} else if bckTest.IsCloud(cmn.AnyCloud) {
-				m.bck.Name = clibucket
-
-				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
-
-				m.cloudPuts(true /*evict*/)
-				defer m.del()
-
-				if test.cached {
-					m.cloudPrefetch(cacheSize)
-					expectedFiles = cacheSize
-				}
-			} else {
-				t.Fatal(test.provider)
-			}
-
-			tutils.Logln("checking objects...")
-
-			if test.summary {
-				msg := &cmn.BucketSummaryMsg{Cached: test.cached, Fast: test.fast}
-				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(m.bck), msg)
-				tassert.CheckFatal(t, err)
-
-				if len(summaries) == 0 {
-					t.Fatalf("summary for bucket %q should exist", m.bck)
-				}
-				if len(summaries) != 1 {
-					t.Fatalf("number of summaries (%d) is larger than 1", len(summaries))
-				}
-
-				summary := summaries[0]
-				if summary.ObjCount != uint64(expectedFiles) {
-					t.Errorf("number of objects in summary (%d) is different than expected (%d)", summary.ObjCount, expectedFiles)
-				}
-			} else {
-				msg := &cmn.SelectMsg{}
-				if test.cached {
-					msg.Flags = cmn.SelectCached
-				}
-				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
-				tassert.CheckFatal(t, err)
-
-				if len(objList.Entries) != expectedFiles {
-					t.Errorf("number of listed objects (%d) is different than expected (%d)", len(objList.Entries), expectedFiles)
-				}
-			}
-		})
-	}
-}
-
 func TestBucketSingleProp(t *testing.T) {
 	const (
 		dataSlices      = 1
@@ -2670,5 +2552,126 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 				}
 			}
 		}
+	}
+}
+
+func TestBucketListAndSummary(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	type test struct {
+		provider string
+		summary  bool
+		cached   bool
+		fast     bool // TODO: it makes sense only for summary
+	}
+
+	var tests []test
+	for _, provider := range []string{cmn.ProviderAIS, cmn.AnyCloud} {
+		for _, summary := range []bool{false, true} {
+			for _, cached := range []bool{false, true} {
+				for _, fast := range []bool{false, true} {
+					tests = append(tests, test{
+						provider: provider,
+						summary:  summary,
+						cached:   cached,
+						fast:     fast,
+					})
+				}
+			}
+		}
+	}
+
+	for _, test := range tests {
+		p := make([]string, 4)
+		p[0] = test.provider
+		p[1] = "list"
+		if test.summary {
+			p[1] = "summary"
+		}
+		p[2] = "all"
+		if test.cached {
+			p[2] = "cached"
+		}
+		p[3] = "slow"
+		if test.fast {
+			p[3] = "fast"
+		}
+		t.Run(strings.Join(p, "/"), func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t: t,
+					bck: cmn.Bck{
+						Name:     cmn.RandString(10),
+						Provider: test.provider,
+					},
+
+					num: 2234,
+				}
+				baseParams = tutils.BaseAPIParams()
+			)
+			bckTest := cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}
+			if !bckTest.IsAIS() {
+				m.num = 123
+			}
+			cacheSize := m.num / 2 // determines number of objects which should be cached
+
+			m.saveClusterState()
+			if m.originalTargetCount < 2 {
+				t.Fatalf("must have at least 2 target in the cluster")
+			}
+
+			expectedFiles := m.num
+			if bckTest.IsAIS() {
+				tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+				defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+				m.puts()
+			} else if bckTest.IsCloud(cmn.AnyCloud) {
+				m.bck.Name = clibucket
+
+				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
+
+				m.cloudPuts(true /*evict*/)
+				defer m.del()
+
+				if test.cached {
+					m.cloudPrefetch(cacheSize)
+					expectedFiles = cacheSize
+				}
+			} else {
+				t.Fatal(test.provider)
+			}
+
+			tutils.Logln("checking objects...")
+
+			if test.summary {
+				msg := &cmn.BucketSummaryMsg{Cached: test.cached, Fast: test.fast}
+				summaries, err := api.GetBucketsSummaries(baseParams, cmn.QueryBcks(m.bck), msg)
+				tassert.CheckFatal(t, err)
+
+				if len(summaries) == 0 {
+					t.Fatalf("summary for bucket %q should exist", m.bck)
+				}
+				if len(summaries) != 1 {
+					t.Fatalf("number of summaries (%d) is larger than 1", len(summaries))
+				}
+
+				summary := summaries[0]
+				if summary.ObjCount != uint64(expectedFiles) {
+					t.Errorf("number of objects in summary (%d) is different than expected (%d)", summary.ObjCount, expectedFiles)
+				}
+			} else {
+				msg := &cmn.SelectMsg{}
+				if test.cached {
+					msg.Flags = cmn.SelectCached
+				}
+				objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+				tassert.CheckFatal(t, err)
+
+				if len(objList.Entries) != expectedFiles {
+					t.Errorf("number of listed objects (%d) is different than expected (%d)", len(objList.Entries), expectedFiles)
+				}
+			}
+		})
 	}
 }

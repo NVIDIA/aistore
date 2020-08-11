@@ -39,7 +39,7 @@ cat > $AIS_CONF_FILE <<EOL
 	"client": {
 		"client_timeout":      "10s",
 		"client_long_timeout": "30m",
-		"list_timeout":        "2m"
+		"list_timeout":        "3m"
 	},
 	"proxy": {
 		"primary_url":   "${AIS_PRIMARY_URL}",
