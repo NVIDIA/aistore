@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -61,6 +62,53 @@ var (
 //   the same name.
 //
 // * TODO: replace `kubectl` calls with proper go-sdk calls.
+
+type (
+	Aborter struct {
+		t           cluster.Target
+		currentSmap *cluster.Smap
+		uuid        string
+		mtx         sync.Mutex
+	}
+)
+
+func NewAborter(t cluster.Target, uuid string) *Aborter {
+	return &Aborter{
+		uuid:        uuid,
+		t:           t,
+		currentSmap: t.GetSowner().Get(),
+	}
+}
+
+func (e *Aborter) String() string {
+	return fmt.Sprintf("etl-aborter-%s", e.uuid)
+}
+
+func (e *Aborter) ListenSmapChanged() {
+	// New goroutine as kubectl calls can take a lot of time,
+	// making other listeners wait.
+	go func() {
+		e.mtx.Lock()
+		defer e.mtx.Unlock()
+		newSmap := e.t.GetSowner().Get()
+
+		if newSmap.Version <= e.currentSmap.Version {
+			return
+		}
+
+		if !newSmap.CompareTargets(e.currentSmap) {
+			glog.Errorf("[ETL-UUID=%s] targets have changed, aborting...", e.uuid)
+			// Stop will unregister e from smap listeners.
+			if err := Stop(e.t, e.uuid); err != nil {
+				glog.Error(err.Error())
+			}
+		}
+
+		e.currentSmap = newSmap
+	}()
+}
+
+// TODO: remove the `kubectl` with a proper go-sdk call
 func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	var (
 		pod      *corev1.Pod
@@ -148,8 +196,11 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 		return waitErr
 	}
 
-	c := makeCommunicator(t, pod, msg.CommType, transformerURL, nodeName)
-	reg.put(msg.ID, c)
+	c := makeCommunicator(t, pod, msg.CommType, transformerURL, nodeName, NewAborter(t, msg.ID))
+	if err := reg.put(msg.ID, c); err != nil {
+		return err
+	}
+	t.GetSowner().Listeners().Reg(c)
 	return nil
 }
 
@@ -195,7 +246,9 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 	}
 }
 
-func Stop(id string) error {
+// Stop deletes all occupied by the ETL resources, including Pods and Services.
+// It unregisters ETL smap listener.
+func Stop(t cluster.Target, id string) error {
 	c, err := GetCommunicator(id)
 	if err != nil {
 		return err
@@ -209,7 +262,10 @@ func Stop(id string) error {
 		return err
 	}
 
-	reg.removeByUUID(id)
+	if c := reg.removeByUUID(id); c != nil {
+		t.GetSowner().Listeners().Unreg(c)
+	}
+
 	return nil
 }
 

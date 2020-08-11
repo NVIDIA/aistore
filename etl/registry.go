@@ -5,6 +5,7 @@
 package etl
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -40,12 +41,16 @@ func newRegistry() *registry {
 	}
 }
 
-func (r *registry) put(uuid string, c Communicator) {
+func (r *registry) put(uuid string, c Communicator) error {
 	cmn.Assert(uuid != "")
 	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	if _, ok := r.byUUID[uuid]; ok {
+		return fmt.Errorf("ETL with uuid %q already exists", uuid)
+	}
 	r.byUUID[uuid] = c
 	r.byName[c.Name()] = c
-	r.mtx.Unlock()
+	return nil
 }
 
 func (r *registry) getByUUID(uuid string) (c Communicator, exists bool) {
@@ -55,14 +60,18 @@ func (r *registry) getByUUID(uuid string) (c Communicator, exists bool) {
 	return
 }
 
-func (r *registry) removeByUUID(uuid string) {
+func (r *registry) removeByUUID(uuid string) (c Communicator) {
+	var (
+		ok bool
+	)
 	cmn.Assert(uuid != "")
 	r.mtx.Lock()
-	if c, ok := r.byUUID[uuid]; ok {
+	if c, ok = r.byUUID[uuid]; ok {
 		delete(r.byUUID, uuid)
 		delete(r.byName, c.Name())
 	}
 	r.mtx.Unlock()
+	return c
 }
 
 func (r *registry) list() []Info {

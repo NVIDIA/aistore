@@ -302,6 +302,10 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 	return
 }
 
+func (m *Smap) CompareTargets(other *Smap) (equal bool) {
+	return mapsEq(m.Tmap, other.Tmap)
+}
+
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
 	_, ok = m.IC[psi.ID()]
 	return

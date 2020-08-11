@@ -56,7 +56,7 @@ func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uuid := apiItems[0]
-	if err := etl.Stop(uuid); err != nil {
+	if err := etl.Stop(t, uuid); err != nil {
 		t.handleETLError(w, r, err)
 	}
 }

@@ -24,10 +24,16 @@ var (
 	toBeFiltered = []string{cmn.URLParamUUID, cmn.URLParamProxyID, cmn.URLParamUnixTime}
 )
 
+// Communicator is responsible for managing communication with an ETL container.
+// Do() method is called each time a user asks to do a transformation on specified (bucket,object).
+// Communicator extends cluster.Slistener interface. It is responsible for aborting relevant ETL container
+// when targets membership changes.
 type Communicator interface {
+	cluster.Slistener
 	Name() string
 	PodName() string
 	SvcName() string
+
 	// Do can use one of 2 ETL container endpoints:
 	// Method "PUT", Path "/"
 	// Method "GET", Path "/bucket/object"
@@ -45,12 +51,15 @@ func filterQueryParams(rawQuery string) string {
 	}
 	return vals.Encode()
 }
-func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerURL, name string) Communicator {
+
+func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerURL, name string, listener cluster.Slistener) Communicator {
 	baseComm := baseComm{
+		Slistener:          listener,
 		transformerAddress: transformerURL,
 		name:               name,
 		podName:            pod.GetName(),
 	}
+
 	switch commType {
 	case PushCommType:
 		return &pushComm{baseComm: baseComm, t: t}
@@ -78,6 +87,7 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 }
 
 type baseComm struct {
+	cluster.Slistener
 	transformerAddress string
 	name               string
 	podName            string
