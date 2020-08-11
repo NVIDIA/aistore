@@ -59,11 +59,14 @@ var (
 //
 // * Recreating a ETL container with the same name, will delete any containers running with
 //   the same name.
+//
+// * TODO: replace `kubectl` calls with proper go-sdk calls.
 func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	var (
-		pod    *corev1.Pod
-		svc    *corev1.Service
-		hostIP string
+		pod      *corev1.Pod
+		svc      *corev1.Service
+		hostIP   string
+		nodePort int
 	)
 	cmn.Assert(nodeName != "")
 	// Parse spec template.
@@ -85,69 +88,62 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	// 1. The ETL container is always scheduled on the target invoking it.
 	// 2. Not more than one ETL container with the same target, is scheduled on the same node,
 	//    at a given point of time
-	if err := setTransformAffinity(pod); err != nil {
-		return err
+	if err = setTransformAffinity(pod); err != nil {
+		return
 	}
 
-	if err := setTransformAntiAffinity(pod); err != nil {
-		return err
+	if err = setTransformAntiAffinity(pod); err != nil {
+		return
 	}
 
-	if err := setPodEnvVariables(pod, t); err != nil {
-		return err
-	}
+	setPodEnvVariables(pod, t)
+
 	// 1. Doing cleanup of any pre-existing entities
-	if err := deleteEntity(cmn.KubePod, pod.Name); err != nil {
-		return err
+	if err = deleteEntity(cmn.KubePod, pod.Name); err != nil {
+		return
 	}
 
-	if err := deleteEntity(cmn.KubeSvc, svc.Name); err != nil {
-		return err
+	if err = deleteEntity(cmn.KubeSvc, svc.Name); err != nil {
+		return
 	}
 
 	// 2. Creating pod
-	if err := createEntity(cmn.KubePod, pod); err != nil {
-		// Ignoring the error for deletion as it is best effort.
-		glog.Errorf("Failed creation of pod %q. Doing cleanup.", pod.Name)
-		deleteEntity(cmn.KubePod, pod.Name)
-		return err
+	if err = createEntity(cmn.KubePod, pod); err != nil {
+		_ = deleteEntity(cmn.KubePod, pod.Name) // ignoring err
+		return
 	}
 
-	if err := waitPodReady(pod, msg.WaitTimeout); err != nil {
-		return err
+	if err = waitPodReady(pod, msg.WaitTimeout); err != nil {
+		return
 	}
 
 	// Retrieve host IP of the pod.
 	if hostIP, err = getPodHostIP(pod); err != nil {
-		return err
+		return
 	}
 
 	// 3. Creating service
-	if err := createEntity(cmn.KubeSvc, svc); err != nil {
-		// Ignoring the error for deletion as it is best effort.
-		glog.Errorf("Failed creation of svc %q. Doing cleanup.", svc.Name)
-		deleteEntity(cmn.KubeSvc, svc.Name)
-		deleteEntity(cmn.KubePod, pod.Name)
-		return err
+	if err = createEntity(cmn.KubeSvc, svc); err != nil {
+		_ = deleteEntity(cmn.KubeSvc, svc.Name) // ignoring delete errs
+		_ = deleteEntity(cmn.KubePod, pod.Name)
+		return
 	}
 
-	nodePort, err := getServiceNodePort(svc)
-	if err != nil {
-		return err
+	if nodePort, err = getServiceNodePort(svc); err != nil {
+		return
 	}
 
 	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
 
 	// TODO: Temporary workaround. Debug this further to find the root cause.
-	// Not waiting causes the first Do() request to fail
-	// sometimes.
+	// (not waiting sometimes causes the first Do() to fail)
 	readinessPath := pod.Spec.Containers[0].ReadinessProbe.HTTPGet.Path
 	if waitErr := waitTransformerReady(transformerURL, readinessPath); waitErr != nil {
 		if err := deleteEntity(cmn.KubePod, pod.Name); err != nil {
-			glog.Errorf("Unable to delete pod: %s, err: %s", pod.Name, err.Error())
+			glog.Error(err)
 		}
 		if err := deleteEntity(cmn.KubePod, svc.Name); err != nil {
-			glog.Errorf("Unable to delete svc: %s, err: %s", svc.Name, err.Error())
+			glog.Error(err)
 		}
 		return waitErr
 	}
@@ -157,27 +153,25 @@ func Start(t cluster.Target, nodeName string, msg Msg) (err error) {
 	return nil
 }
 
-// TODO: remove the `kubectl` calls with proper go-sdk calls.
-
-func waitTransformerReady(url, path string) error {
+func waitTransformerReady(url, path string) (err error) {
+	var resp *http.Response
 	tfProbeSleep := cmn.GCO.Get().Timeout.MaxKeepalive
 	tfProbeClient.Timeout = tfProbeSleep
 	for i := 0; i < tfProbeRetries; i++ {
-		resp, err := tfProbeClient.Get(cmn.JoinPath(url, path))
+		resp, err = tfProbeClient.Get(cmn.JoinPath(url, path))
 		if err != nil {
+			glog.Errorf("failing to GET %s, err: %v, cnt: %d", cmn.JoinPath(url, path), err, i+1)
 			if cmn.IsReqCanceled(err) || cmn.IsErrConnectionRefused(err) {
-				glog.Errorf("checking transformer endpoint: %s  failed, err: %s, retryCount: %d",
-					url, err.Error(), i+1)
 				time.Sleep(tfProbeSleep)
 				continue
 			}
-			return err
+			return
 		}
 		err = cmn.DrainReader(resp.Body)
 		resp.Body.Close()
-		return err
+		break
 	}
-	return fmt.Errorf("waiting for transformer readiness failed for endpoint: %s", url)
+	return
 }
 
 func createServiceSpec(pod *corev1.Pod) *corev1.Service {
@@ -242,7 +236,7 @@ func setTransformAffinity(pod *corev1.Pod) error {
 	prefAffinity := pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if reqAffinity != nil && len(reqAffinity.NodeSelectorTerms) > 0 || len(prefAffinity) > 0 {
-		return fmt.Errorf("error in spec, pod: %q should not have any NodeAffinities defined", pod)
+		return fmt.Errorf("error in YAML spec: pod %q should not have any NodeAffinities defined", pod)
 	}
 
 	cmn.Assert(cmn.GetK8sNodeName() != "")
@@ -277,7 +271,7 @@ func setTransformAntiAffinity(pod *corev1.Pod) error {
 	prefAntiAffinity := pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
 
 	if len(reqAntiAffinities) > 0 || len(prefAntiAffinity) > 0 {
-		return fmt.Errorf("error in spec, pod: %q should not have any NodeAntiAffinities defined", pod)
+		return fmt.Errorf("error in YAML spec: pod %q should not have any NodeAntiAffinities defined", pod)
 	}
 
 	cmn.Assert(cmn.GetK8sNodeName() != "")
@@ -294,7 +288,7 @@ func setTransformAntiAffinity(pod *corev1.Pod) error {
 }
 
 // Sets environment variables that can be accessed inside the container.
-func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) error {
+func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) {
 	containers := pod.Spec.Containers
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
@@ -302,7 +296,6 @@ func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) error {
 			Value: t.Snode().URL(cmn.NetworkPublic),
 		})
 	}
-	return nil
 }
 
 func waitPodReady(pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
@@ -314,7 +307,8 @@ func waitPodReady(pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 	cmd := exec.Command(cmn.Kubectl, args...)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		handlePodFailure(pod, "pod start failure")
-		return fmt.Errorf("failed to wait for %q pod to be ready (err: %v; output: %s)", pod.GetName(), err, string(b))
+		return fmt.Errorf("failed waiting for pod %q to get ready (err: %v; out: %s)",
+			pod.GetName(), err, string(b))
 	}
 	return nil
 }
@@ -324,39 +318,40 @@ func getPodHostIP(pod *corev1.Pod) (string, error) {
 	args := []string{"get", "pod", pod.GetName(), "--template={{.status.hostIP}}"}
 	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to get IP of %q pod (err: %v; output: %s)", pod.GetName(), err, string(output))
+		return "", fmt.Errorf("failed to get pod %q IP addr (err: %v; out: %s)",
+			pod.GetName(), err, string(output))
 	}
 	return string(output), nil
 }
 
-func deleteEntity(entity, entityName string) error {
-	args := []string{"delete", entity, entityName, "--ignore-not-found"}
-	// Doing graceful delete
-	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
-	if err != nil {
-		glog.Errorf("graceful delete failed. %q %s, err: %v, out: %s",
-			entity, entityName, err, string(output))
-		// Doing force delete
-		args = append(args, "--force")
-		output, err = exec.Command(cmn.Kubectl, args...).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("force delete failed. %q %s, err: %v, out: %s",
-				entity, entityName, err, string(output))
-		}
+func deleteEntity(entity, entityName string) (err error) {
+	var (
+		output []byte
+		args   = []string{"delete", entity, entityName, "--ignore-not-found"}
+	)
+	if output, err = exec.Command(cmn.Kubectl, args...).CombinedOutput(); err == nil {
+		return
 	}
-	return nil
+	glog.Errorf("failed to delete %q[%s] (err: %v, out: %s) - retrying with `--force`",
+		entity, entityName, err, string(output))
+	args = append(args, "--force")
+	output, err = exec.Command(cmn.Kubectl, args...).CombinedOutput()
+	if err != nil {
+		err = fmt.Errorf("failed to delete %q[%s] (err: %v, out: %s)", entity, entityName, err, string(output))
+	}
+	return
 }
 
 func createEntity(entity string, spec interface{}) error {
 	b, err := jsoniter.Marshal(spec)
 	if err != nil {
-		return err
+		return fmt.Errorf("unexpected failure marshal %s spec, err: %v", entity, err)
 	}
 	args := []string{"create", "-f", "-"}
 	cmd := exec.Command(cmn.Kubectl, args...)
 	cmd.Stdin = bytes.NewBuffer(b)
 	if b, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create %s (err: %v; output: %s)", entity, err, string(b))
+		return fmt.Errorf("failed to create %s (err: %v, out: %s)", entity, err, string(b))
 	}
 	return nil
 }
@@ -365,12 +360,14 @@ func getServiceNodePort(svc *corev1.Service) (int, error) {
 	args := []string{"get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svc.GetName()}
 	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
 	if err != nil {
-		return -1, fmt.Errorf("failed to get nodePort of service %q (err: %v; output: %s)", svc.GetName(), err, string(output))
+		return -1, fmt.Errorf("failed to get nodePort for service %q (err: %v, out: %s)",
+			svc.GetName(), err, string(output))
 	}
 	outputStr, _ := strconv.Unquote(string(output))
 	nodePort, err := strconv.Atoi(outputStr)
 	if err != nil {
-		return -1, fmt.Errorf("failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svc.GetName(), err, string(output))
+		return -1, fmt.Errorf("failed to parse nodePort for service %q (err: %v, out: %s)",
+			svc.GetName(), err, string(output))
 	}
 	return nodePort, nil
 }
