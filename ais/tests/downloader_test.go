@@ -445,7 +445,7 @@ func TestDownloadTimeout(t *testing.T) {
 		"unexpected name for the object (expected: %q, got: %q)", objName, objErr.Name,
 	)
 	tassert.Errorf(
-		t, strings.Contains(objErr.Err, "deadline exceeded"),
+		t, strings.Contains(objErr.Err, "deadline exceeded") || strings.Contains(objErr.Err, "timeout"),
 		"error mismatch (expected: %q, got: %q)", context.DeadlineExceeded, objErr.Err,
 	)
 
