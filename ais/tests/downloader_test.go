@@ -1246,36 +1246,36 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer abortDownload(t, id1)
 
-	time.Sleep(time.Second) // wait for downloader to pick up the first job
-
 	id2, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
 	defer abortDownload(t, id2)
 
-	time.Sleep(4 * time.Second) // wait for downloader to pick up the second job
-
-	resp1, err := api.DownloadStatus(baseParams, id1)
-	tassert.CheckFatal(t, err)
-
-	// Now, when a jogger finishes a task it saves it and sets task to nil,
-	// So, if downloading is fast, it is possible that tasks are finished and
-	// cleaned up by the moment of requesting task list.
-	tassert.Errorf(
-		t, len(resp1.CurrentTasks) <= smap.CountTargets(),
-		"number of tasks mismatch (expected at most: %d, got: %d)",
-		smap.CountTargets(), len(resp1.CurrentTasks),
+	var (
+		concurrentJobs bool
+		resp1, resp2   downloader.DlStatusResp
 	)
+	for i := 0; i < 10; i++ {
+		resp1, err = api.DownloadStatus(baseParams, id1)
+		tassert.CheckFatal(t, err)
 
-	resp2, err := api.DownloadStatus(baseParams, id2)
-	tassert.CheckFatal(t, err)
+		// Expect that number of tasks never exceeds the defined limit.
+		tassert.Errorf(
+			t, len(resp1.CurrentTasks) <= smap.CountTargets(),
+			"number of tasks mismatch (expected at most: %d, got: %d)",
+			smap.CountTargets(), len(resp1.CurrentTasks),
+		)
 
-	// If downloader didn't start jobs concurrently the number of current
-	// tasks would be 0 (as the previous download would clog the downloader).
-	tassert.Errorf(
-		t, len(resp2.CurrentTasks) > 0,
-		"number of tasks mismatch (expected at least: 0, got: %d)",
-		len(resp2.CurrentTasks),
-	)
+		// Expect that at some point the second job will be run concurrently.
+		resp2, err = api.DownloadStatus(baseParams, id2)
+		tassert.CheckFatal(t, err)
+
+		if len(resp2.CurrentTasks) > 0 && len(resp1.CurrentTasks) > 0 {
+			concurrentJobs = true
+		}
+		time.Sleep(time.Second)
+	}
+
+	tassert.Errorf(t, concurrentJobs, "expected jobs to run concurrently")
 }
 
 // NOTE: Test may fail if the network is SUPER slow!!
