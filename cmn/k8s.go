@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	K8SHostName = "K8S_HOST_NAME"
+	k8sHostNameEnv = "K8S_HOST_NAME"
+
 	KubeDefault = "default"
 	Kubectl     = "kubectl"
 	KubePod     = "pod"
@@ -20,7 +21,7 @@ const (
 )
 
 func DetectK8s() (k8snode string) {
-	if k8snode = os.Getenv(K8SHostName); k8snode == "" {
+	if k8snode = os.Getenv(k8sHostNameEnv); k8snode == "" {
 		return
 	}
 	output, err := exec.Command(Kubectl, "get", "node", k8snode, "--template={{.metadata.name}}").Output()

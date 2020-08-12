@@ -96,7 +96,10 @@ func (e *Aborter) ListenSmapChanged() {
 		}
 
 		if !newSmap.CompareTargets(e.currentSmap) {
-			glog.Errorf("[ETL-UUID=%s] targets have changed, aborting...", e.uuid)
+			glog.Warning(cmn.NewETLError(&cmn.ETLErrorContext{
+				Tid:  e.t.Snode().DaemonID,
+				UUID: e.uuid,
+			}, "targets have changed, aborting..."))
 			// Stop will unregister e from smap listeners.
 			if err := Stop(e.t, e.uuid); err != nil {
 				glog.Error(err.Error())
@@ -107,23 +110,55 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-// TODO: remove the `kubectl` with a proper go-sdk call
 func Start(t cluster.Target, msg Msg) (err error) {
+	errCtx, podName, svcName, err := tryStart(t, msg)
+	if err != nil {
+		glog.Warning(cmn.NewETLError(errCtx, "Doing cleanup after unsuccessful Start"))
+		cleanupStart(errCtx, podName, svcName)
+	}
+
+	return err
+}
+
+// Should be called if tryStart was unsuccessful.
+// It cleans up any possibly created resources.
+func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName string) {
+	if svcName != "" {
+		if deleteErr := deleteEntity(errCtx, cmn.KubeSvc, svcName); deleteErr != nil {
+			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete service during cleanup")
+		}
+	}
+
+	if podName != "" {
+		if deleteErr := deleteEntity(errCtx, cmn.KubePod, podName); deleteErr != nil {
+			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete pod during cleanup")
+		}
+	}
+}
+
+// Returns:
+// * errCtx - gathered information about ETL context
+// * podName - non-empty if at least one try of creating pod was executed
+// * svcName - non-empty if at least one try of creating service was executed
+// * err - any error occurred which should be passed further.
+func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
 	var (
 		pod             *corev1.Pod
 		svc             *corev1.Service
 		hostIP          string
 		originalPodName string
-
-		errCtx = &cmn.ETLErrorContext{
-			Tid:  t.Snode().DaemonID,
-			UUID: msg.ID,
-		}
+		nodePort        int
 	)
+
+	errCtx = &cmn.ETLErrorContext{
+		Tid:  t.Snode().DaemonID,
+		UUID: msg.ID,
+	}
+
 	cmn.Assert(t.K8sNodeName() != "") // Corresponding 'if' done at the beginning of the request.
 	// Parse spec template.
 	if pod, err = ParsePodSpec(errCtx, msg.Spec); err != nil {
-		return err
+		return
 	}
 	errCtx.ETLName = pod.GetName()
 	originalPodName = pod.GetName()
@@ -145,60 +180,43 @@ func Start(t cluster.Target, msg Msg) (err error) {
 	// 1. The ETL container is always scheduled on the target invoking it.
 	// 2. Not more than one ETL container with the same target, is scheduled on the same node,
 	//    at a given point of time
-	if err := setTransformAffinity(errCtx, t, pod); err != nil {
-		return err
+	if err = setTransformAffinity(errCtx, t, pod); err != nil {
+		return
 	}
 
-	if err := setTransformAntiAffinity(errCtx, t, pod); err != nil {
-		return err
+	if err = setTransformAntiAffinity(errCtx, t, pod); err != nil {
+		return
 	}
 
 	setPodEnvVariables(pod, t)
 
 	// 1. Doing cleanup of any pre-existing entities
-	if err := deleteEntity(errCtx, cmn.KubePod, pod.Name); err != nil {
-		return err
-	}
-
-	if err := deleteEntity(errCtx, cmn.KubeSvc, svc.Name); err != nil {
-		return err
-	}
+	cleanupStart(errCtx, pod.Name, svc.Name)
 
 	// 2. Creating pod
-	if err := createEntity(errCtx, cmn.KubePod, pod); err != nil {
-		// Ignoring the error for deletion as it is best effort.
-		glog.Errorf("Failed creation of pod %q. Doing cleanup.", pod.Name)
-		if deleteErr := deleteEntity(errCtx, cmn.KubePod, pod.Name); deleteErr != nil {
-			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete pod after it's failed starting")
-		}
-		return err
+	podName = pod.GetName()
+	if err = createEntity(errCtx, cmn.KubePod, pod); err != nil {
+		return
 	}
 
-	if err := waitPodReady(errCtx, pod, msg.WaitTimeout); err != nil {
-		return err
+	if err = waitPodReady(errCtx, pod, msg.WaitTimeout); err != nil {
+		return
 	}
 
 	// Retrieve host IP of the pod.
 	if hostIP, err = getPodHostIP(errCtx, pod); err != nil {
-		return err
+		return
 	}
 
 	// 3. Creating service
-	if err := createEntity(errCtx, cmn.KubeSvc, svc); err != nil {
-		// Ignoring the error for deletion as it is best effort.
-		glog.Errorf("Failed creation of svc %q. Doing cleanup.", svc.Name)
-		if deleteErr := deleteEntity(errCtx, cmn.KubeSvc, svc.Name); deleteErr != nil {
-			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete service after it's failed starting")
-		}
-		if deleteErr := deleteEntity(errCtx, cmn.KubePod, pod.Name); deleteErr != nil {
-			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete pod after it's corresponding service failed starting")
-		}
-		return err
+	svcName = svc.GetName()
+	if err = createEntity(errCtx, cmn.KubeSvc, svc); err != nil {
+		return
 	}
 
-	nodePort, err := getServiceNodePort(errCtx, svc)
+	nodePort, err = getServiceNodePort(errCtx, svc)
 	if err != nil {
-		return err
+		return
 	}
 
 	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
@@ -207,21 +225,16 @@ func Start(t cluster.Target, msg Msg) (err error) {
 	// (not waiting sometimes causes the first Do() to fail)
 	readinessPath := pod.Spec.Containers[0].ReadinessProbe.HTTPGet.Path
 	if waitErr := waitTransformerReady(transformerURL, readinessPath); waitErr != nil {
-		if err := deleteEntity(errCtx, cmn.KubePod, pod.Name); err != nil {
-			glog.Error(err)
-		}
-		if err := deleteEntity(errCtx, cmn.KubeSvc, svc.Name); err != nil {
-			glog.Error(err)
-		}
-		return cmn.NewETLError(errCtx, waitErr.Error())
+		return errCtx, podName, svcName, cmn.NewETLError(errCtx, waitErr.Error())
 	}
 
 	c := makeCommunicator(t, pod, msg.CommType, transformerURL, originalPodName, NewAborter(t, msg.ID))
-	if err := reg.put(msg.ID, c); err != nil {
-		return err
+	// NOTE: communicator is put to registry only if the whole tryStart was successful.
+	if err = reg.put(msg.ID, c); err != nil {
+		return
 	}
 	t.GetSowner().Listeners().Reg(c)
-	return nil
+	return
 }
 
 func waitTransformerReady(url, path string) (err error) {
@@ -389,7 +402,6 @@ func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.
 	args = append(args, "--for", "condition=ready", "pod", pod.GetName())
 	cmd := exec.Command(cmn.Kubectl, args...)
 	if b, err := cmd.CombinedOutput(); err != nil {
-		handlePodFailure(errCtx, pod, "pod start failure")
 		return cmn.NewETLError(errCtx, "failed waiting for pod to get ready (err: %v; out: %s)", err, string(b))
 	}
 	return nil
@@ -453,10 +465,4 @@ func getServiceNodePort(errCtx *cmn.ETLErrorContext, svc *corev1.Service) (int, 
 		return -1, cmn.NewETLError(errCtx, "failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svc.GetName(), err, string(output))
 	}
 	return nodePort, nil
-}
-
-func handlePodFailure(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, msg string) {
-	if deleteErr := deleteEntity(errCtx, cmn.KubePod, pod.GetName()); deleteErr != nil {
-		glog.Errorf("%s: %s", deleteErr.Error(), "failed to delete pod after "+msg)
-	}
 }

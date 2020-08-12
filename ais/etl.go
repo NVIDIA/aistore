@@ -57,7 +57,11 @@ func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 	}
 	uuid := apiItems[0]
 	if err := etl.Stop(t, uuid); err != nil {
-		t.handleETLError(w, r, err)
+		statusCode := http.StatusBadRequest
+		if _, ok := err.(*cmn.NotFoundError); ok {
+			statusCode = http.StatusNotFound
+		}
+		t.invalmsghdlr(w, r, err.Error(), statusCode)
 	}
 }
 
@@ -68,7 +72,12 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 	)
 	comm, err = etl.GetCommunicator(uuid)
 	if err != nil {
-		t.handleETLError(w, r, err)
+		if _, ok := err.(*cmn.NotFoundError); ok {
+			t.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s. Try starting new ETL with \"%s/v1/etl/init\" endpoint",
+				err.Error(), t.owner.smap.Get().Primary.URL(cmn.NetworkPublic))
+			return
+		}
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
@@ -86,17 +95,6 @@ func (t *targetrunner) listETLs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.writeJSON(w, r, etl.List(), "list-ETL")
-}
-
-// TODO: It should be all-purpose function, similar to invaldmsghdlr.
-func (t *targetrunner) handleETLError(w http.ResponseWriter, r *http.Request, err error) {
-	if _, ok := err.(*cmn.NotFoundError); ok {
-		primaryURL := t.owner.smap.Get().Primary.URL(cmn.NetworkPublic)
-		t.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s. Try starting new ETL with \"%s/v1/etl/init\" endpoint",
-			err.Error(), primaryURL)
-	} else {
-		t.invalmsghdlr(w, r, err.Error())
-	}
 }
 
 ////////////////
@@ -168,7 +166,6 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
 			Path:   cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlStop, msg.ID),
-			Body:   nil,
 		},
 		timeout: cmn.LongTimeout,
 	})
@@ -201,16 +198,13 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	results := p.bcastToGroup(bcastArgs{
-		req:     cmn.ReqArgs{Method: http.MethodDelete, Path: r.URL.Path, Body: nil},
+		req:     cmn.ReqArgs{Method: http.MethodDelete, Path: r.URL.Path},
 		timeout: cmn.LongTimeout,
 	})
 	for res := range results {
 		if res.err != nil {
-			err = res.err
-			glog.Error(err)
+			p.invalmsghdlr(w, r, res.err.Error())
+			return
 		}
-	}
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
 	}
 }

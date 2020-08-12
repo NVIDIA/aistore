@@ -15,7 +15,6 @@ import (
 
 // Currently we need the `default` port (on which the application runs) to be same as the
 // `readiness` probe port in the pod spec.
-
 func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
 	if err != nil {

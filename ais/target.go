@@ -91,7 +91,7 @@ type (
 		regstate regstate     // the state of being registered with the primary, can be (en/dis)abled via API
 		gmm      *memsys.MMSA // system pagesize-based memory manager and slab allocator
 		smm      *memsys.MMSA // system MMSA for small-size allocations
-		k8snode  string       // env(cmn.K8SHostName)
+		k8sNode  string       // env (cmn.k8sHostNameEnv)
 	}
 )
 
@@ -214,7 +214,7 @@ func (t *targetrunner) Run() error {
 
 	cluster.InitTarget()
 
-	t.k8snode = cmn.DetectK8s()
+	t.k8sNode = cmn.DetectK8s()
 
 	//
 	// join cluster
@@ -300,7 +300,7 @@ func (t *targetrunner) Run() error {
 }
 
 func (t *targetrunner) checkK8s() error {
-	if t.k8snode == "" {
+	if t.k8sNode == "" {
 		return fmt.Errorf("%s: the operation requires Kubernetes deployment", t.si)
 	}
 	return nil
@@ -1500,5 +1500,5 @@ func (t *targetrunner) fshc(err error, filepath string) {
 }
 
 func (t *targetrunner) K8sNodeName() string {
-	return t.k8snode
+	return t.k8sNode
 }

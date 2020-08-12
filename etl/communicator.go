@@ -24,21 +24,44 @@ var (
 	toBeFiltered = []string{cmn.URLParamUUID, cmn.URLParamProxyID, cmn.URLParamUnixTime}
 )
 
-// Communicator is responsible for managing communication with an ETL container.
-// Do() method is called each time a user asks to do a transformation on specified (bucket,object).
-// Communicator extends cluster.Slistener interface. It is responsible for aborting relevant ETL container
-// when targets membership changes.
-type Communicator interface {
-	cluster.Slistener
-	Name() string
-	PodName() string
-	SvcName() string
+type (
+	// Communicator is responsible for managing communication with an ETL container.
+	// Do() method is called each time a user asks to do a transformation on specified (bucket,object).
+	// Communicator extends cluster.Slistener interface. It is responsible for aborting relevant ETL container
+	// when targets membership changes.
+	Communicator interface {
+		cluster.Slistener
+		Name() string
+		PodName() string
+		SvcName() string
 
-	// Do can use one of 2 ETL container endpoints:
-	// Method "PUT", Path "/"
-	// Method "GET", Path "/bucket/object"
-	Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
-}
+		// Do can use one of 2 ETL container endpoints:
+		// Method "PUT", Path "/"
+		// Method "GET", Path "/bucket/object"
+		Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
+	}
+
+	baseComm struct {
+		cluster.Slistener
+		transformerAddress string
+		name               string
+		podName            string
+	}
+
+	pushComm struct {
+		baseComm
+		t cluster.Target
+	}
+
+	redirComm struct {
+		baseComm
+	}
+
+	revProxyComm struct {
+		baseComm
+		rp *httputil.ReverseProxy
+	}
+)
 
 func filterQueryParams(rawQuery string) string {
 	vals, err := url.ParseQuery(rawQuery)
@@ -80,52 +103,15 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 				}
 			},
 		}
-		return &pushPullComm{baseComm: baseComm, rp: rp}
+		return &revProxyComm{baseComm: baseComm, rp: rp}
 	}
 	cmn.AssertMsg(false, commType)
 	return nil
 }
 
-type baseComm struct {
-	cluster.Slistener
-	transformerAddress string
-	name               string
-	podName            string
-}
-
 func (c baseComm) Name() string    { return c.name }
 func (c baseComm) PodName() string { return c.podName }
 func (c baseComm) SvcName() string { return c.podName /*pod name is same as service name*/ }
-
-type pushPullComm struct {
-	baseComm
-	rp *httputil.ReverseProxy
-}
-
-func (ppc *pushPullComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	r.URL.Path = transformerPath(bck, objName) // Reverse proxy should always use /bucket/object endpoint.
-	ppc.rp.ServeHTTP(w, r)
-	return nil
-}
-
-func (ppc *pushPullComm) Name() string {
-	return ppc.name
-}
-
-type redirComm struct {
-	baseComm
-}
-
-func (repc *redirComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	redirectURL := cmn.JoinPath(repc.transformerAddress, transformerPath(bck, objName))
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-	return nil
-}
-
-type pushComm struct {
-	baseComm
-	t cluster.Target
-}
 
 func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	lom := &cluster.LOM{T: pushc.t, ObjName: objName}
@@ -154,10 +140,25 @@ func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.B
 	if err != nil {
 		return err
 	}
+	if contentLength := resp.Header.Get(cmn.HeaderContentLength); contentLength != "" {
+		w.Header().Add(cmn.HeaderContentLength, contentLength)
+	}
 	_, err = io.Copy(w, resp.Body)
 	debug.AssertNoErr(err)
 	err = resp.Body.Close()
 	debug.AssertNoErr(err)
+	return nil
+}
+
+func (repc *redirComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	redirectURL := cmn.JoinPath(repc.transformerAddress, transformerPath(bck, objName))
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	return nil
+}
+
+func (ppc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	r.URL.Path = transformerPath(bck, objName) // Reverse proxy should always use /bucket/object endpoint.
+	ppc.rp.ServeHTTP(w, r)
 	return nil
 }
 
