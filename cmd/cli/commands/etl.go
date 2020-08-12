@@ -92,7 +92,7 @@ func etlStopHandler(c *cli.Context) (err error) {
 	if err := api.TransformStop(defaultAPIParams, id); err != nil {
 		return err
 	}
-	fmt.Fprintln(c.App.Writer, "Transformers stopped successfully.")
+	fmt.Fprintln(c.App.Writer, "ETL containers stopped successfully.")
 	return nil
 }
 

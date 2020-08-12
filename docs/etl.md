@@ -9,26 +9,27 @@
 
 ## Introduction
 
-Transformations are integrated [ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) into the AIStore.
-They allow to run any transformation on the object.
-The transformations are designed to work close to data to minimize data transfer and latency.
+[ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is the general procedure of copying data from one or more sources into a destination system which represents the data differently from the source(s) or in a different context than the source(s).
+AIStore supports ETL and is designed to work close to data to minimize data transfer and latency.
 
 ## Overview
 
-Transformations are design for AIStore cluster running in Kubernetes.
-Transformation is expected to be a [Kubernetes Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) which has a server inside it.
-When the targets receive initialization requests they start transformation servers which are collocated on the same machine/node as each of the targets.
+ETL is designed for AIStore cluster running in Kubernetes. Every ETL is specified by a spec file (Kubernetes YAML spec), which determines what
+and how the ETL should operate. Every such spec file creates an **ETL container** which is a [Kubernetes Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) running a server inside it.
+To start an ETL the user (client) needs to send an **init** request to the AIStore endpoint (proxy). The proxy broadcasts this request to all
+the registered targets.
+When the targets receive init requests they start the ETL container which are collocated on the same machine/node as each of the targets.
 Targets use `kubectl` to initialize the pod and gather necessary information for future communication.
 
 There are 3 communication types that user can choose from to implement the transform server:
 
 | Name | Value | Description |
 |---|---|---|
-| **post** | `hpush://` | Target issues a POST request to its transform server with the body containing the requested object. After finished request, target forwards the response from the transformation server to the user. |
-| **reverse proxy** | `hrev://` | Target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using transformer server. Transformer server should make GET request to a target, transform bytes, and return them to a target. |
-| **redirect** | `hpull://` | Target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using transformer server. Transformer server should make GET request to a target, transform bytes, and return them to a user. |
+| **post** | `hpush://` | Target issues a POST request to its transform server with the body containing the requested object. After finished request, target forwards the response from the ETL container to the user. |
+| **reverse proxy** | `hrev://` | Target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return them to a target. |
+| **redirect** | `hpull://` | Target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return them to a user. |
 
-The communication type must be specified in the pod specification, so the target can know how to communicate with the transformer server.
+The communication type must be specified in the pod specification, so the target can know how to communicate with the ETL container.
 It is defined in as pod's annotation, under `communication_type` key:
 ```yaml
 apiVersion: v1
@@ -40,14 +41,14 @@ metadata:
 (...)
 ```
 
-Transformation specification can include `wait_timeout` value.
-It states how long a target should wait for a transformer to transition into `Ready` state.
-If the timeout is exceeded, initialization of a transformer is considered failed.
+The specification can include `wait_timeout`.
+It states how long a target should wait for a ETL container to transition into `Ready` state.
+If the timeout is exceeded, initialization of the ETL container is considered failed.
 ```yaml
 apiVersion: v1
 kind: Pod
 metadata:
-  name: transformer-name
+  name: etl-container-name
   annotations:
     wait_timeout: 30s
 (...)
@@ -55,7 +56,7 @@ metadata:
 
 ## Prerequisites
 
-There are a couple of steps that are required to make the transformation work:
+There are a couple of steps that are required to make the ETL work:
 1. Target should be able to execute `kubectl` meaning that the binary should be in the `$PATH`.
 2. `K8S_HOST_NAME = spec.nodeName` variable must be set inside the target pod's container (see more [here](https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/)).
     Example:
@@ -67,7 +68,7 @@ There are a couple of steps that are required to make the transformation work:
              fieldRef:
                fieldPath: spec.nodeName
     ```
-   This will allow the target to assign a transformer to the same machine/node that the target is working on.
+   This will allow the target to assign an ETL container to the same machine/node that the target is working on.
 3. Server inside the pod can listen on any port, but the port must be specified in pod spec with `containerPort` - the cluster must know how it can contact the pod.
 
 ## Examples
@@ -76,7 +77,7 @@ Throughout the examples, we assume that 1. and 2. from [prerequisites](#prerequi
 
 ### Compute MD5 on the objects
 
-To showcase the capabilities of the transformations we will go over a simple transformation that computes MD5 checksum of the object.
+To showcase the capabilities of ETL, we will go over a simple ETL container that computes MD5 checksum of the object.
 
 First, we need to write a server.
 In this case, we will write a Python 3 HTTP server.
@@ -181,7 +182,7 @@ This is extremely important so that target can know what port it must contact th
 Another note is that we pass additional parameters via the `annotations` field.
 We specified the communication type and wait time (for the pod to start).
 
-After all these steps we are ready to start the transformers.
+After all these steps we are ready to start the ETL containers.
 Just before we do that let's take a quick look at how our pods look like:
 
 ```console
@@ -193,7 +194,7 @@ ais-target-fsxhp     1/1     Running   0          46m
 ```
 
 So we see that we have 1 proxy and 2 targets.
-After we initialize the transformation, we expect two more pods to start (`#targets == #transformation_pods`).
+After we initialize the ETL container, we expect two more pods to start (`#targets == #etl_containers`).
 
 ```console
 $ ais transform init spec.yaml
@@ -209,25 +210,28 @@ transformer-md5-vspra-node2           1/1     Running   0          1m
 
 As expected two more pods are up and running one for each target.
 
-> **Note:** transformers will be run on the same node as the targets that started them.
-This means that the transformers are close to data minimizing the latency on data transfer.
+> **Note:** ETL containers will be run on the same node as the targets that started them.
+In other words, each ETL container runs close to data and does not generate any extract-transform-load
+related network traffic. Given that there are as many ETL containers as storage nodes
+(one container per target) and that all ETL containers run in parallel, the cumulative "transformation"
+bandwidth scales proportionally to the number of storage nodes and disks.
 
 Finally, we can use newly created pods to transform the objects for us:
 
 ```console
 $ ais create bucket transform
 $ echo "some text :)" | ais put - transform/shard.in
-$ ais transform object JGHEoo89gg transform/shard.in -
+$ ais etl object JGHEoo89gg transform/shard.in -
 393c6706efb128fbc442d3f7d084a426
 ```
 
-Voila! The transformer successfully computed the `md5` on the `transform/shard.in` object.
+Voila! The ETL container successfully computed the `md5` on the `transform/shard.in` object.
 
-Once transformation isn't needed anymore, the pods can be stopped with:
+Once ETL isn't needed anymore, the pods can be stopped with:
 
 ```console
-$ ais transform stop JGHEoo89gg
-Transformers stopped successfully.
+$ ais etl stop JGHEoo89gg
+ETL containers stopped successfully.
 $ kubectl get pods
 NAME                 READY   STATUS    RESTARTS   AGE
 ais-proxy-2wvhp      1/1     Running   0          50m
