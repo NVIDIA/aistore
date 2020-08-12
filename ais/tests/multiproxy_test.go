@@ -58,6 +58,7 @@ var (
 		{"ICMemberLeaveAndRejoin", icMemberLeaveAndRejoin},
 		{"ICKillAndRestorePrimary", icKillAndRestorePrimary},
 		{"ICSyncOwnTbl", icSyncOwnershipTable},
+		{"ICSinglePrimaryRevamp", icSinglePrimaryRevamp},
 	}
 )
 
@@ -1555,4 +1556,57 @@ func icSyncOwnershipTable(t *testing.T) {
 	baseParams = tutils.BaseAPIParams(killNode.URL(cmn.NetworkPublic))
 	_, err = api.GetStatusJtx(baseParams, xactID)
 	tassert.CheckError(t, err)
+}
+
+func icSinglePrimaryRevamp(t *testing.T) {
+	var (
+		proxyURL       = tutils.RandomProxyURL()
+		smap           = tutils.GetClusterMap(t, proxyURL)
+		origProxyCount = smap.CountProxies()
+
+		src = cmn.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
+
+		dstBck = cmn.Bck{
+			Name:     TestBucketName + "_new",
+			Provider: cmn.ProviderAIS,
+		}
+	)
+
+	type killCmd struct {
+		node *cluster.Snode
+		cmd  string
+		args []string
+	}
+	nodesToRestore := make([]killCmd, 0, origProxyCount-1)
+
+	// kill all nodes except primary
+	for i := origProxyCount; i > 1; i-- {
+		cmd := killCmd{}
+		cmd.node, smap, cmd.cmd, cmd.args = killRandNonPrimaryIC(t, smap)
+		nodesToRestore = append(nodesToRestore, cmd)
+	}
+
+	proxyURL = smap.Primary.URL(cmn.NetworkPublic)
+	baseParams = tutils.BaseAPIParams(proxyURL)
+	tutils.CreateFreshBucket(t, proxyURL, src)
+	defer tutils.DestroyBucket(t, proxyURL, src)
+
+	// Start any xaction and get ID
+	xactID, err := api.CopyBucket(baseParams, src, dstBck)
+	tassert.CheckFatal(t, err)
+	defer tutils.DestroyBucket(t, proxyURL, dstBck)
+
+	// Restart all killed nodes and check for xaction status
+	for _, cmd := range nodesToRestore {
+		err = restore(cmd.cmd, cmd.args, false, "proxy")
+		tassert.CheckFatal(t, err)
+		tutils.WaitStarted(t, cmd.node.URL(cmn.NetworkPublic))
+
+		baseParams = tutils.BaseAPIParams(cmd.node.URL(cmn.NetworkPublic))
+		_, err = api.GetStatusJtx(baseParams, xactID)
+		tassert.CheckError(t, err)
+	}
 }

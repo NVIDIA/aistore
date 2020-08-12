@@ -727,19 +727,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			return true
 		})
-
-		if smap.IsIC(p.si) && newSmap.IsIC(p.si) {
-			// node is IC member in both old and new smap
-			// send ownership table to newly added members
-			for sid := range newSmap.IC {
-				node := newSmap.GetProxy(sid)
-				if !smap.IsIC(node) {
-					if err := p.ic.sendOwnershipTbl(node); err != nil {
-						glog.Errorf("%s: failed to send ownership table to %s (err:%s)", p.si, node, err.Error())
-					}
-				}
-			}
-		}
+		p.syncNewICOwners(smap, newSmap)
 	}
 
 ExtractRMD:
@@ -777,6 +765,23 @@ ExtractRMD:
 	if len(errs) > 0 {
 		p.invalmsghdlrf(w, r, "%v", errs)
 		return
+	}
+}
+
+func (p *proxyrunner) syncNewICOwners(smap, newSmap *smapX) {
+	if !smap.IsIC(p.si) || !newSmap.IsIC(p.si) {
+		return
+	}
+
+	// node is IC member in both old and new smap
+	// send ownership table to newly added members
+	for sid := range newSmap.IC {
+		node := newSmap.GetProxy(sid)
+		if !smap.IsIC(node) {
+			if err := p.ic.sendOwnershipTbl(node); err != nil {
+				glog.Errorf("%s: failed to send ownership table to %s, err:%v", p.si, node, err)
+			}
+		}
 	}
 }
 
@@ -2369,6 +2374,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 }
 
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
+	smap := p.owner.smap.get()
 	err := p.owner.smap.modify(
 		func(clone *smapX) error {
 			if !clone.isPresent(p.si) {
@@ -2384,7 +2390,6 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 			clone.Version += 100
 			delete(clone.IC, proxyIDToRemove)
 			clone.staffIC()
-			// TODO -- FIXME: bring newly added member of the IC up to speed - here and elsewhere
 			return nil
 		},
 		func(clone *smapX) {
@@ -2402,6 +2407,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 				revsPair{bmd, msg},
 				revsPair{rmd, msg},
 			)
+			p.syncNewICOwners(smap, clone)
 		},
 	)
 	cmn.AssertNoErr(err)
@@ -2950,7 +2956,6 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 				_ = p.metasyncer.notify(true, notifyPairs)
 			}
 			clone.staffIC()
-			// TODO -- FIXME: bring newly added IC member up to speed
 			return nil
 		},
 		func(clone *smapX) {
@@ -2982,6 +2987,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 				pairs = append(pairs, revsPair{tokens, aisMsg})
 			}
 			_ = p.metasyncer.sync(pairs...)
+			p.syncNewICOwners(smap, clone)
 		},
 	)
 	if err != nil {
