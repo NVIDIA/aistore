@@ -18,7 +18,7 @@ function post_deploy() {
   echo "build all AIStore binaries from source"
   make all
   echo "working with build: $(git rev-parse --short HEAD)"
-  export BUCKET=nvais
+  export BUCKET=devtestcloud
   echo "run tests with cloud bucket: ${BUCKET}"
 }
 
