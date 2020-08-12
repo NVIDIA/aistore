@@ -39,8 +39,8 @@ type (
 	}
 
 	icBundle struct {
-		Smap   *smapX              `json:"smap"`
-		Owntbl jsoniter.RawMessage `json:"ownership_table"`
+		Smap         *smapX              `json:"smap"`
+		OwnershipTbl jsoniter.RawMessage `json:"ownership_table"`
 	}
 
 	ic struct {
@@ -177,10 +177,11 @@ func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if what == cmn.GetWhatICBundle {
-		bundle := icBundle{Smap: smap, Owntbl: cmn.MustMarshal(&ic.p.notifs)}
+	switch what {
+	case cmn.GetWhatICBundle:
+		bundle := icBundle{Smap: smap, OwnershipTbl: cmn.MustMarshal(&ic.p.notifs)}
 		ic.p.writeJSON(w, r, bundle, what)
-	} else {
+	default:
 		ic.p.invalmsghdlrf(w, r, fmtUnknownQue, what)
 	}
 }
@@ -296,35 +297,38 @@ func (ic *ic) syncICBundle() error {
 		return nil
 	}
 
-	result := ic.p.call(callArgs{si: si,
-		req: cmn.ReqArgs{Method: http.MethodGet,
-			Path:  cmn.URLPath(cmn.Version, cmn.IC),
-			Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
-		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation},
-	)
-
-	if result.err == nil {
-		bundle := &icBundle{}
-		if err := jsoniter.Unmarshal(result.bytes, bundle); err != nil {
-			glog.Errorf("%s: failed to marshal ic bundle", ic.p.si)
-			return err
-		}
-
-		cmn.AssertMsg(smap.UUID == bundle.Smap.UUID, smap.StringEx()+"vs. "+bundle.Smap.StringEx())
-
-		if err := ic.p.owner.smap.synchronize(bundle.Smap, true /* lesserIsErr */); err != nil {
-			glog.Errorf("%s: sync Smap err %v", ic.p.si, err)
-		} else {
-			smap = ic.p.owner.smap.get()
-			glog.Infof("%s: sync %s", ic.p.si, ic.p.owner.smap.get())
-		}
-
-		if !smap.IsIC(ic.p.si) {
-			return nil
-		}
-		return jsoniter.Unmarshal(bundle.Owntbl, &ic.p.notifs)
+	result := ic.p.call(callArgs{
+		si: si,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Path:   cmn.URLPath(cmn.Version, cmn.IC),
+			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
+		},
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+	})
+	if result.err != nil {
+		// TODO: Handle error. Should try calling another IC member maybe.
+		glog.Errorf("%s: failed to get ownership table from %s (%s)", ic.p.si, si, result.err.Error())
+		return result.err
 	}
-	// TODO: Handle error. Should try calling another IC member maybe.
-	glog.Errorf("%s: failed to get ownership table from %s (%s)", ic.p.si, si, result.err.Error())
-	return result.err
+
+	bundle := &icBundle{}
+	if err := jsoniter.Unmarshal(result.bytes, bundle); err != nil {
+		glog.Errorf("%s: failed to unmarshal ic bundle", ic.p.si)
+		return err
+	}
+
+	cmn.AssertMsg(smap.UUID == bundle.Smap.UUID, smap.StringEx()+"vs. "+bundle.Smap.StringEx())
+
+	if err := ic.p.owner.smap.synchronize(bundle.Smap, true /* lesserIsErr */); err != nil {
+		glog.Errorf("%s: sync Smap err %v", ic.p.si, err)
+	} else {
+		smap = ic.p.owner.smap.get()
+		glog.Infof("%s: sync %s", ic.p.si, ic.p.owner.smap.get())
+	}
+
+	if !smap.IsIC(ic.p.si) {
+		return nil
+	}
+	return jsoniter.Unmarshal(bundle.OwnershipTbl, &ic.p.notifs)
 }
