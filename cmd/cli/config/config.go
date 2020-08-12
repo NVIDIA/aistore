@@ -7,7 +7,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -26,14 +25,12 @@ const (
 )
 
 var (
-	ConfigDirPath  string
-	configFilePath string
-	defaultConfig  Config
+	ConfigDirPath string
+	defaultConfig Config
 )
 
 func init() {
 	ConfigDirPath = cmn.AppConfigPath(configDirName)
-	configFilePath = filepath.Join(ConfigDirPath, configFileName)
 
 	proto := "http"
 	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cmn.IsParseBool(value) {
@@ -89,11 +86,6 @@ func (c *Config) validate() (err error) {
 		return fmt.Errorf("invalid timeout.http_timeout format %q: %v", c.Timeout.HTTPTimeoutStr, err)
 	}
 	return nil
-}
-
-// Location returns an absolute path to the config file.
-func Location() string {
-	return configFilePath
 }
 
 func Load() (*Config, error) {
