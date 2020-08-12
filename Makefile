@@ -69,7 +69,7 @@ $(call make-lazy,term-reset)
 
 .PHONY: all node cli cli-autocompletions aisfs authn aisloader xmeta
 
-all: node cli aisfs authn ## Build all main binaries
+all: node cli aisfs authn aisloader ## Build all main binaries
 
 node: ## Build 'aisnode' binary
 	@echo "Building aisnode: version=$(VERSION) provider=$(AIS_CLD_PROVIDER)"
