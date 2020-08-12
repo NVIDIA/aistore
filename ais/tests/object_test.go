@@ -328,7 +328,7 @@ func TestOperationsWithRanges(t *testing.T) {
 		for _, evict := range []bool{false, true} {
 			t.Run(fmt.Sprintf("evict=%t", evict), func(t *testing.T) {
 				if evict && bck.IsAIS() {
-					t.Skip("evicting not possible for AIS bucket")
+					t.Skip("operation `evict` is not applicable to AIS buckets")
 				}
 
 				var (
@@ -353,31 +353,31 @@ func TestOperationsWithRanges(t *testing.T) {
 					name string
 					// a range of file IDs
 					rangeStr string
-					// total number of files expected to be deleted/evicted
+					// total number of objects expected to be deleted/evicted
 					delta int
 				}{
 					{
-						"Trying to delete/evict files with invalid prefix",
+						"Trying to delete/evict objects with invalid prefix",
 						"file/a-{0..10}",
 						0,
 					},
 					{
-						"Trying to delete/evict files out of range",
+						"Trying to delete/evict objects out of range",
 						commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", numfiles+10, numfiles+110),
 						0,
 					},
 					{
-						fmt.Sprintf("Deleting/Evicting %d files with prefix 'a-'", numfiles/10),
+						fmt.Sprintf("Deleting/Evicting %d objects with prefix 'a-'", numfiles/10),
 						commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (numfiles-numfiles/5)/2, numfiles/2),
 						numfiles / 10,
 					},
 					{
-						fmt.Sprintf("Deleting/Evicting %d files (short range)", numfiles/5),
+						fmt.Sprintf("Deleting/Evicting %d objects (short range)", numfiles/5),
 						commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, numfiles/5),
 						numfiles / 5,
 					},
 					{
-						"Deleting/Evicting files with empty range",
+						"Deleting/Evicting objects with empty range",
 						commonPrefix + "/b-",
 						numfiles/2 - numfiles/5,
 					},
@@ -421,26 +421,27 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 					if len(objList.Entries) != totalFiles {
-						t.Errorf("Incorrect number of remaining files: %d, should be %d", len(objList.Entries), totalFiles)
+						t.Errorf("Incorrect number of remaining objects: %d, should be %d", len(objList.Entries), totalFiles)
 					} else {
-						tutils.Logf("  %d files have been deleted/evicted\n", test.delta)
+						tutils.Logf("  %d objects have been deleted/evicted\n", test.delta)
 					}
 				}
 
-				tutils.Logf("Cleaning up remained objects...\n")
 				msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
 				bckList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 				if err != nil {
-					t.Errorf("Failed to get the list of remained files, err: %v\n", err)
+					t.Fatalf("Failed to list remaining objects, pref: %s, bck: %s, err: %v\n",
+						commonPrefix, bck.Bck, err)
 				}
-				// cleanup everything at the end
-				// Declare one channel per worker to pass the keyname
+				tassert.Fatalf(t, bckList != nil, "bckList nil")
+
+				tutils.Logf("Cleaning up remaining objects...\n")
+				// channel per worker to pass the keyname
 				nameChans := make([]chan string, numworkers)
 				for i := 0; i < numworkers; i++ {
 					// Allow a bunch of messages at a time to be written asynchronously to a channel
 					nameChans[i] = make(chan string, 100)
 				}
-
 				// Start the worker pools
 				var wg = &sync.WaitGroup{}
 				// Get the workers started
@@ -448,7 +449,6 @@ func TestOperationsWithRanges(t *testing.T) {
 					wg.Add(1)
 					go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
 				}
-
 				num := 0
 				for _, entry := range bckList.Entries {
 					nameChans[num%numworkers] <- entry.Name
