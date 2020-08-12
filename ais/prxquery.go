@@ -116,9 +116,8 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nlq.hrwOwner(smap)
-
-	// TODO: not "Equal" when cached
 	p.ic.registerEqual(regIC{nl: nlq, smap: smap, msg: msg})
+
 	w.Write([]byte(handle))
 }
 
