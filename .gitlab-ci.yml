@@ -30,15 +30,21 @@ stages:
   - test-short
   - test-long
 
-.default_ref_template: &default_ref_def
+.default_only_template: &default_only_def
   only:
     - master
     - merge_requests
     - schedules
 
+.default_ref_template: &default_ref_def
+  <<: *default_only_def
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+
 build:linux:
   stage: build
-  <<: *default_ref_def
+  <<: *default_only_def
   script:
     - AIS_CLD_PROVIDER="ais" make node
     - AIS_CLD_PROVIDER="aws" make node
@@ -52,7 +58,7 @@ build:linux:
 
 lint:linux:
   stage: build
-  <<: *default_ref_def
+  <<: *default_only_def
   script:
     - pip3 install yapf pylint
     - make lint
