@@ -5,11 +5,14 @@ set -e
 echo "Add GOPATH and GOBIN"
 
 sudo touch /etc/profile.d/aispaths.sh
-sudo sh -c "echo export PATH=$PATH:/usr/local/go/bin > /etc/profile.d/aispaths.sh"
-sudo sh -c "echo export GOBIN=$HOME/ais/bin >> /etc/profile.d/aispaths.sh"
-sudo sh -c "echo export GOPATH=$HOME/ais/ >> /etc/profile.d/aispaths.sh"
-sudo sh -c "echo export AISSRC=$HOME/ais/src/github.com/NVIDIA/aistore/ais >> /etc/profile.d/aispaths.sh"
-sudo sh -c "echo export AISTORE_SRC=$HOME/ais/src/github.com/NVIDIA/aistore >> /etc/profile.d/aispaths.sh"
+sudo sh -c 'cat << EOF > /etc/profile.d/aispaths.sh
+export GOBIN=$HOME/ais/bin
+export GOPATH=$HOME/ais/
+export PATH=$PATH:/usr/local/go/bin:$GOBIN
+export AISSRC=$HOME/ais/src/github.com/NVIDIA/aistore/ais
+export AISTORE_SRC=$HOME/ais/src/github.com/NVIDIA/aistore
+EOF'
+
 sudo chmod 777 /etc/profile.d/aispaths.sh
 . /etc/profile.d/aispaths.sh
 
