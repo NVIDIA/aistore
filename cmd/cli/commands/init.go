@@ -65,6 +65,9 @@ func initClusterParams() {
 
 func Init() (err error) {
 	cfg, err = config.Load()
+	if err != nil {
+		return err
+	}
 	initClusterParams()
-	return err
+	return nil
 }
