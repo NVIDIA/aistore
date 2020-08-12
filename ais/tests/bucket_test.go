@@ -609,46 +609,64 @@ func TestListObjectsProps(t *testing.T) {
 
 	m.puts()
 
-	tutils.Logln("asking for default props...")
-
-	msg := &cmn.SelectMsg{PageSize: 100}
-	msg.AddProps(cmn.GetPropsDefault...)
-	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(
-		t, len(objList.Entries) == m.num,
-		"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
-	)
-	for _, entry := range objList.Entries {
-		tassert.Errorf(t, entry.Name != "", "name is not set")
-		tassert.Errorf(t, entry.Size != 0, "size is not set")
-		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-		tassert.Errorf(t, entry.Atime != "", "atime is not set")
-		tassert.Errorf(t, entry.Version != "", "version is not set")
-
-		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
-		tassert.Errorf(t, entry.Copies == 0, "copies is set")
+	checkProps := func(useCache bool, props []string, f func(entry *cmn.BucketEntry)) {
+		msg := &cmn.SelectMsg{PageSize: 100, UseCache: useCache}
+		msg.AddProps(props...)
+		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(
+			t, len(objList.Entries) == m.num,
+			"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+		)
+		for _, entry := range objList.Entries {
+			tassert.Errorf(t, entry.Name != "", "name is not set")
+			f(entry)
+		}
 	}
 
-	tutils.Logln("trying again with different subset of props...")
+	for _, useCache := range []bool{false, true} {
+		tutils.Logf("[cache=%t] trying default subset of props...\n", useCache)
+		checkProps(useCache, cmn.GetPropsDefault, func(entry *cmn.BucketEntry) {
+			tassert.Errorf(t, entry.Size != 0, "size is not set")
+			tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+			tassert.Errorf(t, entry.Atime != "", "atime is not set")
+			tassert.Errorf(t, entry.Version != "", "version is not set")
 
-	msg = &cmn.SelectMsg{PageSize: 100}
-	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies)
-	objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(
-		t, len(objList.Entries) == m.num,
-		"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
-	)
-	for _, entry := range objList.Entries {
-		tassert.Errorf(t, entry.Name != "", "name is not set")
-		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-		tassert.Errorf(t, entry.Version != "", "version is not set")
-		tassert.Errorf(t, entry.Copies == 1, "copies is not set")
+			tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+			tassert.Errorf(t, entry.Copies == 0, "copies is set")
+		})
 
-		tassert.Errorf(t, entry.Size == 0, "size is set")
-		tassert.Errorf(t, entry.Atime == "", "atime is set")
-		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+		tutils.Logf("[cache=%t] trying specific subset of props...\n", useCache)
+		checkProps(useCache, []string{cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies}, func(entry *cmn.BucketEntry) {
+			tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+			tassert.Errorf(t, entry.Version != "", "version is not set")
+			tassert.Errorf(t, entry.Copies == 1, "copies is not set")
+
+			tassert.Errorf(t, entry.Size == 0, "size is set")
+			tassert.Errorf(t, entry.Atime == "", "atime is set")
+			tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+		})
+
+		tutils.Logf("[cache=%t] trying small subset of props...\n", useCache)
+		checkProps(useCache, []string{cmn.GetPropsSize}, func(entry *cmn.BucketEntry) {
+			tassert.Errorf(t, entry.Size != 0, "size is not set")
+
+			tassert.Errorf(t, entry.Checksum == "", "checksum is set")
+			tassert.Errorf(t, entry.Atime == "", "atime is set")
+			tassert.Errorf(t, entry.Version == "", "version is set")
+			tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+			tassert.Errorf(t, entry.Copies == 0, "copies is set")
+		})
+
+		tutils.Logf("[cache=%t] trying all props...\n", useCache)
+		checkProps(useCache, cmn.GetPropsAll, func(entry *cmn.BucketEntry) {
+			tassert.Errorf(t, entry.Size != 0, "size is not set")
+			tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+			tassert.Errorf(t, entry.Atime != "", "atime is not set")
+			tassert.Errorf(t, entry.Version != "", "version is not set")
+			tassert.Errorf(t, entry.TargetURL != "", "targetURL is not set")
+			tassert.Errorf(t, entry.Copies != 0, "copies is not set")
+		})
 	}
 }
 

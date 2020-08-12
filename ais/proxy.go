@@ -1727,6 +1727,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 		cacheID   = cacheReqID{bck: bck.Bck, prefix: smsg.Prefix}
 		token     = smsg.ContinuationToken
 		pageSize  = smsg.PageSize
+		props     = smsg.PropsSet()
 	)
 
 	// TODO: Before checking cache and buffer we should check if there is another
@@ -1779,12 +1780,19 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 endWithCache:
 	if smsg.UseCache {
 		p.qm.c.set(cacheID, token, entries, pageSize)
-		props := smsg.PropsSet()
-		for idx := range entries {
-			entries[idx].SetProps(props)
-		}
 	}
 end:
+	if smsg.UseCache && !props.All(cmn.GetPropsAll...) {
+		// Since cache keeps entries with whole subset props we must create copy
+		// of the entries with smaller subset of props (if we would change the
+		// props of the `entries` it would also affect entries inside cache).
+		propsEntries := make([]*cmn.BucketEntry, len(entries))
+		for idx := range entries {
+			propsEntries[idx] = entries[idx].CopyWithProps(props)
+		}
+		entries = propsEntries
+	}
+
 	allEntries = &cmn.BucketList{
 		UUID:    smsg.UUID,
 		Entries: entries,

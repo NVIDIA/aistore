@@ -348,6 +348,15 @@ func (ss StringSet) Intersection(other StringSet) StringSet {
 	return result
 }
 
+func (ss StringSet) All(xs ...string) bool {
+	for _, x := range xs {
+		if !ss.Contains(x) {
+			return false
+		}
+	}
+	return true
+}
+
 // Exitf writes formatted message to STDOUT and exits with non-zero status code.
 func Exitf(f string, a ...interface{}) {
 	fmt.Fprintf(os.Stderr, f, a...)
