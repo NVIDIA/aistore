@@ -16,7 +16,7 @@ function post_deploy() {
     exit 1
   fi
   echo "working with build: $(git rev-parse --short HEAD)"
-  export BUCKET=aws://nvais
+  export BUCKET=aws://ais-jenkins
   echo "run tests with cloud bucket: ${BUCKET}"
 }
 

@@ -126,12 +126,12 @@ test:long:
 test:cloud:
   <<: *test_long_def
   variables:
-    AWS_REGION: "us-west-2"
+    AWS_REGION: "us-east-2"
   script:
     - export NUM_PROXY=6
     - export CLOUD=1
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
-    - BUCKET="aws://ci-aistore" make test-long
+    - BUCKET="aws://ais-ci" make test-long
 
 test:soak:
   stage: test-long
