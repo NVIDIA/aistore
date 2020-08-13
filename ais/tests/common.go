@@ -170,6 +170,11 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 }
 
 func (m *ioContext) puts(dontFail ...bool) int {
+	if !m.bck.IsAIS() {
+		m.cloudPuts(false /*evict*/)
+		return m.num
+	}
+
 	filenameCh := make(chan string, m.num)
 	errCh := make(chan error, m.num)
 
@@ -217,7 +222,7 @@ func (m *ioContext) cloudPuts(evict bool, overrides ...bool) {
 func (m *ioContext) cloudRefill() {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{Prefix: m.prefix}
+		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -239,7 +244,7 @@ func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 		baseParams = tutils.BaseAPIParams()
 		errCh      = make(chan error, objCnt)
 		wg         = cmn.NewLimitedWaitGroup(20)
-		msg        = &cmn.SelectMsg{Prefix: m.prefix}
+		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	if !m.silent {
@@ -295,7 +300,7 @@ func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{Prefix: m.prefix}
+		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -322,7 +327,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 func (m *ioContext) del(cnt ...int) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{Prefix: m.prefix}
+		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
@@ -331,6 +336,10 @@ func (m *ioContext) del(cnt ...int) {
 	toRemove := objList.Entries
 	if len(cnt) > 0 {
 		toRemove = toRemove[:cnt[0]]
+	}
+
+	if len(toRemove) == 0 {
+		return
 	}
 
 	tutils.Logf("deleting %d objects...\n", len(toRemove))

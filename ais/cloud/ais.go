@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -312,30 +311,21 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.B
 	remoteMsg := &cmn.SelectMsg{}
 	cmn.CopyStruct(remoteMsg, msg)
 	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, m.MaxPageSize())
-	// TODO: This code needs to be revisited and refactored - there should be
-	//  standard functions/methods for joining and splitting continuation token
-	//  into parts.
-	if remoteMsg.ContinuationToken != "" {
-		parts := strings.Split(remoteMsg.ContinuationToken, "|")
-		if len(parts) != 2 {
-			return nil, errors.New("invalid continuation token"), http.StatusBadRequest
-		}
-		remoteMsg.UUID = parts[0]
-		remoteMsg.ContinuationToken = parts[1]
-	} else {
-		// Clearing `remoteMsg.UUID` is necessary otherwise the remote cluster
-		// will think that it already knows this UUID and problems will arise.
-		remoteMsg.UUID = ""
-		remoteMsg.ContinuationToken = ""
-	}
+
+	// TODO: Currently we cannot remember the `UUID` from remote cluster and
+	//  embed it into `ContinuationToken`. The problem is that when local data
+	//  is needed then all targets list cloud objects and currently we don't
+	//  support listing objects (AIS bucket) with same `UUID` from multiple clients.
+	//
+	// Clearing `remoteMsg.UUID` is necessary otherwise the remote cluster
+	// will think that it already knows this UUID and problems will arise.
+	remoteMsg.UUID = ""
+
 	err = m.try(remoteBck.Bck, func(bck cmn.Bck) error {
 		bckList, err = api.ListObjectsPage(aisCluster.bp, bck, remoteMsg)
 		return err
 	})
 	if bckList != nil {
-		if bckList.ContinuationToken != "" {
-			bckList.ContinuationToken = bckList.UUID + "|" + bckList.ContinuationToken
-		}
 		// Set original UUID of the request (UUID of remote cluster is already
 		// embedded into `ContinuationToken`).
 		bckList.UUID = msg.UUID

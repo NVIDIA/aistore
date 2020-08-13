@@ -414,7 +414,6 @@ func TestListObjectsSmoke(t *testing.T) {
 		)
 
 		m.init()
-
 		m.puts()
 		defer m.del()
 
@@ -451,7 +450,6 @@ func TestListObjectsGoBack(t *testing.T) {
 		}
 
 		m.init()
-
 		m.puts()
 		defer m.del()
 
@@ -520,7 +518,6 @@ func TestListObjectsRerequestPage(t *testing.T) {
 		}
 
 		m.init()
-
 		m.puts()
 		defer m.del()
 
@@ -568,7 +565,6 @@ func TestListObjectsStartAfter(t *testing.T) {
 		}
 
 		m.init()
-
 		m.puts()
 		defer m.del()
 
@@ -625,6 +621,17 @@ func TestListObjectsProps(t *testing.T) {
 	}
 
 	for _, useCache := range []bool{false, true} {
+		tutils.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
+		checkProps(useCache, []string{}, func(entry *cmn.BucketEntry) {
+			tassert.Errorf(t, entry.Size != 0, "size is not set")
+			tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+			tassert.Errorf(t, entry.Atime != "", "atime is not set")
+			tassert.Errorf(t, entry.Version != "", "version is not set")
+
+			tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+			tassert.Errorf(t, entry.Copies == 0, "copies is set")
+		})
+
 		tutils.Logf("[cache=%t] trying default subset of props...\n", useCache)
 		checkProps(useCache, cmn.GetPropsDefault, func(entry *cmn.BucketEntry) {
 			tassert.Errorf(t, entry.Size != 0, "size is not set")
@@ -686,27 +693,38 @@ func TestListObjectsCloudCached(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 	m.init()
-	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
-	msg := &cmn.SelectMsg{PageSize: 10, Flags: cmn.SelectCached, Prefix: m.prefix}
-	msg.AddProps(cmn.GetPropsDefault...)
-	msg.AddProps(cmn.GetPropsCached, cmn.GetPropsStatus)
-	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(
-		t, len(objList.Entries) == m.num,
-		"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
-	)
-	for _, entry := range objList.Entries {
-		tassert.Errorf(t, entry.Name != "", "name is not set")
-		tassert.Errorf(t, entry.Size != 0, "size is not set")
-		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-		tassert.Errorf(t, entry.Atime != "", "atime is not set")
-		// NOTE: `entry.Version` value depends on cloud configuration.
+	for _, evict := range []bool{false, true} {
+		tutils.Logf("list cloud objects with evict=%t\n", evict)
+		m.cloudPuts(evict)
 
-		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
-		tassert.Errorf(t, entry.Copies == 0, "copies is set")
+		msg := &cmn.SelectMsg{PageSize: 10, Flags: cmn.SelectCached, Prefix: m.prefix}
+		msg.AddProps(cmn.GetPropsDefault...)
+		msg.AddProps(cmn.GetPropsCached, cmn.GetPropsStatus)
+		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+		tassert.CheckFatal(t, err)
+		if evict {
+			tassert.Errorf(
+				t, len(objList.Entries) == 0,
+				"unexpected number of entries (got: %d, expected: 0)", len(objList.Entries),
+			)
+		} else {
+			tassert.Errorf(
+				t, len(objList.Entries) == m.num,
+				"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+			)
+			for _, entry := range objList.Entries {
+				tassert.Errorf(t, entry.Name != "", "name is not set")
+				tassert.Errorf(t, entry.Size != 0, "size is not set")
+				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, entry.Atime != "", "atime is not set")
+				// NOTE: `entry.Version` value depends on cloud configuration.
+
+				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+			}
+		}
 	}
 }
 
@@ -726,7 +744,7 @@ func TestListObjectsCloudProps(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 	m.init()
-	m.cloudPuts(false /*evict*/)
+	m.puts()
 	defer m.del()
 
 	msg := &cmn.SelectMsg{PageSize: 10}
@@ -769,7 +787,6 @@ func TestListObjectsRandProxy(t *testing.T) {
 		}
 
 		m.init()
-
 		m.puts()
 		defer m.del()
 
@@ -798,7 +815,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 				t:        t,
 				bck:      bck.Bck,
 				num:      rand.Intn(5000) + 1000,
-				fileSize: 5 * cmn.KiB,
+				fileSize: 128,
 			}
 
 			totalCnt = 0
@@ -806,16 +823,15 @@ func TestListObjectsRandPageSize(t *testing.T) {
 		)
 
 		if !bck.IsAIS() {
-			m.num = rand.Intn(300) + 100
+			m.num = rand.Intn(200) + 100
 		}
 
 		m.init()
-
 		m.puts()
 		defer m.del()
 
 		for {
-			msg.PageSize = uint(rand.Intn(100) + 50)
+			msg.PageSize = uint(rand.Intn(50) + 50)
 
 			objList, err := api.ListObjectsPage(baseParams, m.bck, msg)
 			tassert.CheckFatal(t, err)

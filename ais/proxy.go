@@ -1160,6 +1160,11 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		return
 	}
 
+	// If props were not explicitly specified always return default ones.
+	if smsg.Props == "" {
+		smsg.AddProps(cmn.GetPropsDefault...)
+	}
+
 	if bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached) {
 		bckList, err = p.listObjectsAIS(bck, smsg)
 	} else {
@@ -1819,9 +1824,8 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	}
 
 	var (
-		smap          = p.owner.smap.get()
-		reqTimeout    = cmn.GCO.Get().Client.ListObjects
-		needLocalData = smsg.IsFlagSet(cmn.SelectCached) || smsg.NeedLocalData()
+		smap       = p.owner.smap.get()
+		reqTimeout = cmn.GCO.Get().Client.ListObjects
 
 		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
 		args   = bcastArgs{
@@ -1838,7 +1842,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	)
 
 	var results chan callResult
-	if needLocalData {
+	if smsg.NeedLocalData() {
 		results = p.bcastToGroup(args)
 	} else {
 		// Only cloud options are requested - call random target for data.

@@ -139,9 +139,7 @@ func (r *BckListTask) Run() (err error) {
 			debug.Assert(r.msg.Prefix == req.msg.Prefix)
 			debug.Assert(r.msg.Flags == req.msg.Flags)
 			r.msg.ContinuationToken = req.msg.ContinuationToken
-			if !r.fromRemote || req.msg.PageSize != 0 {
-				r.msg.PageSize = req.msg.PageSize
-			}
+			r.msg.PageSize = req.msg.PageSize
 			resp := r.dispatchRequest()
 			req.ch <- resp
 			close(req.ch)

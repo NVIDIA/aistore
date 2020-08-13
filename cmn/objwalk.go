@@ -123,7 +123,7 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	}
 
 	if len(objSet) == 0 {
-		return objs
+		return &BucketList{}
 	}
 
 	// cleanup and refill

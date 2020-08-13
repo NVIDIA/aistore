@@ -75,14 +75,17 @@ type MountpathList struct {
 	Disabled  []string `json:"disabled"`
 }
 
-// GetPropsDefault is a list of default (most relevant) GetProps* options
-// NOTE: do **NOT** forget update `GetPropsAll` constant when a prop is added/removed.
+// GetPropsDefault is a list of default (most relevant) `GetProps*` options.
+// NOTE: do **NOT** forget update this array when a prop is added/removed.
 var GetPropsDefault = []string{
-	GetPropsName, GetPropsChecksum, GetPropsSize, GetPropsAtime, GetPropsVersion,
+	GetPropsName, GetPropsSize, GetPropsVersion, GetPropsChecksum, GetPropsAtime,
 }
 
-// GetPropsAll is a list of all GetProps* options.
-var GetPropsAll = append(GetPropsDefault, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC)
+// GetPropsAll is a list of all `GetProps*` options.
+// NOTE: do **NOT** forget update this array when a prop is added/removed.
+var GetPropsAll = append(GetPropsDefault,
+	GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
+)
 
 // NeedLocalData returns true if ListObjects for a cloud bucket needs
 // to return object properties that can be retrieved only from local caches
