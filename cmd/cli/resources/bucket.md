@@ -170,6 +170,7 @@ List all objects contained in `BUCKET_NAME` bucket.
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
 | `--use-cache` | `bool` | Use proxy cache to speed up list object request | `false` |
+| `--start-after` | `string` | Object name after which the listing should start | `""` |
 
 ### Examples
 

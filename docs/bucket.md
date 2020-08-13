@@ -9,12 +9,13 @@
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Cloud Bucket](#evict-cloud-bucket)
 - [Backend Bucket](#backend-bucket)
+- [Bucket Properties](#bucket-properties)
+  - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 - [Bucket Access Attributes](#bucket-access-attributes)
 - [List Objects](#list-objects)
-  - [Properties and Options](#properties-and-options)
-  - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
-- [Recover Buckets](#recover-buckets)
-  - [Example: recovering buckets](#example-recovering-buckets)
+  - [Options](#list-options)
+- [Query Objects](#experimental-query-objects)
+  - [Options](#query-options)
 
 ## Bucket
 
@@ -53,6 +54,7 @@ Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DEL
 For API reference, please refer [to the RESTful API and examples](http_api.md). The rest of this document serves to further explain features and concepts specific to storage buckets.
 
 ## AIS Bucket
+
 AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
 
 The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy ais buckets.
@@ -222,6 +224,62 @@ shard-0.tar	 2.50KiB	 1
 
 For more examples please refer to [CLI docs](/cmd/cli/resources/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
 
+## Bucket Properties
+
+The full list of bucket properties are:
+
+| Bucket Property | JSON | Description | Fields |
+| --- | --- | --- | --- |
+| Provider | `provider` | "aws", "gcp" or "ais" | `"provider": "aws"/"gcp"/"ais"` |
+| Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
+| LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }` |
+| Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#n-way-mirror). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size.  `util_thresh` represents the threshold when utilizations are considered equivalent. `optimize_put` represents the optimization objective. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }` |
+| EC | `ec` | Configuration for [erasure coding](storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
+| Versioning | `versioning` | Configuration for object versioning support. `enabled` represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. `validate_warm_get`: determines if the object's version is checked(if in Cloud-based bucket) | `"versioning": { "enabled": true, "validate_warm_get": false }`|
+| AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
+| BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
+| Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
+
+`SetBucketProps` allows the following configurations to be changed:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `ec.enabled` | bool | enables EC on the bucket |
+| `ec.data_slices` | int | number of data slices for EC |
+| `ec.parity_slices` | int | number of parity slices for EC |
+| `ec.objsize_limit` | int | below this size objects are replicated instead of EC'ed |
+| `ec.compression` | string | LZ4 compression parameters used when EC sends its fragments and replicas over network |
+| `mirror.enabled` | bool | enable local mirroring |
+| `mirror.copies` | int | number of local copies |
+| `mirror.util_thresh` | int | threshold when utilization are considered equivalent |
+
+### CLI examples: listing and setting bucket properties
+
+1. List bucket properties:
+
+```console
+$ ais show props mybucket
+```
+
+or, the same to get output in a (raw) JSON form:
+
+```console
+$ ais show props mybucket --json
+```
+
+2. Enable erasure coding on a bucket:
+
+```console
+$ ais set props mybucket ec.enabled=true
+```
+
+3. Enable object versioning and then list updated bucket properties:
+
+```console
+$ ais set props mybucket versioning.enabled=true
+$ ais show props mybucket
+```
+
 ## Bucket Access Attributes
 
 Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](../cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
@@ -256,83 +314,64 @@ When using proxy cache (experimental) immutability of a bucket is assumed betwee
 If a bucket has been updated after ListObjects request, a user should call ListObjectsInvalidateCache API to get
 correct ListObjects results. This is the temporary requirement and will be removed in next AIS versions.
 
-### Properties and options
+### List Options
 
-The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
+The properties-and-options specifier must be a JSON-encoded structure, for instance `{"props": "size"}` (see examples).
+An empty structure `{}` results in getting just the names of the objects (from the specified bucket) with no other metadata.
 
 | Property/Option | Description | Value |
 | --- | --- | --- |
-| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","version","target_url","copies","status". <sup id="a1">[1](#ft1)</sup> |
-| time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
-| prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
-| pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
-| pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and ais bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html) |
-| taskid | ID of the list objects operation (string) | Listing objects is an asynchronous operation. First, a client should start the operation by sending `"0"` as `taskid` - `"0"` means initialize a new list operation. In response, a proxy returns a `taskid` generated for the operation. Then the client should poll the operation status using the same JSON-encoded structure but with `taskid` set to the received value. If the operation is still in progress the proxy returns status code 202(Accepted) and an empty body. If the operation is completed, it returns 200(OK) and the list of objects. The proxy can return status 410(Gone) indicating that the operation restarted and got a new ID. In this case, the client should read new operation ID from the response body |
-| flags | Advanced filter options | A bit field of [SelectMsg extended flags](/cmn/api.go) |
+| `uuid` | ID of the list objects operation | After initial request to list objects the `uuid` is returned and should be used for subsequent requests. The ID ensures integrity between next requests. |
+| `pagesize` | The maximum number of object names returned in response | For AIS buckets default value is `10000`. For cloud buckets this value varies as each cloud has it's own maximal page size. |
+| `props` | The properties of the object to return | A comma-separated string containing any combination of: `name,size,version,checksum,atime,target_url,copies,ec,status` (if not specified, props are set to `name,size,version,checksum,atime`). <sup id="a1">[1](#ft1)</sup> |
+| `prefix` | The prefix which all returned objects must have | For example, `prefix = "my/directory/structure/"` will include object `object_name = "my/directory/structure/object1.txt"` but will not `object_name = "my/directory/object2.txt"` |
+| `start_after` | Name of the object after which the listing should start | For example, `start_after = "baa"` will include object `object_name = "caa"` but will not `object_name = "ba"` nor `object_name = "aab"`. |
+| `continuation_token` | The token identifying the next page to retrieve | Returned in the `ContinuationToken` field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, `ContinuationToken` will be the empty string. |
+| `time_format` | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
+| `flags` | Advanced filter options | A bit field of [SelectMsg extended flags](/cmn/api.go). |
+| [experimental] `use_cache` | Requests usage of cache in proxy | With this option enabled subsequent requests to list objects for the given bucket will be served from cache without traversing disks. For now implementation is limited to caching results for buckets which content doesn't change, otherwise the cache will be in stale state. | 
 
 SelectMsg extended flags:
 
 | Name | Value | Description |
 | --- | --- | --- |
-| SelectCached | `1` | For Cloud buckets only: return only objects that are cached on local drives, i.e. objects that can be read without accessing to the Cloud |
-| SelectMisplaced | `2` | Include objects that are on incorrect target or mountpath |
+| `SelectCached` | `1` | For Cloud buckets only: return only objects that are cached on local drives, i.e. objects that can be read without accessing to the Cloud |
+| `SelectMisplaced` | `2` | Include objects that are on incorrect target or mountpath |
 
 Note that the list generated with `SelectMisplaced` option may have duplicated entries.
-E.g, after rebalance the list can contains two entries for the same object:
+E.g, after rebalance the list can contain two entries for the same object:
 a misplaced one (from original location) and real one (from the new location).
 
-The full list of bucket properties are:
+ <a name="ft1">1</a>) The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (`""`). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a1)
 
-| Bucket Property | JSON | Description | Fields |
-| --- | --- | --- | --- |
-| Provider | `provider` | "aws", "gcp" or "ais" | `"provider": "aws"/"gcp"/"ais"` |
-| Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
-| LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }` |
-| Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#local-mirroring-and-load-balancing). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size.  `util_thresh` represents the threshold when utilizations are considered equivalent. `optimize_put` represents the optimization objective. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }` |
-| EC | `ec` | Configuration for [erasure coding](storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
-| Versioning | `versioning` | Configuration for object versioning support. `enabled` represents if object versioning is enabled for a bucket. For Cloud-based bucket, its versioning must be enabled in the cloud prior to enabling on AIS side. `validate_warm_get`: determines if the object's version is checked(if in Cloud-based bucket) | `"versioning": { "enabled": true, "validate_warm_get": false }`|
-| AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
-| BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
-| Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
+## [experimental] Query Objects
 
-`SetBucketProps` allows the following configurations to be changed:
+QueryObjects API is extension of list objects.
+Alongside listing names and properties of the objects it also allows for filtering and selecting specific sets of objects.
 
-| Property | Type | Description |
+On the high level the idea is that proxy dispatches a request to targets which produce output that is returned and combined by the proxy.
+
+![](images/query_high.png)
+
+*(Proxy combines and sorts the outputs returned from targets)*
+
+
+When target receives a request from the proxy, it then traverses disks applying the filters and selections on each of the object.
+
+![](images/query_target.png)
+
+*(Objects marked as green pass all the filtering and selection whereas objects marked red don't)*
+
+### Query Options
+
+The options for init message describe the most important values of the query.
+
+| Property/Option | Description | Value |
 | --- | --- | --- |
-| `ec.enabled` | bool | enables EC on the bucket |
-| `ec.data_slices` | int | number of data slices for EC |
-| `ec.parity_slices` | int | number of parity slices for EC |
-| `ec.objsize_limit` | int | size limit in which objects below this size are replicated instead of EC'ed |
-| `ec.compression` | string | LZ4 compression parameters used when EC sends its fragments and replicas over network |
-| `mirror.enabled` | bool | enable local mirroring |
-| `mirror.copies` | int | number of local copies |
-| `mirror.util_thresh` | int | threshold when utilizations are considered equivalent |
+| `outer_select.prefix` | The prefix which all returned objects must have | For example, `prefix = "my/directory/structure/"` will include object `object_name = "my/directory/structure/object1.txt"` but will not `object_name = "my/directory/object2.txt"` |
+| `outer_select.objects_source` | Template which objects names must match | For example `objects_source = "object{00..99}.tar"` will include object `object_name = "object49.tar"` but will not `object_name = "object0.tgz"` |
+| `inner_select.props` | The properties of the object to return | A comma-separated string containing any combination of: `name,size,version,checksum,atime,target_url,copies,ec,status`. |
+| `from.bucket` | Bucket in which query should be executed | |
+| `where.filter` | Filter which should be applied when traversing objects | Filter is recursive data structure that can describe multiple filters which should be applied. |
 
- <a name="ft1">1</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a1)
-
-### CLI examples: listing and setting bucket properties
-
-1. List bucket properties:
-
-```console
-$ ais show props mybucket
-```
-
-or, the same to get output in a (raw) JSON form:
-
-```console
-$ ais show props mybucket --json
-```
-
-2. Enable erasure coding on a bucket:
-
-```console
-$ ais set props mybucket ec.enabled=true
-```
-
-3. Enable object versioning and then list updated bucket properties:
-
-```console
-$ ais set props mybucket ver.enabled=true
-$ ais show props mybucket
-```
+Init message returns `handle` that should be used in NextQueryResults API call.
