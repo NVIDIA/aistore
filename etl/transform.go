@@ -210,7 +210,7 @@ func Start(t cluster.Target, msg Msg) (err error) {
 		if err := deleteEntity(errCtx, cmn.KubePod, pod.Name); err != nil {
 			glog.Error(err)
 		}
-		if err := deleteEntity(errCtx, cmn.KubePod, svc.Name); err != nil {
+		if err := deleteEntity(errCtx, cmn.KubeSvc, svc.Name); err != nil {
 			glog.Error(err)
 		}
 		return cmn.NewETLError(errCtx, waitErr.Error())
