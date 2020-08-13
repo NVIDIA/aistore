@@ -138,6 +138,7 @@ test:aisloader-long:
   script:
     - make aisloader
     - make deploy <<< $'5\n5\n3\n0'
+    - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
 
 # TODO: The job is for now disabled because it gets stuck on memsys benchmarks.
