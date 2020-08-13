@@ -590,94 +590,107 @@ func TestListObjectsStartAfter(t *testing.T) {
 }
 
 func TestListObjectsProps(t *testing.T) {
-	var (
-		baseParams = tutils.BaseAPIParams()
-		m          = ioContext{
-			t:        t,
-			num:      rand.Intn(5000) + 1000,
-			fileSize: 5 * cmn.KiB,
-		}
-	)
-
-	m.init()
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-
-	m.puts()
-
-	checkProps := func(useCache bool, props []string, f func(entry *cmn.BucketEntry)) {
-		msg := &cmn.SelectMsg{PageSize: 100, UseCache: useCache}
-		msg.AddProps(props...)
-		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
-		tassert.CheckFatal(t, err)
-		tassert.Errorf(
-			t, len(objList.Entries) == m.num,
-			"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		var (
+			baseParams = tutils.BaseAPIParams()
+			m          = ioContext{
+				t:        t,
+				num:      rand.Intn(5000) + 1000,
+				bck:      bck.Bck,
+				fileSize: 128,
+			}
 		)
-		for _, entry := range objList.Entries {
-			tassert.Errorf(t, entry.Name != "", "name is not set")
-			f(entry)
+
+		if !bck.IsAIS() {
+			m.num = rand.Intn(250) + 100
 		}
-	}
 
-	for _, useCache := range []bool{false, true} {
-		tutils.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
-		checkProps(useCache, []string{}, func(entry *cmn.BucketEntry) {
-			tassert.Errorf(t, entry.Size != 0, "size is not set")
-			tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-			tassert.Errorf(t, entry.Atime != "", "atime is not set")
-			tassert.Errorf(t, entry.Version != "", "version is not set")
+		m.init()
+		m.puts()
+		defer m.del()
 
-			tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
-			tassert.Errorf(t, entry.Copies == 0, "copies is set")
-		})
+		checkProps := func(useCache bool, props []string, f func(entry *cmn.BucketEntry)) {
+			msg := &cmn.SelectMsg{PageSize: 100, UseCache: useCache}
+			msg.AddProps(props...)
+			objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(
+				t, len(objList.Entries) == m.num,
+				"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+			)
+			for _, entry := range objList.Entries {
+				tassert.Errorf(t, entry.Name != "", "name is not set")
+				f(entry)
+			}
+		}
 
-		tutils.Logf("[cache=%t] trying default subset of props...\n", useCache)
-		checkProps(useCache, cmn.GetPropsDefault, func(entry *cmn.BucketEntry) {
-			tassert.Errorf(t, entry.Size != 0, "size is not set")
-			tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-			tassert.Errorf(t, entry.Atime != "", "atime is not set")
-			tassert.Errorf(t, entry.Version != "", "version is not set")
+		for _, useCache := range []bool{false, true} {
+			tutils.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
+			checkProps(useCache, []string{}, func(entry *cmn.BucketEntry) {
+				tassert.Errorf(t, entry.Size != 0, "size is not set")
+				if bck.IsAIS() {
+					tassert.Errorf(t, entry.Version != "", "version is not set")
+				}
+				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 
-			tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
-			tassert.Errorf(t, entry.Copies == 0, "copies is set")
-		})
+				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+			})
 
-		tutils.Logf("[cache=%t] trying specific subset of props...\n", useCache)
-		checkProps(useCache, []string{cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies}, func(entry *cmn.BucketEntry) {
-			tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-			tassert.Errorf(t, entry.Version != "", "version is not set")
-			tassert.Errorf(t, entry.Copies == 1, "copies is not set")
+			tutils.Logf("[cache=%t] trying default subset of props...\n", useCache)
+			checkProps(useCache, cmn.GetPropsDefault, func(entry *cmn.BucketEntry) {
+				tassert.Errorf(t, entry.Size != 0, "size is not set")
+				if bck.IsAIS() {
+					tassert.Errorf(t, entry.Version != "", "version is not set")
+				}
+				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 
-			tassert.Errorf(t, entry.Size == 0, "size is set")
-			tassert.Errorf(t, entry.Atime == "", "atime is set")
-			tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
-		})
+				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+			})
 
-		tutils.Logf("[cache=%t] trying small subset of props...\n", useCache)
-		checkProps(useCache, []string{cmn.GetPropsSize}, func(entry *cmn.BucketEntry) {
-			tassert.Errorf(t, entry.Size != 0, "size is not set")
+			tutils.Logf("[cache=%t] trying specific subset of props...\n", useCache)
+			checkProps(useCache, []string{cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies}, func(entry *cmn.BucketEntry) {
+				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+				if bck.IsAIS() {
+					tassert.Errorf(t, entry.Version != "", "version is not set")
+				}
+				tassert.Errorf(t, entry.Copies == 1, "copies is not set")
 
-			tassert.Errorf(t, entry.Checksum == "", "checksum is set")
-			tassert.Errorf(t, entry.Atime == "", "atime is set")
-			tassert.Errorf(t, entry.Version == "", "version is set")
-			tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
-			tassert.Errorf(t, entry.Copies == 0, "copies is set")
-		})
+				tassert.Errorf(t, entry.Size == 0, "size is set")
+				tassert.Errorf(t, entry.Atime == "", "atime is set")
+				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+			})
 
-		tutils.Logf("[cache=%t] trying all props...\n", useCache)
-		checkProps(useCache, cmn.GetPropsAll, func(entry *cmn.BucketEntry) {
-			tassert.Errorf(t, entry.Size != 0, "size is not set")
-			tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-			tassert.Errorf(t, entry.Atime != "", "atime is not set")
-			tassert.Errorf(t, entry.Version != "", "version is not set")
-			tassert.Errorf(t, entry.TargetURL != "", "targetURL is not set")
-			tassert.Errorf(t, entry.Copies != 0, "copies is not set")
-		})
-	}
+			tutils.Logf("[cache=%t] trying small subset of props...\n", useCache)
+			checkProps(useCache, []string{cmn.GetPropsSize}, func(entry *cmn.BucketEntry) {
+				tassert.Errorf(t, entry.Size != 0, "size is not set")
+
+				tassert.Errorf(t, entry.Version == "", "version is set")
+				tassert.Errorf(t, entry.Checksum == "", "checksum is set")
+				tassert.Errorf(t, entry.Atime == "", "atime is set")
+				tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
+				tassert.Errorf(t, entry.Copies == 0, "copies is set")
+			})
+
+			tutils.Logf("[cache=%t] trying all props...\n", useCache)
+			checkProps(useCache, cmn.GetPropsAll, func(entry *cmn.BucketEntry) {
+				tassert.Errorf(t, entry.Size != 0, "size is not set")
+				if bck.IsAIS() {
+					tassert.Errorf(t, entry.Version != "", "version is not set")
+				}
+				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
+				tassert.Errorf(t, entry.Atime != "", "atime is not set")
+				tassert.Errorf(t, entry.TargetURL != "", "targetURL is not set")
+				tassert.Errorf(t, entry.Copies != 0, "copies is not set")
+			})
+		}
+	})
 }
 
-// Runs cloud list objects with `cached == true`.
+// Runs cloud list objects with `cached == true` (for both evicted and not evicted objects).
 func TestListObjectsCloudCached(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()
@@ -685,8 +698,7 @@ func TestListObjectsCloudCached(t *testing.T) {
 			t:        t,
 			bck:      cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
 			num:      rand.Intn(100) + 10,
-			fileSize: 5 * cmn.KiB,
-			prefix:   t.Name(),
+			fileSize: 128,
 		}
 	)
 
@@ -699,9 +711,7 @@ func TestListObjectsCloudCached(t *testing.T) {
 		tutils.Logf("list cloud objects with evict=%t\n", evict)
 		m.cloudPuts(evict)
 
-		msg := &cmn.SelectMsg{PageSize: 10, Flags: cmn.SelectCached, Prefix: m.prefix}
-		msg.AddProps(cmn.GetPropsDefault...)
-		msg.AddProps(cmn.GetPropsCached, cmn.GetPropsStatus)
+		msg := &cmn.SelectMsg{PageSize: 10, Flags: cmn.SelectCached}
 		objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if evict {
@@ -725,45 +735,6 @@ func TestListObjectsCloudCached(t *testing.T) {
 				tassert.Errorf(t, entry.Copies == 0, "copies is set")
 			}
 		}
-	}
-}
-
-// Runs cloud list objects with subset of all props.
-func TestListObjectsCloudProps(t *testing.T) {
-	var (
-		baseParams = tutils.BaseAPIParams()
-		m          = ioContext{
-			t:        t,
-			bck:      cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
-			num:      rand.Intn(100) + 10,
-			fileSize: 5 * cmn.KiB,
-			prefix:   t.Name(),
-		}
-	)
-
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
-
-	m.init()
-	m.puts()
-	defer m.del()
-
-	msg := &cmn.SelectMsg{PageSize: 10}
-	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies)
-	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(
-		t, len(objList.Entries) == m.num,
-		"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
-	)
-	for _, entry := range objList.Entries {
-		tassert.Errorf(t, entry.Name != "", "name is not set")
-		tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
-		tassert.Errorf(t, entry.Copies == 1, "copies is not set")
-		// NOTE: `entry.Version` value depends on cloud configuration.
-
-		tassert.Errorf(t, entry.Size == 0, "size is set")
-		tassert.Errorf(t, entry.Atime == "", "atime is set")
-		tassert.Errorf(t, entry.TargetURL == "", "targetURL is set")
 	}
 }
 

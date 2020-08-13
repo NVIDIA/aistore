@@ -18,9 +18,6 @@ import (
 )
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
-// Special case:
-//  * If URL contains `cached=true` then the function returns the list of
-//    locally cached objects.
 func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {

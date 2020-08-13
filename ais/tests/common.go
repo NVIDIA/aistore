@@ -267,7 +267,7 @@ func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 		if override {
 			objName = m.objNames[i]
 		} else {
-			objName = fmt.Sprintf("%s%s%d", objPrefix, cmn.RandString(5), i)
+			objName = fmt.Sprintf("%s%s%d", objPrefix, cmn.RandString(8), i)
 		}
 		wg.Add(1)
 		go func() {

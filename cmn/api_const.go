@@ -234,11 +234,11 @@ const (
 // DO NOT forget update `GetPropsAll` constant when a prop is added/removed
 const (
 	GetPropsName     = "name"
-	GetPropsChecksum = "checksum"
 	GetPropsSize     = "size"
+	GetPropsVersion  = "version"
+	GetPropsChecksum = "checksum"
 	GetPropsAtime    = "atime"
 	GetPropsCached   = "cached"
-	GetPropsVersion  = "version"
 	GetTargetURL     = "target_url"
 	GetPropsStatus   = "status"
 	GetPropsCopies   = "copies"
