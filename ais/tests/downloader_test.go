@@ -41,6 +41,10 @@ func clearDownloadList(t *testing.T) {
 	listDownload, err := api.DownloadGetList(tutils.BaseAPIParams(), downloadDescAllRegex)
 	tassert.CheckFatal(t, err)
 
+	if len(listDownload) == 0 {
+		return
+	}
+
 	for _, v := range listDownload {
 		if v.JobRunning() {
 			tutils.Logf("Canceling: %v...\n", v.ID)
@@ -49,7 +53,20 @@ func clearDownloadList(t *testing.T) {
 		}
 	}
 
-	time.Sleep(time.Second)
+	// Wait for the jobs to complete.
+	for running := true; running; {
+		time.Sleep(time.Second)
+		listDownload, err := api.DownloadGetList(tutils.BaseAPIParams(), downloadDescAllRegex)
+		tassert.CheckFatal(t, err)
+
+		running = false
+		for _, v := range listDownload {
+			if v.JobRunning() {
+				running = true
+				break
+			}
+		}
+	}
 
 	for _, v := range listDownload {
 		tutils.Logf("Removing: %v...\n", v.ID)
