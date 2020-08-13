@@ -686,7 +686,6 @@ func TestListObjectsCloudCached(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 	m.init()
-
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
@@ -727,7 +726,6 @@ func TestListObjectsCloudProps(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 	m.init()
-
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
@@ -1507,7 +1505,7 @@ func TestCloudMirror(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
-	m.saveClusterState()
+	m.init()
 	m.cloudPuts(true /*evict*/)
 	defer m.del()
 

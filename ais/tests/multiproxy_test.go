@@ -1336,9 +1336,7 @@ func primaryAndNextCrash(t *testing.T) {
 		// least by 100, that is why +99
 		smap, err = tutils.WaitForPrimaryProxy(finalPrimaryURL, "to designate new primary",
 			smap.Version+99, testing.Verbose(), origProxyCount-2)
-	}
-	if err != nil {
-		t.Error(err)
+		tassert.CheckFatal(t, err)
 	}
 
 	tutils.Logln("Checking current primary")

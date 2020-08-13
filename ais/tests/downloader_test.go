@@ -1023,7 +1023,7 @@ func TestDownloadOverrideObjectCloud(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
-	m.saveClusterState()
+	m.init()
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
@@ -1033,7 +1033,7 @@ func TestDownloadOverrideObjectCloud(t *testing.T) {
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
 	downloadObjectCloud(t, dlBody, m.num, 0)
-	m.cloudRePuts(false /*evict*/)
+	m.cloudPuts(false /*evict*/)
 	downloadObjectCloud(t, dlBody, m.num, 0)
 }
 
@@ -1089,7 +1089,7 @@ func TestDownloadSkipObjectCloud(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
-	m.saveClusterState()
+	m.init()
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
@@ -1103,7 +1103,7 @@ func TestDownloadSkipObjectCloud(t *testing.T) {
 
 	// Put some more cloud objects (we expect that only the new ones will be downloaded)
 	m.num += 10
-	m.cloudPuts(false /*evict*/)
+	m.cloudRefill()
 
 	downloadObjectCloud(t, dlBody, m.num, m.num-10)
 }
@@ -1132,7 +1132,7 @@ func TestDownloadSync(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
-	m.saveClusterState()
+	m.init()
 	m.cloudPuts(false /*evict*/)
 	defer m.del()
 
@@ -1154,7 +1154,7 @@ func TestDownloadSync(t *testing.T) {
 	downloadObjectCloud(t, dlBody, m.num-objsToDelete, m.num-objsToDelete)
 
 	tutils.Logln("3. filling removed cloud objects...")
-	m.cloudPuts(false /*evict*/)
+	m.cloudRefill()
 
 	// Check that new objects are correctly downloaded.
 	tutils.Logln("4. re-syncing cloud bucket...")
@@ -1163,8 +1163,8 @@ func TestDownloadSync(t *testing.T) {
 	dlBody.Sync = false
 	downloadObjectCloud(t, dlBody, m.num, m.num)
 
-	tutils.Logln("5. re-putting the objects and deleting some of them...")
-	m.cloudRePuts(false /*evict*/)
+	tutils.Logln("5. overridding the objects and deleting some of them...")
+	m.cloudPuts(false /*evict*/, true /*override*/)
 	m.del(objsToDelete)
 
 	// Check that all objects have been replaced.

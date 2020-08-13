@@ -193,18 +193,32 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	return len(errCh)
 }
 
-func (m *ioContext) cloudPuts(evict bool) {
+// cloudPuts by default cleanups the cloud bucket and puts fresh `m.num` objects
+// into the bucket. If `override` parameter is set then the existing objects
+// are updated with new ones (new version and checksum).
+func (m *ioContext) cloudPuts(evict bool, overrides ...bool) {
+	var override bool
+	if len(overrides) > 0 {
+		override = overrides[0]
+	}
+
+	if !override {
+		// Cleanup the cloud bucket.
+		m.del()
+		m.objNames = m.objNames[:0]
+	}
+
+	m._cloudFill(m.num, evict, override)
+}
+
+// cloudRefill calculates number of missing objects and refills the bucket.
+// It is expected that the number of missing objects is positive meaning that
+// some of the objects were removed before calling cloudRefill.
+func (m *ioContext) cloudRefill() {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{Prefix: m.prefix}
 	)
-
-	if !m.silent {
-		tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
-	}
-
-	p, err := api.HeadBucket(baseParams, m.bck)
-	tassert.CheckFatal(m.t, err)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
@@ -215,82 +229,53 @@ func (m *ioContext) cloudPuts(evict bool) {
 	}
 
 	leftToFill := m.num - len(objList.Entries)
-	if leftToFill <= 0 {
-		tutils.Logf("cloud PUT %d (%d) objects already in bucket %s...\n", m.num, len(objList.Entries), m.bck)
-		m.num = len(objList.Entries)
-		return
-	}
+	cmn.Assert(leftToFill > 0)
 
-	// Not enough objects in cloud bucket, need to create more.
-	var (
-		errCh     = make(chan error, leftToFill)
-		wg        = cmn.NewLimitedWaitGroup(20)
-		objPrefix = m.prefix
-	)
-	if objPrefix == "" {
-		objPrefix = "copy"
-	}
-	objPrefix += "/cloud_"
-	for i := 0; i < leftToFill; i++ {
-		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
-		tassert.CheckFatal(m.t, err)
-		objName := fmt.Sprintf("%s%s%d", objPrefix, cmn.RandString(4), i)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			tutils.Put(m.proxyURL, m.bck, objName, r, errCh)
-		}()
-		m.objNames = append(m.objNames, objName)
-	}
-	wg.Wait()
-	tassert.SelectErr(m.t, errCh, "put", true)
-	tutils.Logln("cloud PUT done")
-
-	objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
-	tassert.CheckFatal(m.t, err)
-	if len(objList.Entries) != m.num {
-		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
-	}
-
-	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
-
-	if evict {
-		tutils.Logln("evicting cloud bucket...")
-		err := api.EvictCloudBucket(baseParams, m.bck)
-		tassert.CheckFatal(m.t, err)
-	}
+	m._cloudFill(leftToFill, false /*evict*/, false /*override*/)
 }
 
-// Override the previously put cloud objects with new ones (to change version and checksum).
-func (m *ioContext) cloudRePuts(evict bool) {
+func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		msg        = &cmn.SelectMsg{}
+		errCh      = make(chan error, objCnt)
+		wg         = cmn.NewLimitedWaitGroup(20)
+		msg        = &cmn.SelectMsg{Prefix: m.prefix}
 	)
 
 	if !m.silent {
-		tutils.Logf("cloud PUT %d objects into bucket %s...\n", m.num, m.bck)
+		tutils.Logf("cloud PUT %d objects into bucket %s...\n", objCnt, m.bck)
 	}
 
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(m.t, err)
 
-	var (
-		errCh = make(chan error, m.num)
-		wg    = &sync.WaitGroup{}
-	)
-	for i := 0; i < m.num; i++ {
+	objPrefix := m.prefix
+	if objPrefix == "" {
+		objPrefix = "copy"
+	}
+	objPrefix += "/cloud_"
+	for i := 0; i < objCnt; i++ {
 		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
+
+		var objName string
+		if override {
+			objName = m.objNames[i]
+		} else {
+			objName = fmt.Sprintf("%s%s%d", objPrefix, cmn.RandString(5), i)
+		}
 		wg.Add(1)
-		go func(i int) {
+		go func() {
 			defer wg.Done()
-			tutils.Put(m.proxyURL, m.bck, m.objNames[i], r, errCh)
-		}(i)
+			tutils.Put(m.proxyURL, m.bck, objName, r, errCh)
+		}()
+		if !override {
+			m.objNames = append(m.objNames, objName)
+		}
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
-	tutils.Logln("cloud (re)PUT done")
+	tutils.Logln("cloud PUT done")
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
@@ -298,9 +283,7 @@ func (m *ioContext) cloudRePuts(evict bool) {
 		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
 	}
 
-	if !m.silent {
-		tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
-	}
+	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
 
 	if evict {
 		tutils.Logln("evicting cloud bucket...")

@@ -502,7 +502,7 @@ func TestObjProps(t *testing.T) {
 				}
 			)
 
-			m.saveClusterState()
+			m.init()
 
 			if test.cloud {
 				m.bck = cmn.Bck{
