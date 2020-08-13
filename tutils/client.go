@@ -332,7 +332,9 @@ func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, proxyURL string, 
 	})
 	tassert.CheckFatal(t, err)
 
-	EvictObjects(t, proxyURL, bck, []string{object})
+	if err := api.EvictObject(baseParams, bck, object); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func GetObjectAtime(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, object, timeFormat string) time.Time {

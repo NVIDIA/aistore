@@ -198,7 +198,7 @@ func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) (xactID string,
 // DeleteList sends a HTTP request to remove a list of objects from a bucket
 func DeleteList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	deleteMsg := cmn.ListMsg{ObjNames: fileslist}
-	return doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
 }
 
 // DeleteRange API
@@ -206,7 +206,7 @@ func DeleteList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string,
 // DeleteRange sends a HTTP request to remove a range of objects from a bucket
 func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	deleteMsg := cmn.RangeMsg{Template: rng}
-	return doListRangeRequest(baseParams, bck, cmn.ActDelete, http.MethodDelete, deleteMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
 }
 
 // PrefetchList API
@@ -214,7 +214,7 @@ func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error)
 // PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket
 func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	prefetchMsg := cmn.ListMsg{ObjNames: fileslist}
-	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, prefetchMsg)
 }
 
 // PrefetchRange API
@@ -222,7 +222,7 @@ func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (strin
 // PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket
 func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	prefetchMsg := cmn.RangeMsg{Template: rng}
-	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, prefetchMsg)
 }
 
 // EvictList API
@@ -230,7 +230,7 @@ func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, erro
 // EvictList sends a HTTP request to evict a list of objects from a cloud bucket
 func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	evictMsg := cmn.ListMsg{ObjNames: fileslist}
-	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
 // EvictRange API
@@ -238,7 +238,7 @@ func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, 
 // EvictRange sends a HTTP request to evict a range of objects from a cloud bucket
 func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	evictMsg := cmn.RangeMsg{Template: rng}
-	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
+	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
 // EvictCloudBucket API
@@ -470,8 +470,16 @@ func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck) error {
 }
 
 // Handles the List/Range operations (delete, prefetch)
-func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action, method string, listRangeMsg interface{}) (xactID string, err error) {
-	baseParams.Method = method
+func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, listRangeMsg interface{}) (xactID string, err error) {
+	switch action {
+	case cmn.ActDelete, cmn.ActEvictObjects:
+		baseParams.Method = http.MethodDelete
+	case cmn.ActPrefetch:
+		baseParams.Method = http.MethodPost
+	default:
+		err = fmt.Errorf("invalid action %q", action)
+		return
+	}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),

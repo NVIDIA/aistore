@@ -1354,13 +1354,12 @@ func TestAtimeColdGet(t *testing.T) {
 		proxyURL      = tutils.RandomProxyURL()
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
-		objectContent = readers.NewBytesReader([]byte("file content"))
+		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
-
-	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
-	defer tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
+	api.DeleteObject(baseParams, bck, objectName)
+	defer api.DeleteObject(baseParams, bck, objectName)
 
 	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, proxyURL, bck, objectName, objectContent)
 
@@ -1389,12 +1388,12 @@ func TestAtimePrefetch(t *testing.T) {
 		proxyURL      = tutils.RandomProxyURL()
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
-		objectContent = readers.NewBytesReader([]byte("file content"))
+		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
-	tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
-	defer tutils.CleanCloudBucket(t, proxyURL, bck, objectName)
+	api.DeleteObject(baseParams, bck, objectName)
+	defer api.DeleteObject(baseParams, bck, objectName)
 
 	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, proxyURL, bck, objectName, objectContent)
 	time.Sleep(time.Millisecond)
@@ -1423,7 +1422,7 @@ func TestAtimeLocalPut(t *testing.T) {
 		proxyURL      = tutils.RandomProxyURL()
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
-		objectContent = readers.NewBytesReader([]byte("file content"))
+		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
