@@ -19,14 +19,14 @@ ais put $OBJECT_1.txt $BUCKET_1/cksum --xxhash 05967d5390ac53b0
 ais put $OBJECT_1.txt $BUCKET_1/cksum --xxhash // FAIL "BAD DATA CHECKSUM: xxhash(badchecksum != 05967d5390ac53b0)"
 
 ais put $OBJECT_1.txt $BUCKET_1/object_2.txt
-ais ls $BUCKET_1
+ais ls $BUCKET_1 --props size,version
 
 echo "0" > $OBJECT_1.txt
 mkdir -p /tmp/dir1/dir2 && echo "0123456789" > /tmp/dir1/dir2/object_3.txt
 
 ais put $OBJECT_1.txt $BUCKET_1/object_1.txt // Bump the version of 'object_1.txt' object
 ais put /tmp/dir1/dir2/object_3.txt $BUCKET_1
-ais ls $BUCKET_1
+ais ls $BUCKET_1 --props size,version
 
 rm -rf /tmp/dir1
 

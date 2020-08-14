@@ -78,13 +78,13 @@ type MountpathList struct {
 // GetPropsDefault is a list of default (most relevant) `GetProps*` options.
 // NOTE: do **NOT** forget update this array when a prop is added/removed.
 var GetPropsDefault = []string{
-	GetPropsName, GetPropsSize, GetPropsVersion, GetPropsChecksum, GetPropsAtime,
+	GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime,
 }
 
 // GetPropsAll is a list of all `GetProps*` options.
 // NOTE: do **NOT** forget update this array when a prop is added/removed.
 var GetPropsAll = append(GetPropsDefault,
-	GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
+	GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
 )
 
 // NeedLocalData returns true if ListObjects for a cloud bucket needs

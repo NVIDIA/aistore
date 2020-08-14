@@ -628,9 +628,7 @@ func TestListObjectsProps(t *testing.T) {
 			tutils.Logf("[cache=%t] trying empty (default) subset of props...\n", useCache)
 			checkProps(useCache, []string{}, func(entry *cmn.BucketEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				if bck.IsAIS() {
-					tassert.Errorf(t, entry.Version != "", "version is not set")
-				}
+				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 
@@ -641,9 +639,7 @@ func TestListObjectsProps(t *testing.T) {
 			tutils.Logf("[cache=%t] trying default subset of props...\n", useCache)
 			checkProps(useCache, cmn.GetPropsDefault, func(entry *cmn.BucketEntry) {
 				tassert.Errorf(t, entry.Size != 0, "size is not set")
-				if bck.IsAIS() {
-					tassert.Errorf(t, entry.Version != "", "version is not set")
-				}
+				tassert.Errorf(t, entry.Version == "", "version is set")
 				tassert.Errorf(t, entry.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, entry.Atime != "", "atime is not set")
 
