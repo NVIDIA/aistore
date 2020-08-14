@@ -5,13 +5,19 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
+)
+
+const (
+	waitNodeStarted = 10 * time.Second
 )
 
 // GetClusterMap API
@@ -186,4 +192,48 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 func Health(baseParams BaseParams) error {
 	baseParams.Method = http.MethodGet
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPath(cmn.Version, cmn.Health)})
+}
+
+func WaitNodeAdded(baseParams BaseParams, nodeID string) (*cluster.Smap, error) {
+	var (
+		i, max = 0, 2
+	)
+
+retry:
+	smap, err := GetClusterMap(baseParams)
+	if err != nil {
+		return nil, err
+	}
+	node := smap.GetNode(nodeID)
+	if node != nil {
+		baseParams.URL = node.URL(cmn.NetworkPublic)
+		return smap, waitStarted(baseParams)
+	}
+	time.Sleep(waitNodeStarted)
+	i++
+	if i > max {
+		return nil, fmt.Errorf("max retry (%d) exceeded - node not in smap", max)
+	}
+
+	goto retry
+}
+
+func waitStarted(baseParams BaseParams) (err error) {
+	var (
+		i, max = 0, 2
+	)
+while503:
+	err = Health(baseParams)
+	if err == nil {
+		return nil
+	}
+	if HTTPStatus(err) != http.StatusServiceUnavailable {
+		return
+	}
+	time.Sleep(waitNodeStarted)
+	i++
+	if i > max {
+		return fmt.Errorf("node start failed - max retries (%d) exceeded", max)
+	}
+	goto while503
 }

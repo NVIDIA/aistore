@@ -423,6 +423,7 @@ func crashAndFastRestore(t *testing.T) {
 	tutils.Logf("targets: %d, proxies: %d\n", smap.CountTargets(), smap.CountProxies())
 
 	id := smap.Primary.ID()
+	oldPrimaryURL := smap.Primary.URL(cmn.NetworkPublic)
 	tutils.Logf("The current primary %s, Smap version %d\n", id, smap.Version)
 
 	cmd, args, err := kill(smap.Primary.ID(), smap.Primary.PublicNet.DaemonPort)
@@ -441,6 +442,8 @@ func crashAndFastRestore(t *testing.T) {
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to restore",
 		smap.Version-1, testing.Verbose())
 	tassert.CheckFatal(t, err)
+
+	tutils.WaitStarted(t, oldPrimaryURL)
 
 	if smap.Primary.ID() != id {
 		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.Primary.ID(), id)
@@ -769,6 +772,7 @@ loop:
 
 		smap := tutils.GetClusterMap(t, proxyURL)
 		_, nextProxyURL, err := chooseNextProxy(smap)
+		currentPrimaryURL := smap.Primary.URL(cmn.NetworkPublic)
 		tassert.CheckFatal(t, err)
 
 		cmd, args, err := kill(smap.Primary.ID(), smap.Primary.PublicNet.DaemonPort)
@@ -791,6 +795,8 @@ loop:
 		_, err = tutils.WaitForPrimaryProxy(nextProxyURL, "to synchronize on 'primary restored'",
 			smap.Version, testing.Verbose())
 		tassert.CheckFatal(t, err)
+
+		tutils.WaitStarted(t, currentPrimaryURL)
 	}
 }
 
@@ -1397,7 +1403,6 @@ func killRandNonPrimaryIC(t *testing.T, smap *cluster.Smap) (*cluster.Snode, *cl
 func icMemberLeaveAndRejoin(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	primary := smap.Primary
-	origProxyCount := smap.CountProxies()
 
 	tassert.Fatalf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
 
@@ -1422,8 +1427,7 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	updatedICs := smap.IC
-	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
-		smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = api.WaitNodeAdded(tutils.BaseAPIParams(primary.PublicNet.DirectURL), killNode.ID())
 	tassert.CheckFatal(t, err)
 
 	// Adding a new node shouldn't change IC members
@@ -1469,10 +1473,8 @@ func icKillAndRestorePrimary(t *testing.T) {
 	// Restore the killed primary back as primary
 	err = restore(cmd, args, true, "proxy")
 	tassert.CheckFatal(t, err)
-	tutils.WaitStarted(t, oldPrimary.URL(cmn.NetworkPublic))
 
-	smap, err = tutils.WaitForPrimaryProxy(oldPrimaryURL, "to designate new primary",
-		smap.Version, testing.Verbose())
+	smap, err = api.WaitNodeAdded(tutils.BaseAPIParams(newPrimaryURL), oldPrimaryID)
 	tassert.CheckFatal(t, err)
 
 	smap = setPrimaryTo(t, oldPrimaryURL, smap, "", oldPrimaryID)
@@ -1492,11 +1494,10 @@ func icKillAndRestorePrimary(t *testing.T) {
 
 func icSyncOwnershipTable(t *testing.T) {
 	var (
-		proxyURL       = tutils.RandomProxyURL()
-		baseParams     = tutils.BaseAPIParams(proxyURL)
-		smap           = tutils.GetClusterMap(t, proxyURL)
-		primary        = smap.Primary
-		origProxyCount = smap.CountProxies()
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		primary    = smap.Primary
 
 		src = cmn.Bck{
 			Name:     TestBucketName,
@@ -1540,10 +1541,8 @@ func icSyncOwnershipTable(t *testing.T) {
 
 	err = restore(cmd, args, false, "proxy")
 	tassert.CheckFatal(t, err)
-	tutils.WaitStarted(t, killNode.URL(cmn.NetworkPublic))
 
-	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
-		smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = api.WaitNodeAdded(baseParams, killNode.ID())
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, !smap.IsIC(killNode), "newly joined node shouldn't be in IC (%s)", killNode)
 
@@ -1600,8 +1599,10 @@ func icSinglePrimaryRevamp(t *testing.T) {
 	// Restart all killed nodes and check for xaction status
 	for _, cmd := range nodesToRestore {
 		err = restore(cmd.cmd, cmd.args, false, "proxy")
-		tassert.CheckFatal(t, err)
-		tutils.WaitStarted(t, cmd.node.URL(cmn.NetworkPublic))
+		tassert.CheckError(t, err)
+
+		_, err = api.WaitNodeAdded(baseParams, cmd.node.ID())
+		tassert.CheckError(t, err)
 
 		baseParams = tutils.BaseAPIParams(cmd.node.URL(cmn.NetworkPublic))
 		_, err = api.GetStatusJtx(baseParams, xactID)
