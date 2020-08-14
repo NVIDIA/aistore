@@ -6,15 +6,11 @@
  */
 package cloud
 
-import "github.com/NVIDIA/aistore/cluster"
-
-type (
-	awsProvider struct { // mock
-		dummyCloudProvider
-		t cluster.Target
-	}
+import (
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
-func NewAWS(t cluster.Target) (cluster.CloudProvider, error) {
-	return &awsProvider{dummyCloudProvider{}, t}, nil
+func NewAWS(_ cluster.Target) (cluster.CloudProvider, error) {
+	return nil, newInitCloudErr(cmn.ProviderAmazon)
 }

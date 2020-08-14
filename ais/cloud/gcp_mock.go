@@ -8,15 +8,9 @@ package cloud
 
 import (
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
-type (
-	gcpProvider struct {
-		dummyCloudProvider
-		t cluster.Target
-	}
-)
-
-func NewGCP(t cluster.Target) (cluster.CloudProvider, error) {
-	return &gcpProvider{dummyCloudProvider{}, t}, nil
+func NewGCP(_ cluster.Target) (cluster.CloudProvider, error) {
+	return nil, newInitCloudErr(cmn.ProviderGoogle)
 }

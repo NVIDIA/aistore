@@ -15,11 +15,23 @@ function post_deploy() {
     echo "some of the aisnodes did not start properly"
     exit 1
   fi
-  echo "build all AIStore binaries from source"
-  make all
   echo "working with build: $(git rev-parse --short HEAD)"
   export BUCKET=devtestcloud
   echo "run tests with cloud bucket: ${BUCKET}"
+}
+
+# $1 - num_targets; $2 - num_proxies; $3 - num_mountpaths; $4 - cloud
+function deploy() {
+  cleanup
+
+  echo "build required binaries"
+  make cli aisfs aisloader
+
+  targets=$1
+  proxies=$2
+  { echo $targets; echo $proxies; echo $3; echo $4; } | MODE="debug" make deploy
+
+  post_deploy $((targets + proxies))
 }
 
 set -o xtrace
@@ -47,16 +59,12 @@ popd
 
 
 # Running kubernetes based tests
-cleanup
 export K8S_HOST_NAME="minikube"
-# TODO: This requiremenet can be removed once we do not need single transformer per target.
+# TODO: This requirement can be removed once we do not need single transformer per target.
 # We use this because minikube is a 1-node kubernetes cluster
 # and with pod anti-affinities (for enabling single transformer per target at a time) it would
 # cause failures with pods getting stuck in `Pending` state.
-num_targets=1
-num_proxies=1
-{ echo $num_targets; echo $num_proxies; echo 3; echo 0; } | MODE="debug" make deploy
-post_deploy $((num_proxies + num_targets))
+deploy 1 1 3 0
 RE="TestKube" make test-run
 exit_code=$?
 result=$((result + exit_code))
@@ -68,11 +76,7 @@ pushd deploy/dev/k8s
 popd
 
 # Running long tests
-cleanup
-num_targets=6
-num_proxies=6
-{ echo $num_targets; echo $num_proxies; echo 4; echo 1; } | MODE="debug" make deploy
-post_deploy $((num_proxies + num_targets))
+deploy 6 6 4 1
 make test-long && make test-aisloader
 exit_code=$?
 result=$((result + exit_code))

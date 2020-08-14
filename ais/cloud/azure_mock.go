@@ -8,15 +8,9 @@ package cloud
 
 import (
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
-type (
-	azureProvider struct {
-		dummyCloudProvider
-		t cluster.Target
-	}
-)
-
-func NewAzure(t cluster.Target) (cluster.CloudProvider, error) {
-	return &azureProvider{dummyCloudProvider{}, t}, nil
+func NewAzure(_ cluster.Target) (cluster.CloudProvider, error) {
+	return nil, newInitCloudErr(cmn.ProviderAzure)
 }

@@ -47,14 +47,6 @@ func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 			return t.cloud.ext
 		}
 
-		cloudConf := cmn.GCO.Get().Cloud
-		if bck.CloudBck().Provider == cloudConf.Provider && !cmn.IsValidProvider(t.cloud.ext.Provider()) {
-			err := t.cloud.initExt(t)
-			cmn.AssertNoErr(err)
-			glog.Errorf("%s: %s, %s, %s", t.si, bck, cloudConf.Provider, t.cloud.ext.Provider())
-			return t.cloud.ext
-		}
-
 		c, _ := cloud.NewDummyCloud(t)
 		return c
 	}

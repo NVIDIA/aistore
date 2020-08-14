@@ -6,6 +6,7 @@ package cloud
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -29,4 +30,11 @@ func calcPageSize(pageSize, maxPageSize uint) uint {
 		return maxPageSize
 	}
 	return pageSize
+}
+
+func newInitCloudErr(provider string) error {
+	return fmt.Errorf(
+		"tried to initialize %q cloud (specified in config) but the binary was not built with %q build tag",
+		provider, provider,
+	)
 }
