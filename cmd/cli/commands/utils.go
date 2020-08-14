@@ -862,7 +862,6 @@ func determineClusterURL(cfg *config.Config) string {
 		return "http://" + proxyGateway + ":8080"
 	}
 
-	fmt.Fprintf(os.Stderr, "Warning! AIStore URL not configured, using default: %s\n", cfg.Cluster.DefaultAISHost)
 	return cfg.Cluster.DefaultAISHost
 }
 
