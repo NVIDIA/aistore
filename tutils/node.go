@@ -81,7 +81,7 @@ func ExtractProxyNodes(smap *cluster.Smap) cluster.Nodes {
 	return proxies
 }
 
-func RandomProxyURL() string {
+func RandomProxyURL(ts ...*testing.T) string {
 	var (
 		httpErr    = &cmn.HTTPError{}
 		baseParams = BaseAPIParams(proxyURLReadOnly)
@@ -94,6 +94,10 @@ while503:
 		goto while503
 	}
 	if err != nil {
+		Logf("unable to get usable cluster map, err: %v\n", err)
+		if len(ts) > 0 {
+			tassert.CheckFatal(ts[0], err)
+		}
 		return ""
 	}
 	proxies := ExtractProxyNodes(smap)

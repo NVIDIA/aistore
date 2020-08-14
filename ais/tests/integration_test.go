@@ -204,7 +204,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tcmd, targs, err := kill(targetID, targetPort)
 	tassert.CheckFatal(t, err)
 
-	proxyURL := tutils.RandomProxyURL()
+	proxyURL := tutils.RandomProxyURL(t)
 	m.smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to update smap", m.smap.Version,
 		testing.Verbose(), m.originalProxyCount, m.originalTargetCount-1)
 	tassert.CheckError(t, err)
@@ -1319,7 +1319,7 @@ func TestAtimeLocalGet(t *testing.T) {
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL      = tutils.RandomProxyURL()
+		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("file content"))
@@ -1351,7 +1351,7 @@ func TestAtimeColdGet(t *testing.T) {
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
-		proxyURL      = tutils.RandomProxyURL()
+		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
@@ -1385,7 +1385,7 @@ func TestAtimePrefetch(t *testing.T) {
 			Name:     clibucket,
 			Provider: cmn.AnyCloud,
 		}
-		proxyURL      = tutils.RandomProxyURL()
+		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
@@ -1419,7 +1419,7 @@ func TestAtimeLocalPut(t *testing.T) {
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL      = tutils.RandomProxyURL()
+		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
