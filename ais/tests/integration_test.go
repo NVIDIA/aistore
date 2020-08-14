@@ -183,8 +183,8 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 			fileSize:        cmn.KiB * 2,
 		}
 		targetURL  string
-		targetPort string
 		targetID   string
+		targetNode *cluster.Snode
 	)
 
 	m.saveClusterState()
@@ -196,12 +196,12 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	// Select a random target
 	for _, v := range m.smap.Tmap {
 		targetURL = v.PublicNet.DirectURL
-		targetPort = v.PublicNet.DaemonPort
 		targetID = v.ID()
+		targetNode = v
 		break
 	}
 	tutils.Logf("Killing target: %s - %s\n", targetURL, targetID)
-	tcmd, targs, err := kill(targetID, targetPort)
+	tcmd, err := kill(targetNode)
 	tassert.CheckFatal(t, err)
 
 	proxyURL := tutils.RandomProxyURL(t)
@@ -222,7 +222,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(4 * time.Second)
-		restore(tcmd, targs, false, "target")
+		restore(tcmd, false, "target")
 	}()
 	go func() {
 		defer wg.Done()
