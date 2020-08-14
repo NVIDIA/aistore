@@ -208,11 +208,12 @@ func abortDownload(t *testing.T, id string) {
 	err := api.DownloadAbort(baseParams, id)
 	tassert.CheckFatal(t, err)
 
-	time.Sleep(time.Second)
+	waitForDownload(t, id, 30*time.Second)
 
 	status, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, status.Aborted, "download was not marked aborted")
+	tassert.Fatalf(t, status.JobFinished(), "download should be finished")
 	tassert.Fatalf(t, len(status.CurrentTasks) == 0, "current tasks should be empty")
 }
 
@@ -1267,6 +1268,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer abortDownload(t, id2)
 
+	tutils.Logln("waiting for checks...")
 	var (
 		concurrentJobs bool
 		resp1, resp2   downloader.DlStatusResp
@@ -1293,6 +1295,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	}
 
 	tassert.Errorf(t, concurrentJobs, "expected jobs to run concurrently")
+	tutils.Logln("done waiting")
 }
 
 // NOTE: Test may fail if the network is SUPER slow!!

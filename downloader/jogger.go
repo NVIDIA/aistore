@@ -97,7 +97,7 @@ func (j *jogger) stop() {
 	<-j.terminateCh.Listen()
 }
 
-// Returns chanel which task should be put into.
+// Returns channel which task should be put into.
 func (j *jogger) putCh(t *singleObjectTask) chan<- *singleObjectTask {
 	ok, ch := j.q.putCh(t)
 	if ok {
@@ -117,7 +117,7 @@ func (j *jogger) abortJob(id string) {
 	j.mtx.RLock()
 	defer j.mtx.RUnlock()
 
-	// Remove pending jobs in queue.
+	// Remove pending tasks in queue.
 	cnt := j.q.removeJob(id)
 	j.parent.parent.SubPending(cnt)
 
@@ -127,7 +127,7 @@ func (j *jogger) abortJob(id string) {
 	}
 }
 
-// Returns `true` if there is any task pending for a given job (either running
+// Returns `true` if there is any pending task for a given job (either running
 // or still in queue), `false` otherwise.
 func (j *jogger) pending(id string) bool {
 	task := j.getTask()
@@ -145,7 +145,7 @@ func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask
 	q.Lock()
 	if q.stopped() || q.exists(t.id(), t.uid()) {
 		// If task already exists or the queue was stopped we should just omit it
-		// hence return chanel which immediately accepts and omits the task
+		// hence return channel which immediately accepts and omits the task.
 		q.Unlock()
 		return false, make(chan *singleObjectTask, 1)
 	}
@@ -170,6 +170,10 @@ func (q *queue) get() (foundTask *singleObjectTask) {
 			//  has `Finished` to prevent situation where we put task which is
 			//  being downloaded.
 			foundTask = t
+		} else {
+			// If the task's job was removed from the queue then we must release
+			// the throttler that was acquired before we put the task into the queue.
+			t.job.throttler().release()
 		}
 		q.RUnlock()
 	}

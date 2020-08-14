@@ -367,6 +367,7 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (err
 
 	// Firstly, check if the job was aborted when we were sleeping.
 	if d.checkAbortedJob(task.job) {
+		task.job.throttler().release()
 		return nil, true
 	}
 
@@ -377,8 +378,10 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (err
 	case jogger.putCh(task) <- task:
 		return nil, true
 	case <-d.jobAbortedCh(task.job.ID()).Listen():
+		task.job.throttler().release()
 		return nil, true
 	case <-d.stopCh.Listen():
+		task.job.throttler().release()
 		return nil, false
 	}
 }
