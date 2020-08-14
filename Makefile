@@ -109,6 +109,9 @@ build-%:
 	@go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 	@echo "done."
 
+docker-image-aisnode-%: ## Build 'aisnode' docker image using alpine/ubuntu as the base.
+	@sudo docker build . --force-rm -t aistore/aisnode:latest-$* -f deploy/dev/k8s/Dockerfile-aisnode-$*
+
 #
 # local deployment (intended for developers)
 #
