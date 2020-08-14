@@ -53,9 +53,13 @@ func newJogger(d *dispatcher, mpath string) *jogger {
 func (j *jogger) jog() {
 	glog.Infof("Starting jogger for mpath %q.", j.mpath)
 	for {
-		t := j.q.get()
+		t, skip := j.q.get()
 		if t == nil {
 			break
+		}
+		if skip {
+			t.job.throttler().release()
+			continue
 		}
 
 		j.mtx.Lock()
@@ -156,32 +160,27 @@ func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask
 }
 
 // Get tries to find first task which was not yet Aborted
-func (q *queue) get() (foundTask *singleObjectTask) {
-	for foundTask == nil {
-		t, ok := <-q.ch
-		if !ok {
-			foundTask = nil
-			return
-		}
-
-		q.RLock()
-		if q.exists(t.id(), t.uid()) {
-			// NOTE: We do not delete task here but postpone it until the task
-			//  has `Finished` to prevent situation where we put task which is
-			//  being downloaded.
-			foundTask = t
-		} else {
-			// If the task's job was removed from the queue then we must release
-			// the throttler that was acquired before we put the task into the queue.
-			t.job.throttler().release()
-		}
-		q.RUnlock()
+func (q *queue) get() (foundTask *singleObjectTask, skip bool) {
+	t, ok := <-q.ch
+	if !ok {
+		return nil, false
 	}
 
+	q.RLock()
+	defer q.RUnlock()
+	if !q.exists(t.id(), t.uid()) {
+		// The job was removed so we must skip tasks which no longer exist.
+		return t, true
+	}
+
+	// NOTE: We do not delete task here but postpone it until the task
+	//  has `Finished` to prevent situation where we put task which is
+	//  being downloaded.
+
 	ctx, cancel := context.WithCancel(context.Background())
-	foundTask.downloadCtx = ctx
-	foundTask.cancelFunc = cancel
-	return
+	t.downloadCtx = ctx
+	t.cancelFunc = cancel
+	return t, false
 }
 
 func (q *queue) delete(t *singleObjectTask) bool {
