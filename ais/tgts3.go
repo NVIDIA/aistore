@@ -258,6 +258,11 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 		t.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s/%s %s", bucket, objName, cmn.DoesNotExist)
 		return
 	}
+
+	if cmn.IsETLRequest(r.URL.Query()) {
+		s3compat.SetETLHeader(w.Header(), lom)
+		return
+	}
 	s3compat.SetHeaderFromLOM(w.Header(), lom, lom.Size())
 }
 

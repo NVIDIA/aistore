@@ -613,8 +613,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if transformID := query.Get(cmn.URLParamUUID); transformID != "" {
-		t.doETL(w, r, transformID, bck, objName)
+	if cmn.IsETLRequest(query) {
+		t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, objName)
 		return
 	}
 	goi := &getObjInfo{
@@ -1113,6 +1113,14 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return nil, false
 	})
 	cmn.AssertNoErr(err)
+
+	if cmn.IsETLRequest(query) {
+		// We don't know neither length of on-the-fly transformed object, nor checksum.
+		hdr.Del(cmn.HeaderContentLength)
+		hdr.Del(cmn.GetPropsChecksum)
+		hdr.Del(cmn.HeaderObjCksumVal)
+		hdr.Del(cmn.HeaderObjCksumType)
+	}
 }
 
 //

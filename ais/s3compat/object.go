@@ -115,6 +115,12 @@ func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
 	header.Set(headerVersion, lom.Version())
 }
 
+func SetETLHeader(header http.Header, lom *cluster.LOM) {
+	header.Set(headerAtime, FormatTime(lom.Atime()))
+	header.Set(cmn.HeaderContentType, cmn.ContentBinary)
+	header.Set(headerVersion, lom.Version())
+}
+
 func (r *CopyObjectResult) MustMarshal() []byte {
 	b, err := xml.Marshal(r)
 	cmn.AssertNoErr(err)
