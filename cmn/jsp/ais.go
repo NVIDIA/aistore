@@ -17,30 +17,28 @@ import (
 // ais config //
 ////////////////
 
-func LoadConfig(confPath string) *cmn.Config {
-	config, err := loadConfig(confPath)
-	if err != nil {
+func LoadConfig(confPath string) {
+	if err := loadConfig(confPath); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	return config
 }
 
-func loadConfig(confPath string) (config *cmn.Config, err error) {
+func loadConfig(confPath string) (err error) {
 	cmn.GCO.SetConfigFile(confPath)
 
-	config = cmn.GCO.BeginUpdate()
+	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
 
 	err = Load(confPath, &config, Options{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config %q, err: %v", confPath, err)
+		return fmt.Errorf("failed to load config %q, err: %v", confPath, err)
 	}
 	if err = cmn.CreateDir(config.Log.Dir); err != nil {
-		return nil, fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
+		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}
 	glog.SetLogDir(config.Log.Dir)
 	if err := config.Validate(); err != nil {
-		return nil, err
+		return err
 	}
 
 	// glog rotate
@@ -65,7 +63,7 @@ func loadConfig(confPath string) (config *cmn.Config, err error) {
 	}
 
 	if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {
-		return nil, fmt.Errorf("failed to set log level = %s, err: %s", config.Log.Level, err)
+		return fmt.Errorf("failed to set log level = %s, err: %s", config.Log.Level, err)
 	}
 	glog.Infof("log.dir: %q; l4.proto: %s; port: %d; verbosity: %s",
 		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)

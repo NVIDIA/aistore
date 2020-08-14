@@ -196,7 +196,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		str += "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> ..."
 		cmn.ExitLogf(str)
 	}
-	config := jsp.LoadConfig(daemon.cli.confPath)
+	jsp.LoadConfig(daemon.cli.confPath)
 
 	// even more config changes, e.g:
 	// -config=/etc/ais.json -role=target -persist=true -config_custom="client.timeout=13s, proxy.primary_url=https://localhost:10080"
@@ -258,7 +258,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	if daemon.cli.role == cmn.Proxy {
 		rmain = initProxy()
 	} else {
-		rmain = initTarget(config)
+		rmain = initTarget()
 	}
 	daemon.rg.add(&sigrunner{}, xsignal)
 	return
@@ -280,7 +280,7 @@ func initProxy() cmn.Runner {
 	return p
 }
 
-func initTarget(config *cmn.Config) cmn.Runner {
+func initTarget() cmn.Runner {
 	t := &targetrunner{
 		gmm: &memsys.MMSA{Name: gmmName},
 		smm: &memsys.MMSA{Name: smmName, Small: true},
@@ -307,7 +307,8 @@ func initTarget(config *cmn.Config) cmn.Runner {
 
 	// fs.Mountpaths must be inited prior to all runners that utilize them
 	// for mountpath definition, see fs/mountfs.go
-	if cmn.GCO.Get().TestingEnv() {
+	config := cmn.GCO.Get()
+	if config.TestingEnv() {
 		glog.Infof("Warning: configuring %d fspaths for testing", config.TestFSP.Count)
 		fs.DisableFsIDCheck()
 		t.testCachepathMounts()

@@ -249,7 +249,7 @@ func (t *targetrunner) Run() error {
 	t.detectMpathChanges()
 
 	// init cloud
-	t.cloud.init(t, config)
+	t.cloud.init(t)
 
 	t.authn = &authManager{
 		tokens:        make(map[string]*cmn.AuthToken),
@@ -306,18 +306,22 @@ func (t *targetrunner) checkK8s() error {
 	return nil
 }
 
-func (c *clouds) init(t *targetrunner, config *cmn.Config) {
-	// ais cloud always enabled
-	c.ais = cloud.NewAIS(t)
+func (c *clouds) init(t *targetrunner) {
+	config := cmn.GCO.Get()
+	c.ais = cloud.NewAIS(t) // ais cloud is always present
 	if aisConf, ok := config.Cloud.ProviderConf(cmn.ProviderAIS); ok {
 		if err := c.ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
 		}
 	}
-	// 3rd part cloud: empty stubs unless populated via build tags
-	var (
-		err error
-	)
+	if err := c.initExt(t); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+}
+
+// 3rd part cloud: empty stubs unless populated via build tags
+func (c *clouds) initExt(t *targetrunner) (err error) {
+	config := cmn.GCO.Get()
 	switch config.Cloud.Provider {
 	case cmn.ProviderAmazon:
 		c.ext, err = cloud.NewAWS(t)
@@ -326,13 +330,11 @@ func (c *clouds) init(t *targetrunner, config *cmn.Config) {
 	case cmn.ProviderAzure:
 		c.ext, err = cloud.NewAzure(t)
 	case "":
-		c.ext, err = cloud.NewDummyCloud(t)
+		c.ext, _ = cloud.NewDummyCloud(t)
 	default:
 		err = fmt.Errorf("unknown cloud provider: %q", config.Cloud.Provider)
 	}
-	if err != nil {
-		cmn.ExitLogf("%v", err)
-	}
+	return
 }
 
 func (t *targetrunner) initRecvHandlers() {
