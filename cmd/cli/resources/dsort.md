@@ -88,9 +88,9 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | `provider` | `string` | cloud provider (ais or cloud) | no | `"ais"` |
 | `output_bucket` | `string` | bucket where new output shards will be saved | no | same as `bucket` |
 | `output_provider` | `string` | determines whether the output bucket is ais or cloud | no | same as `provider` |
-| `description` | `string` | description of dsort job | no | `""` |
+| `description` | `string` | description of dSort job | no | `""` |
 | `output_shard_size` | `string` | size (in bytes) of the output shard, can be in form of raw numbers `10240` or suffixed `10KB` | yes | |
-| `algorithm.kind` | `string` | determines which algorithm should be during dSort job, available are: `"alphanumeric"`, `"shuffle"`, `"content"` | no | `"alphanumeric"` |
+| `algorithm.kind` | `string` | determines which sorting algorithm dSort job uses, available are: `"alphanumeric"`, `"shuffle"`, `"content"` | no | `"alphanumeric"` |
 | `algorithm.decreasing` | `bool` | determines if the algorithm should sort the records in decreasing or increasing order, used for `kind=alphanumeric` or `kind=content` | no | `false` |
 | `algorithm.seed` | `string` | seed provided to random generator, used when `kind=shuffle` | no | `""` - `time.Now()` is used |
 | `algorithm.extension` | `string` | content of the file with provided extension will be used as sorting key, used when `kind=content` | yes (only when `kind=content`) |
@@ -100,7 +100,7 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | `max_mem_usage` | `string` | limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB | no | same as in `/deploy/dev/local/aisnode_config.sh` |
 | `extract_concurrency_max_limit` | `int` | limits maximum number of concurrent shards extracted per disk | no | (calculated based on different factors) ~50 |
 | `create_concurrency_max_limit` | `int` | limits maximum number of concurrent shards created per disk| no | (calculated based on different factors) ~50 |
-| `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |
+| `extended_metrics` | `bool` | determines if dSort should collect extended statistics | no | `false` |
 
 There's also the possibility to override some of the values from global `distributed_sort` config via job specification.
 All values are optional - if empty, the value from global `distributed_sort` config will be used.
@@ -318,7 +318,7 @@ true
 false
 ```
 
-Show created shards in each target alongwith the target ids.
+Show created shards in each target along with the target ids.
 
 ```console
 $ ais show dsort 5JjIuGemR --json | jq 'to_entries[] | [.key, .value.shard_creation.created_count]'

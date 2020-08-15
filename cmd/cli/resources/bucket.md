@@ -332,7 +332,7 @@ If `BUCKET_NAME` is omitted, shows information about all buckets.
 
 `ais set-copies BUCKET_NAME --copies <value>`
 
-Start an extended action to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../../docs/storage_svcs.md#n-way-mirror).
+Start an extended action to bring a given bucket to a certain redundancy level (`value` copies). Read more about this feature [here](../../../docs/storage_svcs.md#n-way-mirror).
 
 ### Options
 

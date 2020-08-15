@@ -40,7 +40,7 @@ Cloud-based and ais buckets support the same API with minor exceptions. Cloud bu
 
 ### Cloud Provider
 
-[Cloud Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, plase refer to the [Cloud Provider](./providers.md) document.
+[Cloud Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, please refer to the [Cloud Provider](./providers.md) document.
 
 Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values that include:
 
@@ -168,10 +168,10 @@ Once there is a request to access the bucket, or a request to change the bucket'
 
 In an evict bucket operation, AIS will remove all traces of the cloud bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to the bucket have been made. This does not affect the objects stored within the cloud bucket.
 
-For example, to evict the `abc` cloud bucket from the AIS cluster, run:
+For example, to evict `abc` cloud bucket from the AIS cluster, run:
 
 ```console
-$ ais evict aws://myS3bucket
+$ ais evict aws://abc
 ```
 
 ## Backend Bucket
@@ -329,7 +329,7 @@ An empty structure `{}` results in getting just the names of the objects (from t
 | `continuation_token` | The token identifying the next page to retrieve | Returned in the `ContinuationToken` field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, `ContinuationToken` will be the empty string. |
 | `time_format` | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | `flags` | Advanced filter options | A bit field of [SelectMsg extended flags](/cmn/api.go). |
-| [experimental] `use_cache` | Requests usage of cache in proxy | With this option enabled subsequent requests to list objects for the given bucket will be served from cache without traversing disks. For now implementation is limited to caching results for buckets which content doesn't change, otherwise the cache will be in stale state. | 
+| [experimental] `use_cache` | Enables caching | With this option enabled, subsequent requests to list objects for the given bucket will be served from cache without traversing disks. For now implementation is limited to caching results for buckets which content doesn't change, otherwise the cache will be in stale state. |
 
 SelectMsg extended flags:
 
@@ -347,9 +347,9 @@ a misplaced one (from original location) and real one (from the new location).
 ## [experimental] Query Objects
 
 QueryObjects API is extension of list objects.
-Alongside listing names and properties of the objects it also allows for filtering and selecting specific sets of objects.
+Alongside listing names and properties of the objects, it also allows filtering and selecting specific sets of objects.
 
-On the high level the idea is that proxy dispatches a request to targets which produce output that is returned and combined by the proxy.
+At the high level, the idea is that a proxy dispatches a request to targets which produce output that is returned and combined by the proxy.
 
 ![](images/query_high.png)
 
@@ -368,10 +368,10 @@ The options for init message describe the most important values of the query.
 
 | Property/Option | Description | Value |
 | --- | --- | --- |
-| `outer_select.prefix` | The prefix which all returned objects must have | For example, `prefix = "my/directory/structure/"` will include object `object_name = "my/directory/structure/object1.txt"` but will not `object_name = "my/directory/object2.txt"` |
-| `outer_select.objects_source` | Template which objects names must match | For example `objects_source = "object{00..99}.tar"` will include object `object_name = "object49.tar"` but will not `object_name = "object0.tgz"` |
-| `inner_select.props` | The properties of the object to return | A comma-separated string containing any combination of: `name,size,version,checksum,atime,target_url,copies,ec,status`. |
+| `outer_select.prefix` | Prefix which all returned objects must have | For example, `prefix = "my/directory/structure/"` will include object `object_name = "my/directory/structure/object1.txt"` but will not `object_name = "my/directory/object2.txt"` |
+| `outer_select.objects_source` | Template that object names must match to | For example `objects_source = "object{00..99}.tar"` will include object `object_name = "object49.tar"` but will not `object_name = "object0.tgz"` |
+| `inner_select.props` | Properties of objects to return | A comma-separated list containing any combination of: `name,size,version,checksum,atime,target_url,copies,ec,status`. |
 | `from.bucket` | Bucket in which query should be executed | |
-| `where.filter` | Filter which should be applied when traversing objects | Filter is recursive data structure that can describe multiple filters which should be applied. |
+| `where.filter` | Filter to apply when traversing objects | Filter is recursive data structure that can describe multiple filters which should be applied. |
 
 Init message returns `handle` that should be used in NextQueryResults API call.

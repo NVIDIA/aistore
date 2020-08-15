@@ -1,4 +1,4 @@
-AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster lifecycle.
+AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle.
 In addition, CLI provides dataset management commands, commands to read and write data, and more.
 
 **TL;DR**: see section [CLI reference](#cli-reference) below to quickly locate useful commands. There's also a (structured as a reference) list CLI resources with numerous examples and usage guides that we constantly keep updating.
@@ -42,13 +42,13 @@ Simply change config file so next time CLI will use updated values.
 
 ### First steps
 
-To get the list of commands run following command:
+To get the list of commands, run following command:
 
 ```console
 $ ais --help
 ```
 
-To check if the CLI can correctly contact the cluster and to get cluster status run following command:
+To check if the CLI can correctly contact the cluster and to get cluster status, run following command:
 
 ```console
 $ ais show cluster
@@ -65,7 +65,7 @@ To install them manually, run `bash autocomplete/install.sh`.
 
 ### Uninstalling
 
-To uninstall autocompletions run `bash autocomplete/uninstall.sh`.
+To uninstall autocompletions, run `bash autocomplete/uninstall.sh`.
 
 ## CLI reference
 

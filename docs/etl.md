@@ -16,21 +16,20 @@ AIStore supports ETL and is designed to work close to data to minimize data tran
 
 ETL is designed for AIStore cluster running in Kubernetes. Every ETL is specified by a spec file (Kubernetes YAML spec), which determines what
 and how the ETL should operate. Every such spec file creates an **ETL container** which is a [Kubernetes Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) running a server inside it.
-To start an ETL the user (client) needs to send an **init** request to the AIStore endpoint (proxy). The proxy broadcasts this request to all
+To start an ETL, the user (client) needs to send an **init** request to the AIStore endpoint (proxy). The proxy broadcasts this request to all
 the registered targets.
-When the targets receive init requests they start the ETL container which are collocated on the same machine/node as each of the targets.
+When the targets receive the **init** request, each target starts an ETL container which is collocated on the same machine/node.
 Targets use `kubectl` to initialize the pod and gather necessary information for future communication.
 
 There are 3 communication types that user can choose from to implement the transform server:
 
 | Name | Value | Description |
 |---|---|---|
-| **post** | `hpush://` | Target issues a POST request to its transform server with the body containing the requested object. After finished request, target forwards the response from the ETL container to the user. |
-| **reverse proxy** | `hrev://` | Target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return them to a target. |
-| **redirect** | `hpull://` | Target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return them to a user. |
+| **post** | `hpush://` | A target issues a POST request to its transform server with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
+| **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return the result to the target. |
+| **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make GET request to the target, transform bytes, and return the result to a user. |
 
-The communication type must be specified in the pod specification, so the target can know how to communicate with the ETL container.
-It is defined in as pod's annotation, under `communication_type` key:
+The target communicates with a pod defined in the pod specification under `communication_type` key:
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -69,7 +68,7 @@ There are a couple of steps that are required to make the ETL work:
                fieldPath: spec.nodeName
     ```
    This will allow the target to assign an ETL container to the same machine/node that the target is working on.
-3. Server inside the pod can listen on any port, but the port must be specified in pod spec with `containerPort` - the cluster must know how it can contact the pod.
+3. Server inside the pod can listen on any port, but the port must be specified in pod spec with `containerPort` - the cluster must know how to contact the pod.
 
 ## Examples
 
@@ -134,7 +133,7 @@ if __name__ == "__main__":
     run(addr=args.listen, port=args.port)
 ```
 
-Once we have a server that computes the MD5 we need to create an image out of it.
+Once we have a server that computes the MD5, we need to create an image out of it.
 For that we need to write `Dockerfile` which can look like this:
 
 ```dockerfile
@@ -157,7 +156,7 @@ $ docker build -t quay.io/user/md5_server:v1 .
 $ docker push quay.io/user/md5_server:v1
 ```
 
-The next step would be to create a pod spec that would be run on Kuberenetes (`spec.yaml`):
+The next step would be to create a pod spec that would be run on Kubernetes (`spec.yaml`):
 
 ```yaml
 apiVersion: v1
@@ -208,7 +207,7 @@ transformer-md5-fgjk3-node1           1/1     Running   0          1m
 transformer-md5-vspra-node2           1/1     Running   0          1m
 ```
 
-As expected two more pods are up and running one for each target.
+As expected, two more pods are up and running one for each target.
 
 > **Note:** ETL containers will be run on the same node as the targets that started them.
 In other words, each ETL container runs close to data and does not generate any extract-transform-load

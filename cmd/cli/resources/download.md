@@ -28,9 +28,9 @@ As for `DESTINATION` location, the only supported schema is `ais://` and the lin
 | --- | --- | --- | --- |
 | `--description, --desc` | `string` | Description of the download job | `""` |
 | `--timeout` | `string` | Timeout for request to external resource | `""` |
-| `--sync` | `bool` | Starts a special kind of downloading job that synchronizes the contents of cached objects and remote objects in the cloud. In other words, in addition to downloading new objects from the cloud and updating versions of the existing objects, the sync option also entails the removal of objects that are not present (anymore) in the cloud bucket | `false` |
+| `--sync` | `bool` | Start a special kind of downloading job that synchronizes the contents of cached objects and remote objects in the cloud. In other words, in addition to downloading new objects from the cloud and updating versions of the existing objects, the sync option also entails the removal of objects that are not present (anymore) in the cloud bucket | `false` |
 | `--limit-connections,--conns` | `int` | Number of connections each target can make concurrently (each target can handle at most #mountpaths connections) | `0` (unlimited - at most #mountpaths connections) |
-| `--limit-bytes-per-hour,--limit-bph,--bph` | `string` | Number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can maximally download in hour | `""` (unlimited) |
+| `--limit-bytes-per-hour,--limit-bph,--bph` | `string` | Limit the number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can download per hour | `""` (unlimited) |
 | `--object-list,--from` | `string` | Path to file containing JSON array of strings with object names to download | `""` |
 
 ### Examples
@@ -168,7 +168,7 @@ Run `ais show download QdwOYMAqg` to monitor the progress of downloading.
 There are times when we suspect or know that the content of the cloud bucket that we previously downloaded has changed.
 By default, the downloader just downloads new objects or updates the outdated ones, and it doesn't check if the cached objects are no present in the cloud.
 To change this behavior, you can specify `--sync` flag to enforce downloader to remove cached objects which are no longer present in the cloud.
- 
+
 ```console
 $ ais ls --no-headers gcp://lpr-vision | wc -l
 50
@@ -276,7 +276,7 @@ imagenet/imagenet_train-000043.tgz  38.5MiB/945.9MiB [==>-----------------------
 
 #### Show download job which description match given regex
 
-Show all download jobs with descriptions starting with `download ` prefix. 
+Show all download jobs with descriptions starting with `download ` prefix.
 
 ```console
 $ ais show download --regex "^downloads (.*)"
@@ -297,4 +297,3 @@ Wait for the download job with given `JOB_ID` to finish.
 | --- | --- | --- | --- |
 | `--refresh` | `duration` | Refresh rate | `1s` |
 | `--progress` | `bool` | Displays progress bar | `false` |
-
