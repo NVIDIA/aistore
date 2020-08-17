@@ -2,6 +2,7 @@
 
 - [Bucket](#bucket)
   - [Cloud Provider](#cloud-provider)
+    - [Public Cloud buckets](#public-cloud-buckets)
 - [AIS Bucket](#ais-bucket)
   - [CLI examples: create, rename and, destroy ais bucket](#cli-examples-create-rename-and-destroy-ais-bucket)
   - [CLI example: working with remote AIS bucket](#cli-example-working-with-remote-ais-bucket)
@@ -52,6 +53,49 @@ Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DEL
 * and finally, you can simple say `cloud` to designate any one of the 3 (three) Cloud providers listed above.
 
 For API reference, please refer [to the RESTful API and examples](http_api.md). The rest of this document serves to further explain features and concepts specific to storage buckets.
+
+#### Public Cloud buckets
+
+Public Google storage supports limited access to its data.
+If AIS cluster is deployed with Google Cloud enabled(Google storage is selected as 3rd party Cloud provider when [deploying an AIS cluster](/README.md#local-playground)),
+it allows a few operations without providing credentials:
+HEAD a bucket, list bucket objects, GET an object, and HEAD an object.
+The example shows accessing a private GCP bucket and a public GCP one without user authorization.
+
+```console
+# Listing objects of a private bucket
+$ ais ls gs://ais-ic
+Failed to HEAD bucket "gcp://ais-ic": {"status":400,"message":"","method":"HEAD","url_path":"/v1/buckets/ais-ic","remote_addr":"","trace":""}
+
+# Listing a public bucket
+$ ais ls gs://pub-images --limit 3
+NAME                         SIZE
+images-shard.ipynb           101.94KiB
+images-train-000000.tar      964.77MiB
+images-train-000001.tar      964.74MiB
+```
+
+Even if an AIS cluster is deployed without Cloud support, it is still possible to access public GCP and AWS buckets.
+Run downloader to copy data from a public Cloud bucket to an AIS bucket and then use the AIS bucket.
+Example shows how to download data from public Google storage:
+
+```console
+$ ais create bucket ais://images
+"ais://images" bucket created
+$ ais start download "gs://pub-images/images-train-{000000..000001}.tar" ais://images/
+Z8WkHxwIrr
+Run `ais show download Z8WkHxwIrr` to monitor the progress of downloading.
+
+$ ais show download Z8WkHxwIrr --progress
+Files downloaded:                         2/2 [==============================================================] 100 %
+images-train-000001.tar 964.7MiB/964.7MiB [==============================================================| 00:00:00 ]    0.0 b/s
+All files successfully downloaded.
+
+$ ais ls ais://images
+NAME                             SIZE
+images-train-000000.tar      964.77MiB
+images-train-000001.tar      964.74MiB
+```
 
 ## AIS Bucket
 
