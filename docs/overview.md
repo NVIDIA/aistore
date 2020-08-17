@@ -16,7 +16,7 @@ The rest of this document is structured as follows:
 - [New in 3.1](#new-in-3.1)
 - [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
-- [Datapath](#datapath)
+- [Traffic patterns](#traffic-patterns)
 - [Open Format](#open-format)
 - [Existing Datasets](#existing-datasets)
 - [Data Protection](#data-protection)
@@ -84,16 +84,21 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 * [Mountpath](./configuration.md) - a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
 
-## Datapath
-In AIS, all inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
+## Traffic patterns
+
+In AIS, all inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development).
+HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
 
 <img src="images/dp-schematics-direct.png" alt="Datapath schematics" width="400">
 
 > MDS in the diagram above stands for the metadata server(s) or service(s).
 
-In the picture, a client on the left side makes an I/O request which is then fully serviced by the *left* target - one of the nodes in the AIS cluster (not shown). Symmetrically, the *right* client engages with the *right* AIS target for its own GET or PUT object transaction. In each case, the entire transaction is executed via a single TCP session that connects the requesting client directly to one of the clustered nodes. As far as the datapath is concerned, there are no extra hops in the line of communications.
+In the picture, a client on the left side makes an I/O request which is then fully serviced by the *left* target - one of the nodes in the AIS cluster (not shown).
+Symmetrically, the *right* client engages with the *right* AIS target for its own GET or PUT object transaction.
+In each case, the entire transaction is executed via a single TCP session that connects the requesting client directly to one of the clustered nodes.
+As far as the datapath is concerned, there are no extra hops in the line of communications.
 
-> For detailed read and write sequence diagrams, please refer to [this readme](datapath.md).
+> For detailed traffic patterns diagrams, please refer to [this readme](traffic_patterns.md).
 
 Distribution of objects across AIS cluster is done via (lightning fast) two-dimensional consistent-hash whereby objects get distributed across all storage targets and, within each target, all local disks.
 
@@ -123,6 +128,7 @@ One common way to use AIStore includes the most basic step: populating it with a
 In particular:
 
 ### Existing Datasets: Cold GET
+
 If the dataset in question is accessible via S3-like object API, start working with it via GET primitive of the [AIS API](http_api.md). Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
 
 > As far as supported S3-like backends, AIS currently supports Amazon S3 and Google Cloud.
@@ -171,9 +177,11 @@ $ ais promote /tmp/mydata mybucket/ -r
 In this example, `mybucket` would be the designated (destination) bucket.
 
 ## Data Protection
+
 AIS [supports](storage_svcs.md) end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon [erasure coding](storage_svcs.md#erasure-coding) - thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
 
 ## Scale-Out
+
 The scale-out category includes balanced and fair distribution of objects where each storage target will store (via a variant of the consistent hashing) 1/Nth of the entire namespace where (the number of objects) N is unlimited by design.
 
 > AIS cluster capability to **scale-out is truly unlimited**. The real-life limitations can only be imposed by the environment - capacity of a given Data Center, for instance.
@@ -181,6 +189,7 @@ The scale-out category includes balanced and fair distribution of objects where 
 Similar to the AIS gateways, AIS storage targets can join and leave at any moment causing the cluster to rebalance itself in the background and without downtime.
 
 ## HA
+
 AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](http_api.md). Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier

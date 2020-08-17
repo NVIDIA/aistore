@@ -270,7 +270,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
 - [Object checksums: Brief Theory of Operations](docs/checksum.md)
 - [Configuration](docs/configuration.md)
-- [Datapath: Read and Write Sequence Diagrams](docs/datapath.md)
+- [Traffic patterns](docs/traffic_patterns.md)
 - [Highly available control plane](docs/ha.md)
 - [How to benchmark](docs/howto_benchmark.md)
 - [RESTful API](docs/http_api.md)
