@@ -170,7 +170,7 @@ The rest of this section talks about a single Linux machine and, as such, is int
 
 ### Local Kubernetes
 
-Yet another local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/k8s).
+Yet another local-deployment option makes use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and is documented [here](deploy/dev/k8s/README.md).
 
 ## Containerized Deployments: Host Resource Sharing
 
