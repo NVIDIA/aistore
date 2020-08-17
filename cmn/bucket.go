@@ -220,6 +220,7 @@ func IsValidProvider(provider string) bool {
 	return ok
 }
 
+func (query QueryBcks) String() string     { return Bck(query).String() }
 func (query QueryBcks) IsAIS() bool        { return Bck(query).IsAIS() }
 func (query QueryBcks) IsRemoteAIS() bool  { return Bck(query).IsRemoteAIS() }
 func (query QueryBcks) Equal(bck Bck) bool { return Bck(query).Equal(bck) }

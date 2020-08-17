@@ -8,6 +8,7 @@ package cloud
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -21,12 +22,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 const (
 	gcpChecksumType = "x-goog-meta-ais-cksum-type"
 	gcpChecksumVal  = "x-goog-meta-ais-cksum-val"
 
+	projectIDField  = "project_id"
 	projectIDEnvVar = "GOOGLE_CLOUD_PROJECT"
 	credPathEnvVar  = "GOOGLE_APPLICATION_CREDENTIALS"
 )
@@ -52,27 +55,39 @@ func readCredFile() (projectID string) {
 	if err != nil {
 		return
 	}
-	projectID, _ = jsoniter.Get(b, "project_id").GetInterface().(string)
+	projectID, _ = jsoniter.Get(b, projectIDField).GetInterface().(string)
 	return
 }
 
 func NewGCP(t cluster.Target) (cluster.CloudProvider, error) {
-	projectID := readCredFile()
-	if projectID == "" {
-		projectID = os.Getenv(projectIDEnvVar)
+	var (
+		projectID     string
+		credProjectID = readCredFile()
+		envProjectID  = os.Getenv(projectIDEnvVar)
+	)
+	if credProjectID != "" && envProjectID != "" && credProjectID != envProjectID {
+		return nil, fmt.Errorf(
+			"both %q and %q env vars are non-empty (and %s is not equal) cannot decide which to use",
+			projectIDEnvVar, credPathEnvVar, projectIDField,
+		)
+	} else if credProjectID != "" {
+		projectID = credProjectID
+		glog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, credPathEnvVar)
+	} else if envProjectID != "" {
+		projectID = envProjectID
+		glog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, projectIDEnvVar)
+	} else {
+		glog.Warningf("[cloud_gcp] unable to determine %q (%q and %q env vars are empty) - using unauthenticated client", projectIDField, projectIDEnvVar, credPathEnvVar)
 	}
-	if projectID == "" {
-		return nil, fmt.Errorf("gcp: unable to determine 'project_id', %q or %q env var needs to be set", projectIDEnvVar, credPathEnvVar)
-	}
-	glog.Infof("[cloud_gcp] project_id: %q", projectID)
 	return &gcpProvider{t: t, projectID: projectID}, nil
 }
 
-func createClient(ctx context.Context) (*storage.Client, context.Context, error) {
-	if glog.V(5) {
-		glog.Info("Creating default google cloud session")
+func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, context.Context, error) {
+	var opts []option.ClientOption
+	if gcpp.projectID == "" {
+		opts = []option.ClientOption{option.WithoutAuthentication()}
 	}
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create client, err: %v", err)
 	}
@@ -109,7 +124,7 @@ func (gcpp *gcpProvider) MaxPageSize() uint { return 1000 }
 //////////////////
 
 func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
-	gcpClient, gctx, err := createClient(ctx)
+	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -171,7 +186,7 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		glog.Infof("head_bucket %s", bck.Name)
 	}
 
-	gcpClient, gctx, err := createClient(ctx)
+	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -196,7 +211,12 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 //////////////////
 
 func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
-	gcpClient, gctx, err := createClient(ctx)
+	if gcpp.projectID == "" {
+		// NOTE: Passing empty `projectID` to `Buckets` method results in
+		//  enigmatic error: "googleapi: Error 400: Invalid argument".
+		return nil, errors.New("listing buckets with the unauthenticated client is not possible"), http.StatusBadRequest
+	}
+	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -230,7 +250,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 /////////////////
 
 func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
-	gcpClient, gctx, err := createClient(ctx)
+	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -266,7 +286,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 ////////////////
 
 func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
-	gcpClient, gctx, err := createClient(ctx)
+	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -331,7 +351,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 ////////////////
 
 func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
-	gcpClient, gctx, err := createClient(ctx)
+	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -376,7 +396,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 ///////////////////
 
 func (gcpp *gcpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
-	gcpClient, gctx, err := createClient(ctx)
+	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
 		return
 	}

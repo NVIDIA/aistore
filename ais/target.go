@@ -1159,7 +1159,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 	if query.Provider != "" {
 		bucketNames, err, code = t._listBcks(query, config)
 		if err != nil {
-			t.invalmsghdlrstatusf(w, r, code, "failed to list buckets for %s, err: %v(%d)", query, err, code)
+			t.invalmsghdlrstatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
 			return
 		}
 	} else /* all providers */ {
@@ -1168,7 +1168,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 			query.Provider = provider
 			buckets, err, code = t._listBcks(query, config)
 			if err != nil {
-				glog.Errorf("failed to list buckets for %s, err: %v(%d)", query, err, code)
+				glog.Errorf("failed to list buckets for %q, err: %v (status: %d)", query, err, code)
 			} else {
 				bucketNames = append(bucketNames, buckets...)
 			}
