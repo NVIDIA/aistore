@@ -42,7 +42,7 @@ const (
 	dryRunExplanation = "No modifications on the cluster"
 )
 
-func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) {
+func getObject(c *cli.Context, bck cmn.Bck, object, outFile string, silent bool) (err error) {
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
 		return objectCheckExists(c, bck, object)
@@ -93,8 +93,9 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string) (err error) 
 		fmt.Fprintf(c.App.ErrWriter, "Read %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
 		return
 	}
-
-	fmt.Fprintf(c.App.ErrWriter, "%q has the size %s (%d B)\n", object, cmn.B2S(objLen, 2), objLen)
+	if !silent {
+		fmt.Fprintf(c.App.ErrWriter, "%q has the size %s (%d B)\n", object, cmn.B2S(objLen, 2), objLen)
+	}
 	return
 }
 

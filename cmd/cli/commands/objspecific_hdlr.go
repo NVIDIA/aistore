@@ -210,7 +210,7 @@ func getHandler(c *cli.Context) (err error) {
 	if objName == "" {
 		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 	}
-	return getObject(c, bck, objName, outFile)
+	return getObject(c, bck, objName, outFile, false /*silent*/)
 }
 
 func putHandler(c *cli.Context) (err error) {
@@ -318,5 +318,5 @@ func catHandler(c *cli.Context) (err error) {
 	if objName == "" {
 		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 	}
-	return getObject(c, bck, objName, fileStdIO)
+	return getObject(c, bck, objName, fileStdIO, true /*silent*/)
 }
