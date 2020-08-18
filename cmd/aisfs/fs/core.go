@@ -104,7 +104,6 @@ type (
 )
 
 func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Server, err error) {
-	cmn.Assert(cfg != nil)
 	// Init HTTP client.
 	httpClient := cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: cfg.TCPTimeout,

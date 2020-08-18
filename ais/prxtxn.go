@@ -581,8 +581,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnClientCtx {
 	var (
-		query = make(url.Values)
-		c     = &txnClientCtx{}
+		c = &txnClientCtx{}
 	)
 	c.uuid = cmn.GenUUID()
 	c.smap = p.owner.smap.get()
@@ -591,10 +590,10 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 	body := cmn.MustMarshal(c.msg)
 
 	c.path = cmn.URLPath(cmn.Version, cmn.Txn, bck.Name)
-	if bck != nil {
-		_ = cmn.AddBckToQuery(query, bck.Bck)
-	}
 	c.timeout = cmn.GCO.Get().Timeout.CplaneOperation
+
+	query := make(url.Values, 2)
+	query = cmn.AddBckToQuery(query, bck.Bck)
 	query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
 	c.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: body}

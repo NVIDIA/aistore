@@ -429,11 +429,7 @@ func TestOperationsWithRanges(t *testing.T) {
 
 				msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
 				bckList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
-				if err != nil {
-					t.Fatalf("Failed to list remaining objects, pref: %s, bck: %s, err: %v\n",
-						commonPrefix, bck.Bck, err)
-				}
-				tassert.Fatalf(t, bckList != nil, "bckList nil")
+				tassert.CheckFatal(t, err)
 
 				tutils.Logf("Cleaning up remaining objects...\n")
 				// channel per worker to pass the keyname

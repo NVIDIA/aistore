@@ -505,7 +505,6 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	ct *rebCT, sliceID int, cksum *cmn.CksumHash, target *cluster.Snode, rt *retransmitCT) error {
 	cmn.AssertMsg(ct.meta != nil, ct.ObjName)
 	cmn.AssertMsg(ct.ObjSize != 0, ct.ObjName)
-	cmn.Assert(rt != nil)
 	var (
 		newMeta = *ct.meta // copy of meta (flat struct of primitive types)
 		req     = pushReq{
