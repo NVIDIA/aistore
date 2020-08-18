@@ -8,12 +8,31 @@ import (
 	"flag"
 	"math/rand"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
+
+func parseEnvVars() {
+	var err error
+	pc := os.Getenv(cmn.EnvVars.NumProxy)
+	tc := os.Getenv(cmn.EnvVars.NumTarget)
+	if pc != "" || tc != "" {
+		numproxy, err = strconv.Atoi(pc)
+		if err != nil {
+			tutils.Logf("Error EnvVars: %s. err: %v", cmn.EnvVars.NumProxy, err)
+			os.Exit(1)
+		}
+		numtarget, err = strconv.Atoi(tc)
+		if err != nil {
+			tutils.Logf("Error EnvVars: %s. err: %v", cmn.EnvVars.NumTarget, err)
+			os.Exit(1)
+		}
+	}
+}
 
 func TestMain(m *testing.M) {
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
@@ -42,7 +61,19 @@ func TestMain(m *testing.M) {
 		clibucket = cmn.RandString(7)
 		tutils.Logf("Using BUCKET=%q\n", clibucket)
 	}
-
+	parseEnvVars()
+	var err error
+	tutils.Logln("Waiting for cluster readiness...")
+	var cntNodes = []int{}
+	if numtarget != 0 || numproxy != 0 {
+		cntNodes = []int{numproxy, numtarget}
+	}
+	_, err = tutils.WaitForPrimaryProxy(tutils.GetPrimaryURL(), "startup", -1, true, cntNodes...)
+	if err != nil {
+		tutils.Logf("Error waiting for cluster startup. err: %v", err)
+		os.Exit(1)
+	}
+	tutils.Logln("Cluster ready...")
 	rand.Seed(time.Now().UnixNano())
 	os.Exit(m.Run())
 }

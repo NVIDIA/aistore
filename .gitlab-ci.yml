@@ -24,7 +24,10 @@ before_script:
   - export PATH="$PATH:$GOPATH/bin"
   - apt-get update -yq
   - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools coreutils
-
+  - export NUM_TARGET=5
+  - export NUM_PROXY=5
+  - export FS_CNT=3
+  - export CLOUD=0
 stages:
   - build
   - test-short
@@ -71,7 +74,7 @@ test:short:
   script:
     - *aws_cli
     - make aisfs cli aisloader
-    - make deploy <<< $'5\n5\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\n0'
     - sleep 3
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
@@ -89,7 +92,7 @@ test:authn:
     AUTHN_SU_PASS: "admin"
   script:
     - make cli
-    - make deploy <<< $'5\n5\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - ais auth login $AUTHN_SU_NAME -p $AUTHN_SU_PASS
     - BUCKET="test" RE="TestAuth" make test-run
     - ais auth logout
@@ -107,7 +110,7 @@ test:https:
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - make aisfs cli
-    - make deploy <<< $'5\n5\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\n0'
     - sleep 3
     - ais attach remote alias=https://127.0.0.1:11080 # attach to remote cluster
@@ -125,7 +128,9 @@ test:cloud:
   variables:
     AWS_REGION: "us-west-2"
   script:
-    - make deploy <<< $'6\n5\n3\n1'
+    - export NUM_PROXY=6
+    - export CLOUD=1
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - BUCKET="ci-aistore" make test-long
 
 test:soak:
@@ -134,7 +139,7 @@ test:soak:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $'5\n5\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - FLAGS="--short --rec-cycles=1" make test-soak
 
 test:aisloader-long:
@@ -143,7 +148,7 @@ test:aisloader-long:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $'5\n5\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
 
@@ -177,12 +182,16 @@ test:aisloader-long:
     - kubectl version --client
     - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecylce of transformers is implemented.
     - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecylce of transformers is implemented.
+    - export NUM_TARGET=1
+    - export NUM_PROXY=1
+    - export CLOUD=0
+    - export FS_CNT=3
 
 
 test:kube:
   <<: *test_kube_def
   script:
-    - make deploy <<< $'1\n1\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - status=0
     - BUCKET="test" RE="TestKube" make test-run || status=$?
     - make kill
@@ -192,7 +201,7 @@ test:aisloader-short:
   <<: *test_kube_def
   script:
     - make aisloader
-    - make deploy <<< $'1\n1\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - sleep 10 # TODO: better alternative ? adding sleep for targets to join.
     - status=0
     - BUCKET="test" FLAGS="--duration=5s --tar2tf" make test-aisloader || status=$?

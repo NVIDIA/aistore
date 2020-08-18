@@ -76,12 +76,18 @@ var (
 
 		SkipVerifyCrt string
 		UseHTTPS      string
+		NumTarget     string
+		NumProxy      string
 	}{
 		Endpoint:      "AIS_ENDPOINT",
 		IsPrimary:     "AIS_IS_PRIMARY",
 		PrimaryID:     "AIS_PRIMARY_ID",
 		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
 		UseHTTPS:      "AIS_USE_HTTPS",
+
+		// Env variables used for tests or CI
+		NumTarget: "NUM_TARGET",
+		NumProxy:  "NUM_PROXY",
 	}
 )
 

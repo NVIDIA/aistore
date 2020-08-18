@@ -45,6 +45,8 @@ var (
 	numops                 int
 	numfiles               int
 	numworkers             int
+	numtarget              int
+	numproxy               int
 	match                  = ".*"
 	pagesize               uint
 	fnlen                  int

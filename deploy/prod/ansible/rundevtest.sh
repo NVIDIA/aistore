@@ -30,7 +30,8 @@ function deploy() {
   targets=$1
   proxies=$2
   { echo $targets; echo $proxies; echo $3; echo $4; } | MODE="debug" make deploy
-
+  export NUM_PROXY=$proxies
+  export NUM_TARGET=$targets
   post_deploy $((targets + proxies))
 }
 
