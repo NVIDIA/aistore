@@ -29,11 +29,11 @@ linters:
     - nolintlint
     - exportloopref
 
-    # TODO: Add when available (and working):
+    # TODO: Fix code to include these linters:
     # - gofumpt
-    # - goerr113
     #
     # Following linters produce false positives (enable only when needed):
+    # - goerr113
     # - gosec
     # - nestif
     # - scopelint
@@ -118,9 +118,6 @@ issues:
 
     - linters: staticcheck
       text: "SA5011:" # produces a lot of false-positives; hopefully in the future we could enable it!
-
-    - linters: staticcheck
-      text: "SA4006: this value of `aborted` is never used" # commonly used as `if aborted := x(); aborted {`
 
   # Set to 0 to disable limit
   max-same-issues: 0
