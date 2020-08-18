@@ -484,7 +484,7 @@ func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interf
 	return doDlDownloadRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Download),
-		Body:       cmn.MustMarshal(downloader.DlBody{Type: dlt, Data: cmn.MustMarshal(body)}),
+		Body:       cmn.MustMarshal(downloader.DlBody{Type: dlt, RawMessage: cmn.MustMarshal(body)}),
 	})
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -219,11 +220,13 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request, body []byte) (ok bool) {
 	dlb := downloader.DlBody{}
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 	payload := downloader.DlBase{}
-	err := jsoniter.Unmarshal(dlb.Data, &payload)
+	err := jsoniter.Unmarshal(dlb.RawMessage, &payload)
 	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 	bck := cluster.NewBckEmbed(payload.Bck)
@@ -241,13 +244,8 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 }
 
 func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {
-	resp := downloader.DlPostResp{
-		ID: id,
-	}
-
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
-	b := cmn.MustMarshal(resp)
-	if _, err := w.Write(b); err != nil {
-		glog.Errorf("Failed to write to http response: %v.", err)
-	}
+	b := cmn.MustMarshal(downloader.DlPostResp{ID: id})
+	_, err := w.Write(b)
+	debug.AssertNoErr(err)
 }

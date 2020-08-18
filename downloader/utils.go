@@ -85,7 +85,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 	switch dlb.Type {
 	case DlTypeCloud:
 		dp := &DlCloudBody{}
-		err := jsoniter.Unmarshal(dlb.Data, dp)
+		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +96,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 
 	case DlTypeMulti:
 		dp := &DlMultiBody{}
-		err := jsoniter.Unmarshal(dlb.Data, dp)
+		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +107,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 
 	case DlTypeRange:
 		dp := &DlRangeBody{}
-		err := jsoniter.Unmarshal(dlb.Data, dp)
+		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +118,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 
 	case DlTypeSingle:
 		dp := &DlSingleBody{}
-		err := jsoniter.Unmarshal(dlb.Data, dp)
+		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err
 		}

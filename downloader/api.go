@@ -14,24 +14,26 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	jsoniter "github.com/json-iterator/go"
 )
 
-// Generic Download request
-
-type DlBody struct {
-	Type DlType `json:"type"`
-	Data json.RawMessage
-}
-type DlType string
-
 const (
-	DlTypeSingle DlType = "dl-single"
-	DlTypeRange  DlType = "dl-range"
-	DlTypeMulti  DlType = "dl-multi"
-	DlTypeCloud  DlType = "dl-cloud"
+	DlTypeSingle DlType = "single"
+	DlTypeRange  DlType = "range"
+	DlTypeMulti  DlType = "multi"
+	DlTypeCloud  DlType = "cloud"
 )
 
 type (
+	DlType string
+
+	// NOTE: Changing this structure requires changes in `MarshalJSON` and `UnmarshalJSON` methods.
+	DlBody struct {
+		Type DlType `json:"type"`
+		json.RawMessage
+	}
+
 	// Download POST result returned to the user
 	DlPostResp struct {
 		ID string `json:"id"`
@@ -81,6 +83,24 @@ func (j *DlJobInfo) Aggregate(rhs *DlJobInfo) {
 			j.FinishedTime = rhs.FinishedTime
 		}
 	}
+}
+
+func (db DlBody) MarshalJSON() ([]byte, error) {
+	b, err := db.RawMessage.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	debug.Assert(b[0] == '{' && b[len(b)-1] == '}')
+	s := fmt.Sprintf(`{"type": "%s", %s}`, db.Type, string(b[1:len(b)-1]))
+	return []byte(s), nil
+}
+
+func (db *DlBody) UnmarshalJSON(b []byte) error {
+	db.Type = DlType(jsoniter.Get(b, "type").ToString())
+	if db.Type == "" {
+		return errors.New("'type' field is empty")
+	}
+	return db.RawMessage.UnmarshalJSON(b)
 }
 
 func (j DlJobInfo) JobFinished() bool {

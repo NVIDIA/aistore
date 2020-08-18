@@ -51,7 +51,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		dlBodyBase := downloader.DlBase{}
-		if err := jsoniter.Unmarshal(dlb.Data, &dlBodyBase); err != nil {
+		if err := jsoniter.Unmarshal(dlb.RawMessage, &dlBodyBase); err != nil {
 			return
 		}
 		bck := cluster.NewBckEmbed(dlBodyBase.Bck)
