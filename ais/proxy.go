@@ -6,7 +6,6 @@ package ais
 
 import (
 	"bytes"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -16,8 +15,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -26,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
@@ -33,7 +31,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -78,6 +75,8 @@ type (
 		queryBck *cluster.Bck
 		err      error
 		msg      *cmn.ActionMsg
+		// bck.IsHTTP()
+		origURLBck string
 	}
 )
 
@@ -349,7 +348,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /v1/objects/bucket-name/object-name
-func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	var (
 		started = time.Now()
 		query   = r.URL.Query()
@@ -366,6 +365,9 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if len(origURLBck) > 0 {
+			args.origURLBck = origURLBck[0]
+		}
 		if bck, err = args.try(); err != nil {
 			return
 		}
@@ -413,6 +415,10 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		if bck, err = args.try(); err != nil {
 			return
 		}
+	}
+	if bck.IsHTTP() {
+		p.invalmsghdlrf(w, r, "%q provider doesn't support %q", cmn.ProviderHTTP, r.Method)
+		return
 	}
 
 	var (
@@ -1375,7 +1381,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 }
 
 // HEAD /v1/objects/bucket-name/object-name
-func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	var (
 		started       = time.Now()
 		query         = r.URL.Query()
@@ -1393,6 +1399,9 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if len(origURLBck) > 0 {
+			args.origURLBck = origURLBck[0]
+		}
 		if bck, err = args.try(); err != nil {
 			return
 		}
@@ -2443,16 +2452,6 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	dsort.ProxySortHandler(w, r)
 }
 
-func url2BckObj(u *url.URL) (string, string) {
-	objName := filepath.Base(u.Path)
-	// compute bucket name in 4 steps, as follows:
-	b1 := filepath.Dir(u.Host + u.Path)
-	b2 := xxhash.ChecksumString64S(b1, cmn.MLCG32)
-	b3 := strconv.FormatUint(b2, 16)
-	bckName := base64.RawURLEncoding.EncodeToString([]byte(b3))
-	return bckName, objName
-}
-
 // http reverse-proxy handler, to handle unmodified requests
 // (not to confuse with p.rproxy)
 func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
@@ -2460,24 +2459,22 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
-
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
-		bckName, objName := url2BckObj(r.URL)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("[HTTP CLOUD] Bck: %s, Obj: %s", bckName, objName)
-		}
+		// bck.IsHTTP()
+		bckName, objName, origURLBck := cmn.URL2BckObj(r.URL)
 		q := r.URL.Query()
 		q.Set(cmn.URLParamOrigURL, r.URL.String())
 		q.Set(cmn.URLParamProvider, cmn.ProviderHTTP)
 		r.URL.Path = cmn.URLPath(cmn.Version, cmn.Objects, bckName, objName)
 		r.URL.RawQuery = q.Encode()
-		p.httpobjget(w, r)
+		if r.Method == http.MethodGet {
+			p.httpobjget(w, r, origURLBck)
+		} else {
+			p.httpobjhead(w, r, origURLBck)
+		}
 		return
 	}
-
-	glog.Warningf("%s request to %q passed to server as-is", r.Method, r.URL.String())
-	// Make it work as a transparent proxy for all other requests.
-	p.rproxy.cloud.ServeHTTP(w, r)
+	p.invalmsghdlrf(w, r, "%q provider doesn't support %q", cmn.ProviderHTTP, r.Method)
 }
 
 ///////////////////////////////////
@@ -3452,7 +3449,7 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 		return
 	}
 	//
-	// from this point on, its the primary - lookup via random target and more checks
+	// from this point on it's the primary - lookup via random target, perform more checks
 	//
 	if cloudProps, err = args.lookup(); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
@@ -3462,8 +3459,12 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 		}
 		return
 	}
-	if args.queryBck.Provider == cmn.ProviderAIS || args.queryBck.Provider == cmn.ProviderHTTP {
+	if args.queryBck.IsAIS() || args.queryBck.IsRemoteAIS() {
 		bck = args.queryBck
+	} else if args.queryBck.IsHTTP() {
+		bck = args.queryBck
+		debug.Assert(args.origURLBck != "")
+		cloudProps.Set(cmn.HeaderOrigURLBck, args.origURLBck)
 	} else {
 		cloudConf := cmn.GCO.Get().Cloud
 		bck = cluster.NewBck(args.queryBck.Name, cloudConf.Provider, cloudConf.Ns)
@@ -3492,8 +3493,10 @@ func (args *remBckAddArgs) lookup() (header http.Header, err error) {
 	}
 	q := cmn.AddBckToQuery(nil, args.queryBck.Bck)
 	if args.queryBck.IsHTTP() {
-		query := args.r.URL.Query()
-		q.Set(cmn.URLParamOrigURL, query.Get(cmn.URLParamOrigURL))
+		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)
+		cmn.Assert(args.origURLBck != "")
+		cmn.Assert(strings.Contains(origURL, args.origURLBck)) // TODO: remove debug
+		q.Set(cmn.URLParamOrigURL, origURL)
 	}
 	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
 	res := args.p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})

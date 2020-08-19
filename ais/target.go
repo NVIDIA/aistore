@@ -315,7 +315,7 @@ func (c *clouds) init(t *targetrunner) {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
 		}
 	}
-	c.http, _ = cloud.NewHTTP(t)
+	c.http, _ = cloud.NewHTTP(t, config)
 	if err := c.initExt(t); err != nil {
 		cmn.ExitLogf("%v", err)
 	}

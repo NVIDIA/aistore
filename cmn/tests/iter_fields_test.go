@@ -58,6 +58,8 @@ var _ = Describe("IterFields", func() {
 					"backend_bck.name":     "name",
 					"backend_bck.provider": cmn.ProviderGoogle,
 
+					"orig_url_bck": "",
+
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),
 					"mirror.util_thresh":  int64(0),

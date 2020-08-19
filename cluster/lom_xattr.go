@@ -75,7 +75,7 @@ const (
 	CRC32CObjMD  = cmn.ChecksumCRC32C
 	MD5ObjMD     = cmn.ChecksumMD5
 
-	OriginalURLObjMD = "orig_url"
+	OrigURLObjMD = "orig_url"
 )
 
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }

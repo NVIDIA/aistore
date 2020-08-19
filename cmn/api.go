@@ -213,6 +213,9 @@ type BucketProps struct {
 	// BackendBck if set it contains cloud bucket to which AIS bucket points to.
 	BackendBck Bck `json:"backend_bck,omitempty"`
 
+	// prior-to-hashing part of the original URL when bck.IsHTTP()
+	OrigURLBck string `json:"orig_url_bck"`
+
 	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning"`
 
@@ -395,6 +398,9 @@ func CloudBucketProps(header http.Header) (props *BucketProps) {
 
 	props.Provider = header.Get(HeaderCloudProvider)
 	Assert(IsValidProvider(props.Provider))
+
+	props.OrigURLBck = header.Get(HeaderOrigURLBck)
+
 	if verStr := header.Get(HeaderBucketVerEnabled); verStr != "" {
 		versioning, err := ParseBool(verStr)
 		AssertNoErr(err)

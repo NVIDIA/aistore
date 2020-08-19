@@ -175,7 +175,7 @@ func (b *Bck) CloudBck() cmn.Bck {
 	if b.Provider == cmn.ProviderAIS && b.HasBackendBck() {
 		return b.Props.BackendBck
 	}
-	cmn.Assert(b.Bck.IsCloud() || b.Bck.IsHTTP())
+	cmn.Assert(b.Bck.IsCloud() || b.IsHTTP())
 	return b.Bck
 }
 
@@ -193,9 +193,12 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 		b.Provider = cloudConf.Provider
 		b.Ns = cloudConf.Ns // TODO -- FIXME: remove
 		bmd.initBckCloudProvider(b)
-	} else if b.Bck.IsHTTP() {
+	} else if b.IsHTTP() {
 		debug.Assert(b.Ns == cmn.NsGlobal)
-		bmd.initBckCloudProvider(b)
+		if present := bmd.initBckCloudProvider(b); present && debug.Enabled {
+			bckName := cmn.OrigURLBck2Name(b.Props.OrigURLBck)
+			debug.AssertMsg(b.Name == bckName, b.Name+" != "+bckName+", "+b.Props.OrigURLBck)
+		}
 	} else {
 		b.Props, _ = bmd.Get(b)
 	}

@@ -209,23 +209,24 @@ func (m *BMD) initBckAnyProvider(bck *Bck) {
 	}
 }
 
-func (m *BMD) initBckCloudProvider(bck *Bck) bool {
+func (m *BMD) initBckCloudProvider(bck *Bck) (present bool) {
 	for provider, namespaces := range m.Providers {
 		for nsUname, buckets := range namespaces {
 			var (
+				p  *cmn.BucketProps
 				ns = cmn.ParseNsUname(nsUname)
 				b  = cmn.Bck{Provider: provider, Ns: ns}
 			)
-			if b.IsAIS() {
+			if b.IsAIS() { // looking for Cloud bucket
 				continue
 			}
-			if p, present := buckets[bck.Name]; present {
+			if p, present = buckets[bck.Name]; present {
 				bck.Provider = provider
 				bck.Ns = ns
 				bck.Props = p
-				return true
+				return
 			}
 		}
 	}
-	return false
+	return
 }

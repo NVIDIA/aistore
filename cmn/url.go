@@ -5,12 +5,16 @@
 package cmn
 
 import (
+	"encoding/base64"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -73,4 +77,18 @@ func JoinPath(urlBase, path string) string {
 		url += "/"
 	}
 	return url + path
+}
+
+func URL2BckObj(u *url.URL) (bckName, objName, origURLBck string) {
+	objName = filepath.Base(u.Path)
+	// compute bucket name in steps:
+	origURLBck = filepath.Dir(u.Host + u.Path)
+	bckName = OrigURLBck2Name(origURLBck)
+	return
+}
+func OrigURLBck2Name(origURLBck string) (bckName string) {
+	b2 := xxhash.ChecksumString64S(origURLBck, MLCG32)
+	b3 := strconv.FormatUint(b2, 16)
+	bckName = base64.RawURLEncoding.EncodeToString([]byte(b3))
+	return
 }
