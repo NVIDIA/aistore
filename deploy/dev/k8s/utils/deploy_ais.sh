@@ -34,7 +34,7 @@ HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"
 
 export AIS_PRIMARY_URL=$HOST_URL
 export IPV4LIST="$(minikube ip)"
-export AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER}
+export AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}
 export TARGET_CNT=${TARGET_CNT}
 
 # Deploying kubernetes cluster

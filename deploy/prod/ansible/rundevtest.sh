@@ -29,7 +29,7 @@ function deploy() {
 
   targets=$1
   proxies=$2
-  { echo $targets; echo $proxies; echo $3; echo $4; } | MODE="debug" make deploy
+  { echo $targets; echo $proxies; echo $3; echo $4; echo $5; echo $6; } | MODE="debug" make deploy
   export NUM_PROXY=$proxies
   export NUM_TARGET=$targets
   post_deploy $((targets + proxies))
@@ -65,7 +65,7 @@ export K8S_HOST_NAME="minikube"
 # We use this because minikube is a 1-node kubernetes cluster
 # and with pod anti-affinities (for enabling single transformer per target at a time) it would
 # cause failures with pods getting stuck in `Pending` state.
-deploy 1 1 3 0
+deploy 1 1 3 n n n
 RE="TestKube" make test-run
 exit_code=$?
 result=$((result + exit_code))
@@ -77,7 +77,7 @@ pushd deploy/dev/k8s
 popd
 
 # Running long tests
-deploy 6 6 4 1
+deploy 6 6 4 y n n
 make test-long && make test-aisloader
 exit_code=$?
 result=$((result + exit_code))

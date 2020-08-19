@@ -57,7 +57,7 @@ save_env() {
     echo "" > ${TMP_ENV}
     echo "QUICK=${QUICK}" >> ${TMP_ENV}
     echo "TARGET_CNT=${TARGET_CNT:-1000}" >> ${TMP_ENV}
-    echo "AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER-}" >> ${TMP_ENV}
+    echo "AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS-}" >> ${TMP_ENV}
     echo "TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT}" >> ${TMP_ENV}
     echo "AIS_FS_PATHS=${AIS_FS_PATHS}" >> ${TMP_ENV}
 
@@ -315,7 +315,7 @@ if [ $CLOUD -eq 1 ]; then
         echo -a is a required parameter. Provide the path for aws.env file
         usage
     fi
-    AIS_CLD_PROVIDER="aws"
+    AIS_CLD_PROVIDERS="aws"
     # to get proper tilde expansion
     AWS_ENV="${AWS_ENV/#\~/$HOME}"
     temp_file="${AWS_ENV}/credentials"
@@ -344,13 +344,13 @@ if [ $CLOUD -eq 1 ]; then
     sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
     sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
 elif [ $CLOUD -eq 2 ]; then
-    AIS_CLD_PROVIDER="gcp"
+    AIS_CLD_PROVIDERS="gcp"
     touch $LOCAL_AWS
 elif [ $CLOUD -eq 3 ]; then
-    AIS_CLD_PROVIDER="azure"
+    AIS_CLD_PROVIDERS="azure"
     touch $LOCAL_AWS
 else
-    AIS_CLD_PROVIDER=""
+    AIS_CLD_PROVIDERS=""
     touch $LOCAL_AWS
 fi
 

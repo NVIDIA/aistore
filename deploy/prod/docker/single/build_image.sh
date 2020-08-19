@@ -16,7 +16,7 @@ cp ${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh aisnode_config.sh
 # https://blog.codeship.com/building-minimal-docker-containers-for-go-applications
 for provider in "" "aws" "gcp" "azure"; do
   env \
-    AIS_CLD_PROVIDER=${provider} \
+    AIS_CLD_PROVIDERS=${provider} \
     GOOS="linux" GOARCH="amd64" CGO_ENABLED=0 BUILD_FLAGS="-a -installsuffix cgo" \
     make -C ${AISTORE_PATH} node
 

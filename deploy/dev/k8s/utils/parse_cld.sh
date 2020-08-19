@@ -1,15 +1,11 @@
 
 export LOCAL_AWS="/tmp/aws.env"
 touch $LOCAL_AWS
-export AIS_CLD_PROVIDER="" # See deploy.sh for more informations about empty AIS_CLD_PROVIDER
-echo "Select:"
-echo " 0: No 3rd party Cloud"
-echo " 1: Amazon S3"
-echo " 2: Google Cloud Storage"
-echo " 3: Azure Cloud"
-read cldprovider
-if [ $cldprovider -eq 1 ]; then
-    export AIS_CLD_PROVIDER="aws"
+export AIS_CLD_PROVIDERS="" # See deploy.sh for more informations about empty AIS_CLD_PROVIDERS
+source ../utils.sh
+parse_cld_providers
+
+if [ $AIS_CLD_PROVIDERS=="*aws*" ]; then
 
     echo "Enter the location of your AWS configuration and credentials files:"
     echo "Note: No input will result in using the default AWS dir (~/.aws/)"
@@ -45,13 +41,6 @@ if [ $cldprovider -eq 1 ]; then
     sed -i 's/aws_access_key_id/AWS_ACCESS_KEY_ID/g' ${LOCAL_AWS}
     sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
     sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
-
-elif [[ $cldprovider -eq 2 ]]; then
-  export AIS_CLD_PROVIDER="gcp"
-elif [[ $cldprovider -eq 3 ]]; then
-  export AIS_CLD_PROVIDER="azure"
-else
-  export AIS_CLD_PROVIDER=""
 fi
 
 # TODO: The following should happen only for AWS. This is because

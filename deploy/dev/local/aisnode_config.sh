@@ -1,9 +1,9 @@
 cat > $AIS_CONF_FILE <<EOL
 {
 	"confdir": "${AIS_CONF_DIR}",
-	"cloud": {
-		"${AIS_CLD_PROVIDER}": {}
-	},
+  "cloud": {
+    $(for i in ${AIS_CLD_PROVIDERS};do echo -n "\"${i}\":{}", ;done | sed 's/,$//')
+  },
 	"mirror": {
 		"copies":       2,
 		"burst_buffer": 512,

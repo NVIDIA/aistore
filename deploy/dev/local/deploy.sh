@@ -13,31 +13,8 @@
 # releasing memory to the system.
 export GODEBUG=madvdontneed=1
 
-printError() {
-  echo "Error: $1."
-  exit 1
-}
-
-is_number() {
-  if ! [[ "$1" =~ ^[0-9]+$ ]] ; then
-    printError "'$1' is not a number"
-  fi
-}
-
-isCommandAvailable() {
-  if [[ -z $(command -v "$1") ]]; then
-    printError "command '$1' not available"
-  fi
-}
-
-runCmd() {
-  set -x
-  $@ &
-  { set +x; } 2>/dev/null
-}
-
 AISTORE_DIR=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
-
+source $AISTORE_DIR/deploy/dev/utils.sh
 AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
 CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
@@ -73,31 +50,31 @@ AIS_CONF_DIR="$HOME/.ais$NEXT_TIER"
 TEST_FSPATH_COUNT=1
 
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
-  printError "TCP port $PORT is not open (check if AIStore is already running)"
+  print_error "TCP port $PORT is not open (check if AIStore is already running)"
 fi
 TMPF=$(mktemp /tmp/ais$NEXT_TIER.XXXXXXXXX)
 touch $TMPF;
 OS=$(uname -s)
 case $OS in
   Linux) # Linux
-    isCommandAvailable "iostat" "-V"
-    isCommandAvailable "lsblk" "--version"
-    isCommandAvailable "df" "--version"
+    is_command_available "iostat" "-V"
+    is_command_available "lsblk" "--version"
+    is_command_available "df" "--version"
     setfattr -n user.comment -v comment $TMPF
     ;;
   Darwin) # macOS
-    isCommandAvailable "df" "--version"
+    is_command_available "df" "--version"
     xattr -w user.comment comment $TMPF
     echo "WARNING: Darwin architecture is not yet fully supported. You may stumble upon bugs and issues when testing on Mac."
     ;;
   *)
     rm $TMPF 2>/dev/null
-    printError "'${OS}' is not supported"
+    print_error "'${OS}' is not supported"
     ;;
 esac
 if [ $? -ne 0 ]; then
   rm $TMPF 2>/dev/null
-  printError "bad kernel configuration: extended attributes are not enabled"
+  print_error "bad kernel configuration: extended attributes are not enabled"
 fi
 rm $TMPF 2>/dev/null
 
@@ -111,7 +88,7 @@ echo "Enter number of proxies (gateways):"
 read -r PROXY_CNT
 is_number ${PROXY_CNT}
 if  [[ ${PROXY_CNT} -lt 1 ]] ; then
-  printError "${PROXY_CNT} must be at least 1"
+  print_error "${PROXY_CNT} must be at least 1"
 fi
 if [[ ${PROXY_CNT} -gt 1 ]] ; then
   AIS_DISCOVERY_PORT=$((PORT + 1))
@@ -129,32 +106,14 @@ read test_fspath_cnt
 is_number ${test_fspath_cnt}
 TEST_FSPATH_COUNT=${test_fspath_cnt}
 
-# If not specified, AIS_CLD_PROVIDER will remain empty (or `0`) and
+# If not specified, AIS_CLD_PROVIDERS will remain empty (or `0`) and
 # aisnode build will include neither AWS ("aws") nor GCP ("gcp").
 
-AIS_CLD_PROVIDER=""
-echo "Select:"
-echo " 0: No 3rd party Cloud"
-echo " 1: Amazon S3"
-echo " 2: Google Cloud Storage"
-echo " 3: Azure Cloud"
-read -r cld_provider
-is_number ${cld_provider}
 
-if [[ ${cld_provider} -eq 0 ]]; then
-  AIS_CLD_PROVIDER=""
-elif [[ ${cld_provider} -eq 1 ]]; then
-  AIS_CLD_PROVIDER="aws"
-elif [[ ${cld_provider} -eq 2 ]]; then
-  AIS_CLD_PROVIDER="gcp"
-elif [[ ${cld_provider} -eq 3 ]]; then
-  AIS_CLD_PROVIDER="azure"
-else
-  printError "${cld_provider} is not a valid entry - expecting 0, 1, 2, or 3"
-fi
+parse_cld_providers
 
-if ! AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER} make --no-print-directory -C ${AISTORE_DIR} node; then
-  printError "failed to compile 'aisnode' binary"
+if ! AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}  make --no-print-directory -C ${AISTORE_DIR} node; then
+  print_error "failed to compile 'aisnode' binary"
 fi
 
 mkdir -p $AIS_CONF_DIR
@@ -192,15 +151,15 @@ for (( c=START; c<=END; c++ )); do
 
   if [[ $c -eq 0 ]]; then
     export AIS_IS_PRIMARY="true"
-    runCmd "${CMD} ${PROXY_PARAM}"
+    run_cmd "${CMD} ${PROXY_PARAM}"
     unset AIS_IS_PRIMARY
 
     # Wait for the proxy to start up
     sleep 2
   elif [[ $c -lt ${PROXY_CNT} ]]; then
-    runCmd "${CMD} ${PROXY_PARAM}"
+    run_cmd "${CMD} ${PROXY_PARAM}"
   else
-    runCmd "${CMD} ${TARGET_PARAM}"
+    run_cmd "${CMD} ${TARGET_PARAM}"
   fi
 done
 
@@ -213,9 +172,9 @@ if [[ $AUTH_ENABLED == "true" ]]; then
   source "${AISTORE_DIR}/deploy/dev/local/authn_config.sh"
 
   if ! make --no-print-directory -C ${AISTORE_DIR} authn; then
-    printError "failed to compile 'authn' binary"
+    print_error "failed to compile 'authn' binary"
   fi
-  runCmd "${GOPATH}/bin/authn -config=${AUTHN_CONF_FILE}"
+  run_cmd "${GOPATH}/bin/authn -config=${AUTHN_CONF_FILE}"
 fi
 
 sleep 0.1

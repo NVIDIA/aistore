@@ -27,7 +27,6 @@ before_script:
   - export NUM_TARGET=5
   - export NUM_PROXY=5
   - export FS_CNT=3
-  - export CLOUD=0
 stages:
   - build
   - test-short
@@ -49,11 +48,8 @@ build:linux:
   stage: build
   <<: *default_only_def
   script:
-    - AIS_CLD_PROVIDER="ais" make node
-    - AIS_CLD_PROVIDER="aws" make node
-    - AIS_CLD_PROVIDER="gcp" make node
-    - AIS_CLD_PROVIDER="azure" make node
-    - AIS_CLD_PROVIDER="" MODE="" make node # build one node without debug assert (to see if it compiles)
+    - AIS_CLD_PROVIDERS="ais aws gcp azure" make node
+    - AIS_CLD_PROVIDERS="" MODE="" make node # build one node without debug assert (to see if it compiles)
     - make authn
     - make aisfs
     - make cli
@@ -74,8 +70,8 @@ test:short:
   script:
     - *aws_cli
     - make aisfs cli aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
-    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\n'
     - sleep 3
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="test" make test-short
@@ -92,7 +88,7 @@ test:authn:
     AUTHN_SU_PASS: "admin"
   script:
     - make cli
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
     - ais auth login $AUTHN_SU_NAME -p $AUTHN_SU_PASS
     - BUCKET="test" RE="TestAuth" make test-run
     - ais auth logout
@@ -110,8 +106,8 @@ test:https:
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - make aisfs cli
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
-    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\n0'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\n'
     - sleep 3
     - ais attach remote alias=https://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="test" make test-short
@@ -120,7 +116,7 @@ test:long:
   <<: *test_long_def
   script:
     - *aws_cli
-    - make deploy <<< $'6\n5\n3\n0'
+    - make deploy <<< $'6\n5\n3\nn\nn\nn\n'
     - BUCKET="test" make test-long
 
 test:cloud:
@@ -129,8 +125,7 @@ test:cloud:
     AWS_REGION: "us-east-2"
   script:
     - export NUM_PROXY=6
-    - export CLOUD=1
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo n; echo n; })
     - BUCKET="aws://ais-ci" make test-long
 
 test:soak:
@@ -139,7 +134,7 @@ test:soak:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
     - FLAGS="--short --rec-cycles=1" make test-soak
 
 test:aisloader-long:
@@ -148,7 +143,7 @@ test:aisloader-long:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
 
@@ -181,7 +176,6 @@ test:aisloader-long:
     - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecylce of transformers is implemented.
     - export NUM_TARGET=1
     - export NUM_PROXY=1
-    - export CLOUD=0
     - export FS_CNT=3
 
 
@@ -190,7 +184,7 @@ test:kube-short:
   only:
     - merge_requests
   script:
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y;echo y;echo y;  })
     - status=0
     - BUCKET="test" RE="TestKubeTransformer/tar2tf-filters" make test-run || status=$?
     - make kill
@@ -203,7 +197,7 @@ test:kube:
     - if: '$CI_PIPELINE_SOURCE == "schedules"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
     - status=0
     - BUCKET="test" RE="TestKube" make test-run || status=$?
     - make kill
@@ -216,7 +210,7 @@ test:aisloader-short:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
     - sleep 10 # TODO: better alternative ? adding sleep for targets to join.
     - status=0
     - BUCKET="test" FLAGS="--duration=5s --tar2tf" make test-aisloader || status=$?
