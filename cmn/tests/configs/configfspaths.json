@@ -107,8 +107,6 @@
       "port_intra_data":    "10080"
     },
     "http": {
-      "rproxy":		"",
-      "rproxy_cache":		true,
       "server_crt":	"server.crt",
       "server_key":		"server.key",
       "use_https":		false

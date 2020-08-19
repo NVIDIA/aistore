@@ -1785,10 +1785,6 @@ components:
               properties:
                 use_https:
                   type: boolean
-                rproxy:
-                  type: string
-                rproxy_cache:
-                  type: boolean
                 server_crt:
                   type: string
                 server_key:
