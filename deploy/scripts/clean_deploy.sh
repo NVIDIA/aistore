@@ -2,23 +2,27 @@
 
 set -e
 
-CLOUD=0 # By default use no cloud
-TARGETS=5
-AIS_DIR="$GOPATH/src/github.com/NVIDIA/aistore"
-NEXT_TIER=""
+root_dir="$GOPATH/src/github.com/NVIDIA/aistore"
+
+# Default values
+cloud=0 # no cloud by default
+targets=5
+proxies=5
+next_tier=""
 
 export MODE="debug" # By default start in debug mode
 export AIS_NODE_FLAGS="-skip_startup"
 
 while (( "$#" )); do
   case "${1}" in
-    --cloud) CLOUD=$2; shift; shift;;
-    --dir) AIS_DIR=$2; shift; shift;;
+    --cloud) cloud=$2; shift; shift;;
+    --dir) root_dir=$2; shift; shift;;
     --debug) export AIS_DEBUG=$2; shift; shift;;
-    --tier) NEXT_TIER="true"; shift;;
-    --ntargets) TARGETS=$2; shift; shift;;
+    --tier) next_tier="true"; shift;;
+    --ntargets) targets=$2; shift; shift;;
+    --nproxies) proxies=$2; shift; shift;;
     --https)
-      export USE_HTTPS="true"
+      use_https="true"
       export AIS_SKIP_VERIFY_CRT="true"
       export AIS_HTTPS_CERT="$HOME/localhost.crt"
       export AIS_HTTPS_KEY="$HOME/localhost.key"
@@ -28,19 +32,19 @@ while (( "$#" )); do
   esac
 done
 
-pushd $AIS_DIR
+pushd ${root_dir}
 
 make kill
 make clean
 
-echo -e "${TARGETS}\n5\n5\n${CLOUD}" | make deploy
+echo -e "${targets}\n${proxies}\n5\n${cloud}" | make deploy
 
 make aisfs && make cli
 
-if [[ -n $NEXT_TIER ]]; then
+if [[ -n ${next_tier} ]]; then
   DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\n0'
   sleep 4
-  if [[ -z $USE_HTTPS ]]; then
+  if [[ -z ${use_https} ]]; then
     ais attach remote alias=http://127.0.0.1:11080
   else
     ais attach remote alias=https://127.0.0.1:11080
