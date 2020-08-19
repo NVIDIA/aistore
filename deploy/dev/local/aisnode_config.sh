@@ -111,9 +111,7 @@ cat > $AIS_CONF_FILE <<EOL
 			"write_buffer_size": ${HTTP_WRITE_BUFFER_SIZE:-0},
 			"read_buffer_size":  ${HTTP_READ_BUFFER_SIZE:-0},
 			"chunked_transfer":  ${CHUNKED_TRANSFER:-true},
-			"skip_verify":       ${AIS_SKIP_VERIFY_CRT:-false},
-			"rproxy":            "",
-			"rproxy_cache":      true
+			"skip_verify":       ${AIS_SKIP_VERIFY_CRT:-false}
 		}
 	},
 	"fshc": {

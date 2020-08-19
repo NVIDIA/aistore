@@ -72,8 +72,9 @@ type (
 		refCount    uint32
 	}
 	clouds struct {
-		ais *cloud.AisCloudProvider
-		ext cluster.CloudProvider
+		ais  *cloud.AisCloudProvider
+		http cluster.CloudProvider
+		ext  cluster.CloudProvider
 	}
 	// main
 	targetrunner struct {
@@ -314,6 +315,7 @@ func (c *clouds) init(t *targetrunner) {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
 		}
 	}
+	c.http, _ = cloud.NewHTTP(t)
 	if err := c.initExt(t); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
@@ -613,6 +615,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	if cmn.IsETLRequest(query) {
 		t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, objName)
 		return
@@ -626,6 +629,10 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: 0},
 		isGFN:   isGFNRequest,
 		chunked: config.Net.HTTP.Chunked,
+	}
+	if bck.IsHTTP() {
+		originalURL := query.Get(cmn.URLParamOrigURL)
+		goi.ctx = context.WithValue(goi.ctx, cmn.CtxOriginalURL, originalURL)
 	}
 	if err, errCode := goi.getObject(); err != nil {
 		if cmn.IsErrConnectionReset(err) {
@@ -821,7 +828,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 				http.StatusNotFound,
 			)
 		} else {
-			t.invalmsghdlrstatusf(w, r, errCode, "error deleting %s: %v", lom, err)
+			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 		return
 	}
@@ -954,6 +961,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketProps cmn.SimpleKVs
 		code        int
 		inBMD       = true
+		ctx         = context.Background()
 		hdr         = w.Header()
 		query       = r.URL.Query()
 	)
@@ -982,8 +990,12 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		t.bucketPropsToHdr(bck, hdr)
 		return
 	}
+	if bck.IsHTTP() {
+		originalURL := query.Get(cmn.URLParamOrigURL)
+		ctx = context.WithValue(ctx, cmn.CtxOriginalURL, originalURL)
+	}
 	// + cloud
-	bucketProps, err, code = t.Cloud(bck).HeadBucket(context.Background(), bck)
+	bucketProps, err, code = t.Cloud(bck).HeadBucket(ctx, bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
@@ -998,6 +1010,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketProps = make(cmn.SimpleKVs)
 		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, bck, err, code)
 		bucketProps[cmn.HeaderCloudProvider] = bck.Provider
+		// TODO: what about `HTTP` cloud?
 		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
 		bucketProps[cmn.HeaderRemoteAisOffline] = strconv.FormatBool(bck.IsRemoteAIS())
 	}
@@ -1337,7 +1350,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 		}
 	}
 	if cloudErr != nil {
-		return fmt.Errorf("failed to delete from cloud: %w", cloudErr), cloudErrCode
+		return cloudErr, cloudErrCode
 	}
 	return errRet, 0
 }

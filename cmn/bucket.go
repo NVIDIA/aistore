@@ -18,7 +18,8 @@ const (
 	ProviderGoogle = "gcp"
 	ProviderAIS    = "ais"
 	ProviderAzure  = "azure"
-	allProviders   = "aws, gcp, ais, azure"
+	ProviderHTTP   = "http"
+	allProviders   = "aws, gcp, ais, azure, http"
 
 	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
@@ -72,6 +73,7 @@ var (
 		ProviderGoogle: {},
 		ProviderAmazon: {},
 		ProviderAzure:  {},
+		ProviderHTTP:   {},
 	}
 )
 
@@ -203,9 +205,10 @@ func (n Ns) IsRemote() bool    { return n.UUID != "" }
 
 func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() } // is local AIS cluster
 func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }  // is remote AIS cluster
-func (b Bck) IsRemote() bool    { return b.IsCloud() || b.IsRemoteAIS() }                // is remote
+func (b Bck) IsRemote() bool    { return b.IsCloud() || b.IsRemoteAIS() || b.IsHTTP() }  // is remote
+func (b Bck) IsHTTP() bool      { return b.Provider == ProviderHTTP }                    // is HTTP
 func (b Bck) IsCloud(anyCloud ...string) bool { // is 3rd party Cloud
-	if b.Provider == ProviderAIS {
+	if b.Provider == ProviderAIS || b.Provider == ProviderHTTP {
 		return false
 	}
 	if IsValidProvider(b.Provider) {

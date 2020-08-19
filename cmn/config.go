@@ -21,9 +21,6 @@ import (
 )
 
 const (
-	RevProxyCloud  = "cloud"
-	RevProxyTarget = "target"
-
 	KeepaliveHeartbeatType = "heartbeat"
 	KeepaliveAverageType   = "average"
 )
@@ -501,12 +498,10 @@ type HTTPConf struct {
 	Proto           string `json:"-"`                 // http or https (set depending on `UseHTTPS`)
 	Certificate     string `json:"server_crt"`        // HTTPS: openssl certificate
 	Key             string `json:"server_key"`        // HTTPS: openssl key
-	RevProxy        string `json:"rproxy"`            // RevProxy* enum
 	WriteBufferSize int    `json:"write_buffer_size"` // http.Transport.WriteBufferSize; if zero, a default (currently 4KB) is used
 	ReadBufferSize  int    `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; if zero, a default (currently 4KB) is used
 	UseHTTPS        bool   `json:"use_https"`         // use HTTPS instead of HTTP
 	SkipVerify      bool   `json:"skip_verify"`       // skip certificate verification for HTTPS (e.g, used with self-signed certificates)
-	RevProxyCache   bool   `json:"rproxy_cache"`      // RevProxy caches or work as transparent proxy
 	Chunked         bool   `json:"chunked_transfer"`  // https://tools.ietf.org/html/rfc7230#page-36
 }
 
@@ -956,12 +951,6 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 		} else {
 			glog.Warningf("intra-cluster control (%s) and data (%s) IPv4 lists overlap: %s",
 				c.IPv4IntraControl, c.IPv4IntraData, addr)
-		}
-	}
-	if c.HTTP.RevProxy != "" {
-		if c.HTTP.RevProxy != RevProxyCloud && c.HTTP.RevProxy != RevProxyTarget {
-			return fmt.Errorf("invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
-				c.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
 		}
 	}
 	if !c.HTTP.Chunked {

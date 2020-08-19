@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -174,7 +175,7 @@ func (b *Bck) CloudBck() cmn.Bck {
 	if b.Provider == cmn.ProviderAIS && b.HasBackendBck() {
 		return b.Props.BackendBck
 	}
-	cmn.Assert(b.Bck.IsCloud())
+	cmn.Assert(b.Bck.IsCloud() || b.Bck.IsHTTP())
 	return b.Bck
 }
 
@@ -191,6 +192,9 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 		cloudConf := cmn.GCO.Get().Cloud
 		b.Provider = cloudConf.Provider
 		b.Ns = cloudConf.Ns // TODO -- FIXME: remove
+		bmd.initBckCloudProvider(b)
+	} else if b.Bck.IsHTTP() {
+		debug.Assert(b.Ns == cmn.NsGlobal)
 		bmd.initBckCloudProvider(b)
 	} else {
 		b.Props, _ = bmd.Get(b)

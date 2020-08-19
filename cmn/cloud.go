@@ -31,6 +31,7 @@ var (
 		Google cloudFuncs
 		Amazon cloudFuncs
 		Azure  cloudFuncs
+		HTTP   cloudFuncs
 	}{
 		Google: cloudFuncs{
 			EncodeVersion: func(v interface{}) (string, bool) {
@@ -114,6 +115,19 @@ var (
 					return hex.EncodeToString(decoded), true
 				case []byte:
 					return hex.EncodeToString(x), true
+				default:
+					panic(v)
+				}
+			},
+		},
+		HTTP: cloudFuncs{
+			EncodeVersion: func(v interface{}) (string, bool) {
+				switch x := v.(type) {
+				case string:
+					// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+					x = strings.TrimPrefix(x, "W/")
+					x = strings.Trim(x, "\"")
+					return x, x != ""
 				default:
 					panic(v)
 				}

@@ -45,6 +45,7 @@ const (
 	HeaderContentLength         = "Content-Length"
 	HeaderAccept                = "Accept"
 	HeaderLocation              = "Location"
+	HeaderETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
 )
 
 // Ref: https://www.iana.org/assignments/media-types/media-types.xhtml

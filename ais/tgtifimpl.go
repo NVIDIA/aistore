@@ -42,6 +42,9 @@ func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 	if bck.Bck.IsRemoteAIS() {
 		return t.cloud.ais
 	}
+	if bck.Bck.IsHTTP() {
+		return t.cloud.http
+	}
 	if bck.Props != nil {
 		if t.cloud.ext.Provider() == bck.CloudBck().Provider {
 			return t.cloud.ext
@@ -159,7 +162,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 	)
 	if err, errCode = t.Cloud(lom.Bck()).GetObj(ctx, workFQN, lom); err != nil {
 		lom.Unlock(true)
-		err = fmt.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
+		glog.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return
 	}
 	defer func() {

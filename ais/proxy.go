@@ -6,9 +6,9 @@ package ais
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -16,6 +16,8 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -31,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -80,14 +83,12 @@ type (
 
 func (rp *reverseProxy) init() {
 	cfg := cmn.GCO.Get()
-	if cfg.Net.HTTP.RevProxy == cmn.RevProxyCloud {
-		rp.cloud = &httputil.ReverseProxy{
-			Director: func(r *http.Request) {},
-			Transport: cmn.NewTransport(cmn.TransportArgs{
-				UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
-				SkipVerify: cfg.Net.HTTP.SkipVerify,
-			}),
-		}
+	rp.cloud = &httputil.ReverseProxy{
+		Director: func(r *http.Request) {},
+		Transport: cmn.NewTransport(cmn.TransportArgs{
+			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
+			SkipVerify: cfg.Net.HTTP.SkipVerify,
+		}),
 	}
 }
 
@@ -149,19 +150,7 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Notifs, h: p.notifs.handler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
-	}
-
-	// Public network
-	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
-		networkHandlers = append(networkHandlers, networkHandler{
-			r: "/", h: p.reverseProxyHandler,
-			net: []string{cmn.NetworkPublic},
-		})
-	} else {
-		networkHandlers = append(networkHandlers, networkHandler{
-			r: "/", h: p.invalidHandler,
-			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData},
-		})
+		{r: "/", h: p.httpCloudHandler, net: []string{cmn.NetworkPublic}},
 	}
 
 	p.registerNetworkHandlers(networkHandlers)
@@ -173,20 +162,9 @@ func (p *proxyrunner) Run() error {
 	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
 		glog.Infof("%s: [intra data net] listening on: %s", p.si, p.si.IntraDataNet.DirectURL)
 	}
-	if config.Net.HTTP.RevProxy != "" {
-		glog.Warningf("Warning: serving GET /object as a reverse-proxy (%q)", config.Net.HTTP.RevProxy)
-	}
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, nil, p.statsT)
 	return p.httprunner.run()
-}
-
-func (p *proxyrunner) invalidHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStarted() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	} else {
-		cmn.InvalidHandler(w, r)
-	}
 }
 
 // enable handlers that must be accessible only upon cluster-startup-done
@@ -370,55 +348,6 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Used for redirecting ReverseProxy GCP/AWS GET request to target
-func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
-	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
-	if err != nil {
-		return
-	}
-	bucket, objName := apiItems[0], apiItems[1]
-	bck, err := newBckFromQuery(bucket, r.URL.Query())
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
-		if _, err = args.try(); err != nil {
-			return
-		}
-	}
-	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
-	pReq, err := http.NewRequest(r.Method, redirectURL, r.Body)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	for header, values := range r.Header {
-		for _, value := range values {
-			pReq.Header.Add(header, value)
-		}
-	}
-	pRes, err := p.httpclient.Do(pReq)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if pRes.StatusCode >= http.StatusBadRequest {
-		p.invalmsghdlr(w, r, "Failed to read object", pRes.StatusCode)
-		return
-	}
-	io.Copy(w, pRes.Body)
-	pRes.Body.Close()
-}
-
 // GET /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -455,21 +384,11 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	config := cmn.GCO.Get()
-	if config.Net.HTTP.RevProxy == cmn.RevProxyTarget {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bucket, objName, si)
-		}
-		p.reverseNodeRequest(w, r, si)
-		delta := time.Since(started)
-		p.statsT.Add(stats.GetLatency, int64(delta))
-	} else {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
-		}
-		redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
-		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
 	}
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
+	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 	p.statsT.Add(stats.GetCount, 1)
 }
 
@@ -1163,6 +1082,10 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 	// If props were not explicitly specified always return default ones.
 	if smsg.Props == "" {
 		smsg.AddProps(cmn.GetPropsDefault...)
+	}
+
+	if bck.IsHTTP() {
+		smsg.SetFlag(cmn.SelectCached)
 	}
 
 	if bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached) {
@@ -2520,61 +2443,41 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	dsort.ProxySortHandler(w, r)
 }
 
+func url2BckObj(u *url.URL) (string, string) {
+	objName := filepath.Base(u.Path)
+	// compute bucket name in 4 steps, as follows:
+	b1 := filepath.Dir(u.Host + u.Path)
+	b2 := xxhash.ChecksumString64S(b1, cmn.MLCG32)
+	b3 := strconv.FormatUint(b2, 16)
+	bckName := base64.RawURLEncoding.EncodeToString([]byte(b3))
+	return bckName, objName
+}
+
 // http reverse-proxy handler, to handle unmodified requests
 // (not to confuse with p.rproxy)
-func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
+		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
 
-	// Make it work as a transparent proxy if we are not able to cache the requested object.
-	// Caching is available only for GET HTTP requests to GCS either via
-	// http://www.googleapi.com/storage or http://storage.googleapis.com
-	if r.Method != http.MethodGet || (baseURL != cmn.GcsURL && baseURL != cmn.GcsURLAlt) {
-		p.rproxy.cloud.ServeHTTP(w, r)
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		bckName, objName := url2BckObj(r.URL)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("[HTTP CLOUD] Bck: %s, Obj: %s", bckName, objName)
+		}
+		q := r.URL.Query()
+		q.Set(cmn.URLParamOrigURL, r.URL.String())
+		q.Set(cmn.URLParamProvider, cmn.ProviderHTTP)
+		r.URL.Path = cmn.URLPath(cmn.Version, cmn.Objects, bckName, objName)
+		r.URL.RawQuery = q.Encode()
+		p.httpobjget(w, r)
 		return
 	}
 
-	s := cmn.RESTItems(r.URL.Path)
-	if baseURL == cmn.GcsURLAlt {
-		// remove redundant items from URL path to make it AIS-compatible
-		// original looks like:
-		//    http://www.googleapis.com/storage/v1/b/<bucket>/o/<object>
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("JSON GCP request for object: %v", s)
-		}
-		if len(s) < 4 {
-			p.invalmsghdlr(w, r, "Invalid object path", http.StatusBadRequest)
-			return
-		}
-		if s[0] != "storage" || s[2] != "b" {
-			p.invalmsghdlr(w, r, "Invalid object path", http.StatusBadRequest)
-			return
-		}
-		s = s[3:]
-		// remove 'o' if it exists
-		if len(s) > 1 && s[1] == "o" {
-			s = append(s[:1], s[2:]...)
-		}
-
-		r.URL.Path = cmn.URLPath(s...)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Updated JSON URL Path: %s", r.URL.Path)
-		}
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		// original url looks like - no cleanup required:
-		//    http://storage.googleapis.com/<bucket>/<object>
-		glog.Infof("XML GCP request for object: %v", s)
-	}
-
-	if len(s) > 1 {
-		r.URL.Path = cmn.URLPath(cmn.Version, cmn.Objects) + r.URL.Path
-		p.objGetRProxy(w, r)
-	} else if len(s) == 1 {
-		r.URL.Path = cmn.URLPath(cmn.Version, cmn.Buckets) + r.URL.Path
-		p.httpbckget(w, r)
-	}
+	glog.Warningf("%s request to %q passed to server as-is", r.Method, r.URL.String())
+	// Make it work as a transparent proxy for all other requests.
+	p.rproxy.cloud.ServeHTTP(w, r)
 }
 
 ///////////////////////////////////
@@ -3559,7 +3462,7 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 		}
 		return
 	}
-	if args.queryBck.Provider == cmn.ProviderAIS {
+	if args.queryBck.Provider == cmn.ProviderAIS || args.queryBck.Provider == cmn.ProviderHTTP {
 		bck = args.queryBck
 	} else {
 		cloudConf := cmn.GCO.Get().Cloud
@@ -3588,6 +3491,10 @@ func (args *remBckAddArgs) lookup() (header http.Header, err error) {
 		return
 	}
 	q := cmn.AddBckToQuery(nil, args.queryBck.Bck)
+	if args.queryBck.IsHTTP() {
+		query := args.r.URL.Query()
+		q.Set(cmn.URLParamOrigURL, query.Get(cmn.URLParamOrigURL))
+	}
 	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
 	res := args.p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
 	if res.status == http.StatusNotFound {

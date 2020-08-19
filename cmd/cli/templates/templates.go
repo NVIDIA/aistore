@@ -166,8 +166,6 @@ const (
 		" IPv4 IntraData:\t{{$obj.IPv4IntraData}}\n\n" +
 		" HTTP\n" +
 		" Protocol:\t{{$obj.HTTP.Proto}}\n" +
-		" Reverse Proxy:\t{{$obj.HTTP.RevProxy}}\n" +
-		" Reverse Proxy Cache:\t{{$obj.HTTP.RevProxyCache}}\n" +
 		" Certificate:\t{{$obj.HTTP.Certificate}}\n" +
 		" Key:\t{{$obj.HTTP.Key}}\n" +
 		" UseHTTPS:\t{{$obj.HTTP.UseHTTPS}}\n" +

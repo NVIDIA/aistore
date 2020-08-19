@@ -68,11 +68,14 @@ const (
 	SourceAmazonObjMD = cmn.ProviderAmazon
 	SourceGoogleObjMD = cmn.ProviderGoogle
 	SourceAzureObjMD  = cmn.ProviderAzure
+	SourceHTTPObjMD   = cmn.ProviderHTTP
 	SourceWebObjMD    = "web"
 
 	VersionObjMD = "v"
 	CRC32CObjMD  = cmn.ChecksumCRC32C
 	MD5ObjMD     = cmn.ChecksumMD5
+
+	OriginalURLObjMD = "orig_url"
 )
 
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }

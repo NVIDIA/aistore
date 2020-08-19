@@ -143,9 +143,9 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 			if err1 == nil {
 				err1 = err
 			}
-			poi.t.fshc(err, poi.workFQN)
-			if err = cmn.RemoveFile(poi.workFQN); err != nil {
-				glog.Errorf("Nested error: %s => (remove %s => err: %v)", err1, poi.workFQN, err)
+			poi.t.fshc(err1, poi.workFQN)
+			if err2 := cmn.RemoveFile(poi.workFQN); err2 != nil {
+				glog.Errorf("Nested error: %s => (remove %s => err: %v)", err1, poi.workFQN, err2)
 			}
 		}
 		poi.lom.Uncache()
@@ -170,13 +170,13 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	)
 	if bck.IsRemote() && !poi.migrated {
 		var version string
-		if bck.IsCloud() {
+		if bck.IsCloud() || bck.IsHTTP() { // TODO: should `HTTP` be part of `IsCloud`?!
 			version, err, errCode = poi.putCloud()
 		} else {
 			version, err, errCode = poi.putRemoteAIS()
 		}
 		if err != nil {
-			err = fmt.Errorf("%s: PUT failed, err: %v", lom, err)
+			glog.Errorf("%s: PUT failed, err: %v", lom, err)
 			return
 		}
 		if lom.VerConf().Enabled {

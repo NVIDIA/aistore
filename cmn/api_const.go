@@ -197,6 +197,9 @@ const (
 
 	// notification target's node ID (usually, the node that initiates the operation)
 	URLParamNotifyMe = "nft"
+
+	// HTTP bucket support
+	URLParamOrigURL = "origurl"
 )
 
 // enum: task action (cmn.URLParamTaskAction)

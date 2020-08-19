@@ -262,9 +262,6 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 	// waste time by getting and reading global configuration, string
 	// comparison and branching
 	var httpHandler http.Handler = server.mux
-	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
-		httpHandler = server
-	}
 	server.s = &http.Server{
 		Addr:     addr,
 		Handler:  httpHandler,

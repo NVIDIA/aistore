@@ -126,6 +126,10 @@ func (msg *SelectMsg) PropsSet() (s StringSet) {
 	return s
 }
 
+func (msg *SelectMsg) SetFlag(flag uint64) {
+	msg.Flags |= flag
+}
+
 func (msg *SelectMsg) IsFlagSet(flags uint64) bool {
 	return msg.Flags&flags == flags
 }
