@@ -22,10 +22,10 @@ while (( "$#" )); do
     --ntargets) targets=$2; shift; shift;;
     --nproxies) proxies=$2; shift; shift;;
     --https)
-      use_https="true"
+      export AIS_USE_HTTPS="true"
       export AIS_SKIP_VERIFY_CRT="true"
-      export AIS_HTTPS_CERT="$HOME/localhost.crt"
-      export AIS_HTTPS_KEY="$HOME/localhost.key"
+      export AIS_SERVER_CRT="$HOME/localhost.crt"
+      export AIS_SERVER_KEY="$HOME/localhost.key"
       shift
       ;;
     *) echo "fatal: unknown argument '${1}'"; exit 1;;
@@ -44,7 +44,7 @@ make aisfs && make cli
 if [[ -n ${next_tier} ]]; then
   DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\n0'
   sleep 4
-  if [[ -z ${use_https} ]]; then
+  if [[ -z ${AIS_USE_HTTPS} ]]; then
     ais attach remote alias=http://127.0.0.1:11080
   else
     ais attach remote alias=https://127.0.0.1:11080
