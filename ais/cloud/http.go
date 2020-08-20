@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -22,8 +21,8 @@ import (
 type (
 	httpProvider struct {
 		t           cluster.Target
-		sClient     *http.Client
-		plainClient *http.Client
+		httpClient  *http.Client
+		httpsClient *http.Client
 	}
 )
 
@@ -33,14 +32,14 @@ var (
 
 func NewHTTP(t cluster.Target, config *cmn.Config) (cluster.CloudProvider, error) {
 	hp := &httpProvider{t: t}
-	hp.plainClient = cmn.NewClient(cmn.TransportArgs{
+	hp.httpClient = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.TimeoutLong,
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		UseHTTPS:        false,
 		SkipVerify:      config.Net.HTTP.SkipVerify,
 	})
-	hp.sClient = cmn.NewClient(cmn.TransportArgs{
+	hp.httpsClient = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.TimeoutLong,
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
@@ -50,95 +49,99 @@ func NewHTTP(t cluster.Target, config *cmn.Config) (cluster.CloudProvider, error
 	return hp, nil
 }
 
+func (hp *httpProvider) client(u string) *http.Client {
+	if strings.HasPrefix(u, "https") {
+		return hp.httpsClient
+	}
+	return hp.httpClient
+}
+
 func (hp *httpProvider) Provider() string  { return cmn.ProviderHTTP }
 func (hp *httpProvider) MaxPageSize() uint { return 10000 }
 
-func (hp *httpProvider) client(url string) *http.Client {
-	u := strings.ToLower(url)
-	if strings.HasPrefix(u, "https") {
-		return hp.sClient
-	}
-	return hp.plainClient
-}
-
-func (hp *httpProvider) ListBuckets(ctx context.Context,
-	_ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
+func (hp *httpProvider) ListBuckets(_ context.Context, _ cmn.QueryBcks) (_ cmn.BucketNames, _ error, _ int) {
 	debug.Assert(false)
-	return nil,
-		fmt.Errorf("%q provider doesn't support listing buckets from the cloud", hp.Provider()), http.StatusBadRequest
+	return
 }
 
-func (hp *httpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (error, int) {
+func (hp *httpProvider) ListObjects(_ context.Context, _ *cluster.Bck, _ *cmn.SelectMsg) (_ *cmn.BucketList, _ error, _ int) {
+	debug.Assert(false)
+	return
+}
+
+func (hp *httpProvider) PutObj(_ context.Context, _ io.Reader, _ *cluster.LOM) (string, error, int) {
+	return "", fmt.Errorf("%q provider doesn't support creating new objects", hp.Provider()), http.StatusBadRequest
+}
+
+func (hp *httpProvider) DeleteObj(_ context.Context, _ *cluster.LOM) (error, int) {
 	return fmt.Errorf("%q provider doesn't support deleting object", hp.Provider()), http.StatusBadRequest
 }
 
-func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (string, error) {
 	origURL := ctx.Value(cmn.CtxOriginalURL).(string)
 	if origURL == "" {
-		// TODO: NOTE that bck.Props.OrigURLBck does not contain URL.Scheme
-		origURL = bck.Props.OrigURLBck
-		if origURL == "" {
-			return nil, fmt.Errorf("failed to HEAD(%s): original_url is empty", bck), http.StatusBadRequest
+		if bck.Props == nil {
+			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck.Bck)
 		}
+		origURL = bck.Props.Extra.OrigURLBck
+		debug.Assert(origURL != "")
+		if objName != "" {
+			origURL = cmn.JoinPath(bck.Props.Extra.OrigURLBck, objName) // see `cmn.URL2BckObj`
+		}
+	}
+	return origURL, nil
+}
+
+func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+	// TODO: we should use `bck.CloudBck()`.
+
+	origURL, err := getOriginalURL(ctx, bck, "")
+	if err != nil {
+		return nil, err, http.StatusBadRequest
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[HTTP CLOUD][HEAD] original_url: %q", origURL)
+		glog.Infof("[head_bucket] original_url: %q", origURL)
 	}
 
-	// HEAD bucket is basically equivalent to checking if we are able to HEAD a given object.
-	// TODO: maybe we should strip the object name and check if we can contact the URL?
+	// Contact the original URL - as long as we can make connection we assume it's good.
 	resp, err := hp.client(origURL).Head(origURL)
 	if err != nil {
-		return nil, err, http.StatusInternalServerError
+		return nil, err, http.StatusBadRequest
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error occurred: %v", resp.StatusCode), resp.StatusCode
-	}
+	resp.Body.Close()
 
 	bckProps = make(cmn.SimpleKVs)
 	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderHTTP
 	return
 }
 
-func (hp *httpProvider) ListObjects(ctx context.Context, bck *cluster.Bck,
-	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
-	debug.Assert(false)
-	return nil,
-		fmt.Errorf("%q provider doesn't support listing objects from the cloud (use 'cached' option)",
-			hp.Provider()), http.StatusBadRequest
-}
-
 func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
-		h       = cmn.CloudHelpers.HTTP
-		origURL = ctx.Value(cmn.CtxOriginalURL).(string)
+		h   = cmn.CloudHelpers.HTTP
+		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().CloudBck()`
 	)
-	if origURL == "" {
-		// try to recreate the original URL but NOTE: does not contain URL.Scheme
-		bck := lom.Bck()
-		if bck.Props.OrigURLBck == "" {
-			return nil, fmt.Errorf("failed to HEAD(%s): original_url is empty", lom), http.StatusBadRequest
-		}
-		origURL = filepath.Join(bck.Props.OrigURLBck, lom.ObjName) // see cmn.URL2BckObj
-	}
+
+	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
+	debug.AssertNoErr(err)
 
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[HTTP CLOUD][HEAD] original_url: %q", origURL)
+		glog.Infof("[head_object] original_url: %q", origURL)
 	}
 
 	resp, err := hp.client(origURL).Head(origURL)
 	if err != nil {
-		return nil, err, http.StatusInternalServerError
+		return nil, err, http.StatusBadRequest
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("error occurred: %v", resp.StatusCode), resp.StatusCode
 	}
 	objMeta = make(cmn.SimpleKVs, 2)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderHTTP
-	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength, 10) // TODO: what if server does not return `ContentLength`?
+	if resp.ContentLength >= 0 {
+		objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength, 10)
+	}
 	if v, ok := h.EncodeVersion(resp.Header.Get(cmn.HeaderETag)); ok {
 		objMeta[cluster.VersionObjMD] = v
 	}
@@ -151,17 +154,12 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 
 func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	var (
-		h       = cmn.CloudHelpers.HTTP
-		origURL = ctx.Value(cmn.CtxOriginalURL).(string)
+		h   = cmn.CloudHelpers.HTTP
+		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().CloudBck()`
 	)
-	if origURL == "" {
-		// try to recreate the original URL - see NOTE above
-		bck := lom.Bck()
-		if bck.Props.OrigURLBck == "" {
-			return fmt.Errorf("failed to GET(%s): original_url is empty", lom), http.StatusBadRequest
-		}
-		origURL = filepath.Join(bck.Props.OrigURLBck, lom.ObjName) // see cmn.URL2BckObj
-	}
+
+	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
+	debug.AssertNoErr(err)
 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
@@ -189,7 +187,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster
 	}
 
 	lom.SetCustomMD(customMD)
-	setSize(ctx, resp.ContentLength) // TODO: what if server does not return `ContentLength`?
+	setSize(ctx, resp.ContentLength)
 	err = hp.t.PutObject(cluster.PutObjectParams{
 		LOM:          lom,
 		Reader:       wrapReader(ctx, resp.Body),
@@ -204,8 +202,4 @@ func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
-}
-
-func (hp *httpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
-	return "", fmt.Errorf("%q provider doesn't support creating new objects", hp.Provider()), http.StatusBadRequest
 }

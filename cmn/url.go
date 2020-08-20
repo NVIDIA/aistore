@@ -80,15 +80,16 @@ func JoinPath(urlBase, path string) string {
 }
 
 func URL2BckObj(u *url.URL) (bckName, objName, origURLBck string) {
-	objName = filepath.Base(u.Path)
-	// compute bucket name in steps:
-	origURLBck = filepath.Dir(u.Host + u.Path)
+	origURLBck, objName = filepath.Split(u.Path)
+	origURLBck = u.Scheme + "://" + u.Host + origURLBck
 	bckName = OrigURLBck2Name(origURLBck)
 	return
 }
+
 func OrigURLBck2Name(origURLBck string) (bckName string) {
-	b2 := xxhash.ChecksumString64S(origURLBck, MLCG32)
-	b3 := strconv.FormatUint(b2, 16)
-	bckName = base64.RawURLEncoding.EncodeToString([]byte(b3))
+	_, b := ParseURLScheme(origURLBck)
+	b1 := xxhash.ChecksumString64S(b, MLCG32)
+	b2 := strconv.FormatUint(b1, 16)
+	bckName = base64.RawURLEncoding.EncodeToString([]byte(b2))
 	return
 }

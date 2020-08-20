@@ -21,20 +21,20 @@ import (
 
 const (
 	// Public object name to download from Google Cloud Storage(GCS)
-	GcsFilename = "LT80400212013126LGN01_B10.TIF"
-	GcsObjXML   = "LT08/PRE/040/021/LT80400212013126LGN01/" + GcsFilename
+	gcsFilename = "LT80400212013126LGN01_B10.TIF"
+	gcsObjXML   = "LT08/PRE/040/021/LT80400212013126LGN01/" + gcsFilename
 	// Public GCS bucket
-	GcsBck = "gcp-public-data-landsat"
-	// wihtout this query GCS returns only object's information
-	GcsQry      = "?alt=media"
-	GcsHostJSON = "www.googleapis.com"
-	GcsHostXML  = "storage.googleapis.com"
-	GcsTmpFile  = "/tmp/rproxy_test_download.tiff"
+	gcsBck = "gcp-public-data-landsat"
+	// Without this query GCS returns only object's information
+	gcsQuery    = "?alt=media"
+	gcsHostJSON = "www.googleapis.com"
+	gcsHostXML  = "storage.googleapis.com"
+	gcsTmpFile  = "/tmp/rproxy_test_download.tiff"
 )
 
 var (
 	// reformat object name from XML to JSON API requirements
-	GcsObjJSON = strings.ReplaceAll(GcsObjXML, "/", "%2F")
+	gcsObjJSON = strings.ReplaceAll(gcsObjXML, "/", "%2F")
 )
 
 // search for the full path of cached object
@@ -51,7 +51,7 @@ func pathForCached() string {
 			return nil
 		}
 
-		if strings.HasSuffix(path, GcsFilename) {
+		if strings.HasSuffix(path, gcsFilename) {
 			fpath = path
 			return filepath.SkipDir
 		}
@@ -63,39 +63,40 @@ func pathForCached() string {
 
 // generate URL to request object from GCS
 func genObjURL(isSecure, isXML bool) (s string) {
-	if isSecure {
+	if isSecure || !isXML { // Using JSON requires HTTPS: "SSL is required to perform this operation."
 		s = "https://"
 	} else {
 		s = "http://"
 	}
 	if isXML {
-		s += fmt.Sprintf("%s/%s/%s", GcsHostXML, GcsBck, GcsObjXML)
+		s += fmt.Sprintf("%s/%s/%s", gcsHostXML, gcsBck, gcsObjXML)
 	} else {
-		s += fmt.Sprintf("%s/storage/v1/b/%s/o/%s", GcsHostJSON, GcsBck, GcsObjJSON)
+		s += fmt.Sprintf("%s/storage/v1/b/%s/o/%s%s", gcsHostJSON, gcsBck, gcsObjJSON, gcsQuery)
 	}
 	return s
 }
 
 // build command line for CURL
 func genCURLCmdLine(isSecure, isXML bool, proxyURL string, targets cluster.NodeMap) []string {
-	noProxy := ""
+	var noProxy []string
 	for _, t := range targets {
-		if noProxy != "" {
-			noProxy += ","
+		if !cmn.StringInSlice(t.PublicNet.NodeIPAddr, noProxy) {
+			noProxy = append(noProxy, t.PublicNet.NodeIPAddr)
 		}
-		noProxy += t.PublicNet.NodeIPAddr
 	}
 	return []string{
 		"-L", "-X", "GET",
-		fmt.Sprintf("%s%s", genObjURL(isSecure, isXML), GcsQry),
-		"-o", GcsTmpFile,
+		genObjURL(isSecure, isXML),
+		"-o", gcsTmpFile,
 		"-x", proxyURL,
-		"--noproxy", noProxy,
+		"--max-redirs", "3",
+		"--noproxy", strings.Join(noProxy, ","),
 	}
 }
 
-// extract download speed from CURL output (from the last non-empty line)
-func extractSpeed(lines []string) int64 {
+// Extract download speed from CURL output.
+func extractSpeed(out []byte) int64 {
+	lines := strings.Split(string(out), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		if lines[i] == "" {
 			continue
@@ -119,71 +120,63 @@ func TestRProxyGCS(t *testing.T) {
 		tutils.Logf("Found in cache: %s. Removing...\n", pathCached)
 		os.Remove(pathCached)
 	}
-	if _, err := os.Stat(GcsTmpFile); err == nil {
-		os.Remove(GcsTmpFile)
-	}
+	os.Remove(gcsTmpFile)
 
 	tutils.Logf("First time download via XML API\n")
 	cmdline := genCURLCmdLine(false, true, proxyURL, smap.Tmap)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
-	t.Log(string(out))
+	tutils.Logln(string(out))
 	tassert.CheckFatal(t, err)
 
 	pathCached = pathForCached()
-	if pathCached == "" {
-		t.Fatalf("Object was not cached")
-	}
+	tassert.Fatalf(t, pathCached != "", "object was not cached")
+
 	defer func() {
-		os.Remove(GcsTmpFile)
+		os.Remove(gcsTmpFile)
 		os.Remove(pathCached)
 	}()
 
 	tutils.Logf("Cached at: %q\n", pathCached)
-	lines := strings.Split(string(out), "\n")
-	speedCold := extractSpeed(lines)
-	if speedCold == 0 {
-		t.Fatal("Failed to detect speed for cold download")
-	}
+	speedCold := extractSpeed(out)
+	tassert.Fatalf(t, speedCold != 0, "Failed to detect speed for cold download")
 
 	tutils.Logf("HTTP download\n")
 	cmdline = genCURLCmdLine(false, true, proxyURL, smap.Tmap)
 	out, err = exec.Command("curl", cmdline...).CombinedOutput()
-	t.Log(string(out))
+	tutils.Logln(string(out))
 	tassert.CheckFatal(t, err)
-	lines = strings.Split(string(out), "\n")
-	speedHTTPS := extractSpeed(lines)
-	if speedHTTPS == 0 {
-		t.Fatal("Failed to detect speed for HTTPS download")
-	}
+	speedHTTP := extractSpeed(out)
+	tassert.Fatalf(t, speedHTTP != 0, "Failed to detect speed for HTTP download")
 
 	/*
 		TODO: uncomment when target supports HTTPS client
+
 		tutils.Logf("HTTPS download\n")
 		cmdline = genCURLCmdLine(true, true, proxyURL, smap.Tmap)
 		out, err = exec.Command("curl", cmdline...).CombinedOutput()
+		tutils.Logln(string(out))
+		tassert.CheckFatal(t, err)
+		speedHTTPS := extractSpeed(out)
+		tassert.Fatalf(t, speedHTTPS != 0, "Failed to detect speed for HTTPS download")
+
+
+		tutils.Logf("Check via JSON API\n")
+		cmdline = genCURLCmdLine(false, false, proxyURL, smap.Tmap)
+		tutils.Logf("JSON: %s\n", cmdline)
+		out, err = exec.Command("curl", cmdline...).CombinedOutput()
 		t.Log(string(out))
 		tassert.CheckFatal(t, err)
-		lines = strings.Split(string(out), "\n")
-		speedHTTPS := extractSpeed(lines)
-		if speedHTTPS == 0 {
-			t.Fatal("Failed to detect speed for HTTPS download")
-		}
+		speedJSON := extractSpeed(out)
+		tassert.Fatalf(t, speedJSON != 0, "Failed to detect speed for JSON download")
 	*/
 
-	tutils.Logf("Cache check via JSON API\n")
-	cmdline = genCURLCmdLine(false, true, proxyURL, smap.Tmap)
-	tutils.Logf("JSON: %s\n", cmdline)
-	out, err = exec.Command("curl", cmdline...).CombinedOutput()
-	t.Log(string(out))
-	tassert.CheckFatal(t, err)
-	lines = strings.Split(string(out), "\n")
-	speedCache := extractSpeed(lines)
-	if speedCache == 0 {
-		t.Fatal("Failed to detect speed for cached download")
-	}
-
 	tutils.Logf("Cold download speed:   %s\n", cmn.B2S(speedCold, 1))
-	tutils.Logf("HTTPS download speed:  %s\n", cmn.B2S(speedHTTPS, 1))
-	tutils.Logf("Cached download speed: %s\n", cmn.B2S(speedCache, 1))
-	tutils.Logf("Cached is %.1f times faster than Cold\n", float64(speedCache)/float64(speedCold))
+	tutils.Logf("HTTP download speed:   %s\n", cmn.B2S(speedHTTP, 1))
+	/*
+		TODO: uncomment when target supports HTTPS client
+
+		tutils.Logf("HTTPS download speed:  %s\n", cmn.B2S(speedHTTPS, 1))
+		tutils.Logf("JSON download speed:   %s\n", cmn.B2S(speedJSON, 1))
+	*/
+	tutils.Logf("HTTP (cached) is %.1f times faster than Cold\n", float64(speedHTTP)/float64(speedCold))
 }

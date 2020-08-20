@@ -22,9 +22,39 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	"golang.org/x/sync/errgroup"
 )
+
+func TestHTTPProviderBucket(t *testing.T) {
+	var (
+		bck = cmn.Bck{
+			Name:     t.Name() + "Bucket",
+			Provider: cmn.ProviderHTTP,
+		}
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
+	err := api.CreateBucket(baseParams, bck)
+	tassert.Fatalf(t, err != nil, "expected error")
+
+	_, err = api.GetObject(baseParams, bck, "nonexisting")
+	tassert.Fatalf(t, err != nil, "expected error")
+
+	_, err = api.ListObjects(baseParams, bck, nil, 0)
+	tassert.Fatalf(t, err != nil, "expected error")
+
+	reader, _ := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
+	err = api.PutObject(api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		Object:     "something",
+		Reader:     reader,
+	})
+	tassert.Fatalf(t, err != nil, "expected error")
+}
 
 func Test_BucketNames(t *testing.T) {
 	var (

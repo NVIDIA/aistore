@@ -195,9 +195,13 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 		bmd.initBckCloudProvider(b)
 	} else if b.IsHTTP() {
 		debug.Assert(b.Ns == cmn.NsGlobal)
-		if present := bmd.initBckCloudProvider(b); present && debug.Enabled {
-			bckName := cmn.OrigURLBck2Name(b.Props.OrigURLBck)
-			debug.AssertMsg(b.Name == bckName, b.Name+" != "+bckName+", "+b.Props.OrigURLBck)
+		present := bmd.initBckCloudProvider(b)
+		if debug.Enabled && present {
+			var (
+				origURL = b.Props.Extra.OrigURLBck
+				bckName = cmn.OrigURLBck2Name(origURL)
+			)
+			debug.Assertf(b.Name == bckName, "%s != %s; original_url: %s", b.Name, bckName, origURL)
 		}
 	} else {
 		b.Props, _ = bmd.Get(b)

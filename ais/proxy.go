@@ -755,7 +755,7 @@ func (cii *clusterInfo) fill(p *proxyrunner) {
 
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	const fmtErr = "cannot %s: invalid provider %q"
+	const fmtErr = "cannot %s: unsupported provider %q"
 	var (
 		msg   cmn.ActionMsg
 		query = r.URL.Query()
@@ -836,7 +836,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if bck.Bck.IsCloud(cmn.AnyCloud) {
+		if bck.Bck.Provider != "" && !bck.Bck.IsAIS() {
 			p.invalmsghdlrf(w, r, fmtErr, msg.Action, bck.Provider)
 			return
 		}
@@ -3494,8 +3494,6 @@ func (args *remBckAddArgs) lookup() (header http.Header, err error) {
 	q := cmn.AddBckToQuery(nil, args.queryBck.Bck)
 	if args.queryBck.IsHTTP() {
 		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)
-		cmn.Assert(args.origURLBck != "")
-		cmn.Assert(strings.Contains(origURL, args.origURLBck)) // TODO: remove debug
 		q.Set(cmn.URLParamOrigURL, origURL)
 	}
 	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}

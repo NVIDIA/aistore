@@ -213,9 +213,6 @@ type BucketProps struct {
 	// BackendBck if set it contains cloud bucket to which AIS bucket points to.
 	BackendBck Bck `json:"backend_bck,omitempty"`
 
-	// prior-to-hashing part of the original URL when bck.IsHTTP()
-	OrigURLBck string `json:"orig_url_bck"`
-
 	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning"`
 
@@ -233,6 +230,14 @@ type BucketProps struct {
 
 	// Bucket access attributes - see Allow* above
 	Access AccessAttrs `json:"access,string"`
+
+	// Extra contains additional information which can depend on the provider.
+	Extra struct {
+		// [HTTP provider] Original URL prior to hashing.
+		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
+
+		// TODO: add "[AWS provider] Region of the S3 bucket".
+	} `json:"extra,omitempty" list:"readonly"`
 
 	// unique bucket ID
 	BID uint64 `json:"bid,string" list:"omit"`
@@ -399,7 +404,9 @@ func CloudBucketProps(header http.Header) (props *BucketProps) {
 	props.Provider = header.Get(HeaderCloudProvider)
 	Assert(IsValidProvider(props.Provider))
 
-	props.OrigURLBck = header.Get(HeaderOrigURLBck)
+	if props.Provider == ProviderHTTP {
+		props.Extra.OrigURLBck = header.Get(HeaderOrigURLBck)
+	}
 
 	if verStr := header.Get(HeaderBucketVerEnabled); verStr != "" {
 		versioning, err := ParseBool(verStr)
@@ -442,6 +449,9 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 	if !bp.BackendBck.IsEmpty() {
 		if bp.BackendBck.Name == "" {
 			return fmt.Errorf("backend bucket (%q) name is empty", bp.BackendBck)
+		}
+		if bp.BackendBck.IsHTTP() {
+			return fmt.Errorf("backend bucket (%q) cannot be associated with %q provider", bp.BackendBck, ProviderHTTP)
 		}
 		if !bp.BackendBck.IsCloud() {
 			return fmt.Errorf("backend bucket (%q) should be referencing a Cloud bucket", bp.BackendBck)
