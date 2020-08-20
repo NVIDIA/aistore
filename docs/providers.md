@@ -2,7 +2,7 @@
 
 | Term                                   | Definition                                                   |
 | -------------------------------------- | ------------------------------------------------------------ |
-| 3rd party cloud (aka *cloud provider*) | HTTP(S) accessible object storage with primary examples including Amazon S3, Google Cloud, and Microsoft Azure with protocol prefixes `aws://` (or `s3://`), `gcp://` or `gs://`, and `azure://`, respectively. |
+| 3rd party cloud (aka *cloud provider*) | HTTP(S) accessible object storage with primary examples including Amazon S3, Google Cloud, and Microsoft Azure with protocol prefixes `aws://` (or `s3://`), `gcp://` (or `gs://`), and `azure://`, respectively. |
 | HTTP(S) based dataset                  | That is, a dataset containing HTTP(S) accessible files that may or **may not** be stored in a vendor-supported Cloud storage. When used as HTTP Proxy (e. g., via`http_proxy=AIS_ENDPOINT`) and given vanilla HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) -reachable files all the while supporting the entire gamut of functionality including ETL. |
 | remote AIS cluster                     | Let's say, there are two deployed AIS clusters: A and B. And let's also say that you can access cluster directly A via any/all of its gateways' URLs. If B gets *attached* to A (as shown below) then B becomes transparently accessibly via A and we call B *remote*. |
 | unified global namespace               | By *attaching* multiple AIS clusters to each other, we effectively create a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters). This *attaching* and *detaching* can be done ad-hoc and at any time without disrupting or otherwise affecting operations of any individual cluster. |
@@ -25,13 +25,11 @@ In each case, we use the vendor's own SDK/API to provide transparent access to C
 
 But there's more.
 
-In addition to the listed above 3rd party Cloud storages, AIS integrates with itself via its own RESTful API. One AIS cluster can be *attached* to another.
+In addition to the listed above 3rd party Cloud storages and non-Cloud HTTP(S) based datasets, AIS *integrates with itself* via its own RESTful API. In other words, one AIS cluster can be *attached* to another (to transparently access and replicate each other's distributed storage).
 
 Between two AIS clusters A and B (see [Terminology](#Terminology) the same exact rules apply: as soon as B gets attached to A, any read access to (remote) objects and datasets from B will have the side effect of cluster A persistently caching those objects and datasets on its own clustered servers (aka storage targets), subject to the rules and policies configured on the corresponding A's buckets.
 
 By *attaching* AIS clusters we are, effectively and ad-hoc, forming a unified global namespace of all individually hosted datasets.
-
-And finally, AIS supports so-called `http://`
 
 ---------------------
 
@@ -52,7 +50,7 @@ Finally, AIS bucket may be implicitly defined by HTTP(S) based dataset, where fi
 
 * https://a/b/c/imagenet/train-999999.tar
 
-would all be stored in a single AIS bucket that would have protocol prefix `http://` and a bucket name derived from the *directory* part of the URL Path ("a/b/c/imagenet", in this case).
+would all be stored in a single AIS bucket that would have a protocol prefix `http://` and a bucket name derived from the *directory* part of the URL Path ("a/b/c/imagenet", in this case).
 
 ## Supported Cloud Providers
 
