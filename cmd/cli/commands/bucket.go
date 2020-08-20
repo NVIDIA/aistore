@@ -64,6 +64,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props ...cmn.BucketPropsToUpdate)
 				}
 				return fmt.Errorf(desc)
 			}
+			return fmt.Errorf("create bucket %q failed: %s", bck, herr.Message)
 		}
 		return fmt.Errorf("create bucket %q failed: %s", bck, err.Error())
 	}
