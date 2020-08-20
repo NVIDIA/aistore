@@ -1,10 +1,11 @@
 ## Terminology
 
-| Term                     | Definition                                                   |
-| ------------------------ | ------------------------------------------------------------ |
-| 3rd party cloud          | HTTP(S) accessible object storage with primary examples including Amazon S3, Google Cloud, and Microsoft Azure. |
-| remote AIS cluster       | Let's say, there are two deployed AIS clusters: A and B. And let's also say that you can access cluster directly A via any/all of its gateways' URLs. If B gets *attached* to A (as shown below) then B becomes transparently accessibly via A and we call B *remote*. |
-| unified global namespace | By *attaching* multiple AIS clusters to each other, we effectively create a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters). This *attaching* and *detaching* can be done ad-hoc and at any time without disrupting or otherwise affecting operations of any individual cluster. |
+| Term                                   | Definition                                                   |
+| -------------------------------------- | ------------------------------------------------------------ |
+| 3rd party cloud (aka *cloud provider*) | HTTP(S) accessible object storage with primary examples including Amazon S3, Google Cloud, and Microsoft Azure with protocol prefixes `aws://` (or `s3://`), `gcp://` or `gs://`, and `azure://`, respectively. |
+| HTTP(S) based dataset                  | That is, a dataset containing HTTP(S) accessible files that may or **may not** be stored in a vendor-supported Cloud storage. When used as HTTP Proxy (e. g., via`http_proxy=AIS_ENDPOINT`) and given vanilla HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) -reachable files all the while supporting the entire gamut of functionality including ETL. |
+| remote AIS cluster                     | Let's say, there are two deployed AIS clusters: A and B. And let's also say that you can access cluster directly A via any/all of its gateways' URLs. If B gets *attached* to A (as shown below) then B becomes transparently accessibly via A and we call B *remote*. |
+| unified global namespace               | By *attaching* multiple AIS clusters to each other, we effectively create a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters). This *attaching* and *detaching* can be done ad-hoc and at any time without disrupting or otherwise affecting operations of any individual cluster. |
 
 ## Introduction
 
@@ -30,12 +31,28 @@ Between two AIS clusters A and B (see [Terminology](#Terminology) the same exact
 
 By *attaching* AIS clusters we are, effectively and ad-hoc, forming a unified global namespace of all individually hosted datasets.
 
+And finally, AIS supports so-called `http://`
+
 ---------------------
 
-To reiterate, a storage bucket that is visible/accessible/modifiable via AIS may originate in a given AIS cluster, or:
+To reiterate, a storage bucket that is visible/accessible/modifiable via AIS may originate:
 
-* in a 3rd party Cloud, or
+* in a given AIS cluster
+
+* in a 3rd party Cloud
 * in another AIS cluster, which we then respectively call *remote*
+
+Finally, AIS bucket may be implicitly defined by HTTP(S) based dataset, where files such as, for instance:
+
+* https://a/b/c/imagenet/train-000000.tar
+
+* https://a/b/c/imagenet/train-123456.tar
+
+  and
+
+* https://a/b/c/imagenet/train-999999.tar
+
+would all be stored in a single AIS bucket that would have protocol prefix `http://` and a bucket name derived from the *directory* part of the URL Path ("a/b/c/imagenet", in this case).
 
 ## Supported Cloud Providers
 
@@ -46,7 +63,8 @@ In the AIS [CLI](/cmd/cli/README.md), we use protocol prefixes to designate any 
 * `ais://` - for AIS
 * `aws://` or `s3://` interchangeably - for S3
 * `gcp://` or `gs://` - for Google Cloud Storage
-* `azure://` - for Microsoft Azure.
+* `azure://` - for Microsoft Azure
+* `http://` - for HTTP(S) based datasets
 
 Further:
 
