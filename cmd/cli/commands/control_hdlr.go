@@ -249,7 +249,7 @@ func startDownloadHandler(c *cli.Context) error {
 	basePayload := downloader.DlBase{
 		Bck: cmn.Bck{
 			Name:     bucket,
-			Provider: cmn.ProviderAIS, // NOTE: currently downloading only to ais buckets is supported
+			Provider: cmn.ProviderAIS,
 			Ns:       cmn.NsGlobal,
 		},
 		Timeout:     timeout,
@@ -267,7 +267,7 @@ func startDownloadHandler(c *cli.Context) error {
 	} else if strings.Contains(source.link, "{") && strings.Contains(source.link, "}") {
 		dlType = downloader.DlTypeRange
 	} else if source.cloud.bck.IsEmpty() {
-		dlType = downloader.DlTypeCloud
+		dlType = downloader.DlTypeSingle
 	} else {
 		cfg, err := getClusterConfig()
 		if err != nil {
@@ -357,7 +357,7 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	fmt.Fprintln(c.App.Writer, id)
-	fmt.Fprintf(c.App.Writer, "Run `ais show download %s` to monitor the progress of downloading.\n", id)
+	fmt.Fprintf(c.App.Writer, "Run `ais show download %s --progress` to monitor the progress of downloading.\n", id)
 	return nil
 }
 

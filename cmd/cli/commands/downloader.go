@@ -62,6 +62,7 @@ const (
 	totalBarText          = "Files downloaded:"
 	unknownTotalIncrement = 2048
 	progressBarWidth      = 64
+	minTotalCnt           = 10
 )
 
 func (d downloadingResult) String() string {
@@ -156,16 +157,18 @@ func (b *downloaderPB) start() (bool, error) {
 		barText += " (total estimated)"
 	}
 
-	b.totalBar = b.p.AddBar(
-		int64(b.totalFilesCnt()),
-		mpb.BarRemoveOnComplete(),
-		mpb.PrependDecorators(
-			decor.Name(barText, decor.WC{W: len(totalBarText) + 2, C: decor.DSyncWidthR}),
-			decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
-		),
-		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
-	)
-	b.totalBar.IncrBy(b.finishedFiles)
+	if b.totalFilesCnt() > 1 {
+		b.totalBar = b.p.AddBar(
+			int64(b.totalFilesCnt()),
+			mpb.BarRemoveOnComplete(),
+			mpb.PrependDecorators(
+				decor.Name(barText, decor.WC{W: len(totalBarText) + 2, C: decor.DSyncWidthR}),
+				decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
+			),
+			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
+		)
+		b.totalBar.IncrBy(b.finishedFiles)
+	}
 
 	b.updateBars(resp)
 
@@ -186,8 +189,9 @@ func (b *downloaderPB) updateBars(downloadStatus downloader.DlStatusResp) {
 
 		b.updateFileBar(newState, oldState)
 	}
-
-	b.updateTotalBar(downloadStatus.FinishedCnt+len(downloadStatus.Errs), downloadStatus.TotalCnt())
+	if downloadStatus.TotalCnt() > 1 {
+		b.updateTotalBar(downloadStatus.FinishedCnt+len(downloadStatus.Errs), downloadStatus.TotalCnt())
+	}
 }
 
 func (b *downloaderPB) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
@@ -372,11 +376,18 @@ func printDownloadStatus(w io.Writer, d downloader.DlStatusResp, verbose bool) {
 		doneCnt  = d.DoneCnt()
 		totalCnt = d.TotalCnt()
 	)
+	if totalCnt < minTotalCnt {
+		verbose = true
+	}
 	if totalCnt == 0 {
 		fmt.Fprintf(w, "Download progress: 0/?\n")
 	} else {
-		pctDone := 100 * float64(doneCnt) / float64(totalCnt)
-		fmt.Fprintf(w, "Download progress: %d/%d (%.2f%%)\n", doneCnt, totalCnt, pctDone)
+		progressMsg := fmt.Sprintf("Download progress: %d/%d", doneCnt, totalCnt)
+		if totalCnt >= minTotalCnt {
+			pctDone := 100 * float64(doneCnt) / float64(totalCnt)
+			progressMsg = fmt.Sprintf("%s (%0.2f%%)", progressMsg, pctDone)
+		}
+		fmt.Fprintln(w, progressMsg)
 	}
 	if verbose {
 		if len(d.CurrentTasks) > 0 {
