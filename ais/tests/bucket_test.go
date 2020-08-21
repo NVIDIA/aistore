@@ -350,77 +350,40 @@ func TestSetInvalidBucketProps(t *testing.T) {
 	}
 }
 
-func TestCloudListObjectVersions(t *testing.T) {
+func TestListObjectCloudVersions(t *testing.T) {
 	var (
-		workerCount = 10
-		objectDir   = "cloud-version-test"
-		objectSize  = 256
-		objectCount = 1340 // must be greater than 1000(AWS page size)
-		bck         = cliBck
-		proxyURL    = tutils.RandomProxyURL(t)
-		wg          = cmn.NewLimitedWaitGroup(40)
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      50,
+			fileSize: 128,
+			prefix:   cmn.RandString(6) + "-",
+		}
+		baseParams = tutils.BaseAPIParams()
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: m.bck})
 
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	p, err := api.HeadBucket(baseParams, bck)
+	m.init()
+
+	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
-	// Enable local versioning management
-	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
-		Versioning: &cmn.VersionConfToUpdate{Enabled: api.Bool(true)},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
-		Versioning: &cmn.VersionConfToUpdate{Enabled: api.Bool(false)},
-	})
-
-	// Enabling local versioning may not work if the cloud bucket has
-	// versioning disabled. So, request props and do double check
-	bprops, err := api.HeadBucket(baseParams, bck)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bprops.Versioning.Enabled {
+	if !p.Versioning.Enabled {
 		t.Skip("test requires a cloud bucket with enabled versioning")
 	}
 
-	tutils.Logf("Filling bucket %s\n", bck)
-	for wid := 0; wid < workerCount; wid++ {
-		wg.Add(1)
-		go func(wid int) {
-			defer wg.Done()
-			objectsToPut := objectCount / workerCount
-			if wid == workerCount-1 { // last worker puts leftovers
-				objectsToPut += objectCount % workerCount
-			}
-			tutils.PutRR(t, baseParams, int64(objectSize), p.Cksum.Type, bck, objectDir, objectsToPut, fnlen)
-		}(wid)
+	m.puts()
+	defer m.del()
 
-		wg.Wait()
+	tutils.Logf("Reading %q objects\n", m.bck)
+	msg := &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsVersion}
+	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(t, err)
 
-		tutils.Logf("Reading %q objects\n", bck)
-		msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
-		bckObjs, err := api.ListObjects(baseParams, bck, msg, 0)
-		tassert.CheckFatal(t, err)
-
-		tutils.Logf("Checking %q object versions[total: %d]\n", bck, len(bckObjs.Entries))
-		for _, entry := range bckObjs.Entries {
-			if entry.Version == "" {
-				t.Errorf("Object %s does not have version", entry.Name)
-			}
-			wg.Add(1)
-			go func(name string) {
-				defer wg.Done()
-				err := api.DeleteObject(baseParams, bck, name)
-				tassert.CheckError(t, err)
-			}(entry.Name)
-		}
-		wg.Wait()
+	tutils.Logf("Checking %q object versions [total: %d]\n", m.bck, len(bckObjs.Entries))
+	for _, entry := range bckObjs.Entries {
+		tassert.Errorf(t, entry.Version != "", "Object %s does not have version", entry.Name)
 	}
 }
 
