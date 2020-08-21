@@ -85,7 +85,7 @@ def ec2_connect_to_region(region=None):
         conn = boto.ec2.connect_to_region(region, aws_access_key_id=AWS_AK, aws_secret_access_key=AWS_SAK)
     except Exception as e:
         logger.error("EC2 connection failed - {}".format(repr(e)))
-        raise Exception("EC2 connection failed") from e
+        raise Exception("EC2 connection failed")
     return conn
 
 
