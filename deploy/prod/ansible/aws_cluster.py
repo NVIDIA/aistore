@@ -77,6 +77,7 @@ def load_ais_cluster(cluster_name, clients):
     return ais
 
 
+# pylint: disable=raise-missing-from
 def ec2_connect_to_region(region=None):
     if region is None:
         region = region_name
