@@ -537,8 +537,8 @@ func TestDownloadCloud(t *testing.T) {
 			tutils.Logln("evicting cloud bucket...")
 			xactID, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			xactArgs := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
-			err = api.WaitForXaction(baseParams, xactArgs)
+			args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+			err = api.WaitForXactionV2(baseParams, args)
 			tassert.CheckFatal(t, err)
 
 			if test.dstBck.IsAIS() {
@@ -567,8 +567,8 @@ func TestDownloadCloud(t *testing.T) {
 			tutils.Logln("evicting cloud bucket...")
 			xactID, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			xactArgs.ID = xactID
-			err = api.WaitForXaction(baseParams, xactArgs)
+			args = api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+			err = api.WaitForXactionV2(baseParams, args)
 			tassert.CheckFatal(t, err)
 
 			tutils.Logln("starting cloud download...")

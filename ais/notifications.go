@@ -305,7 +305,16 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		n.p.invalmsghdlrstatusf(w, r, 0, "%s: unknown notification type %s", n.p.si, notifMsg)
 		return
 	}
-	nl, exists := n.entry(uuid)
+	var (
+		nl     notifListener
+		exists bool
+	)
+
+	withLocalRetry(func() bool {
+		nl, exists = n.entry(uuid)
+		return exists
+	})
+
 	if !exists {
 		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown UUID %q (%s)", n.p.si, uuid, notifMsg)
 		return

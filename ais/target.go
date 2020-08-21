@@ -288,6 +288,7 @@ func (t *targetrunner) Run() error {
 	if marked.Interrupted {
 		go func() {
 			glog.Infoln("resuming resilver...")
+			// TODO: Assign UUID and notify IC
 			t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
 		}()
 	}
@@ -787,6 +788,15 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
+
+		xact.AddNotif(&cmn.NotifXact{
+			NotifBase: cmn.NotifBase{
+				When: cmn.UponTerm,
+				Ty:   notifXact,
+				Dsts: []string{equalIC},
+				F:    t.xactCallerNotify,
+			},
+		})
 		go xact.Run()
 	default:
 		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)

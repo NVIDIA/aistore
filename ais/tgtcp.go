@@ -731,9 +731,17 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 	}
 
 	smap := t.owner.smap.Get()
+	notif := &cmn.NotifXact{
+		NotifBase: cmn.NotifBase{
+			When: cmn.UponTerm,
+			Ty:   notifXact,
+			Dsts: []string{equalIC},
+			F:    t.xactCallerNotify,
+		},
+	}
 	if msg.Action == cmn.ActRebalance { // manual (triggered by user)
 		glog.Infof("%s: manual rebalance (version: %d)", t.si, newRMD.version())
-		go t.rebManager.RunRebalance(smap, newRMD.Version)
+		go t.rebManager.RunRebalance(smap, newRMD.Version, notif)
 		return
 	}
 
@@ -741,8 +749,9 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 		"%s: rebalance (version: %d; new_targets: %v; resilver: %t)",
 		t.si, newRMD.version(), newRMD.TargetIDs, newRMD.Resilver,
 	)
-	go t.rebManager.RunRebalance(smap, newRMD.Version)
+	go t.rebManager.RunRebalance(smap, newRMD.Version, notif)
 	if newRMD.Resilver {
+		// TODO: Assign UUID and notify IC
 		go t.rebManager.RunResilver("", true /*skipGlobMisplaced*/)
 	}
 	return

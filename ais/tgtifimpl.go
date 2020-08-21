@@ -83,6 +83,15 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
 		GetFSStats:          ios.GetFSStats,
 	}
+
+	xlru.AddNotif(&cmn.NotifXact{
+		NotifBase: cmn.NotifBase{
+			When: cmn.UponTerm,
+			Ty:   notifXact,
+			Dsts: []string{equalIC},
+			F:    t.xactCallerNotify,
+		},
+	})
 	lru.Run(&ini) // blocking
 
 	xlru.Finish()

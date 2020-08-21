@@ -1097,10 +1097,6 @@ func cleanup() {
 func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	var (
-		xactArgs = api.XactReqArgs{Kind: cmn.ActDelete, Bck: runParams.bck}
-	)
-
 	t := len(objs)
 	if t == 0 {
 		return
@@ -1108,22 +1104,24 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	b := cmn.Min(t, runParams.batchSize)
 	n := t / b
 	for i := 0; i < n; i++ {
-		_, err := api.DeleteList(runParams.bp, runParams.bck, objs[i*b:(i+1)*b])
+		xactID, err := api.DeleteList(runParams.bp, runParams.bck, objs[i*b:(i+1)*b])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
-		err = api.WaitForXaction(runParams.bp, xactArgs)
+		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete}
+		err = api.WaitForXactionV2(runParams.bp, args)
 		if err != nil {
 			fmt.Println("wait for xaction err ", err)
 		}
 	}
 
 	if t%b != 0 {
-		_, err := api.DeleteList(runParams.bp, runParams.bck, objs[n*b:])
+		xactID, err := api.DeleteList(runParams.bp, runParams.bck, objs[n*b:])
 		if err != nil {
 			fmt.Println("delete err ", err)
 		}
-		err = api.WaitForXaction(runParams.bp, xactArgs)
+		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete}
+		err = api.WaitForXactionV2(runParams.bp, args)
 		if err != nil {
 			fmt.Println("wait for xaction err ", err)
 		}

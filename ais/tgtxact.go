@@ -137,7 +137,13 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
-		go t.rebManager.RunResilver(xactMsg.ID, false /*skipGlobMisplaced*/)
+		notif := &cmn.NotifXact{
+			NotifBase: cmn.NotifBase{
+				When: cmn.UponTerm, Ty: notifXact,
+				Dsts: []string{equalIC}, F: t.xactCallerNotify,
+			},
+		}
+		go t.rebManager.RunResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
 	// 2. with bucket
 	case cmn.ActPrefetch:
 		if bck == nil {
@@ -151,6 +157,15 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		if err != nil {
 			return err
 		}
+
+		xact.AddNotif(&cmn.NotifXact{
+			NotifBase: cmn.NotifBase{
+				When: cmn.UponTerm,
+				Ty:   notifXact,
+				Dsts: []string{equalIC},
+				F:    t.xactCallerNotify,
+			},
+		})
 		go xact.Run()
 	// 3. cannot start
 	case cmn.ActPutCopies:

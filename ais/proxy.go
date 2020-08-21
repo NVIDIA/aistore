@@ -1906,6 +1906,10 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 	} else {
 		timeout = cmn.DefaultTimeout
 	}
+
+	nlb := newNLB(aisMsg.UUID, smap, notifXact, aisMsg.Action)
+	nlb.setOwner(equalIC)
+	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
 	results = p.bcastToGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body},
 		smap:    smap,
@@ -2494,7 +2498,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case cmn.QueryXactStats:
 		p.queryXaction(w, r, what)
 	case cmn.GetWhatStatus:
-		p.jtxStatus(w, r, what)
+		p.ic.writeStatus(w, r, what)
 	case cmn.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
 	case cmn.GetWhatRemoteAIS:
@@ -2523,25 +2527,6 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		s := fmt.Sprintf(fmtUnknownQue, what)
 		cmn.InvalidHandlerWithMsg(w, r, s)
 	}
-}
-
-// get jtx status
-func (p *proxyrunner) jtxStatus(w http.ResponseWriter, r *http.Request, what string) {
-	var (
-		query = r.URL.Query()
-		uuid  = query.Get(cmn.URLParamUUID)
-	)
-
-	if uuid == "" {
-		p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "no uuid given for `what`: %v", what)
-		return
-	}
-
-	if p.ic.reverseToOwner(w, r, uuid, nil) {
-		return
-	}
-
-	p.ic.writeStatus(w, r, uuid)
 }
 
 func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what string) {
@@ -2866,6 +2851,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 			var (
 				tokens = p.authn.revokedTokenList()
 				bmd    = p.owner.bmd.get()
+				nl     notifListener
 			)
 			// metasync
 			aisMsg := p.newAisMsg(msg, clone, bmd)
@@ -2875,11 +2861,13 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 				// we must trigger the rebalance and assume it is a new target
 				// with the same ID).
 				if exists || p.requiresRebalance(smap, clone) {
-					clone := p.owner.rmd.modify(func(clone *rebMD) {
+					rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
 						clone.TargetIDs = []string{nsi.ID()}
 						clone.inc()
 					})
-					pairs = append(pairs, revsPair{clone, aisMsg})
+					pairs = append(pairs, revsPair{rmdClone, aisMsg})
+					nl = newNLB(xaction.RebID(rmdClone.Version).String(), clone, notifXact, cmn.ActRebalance)
+					nl.setOwner(equalIC)
 				}
 			} else {
 				// Send RMD to proxies to make sure that they have
@@ -2891,6 +2879,9 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 				pairs = append(pairs, revsPair{tokens, aisMsg})
 			}
 			_ = p.metasyncer.sync(pairs...)
+			if nl != nil {
+				p.ic.registerEqual(regIC{smap: clone, nl: nl})
+			}
 			p.syncNewICOwners(smap, clone)
 		},
 	)
@@ -2966,15 +2957,23 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			return err
 		},
 		func(clone *smapX) {
-			aisMsg := p.newAisMsg(msg, clone, nil)
-			pairs := []revsPair{{clone, aisMsg}}
+			var (
+				aisMsg = p.newAisMsg(msg, clone, nil)
+				pairs  = []revsPair{{clone, aisMsg}}
+				nl     notifListener
+			)
 			if p.requiresRebalance(smap, clone) {
-				clone := p.owner.rmd.modify(func(clone *rebMD) {
+				rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
 					clone.inc()
 				})
-				pairs = append(pairs, revsPair{clone, aisMsg})
+				pairs = append(pairs, revsPair{rmdClone, aisMsg})
+				nl = newNLB(xaction.RebID(rmdClone.Version).String(), clone, notifXact, cmn.ActRebalance)
+				nl.setOwner(equalIC)
 			}
 			_ = p.metasyncer.sync(pairs...)
+			if nl != nil {
+				p.ic.registerEqual(regIC{smap: clone, nl: nl})
+			}
 		},
 	)
 	if err != nil {
@@ -3109,16 +3108,23 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if msg.Action == cmn.ActXactStart && xactMsg.Kind == cmn.ActRebalance {
+			smap := p.owner.smap.get()
 			if err := p.canStartRebalance(); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
-			clone := p.owner.rmd.modify(func(clone *rebMD) {
+			rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
 				clone.inc()
 			})
 			msg := &cmn.ActionMsg{Action: cmn.ActRebalance}
-			_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(msg, nil, nil)})
-			w.Write([]byte(xaction.RebID(clone.version()).String()))
+
+			_ = p.metasyncer.sync(revsPair{rmdClone, p.newAisMsg(msg, nil, nil)})
+
+			nl := newNLB(xaction.RebID(rmdClone.Version).String(), smap, notifXact, cmn.ActRebalance)
+			nl.setOwner(equalIC)
+			p.ic.registerEqual(regIC{smap: smap, nl: nl})
+
+			w.Write([]byte(xaction.RebID(rmdClone.version()).String()))
 			return
 		}
 
@@ -3136,6 +3142,9 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if msg.Action == cmn.ActXactStart {
+			smap := p.owner.smap.get()
+			nl := newNLB(xactMsg.ID, smap, notifXact, xactMsg.Kind)
+			p.ic.registerEqual(regIC{smap: smap, nl: nl})
 			w.Write([]byte(xactMsg.ID))
 		}
 	case cmn.ActSendOwnershipTbl:

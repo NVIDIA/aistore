@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -382,6 +383,9 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 			// 7. start rebalance and resilver
 			wg = p.metasyncer.sync(revsPair{clone, c.msg})
+			nl = newNLB(xaction.RebID(clone.Version).String(), c.smap, notifXact, cmn.ActRebalance)
+			nl.setOwner(equalIC)
+			p.ic.registerEqual(regIC{smap: c.smap, nl: nl})
 		},
 	)
 	wg.Wait()

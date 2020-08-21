@@ -1390,13 +1390,13 @@ func TestAtimePrefetch(t *testing.T) {
 	defer api.DeleteObject(baseParams, bck, objectName)
 
 	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, proxyURL, bck, objectName, objectContent)
-	time.Sleep(time.Millisecond)
+	time.Sleep(25 * time.Millisecond)
 	timeAfterPut := time.Now()
 
-	_, err := api.PrefetchList(baseParams, bck, []string{objectName})
+	xactID, err := api.PrefetchList(baseParams, bck, []string{objectName})
 	tassert.CheckFatal(t, err)
-	xactArgs := api.XactReqArgs{Kind: cmn.ActPrefetch, Bck: bck, Timeout: rebalanceTimeout}
-	err = api.WaitForXaction(baseParams, xactArgs)
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	atime := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
@@ -1541,6 +1541,7 @@ func TestRenewRebalance(t *testing.T) {
 			numGetsEachFile:     5,
 			otherTasksToTrigger: 1,
 		}
+		rebID string
 	)
 
 	m.saveClusterState()
@@ -1591,13 +1592,16 @@ func TestRenewRebalance(t *testing.T) {
 
 		<-m.controlCh // wait for half the GETs to complete
 
-		_, err := api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActRebalance})
+		rebID, err = api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActRebalance})
 		tassert.CheckFatal(t, err)
 		tutils.Logf("manually initiated rebalance\n")
 	}()
 
 	wg.Wait()
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
+	tassert.CheckError(t, err)
+
 	m.ensureNoErrors()
 	m.assertClusterState()
 }

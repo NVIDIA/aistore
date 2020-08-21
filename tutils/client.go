@@ -433,8 +433,9 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
-	xactArgs := api.XactReqArgs{ID: xactID, Timeout: evictPrefetchTimeout}
-	if err := api.WaitForXaction(baseParams, xactArgs); err != nil {
+
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: evictPrefetchTimeout}
+	if err := api.WaitForXactionV2(baseParams, args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
 }

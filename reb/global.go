@@ -65,7 +65,7 @@ func (reb *Manager) rebPreInit(md *rebArgs) bool {
 	return true
 }
 
-func (reb *Manager) rebInit(md *rebArgs) bool {
+func (reb *Manager) rebInit(md *rebArgs, notif cmn.Notif) bool {
 	reb.stages.stage.Store(rebStageInit)
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("rebalance (v%d) in %s state", md.id, stages[rebStageInit])
@@ -75,6 +75,7 @@ func (reb *Manager) rebInit(md *rebArgs) bool {
 	if xact == nil {
 		return false
 	}
+	xact.AddNotif(notif)
 
 	// get EC rebalancer ready
 	if md.ecUsed {
@@ -448,7 +449,7 @@ func (reb *Manager) rebFini(md *rebArgs) {
 // 4. Regular rebalance do checks like `stage > rebStageTraverse` or
 //    `stage < rebStageWaitAck`. But since all EC stages are between
 //    `Traverse` and `WaitAck` regular rebalance does not notice stage changes.
-func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64) {
+func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cmn.Notif) {
 	md := &rebArgs{
 		id:     id,
 		smap:   smap,
@@ -459,7 +460,7 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64) {
 	if !reb.rebPreInit(md) {
 		return
 	}
-	if !reb.rebInit(md) {
+	if !reb.rebInit(md, notif) {
 		return
 	}
 

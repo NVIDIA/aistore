@@ -383,9 +383,6 @@ func TestOperationsWithRanges(t *testing.T) {
 				var (
 					totalFiles = numfiles
 					baseParams = tutils.BaseAPIParams(proxyURL)
-					xactArgs   = func(xactID string) api.XactReqArgs {
-						return api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
-					}
 				)
 
 				for idx, test := range tests {
@@ -394,22 +391,25 @@ func TestOperationsWithRanges(t *testing.T) {
 					var (
 						err    error
 						xactID string
+						kind   string
 						msg    = &cmn.SelectMsg{Prefix: commonPrefix + "/"}
 					)
 					if evict {
 						xactID, err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
 						msg.Flags = cmn.SelectCached
+						kind = cmn.ActEvictObjects
 					} else {
 						xactID, err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
+						kind = cmn.ActDelete
 					}
 					if err != nil {
 						t.Error(err)
 						continue
 					}
-					if err := api.WaitForXaction(baseParams, xactArgs(xactID)); err != nil {
-						t.Error(err)
-						continue
-					}
+
+					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: rebalanceTimeout}
+					err = api.WaitForXactionV2(baseParams, args)
+					tassert.CheckError(t, err)
 
 					totalFiles -= test.delta
 					objList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
@@ -491,12 +491,6 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		Object:     fileName1,
 		Reader:     readers.NewBytesReader(dataCloud),
 	}
-	xactArgsF := func(xactID string, timeout time.Duration) api.XactReqArgs {
-		return api.XactReqArgs{ID: xactID, Timeout: timeout}
-	}
-	xactArgsPrefetch := func(xactID string) api.XactReqArgs { return xactArgsF(xactID, rebalanceTimeout) }
-	xactArgsEvict := xactArgsPrefetch
-	xactArgsDelete := xactArgsPrefetch
 
 	// PUT/GET/DEL Without ais bucket
 	tutils.Logf("Validating responses for non-existent ais bucket...\n")
@@ -518,25 +512,29 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tutils.Logf("PrefetchList %d\n", len(files))
 	prefetchListID, err := api.PrefetchList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsPrefetch(prefetchListID))
+	args := api.XactReqArgs{ID: prefetchListID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("PrefetchRange\n")
 	prefetchRangeID, err := api.PrefetchRange(baseParams, bckCloud, "r"+prefetchRange)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsPrefetch(prefetchRangeID))
+	args = api.XactReqArgs{ID: prefetchRangeID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("EvictList\n")
 	evictListID, err := api.EvictList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsEvict(evictListID))
+	args = api.XactReqArgs{ID: evictListID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("EvictRange\n")
 	evictRangeID, err := api.EvictRange(baseParams, bckCloud, prefetchRange)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsEvict(evictRangeID))
+	args = api.XactReqArgs{ID: evictRangeID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
@@ -566,26 +564,30 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	// Prefetch/Evict should work
 	prefetchListID, err = api.PrefetchList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsPrefetch(prefetchListID))
+	args = api.XactReqArgs{ID: prefetchListID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	evictListID, err = api.EvictList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsEvict(evictListID))
+	args = api.XactReqArgs{ID: evictListID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// Deleting from cloud bucket
 	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
 	deleteID, err := api.DeleteList(baseParams, bckCloud, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsDelete(deleteID))
+	args = api.XactReqArgs{ID: deleteID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// Deleting from ais bucket
 	tutils.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
 	deleteID, err = api.DeleteList(baseParams, bckLocal, files)
 	tassert.CheckFatal(t, err)
-	err = api.WaitForXaction(baseParams, xactArgsDelete(deleteID))
+	args = api.XactReqArgs{ID: deleteID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1)

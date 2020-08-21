@@ -232,31 +232,36 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
 	return nil
 }
 
-// TODO: Rename this function after IC is stable
-func GetStatusJtx(baseParams BaseParams, uuid string) (finished bool, err error) {
+func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (finished bool, err error) {
 	baseParams.Method = http.MethodGet
+	msg := cmn.XactReqMsg{
+		ID:   args.ID,
+		Kind: args.Kind,
+		Bck:  args.Bck,
+	}
+
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
+		Body:       cmn.MustMarshal(msg),
 		Query: url.Values{
 			cmn.URLParamWhat: []string{cmn.GetWhatStatus},
-			cmn.URLParamUUID: []string{uuid},
 		},
 	}, &finished)
 	return
 }
 
 // TODO: Rename this function after IC is stable
-func WaitForXactionJtx(baseParams BaseParams, uuid string, timeout ...time.Duration) (err error) {
+func WaitForXactionV2(baseParams BaseParams, args XactReqArgs) (err error) {
 	ctx := context.Background()
-	if len(timeout) > 0 {
+	if args.Timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout[0])
+		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
 		defer cancel()
 	}
 
 	for {
-		finished, err := GetStatusJtx(baseParams, uuid)
+		finished, err := GetXactionStatus(baseParams, args)
 		if err != nil || finished {
 			return err
 		}

@@ -126,6 +126,7 @@ func (g *fsprungroup) addMpathEvent(action, mpath string) {
 	}
 	g.RUnlock()
 	go func() {
+		// TODO: Assign UUID and notify IC
 		g.t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
 		xaction.Registry.MakeNCopiesOnMpathEvent(g.t, "add-mp")
 	}()
@@ -151,6 +152,7 @@ func (g *fsprungroup) delMpathEvent(action, mpath string) {
 	}
 
 	go func() {
+		// TODO: Assign UUID and notify IC
 		g.t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
 		xaction.Registry.MakeNCopiesOnMpathEvent(g.t, "del-mp")
 	}()

@@ -137,11 +137,31 @@ func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 	return nl, true
 }
 
-func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, uuid string) {
-	nl, exists := ic.p.notifs.entry(uuid)
+func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
+	msg := &cmn.XactReqMsg{}
+
+	if err := cmn.ReadJSON(w, r, msg); err != nil {
+		return
+	}
+
+	if msg.ID == "" {
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "missing ID for `what`: %v", what)
+		return
+	}
+
+	if ic.reverseToOwner(w, r, msg.ID, msg) {
+		return
+	}
+
+	nl, exists := ic.p.notifs.entry(msg.ID)
 	if !exists {
 		smap := ic.p.owner.smap.get()
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", msg.ID, smap.StrIC(ic.p.si))
+		return
+	}
+
+	if msg.Kind != "" && nl.kind() != msg.Kind {
+		ic.p.invalmsghdlrf(w, r, "xaction kind mismatch (ID: %s, KIND: %s)", msg.ID, msg.Kind)
 		return
 	}
 

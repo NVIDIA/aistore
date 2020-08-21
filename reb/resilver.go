@@ -27,7 +27,7 @@ type (
 	}
 )
 
-func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
+func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...cmn.Notif) {
 	var (
 		availablePaths, _ = fs.Get()
 		err               = fs.PutMarker(xaction.GetMarkerName(cmn.ActResilver))
@@ -38,6 +38,10 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool) {
 
 	xreb := xaction.Registry.RenewResilver(id)
 	defer xreb.MarkDone()
+
+	if len(notifs) != 0 {
+		xreb.AddNotif(notifs[0])
+	}
 
 	glog.Infoln(xreb.String())
 
