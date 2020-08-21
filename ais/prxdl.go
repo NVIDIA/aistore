@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -20,9 +19,7 @@ import (
 )
 
 func (p *proxyrunner) broadcastDownloadRequest(method, path string, body []byte, query url.Values) chan callResult {
-	query.Add(cmn.URLParamProxyID, p.si.ID())
-	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(time.Now().UnixNano()))
-
+	query.Add(cmn.URLParamProxyID, p.si.ID()) // Target checks it in validRedirect
 	return p.bcastToGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: path, Body: body, Query: query},
 		timeout: cmn.GCO.Get().Timeout.MaxHostBusy,

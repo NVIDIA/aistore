@@ -348,6 +348,7 @@ type ClientConf struct {
 	TimeoutLong    time.Duration `json:"-"`
 	ListObjectsStr string        `json:"list_timeout"`
 	ListObjects    time.Duration `json:"-"`
+	DirectAccess   bool          `json:"allow_direct_access"`
 }
 
 type ProxyConf struct {

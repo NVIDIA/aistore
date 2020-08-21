@@ -592,6 +592,12 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		query        = r.URL.Query()
 		isGFNRequest = cmn.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
 	)
+	// GET object is the only request that allows direct access
+	if !cmn.IsIntraClusterReq(r.Header, query) && !config.Client.DirectAccess {
+		// TODO: send TCP RST?
+		t.invalmsghdlrf(w, r, "%s: %s is expected to be redirected", t.si, "GET object")
+		return
+	}
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -811,6 +817,10 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		evict bool
 		query = r.URL.Query()
 	)
+	if !cmn.IsIntraClusterReq(r.Header, query) {
+		t.invalmsghdlrf(w, r, "%s: %s is expected to be redirected", t.si, "GET object")
+		return
+	}
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1049,6 +1059,10 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		silent = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
 
+	if !cmn.IsIntraClusterReq(r.Header, query) {
+		t.invalmsghdlrf(w, r, "%s: %s is expected to be redirected", t.si, "GET object")
+		return
+	}
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return

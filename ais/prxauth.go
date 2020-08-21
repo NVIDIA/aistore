@@ -34,22 +34,12 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TODO: better check for internal request - nid & pid are too insecure
-func (p *proxyrunner) isInternalReq(query url.Values, hdr http.Header) bool {
-	pid := query.Get(cmn.URLParamProxyID)
-	if pid != "" {
-		return true
-	}
-	nid := hdr.Get(cmn.HeaderNodeID)
-	return nid != ""
-}
-
 // Read a token from request header and validates it
 // Header format:
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
 func (p *proxyrunner) validateToken(query url.Values, hdr http.Header) (*cmn.AuthToken, error) {
-	if p.isInternalReq(query, hdr) {
+	if cmn.IsIntraClusterReq(hdr, query) {
 		return nil, nil
 	}
 	authToken := hdr.Get(cmn.HeaderAuthorization)

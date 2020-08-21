@@ -133,7 +133,7 @@ const (
 	HeaderObjECMeta    = "ec_meta"        // Info about EC object/slice/replica
 
 	// intra-cluster: control
-	HeaderCallerID          = "caller.id"
+	HeaderCallerID          = "caller.id" // it is a marker of intra-cluster request (see cmn.IsInternalReq)
 	HeaderCallerName        = "caller.name"
 	HeaderCallerSmapVersion = "caller.smap.ver"
 

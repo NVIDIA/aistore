@@ -496,3 +496,13 @@ func RangeHdr(start, length int64) (hdr http.Header) {
 	hdr.Add(HeaderRange, fmt.Sprintf("%s%d-%d", HeaderRangeValPrefix, start, start+length-1))
 	return
 }
+
+// IsIntraClusterReq returns true if a request is intra-cluster one(in this case
+// the Header contains CallerID) or it is a request from a client to URL
+// returned by a proxy redirection (in this case the proxy fills the query)
+func IsIntraClusterReq(hdr http.Header, q url.Values) bool {
+	if hdr.Get(HeaderCallerID) != "" {
+		return true
+	}
+	return len(q) != 0 && q.Get(URLParamProxyID) != ""
+}

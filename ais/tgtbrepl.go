@@ -121,6 +121,7 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 		query  = url.Values{}
 		header = lom.PopulateHdr(nil)
 	)
+	header.Set(cmn.HeaderCallerID, ri.t.si.ID())
 	query = cmn.AddBckToQuery(query, ri.bckTo.Bck)
 	query.Add(cmn.URLParamTargetID, ri.t.si.ID())
 	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))

@@ -1768,9 +1768,9 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 			smap:    smap,
 			fv:      func() interface{} { return &cmn.BucketList{} },
 		}
+		results chan callResult
 	)
 
-	var results chan callResult
 	if smsg.NeedLocalData() {
 		results = p.bcastToGroup(args)
 	} else {
@@ -2456,6 +2456,10 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 // http reverse-proxy handler, to handle unmodified requests
 // (not to confuse with p.rproxy)
 func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Scheme == "" {
+		p.invalmsghdlr(w, r, "invalid request", http.StatusBadRequest)
+		return
+	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
