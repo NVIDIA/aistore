@@ -34,7 +34,7 @@ class DictParser(dict):
     __getattr__ = dict.__getitem__
 
     def __init__(self, d):
-        super(DictParser, self).__init__()
+        super().__init__()
         if six.PY3:
             iter_items = d.items()
         else:
