@@ -965,9 +965,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		cloudConf := cmn.GCO.Get().Cloud
-		bck.Provider = cloudConf.Provider
-		bck.Ns = cloudConf.Ns
 		if err := p.createBucket(&msg, bck); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
@@ -3475,8 +3472,11 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 		debug.Assert(args.origURLBck != "")
 		cloudProps.Set(cmn.HeaderOrigURLBck, args.origURLBck)
 	} else {
-		cloudConf := cmn.GCO.Get().Cloud
-		bck = cluster.NewBck(args.queryBck.Name, cloudConf.Provider, cloudConf.Ns)
+		if !cmn.IsValidProvider(args.queryBck.Provider) {
+			args.p.invalmsghdlrf(args.w, args.r, "invalid provider: %s", args.queryBck.Provider)
+			return
+		}
+		bck = args.queryBck
 	}
 	if err = args.p.createBucket(&cmn.ActionMsg{Action: cmn.ActRegisterCB}, bck, cloudProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {

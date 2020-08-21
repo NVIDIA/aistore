@@ -280,9 +280,8 @@ type Config struct {
 type CloudConf struct {
 	Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on cloud provider
 
-	// 3rd party Cloud -- set during validation
-	Ns       Ns     `json:"-"`
-	Provider string `json:"-"`
+	// 3rd party Cloud(s) -- set during validation
+	Providers map[string]Ns `json:"-"`
 }
 
 type RemoteAISInfo struct {
@@ -652,57 +651,44 @@ func (c *CloudConf) MarshalJSON() (data []byte, err error) {
 
 func (c *CloudConf) Validate(_ *Config) (err error) {
 	for provider := range c.Conf {
-		// AIS cloud co-exists with any 3rd party
-		if provider == ProviderAIS {
-			if err = c.validateConf(ProviderAIS); err != nil {
-				return
+		var (
+			b = MustMarshal(c.Conf[provider])
+		)
+		switch provider {
+		case ProviderAIS:
+			var aisConf CloudConfAIS
+			if err := jsoniter.Unmarshal(b, &aisConf); err != nil {
+				return fmt.Errorf("invalid cloud specification: %v", err)
 			}
-		} else if c.Provider == "" {
-			c.Provider = provider // supporting a single 3rd party Cloud
-		} else if provider != "" && provider != c.Provider {
-			return fmt.Errorf("multiple cloud providers (%s, %s), expecting one of: %v",
-				provider, c.Provider, allProviders)
+			for alias, urls := range aisConf {
+				if len(urls) == 0 {
+					return fmt.Errorf("no URL(s) to connect to remote AIS cluster %q", alias)
+				}
+				break
+			}
+			c.Conf[provider] = aisConf
+		case "":
+			continue
+		default:
+			c.setProvider(provider)
 		}
 	}
-	if c.Provider == "" {
-		return
-	}
-	if !IsValidProvider(c.Provider) {
-		return fmt.Errorf("invalid `cloud[provider]` value (%s), expected one of: %v", c.Provider, allProviders)
-	}
-	if err = c.validateConf(c.Provider); err != nil {
-		c.Provider = ""
-	}
-	return
+	return nil
 }
 
-func (c *CloudConf) validateConf(provider string) (err error) {
-	var (
-		conf interface{}
-		b    = MustMarshal(c.Conf[provider])
-	)
+func (c *CloudConf) setProvider(provider string) {
+	var ns Ns
 	switch provider {
-	case ProviderAIS:
-		var aisConf CloudConfAIS
-		if err := jsoniter.Unmarshal(b, &aisConf); err != nil {
-			return fmt.Errorf("invalid cloud specification: %v", err)
-		}
-		for alias, urls := range aisConf {
-			if len(urls) == 0 {
-				return fmt.Errorf("no URL(s) to connect to remote AIS cluster %q", alias)
-			}
-			break
-		}
-		conf = aisConf
 	case ProviderAmazon, ProviderGoogle, ProviderAzure:
-		c.Ns = NsGlobal
+		ns = NsGlobal
+
 	default:
 		AssertMsg(false, "unknown cloud provider "+provider)
 	}
-
-	c.Conf[provider] = conf
-
-	return nil
+	if c.Providers == nil {
+		c.Providers = map[string]Ns{}
+	}
+	c.Providers[provider] = ns
 }
 
 func (c *CloudConf) ProviderConf(provider string, newConf ...interface{}) (conf interface{}, ok bool) {

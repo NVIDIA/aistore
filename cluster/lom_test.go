@@ -46,7 +46,7 @@ var _ = Describe("LOM", func() {
 		mpaths []string
 		mis    []*fs.MountpathInfo
 
-		oldCloudProvider = cmn.GCO.Get().Cloud.Provider
+		oldCloudProviders = cmn.GCO.Get().Cloud.Providers
 	)
 
 	for i := 0; i < numMpaths; i++ {
@@ -99,7 +99,10 @@ var _ = Describe("LOM", func() {
 	BeforeEach(func() {
 		// Dummy cloud provider for tests involving cloud buckets
 		config := cmn.GCO.BeginUpdate()
-		config.Cloud.Provider = cmn.ProviderAmazon
+		config.Cloud.Providers = map[string]cmn.Ns{
+			cmn.ProviderAmazon: cmn.NsGlobal,
+		}
+
 		cmn.GCO.CommitUpdate(config)
 
 		for _, mpath := range mpaths {
@@ -111,7 +114,7 @@ var _ = Describe("LOM", func() {
 		_ = os.RemoveAll(tmpDir)
 
 		config := cmn.GCO.BeginUpdate()
-		config.Cloud.Provider = oldCloudProvider
+		config.Cloud.Providers = oldCloudProviders
 		cmn.GCO.CommitUpdate(config)
 	})
 

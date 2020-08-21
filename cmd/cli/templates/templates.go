@@ -207,7 +207,7 @@ const (
 		" Number of parity slices:\t{{$obj.ParitySlices}}\n" +
 		" Rebalance batch size:\t{{$obj.BatchSize}}\n" +
 		" Compression options:\t{{$obj.Compression}}\n"
-	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.Cloud.Provider}}\n"
+	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Providers: {{ range $key := .Cloud.Providers}} {{$key}} {{end}}\n"
 
 	// hidden config sections: replication
 	// Application Config has this sections but /deploy/dev/local/aisnode_config.sh does not expose them

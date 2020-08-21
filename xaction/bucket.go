@@ -192,10 +192,8 @@ func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 		return false
 	})
 	// TODO: remote ais
-	if cfg.Cloud.Provider != "" {
-		provider = cfg.Cloud.Provider
-		namespace := cfg.Cloud.Ns
-		bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {
+	for name, ns := range cfg.Cloud.Providers {
+		bmd.Range(&name, &ns, func(bck *cluster.Bck) bool {
 			if bck.Props.Mirror.Enabled {
 				xact, err := r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
 				if err == nil {

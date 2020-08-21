@@ -129,8 +129,6 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 	)
 
 	if !bck.IsAIS() {
-		config := tutils.GetClusterConfig(t)
-		bckProvider = config.Cloud.Provider
 		bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Ns, cmn.DefaultBucketProps()))
 	}
 
@@ -207,12 +205,11 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
 		bck, objPath, totalCnt, len(sliceList), sliceList)
 
-	var bckProvider string
-	if bck.IsAIS() {
-		bckProvider = cmn.ProviderAIS
-	} else {
+	if !bck.IsAIS() {
+		var ok bool
 		config := tutils.GetClusterConfig(t)
-		bckProvider = config.Cloud.Provider
+		_, ok = config.Cloud.Providers[bck.Provider]
+		tassert.Errorf(t, ok, "invalid provider %s, expected to be in: %v", bck.Provider, config.Cloud.Providers)
 	}
 
 	sliced := sliceSize < objSize
@@ -235,7 +232,6 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 			}
 		} else {
 			tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
-			tassert.Errorf(t, ct.Bck().Provider == bckProvider, "invalid provider %s, expected: %s", ct.Bck().Provider, bckProvider)
 			tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 			tassert.Errorf(t, ct.ObjName() == objPath, "invalid object name %s, expected: %s", ct.ObjName(), objPath)
 			tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)

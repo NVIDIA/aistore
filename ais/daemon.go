@@ -282,8 +282,9 @@ func initProxy() cmn.Runner {
 
 func initTarget() cmn.Runner {
 	t := &targetrunner{
-		gmm: &memsys.MMSA{Name: gmmName},
-		smm: &memsys.MMSA{Name: smmName, Small: true},
+		gmm:   &memsys.MMSA{Name: gmmName},
+		smm:   &memsys.MMSA{Name: smmName, Small: true},
+		cloud: make(clouds, 8),
 	}
 	_ = t.gmm.Init(true /*panicOnErr*/)
 	_ = t.smm.Init(true /*panicOnErr*/)

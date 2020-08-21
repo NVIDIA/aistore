@@ -88,7 +88,7 @@ func genCURLCmdLine(isSecure, isXML bool, proxyURL string, targets cluster.NodeM
 		"-L", "-X", "GET",
 		genObjURL(isSecure, isXML),
 		"-o", gcsTmpFile,
-		"-x", proxyURL,
+		"-x", proxyURL, "--proxy-insecure",
 		"--max-redirs", "3",
 		"--noproxy", strings.Join(noProxy, ","),
 	}
@@ -122,8 +122,8 @@ func TestRProxyGCS(t *testing.T) {
 	}
 	os.Remove(gcsTmpFile)
 
-	tutils.Logf("First time download via XML API\n")
 	cmdline := genCURLCmdLine(false, true, proxyURL, smap.Tmap)
+	tutils.Logf("First time download via XML API: %s\n", cmdline)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
 	tutils.Logln(string(out))
 	tassert.CheckFatal(t, err)

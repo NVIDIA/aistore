@@ -273,7 +273,7 @@ func startDownloadHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		if cfg.Cloud.Provider == source.cloud.bck.Provider {
+		if _, ok := cfg.Cloud.Providers[source.cloud.bck.Provider]; ok {
 			// Cloud is configured to requested bucket provider.
 			dlType = downloader.DlTypeCloud
 

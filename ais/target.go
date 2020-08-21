@@ -71,11 +71,7 @@ type (
 		timedLookup atomic.Bool
 		refCount    uint32
 	}
-	clouds struct {
-		ais  *cloud.AisCloudProvider
-		http cluster.CloudProvider
-		ext  cluster.CloudProvider
-	}
+	clouds map[string]cluster.CloudProvider
 	// main
 	targetrunner struct {
 		httprunner
@@ -308,34 +304,39 @@ func (t *targetrunner) checkK8s() error {
 	return nil
 }
 
-func (c *clouds) init(t *targetrunner) {
+func (c clouds) init(t *targetrunner) {
 	config := cmn.GCO.Get()
-	c.ais = cloud.NewAIS(t) // ais cloud is always present
+	ais := cloud.NewAIS(t)
+	c[cmn.ProviderAIS] = ais // ais cloud is always present
 	if aisConf, ok := config.Cloud.ProviderConf(cmn.ProviderAIS); ok {
-		if err := c.ais.Apply(aisConf, "init"); err != nil {
+		if err := ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
 		}
 	}
-	c.http, _ = cloud.NewHTTP(t, config)
+
+	c[cmn.ProviderHTTP], _ = cloud.NewHTTP(t, config)
 	if err := c.initExt(t); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 }
 
 // 3rd part cloud: empty stubs unless populated via build tags
-func (c *clouds) initExt(t *targetrunner) (err error) {
+func (c clouds) initExt(t *targetrunner) (err error) {
 	config := cmn.GCO.Get()
-	switch config.Cloud.Provider {
-	case cmn.ProviderAmazon:
-		c.ext, err = cloud.NewAWS(t)
-	case cmn.ProviderGoogle:
-		c.ext, err = cloud.NewGCP(t)
-	case cmn.ProviderAzure:
-		c.ext, err = cloud.NewAzure(t)
-	case "":
-		c.ext, _ = cloud.NewDummyCloud(t)
-	default:
-		err = fmt.Errorf("unknown cloud provider: %q", config.Cloud.Provider)
+	for provider := range config.Cloud.Providers {
+		switch provider {
+		case cmn.ProviderAmazon:
+			c[provider], err = cloud.NewAWS(t)
+		case cmn.ProviderGoogle:
+			c[provider], err = cloud.NewGCP(t)
+		case cmn.ProviderAzure:
+			c[provider], err = cloud.NewAzure(t)
+		default:
+			err = fmt.Errorf("unknown cloud provider: %q", provider)
+		}
+		if err != nil {
+			return
+		}
 	}
 	return
 }
@@ -1206,7 +1207,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 
 func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
 	// 3rd party cloud or remote ais
-	if query.Provider == cfg.Cloud.Provider || query.IsRemoteAIS() {
+	if _, ok := cfg.Cloud.Providers[query.Provider]; ok || query.IsRemoteAIS() {
 		bck := cluster.NewBck("", query.Provider, query.Ns)
 		names, err, c = t.Cloud(bck).ListBuckets(context.Background(), query)
 		sort.Sort(names)

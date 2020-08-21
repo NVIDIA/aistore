@@ -40,20 +40,20 @@ func (t *targetrunner) GetDB() dbdriver.Driver      { return t.dbDriver }
 
 func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 	if bck.Bck.IsRemoteAIS() {
-		return t.cloud.ais
+		return t.cloud[cmn.ProviderAIS]
 	}
 	if bck.Bck.IsHTTP() {
-		return t.cloud.http
+		return t.cloud[cmn.ProviderHTTP]
 	}
+	// TODO: check if this can be simplified ?
 	if bck.Props != nil {
-		if t.cloud.ext.Provider() == bck.CloudBck().Provider {
-			return t.cloud.ext
+		providerName := bck.CloudBck().Provider
+		if ext, ok := t.cloud[providerName]; ok {
+			return ext
 		}
-
-		c, _ := cloud.NewDummyCloud(t)
-		return c
 	}
-	return t.cloud.ext
+	c, _ := cloud.NewDummyCloud(t)
+	return c
 }
 
 func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {

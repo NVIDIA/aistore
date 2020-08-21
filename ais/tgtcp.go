@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -219,7 +220,8 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 		//
 		aisConf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
 		cmn.Assert(ok)
-		if err := t.cloud.ais.Apply(aisConf, action); err != nil {
+		aisCloud := t.cloud[cmn.ProviderAIS].(*cloud.AisCloudProvider)
+		if err := aisCloud.Apply(aisConf, action); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	}
@@ -333,8 +335,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		clusterConf, ok := conf.(cmn.CloudConfAIS)
 		cmn.Assert(ok)
-		aisCloudInfo := t.cloud.ais.GetInfo(clusterConf)
-		t.writeJSON(w, r, aisCloudInfo, httpdaeWhat)
+		aisCloud := t.cloud[cmn.ProviderAIS].(*cloud.AisCloudProvider)
+		t.writeJSON(w, r, aisCloud.GetInfo(clusterConf), httpdaeWhat)
 	default:
 		t.httprunner.httpdaeget(w, r)
 	}

@@ -147,14 +147,13 @@ type (
 		hasAllSlices bool         // true: all slices existed before rebalance
 	}
 	rebBck struct {
+		cmn.Bck
 		objs map[string]*rebObject // maps ObjectName <-> object info
 	}
 	// final result of scanning the existing objects
 	globalCTList struct {
-		ais   map[string]*rebBck // maps BucketName <-> map of objects
-		cloud map[string]*rebBck // maps BucketName <-> map of objects
+		bcks map[string]*rebBck // maps BucketFQN <-> objects
 	}
-
 	// CT destination (to use later for retransmitting lost CTs)
 	retransmitCT struct {
 		daemonID string           // destination
@@ -315,14 +314,11 @@ func (ack *ackCT) clear() {
 // It checks if the CT is unique(in case of the object is erasure coded),
 // and the CT's info about object matches previously found CTs.
 func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error {
-	bckList := rr.ais
-	if ct.Bck.IsRemote() {
-		bckList = rr.cloud
-	}
-	bck, ok := bckList[ct.Name]
+	bckList := rr.bcks
+	bck, ok := bckList[ct.Bck.String()]
 	if !ok {
-		bck = &rebBck{objs: make(map[string]*rebObject)}
-		bckList[ct.Name] = bck
+		bck = &rebBck{Bck: ct.Bck, objs: make(map[string]*rebObject)}
+		bckList[ct.Bck.String()] = bck
 	}
 
 	b := cluster.NewBckEmbed(ct.Bck)
@@ -757,8 +753,7 @@ func (reb *Manager) recvECData(hdr transport.Header, unpacker *cmn.ByteUnpack, r
 // Build a list buckets with their objects from a flat list of all CTs
 func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 	res := &globalCTList{
-		ais:   make(map[string]*rebBck),
-		cloud: make(map[string]*rebBck),
+		bcks: make(map[string]*rebBck),
 	}
 
 	// process all received CTs
@@ -818,53 +813,42 @@ func (reb *Manager) detectBroken(md *rebArgs, res *globalCTList) {
 	bowner := reb.t.GetBowner()
 	bmd := bowner.Get()
 
-	providers := map[string]map[string]*rebBck{
-		cmn.ProviderAIS:              res.ais,
-		cmn.GCO.Get().Cloud.Provider: res.cloud,
-	}
-	for provider, tp := range providers {
-		for bckName, objs := range tp {
-			if provider == "" {
-				// Cloud provider can be empty so we do not need to do anything.
+	for _, rebBck := range res.bcks {
+		bck := cluster.NewBck(rebBck.Name, rebBck.Provider, rebBck.Ns)
+		if err := bck.Init(bowner, reb.t.Snode()); err != nil {
+			// bucket might be deleted while rebalancing - skip it
+			glog.Errorf("invalid bucket %s: %v", rebBck.Name, err)
+			delete(res.bcks, rebBck.Bck.String())
+			continue
+		}
+		bprops, ok := bmd.Get(bck)
+		if !ok {
+			// bucket might be deleted while rebalancing - skip it
+			glog.Errorf("bucket %s does not exist", rebBck.Name)
+			delete(res.bcks, rebBck.Bck.String())
+			continue
+		}
+		// Select only objects that have "main" part missing or misplaced.
+		// Other missing slices/replicas must be added to ZIL
+		for objName, obj := range rebBck.objs {
+			if err := reb.calcLocalProps(bck, obj, md.smap, &bprops.EC); err != nil {
+				glog.Warningf("detect %s failed, skipping: %v", obj.objName, err)
 				continue
 			}
 
-			bck := cluster.NewBck(bckName, provider, cmn.NsGlobal)
-			if err := bck.Init(bowner, reb.t.Snode()); err != nil {
-				// bucket might be deleted while rebalancing - skip it
-				glog.Errorf("invalid bucket %s: %v", bckName, err)
-				delete(tp, bckName)
+			mainHasObject := (obj.mainSliceID == 0 || obj.isECCopy) && obj.mainHasAny
+			if mainHasObject {
+				// TODO: put to ZIL slices to rebuild locally and resend
+				// or slices to move locally if needed
+				glog.Infof("#0. Main has full object: %s", objName)
 				continue
 			}
-			bprops, ok := bmd.Get(bck)
-			if !ok {
-				// bucket might be deleted while rebalancing - skip it
-				glog.Errorf("bucket %s does not exist", bckName)
-				delete(tp, bckName)
-				continue
-			}
-			// Select only objects that have "main" part missing or misplaced.
-			// Other missing slices/replicas must be added to ZIL
-			for objName, obj := range objs.objs {
-				if err := reb.calcLocalProps(bck, obj, md.smap, &bprops.EC); err != nil {
-					glog.Warningf("detect %s failed, skipping: %v", obj.objName, err)
-					continue
-				}
 
-				mainHasObject := (obj.mainSliceID == 0 || obj.isECCopy) && obj.mainHasAny
-				if mainHasObject {
-					// TODO: put to ZIL slices to rebuild locally and resend
-					// or slices to move locally if needed
-					glog.Infof("#0. Main has full object: %s", objName)
-					continue
-				}
-
-				if glog.FastV(4, glog.SmoduleReb) {
-					glog.Infof("[%s] BROKEN: %s [Main %d on %s], CTs %d of %d",
-						reb.t.Snode(), objName, obj.mainSliceID, obj.mainDaemon, obj.foundCT(), obj.requiredCT())
-				}
-				reb.ec.broken = append(reb.ec.broken, obj)
+			if glog.FastV(4, glog.SmoduleReb) {
+				glog.Infof("[%s] BROKEN: %s [Main %d on %s], CTs %d of %d",
+					reb.t.Snode(), objName, obj.mainSliceID, obj.mainDaemon, obj.foundCT(), obj.requiredCT())
 			}
+			reb.ec.broken = append(reb.ec.broken, obj)
 		}
 	}
 
@@ -1016,9 +1000,9 @@ func (reb *Manager) runEC() {
 		go reb.jogEC(mpathInfo, bck, wg)
 	}
 
-	if cfg.Cloud.Provider != "" {
+	for _, provider := range cfg.Cloud.Providers {
 		for _, mpathInfo := range availablePaths {
-			bck := cmn.Bck{Name: bck.Name, Provider: cfg.Cloud.Provider, Ns: bck.Ns}
+			bck := cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
 			wg.Add(1)
 			go reb.jogEC(mpathInfo, bck, wg)
 		}
