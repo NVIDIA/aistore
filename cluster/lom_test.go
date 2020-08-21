@@ -183,7 +183,7 @@ var _ = Describe("LOM", func() {
 				fs.Disable(mpaths[2])
 
 				lom := &cluster.LOM{T: tMock, ObjName: testObject}
-				err := lom.Init(cmn.Bck{Name: bucketCloudA, Provider: cmn.AnyCloud, Ns: cmn.NsGlobal})
+				err := lom.Init(cmn.Bck{Name: bucketCloudA, Provider: cmn.ProviderAmazon, Ns: cmn.NsGlobal})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredCloudFQN))
 
@@ -946,7 +946,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomLocal.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
 
 			lomCloud := &cluster.LOM{T: tMock, ObjName: testObject}
-			err = lomCloud.Init(cmn.Bck{Name: sameBucketName, Provider: cmn.AnyCloud})
+			err = lomCloud.Init(cmn.Bck{Name: sameBucketName, Provider: cmn.ProviderAmazon})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomCloud.Load(false)
 			Expect(cmn.IsObjNotExist(err)).To(BeTrue())

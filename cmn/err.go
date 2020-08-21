@@ -148,7 +148,7 @@ func NewErrorRemoteBucketDoesNotExist(bck Bck, node string) *ErrorRemoteBucketDo
 	return &ErrorRemoteBucketDoesNotExist{node: node, bck: bck}
 }
 func (e *ErrorRemoteBucketDoesNotExist) Error() string {
-	if e.bck.IsCloud(AnyCloud) {
+	if e.bck.IsCloud() {
 		return _errBucket(fmt.Sprintf("cloud bucket %s does not exist", e.bck), e.node)
 	}
 	return _errBucket(fmt.Sprintf("remote ais bucket %s does not exist", e.bck), e.node)

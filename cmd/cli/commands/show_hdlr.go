@@ -210,7 +210,7 @@ var (
 )
 
 func showBucketHandler(c *cli.Context) (err error) {
-	bck, objName, err := parseBckObjectURI(c.Args().First(), true /*query*/)
+	bck, objName, err := cmn.ParseBckObjectURI(c.Args().First(), true /*query*/)
 	if err != nil {
 		return
 	}
@@ -375,7 +375,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in format bucket/object")
 	}
-	bck, object, err := parseBckObjectURI(fullObjName)
+	bck, object, err := cmn.ParseBckObjectURI(fullObjName)
 	if err != nil {
 		return
 	}

@@ -49,7 +49,7 @@ func setCopiesHandler(c *cli.Context) (err error) {
 		p          *cmn.BucketProps
 		objectName string
 	)
-	if bck, objectName, err = parseBckObjectURI(c.Args().First()); err != nil {
+	if bck, objectName, err = cmn.ParseBckObjectURI(c.Args().First()); err != nil {
 		return
 	}
 	if objectName != "" {
@@ -77,7 +77,7 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 		p          *cmn.BucketProps
 		objectName string
 	)
-	if bck, objectName, err = parseBckObjectURI(c.Args().First()); err != nil {
+	if bck, objectName, err = cmn.ParseBckObjectURI(c.Args().First()); err != nil {
 		return
 	}
 	if objectName != "" {

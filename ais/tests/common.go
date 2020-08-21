@@ -45,8 +45,6 @@ var (
 	numops                 int
 	numfiles               int
 	numworkers             int
-	numtarget              int
-	numproxy               int
 	match                  = ".*"
 	pagesize               uint
 	fnlen                  int
@@ -60,7 +58,7 @@ var (
 	cycles                 int
 	prefixFileNumber       int
 
-	clibucket string
+	cliBck cmn.Bck
 )
 
 // nolint:maligned // no performance critical code
@@ -554,7 +552,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "cloud",
-			bck:  cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
+			bck:  cliBck,
 			skipArgs: tutils.SkipTestArgs{
 				Long:  true,
 				Cloud: true,
@@ -571,7 +569,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		{
 			name:       "backend",
 			bck:        cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
-			backendBck: cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
+			backendBck: cliBck,
 			skipArgs: tutils.SkipTestArgs{
 				Long:  true,
 				Cloud: true,

@@ -16,22 +16,66 @@ import (
 	"github.com/NVIDIA/aistore/tutils"
 )
 
-func parseEnvVars() {
-	var err error
+func setBucket() {
+	var (
+		err      error
+		bucket   = os.Getenv("BUCKET")
+		provider = os.Getenv("PROVIDER")
+	)
+	if bucket == "" {
+		bucket = cmn.RandString(7)
+		tutils.Logf("Using BUCKET=%q\n", bucket)
+	}
+	cliBck, _, err = cmn.ParseBckObjectURI(bucket)
+	if err != nil {
+		tutils.Logf("Failed to parse 'BUCKET' env variable, err: %v\n", err)
+		os.Exit(1)
+	}
+	if provider != "" {
+		if cliBck.Provider != "" && cliBck.Provider != provider {
+			tutils.Logf("Provider is set for both 'BUCKET' (%q) and 'PROVIDER' (%q) env variables\n", cliBck, provider)
+			os.Exit(1)
+		}
+		if !cmn.IsValidProvider(provider) {
+			tutils.Logf("Invalid provider set for 'PROVIDER' (%q) env variable\n", provider)
+			os.Exit(1)
+		}
+		cliBck.Provider = provider
+	}
+}
+
+func waitForCluster() {
+	var (
+		err       error
+		proxyCnt  int
+		targetCnt int
+	)
 	pc := os.Getenv(cmn.EnvVars.NumProxy)
 	tc := os.Getenv(cmn.EnvVars.NumTarget)
 	if pc != "" || tc != "" {
-		numproxy, err = strconv.Atoi(pc)
+		proxyCnt, err = strconv.Atoi(pc)
 		if err != nil {
 			tutils.Logf("Error EnvVars: %s. err: %v", cmn.EnvVars.NumProxy, err)
 			os.Exit(1)
 		}
-		numtarget, err = strconv.Atoi(tc)
+		targetCnt, err = strconv.Atoi(tc)
 		if err != nil {
 			tutils.Logf("Error EnvVars: %s. err: %v", cmn.EnvVars.NumTarget, err)
 			os.Exit(1)
 		}
 	}
+
+	tutils.Logln("Waiting for cluster readiness...")
+	var cntNodes []int
+	if proxyCnt != 0 || targetCnt != 0 {
+		cntNodes = []int{proxyCnt, targetCnt}
+	}
+	_, err = tutils.WaitForPrimaryProxy(tutils.GetPrimaryURL(), "startup", -1, true, cntNodes...)
+	if err != nil {
+		tutils.Logf("Error waiting for cluster startup, err: %v\n", err)
+		os.Exit(1)
+	}
+	tutils.Logln("Cluster ready...")
 }
 
 func TestMain(m *testing.M) {
@@ -56,24 +100,9 @@ func TestMain(m *testing.M) {
 
 	flag.Parse()
 
-	clibucket = os.Getenv("BUCKET")
-	if clibucket == "" {
-		clibucket = cmn.RandString(7)
-		tutils.Logf("Using BUCKET=%q\n", clibucket)
-	}
-	parseEnvVars()
-	var err error
-	tutils.Logln("Waiting for cluster readiness...")
-	var cntNodes = []int{}
-	if numtarget != 0 || numproxy != 0 {
-		cntNodes = []int{numproxy, numtarget}
-	}
-	_, err = tutils.WaitForPrimaryProxy(tutils.GetPrimaryURL(), "startup", -1, true, cntNodes...)
-	if err != nil {
-		tutils.Logf("Error waiting for cluster startup. err: %v", err)
-		os.Exit(1)
-	}
-	tutils.Logln("Cluster ready...")
+	setBucket()
+	waitForCluster()
+
 	rand.Seed(time.Now().UnixNano())
 	os.Exit(m.Run())
 }

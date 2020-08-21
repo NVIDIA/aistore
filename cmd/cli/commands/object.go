@@ -712,11 +712,15 @@ func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		xactID, err = api.DeleteList(defaultAPIParams, bck, fileList)
 		command = "removed"
 	case commandPrefetch:
-		bck.Provider = cmn.AnyCloud
+		if err = ensureHasProvider(bck, command); err != nil {
+			return
+		}
 		xactID, err = api.PrefetchList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	case commandEvict:
-		bck.Provider = cmn.AnyCloud
+		if err = ensureHasProvider(bck, command); err != nil {
+			return
+		}
 		xactID, err = api.EvictList(defaultAPIParams, bck, fileList)
 		command += "ed"
 	default:
@@ -761,11 +765,15 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 		xactID, err = api.DeleteRange(defaultAPIParams, bck, rangeStr)
 		command = "removed"
 	case commandPrefetch:
-		bck.Provider = cmn.AnyCloud
+		if err = ensureHasProvider(bck, command); err != nil {
+			return
+		}
 		xactID, err = api.PrefetchRange(defaultAPIParams, bck, rangeStr)
 		command += "ed"
 	case commandEvict:
-		bck.Provider = cmn.AnyCloud
+		if err = ensureHasProvider(bck, command); err != nil {
+			return
+		}
 		xactID, err = api.EvictRange(defaultAPIParams, bck, rangeStr)
 		command += "ed"
 	default:
@@ -790,7 +798,7 @@ func multiObjOp(c *cli.Context, command string) error {
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
 		var (
-			bck, objectName, err = parseBckObjectURI(fullObjName)
+			bck, objectName, err = cmn.ParseBckObjectURI(fullObjName)
 		)
 		if err != nil {
 			return err

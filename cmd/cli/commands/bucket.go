@@ -124,6 +124,9 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 		fmt.Fprintf(c.App.Writer, "EVICT: %q\n", bck)
 		return
 	}
+	if err = ensureHasProvider(bck, c.Command.Name); err != nil {
+		return
+	}
 	if err = api.EvictCloudBucket(defaultAPIParams, bck); err != nil {
 		return
 	}
@@ -287,7 +290,7 @@ func reformatBucketProps(nvs cmn.SimpleKVs) error {
 				objName string
 				err     error
 			)
-			originBck, objName, err = parseBckObjectURI(v)
+			originBck, objName, err = cmn.ParseBckObjectURI(v)
 			if err != nil {
 				return err
 			}
@@ -350,7 +353,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	}
 
 	section := c.Args().Get(1)
-	if bck, objName, err = parseBckObjectURI(c.Args().First()); err != nil {
+	if bck, objName, err = cmn.ParseBckObjectURI(c.Args().First()); err != nil {
 		return
 	}
 	if objName != "" {

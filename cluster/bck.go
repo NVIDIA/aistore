@@ -57,7 +57,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 		props = optProps[0]
 	}
 	if !cmn.IsValidProvider(provider) {
-		cmn.Assert(provider == "" || provider == cmn.AnyCloud)
+		cmn.Assert(provider == "")
 	}
 	b := &Bck{Bck: bck, Props: props}
 	return b
@@ -164,8 +164,8 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 }
 
 func (b *Bck) IsAIS() bool { return b.Bck.IsAIS() && !b.HasBackendBck() }
-func (b *Bck) IsCloud(anyCloud ...string) bool {
-	return b.Bck.IsCloud(anyCloud...) || b.HasBackendBck()
+func (b *Bck) IsCloud() bool {
+	return b.Bck.IsCloud() || b.HasBackendBck()
 }
 func (b *Bck) IsRemote() bool      { return b.Bck.IsRemote() || b.HasBackendBck() }
 func (b *Bck) HasBackendBck() bool { return !b.Props.BackendBck.IsEmpty() }
@@ -188,10 +188,8 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
-	} else if b.Bck.IsCloud(cmn.AnyCloud) {
-		cloudConf := cmn.GCO.Get().Cloud
-		b.Provider = cloudConf.Provider
-		b.Ns = cloudConf.Ns // TODO -- FIXME: remove
+	} else if b.Bck.IsCloud() {
+		debug.Assert(b.Ns == cmn.NsGlobal)
 		bmd.initBckCloudProvider(b)
 	} else if b.IsHTTP() {
 		debug.Assert(b.Ns == cmn.NsGlobal)

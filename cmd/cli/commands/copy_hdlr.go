@@ -40,15 +40,15 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	fromBck, objName, err := parseBckObjectURI(bucketName)
+	fromBck, objName, err := cmn.ParseBckObjectURI(bucketName)
 	if err != nil {
 		return err
 	}
-	toBck, newObjName, err := parseBckObjectURI(newBucketName)
+	toBck, newObjName, err := cmn.ParseBckObjectURI(newBucketName)
 	if err != nil {
 		return err
 	}
-	if fromBck.IsCloud(cmn.AnyCloud) || toBck.IsCloud(cmn.AnyCloud) {
+	if fromBck.IsCloud() || toBck.IsCloud() {
 		return fmt.Errorf("copying of cloud buckets not supported")
 	}
 	if fromBck.IsRemoteAIS() || toBck.IsRemoteAIS() {

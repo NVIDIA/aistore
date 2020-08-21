@@ -1347,10 +1347,7 @@ func TestAtimeLocalGet(t *testing.T) {
 
 func TestAtimeColdGet(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck           = cliBck
 		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
@@ -1381,10 +1378,7 @@ func TestAtimePrefetch(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
-		bck = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck           = cliBck
 		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objectName    = t.Name()

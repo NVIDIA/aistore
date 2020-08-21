@@ -129,9 +129,8 @@ func Run(ini *InitLRU) {
 			p:         parent,
 		}
 	}
-	for provider := range cmn.Providers {
-		providers = append(providers, provider) // in random order
-	}
+
+	providers = cmn.Providers.Keys()
 
 repeat:
 	xlru.XactDemandBase.IncPending()

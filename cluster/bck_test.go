@@ -94,12 +94,12 @@ var _ = Describe("Bck", func() {
 			Entry(
 				"not matching providers #2",
 				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
-				NewBck("a", cmn.AnyCloud, cmn.NsGlobal),
+				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching providers #3",
 				NewBck("a", "", cmn.NsGlobal),
-				NewBck("a", cmn.AnyCloud, cmn.NsGlobal),
+				NewBck("a", cmn.ProviderAzure, cmn.NsGlobal),
 			),
 		)
 

@@ -250,9 +250,7 @@ func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) e
 	if len(query) > 0 {
 		q = query[0]
 	}
-	if bck.Provider == "" {
-		bck.Provider = cmn.AnyCloud
-	}
+
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

@@ -144,10 +144,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		fileNameCh = make(chan string, numberOfFiles)
 		errCh      = make(chan error, numberOfFiles)
 		targets    = make(map[string]struct{})
-		bck        = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		prefix     = tutils.GenRandomString(32)
@@ -669,11 +666,8 @@ func TestLRU(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		m = &ioContext{
-			t: t,
-			bck: cmn.Bck{
-				Name:     clibucket,
-				Provider: cmn.AnyCloud,
-			},
+			t:      t,
+			bck:    cliBck,
 			num:    100,
 			prefix: t.Name(),
 		}
@@ -769,10 +763,7 @@ func TestPrefetchList(t *testing.T) {
 		toprefetch = make(chan string, numfiles)
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck        = cliBck
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
@@ -873,10 +864,7 @@ func TestPrefetchRange(t *testing.T) {
 		proxyURL           = tutils.RandomProxyURL(t)
 		baseParams         = tutils.BaseAPIParams(proxyURL)
 		prefetchPrefix     = "regressionList/obj"
-		bck                = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck                = cliBck
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})

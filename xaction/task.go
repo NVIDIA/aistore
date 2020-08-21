@@ -86,7 +86,6 @@ func (t *bckSummaryTask) Run() error {
 	var (
 		buckets []*cluster.Bck
 		bmd     = t.t.GetBowner().Get()
-		cfg     = cmn.GCO.Get()
 	)
 	if t.Bck().Name != "" {
 		buckets = append(buckets, cluster.NewBckEmbed(t.Bck()))
@@ -98,10 +97,10 @@ func (t *bckSummaryTask) Run() error {
 				return false
 			})
 		}
-		if !t.Bck().HasProvider() || t.Bck().IsCloud(cmn.AnyCloud) {
+		if t.Bck().HasProvider() && !t.Bck().IsAIS() {
 			var (
-				provider  = cfg.Cloud.Provider
-				namespace = cfg.Cloud.Ns
+				provider  = t.Bck().Provider
+				namespace = t.Bck().Ns
 			)
 			bmd.Range(&provider, &namespace, func(bck *cluster.Bck) bool {
 				buckets = append(buckets, bck)

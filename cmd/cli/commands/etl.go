@@ -111,7 +111,7 @@ func etlObjectHandler(c *cli.Context) (err error) {
 		outputDest = c.Args()[2]
 	)
 
-	bck, objName, err := parseBckObjectURI(objName)
+	bck, objName, err := cmn.ParseBckObjectURI(objName)
 	if err != nil {
 		return err
 	}

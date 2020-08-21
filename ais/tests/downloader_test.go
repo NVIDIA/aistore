@@ -488,22 +488,13 @@ func TestDownloadCloud(t *testing.T) {
 		dstBck cmn.Bck
 	}{
 		{
-			name: "src==dst",
-			srcBck: cmn.Bck{
-				Name:     clibucket,
-				Provider: cmn.AnyCloud,
-			},
-			dstBck: cmn.Bck{
-				Name:     clibucket,
-				Provider: cmn.AnyCloud,
-			},
+			name:   "src==dst",
+			srcBck: cliBck,
+			dstBck: cliBck,
 		},
 		{
-			name: "src!=dst",
-			srcBck: cmn.Bck{
-				Name:     clibucket,
-				Provider: cmn.AnyCloud,
-			},
+			name:   "src!=dst",
+			srcBck: cliBck,
 			dstBck: cmn.Bck{
 				Name:     cmn.RandString(5),
 				Provider: cmn.ProviderAIS,
@@ -1015,10 +1006,7 @@ func TestDownloadOverrideObjectCloud(t *testing.T) {
 		m = &ioContext{
 			t:   t,
 			num: 10,
-			bck: cmn.Bck{
-				Name:     clibucket,
-				Provider: cmn.AnyCloud,
-			},
+			bck: cliBck,
 		}
 	)
 
@@ -1081,10 +1069,7 @@ func TestDownloadSkipObjectCloud(t *testing.T) {
 		m = &ioContext{
 			t:   t,
 			num: 10,
-			bck: cmn.Bck{
-				Name:     clibucket,
-				Provider: cmn.AnyCloud,
-			},
+			bck: cliBck,
 		}
 	)
 
@@ -1123,10 +1108,7 @@ func TestDownloadSync(t *testing.T) {
 		m = &ioContext{
 			t:   t,
 			num: 10,
-			bck: cmn.Bck{
-				Name:     clibucket,
-				Provider: cmn.AnyCloud,
-			},
+			bck: cliBck,
 		}
 		objsToDelete = 4
 	)

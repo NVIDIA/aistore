@@ -351,7 +351,7 @@ func TestParseBckObjectURI(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		bck, obj, err := parseBckObjectURI(test.uri, test.query)
+		bck, obj, err := cmn.ParseBckObjectURI(test.uri, test.query)
 		if err == nil && test.expectedErr {
 			t.Errorf("expected error for input: %s", test.uri)
 			continue

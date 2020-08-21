@@ -356,12 +356,9 @@ func TestCloudListObjectVersions(t *testing.T) {
 		objectDir   = "cloud-version-test"
 		objectSize  = 256
 		objectCount = 1340 // must be greater than 1000(AWS page size)
-		bck         = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
-		proxyURL = tutils.RandomProxyURL(t)
-		wg       = cmn.NewLimitedWaitGroup(40)
+		bck         = cliBck
+		proxyURL    = tutils.RandomProxyURL(t)
+		wg          = cmn.NewLimitedWaitGroup(40)
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
@@ -720,9 +717,10 @@ func TestListObjectsProps(t *testing.T) {
 func TestListObjectsCloudCached(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()
-		m          = ioContext{
+
+		m = ioContext{
 			t:        t,
-			bck:      cmn.Bck{Name: clibucket, Provider: cmn.AnyCloud},
+			bck:      cliBck,
 			num:      rand.Intn(100) + 10,
 			fileSize: 128,
 		}
@@ -1026,7 +1024,12 @@ func TestListObjectsPrefix(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	for _, provider := range []string{cmn.ProviderAIS, cmn.AnyCloud} {
+	providers := []string{cmn.ProviderAIS}
+	if cliBck.IsCloud() {
+		providers = append(providers, cliBck.Provider)
+	}
+
+	for _, provider := range providers {
 		t.Run(provider, func(t *testing.T) {
 			var (
 				bck        cmn.Bck
@@ -1036,11 +1039,8 @@ func TestListObjectsPrefix(t *testing.T) {
 				customPage = true
 			)
 			bckTest := cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
-			if bckTest.IsCloud(cmn.AnyCloud) {
-				bck = cmn.Bck{
-					Name:     clibucket,
-					Provider: provider,
-				}
+			if bckTest.IsCloud() {
+				bck = cliBck
 
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
@@ -1339,7 +1339,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 
 	bck := cmn.Bck{
 		Name:     bucket,
-		Provider: cmn.AnyCloud,
+		Provider: cliBck.Provider,
 	}
 
 	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
@@ -1366,7 +1366,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 
 	bck := cmn.Bck{
 		Name:     bucket,
-		Provider: cmn.AnyCloud,
+		Provider: cliBck.Provider,
 	}
 
 	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
@@ -1505,12 +1505,9 @@ func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies i
 func TestCloudMirror(t *testing.T) {
 	var (
 		m = &ioContext{
-			t:   t,
-			num: 64,
-			bck: cmn.Bck{
-				Name:     clibucket,
-				Provider: cmn.AnyCloud,
-			},
+			t:      t,
+			num:    64,
+			bck:    cliBck,
 			prefix: t.Name(),
 		}
 		baseParams = tutils.BaseAPIParams()
@@ -1850,31 +1847,31 @@ func TestRenameBucketTwice(t *testing.T) {
 
 func TestCopyBucket(t *testing.T) {
 	tests := []struct {
-		provider         string
+		cloud            bool
 		dstBckExist      bool // determines if destination bucket exists before copy or not
 		dstBckHasObjects bool // determines if destination bucket contains any objects before copy or not
 		multipleDests    bool // determines if there are multiple destinations to which objects are copied
 	}{
 		// ais
-		{provider: cmn.ProviderAIS, dstBckExist: false, dstBckHasObjects: false, multipleDests: false},
-		{provider: cmn.ProviderAIS, dstBckExist: true, dstBckHasObjects: false, multipleDests: false},
-		{provider: cmn.ProviderAIS, dstBckExist: true, dstBckHasObjects: true, multipleDests: false},
-		{provider: cmn.ProviderAIS, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
-		{provider: cmn.ProviderAIS, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+		{cloud: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: false},
+		{cloud: false, dstBckExist: true, dstBckHasObjects: false, multipleDests: false},
+		{cloud: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: false},
+		{cloud: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
+		{cloud: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 
 		// cloud
-		{provider: cmn.AnyCloud, dstBckExist: false, dstBckHasObjects: false},
-		{provider: cmn.AnyCloud, dstBckExist: true, dstBckHasObjects: false},
-		{provider: cmn.AnyCloud, dstBckExist: true, dstBckHasObjects: true},
-		{provider: cmn.AnyCloud, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
-		{provider: cmn.AnyCloud, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+		{cloud: true, dstBckExist: false, dstBckHasObjects: false},
+		{cloud: true, dstBckExist: true, dstBckHasObjects: false},
+		{cloud: true, dstBckExist: true, dstBckHasObjects: true},
+		{cloud: true, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
+		{cloud: true, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 	}
 
 	for _, test := range tests {
 		// Bucket must exist when we require it to have objects.
 		cmn.Assert(test.dstBckExist || !test.dstBckHasObjects)
 
-		testName := test.provider + "/"
+		testName := fmt.Sprintf("cloud=%t/", test.cloud)
 		if test.dstBckExist {
 			testName += "present/"
 			if test.dstBckHasObjects {
@@ -1925,13 +1922,10 @@ func TestCopyBucket(t *testing.T) {
 					},
 				})
 			}
-			bckTest := cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}
-			if bckTest.IsCloud(cmn.AnyCloud) {
-				srcm.bck = cmn.Bck{
-					Name:     clibucket,
-					Provider: cmn.AnyCloud,
-				}
-
+			bckTest := cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+			if test.cloud {
+				srcm.bck = cliBck
+				bckTest.Provider = cliBck.Provider
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: srcm.bck})
 			}
 
@@ -1977,14 +1971,14 @@ func TestCopyBucket(t *testing.T) {
 
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
-			} else if bckTest.IsCloud(cmn.AnyCloud) {
+			} else if bckTest.IsCloud() {
 				srcm.cloudPuts(false /*evict*/)
 				defer srcm.del()
 
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
 			} else {
-				panic(test.provider)
+				panic(bckTest)
 			}
 
 			xactIDs := make([]string, len(dstms))
@@ -2267,11 +2261,8 @@ func TestCopyAndRenameBucket(t *testing.T) {
 
 func TestBackendBucket(t *testing.T) {
 	var (
-		cloudBck = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
-		aisBck = cmn.Bck{
+		cloudBck = cliBck
+		aisBck   = cmn.Bck{
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
@@ -2599,8 +2590,13 @@ func TestBucketListAndSummary(t *testing.T) {
 		fast     bool // TODO: it makes sense only for summary
 	}
 
+	providers := []string{cmn.ProviderAIS}
+	if cliBck.IsCloud() {
+		providers = append(providers, cliBck.Provider)
+	}
+
 	var tests []test
-	for _, provider := range []string{cmn.ProviderAIS, cmn.AnyCloud} {
+	for _, provider := range providers {
 		for _, summary := range []bool{false, true} {
 			for _, cached := range []bool{false, true} {
 				for _, fast := range []bool{false, true} {
@@ -2660,8 +2656,8 @@ func TestBucketListAndSummary(t *testing.T) {
 				defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 				m.puts()
-			} else if bckTest.IsCloud(cmn.AnyCloud) {
-				m.bck.Name = clibucket
+			} else if bckTest.IsCloud() {
+				m.bck.Name = cliBck.Name
 
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 

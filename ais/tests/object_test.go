@@ -39,10 +39,7 @@ func TestCloudBucketObject(t *testing.T) {
 
 	var (
 		baseParams = tutils.BaseAPIParams()
-		bck        = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck        = cliBck
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
@@ -65,7 +62,7 @@ func TestCloudBucketObject(t *testing.T) {
 			if !test.exists {
 				bck.Name = cmn.RandString(10)
 			} else {
-				bck.Name = clibucket
+				bck.Name = cliBck.Name
 			}
 
 			reader, err := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
@@ -468,13 +465,10 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bckLocal   = cmn.Bck{
-			Name:     clibucket,
+			Name:     cliBck.Name,
 			Provider: cmn.ProviderAIS,
 		}
-		bckCloud = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bckCloud  = cliBck
 		fileName1 = "mytestobj1.txt"
 		fileName2 = "mytestobj2.txt"
 		dataLocal = []byte("im local")
@@ -619,13 +613,10 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		defCloudProps cmn.BucketPropsToUpdate
 
 		bckLocal = cmn.Bck{
-			Name:     clibucket,
+			Name:     cliBck.Name,
 			Provider: cmn.ProviderAIS,
 		}
-		bckCloud = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bckCloud   = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		fileName   = "mytestobj1.txt"
@@ -763,15 +754,12 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 
 func Test_coldgetmd5(t *testing.T) {
 	var (
-		numPuts    = 5
-		filesPutCh = make(chan string, numPuts)
-		filesList  = make([]string, 0, 100)
-		errCh      = make(chan error, 100)
-		wg         = &sync.WaitGroup{}
-		bck        = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		numPuts       = 5
+		filesPutCh    = make(chan string, numPuts)
+		filesList     = make([]string, 0, 100)
+		errCh         = make(chan error, 100)
+		wg            = &sync.WaitGroup{}
+		bck           = cliBck
 		totalSize     = int64(numPuts * largeFileSize)
 		proxyURL      = tutils.RandomProxyURL(t)
 		propsToUpdate cmn.BucketPropsToUpdate
@@ -882,10 +870,7 @@ func TestHeadCloudBucket(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck        = cliBck
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
@@ -1011,10 +996,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 			),
 		)
 		tMock = cluster.NewTargetMock(bmdMock)
-		bck   = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck   = cliBck
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
@@ -1125,10 +1107,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		filesList  = make([]string, 0, 100)
 		errCh      = make(chan error, 100)
 		wg         = &sync.WaitGroup{}
-		bck        = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -1196,10 +1175,7 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, file
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck        = cliBck
 	)
 	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
@@ -1526,10 +1502,7 @@ func Test_checksum(t *testing.T) {
 		duration    time.Duration
 
 		numPuts = 5
-		bck     = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck     = cliBck
 
 		filesPutCh = make(chan string, numPuts)
 		filesList  = make([]string, 0, numPuts)
@@ -1704,7 +1677,7 @@ func validateBucketProps(t *testing.T, expected cmn.BucketPropsToUpdate, actual 
 func resetBucketProps(proxyURL string, bck cmn.Bck, t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	if _, err := api.ResetBucketProps(baseParams, bck); err != nil {
-		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
+		t.Errorf("bucket: %s props not reset, err: %v", bck, err)
 	}
 }
 
@@ -1754,7 +1727,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bckLocal   = cmn.Bck{
-			Name:     clibucket,
+			Name:     cliBck.Name,
 			Provider: cmn.ProviderAIS,
 		}
 		basefileName = "mytestobj.txt"

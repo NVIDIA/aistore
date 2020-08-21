@@ -1165,10 +1165,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 		err         error
 		config      = cmn.GCO.Get()
 	)
-	// cmn.AnyCloud translates as any (one!) *3rd party* Cloud
-	if query.Provider == cmn.AnyCloud {
-		query.Provider = config.Cloud.Provider
-	}
+
 	if query.Provider != "" {
 		bucketNames, err, code = t._listBcks(query, config)
 		if err != nil {

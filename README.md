@@ -129,13 +129,13 @@ Alternatively, if you happen to have Amazon and/or Google Cloud account, make su
 For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
 
 ```console
-$ BUCKET=myS3bucket go test ./tests -v -run=download
+$ BUCKET=aws://myS3bucket go test ./tests -v -run=download
 ```
 
 Here's a minor variation of the above:
 
 ```console
-$ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
+$ BUCKET=aws://myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
 ```
 
 This command runs a test that matches the specified string ("download").

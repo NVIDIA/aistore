@@ -50,11 +50,11 @@ func renameBucketHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	bck, objName, err := parseBckObjectURI(bucketName)
+	bck, objName, err := cmn.ParseBckObjectURI(bucketName)
 	if err != nil {
 		return err
 	}
-	newBck, newObjName, err := parseBckObjectURI(newBucketName)
+	newBck, newObjName, err := cmn.ParseBckObjectURI(newBucketName)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func renameObjectHandler(c *cli.Context) (err error) {
 		bck    cmn.Bck
 	)
 
-	if bck, oldObj, err = parseBckObjectURI(oldObjFull); err != nil {
+	if bck, oldObj, err = cmn.ParseBckObjectURI(oldObjFull); err != nil {
 		return
 	}
 	if oldObj == "" {

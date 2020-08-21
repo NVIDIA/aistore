@@ -12,8 +12,6 @@ import (
 
 // Cloud Provider enum
 const (
-	AnyCloud = "cloud" // refers to any 3rd party Cloud
-
 	ProviderAmazon = "aws"
 	ProviderGoogle = "gcp"
 	ProviderAIS    = "ais"
@@ -25,6 +23,13 @@ const (
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
 
 	BckProviderSeparator = "://"
+
+	// Scheme parsing
+	DefaultScheme = "https"
+	GSScheme      = "gs"
+	S3Scheme      = "s3"
+	AZScheme      = "az"
+	AISScheme     = "ais"
 )
 
 type (
@@ -68,13 +73,13 @@ var (
 	// exclusively to AIS (provider) given that other Cloud providers are remote by definition.
 	NsAnyRemote = Ns{UUID: string(NsUUIDPrefix)}
 
-	Providers = map[string]struct{}{
-		ProviderAIS:    {},
-		ProviderGoogle: {},
-		ProviderAmazon: {},
-		ProviderAzure:  {},
-		ProviderHTTP:   {},
-	}
+	Providers = NewStringSet(
+		ProviderAIS,
+		ProviderGoogle,
+		ProviderAmazon,
+		ProviderAzure,
+		ProviderHTTP,
+	)
 )
 
 // Parses [@uuid][#namespace]. It does a little bit more than just parsing
@@ -89,6 +94,71 @@ func ParseNsUname(s string) (n Ns) {
 	} else {
 		n.UUID = s[:idx]
 		n.Name = s[idx+1:]
+	}
+	return
+}
+
+// Replace provider aliases with real provider names
+func parseBckProvider(provider string) string {
+	if provider == GSScheme {
+		return ProviderGoogle
+	}
+	if provider == S3Scheme {
+		return ProviderAmazon
+	}
+	if provider == AZScheme {
+		return ProviderAzure
+	}
+	return provider
+}
+
+// Parses "provider://@uuid#namespace/bucketName/objectName"
+func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, err error) {
+	const (
+		bucketSepa = "/"
+	)
+
+	parts := strings.SplitN(objName, BckProviderSeparator, 2)
+	if len(parts) > 1 {
+		bck.Provider = parseBckProvider(parts[0])
+		objName = parts[1]
+	}
+	bck.Provider = parseBckProvider(bck.Provider)
+	if bck.Provider != "" && !IsValidProvider(bck.Provider) {
+		return bck, "", fmt.Errorf("invalid bucket provider %q", bck.Provider)
+	}
+
+	parts = strings.SplitN(objName, bucketSepa, 2)
+	if len(parts[0]) > 0 && (parts[0][0] == NsUUIDPrefix || parts[0][0] == NsNamePrefix) {
+		bck.Ns = ParseNsUname(parts[0])
+		if err := bck.Ns.Validate(); err != nil {
+			return bck, "", err
+		}
+		if len(parts) == 1 {
+			isQuery := len(query) > 0 && query[0]
+			if parts[0] == string(NsUUIDPrefix) && isQuery {
+				// Case: "[provider://]@" (only valid if uri is query)
+				// We need to list buckets from all possible remote clusters
+				bck.Ns = NsAnyRemote
+				return bck, "", nil
+			}
+
+			// Case: "[provider://]@uuid#ns"
+			return bck, "", nil
+		}
+
+		// Case: "[provider://]@uuid#ns/bucket"
+		parts = strings.SplitN(parts[1], bucketSepa, 2)
+	}
+
+	bck.Name = parts[0]
+	if bck.Name != "" {
+		if err := ValidateBckName(bck.Name); err != nil {
+			return bck, "", err
+		}
+	}
+	if len(parts) > 1 {
+		object = parts[1]
 	}
 	return
 }
@@ -207,14 +277,11 @@ func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRe
 func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }  // is remote AIS cluster
 func (b Bck) IsRemote() bool    { return b.IsCloud() || b.IsRemoteAIS() || b.IsHTTP() }  // is remote
 func (b Bck) IsHTTP() bool      { return b.Provider == ProviderHTTP }                    // is HTTP
-func (b Bck) IsCloud(anyCloud ...string) bool { // is 3rd party Cloud
+func (b Bck) IsCloud() bool { // is 3rd party Cloud
 	if b.Provider == ProviderAIS || b.Provider == ProviderHTTP {
 		return false
 	}
-	if IsValidProvider(b.Provider) {
-		return true
-	}
-	return len(anyCloud) > 0 && b.Provider == AnyCloud && b.Provider == anyCloud[0]
+	return IsValidProvider(b.Provider)
 }
 func (b Bck) HasProvider() bool { return IsValidProvider(b.Provider) }
 
@@ -236,15 +303,10 @@ func (query QueryBcks) Contains(other Bck) bool {
 		if query.Provider == "" {
 			// If query's provider not set, we should match the expected bucket
 			query.Provider = other.Provider
-		} else if query.Provider == AnyCloud && other.IsCloud() {
-			// If provider is any cloud then we can just match the expected cloud bucket
-			query.Provider = other.Provider
 		}
 		return query.Equal(other)
 	}
-	ok := query.Provider == other.Provider ||
-		query.Provider == "" ||
-		(query.Provider == AnyCloud && other.IsCloud())
+	ok := query.Provider == other.Provider || query.Provider == ""
 	return ok && query.Ns.Contains(other.Ns)
 }
 

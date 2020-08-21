@@ -61,7 +61,7 @@ var (
 			ArgsUsage:    optionalObjectsArgument,
 			Flags:        objectSpecificCmdsFlags[commandEvict],
 			Action:       evictHandler,
-			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.AnyCloud}),
+			BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
 		},
 		{
 			Name:         commandGet,
@@ -120,7 +120,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "too many arguments")
 	}
 
-	if bck, objectName, err = parseBckObjectURI(c.Args().First()); err != nil {
+	if bck, objectName, err = cmn.ParseBckObjectURI(c.Args().First()); err != nil {
 		return
 	}
 	if bck.IsAIS() {
@@ -150,7 +150,7 @@ func evictHandler(c *cli.Context) error {
 
 	// default bucket or bucket argument given by the user
 	if c.NArg() == 1 {
-		bck, objName, err := parseBckObjectURI(c.Args().First())
+		bck, objName, err := cmn.ParseBckObjectURI(c.Args().First())
 		if err != nil {
 			return err
 		}
@@ -200,7 +200,7 @@ func getHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 && !flagIsSet(c, isCachedFlag) {
 		return missingArgumentsError(c, "output file")
 	}
-	bck, objName, err = parseBckObjectURI(fullObjName)
+	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,7 @@ func putHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
-	bck, objName, err = parseBckObjectURI(fullObjName)
+	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
 	if err != nil {
 		return
 	}
@@ -257,7 +257,7 @@ func concatHandler(c *cli.Context) (err error) {
 		fileNames[i] = c.Args().Get(i)
 	}
 
-	bck, objName, err = parseBckObjectURI(fullObjName)
+	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
 	if err != nil {
 		return
 	}
@@ -285,7 +285,7 @@ func promoteHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 
-	bck, objName, err = parseBckObjectURI(fullObjName)
+	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
 	if err != nil {
 		return
 	}
@@ -308,7 +308,7 @@ func catHandler(c *cli.Context) (err error) {
 		return incorrectUsageError(c, fmt.Errorf("too many arguments"))
 	}
 
-	bck, objName, err = parseBckObjectURI(fullObjName)
+	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
 	if err != nil {
 		return
 	}

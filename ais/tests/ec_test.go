@@ -833,10 +833,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 // Simple stress testing EC for Cloud buckets
 func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     clibucket,
-			Provider: cmn.AnyCloud,
-		}
+		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)

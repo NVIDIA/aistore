@@ -76,9 +76,9 @@ var _ = Describe("RequestSpec", func() {
 		It("should set buckets correctly", func() {
 			rs := RequestSpec{
 				Bucket:          "test",
-				Provider:        cmn.AnyCloud,
+				Provider:        cmn.ProviderAmazon,
 				OutputBucket:    "testing",
-				OutputProvider:  cmn.AnyCloud,
+				OutputProvider:  cmn.ProviderAmazon,
 				Extension:       cmn.ExtTar,
 				InputFormat:     "prefix-{0010..0111..2}-suffix",
 				OutputFormat:    "prefix-{10..111}-suffix",
@@ -91,8 +91,8 @@ var _ = Describe("RequestSpec", func() {
 
 			Expect(parsed.Bucket).To(Equal("test"))
 			Expect(parsed.OutputBucket).To(Equal("testing"))
-			Expect(parsed.Provider).To(Equal(cmn.AnyCloud))
-			Expect(parsed.OutputProvider).To(Equal(cmn.AnyCloud))
+			Expect(parsed.Provider).To(Equal(cmn.ProviderAmazon))
+			Expect(parsed.OutputProvider).To(Equal(cmn.ProviderAmazon))
 		})
 
 		It("should parse spec with mem usage as bytes", func() {

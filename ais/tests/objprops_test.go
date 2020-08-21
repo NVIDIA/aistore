@@ -396,7 +396,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 	propsReadObjects(t, proxyURL, bck, filesList)
 
 	// TODO: this should work for the remote cluster as well
-	if bck.IsCloud(cmn.AnyCloud) {
+	if bck.IsCloud() {
 		// try to evict some files and check if they are gone
 		propsEvict(t, proxyURL, bck, newVersions, msg, versionEnabled)
 
@@ -505,10 +505,7 @@ func TestObjProps(t *testing.T) {
 			m.init()
 
 			if test.cloud {
-				m.bck = cmn.Bck{
-					Name:     clibucket,
-					Provider: cmn.AnyCloud,
-				}
+				m.bck = cliBck
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 			} else {
 				tutils.CreateFreshBucket(t, proxyURL, m.bck)

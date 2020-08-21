@@ -131,7 +131,7 @@ test:cloud:
     - export NUM_PROXY=6
     - export CLOUD=1
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
-    - BUCKET="ci-aistore" make test-long
+    - BUCKET="aws://ci-aistore" make test-long
 
 test:soak:
   stage: test-long

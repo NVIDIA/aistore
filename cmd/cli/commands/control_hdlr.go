@@ -61,7 +61,7 @@ var (
 					ArgsUsage:    bucketArgument,
 					Flags:        startCmdsFlags[commandPrefetch],
 					Action:       prefetchHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.AnyCloud}),
+					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
 				},
 				{
 					Name:      subcmdStartDownload,
@@ -155,7 +155,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, bucketArgument)
 	}
 
-	bck, _, err := parseBckObjectURI(c.Args().First())
+	bck, _, err := cmn.ParseBckObjectURI(c.Args().First())
 
 	if err != nil {
 		return err
@@ -468,7 +468,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 	bckArgs := makeList(parseStrFlag(c, listBucketsFlag), ",")
 	buckets := make([]cmn.Bck, len(bckArgs))
 	for idx, bckArg := range bckArgs {
-		bck, _, err := parseBckObjectURI(bckArg)
+		bck, _, err := cmn.ParseBckObjectURI(bckArg)
 		if err != nil {
 			return err
 		}
