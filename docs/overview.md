@@ -21,10 +21,10 @@ Also, for insights and specific requirements from a deep-learning perspective, p
 
 The rest of this document is structured as follows:
 
-- [New in 3.1](#new-in-3.1)
+- [Block Diagrams](#block-diagrams)
 - [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
-- [Datapath](#datapath)
+- [Traffic Patterns](#traffic-patterns)
 - [Open Format](#open-format)
 - [Existing Datasets](#existing-datasets)
 - [Data Protection](#data-protection)
@@ -37,15 +37,26 @@ The rest of this document is structured as follows:
 - [AIS Limitations](#ais-limitations)
 
 
-## New in 3.1
+## Block Diagrams
 
-AIStore v3.1 is a significant upgrade in multiple directions, including TensorFlow integration, performance optimizations, CLI usability improvements, erasure coding optimizations, automated no-downtime rebalancing for erasure-coded buckets, refactoring, cleanup, and stability fixes across the board, and K8s integration/automation.
+Following is a high-level architecture with an emphasis on supported (frontend and backend) APIs and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives,  whereby each drive is formatted with a local filesystem (e. g., xfs or zfs).
 
-In addition to AIS (native) REST API, we are also now supporting Amazon S3, thus providing immediate compatibility for existing S3 applications and clients. Azure (aka Microsoft Azure Blob Storage) is now the 3rd supported Cloud provider that you can transparently and optimally access (cache on demand, store persistently at a given configurable redundancy, etc.) via AIStore.
+<img src="images/ais-block.png" alt="New in 3.1" width="700">
 
-The block diagram below highlights some of what's been added.
+Most recently capabilities include:
 
-<img src="images/ais-v3.1.png" alt="New in 3.1" width="700">
+- (**new**) ETL offload: support for running custom extract-transform-load workloads on (and by) storage cluster;
+- (**new**) TensorFlow integration to support existing training clients that use S3 API - done via `tar2tf` ETL offload that handles on-the-fly TFRecord/tf.Example conversion;
+
+<img src="images/etl-v3.2.png" alt="ETL 1.0" width="450">
+
+- List objects v2: optimized `list-objects` to greatly reduce response times;
+- (**new**) Query objects: extends `list-objects` with advanced filtering capabilities;
+- (**new**) Downloader:  an option to keep AIS bucket in-sync with a (downloaded) destination;
+- (**new**) When used as HTTP Proxy (e. g., via `http_proxy=AIS_ENDPOINT`) and given HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) - based resources;
+- and more - see https://github.com/NVIDIA/aistore/releases.
+
+In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Cloud providers](providers.md). 
 
 Each specific capability is separately documented elsewhere. In particular, supported cloud providers and *unified global namespace* are described [here](providers.md).
 
@@ -92,16 +103,21 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 * [Mountpath](./configuration.md) - a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of (number of storage targets) x (number of disks in each target).
 
-## Datapath
-In AIS, all inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
+## Traffic Patterns
+
+In AIS, all inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development).
+HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
 
 <img src="images/dp-schematics-direct.png" alt="Datapath schematics" width="400">
 
 > MDS in the diagram above stands for the metadata server(s) or service(s).
 
-In the picture, a client on the left side makes an I/O request which is then fully serviced by the *left* target - one of the nodes in the AIS cluster (not shown). Symmetrically, the *right* client engages with the *right* AIS target for its own GET or PUT object transaction. In each case, the entire transaction is executed via a single TCP session that connects the requesting client directly to one of the clustered nodes. As far as the datapath is concerned, there are no extra hops in the line of communications.
+In the picture, a client on the left side makes an I/O request which is then fully serviced by the *left* target - one of the nodes in the AIS cluster (not shown).
+Symmetrically, the *right* client engages with the *right* AIS target for its own GET or PUT object transaction.
+In each case, the entire transaction is executed via a single TCP session that connects the requesting client directly to one of the clustered nodes.
+As far as the datapath is concerned, there are no extra hops in the line of communications.
 
-> For detailed read and write sequence diagrams, please refer to [this readme](datapath.md).
+> For detailed traffic patterns diagrams, please refer to [this readme](traffic_patterns.md).
 
 Distribution of objects across AIS cluster is done via (lightning fast) two-dimensional consistent-hash whereby objects get distributed across all storage targets and, within each target, all local disks.
 
@@ -131,6 +147,7 @@ One common way to use AIStore includes the most basic step: populating it with a
 In particular:
 
 ### Existing Datasets: Cold GET
+
 If the dataset in question is accessible via S3-like object API, start working with it via GET primitive of the [AIS API](http_api.md). Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
 
 > As far as supported S3-like backends, AIS currently supports Amazon S3 and Google Cloud.
@@ -151,10 +168,10 @@ For these and similar use cases we have [AIS Downloader](../downloader/README.md
 
 ### Existing Datasets: Reverse Proxy
 
-AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation is limited to Google Cloud Storage (GCS) and requires:
+AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation requires:
 
 1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment
-2. AIS configuration: set `rproxy=cloud` in the [configuration](/aistore/deploy/dev/local/aisnode_config.sh)
+2. Disable proxy for AIS cluster IP addresses/hostnames (for `curl` use option `--noproxy`)
 
 Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
 
@@ -163,8 +180,6 @@ $ export http_proxy=<AIS proxy IPv4 or hostname>
 ```
 
 In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective.
-
-Further details and examples are available [in this readme](rproxy.md).
 
 ### Existing Datasets: Promote (API and CLI)
 
@@ -179,9 +194,11 @@ $ ais promote /tmp/mydata mybucket/ -r
 In this example, `mybucket` would be the designated (destination) bucket.
 
 ## Data Protection
+
 AIS [supports](storage_svcs.md) end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon [erasure coding](storage_svcs.md#erasure-coding) - thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
 
 ## Scale-Out
+
 The scale-out category includes balanced and fair distribution of objects where each storage target will store (via a variant of the consistent hashing) 1/Nth of the entire namespace where (the number of objects) N is unlimited by design.
 
 > AIS cluster capability to **scale-out is truly unlimited**. The real-life limitations can only be imposed by the environment - capacity of a given Data Center, for instance.
@@ -189,6 +206,7 @@ The scale-out category includes balanced and fair distribution of objects where 
 Similar to the AIS gateways, AIS storage targets can join and leave at any moment causing the cluster to rebalance itself in the background and without downtime.
 
 ## HA
+
 AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](http_api.md). Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier
@@ -222,7 +240,7 @@ AIStore includes an easy-to-use management-and-monitoring facility called [AIS C
  ```console
 $ export AIS_ENDPOINT=http://G
 $ ais --help
-```
+ ```
 
 where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
 

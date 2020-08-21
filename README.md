@@ -179,7 +179,7 @@ The rest of this section talks about a single Linux machine and, as such, is int
 
 ### Local Kubernetes
 
-Yet another local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/k8s).
+Yet another local-deployment option makes use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and is documented [here](deploy/dev/k8s/README.md).
 
 ## Containerized Deployments: Host Resource Sharing
 
@@ -203,7 +203,7 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 
 As is usually the case with storage clusters, there are multiple ways to monitor their performance.
 
-> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [AIS Load Generator](docs/howto_benchmark.md).
+> AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [Load Generator](bench/aisloader/README.md) and [How To Benchmark AIStore](docs/howto_benchmark.md).
 
 For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](xaction/README.md), and, of course, object storage transactions.
 
@@ -273,12 +273,13 @@ with the corresponding [JSON names](/aistore/deploy/dev/local/aisnode_config.sh)
   - [User account and access management](cmd/cli/resources/users.md)
   - [Xaction (Job) management](cmd/cli/resources/xaction.md)
 - [On-Disk Layout](docs/on-disk-layout.md)
+- [System Files](docs/sysfiles.md)
 - [Command line parameters](docs/command_line.md)
 - [AIS Load Generator: integrated benchmark tool](bench/aisloader/README.md)
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
 - [Object checksums: Brief Theory of Operations](docs/checksum.md)
 - [Configuration](docs/configuration.md)
-- [Datapath: Read and Write Sequence Diagrams](docs/datapath.md)
+- [Traffic patterns](docs/traffic_patterns.md)
 - [Highly available control plane](docs/ha.md)
 - [How to benchmark](docs/howto_benchmark.md)
 - [RESTful API](docs/http_api.md)

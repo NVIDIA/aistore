@@ -51,10 +51,11 @@ os.environ["S3_ENDPOINT"] = CLUSTER_ENDPOINT
 
 # (...)
 
-# !tf suffix convert TAR to TFRecord
+# ?uuid query param to convert TAR to a transformed data.
+
 train_dataset = tf.data.TFRecordDataset(filenames=[
-    "s3://tf/train-1.tar!tf",
-    "s3://tf/train-2.tar!tf",
+    "s3://tf/train-1.tar?uuid=<uuid of tensorflow transformer>",
+    "s3://tf/train-2.tar?uuid=<uuid of tensorflow transformer>",
 ]).map(record_parser).batch(BATCH_SIZE)
 
 # (...)

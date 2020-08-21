@@ -102,12 +102,10 @@
     },
     "http": {
       "proto": "http",
-      "rproxy": "",
       "server_crt": "server.crt",
       "server_key": "server.key",
       "write_buffer_size": 0,
       "read_buffer_size": 0,
-      "rproxy_cache": true,
       "use_https": false,
       "chunked_transfer": true
     }

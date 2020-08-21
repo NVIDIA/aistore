@@ -30,7 +30,7 @@ After successful login, CLI saves the generated token to user's configuration di
 For convenience, CLI prints out the generated token so it can be copied and used with other clients.
 
 ```console
-$ ais auth login admin admin
+$ ais auth login -p admin admin
 Token(/home/ubuntu/.config/ais/auth.token):
 eyJhbGciOiJIUuI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiZThwaXJlcyI6IjIwMjAtMDYtMTFUMTY6MzU6MDAuODQyNzMzNjU1LTA3OjAwIiwidXNlcm5hbWUiOiJhZG1pbiJ9.ppyMR8EE37M9O9Kl9ybyB7CE0fq6hIwL3Sa-5OUea8I
 ```
@@ -46,11 +46,11 @@ But when the user needs to modify any AuthN data, the user executes CLI with opt
 
 ```console
 # generate a token and save to a given location
-$ ais auth login admin admin --file ./admin.token
+$ ais auth login -p admin --file ./admin.token admin
 Token saved to ./admin.token
 
 # log in as a regular user
-$ ais auth login user pass
+$ ais auth login -p pass user
 Token(/home/ubuntu/.config/ais/auth.token):
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1Z...
 
@@ -65,7 +65,7 @@ $ AUTHN_TOKEN_FILE=./admin.token ais auth rm user tmpUser1
 
 ## Register new user
 
-`ais auth add user USER_NAME USER_PASS [ROLE [ROLE...]]`
+`ais auth add user [-p USER_PASS] USER_NAME [ROLE [ROLE...]]`
 
 Register the user and assign the list of roles to the user.
 
@@ -76,8 +76,8 @@ for the user, register a user with empty role and grant permissions to the requi
 **Examples:**
 
 ```console
-$ ais auth add user user1 password
-$ ais auth add user user2 password PowerUser
+$ ais auth add user -p password user1
+$ ais auth add user -p password user2 PowerUser
 $ ais auth show user
 NAME    ROLES
 admin   Admin
@@ -87,7 +87,7 @@ user2   PowerUser
 
 ## Update user
 
-`ais auth update user USER_NAME USER_PASS [ROLE [ROLE...]]`
+`ais auth update user [-p USER_PASS] USER_NAME [ROLE [ROLE...]]`
 
 Updates user password and list of roles. If role list is omitted, the current
 user role remains unchanged.
@@ -131,7 +131,7 @@ PowerUser       Full access to cluster
 
 ## Log in to AIS cluster
 
-`ais auth login USER_NAME USER_PASS`
+`ais auth login [-p USER_PASS] USER_NAME`
 
 Issue a token for a user.
 After successful login, user's token is saved to CLI configuration directory (usually it is `~/.config/ais/`) with a filename `auth.token`.
@@ -188,7 +188,7 @@ $ ais auth add cluster 78df35690 srv1 http://172.0.10.50
 
 # check the list of the clusters
 $ ais auth show cluster
-ClUSTER ID      ALIAS   URLs
+CLUSTER ID      ALIAS   URLs
 2xs35th89               http://172.0.10.10,http://10.0.10.10
 78df35690       srv1    http://172.0.10.50
 

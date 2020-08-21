@@ -167,17 +167,18 @@ List all objects contained in `BUCKET_NAME` bucket.
 | `--regex` | `string` | Pattern for matching object names | `""` |
 | `--template` | `string` | Template for matching object names | `""` |
 | `--prefix` | `string` | Prefix for matching object names | `""` |
-| `--fast` | `bool` | Use fast API to list all object names | `false` |
-| `--paged` | `bool` | Fetch and print objects page by page (ignored in fast mode) | `false` |
+| `--paged` | `bool` | Fetch and print objects page by page | `false` |
 | `--max-pages` | `int` | Max. number of pages to list | `0` |
 | `--page-size` | `int` | Max. number of object names per page | `1000` |
-| `--props` | `string` | Comma-separated properties to return with object names (ignored in fast mode) | `"size,version"`
-| `--limit` | `int` | Max. number of object names to list (ignored in fast mode) | `0` |
+| `--props` | `string` | Comma-separated properties to return with object names | `"size,version"`
+| `--limit` | `int` | Max. number of object names to list | `0` |
 | `--show-unmatched` | `bool` | List objects unmatched by regex and template as well, after the matched ones | `false` |
-| `--all-items` | `bool` | Show all items, including all, duplicated, etc. (ignored in fast mode) | `false` |
-| `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically (ignored in fast mode) | `""` |
+| `--all-items` | `bool` | Show all items, including all, duplicated, etc. | `false` |
+| `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
+| `--use-cache` | `bool` | Use proxy cache to speed up list object request | `false` |
+| `--start-after` | `string` | Object name after which the listing should start | `""` |
 
 ### Examples
 
@@ -245,6 +246,19 @@ $ ais ls ais://bucket_name --prefix "shard-1"
 NAME		SIZE		VERSION
 shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
+```
+
+#### [experimental] Using proxy cache
+
+Experimental support for the proxy's cache can be enabled with `--use-cache` option.
+In such case the proxy will cache list object request, so the subsequent calls will be faster.
+
+```console
+$ ais ls ais://bucket_name --use-cache
+NAME		SIZE		VERSION
+shard-0.tar	16.00KiB	1
+shard-1.tar	16.00KiB	1
+...
 ```
 
 ## Evict cloud bucket
@@ -326,7 +340,7 @@ If `BUCKET_NAME` is omitted, shows information about all buckets.
 
 `ais set-copies BUCKET_NAME --copies <value>`
 
-Start an extended action to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../../docs/storage_svcs.md#n-way-mirror).
+Start an extended action to bring a given bucket to a certain redundancy level (`value` copies). Read more about this feature [here](../../../docs/storage_svcs.md#n-way-mirror).
 
 ### Options
 
@@ -400,22 +414,22 @@ lru.out_of_space	 95
 
 ## Set bucket props
 
-`ais set props BUCKET_NAME KEY=VALUE [KEY=VALUE...]`
+`ais set props BUCKET_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
 
 Set bucket properties.
 For the available options, see [bucket-properties](../../../docs/bucket.md#properties-and-options).
 
+If JSON_SPECIFICATION is used, **all** properties of the bucket are set based on the values in the JSON object.
+
 ### Options
 
 If `--reset` flag is set, arguments are ignored and bucket properties are reset to original state.
-If `--jsonspec` option is used, **all** properties of the bucket are set based on the values in the JSON object.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--jsonspec` | `string` | Bucket properties in a JSON format | `""` |
 | `--reset` | `bool` | Reset bucket properties to original state | `false` |
 
-When `--jsonspec` is not used, some properties support user-friendly aliases:
+When JSON specification is not used, some properties support user-friendly aliases:
 
 | Property | Value alias | Description |
 | --- | --- | --- |
@@ -431,6 +445,7 @@ Set the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respec
 ```console
 $ ais set props bucket_name 'mirror.enabled=true' 'mirror.copies=2'
 Bucket props successfully updated
+"mirror.enabled" set to:"true" (was:"false")
 ```
 
 #### Make a bucket read-only
@@ -441,6 +456,7 @@ All PUT and DELETE requests will fail.
 ```console
 $ ais set props bucket_name 'access=ro'
 Bucket props successfully updated
+"access" set to:"GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS" (was:"<PREV_ACCESS_LIST>")
 ```
 
 #### Reset properties for the bucket
@@ -462,6 +478,8 @@ The only difference is that all objects will be cached into `ais://bucket_name` 
 ```console
 $ ais set props bucket_name backend_bck=gcp://cloud_bucket
 Bucket props successfully updated
+"backend_bck.name" set to:"cloud_bucket" (was:"")
+"backend_bck.provider" set to:"gcp" (was:"")
 ```
 
 To disconnect cloud bucket do:
@@ -469,6 +487,8 @@ To disconnect cloud bucket do:
 ```console
 $ ais set props bucket_name backend_bck=none
 Bucket props successfully updated
+"backend_bck.name" set to:"" (was:"cloud_bucket")
+"backend_bck.provider" set to:"" (was:"gcp")
 ```
 
 #### Set bucket properties with JSON
@@ -476,7 +496,7 @@ Bucket props successfully updated
 Set **all** bucket properties for `bucket_name` bucket based on the provided JSON specification.
 
 ```bash
-$ ais set props bucket_name --jsonspec '{
+$ ais set props bucket_name '{
     "provider": "ais",
     "versioning": {
       "enabled": true,
@@ -533,7 +553,7 @@ If not all properties are mentioned in the JSON, the missing ones are set to zer
 ```bash
 $ ais set props --reset bucket_name
 Bucket props successfully reset
-$ ais set props bucket_name --jsonspec '{
+$ ais set props bucket_name '{
   "mirror": {
     "enabled": true,
     "copies": 2
@@ -544,6 +564,8 @@ $ ais set props bucket_name --jsonspec '{
   }
 }'
 Bucket props successfully updated
+"versioning.validate_warm_get" set to:"true" (was:"false")
+"mirror.enabled" set to:"true" (was:"false")
 $ ais show props bucket_name
 PROPERTY	 VALUE
 access		 GET,PUT,DELETE,HEAD,ColdGET

@@ -546,7 +546,7 @@ aws://cloudbucket  0             0B      0%
 
 ## Prefetch objects
 
-`ais prefetch BUCKET_NAME/ --list|--template <value>`
+`ais start prefetch BUCKET_NAME/ --list|--template <value>`
 
 [Prefetch](../../../docs/bucket.md#prefetchevict-objects) objects from the cloud bucket.
 
@@ -569,7 +569,7 @@ See [List/Range Operations](../../../docs/batch.md#listrange-operations) for mor
 Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and stores them in the AIS cluster
 
 ```console
-$ ais prefetch aws://cloudbucket --list 'o1,o2,o3'
+$ ais start prefetch aws://cloudbucket --list 'o1,o2,o3'
 ```
 
 ## Rename object

@@ -14,10 +14,10 @@ AIS *xactions* run asynchronously, have one of the enumerated kinds, start/stop 
 
 ## Start xaction
 
-`ais start xaction XACTION_NAME [BUCKET_NAME]`
+`ais start <XACTION_COMMAND> [arguments...]`
 
-Start xaction(s). Some xactions require a bucket name to execute.
-The second argument is used to determine the bucket name if it is required.
+Start xaction(s). Some xactions require additional arguments such as bucket name to execute.
+
 
 ### Examples
 
@@ -26,8 +26,15 @@ The second argument is used to determine the bucket name if it is required.
 Starts LRU xaction on all nodes
 
 ```console
-$ ais start xaction lru
+$ ais start lru
 Started "lru" xaction.
+```
+An administrator may choose to run LRU on a subset of buckets. This can be achieved by using the `--buckets` flag to provide a comma-separated list of buckets, for instance `--buckets bck1,gcp://bck2`, on which LRU needs to be performed.
+Additionally, the `--force`(`-f`) option can be used to override the bucket's `lru.enabled` property.
+
+**Note:** To ensure safety, the force flag (`-f`) only works when a list of buckets is provided.
+```console
+$ ais start lru --buckets ais://buck1,aws://buck2 -f
 ```
 
 ## Stop xaction
