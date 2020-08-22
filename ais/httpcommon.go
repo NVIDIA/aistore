@@ -1494,10 +1494,8 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	finalProps := bck.Props.Clone()
 	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
 		if fieldName == cmn.HeaderBucketVerEnabled {
-			// For Cloud buckets, `versioning.enabled` is a combination of local
-			// and cloud settings and is true iff versioning is enabled on both sides.
-			verEnabled := field.Value().(bool)
-			if bck.IsAIS() || !verEnabled {
+			if bck.IsAIS() {
+				verEnabled := field.Value().(bool)
 				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verEnabled))
 			}
 			return nil, false

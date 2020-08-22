@@ -50,8 +50,14 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	if bck.Props != nil {
 		bucketProps = bck.Props
-	} else if len(cloudHeader) != 0 {
-		bucketProps = cmn.CloudBucketProps(cloudHeader[0])
+	}
+	if len(cloudHeader) != 0 {
+		cloudProps := cmn.CloudBucketProps(cloudHeader[0])
+		if bck.Props == nil {
+			bucketProps = cloudProps
+		} else {
+			bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
+		}
 	}
 	nlp.Lock()
 	defer nlp.Unlock()
@@ -646,10 +652,18 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	)
 	nprops = bprops.Clone()
 	nprops.Apply(propsToUpdate)
+	if bck.IsCloud() {
+		bv, nv := bprops.Versioning.Enabled, nprops.Versioning.Enabled
+		if bv != nv {
+			// NOTE: bprops.Versioning.Enabled must be previously set via httpbckhead
+			err = fmt.Errorf("%s: cannot modify existing Cloud bucket versioning (%s, %s)",
+				p.si, bck, _versioning(bv))
+			return
+		}
+	}
 	if bprops.EC.Enabled && nprops.EC.Enabled {
 		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
-			err = fmt.Errorf("%s: once enabled, EC configuration can be only disabled but cannot change",
-				p.si)
+			err = fmt.Errorf("%s: once enabled, EC configuration can be only disabled but cannot change", p.si)
 			return
 		}
 	} else if nprops.EC.Enabled {
@@ -679,4 +693,11 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	targetCnt := p.owner.smap.Get().CountTargets()
 	err = nprops.Validate(targetCnt)
 	return
+}
+
+func _versioning(v bool) string {
+	if v {
+		return "enabled"
+	}
+	return "disabled"
 }

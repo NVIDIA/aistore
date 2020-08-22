@@ -1025,6 +1025,12 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketProps[cmn.HeaderRemoteAisOffline] = strconv.FormatBool(bck.IsRemoteAIS())
 	}
 	for k, v := range bucketProps {
+		if k == cmn.HeaderBucketVerEnabled && bck.Props != nil {
+			if curr := strconv.FormatBool(bck.Props.Versioning.Enabled); curr != v {
+				// e.g., change via vendor-provided CLI and similar
+				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t.si, bck, v, curr)
+			}
+		}
 		hdr.Set(k, v)
 	}
 	t.bucketPropsToHdr(bck, hdr)
@@ -1245,7 +1251,7 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 
 // PUT new version and update object metadata
 // ais bucket:
-//  - if bucket versioning is enabled, the version is autoincremented
+//  - if ais bucket versioning is enabled, the version is auto-incremented
 // Cloud bucket:
 //  - returned version ID is the version
 // In both cases, new checksum is also generated and stored along with the new version.
