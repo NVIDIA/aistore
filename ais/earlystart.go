@@ -282,10 +282,12 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.owner.bmd.Unlock()
 
 	msg := p.newAisMsgStr(metaction2, smap, bmd)
-	_ = p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
+	wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 
 	// 6: started up as primary
-	glog.Infof("%s: primary & cluster startup complete, %s", p.si, smap.StringEx())
+	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), bmd.StringEx())
+	wg.Wait()
+	glog.Infof("%s: primary & cluster startup complete", p.si)
 	p.markClusterStarted()
 }
 

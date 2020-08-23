@@ -147,9 +147,6 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: cmn.Notifs, h: p.notifs.handler, net: []string{cmn.NetworkIntraControl}},
-
-		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
-		{r: "/", h: p.httpCloudHandler, net: []string{cmn.NetworkPublic}},
 	}
 
 	p.registerNetworkHandlers(networkHandlers)
@@ -173,6 +170,9 @@ func (p *proxyrunner) markClusterStarted() {
 		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.Query, h: p.queryHandler, net: []string{cmn.NetworkPublic}},
+
+		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
+		{r: "/", h: p.httpCloudHandler, net: []string{cmn.NetworkPublic}},
 	}
 	p.registerNetworkHandlers(netH)
 	p.httprunner.markClusterStarted()
