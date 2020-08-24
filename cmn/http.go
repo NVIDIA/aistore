@@ -412,6 +412,14 @@ func IsHTTPS(urlPath string) bool {
 	return strings.HasPrefix(urlPath, "https://")
 }
 
+func IsHTTP(urlPath string) bool {
+	return strings.HasPrefix(urlPath, "http://")
+}
+
+func IsWebURL(urlPath string) bool {
+	return IsHTTP(urlPath) || IsHTTPS(urlPath)
+}
+
 func (r HTTPRange) ContentRange(size int64) string {
 	return fmt.Sprintf("%s%d-%d/%d", HeaderContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }

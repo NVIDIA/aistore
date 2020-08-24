@@ -210,10 +210,18 @@ var (
 )
 
 func showBucketHandler(c *cli.Context) (err error) {
-	bck, objName, err := cmn.ParseBckObjectURI(c.Args().First(), true /*query*/)
-	if err != nil {
+	var (
+		bck     cmn.Bck
+		objName string
+		objPath = c.Args().First()
+	)
+
+	if cmn.IsWebURL(objPath) {
+		bck = parseURLtoBck(objPath)
+	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath, true); err != nil {
 		return
 	}
+
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}

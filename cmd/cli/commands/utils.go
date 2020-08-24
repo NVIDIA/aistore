@@ -975,3 +975,12 @@ func ensureHasProvider(bck cmn.Bck, cmd string) error {
 	}
 	return nil
 }
+
+func parseURLtoBck(strURL string) (bck cmn.Bck) {
+	if strURL[len(strURL)-1:] != "/" {
+		strURL += "/"
+	}
+	bck.Provider = cmn.ProviderHTTP
+	bck.Name = cmn.OrigURLBck2Name(strURL)
+	return
+}

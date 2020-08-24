@@ -50,7 +50,7 @@ Finally, AIS bucket may be implicitly defined by HTTP(S) based dataset, where fi
 
 * https://a/b/c/imagenet/train-999999.tar
 
-would all be stored in a single AIS bucket that would have a protocol prefix `http://` and a bucket name derived from the *directory* part of the URL Path ("a/b/c/imagenet", in this case).
+would all be stored in a single AIS bucket that would have a protocol prefix `ht://` and a bucket name derived from the *directory* part of the URL Path ("a/b/c/imagenet", in this case).
 
 ## Supported Cloud Providers
 
@@ -62,7 +62,7 @@ In the AIS [CLI](/cmd/cli/README.md), we use protocol prefixes to designate any 
 * `aws://` or `s3://` interchangeably - for Amazon S3
 * `gcp://` or `gs://` - for Google Cloud Storage
 * `azure://` - for Microsoft Azure Blob Storage
-* `http://` - for HTTP(S) based datasets
+* `ht://` - for HTTP(S) based datasets
 
 Further:
 

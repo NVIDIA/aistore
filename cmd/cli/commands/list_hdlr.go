@@ -46,10 +46,14 @@ func defaultListHandler(c *cli.Context) (err error) {
 	var (
 		bck     cmn.Bck
 		objName string
+		objPath = c.Args().First()
 	)
-	if bck, objName, err = cmn.ParseBckObjectURI(c.Args().First(), true /*query*/); err != nil {
+	if cmn.IsWebURL(objPath) {
+		bck = parseURLtoBck(objPath)
+	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath, true /*query*/); err != nil {
 		return
 	}
+
 	if objName != "" {
 		return objectNameArgumentNotSupported(c, objName)
 	}

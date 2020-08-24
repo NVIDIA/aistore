@@ -1689,6 +1689,7 @@ func findObjOnDisk(bck cmn.Bck, objName string) string {
 		if tutils.IsTrashDir(path) {
 			return filepath.SkipDir
 		}
+		// TODO -- FIXME - avoid hardcoded on-disk layout `/%ob`
 		if strings.Contains(path, "/%") && !strings.Contains(path, "/%ob") {
 			return filepath.SkipDir
 		}

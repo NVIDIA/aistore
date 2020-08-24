@@ -47,7 +47,9 @@ func pathForCached() string {
 		if err != nil || info == nil {
 			return nil
 		}
-		if info.IsDir() || !strings.Contains(path, "http/") {
+
+		// TODO -- FIXME - avoid hardcoded on-disk layout
+		if info.IsDir() || !strings.Contains(path, cmn.ProviderHTTP+"/") {
 			return nil
 		}
 

@@ -16,8 +16,8 @@ const (
 	ProviderGoogle = "gcp"
 	ProviderAIS    = "ais"
 	ProviderAzure  = "azure"
-	ProviderHTTP   = "http"
-	allProviders   = "aws, gcp, ais, azure, http"
+	ProviderHTTP   = "ht"
+	allProviders   = "aws, gcp, ais, azure, ht"
 
 	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
@@ -119,6 +119,7 @@ func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, e
 	)
 
 	parts := strings.SplitN(objName, BckProviderSeparator, 2)
+
 	if len(parts) > 1 {
 		bck.Provider = parseBckProvider(parts[0])
 		objName = parts[1]
@@ -160,6 +161,7 @@ func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, e
 	if len(parts) > 1 {
 		object = parts[1]
 	}
+
 	return
 }
 

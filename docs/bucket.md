@@ -52,7 +52,7 @@ Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DEL
 * `aws` or `s3` - for Amazon S3 buckets
 * `gcp` or `gs` - for Google Cloud Storage buckets
 * `azure` - for Microsoft Azure Blob Storage buckets
-* `http` - for HTTP(S) based datasets
+* `ht` - for HTTP(S) based datasets
 
 * and finally, you can simple say `cloud` to designate any one of the 5 Cloud providers listed above.
 
@@ -195,7 +195,7 @@ Assuming that proxy is listening on `localhost:8080`, one can use it as reverse-
 
 ```console
 $ curl -L --max-redirs 3 -x localhost:8080 --noproxy "<comma separated lists of targets IPs>" \
-  -X GET "http://storage.googleapis.com/pub-images/images-train-000000.tar" \
+  -X GET "http://storage.googleapis.com/minikube/minikube-0.6.iso.sha256" \
   > /dev/null
 ```
 
@@ -205,27 +205,33 @@ We can confirm this by listing available buckets and checking the content:
 ```console
 $ ais ls http://
 HTTP Buckets (1)
-  http://ZTMzZWI5YWE4ODA1YTdhNA
-$ ais ls http://ZTMzZWI5YWE4ODA1YTdhNA
-NAME                     SIZE
-images-train-000000.tar	 964.77MiB
+  ht://ZDdhNTYxZTkyMzhkNjk3NA
+$ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
+NAME                                 SIZE
+minikube-0.6.iso.sha256	              65B
 ```
 
 Now, when the object is accessed again, it will be served from AIStore cluster and will **not** be re-downloaded from HTTP source.
 
 Under the hood, AIStore remembers the original URL from which the object was downloaded and associates the bucket with this URL.
-In our example, bucket `http://ZTMzZWI5YWE4ODA1YTdhNA` will be associated with `http://storage.googleapis.com/pub-images/` URL.
+In our example, bucket `ht://ZDdhNTYxZTkyMzhkNjk3NA` will be associated with `http://storage.googleapis.com/minikube/` URL. Therefore, we can interchangeably use the associated URL for listing the bucket as show below.
 
-> Note that only the last part (`images-train-000000.tar`) of the URL is treated as the object name.
+```console
+$ ais ls http://storage.googleapis.com/minikube
+NAME                                  SIZE
+minikube-0.6.iso.sha256	              65B
+```
+
+> Note that only the last part (`minikube-0.6.iso.sha256`) of the URL is treated as the object name.
 
 Such connections between bucket and URL allows downloading content without providing URL again:
 
 ```console
-$ ais cat http://ZTMzZWI5YWE4ODA1YTdhNA/images-train-000001.tar > /dev/null # cache another object
-$ ais ls http://ZTMzZWI5YWE4ODA1YTdhNA
-NAME                         SIZE
-images-train-000000.tar      964.77MiB
-images-train-000001.tar      964.74MiB
+$ ais cat ht://ZDdhNTYxZTkyMzhkNjk3NA/minikube-0.7.iso.sha256 > /dev/null # cache another object
+$ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
+NAME                     SIZE
+minikube-0.6.iso.sha256  65B
+minikube-0.7.iso.sha256  65B
 ```
 
 ### Prefetch/Evict Objects

@@ -127,12 +127,12 @@ Notwithstanding, AIS stores and then maintains object replicas, erasure-coded sl
 
 ## Existing Datasets
 
-One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets. To this end, AIS provides 6 (six) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
+One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets from Cloud buckets (AWS, Google Cloud and Azure) or any vanilla HTTP(S) resources. To this end, AIS provides 6 (six) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
 
 1. [Cold GET](#existing-datasets-cold-get)
 2. [Prefetch](#existing-datasets-batch-prefetch)
 3. [Internet Downloader](#existing-datasets-integrated-downloader)
-4. [Reverse Proxy](#existing-datasets-reverse-proxy)
+4. [HTTP(S) Datasets](#existing-datasets-https-datasets)
 5. [Promote (API and CLI)](#existing-datasets-promote-api-and-cli)
 6. [Backend Bucket](bucket.md#backend-bucket)
 
@@ -142,7 +142,7 @@ In particular:
 
 If the dataset in question is accessible via S3-like object API, start working with it via GET primitive of the [AIS API](http_api.md). Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
 
-> As far as supported S3-like backends, AIS currently supports Amazon S3 and Google Cloud.
+> As far as supported S3-like backends, AIS currently supports Amazon S3, Google Cloud, and Azure.
 
 > AIS executes *cold GET* from the Cloud if and only if the object is not stored (by AIS), **or** the object has a bad checksum, **or** the object's version is outdated.
 
@@ -158,7 +158,7 @@ But what if the dataset in question exists in the form of (vanilla) HTTP/HTTPS U
 
 For these and similar use cases we have [AIS Downloader](../downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
 
-### Existing Datasets: Reverse Proxy
+### Existing Datasets: HTTP(S) Datasets
 
 AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation requires:
 
@@ -171,7 +171,7 @@ Note that `http_proxy` is supported by most UNIX systems and is recognized by mo
 $ export http_proxy=<AIS proxy IPv4 or hostname>
 ```
 
-In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective.
+In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective. AIStore will on the fly create a bucket to store and cache HTTP(S) reachable files all the while supporting the entire gamut of functionality including ETL. Examples for HTTP(S) datasets can be found in [this readme](bucket.md#public-https-dataset)
 
 ### Existing Datasets: Promote (API and CLI)
 
