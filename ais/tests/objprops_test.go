@@ -520,8 +520,13 @@ func TestObjProps(t *testing.T) {
 					Enabled: api.Bool(test.verEnabled),
 				},
 			})
-			tassert.CheckFatal(t, err)
-
+			if test.cloud && test.verEnabled != defaultBckProp.Versioning.Enabled {
+				tassert.Errorf(
+					t, err != nil,
+					"Cloud bucket %s is unversioned, expecting set-props to fail", m.bck)
+			} else {
+				tassert.CheckFatal(t, err)
+			}
 			if test.cloud {
 				m.cloudPuts(test.evict)
 				defer m.del()
@@ -570,7 +575,9 @@ func TestObjProps(t *testing.T) {
 					if defaultBckProp.Versioning.Enabled && (test.verEnabled || test.evict) {
 						tassert.Errorf(t, props.Version != "", "cloud object version should not be empty")
 					} else {
-						tassert.Errorf(t, props.Version == "", "cloud object version should be empty")
+						tassert.Errorf(t, props.Version == "" ||
+							test.cloud && defaultBckProp.Versioning.Enabled,
+							"cloud object version should be empty")
 					}
 					if test.evict {
 						tassert.Errorf(t, props.Atime == 0, "expected access time to be empty (not cached)")
