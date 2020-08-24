@@ -119,7 +119,7 @@ const (
 		" Timeout:\t{{$obj.TimeoutStr}}\n" +
 		" Long Timeout:\t{{$obj.TimeoutLongStr}}\n" +
 		" List Time:\t{{$obj.ListObjectsStr}}\n" +
-		" Allow Direct Access:\t{{$obj.DirectAccess}}\n"
+		" Flags:\t{{FormatFeatureFlags $obj.Features}}\n"
 	ProxyConfTmpl = "\n{{$obj := .Proxy}}Proxy Config\n" +
 		" Non Electable:\t{{$obj.NonElectable}}\n" +
 		" Primary URL:\t{{$obj.PrimaryURL}}\n" +
@@ -368,6 +368,7 @@ var (
 		"FormatBool":          fmtBool,
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
+		"FormatFeatureFlags":  fmtFeatureFlags,
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -592,4 +593,11 @@ func fmtStringListGeneric(lst []string, sep string) string {
 		fmt.Fprint(&s, url)
 	}
 	return s.String()
+}
+
+func fmtFeatureFlags(flags cmn.FeatureFlags) string {
+	if flags == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%s(%s)", flags, flags.Describe())
 }

@@ -593,7 +593,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		isGFNRequest = cmn.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
 	)
 	// GET object is the only request that allows direct access
-	if !cmn.IsIntraClusterReq(r.Header, query) && !config.Client.DirectAccess {
+	if !cmn.IsIntraClusterReq(r.Header, query) && !config.Client.Features.IsSet(cmn.FeatureDirectAccess) {
 		// TODO: send TCP RST?
 		t.invalmsghdlrf(w, r, "%s: %s is expected to be redirected", t.si, "GET object")
 		return

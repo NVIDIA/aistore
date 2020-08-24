@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -50,6 +51,11 @@ const (
 	httpsProto = "https"
 )
 
+// FeatureFlags
+const (
+	FeatureDirectAccess = 1 << iota
+)
+
 type (
 	ValidationArgs struct {
 		TargetCnt int // for EC
@@ -61,6 +67,7 @@ type (
 	PropsValidator interface {
 		ValidateAsProps(args *ValidationArgs) error
 	}
+	FeatureFlags uint64
 )
 
 //
@@ -68,6 +75,13 @@ type (
 //
 var (
 	_ ConfigOwner = &globalConfigOwner{}
+
+	clientFeatureList = []struct {
+		name  string
+		value FeatureFlags
+	}{
+		{name: "DirectAccess", value: FeatureDirectAccess},
+	}
 )
 
 type (
@@ -348,7 +362,7 @@ type ClientConf struct {
 	TimeoutLong    time.Duration `json:"-"`
 	ListObjectsStr string        `json:"list_timeout"`
 	ListObjects    time.Duration `json:"-"`
-	DirectAccess   bool          `json:"allow_direct_access"`
+	Features       FeatureFlags  `json:"features,string"`
 }
 
 type ProxyConf struct {
@@ -1120,4 +1134,30 @@ func Printf(format string, a ...interface{}) {
 	} else {
 		fmt.Printf(format+"\n", a...)
 	}
+}
+
+/////////////////////
+// feature flags   //
+/////////////////////
+
+func (cflags FeatureFlags) IsSet(flag FeatureFlags) bool {
+	return cflags&flag == flag
+}
+
+func (cflags FeatureFlags) String() string {
+	return "0x" + strconv.FormatUint(uint64(cflags), 16)
+}
+
+func (cflags FeatureFlags) Describe() string {
+	s := ""
+	for _, flag := range clientFeatureList {
+		if cflags&flag.value != flag.value {
+			continue
+		}
+		if s != "" {
+			s += ","
+		}
+		s += flag.name
+	}
+	return s
 }

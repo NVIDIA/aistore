@@ -95,8 +95,8 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	bl, err := api.ListObjects(baseParams, bck, msg, num)
 	tassert.CheckFatal(t, err)
 
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.allow_direct_access": "true"})
-	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.allow_direct_access": "false"})
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
+	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": "0"})
 
 	if len(bl.Entries) != num {
 		t.Errorf("Expected %d bucket list entries, found %d\n", num, len(bl.Entries))
@@ -185,8 +185,8 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
-	tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.allow_direct_access": "true"})
-	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.allow_direct_access": "false"})
+	tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
+	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": "0"})
 
 	if len(bucketList.Entries) != numberOfFiles {
 		t.Errorf("Number of entries in bucket list [%d] must be equal to [%d].\n",
