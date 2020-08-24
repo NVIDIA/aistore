@@ -45,12 +45,13 @@ func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 	if bck.Bck.IsHTTP() {
 		return t.cloud[cmn.ProviderHTTP]
 	}
-	// TODO: check if this can be simplified ?
+	providerName := bck.Provider
 	if bck.Props != nil {
-		providerName := bck.CloudBck().Provider
-		if ext, ok := t.cloud[providerName]; ok {
-			return ext
-		}
+		// TODO: simplify logic
+		providerName = bck.CloudBck().Provider
+	}
+	if ext, ok := t.cloud[providerName]; ok {
+		return ext
 	}
 	c, _ := cloud.NewDummyCloud(t)
 	return c
