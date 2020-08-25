@@ -142,9 +142,9 @@ func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.
 	resp, err1 := ri.t.httpclientGetPut.Do(req)
 	if err1 != nil {
 		err = fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err1)
-	} else {
-		copied = true
+		return
 	}
+	copied = true
 	debug.AssertNoErr(resp.Body.Close())
 	return
 }

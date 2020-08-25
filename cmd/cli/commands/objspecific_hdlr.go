@@ -7,6 +7,7 @@ package commands
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -283,6 +284,9 @@ func promoteHandler(c *cli.Context) (err error) {
 	}
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
+	}
+	if !filepath.IsAbs(fqn) {
+		return incorrectUsageMsg(c, "promoted source (file or directory) must have an absolute path")
 	}
 
 	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)

@@ -70,7 +70,11 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
 		return err
 	}
-	objName := r.params.ObjName + strings.TrimPrefix(strings.TrimPrefix(fqn, r.dir), string(filepath.Separator))
+	objName := r.params.ObjName
+	if objName != "" && objName[len(objName)-1] != os.PathSeparator {
+		objName += string(os.PathSeparator)
+	}
+	objName += strings.TrimPrefix(strings.TrimPrefix(fqn, r.dir), string(filepath.Separator))
 	objName = strings.Trim(objName, string(filepath.Separator))
 	lom, err := r.Target().PromoteFile(fqn, bck, objName, nil, /*expectedCksum*/
 		r.params.Overwrite, true /*safe*/, r.params.Verbose)

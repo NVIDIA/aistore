@@ -1491,8 +1491,8 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 	// 3b. promote file
 	objName := params.ObjName
-	if objName == "" {
-		objName = filepath.Base(srcFQN)
+	if objName == "" || objName[len(objName)-1] == os.PathSeparator {
+		objName += filepath.Base(srcFQN)
 	}
 	if _, err = t.PromoteFile(srcFQN, bck, objName, nil, /*expectedCksum*/
 		params.Overwrite, true /*safe*/, params.Verbose); err != nil {

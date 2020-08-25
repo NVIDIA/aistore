@@ -1,0 +1,12 @@
+mkdir -p /tmp/prm && echo 012345 > /tmp/prm/obj
+ais create bucket $BUCKET_1 // IGNORE
+ais promote /tmp/prm/obj ais://$BUCKET_1/one/one // IGNORE
+ais promote /tmp/prm/obj ais://$BUCKET_1/two/ // IGNORE
+ais promote /tmp/prm/ ais://$BUCKET_1/three // IGNORE
+ais promote /tmp/prm ais://$BUCKET_1/fourth // IGNORE
+ais promote /tmp/prm ais://$BUCKET_1/fifth/ // IGNORE
+ais promote /tmp/prm/ ais://$BUCKET_1/sixth/ // IGNORE
+
+ais ls ais://$BUCKET_1
+
+rm -rf /tmp/prm // IGNORE

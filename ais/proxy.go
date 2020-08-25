@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -1273,6 +1274,10 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		}
 		if err = bck.Allow(cmn.AccessPROMOTE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
+		if !filepath.IsAbs(msg.Name) {
+			p.invalmsghdlr(w, r, "source must be an absolute path", http.StatusBadRequest)
 			return
 		}
 		p.promoteFQN(w, r, bck, &msg)
