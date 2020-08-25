@@ -76,13 +76,13 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		r.params.Overwrite, true /*safe*/, r.params.Verbose)
 	if err != nil {
 		if finfo, ers := os.Stat(fqn); ers == nil {
-			if finfo.Mode().IsRegular() {
-				glog.Error(err)
-			} // else symbolic link, etc.
-		} else if !os.IsNotExist(ers) {
+			if !finfo.Mode().IsRegular() {
+				glog.Warningf("%v (mode=%#x)", err, finfo.Mode()) // symbolic link, etc.
+			}
+		} else {
 			glog.Error(err)
 		}
-	} else {
+	} else if lom != nil { // nil when (placement = different target)
 		r.ObjectsInc()
 		r.BytesAdd(lom.Size())
 	}
