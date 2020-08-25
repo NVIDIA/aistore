@@ -114,8 +114,12 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 		var httpErr *cmn.HTTPError
 		if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
 			if err := jsoniter.NewDecoder(resp.Body).Decode(&httpErr); err != nil {
-				return nil,
-					fmt.Errorf("failed to read response (status: %d), err: %v", resp.StatusCode, err)
+				httpErr = &cmn.HTTPError{
+					Status:  resp.StatusCode,
+					Method:  reqParams.BaseParams.Method,
+					URLPath: reqParams.Path,
+				}
+				return nil, httpErr
 			}
 		} else {
 			// HEAD request does not return the body - create http error

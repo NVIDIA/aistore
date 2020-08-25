@@ -147,6 +147,8 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: cmn.Notifs, h: p.notifs.handler, net: []string{cmn.NetworkIntraControl}},
+
+		{r: "/", h: p.httpCloudHandler, net: []string{cmn.NetworkPublic}},
 	}
 
 	p.registerNetworkHandlers(networkHandlers)
@@ -172,7 +174,6 @@ func (p *proxyrunner) markClusterStarted() {
 		{r: cmn.Query, h: p.queryHandler, net: []string{cmn.NetworkPublic}},
 
 		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
-		{r: "/", h: p.httpCloudHandler, net: []string{cmn.NetworkPublic}},
 	}
 	p.registerNetworkHandlers(netH)
 	p.httprunner.markClusterStarted()
@@ -2456,6 +2457,10 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 // http reverse-proxy handler, to handle unmodified requests
 // (not to confuse with p.rproxy)
 func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	if r.URL.Scheme == "" {
 		p.invalmsghdlr(w, r, "invalid request", http.StatusBadRequest)
 		return
