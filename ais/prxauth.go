@@ -7,7 +7,6 @@ package ais
 import (
 	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -38,10 +37,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Header format:
 //		'Authorization: Bearer <token>'
 // Returns: is auth enabled, decoded token, error
-func (p *proxyrunner) validateToken(query url.Values, hdr http.Header) (*cmn.AuthToken, error) {
-	if cmn.IsIntraClusterReq(hdr, query) {
-		return nil, nil
-	}
+func (p *proxyrunner) validateToken(hdr http.Header) (*cmn.AuthToken, error) {
 	authToken := hdr.Get(cmn.HeaderAuthorization)
 	idx := strings.Index(authToken, " ")
 	if idx == -1 || authToken[:idx] != cmn.HeaderBearer {
@@ -57,12 +53,15 @@ func (p *proxyrunner) validateToken(query url.Values, hdr http.Header) (*cmn.Aut
 	return auth, nil
 }
 
-func (p *proxyrunner) checkPermissions(query url.Values, hdr http.Header, bck *cmn.Bck, perms cmn.AccessAttrs) error {
+func (p *proxyrunner) checkPermissions(hdr http.Header, bck *cmn.Bck, perms cmn.AccessAttrs) error {
+	if isIntraCall(hdr) {
+		return nil
+	}
 	cfg := cmn.GCO.Get()
 	if !cfg.Auth.Enabled {
 		return nil
 	}
-	token, err := p.validateToken(query, hdr)
+	token, err := p.validateToken(hdr)
 	if err != nil {
 		return err
 	}

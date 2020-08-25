@@ -315,14 +315,11 @@ func (t *targetrunner) DisableMountpath(mountpath, reason string) (disabled bool
 func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error) {
 	// pull the data
 	query := url.Values{}
-	header := make(http.Header)
-	header.Set(cmn.HeaderCallerID, t.si.ID())
 	query.Add(cmn.URLParamRebData, "true")
 	args := callArgs{
 		si: si,
 		req: cmn.ReqArgs{
 			Method: http.MethodGet,
-			Header: header,
 			Base:   si.URL(cmn.NetworkIntraData),
 			Path:   cmn.URLPath(cmn.Version, cmn.Rebalance),
 			Query:  query,

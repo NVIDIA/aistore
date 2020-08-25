@@ -134,6 +134,7 @@ const (
 
 	// intra-cluster: control
 	HeaderCallerID          = "caller.id" // it is a marker of intra-cluster request (see cmn.IsInternalReq)
+	HeaderPutterID          = "putter.id"
 	HeaderCallerName        = "caller.name"
 	HeaderCallerSmapVersion = "caller.smap.ver"
 

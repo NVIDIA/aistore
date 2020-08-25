@@ -94,7 +94,8 @@ type (
 // Eg: Bad Request: Bucket abc does not appear to be local or does not exist:
 //   DELETE /v1/buckets/abc from 127.0.0.1:54064| ([httpcommon.go, #840] <- [proxy.go, #484] <- [proxy.go, #264])
 func (e *HTTPError) String() string {
-	return http.StatusText(e.Status) + ": " + e.Message + ": " + e.Method + " " + e.URLPath + " from " + e.RemoteAddr + "| (" + e.Trace + ")"
+	return http.StatusText(e.Status) + ": " + e.Message + ": " +
+		e.Method + " " + e.URLPath + " from " + e.RemoteAddr + "| (" + e.Trace + ")"
 }
 
 // Implements error interface
@@ -121,7 +122,8 @@ func NewHTTPError(r *http.Request, msg string, status int) (*HTTPError, bool) {
 	if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
 		return &httpErr, true
 	}
-	return &HTTPError{Status: status, Message: msg, Method: r.Method, URLPath: r.URL.Path, RemoteAddr: r.RemoteAddr}, false
+	return &HTTPError{Status: status, Message: msg, Method: r.Method,
+		URLPath: r.URL.Path, RemoteAddr: r.RemoteAddr}, false
 }
 
 // URLPath returns a HTTP URL path by joining all segments with "/"
@@ -188,9 +190,11 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 
 	apiItems = apiItems[len(items):]
 	if len(apiItems) < itemsAfter {
-		return nil, fmt.Errorf("path is too short: got %d items, but expected %d", len(apiItems)+len(items), itemsAfter+len(items))
+		return nil, fmt.Errorf("path is too short: got %d items, but expected %d",
+			len(apiItems)+len(items), itemsAfter+len(items))
 	} else if len(apiItems) > itemsAfter && !splitAfter {
-		return nil, fmt.Errorf("path is too long: got %d items, but expected %d", len(apiItems)+len(items), itemsAfter+len(items))
+		return nil, fmt.Errorf("path is too long: got %d items, but expected %d",
+			len(apiItems)+len(items), itemsAfter+len(items))
 	}
 
 	return apiItems, nil
@@ -495,14 +499,4 @@ func RangeHdr(start, length int64) (hdr http.Header) {
 	hdr = make(http.Header, 1)
 	hdr.Add(HeaderRange, fmt.Sprintf("%s%d-%d", HeaderRangeValPrefix, start, start+length-1))
 	return
-}
-
-// IsIntraClusterReq returns true if a request is intra-cluster one(in this case
-// the Header contains CallerID) or it is a request from a client to URL
-// returned by a proxy redirection (in this case the proxy fills the query)
-func IsIntraClusterReq(hdr http.Header, q url.Values) bool {
-	if hdr.Get(HeaderCallerID) != "" {
-		return true
-	}
-	return len(q) != 0 && q.Get(URLParamProxyID) != ""
 }

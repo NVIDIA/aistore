@@ -73,14 +73,16 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 	comm, err = etl.GetCommunicator(uuid)
 	if err != nil {
 		if _, ok := err.(*cmn.NotFoundError); ok {
-			t.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s. Try starting new ETL with \"%s/v1/etl/init\" endpoint",
-				err.Error(), t.owner.smap.Get().Primary.URL(cmn.NetworkPublic))
+			smap := t.owner.smap.Get()
+			t.invalmsghdlrstatusf(w, r,
+				http.StatusNotFound,
+				"%v - try starting new ETL with \"%s/v1/etl/init\" endpoint",
+				err.Error(), smap.Primary.URL(cmn.NetworkPublic))
 			return
 		}
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	if err := comm.Do(w, r, bck, objName); err != nil {
 		t.invalmsghdlr(w, r, cmn.NewETLError(&cmn.ETLErrorContext{
 			UUID:    uuid,

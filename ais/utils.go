@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -18,11 +19,34 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-//===========================================================================
+//
+// request validation helpers - TODO: optionally, check node IDs vs Smap
+//
+func isIntraCall(hdr http.Header) bool { return hdr != nil && hdr.Get(cmn.HeaderCallerID) != "" }
+func isIntraPut(hdr http.Header) bool  { return hdr != nil && hdr.Get(cmn.HeaderPutterID) != "" }
+
+func isRedirect(q url.Values) (delta string) {
+	if len(q) == 0 || q.Get(cmn.URLParamProxyID) == "" {
+		return
+	}
+	return q.Get(cmn.URLParamUnixTime)
+}
+func redirectLatency(started time.Time, ptime string) (redelta int64) {
+	pts, err := cmn.S2UnixNano(ptime)
+	if err != nil {
+		glog.Errorf("unexpected: failed to convert %s to int, err: %v", ptime, err)
+		return
+	}
+	redelta = started.UnixNano() - pts
+	if redelta < 0 && -redelta < int64(clusterClockDrift) {
+		redelta = 0
+	}
+	return
+}
+
 //
 // IPV4
 //
-//===========================================================================
 
 // Local unicast IP info
 type localIPv4Info struct {

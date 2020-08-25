@@ -44,7 +44,7 @@ func (r *registry) put(uuid string, c Communicator) error {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	if _, ok := r.byUUID[uuid]; ok {
-		return fmt.Errorf("ETL with uuid %q already exists", uuid)
+		return fmt.Errorf("ETL %q already exists", uuid)
 	}
 	r.byUUID[uuid] = c
 	return nil
