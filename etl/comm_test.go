@@ -103,7 +103,7 @@ var _ = Describe("CommunicatorTest", func() {
 			pod := &corev1.Pod{}
 			pod.SetName("somename")
 
-			comm = makeCommunicator(tMock, pod, commType, transformerServer.URL, "", nil)
+			comm = makeCommunicator(tMock, pod, commType, "dummyip", transformerServer.URL, "", nil)
 			resp, err := http.Get(proxyServer.URL)
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()

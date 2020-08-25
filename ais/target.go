@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
@@ -559,15 +560,17 @@ func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, ap
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		ptime        string
+		query        = r.URL.Query()
+		ptime        = isRedirect(query)
 		config       = cmn.GCO.Get()
 		features     = config.Client.Features
-		query        = r.URL.Query()
 		isGFNRequest = cmn.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
 	)
 	// TODO:  return TCP RST here and elsewhere
 	// FIXME: disabling the check temporarily to pass ETL
-	if ptime = isRedirect(query); false && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
+	if !etl.ValidIP(r.RemoteAddr) && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
+		// GET object is the only request that allows direct access
+		// TODO:  return TCP RST here and elsewhere
 		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
 		return
 	}
@@ -1047,9 +1050,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		exists         bool
 		silent         = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
-	// FIXME: disabling the check temporarily to pass ETL
-	if false && isRedirect(query) == "" && !features.IsSet(cmn.FeatureDirectAccess) {
-		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
+	if !etl.ValidIP(r.RemoteAddr) && isRedirect(query) == "" && !features.IsSet(cmn.FeatureDirectAccess) {
+		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (validIP: %v, isRedirect: %v)",
+			t.si, r.Method, etl.ValidIP(r.RemoteAddr), isRedirect(query))
 		return
 	}
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)

@@ -146,6 +146,7 @@ func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, 
 		pod             *corev1.Pod
 		svc             *corev1.Service
 		hostIP          string
+		podIP           string
 		originalPodName string
 		nodePort        int
 	)
@@ -208,6 +209,11 @@ func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, 
 		return
 	}
 
+	// Retrieve pod IP.
+	if podIP, err = getPodIP(errCtx, pod); err != nil {
+		return
+	}
+
 	// 3. Creating service
 	svcName = svc.GetName()
 	if err = createEntity(errCtx, cmn.KubeSvc, svc); err != nil {
@@ -228,7 +234,7 @@ func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, 
 		return errCtx, podName, svcName, cmn.NewETLError(errCtx, waitErr.Error())
 	}
 
-	c := makeCommunicator(t, pod, msg.CommType, transformerURL, originalPodName, NewAborter(t, msg.ID))
+	c := makeCommunicator(t, pod, msg.CommType, podIP, transformerURL, originalPodName, NewAborter(t, msg.ID))
 	// NOTE: communicator is put to registry only if the whole tryStart was successful.
 	if err = reg.put(msg.ID, c); err != nil {
 		return
@@ -407,11 +413,20 @@ func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.
 	return nil
 }
 
+func getPodIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
+	// Retrieve host IP of the pod.
+	output, err := exec.Command(cmn.Kubectl, []string{"get", "pod", pod.GetName(), "--template={{.status.podIP}}"}...).CombinedOutput()
+	if err != nil {
+		return "", cmn.NewETLError(errCtx, "failed to get IP of pod (err: %v; output: %s)", err, string(output))
+	}
+	return string(output), nil
+}
+
 func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
 	// Retrieve host IP of the pod.
 	output, err := exec.Command(cmn.Kubectl, []string{"get", "pod", pod.GetName(), "--template={{.status.hostIP}}"}...).CombinedOutput()
 	if err != nil {
-		return "", cmn.NewETLError(errCtx, "failed to get IP of pod (err: %v; output: %s)", err, string(output))
+		return "", cmn.NewETLError(errCtx, "failed to get host IP of pod (err: %v; output: %s)", err, string(output))
 	}
 	return string(output), nil
 }

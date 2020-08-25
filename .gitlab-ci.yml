@@ -164,9 +164,6 @@ test:aisloader-long:
 
 .test_kube_template: &test_kube_def
   stage: test-short
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedules"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   variables:
     AIS_ENDPOINT: "localhost:8080"
     K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
@@ -188,8 +185,23 @@ test:aisloader-long:
     - export FS_CNT=3
 
 
+test:kube-short:
+  <<: *test_kube_def
+  only:
+    - merge_requests
+  script:
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
+    - status=0
+    - BUCKET="test" RE="TestKubeTransformer/tar2tf-filters" make test-run || status=$?
+    - make kill
+    - exit $status # TODO: hack to prevent pod hangs on failures
+
+
 test:kube:
   <<: *test_kube_def
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedules"'
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })
     - status=0
@@ -199,6 +211,9 @@ test:kube:
 
 test:aisloader-short:
   <<: *test_kube_def
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedules"'
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - make aisloader
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo $CLOUD; })

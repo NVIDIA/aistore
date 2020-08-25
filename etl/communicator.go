@@ -34,7 +34,7 @@ type (
 		Name() string
 		PodName() string
 		SvcName() string
-
+		RemoteAddrIP() string
 		// Do can use one of 2 ETL container endpoints:
 		// Method "PUT", Path "/"
 		// Method "GET", Path "/bucket/object"
@@ -46,6 +46,7 @@ type (
 		transformerAddress string
 		name               string
 		podName            string
+		remoteAddr         string
 	}
 
 	pushComm struct {
@@ -75,12 +76,13 @@ func filterQueryParams(rawQuery string) string {
 	return vals.Encode()
 }
 
-func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerURL, name string, listener cluster.Slistener) Communicator {
+func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, podIP, transformerURL, name string, listener cluster.Slistener) Communicator {
 	baseComm := baseComm{
 		Slistener:          listener,
 		transformerAddress: transformerURL,
 		name:               name,
 		podName:            pod.GetName(),
+		remoteAddr:         podIP,
 	}
 
 	switch commType {
@@ -109,9 +111,10 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, transformerUR
 	return nil
 }
 
-func (c baseComm) Name() string    { return c.name }
-func (c baseComm) PodName() string { return c.podName }
-func (c baseComm) SvcName() string { return c.podName /*pod name is same as service name*/ }
+func (c baseComm) Name() string         { return c.name }
+func (c baseComm) PodName() string      { return c.podName }
+func (c baseComm) RemoteAddrIP() string { return c.remoteAddr }
+func (c baseComm) SvcName() string      { return c.podName /*pod name is same as service name*/ }
 
 func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	lom := &cluster.LOM{T: pushc.t, ObjName: objName}

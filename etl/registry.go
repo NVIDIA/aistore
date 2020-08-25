@@ -6,8 +6,10 @@ package etl
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -37,6 +39,20 @@ func newRegistry() *registry {
 	return &registry{
 		byUUID: make(map[string]Communicator),
 	}
+}
+
+func ValidIP(remoteAddr string) bool {
+	addrSplit := strings.Split(remoteAddr, ":")
+	if len(addrSplit) < 2 {
+		glog.Errorf("invalid remote addr for etl: %s", remoteAddr)
+		return false
+	}
+	for _, info := range reg.list() {
+		if info.RemoteAddrIP == addrSplit[0] {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *registry) put(uuid string, c Communicator) error {
@@ -75,8 +91,9 @@ func (r *registry) list() []Info {
 	etls := make([]Info, 0, len(r.byUUID))
 	for uuid, c := range r.byUUID {
 		etls = append(etls, Info{
-			ID:   uuid,
-			Name: c.Name(),
+			ID:           uuid,
+			Name:         c.Name(),
+			RemoteAddrIP: c.RemoteAddrIP(),
 		})
 	}
 	r.mtx.RUnlock()
