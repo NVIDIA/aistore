@@ -113,22 +113,18 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 	if resp.StatusCode >= http.StatusBadRequest {
 		var httpErr *cmn.HTTPError
 		if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
-			if err := jsoniter.NewDecoder(resp.Body).Decode(&httpErr); err != nil {
-				httpErr = &cmn.HTTPError{
-					Status:  resp.StatusCode,
-					Method:  reqParams.BaseParams.Method,
-					URLPath: reqParams.Path,
-				}
+			if jsonErr := jsoniter.NewDecoder(resp.Body).Decode(&httpErr); jsonErr == nil {
 				return nil, httpErr
 			}
-		} else {
-			// HEAD request does not return the body - create http error
-			// 503 is also to be preserved
-			httpErr = &cmn.HTTPError{
-				Status:  resp.StatusCode,
-				Method:  reqParams.BaseParams.Method,
-				URLPath: reqParams.Path,
-			}
+		}
+		msg, _ := ioutil.ReadAll(resp.Body)
+		// HEAD request does not return the body - create http error
+		// 503 is also to be preserved
+		httpErr = &cmn.HTTPError{
+			Status:  resp.StatusCode,
+			Method:  reqParams.BaseParams.Method,
+			URLPath: reqParams.Path,
+			Message: string(msg),
 		}
 		return nil, httpErr
 	}

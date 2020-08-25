@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -46,9 +47,11 @@ func setBucket() {
 
 func waitForCluster() {
 	var (
-		err       error
-		proxyCnt  int
-		targetCnt int
+		err        error
+		proxyCnt   int
+		targetCnt  int
+		retryCount = 5
+		sleep      = time.Second * 5
 	)
 	pc := os.Getenv(cmn.EnvVars.NumProxy)
 	tc := os.Getenv(cmn.EnvVars.NumTarget)
@@ -65,7 +68,7 @@ func waitForCluster() {
 		}
 	}
 
-	tutils.Logln("Waiting for cluster readiness...")
+	tutils.Logln("Waiting for clustermap init...")
 	var cntNodes []int
 	if proxyCnt != 0 || targetCnt != 0 {
 		cntNodes = []int{proxyCnt, targetCnt}
@@ -74,6 +77,22 @@ func waitForCluster() {
 	if err != nil {
 		tutils.Logf("Error waiting for cluster startup, err: %v\n", err)
 		os.Exit(1)
+	}
+
+	tutils.Logln("Waiting for primary proxy healthcheck...")
+	retry := 0
+	for {
+		tutils.Logf("Pinging for health of primary, #iter: %d\n", retry)
+		err = api.Health(tutils.BaseAPIParams(tutils.GetPrimaryURL()))
+		if err == nil {
+			break
+		}
+		if retry == retryCount {
+			tutils.Logf("Error waiting for cluster startup, err: %v\n", err)
+			os.Exit(1)
+		}
+		retry++
+		time.Sleep(sleep)
 	}
 	tutils.Logln("Cluster ready...")
 }
