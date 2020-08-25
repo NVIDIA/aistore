@@ -6,6 +6,8 @@ package integration
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,7 +81,7 @@ func genObjURL(isSecure, isXML bool) (s string) {
 }
 
 // build command line for CURL
-func genCURLCmdLine(isSecure, isXML bool, proxyURL string, targets cluster.NodeMap) []string {
+func genCURLCmdLine(resURL, proxyURL string, targets cluster.NodeMap) []string {
 	var noProxy []string
 	for _, t := range targets {
 		if !cmn.StringInSlice(t.PublicNet.NodeIPAddr, noProxy) {
@@ -88,7 +90,7 @@ func genCURLCmdLine(isSecure, isXML bool, proxyURL string, targets cluster.NodeM
 	}
 	return []string{
 		"-L", "-X", "GET",
-		genObjURL(isSecure, isXML),
+		resURL,
 		"-o", gcsTmpFile,
 		"-x", proxyURL, "--proxy-insecure",
 		"--max-redirs", "3",
@@ -113,9 +115,11 @@ func extractSpeed(out []byte) int64 {
 }
 
 func TestRProxyGCS(t *testing.T) {
-	smap, err := api.GetClusterMap(baseParams)
-	tassert.CheckFatal(t, err)
-	proxyURL := tutils.GetPrimaryURL()
+	var (
+		resURL   = genObjURL(false, true)
+		proxyURL = tutils.GetPrimaryURL()
+		smap     = tutils.GetClusterMap(t, proxyURL)
+	)
 
 	// look for leftovers and cleanup if found
 	pathCached := pathForCached()
@@ -124,8 +128,7 @@ func TestRProxyGCS(t *testing.T) {
 		os.Remove(pathCached)
 	}
 	os.Remove(gcsTmpFile)
-
-	cmdline := genCURLCmdLine(false, true, proxyURL, smap.Tmap)
+	cmdline := genCURLCmdLine(resURL, proxyURL, smap.Tmap)
 	tutils.Logf("First time download via XML API: %s\n", cmdline)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
 	tutils.Logln(string(out))
@@ -144,7 +147,7 @@ func TestRProxyGCS(t *testing.T) {
 	tassert.Fatalf(t, speedCold != 0, "Failed to detect speed for cold download")
 
 	tutils.Logf("HTTP download\n")
-	cmdline = genCURLCmdLine(false, true, proxyURL, smap.Tmap)
+	cmdline = genCURLCmdLine(resURL, proxyURL, smap.Tmap)
 	out, err = exec.Command("curl", cmdline...).CombinedOutput()
 	tutils.Logln(string(out))
 	tassert.CheckFatal(t, err)
@@ -182,4 +185,43 @@ func TestRProxyGCS(t *testing.T) {
 		tutils.Logf("JSON download speed:   %s\n", cmn.B2S(speedJSON, 1))
 	*/
 	tutils.Logf("HTTP (cached) is %.1f times faster than Cold\n", float64(speedHTTP)/float64(speedCold))
+}
+
+func TestRProxyInvalidURL(t *testing.T) {
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		urlObj     *url.URL
+		bckName    string
+		bck        cmn.Bck
+	)
+
+	client := tutils.NewClientWithProxy(proxyURL)
+
+	tests := []struct {
+		url        string
+		statusCode int
+	}{
+		{url: "http://archive.ics.uci.edu/ml/datasets/Abalone", statusCode: http.StatusBadRequest},
+		{url: "http://storage.googleapis.com/kubernetes-release/release", statusCode: http.StatusNotFound},
+		{url: "http://invalid.invaliddomain.com/test/webpage.txt", statusCode: http.StatusBadRequest}, // Invalid domain
+		{url: "http://httpstat.us/403", statusCode: http.StatusBadRequest},
+		{url: "http://httpstat.us/500", statusCode: http.StatusBadRequest},
+	}
+
+	for _, test := range tests {
+		urlObj, _ = url.ParseRequestURI(test.url)
+		bckName, _, _ = cmn.URL2BckObj(urlObj)
+		bck = cmn.Bck{Name: bckName, Provider: cmn.ProviderHTTP, Ns: cmn.NsGlobal}
+		api.DestroyBucket(baseParams, bck)
+
+		res, err := client.Get(test.url)
+		tassert.CheckError(t, err)
+		res.Body.Close()
+		tassert.Errorf(t, res.StatusCode == test.statusCode, "%q: expected status %d - got %d", test.url, test.statusCode, res.StatusCode)
+
+		_, err = api.HeadBucket(baseParams, bck)
+		tassert.Errorf(t, err != nil, "shouldn't create bucket (%s) for invalid resource URL", bck)
+		api.DestroyBucket(baseParams, bck)
+	}
 }

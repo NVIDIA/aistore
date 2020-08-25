@@ -109,6 +109,18 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	if err != nil {
 		return nil, err, http.StatusBadRequest
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("HEAD(%s) failed, status %d", origURL, resp.StatusCode)
+		return nil, err, resp.StatusCode
+	}
+
+	// TODO: improve validation - check `content-type` header
+	if resp.Header.Get(cmn.HeaderETag) == "" {
+		err = fmt.Errorf("invalid resource - missing header %s", cmn.HeaderETag)
+		return nil, err, http.StatusBadRequest
+	}
+
 	resp.Body.Close()
 
 	bckProps = make(cmn.SimpleKVs)

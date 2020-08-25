@@ -2474,6 +2474,7 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
+
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		// bck.IsHTTP()
 		bckName, objName, origURLBck := cmn.URL2BckObj(r.URL)

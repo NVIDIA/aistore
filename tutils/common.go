@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -167,4 +168,14 @@ func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType st
 	}
 
 	return objNames
+}
+
+func NewClientWithProxy(proxyURL string) *http.Client {
+	transport := cmn.NewTransport(transportArgs)
+	prxURL, _ := url.Parse(proxyURL)
+	transport.Proxy = http.ProxyURL(prxURL)
+	return &http.Client{
+		Transport: transport,
+		Timeout:   transportArgs.Timeout,
+	}
 }
