@@ -71,8 +71,10 @@ func init() {
 }
 
 func initProxyURL() {
-	envVars := cmn.ParseEnvVariables(dockerEnvFile)                    // Gets the fields from the .env file from which the docker was deployed
-	primaryHostIP, port := envVars["PRIMARY_HOST_IP"], envVars["PORT"] // Host IP and port of primary cluster
+	// Gets the fields from the .env file from which the docker was deployed
+	envVars := cmn.ParseEnvVariables(dockerEnvFile)
+	// Host IP and port of primary cluster
+	primaryHostIP, port := envVars["PRIMARY_HOST_IP"], envVars["PORT"]
 
 	proxyURLReadOnly = proxyURL
 	if containers.DockerRunning() && proxyURLReadOnly == proxyURL {
@@ -93,7 +95,20 @@ func initProxyURL() {
 	// Finds who is the current primary proxy.
 	primary, err := GetPrimaryProxy(proxyURLReadOnly)
 	if err != nil {
-		cmn.Exitf("Failed to get primary proxy, err = %v", err)
+		fmt.Printf("Failed to reach primary proxy at %s\n", proxyURLReadOnly)
+		fmt.Printf("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
+		fmt.Println("Environment variables:")
+		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.Endpoint, os.Getenv(cmn.EnvVars.Endpoint))
+		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.PrimaryID, os.Getenv(cmn.EnvVars.PrimaryID))
+		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.SkipVerifyCrt, os.Getenv(cmn.EnvVars.SkipVerifyCrt))
+		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.UseHTTPS, os.Getenv(cmn.EnvVars.UseHTTPS))
+		if len(envVars) > 0 {
+			fmt.Println("Docker Environment:")
+			for k, v := range envVars {
+				fmt.Printf("\t%s:\t%s\n", k, v)
+			}
+		}
+		cmn.Exitf("")
 	}
 	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
 }
