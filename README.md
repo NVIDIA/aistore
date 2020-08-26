@@ -102,18 +102,20 @@ Enter number of proxies (gateways):
 3
 Number of local cache directories (enter 0 to use preconfigured filesystems):
 2
-Select:
- 0: No 3rd party Cloud
- 1: Amazon S3
- 2: Google Cloud Storage
- 3: Azure Cloud
-0
+Select the cloud providers you wish to support:
+Amazon S3: (y/n) ?
+n
+Google Cloud Storage: (y/n) ?
+n
+Azure: (y/n) ?
+n
+Building aisnode: version=df24df77 providers=
 ```
 
-Or, you can run all the above non-interactively:
+Or, you can run all the above in one shot non-interactively:
 
 ```console
-$ make kill; make deploy <<< $'10\n3\n2\n0'
+$ make kill deploy <<< $'10\n3\n2\nn\nn\nn\n'
 ```
 
 > The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems.
@@ -155,16 +157,18 @@ $ openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 10
 2. Deploy cluster (4 targets, 1 gateway, 6 mountpaths, Google Cloud):
 
 ```console
-$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\n2'
+$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\n'
 ```
 
-3. Run tests (the example below will list bucket names for the buckets accessible for you in Google Cloud):
+3. Run tests (both examples below list the names of buckets accessible for you in Google Cloud):
 
 ```console
-$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=aws://nvais go test -v -p 1 -count 1 -timeout 2h ./ais/tests -failfast -run=BucketNames
+$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=gs://myGCPbucket go test -v -p 1 -count 1 ./ais/tests -run=BucketNames
+
+$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go test -v -p 1 -count 1 ./ais/tests -run=BucketNames
 ```
 
-> Note environment variables: **AIS_USE_HTTPS**, **AIS_ENDPOINT**, and **AIS_SKIP_VERIFY_CRT**.
+> Notice environment variables above: **AIS_USE_HTTPS**, **AIS_ENDPOINT**, and **AIS_SKIP_VERIFY_CRT**.
 
 ## Build, Make and Development Tools
 
