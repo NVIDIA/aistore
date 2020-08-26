@@ -575,6 +575,10 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 }
 
 func parseBck(c *cli.Context, uri string) (*cmn.Bck, error) {
+	if cmn.IsWebURL(uri) {
+		bck := parseURLtoBck(uri)
+		return &bck, nil
+	}
 	bck, objName, err := cmn.ParseBckObjectURI(uri)
 	if err != nil {
 		return nil, err
