@@ -16,7 +16,6 @@ function post_deploy() {
     exit 1
   fi
   echo "working with build: $(git rev-parse --short HEAD)"
-  export BUCKET=aws://ais-jenkins
   echo "run tests with cloud bucket: ${BUCKET}"
 }
 
@@ -38,6 +37,7 @@ function deploy() {
 set -o xtrace
 source /etc/profile.d/aispaths.sh
 source aws.env
+source gcs.env
 
 cd $AISSRC && cd ..
 
@@ -78,7 +78,9 @@ popd
 
 # Running long tests
 deploy 6 6 4 y n n
-make test-long && make test-aisloader
+for BUCKET in "aws://ais-jenkins" "gs://ais-nv";do
+  BUCKET=$BUCKET make test-long && make test-aisloader
+done
 exit_code=$?
 result=$((result + exit_code))
 echo "'make test-long && make test-aisloader' exit status: $exit_code"

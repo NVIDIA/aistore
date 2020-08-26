@@ -125,7 +125,10 @@ test:cloud:
     AWS_REGION: "us-east-2"
   script:
     - export NUM_PROXY=6
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo n; echo n; })
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > /tmp/gcs.json
+    - export GOOGLE_APPLICATION_CREDENTIALS="/tmp/gcs.json"
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo y; echo n; })
+    - BUCKET="gs://ais-nv" make test-long
     - BUCKET="aws://ais-ci" make test-long
 
 test:soak:
