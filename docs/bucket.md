@@ -203,9 +203,14 @@ This will cache shard object inside the AIStore cluster.
 We can confirm this by listing available buckets and checking the content:
 
 ```console
-$ ais ls http://
-HTTP Buckets (1)
-  ht://ZDdhNTYxZTkyMzhkNjk3NA
+$ ais ls
+AIS Buckets (1)
+  ais://local-bck
+AWS Buckets (1)
+  aws://ais-test
+HTTP(S) Buckets (1)
+  ht://ZDdhNTYxZTkyMzhkNjk3NA (http://storage.googleapis.com/minikube/)
+
 $ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
 NAME                                 SIZE
 minikube-0.6.iso.sha256	              65B

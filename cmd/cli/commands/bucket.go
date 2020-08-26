@@ -452,9 +452,19 @@ func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders b
 			}
 		}
 		if showHeaders {
-			fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(provider), len(filtered))
+			dspProvider := provider
+			if provider == cmn.ProviderHTTP {
+				dspProvider = "HTTP(S)"
+			}
+			fmt.Fprintf(c.App.Writer, "%s Buckets (%d)\n", strings.ToUpper(dspProvider), len(filtered))
 		}
 		for _, bck := range filtered {
+			if provider == cmn.ProviderHTTP {
+				if props, err := api.HeadBucket(defaultAPIParams, bck); err == nil {
+					fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.OrigURLBck)
+					continue
+				}
+			}
 			fmt.Fprintf(c.App.Writer, "  %s\n", bck)
 		}
 	}
