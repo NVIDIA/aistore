@@ -512,8 +512,8 @@ func TestDownloadCloud(t *testing.T) {
 				defer tutils.DestroyBucket(t, proxyURL, test.dstBck)
 			}
 
-			tutils.CleanCloudBucket(t, proxyURL, test.srcBck, prefix)
-			defer tutils.CleanCloudBucket(t, proxyURL, test.srcBck, prefix)
+			tutils.CleanupCloudBucket(t, proxyURL, test.srcBck, prefix)
+			defer tutils.CleanupCloudBucket(t, proxyURL, test.srcBck, prefix)
 
 			tutils.Logln("putting objects into cloud bucket...")
 

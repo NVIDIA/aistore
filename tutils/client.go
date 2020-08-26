@@ -151,11 +151,14 @@ func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	}
 }
 
-func CleanCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
+func CleanupCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
 	toDelete, err := ListObjectNames(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
 	baseParams := BaseAPIParams(proxyURL)
-	_, err = api.DeleteList(baseParams, bck, toDelete)
+	xactID, err := api.DeleteList(baseParams, bck, toDelete)
+	tassert.CheckFatal(t, err)
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: time.Minute}
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 }
 
