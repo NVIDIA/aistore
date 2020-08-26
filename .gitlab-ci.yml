@@ -44,6 +44,29 @@ stages:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
 
+.test_kube_template: &test_kube_def
+  stage: test-short
+  variables:
+    AIS_ENDPOINT: "localhost:8080"
+    K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
+  tags:
+    - ais-kube
+  before_script:
+    - export PATH="$PATH:$GOPATH/bin"
+    - apt-get update -yq
+    - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools coreutils
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    - chmod +x ./kubectl
+    - mv ./kubectl /usr/local/bin/kubectl
+    - kubectl version --client
+    - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecylce of transformers is implemented.
+    - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecylce of transformers is implemented.
+    - export NUM_TARGET=1
+    - export NUM_PROXY=1
+    - export FS_CNT=3
+
+
+
 build:linux:
   stage: build
   <<: *default_only_def
@@ -160,32 +183,14 @@ test:aisloader-long:
 #    - make test-bench
 
 
-.test_kube_template: &test_kube_def
-  stage: test-short
-  variables:
-    AIS_ENDPOINT: "localhost:8080"
-    K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
-  tags:
-    - ais-kube
-  before_script:
-    - export PATH="$PATH:$GOPATH/bin"
-    - apt-get update -yq
-    - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools coreutils
-    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
-    - chmod +x ./kubectl
-    - mv ./kubectl /usr/local/bin/kubectl
-    - kubectl version --client
-    - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecylce of transformers is implemented.
-    - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecylce of transformers is implemented.
-    - export NUM_TARGET=1
-    - export NUM_PROXY=1
-    - export FS_CNT=3
-
 
 test:kube-short:
   <<: *test_kube_def
   only:
     - merge_requests
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   script:
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y;echo y;echo y;  })
     - status=0
