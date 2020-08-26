@@ -970,7 +970,7 @@ func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 }
 
 func ensureHasProvider(bck cmn.Bck, cmd string) error {
-	if !bck.IsCloud() {
+	if !bck.IsHTTP() && !bck.IsCloud() {
 		return fmt.Errorf("missing cloud provider for %q", cmd)
 	}
 	return nil
