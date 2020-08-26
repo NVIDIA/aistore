@@ -566,9 +566,10 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		features     = config.Client.Features
 		isGFNRequest = cmn.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
 	)
-	// TODO:  return TCP RST here and elsewhere
+	// TODO: return TCP RST here and elsewhere
+	// TODO: etl.IsCaller() currently always true
 	if ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
-		if !etl.ValidIP(r.RemoteAddr) {
+		if !etl.IsCaller(r.RemoteAddr) {
 			t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 				t.si, r.Method, r.RemoteAddr)
 			return
@@ -1051,7 +1052,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		silent         = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
 	if isRedirect(query) == "" && !features.IsSet(cmn.FeatureDirectAccess) {
-		if !etl.ValidIP(r.RemoteAddr) {
+		if !etl.IsCaller(r.RemoteAddr) {
 			t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 				t.si, r.Method, r.RemoteAddr)
 			return

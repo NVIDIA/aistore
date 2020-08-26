@@ -6,10 +6,8 @@ package etl
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -33,27 +31,13 @@ type (
 	}
 )
 
-var reg = newRegistry()
+var reg *registry
 
-func newRegistry() *registry {
-	return &registry{
-		byUUID: make(map[string]Communicator),
-	}
+func init() {
+	reg = &registry{byUUID: make(map[string]Communicator)}
 }
 
-func ValidIP(remoteAddr string) bool {
-	addrSplit := strings.Split(remoteAddr, ":")
-	if len(addrSplit) < 2 {
-		glog.Errorf("invalid remote addr for etl: %s", remoteAddr)
-		return false
-	}
-	for _, info := range reg.list() {
-		if info.RemoteAddrIP == addrSplit[0] {
-			return true
-		}
-	}
-	return false
-}
+func IsCaller(_ string) bool { return true } // TODO: refine
 
 func (r *registry) put(uuid string, c Communicator) error {
 	cmn.Assert(uuid != "")
