@@ -93,6 +93,7 @@ func genCURLCmdLine(isSecure, isXML bool, proxyURL string, targets cluster.NodeM
 		"-x", proxyURL, "--proxy-insecure",
 		"--max-redirs", "3",
 		"--noproxy", strings.Join(noProxy, ","),
+		"--insecure",
 	}
 }
 
