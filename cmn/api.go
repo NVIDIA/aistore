@@ -447,14 +447,18 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.Provider, allProviders)
 	}
 	if !bp.BackendBck.IsEmpty() {
+		if bp.BackendBck.Provider == "" {
+			return fmt.Errorf("backend bucket (%q): provider is empty", bp.BackendBck)
+		}
 		if bp.BackendBck.Name == "" {
 			return fmt.Errorf("backend bucket (%q) name is empty", bp.BackendBck)
 		}
 		if bp.BackendBck.IsHTTP() {
-			return fmt.Errorf("backend bucket (%q) cannot be associated with %q provider", bp.BackendBck, ProviderHTTP)
+			return fmt.Errorf("backend bucket (%q) cannot be associated with %q provider",
+				bp.BackendBck, ProviderHTTP)
 		}
 		if !bp.BackendBck.IsCloud() {
-			return fmt.Errorf("backend bucket (%q) should be referencing a Cloud bucket", bp.BackendBck)
+			return fmt.Errorf("backend bucket (%q) must be a Cloud bucket", bp.BackendBck)
 		}
 		if bp.Provider != ProviderAIS {
 			return fmt.Errorf("backend bucket (%q) can only be set for AIS buckets", bp.BackendBck)

@@ -360,7 +360,7 @@ func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *clus
 
 func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody) (*rangeDlJob, error) {
 	if !bck.IsAIS() {
-		return nil, errors.New("regular download requires ais bucket")
+		return nil, errAISBckReq
 	}
 
 	var (
