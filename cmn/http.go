@@ -157,10 +157,10 @@ func RESTItems(unescapedPath string) []string {
 	return apiItems
 }
 
-// MatchRESTItems splits url path into api items and match them with provided
-// items. If splitAfter is set to true all items will be split, otherwise the
-// rest of the path will be split only to itemsAfter items. Returns all items
-// which come after all of the provided items
+// MatchRESTItems splits url path and matches the parts against specified `items`.
+// If `splitAfter` is true all items will be split, otherwise the
+// rest of the path will be split only to `itemsAfter` items.
+// Returns all items that follow the specified `items`.
 func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items ...string) ([]string, error) {
 	var split []string
 	escaped := html.EscapeString(unescapedPath)

@@ -65,16 +65,6 @@ type PutObjectParams struct {
 	SkipEncode   bool // Do not run EC encode after finalizing
 }
 
-type Node interface {
-	Snode() *Snode
-	GetBowner() Bowner
-	GetSowner() Sowner
-	ClusterStarted() bool
-	NodeStarted() bool
-	NodeStartedTime() time.Time
-	Client() *http.Client
-}
-
 // NOTE: For implementations, please refer to ais/tgtifimpl.go and ais/httpcommon.go
 type Target interface {
 	Node
