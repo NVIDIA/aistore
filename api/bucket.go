@@ -21,6 +21,24 @@ const (
 	maxPollInterval     = 10 * time.Second
 )
 
+type (
+	// ProgressInfo to notify a caller about an operation progress. The operation
+	// returns negative values for data that unavailable(e.g, Total or Percent for ListObjects).
+	ProgressInfo struct {
+		Percent float64
+		Count   int
+		Total   int
+	}
+	ProgressContext struct {
+		startTime time.Time // time when operation was started
+		callAfter time.Time // call a callback only after this point in time
+		callback  ProgressCallback
+
+		info ProgressInfo
+	}
+	ProgressCallback = func(pi *ProgressContext)
+)
+
 // SetBucketProps API
 //
 // Set the properties of a bucket using the bucket name and the entire bucket
@@ -317,7 +335,7 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 
 // ListObjects returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListObjects (0 - return all objects in a bucket)
-func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint) (*cmn.BucketList, error) {
+func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint, args ...*ProgressContext) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 
 	if smsg == nil {
@@ -344,10 +362,14 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 
 		bckList = &cmn.BucketList{} // List with final result.
 		tmpPage = &cmn.BucketList{} // Temporary page for intermediate results.
+		ctx     *ProgressContext
 	)
 
 	smsg.UUID = ""
 	smsg.ContinuationToken = ""
+	if len(args) != 0 {
+		ctx = args[0]
+	}
 
 	for iter := 1; ; iter++ {
 		if toRead != 0 && toRead <= pageSize {
@@ -399,6 +421,14 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		if iter > 1 {
 			bckList.Entries = append(bckList.Entries, page.Entries...)
 			bckList.ContinuationToken = page.ContinuationToken
+		}
+
+		if ctx != nil && ctx.mustFire() {
+			ctx.info.Count = len(bckList.Entries)
+			if page.ContinuationToken == "" {
+				ctx.finish()
+			}
+			ctx.callback(ctx)
 		}
 
 		if page.ContinuationToken == "" {
@@ -501,4 +531,39 @@ func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactI
 		Query:      cmn.AddBckToQuery(nil, bck),
 	}, &xactID)
 	return
+}
+
+func NewProgressContext(cb ProgressCallback, after time.Duration) *ProgressContext {
+	ctx := &ProgressContext{
+		info:      ProgressInfo{Count: -1, Total: -1, Percent: -1.0},
+		startTime: time.Now(),
+		callback:  cb,
+	}
+	if after != 0 {
+		ctx.callAfter = ctx.startTime.Add(after)
+	}
+	return ctx
+}
+
+func (ctx *ProgressContext) finish() {
+	ctx.info.Percent = 100.0
+	ctx.info.Count = ctx.info.Total
+}
+
+func (ctx *ProgressContext) IsFinished() bool {
+	return ctx.info.Percent >= 100.0 ||
+		(ctx.info.Total != 0 && ctx.info.Total == ctx.info.Count)
+}
+
+func (ctx *ProgressContext) Elapsed() time.Duration {
+	return time.Since(ctx.startTime)
+}
+
+func (ctx *ProgressContext) mustFire() bool {
+	return ctx.callAfter.IsZero() ||
+		ctx.callAfter.Before(time.Now())
+}
+
+func (ctx *ProgressContext) Info() ProgressInfo {
+	return ctx.info
 }

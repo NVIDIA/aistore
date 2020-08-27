@@ -67,5 +67,5 @@ func defaultListHandler(c *cli.Context) (err error) {
 	}
 
 	bck.Name = strings.TrimSuffix(bck.Name, "/")
-	return listBucketObj(c, bck)
+	return listObjects(c, bck)
 }

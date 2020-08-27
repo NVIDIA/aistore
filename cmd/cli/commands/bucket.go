@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
+	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 const (
@@ -162,7 +163,7 @@ func listBucketNames(c *cli.Context, query cmn.QueryBcks) (err error) {
 }
 
 // Lists objects in bucket
-func listBucketObj(c *cli.Context, bck cmn.Bck) error {
+func listObjects(c *cli.Context, bck cmn.Bck) error {
 	objectListFilter, err := newObjectListFilter(c)
 	if err != nil {
 		return err
@@ -253,8 +254,18 @@ func listBucketObj(c *cli.Context, bck cmn.Bck) error {
 		}
 	}
 
+	cb := func(ctx *api.ProgressContext) {
+		fmt.Fprintf(c.App.Writer, "\rFetched %d objects (elapsed: %s)",
+			ctx.Info().Count, duration.HumanDuration(ctx.Elapsed()))
+		// If it is a final message, move to new line, to keep output tidy
+		if ctx.IsFinished() {
+			fmt.Fprintln(c.App.Writer)
+		}
+	}
+	ctx := api.NewProgressContext(cb, longCommandTime)
+
 	// retrieve the entire bucket list and print it
-	objList, err := api.ListObjects(defaultAPIParams, bck, msg, uint(limit))
+	objList, err := api.ListObjects(defaultAPIParams, bck, msg, uint(limit), ctx)
 	if err != nil {
 		return err
 	}
