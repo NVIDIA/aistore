@@ -236,6 +236,23 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	if cmn.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
 		daemonID = ""
 		kvs = args
+	} else {
+		var smap *cluster.Smap
+		smap, err = api.GetClusterMap(defaultAPIParams)
+		if err != nil {
+			return "", nil, err
+		}
+		if smap.GetNode(daemonID) == nil {
+			var err error
+			if c.NArg()%2 == 0 {
+				// Even - updating cluster configuration (a few key/value pairs)
+				err = fmt.Errorf("option %q does not exist (hint: run 'show config DAEMON_ID --json' to show list of options)", daemonID)
+			} else {
+				// Odd - updating daemon configuration (daemon ID + a few key/value pairs)
+				err = fmt.Errorf("node ID %q does not exist (hint: run 'show cluster' to show nodes)", daemonID)
+			}
+			return "", nil, err
+		}
 	}
 
 	if len(kvs) == 0 {
