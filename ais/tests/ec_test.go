@@ -119,7 +119,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 		foundParts = make(map[string]ecSliceMD)
 		oldest     = time.Now().Add(time.Hour)
 
-		bckProvider = cmn.ProviderAIS
+		bckProvider = bck.Provider
 		bmd         = cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				bck.Name, bck.Provider, bck.Ns,
@@ -519,7 +519,7 @@ func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, 
 }
 
 func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps cmn.BucketPropsToUpdate) {
-	tutils.Logf("Changing EC %d:%d\n", bckProps.EC.DataSlices, bckProps.EC.ParitySlices)
+	tutils.Logf("Changing EC %d:%d\n", *bckProps.EC.DataSlices, *bckProps.EC.ParitySlices)
 	_, err := api.SetBucketProps(baseParams, bck, bckProps)
 	tassert.CheckFatal(t, err)
 }
