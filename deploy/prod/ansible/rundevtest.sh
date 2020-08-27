@@ -66,7 +66,7 @@ export K8S_HOST_NAME="minikube"
 # and with pod anti-affinities (for enabling single transformer per target at a time) it would
 # cause failures with pods getting stuck in `Pending` state.
 deploy 1 1 3 n n n
-RE="TestKube" make test-run
+BUCKET=test RE="TestKube" make test-run
 exit_code=$?
 result=$((result + exit_code))
 echo "'RE=TestKube make test-run' exit status: $exit_code"

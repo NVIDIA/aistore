@@ -110,7 +110,16 @@ build-%:
 	@echo "done."
 
 docker-image-aisnode-%: ## Build 'aisnode' docker image using alpine/ubuntu as the base.
+	@echo "Building docker-image-aisnode $*... "
 	@sudo docker build . --force-rm -t aistore/aisnode:latest-$* -f deploy/dev/k8s/Dockerfile-aisnode-$*
+	@echo "*** Run the following to push the image to docker hub"
+	@echo "*** docker push aistore/aisnode:latest-"$*
+
+docker-image-ais-demo-%: ## Build 'aisnode' docker demo image with (1-proxy, 1-target, no cloud setup) using alpine/ubuntu as the base.
+	@echo "Building docker-image-ais-demo $*... "
+	@sudo docker build . --force-rm -t aistore/ais-minimal-deployment:latest-$* -f deploy/dev/docker/Dockerfile-ais-demo-$*
+	@echo "*** Run the following to push the image to docker hub"
+	@echo "*** docker push aistore/ais-minimal-deployment:latest-"$*
 
 #
 # local deployment (intended for developers)
