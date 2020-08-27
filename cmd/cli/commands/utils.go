@@ -913,6 +913,9 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList []prop, err err
 			{"lru", props.LRU.String()},
 			{"versioning", props.Versioning.String()},
 		}
+		if props.Extra.OrigURLBck != "" {
+			propList = append(propList, prop{Name: "original-url", Value: props.Extra.OrigURLBck})
+		}
 	} else {
 		err = cmn.IterFields(props, func(uniqueTag string, field cmn.IterField) (err error, b bool) {
 			value := fmt.Sprintf("%v", field.Value())
