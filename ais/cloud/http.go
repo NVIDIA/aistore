@@ -78,8 +78,8 @@ func (hp *httpProvider) DeleteObj(_ context.Context, _ *cluster.LOM) (error, int
 }
 
 func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (string, error) {
-	origURL := ctx.Value(cmn.CtxOriginalURL).(string)
-	if origURL == "" {
+	origURL, ok := ctx.Value(cmn.CtxOriginalURL).(string)
+	if !ok || origURL == "" {
 		if bck.Props == nil {
 			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck.Bck)
 		}
