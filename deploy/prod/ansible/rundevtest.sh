@@ -77,7 +77,7 @@ pushd deploy/dev/k8s
 popd
 
 # Running long tests
-deploy 6 6 4 y n n
+deploy 6 6 4 y y n
 for BUCKET in "aws://ais-jenkins" "gs://ais-nv";do
   BUCKET=$BUCKET make test-long && make test-aisloader
 done
