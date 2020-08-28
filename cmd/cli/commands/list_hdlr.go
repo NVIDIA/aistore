@@ -48,7 +48,7 @@ func defaultListHandler(c *cli.Context) (err error) {
 		objName string
 		objPath = c.Args().First()
 	)
-	if cmn.IsWebURL(objPath) {
+	if isWebURL(objPath) {
 		bck = parseURLtoBck(objPath)
 	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath, true /*query*/); err != nil {
 		return

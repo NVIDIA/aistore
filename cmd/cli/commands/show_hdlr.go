@@ -216,7 +216,7 @@ func showBucketHandler(c *cli.Context) (err error) {
 		objPath = c.Args().First()
 	)
 
-	if cmn.IsWebURL(objPath) {
+	if isWebURL(objPath) {
 		bck = parseURLtoBck(objPath)
 	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath, true); err != nil {
 		return

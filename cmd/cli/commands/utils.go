@@ -63,34 +63,31 @@ var (
 	mu                sync.Mutex
 )
 
-//
-// Error handling
-//
+type (
+	usageError struct {
+		context       *cli.Context
+		message       string
+		bottomMessage string
+		helpData      interface{}
+		helpTemplate  string
+	}
+	additionalInfoError struct {
+		baseErr        error
+		additionalInfo string
+	}
+	progressBarArgs struct {
+		barType string
+		barText string
+		total   int64
+		options []mpb.BarOption
+	}
+	prop struct {
+		Name  string
+		Value string
+	}
+)
 
-type usageError struct {
-	context       *cli.Context
-	message       string
-	bottomMessage string
-	helpData      interface{}
-	helpTemplate  string
-}
-
-type additionalInfoError struct {
-	baseErr        error
-	additionalInfo string
-}
-
-type progressBarArgs struct {
-	barType string
-	barText string
-	total   int64
-	options []mpb.BarOption
-}
-
-type prop struct {
-	Name  string
-	Value string
-}
+func isWebURL(url string) bool { return cmn.IsHTTP(url) || cmn.IsHTTPS(url) }
 
 func (e *usageError) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
@@ -98,7 +95,8 @@ func (e *usageError) Error() string {
 		msg += fmt.Sprintf("\n%s\n", e.bottomMessage)
 	}
 	if e.context.Command.Name != "" {
-		return fmt.Sprintf("Incorrect usage of \"%s %s\": %s.\n\n%s", e.context.App.Name, e.context.Command.Name, e.message, msg)
+		return fmt.Sprintf("Incorrect usage of \"%s %s\": %s.\n\n%s",
+			e.context.App.Name, e.context.Command.Name, e.message, msg)
 	}
 	return fmt.Sprintf("Incorrect usage of \"%s\": %s.\n\n%s", e.context.App.Name, e.message, msg)
 }
@@ -575,7 +573,7 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 }
 
 func parseBck(c *cli.Context, uri string) (*cmn.Bck, error) {
-	if cmn.IsWebURL(uri) {
+	if cmn.IsHTTP(uri) || cmn.IsHTTPS(uri) {
 		bck := parseURLtoBck(uri)
 		return &bck, nil
 	}

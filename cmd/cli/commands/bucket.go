@@ -355,7 +355,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	section := c.Args().Get(1)
 	objPath := c.Args().First()
 
-	if cmn.IsWebURL(objPath) {
+	if isWebURL(objPath) {
 		bck = parseURLtoBck(objPath)
 	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath); err != nil {
 		return

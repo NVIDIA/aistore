@@ -27,6 +27,9 @@ const (
 	azBlobURL = ".blob.core.windows.net"
 )
 
+func IsHTTPS(url string) bool { return strings.HasPrefix(url, "https://") }
+func IsHTTP(url string) bool  { return strings.HasPrefix(url, "http://") }
+
 func IsGoogleStorageURL(u *url.URL) bool {
 	return u.Host == gsStorageURL
 }
