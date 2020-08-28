@@ -109,12 +109,13 @@ var (
 )
 
 func prefetchHandler(c *cli.Context) (err error) {
-	printDryRunHeader(c)
-
 	var (
-		bck        cmn.Bck
-		objectName string
+		bck     cmn.Bck
+		objName string
+		objPath string
 	)
+
+	printDryRunHeader(c)
 
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing bucket name")
@@ -122,18 +123,20 @@ func prefetchHandler(c *cli.Context) (err error) {
 	if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "too many arguments")
 	}
-
-	if bck, objectName, err = cmn.ParseBckObjectURI(c.Args().First()); err != nil {
+	objPath = c.Args().First()
+	if isWebURL(objPath) {
+		bck = parseURLtoBck(objPath)
+	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath); err != nil {
 		return
 	}
 	if bck.IsAIS() {
-		return fmt.Errorf("prefetch command doesn't support local buckets")
+		return fmt.Errorf("cannot prefetch from ais buckets (the operation applies to Cloud buckets only)")
 	}
 	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
 	//FIXME: it can be easily handled
-	if objectName != "" {
+	if objName != "" {
 		return incorrectUsageMsg(c, "object name not supported, use list flag or range flag")
 	}
 
@@ -144,7 +147,11 @@ func prefetchHandler(c *cli.Context) (err error) {
 	return missingArgumentsError(c, "object list or range")
 }
 
-func evictHandler(c *cli.Context) error {
+func evictHandler(c *cli.Context) (err error) {
+	var (
+		bck     cmn.Bck
+		objName string
+	)
 	printDryRunHeader(c)
 
 	if c.NArg() == 0 {
@@ -153,12 +160,15 @@ func evictHandler(c *cli.Context) error {
 
 	// default bucket or bucket argument given by the user
 	if c.NArg() == 1 {
-		bck, objName, err := cmn.ParseBckObjectURI(c.Args().First())
-		if err != nil {
-			return err
+		objPath := c.Args().First()
+		if isWebURL(objPath) {
+			bck = parseURLtoBck(objPath)
+		} else if bck, objName, err = cmn.ParseBckObjectURI(objPath); err != nil {
+			return
 		}
+
 		if bck.IsAIS() {
-			return fmt.Errorf("evict command doesn't support local buckets")
+			return fmt.Errorf("cannot evict ais buckets (the operation applies to Cloud buckets only)")
 		}
 
 		if bck, _, err = validateBucket(c, bck, "", false); err != nil {
