@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,7 +43,7 @@ const (
 	dryRunExplanation = "No modifications on the cluster"
 )
 
-func getObject(c *cli.Context, bck cmn.Bck, object, outFile string, silent bool) (err error) {
+func getObject(c *cli.Context, bck cmn.Bck, object, origURL, outFile string, silent bool) (err error) {
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
 		return objectCheckExists(c, bck, object)
@@ -73,6 +74,11 @@ func getObject(c *cli.Context, bck cmn.Bck, object, outFile string, silent bool)
 		}
 		defer file.Close()
 		objArgs = api.GetObjectInput{Writer: file, Header: hdr}
+	}
+
+	if origURL != "" {
+		objArgs.Query = make(url.Values, 1)
+		objArgs.Query.Set(cmn.URLParamOrigURL, origURL)
 	}
 
 	if flagIsSet(c, checksumFlag) {

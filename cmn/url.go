@@ -82,6 +82,20 @@ func JoinPath(urlBase, path string) string {
 	return url + path
 }
 
+func RawURL2BckObj(rawURL string) (bck Bck, objName, origURLBck string, err error) {
+	var (
+		urlObj *url.URL
+	)
+	urlObj, err = url.ParseRequestURI(rawURL)
+	if err != nil {
+		return
+	}
+	bck.Name, objName, origURLBck = URL2BckObj(urlObj)
+	bck.Provider = ProviderHTTP
+	bck.Ns = NsGlobal
+	return
+}
+
 func URL2BckObj(u *url.URL) (bckName, objName, origURLBck string) {
 	origURLBck, objName = filepath.Split(u.Path)
 	origURLBck = u.Scheme + "://" + u.Host + origURLBck

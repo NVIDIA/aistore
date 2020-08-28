@@ -199,6 +199,13 @@ $ curl -L --max-redirs 3 -x localhost:8080 --noproxy "<comma separated lists of 
   > /dev/null
 ```
 
+Alternatively, an object can also be downloaded using the `get` and `cat` CLI commands. 
+```console
+$ ais get -f http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
+```
+
+The `--force`(`-f`) option skips bucket validation and automatically creates a new `ht://` bucket for the object if it doesn't exist.
+
 This will cache shard object inside the AIStore cluster.
 We can confirm this by listing available buckets and checking the content:
 

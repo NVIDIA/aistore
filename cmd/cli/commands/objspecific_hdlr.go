@@ -25,6 +25,7 @@ var (
 			lengthFlag,
 			checksumFlag,
 			isCachedFlag,
+			forceFlag,
 		},
 		commandPut: append(
 			checksumFlags,
@@ -52,6 +53,7 @@ var (
 			offsetFlag,
 			lengthFlag,
 			checksumFlag,
+			forceFlag,
 		},
 	}
 
@@ -192,6 +194,7 @@ func getHandler(c *cli.Context) (err error) {
 	var (
 		bck         cmn.Bck
 		objName     string
+		origURL     string
 		fullObjName = c.Args().Get(0) // empty string if arg not given
 		outFile     = c.Args().Get(1) // empty string if arg not given
 	)
@@ -201,17 +204,28 @@ func getHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 && !flagIsSet(c, isCachedFlag) {
 		return missingArgumentsError(c, "output file")
 	}
-	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
+
+	if isWebURL(fullObjName) {
+		bck, objName, _, err = cmn.RawURL2BckObj(fullObjName)
+		origURL = fullObjName
+	} else {
+		bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
+	}
+
 	if err != nil {
 		return err
 	}
-	if bck, _, err = validateBucket(c, bck, fullObjName, false); err != nil {
-		return
+
+	if origURL == "" || !flagIsSet(c, forceFlag) {
+		if bck, _, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
+			return
+		}
 	}
+
 	if objName == "" {
 		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 	}
-	return getObject(c, bck, objName, outFile, false /*silent*/)
+	return getObject(c, bck, objName, origURL, outFile, false /*silent*/)
 }
 
 func putHandler(c *cli.Context) (err error) {
@@ -303,6 +317,7 @@ func catHandler(c *cli.Context) (err error) {
 	var (
 		bck         cmn.Bck
 		objName     string
+		origURL     string
 		fullObjName = c.Args().Get(0) // empty string if arg not given
 	)
 	if c.NArg() < 1 {
@@ -312,15 +327,24 @@ func catHandler(c *cli.Context) (err error) {
 		return incorrectUsageError(c, fmt.Errorf("too many arguments"))
 	}
 
-	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
+	if isWebURL(fullObjName) {
+		bck, objName, _, err = cmn.RawURL2BckObj(fullObjName)
+		origURL = fullObjName
+	} else {
+		bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
+	}
+
 	if err != nil {
 		return
 	}
-	if bck, _, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
-		return
+	if origURL == "" || !flagIsSet(c, forceFlag) {
+		if bck, _, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
+			return
+		}
 	}
+
 	if objName == "" {
 		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 	}
-	return getObject(c, bck, objName, fileStdIO, true /*silent*/)
+	return getObject(c, bck, objName, origURL, fileStdIO, true /*silent*/)
 }

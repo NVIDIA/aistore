@@ -573,7 +573,7 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 }
 
 func parseBck(c *cli.Context, uri string) (*cmn.Bck, error) {
-	if cmn.IsHTTP(uri) || cmn.IsHTTPS(uri) {
+	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
 		return &bck, nil
 	}

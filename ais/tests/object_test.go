@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -29,6 +30,16 @@ import (
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+)
+
+const (
+	httpBucketURL           = "http://storage.googleapis.com/minikube/"
+	httpObjectName          = "minikube-0.6.iso.sha256"
+	httpObjectURL           = httpBucketURL + httpObjectName
+	httpAnotherObjectName   = "minikube-0.7.iso.sha256"
+	httpAnotherObjectURL    = httpBucketURL + httpAnotherObjectName
+	httpObjectOutput        = "ff0f444f4a01f0ec7925e6bb0cb05e84156cff9cc8de6d03102d8b3df35693e2"
+	httpAnotherObjectOutput = "aadc8b6f5720d5a493a36e1f07f71bffb588780c76498d68cd761793d2ca344e"
 )
 
 func TestCloudBucketObject(t *testing.T) {
@@ -105,6 +116,46 @@ func TestCloudBucketObject(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHttpProviderObjectGet(t *testing.T) {
+	var (
+		proxyURL     = tutils.RandomProxyURL()
+		baseParams   = tutils.BaseAPIParams(proxyURL)
+		bck, _, _, _ = cmn.RawURL2BckObj(httpObjectURL)
+		w            = bytes.NewBuffer(nil)
+		options      = api.GetObjectInput{Writer: w}
+	)
+	_ = api.DestroyBucket(baseParams, bck)
+	defer api.DestroyBucket(baseParams, bck)
+
+	// get using the HTTP API
+	options.Query = make(url.Values, 1)
+	options.Query.Set(cmn.URLParamOrigURL, httpObjectURL)
+	_, err := api.GetObject(baseParams, bck, httpObjectName, options)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpObjectOutput, "bad content (expected:%s got:%s)", httpObjectOutput, w.String())
+
+	// get another object using /v1/objects/bucket-name/object-name endpoint
+	w.Reset()
+	options.Query = make(url.Values, 1)
+	options.Query.Set(cmn.URLParamOrigURL, httpAnotherObjectURL)
+	_, err = api.GetObject(baseParams, bck, httpAnotherObjectName, options)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpAnotherObjectOutput, "bad content (expected:%s got:%s)", httpAnotherObjectOutput, w.String())
+
+	// list object should contain both the objects
+	reslist, err := api.ListObjects(baseParams, bck, &cmn.SelectMsg{}, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(reslist.Entries) == 2, "should have exactly 2 entries in bucket")
+
+	matchCount := 0
+	for _, entry := range reslist.Entries {
+		if entry.Name == httpAnotherObjectName || entry.Name == httpObjectName {
+			matchCount++
+		}
+	}
+	tassert.Errorf(t, matchCount == 2, "objects %s and %s should be present in the bucket %s", httpObjectName, httpAnotherObjectName, bck)
 }
 
 func TestAppendObject(t *testing.T) {

@@ -369,6 +369,13 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
 		if len(origURLBck) > 0 {
 			args.origURLBck = origURLBck[0]
+		} else if query.Get(cmn.URLParamOrigURL) != "" {
+			origURL := query.Get(cmn.URLParamOrigURL)
+			_, _, args.origURLBck, err = cmn.RawURL2BckObj(origURL)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+				return
+			}
 		}
 		if bck, err = args.try(); err != nil {
 			return
@@ -1404,6 +1411,13 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
 		if len(origURLBck) > 0 {
 			args.origURLBck = origURLBck[0]
+		} else if query.Get(cmn.URLParamOrigURL) != "" {
+			origURL := query.Get(cmn.URLParamOrigURL)
+			_, _, args.origURLBck, err = cmn.RawURL2BckObj(origURL)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+				return
+			}
 		}
 		if bck, err = args.try(); err != nil {
 			return
