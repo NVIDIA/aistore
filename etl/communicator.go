@@ -17,30 +17,22 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var (
-	// These parameters are not needed by the ETL container
-	// WARNING: Sending UUID might cause infinite loop where we GET objects and
-	// then requests are redirected back to the ETL container (since we didn't remove UUID from query parameters).
-	toBeFiltered = []string{cmn.URLParamUUID, cmn.URLParamProxyID, cmn.URLParamUnixTime}
-)
-
 type (
-	// Communicator is responsible for managing communication with an ETL container.
-	// Do() method is called each time a user asks to do a transformation on specified (bucket,object).
-	// Communicator extends cluster.Slistener interface. It is responsible for aborting relevant ETL container
-	// when targets membership changes.
+	// Communicator is responsible for managing communications with local ETL container.
+	// Do() gets executed as part of (each) GET bucket/object by the user.
+	// Communicator listens to cluster membership changes and terminates ETL container,
+	// if need be.
 	Communicator interface {
 		cluster.Slistener
 		Name() string
 		PodName() string
 		SvcName() string
 		RemoteAddrIP() string
-		// Do can use one of 2 ETL container endpoints:
-		// Method "PUT", Path "/"
-		// Method "GET", Path "/bucket/object"
+		// Do() uses one of the two ETL container endpoints:
+		// - Method "PUT", Path "/"
+		// - Method "GET", Path "/bucket/object"
 		Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 	}
-
 	baseComm struct {
 		cluster.Slistener
 		transformerAddress string
@@ -48,35 +40,32 @@ type (
 		podName            string
 		remoteAddr         string
 	}
-
 	pushComm struct {
 		baseComm
 		t cluster.Target
 	}
-
 	redirComm struct {
 		baseComm
 	}
-
 	revProxyComm struct {
 		baseComm
 		rp *httputil.ReverseProxy
 	}
 )
 
-func filterQueryParams(rawQuery string) string {
-	vals, err := url.ParseQuery(rawQuery)
-	if err != nil {
-		glog.Errorf("error parsing raw query: %q", rawQuery)
-		return ""
-	}
-	for _, filtered := range toBeFiltered {
-		vals.Del(filtered)
-	}
-	return vals.Encode()
-}
+// interface guard
+var (
+	_ Communicator = &pushComm{}
+	_ Communicator = &redirComm{}
+	_ Communicator = &revProxyComm{}
+)
 
-func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, podIP, transformerURL, name string, listener cluster.Slistener) Communicator {
+//////////////
+// baseComm //
+//////////////
+
+func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, podIP, transformerURL, name string,
+	listener cluster.Slistener) Communicator {
 	baseComm := baseComm{
 		Slistener:          listener,
 		transformerAddress: transformerURL,
@@ -98,7 +87,7 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, podIP, transf
 				// Replacing the `req.URL` host with ETL container host
 				req.URL.Scheme = transURL.Scheme
 				req.URL.Host = transURL.Host
-				req.URL.RawQuery = filterQueryParams(req.URL.RawQuery)
+				req.URL.RawQuery = pruneQuery(req.URL.RawQuery)
 				if _, ok := req.Header["User-Agent"]; !ok {
 					// Explicitly disable `User-Agent` so it's not set to default value.
 					req.Header.Set("User-Agent", "")
@@ -115,6 +104,10 @@ func (c baseComm) Name() string         { return c.name }
 func (c baseComm) PodName() string      { return c.podName }
 func (c baseComm) RemoteAddrIP() string { return c.remoteAddr }
 func (c baseComm) SvcName() string      { return c.podName /*pod name is same as service name*/ }
+
+//////////////
+// pushComm //
+//////////////
 
 func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	lom := &cluster.LOM{T: pushc.t, ObjName: objName}
@@ -153,11 +146,19 @@ func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.B
 	return nil
 }
 
+///////////////
+// redirComm //
+///////////////
+
 func (repc *redirComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	redirectURL := cmn.JoinPath(repc.transformerAddress, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
 }
+
+//////////////////
+// revProxyComm //
+//////////////////
 
 func (ppc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	r.URL.Path = transformerPath(bck, objName) // Reverse proxy should always use /bucket/object endpoint.
@@ -165,6 +166,18 @@ func (ppc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster
 	return nil
 }
 
-func transformerPath(bck *cluster.Bck, objName string) string {
-	return cmn.URLPath(bck.Name, objName)
+// prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
+// not removing cmn.URLParamUUID, forinstance, would cause infinite loop
+func pruneQuery(rawQuery string) string {
+	vals, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		glog.Errorf("error parsing raw query: %q", rawQuery)
+		return ""
+	}
+	for _, filtered := range []string{cmn.URLParamUUID, cmn.URLParamProxyID, cmn.URLParamUnixTime} {
+		vals.Del(filtered)
+	}
+	return vals.Encode()
 }
+
+func transformerPath(bck *cluster.Bck, objName string) string { return cmn.URLPath(bck.Name, objName) }

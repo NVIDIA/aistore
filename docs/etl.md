@@ -1,27 +1,30 @@
 ## Table of Contents
 
 - [Introduction](#introduction)
-- [Overview](#overview)
+- [Communication Mechanisms](#communication-mechanisms)
 - [Prerequisites](#prerequisites)
 - [Examples](#examples)
-  - [MD5 server](#compute-md5-on-the-objects)
-
 
 ## Introduction
 
-[ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is the general procedure of copying data from one or more sources into a destination system which represents the data differently from the source(s) or in a different context than the source(s).
-AIStore supports ETL and is designed to work close to data to minimize data transfer and latency.
+[ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is "the general procedure of copying data from one or more sources into a destination system which represents the data differently from the source(s) or in a different context than the source(s)" ([wikipedia](https://en.wikipedia.org/wiki/Extract,_transform,_load)).
+In order to run custom ETL transforms *inline* and *close to data*, AIStore supports running custom ETL containers *in the storage cluster* .
 
-## Overview
+As such, AIS-ETL (capability) requires Kubernetes. Each specific transformation is defined by its specification - a regular Kubernetes YAML (see examples below).
 
-ETL is designed for AIStore cluster running in Kubernetes. Every ETL is specified by a spec file (Kubernetes YAML spec), which determines what
-and how the ETL should operate. Every such spec file creates an **ETL container** which is a [Kubernetes Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) running a server inside it.
-To start an ETL, the user (client) needs to send an **init** request to the AIStore endpoint (proxy). The proxy broadcasts this request to all
-the registered targets.
-When the targets receive the **init** request, each target starts an ETL container which is collocated on the same machine/node.
-Targets use `kubectl` to initialize the pod and gather necessary information for future communication.
+* To start distributed ETL processing, a user needs to send documented **init** request to the AIStore endpoint.
 
-There are 3 communication types that user can choose from to implement the transform server:
+  >  The request carries YAML spec ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
+
+* Upon receiving **init**, AIS proxy broadcasts the request to all AIS targets in the cluster.
+
+* When a target receives **init**, it starts the container locally on the same (the target's) machine.
+
+* Targets use `kubectl` to initialize the pod and gather necessary information for future runtime.
+
+## Communication Mechanisms
+
+To facilitate on the fly or offline transformation, AIS currently supports 3 (three) distinct target <=> container communication mechanisms. User can choose and specify (via YAML spec) any of the following:
 
 | Name | Value | Description |
 |---|---|---|
