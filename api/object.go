@@ -22,8 +22,12 @@ import (
 )
 
 const (
-	httpMaxRetries = 3                      // maximum number of retries for an HTTP request
+	httpMaxRetries = 5                      // maximum number of retries for an HTTP request
 	httpRetrySleep = 100 * time.Millisecond // a sleep between HTTP request retries
+	// Sleep between HTTP retries for error[rate of change requests exceeds limit] - must be > 1s:
+	// From https://cloud.google.com/storage/quotas#objects
+	//   There is an update limit on each object of once per second ...
+	httpRetryRateSleep = 1500 * time.Millisecond
 )
 
 // GetObjectInput is used to hold optional parameters for GetObject and GetObjectWithValidation
@@ -358,8 +362,11 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 	if req, err = newRequest(reqArgs); err != nil {
 		return
 	}
-	if resp, err = client.Do(req); !shouldRetryHTTP(err) {
+	if resp, err = client.Do(req); !shouldRetryHTTP(err, resp.StatusCode) {
 		goto exit
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		sleep = httpRetryRateSleep
 	}
 	for i := 0; i < httpMaxRetries; i++ {
 		time.Sleep(sleep)
@@ -374,7 +381,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 			r.Close()
 			return
 		}
-		if resp, err = client.Do(req); !shouldRetryHTTP(err) {
+		if resp, err = client.Do(req); !shouldRetryHTTP(err, resp.StatusCode) {
 			goto exit
 		}
 	}
@@ -389,8 +396,9 @@ exit:
 	return
 }
 
-func shouldRetryHTTP(err error) bool {
-	return err != nil && (cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err))
+func shouldRetryHTTP(err error, status int) bool {
+	return status == http.StatusTooManyRequests ||
+		(err != nil && (cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err)))
 }
 
 // FlushObject API

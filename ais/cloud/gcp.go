@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
@@ -98,7 +99,11 @@ func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck cmn.Bck) (error,
 	if gcpError == storage.ErrBucketNotExist {
 		return cmn.NewErrorRemoteBucketDoesNotExist(bck, gcpp.t.Snode().Name()), http.StatusNotFound
 	}
-	return gcpError, http.StatusBadRequest
+	status := http.StatusBadRequest
+	if apiErr, ok := gcpError.(*googleapi.Error); ok {
+		status = apiErr.Code
+	}
+	return gcpError, status
 }
 
 func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck cmn.Bck) (error, int) {
@@ -374,7 +379,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 		return
 	}
 	if err = wc.Close(); err != nil {
-		err = fmt.Errorf("failed to close, err: %v", err)
+		err, errCode = gcpp.gcpErrorToAISError(err, cloudBck)
 		return
 	}
 	attr, err := gcpObj.Attrs(gctx)
