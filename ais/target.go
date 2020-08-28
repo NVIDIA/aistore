@@ -1007,6 +1007,11 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if bck.IsHTTP() {
 		originalURL := query.Get(cmn.URLParamOrigURL)
 		ctx = context.WithValue(ctx, cmn.CtxOriginalURL, originalURL)
+		if !inBMD && originalURL == "" {
+			err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, t.si.String())
+			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+			return
+		}
 	}
 	// + cloud
 	bucketProps, err, code = t.Cloud(bck).HeadBucket(ctx, bck)
