@@ -1,15 +1,13 @@
 #!/bin/bash
-
+set -x
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 name=$(basename "$0")
 
 usage() {
-    echo "Usage: $name [-a=AWS_DIR] [-c=NUM] [-d=NUM] [-f=LIST] [-g] [-h] [-l] [-m] [-p=NUM] [-s] [-t=NUM] [-qs=AWS_DIR (Optional)]"
-    echo "  -a=AWS_DIR or --aws=AWS_DIR             : to use AWS, where AWS_DIR is the location of AWS configuration and credential files"
+    echo "Usage: $name [-c=NUM] [-d=NUM] [-f=LIST] [-g] [-h] [-l] [-m] [-p=NUM] [-s] [-t=NUM] [-qs=AWS_DIR (Optional)]"
     echo "  -c=NUM or --cluster=NUM                 : where NUM is the number of clusters"
     echo "  -d=NUM or --directories=NUM             : where NUM is the number of local cache directories"
     echo "  -f=LIST or --filesystems=LIST           : where LIST is a comma separated list of filesystems"
-    echo "  -g or --gcp                             : to use GCP"
     echo "  -h or --help                            : show usage"
     echo "  -l or --last                            : redeploy using the arguments from the last ais docker deployment"
     echo "  -m or --multi                           : use multiple networks"
@@ -84,7 +82,7 @@ save_setup() {
     echo "TARGET_CNT=$TARGET_CNT" >> ${SETUP_FILE}
     echo "NETWORK=${NETWORK}" >> ${SETUP_FILE}
 
-    echo "CLOUD=$CLOUD" >> ${SETUP_FILE}
+    echo "AIS_CLD_PROVIDERS=$AIS_CLD_PROVIDERS" >> ${SETUP_FILE}
 
     echo "DRYRUN"=$DRYRUN >> ${SETUP_FILE}
     echo "NODISKIO"=$NODISKIO >> ${SETUP_FILE}
@@ -151,7 +149,7 @@ if ! [ -x "$(command -v docker-compose)" ]; then
   exit 1
 fi
 
-CLOUD=""
+AIS_CLD_PROVIDERS=""
 CLUSTER_CNT=0
 PROXY_CNT=0
 TARGET_CNT=0
@@ -173,25 +171,11 @@ DRYRUN=0
 NODISKIO=false
 DRYOBJSIZE="8m"
 
+source ../utils.sh
+
 for i in "$@"
 do
 case $i in
-    -a=*|--aws=*)
-        AWS_ENV="${i#*=}"
-        shift # past argument=value
-        CLOUD=1
-        ;;
-
-    -g|--gcp)
-        CLOUD=2
-        shift # past argument
-        ;;
-
-    -nocloud)
-        CLOUD=0
-        shift # past argument
-        ;;
-
     -c=*|--cluster=*)
         CLUSTER_CNT="${i#*=}"
         is_number $CLUSTER_CNT
@@ -286,37 +270,18 @@ if [ $DRYRUN -ne 0 ]; then
     is_size $DRYOBJSIZE
 fi
 
-if [[ -z $CLOUD ]]; then
-    echo "Select:"
-    echo " 0: No 3rd party Cloud"
-    echo " 1: Amazon S3"
-    echo " 2: Google Cloud Storage"
-    echo " 3: Azure Cloud"
-    read -r CLOUD
-    is_number $CLOUD
-    if [ $CLOUD -ne 0 ] && [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ] && [ $CLOUD -ne 3 ]; then
-        echo "Not a valid entry. Exiting..."
-        exit 1
-    fi
+parse_cld_providers
 
-    if [ $CLOUD -eq 1 ]; then
-        echo "Enter the location of your AWS configuration and credentials files:"
-        echo "Note: No input will result in using the default aws dir (~/.aws/)"
-        read aws_env
+touch $LOCAL_AWS
+echo $AIS_CLD_PROVIDERS
+if [[ "${AIS_CLD_PROVIDERS}" == *aws* ]]; then
+    echo "Enter the location of your AWS configuration and credentials files:"
+    echo "Note: No input will result in using the default aws dir (~/.aws/)"
+    read aws_env
 
-        if [ -z "$aws_env" ]; then
-            AWS_ENV="~/.aws/"
-        fi
+    if [ -z "$aws_env" ]; then
+        AWS_ENV="~/.aws/"
     fi
-fi
-
-if [ $CLOUD -eq 1 ]; then
-    if [ -z "$AWS_ENV" ]; then
-        echo -a is a required parameter. Provide the path for aws.env file
-        usage
-    fi
-    AIS_CLD_PROVIDERS="aws"
-    # to get proper tilde expansion
     AWS_ENV="${AWS_ENV/#\~/$HOME}"
     temp_file="${AWS_ENV}/credentials"
     if [ -f $"$temp_file" ]; then
@@ -343,15 +308,6 @@ if [ $CLOUD -eq 1 ]; then
     sed -i 's/aws_access_key_id/AWS_ACCESS_KEY_ID/g' ${LOCAL_AWS}
     sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
     sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
-elif [ $CLOUD -eq 2 ]; then
-    AIS_CLD_PROVIDERS="gcp"
-    touch $LOCAL_AWS
-elif [ $CLOUD -eq 3 ]; then
-    AIS_CLD_PROVIDERS="azure"
-    touch $LOCAL_AWS
-else
-    AIS_CLD_PROVIDERS=""
-    touch $LOCAL_AWS
 fi
 
 if [ "$CLUSTER_CNT" -eq 0 ]; then
@@ -440,7 +396,7 @@ else
     GRAPHITE_SERVER="localhost"
 fi
 
-PORT=8080
+PORT=51080
 PORT_INTRA_CONTROL=9080
 PORT_INTRA_DATA=10080
 
@@ -505,7 +461,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     sleep 2 # give primary proxy some room to breathe
 
     echo Starting cluster ..
-    docker-compose -p ais${i} -f ${composer_file} up -d --scale proxy=${PROXY_CNT} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --no-recreate
+    docker-compose -p ais${i} -f ${composer_file} up -d --scale proxy=${PROXY_CNT} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --force-recreate
 done
 
 sleep 5

@@ -12,9 +12,8 @@ touch ${AIS_LOG_DIR}/statsd.log
 if [ -n "${QUICK}" ]; then
   go get -u -v github.com/NVIDIA/aistore && /bin/bash
 else
+  source aisnode_config.sh
   cd ${GOPATH}/src/github.com/NVIDIA/aistore
-  source /aisnode_config.sh
-
   exec node /statsd/stats.js ${STATSD_CONF_FILE} 2>&1 | tee -a ${AIS_LOG_DIR}/statsd.log &
 
   make node

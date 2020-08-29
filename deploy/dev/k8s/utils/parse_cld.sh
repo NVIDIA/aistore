@@ -5,7 +5,7 @@ export AIS_CLD_PROVIDERS="" # See deploy.sh for more informations about empty AI
 source ../utils.sh
 parse_cld_providers
 
-if [ $AIS_CLD_PROVIDERS=="*aws*" ]; then
+if [[ "${AIS_CLD_PROVIDERS}" == *aws* ]]; then
 
     echo "Enter the location of your AWS configuration and credentials files:"
     echo "Note: No input will result in using the default AWS dir (~/.aws/)"

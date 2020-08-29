@@ -12,12 +12,12 @@ If you don't have Docker and Docker-Compose installed, please see [Getting start
 
 > For some tests, AWS config and credential files are needed
 
-1. To quick-start AIStore, run: 
+1. To quick-start AIStore, run:
 
     ```console
     $ ./deploy_docker -qs
     ```
-    
+
     > The first build may take some time, but subsequent builds will be much faster.
 
 2. Once it finishes building, you should be inside the AIS container. Run:
@@ -88,7 +88,6 @@ To deploy a cluster in 'silent' mode use the following options (if any of them a
 * `-c=NUM` or `--cluster=NUM`               : where NUM is the number of clusters
 * `-d=NUM` or `--directories=NUM`           : where NUM is the number of local cache directories
 * `-f=LIST` or `--filesystems=LIST`         : where LIST is a comma separated list of filesystems
-* `-g` or `--gcp`                           : to use GCP
 * `-h` or `--help`                          : show usage
 * `-l` or `--last`                          : redeploy using the arguments from the last AIS Docker deployment
 * `-m` or `--multi`                         : use multiple networks
@@ -105,7 +104,6 @@ To deploy a cluster in 'silent' mode use the following options (if any of them a
 
 Note:
 * If the `-f` or `--filesystems` flag is used, the `-d` or `--directories` flag is disabled and vice-versa
-* If the `-a` or `--aws` flag is used, the `-g` or `--gcp` flag is disabled and vice-versa
 * If the `-s` or `--single` and `-m` or `--multi` flag are used, then multiple networks will take precedence
 * Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
@@ -114,7 +112,7 @@ Please see [main AIStore README](/docs/configuration.md) for more information ab
 Example Usage:
 
 ```console
-$ ./deploy_docker.sh -p=3 -t=4 -d=2 -c=1 -a=~/.aws/
+$ ./deploy_docker.sh -p=3 -t=4 -d=2 -c=1
 ```
 
 The command deploys a single cluster with 3 proxies, 4 targets and 2 local cache directories using AWS in normal mode.
@@ -126,7 +124,7 @@ When deploying multi-cluster configurations, each cluster will have the same num
 Example:
 
 ```console
-$ ./deploy_docker.sh -p=3 -t=3 -d=2 -c=3 -a=~/.aws/
+$ ./deploy_docker.sh -p=3 -t=3 -d=2 -c=3
 ```
 
 The command deploys three clusters, each with 3 proxies, 3 targets and 2 local directories in normal mode.

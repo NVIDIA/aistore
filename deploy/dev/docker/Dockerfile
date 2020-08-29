@@ -14,6 +14,7 @@ RUN apt-get clean && apt-get update &&\
       attr \
       net-tools \
       iproute2 \
+      make \
       gnupg \
       iputils-ping &&\
   apt-get -y clean all
@@ -55,6 +56,6 @@ ENV QUICK=${QUICK}
 COPY aisnode_config.sh aisnode_config.sh
 COPY entrypoint/entrypoint.sh entrypoint.sh
 
-EXPOSE 8080 9080 10080
+EXPOSE 51080 9080 10080
 
 ENTRYPOINT ["sh", "-c", "/entrypoint.sh"]
