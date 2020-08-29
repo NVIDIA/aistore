@@ -100,17 +100,20 @@ func ParseNsUname(s string) (n Ns) {
 }
 
 // Replace provider aliases with real provider names
-func parseBckProvider(provider string) string {
-	if provider == GSScheme {
-		return ProviderGoogle
+func NormalizeProvider(provider string) (string, error) {
+	switch provider {
+	case GSScheme:
+		return ProviderGoogle, nil
+	case S3Scheme:
+		return ProviderAmazon, nil
+	case AZScheme:
+		return ProviderAzure, nil
 	}
-	if provider == S3Scheme {
-		return ProviderAmazon
+
+	if provider != "" && !IsValidProvider(provider) {
+		return "", fmt.Errorf("invalid bucket provider %q", provider)
 	}
-	if provider == AZScheme {
-		return ProviderAzure
-	}
-	return provider
+	return provider, nil
 }
 
 // Parses "provider://@uuid#namespace/bucketName/objectName"
@@ -122,12 +125,12 @@ func ParseBckObjectURI(objName string, query ...bool) (bck Bck, object string, e
 	parts := strings.SplitN(objName, BckProviderSeparator, 2)
 
 	if len(parts) > 1 {
-		bck.Provider = parseBckProvider(parts[0])
+		bck.Provider, err = NormalizeProvider(parts[0])
 		objName = parts[1]
 	}
-	bck.Provider = parseBckProvider(bck.Provider)
-	if bck.Provider != "" && !IsValidProvider(bck.Provider) {
-		return bck, "", fmt.Errorf("invalid bucket provider %q", bck.Provider)
+
+	if err != nil {
+		return
 	}
 
 	parts = strings.SplitN(objName, bucketSepa, 2)

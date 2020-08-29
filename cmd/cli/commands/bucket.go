@@ -281,25 +281,9 @@ func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.Bucke
 
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions
 
-func reformatBucketProps(nvs cmn.SimpleKVs) error {
-	if v, ok := nvs[cmn.HeaderBackendBck]; ok {
-		delete(nvs, cmn.HeaderBackendBck)
-		var originBck cmn.Bck
-		if v != emptyOrigin {
-			var (
-				objName string
-				err     error
-			)
-			originBck, objName, err = cmn.ParseBckObjectURI(v)
-			if err != nil {
-				return err
-			}
-			if objName != "" {
-				return fmt.Errorf("invalid format of %q", cmn.HeaderBackendBck)
-			}
-		}
-		nvs[cmn.HeaderBackendBckName] = originBck.Name
-		nvs[cmn.HeaderBackendBckProvider] = originBck.Provider
+func reformatBucketProps(nvs cmn.SimpleKVs) (err error) {
+	if err = _reformatBackendProps(nvs); err != nil {
+		return
 	}
 
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
@@ -319,6 +303,44 @@ func reformatBucketProps(nvs cmn.SimpleKVs) error {
 		}
 	}
 	return nil
+}
+
+func _reformatBackendProps(nvs cmn.SimpleKVs) (err error) {
+	var (
+		originBck cmn.Bck
+		v         string
+		objName   string
+		ok        bool
+	)
+
+	if v, ok = nvs[cmn.HeaderBackendBck]; ok {
+		delete(nvs, cmn.HeaderBackendBck)
+	} else if v, ok = nvs[cmn.HeaderBackendBckName]; !ok {
+		goto validate
+	}
+
+	if v != emptyOrigin {
+		originBck, objName, err = cmn.ParseBckObjectURI(v)
+		if err != nil {
+			return err
+		}
+		if objName != "" {
+			return fmt.Errorf("invalid format of %q", cmn.HeaderBackendBck)
+		}
+	}
+
+	nvs[cmn.HeaderBackendBckName] = originBck.Name
+	if v, ok = nvs[cmn.HeaderBackendBckProvider]; ok && v != "" {
+		nvs[cmn.HeaderBackendBckProvider], err = cmn.NormalizeProvider(v)
+	} else {
+		nvs[cmn.HeaderBackendBckProvider] = originBck.Provider
+	}
+
+validate:
+	if nvs[cmn.HeaderBackendBckProvider] != "" && nvs[cmn.HeaderBackendBckName] == "" {
+		return fmt.Errorf("invalid format %q cannot be empty when %q is set", cmn.HeaderBackendBckName, cmn.HeaderBackendBckProvider)
+	}
+	return err
 }
 
 // Sets bucket properties
