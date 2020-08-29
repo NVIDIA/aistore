@@ -88,11 +88,12 @@ func genCURLCmdLine(resURL, proxyURL string, targets cluster.NodeMap) []string {
 			noProxy = append(noProxy, t.PublicNet.NodeIPAddr)
 		}
 	}
+	// TODO:  "--proxy-insecure" requires `curl` 7.58.0+ and is needed when we USE_HTTPS (see #885)
 	return []string{
 		"-L", "-X", "GET",
 		resURL,
 		"-o", gcsTmpFile,
-		"-x", proxyURL, "--proxy-insecure",
+		"-x", proxyURL,
 		"--max-redirs", "3",
 		"--noproxy", strings.Join(noProxy, ","),
 		"--insecure",
