@@ -371,6 +371,12 @@ func IsErrObjNought(err error) bool {
 	return false
 }
 
-func IsObjNotExist(err error) bool    { return os.IsNotExist(err) }
+func IsObjNotExist(err error) bool {
+	if os.IsNotExist(err) {
+		return true
+	}
+	_, ok := err.(*NotFoundError)
+	return ok
+}
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }
 func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
