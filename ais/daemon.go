@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // runners
@@ -86,8 +85,7 @@ type (
 //
 //====================
 var (
-	daemon     = daemonCtx{}
-	jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+	daemon = daemonCtx{}
 )
 
 //====================

@@ -7,26 +7,11 @@ package cmn
 import (
 	"fmt"
 	"net/http"
-	"net/url"
+	"reflect"
 	"strings"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
-
-// ActionMsg is a JSON-formatted control structures for the REST API
-type ActionMsg struct {
-	Action string      `json:"action"` // ActShutdown, ActRebalance, and many more (see api_const.go)
-	Name   string      `json:"name"`   // action-specific (e.g., bucket name)
-	Value  interface{} `json:"value"`  // ditto
-}
-
-type ActValPromote struct {
-	Target    string `json:"target"`
-	ObjName   string `json:"objname"`
-	Recurs    bool   `json:"recurs"`
-	Overwrite bool   `json:"overwrite"`
-	Verbose   bool   `json:"verbose"`
-}
 
 // SelectMsg extended flags
 const (
@@ -35,45 +20,156 @@ const (
 	SelectDeleted               // Include marked for deletion
 )
 
-// TODO: `UUID` should be merged into `ContinuationToken`.
-// SelectMsg represents properties and options for listing objects.
-type SelectMsg struct {
-	UUID              string `json:"uuid"`               // ID to identify a single multi-page request
-	Props             string `json:"props"`              // e.g. "checksum,size"
-	TimeFormat        string `json:"time_format"`        // "RFC822" default - see the enum above
-	Prefix            string `json:"prefix"`             // object name filter: return only objects which name starts with prefix
-	PageSize          uint   `json:"pagesize"`           // maximum number of entries returned by list objects call
-	StartAfter        string `json:"start_after"`        // key after which we should start listing (only AIS buckets)
-	ContinuationToken string `json:"continuation_token"` // continuation token taken from `BucketList.ContinuationToken`
-	Flags             uint64 `json:"flags,string"`       // advanced filtering (SelectMsg extended flags)
-	UseCache          bool   `json:"use_cache"`          // use proxy cache to speed up listing objects
-}
+// ActionMsg is a JSON-formatted control structures for the REST API
+type (
+	ActionMsg struct {
+		Action string      `json:"action"` // ActShutdown, ActRebalance, and many more (see api_const.go)
+		Name   string      `json:"name"`   // action-specific (e.g., bucket name)
+		Value  interface{} `json:"value"`  // ditto
+	}
+	ActValPromote struct {
+		Target    string `json:"target"`
+		ObjName   string `json:"objname"`
+		Recurs    bool   `json:"recurs"`
+		Overwrite bool   `json:"overwrite"`
+		Verbose   bool   `json:"verbose"`
+	}
 
-// BucketSummaryMsg represents options that can be set when asking for bucket summary.
-type BucketSummaryMsg struct {
-	UUID   string `json:"uuid"`
-	Fast   bool   `json:"fast"`
-	Cached bool   `json:"cached"`
-}
+	// TODO: `UUID` should be merged into `ContinuationToken`.
+	// SelectMsg represents properties and options for listing objects.
+	SelectMsg struct {
+		UUID              string `json:"uuid"`               // ID to identify a single multi-page request
+		Props             string `json:"props"`              // e.g. "checksum,size"
+		TimeFormat        string `json:"time_format"`        // "RFC822" default - see the enum above
+		Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
+		PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
+		StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
+		ContinuationToken string `json:"continuation_token"` // `BucketList.ContinuationToken`
+		Flags             uint64 `json:"flags,string"`       // advanced filtering (SelectMsg extended flags)
+		UseCache          bool   `json:"use_cache"`          // use proxy cache to speed up listing objects
+	}
 
-// ListMsg contains a list of files and a duration within which to get them
-type ListMsg struct {
-	ObjNames []string `json:"objnames"`
-}
+	BucketSummary struct {
+		Bck
+		ObjCount       uint64  `json:"count,string"`
+		Size           uint64  `json:"size,string"`
+		TotalDisksSize uint64  `json:"disks_size,string"`
+		UsedPct        float64 `json:"used_pct"`
+	}
+	// BucketSummaryMsg represents options that can be set when asking for bucket summary.
+	BucketSummaryMsg struct {
+		UUID   string `json:"uuid"`
+		Fast   bool   `json:"fast"`
+		Cached bool   `json:"cached"`
+	}
+	BucketsSummaries []BucketSummary
 
-// RangeMsg contains a Prefix, Regex, and Range for a Range Operation
-type RangeMsg struct {
-	Template string `json:"template"`
-}
+	// ListMsg contains a list of files and a duration within which to get them
+	ListMsg struct {
+		ObjNames []string `json:"objnames"`
+	}
+	// RangeMsg contains a Prefix, Regex, and Range for a Range Operation
+	RangeMsg struct {
+		Template string `json:"template"`
+	}
 
-// MountpathList contains two lists:
-// * Available - list of local mountpaths available to the storage target
-// * Disabled  - list of disabled mountpaths, the mountpaths that generated
-//	         IO errors followed by (FSHC) health check, etc.
-type MountpathList struct {
-	Available []string `json:"available"`
-	Disabled  []string `json:"disabled"`
-}
+	// MountpathList contains two lists:
+	// * Available - list of local mountpaths available to the storage target
+	// * Disabled  - list of disabled mountpaths, the mountpaths that generated
+	//	         IO errors followed by (FSHC) health check, etc.
+	MountpathList struct {
+		Available []string `json:"available"`
+		Disabled  []string `json:"disabled"`
+	}
+)
+
+// bucket properties
+type (
+	// BucketProps defines the configuration of the bucket with regard to
+	// its type, checksum, and LRU. These characteristics determine its behavior
+	// in response to operations on the bucket itself or the objects inside the bucket.
+	//
+	// Naming convention for setting/getting the particular props is defined as
+	// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
+	// one would need to write `ec.enabled`. For more info refer to `IterFields`.
+	BucketProps struct {
+		// Provider of the bucket. The value contains explicit provider
+		// meaning that `` or `cloud` values are forbidden.
+		Provider string `json:"provider" list:"readonly"`
+
+		// BackendBck if set it contains cloud bucket to which AIS bucket points to.
+		BackendBck Bck `json:"backend_bck,omitempty"`
+
+		// Versioning can be enabled or disabled on a per-bucket basis
+		Versioning VersionConf `json:"versioning"`
+
+		// Cksum is the embedded struct of the same name
+		Cksum CksumConf `json:"checksum"`
+
+		// LRU is the embedded struct of the same name
+		LRU LRUConf `json:"lru"`
+
+		// Mirror defines local-mirroring policy for the bucket
+		Mirror MirrorConf `json:"mirror"`
+
+		// EC defines erasure coding setting for the bucket
+		EC ECConf `json:"ec"`
+
+		// Bucket access attributes - see Allow* above
+		Access AccessAttrs `json:"access,string"`
+
+		// Extra contains additional information which can depend on the provider.
+		Extra struct {
+			// [HTTP provider] Original URL prior to hashing.
+			OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
+
+			// TODO: add "[AWS provider] Region of the S3 bucket".
+		} `json:"extra,omitempty" list:"readonly"`
+
+		// unique bucket ID
+		BID uint64 `json:"bid,string" list:"omit"`
+
+		// Bucket creation time
+		Created int64 `json:"created,string" list:"readonly"`
+
+		// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
+		Renamed string `list:"omit"`
+	}
+	BucketPropsToUpdate struct {
+		BackendBck *BckToUpdate         `json:"backend_bck"`
+		Versioning *VersionConfToUpdate `json:"versioning"`
+		Cksum      *CksumConfToUpdate   `json:"checksum"`
+		LRU        *LRUConfToUpdate     `json:"lru"`
+		Mirror     *MirrorConfToUpdate  `json:"mirror"`
+		EC         *ECConfToUpdate      `json:"ec"`
+		Access     *AccessAttrs         `json:"access,string"`
+	}
+	BckToUpdate struct {
+		Name     *string `json:"name"`
+		Provider *string `json:"provider"`
+	}
+)
+
+// object properties
+type (
+	ObjectProps struct {
+		Name         string           `json:"name"`
+		Bck          Bck              `json:"bucket"`
+		Size         int64            `json:"size"`
+		Version      string           `json:"version"`
+		Atime        int64            `json:"atime"`
+		Checksum     ObjectCksumProps `json:"checksum"`
+		NumCopies    int              `json:"copies"`
+		DataSlices   int              `list:"omit"`
+		ParitySlices int              `list:"omit"`
+		IsECCopy     bool             `list:"omit"`
+		Present      bool             `json:"present"`
+	}
+	ObjectCksumProps struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}
+)
 
 // GetPropsDefault is a list of default (most relevant) `GetProps*` options.
 // NOTE: do **NOT** forget update this array when a prop is added/removed.
@@ -86,6 +182,10 @@ var GetPropsDefault = []string{
 var GetPropsAll = append(GetPropsDefault,
 	GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
 )
+
+///////////////
+// SelectMsg //
+///////////////
 
 // NeedLocalData returns true if ListObjects for a cloud bucket needs
 // to return object properties that can be retrieved only from local caches
@@ -139,21 +239,6 @@ func (msg *SelectMsg) ListObjectsCacheID(bck Bck) string {
 	return fmt.Sprintf("%s/%s", bck.String(), msg.Prefix)
 }
 
-// Returns true if given `token` includes given object name.
-// `token` includes an object name iff the object name would
-// be included in response having given continuation token.
-func TokenIncludesObject(token, objName string) bool {
-	return strings.Compare(token, objName) >= 0
-}
-
-type BucketSummary struct {
-	Bck
-	ObjCount       uint64  `json:"count,string"`
-	Size           uint64  `json:"size,string"`
-	TotalDisksSize uint64  `json:"disks_size,string"`
-	UsedPct        float64 `json:"used_pct"`
-}
-
 func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {
 	bs.ObjCount += bckSummary.ObjCount
 	bs.Size += bckSummary.Size
@@ -161,19 +246,13 @@ func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {
 	bs.UsedPct = float64(bs.Size) * 100 / float64(bs.TotalDisksSize)
 }
 
-type BucketsSummaries []BucketSummary
+//////////////////////
+// BucketsSummaries //
+//////////////////////
 
-func (s BucketsSummaries) Len() int {
-	return len(s)
-}
-
-func (s BucketsSummaries) Less(i, j int) bool {
-	return s[i].Bck.Less(s[j].Bck)
-}
-
-func (s BucketsSummaries) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
+func (s BucketsSummaries) Len() int           { return len(s) }
+func (s BucketsSummaries) Less(i, j int) bool { return s[i].Bck.Less(s[j].Bck) }
+func (s BucketsSummaries) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func (s BucketsSummaries) Aggregate(summary BucketSummary) BucketsSummaries {
 	for idx, bckSummary := range s {
@@ -196,91 +275,9 @@ func (s BucketsSummaries) Get(bck Bck) (BucketSummary, bool) {
 	return BucketSummary{}, false
 }
 
-// BucketProps defines the configuration of the bucket with regard to
-// its type, checksum, and LRU. These characteristics determine its behavior
-// in response to operations on the bucket itself or the objects inside the bucket.
-//
-// Naming convention for setting/getting the particular props is defined as
-// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
-// one would need to write `ec.enabled`. For more info refer to `IterFields`.
-//
-// nolint:maligned // no performance critical code
-type BucketProps struct {
-	// Provider of the bucket. The value contains explicit provider
-	// meaning that `` or `cloud` values are forbidden.
-	Provider string `json:"provider" list:"readonly"`
-
-	// BackendBck if set it contains cloud bucket to which AIS bucket points to.
-	BackendBck Bck `json:"backend_bck,omitempty"`
-
-	// Versioning can be enabled or disabled on a per-bucket basis
-	Versioning VersionConf `json:"versioning"`
-
-	// Cksum is the embedded struct of the same name
-	Cksum CksumConf `json:"checksum"`
-
-	// LRU is the embedded struct of the same name
-	LRU LRUConf `json:"lru"`
-
-	// Mirror defines local-mirroring policy for the bucket
-	Mirror MirrorConf `json:"mirror"`
-
-	// EC defines erasure coding setting for the bucket
-	EC ECConf `json:"ec"`
-
-	// Bucket access attributes - see Allow* above
-	Access AccessAttrs `json:"access,string"`
-
-	// Extra contains additional information which can depend on the provider.
-	Extra struct {
-		// [HTTP provider] Original URL prior to hashing.
-		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
-
-		// TODO: add "[AWS provider] Region of the S3 bucket".
-	} `json:"extra,omitempty" list:"readonly"`
-
-	// unique bucket ID
-	BID uint64 `json:"bid,string" list:"omit"`
-
-	// Bucket creation time
-	Created int64 `json:"created,string" list:"readonly"`
-
-	// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
-	Renamed string `list:"omit"`
-}
-
-type BucketPropsToUpdate struct {
-	BackendBck *BckToUpdate         `json:"backend_bck"`
-	Versioning *VersionConfToUpdate `json:"versioning"`
-	Cksum      *CksumConfToUpdate   `json:"checksum"`
-	LRU        *LRUConfToUpdate     `json:"lru"`
-	Mirror     *MirrorConfToUpdate  `json:"mirror"`
-	EC         *ECConfToUpdate      `json:"ec"`
-	Access     *AccessAttrs         `json:"access,string"`
-}
-
-type BckToUpdate struct {
-	Name     *string `json:"name"`
-	Provider *string `json:"provider"`
-}
-
-// ECConfig - per-bucket erasure coding configuration
-type ECConf struct {
-	ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
-	DataSlices   int    `json:"data_slices"`   // number of data slices
-	ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
-	Compression  string `json:"compression"`   // see CompressAlways, etc. enum
-	Enabled      bool   `json:"enabled"`       // EC is enabled
-	BatchSize    int    `json:"batch_size"`    // Batch size for EC rebalance
-}
-
-type ECConfToUpdate struct {
-	Enabled      *bool   `json:"enabled"`
-	ObjSizeLimit *int64  `json:"objsize_limit"`
-	DataSlices   *int    `json:"data_slices"`
-	ParitySlices *int    `json:"parity_slices"`
-	Compression  *string `json:"compression"`
-}
+///////////////////////////
+// bprops & config *Conf //
+///////////////////////////
 
 func (c *VersionConf) String() string {
 	if !c.Enabled {
@@ -362,26 +359,9 @@ func (c *ECConf) RequiredRestoreTargets() int {
 	return c.DataSlices + 1
 }
 
-// ObjectProps
-type ObjectProps struct {
-	Name         string           `json:"name"`
-	Bck          Bck              `json:"bucket"`
-	Size         int64            `json:"size"`
-	Version      string           `json:"version"`
-	Atime        int64            `json:"atime"`
-	Checksum     ObjectCksumProps `json:"checksum"`
-	NumCopies    int              `json:"copies"`
-	DataSlices   int              `list:"omit"`
-	ParitySlices int              `list:"omit"`
-	IsECCopy     bool             `list:"omit"`
-	Present      bool             `json:"present"`
-}
-
-type ObjectCksumProps struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
-}
-
+//
+// by default, bucket props inherit global config
+//
 func DefaultBucketProps() *BucketProps {
 	c := GCO.Clone()
 	if c.Cksum.Type == "" {
@@ -416,30 +396,22 @@ func CloudBucketProps(header http.Header) (props *BucketProps) {
 	return props
 }
 
-func (bp *BucketProps) CopyFrom(from *BucketProps) {
-	src, err := jsoniter.Marshal(from)
-	AssertNoErr(err)
-	err = jsoniter.Unmarshal(src, bp)
-	AssertNoErr(err)
-}
+/////////////////
+// BucketProps //
+/////////////////
 
 func (bp *BucketProps) Clone() *BucketProps {
-	to := &BucketProps{}
-	to.CopyFrom(bp)
-	return to
+	to := *bp
+	debug.Assert(bp.Equal(&to))
+	return &to
 }
 
-func (bp *BucketProps) Equal(other *BucketProps) bool {
-	var (
-		jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
-		clone      = bp.Clone()
-	)
-	clone.BID = other.BID
-	clone.Created = other.Created
-
-	s1, _ := jsonCompat.Marshal(clone)
-	s2, _ := jsonCompat.Marshal(other)
-	return string(s1) == string(s2)
+func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
+	src := *bp
+	src.BID = other.BID
+	src.Created = other.Created
+	eq = reflect.DeepEqual(&src, other)
+	return
 }
 
 func (bp *BucketProps) Validate(targetCnt int) error {
@@ -500,30 +472,4 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 		}
 	}
 	return
-}
-
-func AddBckToQuery(query url.Values, bck Bck) url.Values {
-	if bck.Provider != "" {
-		if query == nil {
-			query = make(url.Values)
-		}
-		query.Set(URLParamProvider, bck.Provider)
-	}
-	if !bck.Ns.IsGlobal() {
-		if query == nil {
-			query = make(url.Values)
-		}
-		query.Set(URLParamNamespace, bck.Ns.Uname())
-	}
-	return query
-}
-
-func IsETLRequest(query url.Values) bool {
-	return query.Get(URLParamUUID) != ""
-}
-
-func DelBckFromQuery(query url.Values) url.Values {
-	query.Del(URLParamProvider)
-	query.Del(URLParamNamespace)
-	return query
 }

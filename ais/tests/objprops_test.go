@@ -521,9 +521,13 @@ func TestObjProps(t *testing.T) {
 				},
 			})
 			if test.cloud && test.verEnabled != defaultBckProp.Versioning.Enabled {
+				s := "versioned"
+				if !defaultBckProp.Versioning.Enabled {
+					s = "unversioned"
+				}
 				tassert.Errorf(
 					t, err != nil,
-					"Cloud bucket %s is unversioned, expecting set-props to fail", m.bck)
+					"Cloud bucket %s is %s, expecting set-props to fail", m.bck, s)
 			} else {
 				tassert.CheckFatal(t, err)
 			}

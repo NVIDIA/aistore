@@ -7,6 +7,7 @@ package cmn
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -310,6 +311,28 @@ func (query QueryBcks) Contains(other Bck) bool {
 	}
 	ok := query.Provider == other.Provider || query.Provider == ""
 	return ok && query.Ns.Contains(other.Ns)
+}
+
+func AddBckToQuery(query url.Values, bck Bck) url.Values {
+	if bck.Provider != "" {
+		if query == nil {
+			query = make(url.Values)
+		}
+		query.Set(URLParamProvider, bck.Provider)
+	}
+	if !bck.Ns.IsGlobal() {
+		if query == nil {
+			query = make(url.Values)
+		}
+		query.Set(URLParamNamespace, bck.Ns.Uname())
+	}
+	return query
+}
+
+func DelBckFromQuery(query url.Values) url.Values {
+	query.Del(URLParamProvider)
+	query.Del(URLParamNamespace)
+	return query
 }
 
 /////////////////

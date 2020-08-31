@@ -239,3 +239,7 @@ func withLocalRetry(pred func() bool, maxTries ...int) {
 		}
 	}
 }
+
+func isETLRequest(query url.Values) bool {
+	return query.Get(cmn.URLParamUUID) != ""
+}

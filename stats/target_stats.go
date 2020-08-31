@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats/statsd"
+	jsoniter "github.com/json-iterator/go"
 )
 
 //
@@ -175,6 +176,7 @@ func (r *Trunner) GetWhatStats() interface{} {
 }
 
 func (r *Trunner) log(uptime time.Duration) {
+	var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
 	r.lines = r.lines[:0]
 
 	// copy stats, reset latencies

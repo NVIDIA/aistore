@@ -7,6 +7,7 @@ package cmn
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -178,4 +179,11 @@ func DecryptToken(tokenStr, secret string) (*AuthToken, error) {
 		return nil, ErrInvalidToken
 	}
 	return tInfo, nil
+}
+
+// Returns true if given `token` includes given object name.
+// `token` includes an object name iff the object name would
+// be included in response having given continuation token.
+func TokenIncludesObject(token, objName string) bool {
+	return strings.Compare(token, objName) >= 0
 }

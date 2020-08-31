@@ -603,7 +603,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if cmn.IsETLRequest(query) {
+	if isETLRequest(query) {
 		t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, objName)
 		return
 	}
@@ -1160,7 +1160,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	})
 	cmn.AssertNoErr(err)
 
-	if cmn.IsETLRequest(query) {
+	if isETLRequest(query) {
 		// We don't know neither length of on-the-fly transformed object, nor checksum.
 		hdr.Del(cmn.HeaderContentLength)
 		hdr.Del(cmn.GetPropsChecksum)

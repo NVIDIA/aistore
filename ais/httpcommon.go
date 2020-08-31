@@ -522,8 +522,9 @@ func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bo
 // - the latter for, possibly, legitimate reasons (K8s, etc.)
 func (h *httprunner) checkPresenceNetChange(smap *smapX) error {
 	var (
-		snode   *cluster.Snode
-		changed bool
+		jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+		snode      *cluster.Snode
+		changed    bool
 	)
 	if h.si.IsTarget() {
 		snode = smap.GetTarget(h.si.ID())

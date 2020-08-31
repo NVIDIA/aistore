@@ -89,8 +89,6 @@ const (
 	Uptime = "up.µs.time"
 )
 
-var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
-
 //
 // public types
 //

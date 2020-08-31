@@ -259,7 +259,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 		return
 	}
 
-	if cmn.IsETLRequest(r.URL.Query()) {
+	if isETLRequest(r.URL.Query()) {
 		s3compat.SetETLHeader(w.Header(), lom)
 		return
 	}
