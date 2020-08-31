@@ -102,6 +102,8 @@ func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck cmn.Bck) (error,
 	status := http.StatusBadRequest
 	if apiErr, ok := gcpError.(*googleapi.Error); ok {
 		status = apiErr.Code
+	} else if gcpError == storage.ErrObjectNotExist {
+		status = http.StatusNotFound
 	}
 	return gcpError, status
 }
