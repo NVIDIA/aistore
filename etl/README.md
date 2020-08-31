@@ -9,7 +9,7 @@ For prerequisites, 3 (three) supported ais <=> container communication mechanism
 
 ## Example
 
-<img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="1200">
+<img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="900">
 
 The example above uses [AIS CLI](/cmd/cli/README.md) to:
 1. **Create** a new AIS bucket
