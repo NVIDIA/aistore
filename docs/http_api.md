@@ -7,6 +7,7 @@
 - [Cloud Provider](#cloud-provider)
 - [Querying information](#querying-information)
 - [Example: querying runtime statistics](#example-querying-runtime-statistics)
+- [ETL](#etl)
 
 ### Notation
 
@@ -181,3 +182,7 @@ This single command causes execution of multiple `GET ?what=stats` requests with
 <img src="images/ais-get-stats.png" alt="AIStore statistics" width="256">
 
 More usage examples can be found in the [README that describes AIS configuration](configuration.md).
+
+### ETL
+
+For API Reference of ETL please refer to [ETL Readme](/docs/etl.md#api-reference)

@@ -4,6 +4,7 @@
 - [Communication Mechanisms](#communication-mechanisms)
 - [Prerequisites](#prerequisites)
 - [Examples](#examples)
+- [API Reference](#api-reference)
 
 ## Introduction
 
@@ -240,3 +241,18 @@ ais-proxy-2wvhp      1/1     Running   0          50m
 ais-target-9knsb     1/1     Running   0          48m
 ais-target-fsxhp     1/1     Running   0          48m
 ```
+
+## API Reference
+
+This section describes how to interact with ETLs via RESTful API.
+Alternatively, you can use [ETL CLI](/cmd/cli/resources/etl.md) or [AIS Loader](/bench/aisloader/README.md).
+
+> `G` - denotes a (hostname:port) address of a **gateway** (any gateway in a given AIS cluster)
+
+
+| Operation | Description | HTTP action | Example |
+|--- | --- | --- | ---|
+| Init ETL | Inits ETL based on `spec.yaml`. Returns `ETL_ID` | POST /v1/etl/init | `curl -X POST 'http://G/v1/etl/init' -T spec.yaml` |
+| List ETLs | Lists all running ETLs | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
+| Transform object | Transforms an object based on ETL with `ETL_ID` | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
+| Stop ETL | Stops ETL with given `ETL_ID` | DELETE /v1/etl/stop/ETL_ID | `curl -X DELETE 'http://G/v1/etl/stop/ETL_ID'` |
