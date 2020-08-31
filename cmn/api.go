@@ -97,7 +97,8 @@ type (
 		// meaning that `` or `cloud` values are forbidden.
 		Provider string `json:"provider" list:"readonly"`
 
-		// BackendBck if set it contains cloud bucket to which AIS bucket points to.
+		// if specified, creates association between an ais bucket and a given Cloud backend
+		// in effect, making a Cloud bucket out of existing (and differently named) ais bucket.
 		BackendBck Bck `json:"backend_bck,omitempty"`
 
 		// Versioning can be enabled or disabled on a per-bucket basis

@@ -127,12 +127,16 @@ func (b *Bck) unmaskBID() uint64 {
 
 func (b *Bck) String() string {
 	var (
+		s   string
 		bid = b.unmaskBID()
 	)
 	if bid == 0 {
 		return b.Bck.String()
 	}
-	return fmt.Sprintf("%s(%#x)", b.Bck.String(), bid)
+	if b.Props != nil && b.HasBackendBck() {
+		s = ", backend=" + b.Props.BackendBck.String()
+	}
+	return fmt.Sprintf("%s(%#x%s)", b.Bck.String(), bid, s)
 }
 
 func (b *Bck) Equal(other *Bck, sameID bool) bool {
@@ -181,9 +185,9 @@ func (b *Bck) CloudBck() cmn.Bck {
 
 // NOTE: when the specified bucket is not present in the BMD:
 // - always returns the corresponding *DoesNotExist error
-// - for Cloud bucket - fills in the props with defaults from config
-// - for AIS bucket - sets the props to nil
-// - for Remote (Cloud or Remote AIS) bucket, the caller can type-cast err.(*cmn.ErrorRemoteBucketDoesNotExist) and proceed
+// - Cloud bucket: fills in the props with defaults from config
+// - AIS bucket: sets the props to nil
+// - Remote (Cloud or Remote AIS) bucket: caller can type-cast err.(*cmn.ErrorRemoteBucketDoesNotExist) and proceed
 func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
