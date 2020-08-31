@@ -39,12 +39,12 @@ var (
 				{
 					Name:      subcmdStop,
 					Usage:     "stop ETL with given id",
-					ArgsUsage: "TRANSFORM_ID",
+					ArgsUsage: "ETL_ID",
 					Action:    etlStopHandler,
 				},
 				{
 					Name:      subcmdObject,
-					Usage:     "get transformed object",
+					Usage:     "transform object with given ETL",
 					ArgsUsage: "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
 					Action:    etlObjectHandler,
 				},
@@ -132,7 +132,7 @@ func etlObjectHandler(c *cli.Context) (err error) {
 	if httpErr, ok := err.(*cmn.HTTPError); ok {
 		// TODO: How to find out if it's transformation not found, and not object not found?
 		if httpErr.Status == http.StatusNotFound && strings.Contains(httpErr.Error(), id) {
-			return fmt.Errorf("transformation %q not found; try starting new transformation with:\nais transform init spec", id)
+			return fmt.Errorf("ETL %q not found; try starting new ETL with:\nais %s %s <spec>", id, commandETL, subcmdInit)
 		}
 	}
 	return err

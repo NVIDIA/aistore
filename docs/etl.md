@@ -8,20 +8,21 @@
 
 ## Introduction
 
-[ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is "the general procedure of copying data from one or more sources into a destination system which represents the data differently from the source(s) or in a different context than the source(s)" ([wikipedia](https://en.wikipedia.org/wiki/Extract,_transform,_load)).
+[ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is "the general procedure of copying data from one or more sources into a destination system
+which represents the data differently from the source(s) or in a different context than the source(s)" ([wikipedia](https://en.wikipedia.org/wiki/Extract,_transform,_load)).
 In order to run custom ETL transforms *inline* and *close to data*, AIStore supports running custom ETL containers *in the storage cluster* .
 
-As such, AIS-ETL (capability) requires Kubernetes. Each specific transformation is defined by its specification - a regular Kubernetes YAML (see examples below).
+As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io). Each specific transformation is defined by its specification - a regular Kubernetes YAML (see examples below).
 
 * To start distributed ETL processing, a user needs to send documented **init** request to the AIStore endpoint.
 
-  >  The request carries YAML spec ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
+  >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
 
 * Upon receiving **init**, AIS proxy broadcasts the request to all AIS targets in the cluster.
 
 * When a target receives **init**, it starts the container locally on the same (the target's) machine.
 
-* Targets use `kubectl` to initialize the pod and gather necessary information for future runtime.
+* Targets use `kubectl` to initialize the pods and gather necessary information for future runtime.
 
 ## Communication Mechanisms
 
@@ -29,7 +30,7 @@ To facilitate on the fly or offline transformation, AIS currently supports 3 (th
 
 | Name | Value | Description |
 |---|---|---|
-| **post** | `hpush://` | A target issues a POST request to its transform server with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
+| **post** | `hpush://` | A target issues a POST request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
 | **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return the result to the target. |
 | **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make GET request to the target, transform bytes, and return the result to a user. |
 
@@ -175,12 +176,13 @@ spec:
     - name: server
       image: quay.io/user/md5_server:v1
       ports:
-        - containerPort: 80
+        - name: default
+          containerPort: 80
       command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
 ```
 
-The important note here is that the server listens on port `80` that is also specified in `ports.containerPort`.
-This is extremely important so that target can know what port it must contact the transformation pod.
+**Important**: the server listens on the same port as specified in `ports.containerPort`.
+This is required, as a target needs to know precise address of the ETL container.
 
 Another note is that we pass additional parameters via the `annotations` field.
 We specified the communication type and wait time (for the pod to start).
@@ -196,7 +198,7 @@ ais-target-9knsb     1/1     Running   0          46m
 ais-target-fsxhp     1/1     Running   0          46m
 ```
 
-So we see that we have 1 proxy and 2 targets.
+We can see that the cluster is running with 1 proxy and 2 targets.
 After we initialize the ETL container, we expect two more pods to start (`#targets == #etl_containers`).
 
 ```console

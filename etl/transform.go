@@ -320,7 +320,7 @@ func Stop(t cluster.Target, id string) error {
 func GetCommunicator(transformID string) (Communicator, error) {
 	c, exists := reg.getByUUID(transformID)
 	if !exists {
-		return nil, cmn.NewNotFoundError("transformation with %q id", transformID)
+		return nil, cmn.NewNotFoundError("ETL with %q id", transformID)
 	}
 	return c, nil
 }

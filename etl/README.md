@@ -1,8 +1,9 @@
 # ETL package
 
-The `etl` package compiles into `aisnode` executable to facilitate running custom custom ETL containers and communicating with those containers at runtime.
+The `etl` package compiles into `aisnode` executable to facilitate running custom ETL containers and communicating with those containers at runtime.
 
-Generally, AIStore v3.2 and later supports on-the-fly user-defined dataset transformations, which allows moving I/O intensive (and expensive) operations from the computing client(s) into the storage cluster. Popular use cases include - but are not limited to - *dataset augmentation* (of any kind) and filtering of AI datasets.
+Generally, AIStore v3.2 and later supports on the fly user-defined dataset transformations, which allows moving I/O intensive (and expensive) operations from the computing client(s) into the storage cluster.
+Popular use cases include - but are not limited to - *dataset augmentation* (of any kind) and filtering of AI datasets.
 
 For prerequisites, 3 (three) supported ais <=> container communication mechanisms, and further details, please refer to [ETL readme](/docs/etl.md).
 
