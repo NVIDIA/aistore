@@ -170,6 +170,7 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 | Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://T/v1/daemon?what=mountpaths` |
 | Get list of all targets' filesystems (proxy) | GET /v1/cluster?what=mountpaths | `curl -X GET http://G/v1/cluster?what=mountpaths` |
 | Get bucket list from a given target | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=bucketmd` |
+| Get IPs of all targets | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=target_ips` |
 
 ### Example: querying runtime statistics
 

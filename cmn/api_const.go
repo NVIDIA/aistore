@@ -230,6 +230,7 @@ const (
 	QueryXactStats      = "qryxstats" // stats(all-matching-xactions)
 	GetWhatStatus       = "status"    // JTX status by uuid
 	GetWhatICBundle     = "ic-bundle"
+	GetWhatTargetIPs    = "target_ips"
 )
 
 // SelectMsg.TimeFormat enum

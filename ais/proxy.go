@@ -2549,6 +2549,24 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 			p.writeJSONBytes(w, r, res.bytes, what)
 			break
 		}
+	case cmn.GetWhatTargetIPs:
+		// Return comma-separated IPs of the targets.
+		// It can be used to easily fill the `--noproxy` parameter in cURL.
+		var (
+			smap = p.owner.smap.Get()
+			buf  = bytes.NewBuffer(nil)
+		)
+		for _, si := range smap.Tmap {
+			if buf.Len() > 0 {
+				buf.WriteByte(',')
+			}
+			buf.WriteString(si.PublicNet.NodeIPAddr)
+			buf.WriteByte(',')
+			buf.WriteString(si.IntraControlNet.NodeIPAddr)
+			buf.WriteByte(',')
+			buf.WriteString(si.IntraDataNet.NodeIPAddr)
+		}
+		w.Write(buf.Bytes())
 	default:
 		s := fmt.Sprintf(fmtUnknownQue, what)
 		cmn.InvalidHandlerWithMsg(w, r, s)

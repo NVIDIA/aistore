@@ -194,7 +194,7 @@ This enables downloading any HTTP(S) based content into AIStore cluster.
 Assuming that proxy is listening on `localhost:8080`, one can use it as reverse-proxy to download `http://storage.googleapis.com/pub-images/images-train-000000.tar` shard into AIS cluster:
 
 ```console
-$ curl -L --max-redirs 3 -x localhost:8080 --noproxy "<comma separated lists of targets IPs>" \
+$ curl -sL --max-redirs 3 -x localhost:8080 --noproxy "$(curl -s localhost:8080/v1/cluster?what=target_ips)" \
   -X GET "http://storage.googleapis.com/minikube/minikube-0.6.iso.sha256" \
   > /dev/null
 ```

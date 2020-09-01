@@ -167,7 +167,8 @@ AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. T
 
 Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
 
-WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. curl ... --noproxy=<HOST_TO_SKIP>). If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
+WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. `curl ... --noproxy=$(curl -s G/v1/cluster?what=target_ips)`).
+If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
 
 ```console
 $ export http_proxy=<AIS proxy IPv4 or hostname>
