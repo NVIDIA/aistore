@@ -655,7 +655,7 @@ func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
 		propsFlag []string
 	)
 	if flagIsSet(c, objPropsFlag) {
-		propsFlag = parseStrSliceFlag(c, objPropsFlag)
+		propsFlag = strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	}
 	// TODO: we should reuse `SelectMsg.AddProps` code.
 	if len(propsFlag) == 0 {

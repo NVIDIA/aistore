@@ -196,25 +196,22 @@ func (msg *SelectMsg) NeedLocalData() bool {
 		msg.WantProp(GetPropsCached)
 }
 
-// WantProp returns true if msg request requires to return propName property
+// WantProp returns true if msg request requires to return propName property.
 func (msg *SelectMsg) WantProp(propName string) bool {
+	debug.Assert(!strings.ContainsRune(propName, ','))
 	return strings.Contains(msg.Props, propName)
 }
 
 func (msg *SelectMsg) AddProps(propNames ...string) {
-	var props strings.Builder
-	props.WriteString(msg.Props)
 	for _, propName := range propNames {
 		if msg.WantProp(propName) {
 			continue
 		}
-		if props.Len() > 0 {
-			props.WriteString(",")
+		if msg.Props != "" {
+			msg.Props += ","
 		}
-		props.WriteString(propName)
+		msg.Props += propName
 	}
-
-	msg.Props = props.String()
 }
 
 func (msg *SelectMsg) PropsSet() (s StringSet) {
