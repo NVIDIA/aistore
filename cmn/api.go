@@ -122,9 +122,8 @@ type (
 		// Extra contains additional information which can depend on the provider.
 		Extra struct {
 			// [HTTP provider] Original URL prior to hashing.
-			OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
-
-			// TODO: add "[AWS provider] Region of the S3 bucket".
+			OrigURLBck  string `json:"original_url,omitempty" list:"readonly"`
+			CloudRegion string `json:"cloud_region,omitempty" list:"readonly"`
 		} `json:"extra,omitempty" list:"readonly"`
 
 		// unique bucket ID
@@ -387,6 +386,10 @@ func CloudBucketProps(header http.Header) (props *BucketProps) {
 
 	if props.Provider == ProviderHTTP {
 		props.Extra.OrigURLBck = header.Get(HeaderOrigURLBck)
+	}
+
+	if region := header.Get(HeaderCloudRegion); region != "" {
+		props.Extra.CloudRegion = region
 	}
 
 	if verStr := header.Get(HeaderBucketVerEnabled); verStr != "" {

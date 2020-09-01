@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -55,15 +54,24 @@ func createSession() *session.Session {
 	}))
 }
 
+func bckS3Session(bck *cluster.Bck) (svc *s3.S3) {
+	var (
+		awsSession = createSession()
+	)
+
+	if bck.Props != nil && bck.Props.Extra.CloudRegion != "" {
+		svc = s3.New(awsSession, &aws.Config{Region: aws.String(bck.Props.Extra.CloudRegion)})
+	} else {
+		svc = s3.New(awsSession)
+	}
+	return
+}
+
 func (awsp *awsProvider) awsErrorToAISError(awsError error, bck cmn.Bck) (error, int) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		node := awsp.t.Snode().Name()
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
 			return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), reqErr.StatusCode()
-		}
-		// AWS returns confusing error when a bucket does not exist in the region, ideally we should never rely on error message
-		if reqErr.StatusCode() == http.StatusMovedPermanently && strings.Contains(reqErr.Error(), "BucketRegionError") {
-			return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound
 		}
 		return awsError, reqErr.StatusCode()
 	}
@@ -86,12 +94,11 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 	var (
 		h        = cmn.CloudHelpers.Amazon
 		cloudBck = bck.CloudBck()
-		svc      = s3.New(createSession())
+		svc      = bckS3Session(bck)
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
-
 	params := &s3.ListObjectsInput{Bucket: aws.String(cloudBck.Name)}
 	if msg.Prefix != "" {
 		params.Prefix = aws.String(msg.Prefix)
@@ -191,21 +198,41 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *c
 // HEAD BUCKET //
 /////////////////
 
+func (awsp *awsProvider) getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
+	var (
+		resp *s3.GetBucketLocationOutput
+	)
+	resp, err = svc.GetBucketLocation(&s3.GetBucketLocationInput{
+		Bucket: aws.String(bckName),
+	})
+	if err != nil {
+		return
+	}
+	region = aws.StringValue(resp.LocationConstraint)
+	return
+}
+
 func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	var (
-		cloudBck = bck.CloudBck()
-		svc      = s3.New(createSession())
+		region     string
+		cloudBck   = bck.CloudBck()
+		awsSession = createSession()
+		svc        = bckS3Session(bck)
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_bucket] %s", cloudBck.Name)
 	}
-	_, err = svc.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(cloudBck.Name),
-	})
-	if err != nil {
+
+	if region, err = awsp.getBucketLocation(svc, cloudBck.Name); err != nil {
 		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
+
+	cmn.Assert(region != "")
+	// create new svc with the region details
+	svc = s3.New(awsSession, &aws.Config{
+		Region: aws.String(region),
+	})
 
 	inputVersion := &s3.GetBucketVersioningInput{Bucket: aws.String(cloudBck.Name)}
 	result, err := svc.GetBucketVersioning(inputVersion)
@@ -214,8 +241,9 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 		return
 	}
 
-	bckProps = make(cmn.SimpleKVs, 2)
+	bckProps = make(cmn.SimpleKVs, 3)
 	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
+	bckProps[cmn.HeaderCloudRegion] = region
 	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
 		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
 	)
@@ -292,9 +320,9 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		cksumToCheck *cmn.Cksum
 		h            = cmn.CloudHelpers.Amazon
 		bck          = lom.Bck().CloudBck()
+		svc          = bckS3Session(lom.Bck())
 	)
-	sess := createSession()
-	svc := s3.New(sess)
+
 	obj, err := svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(lom.ObjName),

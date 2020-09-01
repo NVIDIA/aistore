@@ -111,7 +111,8 @@ const (
 	HeaderBackendBckName     = HeaderBackendBck + ".name"
 	HeaderBackendBckProvider = HeaderBackendBck + "." + HeaderCloudProvider
 
-	HeaderOrigURLBck = "orig_url_bck" // see BucketProps.OrigURLBck
+	HeaderOrigURLBck  = "orig_url_bck"     // see BucketProps.OrigURLBck
+	HeaderCloudRegion = "cloud_bck_region" // see BucketProps.CloudRegion
 
 	HeaderCloudProvider    = "provider"           // ProviderAmazon et al. - see cmn/bucket.go
 	HeaderCloudOffline     = "cloud.offline"      // when accessing cached cloud bucket with no Cloud connectivity
