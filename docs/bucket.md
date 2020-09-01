@@ -185,11 +185,11 @@ images-train-000001.tar      964.74MiB
 
 ### Public HTTP(S) Dataset
 
-It is standard in machine learning community to publish in public domains, so they can be accessed by everyone.
-AIStore has integrated tools like [downloader](/downloader/README.md) which can help in downloading large datasets straight into provided AIS bucket.
-But sometimes using such tools are not a feasible solution.
+It is standard in machine learning community to publish datasets in public domains, so they can be accessed by everyone.
+AIStore has integrated tools like [downloader](/downloader/README.md) which can help in downloading those large datasets straight into provided AIS bucket.
+However, sometimes using such tools is not a feasible solution.
 
-For other cases AIStore has ability to act as reverese-proxy when accessing any URL.
+For other cases AIStore has ability to act as a reverese-proxy when accessing **any** URL.
 This enables downloading any HTTP(S) based content into AIStore cluster.
 Assuming that proxy is listening on `localhost:8080`, one can use it as reverse-proxy to download `http://storage.googleapis.com/pub-images/images-train-000000.tar` shard into AIS cluster:
 
@@ -223,10 +223,11 @@ NAME                                 SIZE
 minikube-0.6.iso.sha256	              65B
 ```
 
-Now, when the object is accessed again, it will be served from AIStore cluster and will **not** be re-downloaded from HTTP source.
+Now, when the object is accessed again, it will be served from AIStore cluster and will **not** be re-downloaded from HTTP(S) source.
 
-Under the hood, AIStore remembers the original URL from which the object was downloaded and associates the bucket with this URL.
-In our example, bucket `ht://ZDdhNTYxZTkyMzhkNjk3NA` will be associated with `http://storage.googleapis.com/minikube/` URL. Therefore, we can interchangeably use the associated URL for listing the bucket as show below.
+Under the hood, AIStore remembers the object's source URL and associates the bucket with this URL.
+In our example, bucket `ht://ZDdhNTYxZTkyMzhkNjk3NA` will be associated with `http://storage.googleapis.com/minikube/` URL.
+Therefore, we can interchangeably use the associated URL for listing the bucket as show below.
 
 ```console
 $ ais ls http://storage.googleapis.com/minikube
@@ -236,7 +237,7 @@ minikube-0.6.iso.sha256	              65B
 
 > Note that only the last part (`minikube-0.6.iso.sha256`) of the URL is treated as the object name.
 
-Such connections between bucket and URL allows downloading content without providing URL again:
+Such connection between bucket and URL allows downloading content without providing URL again:
 
 ```console
 $ ais cat ht://ZDdhNTYxZTkyMzhkNjk3NA/minikube-0.7.iso.sha256 > /dev/null # cache another object
