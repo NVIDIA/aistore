@@ -122,7 +122,9 @@ type (
 		// Extra contains additional information which can depend on the provider.
 		Extra struct {
 			// [HTTP provider] Original URL prior to hashing.
-			OrigURLBck  string `json:"original_url,omitempty" list:"readonly"`
+			OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
+
+			// [AWS provider] Region where the cloud bucket is located.
 			CloudRegion string `json:"cloud_region,omitempty" list:"readonly"`
 		} `json:"extra,omitempty" list:"readonly"`
 
