@@ -282,10 +282,11 @@ func startDownloadHandler(c *cli.Context) error {
 				return err
 			}
 			if !p.BackendBck.Equal(source.cloud.bck) {
-				return fmt.Errorf(
-					"%q AIS bucket must be connected to backend cloud bucket %q",
+				fmt.Fprintf(c.App.Writer,
+					"Warning: bucket %q does not have Cloud bucket %q as its *backend* - proceeding to download anyway\n",
 					basePayload.Bck, source.cloud.bck,
 				)
+				dlType = downloader.DlTypeSingle
 			}
 		} else if source.cloud.prefix == "" {
 			return fmt.Errorf(
