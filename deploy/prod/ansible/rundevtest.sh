@@ -58,7 +58,6 @@ pushd deploy/dev/k8s
 { echo n; } | ./utils/deploy_minikube.sh
 popd
 
-
 # Running kubernetes based tests
 export K8S_HOST_NAME="minikube"
 # TODO: This requirement can be removed once we do not need single transformer per target.
@@ -66,26 +65,27 @@ export K8S_HOST_NAME="minikube"
 # and with pod anti-affinities (for enabling single transformer per target at a time) it would
 # cause failures with pods getting stuck in `Pending` state.
 deploy 1 1 3 n n n
+echo "----- RUNNING K8S TESTS -----"
 BUCKET=test RE="TestKube" make test-run
 exit_code=$?
 result=$((result + exit_code))
-echo "'RE=TestKube make test-run' exit status: $exit_code"
+echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
 
 # Deleting minikube cluster
-pushd deploy/dev/k8s
-./stop.sh
-popd
+./deploy/dev/k8s/stop.sh
 
 # Running long tests
 deploy 6 6 4 y y n
-for BUCKET in "aws://ais-jenkins" "gs://ais-nv";do
-  BUCKET=$BUCKET make test-long && make test-aisloader
+for bucket in "aws://ais-jenkins" "gcp://ais-jenkins"; do
+  echo "----- RUNNING LONG TESTS WITH: ${bucket} -----"
+  BUCKET=${bucket} make test-long && make test-aisloader
+  exit_code=$?
+  result=$((result + exit_code))
+  echo "----- LONG TESTS FINISHED WITH: ${exit_code} -----"
 done
-exit_code=$?
-result=$((result + exit_code))
-echo "'make test-long && make test-aisloader' exit status: $exit_code"
 
 cleanup
+
 if [[ $result -ne 0 ]]; then
   echo "tests failed"
 fi
