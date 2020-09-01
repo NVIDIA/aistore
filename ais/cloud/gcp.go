@@ -84,9 +84,9 @@ func NewGCP(t cluster.Target) (cluster.CloudProvider, error) {
 }
 
 func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, context.Context, error) {
-	var opts []option.ClientOption
+	opts := []option.ClientOption{option.WithHTTPClient(cmn.NewClient(cmn.TransportArgs{}))}
 	if gcpp.projectID == "" {
-		opts = []option.ClientOption{option.WithoutAuthentication()}
+		opts = append(opts, option.WithoutAuthentication())
 	}
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {

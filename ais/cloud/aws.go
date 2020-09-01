@@ -52,6 +52,7 @@ func createSession() *session.Session {
 	// TODO: avoid creating sessions for each request
 	return session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
+		Config:            aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})},
 	}))
 }
 
