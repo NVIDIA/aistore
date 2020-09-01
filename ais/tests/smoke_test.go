@@ -30,6 +30,9 @@ func TestSmoke(t *testing.T) {
 			fp       = make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
 			proxyURL = tutils.GetPrimaryURL()
 		)
+		if bck.IsCloud() && bck.BackendBck().Provider == cmn.ProviderGoogle {
+			t.Skip("GCP does not work fine when overloaded with requests, skipping")
+		}
 		for _, fs := range objSizes {
 			for _, r := range ratios {
 				s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", cmn.B2S(fs, 0), r*100)
