@@ -48,7 +48,7 @@ Most recently capabilities include:
 - (**new**) When used as HTTP Proxy (e. g., via `http_proxy=AIS_ENDPOINT`) and given HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) - based resources;
 - and more - see https://github.com/NVIDIA/aistore/releases.
 
-In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Cloud providers](providers.md). 
+In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Cloud providers](providers.md).
 
 Each specific capability is separately documented elsewhere. In particular, supported cloud providers and *unified global namespace* are described [here](providers.md).
 
@@ -166,6 +166,8 @@ AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. T
 2. Disable proxy for AIS cluster IP addresses/hostnames (for `curl` use option `--noproxy`)
 
 Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
+
+WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. curl ... --noproxy=<HOST_TO_SKIP>). If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
 
 ```console
 $ export http_proxy=<AIS proxy IPv4 or hostname>
