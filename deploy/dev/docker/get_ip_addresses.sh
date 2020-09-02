@@ -19,10 +19,10 @@ for container_name in $(docker ps --format "{{.Names}}"); do
             ip_address=$(docker inspect -f $format $container_name)
             ip_address=${ip_address//\'/}   # remove all single quotes
             if [[ "$network" == *"public"* ]]; then
-                echo "    $network: $ip_address:${PORT:-8080}"
+                echo "    $network: $ip_address:${PORT:-51080}"
             elif [[ "$network" == *"internal_control"* ]]; then
                 echo "    $network: $ip_address:${PORT_INTRA_CONTROL:-9080}"
-            else 
+            else
                 echo "    $network: $ip_address:${PORT_INTRA_DATA:-10080}"
             fi
         fi

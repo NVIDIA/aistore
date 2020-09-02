@@ -50,11 +50,12 @@ ENV STATSD_CONF_FILE ${AIS_CONF_DIR}/statsd.conf
 
 ENV MOUNTPATH /tmp/ais
 
-ARG QUICK
-ENV QUICK=${QUICK}
-
 COPY aisnode_config.sh aisnode_config.sh
 COPY entrypoint/entrypoint.sh entrypoint.sh
+
+RUN go get -v github.com/NVIDIA/aistore || echo "cloned"
+WORKDIR "${GOPATH}/src/github.com/NVIDIA/aistore"
+
 
 EXPOSE 51080 9080 10080
 

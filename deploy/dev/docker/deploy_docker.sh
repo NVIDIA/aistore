@@ -18,7 +18,6 @@ usage() {
     echo "  -nocloud                                : to deploy AIS without any cloud provider"
     echo "  -grafana                                : starts Graphite and Grafana containers"
     echo "  -nodiskio=BOOL                          : run Dry-Run mode with disk IO is disabled (default = false)"
-    echo "  -nonetio=BOOL                           : run Dry-Run mode with network IO is disabled (default = false)"
     echo "  -dryobjsize=SIZE                        : size of an object when a source is a 'fake' one."
     echo "                                            'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'"
     echo "Note:"
@@ -65,7 +64,6 @@ save_env() {
     echo "GRAPHITE_PORT=${GRAPHITE_PORT}" >> ${TMP_ENV}
     echo "GRAPHITE_SERVER=${GRAPHITE_SERVER}" >> ${TMP_ENV}
 
-    echo "AIS_PRIMARY_URL=http://${PUB_NET}.2:${PORT}" >> ${TMP_ENV}
     echo "PUB_SUBNET=${PUB_SUBNET}" >> ${TMP_ENV}
     echo "INT_CONTROL_SUBNET=${INT_CONTROL_SUBNET}" >> ${TMP_ENV}
     echo "INT_DATA_SUBNET=${INT_DATA_SUBNET}" >> ${TMP_ENV}
@@ -242,7 +240,7 @@ case $i in
         ;;
 
     -nodiskio=*|--nodiskio=*)
-        NODISKIO="${i#*=}"
+        export NODISKIO="${i#*=}"
         if $NODISKIO; then
             DRYRUN=1
         fi
@@ -396,10 +394,12 @@ else
     GRAPHITE_SERVER="localhost"
 fi
 
-PORT=51080
 PORT_INTRA_CONTROL=9080
 PORT_INTRA_DATA=10080
-
+i
+export PORT=51080
+export AIS_NO_DISK_IO=${NODISKIO}
+export AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}
 # Setting the IP addresses for the containers
 echo "Network type: ${NETWORK}"
 for ((i=0; i<${CLUSTER_CNT}; i++)); do
@@ -459,9 +459,9 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     echo Starting Primary Proxy
     AIS_IS_PRIMARY=true docker-compose -p ais${i} -f ${composer_file} up -d proxy
     sleep 2 # give primary proxy some room to breathe
-
     echo Starting cluster ..
-    docker-compose -p ais${i} -f ${composer_file} up -d --scale proxy=${PROXY_CNT} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --force-recreate
+    PRIMARY_IP=$(docker inspect -f "{{ .NetworkSettings.Networks.ais${i}_public.IPAddress }}" ais${i}_proxy_1)
+    PRIMARY_IP=${PRIMARY_IP} docker-compose -p ais${i} -f ${composer_file} up -d --scale proxy=${PROXY_CNT} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --no-recreate
 done
 
 sleep 5
