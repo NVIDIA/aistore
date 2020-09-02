@@ -24,6 +24,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+	htransport "google.golang.org/api/transport/http"
 )
 
 const (
@@ -84,10 +85,18 @@ func NewGCP(t cluster.Target) (cluster.CloudProvider, error) {
 }
 
 func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, context.Context, error) {
-	opts := []option.ClientOption{option.WithHTTPClient(cmn.NewClient(cmn.TransportArgs{}))}
+	opts := []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
 	if gcpp.projectID == "" {
 		opts = append(opts, option.WithoutAuthentication())
 	}
+
+	// Create a custom HTTP client
+	transport, err := htransport.NewTransport(ctx, cmn.NewTransport(cmn.TransportArgs{}), opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create http client transport, err: %v", err)
+	}
+	opts = append(opts, option.WithHTTPClient(&http.Client{Transport: transport}))
+
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create client, err: %v", err)
