@@ -859,13 +859,28 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
+			// make and validate nprops
 			bck.Props = cmn.DefaultBucketProps()
 			bck.Props.Provider = bck.Provider
-			// make and validate nprops
 			bck.Props, err = p.makeNprops(bck, propsToUpdate, true /*creating*/)
 			if err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
+			}
+			if bck.HasBackendBck() {
+				// initialize backend
+				backend := cluster.NewBckEmbed(bck.Props.BackendBck)
+				if err = backend.InitNoBackend(p.owner.bmd, p.si); err != nil {
+					if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
+						p.invalmsghdlrf(w, r, "cannot create %s: failing to initialize backend %s, err: %v",
+							bck, backend, err)
+						return
+					}
+					args := remBckAddArgs{p: p, w: w, r: r, queryBck: backend, err: err, msg: &msg}
+					if _, err = args.try(); err != nil {
+						return
+					}
+				}
 			}
 		}
 		if err := p.createBucket(&msg, bck); err != nil {
@@ -1365,7 +1380,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
+	if err = bck.InitNoBackend(p.owner.bmd, p.si); err != nil {
 		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg}
 		if bck, err = args.try(); err != nil {
 			return
@@ -1385,7 +1400,21 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	var xactID string
 	if xactID, err = p.setBucketProps(msg, bck, propsToUpdate); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		errBackend, ok := err.(*backendDoesNotExistErr)
+		if !ok {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		glog.Warning(err)
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck}
+		if err = args._tryAdd(errBackend.backend); err != nil {
+			return
+		}
+		// 2nd attempt
+		if xactID, err = p.setBucketProps(msg, bck, propsToUpdate); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	}
 	w.Write([]byte(xactID))
 }
@@ -3482,7 +3511,6 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 /////////////////////////////////////////////
 
 func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
-	var cloudProps http.Header
 	if _, ok := args.err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
 		err = args.err
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
@@ -3508,7 +3536,13 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 	if bck.Props != nil && bck.HasBackendBck() {
 		bck = cluster.NewBckEmbed(bck.Props.BackendBck)
 	}
-	if cloudProps, err = args.lookup(bck); err != nil {
+	err = args._tryAdd(bck)
+	return
+}
+
+func (args *remBckAddArgs) _tryAdd(bck *cluster.Bck) (err error) {
+	var cloudProps http.Header
+	if cloudProps, err = args._lookup(bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			args.p.invalmsghdlrsilent(args.w, args.r, err.Error(), http.StatusNotFound)
 		} else {
@@ -3533,7 +3567,7 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 	return
 }
 
-func (args *remBckAddArgs) lookup(bck *cluster.Bck) (header http.Header, err error) {
+func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, err error) {
 	var (
 		tsi   *cluster.Snode
 		pname = args.p.si.String()

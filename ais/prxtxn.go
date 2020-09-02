@@ -21,14 +21,20 @@ import (
 
 // convenience structure to gather all (or most) of the relevant context in one place
 // (compare with txnServerCtx & prepTxnServer)
-type txnClientCtx struct {
-	uuid    string
-	smap    *smapX
-	msg     *aisMsg
-	path    string
-	timeout time.Duration
-	req     cmn.ReqArgs
-}
+type (
+	txnClientCtx struct {
+		uuid    string
+		smap    *smapX
+		msg     *aisMsg
+		path    string
+		timeout time.Duration
+		req     cmn.ReqArgs
+	}
+	backendDoesNotExistErr struct {
+		backend *cluster.Bck
+		err     error
+	}
+)
 
 // NOTE
 // - implementation-wise, a typical CP transaction will execute, with minor variations,
@@ -238,6 +244,9 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 		if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
 			return
 		}
+		if err = p.checkBackendBck(bck, nprops); err != nil {
+			return
+		}
 	case cmn.ActResetBprops:
 		nprops = cmn.DefaultBucketProps()
 	default:
@@ -270,6 +279,10 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 		bck.Props = bprops
 		nprops, err = p.makeNprops(bck, propsToUpdate) // under lock
 		if err != nil {
+			p.owner.bmd.Unlock()
+			return
+		}
+		if err = p.checkBackendBck(bck, nprops); err != nil {
 			p.owner.bmd.Unlock()
 			return
 		}
@@ -701,3 +714,24 @@ func _versioning(v bool) string {
 	}
 	return "disabled"
 }
+
+func (p *proxyrunner) checkBackendBck(bck *cluster.Bck, nprops *cmn.BucketProps) (err error) {
+	if nprops.BackendBck.IsEmpty() {
+		return
+	}
+	backend := cluster.NewBckEmbed(nprops.BackendBck)
+	if err = backend.InitNoBackend(p.owner.bmd, p.si); err != nil {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+			err = &backendDoesNotExistErr{
+				backend,
+				fmt.Errorf("failed to initialize backend %s for bucket %s", backend, bck),
+			}
+		}
+		return
+	}
+	// NOTE: backend versioning override
+	nprops.Versioning.Enabled = backend.Props.Versioning.Enabled
+	return
+}
+
+func (e *backendDoesNotExistErr) Error() string { return e.err.Error() }

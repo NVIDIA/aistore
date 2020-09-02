@@ -192,6 +192,26 @@ func (b *Bck) BackendBck() *Bck {
 // NOTE: most of the above applies to a backend bucket, if specified
 //
 func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
+	err = b.InitNoBackend(bowner, si)
+	if err != nil {
+		return
+	}
+	if !b.HasBackendBck() {
+		return
+	}
+	backend := NewBckEmbed(b.Props.BackendBck)
+	if !backend.IsCloud() {
+		err = fmt.Errorf("bucket %s: invalid backend %s (not a Cloud bucket)", b, backend)
+		return
+	}
+	err = backend.Init(bowner, si)
+	if err == nil {
+		cmn.Assert(!backend.HasBackendBck())
+	}
+	return
+}
+
+func (b *Bck) InitNoBackend(bowner Bowner, si *Snode) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
@@ -211,29 +231,17 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	} else {
 		b.Props, _ = bmd.Get(b)
 	}
-	if b.Props == nil {
-		var name string
-		if si != nil {
-			name = si.Name()
-		}
-		if b.Bck.IsAIS() {
-			return cmn.NewErrorBucketDoesNotExist(b.Bck, name)
-		}
-		return cmn.NewErrorRemoteBucketDoesNotExist(b.Bck, name)
-	}
-	if !b.HasBackendBck() {
+	if b.Props != nil {
 		return
 	}
-	backend := NewBckEmbed(b.Props.BackendBck)
-	if !backend.IsCloud() {
-		err = fmt.Errorf("bucket %s: invalid backend %s (not a Cloud bucket)", b, backend)
-		return
+	var name string
+	if si != nil {
+		name = si.Name()
 	}
-	err = backend.Init(bowner, si)
-	if err == nil {
-		cmn.Assert(!backend.HasBackendBck())
+	if b.Bck.IsAIS() {
+		return cmn.NewErrorBucketDoesNotExist(b.Bck, name)
 	}
-	return
+	return cmn.NewErrorRemoteBucketDoesNotExist(b.Bck, name)
 }
 
 func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }
