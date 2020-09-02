@@ -47,7 +47,7 @@ metadata:
 
 The specification can include `wait_timeout`.
 It states how long a target should wait for a ETL container to transition into `Ready` state.
-If the timeout is exceeded, initialization of the ETL container is considered failed.
+If the timeout is exceeded, the initialization of the ETL container is considered failed.
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -57,6 +57,8 @@ metadata:
     wait_timeout: 30s
 (...)
 ```
+
+> NOTE: ETL container will have `AIS_TARGET_URL` environment variable set to the address of its corresponding target.
 
 ## Prerequisites
 
@@ -73,7 +75,7 @@ There are a couple of steps that are required to make the ETL work:
                fieldPath: spec.nodeName
     ```
    This will allow the target to assign an ETL container to the same machine/node that the target is working on.
-3. Server inside the pod can listen on any port, but the port must be specified in pod spec with `containerPort` - the cluster must know how to contact the pod.
+3. The server inside the pod can listen on any port, but the port must be specified in pod spec with `containerPort` - the cluster must know how to contact the pod.
 
 ## Examples
 
@@ -154,11 +156,11 @@ ENTRYPOINT [ "/code/server.py", "--listen", "0.0.0.0", "--port", "80" ]
 ```
 
 Once we have the docker file we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/), so our Kubernetes cluster can pull this image later.
-In this example we will use [quay.io](https://quay.io/) Docker Registry.
+In this example, we will use [DockerHub](https://hub.docker.com/) Docker Registry.
 
 ```console
-$ docker build -t quay.io/user/md5_server:v1 .
-$ docker push quay.io/user/md5_server:v1
+$ docker build -t user/md5_server:v1 .
+$ docker push user/md5_server:v1
 ```
 
 The next step would be to create a pod spec that would be run on Kubernetes (`spec.yaml`):
@@ -174,7 +176,7 @@ metadata:
 spec:
   containers:
     - name: server
-      image: quay.io/user/md5_server:v1
+      image: user/md5_server:v1
       ports:
         - name: default
           containerPort: 80

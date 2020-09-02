@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,35 +35,49 @@ var (
 
 // Definitions:
 //
-// ETL -> This refers to Extract-Transform-Load, which allows a user to do transformation
-//        of the objects. It is defined by an ETL spec which is a K8S yaml spec file.
-//        The operations of an ETL are executed on the ETL container.
+// ETL:
+//     Refers to Extract-Transform-Load, which allows a user to do transformation
+//     of the objects. Transformation is defined by an ETL spec, which is a K8S
+//     yaml spec file. The operations of an ETL are executed on the ETL container.
 //
-// ETL container -> The user's K8S pod which runs the container doing the transformation of the
-//                  objects.  It is initiated by a target and runs on the same K8S node running
-//                  the target.
+// ETL container:
+//     The user's K8S pod which runs the container doing the transformation of
+//     the objects. It is initiated by a target and runs on the same K8S node
+//     running the target.
+//
 // Flow:
-// 1. User initiates an ETL container, using the `Start` method.
-// 2. The ETL container starts on the same node as the target.
+// 1. User initiates an ETL container, using the `Start` method (via proxy).
+// 2. The ETL container starts on the same node as the target. It creates
+//    `Communicator` instance based on provided communication type.
 // 3. The transformation is done using `Communicator.Do()`
-// 4. The ETL container is stopped using `Stop`, which deletes the K8S pod.
+// 4. The ETL container is stopped using `Stop` (via proxy). All targets delete
+//    their ETL containers (K8s pods).
 //
 // Limitations of the current implementation (soon to be removed):
 //
 // * No idle timeout for a ETL container. It keeps running unless explicitly
 //   stopped by invoking the `Stop` API.
 //
-// * `kubectl delete` of a ETL container is done in two stages. First we gracefully try to terminate
-//   the pod with a 30s timeout. Upon failure to do so, we perform a force delete.
+// * `kubectl delete` of a ETL container is done in two stages. First we
+//    gracefully try to terminate the pod with a 30s timeout. Upon failure to do
+//    so, we perform a force delete.
 //
 // * A single ETL container runs per target at any point of time.
 //
-// * Recreating a ETL container with the same name, will delete any containers running with
-//   the same name.
+// * Recreating a ETL container with the same name will delete all running
+//   containers with the same name.
 //
 // * TODO: replace `kubectl` calls with proper go-sdk calls.
 
 type (
+
+	// Aborter listens to smap changes and aborts the ETL on the target when
+	// there is any change in targets membership. Aborter should be registered
+	// on ETL init. It is unregistered by Stop function. The is no
+	// synchronization between aborters on different targets. It is assumed that
+	// if one target received smap with changed targets membership, eventually
+	// each of the targets will receive it as well. Hence all ETL containers
+	// will be stopped.
 	Aborter struct {
 		t           cluster.Target
 		currentSmap *cluster.Smap
@@ -70,6 +85,8 @@ type (
 		mtx         sync.Mutex
 	}
 )
+
+var _ cluster.Slistener = &Aborter{}
 
 func NewAborter(t cluster.Target, uuid string) *Aborter {
 	return &Aborter{
@@ -138,8 +155,8 @@ func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName string) {
 
 // Returns:
 // * errCtx - gathered information about ETL context
-// * podName - non-empty if at least one try of creating pod was executed
-// * svcName - non-empty if at least one try of creating service was executed
+// * podName - non-empty if at least one attempt of creating pod was executed
+// * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
 func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
 	var (
@@ -148,7 +165,7 @@ func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, 
 		hostIP          string
 		podIP           string
 		originalPodName string
-		nodePort        int
+		nodePort        uint
 	)
 
 	errCtx = &cmn.ETLErrorContext{
@@ -178,9 +195,9 @@ func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, 
 
 	// The following combination of Affinity and Anti-Affinity allows one to
 	// achieve the following:
-	// 1. The ETL container is always scheduled on the target invoking it.
-	// 2. Not more than one ETL container with the same target, is scheduled on the same node,
-	//    at a given point of time
+	//  1. The ETL container is always scheduled on the target invoking it.
+	//  2. Not more than one ETL container with the same target, is scheduled on
+	//     the same node, at a given point of time.
 	if err = setTransformAffinity(errCtx, t, pod); err != nil {
 		return
 	}
@@ -220,8 +237,7 @@ func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, 
 		return
 	}
 
-	nodePort, err = getServiceNodePort(errCtx, svc)
-	if err != nil {
+	if nodePort, err = getServiceNodePort(errCtx, svc); err != nil {
 		return
 	}
 
@@ -392,6 +408,7 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod
 // Sets environment variables that can be accessed inside the container.
 func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) {
 	containers := pod.Spec.Containers
+	debug.Assert(len(containers) > 0)
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
@@ -400,6 +417,11 @@ func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) {
 	}
 }
 
+// waitPodReady waits until Kubernetes marks a pod's state READY. This happens
+// only after the pod's containers have started and the pods readinessProbe
+// request (made by kubernetes itself) is successful. If pod doesn't have
+// readinessProbe config specified the last step is skipped. Currently
+// readinessProbe config is required by us in ETL spec.
 func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 	args := []string{"wait"}
 	if !waitTimeout.IsZero() {
@@ -432,9 +454,7 @@ func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) 
 }
 
 func deleteEntity(errCtx *cmn.ETLErrorContext, entity, entityName string) error {
-	var (
-		args = []string{"delete", entity, entityName, "--ignore-not-found"}
-	)
+	args := []string{"delete", entity, entityName, "--ignore-not-found"}
 
 	// Doing graceful delete
 	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
@@ -447,8 +467,7 @@ func deleteEntity(errCtx *cmn.ETLErrorContext, entity, entityName string) error 
 
 	// Doing force delete
 	args = append(args, "--force")
-	output, err = exec.Command(cmn.Kubectl, args...).CombinedOutput()
-	if err != nil {
+	if output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput(); err != nil {
 		return cmn.NewETLError(errCtx, "force delete failed. %q %s, err: %v, out: %s",
 			entity, entityName, err, string(output))
 	}
@@ -469,15 +488,20 @@ func createEntity(errCtx *cmn.ETLErrorContext, entity string, spec interface{}) 
 	return nil
 }
 
-func getServiceNodePort(errCtx *cmn.ETLErrorContext, svc *corev1.Service) (int, error) {
+func getServiceNodePort(errCtx *cmn.ETLErrorContext, svc *corev1.Service) (uint, error) {
 	output, err := exec.Command(cmn.Kubectl, []string{"get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svc.GetName()}...).CombinedOutput()
 	if err != nil {
-		return -1, cmn.NewETLError(errCtx, "failed to get nodePort for service %q (err: %v; output: %s)", svc.GetName(), err, string(output))
+		return 0, cmn.NewETLError(errCtx, "failed to get nodePort for service %q (err: %v; output: %s)", svc.GetName(), err, string(output))
 	}
 	outputStr, _ := strconv.Unquote(string(output))
 	nodePort, err := strconv.Atoi(outputStr)
 	if err != nil {
-		return -1, cmn.NewETLError(errCtx, "failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svc.GetName(), err, string(output))
+		return 0, cmn.NewETLError(errCtx, "failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svc.GetName(), err, string(output))
 	}
-	return nodePort, nil
+
+	port, err := cmn.ValidatePort(nodePort)
+	if err != nil {
+		return 0, cmn.NewETLError(errCtx, err.Error())
+	}
+	return uint(port), nil
 }

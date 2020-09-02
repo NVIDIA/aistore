@@ -21,7 +21,7 @@ const (
 	// The data is then transformed and returned to the client.
 	RedirectCommType = "hpull://"
 	// Similar to redirection strategy but with usage of reverse proxy.
-	RevProxyCommType = "hrev://" // TODO: try to think on different naming, it is not much different than redirect
+	RevProxyCommType = "hrev://"
 )
 
 type (

@@ -44,7 +44,7 @@ type (
 		baseComm
 		t cluster.Target
 	}
-	redirComm struct {
+	redirectComm struct {
 		baseComm
 	}
 	revProxyComm struct {
@@ -56,7 +56,7 @@ type (
 // interface guard
 var (
 	_ Communicator = &pushComm{}
-	_ Communicator = &redirComm{}
+	_ Communicator = &redirectComm{}
 	_ Communicator = &revProxyComm{}
 )
 
@@ -78,7 +78,7 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, podIP, transf
 	case PushCommType:
 		return &pushComm{baseComm: baseComm, t: t}
 	case RedirectCommType:
-		return &redirComm{baseComm: baseComm}
+		return &redirectComm{baseComm: baseComm}
 	case RevProxyCommType:
 		transURL, err := url.Parse(transformerURL)
 		cmn.AssertNoErr(err)
@@ -146,11 +146,11 @@ func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.B
 	return nil
 }
 
-///////////////
-// redirComm //
-///////////////
+////////////////////
+//  redirectComm  //
+////////////////////
 
-func (repc *redirComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (repc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	redirectURL := cmn.JoinPath(repc.transformerAddress, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
@@ -167,7 +167,7 @@ func (ppc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster
 }
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
-// not removing cmn.URLParamUUID, forinstance, would cause infinite loop
+// not removing cmn.URLParamUUID, for instance, would cause infinite loop.
 func pruneQuery(rawQuery string) string {
 	vals, err := url.ParseQuery(rawQuery)
 	if err != nil {

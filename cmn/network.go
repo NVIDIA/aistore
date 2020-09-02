@@ -51,10 +51,13 @@ func ParsePort(p string) (int, error) {
 		return 0, err
 	}
 
+	return ValidatePort(port)
+}
+
+func ValidatePort(port int) (int, error) {
 	if port <= 0 || port >= (1<<16) {
 		return 0, fmt.Errorf("port number (%d) should be between 1 and 65535", port)
 	}
-
 	return port, nil
 }
 
