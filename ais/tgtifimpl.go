@@ -48,7 +48,7 @@ func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 	providerName := bck.Provider
 	if bck.Props != nil {
 		// TODO: simplify logic
-		providerName = bck.CloudBck().Provider
+		providerName = bck.BackendBck().Provider
 	}
 	if ext, ok := t.cloud[providerName]; ok {
 		return ext

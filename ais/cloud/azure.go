@@ -136,19 +136,19 @@ func NewAzure(t cluster.Target) (cluster.CloudProvider, error) {
 	}, nil
 }
 
-func (ap *azureProvider) azureErrorToAISError(azureError error, bck cmn.Bck, objName string) (error, int) {
+func (ap *azureProvider) azureErrorToAISError(azureError error, bck *cluster.Bck, objName string) (error, int) {
 	stgErr, ok := azureError.(azblob.StorageError)
 	if !ok {
 		return azureError, http.StatusInternalServerError
 	}
 	switch stgErr.ServiceCode() {
 	case azblob.ServiceCodeContainerNotFound:
-		return cmn.NewErrorRemoteBucketDoesNotExist(bck, ap.t.Snode().Name()), http.StatusNotFound
+		return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, ap.t.Snode().Name()), http.StatusNotFound
 	case azblob.ServiceCodeBlobNotFound:
-		msg := fmt.Sprintf("%s/%s not found", bck, objName)
+		msg := fmt.Sprintf("%s/%s not found", bck.Bck, objName)
 		return &cmn.HTTPError{Status: http.StatusNotFound, Message: msg}, http.StatusNotFound
 	case azblob.ServiceCodeInvalidResourceName:
-		msg := fmt.Sprintf("%s/%s not found", bck, objName)
+		msg := fmt.Sprintf("%s/%s not found", bck.Bck, objName)
 		return &cmn.HTTPError{Status: http.StatusNotFound, Message: msg}, http.StatusNotFound
 	default:
 		if stgErr.Response() != nil {
@@ -172,7 +172,7 @@ func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 	for marker.NotDone() {
 		containers, err = ap.s.ListContainersSegment(ctx, marker, o)
 		if err != nil {
-			err, errCode = ap.azureErrorToAISError(err, cmn.Bck{Provider: cmn.ProviderAzure}, "")
+			err, errCode = ap.azureErrorToAISError(err, cluster.NewBck("", cmn.ProviderAzure, cmn.NsGlobal), "")
 			return
 		}
 
@@ -191,7 +191,7 @@ func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 // an object beforehand and releasing the lease after
 func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (error, int) {
 	var (
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = lom.Bck().BackendBck()
 		cntURL   = ap.s.NewContainerURL(lom.BckName())
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 		cond     = azblob.ModifiedAccessConditions{}
@@ -222,7 +222,7 @@ func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (error
 func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bucketProps cmn.SimpleKVs, err error, errCode int) {
 	var (
 		bckProps = make(cmn.SimpleKVs, 2)
-		cloudBck = bck.CloudBck()
+		cloudBck = bck.BackendBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 	)
 	resp, err := cntURL.GetProperties(ctx, azblob.LeaseAccessConditions{})
@@ -243,7 +243,7 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 
 	var (
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = bck.CloudBck()
+		cloudBck = bck.BackendBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		marker   = azblob.Marker{}
 		opts     = azblob.ListBlobsSegmentOptions{
@@ -298,7 +298,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	objMeta = make(cmn.SimpleKVs)
 	var (
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = lom.Bck().BackendBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
@@ -329,7 +329,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	var (
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = lom.Bck().BackendBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
@@ -391,7 +391,7 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	var (
 		leaseID  string
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = lom.Bck().BackendBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlockBlobURL(lom.ObjName)
 		cond     = azblob.ModifiedAccessConditions{}

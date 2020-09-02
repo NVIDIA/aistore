@@ -104,9 +104,9 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, con
 	return client, ctx, nil
 }
 
-func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck cmn.Bck) (error, int) {
+func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck *cluster.Bck) (error, int) {
 	if gcpError == storage.ErrBucketNotExist {
-		return cmn.NewErrorRemoteBucketDoesNotExist(bck, gcpp.t.Snode().Name()), http.StatusNotFound
+		return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, gcpp.t.Snode().Name()), http.StatusNotFound
 	}
 	status := http.StatusBadRequest
 	if apiErr, ok := gcpError.(*googleapi.Error); ok {
@@ -117,7 +117,7 @@ func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck cmn.Bck) (error,
 	return gcpError, status
 }
 
-func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck cmn.Bck) (error, int) {
+func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cluster.Bck) (error, int) {
 	if objErr != storage.ErrObjectNotExist {
 		return objErr, http.StatusBadRequest
 	}
@@ -148,7 +148,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	var (
 		query    *storage.Query
 		h        = cmn.CloudHelpers.Google
-		cloudBck = bck.CloudBck()
+		cloudBck = bck.BackendBck()
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("list_objects %s", cloudBck.Name)
@@ -207,7 +207,7 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		return
 	}
 	var (
-		cloudBck = bck.CloudBck()
+		cloudBck = bck.BackendBck()
 	)
 	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(gctx)
 	if err != nil {
@@ -247,7 +247,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 			break
 		}
 		if err != nil {
-			err, errCode = gcpp.gcpErrorToAISError(err, cmn.Bck{Provider: cmn.ProviderGoogle})
+			err, errCode = gcpp.gcpErrorToAISError(err, cluster.NewBck("", cmn.ProviderGoogle, cmn.NsGlobal))
 			return
 		}
 		buckets = append(buckets, cmn.Bck{
@@ -272,7 +272,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	}
 	var (
 		h        = cmn.CloudHelpers.Google
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = lom.Bck().BackendBck()
 	)
 	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(gctx)
 	if err != nil {
@@ -308,7 +308,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	}
 	var (
 		h        = cmn.CloudHelpers.Google
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = lom.Bck().BackendBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
 	attrs, err := o.Attrs(gctx)
@@ -374,7 +374,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 
 	var (
 		h        = cmn.CloudHelpers.Google
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = lom.Bck().BackendBck()
 		md       = make(cmn.SimpleKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 		wc       = gcpObj.NewWriter(gctx)
@@ -417,7 +417,7 @@ func (gcpp *gcpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err e
 		return
 	}
 	var (
-		cloudBck = lom.Bck().CloudBck()
+		cloudBck = lom.Bck().BackendBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
 

@@ -685,7 +685,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, "cannot override cloud-downloaded object")
 			return
 		}
-		if bck.CloudBck().Provider != objSrc {
+		if bck.BackendBck().Provider != objSrc {
 			t.invalmsghdlr(w, r, "cannot override cloud-downloaded object with an object from different cloud provider")
 			return
 		}

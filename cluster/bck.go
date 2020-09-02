@@ -173,14 +173,14 @@ func (b *Bck) IsCloud() bool {
 }
 func (b *Bck) IsRemote() bool      { return b.Bck.IsRemote() || b.HasBackendBck() }
 func (b *Bck) HasBackendBck() bool { return !b.Props.BackendBck.IsEmpty() }
-func (b *Bck) CloudBck() cmn.Bck {
+func (b *Bck) BackendBck() *Bck {
 	// NOTE: It's required that props are initialized for AIS bucket. It
 	//  might not be the case for cloud buckets (see: `HeadBucket`).
 	if b.Provider == cmn.ProviderAIS && b.HasBackendBck() {
-		return b.Props.BackendBck
+		return NewBckEmbed(b.Props.BackendBck)
 	}
-	cmn.Assert(b.Bck.IsCloud() || b.IsHTTP())
-	return b.Bck
+	cmn.Assert(b.IsCloud() || b.IsHTTP())
+	return b
 }
 
 // NOTE: when the specified bucket is not present in the BMD:
