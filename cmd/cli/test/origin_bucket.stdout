@@ -1,15 +1,17 @@
 "$BUCKET" bucket created
+PROPERTY         VALUE
+provider         gcp
 PROPERTY            VALUE
 backend_bck.name
 backend_bck.provider
 Bucket props successfully updated
-"backend_bck.name" set to:"something" (was:"")
+"backend_bck.name" set to:"ais-nv" (was:"")
 "backend_bck.provider" set to:"gcp" (was:"")
  PROPERTY                 VALUE
-backend_bck.name         something
+backend_bck.name         ais-nv
 backend_bck.provider     gcp
 Bucket props successfully updated
-"backend_bck.name" set to:"" (was:"something")
+"backend_bck.name" set to:"" (was:"ais-nv")
 "backend_bck.provider" set to:"" (was:"gcp")
  PROPERTY               VALUE
 backend_bck.name

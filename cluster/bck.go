@@ -188,6 +188,9 @@ func (b *Bck) CloudBck() cmn.Bck {
 // - Cloud bucket: fills in the props with defaults from config
 // - AIS bucket: sets the props to nil
 // - Remote (Cloud or Remote AIS) bucket: caller can type-cast err.(*cmn.ErrorRemoteBucketDoesNotExist) and proceed
+//
+// NOTE: most of the above applies to a backend bucket, if specified
+//
 func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
@@ -217,6 +220,18 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 			return cmn.NewErrorBucketDoesNotExist(b.Bck, name)
 		}
 		return cmn.NewErrorRemoteBucketDoesNotExist(b.Bck, name)
+	}
+	if !b.HasBackendBck() {
+		return
+	}
+	backend := NewBckEmbed(b.Props.BackendBck)
+	if !backend.IsCloud() {
+		err = fmt.Errorf("bucket %s: invalid backend %s (not a Cloud bucket)", b, backend)
+		return
+	}
+	err = backend.Init(bowner, si)
+	if err == nil {
+		cmn.Assert(!backend.HasBackendBck())
 	}
 	return
 }

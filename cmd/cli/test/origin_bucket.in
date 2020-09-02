@@ -4,8 +4,9 @@ ais set props ais://$BUCKET backend_bck=ais://something // FAIL "backend bucket 
 ais set props ais://$BUCKET backend_bck=cloud://something // FAIL "backend bucket should point to cloud bucket"
 ais set props ais://$BUCKET backend_bck=gcp:// // FAIL "backend bucket name should not be empty"
 
+ais show props gcp://ais-nv provider
 ais show props ais://$BUCKET backend_bck -v
-ais set props ais://$BUCKET backend_bck=gcp://something
+ais set props ais://$BUCKET backend_bck=gcp://ais-nv
 ais show props ais://$BUCKET backend_bck -v
 ais set props ais://$BUCKET backend_bck=none
 ais show props ais://$BUCKET backend_bck -v

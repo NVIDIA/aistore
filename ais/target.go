@@ -1021,7 +1021,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 				err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, t.si.String())
 				t.invalmsghdlrsilent(w, r, err.Error(), code)
 			} else {
-				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, bucket, err)
+				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, bck, err)
 				t.invalmsghdlr(w, r, err.Error(), code)
 			}
 			return

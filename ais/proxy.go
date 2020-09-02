@@ -3486,7 +3486,11 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 	//
 	// from this point on it's the primary - lookup via random target, perform more checks
 	//
-	if cloudProps, err = args.lookup(); err != nil {
+	bck = args.queryBck
+	if bck.Props != nil && bck.HasBackendBck() {
+		bck = cluster.NewBckEmbed(bck.Props.BackendBck)
+	}
+	if cloudProps, err = args.lookup(bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			args.p.invalmsghdlrsilent(args.w, args.r, err.Error(), http.StatusNotFound)
 		} else {
@@ -3494,18 +3498,9 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 		}
 		return
 	}
-	if args.queryBck.IsAIS() || args.queryBck.IsRemoteAIS() {
-		bck = args.queryBck
-	} else if args.queryBck.IsHTTP() {
-		bck = args.queryBck
+	if args.queryBck.IsHTTP() {
 		debug.Assert(args.origURLBck != "")
 		cloudProps.Set(cmn.HeaderOrigURLBck, args.origURLBck)
-	} else {
-		if !cmn.IsValidProvider(args.queryBck.Provider) {
-			args.p.invalmsghdlrf(args.w, args.r, "invalid provider: %s", args.queryBck.Provider)
-			return
-		}
-		bck = args.queryBck
 	}
 	if err = args.p.createBucket(&cmn.ActionMsg{Action: cmn.ActRegisterCB}, bck, cloudProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
@@ -3520,28 +3515,28 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 	return
 }
 
-func (args *remBckAddArgs) lookup() (header http.Header, err error) {
+func (args *remBckAddArgs) lookup(bck *cluster.Bck) (header http.Header, err error) {
 	var (
 		tsi   *cluster.Snode
 		pname = args.p.si.String()
-		path  = cmn.URLPath(cmn.Version, cmn.Buckets, args.queryBck.Name)
+		path  = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	)
 	if tsi, err = args.p.owner.smap.get().GetRandTarget(); err != nil {
 		return
 	}
-	q := cmn.AddBckToQuery(nil, args.queryBck.Bck)
-	if args.queryBck.IsHTTP() {
+	q := cmn.AddBckToQuery(nil, bck.Bck)
+	if bck.IsHTTP() {
 		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)
 		q.Set(cmn.URLParamOrigURL, origURL)
 	}
 	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
 	res := args.p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
 	if res.status == http.StatusNotFound {
-		err = cmn.NewErrorRemoteBucketDoesNotExist(args.queryBck.Bck, pname)
+		err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, pname)
 	} else if res.status == http.StatusGone {
-		err = cmn.NewErrorCloudBucketOffline(args.queryBck.Bck, pname)
+		err = cmn.NewErrorCloudBucketOffline(bck.Bck, pname)
 	} else if res.err != nil {
-		err = fmt.Errorf("%s: %s, target %s, err: %v", pname, args.queryBck, tsi, res.err)
+		err = fmt.Errorf("%s: %s, target %s, err: %v", pname, bck, tsi, res.err)
 	} else {
 		header = res.header
 	}
