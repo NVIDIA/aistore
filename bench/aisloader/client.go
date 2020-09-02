@@ -18,6 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+const longListTime = 10 * time.Second
+
 var (
 	// AisLoader, being a stress loading tool, should have different from
 	// AIS cluster timeouts. And if HTTPS is used, certificate check is
@@ -357,10 +359,19 @@ func getConfig(server string) (httpLatencies, error) {
 	return l, err
 }
 
+func listObjCallback(ctx *api.ProgressContext) {
+	fmt.Printf("\rFetched %d objects", ctx.Info().Count)
+	// Final message moves output to new line, to keep output tidy
+	if ctx.IsFinished() {
+		fmt.Println()
+	}
+}
+
 // listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
 func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: cmn.DefaultListPageSizeAIS}
-	objList, err := api.ListObjects(baseParams, bck, msg, 0)
+	ctx := api.NewProgressContext(listObjCallback, longListTime)
+	objList, err := api.ListObjects(baseParams, bck, msg, 0, ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -547,7 +547,9 @@ func NewProgressContext(cb ProgressCallback, after time.Duration) *ProgressConte
 
 func (ctx *ProgressContext) finish() {
 	ctx.info.Percent = 100.0
-	ctx.info.Count = ctx.info.Total
+	if ctx.info.Total > 0 {
+		ctx.info.Count = ctx.info.Total
+	}
 }
 
 func (ctx *ProgressContext) IsFinished() bool {
