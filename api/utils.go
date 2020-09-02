@@ -118,13 +118,18 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 			}
 		}
 		msg, _ := ioutil.ReadAll(resp.Body)
+		strMsg := string(msg)
+
+		if resp.StatusCode == http.StatusServiceUnavailable && strMsg == "" {
+			strMsg = "service unavailable please try again later!"
+		}
 		// HEAD request does not return the body - create http error
 		// 503 is also to be preserved
 		httpErr = &cmn.HTTPError{
 			Status:  resp.StatusCode,
 			Method:  reqParams.BaseParams.Method,
 			URLPath: reqParams.Path,
-			Message: string(msg),
+			Message: strMsg,
 		}
 		return nil, httpErr
 	}
