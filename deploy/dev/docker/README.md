@@ -20,12 +20,12 @@ If you don't have Docker and Docker-Compose installed, please see [Getting start
 
 > For some tests, AWS config and credential files are needed
 
-1. To quick-start AIStore, run: 
+1. To quick-start AIStore, run:
 
     ```console
     $ ./deploy_docker -qs
     ```
-    
+
     > The first build may take some time, but subsequent builds will be much faster.
 
 2. Once it finishes building, you should be inside the AIS container. Run:
@@ -96,7 +96,6 @@ To deploy a cluster in 'silent' mode use the following options (if any of them a
 * `-c=NUM` or `--cluster=NUM`               : where NUM is the number of clusters
 * `-d=NUM` or `--directories=NUM`           : where NUM is the number of local cache directories
 * `-f=LIST` or `--filesystems=LIST`         : where LIST is a comma separated list of filesystems
-* `-g` or `--gcp`                           : to use GCP
 * `-h` or `--help`                          : show usage
 * `-l` or `--last`                          : redeploy using the arguments from the last AIS Docker deployment
 * `-m` or `--multi`                         : use multiple networks
@@ -107,13 +106,11 @@ To deploy a cluster in 'silent' mode use the following options (if any of them a
 * `-nocloud`                                : to deploy AIS without any cloud provider
 * `-grafana`                                : starts Graphite and Grafana (can be accessed at [localhost:3000](http://localhost:3000)) for displaying metrics
 * `-nodiskio=BOOL`                          : run Dry-Run mode with disk IO is disabled (default = false)
-* `-nonetio=BOOL`                           : run Dry-Run mode with network IO is disabled (default = false)
 * `-dryobjsize=SIZE`                        : size of an object when a source is a 'fake' one. 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'
 
 
 Note:
 * If the `-f` or `--filesystems` flag is used, the `-d` or `--directories` flag is disabled and vice-versa
-* If the `-a` or `--aws` flag is used, the `-g` or `--gcp` flag is disabled and vice-versa
 * If the `-s` or `--single` and `-m` or `--multi` flag are used, then multiple networks will take precedence
 * Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
@@ -122,7 +119,7 @@ Please see [main AIStore README](/aistore/docs/configuration.md) for more inform
 Example Usage:
 
 ```console
-$ ./deploy_docker.sh -p=3 -t=4 -d=2 -c=1 -a=~/.aws/
+$ ./deploy_docker.sh -p=3 -t=4 -d=2 -c=1
 ```
 
 The command deploys a single cluster with 3 proxies, 4 targets and 2 local cache directories using AWS in normal mode.
@@ -134,7 +131,7 @@ When deploying multi-cluster configurations, each cluster will have the same num
 Example:
 
 ```console
-$ ./deploy_docker.sh -p=3 -t=3 -d=2 -c=3 -a=~/.aws/
+$ ./deploy_docker.sh -p=3 -t=3 -d=2 -c=3
 ```
 
 The command deploys three clusters, each with 3 proxies, 3 targets and 2 local directories in normal mode.
@@ -218,7 +215,7 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.
 
 ## Running benchmark tests in the Docker environment
 
-AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in either **one** of `-nodiskio` or `-nonetio`. See more about benchmark tests, see [AIS Loader](/aistore/bench/aisloader/README.md)
+AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in `-nodiskio`. See more about benchmark tests, see [AIS Loader](/aistore/bench/aisloader/README.md)
 
 ## Utility Scripts
 
@@ -282,3 +279,4 @@ $ container_logs.sh CONTAINER_NAME
 ## Limitations
 
 Certain tests require the ability to modify files/directories or set extended attributes(xattrs) directly onto the filesystem of a container. These tests are currently skipped when using Docker because of Docker's write protection of container volumes.
+{% include_relative videos.md %}

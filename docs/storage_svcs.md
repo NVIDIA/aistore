@@ -178,3 +178,4 @@ The next command will redefine the `abc` bucket created in the previous example 
 ```console
 $ ais set-copies --copies 2 ais://abc
 ```
+

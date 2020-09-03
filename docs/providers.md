@@ -58,7 +58,10 @@ Finally, AIS bucket may be implicitly defined by HTTP(S) based dataset, where fi
 
 * https://a/b/c/imagenet/train-999999.tar
 
-would all be stored in a single AIS bucket that would have a protocol prefix `http://` and a bucket name derived from the *directory* part of the URL Path ("a/b/c/imagenet", in this case).
+would all be stored in a single AIS bucket that would have a protocol prefix `ht://` and a bucket name derived from the *directory* part of the URL Path ("a/b/c/imagenet", in this case).
+
+WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. `curl ... --noproxy=$(curl -s G/v1/cluster?what=target_ips)`).
+If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
 
 ## Supported Cloud Providers
 
@@ -70,7 +73,7 @@ In the AIS [CLI](/aistore/cmd/cli/README.md), we use protocol prefixes to design
 * `aws://` or `s3://` interchangeably - for Amazon S3
 * `gcp://` or `gs://` - for Google Cloud Storage
 * `azure://` - for Microsoft Azure Blob Storage
-* `http://` - for HTTP(S) based datasets
+* `ht://` - for HTTP(S) based datasets
 
 Further:
 
@@ -93,7 +96,7 @@ eKyvPyHr  my.remote.ais:51080     alias111  p[80381p11080]  v27   10       yes
 Notice two aspects of this:
 
 * user-defined aliasing whereby a user can assign an arbitrary name (aka alias) to a given remote cluster
-* the remote cluster does *not* have to be online at attachment time; offline or currently not reachable clusters are shown as follows: 
+* the remote cluster does *not* have to be online at attachment time; offline or currently not reachable clusters are shown as follows:
 
 ```console
 $ ais show remote
@@ -150,3 +153,4 @@ And one final comment:
 You can run `ais remote attach` and/or `ais show remote` CLI to *refresh* remote configuration: check availability and reload cluster maps.
 In other words, repeating the same `ais attach remote` command will have the side effect of refreshing all the currently configured attachments.
 Or, use `ais show remote` CLI for the same exact purpose.
+

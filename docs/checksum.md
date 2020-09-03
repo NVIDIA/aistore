@@ -53,3 +53,4 @@ crc32c   md5      none     sha256   sha512   xxhash
 9. object replication is always checksum-protected. If an object does not have a checksum (see #3 above), the latter gets computed on the fly and stored with the object, so that subsequent replications/migrations could reuse it.
 
 10. finally, when two objects in the cluster have identical (bucket, object) names and identical checksums, they are considered to be full replicas of each other - the fact that allows optimizing PUT, replication, and object migration in a variety of use cases.
+

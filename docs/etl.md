@@ -9,31 +9,36 @@ redirect_from:
 ## Table of Contents
 
 - [Introduction](#introduction)
-- [Overview](#overview)
+- [Communication Mechanisms](#communication-mechanisms)
 - [Prerequisites](#prerequisites)
 - [Examples](#examples)
-  - [MD5 server](#compute-md5-on-the-objects)
-
+- [API Reference](#api-reference)
 
 ## Introduction
 
-[ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is the general procedure of copying data from one or more sources into a destination system which represents the data differently from the source(s) or in a different context than the source(s).
-AIStore supports ETL and is designed to work close to data to minimize data transfer and latency.
+[ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is "the general procedure of copying data from one or more sources into a destination system
+which represents the data differently from the source(s) or in a different context than the source(s)" ([wikipedia](https://en.wikipedia.org/wiki/Extract,_transform,_load)).
+In order to run custom ETL transforms *inline* and *close to data*, AIStore supports running custom ETL containers *in the storage cluster* .
 
-## Overview
+As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io). Each specific transformation is defined by its specification - a regular Kubernetes YAML (see examples below).
 
-ETL is designed for AIStore cluster running in Kubernetes. Every ETL is specified by a spec file (Kubernetes YAML spec), which determines what
-and how the ETL should operate. Every such spec file creates an **ETL container** which is a [Kubernetes Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) running a server inside it.
-To start an ETL, the user (client) needs to send an **init** request to the AIStore endpoint (proxy). The proxy broadcasts this request to all
-the registered targets.
-When the targets receive the **init** request, each target starts an ETL container which is collocated on the same machine/node.
-Targets use `kubectl` to initialize the pod and gather necessary information for future communication.
+* To start distributed ETL processing, a user needs to send documented **init** request to the AIStore endpoint.
 
-There are 3 communication types that user can choose from to implement the transform server:
+  >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
+
+* Upon receiving **init**, AIS proxy broadcasts the request to all AIS targets in the cluster.
+
+* When a target receives **init**, it starts the container locally on the same (the target's) machine.
+
+* Targets use `kubectl` to initialize the pods and gather necessary information for future runtime.
+
+## Communication Mechanisms
+
+To facilitate on the fly or offline transformation, AIS currently supports 3 (three) distinct target <=> container communication mechanisms. User can choose and specify (via YAML spec) any of the following:
 
 | Name | Value | Description |
 |---|---|---|
-| **post** | `hpush://` | A target issues a POST request to its transform server with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
+| **post** | `hpush://` | A target issues a POST request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
 | **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return the result to the target. |
 | **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make GET request to the target, transform bytes, and return the result to a user. |
 
@@ -50,7 +55,7 @@ metadata:
 
 The specification can include `wait_timeout`.
 It states how long a target should wait for a ETL container to transition into `Ready` state.
-If the timeout is exceeded, initialization of the ETL container is considered failed.
+If the timeout is exceeded, the initialization of the ETL container is considered failed.
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -60,6 +65,8 @@ metadata:
     wait_timeout: 30s
 (...)
 ```
+
+> NOTE: ETL container will have `AIS_TARGET_URL` environment variable set to the address of its corresponding target.
 
 ## Prerequisites
 
@@ -76,7 +83,7 @@ There are a couple of steps that are required to make the ETL work:
                fieldPath: spec.nodeName
     ```
    This will allow the target to assign an ETL container to the same machine/node that the target is working on.
-3. Server inside the pod can listen on any port, but the port must be specified in pod spec with `containerPort` - the cluster must know how to contact the pod.
+3. The server inside the pod can listen on any port, but the port must be specified in pod spec with `containerPort` - the cluster must know how to contact the pod.
 
 ## Examples
 
@@ -157,11 +164,11 @@ ENTRYPOINT [ "/code/server.py", "--listen", "0.0.0.0", "--port", "80" ]
 ```
 
 Once we have the docker file we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/), so our Kubernetes cluster can pull this image later.
-In this example we will use [quay.io](https://quay.io/) Docker Registry.
+In this example, we will use [DockerHub](https://hub.docker.com/) Docker Registry.
 
 ```console
-$ docker build -t quay.io/user/md5_server:v1 .
-$ docker push quay.io/user/md5_server:v1
+$ docker build -t user/md5_server:v1 .
+$ docker push user/md5_server:v1
 ```
 
 The next step would be to create a pod spec that would be run on Kubernetes (`spec.yaml`):
@@ -177,14 +184,15 @@ metadata:
 spec:
   containers:
     - name: server
-      image: quay.io/user/md5_server:v1
+      image: user/md5_server:v1
       ports:
-        - containerPort: 80
+        - name: default
+          containerPort: 80
       command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
 ```
 
-The important note here is that the server listens on port `80` that is also specified in `ports.containerPort`.
-This is extremely important so that target can know what port it must contact the transformation pod.
+**Important**: the server listens on the same port as specified in `ports.containerPort`.
+This is required, as a target needs to know precise address of the ETL container.
 
 Another note is that we pass additional parameters via the `annotations` field.
 We specified the communication type and wait time (for the pod to start).
@@ -200,7 +208,7 @@ ais-target-9knsb     1/1     Running   0          46m
 ais-target-fsxhp     1/1     Running   0          46m
 ```
 
-So we see that we have 1 proxy and 2 targets.
+We can see that the cluster is running with 1 proxy and 2 targets.
 After we initialize the ETL container, we expect two more pods to start (`#targets == #etl_containers`).
 
 ```console
@@ -245,3 +253,19 @@ ais-proxy-2wvhp      1/1     Running   0          50m
 ais-target-9knsb     1/1     Running   0          48m
 ais-target-fsxhp     1/1     Running   0          48m
 ```
+
+## API Reference
+
+This section describes how to interact with ETLs via RESTful API.
+Alternatively, you can use [ETL CLI](/aistore/cmd/cli/resources/etl.md) or [AIS Loader](/aistore/bench/aisloader/README.md).
+
+> `G` - denotes a (hostname:port) address of a **gateway** (any gateway in a given AIS cluster)
+
+
+| Operation | Description | HTTP action | Example |
+|--- | --- | --- | ---|
+| Init ETL | Inits ETL based on `spec.yaml`. Returns `ETL_ID` | POST /v1/etl/init | `curl -X POST 'http://G/v1/etl/init' -T spec.yaml` |
+| List ETLs | Lists all running ETLs | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
+| Transform object | Transforms an object based on ETL with `ETL_ID` | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
+| Stop ETL | Stops ETL with given `ETL_ID` | DELETE /v1/etl/stop/ETL_ID | `curl -X DELETE 'http://G/v1/etl/stop/ETL_ID'` |
+

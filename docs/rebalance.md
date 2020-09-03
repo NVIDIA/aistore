@@ -121,3 +121,4 @@ The one salient difference is that all object migrations are local (and, therefo
 ## IO Performance
 
 During rebalancing, response latency and overall cluster throughput may substantially degrade.
+

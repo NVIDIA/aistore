@@ -14,7 +14,8 @@ for f in $(find $TMP_DIR -type f); do
   dname=${dname#"$TMP_DIR"}
   dname=${dname#/}
 
-  text=""
+  header=""
+  footer=""
   if [[ $(echo "$f" | grep ".*README.md$") ]]; then
     bname=""
     if [[ $dname != "" ]]; then
@@ -24,22 +25,24 @@ for f in $(find $TMP_DIR -type f); do
 
     echo $f $dname $title
 
-    text="---\nlayout: post\ntitle: $title\npermalink: $dname\nredirect_from:\n  - $dname/README.md/\n---\n"
+    header="---\nlayout: post\ntitle: $title\npermalink: $dname\nredirect_from:\n  - $dname/README.md/\n---\n"
     if [[ $dname == "" ]]; then
-      text="---\nlayout: post\ntitle: AIStore - scalable storage for AI applications\npermalink: /\nredirect_from:\n  - /README.md/\n  - README.md/\n---\n"
+      header="---\nlayout: post\ntitle: AIStore - scalable storage for AI applications\npermalink: /\nredirect_from:\n  - /README.md/\n  - README.md/\n---\n"
     fi
+    footer="{% include_relative videos.md %}"
   elif [[ $(echo "$f" | grep ".*\.md$") ]]; then
     bname=$(basename $f .md)
     title=${bname^^} # uppercase
 
     echo $f $dname/$bname $title
 
-    text="---\nlayout: post\ntitle: $title\npermalink: $dname/$bname\nredirect_from:\n  - $dname/$bname.md/\n---\n"
+    header="---\nlayout: post\ntitle: $title\npermalink: $dname/$bname\nredirect_from:\n  - $dname/$bname.md/\n---\n"
   else
     continue
   fi
 
-  echo "$(echo -e ${text} | cat - $f)" > $f # insert ${text} as first lines
+  echo "$(echo -e ${header} | cat - $f)" > $f # insert ${header} as first lines
+  echo "$(echo -e ${footer})" >> $f # insert ${footer} as first lines
   ex -sc '%s/"\/docs/"\/aistore\/docs/g' -cx $f # `"/docs/..."` => `"/aistore/docs/..."`
   ex -sc '%s/](\//](\/aistore\//g' -cx $f # `(/...` => `(/aistore/...`
 done

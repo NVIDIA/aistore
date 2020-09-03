@@ -23,3 +23,4 @@ $ go test -v -bench=. -size=8192 -dir=/ais/mpath -benchtime=1m
 # print usage and exit:
 $ go test -bench=. -usage
 ```
+{% include_relative videos.md %}

@@ -60,7 +60,7 @@ Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DEL
 * `aws` or `s3` - for Amazon S3 buckets
 * `gcp` or `gs` - for Google Cloud Storage buckets
 * `azure` - for Microsoft Azure Blob Storage buckets
-* `http` - for HTTP(S) based datasets
+* `ht` - for HTTP(S) based datasets
 
 * and finally, you can simple say `cloud` to designate any one of the 5 Cloud providers listed above.
 
@@ -193,47 +193,66 @@ images-train-000001.tar      964.74MiB
 
 ### Public HTTP(S) Dataset
 
-It is standard in machine learning community to publish in public domains, so they can be accessed by everyone.
-AIStore has integrated tools like [downloader](/aistore/downloader/README.md) which can help in downloading large datasets straight into provided AIS bucket.
-But sometimes using such tools are not a feasible solution.
+It is standard in machine learning community to publish datasets in public domains, so they can be accessed by everyone.
+AIStore has integrated tools like [downloader](/aistore/downloader/README.md) which can help in downloading those large datasets straight into provided AIS bucket.
+However, sometimes using such tools is not a feasible solution.
 
-For other cases AIStore has ability to act as reverese-proxy when accessing any URL.
+For other cases AIStore has ability to act as a reverese-proxy when accessing **any** URL.
 This enables downloading any HTTP(S) based content into AIStore cluster.
 Assuming that proxy is listening on `localhost:8080`, one can use it as reverse-proxy to download `http://storage.googleapis.com/pub-images/images-train-000000.tar` shard into AIS cluster:
 
 ```console
-$ curl -L --max-redirs 3 -x localhost:8080 --noproxy "<comma separated lists of targets IPs>" \
-  -X GET "http://storage.googleapis.com/pub-images/images-train-000000.tar" \
+$ curl -sL --max-redirs 3 -x localhost:8080 --noproxy "$(curl -s localhost:8080/v1/cluster?what=target_ips)" \
+  -X GET "http://storage.googleapis.com/minikube/minikube-0.6.iso.sha256" \
   > /dev/null
 ```
+
+Alternatively, an object can also be downloaded using the `get` and `cat` CLI commands. 
+```console
+$ ais get -f http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
+```
+
+The `--force`(`-f`) option skips bucket validation and automatically creates a new `ht://` bucket for the object if it doesn't exist.
 
 This will cache shard object inside the AIStore cluster.
 We can confirm this by listing available buckets and checking the content:
 
 ```console
-$ ais ls http://
-HTTP Buckets (1)
-  http://ZTMzZWI5YWE4ODA1YTdhNA
-$ ais ls http://ZTMzZWI5YWE4ODA1YTdhNA
-NAME                     SIZE
-images-train-000000.tar	 964.77MiB
+$ ais ls
+AIS Buckets (1)
+  ais://local-bck
+AWS Buckets (1)
+  aws://ais-test
+HTTP(S) Buckets (1)
+  ht://ZDdhNTYxZTkyMzhkNjk3NA (http://storage.googleapis.com/minikube/)
+
+$ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
+NAME                                 SIZE
+minikube-0.6.iso.sha256	              65B
 ```
 
-Now, when the object is accessed again, it will be served from AIStore cluster and will **not** be re-downloaded from HTTP source.
+Now, when the object is accessed again, it will be served from AIStore cluster and will **not** be re-downloaded from HTTP(S) source.
 
-Under the hood, AIStore remembers the original URL from which the object was downloaded and associates the bucket with this URL.
-In our example, bucket `http://ZTMzZWI5YWE4ODA1YTdhNA` will be associated with `http://storage.googleapis.com/pub-images/` URL.
-
-> Note that only the last part (`images-train-000000.tar`) of the URL is treated as the object name.
-
-Such connections between bucket and URL allows downloading content without providing URL again:
+Under the hood, AIStore remembers the object's source URL and associates the bucket with this URL.
+In our example, bucket `ht://ZDdhNTYxZTkyMzhkNjk3NA` will be associated with `http://storage.googleapis.com/minikube/` URL.
+Therefore, we can interchangeably use the associated URL for listing the bucket as show below.
 
 ```console
-$ ais cat http://ZTMzZWI5YWE4ODA1YTdhNA/images-train-000001.tar > /dev/null # cache another object
-$ ais ls http://ZTMzZWI5YWE4ODA1YTdhNA
-NAME                         SIZE
-images-train-000000.tar      964.77MiB
-images-train-000001.tar      964.74MiB
+$ ais ls http://storage.googleapis.com/minikube
+NAME                                  SIZE
+minikube-0.6.iso.sha256	              65B
+```
+
+> Note that only the last part (`minikube-0.6.iso.sha256`) of the URL is treated as the object name.
+
+Such connection between bucket and URL allows downloading content without providing URL again:
+
+```console
+$ ais cat ht://ZDdhNTYxZTkyMzhkNjk3NA/minikube-0.7.iso.sha256 > /dev/null # cache another object
+$ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
+NAME                     SIZE
+minikube-0.6.iso.sha256  65B
+minikube-0.7.iso.sha256  65B
 ```
 
 ### Prefetch/Evict Objects
@@ -471,3 +490,4 @@ The options for init message describe the most important values of the query.
 | `where.filter` | Filter to apply when traversing objects | Filter is recursive data structure that can describe multiple filters which should be applied. |
 
 Init message returns `handle` that should be used in NextQueryResults API call.
+

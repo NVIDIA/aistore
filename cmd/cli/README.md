@@ -118,3 +118,4 @@ also supports provider syntax. For more details refer to each command's document
 Allowed values: `''` (autodetect provider), `ais` (local cluster), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform),
 `azure` (Microsoft Azure), `cloud` (anonymous - cloud provider determined automatically).
 Additionally `provider://` syntax supports aliases `s3` (for `aws`), `gs` (for `gcp`) and `az` (for `azure`).
+{% include_relative videos.md %}

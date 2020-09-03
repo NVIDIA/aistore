@@ -92,3 +92,4 @@ Wait for the `XACTION_ID` or `XACTION_NAME` xaction to finish.
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--refresh` | `duration` | Refresh rate | `1s` |
+

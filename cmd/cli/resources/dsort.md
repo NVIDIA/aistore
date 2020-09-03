@@ -377,3 +377,4 @@ Wait for the dSort job with given `JOB_ID` to finish.
 | --- | --- | --- | --- |
 | `--refresh` | `duration` | Refresh rate | `1s` |
 | `--progress` | `bool` | Displays progress bar | `false` |
+

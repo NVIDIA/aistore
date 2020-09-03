@@ -344,3 +344,4 @@ To determine which dsorter to use we have introduced a heuristic which tries to 
 Config value `dsorter_mem_threshold` sets the threshold above which the `dsorter_mem` will be used.
 If **all** targets have max memory usage (see `default_max_mem_usage`) above the `dsorter_mem_threshold` then `dsorter_mem` is chosen for the dSort job.
 For example if each target has `Y`GB of RAM, `default_max_mem_usage` is set to `80%` and `dsorter_mem_threshold` is set to `100GB` then as long as on all targets `80% * Y > 100GB` then `dsorter_mem` will be used.
+{% include_relative videos.md %}

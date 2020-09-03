@@ -15,6 +15,7 @@ redirect_from:
 - [Cloud Provider](#cloud-provider)
 - [Querying information](#querying-information)
 - [Example: querying runtime statistics](#example-querying-runtime-statistics)
+- [ETL](#etl)
 
 ### Notation
 
@@ -177,6 +178,7 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 | Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://T/v1/daemon?what=mountpaths` |
 | Get list of all targets' filesystems (proxy) | GET /v1/cluster?what=mountpaths | `curl -X GET http://G/v1/cluster?what=mountpaths` |
 | Get bucket list from a given target | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=bucketmd` |
+| Get IPs of all targets | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=target_ips` |
 
 ### Example: querying runtime statistics
 
@@ -189,3 +191,8 @@ This single command causes execution of multiple `GET ?what=stats` requests with
 <img src="images/ais-get-stats.png" alt="AIStore statistics" width="256">
 
 More usage examples can be found in the [README that describes AIS configuration](configuration.md).
+
+### ETL
+
+For API Reference of ETL please refer to [ETL Readme](/aistore/docs/etl.md#api-reference)
+

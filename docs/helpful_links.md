@@ -42,3 +42,4 @@ redirect_from:
 * [Command-line interface for Google Cloud Platform](https://cloud.google.com/sdk/)
 
 * [Cloud Storage: Quickstart Using the Console](https://cloud.google.com/storage/docs/quickstart-console)
+

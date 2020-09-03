@@ -46,7 +46,7 @@ Following is a high-level architecture with an emphasis on supported (frontend a
 Most recently capabilities include:
 
 - (**new**) ETL offload: support for running custom extract-transform-load workloads on (and by) storage cluster;
-- (**new**) TensorFlow integration to support existing training clients that use S3 API - done via `tar2tf` ETL offload that handles on-the-fly TFRecord/tf.Example conversion;
+- (**new**) TensorFlow integration to support existing training clients that use S3 API - done via `tar2tf` ETL offload that handles on the fly TFRecord/tf.Example conversion;
 
 <img src="images/etl-v3.2.png" alt="ETL 1.0" width="450">
 
@@ -56,7 +56,7 @@ Most recently capabilities include:
 - (**new**) When used as HTTP Proxy (e. g., via `http_proxy=AIS_ENDPOINT`) and given HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) - based resources;
 - and more - see https://github.com/NVIDIA/aistore/releases.
 
-In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Cloud providers](providers.md). 
+In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Cloud providers](providers.md).
 
 Each specific capability is separately documented elsewhere. In particular, supported cloud providers and *unified global namespace* are described [here](providers.md).
 
@@ -135,12 +135,12 @@ Notwithstanding, AIS stores and then maintains object replicas, erasure-coded sl
 
 ## Existing Datasets
 
-One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets. To this end, AIS provides 6 (six) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
+One common way to use AIStore includes the most basic step: populating it with an existing dataset, or datasets from Cloud buckets (AWS, Google Cloud and Azure) or any vanilla HTTP(S) resources. To this end, AIS provides 6 (six) easy ways ranging from the (conventional) on-demand caching to (advanced) *promoting* of colocated files and directories:
 
 1. [Cold GET](#existing-datasets-cold-get)
 2. [Prefetch](#existing-datasets-batch-prefetch)
 3. [Internet Downloader](#existing-datasets-integrated-downloader)
-4. [Reverse Proxy](#existing-datasets-reverse-proxy)
+4. [HTTP(S) Datasets](#existing-datasets-https-datasets)
 5. [Promote (API and CLI)](#existing-datasets-promote-api-and-cli)
 6. [Backend Bucket](bucket.md#backend-bucket)
 
@@ -150,7 +150,7 @@ In particular:
 
 If the dataset in question is accessible via S3-like object API, start working with it via GET primitive of the [AIS API](http_api.md). Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
 
-> As far as supported S3-like backends, AIS currently supports Amazon S3 and Google Cloud.
+> As far as supported S3-like backends, AIS currently supports Amazon S3, Google Cloud, and Azure.
 
 > AIS executes *cold GET* from the Cloud if and only if the object is not stored (by AIS), **or** the object has a bad checksum, **or** the object's version is outdated.
 
@@ -166,7 +166,7 @@ But what if the dataset in question exists in the form of (vanilla) HTTP/HTTPS U
 
 For these and similar use cases we have [AIS Downloader](../downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
 
-### Existing Datasets: Reverse Proxy
+### Existing Datasets: HTTP(S) Datasets
 
 AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation requires:
 
@@ -175,11 +175,14 @@ AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. T
 
 Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
 
+WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. `curl ... --noproxy=$(curl -s G/v1/cluster?what=target_ips)`).
+If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
+
 ```console
 $ export http_proxy=<AIS proxy IPv4 or hostname>
 ```
 
-In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective.
+In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective. AIStore will on the fly create a bucket to store and cache HTTP(S) reachable files all the while supporting the entire gamut of functionality including ETL. Examples for HTTP(S) datasets can be found in [this readme](bucket.md#public-https-dataset)
 
 ### Existing Datasets: Promote (API and CLI)
 
@@ -324,3 +327,4 @@ There are **no** designed-in limitations on the:
 * numbers of gateways and storage targets in AIS cluster
 
 Ultimately, the limit on object size may be imposed by a local filesystem of choice and a physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center. But as far as AIS itself, it does not impose any limitations whatsoever.
+

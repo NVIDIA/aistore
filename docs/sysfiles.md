@@ -38,3 +38,4 @@ And on the machine where you run AIS CLI expect to see the following two files (
 | `auth.token` | The *token file* is created iff `AuthN` (see above) is running and CLI user logged-in (via `ais auth login` command). The `auth.token` is then used to make the requests to the cluster and manage users and their permissions. When a logged-in user signs out, the *token file* gets removed. |
 
 Finally, there's also `ais.db` that each AIS node may store locally to maintain component-specific runtime information in the form of key-value records. The components in-question include [dSort](https://github.com/NVIDIA/aistore/tree/master/dsort) and [Downloader](https://github.com/NVIDIA/aistore/tree/master/downloader) and the example of the stored information would be running downloading jobs and their errors (if any).
+

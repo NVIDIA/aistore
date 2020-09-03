@@ -238,3 +238,4 @@ $ curl -L  http://PROXY/v1/buckets/* -X GET \
 ## Known limitations
 
 - **Per-bucket authentication**. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users with read-write access log in, they have full access to all cluster's buckets.
+{% include_relative videos.md %}

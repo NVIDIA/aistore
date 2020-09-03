@@ -135,3 +135,4 @@ Next, in the displayed dialog window, select the `Custom` option in the `Categor
 > If the column is used in a graph, `HH:MM:SS` should be used instead of `MM/DD/YY HH:MM:SS.000` to reduce clutter in the resulting graph.
 
 <img src="/aistore/docs/images/soak-time-excel-step2.png" width="50%" >
+{% include_relative videos.md %}

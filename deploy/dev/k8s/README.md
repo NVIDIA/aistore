@@ -207,3 +207,4 @@ OPTIONS:
 ➜  k8s git:(mini-ais) ✗ cat out.txt
 This is a sample data
 ```
+{% include_relative videos.md %}

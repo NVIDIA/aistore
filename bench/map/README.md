@@ -33,3 +33,4 @@ The list of available options are:
 ### Result
 
 From the results of the benchmark, `sync.Map` does appear to out perform regular maps for read operations when there is contention from multiple go routines. The performance of `sync.Map` for put and delete operations are usually slower than regular maps, but if we expect > `80%` of the requests to be reads, sync.Map will be faster than regular maps. Overall, if we expect that the maps will have much higher read requests than put/delete requests, `sync.Maps` are the better option.
+{% include_relative videos.md %}

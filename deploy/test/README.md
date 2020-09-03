@@ -47,3 +47,4 @@ containers (remember to uniquely name the containers).
 $ ./docker/test.sh --name=your_container_name_local & # run local
 $ ./docker/test.sh --name=your_container_name_cloud --aws=~/.aws & # run cloud (aws)
 ```
+{% include_relative videos.md %}

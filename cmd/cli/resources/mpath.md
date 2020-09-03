@@ -33,3 +33,4 @@ Detach a mountpath on a specified target from AIS storage.
 ```console
 $ ais detach mountpath 12367t8080=/data/dir
 ```
+

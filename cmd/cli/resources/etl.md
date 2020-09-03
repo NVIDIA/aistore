@@ -12,9 +12,9 @@ redirect_from:
 
 Init transform with Pod yaml specification file.
 
-### Examples
+Note: as of AIStore v3.2 only one ETL at a time is supported.
 
-#### Initialize ETL
+### Example
 
 Initialize ETL that computes MD5 of the object.
 
@@ -30,9 +30,10 @@ metadata:
 spec:
   containers:
     - name: server
-      image: quay.io/user/md5_server:v1
+      image: aistore/transformer_md5:latest
       ports:
-        - containerPort: 80
+        - name: default
+          containerPort: 80
       command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
 $ ais etl init spec.yaml
 JGHEoo89gg
@@ -69,10 +70,11 @@ $ ais etl object JGHEoo89gg shards/shard-0.tar -
 
 #### Transform object to output file
 
-Does ETL on `shards/shard-0.tar` object with `JGHEoo89gg` ETL (computes MD5 of the object) and save output to `output.txt` file.
+Do ETL on `shards/shard-0.tar` object with `JGHEoo89gg` ETL (computes MD5 of the object) and save output to `output.txt` file.
 
 ```console
 $ ais etl object JGHEoo89gg shards/shard-0.tar output.txt
 $ cat output.txt
 393c6706efb128fbc442d3f7d084a426
 ```
+

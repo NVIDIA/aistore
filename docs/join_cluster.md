@@ -27,3 +27,4 @@ Here's how a new node joins a running AIStore cluster:
   - `discovery_url`
   - `original_url`
 - but only if those are defined and different from the previously tried.
+

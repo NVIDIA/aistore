@@ -299,3 +299,4 @@ $ ./stop_docker.sh -l # stop docker
 ```
 
 <img src="images/playground-grafana.png" alt="Playground Grafana dashboard" width="400">
+

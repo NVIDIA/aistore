@@ -73,8 +73,8 @@ For the most recently updated command-line options and examples, please run `ais
 | -subdir | `string` | Virtual destination directory for all aisloader-generated objects | `""` |
 | -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |
 | -timeout | `string` | Client HTTP timeout; `0` = infinity) | `10m` |
-| -etl | `string` | Name of an ETL applied to each object on GET request. One of `''`, `tar2tf`, `md5`, `echo` | `""` |
-| -etl-spec | `string` | Path to an ETL specification applied to each object on GET request. It has to be compatible with Kubernetes Pod specification | `""` |
+| -etl | `string` | Built-in ETL, one-of: `tar2tf`, `md5`, or `echo`. Each object that `aisloader` GETs undergoes the selected transformation. See also: `-etl-spec` option. | `""` |
+| -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification. Each object that `aisloader` GETs will undergo this user-defined transformation. See also: `-etl` option. | `""` |
 | -totalputsize | `string`, `int` | Stop PUT workload once cumulative PUT size reaches or exceeds this value, can contain [multiplicative suffix](#bytes-multiplicative-suffix), 0 = no limit | `0` |
 | -uniquegets | `bool` | true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others | `true` |
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
@@ -364,3 +364,4 @@ new dashboards and panels, please follow: [grafana tutorial](http://docs.grafana
 When selecting a series in panel view, it should be in the format: `stats.aisloader.<loader>.*`.
 Remember that metrics will not be visible (and you will not be able to select
 them) until you start the loader.
+{% include_relative videos.md %}
