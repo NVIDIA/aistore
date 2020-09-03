@@ -117,9 +117,9 @@ docker-image-aisnode-%: ## Build 'aisnode' docker image using alpine/ubuntu as t
 
 docker-image-ais-demo-%: ## Build 'aisnode' docker demo image with (1-proxy, 1-target, no cloud setup) using alpine/ubuntu as the base.
 	@echo "Building docker-image-ais-demo $*... "
-	@sudo docker build . --force-rm -t aistore/ais-minimal-deployment:latest-$* -f deploy/dev/docker/Dockerfile-ais-demo-$*
+	@sudo docker build . --force-rm -t aistore/aistore:latest-minimal-devel-$* -f deploy/dev/docker/Dockerfile-ais-demo-$*
 	@echo "*** Run the following to push the image to docker hub"
-	@echo "*** docker push aistore/ais-minimal-deployment:latest-"$*
+	@echo "*** docker push aistore/latest-minimal-devel-"$*
 
 #
 # local deployment (intended for developers)

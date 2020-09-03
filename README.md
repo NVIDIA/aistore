@@ -79,6 +79,8 @@ MacOS/Darwin is also supported, albeit for development only. Certain capabilitie
 
 > For production deployments on Kubernetes, please refer to a separate dedicated [github repo](https://github.com/NVIDIA/ais-k8s).
 
+> For local production deployment, please refer to this [README](/deploy/prod/docker/single/README.md).
+
 Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
 ```console

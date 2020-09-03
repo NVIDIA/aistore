@@ -1,24 +1,14 @@
-# Production single standalone Docker
+# Production standalone Docker
 
-Production ready standalone AIStore docker starts up minimal AIS cluster.
+Production ready standalone AIStore Docker starts up minimal AIS cluster.
 The cluster consists of 1 target and 1 proxy.
 
 The default exposed port from proxy is `51080`.
 
-## Build and upload
-
-It is possible to locally build an image and upload it to selected registry.
-
-```console
-$ ./build_image.sh <TAG>
-$ ./upload_image.sh <REGISTRY_URL>
-```
-
 ## Run
 
-Docker image supports running with different cloud providers.
-Cloud provider can be passed as a first argument.
-Currently, supported cloud providers are: `""` (no provider), `"aws"` (Amazon), `"gcp"` (Google) and `"azure"` (Azure).
+`aistore/aistore:latest-minimal` Docker image is used to deploy the cluster.
+Docker image can be started with attached volumes which will be used by the target to store the data.
 
 **Important**: Currently assuming that all volumes will be mounted in `/ais/*` directory.
 
@@ -29,13 +19,41 @@ Currently, supported cloud providers are: `""` (no provider), `"aws"` (Amazon), 
 ```console
 $ docker run \
     -p 51080:51080 \
+    -v $(mktemp -d):/ais/disk0 \
+    aistore/aistore:latest-minimal
+```
+
+This starts AIS cluster with 1 disk (at least one disk is required!) that is mounted under temporary directory on the host.
+The command exposes `51080` port, so it's possible to reach the cluster with `http://localhost:51080`.
+
+To check the cluster status:
+```console
+$ AIS_ENDPOINT="http://localhost:51080" ais show cluster
+PROXY			 MEM USED %	 MEM AVAIL	 CPU USED %	 UPTIME	 STATUS
+proxy-0934deff64b7[P]	 0.40		 7.78GiB	 0.03		 3m30s	 healthy
+
+TARGET			 MEM USED %	 MEM AVAIL	 CAP USED %	 CAP AVAIL	 CPU USED %	 REBALANCE	 UPTIME	 STATUS
+target-0934deff64b7	 0.41		 7.78GiB	 84		 8.950TiB	 0.07		 not started	 3m30s	 healthy
+
+Summary:
+ Proxies:	1 (0 - unelectable)
+ Targets:	1
+ Primary Proxy:	proxy-0934deff64b7
+ Smap Version:	3
+```
+
+#### Multiple (static) disks
+
+```console
+$ docker run \
+    -p 51080:51080 \
     -v /disk0:/ais/disk0 \
     -v /disk1:/ais/disk1 \
     -v /some/disk2:/ais/disk2 \
-    aistore/aistore-single-node ""
+    aistore/aistore:latest-minimal
 ```
 
-This starts AIS docker cluster with 3 disks (`/disk0`, `/disk1` and `/some/disk2`) with a sample configuration and exposes it on port 8080.
+This starts AIS cluster with 3 disks (`/disk0`, `/disk1` and `/some/disk2`) with a sample configuration and exposes it on port `51080`.
 Important note is that disk paths must resolve to distinct and disjoint filesystems, otherwise target will complain about the incorrect setup.
 
 #### Cloud provider
@@ -51,7 +69,7 @@ When using `aws` cloud provider it is possible to explicitly pass the credential
  - `AWS_DEFAULT_REGION`
 
 
-Start an AIS docker cluster with single disk, `aws` provider and credentials in envvars:
+Start an AIS docker cluster with single disk and `aws` provider credentials in envvars:
 
 ```console
 $ docker run \
@@ -60,11 +78,11 @@ $ docker run \
     -e AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
     -e AWS_DEFAULT_REGION="us-west-2" \
     -v /disk0:/ais/disk0 \
-    aistore/aistore-single-node "aws"
+    aistore/aistore:latest-minimal
 ```
 
 
-Start an AIS docker cluster with single disk, `gcp` provider and credentials as a mounted volume:
+Start an AIS docker cluster with single disk and `gcp` provider credentials as a mounted volume:
 
 ```console
 $ docker run \
@@ -72,5 +90,15 @@ $ docker run \
     -v /home/user/Downloads/[GCP_CREDENTIALS].json:/credentials/[GCP_CREDENTIALS].json \
     -e GOOGLE_APPLICATION_CREDENTIALS="/credentials/[GCP_CREDENTIALS].json" \
     -v /disk0:/ais/disk0 \
-    aistore/aistore-single-node "gcp"
+    aistore/aistore:latest-minimal
+```
+
+
+## (dev) Build and upload
+
+It is possible to locally build an image and upload it to selected registry.
+
+```console
+$ ./build_image.sh <TAG>
+$ ./upload_image.sh <REGISTRY_URL> <TAG>
 ```
