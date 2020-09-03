@@ -84,7 +84,8 @@ for bucket in "aws://ais-jenkins" "gcp://ais-jenkins"; do
   echo "----- LONG TESTS FINISHED WITH: ${exit_code} -----"
 done
 
-cleanup
+# Note: only the logs from the last make test-long run survive - see function deploy above
+make kill
 
 if [[ $result -ne 0 ]]; then
   echo "tests failed"
