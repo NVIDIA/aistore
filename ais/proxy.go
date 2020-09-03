@@ -950,14 +950,14 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Write([]byte(xactID))
-	case cmn.ActCopyBucket:
+	case cmn.ActCopyBucket, cmn.ActETLBucket:
 		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessGET); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
 		bckFrom, bucketTo := bck, msg.Name
 		if bucket == bucketTo {
-			p.invalmsghdlrf(w, r, "cannot copy bucket %q onto itself", bucket)
+			p.invalmsghdlrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bucket)
 			return
 		}
 		if err := cmn.ValidateBckName(bucketTo); err != nil {
@@ -978,10 +978,11 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		var xactID string
-		if xactID, err = p.copyBucket(bckFrom, bckTo, &msg); err != nil {
+		if xactID, err = p.bucketToBucketTxn(bckFrom, bckTo, &msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+
 		w.Write([]byte(xactID))
 	case cmn.ActRegisterCB:
 		// TODO: choose the best permission

@@ -32,6 +32,11 @@ type (
 		// - Method "PUT", Path "/"
 		// - Method "GET", Path "/bucket/object"
 		Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
+
+		// Get should be called when there is no incoming request from a user,
+		// so there's nothing to redirect/reverse proxy. This is the case for
+		// offline-ETL: target starts transforming objects on their own.
+		Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error)
 	}
 	baseComm struct {
 		cluster.Slistener
@@ -39,10 +44,10 @@ type (
 		name               string
 		podName            string
 		remoteAddr         string
+		t                  cluster.Target
 	}
 	pushComm struct {
 		baseComm
-		t cluster.Target
 	}
 	redirectComm struct {
 		baseComm
@@ -72,11 +77,12 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, podIP, transf
 		name:               name,
 		podName:            pod.GetName(),
 		remoteAddr:         podIP,
+		t:                  t,
 	}
 
 	switch commType {
 	case PushCommType:
-		return &pushComm{baseComm: baseComm, t: t}
+		return &pushComm{baseComm: baseComm}
 	case RedirectCommType:
 		return &redirectComm{baseComm: baseComm}
 	case RevProxyCommType:
@@ -109,30 +115,34 @@ func (c baseComm) SvcName() string      { return c.podName /*pod name is same as
 // pushComm //
 //////////////
 
-func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
+func (pushc *pushComm) doRequest(bck *cluster.Bck, objName string) (*http.Response, error) {
 	lom := &cluster.LOM{T: pushc.t, ObjName: objName}
 	if err := lom.Init(bck.Bck); err != nil {
-		return err
+		return nil, err
 	}
 	lom.Lock(false)
 	defer lom.Unlock(false)
 	if err := lom.Load(); err != nil {
-		return err
+		return nil, err
 	}
 
 	// `fh` is closed by Do(req)
 	fh, err := cmn.NewFileHandle(lom.GetFQN())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req, err := http.NewRequest(http.MethodPut, pushc.transformerAddress, fh)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.ContentLength = lom.Size()
 	req.Header.Set(cmn.HeaderContentType, cmn.ContentBinary)
-	resp, err := pushc.t.Client().Do(req)
+	return pushc.t.Client().Do(req)
+}
+
+func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
+	resp, err := pushc.doRequest(bck, objName)
 	if err != nil {
 		return err
 	}
@@ -146,6 +156,11 @@ func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.B
 	return nil
 }
 
+func (pushc *pushComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
+	resp, err := pushc.doRequest(bck, objName)
+	return handleResp(resp, err)
+}
+
 ////////////////////
 //  redirectComm  //
 ////////////////////
@@ -156,6 +171,12 @@ func (repc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluste
 	return nil
 }
 
+func (repc *redirectComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
+	etlURL := cmn.JoinPath(repc.transformerAddress, transformerPath(bck, objName))
+	resp, err := repc.t.Client().Get(etlURL)
+	return handleResp(resp, err)
+}
+
 //////////////////
 // revProxyComm //
 //////////////////
@@ -164,6 +185,12 @@ func (ppc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster
 	r.URL.Path = transformerPath(bck, objName) // Reverse proxy should always use /bucket/object endpoint.
 	ppc.rp.ServeHTTP(w, r)
 	return nil
+}
+
+func (ppc *revProxyComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
+	etlURL := cmn.JoinPath(ppc.transformerAddress, transformerPath(bck, objName))
+	resp, err := ppc.t.Client().Get(etlURL)
+	return handleResp(resp, err)
 }
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
@@ -181,3 +208,11 @@ func pruneQuery(rawQuery string) string {
 }
 
 func transformerPath(bck *cluster.Bck, objName string) string { return cmn.URLPath(bck.Name, objName) }
+
+func handleResp(resp *http.Response, err error) (io.ReadCloser, int64, error) {
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return resp.Body, resp.ContentLength, nil
+}

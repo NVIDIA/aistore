@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/query"
@@ -308,6 +309,54 @@ func (r *registry) RenewPutMirror(lom *cluster.LOM) *mirror.XactPut {
 		return nil
 	}
 	return res.entry.Get().(*mirror.XactPut)
+}
+
+//
+// offlineETLEntry
+//
+type offlineETLEntry struct {
+	baseBckEntry
+	t       cluster.Target
+	phase   string // TODO: is it really needed?
+	xact    *etl.BucketXact
+	bckFrom *cluster.Bck
+	bckTo   *cluster.Bck
+	bckMsg  *etl.OfflineMsg
+}
+
+func (e *offlineETLEntry) Start(_ cmn.Bck) (err error) {
+	e.xact, err = etl.NewBucketXact(e.t, e.uuid, e.bckFrom, e.bckTo, e.bckMsg)
+	return
+}
+func (e *offlineETLEntry) Kind() string  { return cmn.ActETLBucket }
+func (e *offlineETLEntry) Get() cmn.Xact { return e.xact }
+
+func (e *offlineETLEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
+	prev := previousEntry.(*offlineETLEntry)
+	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckFrom.Equal(e.bckFrom, true /*same BID*/, true /*sameBackend*/) {
+		prev.phase = cmn.ActCommit // transition
+		keep = true
+		return
+	}
+	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(%s=>%s)",
+		prev.xact, prev.bckFrom, prev.bckTo, prev.phase, e.phase, e.bckFrom, e.bckTo)
+	return
+}
+
+func (r *registry) RenewETLOffline(t cluster.Target, bckFrom, bckTo *cluster.Bck, bckMsg *etl.OfflineMsg, uuid, phase string) (*etl.BucketXact, error) {
+	e := &offlineETLEntry{
+		baseBckEntry: baseBckEntry{uuid},
+		t:            t,
+		bckFrom:      bckFrom,
+		bckTo:        bckTo,
+		phase:        phase,
+		bckMsg:       bckMsg,
+	}
+	res := r.renewBucketXaction(e, bckTo)
+	if res.err != nil {
+		return nil, res.err
+	}
+	return res.entry.Get().(*etl.BucketXact), nil
 }
 
 //

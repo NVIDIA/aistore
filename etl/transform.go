@@ -311,6 +311,10 @@ func Stop(t cluster.Target, id string) error {
 		}
 	)
 
+	// TODO: Abort any running offline ETL. Impossible to do:
+	// xaction.registry.AbortAll(cmn.ActETLBucket)
+	// as there is an import cycle.
+
 	c, err := GetCommunicator(id)
 	if err != nil {
 		return cmn.NewETLError(errCtx, err.Error())

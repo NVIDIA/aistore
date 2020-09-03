@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -54,13 +55,64 @@ func TestKubeTransformer(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			testTransformer(t, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
+			testETL(t, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
 		})
 	}
 }
 
-func transformInit(t *testing.T, name, comm string) (string, error) {
-	t.Log("Reading template")
+// TODO: currently this test only tests scenario where object are PUT  to the same
+// target which they are currently placed on. That's because our minikube tests
+// only run with a single target.
+func TestKubeTransformerOffline(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	var (
+		bck    = cmn.Bck{Name: "etloffline-from-test", Provider: cmn.ProviderAIS}
+		bckTo  = cmn.Bck{Name: "etloffline-to-test", Provider: cmn.ProviderAIS}
+		objCnt = 10
+
+		m = ioContext{
+			t:         t,
+			num:       objCnt,
+			fileSize:  512,
+			fixedSize: true,
+			bck:       bck,
+		}
+	)
+
+	tutils.Logln("Creating bucket")
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+	m.init()
+
+	tutils.Logln("Putting objects")
+	m.puts()
+
+	// TODO: add more test cases, different ETLs, tarnsformation types.
+	uuid, err := etlInit(tutils.Echo, etl.RedirectCommType)
+	tassert.CheckFatal(t, err)
+
+	defer func() {
+		tutils.Logf("Stop %q\n", uuid)
+		tassert.CheckFatal(t, api.ETLStop(defaultAPIParams, uuid))
+	}()
+
+	tutils.Logf("Offline ETL %q\n", uuid)
+	xactID, err := api.ETLBucket(defaultAPIParams, bck, bckTo, &etl.OfflineMsg{ID: uuid})
+	tassert.CheckFatal(t, err)
+	time.Sleep(5 * time.Second)
+
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBucket, Timeout: time.Minute}
+	err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	tassert.CheckFatal(t, api.ListObjectsInvalidateCache(defaultAPIParams, bckTo))
+	list, err := api.ListObjects(defaultAPIParams, bckTo, nil, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
+}
+
+func etlInit(name, comm string) (string, error) {
+	tutils.Logln("Reading template")
 	spec, err := tutils.GetTransformYaml(name)
 	if err != nil {
 		return "", err
@@ -73,13 +125,13 @@ func transformInit(t *testing.T, name, comm string) (string, error) {
 		pod.Annotations["communication_type"] = comm
 	}
 	spec, _ = jsoniter.Marshal(pod)
-	t.Log("Init ETL")
-	return api.TransformInit(defaultAPIParams, spec)
+	tutils.Logln("Init ETL")
+	return api.ETLInit(defaultAPIParams, spec)
 }
 
-func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
+func testETL(t *testing.T, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
 	var (
-		bck        = cmn.Bck{Name: "transfomer-test", Provider: cmn.ProviderAIS}
+		bck        = cmn.Bck{Name: "etl-test", Provider: cmn.ProviderAIS}
 		testObjDir = filepath.Join("data", "transformer", transformer)
 		objName    = fmt.Sprintf("%s-object", transformer)
 
@@ -100,21 +152,21 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 		expectedOutputFileName = outPath
 	}
 
-	t.Log("Creating bucket")
+	tutils.Logln("Creating bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	t.Log("Putting object")
+	tutils.Logln("Putting object")
 	reader, err := readers.NewFileReaderFromFile(inputFileName, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	errCh := make(chan error, 1)
 	tutils.Put(proxyURL, bck, objName, reader, errCh)
 	tassert.SelectErr(t, errCh, "put", false)
-	uuid, err = transformInit(t, transformer, comm)
+	uuid, err = etlInit(transformer, comm)
 	tassert.CheckFatal(t, err)
 	defer func() {
-		t.Logf("Stop %q", uuid)
-		tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid))
+		tutils.Logf("Stop %q\n", uuid)
+		tassert.CheckFatal(t, api.ETLStop(defaultAPIParams, uuid))
 	}()
 
 	fho, err := cmn.CreateFile(outputFileName)
@@ -124,11 +176,11 @@ func testTransformer(t *testing.T, comm, transformer, inPath, outPath string, fE
 		cmn.RemoveFile(outputFileName)
 	}()
 
-	t.Logf("Read %q", uuid)
-	err = api.TransformObject(defaultAPIParams, uuid, bck, objName, fho)
+	tutils.Logf("Read %q\n", uuid)
+	err = api.ETLObject(defaultAPIParams, uuid, bck, objName, fho)
 	tassert.CheckFatal(t, err)
 
-	t.Log("Compare output")
+	tutils.Logln("Compare output")
 	same, err := fEq(outputFileName, expectedOutputFileName)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, same, "file contents after transformation differ")
@@ -202,18 +254,18 @@ func TestKubeSingleTransformerAtATime(t *testing.T) {
 	if strings.Trim(string(output), "\n") != "1" {
 		t.Skip("requires a single node kubernetes cluster")
 	}
-	uuid1, err := transformInit(t, "echo", "hrev://")
+	uuid1, err := etlInit("echo", "hrev://")
 	tassert.CheckFatal(t, err)
 	if uuid1 != "" {
 		defer func() {
-			t.Logf("Stop %q", uuid1)
-			tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid1))
+			tutils.Logf("Stop %q\n", uuid1)
+			tassert.CheckFatal(t, api.ETLStop(defaultAPIParams, uuid1))
 		}()
 	}
-	uuid2, err := transformInit(t, "md5", "hrev://")
+	uuid2, err := etlInit("md5", "hrev://")
 	tassert.Fatalf(t, err != nil, "Expected err!=nil, got %v", err)
 	if uuid2 != "" {
-		t.Logf("Stop %q", uuid2)
-		tassert.CheckFatal(t, api.TransformStop(defaultAPIParams, uuid2))
+		tutils.Logf("Stop %q\n", uuid2)
+		tassert.CheckFatal(t, api.ETLStop(defaultAPIParams, uuid2))
 	}
 }

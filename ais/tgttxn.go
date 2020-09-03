@@ -6,14 +6,18 @@ package ais
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/xaction"
@@ -78,6 +82,10 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActCopyBucket:
 		if err = t.copyBucket(c); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
+	case cmn.ActETLBucket:
+		if err = t.etlBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActECEncode:
@@ -481,6 +489,103 @@ func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckT
 	return
 }
 
+////////////////
+// etlBucket //
+////////////////
+
+// TODO: deduplicate with copyBucket?
+// TODO: add additional check like in (ri *replicInfo) copyObject
+func (t *targetrunner) etlBucket(c *txnServerCtx) error {
+	if err := t.checkK8s(); err != nil {
+		return err
+	}
+	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+		return err
+	}
+
+	switch c.phase {
+	case cmn.ActBegin:
+		var (
+			etlMsg  *etl.OfflineBckMsg
+			bckFrom = c.bck
+			err     error
+		)
+		// TODO -- FIXME: mountpath validation when destination does not exist
+		if etlMsg, err = t.validateETLBckTxn(bckFrom, c.msg); err != nil {
+			return err
+		}
+		bckTo := cluster.NewBckEmbed(etlMsg.Bck)
+		nlpFrom := bckFrom.GetNameLockPair()
+		nlpTo := bckTo.GetNameLockPair()
+		if !nlpFrom.TryRLock() {
+			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
+		}
+		if !nlpTo.TryLock() {
+			nlpFrom.Unlock()
+			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
+		}
+		txn := newTxnETLBucket(c, bckFrom, bckTo)
+		if err := t.transactions.begin(txn); err != nil {
+			nlpTo.Unlock()
+			nlpFrom.Unlock()
+			return err
+		}
+		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
+	case cmn.ActAbort:
+		_, err := t.transactions.find(c.uuid, true /* remove */)
+		debug.AssertNoErr(err)
+	case cmn.ActCommit:
+		var (
+			xact   *etl.BucketXact
+			bckMsg = etl.OfflineBckMsg{}
+		)
+
+		if err := cmn.MorphMarshal(c.msg.Value, &bckMsg); err != nil {
+			return fmt.Errorf("couldn't morphmarshal. value: (%v) err: %s", c.msg.Value, err.Error())
+		}
+		txn, err := t.transactions.find(c.uuid, false)
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		txnETLBck := txn.(*txnETLBucket)
+		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
+			if err = t.transactions.wait(txn, c.timeout); err != nil {
+				return fmt.Errorf("%s %s: %v", t.si, txn, err)
+			}
+		} else {
+			t.transactions.find(c.uuid, true /* remove */)
+		}
+		xact, err = xaction.Registry.RenewETLOffline(t, txnETLBck.bckFrom, txnETLBck.bckTo, &bckMsg.OfflineMsg, c.uuid, cmn.ActCommit)
+		if err != nil {
+			return err
+		}
+
+		c.addNotif(xact) // notify upon completion
+		go xact.Run()
+	default:
+		cmn.Assert(false)
+	}
+	return nil
+}
+
+func (t *targetrunner) validateETLBckTxn(bckFrom *cluster.Bck, msg *aisMsg) (etlMsg *etl.OfflineBckMsg, err error) {
+	if etlMsg, err = etl.ParseOfflineBckMsg(msg.Value); err != nil {
+		return nil, err
+	}
+
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		return nil, cs.Err
+	}
+	if err = t.coExists(bckFrom, msg); err != nil {
+		return
+	}
+	bmd := t.owner.bmd.get()
+	if _, present := bmd.Get(bckFrom); !present {
+		return nil, cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
+	}
+	return
+}
+
 //////////////
 // ecEncode //
 //////////////
@@ -524,6 +629,48 @@ func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 	}
 	err = t.coExists(bck, msg)
 	return
+}
+
+///////////////////////
+// PutObjectToTarget //
+///////////////////////
+
+// Puts an object (for reader r) to a destTarget, skipping communication with
+// a proxy. Header should be populated with relevant data for a given reader,
+// including content length, checksum, version, atime and should not be nil.
+// r is closed always, even on errors.
+func (t *targetrunner) PutObjectToTarget(destTarget *cluster.Snode, r io.ReadCloser, bckTo *cluster.Bck, objNameTo string, header http.Header) error {
+	cmn.Assert(!t.Snode().Equals(destTarget))
+
+	query := url.Values{}
+	query = cmn.AddBckToQuery(query, bckTo.Bck)
+	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
+
+	header.Set(cmn.HeaderPutterID, t.si.ID())
+
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodPut,
+		Base:   destTarget.URL(cmn.NetworkIntraData),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bckTo.Name, objNameTo),
+		Query:  query,
+		Header: header,
+		BodyR:  r,
+	}
+	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)
+	if err != nil {
+		debug.AssertNoErr(r.Close())
+		err = fmt.Errorf("unexpected failure to create request, err: %v", err)
+		return err
+	}
+	defer cancel()
+	resp, err := t.httpclientGetPut.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
+	}
+	if resp != nil && resp.Body != nil {
+		debug.AssertNoErr(resp.Body.Close())
+	}
+	return nil
 }
 
 //////////

@@ -41,6 +41,7 @@ const (
 	ActDestroyLB      = "destroylb"
 	ActRenameLB       = "renamelb"
 	ActCopyBucket     = "copybck"
+	ActETLBucket      = "etlbck"
 	ActRegisterCB     = "registercb"
 	ActEvictCB        = "evictcb"
 	ActSetConfig      = "setconfig"

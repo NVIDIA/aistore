@@ -43,7 +43,7 @@ Lists all available ETLs.
 
 Stop ETL with specified id.
 
-## Transform object with given ETL
+## Transform object on-the-fly with given ETL
 
 `ais etl object ETL_ID BUCKET/OBJECT_NAME OUTPUT`
 
@@ -69,3 +69,18 @@ $ ais etl object JGHEoo89gg shards/shard-0.tar output.txt
 $ cat output.txt
 393c6706efb128fbc442d3f7d084a426
 ```
+
+## Transform the whole bucket offline with given ETL
+
+`ais etl bucket ETL_ID BUCKET_FROM BUCKET_TO`
+
+### Examples
+
+#### Transform ever object from BUCKET1 with ETL and put new objects to BUCKET2
+
+```console
+XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2)
+ais wait xaction $XACT_ID # wait until process finishes
+```
+
+

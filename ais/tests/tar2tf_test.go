@@ -31,7 +31,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 	spec, _ = jsoniter.Marshal(pod)
 
 	// Starting transformer
-	uuid, err = api.TransformInit(baseParams, spec)
+	uuid, err = api.ETLInit(baseParams, spec)
 	tassert.CheckFatal(t, err)
 	return uuid
 }
@@ -73,7 +73,7 @@ func TestKubeTar2TFS3(t *testing.T) {
 
 	uuid := startTar2TfTransformer(t)
 	defer func() {
-		tassert.CheckFatal(t, api.TransformStop(baseParams, uuid))
+		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
 	}()
 	// GET TFRecord from TAR
 	outFileBuffer := bytes.NewBuffer(nil)
@@ -145,7 +145,7 @@ func TestKubeTar2TFRanges(t *testing.T) {
 
 	uuid := startTar2TfTransformer(t)
 	defer func() {
-		tassert.CheckFatal(t, api.TransformStop(baseParams, uuid))
+		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
 	}()
 
 	// This is to mimic external S3 clients like Tensorflow

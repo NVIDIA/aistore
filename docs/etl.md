@@ -223,7 +223,7 @@ related network traffic. Given that there are as many ETL containers as storage 
 (one container per target) and that all ETL containers run in parallel, the cumulative "transformation"
 bandwidth scales proportionally to the number of storage nodes and disks.
 
-Finally, we can use newly created pods to transform the objects for us:
+Finally, we can use newly created pods to transform the objects on the fly for us:
 
 ```console
 $ ais create bucket transform
@@ -233,6 +233,15 @@ $ ais etl object JGHEoo89gg transform/shard.in -
 ```
 
 Voila! The ETL container successfully computed the `md5` on the `transform/shard.in` object.
+
+Alternatively, one can use offline ETL feature, to transform the whole bucket.
+
+```console
+$ ais create bucket transform
+$ echo "some text :)" | ais put - transform/shard.in
+$ XACT_ID=$(ais etl bucket JGHEoo89gg transform transform-md5)
+$ ais wait xaction $XACT_ID
+```
 
 Once ETL isn't needed anymore, the pods can be stopped with:
 
@@ -259,4 +268,5 @@ Alternatively, you can use [ETL CLI](/cmd/cli/resources/etl.md) or [AIS Loader](
 | Init ETL | Inits ETL based on `spec.yaml`. Returns `ETL_ID` | POST /v1/etl/init | `curl -X POST 'http://G/v1/etl/init' -T spec.yaml` |
 | List ETLs | Lists all running ETLs | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
 | Transform object | Transforms an object based on ETL with `ETL_ID` | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
+| Transform bucket | Transforms all objects in a bucket and puts them to destination bucket | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "prefix":"prefix", "suffix": "suffix"}}' 'http://G/v1/buckets/from-name'` |
 | Stop ETL | Stops ETL with given `ETL_ID` | DELETE /v1/etl/stop/ETL_ID | `curl -X DELETE 'http://G/v1/etl/stop/ETL_ID'` |

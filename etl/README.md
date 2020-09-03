@@ -2,13 +2,13 @@
 
 The `etl` package compiles into `aisnode` executable to facilitate running custom ETL containers and communicating with those containers at runtime.
 
-Generally, AIStore v3.2 and later supports on the fly user-defined dataset transformations, which allows moving I/O intensive (and expensive) operations from the computing client(s) into the storage cluster.
+Generally, AIStore v3.2 and later supports on the fly and offline user-defined dataset transformations, which allows moving I/O intensive (and expensive) operations from the computing client(s) into the storage cluster.
 Popular use cases include - but are not limited to - *dataset augmentation* (of any kind) and filtering of AI datasets.
 
 For prerequisites, 3 (three) supported ais <=> container communication mechanisms, and further details, please refer to [ETL readme](/docs/etl.md).
 
 
-## Example
+## On the fly ETL example
 
 <img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="900">
 
@@ -23,7 +23,7 @@ The example above uses [AIS CLI](/cmd/cli/README.md) to:
 
    * [MD5 ETL YAML](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml)
 
-4. **Transform** the object via custom ETL - the "transformation" in this case boils down to computing the object's MD5.
+4. **Transform** the object on the fly via custom ETL - the "transformation" in this case boils down to computing the object's MD5.
 
 5. **Compare** the output with locally computed MD5.
 

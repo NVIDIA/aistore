@@ -647,6 +647,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
+
 	started := time.Now()
 	if ptime != "" {
 		if redelta := redirectLatency(started, ptime); redelta != 0 {

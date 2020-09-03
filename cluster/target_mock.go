@@ -51,6 +51,9 @@ func (*TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) (bool, error) { 
 func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _ *cmn.Cksum, _, _, _ bool) (*LOM, error) {
 	return nil, nil
 }
+func (*TargetMock) PutObjectToTarget(destTarget *Snode, r io.ReadCloser, bckTo *Bck, objNameTo string, header http.Header) error {
+	return nil
+}
 func (*TargetMock) GetDB() dbdriver.Driver                             { return nil }
 func (*TargetMock) GetFSPRG() fs.PathRunGroup                          { return nil }
 func (*TargetMock) Cloud(_ *Bck) CloudProvider                         { return nil }

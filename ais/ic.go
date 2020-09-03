@@ -161,7 +161,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 	}
 
 	if msg.Kind != "" && nl.kind() != msg.Kind {
-		ic.p.invalmsghdlrf(w, r, "xaction kind mismatch (ID: %s, KIND: %s)", msg.ID, msg.Kind)
+		ic.p.invalmsghdlrf(w, r, "xaction kind mismatch (ID: %s, KIND: %s != %s)", msg.ID, msg.Kind, nl.kind())
 		return
 	}
 

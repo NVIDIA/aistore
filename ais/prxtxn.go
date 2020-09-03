@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -423,8 +424,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	return
 }
 
-// copy-bucket: { confirm existence -- begin -- conditional metasync -- start waiting for copy-done -- commit }
-func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
+// copy-bucket/offline ETL: { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
+func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
 		nmsg = &cmn.ActionMsg{} // + bckTo
 	)
@@ -440,7 +441,18 @@ func (p *proxyrunner) copyBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg
 
 	// msg{} => nmsg{bckTo} and prep context(nmsg)
 	*nmsg = *msg
+
 	nmsg.Value = bckTo.Bck
+	if msg.Action == cmn.ActETLBucket {
+		bckMsg, err := etl.ParseOfflineMsg(msg.Value)
+		if err != nil {
+			return "", err
+		}
+		nmsg.Value = &etl.OfflineBckMsg{
+			Bck:        bckTo.Bck,
+			OfflineMsg: *bckMsg,
+		}
+	}
 
 	// 2. begin
 	var (

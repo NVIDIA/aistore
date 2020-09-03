@@ -85,6 +85,7 @@ type Target interface {
 		overwrite, safe, verbose bool) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
+	PutObjectToTarget(destTarget *Snode, r io.ReadCloser, bckTo *Bck, objNameTo string, header http.Header) error
 
 	GetGFN(gfnType GFNType) GFN
 	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/urfave/cli"
 )
 
@@ -48,6 +49,12 @@ var (
 					ArgsUsage: "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
 					Action:    etlObjectHandler,
 				},
+				{
+					Name:      subcmdBucket,
+					Usage:     "offline transform bucket with given ETL",
+					ArgsUsage: "ETL_ID BUCKET_FROM BUCKET_TO",
+					Action:    etlOfflineHandler,
+				},
 			},
 		},
 	}
@@ -68,7 +75,7 @@ func etlInitHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	id, err := api.TransformInit(defaultAPIParams, spec)
+	id, err := api.ETLInit(defaultAPIParams, spec)
 	if err != nil {
 		return err
 	}
@@ -77,7 +84,7 @@ func etlInitHandler(c *cli.Context) (err error) {
 }
 
 func etlListHandler(c *cli.Context) (err error) {
-	list, err := api.TransformList(defaultAPIParams)
+	list, err := api.ETLList(defaultAPIParams)
 	if err != nil {
 		return err
 	}
@@ -89,7 +96,7 @@ func etlStopHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "ETL_ID")
 	}
 	id := c.Args()[0]
-	if err := api.TransformStop(defaultAPIParams, id); err != nil {
+	if err := api.ETLStop(defaultAPIParams, id); err != nil {
 		return err
 	}
 	fmt.Fprintln(c.App.Writer, "ETL containers stopped successfully.")
@@ -128,11 +135,60 @@ func etlObjectHandler(c *cli.Context) (err error) {
 		defer f.Close()
 	}
 
-	err = api.TransformObject(defaultAPIParams, id, bck, objName, w)
+	return handleETLHTTPError(api.ETLObject(defaultAPIParams, id, bck, objName, w), id)
+}
+
+// TODO: add prefix, suffix and ext flags.
+func etlOfflineHandler(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "ETL_ID")
+	} else if c.NArg() == 1 {
+		return missingArgumentsError(c, "BUCKET_FROM")
+	} else if c.NArg() == 2 {
+		return missingArgumentsError(c, "BUCKET_TO")
+	}
+
+	var (
+		id = c.Args()[0]
+	)
+
+	fromBck, toName, err := cmn.ParseBckObjectURI(c.Args()[1])
+	if err != nil {
+		return err
+	}
+	toBck, fromObjName, err := cmn.ParseBckObjectURI(c.Args()[2])
+	if err != nil {
+		return err
+	}
+	if fromBck.IsCloud() || toBck.IsCloud() {
+		return fmt.Errorf("ETL of cloud buckets not supported")
+	}
+	if fromBck.IsRemoteAIS() || toBck.IsRemoteAIS() {
+		return fmt.Errorf("ETL of remote ais buckets not supported")
+	}
+	if toName != "" {
+		return objectNameArgumentNotSupported(c, toName)
+	}
+	if fromObjName != "" {
+		return objectNameArgumentNotSupported(c, toName)
+	}
+
+	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, &etl.OfflineMsg{
+		ID: id,
+	})
+
+	if err := handleETLHTTPError(err, id); err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer, xactID)
+	return nil
+}
+
+func handleETLHTTPError(err error, etlID string) error {
 	if httpErr, ok := err.(*cmn.HTTPError); ok {
 		// TODO: How to find out if it's transformation not found, and not object not found?
-		if httpErr.Status == http.StatusNotFound && strings.Contains(httpErr.Error(), id) {
-			return fmt.Errorf("ETL %q not found; try starting new ETL with:\nais %s %s <spec>", id, commandETL, subcmdInit)
+		if httpErr.Status == http.StatusNotFound && strings.Contains(httpErr.Error(), etlID) {
+			return fmt.Errorf("ETL %q not found; try starting new ETL with:\nais %s %s <spec>", etlID, commandETL, subcmdInit)
 		}
 	}
 	return err

@@ -577,7 +577,7 @@ func doDlStatusRequest(reqParams ReqParams) (resp downloader.DlStatusResp, err e
 	return resp, err
 }
 
-func TransformInit(baseParams BaseParams, spec []byte) (id string, err error) {
+func ETLInit(baseParams BaseParams, spec []byte) (id string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -587,7 +587,7 @@ func TransformInit(baseParams BaseParams, spec []byte) (id string, err error) {
 	return id, err
 }
 
-func TransformList(baseParams BaseParams) (list []etl.Info, err error) {
+func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -596,7 +596,7 @@ func TransformList(baseParams BaseParams) (list []etl.Info, err error) {
 	return list, err
 }
 
-func TransformStop(baseParams BaseParams, id string) (err error) {
+func ETLStop(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -605,10 +605,20 @@ func TransformStop(baseParams BaseParams, id string) (err error) {
 	return err
 }
 
-func TransformObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
+func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w io.Writer) (err error) {
 	_, err = GetObject(baseParams, bck, objName, GetObjectInput{
 		Writer: w,
 		Query:  url.Values{cmn.URLParamUUID: []string{id}},
 	})
+	return
+}
+
+func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *etl.OfflineMsg) (xactID string, err error) {
+	baseParams.Method = http.MethodPost
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, fromBck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBucket, Name: toBck.Name, Value: bckMsg}),
+	}, &xactID)
 	return
 }

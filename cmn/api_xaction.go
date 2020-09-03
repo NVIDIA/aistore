@@ -63,6 +63,7 @@ var XactsDtor = map[string]XactDescriptor{
 	ActPutCopies:     {Type: XactTypeBck, Startable: false},
 	ActRenameLB:      {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
 	ActCopyBucket:    {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
+	ActETLBucket:     {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
 	ActECEncode:      {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false},
 	ActEvictObjects:  {Type: XactTypeBck, Startable: false},
 	ActDelete:        {Type: XactTypeBck, Startable: false},

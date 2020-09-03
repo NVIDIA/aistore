@@ -6,13 +6,9 @@ package ais
 
 import (
 	"fmt"
-	"net/http"
-	"net/url"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type replicInfo struct {
@@ -110,41 +106,16 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied boo
 
 // TODO: reuse rebalancing code and streams
 func (ri *replicInfo) putRemote(lom *cluster.LOM, objNameTo string, si *cluster.Snode) (copied bool, err error) {
-	var file *cmn.FileHandle // Closed by `.Do()`
+	var file *cmn.FileHandle // Closed by `PutObjectToTarget()`
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
-		err = fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
-		return
+		return false, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
 	}
 
 	// PUT object into different target
-	var (
-		query  = url.Values{}
-		header = lom.PopulateHdr(nil)
-	)
-	header.Set(cmn.HeaderPutterID, ri.t.si.ID())
-	query = cmn.AddBckToQuery(query, ri.bckTo.Bck)
-	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   si.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, ri.bckTo.Name, objNameTo),
-		Query:  query,
-		Header: header,
-		BodyR:  file,
-	}
-	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
+	header := lom.PopulateHdr(nil)
+	err = ri.t.PutObjectToTarget(si, file, ri.bckTo, objNameTo, header)
 	if err != nil {
-		debug.AssertNoErr(file.Close())
-		err = fmt.Errorf("unexpected failure to create request, err: %v", err)
-		return
+		return false, err
 	}
-	defer cancel()
-	resp, err1 := ri.t.httpclientGetPut.Do(req)
-	if err1 != nil {
-		err = fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err1)
-		return
-	}
-	copied = true
-	debug.AssertNoErr(resp.Body.Close())
-	return
+	return true, nil
 }

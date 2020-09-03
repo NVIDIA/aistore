@@ -96,6 +96,11 @@ type (
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 	}
+	txnETLBucket struct {
+		txnBckBase
+		bckFrom *cluster.Bck
+		bckTo   *cluster.Bck
+	}
 )
 
 // interface guard
@@ -458,6 +463,23 @@ var _ txn = &txnCopyBucket{}
 func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnCopyBucket) {
 	txn = &txnCopyBucket{
 		*newTxnBckBase("bcp", *bckFrom),
+		bckFrom,
+		bckTo,
+	}
+	txn.fillFromCtx(c)
+	return
+}
+
+//////////////////
+// txnETLBucket //
+//////////////////
+
+var _ txn = &txnETLBucket{}
+
+// c-tor
+func newTxnETLBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnETLBucket) {
+	txn = &txnETLBucket{
+		*newTxnBckBase("betl", *bckFrom),
 		bckFrom,
 		bckTo,
 	}

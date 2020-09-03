@@ -743,11 +743,11 @@ func Start() error {
 		}
 
 		fmt.Printf("waiting for an ETL to start")
-		etlID, err = api.TransformInit(baseParams, etlSpec)
+		etlID, err = api.ETLInit(baseParams, etlSpec)
 		if err != nil {
 			return fmt.Errorf("failed to initialize transform: %v", err)
 		}
-		defer api.TransformStop(baseParams, etlID)
+		defer api.ETLStop(baseParams, etlID)
 	}
 
 	workOrders = make(chan *workOrder, runParams.numWorkers)
