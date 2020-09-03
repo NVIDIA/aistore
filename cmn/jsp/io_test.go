@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"io/ioutil"
 	"math/rand"
-	"reflect"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -25,6 +24,13 @@ type testStruct struct {
 	ST struct {
 		I64 int64 `json:"int64"`
 	}
+}
+
+func (ts *testStruct) equal(other testStruct) bool {
+	return ts.I == other.I &&
+		ts.S == other.S &&
+		string(ts.B) == string(other.B) &&
+		ts.ST.I64 == other.ST.I64
 }
 
 func makeRandStruct() (ts testStruct) {
@@ -81,8 +87,13 @@ func TestDecodeAndEncode(t *testing.T) {
 			err = jsp.Decode(b, &v, test.opts, "test")
 			tassert.CheckFatal(t, err)
 
+			// reflect.DeepEqual may not work here due to using `[]byte` in the struct.
+			// `Decode` may generate empty slice from original `nil` slice and while
+			// both are kind of the same, DeepEqual says they differ. From output when
+			// the test fails:
+			//      v(B:[]uint8(nil))   !=   test.v(B:[]uint8{})
 			tassert.Fatalf(
-				t, reflect.DeepEqual(v, test.v),
+				t, v.equal(test.v),
 				"structs are not equal, (got: %+v, expected: %+v)", v, test.v,
 			)
 		})
