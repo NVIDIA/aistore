@@ -136,19 +136,19 @@ func NewAzure(t cluster.Target) (cluster.CloudProvider, error) {
 	}, nil
 }
 
-func (ap *azureProvider) azureErrorToAISError(azureError error, bck *cluster.Bck, objName string) (error, int) {
+func (ap *azureProvider) azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (error, int) {
 	stgErr, ok := azureError.(azblob.StorageError)
 	if !ok {
 		return azureError, http.StatusInternalServerError
 	}
 	switch stgErr.ServiceCode() {
 	case azblob.ServiceCodeContainerNotFound:
-		return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, ap.t.Snode().Name()), http.StatusNotFound
+		return cmn.NewErrorRemoteBucketDoesNotExist(*bck, ap.t.Snode().Name()), http.StatusNotFound
 	case azblob.ServiceCodeBlobNotFound:
-		msg := fmt.Sprintf("%s/%s not found", bck.Bck, objName)
+		msg := fmt.Sprintf("%s/%s not found", bck, objName)
 		return &cmn.HTTPError{Status: http.StatusNotFound, Message: msg}, http.StatusNotFound
 	case azblob.ServiceCodeInvalidResourceName:
-		msg := fmt.Sprintf("%s/%s not found", bck.Bck, objName)
+		msg := fmt.Sprintf("%s/%s not found", bck, objName)
 		return &cmn.HTTPError{Status: http.StatusNotFound, Message: msg}, http.StatusNotFound
 	default:
 		if stgErr.Response() != nil {
@@ -172,7 +172,7 @@ func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 	for marker.NotDone() {
 		containers, err = ap.s.ListContainersSegment(ctx, marker, o)
 		if err != nil {
-			err, errCode = ap.azureErrorToAISError(err, cluster.NewBck("", cmn.ProviderAzure, cmn.NsGlobal), "")
+			err, errCode = ap.azureErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAzure}, "")
 			return
 		}
 

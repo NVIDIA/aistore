@@ -49,9 +49,10 @@ type (
 	}
 
 	Bck struct {
-		Name     string `json:"name"`
-		Provider string `json:"provider"`
-		Ns       Ns     `json:"namespace" list:"omitempty"`
+		Name     string       `json:"name"`
+		Provider string       `json:"provider"`
+		Ns       Ns           `json:"namespace" list:"omitempty"`
+		Props    *BucketProps `json:"-"`
 	}
 	QueryBcks Bck
 
@@ -279,16 +280,38 @@ func (n Ns) IsGlobal() bool    { return n == NsGlobal }
 func (n Ns) IsAnyRemote() bool { return n == NsAnyRemote }
 func (n Ns) IsRemote() bool    { return n.UUID != "" }
 
-func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() } // is local AIS cluster
-func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }  // is remote AIS cluster
-func (b Bck) IsRemote() bool    { return b.IsCloud() || b.IsRemoteAIS() || b.IsHTTP() }  // is remote
-func (b Bck) IsHTTP() bool      { return b.Provider == ProviderHTTP }                    // is HTTP
+func (b *Bck) HasBackendBck() bool {
+	return b.Provider == ProviderAIS && b.Props != nil && !b.Props.BackendBck.IsEmpty()
+}
+func (b *Bck) BackendBck() *Bck {
+	if !b.IsRemote() {
+		return nil
+	}
+	if b.HasBackendBck() {
+		return &b.Props.BackendBck
+	}
+	return b
+}
+
+func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() && !b.HasBackendBck() } // is local AIS cluster
+func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }                        // is remote AIS cluster
+func (b Bck) IsHTTP() bool      { return b.Provider == ProviderHTTP }                                          // is HTTP
+
+func (b Bck) IsRemote() bool {
+	return b.IsCloud() || b.IsRemoteAIS() || b.IsHTTP() || b.HasBackendBck()
+}
+
 func (b Bck) IsCloud() bool { // is 3rd party Cloud
-	if b.Provider == ProviderAIS || b.Provider == ProviderHTTP {
+	if b.Provider == ProviderHTTP {
 		return false
 	}
-	return IsValidProvider(b.Provider)
+	if b.HasBackendBck() {
+		backend := b.Props.BackendBck
+		return backend.IsCloud()
+	}
+	return b.Provider != ProviderAIS && IsValidProvider(b.Provider)
 }
+
 func (b Bck) HasProvider() bool { return IsValidProvider(b.Provider) }
 
 func IsValidProvider(provider string) bool {

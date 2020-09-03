@@ -104,9 +104,9 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, con
 	return client, ctx, nil
 }
 
-func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck *cluster.Bck) (error, int) {
+func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck *cmn.Bck) (error, int) {
 	if gcpError == storage.ErrBucketNotExist {
-		return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, gcpp.t.Snode().Name()), http.StatusNotFound
+		return cmn.NewErrorRemoteBucketDoesNotExist(*bck, gcpp.t.Snode().Name()), http.StatusNotFound
 	}
 	status := http.StatusBadRequest
 	if apiErr, ok := gcpError.(*googleapi.Error); ok {
@@ -117,7 +117,7 @@ func (gcpp *gcpProvider) gcpErrorToAISError(gcpError error, bck *cluster.Bck) (e
 	return gcpError, status
 }
 
-func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cluster.Bck) (error, int) {
+func (gcpp *gcpProvider) handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (error, int) {
 	if objErr != storage.ErrObjectNotExist {
 		return objErr, http.StatusBadRequest
 	}
@@ -247,7 +247,7 @@ func (gcpp *gcpProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 			break
 		}
 		if err != nil {
-			err, errCode = gcpp.gcpErrorToAISError(err, cluster.NewBck("", cmn.ProviderGoogle, cmn.NsGlobal))
+			err, errCode = gcpp.gcpErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderGoogle})
 			return
 		}
 		buckets = append(buckets, cmn.Bck{

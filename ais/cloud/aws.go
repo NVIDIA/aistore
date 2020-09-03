@@ -8,6 +8,7 @@ package cloud
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -35,7 +36,7 @@ type (
 	}
 
 	sessConf struct {
-		bck    *cluster.Bck
+		bck    *cmn.Bck
 		region string
 	}
 )
@@ -45,12 +46,6 @@ var (
 )
 
 func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvider{t: t}, nil }
-
-//======
-//
-// session FIXME: optimize
-//
-//======
 
 // A session is created using default credentials from
 // configuration file in ~/.aws/credentials and environment variables
@@ -64,7 +59,7 @@ func createSession() *session.Session {
 
 // newS3Client creates new S3 client that can be used to make requests. It is
 // guaranteed that the client is initialized even in case of errors.
-func (awsp *awsProvider) newS3Client(conf sessConf) (svc *s3.S3, regIsSet bool) {
+func (awsp *awsProvider) newS3Client(conf sessConf, tag string) (svc *s3.S3, err error, regIsSet bool) {
 	var (
 		sess    = createSession()
 		awsConf = &aws.Config{}
@@ -75,9 +70,12 @@ func (awsp *awsProvider) newS3Client(conf sessConf) (svc *s3.S3, regIsSet bool) 
 		regIsSet = true
 	} else if conf.bck != nil {
 		if conf.bck.Props == nil || conf.bck.Props.Extra.CloudRegion == "" {
-			return s3.New(sess), regIsSet
+			if tag != "" {
+				err = fmt.Errorf("%s: unknown region for bucket %s -- proceeding with default", tag, conf.bck)
+			}
+			svc = s3.New(sess)
+			return
 		}
-		debug.Assert(conf.bck.Props.Extra.CloudRegion != "")
 		regIsSet = true
 		awsConf.Region = aws.String(conf.bck.Props.Extra.CloudRegion)
 	}
@@ -85,11 +83,11 @@ func (awsp *awsProvider) newS3Client(conf sessConf) (svc *s3.S3, regIsSet bool) 
 	return
 }
 
-func (awsp *awsProvider) awsErrorToAISError(awsError error, bck *cluster.Bck) (error, int) {
+func (awsp *awsProvider) awsErrorToAISError(awsError error, bck *cmn.Bck) (error, int) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		node := awsp.t.Snode().Name()
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, node), reqErr.StatusCode()
+			return cmn.NewErrorRemoteBucketDoesNotExist(*bck, node), reqErr.StatusCode()
 		}
 		return awsError, reqErr.StatusCode()
 	}
@@ -106,22 +104,22 @@ func (awsp *awsProvider) MaxPageSize() uint { return 1000 }
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
+	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
 
 	var (
-		hasRegion bool
-		svc       *s3.S3
-		h         = cmn.CloudHelpers.Amazon
-		cloudBck  = bck.BackendBck()
+		svc      *s3.S3
+		h        = cmn.CloudHelpers.Amazon
+		cloudBck = bck.BackendBck()
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
 
-	svc, hasRegion = awsp.newS3Client(sessConf{bck: cloudBck})
-	if !hasRegion {
-		glog.Warningf("[list_objects]: missing cloud region props for bucket %v -- proceeding with default", cloudBck.Bck)
+	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[list_objects]")
+	if err != nil {
+		glog.Warning(err)
 	}
 
 	params := &s3.ListObjectsInput{Bucket: aws.String(cloudBck.Name)}
@@ -243,8 +241,8 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 	var (
 		svc       *s3.S3
 		region    string
-		hasRegion bool
 		cloudBck  = bck.BackendBck()
+		hasRegion bool
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[head_bucket] %s", cloudBck.Name)
@@ -252,7 +250,7 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 
 	// Since it's possible that the cloud bucket may not yet exist in the BMD,
 	// we must get the region manually and recreate S3 client.
-	svc, hasRegion = awsp.newS3Client(sessConf{bck: cloudBck})
+	svc, _, hasRegion = awsp.newS3Client(sessConf{bck: cloudBck}, "")
 	if !hasRegion {
 		if region, err = awsp.getBucketLocation(svc, cloudBck.Name); err != nil {
 			err, errCode = awsp.awsErrorToAISError(err, cloudBck)
@@ -260,7 +258,7 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 		}
 
 		// Create new svc with the region details.
-		svc, _ = awsp.newS3Client(sessConf{region: region})
+		svc, _, _ = awsp.newS3Client(sessConf{region: region}, "")
 	}
 
 	region = *svc.Config.Region
@@ -287,10 +285,10 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 //////////////////
 
 func (awsp *awsProvider) ListBuckets(_ context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
-	svc, _ := awsp.newS3Client(sessConf{})
+	svc, _, _ := awsp.newS3Client(sessConf{}, "")
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		err, errCode = awsp.awsErrorToAISError(err, cluster.NewBck("", cmn.ProviderAmazon, cmn.NsGlobal))
+		err, errCode = awsp.awsErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAmazon})
 		return
 	}
 
@@ -313,14 +311,13 @@ func (awsp *awsProvider) ListBuckets(_ context.Context, _ cmn.QueryBcks) (bucket
 
 func (awsp *awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
-		svc       *s3.S3
-		hasRegion bool
-		h         = cmn.CloudHelpers.Amazon
-		cloudBck  = lom.Bck().BackendBck()
+		svc      *s3.S3
+		h        = cmn.CloudHelpers.Amazon
+		cloudBck = lom.Bck().BackendBck()
 	)
-	svc, hasRegion = awsp.newS3Client(sessConf{bck: cloudBck})
-	if !hasRegion {
-		glog.Warningf("[head_object]: missing cloud region props for bucket %v -- proceeding with default", cloudBck.Bck)
+	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[head_object]")
+	if err != nil {
+		glog.Warning(err)
 	}
 
 	headOutput, err := svc.HeadObject(&s3.HeadObjectInput{
@@ -356,14 +353,13 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		svc          *s3.S3
 		cksum        *cmn.Cksum
 		cksumToCheck *cmn.Cksum
-		hasRegion    bool
 		h            = cmn.CloudHelpers.Amazon
 		cloudBck     = lom.Bck().BackendBck()
 	)
 
-	svc, hasRegion = awsp.newS3Client(sessConf{bck: cloudBck})
-	if !hasRegion {
-		glog.Warningf("[get_object]: missing cloud region props for bucket %v -- proceeding with default", cloudBck.Bck)
+	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[get_object]")
+	if err != nil {
+		glog.Warning(err)
 	}
 
 	obj, err := svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
@@ -422,16 +418,15 @@ func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM
 	var (
 		svc                   *s3.S3
 		uploadOutput          *s3manager.UploadOutput
-		hasRegion             bool
 		h                     = cmn.CloudHelpers.Amazon
 		cksumType, cksumValue = lom.Cksum().Get()
 		cloudBck              = lom.Bck().BackendBck()
 		md                    = make(map[string]*string, 2)
 	)
 
-	svc, hasRegion = awsp.newS3Client(sessConf{bck: cloudBck})
-	if !hasRegion {
-		glog.Warningf("[put_object]: missing cloud region props for bucket %v -- proceeding with default", cloudBck.Bck)
+	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[put_object]")
+	if err != nil {
+		glog.Warning(err)
 	}
 
 	md[awsChecksumType] = aws.String(cksumType)
@@ -463,13 +458,12 @@ func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM
 
 func (awsp *awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (err error, errCode int) {
 	var (
-		svc       *s3.S3
-		hasRegion bool
-		cloudBck  = lom.Bck().BackendBck()
+		svc      *s3.S3
+		cloudBck = lom.Bck().BackendBck()
 	)
-	svc, hasRegion = awsp.newS3Client(sessConf{bck: cloudBck})
-	if !hasRegion {
-		glog.Warningf("[delete_object]: missing cloud region props for bucket %v -- proceeding with default", cloudBck.Bck)
+	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[delete_object]")
+	if err != nil {
+		glog.Warning(err)
 	}
 
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{

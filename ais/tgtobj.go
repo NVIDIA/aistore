@@ -170,7 +170,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	)
 	if bck.IsRemote() && !poi.migrated {
 		var version string
-		if bck.IsCloud() || bck.IsHTTP() { // TODO: should `HTTP` be part of `IsCloud`?!
+		if bck.IsCloud() || bck.IsHTTP() {
 			version, err, errCode = poi.putCloud()
 		} else {
 			version, err, errCode = poi.putRemoteAIS()

@@ -42,14 +42,13 @@ var _ = Describe("Mirror", func() {
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	var (
-		bck     = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-		bmdMock = cluster.NewBaseBownerMock(
-			&cluster.Bck{Bck: bck, Props: &cmn.BucketProps{
-				Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
-				LRU:    cmn.LRUConf{Enabled: true},
-				Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
-			}},
-		)
+		props = &cmn.BucketProps{
+			Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
+			LRU:    cmn.LRUConf{Enabled: true},
+			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
+		}
+		bck             = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
+		bmdMock         = cluster.NewBaseBownerMock(&cluster.Bck{Bck: bck})
 		tMock           = cluster.NewTargetMock(bmdMock)
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}
