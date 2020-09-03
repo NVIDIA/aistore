@@ -737,8 +737,12 @@ func headBucket(bck cmn.Bck) (p *cmn.BucketProps, err error) {
 	if p, err = api.HeadBucket(defaultAPIParams, bck); err == nil {
 		return
 	}
-	if httpErr, ok := err.(*cmn.HTTPError); ok && httpErr.Status == http.StatusNotFound {
-		err = fmt.Errorf("bucket %q does not exist", bck)
+	if httpErr, ok := err.(*cmn.HTTPError); ok {
+		if httpErr.Status == http.StatusNotFound {
+			err = fmt.Errorf("bucket %q does not exist", bck)
+		} else {
+			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck, http.StatusText(httpErr.Status))
+		}
 	} else {
 		err = fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)
 	}

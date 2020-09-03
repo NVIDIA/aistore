@@ -3588,7 +3588,7 @@ func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, err er
 	} else if res.status == http.StatusGone {
 		err = cmn.NewErrorCloudBucketOffline(bck.Bck, pname)
 	} else if res.err != nil {
-		err = fmt.Errorf("%s: %s, target %s, err: %v", pname, bck, tsi, res.err)
+		err = fmt.Errorf("%s: %s, target %s, err: %s", pname, bck, tsi, http.StatusText(res.status))
 	} else {
 		header = res.header
 	}
