@@ -676,18 +676,20 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if lom.Bck().IsAIS() && lom.VerConf().Enabled {
-		lom.Load() // need to know the current version if versioning enabled
-	}
-	if objSrc, hasObjSrc := lom.GetCustomMD(cluster.SourceObjMD); hasObjSrc && objSrc != cluster.SourceWebObjMD {
-		bck := lom.Bck()
-		if bck.IsAIS() {
-			t.invalmsghdlr(w, r, "cannot override cloud-downloaded object")
-			return
-		}
-		if bck.BackendBck().Provider != objSrc {
-			t.invalmsghdlr(w, r, "cannot override cloud-downloaded object with an object from different cloud provider")
-			return
+	if lom.Load() == nil { // if exists, check custom md
+		srcProvider, hasSrc := lom.GetCustomMD(cluster.SourceObjMD)
+		if hasSrc && srcProvider != cluster.SourceWebObjMD {
+			bck := lom.Bck()
+			if bck.IsAIS() {
+				t.invalmsghdlrf(w, r,
+					"bucket %s: cannot override %s-downloaded object", bck, srcProvider)
+				return
+			}
+			if b := bck.BackendBck(); b != nil && b.Provider != srcProvider {
+				t.invalmsghdlrf(w, r,
+					"bucket %s: cannot override %s-downloaded object", b, srcProvider)
+				return
+			}
 		}
 	}
 	lom.SetAtimeUnix(started.UnixNano())
