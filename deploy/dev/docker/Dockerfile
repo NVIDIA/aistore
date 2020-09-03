@@ -53,7 +53,7 @@ ENV MOUNTPATH /tmp/ais
 COPY aisnode_config.sh aisnode_config.sh
 COPY entrypoint/entrypoint.sh entrypoint.sh
 
-RUN go get -v github.com/NVIDIA/aistore || echo "cloned"
+RUN go get -v github.com/NVIDIA/aistore
 WORKDIR "${GOPATH}/src/github.com/NVIDIA/aistore"
 
 

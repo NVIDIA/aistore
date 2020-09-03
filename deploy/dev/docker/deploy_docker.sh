@@ -1,5 +1,7 @@
 #!/bin/bash
-set -x
+
+set -e
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 name=$(basename "$0")
 
@@ -271,34 +273,31 @@ fi
 parse_cld_providers
 
 touch $LOCAL_AWS
-echo $AIS_CLD_PROVIDERS
+echo "Configured cloud providers: '${AIS_CLD_PROVIDERS}'"
 if [[ "${AIS_CLD_PROVIDERS}" == *aws* ]]; then
     echo "Enter the location of your AWS configuration and credentials files:"
     echo "Note: No input will result in using the default aws dir (~/.aws/)"
     read aws_env
 
-    if [ -z "$aws_env" ]; then
-        AWS_ENV="~/.aws/"
+    if [[ -z ${aws_env} ]]; then
+        AWS_ENV="${HOME}/.aws/"
     fi
+
     AWS_ENV="${AWS_ENV/#\~/$HOME}"
     temp_file="${AWS_ENV}/credentials"
-    if [ -f $"$temp_file" ]; then
-        cp $"$temp_file"  ${LOCAL_AWS}
+    if [[ -f ${temp_file} ]]; then
+        cp ${temp_file} ${LOCAL_AWS}
     else
         echo "No AWS credentials file found in specified directory. Exiting..."
         exit 1
     fi
 
-    # By default, the region field is found in the aws config file.
-    # Sometimes it is found in the credentials file.
-    if [ $(cat "$temp_file" | grep -c "region") -eq 0 ]; then
-        temp_file="${AWS_ENV}/config"
-        if [ -f $"$temp_file" ] && [ $(cat $"$temp_file" | grep -c "region") -gt 0 ]; then
-            grep region "$temp_file" >> ${LOCAL_AWS}
-        else
-            echo "No region config field found in aws directory. Exiting..."
-            exit 1
-        fi
+    temp_file="${AWS_ENV}/config"
+    if [[ -f ${temp_file} ]] && [[ $(cat ${temp_file} | grep -c "region") -gt 0 ]]; then
+        grep region ${temp_file} >> ${LOCAL_AWS}
+    else
+        echo "No region config field found in aws directory. Exiting..."
+        exit 1
     fi
 
     sed -i 's/\[default\]//g' ${LOCAL_AWS}
@@ -318,9 +317,9 @@ if [ "$CLUSTER_CNT" -eq 0 ]; then
 fi
 
 if [[ -z "${NETWORK// }" ]]; then
-	echo Enter s for single network configuration or m for multi-network configuration..
+    echo "Enter 's' for single network configuration or 'm' for multi-network configuration:"
     read network_config
-	if [ "$network_config" = "s" ]; then
+    if [ "$network_config" = "s" ]; then
         NETWORK="single"
     elif [ $network_config = 'm' ] ; then
         NETWORK="multi"
@@ -396,18 +395,17 @@ fi
 
 PORT_INTRA_CONTROL=9080
 PORT_INTRA_DATA=10080
-i
 export PORT=51080
 export AIS_NO_DISK_IO=${NODISKIO}
 export AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}
 # Setting the IP addresses for the containers
 echo "Network type: ${NETWORK}"
 for ((i=0; i<${CLUSTER_CNT}; i++)); do
-    PUB_NET="172.5$((0 + ($i * 3))).0"
+    PUB_NET="172.5$((0 + (i * 3))).0"
     PUB_SUBNET="${PUB_NET}.0/24"
-    INT_CONTROL_NET="172.5$((1 + ($i * 3))).0"
+    INT_CONTROL_NET="172.5$((1 + (i * 3))).0"
     INT_CONTROL_SUBNET="${INT_CONTROL_NET}.0/24"
-    INT_DATA_NET="172.5$((2 + ($i * 3))).0"
+    INT_DATA_NET="172.5$((2 + (i * 3))).0"
     INT_DATA_SUBNET="${INT_DATA_NET}.0/24"
 
     if [ $i -eq 0 ]; then
@@ -427,25 +425,25 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export UID # (see docker compose files)
     export CLUSTER=${i}
 
-    for j in `seq 2 $((($TARGET_CNT + $PROXY_CNT + 1) * $CLUSTER_CNT))`; do
+    for j in $(seq 2 $(((TARGET_CNT + PROXY_CNT + 1) * CLUSTER_CNT))); do
         IPV4LIST="${IPV4LIST}${PUB_NET}.$j,"
     done
     if [ "$IPV4LIST" != "" ]; then
-        IPV4LIST=${IPV4LIST::-1} # remove last ","
+        IPV4LIST=${IPV4LIST/%?/} # remove last ","
     fi
 
     if [ "${NETWORK}" = "multi" ]; then
         # IPV4LIST_INTRA
-        for j in `seq 2 $((($TARGET_CNT + $PROXY_CNT + 1) * $CLUSTER_CNT))`; do
+        for j in $(seq 2 $(((TARGET_CNT + PROXY_CNT + 1) * CLUSTER_CNT))); do
             IPV4LIST_INTRA_CONTROL="${IPV4LIST_INTRA_CONTROL}${INT_CONTROL_NET}.$j,"
         done
-        IPV4LIST_INTRA_CONTROL=${IPV4LIST_INTRA_CONTROL::-1} # remove last ","
+        IPV4LIST_INTRA_CONTROL=${IPV4LIST_INTRA_CONTROL/%?/} # remove last ","
 
-        #IPV4LIST_INTRA_DATA
-        for j in `seq 2 $((($TARGET_CNT + $PROXY_CNT + 1) * $CLUSTER_CNT))`; do
+        # IPV4LIST_INTRA_DATA
+        for j in $(seq 2 $(((TARGET_CNT + PROXY_CNT + 1) * CLUSTER_CNT))); do
             IPV4LIST_INTRA_DATA="${IPV4LIST_INTRA_DATA}${INT_DATA_NET}.$j,"
         done
-        IPV4LIST_INTRA_DATA=${IPV4LIST_INTRA_DATA::-1} # remove last ","
+        IPV4LIST_INTRA_DATA=${IPV4LIST_INTRA_DATA/%?/} # remove last ","
     fi
 
     save_env
