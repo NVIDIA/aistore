@@ -8,7 +8,6 @@ git clone https://github.com/NVIDIA/aistore.git $TMP_DIR
 rm -rf $TMP_DIR/3rdparty $TMP_DIR/python-client $TMP_DIR/cmn/tests $TMP_DIR/.git
 find $TMP_DIR -type f | grep -v "\.\(md\|png\|xml\|jpeg\|json\|jpg\|gif\)" | xargs rm
 find $TMP_DIR -type d -empty -delete
-
 for f in $(find $TMP_DIR -type f); do
   dname=$(dirname $f)
   dname=${dname#"$TMP_DIR"}
@@ -16,6 +15,9 @@ for f in $(find $TMP_DIR -type f); do
 
   header=""
   footer=""
+  if [[ "$f" == "${TMP_DIR}/README.md" ]]; then
+    footer="{% include_relative videos.md %}"
+  fi
   if [[ $(echo "$f" | grep ".*README.md$") ]]; then
     bname=""
     if [[ $dname != "" ]]; then
@@ -29,7 +31,6 @@ for f in $(find $TMP_DIR -type f); do
     if [[ $dname == "" ]]; then
       header="---\nlayout: post\ntitle: AIStore - scalable storage for AI applications\npermalink: /\nredirect_from:\n  - /README.md/\n  - README.md/\n---\n"
     fi
-    footer="{% include_relative videos.md %}"
   elif [[ $(echo "$f" | grep ".*\.md$") ]]; then
     bname=$(basename $f .md)
     title=${bname^^} # uppercase

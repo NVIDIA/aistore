@@ -25,4 +25,4 @@ TO DESTROY
 ==========
 Usage: helm del --purge ais-test
 ```
-{% include_relative videos.md %}
+

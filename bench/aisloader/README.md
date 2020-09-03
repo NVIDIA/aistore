@@ -364,4 +364,4 @@ new dashboards and panels, please follow: [grafana tutorial](http://docs.grafana
 When selecting a series in panel view, it should be in the format: `stats.aisloader.<loader>.*`.
 Remember that metrics will not be visible (and you will not be able to select
 them) until you start the loader.
-{% include_relative videos.md %}
+

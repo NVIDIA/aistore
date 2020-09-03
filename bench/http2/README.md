@@ -57,4 +57,4 @@ $ go run put_files.go -files 80 -filesize 50 -bucket local_benchmark_bucket -wor
 - Read chunk size cannot be modified
 - Redirects are not followed by nghttp2, so the benchmark must be pointed directly to one target
 - [server_push_http2_bench](./server_push_http2_bench) uses only one concurrent client
-{% include_relative videos.md %}
+

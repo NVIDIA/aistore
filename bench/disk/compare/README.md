@@ -27,4 +27,4 @@ This continuously writes the benchmark data to `/path/to/results.csv`.
 During this time, load can be generated on the disks by using [`loadgen.sh`](../loadgen) in a different terminal. Note that the corresponding mount points corresponding to the disks need to be passed. This can be obtained with the `lsblk` command, the value under the `MOUNTPOINT` column is the corresponding mount point.
 
 The benchmark can be stopped at any time by pressing `ctrl+c` in the controlling terminal.
-{% include_relative videos.md %}
+

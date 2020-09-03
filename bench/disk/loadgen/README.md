@@ -38,4 +38,4 @@ $ sudo -E /bin/bash ./loadgen.sh /ais/sda / /ais/sdc
 | workers | number of workers | 1 |
 | iobatch | number of io operations a worker performs on a mount point before switching | 1000 |
 | pct_read | percentage of io operations that are read requests | 75 |
-{% include_relative videos.md %}
+

@@ -53,4 +53,4 @@ For the full list of supported command line arguments:
 ```console
 $ BUCKET=<bucket name> go test ./tests -v -p 1 -run=Regression -foo=bar
 ```
-{% include_relative videos.md %}
+

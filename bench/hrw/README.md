@@ -19,4 +19,4 @@ For a detailed analysis of the experiment results, please refer to this [PDF](ex
 ```console
 $ go test -tags hrw -bench=. 
 ```
-{% include_relative videos.md %}
+

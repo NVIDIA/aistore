@@ -110,4 +110,4 @@ It is possible to locally build an image and upload it to selected registry.
 $ ./build_image.sh <TAG>
 $ ./upload_image.sh <REGISTRY_URL> <TAG>
 ```
-{% include_relative videos.md %}
+

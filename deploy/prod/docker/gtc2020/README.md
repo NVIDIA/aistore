@@ -78,4 +78,4 @@ $ docker run --name dl --network gtc -it --rm -p 8888:8888 gmaltby/dltorch-gtc:<
 ```
 
 Connect to http://localhost:8888 to access the Jupyter notebook; the password is 'root'.
-{% include_relative videos.md %}
+
