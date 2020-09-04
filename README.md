@@ -199,6 +199,10 @@ The rest of this section talks about a single Linux machine and, as such, is int
 
 * [Getting started with Docker](docs/docker_main.md).
 
+<!-- videoStart
+{% include_relative docker_videos.md %}
+videoEnd -->
+
 ### Local Kubernetes
 
 Yet another local-deployment option makes use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and is documented [here](deploy/dev/k8s/README.md).
