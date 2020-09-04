@@ -140,31 +140,23 @@ func (b *Bck) String() string {
 }
 
 func (b *Bck) Equal(other *Bck, sameID bool) bool {
-	if b.Name != other.Name {
+	left, right := b.Bck, other.Bck
+	left.Props, right.Props = nil, nil
+	if left != right {
 		return false
 	}
-	if b.Ns != other.Ns {
+	if sameID && b.Props != nil && other.Props != nil && b.Props.BID != other.Props.BID {
 		return false
 	}
-	if sameID {
-		if b.Props != nil && other.Props != nil {
-			if b.Props.BID != other.Props.BID {
-				return false
-			}
-		}
+	if b.HasBackendBck() != other.HasBackendBck() {
+		return false
 	}
-	if b.IsAIS() && other.IsAIS() {
-		return true
+	if b.HasBackendBck() && other.HasBackendBck() {
+		left, right = *b.BackendBck(), *other.BackendBck()
+		left.Props, right.Props = nil, nil
+		return left == right
 	}
-	if (b.HasBackendBck() && !other.HasBackendBck()) || (!b.HasBackendBck() && other.HasBackendBck()) {
-		// Case when either bck has backend bucket - we say it's a match since
-		// backend bucket was either connected or disconnected.
-		return true
-	}
-	if b.IsCloud() && other.IsCloud() {
-		return true
-	}
-	return b.IsRemoteAIS() && other.IsRemoteAIS()
+	return true
 }
 
 // NOTE: when the specified bucket is not present in the BMD:

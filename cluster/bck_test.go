@@ -67,11 +67,6 @@ var _ = Describe("Bck", func() {
 				NewBck("b", cmn.ProviderAIS, cmn.NsGlobal),
 			),
 			Entry(
-				"empty providers",
-				NewBck("a", "", cmn.NsGlobal),
-				NewBck("a", "", cmn.NsGlobal),
-			),
-			Entry(
 				"not matching local namespace",
 				NewBck("a", "", cmn.Ns{Name: "ns1"}),
 				NewBck("a", "", cmn.Ns{Name: "ns2"}),
@@ -101,6 +96,16 @@ var _ = Describe("Bck", func() {
 				NewBck("a", "", cmn.NsGlobal),
 				NewBck("a", cmn.ProviderAzure, cmn.NsGlobal),
 			),
+			Entry(
+				"not matching Cloud providers #4",
+				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
+				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
+			),
+			Entry(
+				"not matching Cloud providers #5",
+				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
+				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
+			),
 		)
 
 		DescribeTable("should be equal",
@@ -108,6 +113,11 @@ var _ = Describe("Bck", func() {
 				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
 				Expect(a.Equal(b, true /*same BID*/)).To(BeTrue())
 			},
+			Entry(
+				"empty providers",
+				NewBck("a", "", cmn.NsGlobal),
+				NewBck("a", "", cmn.NsGlobal),
+			),
 			Entry(
 				"matching AIS providers",
 				NewBck("a", cmn.ProviderAIS, cmn.NsGlobal),
@@ -122,16 +132,6 @@ var _ = Describe("Bck", func() {
 				"matching cloud namespaces",
 				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
 				NewBck("a", cmn.ProviderAIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
-			),
-			Entry(
-				"matching Cloud providers",
-				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
-				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
-			),
-			Entry(
-				"matching Cloud providers #2",
-				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
-				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
 			),
 		)
 	})
