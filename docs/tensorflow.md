@@ -62,4 +62,3 @@ train_dataset = tf.data.TFRecordDataset(filenames=[
 
 model.fit(train_dataset, ...)
 ```
-

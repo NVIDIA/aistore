@@ -22,4 +22,3 @@ For downloading and installing the latest binary release run [this](/aistore/cmd
 
 This is a load testing tool for run various stress tests on the AIS cluster.
 For downloading and installing the latest binary release run [this](/aistore/cmd/aisloader/install_bin.sh).
-

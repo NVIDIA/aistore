@@ -25,4 +25,3 @@ TO DESTROY
 ==========
 Usage: helm del --purge ais-test
 ```
-

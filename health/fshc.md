@@ -46,4 +46,3 @@ $ curl -i -X PUT -H 'Content-Type: application/json' \
 	-d '{"action": "setconfig","name": "fschecker_enabled", "value": "true"}' \
 	http://localhost:8084/v1/daemon
 ```
-

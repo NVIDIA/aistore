@@ -490,4 +490,3 @@ The options for init message describe the most important values of the query.
 | `where.filter` | Filter to apply when traversing objects | Filter is recursive data structure that can describe multiple filters which should be applied. |
 
 Init message returns `handle` that should be used in NextQueryResults API call.
-

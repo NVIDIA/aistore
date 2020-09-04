@@ -204,4 +204,3 @@ ClusterOwner-srv1       Full access to cluster 78df35690[srv1]
 Guest-2xs35th89         Read-only access to buckets of cluster 2xs35th89
 Guest-srv1              Read-only access to buckets of cluster 78df35690[srv1]
 ```
-

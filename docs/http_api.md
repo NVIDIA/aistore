@@ -195,4 +195,3 @@ More usage examples can be found in the [README that describes AIS configuration
 ### ETL
 
 For API Reference of ETL please refer to [ETL Readme](/aistore/docs/etl.md#api-reference)
-

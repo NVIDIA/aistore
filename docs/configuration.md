@@ -257,4 +257,3 @@ $ ais show config 844974_8080 --json | jq '.timeout.list_timeout'
 ```
 
 The example above demonstrates cluster-wide configuration update but note: single-node updates are also supported.
-

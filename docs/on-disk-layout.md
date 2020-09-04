@@ -46,4 +46,3 @@ For the purposes of full disclosure and/or in-depth review, following are initia
 In addition to user data, AIStore stores, maintains, and utilizes itself a relatively small number of system files that serve a variety of different purposes. Full description of the AIStore *persistence* would not be complete without listing those files (and their respective purposes) - for details, please refer to:
 
 * [System Files](./sysfiles.md)
-

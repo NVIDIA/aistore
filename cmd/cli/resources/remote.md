@@ -74,4 +74,3 @@ $ ais show remote
 UUID        URL                       Alias     Primary         Smap  Targets  Online
 <alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
 ```
-

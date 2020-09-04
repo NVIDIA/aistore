@@ -43,4 +43,3 @@ AIS proxy and AIS target (executables) both support the following command-line a
 ```console
 $ $GOPATH/bin/aisnode --help
 ```
-

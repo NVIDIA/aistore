@@ -57,4 +57,3 @@ Used internally by almost all our [Makefile](/aistore/Makefile) commands.
 ## utils.sh
 
 A collection of common `shell` functions.
-

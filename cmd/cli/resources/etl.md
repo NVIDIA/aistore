@@ -77,4 +77,3 @@ $ ais etl object JGHEoo89gg shards/shard-0.tar output.txt
 $ cat output.txt
 393c6706efb128fbc442d3f7d084a426
 ```
-

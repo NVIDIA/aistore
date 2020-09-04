@@ -17,4 +17,3 @@ redirect_from:
 | `cmd/authn` | `authn` | Server which provides a token-based secure access to AIStore | 
 | `cmd/cli` | `ais` | CLI to communicate with AIStore | 
 | `cmd/xmeta` | `xmeta` | Tool to format (or extract into plain text) assorted AIS control structures | 
-

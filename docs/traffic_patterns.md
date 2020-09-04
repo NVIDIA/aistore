@@ -73,4 +73,3 @@ In contrast with the Read and Write datapath, `list-objects` flow "engages" all 
    The proxy may also *cache* the entries for reuse across multiple clients and requests.
 
 ![](images/ais-list-flow.png)
-

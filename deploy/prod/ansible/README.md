@@ -73,4 +73,3 @@ $ parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/stopais.sh >/dev/nu
 ```console
 $ ansible-playbook -i inventory/cluster.ini getaislogs.yml
 ```
-

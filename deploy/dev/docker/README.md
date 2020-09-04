@@ -279,4 +279,3 @@ $ container_logs.sh CONTAINER_NAME
 ## Limitations
 
 Certain tests require the ability to modify files/directories or set extended attributes(xattrs) directly onto the filesystem of a container. These tests are currently skipped when using Docker because of Docker's write protection of container volumes.
-

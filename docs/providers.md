@@ -153,4 +153,3 @@ And one final comment:
 You can run `ais remote attach` and/or `ais show remote` CLI to *refresh* remote configuration: check availability and reload cluster maps.
 In other words, repeating the same `ais attach remote` command will have the side effect of refreshing all the currently configured attachments.
 Or, use `ais show remote` CLI for the same exact purpose.
-

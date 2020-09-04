@@ -40,4 +40,3 @@ The example above uses [AIS CLI](/aistore/cmd/cli/README.md) to:
 - [AIS Loader](/aistore/bench/aisloader/README.md) has been extended to benchmark and stress test AIS clusters by running a number of pre-defined transformations that we include with the source code.
 
 For more information and details, please refer to [ETL readme](/aistore/docs/etl.md).
-

@@ -137,4 +137,3 @@ Note that more specialized use cases which warrant custom memory managers with f
 Usage:
 
 To access the global memory manager, a single call to `memsys.Init()` is all that is required. Separate `Init()` nor `Run()` calls should not be made on the returned MMSA instance.
-

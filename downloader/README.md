@@ -351,4 +351,3 @@ Name | Type | Description | Optional?
 ```console
 $ curl -Li -H 'Content-Type: application/json' -d '{"id": "5JjIuGemR"}' -X DELETE 'http://localhost:8080/v1/download/remove'
 ```
-

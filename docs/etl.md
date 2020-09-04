@@ -268,4 +268,3 @@ Alternatively, you can use [ETL CLI](/aistore/cmd/cli/resources/etl.md) or [AIS 
 | List ETLs | Lists all running ETLs | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
 | Transform object | Transforms an object based on ETL with `ETL_ID` | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
 | Stop ETL | Stops ETL with given `ETL_ID` | DELETE /v1/etl/stop/ETL_ID | `curl -X DELETE 'http://G/v1/etl/stop/ETL_ID'` |
-

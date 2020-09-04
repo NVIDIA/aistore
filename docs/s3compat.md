@@ -70,4 +70,3 @@ S3_ENDPOINT=10.0.0.20:8080/s3 S3_USE_HTTPS=0 python mnist.py
 Here is the screencast of the TF training in action:
 
 <img src="/aistore/docs/images/ais-s3-tf.gif" alt="TF training in action">
-

@@ -619,4 +619,3 @@ Creates `obj` in bucket `mybucket` which is concatenation of sorted files from `
 ```console
 $ ais concat dirB dirA mybucket/obj
 ```
-

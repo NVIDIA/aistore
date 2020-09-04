@@ -41,4 +41,3 @@ When an xaction such as `list-objects` is triggered by a user, AIStore internall
 5. The user then includes the provided xaction ID in the following requests, which may include checking the status of xaction, or fetching results, etc.
 6. A proxy on receiving a follow-up request with xaction ID, reverse-proxies to any/selected IC member.
 7. In the background, IC members track the xaction by periodically probing the targets running the xaction and listening to the notification sent by the targets.
-

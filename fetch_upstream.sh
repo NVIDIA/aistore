@@ -14,10 +14,6 @@ for f in $(find $TMP_DIR -type f); do
   dname=${dname#/}
 
   header=""
-  footer=""
-  if [[ "$f" == "${TMP_DIR}/README.md" ]]; then
-    footer="{% include_relative videos.md %}"
-  fi
   if [[ $(echo "$f" | grep ".*README.md$") ]]; then
     bname=""
     if [[ $dname != "" ]]; then
@@ -43,9 +39,10 @@ for f in $(find $TMP_DIR -type f); do
   fi
 
   echo "$(echo -e ${header} | cat - $f)" > $f # insert ${header} as first lines
-  echo "$(echo -e ${footer})" >> $f # insert ${footer} as first lines
   ex -sc '%s/"\/docs/"\/aistore\/docs/g' -cx $f # `"/docs/..."` => `"/aistore/docs/..."`
   ex -sc '%s/](\//](\/aistore\//g' -cx $f # `(/...` => `(/aistore/...`
+  ex -sc '%s/<\!\-\-\ videoStart//g' -cx $f # uncommenting the videos section
+  ex -sc '%s/videoEnd\ \-\->//g' -cx $f # uncommenting the videos section
 done
 
 cp -r $TMP_DIR/* "$OUT_DIR"/

@@ -51,4 +51,3 @@ All the following examples assume that the action is `delete` and the bucket nam
 - dir-1/obj-08
 
 `"value": {"template": "dir-10/"}` - the template defines no ranges, so the request deletes all objects which names start with `dir-10/`
-

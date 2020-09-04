@@ -327,4 +327,3 @@ There are **no** designed-in limitations on the:
 * numbers of gateways and storage targets in AIS cluster
 
 Ultimately, the limit on object size may be imposed by a local filesystem of choice and a physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center. But as far as AIS itself, it does not impose any limitations whatsoever.
-
