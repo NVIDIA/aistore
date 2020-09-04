@@ -184,6 +184,7 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 	if err == nil {
 		cmn.Assert(!backend.HasBackendBck())
 	}
+	b.Props.BackendBck = backend.Bck
 	return
 }
 
