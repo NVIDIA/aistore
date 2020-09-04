@@ -112,9 +112,9 @@ func (lom *LOM) Config() *cmn.Config {
 	}
 	return lom.config
 }
-func (lom *LOM) MirrorConf() *cmn.MirrorConf { return &lom.Bprops().Mirror }
-func (lom *LOM) CksumConf() *cmn.CksumConf   { return lom.bck.CksumConf() }
-func (lom *LOM) VerConf() *cmn.VersionConf   { return &lom.Bprops().Versioning }
+func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
+func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
+func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil

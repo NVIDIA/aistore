@@ -179,7 +179,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 			glog.Errorf("%s: PUT failed, err: %v", lom, err)
 			return
 		}
-		if lom.VerConf().Enabled {
+		if lom.VersionConf().Enabled {
 			lom.SetVersion(version)
 		}
 	}
@@ -198,7 +198,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	if bck.IsAIS() && lom.VerConf().Enabled && !poi.migrated {
+	if bck.IsAIS() && lom.VersionConf().Enabled && !poi.migrated {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}
@@ -426,7 +426,7 @@ do:
 	}
 	// exists && remote|cloud: check ver if requested
 	if !coldGet && goi.lom.Bck().IsRemote() {
-		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
+		if goi.lom.Version() != "" && goi.lom.VersionConf().ValidateWarmGet {
 			goi.lom.Unlock(false)
 			if coldGet, err, errCode = goi.t.CheckCloudVersion(goi.ctx, goi.lom); err != nil {
 				goi.lom.Uncache()

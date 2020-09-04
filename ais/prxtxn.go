@@ -666,7 +666,7 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 	nprops = bprops.Clone()
 	nprops.Apply(propsToUpdate)
 	if bck.IsCloud() {
-		bv, nv := bprops.Versioning.Enabled, nprops.Versioning.Enabled
+		bv, nv := bck.VersionConf().Enabled, nprops.Versioning.Enabled
 		if bv != nv {
 			// NOTE: bprops.Versioning.Enabled must be previously set via httpbckhead
 			err = fmt.Errorf("%s: cannot modify existing Cloud bucket versioning (%s, %s)",

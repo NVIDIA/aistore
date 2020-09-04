@@ -230,6 +230,15 @@ func (b *Bck) InitNoBackend(bowner Bowner, si *Snode) (err error) {
 
 func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }
 
+func (b *Bck) VersionConf() cmn.VersionConf {
+	if b.HasBackendBck() && b.Props.BackendBck.Props != nil {
+		conf := b.Props.BackendBck.Props.Versioning
+		conf.ValidateWarmGet = b.Props.Versioning.ValidateWarmGet
+		return conf
+	}
+	return b.Props.Versioning
+}
+
 //
 // access perms
 //

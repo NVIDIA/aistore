@@ -1037,7 +1037,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	for k, v := range bucketProps {
 		if k == cmn.HeaderBucketVerEnabled && bck.Props != nil {
-			if curr := strconv.FormatBool(bck.Props.Versioning.Enabled); curr != v {
+			if curr := strconv.FormatBool(bck.VersionConf().Enabled); curr != v {
 				// e.g., change via vendor-provided CLI and similar
 				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t.si, bck, v, curr)
 			}

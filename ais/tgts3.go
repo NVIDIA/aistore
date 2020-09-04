@@ -134,7 +134,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 			return
 		}
 	}
-	if lom.Bck().IsAIS() && lom.VerConf().Enabled {
+	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
 		lom.Load() // need to know the current version if versioning enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())

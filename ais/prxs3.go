@@ -474,12 +474,7 @@ func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request,
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	props, exists := p.owner.bmd.get().Get(bck)
-	if !exists {
-		p.invalmsghdlr(w, r, "bucket does not exists", http.StatusNotFound)
-		return
-	}
-	resp := s3compat.NewVersioningConfiguration(props.Versioning.Enabled)
+	resp := s3compat.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
 	b := resp.MustMarshal()
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentXML)
 	w.Write(b)
