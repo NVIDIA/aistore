@@ -362,7 +362,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 	if req, err = newRequest(reqArgs); err != nil {
 		return
 	}
-	if resp, err = client.Do(req); !shouldRetryHTTP(err, resp.StatusCode) {
+	if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {
 		goto exit
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
@@ -381,7 +381,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 			r.Close()
 			return
 		}
-		if resp, err = client.Do(req); !shouldRetryHTTP(err, resp.StatusCode) {
+		if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {
 			goto exit
 		}
 	}
@@ -396,9 +396,11 @@ exit:
 	return
 }
 
-func shouldRetryHTTP(err error, status int) bool {
-	return status == http.StatusTooManyRequests ||
-		(err != nil && (cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err)))
+func shouldRetryHTTP(err error, resp *http.Response) bool {
+	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
+		return true
+	}
+	return err != nil && (cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err))
 }
 
 // FlushObject API
