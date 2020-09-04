@@ -207,6 +207,7 @@ The rest of this section talks about a single Linux machine and, as such, is int
 [Local Playground](#local-playground) is probably the speediest option to run AIS clusters. However, to take advantage of containerization (which includes, for instance, multiple logically-isolated configurable networks), you can also run AIStore as described here:
 
 * [Getting started with Docker](docs/docker_main.md).
+{% include youtubePlayer.html id="VY5rLdflTqU" %}
 
 ### Local Kubernetes
 
@@ -343,4 +344,3 @@ MIT
 ## Author
 
 Alex Aizman (NVIDIA)
-{% include_relative videos.md %}
