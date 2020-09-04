@@ -636,7 +636,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	bmd.Range(nil, nil, func(obck *cluster.Bck) bool {
 		var present bool
 		newBMD.Range(nil, nil, func(nbck *cluster.Bck) bool {
-			if !obck.Equal(nbck, false /*ignore BID*/) {
+			if !obck.Equal(nbck, false /*ignore BID*/, false /* ignore backend */) {
 				return false
 			}
 			present = true

@@ -333,7 +333,8 @@ func (e *bccEntry) Get() cmn.Xact { return e.xact }
 
 func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
 	prev := previousEntry.(*bccEntry)
-	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckFrom.Equal(e.bckFrom, true /*same BID*/) {
+	bckEq := prev.bckFrom.Equal(e.bckFrom, true /*same BID*/, true /* same backend */)
+	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition
 		keep = true
 		return
@@ -428,7 +429,8 @@ func (e *FastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err e
 		// TODO: more checks
 	}
 	prev := previousEntry.(*FastRenEntry)
-	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckTo.Equal(e.bckTo, false /*sameID*/) {
+	bckEq := prev.bckTo.Equal(e.bckTo, false /*sameID*/, false /* same backend */)
+	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition
 		keep = true
 		return

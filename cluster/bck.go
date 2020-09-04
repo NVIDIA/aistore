@@ -139,7 +139,7 @@ func (b *Bck) String() string {
 	return fmt.Sprintf("%s(%#x%s)", b.Bck.String(), bid, s)
 }
 
-func (b *Bck) Equal(other *Bck, sameID bool) bool {
+func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 	left, right := b.Bck, other.Bck
 	left.Props, right.Props = nil, nil
 	if left != right {
@@ -148,8 +148,8 @@ func (b *Bck) Equal(other *Bck, sameID bool) bool {
 	if sameID && b.Props != nil && other.Props != nil && b.Props.BID != other.Props.BID {
 		return false
 	}
-	if b.HasBackendBck() != other.HasBackendBck() {
-		return false
+	if !sameBackend {
+		return true
 	}
 	if b.HasBackendBck() && other.HasBackendBck() {
 		left, right = *b.BackendBck(), *other.BackendBck()

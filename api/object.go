@@ -365,7 +365,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 	if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {
 		goto exit
 	}
-	if resp.StatusCode == http.StatusTooManyRequests {
+	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		sleep = httpRetryRateSleep
 	}
 	for i := 0; i < httpMaxRetries; i++ {

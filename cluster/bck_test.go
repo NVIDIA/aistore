@@ -59,7 +59,7 @@ var _ = Describe("Bck", func() {
 		DescribeTable("should not be equal",
 			func(a, b *Bck) {
 				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
-				Expect(a.Equal(b, true /*same BID*/)).To(BeFalse())
+				Expect(a.Equal(b, true /*same BID*/, true /* same backend*/)).To(BeFalse())
 			},
 			Entry(
 				"not matching names",
@@ -111,7 +111,7 @@ var _ = Describe("Bck", func() {
 		DescribeTable("should be equal",
 			func(a, b *Bck) {
 				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
-				Expect(a.Equal(b, true /*same BID*/)).To(BeTrue())
+				Expect(a.Equal(b, true /*same BID*/, true /* same backend */)).To(BeTrue())
 			},
 			Entry(
 				"empty providers",

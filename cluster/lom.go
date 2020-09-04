@@ -118,7 +118,8 @@ func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
-	if lom.MirrorConf().Enabled && lom.Bck().Equal(from.Bck(), true /* must have same BID*/) {
+	bckEq := lom.Bck().Equal(from.Bck(), true /* must have same BID*/, true /* same backend */)
+	if lom.MirrorConf().Enabled && bckEq {
 		lom.setCopiesMd(from.FQN, from.ParsedFQN.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
 			lom.addCopyMd(fqn, mpathInfo)
@@ -413,7 +414,8 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}
-	if lom.IsHRW() && lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck(), true /* must have same BID*/) {
+	bckEq := lom.Bck().Equal(dst.Bck(), true /* must have same BID*/, true /* same backend */)
+	if lom.IsHRW() && lom.MirrorConf().Enabled && bckEq {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
 				if errRemove := os.Remove(dst.FQN); errRemove != nil {
