@@ -50,7 +50,7 @@ type (
 // create-bucket: { check non-existence -- begin -- create locally -- metasync -- commit }
 func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHeader ...http.Header) error {
 	var (
-		bucketProps = cmn.DefaultBucketProps()
+		bucketProps = cmn.DefaultAISBckProps()
 		nlp         = bck.GetNameLockPair()
 	)
 
@@ -58,7 +58,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		bucketProps = bck.Props
 	}
 	if len(cloudHeader) != 0 {
-		cloudProps := cmn.CloudBucketProps(cloudHeader[0])
+		cloudProps := cmn.DefaultCloudBckProps(cloudHeader[0])
 		if bck.Props == nil {
 			bucketProps = cloudProps
 		} else {
@@ -248,7 +248,19 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 			return
 		}
 	case cmn.ActResetBprops:
-		nprops = cmn.DefaultBucketProps()
+		if bck.IsCloud() {
+			if bck.HasBackendBck() {
+				err = fmt.Errorf("%q has backend %q, detach the backend bucket before resetting the props", bck.Bck, bck.BackendBck())
+				return
+			}
+			cloudProps, err := p.headCloudBck(bck.Bck, nil)
+			if err != nil {
+				return "", err
+			}
+			nprops = cmn.DefaultCloudBckProps(cloudProps)
+		} else {
+			nprops = cmn.DefaultAISBckProps()
+		}
 	default:
 		cmn.Assert(false)
 	}

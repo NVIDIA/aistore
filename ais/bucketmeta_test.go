@@ -38,7 +38,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		for _, provider := range []string{cmn.ProviderAIS, cmn.ProviderAmazon} {
 			for i := 0; i < 10; i++ {
 				bck := cluster.NewBck(fmt.Sprintf("local%d", i), provider, cmn.NsGlobal)
-				bmd.add(bck, cmn.DefaultBucketProps())
+				bmd.add(bck, cmn.DefaultAISBckProps())
 			}
 		}
 	})
@@ -87,7 +87,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 							bck := cluster.NewBck("abc"+cmn.GenTie(), cmn.ProviderAIS, cmn.NsGlobal)
 
 							// add bucket and save
-							clone.add(bck, cmn.DefaultBucketProps())
+							clone.add(bck, cmn.DefaultAISBckProps())
 							err := jsp.Save(testpath, clone, opts)
 							Expect(err).NotTo(HaveOccurred())
 

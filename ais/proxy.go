@@ -860,7 +860,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// make and validate nprops
-			bck.Props = cmn.DefaultBucketProps()
+			bck.Props = cmn.DefaultAISBckProps()
 			bck.Props.Provider = bck.Provider
 			bck.Props, err = p.makeNprops(bck, propsToUpdate, true /*creating*/)
 			if err != nil {
@@ -1312,8 +1312,9 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		started = time.Now()
-		query   = r.URL.Query()
+		started   = time.Now()
+		query     = r.URL.Query()
+		hasLatest bool
 	)
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -1334,12 +1335,13 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		if _, err = args.try(); err != nil {
 			return
 		}
+		hasLatest = true
 	}
 	if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessBckHEAD); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
-	if bck.IsAIS() {
+	if bck.IsAIS() || hasLatest {
 		p.bucketPropsToHdr(bck, w.Header())
 		return
 	}
@@ -3506,6 +3508,31 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 	return false
 }
 
+func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Header, err error) {
+	var (
+		tsi   *cluster.Snode
+		pname = p.si.String()
+		path  = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+	)
+	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {
+		return
+	}
+	q = cmn.AddBckToQuery(q, bck)
+
+	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
+	res := p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
+	if res.status == http.StatusNotFound {
+		err = cmn.NewErrorRemoteBucketDoesNotExist(bck, pname)
+	} else if res.status == http.StatusGone {
+		err = cmn.NewErrorCloudBucketOffline(bck, pname)
+	} else if res.err != nil {
+		err = fmt.Errorf("%s: %s, target %s, err: %v", pname, bck, tsi, res.err)
+	} else {
+		header = res.header
+	}
+	return
+}
+
 /////////////////////////////////////////////
 // lookup and add remote bucket on the fly //
 /////////////////////////////////////////////
@@ -3569,30 +3596,13 @@ func (args *remBckAddArgs) _tryAdd(bck *cluster.Bck) (err error) {
 
 func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, err error) {
 	var (
-		tsi   *cluster.Snode
-		pname = args.p.si.String()
-		path  = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		q = url.Values{}
 	)
-	if tsi, err = args.p.owner.smap.get().GetRandTarget(); err != nil {
-		return
-	}
-	q := cmn.AddBckToQuery(nil, bck.Bck)
 	if bck.IsHTTP() {
 		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)
 		q.Set(cmn.URLParamOrigURL, origURL)
 	}
-	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
-	res := args.p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
-	if res.status == http.StatusNotFound {
-		err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, pname)
-	} else if res.status == http.StatusGone {
-		err = cmn.NewErrorCloudBucketOffline(bck.Bck, pname)
-	} else if res.err != nil {
-		err = fmt.Errorf("%s: %s, target %s, err: %s", pname, bck, tsi, http.StatusText(res.status))
-	} else {
-		header = res.header
-	}
-	return
+	return args.p.headCloudBck(bck.Bck, q)
 }
 
 ////////////////

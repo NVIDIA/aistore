@@ -1278,7 +1278,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
-	conf := cmn.DefaultBucketProps().Cksum
+	conf := cmn.DefaultAISBckProps().Cksum
 
 	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, conf.Type)
 	tassert.SelectErr(t, errCh, "put", false)

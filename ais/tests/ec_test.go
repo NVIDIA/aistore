@@ -129,7 +129,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 	)
 
 	if !bck.IsAIS() {
-		bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Ns, cmn.DefaultBucketProps()))
+		bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Ns, cmn.DefaultAISBckProps()))
 	}
 
 	tMock := cluster.NewTargetMock(bmd)
@@ -2348,7 +2348,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	)
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		cksumType  = cmn.DefaultBucketProps().Cksum.Type
+		cksumType  = cmn.DefaultAISBckProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckReg)

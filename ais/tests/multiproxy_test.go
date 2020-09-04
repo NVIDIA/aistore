@@ -688,7 +688,7 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 		Name:     TestBucketName,
 		Provider: cmn.ProviderAIS,
 	}
-	cksumType := cmn.DefaultBucketProps().Cksum.Type
+	cksumType := cmn.DefaultAISBckProps().Cksum.Type
 loop:
 	for {
 		select {

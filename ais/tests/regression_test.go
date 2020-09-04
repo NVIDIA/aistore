@@ -76,7 +76,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		cksumType  = cmn.DefaultBucketProps().Cksum.Type
+		cksumType  = cmn.DefaultAISBckProps().Cksum.Type
 		subdir     = SmokeStr + "_" + cmn.GenTie()
 	)
 	smap := tutils.GetClusterMap(t, proxyURL)
@@ -245,7 +245,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		cksumType  = cmn.DefaultBucketProps().Cksum.Type
+		cksumType  = cmn.DefaultAISBckProps().Cksum.Type
 		subdir     = SmokeStr + "_" + cmn.GenTie()
 	)
 	if containers.DockerRunning() {
@@ -281,7 +281,7 @@ func TestRegressionBuckets(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL  = tutils.RandomProxyURL(t)
-		cksumType = cmn.DefaultBucketProps().Cksum.Type
+		cksumType = cmn.DefaultAISBckProps().Cksum.Type
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -302,7 +302,7 @@ func TestRenameBucket(t *testing.T) {
 			Name:     bck.Name + "_" + cmn.GenTie(),
 			Provider: cmn.ProviderAIS,
 		}
-		cksumType = cmn.DefaultBucketProps().Cksum.Type
+		cksumType = cmn.DefaultAISBckProps().Cksum.Type
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
@@ -434,7 +434,7 @@ func TestRenameObjects(t *testing.T) {
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
 		}
-		cksumType = cmn.DefaultBucketProps().Cksum.Type
+		cksumType = cmn.DefaultAISBckProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -1026,7 +1026,7 @@ func TestStressDeleteRange(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		cksumType = cmn.DefaultBucketProps().Cksum.Type
+		cksumType = cmn.DefaultAISBckProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)

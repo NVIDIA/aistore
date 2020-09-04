@@ -361,7 +361,7 @@ func (c *ECConf) RequiredRestoreTargets() int {
 //
 // by default, bucket props inherit global config
 //
-func DefaultBucketProps() *BucketProps {
+func DefaultAISBckProps() *BucketProps {
 	c := GCO.Clone()
 	if c.Cksum.Type == "" {
 		c.Cksum.Type = ChecksumXXHash
@@ -376,8 +376,8 @@ func DefaultBucketProps() *BucketProps {
 	}
 }
 
-func CloudBucketProps(header http.Header) (props *BucketProps) {
-	props = DefaultBucketProps()
+func DefaultCloudBckProps(header http.Header) (props *BucketProps) {
+	props = DefaultAISBckProps()
 	Assert(len(header) > 0)
 
 	props.Provider = header.Get(HeaderCloudProvider)
