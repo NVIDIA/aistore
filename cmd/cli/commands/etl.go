@@ -33,6 +33,16 @@ var (
 					Action:    etlInitHandler,
 				},
 				{
+					Name:  subcmdBuild,
+					Usage: "build",
+					Flags: []cli.Flag{
+						fromFileFlag,
+						depsFileFlag,
+						runtimeFlag,
+					},
+					Action: etlBuildHandler,
+				},
+				{
 					Name:   subcmdList,
 					Usage:  "list all ETLs",
 					Action: etlListHandler,
@@ -70,18 +80,44 @@ func etlInitHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "SPEC_FILE")
 	}
-	specPath := c.Args()[0]
-	f, err := os.Open(specPath)
-	if err != nil {
-		return err
-	}
-	spec, err := ioutil.ReadAll(f)
-	f.Close()
+	spec, err := ioutil.ReadFile(c.Args()[0])
 	if err != nil {
 		return err
 	}
 
 	id, err := api.ETLInit(defaultAPIParams, spec)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.App.Writer, "%s\n", id)
+	return nil
+}
+
+func etlBuildHandler(c *cli.Context) (err error) {
+	var msg etl.BuildMsg
+
+	fromFile := parseStrFlag(c, fromFileFlag)
+	if fromFile == "" {
+		return fmt.Errorf("%s flag cannot be empty", fromFileFlag.Name)
+	}
+	if msg.Code, err = ioutil.ReadFile(fromFile); err != nil {
+		return fmt.Errorf("failed to read file: %q, err: %v", fromFile, err)
+	}
+
+	depsFile := parseStrFlag(c, depsFileFlag)
+	if depsFile != "" {
+		if msg.Deps, err = ioutil.ReadFile(depsFile); err != nil {
+			return fmt.Errorf("failed to read file: %q, err: %v", depsFile, err)
+		}
+	}
+
+	msg.Runtime = parseStrFlag(c, runtimeFlag)
+
+	if err := msg.Validate(); err != nil {
+		return err
+	}
+
+	id, err := api.ETLBuild(defaultAPIParams, msg)
 	if err != nil {
 		return err
 	}

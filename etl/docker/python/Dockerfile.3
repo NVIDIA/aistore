@@ -1,0 +1,12 @@
+FROM python:3.8.3-alpine3.11
+
+WORKDIR /
+
+RUN pip --disable-pip-version-check install requests
+COPY server.py /server.py
+
+EXPOSE 80
+
+ENV PYTHONUNBUFFERED 1
+
+CMD [ "python", "/server.py" ]

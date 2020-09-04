@@ -2,7 +2,7 @@
 
 `ais etl init SPEC_FILE`
 
-Init transform with Pod yaml specification file.
+Init ETL with Pod yaml specification file.
 
 Note: as of AIStore v3.2 only one ETL at a time is supported.
 
@@ -28,6 +28,34 @@ spec:
           containerPort: 80
       command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
 $ ais etl init spec.yaml
+JGHEoo89gg
+```
+
+## Build ETL
+
+`ais etl build --from-file=CODE_FILE --runtime=RUNTIME [--deps-file=DEPS_FILE]`
+
+Builds and initializes ETL from provided `CODE_FILE` that contains transformation function named `transform`.
+The `transform` function must take `input_bytes` (raw bytes of the objects) as parameters and return transformed object (also raw bytes which will be saved into new object).
+
+> The ETL simply crashes if the function panics or throws exception.
+> Therefore, error handling should be done inside the function.
+
+Note: as of AIStore v3.2 only `python3` and `python2` runtimes are supported.
+
+### Example
+
+Build ETL that computes MD5 of the object.
+
+```console
+$ cat code.py
+import hashlib
+
+def transform(input_bytes):
+    md5 = hashlib.md5()
+    md5.update(input_bytes)
+    return md5.hexdigest().encode()
+$ ais etl build --from-file=code.py --runtime=python3
 JGHEoo89gg
 ```
 

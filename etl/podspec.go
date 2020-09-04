@@ -67,7 +67,7 @@ func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cmn.Dura
 	return cmn.DurationJSON(v), nil
 }
 
-func ValidateSpec(spec []byte) (msg Msg, err error) {
+func ValidateSpec(spec []byte) (msg InitMsg, err error) {
 	var (
 		errCtx = &cmn.ETLErrorContext{}
 	)

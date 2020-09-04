@@ -12,7 +12,8 @@
 which represents the data differently from the source(s) or in a different context than the source(s)" ([wikipedia](https://en.wikipedia.org/wiki/Extract,_transform,_load)).
 In order to run custom ETL transforms *inline* and *close to data*, AIStore supports running custom ETL containers *in the storage cluster* .
 
-As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io). Each specific transformation is defined by its specification - a regular Kubernetes YAML (see examples below).
+As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io).
+Each specific ETL is defined by its specification - a regular Kubernetes YAML (see examples below).
 
 * To start distributed ETL processing, a user needs to send documented **init** request to the AIStore endpoint.
 
@@ -84,110 +85,139 @@ Throughout the examples, we assume that 1. and 2. from [prerequisites](#prerequi
 ### Compute MD5 on the objects
 
 To showcase the capabilities of ETL, we will go over a simple ETL container that computes MD5 checksum of the object.
+There are two ways of approaching this problem:
 
-First, we need to write a server.
-In this case, we will write a Python 3 HTTP server.
-The code for it can look like this (`server.py`):
+1. **Simplified flow**
 
-```python
-#!/usr/bin/env python
-
-import argparse
-import hashlib
-from http.server import HTTPServer, BaseHTTPRequestHandler
-
-
-class S(BaseHTTPRequestHandler):
-    def _set_headers(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-
-    def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
+    In this example we will be using `python3` runtime.
+    In simplified flow we are only expected to write a simple `transform` function, which can look like this (`code.py`):
+    
+    ```python
+    import hashlib
+    
+    def transform(input_bytes):
         md5 = hashlib.md5()
-        md5.update(post_data)
+        md5.update(input_bytes)
+        return md5.hexdigest().encode()
+    ```
+   
+   Once we have `transform` function defined we can use CLI to build and initialize ETL:
+   ```console
+   $ ais etl build --from-file=code.py --runtime=python3
+   JGHEoo89gg
+   ```
 
-        self._set_headers()
-        self.wfile.write(md5.hexdigest().encode())
+2. **Regular flow**
 
-
-def run(server_class=HTTPServer, handler_class=S, addr="localhost", port=8000):
-    server_address = (addr, port)
-    httpd = server_class(server_address, handler_class)
-
-    print(f"Starting httpd server on {addr}:{port}")
-    httpd.serve_forever()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run a simple HTTP server")
-    parser.add_argument(
-        "-l",
-        "--listen",
-        default="localhost",
-        help="Specify the IP address on which the server listens",
-    )
-    parser.add_argument(
-        "-p",
-        "--port",
-        type=int,
-        default=8000,
-        help="Specify the port on which the server listens",
-    )
-    args = parser.parse_args()
-    run(addr=args.listen, port=args.port)
-```
-
-Once we have a server that computes the MD5, we need to create an image out of it.
-For that we need to write `Dockerfile` which can look like this:
-
-```dockerfile
-FROM python:3.8.3-alpine3.11
-
-RUN mkdir /code
-WORKDIR /code
-COPY server.py server.py
-
-EXPOSE 80
-
-ENTRYPOINT [ "/code/server.py", "--listen", "0.0.0.0", "--port", "80" ]
-```
-
-Once we have the docker file we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/), so our Kubernetes cluster can pull this image later.
-In this example, we will use [DockerHub](https://hub.docker.com/) Docker Registry.
-
-```console
-$ docker build -t user/md5_server:v1 .
-$ docker push user/md5_server:v1
-```
-
-The next step would be to create a pod spec that would be run on Kubernetes (`spec.yaml`):
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: transformer-md5
-  annotations:
-    communication_type: hpush://
-    wait_timeout: 1m
-spec:
-  containers:
-    - name: server
-      image: user/md5_server:v1
-      ports:
-        - name: default
-          containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
-```
-
-**Important**: the server listens on the same port as specified in `ports.containerPort`.
-This is required, as a target needs to know precise address of the ETL container.
-
-Another note is that we pass additional parameters via the `annotations` field.
-We specified the communication type and wait time (for the pod to start).
+    First, we need to write a server.
+    In this case, we will write a Python 3 HTTP server.
+    The code for it can look like this (`server.py`):
+    
+    ```python
+    #!/usr/bin/env python
+    
+    import argparse
+    import hashlib
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    
+    
+    class S(BaseHTTPRequestHandler):
+        def _set_headers(self):
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+    
+        def do_POST(self):
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            md5 = hashlib.md5()
+            md5.update(post_data)
+    
+            self._set_headers()
+            self.wfile.write(md5.hexdigest().encode())
+    
+    
+    def run(server_class=HTTPServer, handler_class=S, addr="localhost", port=8000):
+        server_address = (addr, port)
+        httpd = server_class(server_address, handler_class)
+    
+        print(f"Starting httpd server on {addr}:{port}")
+        httpd.serve_forever()
+    
+    
+    if __name__ == "__main__":
+        parser = argparse.ArgumentParser(description="Run a simple HTTP server")
+        parser.add_argument(
+            "-l",
+            "--listen",
+            default="localhost",
+            help="Specify the IP address on which the server listens",
+        )
+        parser.add_argument(
+            "-p",
+            "--port",
+            type=int,
+            default=8000,
+            help="Specify the port on which the server listens",
+        )
+        args = parser.parse_args()
+        run(addr=args.listen, port=args.port)
+    ```
+    
+    Once we have a server that computes the MD5, we need to create an image out of it.
+    For that we need to write `Dockerfile` which can look like this:
+    
+    ```dockerfile
+    FROM python:3.8.3-alpine3.11
+    
+    RUN mkdir /code
+    WORKDIR /code
+    COPY server.py server.py
+    
+    EXPOSE 80
+    
+    ENTRYPOINT [ "/code/server.py", "--listen", "0.0.0.0", "--port", "80" ]
+    ```
+    
+    Once we have the docker file we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/), so our Kubernetes cluster can pull this image later.
+    In this example we will use [quay.io](https://quay.io/) Docker Registry.
+    
+    ```console
+    $ docker build -t quay.io/user/md5_server:v1 .
+    $ docker push quay.io/user/md5_server:v1
+    ```
+    
+    The next step would be to create a pod spec that would be run on Kubernetes (`spec.yaml`):
+    
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: transformer-md5
+      annotations:
+        communication_type: hpush://
+        wait_timeout: 1m
+    spec:
+      containers:
+        - name: server
+          image: quay.io/user/md5_server:v1
+          ports:
+            - name: default
+              containerPort: 80
+          command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+    ```
+    
+    **Important**: the server listens on the same port as specified in `ports.containerPort`.
+    This is required, as a target needs to know precise address of the ETL container.
+    
+    Another note is that we pass additional parameters via the `annotations` field.
+    We specified the communication type and wait time (for the pod to start).
+    
+    Once we have our `spec.yaml` we can initialize ETL with CLI:
+    ```console
+    $ ais etl init spec.yaml
+    JGHEoo89gg 
+    ```
 
 After all these steps we are ready to start the ETL containers.
 Just before we do that let's take a quick look at how our pods look like:
@@ -204,8 +234,6 @@ We can see that the cluster is running with 1 proxy and 2 targets.
 After we initialize the ETL container, we expect two more pods to start (`#targets == #etl_containers`).
 
 ```console
-$ ais transform init spec.yaml
-JGHEoo89gg
 $ kubectl get pods
 NAME                                  READY   STATUS    RESTARTS   AGE
 ais-proxy-2wvhp                       1/1     Running   0          48m
@@ -262,10 +290,10 @@ Alternatively, you can use [ETL CLI](/cmd/cli/resources/etl.md) or [AIS Loader](
 
 > `G` - denotes a (hostname:port) address of a **gateway** (any gateway in a given AIS cluster)
 
-
 | Operation | Description | HTTP action | Example |
 |--- | --- | --- | ---|
 | Init ETL | Inits ETL based on `spec.yaml`. Returns `ETL_ID` | POST /v1/etl/init | `curl -X POST 'http://G/v1/etl/init' -T spec.yaml` |
+| Build ETL | Builds and initializes ETL based on the source code. Returns `ETL_ID` | POST /v1/etl/build | `curl -X POST 'http://G/v1/etl/init' '{"code": "...", "runtime": "python3"}'` |
 | List ETLs | Lists all running ETLs | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
 | Transform object | Transforms an object based on ETL with `ETL_ID` | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
 | Transform bucket | Transforms all objects in a bucket and puts them to destination bucket | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "prefix":"prefix", "suffix": "suffix"}}' 'http://G/v1/buckets/from-name'` |

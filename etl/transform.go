@@ -127,7 +127,7 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-func Start(t cluster.Target, msg Msg) (err error) {
+func Start(t cluster.Target, msg InitMsg) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg)
 	if err != nil {
 		glog.Warning(cmn.NewETLError(errCtx, "Doing cleanup after unsuccessful Start"))
@@ -158,7 +158,7 @@ func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName string) {
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
+func tryStart(t cluster.Target, msg InitMsg) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
 	var (
 		pod             *corev1.Pod
 		svc             *corev1.Service

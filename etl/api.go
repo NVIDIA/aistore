@@ -9,14 +9,22 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/etl/template"
 )
 
 type (
-	Msg struct {
+	InitMsg struct {
 		ID          string           `json:"id"`
 		Spec        []byte           `json:"spec"`
 		CommType    string           `json:"communication_type"`
 		WaitTimeout cmn.DurationJSON `json:"wait_timeout"`
+	}
+
+	BuildMsg struct {
+		ID      string `json:"id"`
+		Code    []byte `json:"code"`
+		Deps    []byte `json:"dependencies"`
+		Runtime string `json:"runtime"`
 	}
 
 	Info struct {
@@ -66,4 +74,19 @@ func ParseOfflineMsg(v interface{}) (*OfflineMsg, error) {
 
 func cleanUpBckMsg(msg *OfflineMsg) {
 	msg.Ext = strings.TrimLeft(msg.Ext, ".")
+}
+
+func (m BuildMsg) Validate() error {
+	cmn.Assert(m.ID != "")
+
+	if len(m.Code) == 0 {
+		return fmt.Errorf("code is empty")
+	}
+	if m.Runtime == "" {
+		return fmt.Errorf("runtime is not specified")
+	}
+	if _, ok := template.Runtimes[m.Runtime]; !ok {
+		return fmt.Errorf("unsupported runtime provided: %s", m.Runtime)
+	}
+	return nil
 }
