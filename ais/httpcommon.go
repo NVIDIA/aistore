@@ -1496,7 +1496,7 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	finalProps := bck.Props.Clone()
 	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
 		if fieldName == cmn.HeaderBucketVerEnabled {
-			if bck.IsAIS() {
+			if hdr.Get(cmn.HeaderBucketVerEnabled) == "" {
 				verEnabled := field.Value().(bool)
 				hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verEnabled))
 			}

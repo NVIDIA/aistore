@@ -378,8 +378,13 @@ func DefaultAISBckProps() *BucketProps {
 
 func DefaultCloudBckProps(header http.Header) (props *BucketProps) {
 	props = DefaultAISBckProps()
-	Assert(len(header) > 0)
+	props.Versioning.Enabled = false
+	return MergeCloudBckProps(props, header)
+}
 
+func MergeCloudBckProps(base *BucketProps, header http.Header) (props *BucketProps) {
+	Assert(len(header) > 0)
+	props = base.Clone()
 	props.Provider = header.Get(HeaderCloudProvider)
 	Assert(IsValidProvider(props.Provider))
 

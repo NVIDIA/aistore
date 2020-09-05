@@ -1312,7 +1312,6 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		started   = time.Now()
 		query     = r.URL.Query()
 		hasLatest bool
 	)
@@ -1345,16 +1344,47 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.bucketPropsToHdr(bck, w.Header())
 		return
 	}
-	si, err := p.owner.smap.get().GetRandTarget()
+
+	cloudProps, err, statusCode := p.headCloudBck(*bck.BackendBck(), nil)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		// TODO -- FIXME: decide what needs to be done when HEAD fails - changes to BMD
+		p.invalmsghdlr(w, r, err.Error(), statusCode)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck, si)
+
+	nprops := cmn.MergeCloudBckProps(bck.Props, cloudProps)
+	if nprops.Equal(bck.Props) {
+		p.bucketPropsToHdr(bck, w.Header())
+		return
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	if p.forwardCP(w, r, nil, "httpheadbck", nil) {
+		return
+	}
+	glog.Warningf("%s: Cloud bucket %s properties have changed, resynchronizing...", p.si, bck)
+
+	p.owner.bmd.Lock()
+	bmd := p.owner.bmd.get()
+	bprops, present := bmd.Get(bck)
+	if !present {
+		p.owner.bmd.Unlock()
+		glog.Warningf("%s: Cloud bucket %s has been deleted, nothing to do", p.si, bck)
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		return
+	}
+	nprops = cmn.MergeCloudBckProps(bprops, cloudProps)
+	if nprops.Equal(bprops) {
+		p.owner.bmd.Unlock()
+		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, bck)
+		return
+	}
+	clone := bmd.clone()
+	clone.set(bck, nprops)
+	p.owner.bmd.put(clone)
+	_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActResyncBprops}, nil, bmd)})
+	p.owner.bmd.Unlock()
+
+	p.bucketPropsToHdr(bck, w.Header())
 }
 
 // PATCH /v1/buckets/bucket-name
@@ -3508,7 +3538,7 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 	return false
 }
 
-func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Header, err error) {
+func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Header, err error, statusCode int) {
 	var (
 		tsi   *cluster.Snode
 		pname = p.si.String()
@@ -3526,10 +3556,11 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 	} else if res.status == http.StatusGone {
 		err = cmn.NewErrorCloudBucketOffline(bck, pname)
 	} else if res.err != nil {
-		err = fmt.Errorf("%s: %s, target %s, err: %v", pname, bck, tsi, res.err)
+		err = fmt.Errorf("%s: %s, target %s: %s", pname, bck, tsi, http.StatusText(res.status))
 	} else {
 		header = res.header
 	}
+	statusCode = res.status
 	return
 }
 
@@ -3568,13 +3599,13 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 }
 
 func (args *remBckAddArgs) _tryAdd(bck *cluster.Bck) (err error) {
-	var cloudProps http.Header
-	if cloudProps, err = args._lookup(bck); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
-			args.p.invalmsghdlrsilent(args.w, args.r, err.Error(), http.StatusNotFound)
-		} else {
-			args.p.invalmsghdlr(args.w, args.r, err.Error())
-		}
+	var (
+		cloudProps http.Header
+		errCode    int
+	)
+
+	if cloudProps, err, errCode = args._lookup(bck); err != nil {
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
 		return
 	}
 	if args.queryBck.IsHTTP() {
@@ -3594,7 +3625,7 @@ func (args *remBckAddArgs) _tryAdd(bck *cluster.Bck) (err error) {
 	return
 }
 
-func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, err error) {
+func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, err error, statusCode int) {
 	var (
 		q = url.Values{}
 	)

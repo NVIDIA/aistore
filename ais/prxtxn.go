@@ -253,7 +253,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 				err = fmt.Errorf("%q has backend %q, detach the backend bucket before resetting the props", bck.Bck, bck.BackendBck())
 				return
 			}
-			cloudProps, err := p.headCloudBck(bck.Bck, nil)
+			cloudProps, err, _ := p.headCloudBck(bck.Bck, nil)
 			if err != nil {
 				return "", err
 			}

@@ -46,6 +46,7 @@ const (
 	ActSetConfig      = "setconfig"
 	ActSetBprops      = "setbprops"
 	ActResetBprops    = "resetbprops"
+	ActResyncBprops   = "resyncbprops"
 	ActListObjects    = "listobj"
 	ActQueryObjects   = "queryobj"
 	ActInvalListCache = "invallistobjcache"
