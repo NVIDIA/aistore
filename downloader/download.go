@@ -9,7 +9,9 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -123,6 +125,7 @@ var (
 		UseHTTPS:   true,
 		SkipVerify: true,
 	})
+	instance atomic.Int64
 )
 
 // public types
@@ -220,7 +223,7 @@ var (
 	_ fs.PathRunner = &Downloader{}
 )
 
-func (d *Downloader) Name() string                    { return "downloader" }
+func (d *Downloader) Name() string                    { return d.GetRunName() }
 func (d *Downloader) IsMountpathXact() bool           { return true }
 func (d *Downloader) ReqAddMountpath(mpath string)    { d.mpathReqCh <- fs.MountpathAdd(mpath) }
 func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.MountpathRem(mpath) }
@@ -239,6 +242,8 @@ func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 
 	downloader.dispatcher = newDispatcher(downloader)
 	downloader.InitIdle()
+	i := strconv.FormatInt(instance.Inc(), 10)
+	downloader.SetRunName("downloader" + i)
 	return downloader
 }
 
