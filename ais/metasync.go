@@ -124,6 +124,7 @@ type (
 		stopCh       chan struct{}       // stop channel
 		workCh       chan revsReq        // work channel
 		retryTimer   *time.Timer         // timer to sync pending
+		stopping     atomic.Bool         // true: primary is shutting down
 		timerStopped bool                // true if retryTimer has been stopped, false otherwise
 	}
 )
@@ -266,6 +267,9 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 
 		newTargetIDs []string
 	)
+	if y.stopping.Load() {
+		return
+	}
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
 	if debug.Enabled {

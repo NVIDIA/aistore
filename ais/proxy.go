@@ -245,8 +245,10 @@ func (p *proxyrunner) unregisterSelf() (int, error) {
 
 // stop gracefully
 func (p *proxyrunner) Stop(err error) {
-	var isPrimary bool
-	smap := p.owner.smap.get()
+	var (
+		smap      = p.owner.smap.get()
+		isPrimary bool
+	)
 	if smap != nil { // in tests
 		isPrimary = smap.isPrimary(p.si)
 	}
@@ -254,6 +256,7 @@ func (p *proxyrunner) Stop(err error) {
 	xaction.Registry.AbortAll()
 
 	if isPrimary {
+		p.metasyncer.stopping.Store(true)
 		// give targets and non primary proxies some time to unregister
 		version := smap.version()
 		for i := 0; i < 20; i++ {
