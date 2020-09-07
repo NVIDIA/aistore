@@ -285,9 +285,15 @@ var (
 	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
 	useCacheFlag     = cli.BoolFlag{Name: "use-cache", Usage: "use proxy cache to speed up list object request"}
 	checksumFlags    = getCksumFlags()
+
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "save token to file"}
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
+
+	// ETL
+	etlPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to each transformed object's name"}
+	etlSuffixFlag = cli.StringFlag{Name: "suffix", Usage: "suffix added to each transformed object's name"}
+	etlExtFlag    = cli.StringFlag{Name: "ext", Usage: "new extension of transformed object's name"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 

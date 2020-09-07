@@ -54,6 +54,11 @@ var (
 					Usage:     "offline transform bucket with given ETL",
 					ArgsUsage: "ETL_ID BUCKET_FROM BUCKET_TO",
 					Action:    etlOfflineHandler,
+					Flags: []cli.Flag{
+						etlExtFlag,
+						etlPrefixFlag,
+						etlSuffixFlag,
+					},
 				},
 			},
 		},
@@ -174,7 +179,10 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 	}
 
 	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, &etl.OfflineMsg{
-		ID: id,
+		ID:     id,
+		Ext:    parseStrFlag(c, etlExtFlag),
+		Prefix: parseStrFlag(c, etlPrefixFlag),
+		Suffix: parseStrFlag(c, etlSuffixFlag),
 	})
 
 	if err := handleETLHTTPError(err, id); err != nil {

@@ -79,8 +79,25 @@ $ cat output.txt
 #### Transform ever object from BUCKET1 with ETL and put new objects to BUCKET2
 
 ```console
-XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2)
-ais wait xaction $XACT_ID # wait until process finishes
+$ XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2)
+$ ais wait xaction $XACT_ID # wait until offline ETL finishes
+```
+
+#### The same as above, but objects names will have `.out` extension and `etl-` prefix
+
+```console
+$ ais ls bucket BUCKET1 --props=name
+NAME
+obj1.in1
+obj2.in2
+(...)
+$ XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2 --ext=".out" --prefix="etl-")
+$ ais wait xaction $XACT_ID # wait until offline ETL finishes
+$ ais ls bucket BUCKET2 --props=name
+NAME
+etl-obj1.out
+etl-obj2.out
+(...)
 ```
 
 
