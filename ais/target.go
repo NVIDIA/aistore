@@ -1214,10 +1214,10 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 			query.Provider = provider
 			buckets, err, code = t._listBcks(query, config)
 			if err != nil {
-				glog.Errorf("failed to list buckets for %q, err: %v (status: %d)", query, err, code)
-			} else {
-				bucketNames = append(bucketNames, buckets...)
+				t.invalmsghdlrstatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
+				return
 			}
+			bucketNames = append(bucketNames, buckets...)
 		}
 	}
 	sort.Sort(bucketNames)
