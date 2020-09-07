@@ -1,4 +1,5 @@
 #!/bin/bash
+
 print_error() {
   echo "Error: $1."
   exit 1
@@ -19,14 +20,14 @@ is_boolean() {
 parse_cld_providers() {
   AIS_CLD_PROVIDERS=""
   echo "Select the cloud providers you wish to support:"
-  echo "Amazon S3: (y/n) ? "
-  read  CLD_AWS
+  echo "Amazon S3: (y/n) ?"
+  read -r CLD_AWS
   is_boolean $CLD_AWS
-  echo "Google Cloud Storage: (y/n) ? "
-  read  CLD_GCP
+  echo "Google Cloud Storage: (y/n) ?"
+  read -r CLD_GCP
   is_boolean $CLD_GCP
-  echo "Azure: (y/n) ? "
-  read  CLD_AZURE
+  echo "Azure: (y/n) ?"
+  read -r CLD_AZURE
   is_boolean $CLD_AZURE
   if  [[ "$CLD_AWS" == "y" ]] ; then
     AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} aws"
