@@ -68,6 +68,10 @@ func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 	return nil
 }
 
+func (t *targetrunner) GetXactRegistry() cluster.XactRegistry {
+	return xaction.Registry
+}
+
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {

@@ -88,7 +88,7 @@ type (
 
 var _ cluster.Slistener = &Aborter{}
 
-func NewAborter(t cluster.Target, uuid string) *Aborter {
+func newAborter(t cluster.Target, uuid string) *Aborter {
 	return &Aborter{
 		uuid:        uuid,
 		t:           t,
@@ -250,7 +250,7 @@ func tryStart(t cluster.Target, msg Msg) (errCtx *cmn.ETLErrorContext, podName, 
 		return errCtx, podName, svcName, cmn.NewETLError(errCtx, waitErr.Error())
 	}
 
-	c := makeCommunicator(t, pod, msg.CommType, podIP, transformerURL, originalPodName, NewAborter(t, msg.ID))
+	c := makeCommunicator(t, pod, msg.CommType, podIP, transformerURL, originalPodName, newAborter(t, msg.ID))
 	// NOTE: communicator is put to registry only if the whole tryStart was successful.
 	if err = reg.put(msg.ID, c); err != nil {
 		return
@@ -311,9 +311,8 @@ func Stop(t cluster.Target, id string) error {
 		}
 	)
 
-	// TODO: Abort any running offline ETL. Impossible to do:
-	// xaction.registry.AbortAll(cmn.ActETLBucket)
-	// as there is an import cycle.
+	// Abort any running offline ETLs
+	t.GetXactRegistry().AbortAll(cmn.ActETLBucket)
 
 	c, err := GetCommunicator(id)
 	if err != nil {

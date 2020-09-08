@@ -88,6 +88,7 @@ type Target interface {
 	PutObjectToTarget(destTarget *Snode, r io.ReadCloser, bckTo *Bck, objNameTo string, header http.Header) error
 
 	GetGFN(gfnType GFNType) GFN
+	GetXactRegistry() XactRegistry
 	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
 	RebalanceNamespace(si *Snode) ([]byte, int, error)
 	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
