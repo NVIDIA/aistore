@@ -219,6 +219,14 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 	return nil, fmt.Errorf("timed out waiting for the cluster to stabilize")
 }
 
+func WaitNodeRestored(t *testing.T, proxyURL, reason, nodeID string, origVersion int64, verbose bool, nodeCnt ...int) *cluster.Smap {
+	smap, err := WaitForPrimaryProxy(proxyURL, reason, origVersion, verbose, nodeCnt...)
+	tassert.CheckError(t, err)
+	_, err = api.WaitNodeAdded(BaseAPIParams(proxyURL), nodeID)
+	tassert.CheckError(t, err)
+	return smap
+}
+
 func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore []string) error {
 	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore []string) (string, string, bool) {
 		for _, d := range smap.Pmap {
