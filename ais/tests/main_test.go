@@ -51,7 +51,7 @@ func waitForCluster() {
 		proxyCnt   int
 		targetCnt  int
 		retryCount = 5
-		sleep      = time.Second * 5
+		sleep      = 5 * time.Second
 	)
 	pc := os.Getenv(cmn.EnvVars.NumProxy)
 	tc := os.Getenv(cmn.EnvVars.NumTarget)
@@ -95,6 +95,7 @@ func waitForCluster() {
 		time.Sleep(sleep)
 	}
 	tutils.Logln("Cluster ready...")
+	time.Sleep(2 * time.Second)
 }
 
 func TestMain(m *testing.M) {
