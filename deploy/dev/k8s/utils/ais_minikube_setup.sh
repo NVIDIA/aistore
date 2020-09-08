@@ -1,18 +1,19 @@
 echo "Checking kubectl default sa account..."
 kubectl get sa default >/dev/null 2>&1
-if [ $? -ne 0 ]; then
+if [[ $? -ne 0 ]]; then
   kubectl create sa default
 fi
 
-# to allow running kubectl commands from within a pod (for e.g target)
 kubectl apply -f kube_templates/minikube_perms.yaml
 
-# making /var/lib/minikube/ais
-minikube ssh 'sudo mkdir -p /var/lib/minikube/ais'
+# Commands below are run in subshell and the 0 file descriptor is closed
+# so they do not "eat" the input.
 
-# mount binding /tmp to a persistent path
-minikube ssh 'sudo mount --bind /var/lib/minikube/ais /tmp'
+# Make /var/lib/minikube/ais
+(minikube ssh 'sudo mkdir -p /var/lib/minikube/ais' 0<&-)
 
-# creating directory for ais-fs
-minikube ssh 'sudo mkdir -p /tmp/ais-k8s'
+# Mount binding /tmp to a persistent path
+(minikube ssh 'sudo mount --bind /var/lib/minikube/ais /tmp' 0<&-)
 
+# Create directory for ais-fs
+(minikube ssh 'sudo mkdir -p /tmp/ais-k8s' 0<&-)
