@@ -60,14 +60,10 @@ func TestKubeTransformer(t *testing.T) {
 	}
 }
 
-// TODO: currently this test only tests scenario where object are PUT  to the same
-// target which they are currently placed on. That's because our minikube tests
-// only run with a single target.
 func TestKubeTransformerOffline(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	var (
-		bck    = cmn.Bck{Name: "etloffline-from-test", Provider: cmn.ProviderAIS}
-		bckTo  = cmn.Bck{Name: "etloffline-to-test", Provider: cmn.ProviderAIS}
+		bck    = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		objCnt = 10
 
 		m = ioContext{
@@ -79,36 +75,55 @@ func TestKubeTransformerOffline(t *testing.T) {
 		}
 	)
 
-	tutils.Logln("Creating bucket")
+	tests := []testConfig{
+		{transformer: tutils.Echo, comm: etl.RedirectCommType},
+		{transformer: tutils.Md5, comm: etl.RevProxyCommType},
+		{transformer: tutils.Md5, comm: etl.PushCommType},
+	}
+
+	tutils.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 	m.init()
 
-	tutils.Logln("Putting objects")
+	tutils.Logln("Putting objects to source bucket")
 	m.puts()
 
-	// TODO: add more test cases, different ETLs, tarnsformation types.
-	uuid, err := etlInit(tutils.Echo, etl.RedirectCommType)
+	for _, test := range tests {
+		t.Run(test.Name(), func(t *testing.T) {
+			testOfflineETL(t, bck, test.comm, test.transformer, objCnt)
+		})
+	}
+}
+
+// TODO: currently this test only tests scenario where all objects are PUT to
+// the same target which they are currently stored on. That's because our
+// minikube tests only run with a single target.
+func testOfflineETL(t *testing.T, bckFrom cmn.Bck, comm, transformer string, objCnt int) {
+	var (
+		bckTo = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+	)
+
+	uuid, err := etlInit(transformer, comm)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
 		tutils.Logf("Stop %q\n", uuid)
 		tassert.CheckFatal(t, api.ETLStop(defaultAPIParams, uuid))
+		tutils.DestroyBucket(t, proxyURL, bckTo)
 	}()
 
-	tutils.Logf("Offline ETL %q\n", uuid)
-	xactID, err := api.ETLBucket(defaultAPIParams, bck, bckTo, &etl.OfflineMsg{ID: uuid})
+	tutils.Logf("Start offline ETL %q\n", uuid)
+	xactID, err := api.ETLBucket(defaultAPIParams, bckFrom, bckTo, &etl.OfflineMsg{ID: uuid})
 	tassert.CheckFatal(t, err)
-	time.Sleep(5 * time.Second)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBucket, Timeout: time.Minute}
 	err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tassert.CheckFatal(t, api.ListObjectsInvalidateCache(defaultAPIParams, bckTo))
 	list, err := api.ListObjects(defaultAPIParams, bckTo, nil, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
+	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL %s (%s), got %d", objCnt, transformer, comm, len(list.Entries))
 }
 
 func etlInit(name, comm string) (string, error) {
