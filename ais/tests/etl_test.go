@@ -118,7 +118,7 @@ func testOfflineETL(t *testing.T, bckFrom cmn.Bck, comm, transformer string, obj
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBucket, Timeout: time.Minute}
-	err = api.WaitForXaction(baseParams, args)
+	err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(defaultAPIParams, bckTo, nil, 0)

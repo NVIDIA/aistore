@@ -310,12 +310,15 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	c.msg.BMDVersion = clone.version()
 	wg := p.metasyncer.sync(revsPair{clone, c.msg})
 	p.owner.bmd.Unlock()
-
 	wg.Wait()
 
 	// 5. if remirror|re-EC|TBD-storage-svc
 	if remirror || reec {
-		nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bck.Bck)
+		action := cmn.ActMakeNCopies
+		if reec {
+			action = cmn.ActECEncode
+		}
+		nl := newNLB(c.uuid, c.smap, notifXact, action, bck.Bck)
 		nl.setOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 		xactID = c.uuid

@@ -65,6 +65,12 @@ type (
 		Finished []*notifListenMsg `json:"finished"`
 	}
 
+	nlFilter struct {
+		uuid string
+		kind string
+		bck  *cluster.Bck
+	}
+
 	notifListener interface {
 		callback(notifs *notifs, n notifListener, msg interface{}, err error, nows ...int64)
 		lock()
@@ -269,6 +275,42 @@ func (n *notifs) entry(uuid string) (notifListener, bool) {
 		return entry, true
 	}
 	return nil, false
+}
+
+func (n *notifs) find(flt nlFilter) (nl notifListener, exists bool) {
+	if flt.uuid != "" {
+		return n.entry(flt.uuid)
+	}
+	n.RLock()
+	nl, exists = _findNL(n.m, flt)
+	n.RUnlock()
+	if exists {
+		return
+	}
+	n.fmu.RLock()
+	nl, exists = _findNL(n.fin, flt)
+	n.fmu.RUnlock()
+	return
+}
+
+// PRECONDITION: Lock for `nls` must be held
+// returns a listener that matches the filter condition.
+// for finished xaction listeners, returns latest listener (i.e. having highest finish time)
+func _findNL(nls map[string]notifListener, flt nlFilter) (nl notifListener, exists bool) {
+	var ftime int64
+	for _, listener := range nls {
+		if listener.finTime() < ftime {
+			continue
+		}
+		ftime = listener.finTime()
+		if flt.match(listener) {
+			nl, exists = listener, true
+		}
+		if !listener.finished() && exists {
+			return
+		}
+	}
+	return
 }
 
 // verb /v1/notifs
@@ -603,6 +645,28 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 		return
 	}
 	return
+}
+
+//
+// Notification listener filter (nlFilter)
+//
+
+func (nf *nlFilter) match(nl notifListener) bool {
+	if nl.UUID() == nf.uuid {
+		return true
+	}
+
+	if nl.kind() == nf.kind {
+		if nf.bck == nil || nf.bck.IsEmpty() {
+			return true
+		}
+		for _, bck := range nl.bcks() {
+			if cmn.QueryBcks(nf.bck.Bck).Contains(bck) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 //////////

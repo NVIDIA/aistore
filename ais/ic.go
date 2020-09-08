@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -121,6 +122,22 @@ outer:
 	return true
 }
 
+// TODO: add more functionality similar to reverseToOwner
+func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
+	smap := ic.p.owner.smap.get()
+	if !smap.IsIC(ic.p.si) {
+		var node *cluster.Snode
+		for nodeID := range smap.IC {
+			node = smap.GetNode(nodeID)
+			break
+		}
+		redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetworkIntraControl)
+		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+		return true
+	}
+	return false
+}
+
 func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifListener, ok bool) {
 	nl, exists := ic.p.notifs.entry(uuid)
 	if !exists {
@@ -138,25 +155,46 @@ func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 }
 
 func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
-	msg := &cmn.XactReqMsg{}
+	var (
+		msg    = &cmn.XactReqMsg{}
+		bck    *cluster.Bck
+		nl     notifListener
+		exists bool
+	)
 
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
 
-	if msg.ID == "" {
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "missing ID for `what`: %v", what)
+	if msg.ID == "" && msg.Kind == "" {
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "missing `id` and `kind` for `what`: %v", what)
 		return
 	}
 
-	if ic.reverseToOwner(w, r, msg.ID, msg) {
+	// for queries of type {Kind: cmn.ActRebalance}
+	if msg.ID == "" && ic.redirectToIC(w, r) {
+		return
+	} else if msg.ID != "" && ic.reverseToOwner(w, r, msg.ID, msg) {
 		return
 	}
 
-	nl, exists := ic.p.notifs.entry(msg.ID)
+	if msg.Bck.Name != "" {
+		bck = cluster.NewBckEmbed(msg.Bck)
+		if err := bck.Init(ic.p.owner.bmd, ic.p.si); err != nil {
+			ic.p.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+			return
+		}
+	}
+	flt := nlFilter{uuid: msg.ID, kind: msg.Kind, bck: bck}
+
+	withLocalRetry(func() bool {
+		nl, exists = ic.p.notifs.find(flt)
+		return exists
+	}, 2)
+
 	if !exists {
 		smap := ic.p.owner.smap.get()
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", msg.ID, smap.StrIC(ic.p.si))
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "id:%q, kind:%q, bck:%q not found (%s)", msg.ID, msg.Kind, msg.Bck, smap.StrIC(ic.p.si))
 		return
 	}
 

@@ -443,7 +443,7 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	)
 	time.Sleep(time.Second)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
-	err := api.WaitForXaction(baseParams, xactArgs)
+	err := api.WaitForXactionV2(baseParams, xactArgs)
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
