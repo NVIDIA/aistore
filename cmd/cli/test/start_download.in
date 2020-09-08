@@ -1,4 +1,5 @@
 ais create bucket $BUCKET
+ais rm download --all // IGNORE
 ais start download gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz ais://$BUCKET // FAIL "too many arguments"
 
 ais start download gs://minikube/iso/minikube-v0.23.2.iso.sha256 ais://$BUCKET --desc="minikube" // IGNORE

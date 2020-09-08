@@ -94,7 +94,7 @@ import (
 // using the "Content-Length" field returned in the Header.
 // Note: not all servers respond with a "Content-Length" request header.
 // For these cases, a progress percentage is not returned, just the current
-// number of bytes that have been downloaded.
+// downloaded size (in bytes).
 //
 // ====== Notes ======
 //

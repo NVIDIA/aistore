@@ -165,7 +165,7 @@ List all objects contained in `BUCKET_NAME` bucket.
 | `--props` | `string` | Comma-separated properties to return with object names | `"size,version"`
 | `--limit` | `int` | Max. number of object names to list | `0` |
 | `--show-unmatched` | `bool` | List objects unmatched by regex and template as well, after the matched ones | `false` |
-| `--all-items` | `bool` | Show all items, including all, duplicated, etc. | `false` |
+| `--all` | `bool` | Show all objects, including misplaced, duplicated, etc. | `false` |
 | `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |

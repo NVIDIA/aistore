@@ -583,7 +583,6 @@ func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching, rest []
 func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	objFilter := &objectListFilter{}
 
-	// if fastFlag is enabled, allFlag is enabled automatically because obj.Status is unset
 	if !flagIsSet(c, allItemsFlag) {
 		// Filter out files with status different than OK
 		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.IsStatusOK() })

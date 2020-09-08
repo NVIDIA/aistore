@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/urfave/cli"
 )
 
@@ -19,10 +20,12 @@ var (
 		subcmdRemoveBucket: {
 			ignoreErrorFlag,
 		},
-		subcmdRemoveObject:   baseLstRngFlags,
-		subcmdRemoveNode:     {},
-		subcmdRemoveDownload: {},
-		subcmdRemoveDsort:    {},
+		subcmdRemoveObject: baseLstRngFlags,
+		subcmdRemoveNode:   {},
+		subcmdRemoveDownload: {
+			allJobsFlag,
+		},
+		subcmdRemoveDsort: {},
 	}
 
 	removeCmds = []cli.Command{
@@ -31,20 +34,24 @@ var (
 			Usage: "remove buckets, objects, and other entities",
 			Subcommands: []cli.Command{
 				{
-					Name:         subcmdRemoveBucket,
-					Usage:        "remove ais buckets",
-					ArgsUsage:    bucketsArgument,
-					Flags:        removeCmdsFlags[subcmdRemoveBucket],
-					Action:       removeBucketHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, provider: cmn.ProviderAIS}),
+					Name:      subcmdRemoveBucket,
+					Usage:     "remove ais buckets",
+					ArgsUsage: bucketsArgument,
+					Flags:     removeCmdsFlags[subcmdRemoveBucket],
+					Action:    removeBucketHandler,
+					BashComplete: bucketCompletions(bckCompletionsOpts{
+						multiple: true, provider: cmn.ProviderAIS,
+					}),
 				},
 				{
-					Name:         subcmdRemoveObject,
-					Usage:        "remove object from bucket",
-					ArgsUsage:    optionalObjectsArgument,
-					Flags:        removeCmdsFlags[subcmdRemoveObject],
-					Action:       removeObjectHandler,
-					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true, separator: true}),
+					Name:      subcmdRemoveObject,
+					Usage:     "remove object from bucket",
+					ArgsUsage: optionalObjectsArgument,
+					Flags:     removeCmdsFlags[subcmdRemoveObject],
+					Action:    removeObjectHandler,
+					BashComplete: bucketCompletions(bckCompletionsOpts{
+						multiple: true, separator: true,
+					}),
 				},
 				{
 					Name:         subcmdRemoveNode,
@@ -56,7 +63,7 @@ var (
 				},
 				{
 					Name:         subcmdRemoveDownload,
-					Usage:        "remove finished download job with given id from the list",
+					Usage:        "remove finished download job(s) identified by job's ID or regular expression",
 					ArgsUsage:    jobIDArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveDownload],
 					Action:       removeDownloadHandler,
@@ -64,7 +71,7 @@ var (
 				},
 				{
 					Name:         subcmdRemoveDsort,
-					Usage:        fmt.Sprintf("remove finished %s job with given id from the list", cmn.DSortName),
+					Usage:        fmt.Sprintf("remove finished %s job identified by the job's ID", cmn.DSortName),
 					ArgsUsage:    jobIDArgument,
 					Flags:        removeCmdsFlags[subcmdRemoveDsort],
 					Action:       removeDsortHandler,
@@ -108,7 +115,8 @@ func removeObjectHandler(c *cli.Context) error {
 		}
 
 		if objName == "" {
-			return incorrectUsageMsg(c, "%q or %q flag not set with a single bucket argument", listFlag.Name, templateFlag.Name)
+			return incorrectUsageMsg(c, "%q or %q flag not set with a single bucket argument",
+				listFlag.Name, templateFlag.Name)
 		}
 
 		// ais rm BUCKET/OBJECT_NAME - pass, multiObjOp will handle it
@@ -116,7 +124,8 @@ func removeObjectHandler(c *cli.Context) error {
 
 	// list and range flags are invalid with object argument(s)
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %q are invalid when object names have been provided", strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
+		return incorrectUsageMsg(c, "flags %q are cannot be used together with object name arguments",
+			strings.Join([]string{listFlag.Name, templateFlag.Name}, ", "))
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
@@ -130,16 +139,46 @@ func removeNodeHandler(c *cli.Context) (err error) {
 
 func removeDownloadHandler(c *cli.Context) (err error) {
 	id := c.Args().First()
-
+	if flagIsSet(c, allJobsFlag) {
+		return removeDownloadRegex(c)
+	}
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "download job ID")
 	}
-
 	if err = api.DownloadRemove(defaultAPIParams, id); err != nil {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "download job with id %q successfully removed.\n", id)
+	fmt.Fprintf(c.App.Writer, "removed download job %q\n", id)
+	return
+}
+
+func removeDownloadRegex(c *cli.Context) (err error) {
+	var (
+		dlList downloader.DlJobInfos
+		regex  = ".*"
+		cnt    int
+		failed bool
+	)
+	dlList, err = api.DownloadGetList(defaultAPIParams, regex)
+	if err != nil {
+		return err
+	}
+	for _, dl := range dlList {
+		if !dl.JobFinished() {
+			continue
+		}
+		if err = api.DownloadRemove(defaultAPIParams, dl.ID); err == nil {
+			fmt.Fprintf(c.App.Writer, "removed download job %q\n", dl.ID)
+			cnt++
+		} else {
+			fmt.Fprintf(c.App.Writer, "failed to remove download job %q, err: %v\n", dl.ID, err)
+			failed = true
+		}
+	}
+	if cnt == 0 && !failed {
+		fmt.Fprintf(c.App.Writer, "no finished download jobs, nothing to do\n")
+	}
 	return
 }
 
@@ -154,6 +193,6 @@ func removeDsortHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s job with id %q successfully removed\n", cmn.DSortName, id)
+	fmt.Fprintf(c.App.Writer, "removed %s job %q\n", cmn.DSortName, id)
 	return
 }

@@ -125,9 +125,9 @@ func (is *infoStore) setAborted(id string) {
 	jInfo, err := is.getJob(id)
 	cmn.AssertNoErr(err)
 	jInfo.Aborted.Store(true)
-	// NOTE: Don't set `FinishedTime` yet as we are not fully finished. Marking
-	//  finished means that the job can be removed but aborting doesn't guarantee
-	//  that all tasks have been stopped and all resources are freed.
+	// NOTE: Don't set `FinishedTime` yet as we are not fully done.
+	//       The job now can be removed but there's no guarantee
+	//       that all tasks have been stopped and all resources were freed.
 }
 
 func (is *infoStore) delJob(id string) {

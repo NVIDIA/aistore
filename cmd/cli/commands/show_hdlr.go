@@ -70,7 +70,7 @@ var (
 		},
 		subcmdShowXaction: {
 			jsonFlag,
-			allItemsFlag,
+			allXactionsFlag,
 			activeFlag,
 			verboseFlag,
 		},
@@ -311,7 +311,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 		return err
 	}
 	var xactStats api.NodesXactMultiStats
-	latest := !flagIsSet(c, allItemsFlag)
+	latest := !flagIsSet(c, allXactionsFlag)
 	if xactID != "" {
 		latest = false
 	}

@@ -227,7 +227,11 @@ var (
 	ignoreErrorFlag = cli.BoolFlag{Name: "ignore-error", Usage: "ignore error on soft failures like bucket already exists, bucket does not exist etc."}
 	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "value represents custom properties of a bucket"}
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
+
 	allFlag         = cli.BoolFlag{Name: "all", Usage: "list all properties"}
+	allXactionsFlag = cli.BoolTFlag{Name: "all", Usage: "show all xactions including finished"}
+	allItemsFlag    = cli.BoolTFlag{Name: "all", Usage: "list all items"} // TODO: differentiate bucket names vs objects
+	allJobsFlag     = cli.BoolTFlag{Name: "all", Usage: "remove all finished jobs"}
 
 	// Bucket
 	startAfterFlag    = cli.StringFlag{Name: "start-after", Usage: "list objects alphabetically starting from the object after given provided key"}
@@ -236,7 +240,6 @@ var (
 	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
 	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
-	allItemsFlag      = cli.BoolTFlag{Name: "all-items", Usage: "show all items including old and duplicated"}
 	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast algorithm to compute the result (warning: the result can be inaccurate)"}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}

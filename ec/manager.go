@@ -265,8 +265,8 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 	case reqPut:
 		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, hdr, object)
 	case respPut:
-		// Process this request even if there might not be enough targets. It might have been started when there was,
-		// so there is a chance to complete restore successfully
+		// Process the request even if the number of targets is insufficient
+		// (might've started when we had enough)
 		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.ObjName, hdr.ObjAttrs, object)
 	default:
 		glog.Errorf("unknown EC response action %d", iReq.act)

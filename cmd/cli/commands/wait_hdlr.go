@@ -73,7 +73,7 @@ func waitXactionHandler(c *cli.Context) error {
 		return err
 	}
 
-	latest := !flagIsSet(c, allItemsFlag)
+	latest := !flagIsSet(c, allXactionsFlag)
 	if xactID != "" {
 		latest = false
 	}

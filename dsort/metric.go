@@ -159,13 +159,13 @@ type ShardCreation struct {
 	PhaseInfo
 	// ToCreate specifies number of shards that have to be created in this phase.
 	ToCreate int64 `json:"to_create,string"`
-	// CreatedCnt specifies number of shards that have been created to given
-	// moment. Should match ToCreate when phase is finished.
+	// CreatedCnt specifies the number of shards that have been so far created.
+	// Should match ToCreate when phase is finished.
 	CreatedCnt int64 `json:"created_count,string"`
-	// MovedShardCnt describes number of shards that have been moved from this
-	// target to some other. This only applies when dealing with compressed
-	// data. Sometimes is faster to create shard on specific target and send it
-	// via network than create shard on destination target.
+	// MovedShardCnt specifies the number of shards that have migrated from this
+	// to another target in the cluster. Applies only when dealing with compressed
+	// data. Sometimes it is faster to create a shard on a specific target and send it
+	// over (rather than creating on a destination target).
 	MovedShardCnt int64 `json:"moved_shard_count,string"`
 	// RequestStats describes time statistics about request to other target.
 	RequestStats *TimeStats `json:"req_stats,omitempty"`
