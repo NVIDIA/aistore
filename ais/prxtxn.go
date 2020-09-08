@@ -427,7 +427,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 // copy-bucket/offline ETL: { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
 func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		nmsg = &cmn.ActionMsg{} // + bckTo
+		nmsg      = &cmn.ActionMsg{} // + bckTo
+		etlBckMsg = &etl.OfflineMsg{}
 	)
 	// 1. confirm existence
 	p.owner.bmd.Lock()
@@ -444,13 +445,13 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 
 	nmsg.Value = bckTo.Bck
 	if msg.Action == cmn.ActETLBucket {
-		bckMsg, err := etl.ParseOfflineMsg(msg.Value)
+		etlBckMsg, err = etl.ParseOfflineMsg(msg.Value)
 		if err != nil {
 			return "", err
 		}
 		nmsg.Value = &etl.OfflineBckMsg{
 			Bck:        bckTo.Bck,
-			OfflineMsg: *bckMsg,
+			OfflineMsg: *etlBckMsg,
 		}
 	}
 
@@ -475,8 +476,9 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	bprops, present := clone.Get(bckFrom)
 	cmn.Assert(present)
 
-	// create destination bucket but only if it doesn't exist
-	if _, present = clone.Get(bckTo); !present {
+	// create destination bucket but only if it doesn't exist and
+	// it is not ETL dry run request.
+	if _, present = clone.Get(bckTo); !present && !etlBckMsg.DryRun {
 		bckFrom.Props = bprops.Clone()
 		bckTo.Props = bprops.Clone()
 		added := clone.add(bckTo, bckTo.Props)

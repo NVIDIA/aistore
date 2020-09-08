@@ -58,6 +58,7 @@ var (
 						etlExtFlag,
 						etlPrefixFlag,
 						etlSuffixFlag,
+						etlDryRunFlag,
 					},
 				},
 			},
@@ -183,12 +184,29 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 		Ext:    parseStrFlag(c, etlExtFlag),
 		Prefix: parseStrFlag(c, etlPrefixFlag),
 		Suffix: parseStrFlag(c, etlSuffixFlag),
+		DryRun: flagIsSet(c, etlDryRunFlag),
 	})
 
 	if err := handleETLHTTPError(err, id); err != nil {
 		return err
 	}
-	fmt.Fprintln(c.App.Writer, xactID)
+
+	if !flagIsSet(c, etlDryRunFlag) {
+		fmt.Fprintln(c.App.Writer, xactID)
+		return nil
+	}
+
+	if err := api.WaitForXaction(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
+		return err
+	}
+
+	stat, err := api.GetXactionStatsByID(defaultAPIParams, xactID)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
+	fmt.Fprintf(c.App.Writer, "%d objects (%s) would have been put into bucket %s", stat.ObjCount(), cmn.B2S(stat.BytesCount(), 2), toBck.String())
 	return nil
 }
 

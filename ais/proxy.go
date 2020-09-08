@@ -958,6 +958,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
+
 		bckFrom, bucketTo := bck, msg.Name
 		if bucket == bucketTo {
 			p.invalmsghdlrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bucket)

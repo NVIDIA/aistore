@@ -100,4 +100,19 @@ etl-obj2.out
 (...)
 ```
 
+#### The same as above, but don't actually perform any actions. Show what would have happened.
+
+```console
+$ ais ls bucket BUCKET1 --props=name,size
+NAME        SIZE
+obj1.in1    10MiB
+obj2.in2    10MiB
+(...)
+$ ais etl bucket JGHEoo89gg BUCKET1 BUCKET2 --dry-run
+[DRY RUN] No modifications on the cluster
+2 objects (20MiB) would have been put into bucket BUCKET2
+```
+
+
+
 

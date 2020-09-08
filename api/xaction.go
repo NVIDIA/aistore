@@ -67,6 +67,13 @@ func (xs NodesXactStat) ObjCount() (count int64) {
 	return
 }
 
+func (xs NodesXactStat) BytesCount() (count int64) {
+	for _, stat := range xs {
+		count += stat.BytesCount()
+	}
+	return
+}
+
 func (xs NodesXactMultiStats) Running() bool {
 	for _, targetStats := range xs {
 		for _, xaction := range targetStats {

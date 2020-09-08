@@ -516,10 +516,21 @@ func (t *targetrunner) etlBucket(c *txnServerCtx) error {
 		}
 		bckTo := cluster.NewBckEmbed(etlMsg.Bck)
 		nlpFrom := bckFrom.GetNameLockPair()
-		nlpTo := bckTo.GetNameLockPair()
 		if !nlpFrom.TryRLock() {
 			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
 		}
+
+		if etlMsg.DryRun {
+			txn := newTxnETLBucket(c, bckFrom, bckTo)
+			if err := t.transactions.begin(txn); err != nil {
+				nlpFrom.Unlock()
+				return err
+			}
+			txn.nlps = []cmn.NLP{nlpFrom}
+			return nil
+		}
+
+		nlpTo := bckTo.GetNameLockPair()
 		if !nlpTo.TryLock() {
 			nlpFrom.Unlock()
 			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())

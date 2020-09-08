@@ -126,6 +126,57 @@ func testOfflineETL(t *testing.T, bckFrom cmn.Bck, comm, transformer string, obj
 	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL %s (%s), got %d", objCnt, transformer, comm, len(list.Entries))
 }
 
+func TestKubeTransformerOfflineDryRun(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	var (
+		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+		objCnt  = 10
+
+		m = ioContext{
+			t:         t,
+			num:       objCnt,
+			fileSize:  512,
+			fixedSize: true,
+			bck:       bckFrom,
+		}
+	)
+
+	tutils.Logln("Preparing source bucket")
+	tutils.CreateFreshBucket(t, proxyURL, bckFrom)
+	defer tutils.DestroyBucket(t, proxyURL, bckFrom)
+	m.init()
+
+	tutils.Logln("Putting objects to source bucket")
+	m.puts()
+
+	uuid, err := etlInit(tutils.Echo, etl.RevProxyCommType)
+	tassert.CheckFatal(t, err)
+
+	defer func() {
+		tutils.Logf("Stop %q\n", uuid)
+		tassert.CheckFatal(t, api.ETLStop(defaultAPIParams, uuid))
+	}()
+
+	tutils.Logf("Start offline ETL %q\n", uuid)
+	xactID, err := api.ETLBucket(defaultAPIParams, bckFrom, bckTo, &etl.OfflineMsg{ID: uuid, DryRun: true})
+	tassert.CheckFatal(t, err)
+
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBucket, Timeout: time.Minute}
+	err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	exists, err := api.DoesBucketExist(defaultAPIParams, cmn.QueryBcks(bckTo))
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, exists == false, "expected destination bucket to not be created")
+
+	stats, err := api.GetXactionStatsByID(defaultAPIParams, xactID)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, stats.ObjCount() == int64(objCnt), "dry run stats expected to return %d objects", objCnt)
+	expectedBytesCnt := int64(m.fileSize * uint64(objCnt))
+	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "dry run stats expected to return %d bytes, got %d", expectedBytesCnt, stats.BytesCount())
+}
+
 func etlInit(name, comm string) (string, error) {
 	tutils.Logln("Reading template")
 	spec, err := tutils.GetTransformYaml(name)

@@ -7,6 +7,8 @@ package etl
 import (
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -94,6 +96,24 @@ func (r *BucketXact) transformAndPut(entry *cmn.BucketEntry) error {
 	}
 
 	r.ObjectsInc()
+
+	if r.bckMsg.DryRun {
+		if length > 0 {
+			// Trust the length from content length header is set correctly.
+			r.BytesAdd(length)
+			debug.AssertNoErr(body.Close())
+			return nil
+		}
+
+		n, err := io.Copy(ioutil.Discard, body)
+		r.BytesAdd(n)
+		return err
+	}
+
+	if length > 0 {
+		// Trust the length from content length header is set correctly.
+		r.BytesAdd(length)
+	}
 
 	// Get object name for a transformed object.
 	newObjName := newETLObjName(entry.Name, r.bckMsg)
