@@ -121,7 +121,8 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 		strMsg := string(msg)
 
 		if resp.StatusCode == http.StatusServiceUnavailable && strMsg == "" {
-			strMsg = "service unavailable please try again later!"
+			strMsg = fmt.Sprintf("[%s]: starting up, please try again later...",
+				http.StatusText(http.StatusServiceUnavailable))
 		}
 		// HEAD request does not return the body - create http error
 		// 503 is also to be preserved
