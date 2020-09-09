@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -40,6 +41,82 @@ type (
 	}
 )
 
+//
+// run sequence: non-EC and EC global
+//
+// main method: serialized to run one at a time and goes through controlled enumerated stages
+// A note on stage management:
+// 1. Non-EC and EC rebalances run in parallel
+// 2. Execution starts after the `Manager` sets the current stage to rebStageTraverse
+// 3. Only EC rebalance changes the current stage
+// 4. Global rebalance performs checks such as `stage > rebStageTraverse` or
+//    `stage < rebStageWaitAck`. Since all EC stages are between
+//    `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
+func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cmn.Notif) {
+	md := &rebArgs{
+		id:     id,
+		smap:   smap,
+		config: cmn.GCO.Get(),
+		ecUsed: reb.t.GetBowner().Get().IsECUsed(),
+	}
+
+	if !reb.rebPreInit(md) {
+		return
+	}
+	if !reb.rebInit(md, notif) {
+		return
+	}
+
+	// At this point only one rebalance is running so we can safely enable regular GFN.
+	gfn := reb.t.GetGFN(cluster.GFNGlobal)
+	gfn.Activate()
+	defer gfn.Deactivate()
+
+	errCnt := 0
+	if err := reb.rebSyncAndRun(md); err == nil {
+		errCnt = reb.rebWaitAck(md)
+	} else {
+		glog.Warning(err)
+	}
+	reb.changeStage(rebStageFin, 0)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageFin])
+	}
+
+	for errCnt != 0 && !reb.xact().Aborted() {
+		errCnt = reb.bcast(md, reb.waitFinExtended)
+	}
+	reb.rebFini(md)
+}
+
+// To optimize goroutine creation:
+// 1. One bucket case just calls a single rebalance worker depending on
+//    whether a bucket is erasure coded (goroutine is not used).
+// 2. Multi-bucket rebalance may start both non-EC and EC in parallel.
+//    It then waits until everything finishes.
+func (reb *Manager) rebSyncAndRun(md *rebArgs) error {
+	// 6. Capture stats, start mpath joggers
+	reb.stages.stage.Store(rebStageTraverse)
+
+	// No EC-enabled buckets - run only regular rebalance
+	if !md.ecUsed {
+		glog.Infof("starting global rebalance (g%d)", md.id)
+		return reb.runNoEC(md)
+	}
+
+	// In all other cases run both rebalances simultaneously
+	group := &errgroup.Group{}
+	group.Go(func() error {
+		glog.Infof("starting global rebalance (g%d)", md.id)
+		return reb.runNoEC(md)
+	})
+	group.Go(func() error {
+		glog.Infof("EC detected - starting EC rebalance (g%d)", md.id)
+		return reb.runEC(md)
+	})
+	return group.Wait()
+}
+
 func (reb *Manager) rebPreInit(md *rebArgs) bool {
 	glog.FastV(4, glog.SmoduleReb).Infof("global reb (v%d) started pre init", md.id)
 	// 1. check whether other targets are up and running
@@ -63,6 +140,60 @@ func (reb *Manager) rebPreInit(md *rebArgs) bool {
 
 	md.paths, _ = fs.Get()
 	return true
+}
+
+func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
+	var (
+		sleep  = md.config.Timeout.CplaneOperation
+		canRun bool
+	)
+	for {
+		select {
+		case <-reb.semaCh:
+			canRun = true
+		default:
+			runtime.Gosched()
+		}
+
+		// Compare rebIDs
+		logHdr := reb.logHdr(md)
+		if reb.rebID.Load() > md.id {
+			glog.Warningf("%s: seeing newer rebID g%d, not running", logHdr, reb.rebID.Load())
+			newerRMD = true
+			if canRun {
+				reb.semaCh <- struct{}{}
+			}
+			return
+		}
+		if reb.rebID.Load() == md.id {
+			if canRun {
+				reb.semaCh <- struct{}{}
+			}
+			glog.Warningf("%s: g%d is already running", logHdr, md.id)
+			alreadyRunning = true
+			return
+		}
+
+		// Check current xaction
+		entry := xaction.Registry.GetRunning(xaction.RegistryXactFilter{Kind: cmn.ActRebalance})
+		if entry == nil {
+			if canRun {
+				return
+			}
+			glog.Warningf("%s: waiting for ???...", logHdr)
+		} else {
+			otherXreb := entry.Get().(*xaction.Rebalance) // running or previous
+			if canRun {
+				return
+			}
+			if otherXreb.ID().Int() < md.id {
+				otherXreb.Abort()
+				glog.Warningf("%s: aborting older [%s]", logHdr, otherXreb)
+			}
+		}
+		cmn.Assert(!canRun)
+		time.Sleep(sleep)
+	}
 }
 
 func (reb *Manager) rebInit(md *rebArgs, notif cmn.Notif) bool {
@@ -108,76 +239,8 @@ func (reb *Manager) rebInit(md *rebArgs, notif cmn.Notif) bool {
 	return true
 }
 
-// look for local slices/replicas
-func (reb *Manager) buildECNamespace(md *rebArgs) int {
-	reb.runEC()
-	if reb.waitForPushReqs(md, rebStageECNamespace) {
-		return 0
-	}
-	return reb.bcast(md, reb.waitNamespace)
-}
-
-// send all collected slices to a correct target(that must have "main" object).
-// It is a two-step process:
-//   1. The target sends all colected data to correct targets
-//   2. If the target is too fast, it may send too early(or in case of network
-//      troubles) that results in data loss. But the target does not know if
-//		the destination received the data. So, the targets enters
-//		`rebStageECDetect` state that means "I'm ready to receive data
-//		exchange requests"
-//   3. In a perfect case, all push requests are successful and
-//		`rebStageECDetect` stage will be finished in no time without any
-//		data transfer
-func (reb *Manager) distributeECNamespace(md *rebArgs) error {
-	const distributeTimeout = 5 * time.Minute
-	if err := reb.exchange(md); err != nil {
-		return err
-	}
-	if reb.waitForPushReqs(md, rebStageECDetect, distributeTimeout) {
-		return nil
-	}
-	cnt := reb.bcast(md, reb.waitECData)
-	if cnt != 0 {
-		return fmt.Errorf("%d node failed to send their data", cnt)
-	}
-	return nil
-}
-
-// find out which objects are broken and how to fix them
-func (reb *Manager) generateECFixList(md *rebArgs) {
-	reb.checkCTs(md)
-	glog.Infof("number of objects misplaced locally: %d", len(reb.ec.localActions))
-	glog.Infof("number of objects to be reconstructed/resent: %d", len(reb.ec.broken))
-}
-
-func (reb *Manager) ecFixLocal(md *rebArgs) error {
-	if err := reb.resilverCT(); err != nil {
-		return fmt.Errorf("failed to resilver slices/objects: %v", err)
-	}
-
-	if cnt := reb.bcast(md, reb.waitECResilver); cnt != 0 {
-		return fmt.Errorf("%d targets failed to complete resilver", cnt)
-	}
-	return nil
-}
-
-func (reb *Manager) ecFixGlobal(md *rebArgs) error {
-	if err := reb.rebalance(md); err != nil {
-		if !reb.xact().Aborted() {
-			glog.Errorf("EC rebalance failed: %v", err)
-			reb.abortRebalance()
-		}
-		return err
-	}
-
-	if cnt := reb.bcast(md, reb.waitECCleanup); cnt != 0 {
-		return fmt.Errorf("%d targets failed to complete resilver", cnt)
-	}
-	return nil
-}
-
 // when at least one bucket has EC enabled
-func (reb *Manager) rebalanceRunEC(md *rebArgs) error {
+func (reb *Manager) runEC(md *rebArgs) error {
 	// Collect all local slices
 	if cnt := reb.buildECNamespace(md); cnt != 0 {
 		return fmt.Errorf("%d targets failed to build namespace", cnt)
@@ -204,7 +267,7 @@ func (reb *Manager) rebalanceRunEC(md *rebArgs) error {
 }
 
 // when no bucket has EC enabled
-func (reb *Manager) rebalanceRun(md *rebArgs) error {
+func (reb *Manager) runNoEC(md *rebArgs) error {
 	var (
 		ver        = md.smap.Version
 		multiplier = md.config.Rebalance.Multiplier
@@ -236,34 +299,6 @@ func (reb *Manager) rebalanceRun(md *rebArgs) error {
 		glog.Infof("finished rebalance walk (g%d)", md.id)
 	}
 	return nil
-}
-
-// The function detects two cases(to reduce redundant goroutine creation):
-// 1. One bucket case just calls a single rebalance worker depending on
-//    whether a bucket is erasure coded. No goroutine is used.
-// 2. Multi-bucket rebalance may start up to two rebalances in parallel and
-//    wait for all finishes.
-func (reb *Manager) rebSyncAndRun(md *rebArgs) error {
-	// 6. Capture stats, start mpath joggers
-	reb.stages.stage.Store(rebStageTraverse)
-
-	// No EC-enabled buckets - run only regular rebalance
-	if !md.ecUsed {
-		glog.Infof("starting only regular rebalance (g%d)", md.id)
-		return reb.rebalanceRun(md)
-	}
-
-	// In all other cases run both rebalances simultaneously
-	group := &errgroup.Group{}
-	group.Go(func() error {
-		glog.Infof("starting regular rebalance (g%d)", md.id)
-		return reb.rebalanceRun(md)
-	})
-	group.Go(func() error {
-		glog.Infof("EC detected - starting EC rebalance (g%d)", md.id)
-		return reb.rebalanceRunEC(md)
-	})
-	return group.Wait()
 }
 
 func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
@@ -439,53 +474,6 @@ func (reb *Manager) rebFini(md *rebArgs) {
 	reb.semaCh <- struct{}{}
 }
 
-// main method: 10 stages
-// A note about rebalance stage management:
-// Regular and EC rebalances are running in parallel. They share
-// the rebalance stage in `Manager`. At this moment it is safe, because:
-// 1. Parallel execution starts after `Manager` sets stage to rebStageTraverse
-// 2. Regular rebalance does not change stage
-// 3. EC rebalance changes the stage
-// 4. Regular rebalance do checks like `stage > rebStageTraverse` or
-//    `stage < rebStageWaitAck`. But since all EC stages are between
-//    `Traverse` and `WaitAck` regular rebalance does not notice stage changes.
-func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cmn.Notif) {
-	md := &rebArgs{
-		id:     id,
-		smap:   smap,
-		config: cmn.GCO.Get(),
-		ecUsed: reb.t.GetBowner().Get().IsECUsed(),
-	}
-
-	if !reb.rebPreInit(md) {
-		return
-	}
-	if !reb.rebInit(md, notif) {
-		return
-	}
-
-	// At this point only one rebalance is running so we can safely enable regular GFN.
-	gfn := reb.t.GetGFN(cluster.GFNGlobal)
-	gfn.Activate()
-	defer gfn.Deactivate()
-
-	errCnt := 0
-	if err := reb.rebSyncAndRun(md); err == nil {
-		errCnt = reb.rebWaitAck(md)
-	} else {
-		glog.Warning(err)
-	}
-	reb.changeStage(rebStageFin, 0)
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("global reb (v%d) in %s state", md.id, stages[rebStageFin])
-	}
-
-	for errCnt != 0 && !reb.xact().Aborted() {
-		errCnt = reb.bcast(md, reb.waitFinExtended)
-	}
-	reb.rebFini(md)
-}
-
 func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		caller     = r.Header.Get(cmn.HeaderCallerName)
@@ -521,9 +509,9 @@ func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-//
-// rebalanceJogger
-//
+////////////////////////////////////
+// rebalanceJogger: global non-EC //
+////////////////////////////////////
 
 func (rj *rebalanceJogger) jog(mpathInfo *fs.MountpathInfo) {
 	// the jogger is running in separate goroutine, so use defer to be

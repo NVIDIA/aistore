@@ -193,232 +193,100 @@ type (
 	}
 )
 
-// Generate unique ID for an object (all its slices gets the same uid)
-func uniqueWaitID(bck cmn.Bck, objName string) string {
-	return fmt.Sprintf("%s/%s", bck, objName)
-}
-
-//
-// Rebalance object methods
-// All methods should be called only after it is clear that the object exists
-// or we have one or few slices. That is why `Assert` is used.
-// And since a new slice is added to the list only if it matches previously
-// added one, it is OK to read all info from the very first slice always
-//
-
-// Returns the list of slices with the same object hash that is the newest one.
-// In majority of cases the object will contain only one list.
-// TODO: implement better detection of the newest object version. Now the newest
-//  is determined only by the number of slices: the newest has the biggest number
-func (so *rebObject) newest() []*rebCT {
-	var l []*rebCT
-	max := 0
-	maxHash := ""
-	for hash, ctList := range so.cts {
-		if max > len(ctList) || len(ctList) == 0 {
-			continue
-		}
-		// Choose the longest list of CTs.
-		// If length is the same, take the list with greater hash value.
-		if max < len(ctList) || hash > maxHash {
-			max = len(ctList)
-			l = ctList
-			maxHash = hash
-		} else if max == len(ctList) {
-			glog.Warningf("The same size but hash is less. Skipping %s", hash)
-		}
+// look for local slices/replicas
+func (reb *Manager) buildECNamespace(md *rebArgs) int {
+	reb.runECjoggers()
+	if reb.waitForPushReqs(md, rebStageECNamespace) {
+		return 0
 	}
-	return l
+	return reb.bcast(md, reb.waitNamespace)
 }
 
-// Returns how many CTs (including the original object) must exists
-func (so *rebObject) requiredCT() int {
-	if so.isECCopy {
-		return int(so.paritySlices + 1)
-	}
-	return int(so.dataSlices + so.paritySlices + 1)
-}
+// main method - starts all mountpaths walkers, waits for them to finish, and
+// changes internal stage after that to 'traverse done', so the caller may continue
+// rebalancing: send collected data to other targets, rebuild slices etc
+func (reb *Manager) runECjoggers() {
+	var (
+		wg                = &sync.WaitGroup{}
+		availablePaths, _ = fs.Get()
+		cfg               = cmn.GCO.Get()
+		bck               = reb.xact().Bck()
+	)
 
-// Returns how many CTs found across all targets
-func (so *rebObject) foundCT() int {
-	return len(so.locCT)
-}
-
-// Returns the list of targets that does not have any CT but
-// they should have according to HRW.
-func (so *rebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
-	freeTargets := make(cluster.Nodes, 0)
-	for _, tgt := range so.hrwTargets {
-		if skip != nil && skip.ID() == tgt.ID() {
-			continue
-		}
-		if _, ok := so.locCT[tgt.ID()]; ok {
-			continue
-		}
-		freeTargets = append(freeTargets, tgt)
-	}
-	return freeTargets
-}
-
-func (rt *retransmitCT) equal(rhs *retransmitCT) bool {
-	return rt.sliceID == rhs.sliceID &&
-		rt.header.ObjName == rhs.header.ObjName &&
-		rt.daemonID == rhs.daemonID &&
-		rt.header.Bck.Equal(rhs.header.Bck)
-}
-
-func (ack *ackCT) add(rt *retransmitCT) {
-	cmn.Assert(rt.header.ObjName != "" && rt.header.Bck.Name != "")
-	ack.mtx.Lock()
-	ack.ct = append(ack.ct, rt)
-	ack.mtx.Unlock()
-}
-
-// Linear search is sufficient at this moment: ackCT holds only ACKs for the
-// current batch that is 8. Even if everything is broken an object is
-// repairable only if there are at least `Data` slices exist.
-// So, at most ackCT holds <number of objects> * <number of parity slices>.
-// Even for 10 parity slices it makes only 80 items in array at max.
-func (ack *ackCT) remove(rt *retransmitCT) {
-	ack.mtx.Lock()
-	ack.removeUnlocked(rt)
-	ack.mtx.Unlock()
-}
-
-func (ack *ackCT) removeUnlocked(rt *retransmitCT) {
-	for idx, c := range ack.ct {
-		if !rt.equal(c) {
-			continue
-		}
-		l := len(ack.ct) - 1
-		if idx != l {
-			ack.ct[idx] = ack.ct[l]
-		}
-		ack.ct = ack.ct[:l]
-		break
-	}
-}
-
-// Keep allocated capacity for the next batch
-func (ack *ackCT) clear() {
-	ack.mtx.Lock()
-	ack.ct = ack.ct[:0]
-	ack.mtx.Unlock()
-}
-
-//
-//  Rebalance result methods
-//
-
-// Merge given CT with already existing CTs of an object.
-// It checks if the CT is unique(in case of the object is erasure coded),
-// and the CT's info about object matches previously found CTs.
-func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error {
-	bckList := rr.bcks
-	bck, ok := bckList[ct.Bck.String()]
-	if !ok {
-		bck = &rebBck{Bck: ct.Bck, objs: make(map[string]*rebObject)}
-		bckList[ct.Bck.String()] = bck
+	for _, mpathInfo := range availablePaths {
+		bck := cmn.Bck{Name: bck.Name, Provider: cmn.ProviderAIS, Ns: bck.Ns}
+		wg.Add(1)
+		go reb.jogEC(mpathInfo, bck, wg)
 	}
 
-	b := cluster.NewBckEmbed(ct.Bck)
-	if err := b.Init(tgt.GetBowner(), tgt.Snode()); err != nil {
+	for _, provider := range cfg.Cloud.Providers {
+		for _, mpathInfo := range availablePaths {
+			bck := cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
+			wg.Add(1)
+			go reb.jogEC(mpathInfo, bck, wg)
+		}
+	}
+	wg.Wait()
+	reb.changeStage(rebStageECNamespace, 0)
+}
+
+// send all collected slices to a correct target(that must have "main" object).
+// It is a two-step process:
+//   1. The target sends all colected data to correct targets
+//   2. If the target is too fast, it may send too early(or in case of network
+//      troubles) that results in data loss. But the target does not know if
+//		the destination received the data. So, the targets enters
+//		`rebStageECDetect` state that means "I'm ready to receive data
+//		exchange requests"
+//   3. In a perfect case, all push requests are successful and
+//		`rebStageECDetect` stage will be finished in no time without any
+//		data transfer
+func (reb *Manager) distributeECNamespace(md *rebArgs) error {
+	const distributeTimeout = 5 * time.Minute
+	if err := reb.exchange(md); err != nil {
 		return err
 	}
-	obj, ok := bck.objs[ct.ObjName]
-	if !ok {
-		// first CT of the object
-		si, err := cluster.HrwTarget(b.MakeUname(ct.ObjName), md.smap)
-		if err != nil {
-			return err
-		}
-		obj = &rebObject{
-			cts:        make(ctList),
-			mainDaemon: si.ID(),
-			bck:        ct.Bck,
-		}
-		obj.cts[ct.ObjHash] = []*rebCT{ct}
-		bck.objs[ct.ObjName] = obj
+	if reb.waitForPushReqs(md, rebStageECDetect, distributeTimeout) {
 		return nil
 	}
-
-	// When the duplicated slice is detected, the algorithm must choose
-	// only one to proceed. To make all targets to choose the same one,
-	// targets select slice by HRW
-	if ct.SliceID != 0 {
-		list := obj.cts[ct.ObjHash]
-		for _, found := range list {
-			if found.SliceID != ct.SliceID {
-				continue
-			}
-			tgtList, errHrw := cluster.HrwTargetList(b.MakeUname(obj.objName), md.smap, len(md.smap.Tmap))
-			if errHrw != nil {
-				return errHrw
-			}
-			err := fmt.Errorf("duplicated %s/%s SliceID %d from %s (discarded)",
-				ct.Name, ct.ObjName, ct.SliceID, ct.DaemonID)
-			for _, tgt := range tgtList {
-				if tgt.ID() == found.DaemonID {
-					if found.DaemonID == ct.DaemonID && found.meta == nil {
-						found.meta = ct.meta
-						found.hrwFQN = ct.hrwFQN
-						found.realFQN = ct.realFQN
-						err = fmt.Errorf("duplicated slice from the same daemon: %s", ct.ObjName)
-					}
-					return err
-				}
-				if tgt.ID() == ct.DaemonID {
-					err = fmt.Errorf("duplicated %s/%s SliceID %d replaced daemonID %s with %s",
-						ct.Name, ct.ObjName, ct.SliceID, found.DaemonID, ct.DaemonID)
-					found.DaemonID = ct.DaemonID
-					if found.meta == nil {
-						found.meta = ct.meta
-					}
-					// Copy the following fields as they are vital for local slices
-					found.hrwFQN = ct.hrwFQN
-					found.realFQN = ct.realFQN
-					return err
-				}
-			}
-			return err
-		}
+	cnt := reb.bcast(md, reb.waitECData)
+	if cnt != 0 {
+		return fmt.Errorf("%d node failed to send their data", cnt)
 	}
-	obj.cts[ct.ObjHash] = append(obj.cts[ct.ObjHash], ct)
 	return nil
 }
 
-//
-// EC Rebalancer methods and utilities
-//
+// find out which objects are broken and how to fix them
+func (reb *Manager) generateECFixList(md *rebArgs) {
+	reb.checkCTs(md)
+	glog.Infof("number of objects misplaced locally: %d", len(reb.ec.localActions))
+	glog.Infof("number of objects to be reconstructed/resent: %d", len(reb.ec.broken))
+}
 
-func newECData() *ecData {
-	return &ecData{
-		cts:          make(ctList),
-		localActions: make([]*rebCT, 0),
-		ackCTs:       ackCT{ct: make([]*retransmitCT, 0)},
+func (reb *Manager) ecFixLocal(md *rebArgs) error {
+	if err := reb.resilverCT(); err != nil {
+		return fmt.Errorf("failed to resilver slices/objects: %v", err)
 	}
+
+	if cnt := reb.bcast(md, reb.waitECResilver); cnt != 0 {
+		return fmt.Errorf("%d targets failed to complete resilver", cnt)
+	}
+	return nil
 }
 
-// Returns a CT list collected by `si` target
-func (s *ecData) nodeData(daemonID string) ([]*rebCT, bool) {
-	s.mtx.Lock()
-	cts, ok := s.cts[daemonID]
-	s.mtx.Unlock()
-	return cts, ok
-}
+func (reb *Manager) ecFixGlobal(md *rebArgs) error {
+	if err := reb.ecGlobal(md); err != nil {
+		if !reb.xact().Aborted() {
+			glog.Errorf("EC rebalance failed: %v", err)
+			reb.abortRebalance()
+		}
+		return err
+	}
 
-// Store a CT list received from `daemonID` target
-func (s *ecData) setNodeData(daemonID string, cts []*rebCT) {
-	s.mtx.Lock()
-	s.cts[daemonID] = cts
-	s.mtx.Unlock()
-}
-
-// Add a CT to list of CTs of a given target.
-func (s *ecData) appendNodeData(daemonID string, ct *rebCT) {
-	s.mtx.Lock()
-	s.cts[daemonID] = append(s.cts[daemonID], ct)
-	s.mtx.Unlock()
+	if cnt := reb.bcast(md, reb.waitECCleanup); cnt != 0 {
+		return fmt.Errorf("%d targets failed to complete resilver", cnt)
+	}
+	return nil
 }
 
 // Sends local CT along with EC metadata to default target.
@@ -700,7 +568,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	return nil
 }
 
-// On receiving an EC CT or EC namespace
+// receiving EC CT or EC namespace
 func (reb *Manager) recvECData(hdr transport.Header, unpacker *cmn.ByteUnpack, reader io.Reader) {
 	defer cmn.DrainReader(reader)
 
@@ -983,34 +851,6 @@ func (reb *Manager) cleanupEC() {
 	reb.ec.mtx.Unlock()
 }
 
-// Main method - starts all mountpaths walkers, waits for them to finish, and
-// changes internal stage after that to 'traverse done', so the caller may continue
-// rebalancing: send collected data to other targets, rebuild slices etc
-func (reb *Manager) runEC() {
-	var (
-		wg                = &sync.WaitGroup{}
-		availablePaths, _ = fs.Get()
-		cfg               = cmn.GCO.Get()
-		bck               = reb.xact().Bck()
-	)
-
-	for _, mpathInfo := range availablePaths {
-		bck := cmn.Bck{Name: bck.Name, Provider: cmn.ProviderAIS, Ns: bck.Ns}
-		wg.Add(1)
-		go reb.jogEC(mpathInfo, bck, wg)
-	}
-
-	for _, provider := range cfg.Cloud.Providers {
-		for _, mpathInfo := range availablePaths {
-			bck := cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
-			wg.Add(1)
-			go reb.jogEC(mpathInfo, bck, wg)
-		}
-	}
-	wg.Wait()
-	reb.changeStage(rebStageECNamespace, 0)
-}
-
 // send collected CTs to all targets with retry (to assemble the entire namespace)
 func (reb *Manager) exchange(md *rebArgs) error {
 	const (
@@ -1238,12 +1078,18 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	cmn.Assert(obj.sender != nil) // must not happen
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], obj size: %d[%s]",
-			reb.t.Snode(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny, obj.mainSliceID, obj.objSize, mainSlice.ObjHash)
+			reb.t.Snode(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny,
+			obj.mainSliceID, obj.objSize, mainSlice.ObjHash)
 		glog.Infof("%s: slice found %d vs required %d[all slices: %v], is in HRW %v [sender %s]",
 			obj.uid, ctFound, ctReq, obj.hasAllSlices, obj.inHrwList, obj.sender)
 	}
 	reb.stages.currBatch.Store(0)
 	return nil
+}
+
+// Generate unique ID for an object (all its slices gets the same uid)
+func uniqueWaitID(bck cmn.Bck, objName string) string {
+	return fmt.Sprintf("%s/%s", bck, objName)
 }
 
 // true if this target is not "default" one, and does not have any CT,
@@ -1433,7 +1279,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 
 // Fetches missing slices from targets that have not sent them yet.
 // Returns and error if it failed to get sufficient number of slices.
-func (reb *Manager) rerequestObj(md *rebArgs, obj *rebObject) error {
+func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 	if obj.ready.Load() == objDone {
 		return nil
 	}
@@ -1489,7 +1335,7 @@ func (reb *Manager) rerequestObj(md *rebArgs, obj *rebObject) error {
 // slices and have not sent anything to this one. After receiving all the
 // data, the function updates the object status (changes objWaiting to
 // objReceived or objDone depending on whether the object needs rebuilding)
-func (reb *Manager) rerequest(md *rebArgs) {
+func (reb *Manager) reRequest(md *rebArgs) {
 	var (
 		batchSize = md.config.EC.BatchSize
 		start     = int(reb.stages.currBatch.Load())
@@ -1503,7 +1349,7 @@ func (reb *Manager) rerequest(md *rebArgs) {
 		}
 		obj := reb.ec.broken[objIdx]
 		obj.mtx.Lock()
-		err := reb.rerequestObj(md, obj)
+		err := reb.reRequestObj(md, obj)
 		obj.mtx.Unlock()
 		if err != nil {
 			glog.Error(err)
@@ -1523,7 +1369,7 @@ func (reb *Manager) allCTReceived(md *rebArgs) bool {
 		return true
 	}
 	if toWait != 0 {
-		reb.rerequest(md)
+		reb.reRequest(md)
 	}
 	reb.rebuildReceived(md)
 	return true
@@ -1549,8 +1395,7 @@ func (reb *Manager) allNodesCompletedBatch(md *rebArgs) bool {
 	return cnt == len(smap)
 }
 
-// Sends the full replica to the default target if the default target does not
-// have the full replica, this target has one, and it is chosen by HRW
+// Sends full replica to the default target if the default does not have it
 func (reb *Manager) restoreReplica(md *rebArgs, obj *rebObject) (err error) {
 	// add to ZIL if any replica is missing and it is main target
 	if obj.isMain && obj.mainHasAny {
@@ -1570,7 +1415,7 @@ func (reb *Manager) restoreReplica(md *rebArgs, obj *rebObject) (err error) {
 	return reb.sendLocalReplica(md, obj)
 }
 
-func (reb *Manager) rebalanceObject(md *rebArgs, obj *rebObject) (err error) {
+func (reb *Manager) recoverObj(md *rebArgs, obj *rebObject) (err error) {
 	// Case #1: this target does not have to do anything
 	if reb.shouldSkipObj(obj) {
 		if glog.FastV(4, glog.SmoduleReb) {
@@ -1664,7 +1509,7 @@ func (reb *Manager) finalizeBatch(md *rebArgs) error {
 
 // Add to log all slices that were sent to targets but this target
 // has not received ACKs
-func (reb *Manager) logNoAck() {
+func (reb *Manager) logNoECAck() {
 	reb.ec.ackCTs.mtx.Lock()
 	for _, dest := range reb.ec.ackCTs.ct {
 		// TODO: add to ZIL
@@ -1691,11 +1536,11 @@ func (reb *Manager) waitECAck(md *rebArgs) {
 		return
 	}
 
-	reb.logNoAck()
+	reb.logNoECAck()
 }
 
 // Rebalances the current batch of broken objects
-func (reb *Manager) rebalanceBatch(md *rebArgs, batchCurr int64) error {
+func (reb *Manager) doBatch(md *rebArgs, batchCurr int64) error {
 	batchEnd := cmn.Min(int(batchCurr)+md.config.EC.BatchSize, len(reb.ec.broken))
 	for objIdx := int(batchCurr); objIdx < batchEnd; objIdx++ {
 		if reb.xact().Aborted() {
@@ -1708,15 +1553,15 @@ func (reb *Manager) rebalanceBatch(md *rebArgs, batchCurr int64) error {
 		}
 		cmn.Assert(len(obj.locCT) != 0) // cannot happen
 
-		if err := reb.rebalanceObject(md, obj); err != nil {
+		if err := reb.recoverObj(md, obj); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// Does cluster-wide rebalance
-func (reb *Manager) rebalance(md *rebArgs) (err error) {
+// cluster-wide EC rebalance
+func (reb *Manager) ecGlobal(md *rebArgs) (err error) {
 	batchCurr := int64(0)
 	batchLast := int64(len(reb.ec.broken) - 1)
 	reb.stages.currBatch.Store(batchCurr)
@@ -1726,7 +1571,7 @@ func (reb *Manager) rebalance(md *rebArgs) (err error) {
 			glog.Infof("Starting batch of %d from %d", md.config.EC.BatchSize, batchCurr)
 		}
 
-		if err = reb.rebalanceBatch(md, batchCurr); err != nil {
+		if err = reb.doBatch(md, batchCurr); err != nil {
 			reb.cleanupBatch(md)
 			return err
 		}
@@ -2034,4 +1879,239 @@ func (reb *Manager) updateRebuildInfo(obj *rebObject) {
 		// if it is main target, it needs dataSlices slices to rebuild
 		obj.ready.CAS(objWaiting, objReceived)
 	}
+}
+
+///////////////
+// rebObject //
+///////////////
+
+// All methods should be called only after it is clear that the object exists
+// _or_ when we have one or more slices.
+// Since a new slice is added to the list only when it matches a previously
+// added one, it is OK to always read all info from the very first slice
+
+// Returns the list of slices with the same object hash that is the newest one.
+// In majority of cases the object will contain only one list.
+//
+// TODO: implement better detection of the newest object version. Now the newest
+//       is determined only by the number of slices: the newest has the biggest number
+func (so *rebObject) newest() []*rebCT {
+	var (
+		l       []*rebCT
+		maxHash string
+		max     int
+	)
+	for hash, ctList := range so.cts {
+		if max > len(ctList) || len(ctList) == 0 {
+			continue
+		}
+		// Choose the longest list of CTs.
+		// If length is the same, take the list with greater hash value.
+		if max < len(ctList) || hash > maxHash {
+			max = len(ctList)
+			l = ctList
+			maxHash = hash
+		} else if max == len(ctList) {
+			glog.Warningf("The same size but hash is less. Skipping %s", hash)
+		}
+	}
+	return l
+}
+
+// Returns the number of CTs that must exist (full replica including)
+func (so *rebObject) requiredCT() int {
+	if so.isECCopy {
+		return int(so.paritySlices + 1)
+	}
+	return int(so.dataSlices + so.paritySlices + 1)
+}
+
+// Returns num CTs found across all targets
+func (so *rebObject) foundCT() int {
+	return len(so.locCT)
+}
+
+// Returns the list of targets that does not have any CT but
+// they should have according to HRW.
+func (so *rebObject) emptyTargets(skip *cluster.Snode) cluster.Nodes {
+	freeTargets := make(cluster.Nodes, 0)
+	for _, tgt := range so.hrwTargets {
+		if skip != nil && skip.ID() == tgt.ID() {
+			continue
+		}
+		if _, ok := so.locCT[tgt.ID()]; ok {
+			continue
+		}
+		freeTargets = append(freeTargets, tgt)
+	}
+	return freeTargets
+}
+
+///////////
+// ackCT //
+///////////
+
+func (ack *ackCT) add(rt *retransmitCT) {
+	cmn.Assert(rt.header.ObjName != "" && rt.header.Bck.Name != "")
+	ack.mtx.Lock()
+	ack.ct = append(ack.ct, rt)
+	ack.mtx.Unlock()
+}
+
+// Linear search is sufficient at this moment: ackCT holds only ACKs for the
+// current batch that is 8. Even if everything is broken an object is
+// repairable only if there are at least `Data` slices exist.
+// So, at most ackCT holds <number of objects> * <number of parity slices>.
+// Even for 10 parity slices it makes only 80 items in array at max.
+func (ack *ackCT) remove(rt *retransmitCT) {
+	ack.mtx.Lock()
+	ack.removeUnlocked(rt)
+	ack.mtx.Unlock()
+}
+
+func (ack *ackCT) removeUnlocked(rt *retransmitCT) {
+	for idx, c := range ack.ct {
+		if !rt.equal(c) {
+			continue
+		}
+		l := len(ack.ct) - 1
+		if idx != l {
+			ack.ct[idx] = ack.ct[l]
+		}
+		ack.ct = ack.ct[:l]
+		break
+	}
+}
+
+// Keep allocated capacity for the next batch
+func (ack *ackCT) clear() {
+	ack.mtx.Lock()
+	ack.ct = ack.ct[:0]
+	ack.mtx.Unlock()
+}
+
+//////////////////
+// globalCTList //
+//////////////////
+
+// Merge given CT with already existing CTs of an object.
+// It checks if the CT is unique(in case of the object is erasure coded),
+// and the CT's info about object matches previously found CTs.
+func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error {
+	bckList := rr.bcks
+	bck, ok := bckList[ct.Bck.String()]
+	if !ok {
+		bck = &rebBck{Bck: ct.Bck, objs: make(map[string]*rebObject)}
+		bckList[ct.Bck.String()] = bck
+	}
+
+	b := cluster.NewBckEmbed(ct.Bck)
+	if err := b.Init(tgt.GetBowner(), tgt.Snode()); err != nil {
+		return err
+	}
+	obj, ok := bck.objs[ct.ObjName]
+	if !ok {
+		// first CT of the object
+		si, err := cluster.HrwTarget(b.MakeUname(ct.ObjName), md.smap)
+		if err != nil {
+			return err
+		}
+		obj = &rebObject{
+			cts:        make(ctList),
+			mainDaemon: si.ID(),
+			bck:        ct.Bck,
+		}
+		obj.cts[ct.ObjHash] = []*rebCT{ct}
+		bck.objs[ct.ObjName] = obj
+		return nil
+	}
+
+	// When the duplicated slice is detected, the algorithm must choose
+	// only one to proceed. To make all targets to choose the same one,
+	// targets select slice by HRW
+	if ct.SliceID != 0 {
+		list := obj.cts[ct.ObjHash]
+		for _, found := range list {
+			if found.SliceID != ct.SliceID {
+				continue
+			}
+			tgtList, errHrw := cluster.HrwTargetList(b.MakeUname(obj.objName), md.smap, len(md.smap.Tmap))
+			if errHrw != nil {
+				return errHrw
+			}
+			err := fmt.Errorf("duplicated %s/%s SliceID %d from %s (discarded)",
+				ct.Name, ct.ObjName, ct.SliceID, ct.DaemonID)
+			for _, tgt := range tgtList {
+				if tgt.ID() == found.DaemonID {
+					if found.DaemonID == ct.DaemonID && found.meta == nil {
+						found.meta = ct.meta
+						found.hrwFQN = ct.hrwFQN
+						found.realFQN = ct.realFQN
+						err = fmt.Errorf("duplicated slice from the same daemon: %s", ct.ObjName)
+					}
+					return err
+				}
+				if tgt.ID() == ct.DaemonID {
+					err = fmt.Errorf("duplicated %s/%s SliceID %d replaced daemonID %s with %s",
+						ct.Name, ct.ObjName, ct.SliceID, found.DaemonID, ct.DaemonID)
+					found.DaemonID = ct.DaemonID
+					if found.meta == nil {
+						found.meta = ct.meta
+					}
+					// Copy the following fields as they are vital for local slices
+					found.hrwFQN = ct.hrwFQN
+					found.realFQN = ct.realFQN
+					return err
+				}
+			}
+			return err
+		}
+	}
+	obj.cts[ct.ObjHash] = append(obj.cts[ct.ObjHash], ct)
+	return nil
+}
+
+////////////
+// ecData //
+////////////
+
+func newECData() *ecData {
+	return &ecData{
+		cts:          make(ctList),
+		localActions: make([]*rebCT, 0),
+		ackCTs:       ackCT{ct: make([]*retransmitCT, 0)},
+	}
+}
+
+// Returns a CT list collected by `si` target
+func (s *ecData) nodeData(daemonID string) ([]*rebCT, bool) {
+	s.mtx.Lock()
+	cts, ok := s.cts[daemonID]
+	s.mtx.Unlock()
+	return cts, ok
+}
+
+// Store a CT list received from `daemonID` target
+func (s *ecData) setNodeData(daemonID string, cts []*rebCT) {
+	s.mtx.Lock()
+	s.cts[daemonID] = cts
+	s.mtx.Unlock()
+}
+
+// Add a CT to list of CTs of a given target.
+func (s *ecData) appendNodeData(daemonID string, ct *rebCT) {
+	s.mtx.Lock()
+	s.cts[daemonID] = append(s.cts[daemonID], ct)
+	s.mtx.Unlock()
+}
+
+//////////////////
+// retransmitCT //
+//////////////////
+
+func (rt *retransmitCT) equal(rhs *retransmitCT) bool {
+	return rt.sliceID == rhs.sliceID &&
+		rt.header.ObjName == rhs.header.ObjName &&
+		rt.daemonID == rhs.daemonID &&
+		rt.header.Bck.Equal(rhs.header.Bck)
 }

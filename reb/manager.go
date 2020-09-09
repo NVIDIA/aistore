@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -87,18 +86,6 @@ type (
 		batchID int64  // current batch ID (0 for non-EC stages)
 		stage   uint32 // current stage
 	}
-	nodeStages struct {
-		// Info about remote targets. It needs mutex for it can be
-		// updated from different goroutines
-		mtx     sync.Mutex
-		targets map[string]*stageStatus // daemonID <-> stageStatus
-		// Info about this target rebalance status. This info is used oftener
-		// than remote target ones, and updated more frequently locally.
-		// That is why it uses atomics instead of global mutex
-		currBatch atomic.Int64  // EC rebalance: current batch ID
-		lastBatch atomic.Int64  // EC rebalance: ID of the last batch
-		stage     atomic.Uint32 // rebStage* enum: this target current stage
-	}
 	lomAcks struct {
 		mu *sync.Mutex
 		q  map[string]*cluster.LOM // on the wire, waiting for ACK
@@ -121,72 +108,10 @@ var stages = map[uint32]string{
 	rebStageAbort:       "<abort>",
 }
 
-//
-// nodeStages
-//
+//////////////////////////////////////////////
+// rebalance manager: init, receive, common //
+//////////////////////////////////////////////
 
-func newNodeStages() *nodeStages {
-	return &nodeStages{targets: make(map[string]*stageStatus)}
-}
-
-// Returns true if the target is in `newStage` or in any next stage
-func (ns *nodeStages) stageReached(status *stageStatus, newStage uint32, newBatchID int64) bool {
-	// for simple stages: just check the stage
-	if newBatchID == 0 {
-		return status.stage >= newStage
-	}
-	// for cyclic stage (used in EC): check both batch ID and stage
-	return status.batchID > newBatchID ||
-		(status.batchID == newBatchID && status.stage >= newStage) ||
-		(status.stage >= rebStageECCleanup && status.stage > newStage)
-}
-
-// Mark a 'node' that it has reached the 'stage'. Do nothing if the target
-// is already in this stage or has finished it already
-func (ns *nodeStages) setStage(daemonID string, stage uint32, batchID int64) {
-	ns.mtx.Lock()
-	status, ok := ns.targets[daemonID]
-	if !ok {
-		status = &stageStatus{}
-		ns.targets[daemonID] = status
-	}
-
-	if !ns.stageReached(status, stage, batchID) {
-		status.stage = stage
-		status.batchID = batchID
-	}
-	ns.mtx.Unlock()
-}
-
-// Returns true if the target is in `newStage` or in any next stage.
-func (ns *nodeStages) isInStage(si *cluster.Snode, stage uint32) bool {
-	ns.mtx.Lock()
-	inStage := ns.isInStageBatchUnlocked(si, stage, 0)
-	ns.mtx.Unlock()
-	return inStage
-}
-
-// Returns true if the target is in `newStage` and has reached the given
-// batch ID or it is in any next stage
-func (ns *nodeStages) isInStageBatchUnlocked(si *cluster.Snode, stage uint32, batchID int64) bool {
-	status, ok := ns.targets[si.ID()]
-	if !ok {
-		return false
-	}
-	return ns.stageReached(status, stage, batchID)
-}
-
-func (ns *nodeStages) cleanup() {
-	ns.mtx.Lock()
-	for k := range ns.targets {
-		delete(ns.targets, k)
-	}
-	ns.mtx.Unlock()
-}
-
-//
-// Manager
-//
 func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *Manager {
 	netd, netc := cmn.NetworkPublic, cmn.NetworkPublic
 	if config.Net.UseIntraData {
@@ -209,11 +134,11 @@ func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *
 		}),
 	}
 	reb.ec = newECData()
-	reb.initStreams()
+	reb.initStreamRecv()
 	return reb
 }
 
-func (reb *Manager) initStreams() {
+func (reb *Manager) initStreamRecv() {
 	if _, err := transport.Register(reb.netd, RebalanceStreamName, reb.recvObj); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
@@ -255,60 +180,6 @@ func (reb *Manager) logHdr(md *rebArgs) string {
 }
 func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
 	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.RebID(), remoteID)
-}
-
-func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
-	var (
-		sleep  = md.config.Timeout.CplaneOperation
-		canRun bool
-	)
-	for {
-		select {
-		case <-reb.semaCh:
-			canRun = true
-		default:
-			runtime.Gosched()
-		}
-
-		// Compare rebIDs
-		logHdr := reb.logHdr(md)
-		if reb.rebID.Load() > md.id {
-			glog.Warningf("%s: seeing newer rebID g%d, not running", logHdr, reb.rebID.Load())
-			newerRMD = true
-			if canRun {
-				reb.semaCh <- struct{}{}
-			}
-			return
-		}
-		if reb.rebID.Load() == md.id {
-			if canRun {
-				reb.semaCh <- struct{}{}
-			}
-			glog.Warningf("%s: g%d is already running", logHdr, md.id)
-			alreadyRunning = true
-			return
-		}
-
-		// Check current xaction
-		entry := xaction.Registry.GetRunning(xaction.RegistryXactFilter{Kind: cmn.ActRebalance})
-		if entry == nil {
-			if canRun {
-				return
-			}
-			glog.Warningf("%s: waiting for ???...", logHdr)
-		} else {
-			otherXreb := entry.Get().(*xaction.Rebalance) // running or previous
-			if canRun {
-				return
-			}
-			if otherXreb.ID().Int() < md.id {
-				otherXreb.Abort()
-				glog.Warningf("%s: aborting older [%s]", logHdr, otherXreb)
-			}
-		}
-		cmn.Assert(!canRun)
-		time.Sleep(sleep)
-	}
 }
 
 func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
@@ -589,7 +460,8 @@ func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
 		sliceID: int16(ack.sliceID), daemonID: ack.daemonID,
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s: EC ack from %s on %s/%s [%d]", reb.t.Snode(), ack.daemonID, hdr.Bck, hdr.ObjName, ack.sliceID)
+		glog.Infof("%s: EC ack from %s on %s/%s [%d]",
+			reb.t.Snode(), ack.daemonID, hdr.Bck, hdr.ObjName, ack.sliceID)
 	}
 	reb.ec.ackCTs.remove(rt)
 }
@@ -657,7 +529,8 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 		return
 	}
 	var (
-		rj    = &rebalanceJogger{joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase, wg: &sync.WaitGroup{}}, smap: md.smap}
+		rj = &rebalanceJogger{joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase,
+			wg: &sync.WaitGroup{}}, smap: md.smap}
 		query = url.Values{}
 	)
 	query.Add(cmn.URLParamSilent, "true")

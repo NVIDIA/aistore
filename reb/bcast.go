@@ -20,10 +20,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-//
-// rebalance: cluster-wide synchronization at certain stages
-//
-
 type (
 	Status struct {
 		Tmap        cluster.NodeMap         `json:"tmap"`                // targets I'm waiting for ACKs from
@@ -39,6 +35,10 @@ type (
 		Quiescent   bool                    `json:"quiescent"`           // transport queue is empty
 	}
 )
+
+////////////////////////////////////////////
+// rebalance manager: node <=> node comm. //
+////////////////////////////////////////////
 
 // via GET /v1/health (cmn.Health)
 func (reb *Manager) RebStatus(status *Status) {
