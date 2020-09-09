@@ -753,8 +753,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 	)
 	go t.rebManager.RunRebalance(smap, newRMD.Version, notif)
 	if newRMD.Resilver {
-		// TODO: Assign UUID and notify IC
-		go t.rebManager.RunResilver("", true /*skipGlobMisplaced*/)
+		go t.runResilver("", true /*skipGlobMisplaced*/)
 	}
 	return
 }

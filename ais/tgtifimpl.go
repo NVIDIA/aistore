@@ -75,10 +75,20 @@ func (t *targetrunner) GetXactRegistry() cluster.XactRegistry {
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
+	regToIC := id == ""
+	if regToIC {
+		id = cmn.GenUUID()
+	}
+
 	xlru := xaction.Registry.RenewLRU(id)
 	if xlru == nil {
 		return
 	}
+
+	if regToIC && xlru.ID().String() == id {
+		t.registerIC(xactRegMsg{UUID: id, Kind: cmn.ActLRU, Scrs: []string{t.si.ID()}})
+	}
+
 	ini := lru.InitLRU{
 		T:                   t,
 		Xaction:             xlru,

@@ -28,6 +28,7 @@ type (
 )
 
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...cmn.Notif) {
+	cmn.Assert(id != "")
 	var (
 		availablePaths, _ = fs.Get()
 		err               = fs.PutMarker(xaction.GetMarkerName(cmn.ActResilver))

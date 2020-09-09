@@ -80,6 +80,7 @@ const (
 	ActSendOwnershipTbl  = "ic-send-ownership-tbl"
 	ActListenToNotif     = "watch-xaction"
 	ActMergeOwnershipTbl = "merge-ownership-tbl"
+	ActRegGlobalXaction  = "reg-global-xaction"
 )
 
 const (

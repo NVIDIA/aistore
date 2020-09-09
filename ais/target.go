@@ -284,8 +284,7 @@ func (t *targetrunner) Run() error {
 	if marked.Interrupted {
 		go func() {
 			glog.Infoln("resuming resilver...")
-			// TODO: Assign UUID and notify IC
-			t.rebManager.RunResilver("", false /*skipGlobMisplaced*/)
+			t.runResilver("", false /*skipGlobMisplaced*/)
 		}()
 	}
 
@@ -1530,4 +1529,16 @@ func (t *targetrunner) fshc(err error, filepath string) {
 
 func (t *targetrunner) K8sNodeName() string {
 	return t.k8sNode
+}
+
+func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...cmn.Notif) {
+	if id == "" {
+		id = cmn.GenUUID()
+		t.registerIC(xactRegMsg{
+			UUID: id,
+			Kind: cmn.ActResilver,
+			Scrs: []string{t.si.ID()},
+		})
+	}
+	t.rebManager.RunResilver(id, skipGlobMisplaced /*skipGlobMisplaced*/, notifs...)
 }

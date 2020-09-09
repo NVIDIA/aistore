@@ -480,9 +480,13 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, Timeout: timeout}
-		err := api.WaitForXaction(baseParams, xactArgs)
-		if err != nil {
+		xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, Latest: true, Timeout: timeout}
+		if err := api.WaitForXactionV2(baseParams, xactArgs); err != nil {
+			if hErr, ok := err.(*cmn.HTTPError); ok {
+				if hErr.Status == http.StatusNotFound {
+					return
+				}
+			}
 			errCh <- err
 		}
 	}()

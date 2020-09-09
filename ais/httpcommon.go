@@ -911,6 +911,30 @@ func (h *httprunner) bcastToNodes(bargs bcastArgs) chan callResult {
 	return ch
 }
 
+func (h *httprunner) bcastToIC(msg *aisMsg) chan callResult {
+	smap := h.owner.smap.get()
+	nodes := make(cluster.NodeMap, len(smap.IC))
+	for pid := range smap.IC {
+		if pid != h.si.ID() {
+			psi := smap.GetProxy(pid)
+			cmn.Assert(psi != nil)
+			nodes.Add(psi)
+		}
+	}
+	cmn.Assert(len(nodes) > 0)
+
+	return h.bcastToNodes(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Path:   cmn.URLPath(cmn.Version, cmn.IC),
+			Body:   cmn.MustMarshal(msg),
+		},
+		network: cmn.NetworkIntraControl,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+		nodes:   []cluster.NodeMap{nodes},
+	})
+}
+
 //////////////////////////////////
 // HTTP request parsing helpers //
 //////////////////////////////////

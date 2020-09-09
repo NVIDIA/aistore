@@ -145,8 +145,13 @@ var (
 )
 
 func newNLB(uuid string, smap *smapX, ty int, action string, bck ...cmn.Bck) *notifListenerBase {
+	return newNLBWithSrc(uuid, smap, smap.Tmap.Clone(), ty, action, bck...)
+}
+
+func newNLBWithSrc(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *notifListenerBase {
 	cmn.Assert(ty > notifInvalid)
-	return &notifListenerBase{UUIDX: uuid, Srcs: smap.Tmap.Clone(), SmapVersion: smap.version(), Ty: ty, Action: action, Bck: bck}
+	cmn.Assert(len(srcs) != 0)
+	return &notifListenerBase{UUIDX: uuid, Srcs: srcs, SmapVersion: smap.version(), Ty: ty, Action: action, Bck: bck}
 }
 
 ///////////////////////
@@ -461,6 +466,8 @@ func (n *notifs) housekeep() time.Duration {
 	n.RUnlock()
 	args := bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodGet, Query: make(url.Values, 2)},
+		network: cmn.NetworkIntraControl,
+		smap:    n.p.owner.smap.get(),
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	}
 	for uuid, nl := range tempn {
@@ -472,7 +479,17 @@ func (n *notifs) housekeep() time.Duration {
 		args.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
 		args.req.Query.Set(cmn.URLParamUUID, uuid)
 		args.fv = func() interface{} { return &cmn.BaseXactStatsExt{} }
-		results := n.p.bcastToGroup(args)
+
+		// nodes to fetch stats from
+		nodes := make(cluster.NodeMap, len(nl.notifiers()))
+		for _, node := range nl.notifiers() {
+			if node != nil {
+				nodes.Add(node)
+			}
+		}
+		args.nodes = []cluster.NodeMap{nodes}
+
+		results := n.p.bcastToNodes(args)
 		for res := range results {
 			var (
 				msg  interface{}

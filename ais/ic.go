@@ -39,6 +39,12 @@ type (
 		msg   interface{}
 	}
 
+	xactRegMsg struct {
+		UUID string   `json:"uuid"`
+		Kind string   `json:"kind"`
+		Scrs []string `json:"srcs"` // list of daemonIDs
+	}
+
 	icBundle struct {
 		Smap         *smapX              `json:"smap"`
 		OwnershipTbl jsoniter.RawMessage `json:"ownership_table"`
@@ -284,6 +290,20 @@ check:
 		}
 		cmn.Assert(nlMsg.nl.notifTy() == notifXact || nlMsg.nl.notifTy() == notifCache)
 		ic.p.notifs.add(nlMsg.nl)
+	case cmn.ActRegGlobalXaction:
+		regMsg := &xactRegMsg{}
+		if err := cmn.MorphMarshal(msg.Value, regMsg); err != nil {
+			ic.p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
+		srcs, err := smap.GetTargetMap(regMsg.Scrs)
+		if err != nil {
+			ic.p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		nl := newNLBWithSrc(regMsg.UUID, smap, srcs, notifXact, regMsg.Kind)
+		ic.p.notifs.add(nl)
 	default:
 		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
 	}
@@ -303,27 +323,12 @@ func (ic *ic) registerEqual(a regIC) {
 }
 
 func (ic *ic) bcastListenIC(nl notifListener, smap *smapX) (err error) {
-	nodes := make(cluster.NodeMap, len(smap.IC))
-	for pid := range smap.IC {
-		if pid != ic.p.si.ID() {
-			psi := smap.GetProxy(pid)
-			cmn.Assert(psi != nil)
-			nodes.Add(psi)
-		}
-	}
-	actMsg := cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
-	msg := ic.p.newAisMsg(&actMsg, smap, nil)
-	cmn.Assert(len(nodes) > 0)
-	results := ic.p.bcastToNodes(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.URLPath(cmn.Version, cmn.IC),
-			Body:   cmn.MustMarshal(msg),
-		},
-		network: cmn.NetworkIntraControl,
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-		nodes:   []cluster.NodeMap{nodes},
-	})
+	var (
+		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
+		msg    = ic.p.newAisMsg(&actMsg, smap, nil)
+	)
+
+	results := ic.p.bcastToIC(msg)
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err)

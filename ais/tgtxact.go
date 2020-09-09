@@ -143,7 +143,7 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 				Dsts: []string{equalIC}, F: t.xactCallerNotify,
 			},
 		}
-		go t.rebManager.RunResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
+		go t.runResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
 	// 2. with bucket
 	case cmn.ActPrefetch:
 		if bck == nil {
@@ -179,4 +179,21 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		return fmt.Errorf("starting %q xaction is unsupported", xactMsg.Kind)
 	}
 	return nil
+}
+
+func (t *targetrunner) registerIC(regMsg xactRegMsg) (err error) {
+	var (
+		smap   = t.owner.smap.get()
+		actMsg = cmn.ActionMsg{Action: cmn.ActRegGlobalXaction, Value: regMsg}
+		msg    = t.newAisMsg(&actMsg, smap, nil)
+	)
+
+	results := t.bcastToIC(msg)
+	for res := range results {
+		if res.err != nil {
+			glog.Error(res.err)
+			err = res.err
+		}
+	}
+	return
 }
