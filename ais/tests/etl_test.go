@@ -39,28 +39,28 @@ var (
 	defaultAPIParams = api.BaseParams{Client: http.DefaultClient, URL: proxyURL}
 )
 
-func TestKubeTransformer(t *testing.T) {
+func TestETLObject(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	tests := []testConfig{
-		{transformer: tutils.Echo, comm: etl.RedirectCommType},
-		{transformer: tutils.Echo, comm: etl.RevProxyCommType},
-		{transformer: tutils.Echo, comm: etl.PushCommType},
-		{tutils.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tutils.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tutils.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual},
-		{tutils.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
-		{tutils.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
-		{tutils.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual},
+		{transformer: tutils.Echo, comm: etl.RedirectCommType, onlyLong: true},
+		{transformer: tutils.Echo, comm: etl.RevProxyCommType, onlyLong: true},
+		{transformer: tutils.Echo, comm: etl.PushCommType, onlyLong: true},
+		{tutils.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tutils.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tutils.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tutils.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{tutils.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{tutils.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			testETL(t, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
+			testETL(t, test.onlyLong, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
 		})
 	}
 }
 
-func TestKubeTransformerOffline(t *testing.T) {
+func TestETLBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	var (
 		bck    = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
@@ -76,9 +76,9 @@ func TestKubeTransformerOffline(t *testing.T) {
 	)
 
 	tests := []testConfig{
-		{transformer: tutils.Echo, comm: etl.RedirectCommType},
+		{transformer: tutils.Echo, comm: etl.RedirectCommType, onlyLong: true},
 		{transformer: tutils.Md5, comm: etl.RevProxyCommType},
-		{transformer: tutils.Md5, comm: etl.PushCommType},
+		{transformer: tutils.Md5, comm: etl.PushCommType, onlyLong: true},
 	}
 
 	tutils.Logln("Preparing source bucket")
@@ -91,7 +91,7 @@ func TestKubeTransformerOffline(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			testOfflineETL(t, bck, test.comm, test.transformer, objCnt)
+			testOfflineETL(t, test.onlyLong, bck, test.comm, test.transformer, objCnt)
 		})
 	}
 }
@@ -99,7 +99,8 @@ func TestKubeTransformerOffline(t *testing.T) {
 // TODO: currently this test only tests scenario where all objects are PUT to
 // the same target which they are currently stored on. That's because our
 // minikube tests only run with a single target.
-func testOfflineETL(t *testing.T, bckFrom cmn.Bck, comm, transformer string, objCnt int) {
+func testOfflineETL(t *testing.T, onlyLong bool, bckFrom cmn.Bck, comm, transformer string, objCnt int) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: onlyLong})
 	var (
 		bckTo = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 	)
@@ -126,8 +127,8 @@ func testOfflineETL(t *testing.T, bckFrom cmn.Bck, comm, transformer string, obj
 	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL %s (%s), got %d", objCnt, transformer, comm, len(list.Entries))
 }
 
-func TestKubeTransformerOfflineDryRun(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+func TestETLBucketDryRun(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
 	var (
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		bckTo   = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
@@ -195,7 +196,8 @@ func etlInit(name, comm string) (string, error) {
 	return api.ETLInit(defaultAPIParams, spec)
 }
 
-func testETL(t *testing.T, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
+func testETL(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
 	var (
 		bck        = cmn.Bck{Name: "etl-test", Provider: cmn.ProviderAIS}
 		testObjDir = filepath.Join("data", "transformer", transformer)
@@ -261,6 +263,7 @@ type (
 		inPath      string         // optional
 		outPath     string         // optional
 		filesEqual  filesEqualFunc // optional
+		onlyLong    bool           // run only with long tests
 	}
 )
 

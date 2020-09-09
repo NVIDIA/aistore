@@ -194,7 +194,7 @@ test:kube-short:
   script:
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y;echo y;echo y;  })
     - status=0
-    - BUCKET="test" RE="TestKubeTransformer/tar2tf-filters" make test-run || status=$?
+    - BUCKET="test" RE="TestETL" make test-short || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
 

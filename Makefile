@@ -203,7 +203,7 @@ test-envcheck:
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-env
 
 test-short: test-envcheck ## Run short tests (requires BUCKET variable to be set)
-	@BUCKET=$(BUCKET) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
+	@RE=$(RE) BUCKET=$(BUCKET) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
 
 test-long: test-envcheck ## Run all (long) tests (requires BUCKET variable to be set)
 	@BUCKET=$(BUCKET) AIS_ENDPOINT=$(AIS_ENDPOINT) $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
