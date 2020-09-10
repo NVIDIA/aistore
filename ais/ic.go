@@ -203,13 +203,13 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 		return
 	}
 
-	if err := nl.err(); err != nil {
+	if err := nl.err(); err != nil && !nl.aborted() {
 		ic.p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	// TODO: Also send stats, eg. progress when ready
-	w.Write(cmn.MustMarshal(nl.finished()))
+	w.Write(cmn.MustMarshal(nl.status()))
 }
 
 // verb /v1/ic

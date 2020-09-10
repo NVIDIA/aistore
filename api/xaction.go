@@ -239,14 +239,14 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
 	return nil
 }
 
-func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (finished bool, err error) {
+func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *cmn.XactStatus, err error) {
 	baseParams.Method = http.MethodGet
 	msg := cmn.XactReqMsg{
 		ID:   args.ID,
 		Kind: args.Kind,
 		Bck:  args.Bck,
 	}
-
+	status = &cmn.XactStatus{}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPath(cmn.Version, cmn.Cluster),
@@ -254,7 +254,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (finished bool, e
 		Query: url.Values{
 			cmn.URLParamWhat: []string{cmn.GetWhatStatus},
 		},
-	}, &finished)
+	}, status)
 	return
 }
 
@@ -268,8 +268,8 @@ func WaitForXactionV2(baseParams BaseParams, args XactReqArgs) (err error) {
 	}
 
 	for {
-		finished, err := GetXactionStatus(baseParams, args)
-		if err != nil || finished {
+		status, err := GetXactionStatus(baseParams, args)
+		if err != nil || status.Finished() {
 			return err
 		}
 

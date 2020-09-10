@@ -251,3 +251,15 @@ func (xact *XactBase) Stats() XactStats {
 		AbortedX:    xact.Aborted(),
 	}
 }
+
+//
+// XactStatus
+//
+
+func (xs *XactStatus) Finished() bool {
+	return xs.FinTime > 0
+}
+
+func (xs *XactStatus) Aborted() bool {
+	return xs.AbortedX
+}

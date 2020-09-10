@@ -42,6 +42,13 @@ type (
 		BaseXactStats
 		Ext interface{} `json:"ext"`
 	}
+
+	XactStatus struct {
+		UUID     string `json:"uuid"` // UUID of the xaction
+		ErrMsg   string `json:"err"`
+		FinTime  int64  `json:"end_time"` // time when xaction ended
+		AbortedX bool   `json:"aborted"`
+	}
 )
 
 // XactsDtor is a statically declared table of the form: [xaction-kind => xaction-descriptor]

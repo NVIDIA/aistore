@@ -86,6 +86,8 @@ type (
 		err() error
 		UUID() string
 		Category() int
+		aborted() bool
+		status() *cmn.XactStatus
 		finTime() int64
 		finished() bool
 		String() string
@@ -96,19 +98,21 @@ type (
 
 	notifListenerBase struct {
 		sync.RWMutex
-		UUIDX       string            // UUID
-		Srcs        cluster.NodeMap   // expected notifiers
-		Errs        map[string]string // [node-ID => ErrMsg]
-		f           notifCallback     // optional listening-side callback
-		rc          int               // refcount
-		Ty          int               // notification category (above)
-		FinTime     atomic.Int64      // timestamp when finished
-		Owned       string            // "": not owned | equalIC: IC | otherwise, pid + IC
-		SmapVersion int64             // smap version in which NL is added
+		UUIDX string            // UUID
+		Srcs  cluster.NodeMap   // expected notifiers
+		Errs  map[string]string // [node-ID => ErrMsg]
+		f     notifCallback     // optional listening-side callback
+		rc    int               // refcount
+		Ty    int               // notification category (above)
+		// ownership
+		Owned       string // "": not owned | equalIC: IC | otherwise, pid + IC
+		SmapVersion int64  // smap version in which NL is added
 		// common info
 		Action string
 		Bck    []cmn.Bck
-		// ownership
+
+		FinTime atomic.Int64 // timestamp when finished
+		Aborted atomic.Bool  // sets if the xaction is aborted
 	}
 
 	//
@@ -164,6 +168,13 @@ func (nlb *notifListenerBase) callback(notifs *notifs, nl notifListener, msg int
 		notifs.fmu.Lock()
 		notifs.fin[nl.UUID()] = nl
 		notifs.fmu.Unlock()
+
+		// TODO: also handle other notif types
+		if nl.notifTy() == notifXact {
+			if stats, ok := msg.(*cmn.BaseXactStatsExt); ok && stats.Aborted() {
+				nlb.Aborted.CAS(false, true)
+			}
+		}
 	}
 }
 func (nlb *notifListenerBase) lock()                      { nlb.Lock() }
@@ -175,6 +186,7 @@ func (nlb *notifListenerBase) incRC() int                 { nlb.rc++; return nlb
 func (nlb *notifListenerBase) notifTy() int               { return nlb.Ty }
 func (nlb *notifListenerBase) UUID() string               { return nlb.UUIDX }
 func (nlb *notifListenerBase) Category() int              { return nlb.Ty }
+func (nlb *notifListenerBase) aborted() bool              { return nlb.Aborted.Load() }
 func (nlb *notifListenerBase) finTime() int64             { return nlb.FinTime.Load() }
 func (nlb *notifListenerBase) finished() bool             { return nlb.finTime() > 0 }
 func (nlb *notifListenerBase) addErr(sid string, err error) {
@@ -189,6 +201,18 @@ func (nlb *notifListenerBase) err() error {
 		return errors.New(err)
 	}
 	return nil
+}
+
+func (nlb *notifListenerBase) status() *cmn.XactStatus {
+	status := &cmn.XactStatus{
+		UUID:     nlb.UUID(),
+		FinTime:  nlb.FinTime.Load(),
+		AbortedX: nlb.aborted(),
+	}
+	if err := nlb.err(); err != nil {
+		status.ErrMsg = err.Error()
+	}
+	return status
 }
 
 func (nlb *notifListenerBase) String() string {
