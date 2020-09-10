@@ -185,7 +185,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 			return
 		}
 	}
-	flt := nlFilter{uuid: msg.ID, kind: msg.Kind, bck: bck}
+	flt := nlFilter{uuid: msg.ID, kind: msg.Kind, bck: bck, onlyRunning: msg.OnlyRunning}
 
 	withLocalRetry(func() bool {
 		nl, exists = ic.p.notifs.find(flt)

@@ -246,6 +246,10 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *cmn.Xact
 		Kind: args.Kind,
 		Bck:  args.Bck,
 	}
+	if args.Latest {
+		msg.OnlyRunning = Bool(true)
+	}
+
 	status = &cmn.XactStatus{}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

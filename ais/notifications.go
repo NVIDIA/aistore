@@ -66,9 +66,10 @@ type (
 	}
 
 	nlFilter struct {
-		uuid string
-		kind string
-		bck  *cluster.Bck
+		uuid        string
+		kind        string
+		bck         *cluster.Bck
+		onlyRunning *bool
 	}
 
 	notifListener interface {
@@ -303,7 +304,7 @@ func (n *notifs) find(flt nlFilter) (nl notifListener, exists bool) {
 	n.RLock()
 	nl, exists = _findNL(n.m, flt)
 	n.RUnlock()
-	if exists {
+	if exists || (flt.onlyRunning != nil && *flt.onlyRunning) {
 		return
 	}
 	n.fmu.RLock()

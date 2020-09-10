@@ -467,7 +467,7 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: timeout}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Latest: true, Timeout: timeout}
 		if err := api.WaitForXactionV2(baseParams, xactArgs); err != nil {
 			if hErr, ok := err.(*cmn.HTTPError); ok {
 				if hErr.Status == http.StatusNotFound {
