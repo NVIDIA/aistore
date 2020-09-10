@@ -218,7 +218,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif cmn.Notif) bool {
 
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
-	reb.beginStreams(md)
+	reb.beginStreams()
 	reb.awaiting.targets = make(cluster.NodeMap, md.smap.CountTargets()-1)
 	acks := reb.lomAcks()
 	for i := 0; i < len(acks); i++ { // init lom acks
@@ -686,7 +686,7 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 	)
 
 	rj.m.inQueue.Inc()
-	if err = rj.m.streams.Send(o, file, tsi); err != nil {
+	if err = rj.m.dm.Send(o, file, tsi); err != nil {
 		rj.m.inQueue.Dec()
 		if addAck {
 			rj.m.delLomAck(lom)

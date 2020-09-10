@@ -26,9 +26,8 @@ import (
 )
 
 const (
-	RebalanceStreamName = "rebalance"
-	RebalanceAcksName   = "remwack" // NOTE: can become generic remote-write-acknowledgment
-	RebalancePushName   = "rebpush" // push notifications stream
+	RebTrname     = "rebalance"
+	RebPushTrname = "rebpush" // broadcast push notifications
 )
 
 // rebalance stage enum
@@ -58,14 +57,11 @@ type (
 
 	Manager struct {
 		t          cluster.Target
+		dm         *transport.DataMover
+		pushes     *transport.StreamBundle // broadcast notifications
 		statRunner *stats.Trunner
 		filterGFN  *filter.Filter
-		client     *http.Client
-		netd, netc string
 		smap       atomic.Pointer // new smap which will be soon live
-		streams    *transport.StreamBundle
-		acks       *transport.StreamBundle
-		pushes     *transport.StreamBundle
 		lomacks    [cmn.MultiSyncMapCount]*lomAcks
 		awaiting   struct {
 			mu      sync.Mutex
@@ -77,9 +73,10 @@ type (
 		xreb       atomic.Pointer // *xaction.Rebalance
 		stages     *nodeStages
 		ec         *ecData
+		ecClient   *http.Client
 		rebID      atomic.Int64
-		laterx     atomic.Bool
 		inQueue    atomic.Int64
+		laterx     atomic.Bool
 	}
 	// Stage status of a single target
 	stageStatus struct {
@@ -113,39 +110,39 @@ var stages = map[uint32]string{
 //////////////////////////////////////////////
 
 func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *Manager {
-	netd, netc := cmn.NetworkPublic, cmn.NetworkPublic
-	if config.Net.UseIntraData {
-		netd = cmn.NetworkIntraData
-	}
-	if config.Net.UseIntraControl {
-		netc = cmn.NetworkIntraControl
-	}
+	ecClient := cmn.NewClient(cmn.TransportArgs{
+		Timeout:    config.Client.Timeout,
+		UseHTTPS:   config.Net.HTTP.UseHTTPS,
+		SkipVerify: config.Net.HTTP.SkipVerify,
+	})
 	reb := &Manager{
 		t:          t,
 		filterGFN:  filter.NewDefaultFilter(),
-		netd:       netd,
-		netc:       netc,
 		statRunner: strunner,
 		stages:     newNodeStages(),
-		client: cmn.NewClient(cmn.TransportArgs{
-			Timeout:    config.Client.Timeout,
-			UseHTTPS:   config.Net.HTTP.UseHTTPS,
-			SkipVerify: config.Net.HTTP.SkipVerify,
-		}),
+		ecClient:   ecClient,
 	}
+	rebcfg := &config.Rebalance
+	dmExtra := transport.DMExtra{
+		RecvAck:     reb.recvAck,
+		Compression: rebcfg.Compression,
+		Multiplier:  int(rebcfg.Multiplier),
+	}
+	dm, err := transport.NewDataMover(t, RebTrname, reb.recvObj, dmExtra)
+	if err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+	reb.dm = dm
 	reb.ec = newECData()
 	reb.initStreamRecv()
 	return reb
 }
 
 func (reb *Manager) initStreamRecv() {
-	if _, err := transport.Register(reb.netd, RebalanceStreamName, reb.recvObj); err != nil {
+	if err := reb.dm.RegRecv(); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if _, err := transport.Register(reb.netc, RebalanceAcksName, reb.recvAck); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-	if _, err := transport.Register(reb.netc, RebalancePushName, reb.recvPush); err != nil {
+	if _, err := transport.Register(reb.dm.NetC(), RebPushTrname, reb.recvPush); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	// serialization: one at a time
@@ -193,46 +190,12 @@ func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
 	return
 }
 
-func (reb *Manager) beginStreams(md *rebArgs) {
+func (reb *Manager) beginStreams() {
 	cmn.Assert(reb.stages.stage.Load() == rebStageInit)
-	if md.config.Rebalance.Multiplier == 0 {
-		md.config.Rebalance.Multiplier = 1
-	} else if md.config.Rebalance.Multiplier > 8 {
-		glog.Errorf("%s: stream-and-mp-jogger multiplier=%d - misconfigured?",
-			reb.t.Snode(), md.config.Rebalance.Multiplier)
-	}
-	//
-	// objects
-	//
-	client := transport.NewIntraDataClient()
-	sbArgs := transport.SBArgs{
-		Network: reb.netd,
-		Trname:  RebalanceStreamName,
-		Extra: &transport.Extra{
-			Compression: md.config.Rebalance.Compression,
-			Config:      md.config,
-			MMSA:        reb.t.GetMMSA()},
-		Multiplier:   int(md.config.Rebalance.Multiplier),
-		ManualResync: true,
-	}
-	reb.streams = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), client, sbArgs)
 
-	//
-	// ACKs
-	//
-	clientAcks := transport.NewIntraDataClient()
-	sbArgs = transport.SBArgs{
-		ManualResync: true,
-		Network:      reb.netc,
-		Trname:       RebalanceAcksName,
-	}
-	reb.acks = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), clientAcks, sbArgs)
-
-	pushArgs := transport.SBArgs{
-		Network: reb.netc,
-		Trname:  RebalancePushName,
-	}
-	reb.pushes = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), client, pushArgs)
+	reb.dm.Open()
+	pushArgs := transport.SBArgs{Network: reb.dm.NetC(), Trname: RebPushTrname}
+	reb.pushes = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
 
 	reb.laterx.Store(false)
 	reb.inQueue.Store(0)
@@ -240,9 +203,7 @@ func (reb *Manager) beginStreams(md *rebArgs) {
 
 func (reb *Manager) endStreams() {
 	if reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) {
-		reb.streams.Close(true /* graceful */)
-		reb.streams = nil
-		reb.acks.Close(true)
+		reb.dm.Close()
 		reb.pushes.Close(true)
 	}
 }
@@ -318,7 +279,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 		)
 		hdr.Opaque = ack.NewPack(mm)
 		hdr.ObjAttrs.Size = 0
-		if err := reb.acks.Send(transport.Obj{Hdr: hdr, Callback: reb.rackSentCallback}, nil, tsi); err != nil {
+		if err := reb.dm.ACK(hdr, reb.rackSentCallback, tsi); err != nil {
 			mm.Free(hdr.Opaque)
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
 		}

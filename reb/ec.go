@@ -344,7 +344,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 	reb.ec.onAir.Inc()
 	hdr.Opaque = req.NewPack(nil, rebMsgEC)
 
-	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, target); err != nil {
+	if err := reb.dm.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, target); err != nil {
 		reb.ec.onAir.Dec()
 		debug.AssertNoErr(fh.Close())
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
@@ -399,7 +399,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 		glog.Infof("sending slice %d(%d)%s of %s/%s to %s", sliceID, size, cksum, ct.Bck.Name, ct.ObjName, target)
 	}
 	reb.ec.onAir.Inc()
-	if err := reb.streams.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
+	if err := reb.dm.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
 		reb.ec.onAir.Dec()
 		reb.ec.ackCTs.remove(rt)
 		return fmt.Errorf("failed to send slices to node %s: %v", target, err)
@@ -561,7 +561,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("Sending ACK for %s/%s to %s", hdr.Bck, hdr.ObjName, tsi.ID())
 	}
-	if err := reb.acks.Send(transport.Obj{Hdr: hdr}, nil, tsi); err != nil {
+	if err := reb.dm.ACK(hdr, nil, tsi); err != nil {
 		glog.Error(err)
 	}
 
@@ -893,7 +893,7 @@ func (reb *Manager) exchange(md *rebArgs) error {
 				return cmn.NewAbortedError("exchange")
 			}
 			rd := cmn.NewByteHandle(body)
-			if err := reb.streams.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
+			if err := reb.dm.Send(transport.Obj{Hdr: hdr}, rd, node); err != nil {
 				glog.Errorf("Failed to send CTs to node %s: %v", node.ID(), err)
 				failed = append(failed, node)
 			}
@@ -1234,7 +1234,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 		return
 	}
 	rq.URL.RawQuery = qMeta.Encode()
-	if resp, slice.err = reb.client.Do(rq); slice.err != nil {
+	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil {
 		return
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -1260,7 +1260,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 		return
 	}
 	rq.URL.RawQuery = qMeta.Encode()
-	if resp, slice.err = reb.client.Do(rq); slice.err != nil {
+	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil {
 		return
 	}
 	defer func() {
