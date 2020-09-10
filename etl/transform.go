@@ -70,7 +70,6 @@ var (
 // * TODO: replace `kubectl` calls with proper go-sdk calls.
 
 type (
-
 	// Aborter listens to smap changes and aborts the ETL on the target when
 	// there is any change in targets membership. Aborter should be registered
 	// on ETL init. It is unregistered by Stop function. The is no
@@ -83,6 +82,10 @@ type (
 		currentSmap *cluster.Smap
 		uuid        string
 		mtx         sync.Mutex
+	}
+
+	StartOpts struct {
+		ConfigMapName string
 	}
 )
 
@@ -114,7 +117,7 @@ func (e *Aborter) ListenSmapChanged() {
 
 		if !newSmap.CompareTargets(e.currentSmap) {
 			glog.Warning(cmn.NewETLError(&cmn.ETLErrorContext{
-				Tid:  e.t.Snode().DaemonID,
+				TID:  e.t.Snode().DaemonID,
 				UUID: e.uuid,
 			}, "targets have changed, aborting..."))
 			// Stop will unregister e from smap listeners.
@@ -127,11 +130,11 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-func Start(t cluster.Target, msg InitMsg) (err error) {
-	errCtx, podName, svcName, err := tryStart(t, msg)
+func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
+	errCtx, podName, svcName, configMapName, err := tryStart(t, msg, opts...)
 	if err != nil {
 		glog.Warning(cmn.NewETLError(errCtx, "Doing cleanup after unsuccessful Start"))
-		cleanupStart(errCtx, podName, svcName)
+		cleanupStart(errCtx, podName, svcName, configMapName)
 	}
 
 	return err
@@ -139,18 +142,34 @@ func Start(t cluster.Target, msg InitMsg) (err error) {
 
 // Should be called if tryStart was unsuccessful.
 // It cleans up any possibly created resources.
-func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName string) {
+func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName, configMapName string) {
+	if err := cleanupEntities(errCtx, podName, svcName, configMapName); err != nil {
+		glog.Error(err)
+	}
+}
+
+// cleanupEntities removes provided entities. It tries its best to remove all
+// entities so it doesn't stop when encountering an error.
+func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName, configMapName string) (err error) {
 	if svcName != "" {
 		if deleteErr := deleteEntity(errCtx, cmn.KubeSvc, svcName); deleteErr != nil {
-			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete service during cleanup")
+			err = deleteErr
+		}
+	}
+
+	if configMapName != "" {
+		if deleteErr := deleteEntity(errCtx, cmn.KubeConfigMap, configMapName); deleteErr != nil {
+			err = deleteErr
 		}
 	}
 
 	if podName != "" {
 		if deleteErr := deleteEntity(errCtx, cmn.KubePod, podName); deleteErr != nil {
-			glog.Errorf("%s: %s", deleteErr.Error(), "Failed to delete pod during cleanup")
+			err = deleteErr
 		}
 	}
+
+	return
 }
 
 // Returns:
@@ -158,7 +177,7 @@ func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName string) {
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg InitMsg) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
+func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName, configMapName string, err error) {
 	var (
 		pod             *corev1.Pod
 		svc             *corev1.Service
@@ -168,9 +187,14 @@ func tryStart(t cluster.Target, msg InitMsg) (errCtx *cmn.ETLErrorContext, podNa
 		nodePort        uint
 	)
 
+	if len(opts) > 0 {
+		configMapName = opts[0].ConfigMapName
+	}
+
 	errCtx = &cmn.ETLErrorContext{
-		Tid:  t.Snode().DaemonID,
-		UUID: msg.ID,
+		TID:           t.Snode().DaemonID,
+		UUID:          msg.ID,
+		ConfigMapName: configMapName,
 	}
 
 	cmn.Assert(t.K8sNodeName() != "") // Corresponding 'if' done at the beginning of the request.
@@ -208,10 +232,12 @@ func tryStart(t cluster.Target, msg InitMsg) (errCtx *cmn.ETLErrorContext, podNa
 
 	setPodEnvVariables(pod, t)
 
-	// 1. Doing cleanup of any pre-existing entities
-	cleanupStart(errCtx, pod.Name, svc.Name)
+	// 1. Doing cleanup of any pre-existing entities.
+	// NOTE: `configMapName` is empty because it was already created and we
+	//  definitely don't want to clean it up here.
+	cleanupStart(errCtx, pod.Name, svc.Name, "")
 
-	// 2. Creating pod
+	// 2. Creating pod.
 	podName = pod.GetName()
 	if err = createEntity(errCtx, cmn.KubePod, pod); err != nil {
 		return
@@ -231,7 +257,7 @@ func tryStart(t cluster.Target, msg InitMsg) (errCtx *cmn.ETLErrorContext, podNa
 		return
 	}
 
-	// 3. Creating service
+	// 3. Creating service.
 	svcName = svc.GetName()
 	if err = createEntity(errCtx, cmn.KubeSvc, svc); err != nil {
 		return
@@ -244,13 +270,23 @@ func tryStart(t cluster.Target, msg InitMsg) (errCtx *cmn.ETLErrorContext, podNa
 	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
 
 	// TODO: Temporary workaround. Debug this further to find the root cause.
-	// (not waiting sometimes causes the first Do() to fail)
+	//  (not waiting sometimes causes the first `Do()` to fail).
 	readinessPath := pod.Spec.Containers[0].ReadinessProbe.HTTPGet.Path
 	if waitErr := waitTransformerReady(transformerURL, readinessPath); waitErr != nil {
-		return errCtx, podName, svcName, cmn.NewETLError(errCtx, waitErr.Error())
+		err = cmn.NewETLError(errCtx, waitErr.Error())
+		return
 	}
 
-	c := makeCommunicator(t, pod, msg.CommType, podIP, transformerURL, originalPodName, newAborter(t, msg.ID))
+	c := makeCommunicator(commArgs{
+		listener:       newAborter(t, msg.ID),
+		t:              t,
+		pod:            pod,
+		commType:       msg.CommType,
+		podIP:          podIP,
+		transformerURL: transformerURL,
+		name:           originalPodName,
+		configMapName:  configMapName,
+	})
 	// NOTE: communicator is put to registry only if the whole tryStart was successful.
 	if err = reg.put(msg.ID, c); err != nil {
 		return
@@ -306,12 +342,12 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 func Stop(t cluster.Target, id string) error {
 	var (
 		errCtx = &cmn.ETLErrorContext{
+			TID:  t.Snode().DaemonID,
 			UUID: id,
-			Tid:  t.Snode().DaemonID,
 		}
 	)
 
-	// Abort any running offline ETLs
+	// Abort any running offline ETLs.
 	t.GetXactRegistry().AbortAll(cmn.ActETLBucket)
 
 	c, err := GetCommunicator(id)
@@ -320,12 +356,9 @@ func Stop(t cluster.Target, id string) error {
 	}
 	errCtx.PodName = c.PodName()
 	errCtx.SvcName = c.SvcName()
+	errCtx.ConfigMapName = c.ConfigMapName()
 
-	if err := deleteEntity(errCtx, cmn.KubePod, c.PodName()); err != nil {
-		return err
-	}
-
-	if err := deleteEntity(errCtx, cmn.KubeSvc, c.SvcName()); err != nil {
+	if err := cleanupEntities(errCtx, c.PodName(), c.SvcName(), c.ConfigMapName()); err != nil {
 		return err
 	}
 

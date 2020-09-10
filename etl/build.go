@@ -20,12 +20,12 @@ func Build(t cluster.Target, msg BuildMsg) error {
 	cmn.Assert(exists) // Runtime should be checked in proxy during validation.
 
 	var (
-		// TODO: Maybe we should think about more standard naming that would be
-		//  more meaningful to the user. Or allow user it set it.
-		name    = "etl-" + strings.ToLower(cmn.RandString(5))
+		// We clean up the `msg.ID` as K8s doesn't allow `_` and uppercase
+		// letters in the names.
+		name    = "etl-" + strings.ReplaceAll(strings.ToLower(msg.ID), "_", "-")
 		podSpec = runtime.PodSpec()
 		errCtx  = &cmn.ETLErrorContext{
-			Tid:  t.Snode().DaemonID,
+			TID:  t.Snode().DaemonID,
 			UUID: msg.ID,
 		}
 	)
@@ -52,12 +52,10 @@ func Build(t cluster.Target, msg BuildMsg) error {
 	//  could fail when creating a pod (config map is required to create a pod).
 	_ = createEntity(errCtx, cmn.KubeConfigMap, configMap)
 
-	// TODO: remove config map when initialization has been finished.
-
 	// Finally, start the ETL with declared Pod specification.
 	return Start(t, InitMsg{
 		ID:       msg.ID,
 		Spec:     []byte(podSpec),
 		CommType: PushCommType,
-	})
+	}, StartOpts{ConfigMapName: configMap.Name})
 }

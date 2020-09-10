@@ -24,10 +24,14 @@ type (
 	// if need be.
 	Communicator interface {
 		cluster.Slistener
+
 		Name() string
 		PodName() string
 		SvcName() string
+		ConfigMapName() string
+
 		RemoteAddrIP() string
+
 		// Do() uses one of the two ETL container endpoints:
 		// - Method "PUT", Path "/"
 		// - Method "GET", Path "/bucket/object"
@@ -38,14 +42,30 @@ type (
 		// offline-ETL: target starts transforming objects on their own.
 		Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error)
 	}
+
+	commArgs struct {
+		listener       cluster.Slistener
+		t              cluster.Target
+		pod            *corev1.Pod
+		commType       string
+		podIP          string
+		transformerURL string
+		name           string
+		configMapName  string
+	}
+
 	baseComm struct {
 		cluster.Slistener
-		transformerAddress string
-		name               string
-		podName            string
+		t cluster.Target
+
+		name          string
+		podName       string
+		configMapName string
+
 		remoteAddr         string
-		t                  cluster.Target
+		transformerAddress string
 	}
+
 	pushComm struct {
 		baseComm
 	}
@@ -69,24 +89,24 @@ var (
 // baseComm //
 //////////////
 
-func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, podIP, transformerURL, name string,
-	listener cluster.Slistener) Communicator {
+func makeCommunicator(args commArgs) Communicator {
 	baseComm := baseComm{
-		Slistener:          listener,
-		transformerAddress: transformerURL,
-		name:               name,
-		podName:            pod.GetName(),
-		remoteAddr:         podIP,
-		t:                  t,
+		Slistener:          args.listener,
+		t:                  args.t,
+		name:               args.name,
+		podName:            args.pod.GetName(),
+		configMapName:      args.configMapName,
+		remoteAddr:         args.podIP,
+		transformerAddress: args.transformerURL,
 	}
 
-	switch commType {
+	switch args.commType {
 	case PushCommType:
 		return &pushComm{baseComm: baseComm}
 	case RedirectCommType:
 		return &redirectComm{baseComm: baseComm}
 	case RevProxyCommType:
-		transURL, err := url.Parse(transformerURL)
+		transURL, err := url.Parse(args.transformerURL)
 		cmn.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
@@ -101,15 +121,17 @@ func makeCommunicator(t cluster.Target, pod *corev1.Pod, commType, podIP, transf
 			},
 		}
 		return &revProxyComm{baseComm: baseComm, rp: rp}
+	default:
+		cmn.AssertMsg(false, args.commType)
 	}
-	cmn.AssertMsg(false, commType)
 	return nil
 }
 
-func (c baseComm) Name() string         { return c.name }
-func (c baseComm) PodName() string      { return c.podName }
-func (c baseComm) RemoteAddrIP() string { return c.remoteAddr }
-func (c baseComm) SvcName() string      { return c.podName /*pod name is same as service name*/ }
+func (c baseComm) Name() string          { return c.name }
+func (c baseComm) PodName() string       { return c.podName }
+func (c baseComm) SvcName() string       { return c.podName /*pod name is same as service name*/ }
+func (c baseComm) ConfigMapName() string { return c.configMapName }
+func (c baseComm) RemoteAddrIP() string  { return c.remoteAddr }
 
 //////////////
 // pushComm //

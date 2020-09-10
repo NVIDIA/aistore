@@ -78,11 +78,12 @@ type (
 		ETLErrorContext
 	}
 	ETLErrorContext struct {
-		Tid     string
-		UUID    string
-		ETLName string
-		PodName string
-		SvcName string
+		TID           string
+		UUID          string
+		ETLName       string
+		PodName       string
+		SvcName       string
+		ConfigMapName string
 	}
 )
 
@@ -279,10 +280,9 @@ func NewETLError(ctx *ETLErrorContext, format string, a ...interface{}) *ETLErro
 }
 
 func (e *ETLError) Error() string {
-	var s []string
-
-	if e.Tid != "" {
-		s = append(s, fmt.Sprintf("t[%s]", e.Tid))
+	s := make([]string, 0, 3)
+	if e.TID != "" {
+		s = append(s, fmt.Sprintf("t[%s]", e.TID))
 	}
 	if e.UUID != "" {
 		s = append(s, fmt.Sprintf("uuid=%q", e.UUID))
@@ -291,10 +291,13 @@ func (e *ETLError) Error() string {
 		s = append(s, fmt.Sprintf("etl=%q", e.ETLName))
 	}
 	if e.PodName != "" {
-		s = append(s, fmt.Sprintf("pod=%q", e.PodName))
+		s = append(s, fmt.Sprintf("%s=%q", KubePod, e.PodName))
 	}
 	if e.SvcName != "" {
-		s = append(s, fmt.Sprintf("svc=%q", e.SvcName))
+		s = append(s, fmt.Sprintf("%s=%q", KubeSvc, e.SvcName))
+	}
+	if e.ConfigMapName != "" {
+		s = append(s, fmt.Sprintf("%s=%q", KubeConfigMap, e.ConfigMapName))
 	}
 
 	return fmt.Sprintf("[%s] %s", strings.Join(s, ","), e.Reason)
@@ -309,7 +312,7 @@ func (e *ETLError) withUUID(uuid string) *ETLError {
 
 func (e *ETLError) withTarget(tid string) *ETLError {
 	if tid != "" {
-		e.Tid = tid
+		e.TID = tid
 	}
 	return e
 }
@@ -328,6 +331,13 @@ func (e *ETLError) withSvcName(name string) *ETLError {
 	return e
 }
 
+func (e *ETLError) withConfigMapName(name string) *ETLError {
+	if name != "" {
+		e.ConfigMapName = name
+	}
+	return e
+}
+
 func (e *ETLError) WithPodName(name string) *ETLError {
 	if name != "" {
 		e.PodName = name
@@ -339,7 +349,13 @@ func (e *ETLError) WithContext(ctx *ETLErrorContext) *ETLError {
 	if ctx == nil {
 		return e
 	}
-	return e.withUUID(ctx.UUID).withTarget(ctx.Tid).WithPodName(ctx.PodName).withETLName(ctx.ETLName).withSvcName(ctx.SvcName)
+	return e.
+		withTarget(ctx.TID).
+		withUUID(ctx.UUID).
+		WithPodName(ctx.PodName).
+		withETLName(ctx.ETLName).
+		withSvcName(ctx.SvcName).
+		withConfigMapName(ctx.ConfigMapName)
 }
 
 ////////////////////////////
