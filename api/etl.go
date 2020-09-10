@@ -17,7 +17,7 @@ func ETLInit(baseParams BaseParams, spec []byte) (id string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlInit),
+		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.ETLInit),
 		Body:       spec,
 	}, &id)
 	return id, err
@@ -27,7 +27,7 @@ func ETLBuild(baseParams BaseParams, msg etl.BuildMsg) (id string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlBuild),
+		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.ETLBuild),
 		Body:       cmn.MustMarshal(msg),
 	}, &id)
 	return id, err
@@ -37,7 +37,7 @@ func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlList),
+		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.ETLList),
 	}, &list)
 	return list, err
 }
@@ -46,7 +46,7 @@ func ETLStop(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlStop, id),
+		Path:       cmn.URLPath(cmn.Version, cmn.ETL, cmn.ETLStop, id),
 	})
 	return err
 }

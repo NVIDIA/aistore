@@ -33,9 +33,9 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch apiItems[0] {
-		case cmn.EtlInit:
+		case cmn.ETLInit:
 			t.initETL(w, r)
-		case cmn.EtlBuild:
+		case cmn.ETLBuild:
 			t.buildETL(w, r)
 		default:
 			t.invalmsghdlrf(w, r, "invalid POST path: %s", apiItems[0])
@@ -51,7 +51,7 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	var msg etl.InitMsg
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlInit); err != nil {
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.ETLInit); err != nil {
 		return
 	}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
@@ -64,7 +64,7 @@ func (t *targetrunner) initETL(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	var msg etl.BuildMsg
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlBuild); err != nil {
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.ETLBuild); err != nil {
 		return
 	}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
@@ -76,7 +76,7 @@ func (t *targetrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.ETL, cmn.EtlStop)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.ETL, cmn.ETLStop)
 	if err != nil {
 		return
 	}
@@ -118,7 +118,7 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 }
 
 func (t *targetrunner) listETLs(w http.ResponseWriter, r *http.Request) {
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlList); err != nil {
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.ETLList); err != nil {
 		return
 	}
 	t.writeJSON(w, r, etl.List(), "list-ETL")
@@ -137,9 +137,9 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch apiItems[0] {
-		case cmn.EtlInit:
+		case cmn.ETLInit:
 			p.initETL(w, r)
-		case cmn.EtlBuild:
+		case cmn.ETLBuild:
 			p.buildETL(w, r)
 		default:
 			p.invalmsghdlrf(w, r, "invalid POST path: %s", apiItems[0])
@@ -162,7 +162,7 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 //  * If any of targets failed starting an ETL, stop the ETL on all targets.
 //  * Return UUID to the user if all above steps succeeded.
 func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlInit)
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.ETLInit)
 	if err != nil {
 		return
 	}
@@ -203,7 +203,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlStop, msg.ID),
+			Path:   cmn.URLPath(cmn.Version, cmn.ETL, cmn.ETLStop, msg.ID),
 		},
 		timeout: cmn.LongTimeout,
 	})
@@ -212,7 +212,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/etl/build
 func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
-	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlBuild)
+	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.ETLBuild)
 	if err != nil {
 		return
 	}
@@ -250,7 +250,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.ETL, cmn.EtlStop, msg.ID),
+			Path:   cmn.URLPath(cmn.Version, cmn.ETL, cmn.ETLStop, msg.ID),
 		},
 		timeout: cmn.LongTimeout,
 	})
@@ -259,7 +259,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/etl/list
 func (p *proxyrunner) listETL(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.EtlList); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.ETLList); err != nil {
 		return
 	}
 	si, err := p.GetSowner().Get().GetRandTarget()
@@ -273,7 +273,7 @@ func (p *proxyrunner) listETL(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /v1/etl/stop/uuid
 func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.ETL, cmn.EtlStop)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.ETL, cmn.ETLStop)
 	if err != nil {
 		return
 	}

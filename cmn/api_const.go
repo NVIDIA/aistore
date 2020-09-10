@@ -312,7 +312,6 @@ const (
 	Voteres      = "result"
 	VoteInit     = "init"
 	Mountpaths   = "mountpaths"
-	Summary      = "summary"
 	AllBuckets   = "*"
 
 	// common
@@ -341,11 +340,11 @@ const (
 	GetTargetObjects = "objects"
 
 	// ETL
-	EtlInit  = Init
-	EtlBuild = "build"
-	EtlList  = List
-	EtlStop  = Stop
 	ETL      = "etl"
+	ETLInit  = Init
+	ETLBuild = "build"
+	ETLList  = List
+	ETLStop  = Stop
 )
 
 // enum: compression
