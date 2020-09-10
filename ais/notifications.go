@@ -358,11 +358,12 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if !exists {
-		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown UUID %q (%s)", n.p.si, uuid, notifMsg)
+		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown UUID %q", n.p.si, uuid)
 		return
 	}
 	if nl.finished() {
-		n.p.invalmsghdlrstatusf(w, r, 0, "%s: %q already finished (msg=%s)", n.p.si, uuid, notifMsg)
+		s := fmt.Sprintf("%s: %q already finished", n.p.si, uuid)
+		n.p.invalmsghdlrsilent(w, r, s, http.StatusGone)
 		return
 	}
 	//
