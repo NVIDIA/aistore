@@ -2246,7 +2246,7 @@ func TestECBucketEncode(t *testing.T) {
 
 	tutils.Logf("EC encode must start automatically for bucket %s\n", m.bck)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
-	err = api.WaitForXactionV2(baseParams, xactArgs)
+	_, err = api.WaitForXactionV2(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
 	reslist, err = api.ListObjects(baseParams, m.bck, nil, 0)

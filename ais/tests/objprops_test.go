@@ -139,7 +139,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		t.Fail()
 	}
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
-	err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Reading object list...\n")

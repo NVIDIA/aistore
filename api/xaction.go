@@ -263,8 +263,16 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *cmn.Xact
 }
 
 // TODO: Rename this function after IC is stable
-func WaitForXactionV2(baseParams BaseParams, args XactReqArgs) (err error) {
-	ctx := context.Background()
+func WaitForXactionV2(baseParams BaseParams, args XactReqArgs, refreshIntervals ...time.Duration) (status *cmn.XactStatus, err error) {
+	var (
+		ctx           = context.Background()
+		retryInterval = xactRetryInterval
+	)
+
+	if len(refreshIntervals) > 0 {
+		retryInterval = refreshIntervals[0]
+	}
+
 	if args.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
@@ -272,15 +280,15 @@ func WaitForXactionV2(baseParams BaseParams, args XactReqArgs) (err error) {
 	}
 
 	for {
-		status, err := GetXactionStatus(baseParams, args)
+		status, err = GetXactionStatus(baseParams, args)
 		if err != nil || status.Finished() {
-			return err
+			return
 		}
 
-		time.Sleep(xactRetryInterval)
+		time.Sleep(retryInterval)
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 			break
 		}

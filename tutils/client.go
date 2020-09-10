@@ -158,7 +158,7 @@ func CleanupCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix strin
 	xactID, err := api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: time.Minute}
-	err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 }
 
@@ -438,7 +438,7 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 	}
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActEvictObjects, Timeout: evictPrefetchTimeout}
-	if err := api.WaitForXactionV2(baseParams, args); err != nil {
+	if _, err := api.WaitForXactionV2(baseParams, args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
 }
@@ -467,8 +467,8 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Latest: true, Timeout: timeout}
-		if err := api.WaitForXactionV2(baseParams, xactArgs); err != nil {
+		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: timeout}
+		if _, err := api.WaitForXactionV2(baseParams, xactArgs); err != nil {
 			if hErr, ok := err.(*cmn.HTTPError); ok {
 				if hErr.Status == http.StatusNotFound {
 					return
@@ -481,7 +481,7 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 	go func() {
 		defer wg.Done()
 		xactArgs := api.XactReqArgs{Kind: cmn.ActResilver, Latest: true, Timeout: timeout}
-		if err := api.WaitForXactionV2(baseParams, xactArgs); err != nil {
+		if _, err := api.WaitForXactionV2(baseParams, xactArgs); err != nil {
 			if hErr, ok := err.(*cmn.HTTPError); ok {
 				if hErr.Status == http.StatusNotFound {
 					return

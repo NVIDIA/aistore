@@ -1396,7 +1396,7 @@ func TestAtimePrefetch(t *testing.T) {
 	xactID, err := api.PrefetchList(baseParams, bck, []string{objectName})
 	tassert.CheckFatal(t, err)
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
-	err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	atime := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
@@ -1599,7 +1599,7 @@ func TestRenewRebalance(t *testing.T) {
 
 	wg.Wait()
 	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
-	err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckError(t, err)
 
 	m.ensureNoErrors()

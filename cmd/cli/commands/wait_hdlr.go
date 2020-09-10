@@ -73,30 +73,15 @@ func waitXactionHandler(c *cli.Context) error {
 		return err
 	}
 
-	latest := !flagIsSet(c, allXactionsFlag)
-	if xactID != "" {
-		latest = false
-	}
-
 	var (
-		aborted     bool
 		refreshRate = calcRefreshRate(c)
 	)
-	for {
-		xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck, Latest: latest}
-		xactStats, err := api.QueryXactionStats(defaultAPIParams, xactArgs)
-
-		if err != nil {
-			return err
-		}
-
-		aborted = xactStats.Aborted()
-		if aborted || xactStats.Finished() {
-			break
-		}
-		time.Sleep(refreshRate)
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
+	status, err := api.WaitForXactionV2(defaultAPIParams, xactArgs, refreshRate)
+	if err != nil {
+		return err
 	}
-	if aborted {
+	if status.Aborted() {
 		if xactID != "" {
 			return fmt.Errorf("xaction %q was aborted", xactID)
 		}

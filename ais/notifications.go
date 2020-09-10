@@ -327,11 +327,11 @@ func _findNL(nls map[string]notifListener, flt nlFilter) (nl notifListener, exis
 		if listener.finTime() < ftime {
 			continue
 		}
-		ftime = listener.finTime()
 		if flt.match(listener) {
+			ftime = listener.finTime()
 			nl, exists = listener, true
 		}
-		if !listener.finished() && exists {
+		if exists && !listener.finished() {
 			return
 		}
 	}
