@@ -36,7 +36,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 	return uuid
 }
 
-func TestKubeTar2TFS3(t *testing.T) {
+func TestETLTar2TFS3(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 
 	const (
@@ -100,8 +100,9 @@ func TestKubeTar2TFS3(t *testing.T) {
 	tassert.Errorf(t, equal == true, "actual and expected records different")
 }
 
-func TestKubeTar2TFRanges(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+func TestETLTar2TFRanges(t *testing.T) {
+	// TestETLTar2TFS3 already runs in short tests, no need for short here as well.
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
 
 	type testCase struct {
 		start, end int64

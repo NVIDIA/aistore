@@ -207,7 +207,7 @@ test:kube:
   script:
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
     - status=0
-    - BUCKET="test" RE="TestKube" make test-run || status=$?
+    - BUCKET="test" RE="TestETL" make test-run || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
 

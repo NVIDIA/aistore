@@ -316,8 +316,8 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 	return core.NewTFRecordReader(f).ReadAllExamples()
 }
 
-func TestKubeSingleTransformerAtATime(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+func TestETLSingleTransformerAtATime(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
 	output, err := exec.Command("bash", "-c", "kubectl get nodes | grep Ready | wc -l").CombinedOutput()
 	tassert.CheckFatal(t, err)
 	if strings.Trim(string(output), "\n") != "1" {
