@@ -86,6 +86,7 @@ type (
 		err() error
 		UUID() string
 		Category() int
+		setAborted()
 		aborted() bool
 		status() *cmn.XactStatus
 		finTime() int64
@@ -168,13 +169,6 @@ func (nlb *notifListenerBase) callback(notifs *notifs, nl notifListener, msg int
 		notifs.fmu.Lock()
 		notifs.fin[nl.UUID()] = nl
 		notifs.fmu.Unlock()
-
-		// TODO: also handle other notif types
-		if nl.notifTy() == notifXact {
-			if stats, ok := msg.(*cmn.BaseXactStatsExt); ok && stats.Aborted() {
-				nlb.Aborted.CAS(false, true)
-			}
-		}
 	}
 }
 func (nlb *notifListenerBase) lock()                      { nlb.Lock() }
@@ -187,6 +181,7 @@ func (nlb *notifListenerBase) notifTy() int               { return nlb.Ty }
 func (nlb *notifListenerBase) UUID() string               { return nlb.UUIDX }
 func (nlb *notifListenerBase) Category() int              { return nlb.Ty }
 func (nlb *notifListenerBase) aborted() bool              { return nlb.Aborted.Load() }
+func (nlb *notifListenerBase) setAborted()                { nlb.Aborted.CAS(false, true) }
 func (nlb *notifListenerBase) finTime() int64             { return nlb.FinTime.Load() }
 func (nlb *notifListenerBase) finished() bool             { return nlb.finTime() > 0 }
 func (nlb *notifListenerBase) addErr(sid string, err error) {
@@ -398,7 +393,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		errMsg = errors.New(notifMsg.ErrMsg)
 	}
 	nl.lock()
-	err, status, done := n.handleMsg(nl, tid, errMsg)
+	err, status, done := n.handleMsg(nl, tid, msg, errMsg)
 	nl.unlock()
 	if done {
 		nl.callback(n, nl, msg, nil)
@@ -410,7 +405,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // is called under notifListener.lock()
-func (n *notifs) handleMsg(nl notifListener, tid string, srcErr error) (err error, status int, done bool) {
+func (n *notifs) handleMsg(nl notifListener, tid string, msg interface{}, srcErr error) (err error, status int, done bool) {
 	srcs := nl.notifiers()
 	tsi, ok := srcs[tid]
 	if !ok {
@@ -428,6 +423,14 @@ func (n *notifs) handleMsg(nl notifListener, tid string, srcErr error) (err erro
 	srcs[tid] = nil
 	if rc := nl.incRC(); rc >= len(srcs) {
 		done = true
+	}
+
+	// TODO: also handle other notif types
+	if nl.notifTy() == notifXact {
+		if stats, ok := msg.(*cmn.BaseXactStatsExt); ok && stats.Aborted() {
+			nl.setAborted()
+			done = true // NOTE: one abort ==> all done
+		}
 	}
 	return
 }
@@ -527,7 +530,7 @@ func (n *notifs) hkXact(nl notifListener, res callResult) (msg interface{}, err 
 			nl.unlock()
 		} else {
 			nl.lock()
-			_, _, done = n.handleMsg(nl, res.si.ID(), err)
+			_, _, done = n.handleMsg(nl, res.si.ID(), msg, err)
 			nl.unlock()
 		}
 	}
