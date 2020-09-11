@@ -21,6 +21,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
 * automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
 * N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection.
+* [ETL offload](/etl/README.md): running user-defined extract-transform-load workloads on (and by) performance optimized storage cluster;
 
 Also, AIStore:
 
