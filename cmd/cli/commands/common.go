@@ -313,8 +313,8 @@ var (
 		Usage: "absolute path to the file with dependencies that must be installed before running the code"}
 	runtimeFlag = cli.StringFlag{Name: "runtime",
 		Usage: "runtime which should be used when running the provided code", Required: true}
-	waitTimeoutFlag = cli.IntFlag{Name: "wait-timeout",
-		Usage: "timeout when starting the pod, useful when installing large dependencies"}
+	waitTimeoutFlag = cli.DurationFlag{Name: "wait-timeout",
+		Usage: "determines how long ais target should wait for pod to become ready"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
@@ -325,14 +325,17 @@ var (
 )
 
 func getCksumFlags() []cli.Flag {
-	flags := []cli.Flag{}
-	for _, cks := range cmn.SupportedChecksums() {
-		if cks == cmn.ChecksumNone {
+	var (
+		checksums = cmn.SupportedChecksums()
+		flags     = make([]cli.Flag, 0, len(checksums)-1)
+	)
+	for _, cksum := range checksums {
+		if cksum == cmn.ChecksumNone {
 			continue
 		}
 		flags = append(flags, cli.StringFlag{
-			Name:  cks,
-			Usage: fmt.Sprintf("hex encoded string of the %s checksum", cks),
+			Name:  cksum,
+			Usage: fmt.Sprintf("hex encoded string of the %s checksum", cksum),
 		})
 	}
 	return flags

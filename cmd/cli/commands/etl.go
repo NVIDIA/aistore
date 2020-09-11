@@ -113,7 +113,7 @@ func etlBuildHandler(c *cli.Context) (err error) {
 	}
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
-	msg.WaitTimeout = cmn.DurationJSON(parseIntFlag(c, waitTimeoutFlag))
+	msg.WaitTimeout = cmn.DurationJSON(parseDurationFlag(c, waitTimeoutFlag))
 
 	if err := msg.Validate(); err != nil {
 		return err
