@@ -30,7 +30,6 @@ func Build(t cluster.Target, msg BuildMsg) error {
 		}
 	)
 	podSpec = strings.ReplaceAll(podSpec, "<NAME>", name)
-	podSpec = strings.Replace(podSpec, "<COMMUNICATION_TYPE>", PushCommType, 1)
 
 	configMap := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
@@ -54,8 +53,9 @@ func Build(t cluster.Target, msg BuildMsg) error {
 
 	// Finally, start the ETL with declared Pod specification.
 	return Start(t, InitMsg{
-		ID:       msg.ID,
-		Spec:     []byte(podSpec),
-		CommType: PushCommType,
+		ID:          msg.ID,
+		Spec:        []byte(podSpec),
+		CommType:    PushCommType,
+		WaitTimeout: msg.WaitTimeout,
 	}, StartOpts{ConfigMapName: configMap.Name})
 }

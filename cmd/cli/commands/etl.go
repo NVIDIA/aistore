@@ -39,6 +39,7 @@ var (
 						fromFileFlag,
 						depsFileFlag,
 						runtimeFlag,
+						waitTimeoutFlag,
 					},
 					Action: etlBuildHandler,
 				},
@@ -112,6 +113,7 @@ func etlBuildHandler(c *cli.Context) (err error) {
 	}
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
+	msg.WaitTimeout = cmn.DurationJSON(parseIntFlag(c, waitTimeoutFlag))
 
 	if err := msg.Validate(); err != nil {
 		return err

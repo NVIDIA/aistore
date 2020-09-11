@@ -21,10 +21,11 @@ type (
 	}
 
 	BuildMsg struct {
-		ID      string `json:"id"`
-		Code    []byte `json:"code"`
-		Deps    []byte `json:"dependencies"`
-		Runtime string `json:"runtime"`
+		ID          string           `json:"id"`
+		Code        []byte           `json:"code"`
+		Deps        []byte           `json:"dependencies"`
+		Runtime     string           `json:"runtime"`
+		WaitTimeout cmn.DurationJSON `json:"wait_timeout"`
 	}
 
 	Info struct {

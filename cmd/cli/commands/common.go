@@ -292,13 +292,14 @@ var (
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 
 	// ETL
-	etlPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to each transformed object's name"}
-	etlSuffixFlag = cli.StringFlag{Name: "suffix", Usage: "suffix added to each transformed object's name"}
-	etlExtFlag    = cli.StringFlag{Name: "ext", Usage: "new extension of transformed object's name"}
-	etlDryRunFlag = cli.BoolFlag{Name: "dry-run", Usage: "show total size of created objects, without really creating them"}
-	fromFileFlag  = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the code for ETL", Required: true}
-	depsFileFlag  = cli.StringFlag{Name: "deps-file", Usage: "absolute path to the file with dependencies that must be installed before running the code"}
-	runtimeFlag   = cli.StringFlag{Name: "runtime", Usage: "runtime which should be used when running the provided code", Required: true}
+	etlPrefixFlag   = cli.StringFlag{Name: "prefix", Usage: "prefix added to each transformed object's name"}
+	etlSuffixFlag   = cli.StringFlag{Name: "suffix", Usage: "suffix added to each transformed object's name"}
+	etlExtFlag      = cli.StringFlag{Name: "ext", Usage: "new extension of transformed object's name"}
+	etlDryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "show total size of created objects, without really creating them"}
+	fromFileFlag    = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the code for ETL", Required: true}
+	depsFileFlag    = cli.StringFlag{Name: "deps-file", Usage: "absolute path to the file with dependencies that must be installed before running the code"}
+	runtimeFlag     = cli.StringFlag{Name: "runtime", Usage: "runtime which should be used when running the provided code", Required: true}
+	waitTimeoutFlag = cli.IntFlag{Name: "wait-timeout", Usage: "timeout when starting the pod, useful when installing large dependencies"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 

@@ -18,9 +18,6 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: <NAME>
-  annotations:
-    communication_type: <COMMUNICATION_TYPE>
-    wait_timeout: 5m
 spec:
   containers:
     - name: server
