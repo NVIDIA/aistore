@@ -25,12 +25,14 @@ spec:
       ports:
         - name: default
           containerPort: 80
-      command: ['sh', '-c', 'pip install --user -r /code/requirements.txt; python /server.py']
+      command: ['sh', '-c', 'python /server.py']
       env:
         - name: MOD_NAME
           value: code
         - name: FUNC_HANDLER
           value: transform
+        - name: PYTHONPATH
+          value: /runtime
       readinessProbe:
         httpGet:
           path: /health
@@ -38,20 +40,26 @@ spec:
       volumeMounts:
         - name: code
           mountPath: "/code"
+        - name: runtime
+          mountPath: "/runtime"
   initContainers:
     - name: server-deps
       image: aistore/python:2
-      command: ['sh', '-c', 'cp /src/* /dst/']
+      command: ['sh', '-c', 'cp /src/* /dst/; pip install --target="/runtime" -r /dst/requirements.txt']
       volumeMounts:
         - name: config
           mountPath: "/src"
         - name: code
           mountPath: "/dst"
+        - name: runtime
+          mountPath: "/runtime"
   volumes:
     - name: config
       configMap:
         name: <NAME>-source
     - name: code
+      emptyDir: {}
+    - name: runtime
       emptyDir: {}
 `
 }
