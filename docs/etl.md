@@ -327,6 +327,79 @@ ais-target-9knsb     1/1     Running   0          48m
 ais-target-fsxhp     1/1     Running   0          48m
 ```
 
+### PyTorch ImageNet preprocessing
+
+In this example, we will see how ETL can be used to preprocess the images of ImageNet for the learning.
+We will be using `python3` runtime.
+
+Before we start writing code let's put example tar file with ImageNet images to the AIStore.
+The tar we will be using is `n02085620.tar` (saved as `raw-train.tar`) from [ILSVRC2012_img_train_t3.tar](http://www.image-net.org/challenges/LSVRC/2012/dd31405981ef5f776aa17412e1f0c112/ILSVRC2012_img_train_t3.tar).
+
+```console
+$ tar -tvf raw-train.tar | head -n 5
+-rw-r--r--  0 aditya86 users   27024 Jul  4  2012 n02085620_10074.JPEG
+-rw-r--r--  0 aditya86 users   34446 Jul  4  2012 n02085620_10131.JPEG
+-rw-r--r--  0 aditya86 users   12891 Jul  4  2012 n02085620_10621.JPEG
+-rw-r--r--  0 aditya86 users   34837 Jul  4  2012 n02085620_1073.JPEG
+-rw-r--r--  0 aditya86 users   18126 Jul  4  2012 n02085620_10976.JPEG
+$ ais create bucket ais://imagenet
+"ais://imagenet" bucket created
+$ ais put raw-train.tar imagenet
+PUT "raw-train.tar" into bucket "imagenet"
+```
+
+Our transform code will look like this (`code.py`):
+```python
+import torch, tarfile, io
+from PIL import Image
+from torchvision import transforms
+
+preprocessing = transforms.Compose([
+    transforms.RandomResizedCrop(224),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    transforms.ToPILImage(),
+    transforms.Lambda(lambda x: x.tobytes()),
+])
+
+def transform(input_bytes: bytes) -> bytes:
+    input_tar = tarfile.open(fileobj=io.BytesIO(input_bytes))
+
+    output_bytes = io.BytesIO()
+    output_tar = tarfile.open(fileobj=output_bytes, mode="w|")
+
+    for member in input_tar:
+        image = Image.open(input_tar.extractfile(member))
+        processed = preprocessing(image)
+
+        member.size = len(processed)
+        output_tar.addfile(member, io.BytesIO(processed))
+
+    return output_bytes.getvalue()
+```
+
+and dependencies (`deps.txt`):
+```
+torch==1.6.0
+torchvision==0.7.0
+```
+
+Now we can build the ETL:
+```console
+$ ais etl build --from-file=code.py --deps-file=deps.txt --runtime=python3
+JGHEoo89gg
+$ ais etl object JGHEoo89gg imagenet/raw-train.tar preprocessed-train.tar
+$ tar -tvf preprocessed-train.tar | head -n 5
+-rw-r--r--  0 aditya86 users  150528 Jul  4  2012 n02085620_10074.JPEG
+-rw-r--r--  0 aditya86 users  150528 Jul  4  2012 n02085620_10131.JPEG
+-rw-r--r--  0 aditya86 users  150528 Jul  4  2012 n02085620_10621.JPEG
+-rw-r--r--  0 aditya86 users  150528 Jul  4  2012 n02085620_1073.JPEG
+-rw-r--r--  0 aditya86 users  150528 Jul  4  2012 n02085620_10976.JPEG
+```
+
+As expected, the size of the images inside the new tarball has been standardized as all images have the same resolution (`224*224*3=150528`).
+
 ## API Reference
 
 This section describes how to interact with ETLs via RESTful API.
