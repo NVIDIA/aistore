@@ -78,10 +78,8 @@ func cleanUpBckMsg(msg *OfflineMsg) {
 }
 
 func (m BuildMsg) Validate() error {
-	cmn.Assert(m.ID != "")
-
 	if len(m.Code) == 0 {
-		return fmt.Errorf("code is empty")
+		return fmt.Errorf("source code is empty")
 	}
 	if m.Runtime == "" {
 		return fmt.Errorf("runtime is not specified")
