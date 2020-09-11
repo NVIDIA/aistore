@@ -26,8 +26,8 @@ import (
 )
 
 const (
-	RebTrname     = "rebalance"
-	RebPushTrname = "rebpush" // broadcast push notifications
+	rebTrname     = "rebalance"
+	rebPushTrname = "rebpush" // broadcast push notifications
 )
 
 // rebalance stage enum
@@ -128,21 +128,22 @@ func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *
 		Compression: rebcfg.Compression,
 		Multiplier:  int(rebcfg.Multiplier),
 	}
-	dm, err := transport.NewDataMover(t, RebTrname, reb.recvObj, dmExtra)
+	dm, err := transport.NewDataMover(t, rebTrname, reb.recvObj, dmExtra)
 	if err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	reb.dm = dm
 	reb.ec = newECData()
-	reb.initStreamRecv()
+	reb.registerRecv()
 	return reb
 }
 
-func (reb *Manager) initStreamRecv() {
+// NOTE: these receive handlers are statically present throughout: unreg never done
+func (reb *Manager) registerRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if _, err := transport.Register(reb.dm.NetC(), RebPushTrname, reb.recvPush); err != nil {
+	if _, err := transport.Register(reb.dm.NetC(), rebPushTrname, reb.recvPush); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	// serialization: one at a time
@@ -194,7 +195,7 @@ func (reb *Manager) beginStreams() {
 	cmn.Assert(reb.stages.stage.Load() == rebStageInit)
 
 	reb.dm.Open()
-	pushArgs := transport.SBArgs{Network: reb.dm.NetC(), Trname: RebPushTrname}
+	pushArgs := transport.SBArgs{Network: reb.dm.NetC(), Trname: rebPushTrname}
 	reb.pushes = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
 
 	reb.laterx.Store(false)
@@ -213,7 +214,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
-		glog.Errorf("Failed to parse acknowledge: %v", err)
+		glog.Errorf("Failed to parse acknowledgement: %v", err)
 		return
 	}
 

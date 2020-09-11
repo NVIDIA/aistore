@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/transport"
 )
 
 const (
@@ -33,7 +34,8 @@ type (
 		commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (bool, error)
 		rsvp(err error)
 		// cleanup
-		cleanup()
+		abort()
+		commit()
 	}
 	rndzvs struct { // rendezvous records
 		callerName string
@@ -95,6 +97,7 @@ type (
 		txnBckBase
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
+		dm      *transport.DataMover
 	}
 	txnETLBucket struct {
 		txnBckBase
@@ -116,7 +119,7 @@ func (txns *transactions) init(t *targetrunner) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
 	txns.rendezvous = make(map[string]rndzvs, 8)
-	hk.Reg("cp.transactions.gc", txns.garbageCollect, txnsTimeoutGC)
+	hk.Reg("cp.transactions.gc", txns.housekeep, txnsTimeoutGC)
 }
 
 func (txns *transactions) begin(txn txn) error {
@@ -130,15 +133,20 @@ func (txns *transactions) begin(txn txn) error {
 	return nil
 }
 
-func (txns *transactions) find(uuid string, remove bool) (txn txn, err error) {
+func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 	var ok bool
+	cmn.Assert(act == "" /*simply find*/ || act == cmn.ActAbort || act == cmn.ActCommit)
 	txns.Lock()
 	if txn, ok = txns.m[uuid]; !ok {
 		err = fmt.Errorf("%s: Txn[%s] doesn't exist (aborted?)", txns.t.si, uuid)
-	} else if remove {
-		txn.cleanup()
+	} else if act != "" {
 		delete(txns.m, uuid)
 		delete(txns.rendezvous, uuid)
+		if act == cmn.ActAbort {
+			txn.abort()
+		} else {
+			txn.commit()
+		}
 	}
 	txns.Unlock()
 	return
@@ -200,15 +208,20 @@ func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
 	if rsvp {
 		txn.rsvp(rsvpErr)
 	}
-
 	// poll & check
+	defer func() {
+		act := cmn.ActCommit
+		if err != nil {
+			act = cmn.ActAbort
+		}
+		txns.find(txn.uuid(), act)
+	}()
 	for total := sleep; ; total += sleep {
 		if done, err = txn.isDone(); done {
-			txns.find(txn.uuid(), true /* remove */)
 			return
 		}
 		// aborted?
-		if _, err = txns.find(txn.uuid(), false); err != nil {
+		if _, err = txns.find(txn.uuid(), ""); err != nil {
 			return
 		}
 
@@ -232,22 +245,23 @@ func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
 			}
 		}
 	}
-	txns.find(txn.uuid(), true /* remove */)
 	return
 }
 
 // GC orphaned transactions //
-func (txns *transactions) garbageCollect() (d time.Duration) {
-	var errs, uids []string
-	now := time.Now()
+func (txns *transactions) housekeep() (d time.Duration) {
+	var (
+		errs    []string
+		orphans []txn
+		now     = time.Now()
+	)
 	d = txnsTimeoutGC
-
 	txns.RLock()
 	l := len(txns.m)
 	if l > txnsNumKeep*10 && l > 16 {
 		d = txnsTimeoutGC / 10
 	}
-	for uuid, txn := range txns.m {
+	for _, txn := range txns.m {
 		var (
 			elapsed = now.Sub(txn.started(cmn.ActBegin))
 			tout    = txn.timeout()
@@ -257,7 +271,7 @@ func (txns *transactions) garbageCollect() (d time.Duration) {
 		}
 		if elapsed > 2*tout+10*time.Minute {
 			errs = append(errs, fmt.Sprintf("GC %s: timeout", txn))
-			uids = append(uids, uuid)
+			orphans = append(orphans, txn)
 		} else if elapsed >= tout {
 			errs = append(errs,
 				fmt.Sprintf("GC %s: is taking longer than the specified timeout %v", txn, tout))
@@ -265,14 +279,16 @@ func (txns *transactions) garbageCollect() (d time.Duration) {
 	}
 	txns.RUnlock()
 
-	if len(uids) > 0 {
-		txns.Lock()
-		for _, uid := range uids {
-			delete(txns.m, uid)
-			delete(txns.rendezvous, uid)
-		}
-		txns.Unlock()
+	if len(orphans) == 0 {
+		return
 	}
+	txns.Lock()
+	for _, txn := range orphans {
+		txn.abort()
+		delete(txns.m, txn.uuid())
+		delete(txns.rendezvous, txn.uuid())
+	}
+	txns.Unlock()
 	for _, s := range errs {
 		glog.Errorln(s)
 	}
@@ -337,13 +353,16 @@ func newTxnBckBase(kind string, bck cluster.Bck) *txnBckBase {
 	return &txnBckBase{txnBase: txnBase{kind: kind}, bck: bck}
 }
 
-func (txn *txnBckBase) cleanup() {
+func (txn *txnBckBase) abort() {
 	for _, p := range txn.nlps {
 		nlp, ok := p.(*cluster.NameLockPair)
 		cmn.Assert(ok)
 		nlp.Unlock()
 	}
 }
+
+// NOTE: not keeping locks for the duration; see also: txnCopyBucket
+func (txn *txnBckBase) commit() { txn.abort() }
 
 func (txn *txnBckBase) String() string {
 	var (
@@ -460,14 +479,20 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 var _ txn = &txnCopyBucket{}
 
 // c-tor
-func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnCopyBucket) {
+func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *transport.DataMover) (txn *txnCopyBucket) {
 	txn = &txnCopyBucket{
 		*newTxnBckBase("bcp", *bckFrom),
 		bckFrom,
 		bckTo,
+		dm,
 	}
 	txn.fillFromCtx(c)
 	return
+}
+
+func (txn *txnCopyBucket) abort() {
+	txn.txnBckBase.abort()
+	txn.dm.UnregRecv()
 }
 
 //////////////////

@@ -69,7 +69,7 @@ func (r *xactBckBase) init(mpathCount int) {
 }
 
 // control loop
-func (r *xactBckBase) run(mpathersCount int) error {
+func (r *xactBckBase) waitDone(mpathersCount int) error {
 	for {
 		select {
 		case <-r.ChanAbort():

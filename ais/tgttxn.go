@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,8 +21,13 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
+)
+
+const (
+	recvObjTrname = "recvobjs"
 )
 
 // convenience structure to gather all (or most) of the relevant context in one place
@@ -109,9 +115,9 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 			return err
 		}
 	case cmn.ActAbort:
-		t.transactions.find(c.uuid, true /* remove */)
+		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
-		txn, err := t.transactions.find(c.uuid, false)
+		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
@@ -150,10 +156,10 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 		txn.nlps = []cmn.NLP{nlp}
 	case cmn.ActAbort:
-		t.transactions.find(c.uuid, true /* remove */)
+		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
 		copies, _ := t.parseNCopies(c.msg.Value)
-		txn, err := t.transactions.find(c.uuid, false)
+		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
@@ -230,9 +236,9 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		txn.nlps = []cmn.NLP{nlp}
 	case cmn.ActAbort:
-		t.transactions.find(c.uuid, true /* remove */)
+		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
-		txn, err := t.transactions.find(c.uuid, false)
+		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
@@ -329,10 +335,10 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		}
 		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
 	case cmn.ActAbort:
-		t.transactions.find(c.uuid, true /* remove */)
+		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
 		var xact *xaction.FastRen
-		txn, err := t.transactions.find(c.uuid, false)
+		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
@@ -416,33 +422,40 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 		var (
 			bckTo   *cluster.Bck
 			bckFrom = c.bck
+			dm      *transport.DataMover
+			config  = cmn.GCO.Get()
 			err     error
 		)
-		// TODO -- FIXME: mountpath validation when destination does not exist
 		if bckTo, err = t.validateBckCpTxn(bckFrom, c.msg); err != nil {
+			return err
+		}
+		if dm, err = c.newObjMover(&config.Rebalance, c.uuid); err != nil {
 			return err
 		}
 		nlpFrom := bckFrom.GetNameLockPair()
 		nlpTo := bckTo.GetNameLockPair()
 		if !nlpFrom.TryRLock() {
+			dm.UnregRecv()
 			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
 		}
 		if !nlpTo.TryLock() {
+			dm.UnregRecv()
 			nlpFrom.Unlock()
 			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
 		}
-		txn := newTxnCopyBucket(c, bckFrom, bckTo)
+		txn := newTxnCopyBucket(c, bckFrom, bckTo, dm)
 		if err := t.transactions.begin(txn); err != nil {
+			dm.UnregRecv()
 			nlpTo.Unlock()
 			nlpFrom.Unlock()
 			return err
 		}
 		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
 	case cmn.ActAbort:
-		t.transactions.find(c.uuid, true /* remove */)
+		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
 		var xact *mirror.XactBckCopy
-		txn, err := t.transactions.find(c.uuid, false)
+		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
@@ -452,9 +465,9 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 		} else {
-			t.transactions.find(c.uuid, true /* remove */)
+			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, c.uuid, cmn.ActCommit)
+		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, c.uuid, cmn.ActCommit, txnCpBck.dm)
 		if err != nil {
 			return err
 		}
@@ -543,7 +556,7 @@ func (t *targetrunner) etlBucket(c *txnServerCtx) error {
 		}
 		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
 	case cmn.ActAbort:
-		_, err := t.transactions.find(c.uuid, true /* remove */)
+		_, err := t.transactions.find(c.uuid, cmn.ActAbort)
 		debug.AssertNoErr(err)
 	case cmn.ActCommit:
 		var (
@@ -554,7 +567,7 @@ func (t *targetrunner) etlBucket(c *txnServerCtx) error {
 		if err := cmn.MorphMarshal(c.msg.Value, &bckMsg); err != nil {
 			return fmt.Errorf("couldn't morphmarshal. value: (%v) err: %s", c.msg.Value, err.Error())
 		}
-		txn, err := t.transactions.find(c.uuid, false)
+		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
@@ -564,9 +577,10 @@ func (t *targetrunner) etlBucket(c *txnServerCtx) error {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 		} else {
-			t.transactions.find(c.uuid, true /* remove */)
+			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		xact, err = xaction.Registry.RenewETLOffline(t, txnETLBck.bckFrom, txnETLBck.bckTo, &bckMsg.OfflineMsg, c.uuid, cmn.ActCommit)
+		xact, err = xaction.Registry.RenewETLOffline(t, txnETLBck.bckFrom, txnETLBck.bckTo,
+			&bckMsg.OfflineMsg, c.uuid, cmn.ActCommit)
 		if err != nil {
 			return err
 		}
@@ -650,7 +664,8 @@ func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 // a proxy. Header should be populated with relevant data for a given reader,
 // including content length, checksum, version, atime and should not be nil.
 // r is closed always, even on errors.
-func (t *targetrunner) PutObjectToTarget(destTarget *cluster.Snode, r io.ReadCloser, bckTo *cluster.Bck, objNameTo string, header http.Header) error {
+func (t *targetrunner) PutObjectToTarget(destTarget *cluster.Snode, r io.ReadCloser, bckTo *cluster.Bck,
+	objNameTo string, header http.Header) error {
 	cmn.Assert(!t.Snode().Equals(destTarget))
 
 	query := url.Values{}
@@ -727,6 +742,37 @@ func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 }
 
 //
+// streaming receive via transport.DataMover
+//
+
+func (t *targetrunner) recvObj(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	defer cmn.DrainReader(objReader)
+	lom := &cluster.LOM{T: t, ObjName: hdr.ObjName}
+	if err := lom.Init(hdr.Bck); err != nil {
+		glog.Error(err)
+		return
+	}
+	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+	lom.SetVersion(hdr.ObjAttrs.Version)
+
+	if err := t.PutObject(cluster.PutObjectParams{
+		LOM:          lom,
+		Reader:       ioutil.NopCloser(objReader),
+		WorkFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
+		RecvType:     cluster.Migrated,
+		Cksum:        cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Started:      time.Now(),
+		WithFinalize: true,
+	}); err != nil {
+		glog.Error(err)
+	}
+}
+
+//
 // notifications
 //
 
@@ -737,4 +783,20 @@ func (c *txnServerCtx) addNotif(xact cmn.Xact) {
 			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifXact, Dsts: dsts, F: c.t.xactCallerNotify},
 		})
 	}
+}
+
+func (c *txnServerCtx) newObjMover(rebcfg *cmn.RebalanceConf, uuid string) (*transport.DataMover, error) {
+	dmExtra := transport.DMExtra{
+		RecvAck:     nil,                    // NOTE: no ACKs
+		Compression: rebcfg.Compression,     // TODO: define separately
+		Multiplier:  int(rebcfg.Multiplier), // ditto
+	}
+	dm, err := transport.NewDataMover(c.t, recvObjTrname+"/"+uuid, c.t.recvObj, dmExtra)
+	if err != nil {
+		return nil, err
+	}
+	if err := dm.RegRecv(); err != nil {
+		return nil, err
+	}
+	return dm, nil
 }

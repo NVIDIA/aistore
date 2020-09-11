@@ -440,6 +440,10 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+///////////////////////
+// httpbck* handlers //
+///////////////////////
+
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -467,91 +471,273 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Returns a slice. Does not use GFN.
-func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.EC)
+// DELETE { action } /v1/buckets/bucket-name
+// (evict | delete) (list | range)
+func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
+	var (
+		msg           = &aisMsg{}
+		apiItems, err = t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	)
 	if err != nil {
 		return
 	}
-
-	if apiItems[0] == ec.URLMeta {
-		t.sendECMetafile(w, r, apiItems[1:])
-	} else if apiItems[0] == ec.URLCT {
-		t.sendECCT(w, r, apiItems[1:])
-	} else {
-		t.invalmsghdlrf(w, r, "invalid EC URL path %s", apiItems[0])
-	}
-}
-
-func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems []string) {
-	var (
-		config = cmn.GCO.Get()
-	)
-	bucket, objName := apiItems[0], apiItems[1]
+	bucket := apiItems[0]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, ObjName: objName}
-	if err = lom.Init(bck.Bck, config); err != nil {
+	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = lom.Init(bck.Bck, config)
+			err = bck.Init(t.owner.bmd, t.si)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 	}
-	sliceFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(bck.Bck, ec.SliceType, objName)
-	finfo, err := os.Stat(sliceFQN)
-	if err != nil {
-		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-		return
+	b, err := ioutil.ReadAll(r.Body)
+	if err == nil && len(b) > 0 {
+		err = jsoniter.Unmarshal(b, msg)
 	}
-	file, err := os.Open(sliceFQN)
 	if err != nil {
-		t.fshc(err, sliceFQN)
-		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+		s := fmt.Sprintf("failed to read %s body, err: %v", r.Method, err)
+		if err == io.EOF {
+			trailer := r.Trailer.Get("Error")
+			if trailer != "" {
+				s = fmt.Sprintf("failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+			}
+		}
+		t.invalmsghdlr(w, r, s)
 		return
 	}
 
-	buf, slab := t.gmm.Alloc(finfo.Size())
-	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
-	_, err = io.CopyBuffer(w, file, buf)
-	slab.Free(buf)
-	debug.AssertNoErr(file.Close())
-	if err != nil {
-		glog.Errorf("Failed to send slice %s/%s: %v", bck, objName, err)
+	switch msg.Action {
+	case cmn.ActDelete, cmn.ActEvictObjects:
+		if len(b) == 0 { // must be a List/Range request
+			t.invalmsghdlr(w, r, "invalid API request: no message body")
+			return
+		}
+		var (
+			rangeMsg = &cmn.RangeMsg{}
+			listMsg  = &cmn.ListMsg{}
+		)
+		args := &xaction.DeletePrefetchArgs{
+			Ctx:   context.Background(),
+			UUID:  msg.UUID,
+			Evict: msg.Action == cmn.ActEvictObjects,
+		}
+		if err := cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
+			args.RangeMsg = rangeMsg
+		} else if err := cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
+			args.ListMsg = listMsg
+		} else {
+			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
+			return
+		}
+		xact, err := xaction.Registry.RenewEvictDelete(t, bck, args)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
+		xact.AddNotif(&cmn.NotifXact{
+			NotifBase: cmn.NotifBase{
+				When: cmn.UponTerm,
+				Ty:   notifXact,
+				Dsts: []string{equalIC},
+				F:    t.xactCallerNotify,
+			},
+		})
+		go xact.Run()
+	default:
+		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
-// Returns a CT's metadata.
-func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, apiItems []string) {
-	bucket, objName := apiItems[0], apiItems[1]
-	bck, err := newBckFromQuery(bucket, r.URL.Query())
+// POST /v1/buckets/bucket-name
+func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
+	var (
+		bucket string
+		msg    = &aisMsg{}
+		query  = r.URL.Query()
+	)
+	if cmn.ReadJSON(w, r, msg) != nil {
+		return
+	}
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
 	if err != nil {
-		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	t.ensureLatestSmap(msg, r)
+
+	if len(apiItems) == 0 {
+		switch msg.Action {
+		case cmn.ActSummaryBucket:
+			bck, err := newBckFromQuery("", query)
+			if err != nil {
+				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if !t.bucketSummary(w, r, bck, msg) {
+				return
+			}
+		default:
+			t.invalmsghdlr(w, r, "url path is too short: bucket name is missing", http.StatusBadRequest)
+		}
+		return
+	}
+
+	bucket = apiItems[0]
+	bck, err := newBckFromQuery(bucket, query)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err = bck.Init(t.owner.bmd, t.si); err != nil {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			err = bck.Init(t.owner.bmd, t.si)
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	}
+	switch msg.Action {
+	case cmn.ActPrefetch:
+		if !bck.IsRemote() {
+			t.invalmsghdlrf(w, r, "%s: expecting remote bucket, got %s, action=%s", t.si, bck, msg.Action)
+			return
+		}
+		var (
+			err      error
+			xact     *xaction.Prefetch
+			rangeMsg = &cmn.RangeMsg{}
+			listMsg  = &cmn.ListMsg{}
+			args     = &xaction.DeletePrefetchArgs{Ctx: context.Background()}
+		)
+		if err = cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
+			args.RangeMsg = rangeMsg
+		} else if err = cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
+			args.ListMsg = listMsg
+		} else {
+			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
+			return
+		}
+		args.UUID = msg.UUID
+		xact, err = xaction.Registry.RenewPrefetch(t, bck, args)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		go xact.Run()
+	case cmn.ActListObjects:
+		// list the bucket and return
+		begin := mono.NanoTime()
+		if ok := t.listObjects(w, r, bck, msg); !ok {
+			return
+		}
+
+		delta := mono.Since(begin)
+		t.statsT.AddMany(
+			stats.NamedVal64{Name: stats.ListCount, Value: 1},
+			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
+		)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("LIST: %s, %d µs", bucket, int64(delta/time.Microsecond))
+		}
+	case cmn.ActSummaryBucket:
+		if !t.bucketSummary(w, r, bck, msg) {
+			return
+		}
+	default:
+		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+	}
+}
+
+// HEAD /v1/buckets/bucket-name
+func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
+	var (
+		bucketProps cmn.SimpleKVs
+		code        int
+		inBMD       = true
+		ctx         = context.Background()
+		hdr         = w.Header()
+		query       = r.URL.Query()
+	)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	if err != nil {
+		return
+	}
+	bucket := apiItems[0]
+	bck, err := newBckFromQuery(bucket, query)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err = bck.Init(t.owner.bmd, t.si); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
-			t.invalmsghdlrsilent(w, r, err.Error())
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		inBMD = false
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		pid := query.Get(cmn.URLParamProxyID)
+		glog.Infof("%s %s <= %s", r.Method, bck, pid)
+	}
+	if bck.IsAIS() {
+		t.bucketPropsToHdr(bck, hdr)
+		return
+	}
+	if bck.IsHTTP() {
+		originalURL := query.Get(cmn.URLParamOrigURL)
+		ctx = context.WithValue(ctx, cmn.CtxOriginalURL, originalURL)
+		if !inBMD && originalURL == "" {
+			err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, t.si.String())
+			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 			return
 		}
 	}
-	md, err := ec.ObjectMetadata(bck, objName)
+	// + cloud
+	bucketProps, err, code = t.Cloud(bck).HeadBucket(ctx, bck)
 	if err != nil {
-		if os.IsNotExist(err) {
-			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-		} else {
-			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusInternalServerError)
+		if !inBMD {
+			if code == http.StatusNotFound {
+				err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, t.si.String())
+				t.invalmsghdlrsilent(w, r, err.Error(), code)
+			} else {
+				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, bck, err)
+				t.invalmsghdlr(w, r, err.Error(), code)
+			}
+			return
 		}
-		return
+		bucketProps = make(cmn.SimpleKVs)
+		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, bck, err, code)
+		bucketProps[cmn.HeaderCloudProvider] = bck.Provider
+		// TODO: what about `HTTP` cloud?
+		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
+		bucketProps[cmn.HeaderRemoteAisOffline] = strconv.FormatBool(bck.IsRemoteAIS())
 	}
-	w.Write(md.Marshal())
+	for k, v := range bucketProps {
+		if k == cmn.HeaderBucketVerEnabled && bck.Props != nil {
+			if curr := strconv.FormatBool(bck.VersionConf().Enabled); curr != v {
+				// e.g., change via vendor-provided CLI and similar
+				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t.si, bck, v, curr)
+			}
+		}
+		hdr.Set(k, v)
+	}
+	t.bucketPropsToHdr(bck, hdr)
 }
+
+///////////////////////
+// httpobj* handlers //
+///////////////////////
 
 // GET /v1/objects/bucket[+"/"+objName]
 // Checks if the object exists locally (if not, downloads it) and sends it back
@@ -708,91 +894,6 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DELETE { action } /v1/buckets/bucket-name
-// (evict | delete) (list | range)
-func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
-	var (
-		msg           = &aisMsg{}
-		apiItems, err = t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
-	)
-	if err != nil {
-		return
-	}
-	bucket := apiItems[0]
-	bck, err := newBckFromQuery(bucket, r.URL.Query())
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.owner.bmd, t.si)
-		}
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-	}
-	b, err := ioutil.ReadAll(r.Body)
-	if err == nil && len(b) > 0 {
-		err = jsoniter.Unmarshal(b, msg)
-	}
-	if err != nil {
-		s := fmt.Sprintf("failed to read %s body, err: %v", r.Method, err)
-		if err == io.EOF {
-			trailer := r.Trailer.Get("Error")
-			if trailer != "" {
-				s = fmt.Sprintf("failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
-			}
-		}
-		t.invalmsghdlr(w, r, s)
-		return
-	}
-
-	switch msg.Action {
-	case cmn.ActDelete, cmn.ActEvictObjects:
-		if len(b) == 0 { // must be a List/Range request
-			t.invalmsghdlr(w, r, "invalid API request: no message body")
-			return
-		}
-		var (
-			rangeMsg = &cmn.RangeMsg{}
-			listMsg  = &cmn.ListMsg{}
-		)
-		args := &xaction.DeletePrefetchArgs{
-			Ctx:   context.Background(),
-			UUID:  msg.UUID,
-			Evict: msg.Action == cmn.ActEvictObjects,
-		}
-		if err := cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
-			args.RangeMsg = rangeMsg
-		} else if err := cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
-			args.ListMsg = listMsg
-		} else {
-			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
-			return
-		}
-		xact, err := xaction.Registry.RenewEvictDelete(t, bck, args)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
-		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{
-				When: cmn.UponTerm,
-				Ty:   notifXact,
-				Dsts: []string{equalIC},
-				F:    t.xactCallerNotify,
-			},
-		})
-		go xact.Run()
-	default:
-		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
-	}
-}
-
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -840,109 +941,6 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	ec.ECM.CleanupObject(lom)
 }
 
-// POST /v1/buckets/bucket-name
-func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	var (
-		bucket string
-		msg    = &aisMsg{}
-		query  = r.URL.Query()
-	)
-	if cmn.ReadJSON(w, r, msg) != nil {
-		return
-	}
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
-	if err != nil {
-		return
-	}
-
-	t.ensureLatestSmap(msg, r)
-
-	if len(apiItems) == 0 {
-		switch msg.Action {
-		case cmn.ActSummaryBucket:
-			bck, err := newBckFromQuery("", query)
-			if err != nil {
-				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-				return
-			}
-			if !t.bucketSummary(w, r, bck, msg) {
-				return
-			}
-		default:
-			t.invalmsghdlr(w, r, "url path is too short: bucket name is missing", http.StatusBadRequest)
-		}
-		return
-	}
-
-	bucket = apiItems[0]
-	bck, err := newBckFromQuery(bucket, query)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
-			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = bck.Init(t.owner.bmd, t.si)
-		}
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-	}
-	switch msg.Action {
-	case cmn.ActPrefetch:
-		if !bck.IsRemote() {
-			t.invalmsghdlrf(w, r, "%s: expecting remote bucket, got %s, action=%s", t.si, bck, msg.Action)
-			return
-		}
-		var (
-			err      error
-			xact     *xaction.Prefetch
-			rangeMsg = &cmn.RangeMsg{}
-			listMsg  = &cmn.ListMsg{}
-			args     = &xaction.DeletePrefetchArgs{Ctx: context.Background()}
-		)
-		if err = cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
-			args.RangeMsg = rangeMsg
-		} else if err = cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
-			args.ListMsg = listMsg
-		} else {
-			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
-			return
-		}
-		args.UUID = msg.UUID
-		xact, err = xaction.Registry.RenewPrefetch(t, bck, args)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		go xact.Run()
-	case cmn.ActListObjects:
-		// list the bucket and return
-		begin := mono.NanoTime()
-		if ok := t.listObjects(w, r, bck, msg); !ok {
-			return
-		}
-
-		delta := mono.Since(begin)
-		t.statsT.AddMany(
-			stats.NamedVal64{Name: stats.ListCount, Value: 1},
-			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
-		)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("LIST: %s, %d µs", bucket, int64(delta/time.Microsecond))
-		}
-	case cmn.ActSummaryBucket:
-		if !t.bucketSummary(w, r, bck, msg) {
-			return
-		}
-	default:
-		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
-	}
-}
-
 // POST /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -969,82 +967,6 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	default:
 		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
-}
-
-// HEAD /v1/buckets/bucket-name
-func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	var (
-		bucketProps cmn.SimpleKVs
-		code        int
-		inBMD       = true
-		ctx         = context.Background()
-		hdr         = w.Header()
-		query       = r.URL.Query()
-	)
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
-	if err != nil {
-		return
-	}
-	bucket := apiItems[0]
-	bck, err := newBckFromQuery(bucket, query)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err = bck.Init(t.owner.bmd, t.si); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		inBMD = false
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		pid := query.Get(cmn.URLParamProxyID)
-		glog.Infof("%s %s <= %s", r.Method, bck, pid)
-	}
-	if bck.IsAIS() {
-		t.bucketPropsToHdr(bck, hdr)
-		return
-	}
-	if bck.IsHTTP() {
-		originalURL := query.Get(cmn.URLParamOrigURL)
-		ctx = context.WithValue(ctx, cmn.CtxOriginalURL, originalURL)
-		if !inBMD && originalURL == "" {
-			err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, t.si.String())
-			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
-			return
-		}
-	}
-	// + cloud
-	bucketProps, err, code = t.Cloud(bck).HeadBucket(ctx, bck)
-	if err != nil {
-		if !inBMD {
-			if code == http.StatusNotFound {
-				err = cmn.NewErrorRemoteBucketDoesNotExist(bck.Bck, t.si.String())
-				t.invalmsghdlrsilent(w, r, err.Error(), code)
-			} else {
-				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, bck, err)
-				t.invalmsghdlr(w, r, err.Error(), code)
-			}
-			return
-		}
-		bucketProps = make(cmn.SimpleKVs)
-		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, bck, err, code)
-		bucketProps[cmn.HeaderCloudProvider] = bck.Provider
-		// TODO: what about `HTTP` cloud?
-		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(bck.IsCloud())
-		bucketProps[cmn.HeaderRemoteAisOffline] = strconv.FormatBool(bck.IsRemoteAIS())
-	}
-	for k, v := range bucketProps {
-		if k == cmn.HeaderBucketVerEnabled && bck.Props != nil {
-			if curr := strconv.FormatBool(bck.VersionConf().Enabled); curr != v {
-				// e.g., change via vendor-provided CLI and similar
-				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t.si, bck, v, curr)
-			}
-		}
-		hdr.Set(k, v)
-	}
-	t.bucketPropsToHdr(bck, hdr)
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1171,8 +1093,98 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+//////////////////////
+// httpec* handlers //
+//////////////////////
+
+// Returns a slice. Does not use GFN.
+func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.EC)
+	if err != nil {
+		return
+	}
+
+	if apiItems[0] == ec.URLMeta {
+		t.sendECMetafile(w, r, apiItems[1:])
+	} else if apiItems[0] == ec.URLCT {
+		t.sendECCT(w, r, apiItems[1:])
+	} else {
+		t.invalmsghdlrf(w, r, "invalid EC URL path %s", apiItems[0])
+	}
+}
+
+// Returns a CT's metadata.
+func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, apiItems []string) {
+	bucket, objName := apiItems[0], apiItems[1]
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err = bck.Init(t.owner.bmd, t.si); err != nil {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
+			t.invalmsghdlrsilent(w, r, err.Error())
+			return
+		}
+	}
+	md, err := ec.ObjectMetadata(bck, objName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+		} else {
+			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Write(md.Marshal())
+}
+
+func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems []string) {
+	var (
+		config = cmn.GCO.Get()
+	)
+	bucket, objName := apiItems[0], apiItems[1]
+	bck, err := newBckFromQuery(bucket, r.URL.Query())
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+	lom := &cluster.LOM{T: t, ObjName: objName}
+	if err = lom.Init(bck.Bck, config); err != nil {
+		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
+			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
+			err = lom.Init(bck.Bck, config)
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	}
+	sliceFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(bck.Bck, ec.SliceType, objName)
+	finfo, err := os.Stat(sliceFQN)
+	if err != nil {
+		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+		return
+	}
+	file, err := os.Open(sliceFQN)
+	if err != nil {
+		t.fshc(err, sliceFQN)
+		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	buf, slab := t.gmm.Alloc(finfo.Size())
+	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
+	_, err = io.CopyBuffer(w, file, buf)
+	slab.Free(buf)
+	debug.AssertNoErr(file.Close())
+	if err != nil {
+		glog.Errorf("Failed to send slice %s/%s: %v", bck, objName, err)
+	}
+}
+
 //
-// supporting methods and misc
+// supporting methods
 //
 
 // checkCloudVersion returns (vchanged=) true if object versions differ between Cloud and local cache;

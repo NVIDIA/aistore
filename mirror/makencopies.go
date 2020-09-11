@@ -53,11 +53,11 @@ func NewXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, cop
 
 func (r *XactBckMakeNCopies) Run() (err error) {
 	var mpathersCount int
-	if mpathersCount, err = r.init(); err != nil {
+	if mpathersCount, err = r.runJoggers(); err != nil {
 		return
 	}
 	glog.Infoln(r.String(), "copies=", r.copies)
-	err = r.xactBckBase.run(mpathersCount)
+	err = r.xactBckBase.waitDone(mpathersCount)
 	r.Finish(err)
 	return
 }
@@ -81,7 +81,7 @@ func ValidateNCopies(prefix string, copies int) error {
 // private methods
 //
 
-func (r *XactBckMakeNCopies) init() (mpathCount int, err error) {
+func (r *XactBckMakeNCopies) runJoggers() (mpathCount int, err error) {
 	tname := r.Target().Snode().Name()
 	if err = ValidateNCopies(tname, r.copies); err != nil {
 		return

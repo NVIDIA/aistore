@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/transport"
 )
 
 // XactBckCopy copies a bucket locally within the same cluster
@@ -22,6 +23,7 @@ type (
 		slab    *memsys.Slab
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
+		dm      *transport.DataMover
 	}
 	bccJogger struct { // one per mountpath
 		joggerBckBase
@@ -34,19 +36,22 @@ type (
 // public methods
 //
 
-func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab) *XactBckCopy {
+func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab,
+	dm *transport.DataMover) *XactBckCopy {
 	return &XactBckCopy{
 		xactBckBase: *newXactBckBase(id, cmn.ActCopyBucket, bckTo.Bck, t),
 		slab:        slab,
 		bckFrom:     bckFrom,
 		bckTo:       bckTo,
+		dm:          dm,
 	}
 }
 
 func (r *XactBckCopy) Run() (err error) {
-	mpathCount := r.init()
+	mpathCount := r.runJoggers()
+
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
-	err = r.xactBckBase.run(mpathCount)
+	err = r.xactBckBase.waitDone(mpathCount)
 	r.Finish(err)
 	return
 }
@@ -57,17 +62,15 @@ func (r *XactBckCopy) String() string { return fmt.Sprintf("%s <= %s", r.XactBas
 // private methods
 //
 
-func (r *XactBckCopy) init() (mpathCount int) {
+func (r *XactBckCopy) runJoggers() (mpathCount int) {
 	var (
 		availablePaths, _ = fs.Get()
 		config            = cmn.GCO.Get()
 	)
 	mpathCount = len(availablePaths)
-
 	r.xactBckBase.init(mpathCount)
 	for _, mpathInfo := range availablePaths {
 		bccJogger := newBCCJogger(r, mpathInfo, config)
-		// only objects; TODO contentType := range fs.CSM.RegisteredContentTypes
 		mpathLC := mpathInfo.MakePathCT(r.bckFrom.Bck, fs.ObjectType)
 		r.mpathers[mpathLC] = bccJogger
 		go bccJogger.jog()

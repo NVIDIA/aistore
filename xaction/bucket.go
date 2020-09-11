@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/query"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction/demand"
 )
 
@@ -369,12 +370,13 @@ type bccEntry struct {
 	bckFrom *cluster.Bck
 	bckTo   *cluster.Bck
 	phase   string
+	dm      *transport.DataMover
 }
 
 func (e *bccEntry) Start(_ cmn.Bck) error {
 	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	e.xact = mirror.NewXactBCC(e.uuid, e.bckFrom, e.bckTo, e.t, slab)
+	e.xact = mirror.NewXactBCC(e.uuid, e.bckFrom, e.bckTo, e.t, slab, e.dm)
 	return nil
 }
 func (e *bccEntry) Kind() string  { return cmn.ActCopyBucket }
@@ -393,13 +395,15 @@ func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error
 	return
 }
 
-func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, phase string) (*mirror.XactBckCopy, error) {
+func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid,
+	phase string, dm *transport.DataMover) (*mirror.XactBckCopy, error) {
 	e := &bccEntry{
 		baseBckEntry: baseBckEntry{uuid},
 		t:            t,
 		bckFrom:      bckFrom,
 		bckTo:        bckTo,
 		phase:        phase,
+		dm:           dm,
 	}
 	res := r.renewBucketXaction(e, bckTo)
 	if res.err != nil {

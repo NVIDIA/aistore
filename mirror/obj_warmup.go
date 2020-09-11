@@ -30,25 +30,21 @@ func NewXactLLC(t cluster.Target, bck cmn.Bck) *XactBckLoadLomCache {
 }
 
 func (r *XactBckLoadLomCache) Run() (err error) {
-	var mpathCount int
-	if mpathCount, err = r.init(); err != nil {
-		return
-	}
+	mpathCount := r.runJoggers()
 	glog.Infoln(r.String())
-	return r.xactBckBase.run(mpathCount)
+	return r.xactBckBase.waitDone(mpathCount)
 }
 
 //
 // private methods
 //
 
-func (r *XactBckLoadLomCache) init() (mpathCount int, err error) {
+func (r *XactBckLoadLomCache) runJoggers() (mpathCount int) {
 	var (
 		availablePaths, _ = fs.Get()
 		config            = cmn.GCO.Get()
 	)
 	mpathCount = len(availablePaths)
-
 	r.xactBckBase.init(mpathCount)
 	for _, mpathInfo := range availablePaths {
 		xwarmJogger := newXwarmJogger(r, mpathInfo, config)
