@@ -65,7 +65,7 @@ Currently, these runtimes are supported:
 | Name | Description |
 | --- | --- |
 | `python2` | `python:2.7.18` is used to run the code. |
-| `python3` | `python:3.8.3` is used to run the code. |
+| `python3` | `python:3.8.5` is used to run the code. |
 
 Since the number of runtimes is limited we recommend using [`init` request](#init-request) when you have bigger needs.
 
@@ -213,7 +213,7 @@ There are two ways of approaching this problem:
     For that we need to write `Dockerfile` which can look like this:
     
     ```dockerfile
-    FROM python:3.8.3-alpine3.11
+    FROM python:3.8.5-alpine3.11
     
     RUN mkdir /code
     WORKDIR /code

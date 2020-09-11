@@ -22,7 +22,6 @@ spec:
   containers:
     - name: server
       image: aistore/python:2
-      imagePullPolicy: Always
       ports:
         - name: default
           containerPort: 80
@@ -42,7 +41,6 @@ spec:
   initContainers:
     - name: server-deps
       image: aistore/python:2
-      imagePullPolicy: Always
       command: ['sh', '-c', 'cp /src/* /dst/']
       volumeMounts:
         - name: config
