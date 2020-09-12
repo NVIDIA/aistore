@@ -65,6 +65,13 @@ type PutObjectParams struct {
 	SkipEncode   bool // Do not run EC encode after finalizing
 }
 
+type CopyObjectParams struct {
+	LOM       *LOM
+	BckTo     *Bck
+	Buf       []byte
+	LocalOnly bool
+}
+
 // NOTE: For implementations, please refer to ais/tgtifimpl.go and ais/httpcommon.go
 type Target interface {
 	Node
@@ -79,7 +86,7 @@ type Target interface {
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(params PutObjectParams) error
 	EvictObject(lom *LOM) error
-	CopyObject(lom *LOM, bckTo *Bck, buf []byte, localOnly bool) (bool, error)
+	CopyObject(params CopyObjectParams) (bool, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(srcFQN string, bck *Bck, objName string, cksum *cmn.Cksum,
 		overwrite, safe, verbose bool) (lom *LOM, err error)

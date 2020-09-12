@@ -81,13 +81,9 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		return
 	}
 
-	ri := replicInfo{
-		t:     t,
-		smap:  t.owner.smap.get(),
-		bckTo: bckDst,
-	}
+	coi := copyObjInfo{t: t, bckTo: bckDst}
 	objName := path.Join(items[1:]...)
-	if _, err := ri.copyObject(lom, objName); err != nil {
+	if _, err := coi.copyObject(lom, objName); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

@@ -106,7 +106,10 @@ func (j *bccJogger) jog() {
 }
 
 func (j *bccJogger) copyObject(lom *cluster.LOM) error {
-	copied, err := j.parent.Target().CopyObject(lom, j.parent.bckTo, j.buf, false)
+	var (
+		params      = cluster.CopyObjectParams{LOM: lom, BckTo: j.parent.bckTo, Buf: j.buf}
+		copied, err = j.parent.Target().CopyObject(params)
+	)
 	if copied {
 		j.parent.ObjectsInc()
 		j.parent.BytesAdd(lom.Size() + lom.Size())

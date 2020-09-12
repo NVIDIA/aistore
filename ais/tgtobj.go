@@ -96,6 +96,15 @@ type (
 		cksum *cmn.Cksum // Expected checksum of the final object.
 	}
 
+	copyObjInfo struct {
+		t         *targetrunner
+		bckTo     *cluster.Bck
+		buf       []byte
+		localOnly bool // copy locally with no HRW=>target
+		uncache   bool // uncache the source
+		finalize  bool // copies and EC (as in poi.finalize())
+	}
+
 	writerOnly struct{ io.Writer }
 )
 
@@ -968,4 +977,102 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cmn.CksumHash) s
 	cksumTy := partialCksum.Type()
 	cksumBinary := base64.StdEncoding.EncodeToString(buf)
 	return nodeID + "|" + filePath + "|" + cksumTy + "|" + cksumBinary
+}
+
+/////////////////
+// COPY OBJECT //
+/////////////////
+
+func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied bool, err error) {
+	si := coi.t.si
+	if !coi.localOnly {
+		smap := coi.t.owner.smap.Get()
+		if si, err = cluster.HrwTarget(coi.bckTo.MakeUname(objNameTo), smap); err != nil {
+			return
+		}
+	}
+
+	lom.Lock(false)
+	if err = lom.Load(false); err != nil {
+		if !cmn.IsObjNotExist(err) {
+			err = fmt.Errorf("%s: err: %v", lom, err)
+		}
+		lom.Unlock(false)
+		return
+	}
+	if coi.uncache {
+		defer lom.Uncache()
+	}
+
+	if si.ID() != coi.t.si.ID() {
+		copied, err := coi.putRemote(lom, objNameTo, si)
+		lom.Unlock(false)
+		return copied, err
+	}
+
+	if !lom.TryUpgradeLock() {
+		// We haven't managed to upgrade the lock so we must do it slow way...
+		lom.Unlock(false)
+		lom.Lock(true)
+		if err = lom.Load(false); err != nil {
+			lom.Unlock(true)
+			return
+		}
+	}
+
+	// At this point we must have an exclusive lock for the object.
+	defer lom.Unlock(true)
+
+	// local op
+	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
+	err = dst.Init(coi.bckTo.Bck)
+	if err != nil {
+		return
+	}
+
+	// Lock destination for writing if the destination has a different uname.
+	if lom.Uname() != dst.Uname() {
+		dst.Lock(true)
+		defer dst.Unlock(true)
+	}
+
+	// If before initializing the `dst` all mountpaths would be removed except
+	// the one on which the `lom` is placed then both `lom` and `dst` will have
+	// the same FQN in which case we should not copy.
+	if lom.FQN == dst.FQN {
+		return
+	}
+
+	if err = dst.Load(false); err == nil {
+		if lom.Cksum().Equal(dst.Cksum()) {
+			return
+		}
+	} else if cmn.IsErrBucketNought(err) {
+		return
+	}
+
+	dst, err = lom.CopyObject(dst.FQN, coi.buf)
+	if err == nil {
+		copied = true
+		dst.ReCache()
+		if coi.finalize {
+			coi.t.putMirror(dst)
+		}
+	}
+	return
+}
+
+func (coi *copyObjInfo) putRemote(lom *cluster.LOM, objNameTo string, tsi *cluster.Snode) (copied bool, err error) {
+	var file *cmn.FileHandle // Closed by `PutObjectToTarget()`
+	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
+		return false, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
+	}
+
+	// PUT object onto designated target
+	header := lom.PopulateHdr(nil)
+	err = coi.t.PutObjectToTarget(tsi, file, coi.bckTo, objNameTo, header)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

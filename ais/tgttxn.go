@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -507,7 +506,7 @@ func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckT
 ////////////////
 
 // TODO: deduplicate with copyBucket?
-// TODO: add additional check like in (ri *replicInfo) copyObject
+// TODO: add additional check like in (coi *copyObjInfo) copyObject
 func (t *targetrunner) etlBucket(c *txnServerCtx) error {
 	if err := t.checkK8s(); err != nil {
 		return err
@@ -654,49 +653,6 @@ func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 	}
 	err = t.coExists(bck, msg)
 	return
-}
-
-///////////////////////
-// PutObjectToTarget //
-///////////////////////
-
-// Puts an object (for reader r) to a destTarget, skipping communication with
-// a proxy. Header should be populated with relevant data for a given reader,
-// including content length, checksum, version, atime and should not be nil.
-// r is closed always, even on errors.
-func (t *targetrunner) PutObjectToTarget(destTarget *cluster.Snode, r io.ReadCloser, bckTo *cluster.Bck,
-	objNameTo string, header http.Header) error {
-	cmn.Assert(!t.Snode().Equals(destTarget))
-
-	query := url.Values{}
-	query = cmn.AddBckToQuery(query, bckTo.Bck)
-	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
-
-	header.Set(cmn.HeaderPutterID, t.si.ID())
-
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   destTarget.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bckTo.Name, objNameTo),
-		Query:  query,
-		Header: header,
-		BodyR:  r,
-	}
-	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)
-	if err != nil {
-		debug.AssertNoErr(r.Close())
-		err = fmt.Errorf("unexpected failure to create request, err: %v", err)
-		return err
-	}
-	defer cancel()
-	resp, err := t.httpclientGetPut.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
-	}
-	if resp != nil && resp.Body != nil {
-		debug.AssertNoErr(resp.Body.Close())
-	}
-	return nil
 }
 
 //////////
