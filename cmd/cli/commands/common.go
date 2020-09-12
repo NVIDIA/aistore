@@ -225,7 +225,8 @@ var (
 	resetFlag       = cli.BoolFlag{Name: "reset", Usage: "reset to original state"}
 	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the action without really doing it"}
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
-	ignoreErrorFlag = cli.BoolFlag{Name: "ignore-error", Usage: "ignore error on soft failures like bucket already exists, bucket does not exist etc."}
+	ignoreErrorFlag = cli.BoolFlag{Name: "ignore-error",
+		Usage: "ignore error on soft failures like bucket already exists, bucket does not exist etc."}
 	bucketPropsFlag = cli.StringFlag{Name: "bucket-props", Usage: "value represents custom properties of a bucket"}
 	forceFlag       = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
 
@@ -235,13 +236,15 @@ var (
 	allJobsFlag     = cli.BoolTFlag{Name: "all", Usage: "remove all finished jobs"}
 
 	// Bucket
-	startAfterFlag    = cli.StringFlag{Name: "start-after", Usage: "list objects alphabetically starting from the object after given provided key"}
-	objLimitFlag      = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0}
-	pageSizeFlag      = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}
-	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
-	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
-	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
-	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast algorithm to compute the result (warning: the result can be inaccurate)"}
+	startAfterFlag = cli.StringFlag{Name: "start-after",
+		Usage: "list objects alphabetically starting from the object after given provided key"}
+	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object count", Value: 0}
+	pageSizeFlag = cli.IntFlag{Name: "page-size", Usage: "maximum number of entries by list objects call", Value: 1000}
+	templateFlag = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
+	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
+	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
+	fastFlag     = cli.BoolTFlag{Name: "fast",
+		Usage: "use fast algorithm to compute the result (warning: the result can be inaccurate)"}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}
@@ -253,36 +256,45 @@ var (
 	countFlag = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
 
 	// Download
-	descriptionFlag       = cli.StringFlag{Name: "description,desc", Usage: "description of the job - can be useful when listing all downloads"}
-	timeoutFlag           = cli.StringFlag{Name: "timeout", Usage: "timeout for request to external resource, eg. '30m'"}
-	limitConnectionsFlag  = cli.IntFlag{Name: "limit-connections,conns", Usage: "number of connections each target can make concurrently (each target can handle at most #mountpaths connections)"}
-	limitBytesPerHourFlag = cli.StringFlag{Name: "limit-bytes-per-hour,limit-bph,bph", Usage: "number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can maximally download in hour"}
-	objectsListFlag       = cli.StringFlag{Name: "object-list,from", Usage: "path to file containing JSON array of strings with object names to download"}
-	syncFlag              = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
+	descriptionFlag = cli.StringFlag{Name: "description,desc",
+		Usage: "description of the job (useful when listing all downloads)"}
+	timeoutFlag          = cli.StringFlag{Name: "timeout", Usage: "timeout for request to external resource, eg. '30m'"}
+	limitConnectionsFlag = cli.IntFlag{Name: "limit-connections,conns",
+		Usage: "number of connections each target can make concurrently (each target can handle at most #mountpaths connections)"}
+	limitBytesPerHourFlag = cli.StringFlag{Name: "limit-bytes-per-hour,limit-bph,bph",
+		Usage: "number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can maximally download in hour"}
+	objectsListFlag = cli.StringFlag{Name: "object-list,from",
+		Usage: "path to file containing JSON array of strings with object names to download"}
+	syncFlag = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
 
 	// dSort
-	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: cmn.DSortNameLowercase + "-testing", Usage: "bucket where shards will be put"}
+	dsortBucketFlag = cli.StringFlag{Name: "bucket",
+		Value: cmn.DSortNameLowercase + "-testing", Usage: "bucket where shards will be put"}
 	dsortTemplateFlag = cli.StringFlag{Name: "template", Value: "shard-{0..9}", Usage: "template of input shard name"}
 	extFlag           = cli.StringFlag{Name: "ext", Value: ".tar", Usage: "extension for shards (either '.tar' or '.tgz')"}
 	fileSizeFlag      = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "single file size inside the shard"}
 	logFlag           = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
-	cleanupFlag       = cli.BoolFlag{Name: "cleanup", Usage: "remove old bucket and create it again. WARNING: it removes all objects that were present in the old bucket"}
-	concurrencyFlag   = cli.IntFlag{Name: "conc", Value: 10, Usage: "limits number of concurrent put requests and number of concurrent shards created"}
-	fileCountFlag     = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
-	specFileFlag      = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
+	cleanupFlag       = cli.BoolFlag{Name: "cleanup",
+		Usage: "remove old bucket and create it again. WARNING: it removes all objects that were present in the old bucket"}
+	concurrencyFlag = cli.IntFlag{Name: "conc", Value: 10,
+		Usage: "limits number of concurrent put requests and number of concurrent shards created"}
+	fileCountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
+	specFileFlag  = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
 
 	// Object
-	listFlag         = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
-	offsetFlag       = cli.StringFlag{Name: "offset", Usage: "object read offset, can contain prefix 'b', 'KiB', 'MB'"}
-	lengthFlag       = cli.StringFlag{Name: "length", Usage: "object read length, can contain prefix 'b', 'KiB', 'MB'"}
-	isCachedFlag     = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
-	cachedFlag       = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}
-	checksumFlag     = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
-	recursiveFlag    = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
-	overwriteFlag    = cli.BoolFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
-	targetFlag       = cli.StringFlag{Name: "target", Usage: "ais target ID"}
-	yesFlag          = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
-	chunkSizeFlag    = cli.StringFlag{Name: "chunk-size", Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB"}
+	listFlag      = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
+	offsetFlag    = cli.StringFlag{Name: "offset", Usage: "object read offset, can contain prefix 'b', 'KiB', 'MB'"}
+	lengthFlag    = cli.StringFlag{Name: "length", Usage: "object read length, can contain prefix 'b', 'KiB', 'MB'"}
+	isCachedFlag  = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
+	cachedFlag    = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}
+	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
+	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
+	overwriteFlag = cli.BoolFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
+	keepOrigFlag  = cli.BoolFlag{Name: "keep", Usage: "keep original file", Required: true}
+	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
+	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
+	chunkSizeFlag = cli.StringFlag{Name: "chunk-size",
+		Usage: "chunk size used for each request, can contain prefix 'b', 'KiB', 'MB'", Value: "10MB"}
 	computeCksumFlag = cli.BoolFlag{Name: "compute-cksum", Usage: "compute the checksum with the type configured for the bucket"}
 	useCacheFlag     = cli.BoolFlag{Name: "use-cache", Usage: "use proxy cache to speed up list object request"}
 	checksumFlags    = getCksumFlags()
@@ -292,14 +304,17 @@ var (
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 
 	// ETL
-	etlPrefixFlag   = cli.StringFlag{Name: "prefix", Usage: "prefix added to each transformed object's name"}
-	etlSuffixFlag   = cli.StringFlag{Name: "suffix", Usage: "suffix added to each transformed object's name"}
-	etlExtFlag      = cli.StringFlag{Name: "ext", Usage: "new extension of transformed object's name"}
-	etlDryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "show total size of created objects, without really creating them"}
-	fromFileFlag    = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the code for ETL", Required: true}
-	depsFileFlag    = cli.StringFlag{Name: "deps-file", Usage: "absolute path to the file with dependencies that must be installed before running the code"}
-	runtimeFlag     = cli.StringFlag{Name: "runtime", Usage: "runtime which should be used when running the provided code", Required: true}
-	waitTimeoutFlag = cli.IntFlag{Name: "wait-timeout", Usage: "timeout when starting the pod, useful when installing large dependencies"}
+	etlPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to each transformed object's name"}
+	etlSuffixFlag = cli.StringFlag{Name: "suffix", Usage: "suffix added to each transformed object's name"}
+	etlExtFlag    = cli.StringFlag{Name: "ext", Usage: "new extension of transformed object's name"}
+	etlDryRunFlag = cli.BoolFlag{Name: "dry-run", Usage: "show total size of created objects, without really creating them"}
+	fromFileFlag  = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the code for ETL", Required: true}
+	depsFileFlag  = cli.StringFlag{Name: "deps-file",
+		Usage: "absolute path to the file with dependencies that must be installed before running the code"}
+	runtimeFlag = cli.StringFlag{Name: "runtime",
+		Usage: "runtime which should be used when running the provided code", Required: true}
+	waitTimeoutFlag = cli.IntFlag{Name: "wait-timeout",
+		Usage: "timeout when starting the pod, useful when installing large dependencies"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 

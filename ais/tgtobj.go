@@ -930,8 +930,16 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode i
 			errCode = http.StatusInternalServerError
 			return
 		}
-		if _, err := aoi.t.PromoteFile(filePath, aoi.lom.Bck(), aoi.lom.ObjName, partialCksum,
-			true /*overwrite*/, false /*safe*/, false /*verbose*/); err != nil {
+		params := cluster.PromoteFileParams{
+			SrcFQN:    filePath,
+			Bck:       aoi.lom.Bck(),
+			ObjName:   aoi.lom.ObjName,
+			Cksum:     partialCksum,
+			Overwrite: true,
+			KeepOrig:  false,
+			Verbose:   false,
+		}
+		if _, err := aoi.t.PromoteFile(params); err != nil {
 			return "", err, 0
 		}
 	default:

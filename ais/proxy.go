@@ -1931,8 +1931,8 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		return
 	}
 
-	params := cmn.ActValPromote{}
-	if err := cmn.MorphMarshal(msg.Value, &params); err != nil {
+	promoteArgs := cmn.ActValPromote{}
+	if err := cmn.MorphMarshal(msg.Value, &promoteArgs); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1944,10 +1944,10 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	)
 
 	// designated target ID
-	if params.Target != "" {
-		tsi := smap.GetTarget(params.Target)
+	if promoteArgs.Target != "" {
+		tsi := smap.GetTarget(promoteArgs.Target)
 		if tsi == nil {
-			err = &errNodeNotFound{cmn.ActPromote + " failure", params.Target, p.si, smap}
+			err = &errNodeNotFound{cmn.ActPromote + " failure", promoteArgs.Target, p.si, smap}
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}

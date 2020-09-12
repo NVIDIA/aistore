@@ -48,9 +48,8 @@ func (*TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error       { ret
 func (*TargetMock) EvictObject(_ *LOM) error                               { return nil }
 func (*TargetMock) CopyObject(_ CopyObjectParams) (bool, error)            { return false, nil }
 func (*TargetMock) GetCold(_ context.Context, _ *LOM, _ bool) (error, int) { return nil, http.StatusOK }
-func (*TargetMock) PromoteFile(_ string, _ *Bck, _ string, _ *cmn.Cksum, _, _, _ bool) (*LOM, error) {
-	return nil, nil
-}
+func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)          { return nil, nil }
+
 func (*TargetMock) PutObjectToTarget(destTarget *Snode, r io.ReadCloser, bckTo *Bck, objNameTo string, header http.Header) error {
 	return nil
 }

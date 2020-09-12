@@ -119,6 +119,7 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 		FQN:        fqn,
 		Recurs:     flagIsSet(c, recursiveFlag),
 		Overwrite:  flagIsSet(c, overwriteFlag),
+		KeepOrig:   c.Bool(keepOrigFlag.GetName()),
 		Verbose:    flagIsSet(c, verboseFlag),
 	}
 	if err = api.PromoteFileOrDir(promoteArgs); err != nil {

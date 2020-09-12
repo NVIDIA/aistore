@@ -42,6 +42,7 @@ var (
 		commandPromote: {
 			recursiveFlag,
 			overwriteFlag,
+			keepOrigFlag,
 			targetFlag,
 			verboseFlag,
 		},

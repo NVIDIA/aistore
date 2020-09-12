@@ -264,10 +264,9 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 	return
 }
 
-func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string,
-	computedCksum *cmn.Cksum, overwrite, safe, verbose bool) (nlom *cluster.LOM, err error) {
-	lom := &cluster.LOM{T: t, ObjName: objName}
-	if err = lom.Init(bck.Bck); err != nil {
+func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LOM, err error) {
+	lom := &cluster.LOM{T: t, ObjName: params.ObjName}
+	if err = lom.Init(params.Bck.Bck); err != nil {
 		return
 	}
 	// local or remote?
@@ -280,11 +279,11 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 	}
 	// remote
 	if si.ID() != t.si.ID() {
-		if verbose {
-			glog.Infof("promote/PUT %s => %s @ %s", srcFQN, lom, si.ID())
+		if params.Verbose {
+			glog.Infof("promote/PUT %s => %s @ %s", params.SrcFQN, lom, si.ID())
 		}
 		buf, slab := t.gmm.Alloc()
-		lom.FQN = srcFQN
+		lom.FQN = params.SrcFQN
 		coi := &copyObjInfo{t: t, bckTo: lom.Bck(), buf: buf, localOnly: false}
 
 		// TODO -- FIXME: handle overwrite (lookup first)
@@ -295,16 +294,16 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 
 	// local
 	err = lom.Load(false)
-	if err == nil && !overwrite {
+	if err == nil && !params.Overwrite {
 		err = fmt.Errorf("%s already exists", lom)
 		return
 	}
-	if verbose {
+	if params.Verbose {
 		s := ""
-		if overwrite {
+		if params.Overwrite {
 			s = "+"
 		}
-		glog.Infof("promote%s %s => %s", s, srcFQN, lom)
+		glog.Infof("promote%s %s => %s", s, params.SrcFQN, lom)
 	}
 	var (
 		cksum   *cmn.CksumHash
@@ -314,38 +313,38 @@ func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName stri
 		poi     = &putObjInfo{t: t, lom: lom}
 		conf    = lom.CksumConf()
 	)
-	if safe {
+	if params.KeepOrig {
 		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
 		buf, slab := t.gmm.Alloc()
-		written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, conf.Type)
+		written, cksum, err = cmn.CopyFile(params.SrcFQN, workFQN, buf, conf.Type)
 		slab.Free(buf)
 		if err != nil {
 			return
 		}
 		lom.SetCksum(cksum.Clone())
 	} else {
-		workFQN = srcFQN // use the file as it would be intermediate (work) file
-		fi, err = os.Stat(srcFQN)
+		workFQN = params.SrcFQN // use the file as it would be intermediate (work) file
+		fi, err = os.Stat(params.SrcFQN)
 		if err != nil {
 			return
 		}
 		written = fi.Size()
 
-		if computedCksum != nil {
+		if params.Cksum != nil {
 			// Checksum already computed somewhere else.
-			lom.SetCksum(computedCksum)
+			lom.SetCksum(params.Cksum)
 		} else {
-			clone := lom.Clone(srcFQN)
+			clone := lom.Clone(params.SrcFQN)
 			if cksum, err = clone.ComputeCksum(); err != nil {
 				return
 			}
 			lom.SetCksum(cksum.Clone())
 		}
 	}
-	if computedCksum != nil && cksum != nil {
-		if !cksum.Equal(computedCksum) {
-			err = cmn.NewBadDataCksumError(cksum.Clone(), computedCksum, srcFQN+" => "+lom.String())
+	if params.Cksum != nil && cksum != nil {
+		if !cksum.Equal(params.Cksum) {
+			err = cmn.NewBadDataCksumError(cksum.Clone(), params.Cksum, params.SrcFQN+" => "+lom.String())
 			return
 		}
 	}

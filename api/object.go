@@ -60,6 +60,7 @@ type PromoteArgs struct {
 	FQN        string
 	Recurs     bool
 	Overwrite  bool
+	KeepOrig   bool
 	Verbose    bool
 }
 
@@ -452,6 +453,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 		ObjName:   args.Object,
 		Recurs:    args.Recurs,
 		Overwrite: args.Overwrite,
+		KeepOrig:  args.KeepOrig,
 		Verbose:   args.Verbose,
 	}
 

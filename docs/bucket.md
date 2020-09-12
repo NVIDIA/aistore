@@ -442,8 +442,15 @@ SelectMsg extended flags:
 
 | Name | Value | Description |
 | --- | --- | --- |
-| `SelectCached` | `1` | For Cloud buckets only: return only objects that are cached on local drives, i.e. objects that can be read without accessing to the Cloud |
+| `SelectCached` | `1` | For Cloud buckets only: return only objects that are cached on AIS drives, i.e. objects that can be read without accessing to the Cloud |
 | `SelectMisplaced` | `2` | Include objects that are on incorrect target or mountpath |
+
+We say that "an object is cached" to indicate two separate things:
+
+* The object was originally downloaded from a Cloud bucket, bucket in a remote AIS cluster, or an HTTP(s) based dataset;
+* The object is stored in the AIS cluster.
+
+In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go and check the object's original location. Being "cached" does not have any implications on object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
 
 Note that the list generated with `SelectMisplaced` option may have duplicated entries.
 E.g, after rebalance the list can contain two entries for the same object:

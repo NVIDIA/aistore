@@ -32,6 +32,7 @@ type (
 		ObjName   string `json:"objname"`
 		Recurs    bool   `json:"recurs"`
 		Overwrite bool   `json:"overwrite"`
+		KeepOrig  bool   `json:"keep_original"`
 		Verbose   bool   `json:"verbose"`
 	}
 

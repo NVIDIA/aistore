@@ -75,7 +75,7 @@ func TestActMsgRawUnmarshal(t *testing.T) {
 		},
 		{action: ActPromote,
 			vals: []string{
-				`{"action":"promote","value":{"target": "234ed78", "recurs": true}}`,
+				`{"action":"promote","value":{"target": "234ed78", "recurs": true, "keep": false}}`,
 			},
 		},
 	}

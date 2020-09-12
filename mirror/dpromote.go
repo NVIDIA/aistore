@@ -76,8 +76,16 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	}
 	objName += strings.TrimPrefix(strings.TrimPrefix(fqn, r.dir), string(filepath.Separator))
 	objName = strings.Trim(objName, string(filepath.Separator))
-	lom, err := r.Target().PromoteFile(fqn, bck, objName, nil, /*expectedCksum*/
-		r.params.Overwrite, true /*safe*/, r.params.Verbose)
+
+	params := cluster.PromoteFileParams{
+		SrcFQN:    fqn,
+		Bck:       bck,
+		ObjName:   objName,
+		Overwrite: r.params.Overwrite,
+		KeepOrig:  r.params.KeepOrig,
+		Verbose:   r.params.Verbose,
+	}
+	lom, err := r.Target().PromoteFile(params)
 	if err != nil {
 		if finfo, ers := os.Stat(fqn); ers == nil {
 			if !finfo.Mode().IsRegular() {

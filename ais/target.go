@@ -1457,13 +1457,13 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 	bucket := apiItems[0]
 
-	params := cmn.ActValPromote{}
-	if err := cmn.MorphMarshal(msg.Value, &params); err != nil {
+	promoteArgs := cmn.ActValPromote{}
+	if err := cmn.MorphMarshal(msg.Value, &promoteArgs); err != nil {
 		return
 	}
 
-	if params.Target != "" && params.Target != t.si.ID() {
-		glog.Errorf("%s: unexpected target ID %s mismatch", t.si, params.Target)
+	if promoteArgs.Target != "" && promoteArgs.Target != t.si.ID() {
+		glog.Errorf("%s: unexpected target ID %s mismatch", t.si, promoteArgs.Target)
 	}
 
 	// 2. init & validate
@@ -1496,11 +1496,11 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 
 	// 3a. promote dir
 	if finfo.IsDir() {
-		if params.Verbose {
-			glog.Infof("%s: promote %+v", t.si, params)
+		if promoteArgs.Verbose {
+			glog.Infof("%s: promote %+v", t.si, promoteArgs)
 		}
 		var xact *mirror.XactDirPromote
-		xact, err = xaction.Registry.RenewDirPromote(srcFQN, bck, t, &params)
+		xact, err = xaction.Registry.RenewDirPromote(srcFQN, bck, t, &promoteArgs)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -1509,12 +1509,19 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		return
 	}
 	// 3b. promote file
-	objName := params.ObjName
+	objName := promoteArgs.ObjName
 	if objName == "" || objName[len(objName)-1] == os.PathSeparator {
 		objName += filepath.Base(srcFQN)
 	}
-	if _, err = t.PromoteFile(srcFQN, bck, objName, nil, /*expectedCksum*/
-		params.Overwrite, true /*safe*/, params.Verbose); err != nil {
+	params := cluster.PromoteFileParams{
+		SrcFQN:    srcFQN,
+		Bck:       bck,
+		ObjName:   objName,
+		Overwrite: promoteArgs.Overwrite,
+		KeepOrig:  promoteArgs.KeepOrig,
+		Verbose:   promoteArgs.Verbose,
+	}
+	if _, err = t.PromoteFile(params); err != nil {
 		t.invalmsghdlrf(w, r, fmtErr+" %s", t.si, msg.Action, err.Error())
 	}
 	// TODO: inc stats

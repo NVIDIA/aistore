@@ -25,7 +25,13 @@ const (
 	Migrated
 )
 
-type GFNType int
+type (
+	GFNType int
+	GFN     interface {
+		Activate() bool
+		Deactivate()
+	}
+)
 
 const (
 	GFNGlobal GFNType = iota
@@ -49,28 +55,33 @@ type CloudProvider interface {
 // all its slices/replicas are sent to other targets
 type OnFinishObj = func(lom *LOM, err error)
 
-type GFN interface {
-	Activate() bool
-	Deactivate()
-}
-
-type PutObjectParams struct {
-	LOM          *LOM
-	Reader       io.ReadCloser
-	WorkFQN      string
-	RecvType     RecvType
-	Cksum        *cmn.Cksum // checksum to check
-	Started      time.Time
-	WithFinalize bool // determines if we should also finalize the object
-	SkipEncode   bool // Do not run EC encode after finalizing
-}
-
-type CopyObjectParams struct {
-	LOM       *LOM
-	BckTo     *Bck
-	Buf       []byte
-	LocalOnly bool
-}
+type (
+	PutObjectParams struct {
+		LOM          *LOM
+		Reader       io.ReadCloser
+		WorkFQN      string
+		RecvType     RecvType
+		Cksum        *cmn.Cksum // checksum to check
+		Started      time.Time
+		WithFinalize bool // determines if we should also finalize the object
+		SkipEncode   bool // Do not run EC encode after finalizing
+	}
+	CopyObjectParams struct {
+		LOM       *LOM
+		BckTo     *Bck
+		Buf       []byte
+		LocalOnly bool
+	}
+	PromoteFileParams struct {
+		SrcFQN    string
+		Bck       *Bck
+		ObjName   string
+		Cksum     *cmn.Cksum
+		Overwrite bool
+		KeepOrig  bool
+		Verbose   bool
+	}
+)
 
 // NOTE: For implementations, please refer to ais/tgtifimpl.go and ais/httpcommon.go
 type Target interface {
@@ -88,8 +99,7 @@ type Target interface {
 	EvictObject(lom *LOM) error
 	CopyObject(params CopyObjectParams) (bool, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
-	PromoteFile(srcFQN string, bck *Bck, objName string, cksum *cmn.Cksum,
-		overwrite, safe, verbose bool) (lom *LOM, err error)
+	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
 	PutObjectToTarget(destTarget *Snode, r io.ReadCloser, bckTo *Bck, objNameTo string, header http.Header) error
