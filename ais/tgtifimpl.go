@@ -154,31 +154,29 @@ func (t *targetrunner) PutObject(params cluster.PutObjectParams) error {
 	return err
 }
 
-// Puts an object (for reader r) to a destTarget, skipping communication with
-// a proxy. Header should be populated with relevant data for a given reader,
-// including content length, checksum, version, atime and should not be nil.
-// r is closed always, even on errors.
-func (t *targetrunner) PutObjectToTarget(destTarget *cluster.Snode, r io.ReadCloser, bckTo *cluster.Bck,
-	objNameTo string, header http.Header) error {
-	debug.Assert(!t.Snode().Equals(destTarget))
+// Send params.Reader to a given target directly.
+// Header should be populated with content length, checksum, version, atime.
+// Reader is closed always, even on errors.
+func (t *targetrunner) SendTo(params cluster.SendToParams) error {
+	debug.Assert(!t.Snode().Equals(params.Tsi))
 
 	query := url.Values{}
-	query = cmn.AddBckToQuery(query, bckTo.Bck)
+	query = cmn.AddBckToQuery(query, params.BckTo.Bck)
 	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
 
-	header.Set(cmn.HeaderPutterID, t.si.ID())
+	params.Header.Set(cmn.HeaderPutterID, t.si.ID())
 
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
-		Base:   destTarget.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bckTo.Name, objNameTo),
+		Base:   params.Tsi.URL(cmn.NetworkIntraData),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, params.BckTo.Name, params.ObjNameTo),
 		Query:  query,
-		Header: header,
-		BodyR:  r,
+		Header: params.Header,
+		BodyR:  params.Reader,
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)
 	if err != nil {
-		errc := r.Close()
+		errc := params.Reader.Close()
 		debug.AssertNoErr(errc)
 		err = fmt.Errorf("unexpected failure to create request, err: %w", err)
 		return err
@@ -201,16 +199,17 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
 	return err
 }
 
-func (t *targetrunner) CopyObject(params cluster.CopyObjectParams) (copied bool, err error) {
+func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams, localOnly ...bool) (copied bool, err error) {
 	coi := &copyObjInfo{
-		t:         t,
-		bckTo:     params.BckTo,
-		buf:       params.Buf,
-		localOnly: params.LocalOnly,
-		uncache:   false,
-		finalize:  false,
+		CopyObjectParams: params,
+		t:                t,
+		uncache:          false,
+		finalize:         false,
 	}
-	copied, err = coi.copyObject(params.LOM, params.LOM.ObjName)
+	if len(localOnly) > 0 {
+		coi.localOnly = localOnly[0]
+	}
+	copied, err = coi.copyObject(lom, lom.ObjName)
 	return
 }
 
@@ -277,18 +276,18 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	if si, err = cluster.HrwTarget(lom.Uname(), &smap.Smap); err != nil {
 		return
 	}
-	// remote
+	// remote; TODO: handle overwrite (lookup first)
 	if si.ID() != t.si.ID() {
 		if params.Verbose {
 			glog.Infof("promote/PUT %s => %s @ %s", params.SrcFQN, lom, si.ID())
 		}
-		buf, slab := t.gmm.Alloc()
 		lom.FQN = params.SrcFQN
-		coi := &copyObjInfo{t: t, bckTo: lom.Bck(), buf: buf, localOnly: false}
-
-		// TODO -- FIXME: handle overwrite (lookup first)
-		_, err = coi.putRemote(lom, lom.ObjName, si)
-		slab.Free(buf)
+		var (
+			coi        = &copyObjInfo{t: t}
+			sendParams = cluster.SendToParams{ObjNameTo: lom.ObjName, Tsi: si}
+		)
+		coi.BckTo = lom.Bck()
+		_, err = coi.putRemote(lom, sendParams)
 		return
 	}
 

@@ -29,6 +29,10 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
+//
+// PUT, GET, APPEND, and COPY object
+//
+
 type (
 	putObjInfo struct {
 		started time.Time // started time of receiving - used to calculate the recv duration
@@ -97,9 +101,8 @@ type (
 	}
 
 	copyObjInfo struct {
+		cluster.CopyObjectParams
 		t         *targetrunner
-		bckTo     *cluster.Bck
-		buf       []byte
 		localOnly bool // copy locally with no HRW=>target
 		uncache   bool // uncache the source
 		finalize  bool // copies and EC (as in poi.finalize())
@@ -304,7 +307,8 @@ func (poi *putObjInfo) writeToFile() (err error) {
 
 		if err != nil {
 			if nestedErr := file.Close(); nestedErr != nil {
-				glog.Errorf("Nested (%v): failed to close received object %s, err: %v", err, poi.workFQN, nestedErr)
+				glog.Errorf("Nested (%v): failed to close received object %s, err: %v",
+					err, poi.workFQN, nestedErr)
 			}
 			if nestedErr := cmn.RemoveFile(poi.workFQN); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, poi.workFQN, nestedErr)
@@ -597,7 +601,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 	// we might be able to restore it if it was replicated. In this case even
 	// just one additional target might be sufficient. This won't succeed if
 	// an object was sliced, neither will ecmanager.RestoreObject(lom)
-	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= goi.t.owner.smap.Get().CountTargets()
+	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountTargets()
 
 	// cluster-wide lookup ("get from neighbor")
 	marked = xaction.GetRebMarked()
@@ -995,7 +999,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 	si := coi.t.si
 	if !coi.localOnly {
 		smap := coi.t.owner.smap.Get()
-		if si, err = cluster.HrwTarget(coi.bckTo.MakeUname(objNameTo), smap); err != nil {
+		if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), smap); err != nil {
 			return
 		}
 	}
@@ -1013,7 +1017,8 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 	}
 
 	if si.ID() != coi.t.si.ID() {
-		copied, err := coi.putRemote(lom, objNameTo, si)
+		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si}
+		copied, err := coi.putRemote(lom, params)
 		lom.Unlock(false)
 		return copied, err
 	}
@@ -1033,7 +1038,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 
 	// local op
 	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
-	err = dst.Init(coi.bckTo.Bck)
+	err = dst.Init(coi.BckTo.Bck)
 	if err != nil {
 		return
 	}
@@ -1059,7 +1064,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 		return
 	}
 
-	dst, err = lom.CopyObject(dst.FQN, coi.buf)
+	dst, err = lom.CopyObject(dst.FQN, coi.Buf)
 	if err == nil {
 		copied = true
 		dst.ReCache()
@@ -1070,15 +1075,16 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 	return
 }
 
-func (coi *copyObjInfo) putRemote(lom *cluster.LOM, objNameTo string, tsi *cluster.Snode) (copied bool, err error) {
-	var file *cmn.FileHandle // Closed by `PutObjectToTarget()`
+// PUT object onto designated target
+func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (copied bool, err error) {
+	var file *cmn.FileHandle // Closed by `SendTo()`
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		return false, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
 	}
-
-	// PUT object onto designated target
-	header := lom.PopulateHdr(nil)
-	err = coi.t.PutObjectToTarget(tsi, file, coi.bckTo, objNameTo, header)
+	params.Reader = file
+	params.BckTo = coi.BckTo
+	params.Header = lom.PopulateHdr(nil)
+	err = coi.t.SendTo(params)
 	if err != nil {
 		return false, err
 	}

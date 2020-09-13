@@ -42,6 +42,11 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ cluster.DataMover = &DataMover{}
+)
+
 func NewDataMover(t cluster.Target, trname string, recvData Receive, extra DMExtra) (*DataMover, error) {
 	var (
 		config = cmn.GCO.Get()

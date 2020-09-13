@@ -48,7 +48,12 @@ func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *
 }
 
 func (r *XactBckCopy) Run() (err error) {
+	// TODO r.dm.Open
 	mpathCount := r.runJoggers()
+
+	// TODO -- FIXME: quiesce first
+	// r.dm.Close()
+	// r.dm.UnregRecv()
 
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
 	err = r.xactBckBase.waitDone(mpathCount)
@@ -107,8 +112,8 @@ func (j *bccJogger) jog() {
 
 func (j *bccJogger) copyObject(lom *cluster.LOM) error {
 	var (
-		params      = cluster.CopyObjectParams{LOM: lom, BckTo: j.parent.bckTo, Buf: j.buf}
-		copied, err = j.parent.Target().CopyObject(params)
+		params      = cluster.CopyObjectParams{BckTo: j.parent.bckTo, Buf: j.buf, DM: j.parent.dm}
+		copied, err = j.parent.Target().CopyObject(lom, params)
 	)
 	if copied {
 		j.parent.ObjectsInc()

@@ -56,6 +56,12 @@ type CloudProvider interface {
 type OnFinishObj = func(lom *LOM, err error)
 
 type (
+	DataMover interface {
+		RegRecv() error
+		Open()
+		Close()
+		UnregRecv()
+	}
 	PutObjectParams struct {
 		LOM          *LOM
 		Reader       io.ReadCloser
@@ -67,10 +73,16 @@ type (
 		SkipEncode   bool // Do not run EC encode after finalizing
 	}
 	CopyObjectParams struct {
-		LOM       *LOM
+		BckTo *Bck
+		Buf   []byte
+		DM    DataMover
+	}
+	SendToParams struct {
+		Reader    io.ReadCloser
 		BckTo     *Bck
-		Buf       []byte
-		LocalOnly bool
+		ObjNameTo string
+		Header    http.Header
+		Tsi       *Snode
 	}
 	PromoteFileParams struct {
 		SrcFQN    string
@@ -97,12 +109,12 @@ type Target interface {
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(params PutObjectParams) error
 	EvictObject(lom *LOM) error
-	CopyObject(params CopyObjectParams) (bool, error)
+	CopyObject(lom *LOM, params CopyObjectParams, localOnly ...bool) (bool, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
-	PutObjectToTarget(destTarget *Snode, r io.ReadCloser, bckTo *Bck, objNameTo string, header http.Header) error
+	SendTo(params SendToParams) error
 
 	GetGFN(gfnType GFNType) GFN
 	GetXactRegistry() XactRegistry

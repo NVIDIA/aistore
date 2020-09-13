@@ -128,7 +128,14 @@ func (r *BucketXact) transformAndPut(entry *cmn.BucketEntry) error {
 		// Send object to a different target
 		header := make(http.Header, 1)
 		header.Add(cmn.HeaderContentLength, fmt.Sprintf("%d", length))
-		return r.t.PutObjectToTarget(destTarget, body, r.bckTo, newObjName, header)
+		params := cluster.SendToParams{
+			Reader:    body,
+			BckTo:     r.bckTo,
+			ObjNameTo: newObjName,
+			Header:    header,
+			Tsi:       destTarget,
+		}
+		return r.t.SendTo(params)
 	}
 
 	// We have luck. Save object locally.

@@ -81,7 +81,8 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		return
 	}
 
-	coi := copyObjInfo{t: t, bckTo: bckDst}
+	coi := copyObjInfo{t: t}
+	coi.BckTo = bckDst
 	objName := path.Join(items[1:]...)
 	if _, err := coi.copyObject(lom, objName); err != nil {
 		t.invalmsghdlr(w, r, err.Error())

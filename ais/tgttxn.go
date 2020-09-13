@@ -428,7 +428,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 		if bckTo, err = t.validateBckCpTxn(bckFrom, c.msg); err != nil {
 			return err
 		}
-		if dm, err = c.newObjMover(&config.Rebalance, c.uuid); err != nil {
+		if dm, err = c.newDM(&config.Rebalance, c.uuid); err != nil {
 			return err
 		}
 		nlpFrom := bckFrom.GetNameLockPair()
@@ -741,7 +741,7 @@ func (c *txnServerCtx) addNotif(xact cmn.Xact) {
 	}
 }
 
-func (c *txnServerCtx) newObjMover(rebcfg *cmn.RebalanceConf, uuid string) (*transport.DataMover, error) {
+func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string) (*transport.DataMover, error) {
 	dmExtra := transport.DMExtra{
 		RecvAck:     nil,                    // NOTE: no ACKs
 		Compression: rebcfg.Compression,     // TODO: define separately

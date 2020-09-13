@@ -1429,7 +1429,9 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 
 	buf, slab := t.gmm.Alloc()
-	coi := &copyObjInfo{t: t, bckTo: lom.Bck(), buf: buf, localOnly: false, finalize: true}
+	coi := &copyObjInfo{t: t, localOnly: false, finalize: true}
+	coi.BckTo = lom.Bck()
+	coi.Buf = buf
 	copied, err := coi.copyObject(lom, msg.Name /* new object name */)
 	slab.Free(buf)
 	if err != nil {
