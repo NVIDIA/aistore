@@ -173,7 +173,8 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 	}
 
 	if msg.ID == "" && msg.Kind == "" {
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "missing `id` and `kind` for `what`: %v", what)
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusBadRequest,
+			"missing `id` and `kind` for `what`: %v", what)
 		return
 	}
 
@@ -200,12 +201,14 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 
 	if !exists {
 		smap := ic.p.owner.smap.get()
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "id:%q, kind:%q, bck:%q not found (%s)", msg.ID, msg.Kind, msg.Bck, smap.StrIC(ic.p.si))
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound,
+			"id:%q, kind:%q, bck:%q not found (%s)", msg.ID, msg.Kind, msg.Bck, smap.StrIC(ic.p.si))
 		return
 	}
 
 	if msg.Kind != "" && nl.kind() != msg.Kind {
-		ic.p.invalmsghdlrf(w, r, "xaction kind mismatch (ID: %s, KIND: %s != %s)", msg.ID, msg.Kind, nl.kind())
+		ic.p.invalmsghdlrf(w, r, "xaction kind mismatch (ID: %s, KIND: %s != %s)",
+			msg.ID, msg.Kind, nl.kind())
 		return
 	}
 
@@ -371,7 +374,7 @@ func (ic *ic) syncICBundle() error {
 	})
 	if result.err != nil {
 		// TODO: Handle error. Should try calling another IC member maybe.
-		glog.Errorf("%s: failed to get ownership table from %s (%s)", ic.p.si, si, result.err.Error())
+		glog.Errorf("%s: failed to get ownership table from %s, err: %v", ic.p.si, si, result.err)
 		return result.err
 	}
 

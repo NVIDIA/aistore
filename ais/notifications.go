@@ -148,7 +148,8 @@ func newNLB(uuid string, smap *smapX, ty int, action string, bck ...cmn.Bck) *no
 	return newNLBWithSrc(uuid, smap, smap.Tmap.Clone(), ty, action, bck...)
 }
 
-func newNLBWithSrc(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *notifListenerBase {
+func newNLBWithSrc(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string,
+	bck ...cmn.Bck) *notifListenerBase {
 	cmn.Assert(ty > notifInvalid)
 	cmn.Assert(len(srcs) != 0)
 	return &notifListenerBase{UUIDX: uuid, Srcs: srcs, SmapVersion: smap.version(), Ty: ty, Action: action, Bck: bck}
@@ -197,11 +198,18 @@ func (nlb *notifListenerBase) addErr(sid string, err error) {
 	nlb.Errs[sid] = err.Error()
 }
 
-func (nlb *notifListenerBase) err() error {
-	for _, err := range nlb.Errs {
-		return errors.New(err)
+func (nlb *notifListenerBase) err() (err error) {
+	if l := len(nlb.Errs); l > 0 {
+		for _, ers := range nlb.Errs {
+			if l == 1 {
+				err = errors.New(ers)
+			} else {
+				err = fmt.Errorf("%s... (error-count=%d)", ers, l)
+			}
+			break
+		}
 	}
-	return nil
+	return
 }
 
 func (nlb *notifListenerBase) status() *cmn.XactStatus {
@@ -217,11 +225,13 @@ func (nlb *notifListenerBase) status() *cmn.XactStatus {
 }
 
 func (nlb *notifListenerBase) String() string {
-	var tm, res string
-	hdr := fmt.Sprintf("%s-%q", notifText(nlb.Ty), nlb.UUIDX)
+	var (
+		tm, res string
+		hdr     = fmt.Sprintf("%s-%q", notifText(nlb.Ty), nlb.UUIDX)
+	)
 	if tfin := nlb.FinTime.Load(); tfin > 0 {
-		if nlb.Errs != nil {
-			res = fmt.Sprintf("-fail(%+v)", nlb.Errs)
+		if l := len(nlb.Errs); l > 0 {
+			res = fmt.Sprintf("-fail(error-count=%d)", l)
 		}
 		tm = cmn.FormatTimestamp(time.Unix(0, tfin))
 		return fmt.Sprintf("%s-%s%s", hdr, tm, res)
@@ -411,7 +421,8 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // is called under notifListener.lock()
-func (n *notifs) handleMsg(nl notifListener, tid string, msg interface{}, srcErr error) (err error, status int, done bool) {
+func (n *notifs) handleMsg(nl notifListener, tid string, msg interface{},
+	srcErr error) (err error, status int, done bool) {
 	srcs := nl.notifiers()
 	tsi, ok := srcs[tid]
 	if !ok {
@@ -471,7 +482,7 @@ func (n *notifs) housekeep() time.Duration {
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	}
 	for uuid, nl := range tempn {
-		if nl.notifTy() == notifCache { // TODO -- FIXME: implement
+		if nl.notifTy() == notifCache {
 			continue
 		}
 		cmn.AssertMsg(nl.notifTy() == notifXact, nl.String())
