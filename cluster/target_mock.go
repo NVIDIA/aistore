@@ -43,7 +43,7 @@ func (*TargetMock) GetSowner() Sowner                                           
 func (*TargetMock) FSHC(_ error, _ string)                                         {}
 func (*TargetMock) GetMMSA() *memsys.MMSA                                          { return memsys.DefaultPageMM() }
 func (*TargetMock) GetSmallMMSA() *memsys.MMSA                                     { return memsys.DefaultSmallMM() }
-func (*TargetMock) PutObject(_ PutObjectParams) error                              { return nil }
+func (*TargetMock) PutObject(_ *LOM, _ PutObjectParams) error                      { return nil }
 func (*TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error               { return nil }
 func (*TargetMock) EvictObject(_ *LOM) error                                       { return nil }
 func (*TargetMock) CopyObject(_ *LOM, _ CopyObjectParams, _ ...bool) (bool, error) { return false, nil }

@@ -339,14 +339,14 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 	if err := fs.Access(bdir); err != nil {
 		return err
 	}
-	return t.PutObject(cluster.PutObjectParams{
-		LOM:          lom,
+	params := cluster.PutObjectParams{
 		Reader:       readCloser,
 		WorkFQN:      fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec"),
 		SkipEncode:   true,
 		WithFinalize: true,
 		RecvType:     cluster.Migrated, // to avoid changing version
-	})
+	}
+	return t.PutObject(lom, params)
 }
 
 // Saves slice and its metafile

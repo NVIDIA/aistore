@@ -345,14 +345,14 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	lom.SetCksum(cksum)
 	lom.SetCustomMD(customMD)
 	setSize(ctx, rc.Attrs.Size)
-	err = gcpp.t.PutObject(cluster.PutObjectParams{
-		LOM:          lom,
+	params := cluster.PutObjectParams{
 		Reader:       wrapReader(ctx, rc),
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
 		WithFinalize: false,
-	})
+	}
+	err = gcpp.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

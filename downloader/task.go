@@ -104,7 +104,6 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	var (
 		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 	)
-
 	ctx, cancel := context.WithTimeout(t.downloadCtx, timeout)
 	defer cancel()
 
@@ -139,14 +138,14 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	t.setTotalSize(roi.size)
 
 	lom.SetCustomMD(roi.md)
-	err = t.parent.t.PutObject(cluster.PutObjectParams{
-		LOM:          lom,
+	params := cluster.PutObjectParams{
 		Reader:       r,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Started:      t.started.Load(),
 		WithFinalize: true,
-	})
+	}
+	err = t.parent.t.PutObject(lom, params)
 	if err != nil {
 		return err
 	}

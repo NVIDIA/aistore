@@ -200,13 +200,13 @@ func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster
 
 	lom.SetCustomMD(customMD)
 	setSize(ctx, resp.ContentLength)
-	err = hp.t.PutObject(cluster.PutObjectParams{
-		LOM:          lom,
+	params := cluster.PutObjectParams{
 		Reader:       wrapReader(ctx, resp.Body),
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		WithFinalize: false,
-	})
+	}
+	err = hp.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

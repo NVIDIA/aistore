@@ -128,10 +128,10 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 }
 
 // slight variation vs t.doPut() above
-func (t *targetrunner) PutObject(params cluster.PutObjectParams) error {
+func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
 	poi := &putObjInfo{
 		t:       t,
-		lom:     params.LOM,
+		lom:     lom,
 		r:       params.Reader,
 		workFQN: params.WorkFQN,
 		ctx:     context.Background(),

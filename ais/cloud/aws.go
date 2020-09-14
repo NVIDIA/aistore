@@ -393,14 +393,14 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	lom.SetCksum(cksum)
 	lom.SetCustomMD(customMD)
 	setSize(ctx, *obj.ContentLength)
-	err = awsp.t.PutObject(cluster.PutObjectParams{
-		LOM:          lom,
+	params := cluster.PutObjectParams{
 		Reader:       wrapReader(ctx, obj.Body),
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
 		WithFinalize: false,
-	})
+	}
+	err = awsp.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

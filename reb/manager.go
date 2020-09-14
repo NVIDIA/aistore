@@ -247,15 +247,15 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 	lom.SetVersion(hdr.ObjAttrs.Version)
 
-	if err := reb.t.PutObject(cluster.PutObjectParams{
-		LOM:          lom,
+	params := cluster.PutObjectParams{
 		Reader:       ioutil.NopCloser(objReader),
 		WorkFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 		RecvType:     cluster.Migrated,
 		Cksum:        cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		Started:      time.Now(),
 		WithFinalize: true,
-	}); err != nil {
+	}
+	if err := reb.t.PutObject(lom, params); err != nil {
 		glog.Error(err)
 		return
 	}

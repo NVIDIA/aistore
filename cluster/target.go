@@ -63,7 +63,6 @@ type (
 		UnregRecv()
 	}
 	PutObjectParams struct {
-		LOM          *LOM
 		Reader       io.ReadCloser
 		WorkFQN      string
 		RecvType     RecvType
@@ -107,7 +106,7 @@ type Target interface {
 	RunLRU(id string, force bool, bcks ...cmn.Bck)
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
-	PutObject(params PutObjectParams) error
+	PutObject(lom *LOM, params PutObjectParams) error
 	EvictObject(lom *LOM) error
 	CopyObject(lom *LOM, params CopyObjectParams, localOnly ...bool) (bool, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)

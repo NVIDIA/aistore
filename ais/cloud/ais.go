@@ -435,13 +435,13 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 			errCh <- err
 		}()
 
-		err := m.t.PutObject(cluster.PutObjectParams{
-			LOM:          lom,
+		params := cluster.PutObjectParams{
 			Reader:       r,
 			RecvType:     cluster.ColdGet,
 			WorkFQN:      workFQN,
 			WithFinalize: false,
-		})
+		}
+		err := m.t.PutObject(lom, params)
 		r.CloseWithError(err)
 		if err != nil {
 			return err

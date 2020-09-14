@@ -145,15 +145,15 @@ func (r *BucketXact) transformAndPut(entry *cmn.BucketEntry) error {
 		return err
 	}
 
-	// Put object locally.
-	err = r.t.PutObject(cluster.PutObjectParams{
-		LOM:          lom,
+	// PUT object locally.
+	params := cluster.PutObjectParams{
 		Reader:       body,
 		WorkFQN:      fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, newObjName),
 		Started:      time.Now(),
 		WithFinalize: true,
 		RecvType:     cluster.ColdGet,
-	})
+	}
+	err = r.t.PutObject(lom, params)
 	if err != nil {
 		return err
 	}
