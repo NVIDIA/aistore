@@ -40,6 +40,8 @@ spec:
       volumeMounts:
         - name: code
           mountPath: "/code"
+        - name: runtime
+          mountPath: "/runtime"
   initContainers:
     - name: server-deps
       image: aistore/python:3
