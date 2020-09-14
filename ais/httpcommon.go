@@ -72,9 +72,10 @@ type (
 		// See: `callArgs.v` field.
 		fv func() interface{}
 
-		nodes []cluster.NodeMap
-		smap  *smapX
-		to    int
+		nodes     []cluster.NodeMap
+		skipNodes cmn.StringSet // daeIDs of nodes to skip broadcast
+		smap      *smapX
+		to        int
 	}
 
 	networkHandler struct {
@@ -776,6 +777,7 @@ func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
 	if err != nil {
 		msg.ErrMsg = err.Error()
 	}
+	msg.UUID = notif.Xact.ID().String()
 	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
 	nodes := make(cluster.NodeMap)
 	for _, dst := range notif.Dsts {
@@ -881,7 +883,7 @@ func (h *httprunner) bcastToNodes(bargs bcastArgs) chan callResult {
 	)
 	for _, nodeMap := range bargs.nodes {
 		for sid, si := range nodeMap {
-			if sid == h.si.ID() {
+			if sid == h.si.ID() || bargs.skipNodes.Contains(sid) {
 				continue
 			}
 			wg.Add(1)

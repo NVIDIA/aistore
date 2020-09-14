@@ -308,7 +308,7 @@ check:
 			ic.p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		nl := newNLBWithSrc(regMsg.UUID, smap, srcs, notifXact, regMsg.Kind)
+		nl := newXactNL(regMsg.UUID, smap, srcs, notifXact, regMsg.Kind)
 		ic.p.notifs.add(nl)
 	default:
 		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)

@@ -200,7 +200,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	wg.Wait()
 
 	// 5. IC
-	nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bck.Bck)
+	nl := newXactNL(c.uuid, c.smap, c.smap.Tmap.Clone(), notifXact, msg.Action, bck.Bck)
 	nl.setOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -318,7 +318,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 		if reec {
 			action = cmn.ActECEncode
 		}
-		nl := newNLB(c.uuid, c.smap, notifXact, action, bck.Bck)
+		nl := newXactNL(c.uuid, c.smap, c.smap.Tmap.Clone(), notifXact, action, bck.Bck)
 		nl.setOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 		xactID = c.uuid
@@ -405,7 +405,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.msg.RMDVersion = clone.version()
 
 			// 5. IC
-			nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)
+			nl := newXactNL(c.uuid, c.smap, c.smap.Tmap.Clone(), notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)
 			nl.setOwner(equalIC)
 			p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -418,7 +418,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 			// 7. start rebalance and resilver
 			wg = p.metasyncer.sync(revsPair{clone, c.msg})
-			nl = newNLB(xaction.RebID(clone.Version).String(), c.smap, notifXact, cmn.ActRebalance)
+			nl = newXactNL(xaction.RebID(clone.Version).String(), c.smap, c.smap.Tmap.Clone(), notifXact, cmn.ActRebalance)
 			nl.setOwner(equalIC)
 			p.ic.registerEqual(regIC{smap: c.smap, nl: nl})
 		},
@@ -501,7 +501,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	}
 
 	// 5. IC
-	nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)
+	nl := newXactNL(c.uuid, c.smap, c.smap.Tmap.Clone(), notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)
 	nl.setOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -606,7 +606,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	wg.Wait()
 
 	// 5. IC
-	nl := newNLB(c.uuid, c.smap, notifXact, msg.Action, bck.Bck)
+	nl := newXactNL(c.uuid, c.smap, c.smap.Tmap.Clone(), notifXact, msg.Action, bck.Bck)
 	nl.setOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 

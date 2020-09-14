@@ -336,6 +336,9 @@ func (ss StringSet) Add(keys ...string) {
 }
 
 func (ss StringSet) Contains(key string) bool {
+	if len(ss) == 0 {
+		return false
+	}
 	_, ok := ss[key]
 	return ok
 }

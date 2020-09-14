@@ -1102,7 +1102,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 	if smsg.UUID == "" {
 		smsg.UUID = cmn.GenUUID()
 		// TODO -- FIXME: must be consistent vs newQueryListener
-		nl := newNLB(smsg.UUID, smap, notifCache, cmn.ActListObjects, bck.Bck)
+		nl := newXactNL(smsg.UUID, smap, smap.Tmap.Clone(), notifCache, cmn.ActListObjects, bck.Bck)
 		nl.hrwOwner(smap)
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
 	}
@@ -1991,7 +1991,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		timeout = cmn.DefaultTimeout
 	}
 
-	nlb := newNLB(aisMsg.UUID, smap, notifXact, aisMsg.Action)
+	nlb := newXactNL(aisMsg.UUID, smap, smap.Tmap.Clone(), notifXact, aisMsg.Action)
 	nlb.setOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
 	results = p.bcastToGroup(bcastArgs{
@@ -2976,7 +2976,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 						clone.inc()
 					})
 					pairs = append(pairs, revsPair{rmdClone, aisMsg})
-					nl = newNLB(xaction.RebID(rmdClone.Version).String(), clone, notifXact, cmn.ActRebalance)
+					nl = newXactNL(xaction.RebID(rmdClone.Version).String(), clone, clone.Tmap, notifXact, cmn.ActRebalance)
 					nl.setOwner(equalIC)
 				}
 			} else {
@@ -3077,7 +3077,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 					clone.inc()
 				})
 				pairs = append(pairs, revsPair{rmdClone, aisMsg})
-				nl = newNLB(xaction.RebID(rmdClone.Version).String(), clone, notifXact, cmn.ActRebalance)
+				nl = newXactNL(xaction.RebID(rmdClone.Version).String(), clone, clone.Tmap, notifXact, cmn.ActRebalance)
 				nl.setOwner(equalIC)
 			}
 			_ = p.metasyncer.sync(pairs...)
@@ -3230,7 +3230,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 
 			_ = p.metasyncer.sync(revsPair{rmdClone, p.newAisMsg(msg, nil, nil)})
 
-			nl := newNLB(xaction.RebID(rmdClone.Version).String(), smap, notifXact, cmn.ActRebalance)
+			nl := newXactNL(xaction.RebID(rmdClone.Version).String(), smap, smap.Tmap.Clone(), notifXact, cmn.ActRebalance)
 			nl.setOwner(equalIC)
 			p.ic.registerEqual(regIC{smap: smap, nl: nl})
 
@@ -3253,7 +3253,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Action == cmn.ActXactStart {
 			smap := p.owner.smap.get()
-			nl := newNLB(xactMsg.ID, smap, notifXact, xactMsg.Kind)
+			nl := newXactNL(xactMsg.ID, smap, smap.Tmap.Clone(), notifXact, xactMsg.Kind)
 			p.ic.registerEqual(regIC{smap: smap, nl: nl})
 			w.Write([]byte(xactMsg.ID))
 		}

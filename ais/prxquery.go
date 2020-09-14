@@ -19,13 +19,13 @@ import (
 type (
 	// TODO: add more, like target finished, query aborted by user etc.
 	notifListenerQuery struct {
-		notifListenerBase
+		notifXactBase
 		Targets    []*cluster.Snode
 		WorkersCnt uint
 	}
 )
 
-func newQueryListener(uuid string, ty int, smap *smapX, msg *query.InitMsg) (*notifListenerQuery, error) {
+func newQueryListener(uuid string, smap *smapX, msg *query.InitMsg) (*notifListenerQuery, error) {
 	cmn.Assert(uuid != "")
 	numNodes := len(smap.Tmap)
 	if msg.WorkersCnt != 0 && msg.WorkersCnt < uint(numNodes) {
@@ -41,11 +41,12 @@ func newQueryListener(uuid string, ty int, smap *smapX, msg *query.InitMsg) (*no
 	sort.SliceStable(targets, func(i, j int) bool {
 		return targets[i].DaemonID < targets[j].DaemonID
 	})
-	return &notifListenerQuery{
-		notifListenerBase: *newNLB(uuid, smap, ty, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
-		WorkersCnt:        msg.WorkersCnt,
-		Targets:           targets,
-	}, nil
+	nl := &notifListenerQuery{
+		notifXactBase: *newXactNL(uuid, smap, smap.Tmap.Clone(), notifCache, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+		WorkersCnt:    msg.WorkersCnt,
+		Targets:       targets,
+	}
+	return nl, nil
 }
 
 func (q *notifListenerQuery) workersTarget(workerID uint) (*cluster.Snode, error) {
@@ -110,7 +111,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	nlq, err := newQueryListener(handle, notifCache, smap, msg)
+	nlq, err := newQueryListener(handle, smap, msg)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
