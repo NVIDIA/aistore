@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/etl/template"
+	"github.com/NVIDIA/aistore/etl/runtime"
 )
 
 type (
@@ -84,7 +84,7 @@ func (m BuildMsg) Validate() error {
 	if m.Runtime == "" {
 		return fmt.Errorf("runtime is not specified")
 	}
-	if _, ok := template.Runtimes[m.Runtime]; !ok {
+	if _, ok := runtime.Runtimes[m.Runtime]; !ok {
 		return fmt.Errorf("unsupported runtime provided: %s", m.Runtime)
 	}
 	return nil

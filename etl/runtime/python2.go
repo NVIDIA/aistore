@@ -1,18 +1,18 @@
-// Package template provides skeletons and static specifications for building ETL from scratch.
+// Package runtime provides skeletons and static specifications for building ETL from scratch.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package template
+package runtime
 
 type (
-	// RuntimePython2 implements Runtime for "python2".
-	RuntimePython2 struct{}
+	// py2 implements Runtime for "python2".
+	py2 struct{}
 )
 
-func (r RuntimePython2) Type() string        { return RuntimePy2 }
-func (r RuntimePython2) CodeEnvName() string { return "AISTORE_CODE" }
-func (r RuntimePython2) DepsEnvName() string { return "AISTORE_DEPS" }
-func (r RuntimePython2) PodSpec() string {
+func (r py2) Type() string        { return Python2 }
+func (r py2) CodeEnvName() string { return "AISTORE_CODE" }
+func (r py2) DepsEnvName() string { return "AISTORE_DEPS" }
+func (r py2) PodSpec() string {
 	return `
 apiVersion: v1
 kind: Pod

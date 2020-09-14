@@ -9,12 +9,12 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/etl/template"
+	"github.com/NVIDIA/aistore/etl/runtime"
 )
 
 func Build(t cluster.Target, msg BuildMsg) error {
 	// Initialize runtime.
-	runtime, exists := template.Runtimes[msg.Runtime]
+	runtime, exists := runtime.Runtimes[msg.Runtime]
 	cmn.Assert(exists) // Runtime should be checked in proxy during validation.
 
 	var (
