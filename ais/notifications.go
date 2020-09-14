@@ -82,7 +82,7 @@ type (
 		notifTy() int
 		kind() string
 		bcks() []cmn.Bck
-		addErr(string /*sid*/, error)
+		setErr(error)
 		err() error
 		UUID() string
 		setAborted()
@@ -116,12 +116,12 @@ type (
 
 		Srcs    cluster.NodeMap // expected notifiers
 		FinSrcs cmn.StringSet
+		f       notifCallback // optional listening-side callback
 
-		Errs map[string]string // [node-ID => ErrMsg]
-		f    notifCallback     // optional listening-side callback
-
-		FinTime atomic.Int64 // timestamp when finished
-		Aborted atomic.Bool  // sets if the xaction is aborted
+		ErrMsg   string        // ErrMsg
+		FinTime  atomic.Int64  // timestamp when finished
+		Aborted  atomic.Bool   // sets if the xaction is aborted
+		ErrCount atomic.Uint32 // number of error encountered
 	}
 
 	//
@@ -203,25 +203,21 @@ func (nlb *notifListenerBase) aborted() bool              { return nlb.Aborted.L
 func (nlb *notifListenerBase) setAborted()                { nlb.Aborted.CAS(false, true) }
 func (nlb *notifListenerBase) finTime() int64             { return nlb.FinTime.Load() }
 func (nlb *notifListenerBase) finished() bool             { return nlb.finTime() > 0 }
-func (nlb *notifListenerBase) addErr(sid string, err error) {
-	if nlb.Errs == nil {
-		nlb.Errs = make(map[string]string, 2)
+func (nlb *notifListenerBase) setErr(err error) {
+	ecount := nlb.ErrCount.Inc()
+	if ecount == 1 {
+		nlb.ErrMsg = err.Error()
 	}
-	nlb.Errs[sid] = err.Error()
 }
 
-func (nlb *notifListenerBase) err() (err error) {
-	if l := len(nlb.Errs); l > 0 {
-		for _, ers := range nlb.Errs {
-			if l == 1 {
-				err = errors.New(ers)
-			} else {
-				err = fmt.Errorf("%s... (error-count=%d)", ers, l)
-			}
-			break
-		}
+func (nlb *notifListenerBase) err() error {
+	if nlb.ErrMsg == "" {
+		return nil
 	}
-	return
+	if l := nlb.ErrCount.Load(); l > 1 {
+		return fmt.Errorf("%s... (error-count=%d)", nlb.ErrMsg, l)
+	}
+	return errors.New(nlb.ErrMsg)
 }
 
 func (nlb *notifListenerBase) status() *cmn.XactStatus {
@@ -243,7 +239,7 @@ func (nlb *notifListenerBase) String() string {
 		finCount = nlb.finCount()
 	)
 	if tfin := nlb.FinTime.Load(); tfin > 0 {
-		if l := len(nlb.Errs); l > 0 {
+		if l := nlb.ErrCount.Load(); l > 0 {
 			res = fmt.Sprintf("-fail(error-count=%d)", l)
 		}
 		tm = cmn.FormatTimestamp(time.Unix(0, tfin))
@@ -470,7 +466,7 @@ func (n *notifs) handleMsg(nl notifListener, tid string, msg interface{},
 	}
 
 	if srcErr != nil {
-		nl.addErr(tid, srcErr)
+		nl.setErr(srcErr)
 	}
 	done = nl.finCount() == len(srcs)
 
@@ -551,7 +547,7 @@ func (n *notifs) housekeep() time.Duration {
 				done = true // NOTE: not-found at one ==> all done
 				nl.lock()
 				nl.setAborted()
-				nl.addErr(res.si.ID(), err)
+				nl.setErr(err)
 				nl.unlock()
 			} else if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si, res.err)
@@ -639,7 +635,8 @@ func (n *notifs) ListenSmapChanged() {
 		sid := remid[uuid]
 		err := &errNodeNotFound{s, sid, n.p.si, smap}
 		nl.lock()
-		nl.addErr(sid, err)
+		nl.setErr(err)
+		nl.setAborted()
 		nl.unlock()
 		nl.callback(n, nl, nil /*msg*/, err, now)
 	}
