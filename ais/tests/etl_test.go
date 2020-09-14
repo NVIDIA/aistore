@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/etl/runtime"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -73,13 +74,13 @@ func TestETLBucket(t *testing.T) {
 			fixedSize: true,
 			bck:       bck,
 		}
-	)
 
-	tests := []testConfig{
-		{transformer: tutils.Echo, comm: etl.RedirectCommType, onlyLong: true},
-		{transformer: tutils.Md5, comm: etl.RevProxyCommType},
-		{transformer: tutils.Md5, comm: etl.PushCommType, onlyLong: true},
-	}
+		tests = []testConfig{
+			{transformer: tutils.Echo, comm: etl.RedirectCommType, onlyLong: true},
+			{transformer: tutils.Md5, comm: etl.RevProxyCommType},
+			{transformer: tutils.Md5, comm: etl.PushCommType, onlyLong: true},
+		}
+	)
 
 	tutils.Logln("Preparing source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -91,22 +92,92 @@ func TestETLBucket(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			testOfflineETL(t, test.onlyLong, bck, test.comm, test.transformer, objCnt)
+			tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: test.onlyLong})
+
+			uuid, err := etlInit(test.transformer, test.comm)
+			tassert.CheckFatal(t, err)
+
+			testOfflineETL(t, uuid, bck, objCnt)
+		})
+	}
+}
+
+func TestETLBuild(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+
+	const (
+		md5 = `
+import hashlib
+
+def transform(input_bytes):
+    md5 = hashlib.md5()
+    md5.update(input_bytes)
+    return md5.hexdigest().encode()
+`
+
+		numpy = `
+import numpy
+
+def transform(input_bytes: bytes) -> bytes:
+    x = np.array([[0, 1], [2, 3]], dtype='<u2')
+    return x.tobytes()
+`
+		numpyDeps = `numpy==1.19.2`
+	)
+
+	var (
+		m = ioContext{
+			t:         t,
+			num:       10,
+			fileSize:  512,
+			fixedSize: true,
+			bck:       cmn.Bck{Name: "etl_build", Provider: cmn.ProviderAIS},
+		}
+
+		tests = []struct {
+			name     string
+			code     string
+			deps     string
+			onlyLong bool
+		}{
+			{name: "simple", code: md5, deps: "", onlyLong: false},
+			{name: "with_deps", code: numpy, deps: numpyDeps, onlyLong: true},
+		}
+	)
+
+	tutils.Logln("Preparing source bucket")
+	tutils.CreateFreshBucket(t, proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, proxyURL, m.bck)
+
+	m.init()
+
+	tutils.Logln("Putting objects to source bucket")
+	m.puts()
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: test.onlyLong})
+
+			uuid, err := api.ETLBuild(defaultAPIParams, etl.BuildMsg{
+				Code:        []byte(test.code),
+				Deps:        []byte(test.deps),
+				Runtime:     runtime.Python3,
+				WaitTimeout: cmn.DurationJSON(5 * time.Minute),
+			})
+			tassert.CheckFatal(t, err)
+
+			testOfflineETL(t, uuid, m.bck, m.num)
 		})
 	}
 }
 
 // TODO: currently this test only tests scenario where all objects are PUT to
-// the same target which they are currently stored on. That's because our
-// minikube tests only run with a single target.
-func testOfflineETL(t *testing.T, onlyLong bool, bckFrom cmn.Bck, comm, transformer string, objCnt int) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: onlyLong})
+//  the same target which they are currently stored on. That's because our
+//  minikube tests only run with a single target.
+func testOfflineETL(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
 	var (
 		bckTo = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 	)
-
-	uuid, err := etlInit(transformer, comm)
-	tassert.CheckFatal(t, err)
 
 	defer func() {
 		tutils.Logf("Stop %q\n", uuid)
@@ -124,7 +195,7 @@ func testOfflineETL(t *testing.T, onlyLong bool, bckFrom cmn.Bck, comm, transfor
 
 	list, err := api.ListObjects(defaultAPIParams, bckTo, nil, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL %s (%s), got %d", objCnt, transformer, comm, len(list.Entries))
+	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
 }
 
 func TestETLBucketDryRun(t *testing.T) {
