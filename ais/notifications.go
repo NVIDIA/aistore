@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -65,12 +66,7 @@ type (
 		Finished []*notifListenMsg `json:"finished"`
 	}
 
-	nlFilter struct {
-		uuid        string
-		kind        string
-		bck         *cluster.Bck
-		onlyRunning *bool
-	}
+	nlFilter xaction.RegistryXactFilter
 
 	notifListener interface {
 		callback(notifs *notifs, n notifListener, msg interface{}, err error, nows ...int64)
@@ -337,13 +333,13 @@ func (n *notifs) entry(uuid string) (notifListener, bool) {
 }
 
 func (n *notifs) find(flt nlFilter) (nl notifListener, exists bool) {
-	if flt.uuid != "" {
-		return n.entry(flt.uuid)
+	if flt.ID != "" {
+		return n.entry(flt.ID)
 	}
 	n.RLock()
 	nl, exists = _findNL(n.m, flt)
 	n.RUnlock()
-	if exists || (flt.onlyRunning != nil && *flt.onlyRunning) {
+	if exists || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
 		return
 	}
 	n.fmu.RLock()
@@ -734,16 +730,16 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 //
 
 func (nf *nlFilter) match(nl notifListener) bool {
-	if nl.UUID() == nf.uuid {
+	if nl.UUID() == nf.ID {
 		return true
 	}
 
-	if nl.kind() == nf.kind {
-		if nf.bck == nil || nf.bck.IsEmpty() {
+	if nl.kind() == nf.Kind {
+		if nf.Bck == nil || nf.Bck.IsEmpty() {
 			return true
 		}
 		for _, bck := range nl.bcks() {
-			if cmn.QueryBcks(nf.bck.Bck).Contains(bck) {
+			if cmn.QueryBcks(nf.Bck.Bck).Contains(bck) {
 				return true
 			}
 		}

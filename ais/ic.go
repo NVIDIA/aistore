@@ -192,7 +192,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 			return
 		}
 	}
-	flt := nlFilter{uuid: msg.ID, kind: msg.Kind, bck: bck, onlyRunning: msg.OnlyRunning}
+	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
 
 	withLocalRetry(func() bool {
 		nl, exists = ic.p.notifs.find(flt)
@@ -211,6 +211,9 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 			msg.ID, msg.Kind, nl.kind())
 		return
 	}
+
+	nl.rlock()
+	defer nl.runlock()
 
 	if err := nl.err(); err != nil && !nl.aborted() {
 		ic.p.invalmsghdlr(w, r, err.Error())
