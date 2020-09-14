@@ -79,18 +79,19 @@ type (
 		rlock()
 		runlock()
 		notifiers() cluster.NodeMap
-		incRC() int
 		notifTy() int
 		kind() string
 		bcks() []cmn.Bck
 		addErr(string /*sid*/, error)
 		err() error
 		UUID() string
-		Category() int
 		setAborted()
 		aborted() bool
 		status() *cmn.XactStatus
 		finTime() int64
+		hasFinished(node *cluster.Snode) bool
+		markFinished(node *cluster.Snode)
+		finCount() int
 		finished() bool
 		String() string
 		getOwner() string
@@ -98,20 +99,26 @@ type (
 		hrwOwner(smap *smapX)
 	}
 
+	// Note: variables capitablized to allow marshal and unmarshal
 	notifListenerBase struct {
 		sync.RWMutex
-		UUIDX string            // UUID
-		Srcs  cluster.NodeMap   // expected notifiers
-		Errs  map[string]string // [node-ID => ErrMsg]
-		f     notifCallback     // optional listening-side callback
-		rc    int               // refcount
-		Ty    int               // notification category (above)
-		// ownership
-		Owned       string // "": not owned | equalIC: IC | otherwise, pid + IC
-		SmapVersion int64  // smap version in which NL is added
-		// common info
-		Action string
-		Bck    []cmn.Bck
+		Common struct {
+			UUID   string
+			Action string // async operation kind (see cmn/api_const.go)
+
+			// ownership
+			Owned       string // "": not owned | equalIC: IC | otherwise, pid + IC
+			SmapVersion int64  // smap version in which NL is added
+
+			Bck []cmn.Bck
+			Ty  int // notification category (above)
+		}
+
+		Srcs    cluster.NodeMap // expected notifiers
+		FinSrcs cmn.StringSet
+
+		Errs map[string]string // [node-ID => ErrMsg]
+		f    notifCallback     // optional listening-side callback
 
 		FinTime atomic.Int64 // timestamp when finished
 		Aborted atomic.Bool  // sets if the xaction is aborted
@@ -152,7 +159,14 @@ func newNLBWithSrc(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, actio
 	bck ...cmn.Bck) *notifListenerBase {
 	cmn.Assert(ty > notifInvalid)
 	cmn.Assert(len(srcs) != 0)
-	return &notifListenerBase{UUIDX: uuid, Srcs: srcs, SmapVersion: smap.version(), Ty: ty, Action: action, Bck: bck}
+	nlb := &notifListenerBase{Srcs: srcs}
+	nlb.Common.UUID = uuid
+	nlb.Common.Action = action
+	nlb.Common.SmapVersion = smap.version()
+	nlb.Common.Bck = bck
+	nlb.Common.Ty = ty
+	nlb.FinSrcs = make(cmn.StringSet, len(srcs))
+	return nlb
 }
 
 ///////////////////////
@@ -183,10 +197,8 @@ func (nlb *notifListenerBase) unlock()                    { nlb.Unlock() }
 func (nlb *notifListenerBase) rlock()                     { nlb.RLock() }
 func (nlb *notifListenerBase) runlock()                   { nlb.RUnlock() }
 func (nlb *notifListenerBase) notifiers() cluster.NodeMap { return nlb.Srcs }
-func (nlb *notifListenerBase) incRC() int                 { nlb.rc++; return nlb.rc }
-func (nlb *notifListenerBase) notifTy() int               { return nlb.Ty }
-func (nlb *notifListenerBase) UUID() string               { return nlb.UUIDX }
-func (nlb *notifListenerBase) Category() int              { return nlb.Ty }
+func (nlb *notifListenerBase) notifTy() int               { return nlb.Common.Ty }
+func (nlb *notifListenerBase) UUID() string               { return nlb.Common.UUID }
 func (nlb *notifListenerBase) aborted() bool              { return nlb.Aborted.Load() }
 func (nlb *notifListenerBase) setAborted()                { nlb.Aborted.CAS(false, true) }
 func (nlb *notifListenerBase) finTime() int64             { return nlb.FinTime.Load() }
@@ -226,8 +238,9 @@ func (nlb *notifListenerBase) status() *cmn.XactStatus {
 
 func (nlb *notifListenerBase) String() string {
 	var (
-		tm, res string
-		hdr     = fmt.Sprintf("%s-%q", notifText(nlb.Ty), nlb.UUIDX)
+		tm, res  string
+		hdr      = fmt.Sprintf("%s-%q", notifText(nlb.notifTy()), nlb.UUID())
+		finCount = nlb.finCount()
 	)
 	if tfin := nlb.FinTime.Load(); tfin > 0 {
 		if l := len(nlb.Errs); l > 0 {
@@ -236,22 +249,37 @@ func (nlb *notifListenerBase) String() string {
 		tm = cmn.FormatTimestamp(time.Unix(0, tfin))
 		return fmt.Sprintf("%s-%s%s", hdr, tm, res)
 	}
-	if nlb.rc > 0 {
-		return fmt.Sprintf("%s-%d/%d", hdr, nlb.rc, len(nlb.Srcs))
+	if finCount > 0 {
+		return fmt.Sprintf("%s-%d/%d", hdr, finCount, len(nlb.Srcs))
 	}
 	return hdr
 }
 
-func (nlb *notifListenerBase) getOwner() string  { return nlb.Owned }
-func (nlb *notifListenerBase) setOwner(o string) { nlb.Owned = o }
-func (nlb *notifListenerBase) kind() string      { return nlb.Action }
-func (nlb *notifListenerBase) bcks() []cmn.Bck   { return nlb.Bck }
+func (nlb *notifListenerBase) getOwner() string  { return nlb.Common.Owned }
+func (nlb *notifListenerBase) setOwner(o string) { nlb.Common.Owned = o }
+func (nlb *notifListenerBase) kind() string      { return nlb.Common.Action }
+func (nlb *notifListenerBase) bcks() []cmn.Bck   { return nlb.Common.Bck }
 
 // effectively, cache owner
 func (nlb *notifListenerBase) hrwOwner(smap *smapX) {
 	psiOwner, err := cluster.HrwIC(&smap.Smap, nlb.UUID())
 	cmn.AssertNoErr(err) // TODO -- FIXME: handle
 	nlb.setOwner(psiOwner.ID())
+}
+
+func (nlb *notifListenerBase) hasFinished(node *cluster.Snode) bool {
+	return nlb.FinSrcs.Contains(node.ID())
+}
+
+func (nlb *notifListenerBase) markFinished(node *cluster.Snode) {
+	if nlb.FinSrcs == nil {
+		nlb.FinSrcs = make(cmn.StringSet)
+	}
+	nlb.FinSrcs.Add(node.ID())
+}
+
+func (nlb *notifListenerBase) finCount() int {
+	return len(nlb.FinSrcs)
 }
 
 ////////////
@@ -271,7 +299,7 @@ func (n *notifs) String() string { return notifsName }
 // start listening
 func (n *notifs) add(nl notifListener) {
 	cmn.Assert(nl.UUID() != "")
-	cmn.Assert(nl.Category() > notifInvalid)
+	cmn.Assert(nl.notifTy() > notifInvalid)
 	n.Lock()
 	_, ok := n.m[nl.UUID()]
 	cmn.AssertMsg(!ok, nl.UUID())
@@ -356,6 +384,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		errMsg   error
 		uuid     string
 		tid      = r.Header.Get(cmn.HeaderCallerID) // sender node ID
+		finished bool
 	)
 	if r.Method != http.MethodPost {
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /notifs path")
@@ -376,6 +405,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		uuid = stats.IDX
 		msg = stats
+		finished = stats.Finished()
 	case notifCache:
 		return // TODO -- FIXME: implement
 	default:
@@ -409,7 +439,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		errMsg = errors.New(notifMsg.ErrMsg)
 	}
 	nl.lock()
-	err, status, done := n.handleMsg(nl, tid, msg, errMsg)
+	err, status, done := n.handleMsg(nl, tid, msg, errMsg, finished)
 	nl.unlock()
 	if done {
 		nl.callback(n, nl, msg, nil)
@@ -422,7 +452,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 
 // is called under notifListener.lock()
 func (n *notifs) handleMsg(nl notifListener, tid string, msg interface{},
-	srcErr error) (err error, status int, done bool) {
+	srcErr error, finished bool) (err error, status int, done bool) {
 	srcs := nl.notifiers()
 	tsi, ok := srcs[tid]
 	if !ok {
@@ -430,17 +460,19 @@ func (n *notifs) handleMsg(nl notifListener, tid string, msg interface{},
 		status = http.StatusNotFound
 		return
 	}
-	if tsi == nil {
+	if nl.hasFinished(tsi) {
 		err = fmt.Errorf("%s: duplicate %s from node %s", n.p.si, nl, tid)
 		return
 	}
+
+	if finished {
+		nl.markFinished(tsi)
+	}
+
 	if srcErr != nil {
 		nl.addErr(tid, srcErr)
 	}
-	srcs[tid] = nil
-	if rc := nl.incRC(); rc >= len(srcs) {
-		done = true
-	}
+	done = nl.finCount() == len(srcs)
 
 	// TODO: also handle other notif types
 	if nl.notifTy() == notifXact {
@@ -518,6 +550,7 @@ func (n *notifs) housekeep() time.Duration {
 				err = fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si)
 				done = true // NOTE: not-found at one ==> all done
 				nl.lock()
+				nl.setAborted()
 				nl.addErr(res.si.ID(), err)
 				nl.unlock()
 			} else if glog.FastV(4, glog.SmoduleAIS) {
@@ -553,16 +586,11 @@ func (n *notifs) hkXact(nl notifListener, res callResult) (msg interface{}, err 
 		if stats.Aborted() {
 			detail := fmt.Sprintf("%s, node %s", nl, res.si)
 			err = cmn.NewAbortedErrorDetails(stats.Kind(), detail)
-			done = true // NOTE: one abort ==> all done
-			nl.lock()
-			nl.addErr(res.si.ID(), err)
-			nl.unlock()
-		} else {
-			nl.lock()
-			_, _, done = n.handleMsg(nl, res.si.ID(), msg, err)
-			nl.unlock()
 		}
 	}
+	nl.lock()
+	_, _, done = n.handleMsg(nl, res.si.ID(), msg, err, stats.Finished())
+	nl.unlock()
 	return
 }
 

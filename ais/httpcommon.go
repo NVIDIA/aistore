@@ -777,7 +777,6 @@ func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
 		msg.ErrMsg = err.Error()
 	}
 	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
-
 	nodes := make(cluster.NodeMap)
 	for _, dst := range notif.Dsts {
 		if dst == equalIC {
