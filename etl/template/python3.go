@@ -9,9 +9,9 @@ type (
 	RuntimePython3 struct{}
 )
 
-func (r RuntimePython3) Type() string         { return RuntimePy3 }
-func (r RuntimePython3) CodeFileName() string { return "code.py" }
-func (r RuntimePython3) DepsFileName() string { return "requirements.txt" }
+func (r RuntimePython3) Type() string        { return RuntimePy3 }
+func (r RuntimePython3) CodeEnvName() string { return "AISTORE_CODE" }
+func (r RuntimePython3) DepsEnvName() string { return "AISTORE_DEPS" }
 func (r RuntimePython3) PodSpec() string {
 	return `
 apiVersion: v1
@@ -45,18 +45,19 @@ spec:
   initContainers:
     - name: server-deps
       image: aistore/python:3
-      command: ['sh', '-c', 'cp /src/* /dst/; pip install --target="/runtime" -r /dst/requirements.txt']
+      command:
+        - 'sh'
+        - '-c'
+        - | 
+          echo "${AISTORE_CODE}" > /dst/code.py
+          echo "${AISTORE_DEPS}" > /dst/requirements.txt
+          pip install --target="/runtime" -r /dst/requirements.txt
       volumeMounts:
-        - name: config
-          mountPath: "/src"
         - name: code
           mountPath: "/dst"
         - name: runtime
           mountPath: "/runtime"
   volumes:
-    - name: config
-      configMap:
-        name: <NAME>-source
     - name: code
       emptyDir: {}
     - name: runtime

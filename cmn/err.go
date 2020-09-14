@@ -78,12 +78,11 @@ type (
 		ETLErrorContext
 	}
 	ETLErrorContext struct {
-		TID           string
-		UUID          string
-		ETLName       string
-		PodName       string
-		SvcName       string
-		ConfigMapName string
+		TID     string
+		UUID    string
+		ETLName string
+		PodName string
+		SvcName string
 	}
 )
 
@@ -296,9 +295,6 @@ func (e *ETLError) Error() string {
 	if e.SvcName != "" {
 		s = append(s, fmt.Sprintf("%s=%q", KubeSvc, e.SvcName))
 	}
-	if e.ConfigMapName != "" {
-		s = append(s, fmt.Sprintf("%s=%q", KubeConfigMap, e.ConfigMapName))
-	}
 
 	return fmt.Sprintf("[%s] %s", strings.Join(s, ","), e.Reason)
 }
@@ -331,13 +327,6 @@ func (e *ETLError) withSvcName(name string) *ETLError {
 	return e
 }
 
-func (e *ETLError) withConfigMapName(name string) *ETLError {
-	if name != "" {
-		e.ConfigMapName = name
-	}
-	return e
-}
-
 func (e *ETLError) WithPodName(name string) *ETLError {
 	if name != "" {
 		e.PodName = name
@@ -354,8 +343,7 @@ func (e *ETLError) WithContext(ctx *ETLErrorContext) *ETLError {
 		withUUID(ctx.UUID).
 		WithPodName(ctx.PodName).
 		withETLName(ctx.ETLName).
-		withSvcName(ctx.SvcName).
-		withConfigMapName(ctx.ConfigMapName)
+		withSvcName(ctx.SvcName)
 }
 
 ////////////////////////////

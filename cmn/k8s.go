@@ -14,11 +14,10 @@ import (
 const (
 	k8sHostNameEnv = "K8S_HOST_NAME"
 
-	KubeDefault   = "default"
-	Kubectl       = "kubectl"
-	KubePod       = "pod"
-	KubeSvc       = "svc"
-	KubeConfigMap = "configmap"
+	KubeDefault = "default"
+	Kubectl     = "kubectl"
+	KubePod     = "pod"
+	KubeSvc     = "svc"
 )
 
 func DetectK8s() (k8snode string) {

@@ -15,8 +15,8 @@ type (
 	Runtime interface {
 		Type() string
 		PodSpec() string
-		CodeFileName() string
-		DepsFileName() string
+		CodeEnvName() string
+		DepsEnvName() string
 	}
 )
 

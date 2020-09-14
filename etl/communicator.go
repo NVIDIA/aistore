@@ -28,7 +28,6 @@ type (
 		Name() string
 		PodName() string
 		SvcName() string
-		ConfigMapName() string
 
 		RemoteAddrIP() string
 
@@ -51,16 +50,14 @@ type (
 		podIP          string
 		transformerURL string
 		name           string
-		configMapName  string
 	}
 
 	baseComm struct {
 		cluster.Slistener
 		t cluster.Target
 
-		name          string
-		podName       string
-		configMapName string
+		name    string
+		podName string
 
 		remoteAddr         string
 		transformerAddress string
@@ -95,7 +92,6 @@ func makeCommunicator(args commArgs) Communicator {
 		t:                  args.t,
 		name:               args.name,
 		podName:            args.pod.GetName(),
-		configMapName:      args.configMapName,
 		remoteAddr:         args.podIP,
 		transformerAddress: args.transformerURL,
 	}
@@ -127,11 +123,10 @@ func makeCommunicator(args commArgs) Communicator {
 	return nil
 }
 
-func (c baseComm) Name() string          { return c.name }
-func (c baseComm) PodName() string       { return c.podName }
-func (c baseComm) SvcName() string       { return c.podName /*pod name is same as service name*/ }
-func (c baseComm) ConfigMapName() string { return c.configMapName }
-func (c baseComm) RemoteAddrIP() string  { return c.remoteAddr }
+func (c baseComm) Name() string         { return c.name }
+func (c baseComm) PodName() string      { return c.podName }
+func (c baseComm) SvcName() string      { return c.podName /*pod name is same as service name*/ }
+func (c baseComm) RemoteAddrIP() string { return c.remoteAddr }
 
 //////////////
 // pushComm //

@@ -85,7 +85,7 @@ type (
 	}
 
 	StartOpts struct {
-		ConfigMapName string
+		Env map[string]string
 	}
 )
 
@@ -131,10 +131,10 @@ func (e *Aborter) ListenSmapChanged() {
 }
 
 func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
-	errCtx, podName, svcName, configMapName, err := tryStart(t, msg, opts...)
+	errCtx, podName, svcName, err := tryStart(t, msg, opts...)
 	if err != nil {
 		glog.Warning(cmn.NewETLError(errCtx, "Doing cleanup after unsuccessful Start"))
-		cleanupStart(errCtx, podName, svcName, configMapName)
+		cleanupStart(errCtx, podName, svcName)
 	}
 
 	return err
@@ -142,23 +142,17 @@ func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
 
 // Should be called if tryStart was unsuccessful.
 // It cleans up any possibly created resources.
-func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName, configMapName string) {
-	if err := cleanupEntities(errCtx, podName, svcName, configMapName); err != nil {
+func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName string) {
+	if err := cleanupEntities(errCtx, podName, svcName); err != nil {
 		glog.Error(err)
 	}
 }
 
 // cleanupEntities removes provided entities. It tries its best to remove all
 // entities so it doesn't stop when encountering an error.
-func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName, configMapName string) (err error) {
+func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err error) {
 	if svcName != "" {
 		if deleteErr := deleteEntity(errCtx, cmn.KubeSvc, svcName); deleteErr != nil {
-			err = deleteErr
-		}
-	}
-
-	if configMapName != "" {
-		if deleteErr := deleteEntity(errCtx, cmn.KubeConfigMap, configMapName); deleteErr != nil {
 			err = deleteErr
 		}
 	}
@@ -177,7 +171,7 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName, configMapNam
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
-func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName, configMapName string, err error) {
+func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
 	var (
 		pod             *corev1.Pod
 		svc             *corev1.Service
@@ -185,16 +179,17 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		podIP           string
 		originalPodName string
 		nodePort        uint
+
+		customEnv map[string]string
 	)
 
 	if len(opts) > 0 {
-		configMapName = opts[0].ConfigMapName
+		customEnv = opts[0].Env
 	}
 
 	errCtx = &cmn.ETLErrorContext{
-		TID:           t.Snode().DaemonID,
-		UUID:          msg.ID,
-		ConfigMapName: configMapName,
+		TID:  t.Snode().DaemonID,
+		UUID: msg.ID,
 	}
 
 	cmn.Assert(t.K8sNodeName() != "") // Corresponding 'if' done at the beginning of the request.
@@ -230,12 +225,10 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		return
 	}
 
-	setPodEnvVariables(pod, t)
+	setPodEnvVariables(t, pod, customEnv)
 
 	// 1. Doing cleanup of any pre-existing entities.
-	// NOTE: `configMapName` is empty because it was already created and we
-	//  definitely don't want to clean it up here.
-	cleanupStart(errCtx, pod.Name, svc.Name, "")
+	cleanupStart(errCtx, pod.Name, svc.Name)
 
 	// 2. Creating pod.
 	podName = pod.GetName()
@@ -285,7 +278,6 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		podIP:          podIP,
 		transformerURL: transformerURL,
 		name:           originalPodName,
-		configMapName:  configMapName,
 	})
 	// NOTE: communicator is put to registry only if the whole tryStart was successful.
 	if err = reg.put(msg.ID, c); err != nil {
@@ -356,9 +348,8 @@ func Stop(t cluster.Target, id string) error {
 	}
 	errCtx.PodName = c.PodName()
 	errCtx.SvcName = c.SvcName()
-	errCtx.ConfigMapName = c.ConfigMapName()
 
-	if err := cleanupEntities(errCtx, c.PodName(), c.SvcName(), c.ConfigMapName()); err != nil {
+	if err := cleanupEntities(errCtx, c.PodName(), c.SvcName()); err != nil {
 		return err
 	}
 
@@ -442,7 +433,7 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod
 }
 
 // Sets environment variables that can be accessed inside the container.
-func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) {
+func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]string) {
 	containers := pod.Spec.Containers
 	debug.Assert(len(containers) > 0)
 	for idx := range containers {
@@ -450,6 +441,20 @@ func setPodEnvVariables(pod *corev1.Pod, t cluster.Target) {
 			Name:  "AIS_TARGET_URL",
 			Value: t.Snode().URL(cmn.NetworkPublic),
 		})
+		for k, v := range customEnv {
+			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
+				Name:  k,
+				Value: v,
+			})
+		}
+	}
+	for idx := range pod.Spec.InitContainers {
+		for k, v := range customEnv {
+			pod.Spec.InitContainers[idx].Env = append(pod.Spec.InitContainers[idx].Env, corev1.EnvVar{
+				Name:  k,
+				Value: v,
+			})
+		}
 	}
 }
 
