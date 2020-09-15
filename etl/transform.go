@@ -5,11 +5,9 @@
 package etl
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
-	"os/exec"
-	"strconv"
 	"sync"
 	"time"
 
@@ -18,7 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -58,16 +58,14 @@ var (
 // * No idle timeout for a ETL container. It keeps running unless explicitly
 //   stopped by invoking the `Stop` API.
 //
-// * `kubectl delete` of a ETL container is done in two stages. First we
-//    gracefully try to terminate the pod with a 30s timeout. Upon failure to do
-//    so, we perform a force delete.
+// * Delete of a ETL container is done in two stages. First we gracefully try to
+//   terminate the pod with a 30s timeout. Upon failure to do so, we perform
+//   a force delete.
 //
 // * A single ETL container runs per target at any point of time.
 //
 // * Recreating a ETL container with the same name will delete all running
 //   containers with the same name.
-//
-// * TODO: replace `kubectl` calls with proper go-sdk calls.
 
 type (
 	// Aborter listens to smap changes and aborts the ETL on the target when
@@ -134,18 +132,12 @@ func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg, opts...)
 	if err != nil {
 		glog.Warning(cmn.NewETLError(errCtx, "Doing cleanup after unsuccessful Start"))
-		cleanupStart(errCtx, podName, svcName)
+		if err := cleanupEntities(errCtx, podName, svcName); err != nil {
+			glog.Error(err)
+		}
 	}
 
 	return err
-}
-
-// Should be called if tryStart was unsuccessful.
-// It cleans up any possibly created resources.
-func cleanupStart(errCtx *cmn.ETLErrorContext, podName, svcName string) {
-	if err := cleanupEntities(errCtx, podName, svcName); err != nil {
-		glog.Error(err)
-	}
 }
 
 // cleanupEntities removes provided entities. It tries its best to remove all
@@ -228,7 +220,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	setPodEnvVariables(t, pod, customEnv)
 
 	// 1. Doing cleanup of any pre-existing entities.
-	cleanupStart(errCtx, pod.Name, svc.Name)
+	cleanupEntities(errCtx, pod.Name, svc.Name)
 
 	// 2. Creating pod.
 	podName = pod.GetName()
@@ -464,82 +456,115 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 // readinessProbe config specified the last step is skipped. Currently
 // readinessProbe config is required by us in ETL spec.
 func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
-	args := []string{"wait"}
-	if !waitTimeout.IsZero() {
-		args = append(args, "--timeout", waitTimeout.String())
+	client, err := newK8sClient()
+	if err != nil {
+		return cmn.NewETLError(errCtx, err.Error())
 	}
-	args = append(args, "--for", "condition=ready", "pod", pod.GetName())
-	cmd := exec.Command(cmn.Kubectl, args...)
-	if b, err := cmd.CombinedOutput(); err != nil {
-		return cmn.NewETLError(errCtx, "failed waiting for pod to get ready (err: %v; out: %s)", err, string(b))
+
+	// TODO: find out more about failure: `kubectl get logs`, `kubectl describe pod`, ...
+	err = wait.PollImmediate(time.Second, time.Duration(waitTimeout), func() (done bool, err error) {
+		p, err := client.Pod(pod.Name)
+		if err != nil {
+			return false, err
+		}
+
+		for _, condition := range p.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+				return true, nil
+			}
+		}
+
+		switch p.Status.Phase {
+		case corev1.PodFailed, corev1.PodSucceeded:
+			if len(p.Status.Conditions) > 0 {
+				message := p.Status.Conditions[len(p.Status.Conditions)-1].Message
+				return false, fmt.Errorf("pod ran to completion, last message: %s", message)
+			}
+			return false, errors.New("pod ran to completion")
+		default:
+			return false, nil
+		}
+	})
+	if err != nil {
+		return cmn.NewETLError(errCtx, err.Error())
 	}
 	return nil
 }
 
 func getPodIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
-	// Retrieve host IP of the pod.
-	output, err := exec.Command(cmn.Kubectl, []string{"get", "pod", pod.GetName(), "--template={{.status.podIP}}"}...).CombinedOutput()
+	client, err := newK8sClient()
 	if err != nil {
-		return "", cmn.NewETLError(errCtx, "failed to get IP of pod (err: %v; output: %s)", err, string(output))
+		return "", cmn.NewETLError(errCtx, err.Error())
 	}
-	return string(output), nil
+	p, err := client.Pod(pod.GetName())
+	if err != nil {
+		return "", err
+	}
+	return p.Status.PodIP, nil
 }
 
 func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
-	// Retrieve host IP of the pod.
-	output, err := exec.Command(cmn.Kubectl, []string{"get", "pod", pod.GetName(), "--template={{.status.hostIP}}"}...).CombinedOutput()
+	client, err := newK8sClient()
 	if err != nil {
-		return "", cmn.NewETLError(errCtx, "failed to get host IP of pod (err: %v; output: %s)", err, string(output))
+		return "", cmn.NewETLError(errCtx, err.Error())
 	}
-	return string(output), nil
+	p, err := client.Pod(pod.GetName())
+	if err != nil {
+		return "", err
+	}
+	return p.Status.HostIP, nil
 }
 
-func deleteEntity(errCtx *cmn.ETLErrorContext, entity, entityName string) error {
-	args := []string{"delete", entity, entityName, "--ignore-not-found"}
-
-	// Doing graceful delete
-	output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput()
-	if err == nil {
-		return nil
+func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) error {
+	client, err := newK8sClient()
+	if err != nil {
+		return cmn.NewETLError(errCtx, err.Error())
 	}
 
-	etlErr := cmn.NewETLError(errCtx, "failed to delete %s, err: %v, out: %s. Retrying with --force", entity, err, string(output))
-	glog.Errorf(etlErr.Error())
+	// Remove entity immediately (ignoring not found).
+	if err = client.Delete(entityType, entityName); err != nil {
+		if k8sErrors.IsNotFound(err) {
+			return nil
+		}
+		return cmn.NewETLError(errCtx, err.Error())
+	}
 
-	// Doing force delete
-	args = append(args, "--force")
-	if output, err := exec.Command(cmn.Kubectl, args...).CombinedOutput(); err != nil {
-		return cmn.NewETLError(errCtx, "force delete failed. %q %s, err: %v, out: %s",
-			entity, entityName, err, string(output))
+	err = wait.PollImmediate(time.Second, time.Minute, func() (done bool, err error) {
+		exists, err := client.CheckExists(entityType, entityName)
+		if err != nil {
+			return false, err
+		}
+		return !exists, nil
+	})
+	if err != nil {
+		return cmn.NewETLError(errCtx, err.Error())
 	}
 	return nil
 }
 
 func createEntity(errCtx *cmn.ETLErrorContext, entity string, spec interface{}) error {
-	var (
-		b    = cmn.MustMarshal(spec)
-		args = []string{"create", "-f", "-"}
-		cmd  = exec.Command(cmn.Kubectl, args...)
-	)
-
-	cmd.Stdin = bytes.NewBuffer(b)
-	if b, err := cmd.CombinedOutput(); err != nil {
-		return cmn.NewETLError(errCtx, "failed to create %s (err: %v; output: %s)", entity, err, string(b))
+	client, err := newK8sClient()
+	if err != nil {
+		return err
+	}
+	if err = client.Create(spec); err != nil {
+		return cmn.NewETLError(errCtx, "failed to create %s (err: %v)", entity, err)
 	}
 	return nil
 }
 
 func getServiceNodePort(errCtx *cmn.ETLErrorContext, svc *corev1.Service) (uint, error) {
-	output, err := exec.Command(cmn.Kubectl, []string{"get", "-o", "jsonpath=\"{.spec.ports[0].nodePort}\"", "svc", svc.GetName()}...).CombinedOutput()
+	client, err := newK8sClient()
 	if err != nil {
-		return 0, cmn.NewETLError(errCtx, "failed to get nodePort for service %q (err: %v; output: %s)", svc.GetName(), err, string(output))
-	}
-	outputStr, _ := strconv.Unquote(string(output))
-	nodePort, err := strconv.Atoi(outputStr)
-	if err != nil {
-		return 0, cmn.NewETLError(errCtx, "failed to parse nodePort for pod-svc %q (err: %v; output: %s)", svc.GetName(), err, string(output))
+		return 0, cmn.NewETLError(errCtx, err.Error())
 	}
 
+	s, err := client.Service(svc.GetName())
+	if err != nil {
+		return 0, cmn.NewETLError(errCtx, err.Error())
+	}
+
+	nodePort := int(s.Spec.Ports[0].NodePort)
 	port, err := cmn.ValidatePort(nodePort)
 	if err != nil {
 		return 0, cmn.NewETLError(errCtx, err.Error())

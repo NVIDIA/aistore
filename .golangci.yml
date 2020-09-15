@@ -119,6 +119,9 @@ issues:
     - linters: staticcheck
       text: "SA5011:" # produces a lot of false-positives; hopefully in the future we could enable it!
 
+    - linters: interfacer
+      text: "k8s.io/client-go/rest.HTTPClient" # suggests to change `*http.Client` to `rest.HTTPClient`...
+
   # Set to 0 to disable limit
   max-same-issues: 0
   max-per-linter: 0
