@@ -477,7 +477,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 	obj.mtx.Lock()
 	defer obj.mtx.Unlock()
 	ct, ok := obj.locCT[req.daemonID]
-	cmn.AssertMsg(ok || sliceID != 0, req.daemonID+" : "+uid)
+	cmn.Assertf(ok || sliceID != 0, "%s : %s", req.daemonID, uid)
 	if !ok {
 		// Main target sends a rebuilt slice, need to receive it and save.
 		if glog.FastV(4, glog.SmoduleReb) {
@@ -1468,9 +1468,9 @@ func (reb *Manager) recoverObj(md *rebArgs, obj *rebObject) (err error) {
 		return nil
 	}
 
-	cmn.AssertMsg(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
-		fmt.Sprintf("%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
-			reb.t.Snode(), obj.bck, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID))
+	cmn.Assertf(obj.isMain && obj.mainHasAny && obj.mainSliceID == 0,
+		"%s%s/%s: isMain %t - mainHasSome %t - mainID %d",
+		reb.t.Snode(), obj.bck, obj.objName, obj.isMain, obj.mainHasAny, obj.mainSliceID)
 	return nil
 }
 

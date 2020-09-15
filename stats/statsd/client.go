@@ -175,7 +175,7 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 			prefix = "+"
 			t = "g"
 		default:
-			cmn.AssertMsg(false, fmt.Sprintf("Unknown type %+v", m.Type))
+			cmn.Assertf(false, "unknown type %+v", m.Type)
 		}
 
 		if packet.Len() > 0 {

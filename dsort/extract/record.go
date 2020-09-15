@@ -240,7 +240,7 @@ func (r *Records) Less(i, j int, formatType string) (bool, error) {
 		return lhs.(string) < rhs.(string), nil
 	}
 
-	cmn.AssertFmt(false, lhs, rhs, r.arr[i], r.arr[j])
+	cmn.Assertf(false, "lhs: %v, rhs: %v, arr[i]: %v, arr[j]: %v", lhs, rhs, r.arr[i], r.arr[j])
 	return false, nil
 }
 

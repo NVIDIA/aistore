@@ -850,7 +850,7 @@ func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
 		case sizeArg:
 			argDecorators = []decor.Decorator{decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}), decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth)}
 		default:
-			cmn.AssertMsg(false, a.barType+" argument is invalid")
+			cmn.Assertf(false, "invalid argument: %s", a.barType)
 		}
 
 		options := append(

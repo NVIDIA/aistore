@@ -153,7 +153,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 	case *cmn.FileHandle:
 		srcReader, err = cmn.NewFileHandle(lom.FQN)
 	default:
-		cmn.AssertFmt(false, "unsupported reader type", reader)
+		cmn.Assertf(false, "unsupported reader type: %v", reader)
 	}
 
 	if err != nil {

@@ -280,7 +280,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	} else if revsReqType == revsReqSync {
 		method = http.MethodPut
 	} else {
-		cmn.AssertMsg(false, fmt.Sprintf("unknown request type: %d", revsReqType))
+		cmn.Assertf(false, "unknown request type: %d", revsReqType)
 	}
 
 	pairsToSend = pairs[:0] // share original slice

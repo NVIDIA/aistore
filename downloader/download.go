@@ -271,7 +271,7 @@ Loop:
 			case actList:
 				d.dispatcher.dispatchList(req)
 			default:
-				cmn.AssertFmt(false, req, req.action)
+				cmn.Assertf(false, "%v; %v", req, req.action)
 			}
 		case job := <-d.downloadCh:
 			d.dispatcher.ScheduleForDownload(job)

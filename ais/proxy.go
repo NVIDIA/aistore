@@ -2402,7 +2402,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 	err := p.owner.smap.modify(
 		func(clone *smapX) error {
 			if !clone.isPresent(p.si) {
-				cmn.AssertMsg(false, "This proxy '"+p.si.ID()+"' must always be present in the "+clone.pp())
+				cmn.Assertf(false, "This proxy %q must always be present in the %v", p.si.ID(), clone.pp())
 			}
 			// FIXME: may be premature at this point
 			if proxyIDToRemove != "" {

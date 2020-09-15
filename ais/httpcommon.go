@@ -854,7 +854,7 @@ func (h *httprunner) bcastToGroup(args bcastArgs) chan callResult {
 		cmn.Assert(false)
 	}
 	if !cmn.NetworkIsKnown(args.network) {
-		cmn.AssertMsg(false, "unknown network '"+args.network+"'")
+		cmn.Assertf(false, "unknown network %q", args.network)
 	}
 	return h.bcastToNodes(args)
 }

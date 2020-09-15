@@ -186,7 +186,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		debug.AssertNoErr(f.Close())
 		rm.extractionPaths.Store(fullContentPath, struct{}{})
 	} else {
-		cmn.AssertMsg(false, fmt.Sprintf("%d %d", args.extractMethod, args.extractMethod&ExtractToDisk))
+		cmn.Assertf(false, "%d %d", args.extractMethod, args.extractMethod&ExtractToDisk)
 	}
 
 	var key interface{}
@@ -194,7 +194,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		return size, errors.WithStack(err)
 	}
 
-	cmn.AssertMsg(contentPath != "", fmt.Sprintf("shardName: %s; recordName: %s", args.shardName, args.recordName))
+	cmn.Assertf(contentPath != "", "shardName: %s; recordName: %s", args.shardName, args.recordName)
 	cmn.Assert(storeType != "")
 
 	rm.Records.Insert(&Record{

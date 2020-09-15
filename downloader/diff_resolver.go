@@ -5,8 +5,6 @@
 package downloader
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -152,7 +150,7 @@ func (dr *DiffResolver) PushSrc(v interface{}) {
 	case *cluster.LOM:
 		dr.srcCh <- x
 	default:
-		cmn.AssertMsg(false, fmt.Sprintf("%T", x))
+		cmn.Assertf(false, "%T", x)
 	}
 }
 
@@ -171,7 +169,7 @@ func (dr *DiffResolver) PushDst(v interface{}) {
 			Link:    x.Link,
 		}
 	default:
-		cmn.AssertMsg(false, fmt.Sprintf("%T", x))
+		cmn.Assertf(false, "%T", x)
 	}
 
 	dr.dstCh <- d

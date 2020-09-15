@@ -225,7 +225,7 @@ func (m *smapX) containsID(id string) bool {
 
 func (m *smapX) addTarget(tsi *cluster.Snode) {
 	if m.containsID(tsi.ID()) {
-		cmn.AssertMsg(false, "FATAL: duplicate daemon ID: '"+tsi.ID()+"'")
+		cmn.Assertf(false, "FATAL: duplicate daemon ID: %q", tsi.ID())
 	}
 	m.Tmap[tsi.ID()] = tsi
 	m.Version++
@@ -233,7 +233,7 @@ func (m *smapX) addTarget(tsi *cluster.Snode) {
 
 func (m *smapX) addProxy(psi *cluster.Snode) {
 	if m.containsID(psi.ID()) {
-		cmn.AssertMsg(false, "FATAL: duplicate daemon ID: '"+psi.ID()+"'")
+		cmn.Assertf(false, "FATAL: duplicate daemon ID: %q", psi.ID())
 	}
 	m.Pmap[psi.ID()] = psi
 	m.Version++
@@ -241,7 +241,7 @@ func (m *smapX) addProxy(psi *cluster.Snode) {
 
 func (m *smapX) delTarget(sid string) {
 	if m.GetTarget(sid) == nil {
-		cmn.AssertMsg(false, fmt.Sprintf("FATAL: target: %s is not in: %s", sid, m.pp()))
+		cmn.Assertf(false, "FATAL: target: %s is not in: %s", sid, m.pp())
 	}
 	delete(m.Tmap, sid)
 	m.Version++
@@ -249,7 +249,7 @@ func (m *smapX) delTarget(sid string) {
 
 func (m *smapX) delProxy(pid string) {
 	if m.GetProxy(pid) == nil {
-		cmn.AssertMsg(false, fmt.Sprintf("FATAL: proxy: %s is not in: %s", pid, m.pp()))
+		cmn.Assertf(false, "FATAL: proxy: %s is not in: %s", pid, m.pp())
 	}
 	delete(m.Pmap, pid)
 	delete(m.NonElects, pid)

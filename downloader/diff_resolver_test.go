@@ -185,7 +185,7 @@ func TestDiffResolver(t *testing.T) {
 				case downloader.DiffResolverEOF:
 					break
 				default:
-					cmn.AssertFmt(false, result.Action)
+					cmn.Assertf(false, "%d", result.Action)
 				}
 			}
 

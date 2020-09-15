@@ -408,12 +408,12 @@ func Test_ObjAttrs(t *testing.T) {
 
 		idx := hdr.Opaque[0]
 		cmn.AssertMsg(hdr.Bck.IsAIS(), "expecting ais bucket")
-		cmn.AssertMsg(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
-			fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
+		cmn.Assertf(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
+			"attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs)
 
 		written, err := io.Copy(ioutil.Discard, objReader)
 		cmn.Assert(err == nil)
-		cmn.AssertMsg(written == hdr.ObjAttrs.Size, fmt.Sprintf("written: %d, expected: %d", written, hdr.ObjAttrs.Size))
+		cmn.Assertf(written == hdr.ObjAttrs.Size, "written: %d, expected: %d", written, hdr.ObjAttrs.Size)
 
 		receivedCount.Inc()
 	}

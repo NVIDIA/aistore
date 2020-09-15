@@ -205,7 +205,7 @@ func (s *slice) free() {
 		case *memsys.SGL:
 			w.Free()
 		default:
-			cmn.AssertFmt(false, "%T", w)
+			cmn.Assertf(false, "%T", w)
 		}
 	}
 	if s.workFQN != "" {
@@ -291,7 +291,7 @@ func freeObject(r interface{}) {
 		}
 		return
 	}
-	cmn.AssertFmt(false, "Invalid object type", r)
+	cmn.Assertf(false, "invalid object type: %v", r)
 }
 
 // removes all temporary slices in case of erasure coding fails in the middle

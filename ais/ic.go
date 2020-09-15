@@ -114,7 +114,7 @@ outer:
 		}
 	default: // cached + owned
 		psi = smap.GetProxy(owner)
-		cmn.AssertMsg(smap.IsIC(psi), owner+", "+smap.StrIC(ic.p.si)) // TODO -- FIXME: handle
+		cmn.Assertf(smap.IsIC(psi), "%s, %s", owner, smap.StrIC(ic.p.si)) // TODO -- FIXME: handle
 	}
 	if owner == ic.p.si.ID() {
 		return
@@ -384,7 +384,7 @@ func (ic *ic) syncICBundle() error {
 		return err
 	}
 
-	cmn.AssertMsg(smap.UUID == bundle.Smap.UUID, smap.StringEx()+"vs. "+bundle.Smap.StringEx())
+	cmn.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
 	if err := ic.p.owner.smap.synchronize(bundle.Smap, true /* lesserIsErr */); err != nil {
 		glog.Errorf("%s: sync Smap err %v", ic.p.si, err)

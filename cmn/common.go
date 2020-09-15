@@ -401,45 +401,6 @@ func ParseBool(s string) (value bool, err error) {
 
 func IsParseBool(s string) (yes bool) { yes, _ = ParseBool(s); return }
 
-// NOTE: not to be used in the datapath - consider instead one of the 3 flavors below
-func AssertFmt(cond bool, args ...interface{}) {
-	if cond {
-		return
-	}
-	var message = assertMsg
-	if len(args) > 0 {
-		message += ": "
-		for i := 0; i < len(args); i++ {
-			message += fmt.Sprintf("%#v ", args[i])
-		}
-	}
-	panic(message)
-}
-
-// this and the other two asserts get inlined and optimized
-func Assert(cond bool) {
-	if !cond {
-		glog.Flush()
-		panic(assertMsg)
-	}
-}
-
-// NOTE: preferable usage is to have the 'if' in the calling code:
-//       if (!cond) { AssertMsg(false, msg) }
-// - otherwise the message (e.g. Sprintf) may get evaluated every time
-func AssertMsg(cond bool, msg string) {
-	if !cond {
-		glog.Flush()
-		panic(assertMsg + ": " + msg)
-	}
-}
-func AssertNoErr(err error) {
-	if err != nil {
-		glog.Flush()
-		panic(err)
-	}
-}
-
 func CopyStruct(dst, src interface{}) {
 	x := reflect.ValueOf(src)
 	Assert(x.Kind() == reflect.Ptr)
@@ -448,10 +409,6 @@ func CopyStruct(dst, src interface{}) {
 	starY := y.Elem()
 	starY.Set(starX)
 	reflect.ValueOf(dst).Elem().Set(y.Elem())
-}
-
-func HasTarExtension(objName string) bool {
-	return strings.HasSuffix(objName, ExtTar) || strings.HasSuffix(objName, ExtTarTgz) || strings.HasSuffix(objName, ExtTgz)
 }
 
 // WaitForFunc executes a function in goroutine and waits for it to finish.

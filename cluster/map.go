@@ -119,7 +119,7 @@ func (d *Snode) URL(network string) string {
 	case cmn.NetworkIntraData:
 		return d.IntraDataNet.DirectURL
 	default:
-		cmn.AssertMsg(false, "unknown network '"+network+"'")
+		cmn.Assertf(false, "unknown network %q", network)
 		return ""
 	}
 }
@@ -139,7 +139,7 @@ func (d *Snode) Validate() error {
 		return errors.New("invalid Snode: missing node " + d.NameEx())
 	}
 	if d.DaemonType != cmn.Proxy && d.DaemonType != cmn.Target {
-		cmn.AssertMsg(false, "invalid Snode type '+"+d.DaemonType+"'")
+		cmn.Assertf(false, "invalid Snode type %q", d.DaemonType)
 	}
 	return nil
 }

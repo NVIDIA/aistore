@@ -229,7 +229,7 @@ func (s *CoreStats) get(name string) (val int64) {
 //
 func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	v, ok := s.Tracker[name]
-	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
+	cmn.Assertf(ok, "invalid stats name %q", name)
 	switch v.kind {
 	case KindLatency:
 		if strings.HasSuffix(name, ".µs") {
@@ -384,7 +384,7 @@ func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmars
 //
 
 func (tracker statsTracker) register(key, kind string, isCommon ...bool) {
-	cmn.AssertMsg(cmn.StringInSlice(kind, kinds), "invalid stats kind '"+kind+"'")
+	cmn.Assertf(cmn.StringInSlice(kind, kinds), "invalid stats kind %q", kind)
 
 	tracker[key] = &statsValue{kind: kind}
 	if len(isCommon) > 0 {

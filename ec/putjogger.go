@@ -543,7 +543,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			case *cmn.FileSectionHandle:
 				_, err = r.Open()
 			default:
-				cmn.AssertFmt(false, "unsupported reader type", reader)
+				cmn.Assertf(false, "unsupported reader type: %v", reader)
 			}
 		} else {
 			if sgl, ok := slices[i].obj.(*memsys.SGL); ok {
@@ -551,7 +551,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			} else if slices[i].workFQN != "" {
 				reader, err = cmn.NewFileHandle(slices[i].workFQN)
 			} else {
-				cmn.AssertFmt(false, "unsupported reader type", slices[i].obj)
+				cmn.Assertf(false, "unsupported reader type: %v", slices[i].obj)
 			}
 		}
 		if err != nil {

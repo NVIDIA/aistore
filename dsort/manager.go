@@ -316,7 +316,7 @@ func (m *Manager) cleanup() {
 		glog.Infof("%s %s cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 	}()
 
-	cmn.AssertMsg(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
+	cmn.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
 
 	m.extractCreator = nil
 	m.client = nil
@@ -421,7 +421,7 @@ func (m *Manager) setDSorter() (err error) {
 	case DSorterMemType:
 		m.dsorter = newDSorterMem(m)
 	default:
-		cmn.AssertMsg(false, fmt.Sprintf("dsorter type is invalid: %q", m.rs.DSorterType))
+		cmn.Assertf(false, "dsorter type is invalid: %q", m.rs.DSorterType)
 	}
 	return
 }
@@ -458,7 +458,7 @@ func (m *Manager) setExtractCreator() (err error) {
 	case cmn.ExtZip:
 		extractCreator = extract.NewZipExtractCreator(m.ctx.t)
 	default:
-		cmn.AssertMsg(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))
+		cmn.Assertf(false, "unknown extension %s", m.rs.Extension)
 	}
 
 	if !m.rs.DryRun {
@@ -790,7 +790,7 @@ func calcMaxMemoryUsage(maxUsage cmn.ParsedQuantity, mem sys.MemStat) uint64 {
 	case cmn.QuantityBytes:
 		return cmn.MinU64(maxUsage.Value, mem.Total)
 	default:
-		cmn.AssertMsg(false, fmt.Sprintf("mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type))
+		cmn.Assertf(false, "mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type)
 		return 0
 	}
 }

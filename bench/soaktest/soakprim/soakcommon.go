@@ -242,7 +242,7 @@ func fetchBuckets(tag string) []string {
 func fetchSmap(tag string) *cluster.Smap {
 	smap, err := api.GetClusterMap(tutils.BaseAPIParams(primaryURL))
 	if err != nil {
-		cmn.AssertMsg(false, fmt.Sprintf("failed to fetch smap for %s: %v", tag, err))
+		cmn.Assertf(false, "failed to fetch smap for %s: %v", tag, err)
 	}
 	return smap
 }

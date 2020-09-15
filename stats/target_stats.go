@@ -216,7 +216,7 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	)
 
 	v, ok := s.Tracker[name]
-	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
+	cmn.Assertf(ok, "invalid stats name: %q", name)
 
 	// most target stats can be handled by CoreStats.doAdd
 	// stats that track data IO are unique to target and are handled here
