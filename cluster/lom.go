@@ -70,6 +70,8 @@ type (
 var (
 	lomLocker nameLocker
 	maxLmeta  atomic.Int64
+
+	_ cmn.ObjHeaderMetaProvider = &LOM{}
 )
 
 func InitTarget() {
@@ -145,30 +147,9 @@ func (lom *LOM) CloneCopiesMd() int {
 	return num
 }
 
-// see also: transport.HdrFromLom()
+// see also: transport.FromHdrProvider()
 func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
-	if hdr == nil {
-		hdr = make(http.Header, 4)
-	}
-	if lom.Size() > 0 {
-		hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(lom.Size(), 10))
-	}
-	if lom.Cksum() != nil {
-		if ty, val := lom.Cksum().Get(); ty != cmn.ChecksumNone {
-			hdr.Set(cmn.HeaderObjCksumType, ty)
-			hdr.Set(cmn.HeaderObjCksumVal, val)
-		}
-	}
-	if lom.Version() != "" {
-		hdr.Set(cmn.HeaderObjVersion, lom.Version())
-	}
-	if lom.AtimeUnix() != 0 {
-		hdr.Set(cmn.HeaderObjAtime, cmn.UnixNano2S(lom.AtimeUnix()))
-	}
-	for k, v := range lom.CustomMD() {
-		hdr.Add(cmn.HeaderObjCustomMD, strings.Join([]string{k, v}, "="))
-	}
-	return hdr
+	return cmn.ToHTTPHdr(lom, hdr)
 }
 func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 	// NOTE: We never set the `Cksum` from the header

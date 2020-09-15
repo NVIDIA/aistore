@@ -163,10 +163,13 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 func (t *targetrunner) SendTo(lom *cluster.LOM, params cluster.SendToParams) error {
 	debug.Assert(!t.Snode().Equals(params.Tsi))
 
+	if params.HdrMeta == nil {
+		params.HdrMeta = lom
+	}
 	if params.DM != nil {
 		return _sendObjDM(lom, params)
 	}
-	err := t._sendPUT(lom, params)
+	err := t._sendPUT(params)
 	if params.Locked {
 		lom.Unlock(false)
 	}
@@ -177,8 +180,10 @@ func (t *targetrunner) SendTo(lom *cluster.LOM, params cluster.SendToParams) err
 // streaming send/receive via transport.DataMover
 //
 
+// _sendObjDM requires params.HdrMeta not to be nil.
 func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
-	cb := func(hdr transport.Header, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
+	cmn.Assert(params.HdrMeta != nil)
+	cb := func(_ transport.Header, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
 		lom = (*cluster.LOM)(lomptr)
 		if params.Locked {
 			lom.Unlock(false)
@@ -188,9 +193,7 @@ func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 		}
 	}
 	hdr := transport.Header{}
-	hdr.FromLOM(lom, nil)
-	hdr.Bck = params.BckTo.Bck
-	hdr.ObjName = params.ObjNameTo
+	hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
 	o := transport.Obj{Hdr: hdr, Callback: cb, CmplPtr: unsafe.Pointer(lom)}
 	dm := params.DM.(*transport.DataMover) // TODO -- FIXME
 	err := dm.Send(o, params.Reader, params.Tsi)
@@ -230,11 +233,14 @@ func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.Header, o
 	}
 }
 
-func (t *targetrunner) _sendPUT(lom *cluster.LOM, params cluster.SendToParams) error {
+// _sendPUT requires params.HdrMeta not to be nil.
+func (t *targetrunner) _sendPUT(params cluster.SendToParams) error {
+	cmn.Assert(params.HdrMeta != nil)
 	var (
 		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
-		hdr   = lom.ToHTTPHdr(nil)
+		hdr   = cmn.ToHTTPHdr(params.HdrMeta)
 	)
+
 	hdr.Set(cmn.HeaderPutterID, t.si.ID())
 	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
 	reqArgs := cmn.ReqArgs{

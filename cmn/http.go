@@ -89,6 +89,14 @@ type (
 		// when body for [POST, PUT, ...] is in stored `io.Reader`.
 		BodyR io.Reader
 	}
+
+	ObjHeaderMetaProvider interface {
+		Size() int64
+		Cksum() *Cksum
+		Version() string
+		AtimeUnix() int64
+		CustomMD() SimpleKVs
+	}
 )
 
 // Eg: Bad Request: Bucket abc does not appear to be local or does not exist:
@@ -495,4 +503,32 @@ func RangeHdr(start, length int64) (hdr http.Header) {
 	hdr = make(http.Header, 1)
 	hdr.Add(HeaderRange, fmt.Sprintf("%s%d-%d", HeaderRangeValPrefix, start, start+length-1))
 	return
+}
+
+func ToHTTPHdr(meta ObjHeaderMetaProvider, hdrs ...http.Header) (hdr http.Header) {
+	if len(hdrs) == 0 || hdrs[0] == nil {
+		hdr = make(http.Header, 4)
+	} else {
+		hdr = hdrs[0]
+	}
+
+	if meta.Size() > 0 {
+		hdr.Set(HeaderContentLength, strconv.FormatInt(meta.Size(), 10))
+	}
+	if meta.Cksum() != nil {
+		if ty, val := meta.Cksum().Get(); ty != ChecksumNone {
+			hdr.Set(HeaderObjCksumType, ty)
+			hdr.Set(HeaderObjCksumVal, val)
+		}
+	}
+	if meta.Version() != "" {
+		hdr.Set(HeaderObjVersion, meta.Version())
+	}
+	if meta.AtimeUnix() != 0 {
+		hdr.Set(HeaderObjAtime, UnixNano2S(meta.AtimeUnix()))
+	}
+	for k, v := range meta.CustomMD() {
+		hdr.Add(HeaderObjCustomMD, strings.Join([]string{k, v}, "="))
+	}
+	return hdr
 }

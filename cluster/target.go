@@ -83,6 +83,7 @@ type (
 		Tsi       *Snode
 		DM        DataMover
 		Locked    bool
+		HdrMeta   cmn.ObjHeaderMetaProvider
 	}
 	PromoteFileParams struct {
 		SrcFQN    string
