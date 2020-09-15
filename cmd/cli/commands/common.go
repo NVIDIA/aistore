@@ -78,6 +78,7 @@ const (
 	subcmdShowConfig    = subcmdConfig
 	subcmdShowRemoteAIS = subcmdRemoteAIS
 	subcmdShowCluster   = subcmdCluster
+	subcmdShowMpath     = subcmdMountpath
 
 	// Create subcommands
 	subcmdCreateBucket = subcmdBucket

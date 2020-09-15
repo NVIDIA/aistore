@@ -322,6 +322,24 @@ const (
 		"{{range $transform := .}}" +
 		"{{$transform.ID}}\t{{$transform.Name}}\n" +
 		"{{end}}"
+
+	// Command `show mountpath`
+	TargetMpathListTmpl = "{{range $p := . }}" +
+		"{{ $p.DaemonID }}\n" +
+		"{{if and (eq (len $p.Avail) 0) (eq (len $p.Disabled) 0)}}" +
+		"\tNo mountpath\n" +
+		"{{else}}" +
+		"{{if ne (len $p.Avail) 0}}" +
+		"\tAvailable:\n" +
+		"{{range $mp := $p.Avail }}" +
+		"\t\t{{ $mp }}\n" +
+		"{{end}}{{end}}" +
+		"{{if ne (len $p.Disabled) 0}}" +
+		"\tDisabled:\n" +
+		"{{range $mp := $p.Disabled }}" +
+		"\t\t{{ $mp }}\n" +
+		"{{end}}{{end}}" +
+		"{{end}}{{end}}"
 )
 
 var (

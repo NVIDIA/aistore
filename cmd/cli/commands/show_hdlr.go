@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"text/tabwriter"
 
 	"github.com/NVIDIA/aistore/api"
@@ -27,6 +28,12 @@ type (
 	xactionTemplateCtx struct {
 		Stats   *[]daemonTemplateStats
 		Verbose bool
+	}
+
+	targetMpath struct {
+		DaemonID string
+		Avail    []string
+		Disabled []string
 	}
 )
 
@@ -86,6 +93,9 @@ var (
 		},
 		subcmdShowRemoteAIS: {
 			noHeaderFlag,
+		},
+		subcmdShowMpath: {
+			jsonFlag,
 		},
 	}
 
@@ -202,6 +212,14 @@ var (
 					ArgsUsage:    "",
 					Flags:        showCmdsFlags[subcmdShowRemoteAIS],
 					Action:       showRemoteAISHandler,
+					BashComplete: daemonCompletions(completeTargets),
+				},
+				{
+					Name:         subcmdShowMpath,
+					Usage:        "show mountpath list for targets",
+					ArgsUsage:    optionalTargetIDArgument,
+					Flags:        showCmdsFlags[subcmdShowMpath],
+					Action:       showMpathHandler,
 					BashComplete: daemonCompletions(completeTargets),
 				},
 			},
@@ -454,4 +472,55 @@ func showRemoteAISHandler(c *cli.Context) (err error) {
 	}
 	tw.Flush()
 	return
+}
+
+func showMpathHandler(c *cli.Context) (err error) {
+	daemonID := c.Args().First()
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	var nodes []*cluster.Snode
+	if daemonID != "" {
+		tgt := smap.GetTarget(daemonID)
+		if tgt == nil {
+			return fmt.Errorf("target ID %q invalid - no such target", daemonID)
+		}
+		nodes = []*cluster.Snode{tgt}
+	} else {
+		nodes = make([]*cluster.Snode, 0, len(smap.Tmap))
+		for _, tgt := range smap.Tmap {
+			nodes = append(nodes, tgt)
+		}
+	}
+	wg := &sync.WaitGroup{}
+	mpCh := make(chan *targetMpath, len(nodes))
+	erCh := make(chan error, len(nodes))
+	for _, node := range nodes {
+		wg.Add(1)
+		go func(node *cluster.Snode) {
+			defer wg.Done()
+			mpl, err := api.GetMountpaths(defaultAPIParams, node)
+			if err != nil {
+				erCh <- err
+			} else {
+				mpCh <- &targetMpath{DaemonID: node.ID(), Avail: mpl.Available, Disabled: mpl.Disabled}
+			}
+		}(node)
+	}
+	wg.Wait()
+	close(erCh)
+	close(mpCh)
+	for err := range erCh {
+		return err
+	}
+	mpls := make([]*targetMpath, 0, len(nodes))
+	for mp := range mpCh {
+		mpls = append(mpls, mp)
+	}
+	sort.Slice(mpls, func(i, j int) bool {
+		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id/name
+	})
+	useJSON := flagIsSet(c, jsonFlag)
+	return templates.DisplayOutput(mpls, c.App.Writer, templates.TargetMpathListTmpl, useJSON)
 }
