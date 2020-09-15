@@ -1,2 +1,2 @@
-Mountpath "/tmp/ais" was attached successfully to deamon "$RANDOM_TARGET"
-Mountpath "/tmp/ais" was detached successfully from deamon "$RANDOM_TARGET"
+Node "$RANDOM_TARGET": attached mountpath "/tmp/ais"
+Node "$RANDOM_TARGET": detached mountpath "/tmp/ais"

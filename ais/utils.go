@@ -125,7 +125,7 @@ func selectConfiguredIPv4(addrlist []*localIPv4Info, configuredList []string) (i
 	return "", fmt.Errorf("configured IPv4 does not match any local one")
 }
 
-// detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a deamon to listen on it
+// detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a daemon to listen on it
 func detectLocalIPv4(addrlist []*localIPv4Info) (ip net.IP, err error) {
 	if len(addrlist) == 0 {
 		return nil, fmt.Errorf("no addresses to choose from")

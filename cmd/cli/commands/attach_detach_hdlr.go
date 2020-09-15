@@ -119,7 +119,7 @@ func attachMountpathHandler(c *cli.Context) (err error) {
 		if err := api.AddMountpath(defaultAPIParams, si, mountpath); err != nil {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "Mountpath %q was attached successfully to deamon %q\n", mountpath, si.DaemonID)
+		fmt.Fprintf(c.App.Writer, "Node %q: attached mountpath %q\n", si.DaemonID, mountpath)
 	}
 	return nil
 }
@@ -145,7 +145,7 @@ func detachMountpathHandler(c *cli.Context) (err error) {
 		if err := api.RemoveMountpath(defaultAPIParams, si.DaemonID, mountpath); err != nil {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "Mountpath %q was detached successfully from deamon %q\n", mountpath, si.DaemonID)
+		fmt.Fprintf(c.App.Writer, "Node %q: detached mountpath %q\n", si.DaemonID, mountpath)
 	}
 	return nil
 }

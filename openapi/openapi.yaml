@@ -1306,7 +1306,7 @@ components:
       properties:
         daemon_id:
           type: string
-        deamon_type:
+        daemon_type:
           type: string
           enum: [target, proxy]
         public_net:
