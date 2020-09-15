@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction/demand"
 )
 
@@ -39,8 +40,8 @@ type (
 
 		dOwner *dataOwner // data slice manager
 
-		reqBundle  *transport.StreamBundle // a stream bundle to send lightweight requests
-		respBundle *transport.StreamBundle // a stream bungle to transfer data between targets
+		reqBundle  *bundle.Streams // a stream bundle to send lightweight requests
+		respBundle *bundle.Streams // a stream bungle to transfer data between targets
 	}
 
 	xactReqBase struct {
@@ -73,7 +74,7 @@ func newXactReqECBase() xactReqBase {
 }
 
 func newXactECBase(t cluster.Target, smap cluster.Sowner,
-	si *cluster.Snode, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) xactECBase {
+	si *cluster.Snode, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) xactECBase {
 	return xactECBase{
 		t:     t,
 		smap:  smap,

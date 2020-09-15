@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
 // XactBckCopy copies a bucket locally within the same cluster
@@ -24,7 +24,7 @@ type (
 		slab    *memsys.Slab
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
-		dm      *transport.DataMover
+		dm      *bundle.DataMover
 	}
 	bccJogger struct { // one per mountpath
 		joggerBckBase
@@ -38,7 +38,7 @@ type (
 //
 
 func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab,
-	dm *transport.DataMover) *XactBckCopy {
+	dm *bundle.DataMover) *XactBckCopy {
 	return &XactBckCopy{
 		xactBckBase: *newXactBckBase(id, cmn.ActCopyBucket, bckTo.Bck, t),
 		slab:        slab,

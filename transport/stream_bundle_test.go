@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -137,8 +138,8 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		}
 	}
 	_, _ = random.Read(wbuf)
-	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient,
-		transport.SBArgs{Network: network, Trname: trname, Multiplier: multiplier, Extra: extra})
+	sb := bundle.NewStreams(sowner, &lsnode, httpclient,
+		bundle.Args{Network: network, Trname: trname, Multiplier: multiplier, Extra: extra})
 	var numGs int64 = 10
 	if testing.Short() {
 		numGs = 1

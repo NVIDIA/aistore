@@ -1,9 +1,8 @@
-// Package transport provides streaming object-based transport over http for intra-cluster continuous
-// intra-cluster communications (see README for details and usage example).
+// Package bundle TODO
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package transport
+package bundle
 
 import (
 	"fmt"
@@ -15,48 +14,49 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/transport"
 )
 
 const (
 	closeFin = iota
 	closeStop
 
-	// IntraBundleMultiplier is used for intra-cluster workloads when each
-	// target talks to each other target: dSort, EC.
-	IntraBundleMultiplier = 4
+	// bundle.Multiplier is used to "amplify" intra-cluster workloads when each
+	// target talks to each other target: dSort, EC, rebalance, ETL, etc.
+	Multiplier = 4
 )
 
 type (
-	StreamBundle struct {
+	Streams struct {
 		sowner       cluster.Sowner
 		smap         *cluster.Smap // current Smap
 		smaplock     *sync.Mutex
 		lsnode       *cluster.Snode // local Snode
-		client       Client
+		client       transport.Client
 		network      string
 		trname       string
 		streams      atomic.Pointer // points to bundle (below)
-		extra        Extra
+		extra        transport.Extra
 		lid          string
 		rxNodeType   int // receiving nodes: [Targets, ..., AllNodes ] enum above
 		multiplier   int // optionally, greater than 1 number of streams per destination (with round-robin selection)
 		manualResync bool
 	}
-	BundleStats map[string]*Stats // by DaemonID
+	BundleStats map[string]*transport.Stats // by DaemonID
 	//
 	// private types to support multiple streams to the same destination with round-robin selection
 	//
-	stsdest []*Stream // STreams to the Same Destination (stsdest)
+	stsdest []*transport.Stream // STreams to the Same Destination (stsdest)
 	robin   struct {
 		stsdest stsdest
 		i       atomic.Int64
 	}
 	bundle map[string]*robin // stream "bundle" indexed by DaemonID
 
-	SBArgs struct {
+	Args struct {
 		Network      string
 		Trname       string
-		Extra        *Extra
+		Extra        *transport.Extra
 		Ntype        int // cluster.Target (0) by default
 		Multiplier   int
 		ManualResync bool // auto-resync by default
@@ -65,20 +65,20 @@ type (
 
 // interface guard
 var (
-	_ cluster.Slistener = &StreamBundle{}
+	_ cluster.Slistener = &Streams{}
 )
 
 //
 // API
 //
 
-func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl Client, sbArgs SBArgs) (sb *StreamBundle) {
+func NewStreams(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Client, sbArgs Args) (sb *Streams) {
 	if !cmn.NetworkIsKnown(sbArgs.Network) {
 		glog.Errorf("Unknown network %s, expecting one of: %v", sbArgs.Network, cmn.KnownNetworks)
 	}
 	cmn.Assert(sbArgs.Ntype == cluster.Targets || sbArgs.Ntype == cluster.Proxies || sbArgs.Ntype == cluster.AllNodes)
 	listeners := sowner.Listeners()
-	sb = &StreamBundle{
+	sb = &Streams{
 		sowner:       sowner,
 		smap:         &cluster.Smap{},
 		smaplock:     &sync.Mutex{},
@@ -102,7 +102,7 @@ func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl Client, sb
 	// update streams when Smap changes
 	sb.Resync()
 
-	if !sb.extra.compressed() {
+	if !sb.extra.Compressed() {
 		sb.lid = fmt.Sprintf("sb[%s=>%s/%s]", sb.lsnode.ID(), sb.network, sb.trname)
 	} else {
 		sb.lid = fmt.Sprintf("sb[%s=>%s/%s[%s]]", sb.lsnode.ID(), sb.network, sb.trname,
@@ -117,7 +117,7 @@ func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl Client, sb
 
 // Close closes all contained streams and unregisters the bundle from Smap listeners;
 // graceful=true blocks until all pending objects get completed (for "completion", see transport/README.md)
-func (sb *StreamBundle) Close(gracefully bool) {
+func (sb *Streams) Close(gracefully bool) {
 	if gracefully {
 		sb.apply(closeFin)
 	} else {
@@ -130,7 +130,7 @@ func (sb *StreamBundle) Close(gracefully bool) {
 }
 
 // (nodes == nil): transmit via all established streams
-func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
+func (sb *Streams) Send(obj transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
 	var (
 		streams = sb.get()
 		reopen  bool
@@ -143,8 +143,8 @@ func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.
 		obj.Callback = sb.extra.Callback
 	}
 	if nodes == nil {
-		if obj.Callback != nil && len(streams) > 1 {
-			obj.prc = atomic.NewInt64(int64(len(streams))) // when there's a callback and > 1 dest-s
+		if obj.Callback != nil {
+			obj.SetPrc(len(streams))
 		}
 		// Reader-reopening logic: since the streams in a bundle are mutually independent
 		// and asynchronous, reader.Open() (aka reopen) is skipped for the 1st replica
@@ -165,8 +165,8 @@ func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.
 				return
 			}
 		}
-		if obj.Callback != nil && len(nodes) > 1 {
-			obj.prc = atomic.NewInt64(int64(len(nodes)))
+		if obj.Callback != nil {
+			obj.SetPrc(len(nodes))
 		}
 		// second, do send. Same comment wrt reopening.
 		for _, di := range nodes {
@@ -180,10 +180,10 @@ func (sb *StreamBundle) Send(obj Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.
 	return
 }
 
-func (sb *StreamBundle) String() string { return sb.lid }
+func (sb *Streams) String() string { return sb.lid }
 
 // keep streams to => (clustered nodes as per rxNodeType) in sync at all times
-func (sb *StreamBundle) ListenSmapChanged() {
+func (sb *Streams) ListenSmapChanged() {
 	smap := sb.sowner.Get()
 	if smap.Version <= sb.smap.Version {
 		return
@@ -191,7 +191,7 @@ func (sb *StreamBundle) ListenSmapChanged() {
 	sb.Resync()
 }
 
-func (sb *StreamBundle) GetStats() BundleStats {
+func (sb *Streams) GetStats() BundleStats {
 	streams := sb.get()
 	stats := make(BundleStats, len(streams))
 	for id, robin := range streams {
@@ -202,13 +202,11 @@ func (sb *StreamBundle) GetStats() BundleStats {
 	return stats
 }
 
-//==========================================================================
 //
 // private methods
 //
-//==========================================================================
 
-func (sb *StreamBundle) get() (bun bundle) {
+func (sb *Streams) get() (bun bundle) {
 	optr := (*bundle)(sb.streams.Load())
 	if optr != nil {
 		bun = *optr
@@ -217,7 +215,7 @@ func (sb *StreamBundle) get() (bun bundle) {
 }
 
 // one obj, one stream
-func (sb *StreamBundle) sendOne(obj Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) (err error) {
+func (sb *Streams) sendOne(obj transport.Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) (err error) {
 	obj.Reader = roc // reduce to io.ReadCloser
 	if reopen && roc != nil {
 		var reader io.ReadCloser
@@ -235,7 +233,7 @@ func (sb *StreamBundle) sendOne(obj Obj, roc cmn.ReadOpenCloser, robin *robin, r
 	return s.Send(obj)
 }
 
-func (sb *StreamBundle) apply(action int) {
+func (sb *Streams) apply(action int) {
 	cmn.Assert(action == closeFin || action == closeStop)
 	var (
 		streams = sb.get()
@@ -260,7 +258,7 @@ func (sb *StreamBundle) apply(action int) {
 }
 
 // "Resync" streams asynchronously (is a slowpath); calls stream.Stop()
-func (sb *StreamBundle) Resync() {
+func (sb *Streams) Resync() {
 	sb.smaplock.Lock()
 	defer sb.smaplock.Unlock()
 	smap := sb.sowner.Get()
@@ -302,7 +300,7 @@ func (sb *StreamBundle) Resync() {
 		for k := 0; k < sb.multiplier; k++ {
 			var (
 				s  string
-				ns = NewStream(sb.client, toURL, &sb.extra)
+				ns = transport.NewStream(sb.client, toURL, &sb.extra)
 			)
 			if sb.multiplier > 1 {
 				s = fmt.Sprintf("(%d)", k)

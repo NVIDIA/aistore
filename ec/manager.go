@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
 // nolint:maligned // no performance critical code
@@ -35,8 +36,8 @@ type Manager struct {
 	bundleEnabled atomic.Bool // to disable and enable on the fly
 	netReq        string      // network used to send object request
 	netResp       string      // network used to send/receive slices
-	reqBundle     *transport.StreamBundle
-	respBundle    *transport.StreamBundle
+	reqBundle     *bundle.Streams
+	respBundle    *bundle.Streams
 }
 
 var (
@@ -100,23 +101,23 @@ func (mgr *Manager) initECBundles() {
 		Compression: compression,
 	}
 
-	reqSbArgs := transport.SBArgs{
-		Multiplier: transport.IntraBundleMultiplier,
+	reqSbArgs := bundle.Args{
+		Multiplier: bundle.Multiplier,
 		Extra:      &extraReq,
 		Network:    mgr.netReq,
 		Trname:     ReqStreamName,
 	}
 
-	respSbArgs := transport.SBArgs{
-		Multiplier: transport.IntraBundleMultiplier,
+	respSbArgs := bundle.Args{
+		Multiplier: bundle.Multiplier,
 		Trname:     RespStreamName,
 		Network:    mgr.netResp,
 		Extra:      &transport.Extra{Compression: compression},
 	}
 
 	sowner := mgr.t.GetSowner()
-	mgr.reqBundle = transport.NewStreamBundle(sowner, mgr.t.Snode(), client, reqSbArgs)
-	mgr.respBundle = transport.NewStreamBundle(sowner, mgr.t.Snode(), client, respSbArgs)
+	mgr.reqBundle = bundle.NewStreams(sowner, mgr.t.Snode(), client, reqSbArgs)
+	mgr.respBundle = bundle.NewStreams(sowner, mgr.t.Snode(), client, respSbArgs)
 
 	mgr.smap = sowner.Get()
 	mgr.targetCnt.Store(int32(mgr.smap.CountTargets()))

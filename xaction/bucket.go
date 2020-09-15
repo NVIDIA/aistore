@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/query"
-	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction/demand"
 )
 
@@ -370,7 +370,7 @@ type bccEntry struct {
 	bckFrom *cluster.Bck
 	bckTo   *cluster.Bck
 	phase   string
-	dm      *transport.DataMover
+	dm      *bundle.DataMover
 }
 
 func (e *bccEntry) Start(_ cmn.Bck) error {
@@ -396,7 +396,7 @@ func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error
 }
 
 func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid,
-	phase string, dm *transport.DataMover) (*mirror.XactBckCopy, error) {
+	phase string, dm *bundle.DataMover) (*mirror.XactBckCopy, error) {
 	e := &bccEntry{
 		baseBckEntry: baseBckEntry{uuid},
 		t:            t,

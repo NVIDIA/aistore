@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
 type (
@@ -28,7 +29,7 @@ type (
 	}
 )
 
-func NewRespondXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactRespond {
+func NewRespondXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactRespond {
 	XactCount.Inc()
 	smap, si := t.GetSowner(), t.Snode()
 	runner := &XactRespond{

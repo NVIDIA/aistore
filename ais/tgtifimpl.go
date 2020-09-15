@@ -177,7 +177,7 @@ func (t *targetrunner) SendTo(lom *cluster.LOM, params cluster.SendToParams) err
 }
 
 //
-// streaming send/receive via transport.DataMover
+// streaming send/receive via bundle.DataMover
 //
 
 // _sendObjDM requires params.HdrMeta not to be nil.
@@ -195,8 +195,7 @@ func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 	hdr := transport.Header{}
 	hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
 	o := transport.Obj{Hdr: hdr, Callback: cb, CmplPtr: unsafe.Pointer(lom)}
-	dm := params.DM.(*transport.DataMover) // TODO -- FIXME
-	err := dm.Send(o, params.Reader, params.Tsi)
+	err := params.DM.Send(o, params.Reader, params.Tsi)
 	if err != nil {
 		if params.Locked {
 			lom.Unlock(false)

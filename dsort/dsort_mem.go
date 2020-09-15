@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -65,8 +66,8 @@ type (
 		m *Manager
 
 		streams struct {
-			builder *transport.StreamBundle // streams for sending information about building shards
-			records *transport.StreamBundle // streams for sending the record
+			builder *bundle.Streams // streams for sending information about building shards
+			records *bundle.Streams // streams for sending the record
 		}
 
 		creationPhase struct {
@@ -216,13 +217,13 @@ func (ds *dsorterMem) start() error {
 
 	client := transport.NewIntraDataClient()
 
-	streamMultiplier := transport.IntraBundleMultiplier
+	streamMultiplier := bundle.Multiplier
 	if ds.m.rs.StreamMultiplier != 0 {
 		streamMultiplier = ds.m.rs.StreamMultiplier
 	}
 
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-	reqSbArgs := transport.SBArgs{
+	reqSbArgs := bundle.Args{
 		Multiplier: 20,
 		Network:    reqNetwork,
 		Trname:     trname,
@@ -233,7 +234,7 @@ func (ds *dsorterMem) start() error {
 	}
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-	respSbArgs := transport.SBArgs{
+	respSbArgs := bundle.Args{
 		Multiplier: streamMultiplier,
 		Network:    respNetwork,
 		Trname:     trname,
@@ -248,8 +249,8 @@ func (ds *dsorterMem) start() error {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.builder = transport.NewStreamBundle(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
-	ds.streams.records = transport.NewStreamBundle(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
+	ds.streams.builder = bundle.NewStreams(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
+	ds.streams.records = bundle.NewStreams(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
 	return nil
 }
 
@@ -280,7 +281,7 @@ func (ds *dsorterMem) cleanupStreams() error {
 		}
 	}
 
-	for _, streamBundle := range []*transport.StreamBundle{ds.streams.builder, ds.streams.records} {
+	for _, streamBundle := range []*bundle.Streams{ds.streams.builder, ds.streams.records} {
 		if streamBundle != nil {
 			streamBundle.Close(!ds.m.aborted())
 		}

@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
-	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -419,7 +419,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 		var (
 			bckTo   *cluster.Bck
 			bckFrom = c.bck
-			dm      *transport.DataMover
+			dm      *bundle.DataMover
 			config  = cmn.GCO.Get()
 			err     error
 		)
@@ -708,13 +708,13 @@ func (c *txnServerCtx) addNotif(xact cmn.Xact) {
 	}
 }
 
-func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string) (*transport.DataMover, error) {
-	dmExtra := transport.DMExtra{
+func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string) (*bundle.DataMover, error) {
+	dmExtra := bundle.Extra{
 		RecvAck:     nil,                    // NOTE: no ACKs
 		Compression: rebcfg.Compression,     // TODO: define separately
 		Multiplier:  int(rebcfg.Multiplier), // ditto
 	}
-	dm, err := transport.NewDataMover(c.t, recvObjTrname+"_"+uuid, c.t._recvObjDM, dmExtra)
+	dm, err := bundle.NewDataMover(c.t, recvObjTrname+"_"+uuid, c.t._recvObjDM, dmExtra)
 	if err != nil {
 		return nil, err
 	}

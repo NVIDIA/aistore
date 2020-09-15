@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/transport"
 )
 
 type RecvType int
@@ -61,6 +62,8 @@ type (
 		Open()
 		Close()
 		UnregRecv()
+		Send(obj transport.Obj, roc cmn.ReadOpenCloser, tsi *Snode) error
+		ACK(hdr transport.Header, cb transport.SendCallback, tsi *Snode) error
 	}
 	PutObjectParams struct {
 		Reader       io.ReadCloser

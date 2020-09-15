@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -49,8 +50,8 @@ type (
 		mw *memoryWatcher
 
 		streams struct {
-			request  *transport.StreamBundle
-			response *transport.StreamBundle
+			request  *bundle.Streams
+			response *bundle.Streams
 		}
 
 		creationPhase struct {
@@ -143,13 +144,13 @@ func (ds *dsorterGeneral) start() error {
 
 	client := transport.NewIntraDataClient()
 
-	streamMultiplier := transport.IntraBundleMultiplier
+	streamMultiplier := bundle.Multiplier
 	if ds.m.rs.StreamMultiplier != 0 {
 		streamMultiplier = ds.m.rs.StreamMultiplier
 	}
 
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-	reqSbArgs := transport.SBArgs{
+	reqSbArgs := bundle.Args{
 		Multiplier: 20,
 		Network:    reqNetwork,
 		Trname:     trname,
@@ -160,7 +161,7 @@ func (ds *dsorterGeneral) start() error {
 	}
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-	respSbArgs := transport.SBArgs{
+	respSbArgs := bundle.Args{
 		Multiplier: streamMultiplier,
 		Network:    respNetwork,
 		Trname:     trname,
@@ -175,8 +176,8 @@ func (ds *dsorterGeneral) start() error {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.request = transport.NewStreamBundle(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
-	ds.streams.response = transport.NewStreamBundle(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
+	ds.streams.request = bundle.NewStreams(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
+	ds.streams.response = bundle.NewStreams(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
 
 	// start watching memory
 	return ds.mw.watch()
@@ -209,7 +210,7 @@ func (ds *dsorterGeneral) cleanupStreams() error {
 		}
 	}
 
-	for _, streamBundle := range []*transport.StreamBundle{ds.streams.request, ds.streams.response} {
+	for _, streamBundle := range []*bundle.Streams{ds.streams.request, ds.streams.response} {
 		if streamBundle != nil {
 			streamBundle.Close(!ds.m.aborted())
 		}

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -57,8 +58,8 @@ type (
 
 	Manager struct {
 		t          cluster.Target
-		dm         *transport.DataMover
-		pushes     *transport.StreamBundle // broadcast notifications
+		dm         *bundle.DataMover
+		pushes     *bundle.Streams // broadcast notifications
 		statRunner *stats.Trunner
 		filterGFN  *filter.Filter
 		smap       atomic.Pointer // new smap which will be soon live
@@ -123,12 +124,12 @@ func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *
 		ecClient:   ecClient,
 	}
 	rebcfg := &config.Rebalance
-	dmExtra := transport.DMExtra{
+	dmExtra := bundle.Extra{
 		RecvAck:     reb.recvAck,
 		Compression: rebcfg.Compression,
 		Multiplier:  int(rebcfg.Multiplier),
 	}
-	dm, err := transport.NewDataMover(t, rebTrname, reb.recvObj, dmExtra)
+	dm, err := bundle.NewDataMover(t, rebTrname, reb.recvObj, dmExtra)
 	if err != nil {
 		cmn.ExitLogf("%v", err)
 	}
@@ -195,8 +196,8 @@ func (reb *Manager) beginStreams() {
 	cmn.Assert(reb.stages.stage.Load() == rebStageInit)
 
 	reb.dm.Open()
-	pushArgs := transport.SBArgs{Network: reb.dm.NetC(), Trname: rebPushTrname}
-	reb.pushes = transport.NewStreamBundle(reb.t.GetSowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
+	pushArgs := bundle.Args{Network: reb.dm.NetC(), Trname: rebPushTrname}
+	reb.pushes = bundle.NewStreams(reb.t.GetSowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
 
 	reb.laterx.Store(false)
 	reb.inQueue.Store(0)

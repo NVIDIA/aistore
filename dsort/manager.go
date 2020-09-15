@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/pkg/errors"
 )
 
@@ -120,7 +121,7 @@ type (
 			adjuster *concAdjuster
 		}
 		streams struct {
-			shards *transport.StreamBundle // streams for pushing streams to other targets if the fqn is non-local
+			shards *bundle.Streams // streams for pushing streams to other targets if the fqn is non-local
 		}
 		creationPhase struct {
 			metadata CreationPhaseMetadata
@@ -248,8 +249,8 @@ func (m *Manager) initStreams() error {
 	}
 
 	trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
-	shardsSbArgs := transport.SBArgs{
-		Multiplier: transport.IntraBundleMultiplier,
+	shardsSbArgs := bundle.Args{
+		Multiplier: bundle.Multiplier,
 		Network:    respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
@@ -264,7 +265,7 @@ func (m *Manager) initStreams() error {
 	}
 
 	client := transport.NewIntraDataClient()
-	m.streams.shards = transport.NewStreamBundle(m.ctx.smapOwner, m.ctx.node, client, shardsSbArgs)
+	m.streams.shards = bundle.NewStreams(m.ctx.smapOwner, m.ctx.node, client, shardsSbArgs)
 	return nil
 }
 
@@ -284,7 +285,7 @@ func (m *Manager) cleanupStreams() error {
 		}
 	}
 
-	for _, streamBundle := range []*transport.StreamBundle{m.streams.shards} {
+	for _, streamBundle := range []*bundle.Streams{m.streams.shards} {
 		if streamBundle != nil {
 			streamBundle.Close(false)
 		}

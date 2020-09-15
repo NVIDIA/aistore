@@ -186,7 +186,7 @@ var (
 	gc      *collector              // real stream collector
 )
 
-func (extra *Extra) compressed() bool {
+func (extra *Extra) Compressed() bool {
 	return extra.Compression != "" && extra.Compression != cmn.CompressNever
 }
 
@@ -207,7 +207,7 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 		if extra.IdleTimeout > 0 {
 			s.time.idleOut = extra.IdleTimeout
 		}
-		if extra.compressed() {
+		if extra.Compressed() {
 			config := extra.Config
 			if config == nil {
 				config = cmn.GCO.Get()
@@ -388,6 +388,12 @@ func (s *Stream) GetStats() (stats Stats) {
 	return
 }
 
+func (obj *Obj) SetPrc(n int) {
+	// when there's a `sent` callback and more than one destination
+	if n > 1 {
+		obj.prc = atomic.NewInt64(int64(n))
+	}
+}
 func (hdr *Header) IsLast() bool       { return hdr.ObjAttrs.Size == lastMarker }
 func (hdr *Header) IsIdleTick() bool   { return hdr.ObjAttrs.Size == tickMarker }
 func (hdr *Header) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.IsLast() }

@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
 const (
@@ -97,7 +97,7 @@ type (
 		txnBckBase
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
-		dm      *transport.DataMover
+		dm      *bundle.DataMover
 	}
 	txnETLBucket struct {
 		txnBckBase
@@ -479,7 +479,7 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 var _ txn = &txnCopyBucket{}
 
 // c-tor
-func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *transport.DataMover) (txn *txnCopyBucket) {
+func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover) (txn *txnCopyBucket) {
 	txn = &txnCopyBucket{
 		*newTxnBckBase("bcp", *bckFrom),
 		bckFrom,

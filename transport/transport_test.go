@@ -575,11 +575,9 @@ func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 	return
 }
 
-//===========================================================================
-//
-// randReader
-//
-//===========================================================================
+////////////////
+// randReader //
+////////////////
 
 type randReader struct {
 	buf    []byte

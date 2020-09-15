@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
 type (
@@ -30,7 +30,7 @@ type (
 // XactGet
 //
 
-func NewPutXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *transport.StreamBundle) *XactPut {
+func NewPutXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactPut {
 	XactCount.Inc()
 	availablePaths, disabledPaths := fs.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
