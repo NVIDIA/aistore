@@ -275,18 +275,25 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
 	return err
 }
 
-func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams, localOnly ...bool) (copied bool, err error) {
-	coi := &copyObjInfo{
-		CopyObjectParams: params,
-		t:                t,
-		uncache:          false,
-		finalize:         false,
-	}
+func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams,
+	localOnly ...bool) (copied bool, size int64, err error) {
+	var (
+		coi = &copyObjInfo{
+			CopyObjectParams: params,
+			t:                t,
+			uncache:          false,
+			finalize:         false,
+		}
+	)
 	if len(localOnly) > 0 {
 		coi.localOnly = localOnly[0]
 	}
+	if params.DP != nil {
+		return coi.copyReader(lom, params.DP.ObjNameTo(lom.ObjName))
+	}
+
 	copied, err = coi.copyObject(lom, lom.ObjName)
-	return
+	return copied, lom.Size(), err
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize)
@@ -364,7 +371,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 			sendParams = cluster.SendToParams{ObjNameTo: lom.ObjName, Tsi: si}
 		)
 		coi.BckTo = lom.Bck()
-		_, err = coi.putRemote(lom, sendParams)
+		_, _, err = coi.putRemote(lom, sendParams)
 		return
 	}
 

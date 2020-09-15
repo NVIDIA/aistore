@@ -37,7 +37,6 @@ type (
 	OfflineMsg struct {
 		ID     string `json:"id"`      // ETL ID
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
-		Suffix string `json:"suffix"`  // Suffix added to each resulting object.
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
 
 		// New objects names will have this extension. Warning: if in a source

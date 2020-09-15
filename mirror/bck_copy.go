@@ -24,6 +24,7 @@ type (
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 		dm      *bundle.DataMover
+		dp      cluster.SendDataProvider
 	}
 	bccJogger struct { // one per mountpath
 		joggerBckBase
@@ -36,14 +37,16 @@ type (
 // public methods
 //
 
+// XactBckCopy copies one bucket to another. If dp is provided, bytes to save are taken from io.Reader from dp.Reader()
 func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab,
-	dm *bundle.DataMover) *XactBckCopy {
+	dm *bundle.DataMover, dp cluster.SendDataProvider) *XactBckCopy {
 	return &XactBckCopy{
 		xactBckBase: *newXactBckBase(id, cmn.ActCopyBucket, bckTo.Bck, t),
 		slab:        slab,
 		bckFrom:     bckFrom,
 		bckTo:       bckTo,
 		dm:          dm,
+		dp:          dp,
 	}
 }
 
@@ -114,12 +117,13 @@ func (j *bccJogger) jog() {
 
 func (j *bccJogger) copyObject(lom *cluster.LOM) error {
 	var (
-		params      = cluster.CopyObjectParams{BckTo: j.parent.bckTo, Buf: j.buf, DM: j.parent.dm}
-		copied, err = j.parent.Target().CopyObject(lom, params)
+		params            = cluster.CopyObjectParams{BckTo: j.parent.bckTo, Buf: j.buf, DM: j.parent.dm, DP: j.parent.dp}
+		copied, size, err = j.parent.Target().CopyObject(lom, params)
 	)
 	if copied {
 		j.parent.ObjectsInc()
-		j.parent.BytesAdd(lom.Size() + lom.Size()) // FIXME: depends on whether local <-> remote
+		// FIXME: depends on whether local <-> remote and params.DP
+		j.parent.BytesAdd(lom.Size() + size)
 		j.num++
 		if (j.num % throttleNumObjects) == 0 {
 			if cs := fs.GetCapStatus(); cs.Err != nil {

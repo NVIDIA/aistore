@@ -79,6 +79,7 @@ type (
 		BckTo *Bck
 		Buf   []byte
 		DM    DataMover
+		DP    SendDataProvider // optional
 	}
 	SendToParams struct {
 		Reader    cmn.ReadOpenCloser
@@ -98,6 +99,12 @@ type (
 		KeepOrig  bool
 		Verbose   bool
 	}
+
+	// Defines what to send to a target.
+	SendDataProvider interface {
+		Reader(*LOM) (cmn.ReadOpenCloser, *LOM, error) // LOM is supposed to have http.Header metadata
+		ObjNameTo(string) string
+	}
 )
 
 // NOTE: For implementations, please refer to `ais/tgtifimpl.go` and `ais/httpcommon.go`.
@@ -116,7 +123,7 @@ type Target interface {
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(lom *LOM, params PutObjectParams) error
 	EvictObject(lom *LOM) error
-	CopyObject(lom *LOM, params CopyObjectParams, localOnly ...bool) (bool, error)
+	CopyObject(lom *LOM, params CopyObjectParams, localOnly ...bool) (bool, int64, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool

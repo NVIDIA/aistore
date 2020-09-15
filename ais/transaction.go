@@ -98,11 +98,7 @@ type (
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 		dm      *bundle.DataMover
-	}
-	txnETLBucket struct {
-		txnBckBase
-		bckFrom *cluster.Bck
-		bckTo   *cluster.Bck
+		dp      cluster.SendDataProvider // optional
 	}
 )
 
@@ -479,12 +475,13 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 var _ txn = &txnCopyBucket{}
 
 // c-tor
-func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover) (txn *txnCopyBucket) {
+func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover, dp cluster.SendDataProvider) (txn *txnCopyBucket) {
 	txn = &txnCopyBucket{
 		*newTxnBckBase("bcp", *bckFrom),
 		bckFrom,
 		bckTo,
 		dm,
+		dp,
 	}
 	txn.fillFromCtx(c)
 	return
@@ -493,21 +490,4 @@ func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.D
 func (txn *txnCopyBucket) abort() {
 	txn.txnBckBase.abort()
 	txn.dm.UnregRecv()
-}
-
-//////////////////
-// txnETLBucket //
-//////////////////
-
-var _ txn = &txnETLBucket{}
-
-// c-tor
-func newTxnETLBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnETLBucket) {
-	txn = &txnETLBucket{
-		*newTxnBckBase("betl", *bckFrom),
-		bckFrom,
-		bckTo,
-	}
-	txn.fillFromCtx(c)
-	return
 }

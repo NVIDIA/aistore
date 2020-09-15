@@ -452,6 +452,10 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 		if err != nil {
 			return "", err
 		}
+		if etlBckMsg.DryRun {
+			// FIXME: bring back dry-run offline ETL
+			return "", errors.New("dry-run requests not supported")
+		}
 		nmsg.Value = &etl.OfflineBckMsg{
 			Bck:        bckTo.Bck,
 			OfflineMsg: *etlBckMsg,
@@ -479,9 +483,9 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	bprops, present := clone.Get(bckFrom)
 	cmn.Assert(present)
 
-	// create destination bucket but only if it doesn't exist and
-	// it is not ETL dry run request.
-	if _, present = clone.Get(bckTo); !present && !etlBckMsg.DryRun {
+	// create destination bucket but only if it doesn't exist
+	// TODO: don't do it when it's dry run request.
+	if _, present = clone.Get(bckTo); !present {
 		bckFrom.Props = bprops.Clone()
 		bckTo.Props = bprops.Clone()
 		added := clone.add(bckTo, bckTo.Props)

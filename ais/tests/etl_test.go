@@ -332,7 +332,8 @@ def transform(input_bytes: bytes) -> bytes:
 }
 
 func TestETLBucketDryRun(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	t.Skip() // TODO: remove when dry-run is supported with ETL
+	// tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true}) //nolint:commentedOutCode // see TODO above
 	var (
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		bckTo   = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}

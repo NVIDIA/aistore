@@ -306,7 +306,6 @@ var (
 
 	// ETL
 	etlPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to each transformed object's name"}
-	etlSuffixFlag = cli.StringFlag{Name: "suffix", Usage: "suffix added to each transformed object's name"}
 	etlExtFlag    = cli.StringFlag{Name: "ext", Usage: "new extension of transformed object's name"}
 	etlDryRunFlag = cli.BoolFlag{Name: "dry-run", Usage: "show total size of created objects, without really creating them"}
 	fromFileFlag  = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the code for ETL", Required: true}

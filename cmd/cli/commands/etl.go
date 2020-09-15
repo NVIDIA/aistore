@@ -68,7 +68,6 @@ var (
 					Flags: []cli.Flag{
 						etlExtFlag,
 						etlPrefixFlag,
-						etlSuffixFlag,
 						etlDryRunFlag,
 					},
 				},
@@ -221,7 +220,6 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 		ID:     id,
 		Ext:    parseStrFlag(c, etlExtFlag),
 		Prefix: parseStrFlag(c, etlPrefixFlag),
-		Suffix: parseStrFlag(c, etlSuffixFlag),
 		DryRun: flagIsSet(c, etlDryRunFlag),
 	})
 

@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
@@ -411,7 +410,14 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 // copyBucket //
 ////////////////
 
-func (t *targetrunner) copyBucket(c *txnServerCtx) error {
+func (t *targetrunner) copyBucket(c *txnServerCtx, dps ...cluster.SendDataProvider) error {
+	var (
+		dp cluster.SendDataProvider
+	)
+	if len(dps) > 0 {
+		dp = dps[0]
+	}
+
 	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
 		return err
 	}
@@ -430,6 +436,8 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 		if dm, err = c.newDM(&config.Rebalance, c.uuid); err != nil {
 			return err
 		}
+
+		// TODO: add dry-run for ETL or for both etl and cpy bck.
 		nlpFrom := bckFrom.GetNameLockPair()
 		nlpTo := bckTo.GetNameLockPair()
 		if !nlpFrom.TryRLock() {
@@ -441,7 +449,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 			nlpFrom.Unlock()
 			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
 		}
-		txn := newTxnCopyBucket(c, bckFrom, bckTo, dm)
+		txn := newTxnCopyBucket(c, bckFrom, bckTo, dm, dp)
 		if err := t.transactions.begin(txn); err != nil {
 			dm.UnregRecv()
 			nlpTo.Unlock()
@@ -465,7 +473,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx) error {
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, c.uuid, cmn.ActCommit, txnCpBck.dm)
+		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, c.uuid, cmn.ActCommit, txnCpBck.dm, txnCpBck.dp)
 		if err != nil {
 			return err
 		}
@@ -500,113 +508,29 @@ func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckT
 	return
 }
 
-////////////////
+///////////////
 // etlBucket //
-////////////////
+///////////////
 
-// TODO: deduplicate with copyBucket?
-// TODO: add additional check like in (coi *copyObjInfo) copyObject
-func (t *targetrunner) etlBucket(c *txnServerCtx) error {
+// etlBucket uses copyBucket xaction to transform the whole bucket. The only difference is that instead of copying the
+// same bytes, it creates a reader based on given ETL transformation.
+func (t *targetrunner) etlBucket(c *txnServerCtx) (err error) {
 	if err := k8s.Detect(); err != nil {
 		return err
 	}
-	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+	var (
+		etlMsg *etl.OfflineBckMsg
+		dp     cluster.SendDataProvider
+	)
+	if etlMsg, err = etl.ParseOfflineBckMsg(c.msg.Value); err != nil {
 		return err
 	}
 
-	switch c.phase {
-	case cmn.ActBegin:
-		var (
-			etlMsg  *etl.OfflineBckMsg
-			bckFrom = c.bck
-			err     error
-		)
-		// TODO -- FIXME: mountpath validation when destination does not exist
-		if etlMsg, err = t.validateETLBckTxn(bckFrom, c.msg); err != nil {
-			return err
-		}
-		bckTo := cluster.NewBckEmbed(etlMsg.Bck)
-		nlpFrom := bckFrom.GetNameLockPair()
-		if !nlpFrom.TryRLock() {
-			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
-		}
-
-		if etlMsg.DryRun {
-			txn := newTxnETLBucket(c, bckFrom, bckTo)
-			if err := t.transactions.begin(txn); err != nil {
-				nlpFrom.Unlock()
-				return err
-			}
-			txn.nlps = []cmn.NLP{nlpFrom}
-			return nil
-		}
-
-		nlpTo := bckTo.GetNameLockPair()
-		if !nlpTo.TryLock() {
-			nlpFrom.Unlock()
-			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
-		}
-		txn := newTxnETLBucket(c, bckFrom, bckTo)
-		if err := t.transactions.begin(txn); err != nil {
-			nlpTo.Unlock()
-			nlpFrom.Unlock()
-			return err
-		}
-		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
-	case cmn.ActAbort:
-		_, err := t.transactions.find(c.uuid, cmn.ActAbort)
-		debug.AssertNoErr(err)
-	case cmn.ActCommit:
-		var (
-			xact   *etl.BucketXact
-			bckMsg = etl.OfflineBckMsg{}
-		)
-
-		if err := cmn.MorphMarshal(c.msg.Value, &bckMsg); err != nil {
-			return fmt.Errorf("couldn't morphmarshal. value: (%v) err: %s", c.msg.Value, err.Error())
-		}
-		txn, err := t.transactions.find(c.uuid, "")
-		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
-		}
-		txnETLBck := txn.(*txnETLBucket)
-		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
-			if err = t.transactions.wait(txn, c.timeout); err != nil {
-				return fmt.Errorf("%s %s: %v", t.si, txn, err)
-			}
-		} else {
-			t.transactions.find(c.uuid, cmn.ActCommit)
-		}
-		xact, err = xaction.Registry.RenewETLOffline(t, txnETLBck.bckFrom, txnETLBck.bckTo,
-			&bckMsg.OfflineMsg, c.uuid, cmn.ActCommit)
-		if err != nil {
-			return err
-		}
-
-		c.addNotif(xact) // notify upon completion
-		go xact.Run()
-	default:
-		cmn.Assert(false)
-	}
-	return nil
-}
-
-func (t *targetrunner) validateETLBckTxn(bckFrom *cluster.Bck, msg *aisMsg) (etlMsg *etl.OfflineBckMsg, err error) {
-	if etlMsg, err = etl.ParseOfflineBckMsg(msg.Value); err != nil {
-		return nil, err
+	if dp, err = etl.NewOfflineDataProvider(etlMsg); err != nil {
+		return nil
 	}
 
-	if cs := fs.GetCapStatus(); cs.Err != nil {
-		return nil, cs.Err
-	}
-	if err = t.coExists(bckFrom, msg); err != nil {
-		return
-	}
-	bmd := t.owner.bmd.get()
-	if _, present := bmd.Get(bckFrom); !present {
-		return nil, cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
-	}
-	return
+	return t.copyBucket(c, dp)
 }
 
 //////////////

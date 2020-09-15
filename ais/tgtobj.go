@@ -996,6 +996,7 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cmn.CksumHash) s
 /////////////////
 
 func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied bool, err error) {
+	cmn.Assert(coi.DP == nil)
 	si := coi.t.si
 	if !coi.localOnly {
 		smap := coi.t.owner.smap.Get()
@@ -1018,8 +1019,8 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 
 	if si.ID() != coi.t.si.ID() {
 		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si, DM: coi.DM, Locked: true}
-		copied, err := coi.putRemote(lom, params) // NOTE: lom.Unlock inside
-		return copied, err
+		copied, _, err = coi.putRemote(lom, params) // NOTE: lom.Unlock inside
+		return
 	}
 
 	if !lom.TryUpgradeLock() {
@@ -1050,7 +1051,8 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 
 	// If before initializing the `dst` all mountpaths would be removed except
 	// the one on which the `lom` is placed then both `lom` and `dst` will have
-	// the same FQN in which case we should not copy.
+	// the same FQN in which case we should not copy. The exeception is when DP
+	// is not nil, meaning that content of a destination object can be different.
 	if lom.FQN == dst.FQN {
 		return
 	}
@@ -1063,28 +1065,79 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 		return
 	}
 
-	dst, err = lom.CopyObject(dst.FQN, coi.Buf)
-	if err == nil {
+	if dst, err = lom.CopyObject(dst.FQN, coi.Buf); err == nil {
 		copied = true
 		dst.ReCache()
 		if coi.finalize {
 			coi.t.putMirror(dst)
 		}
 	}
+
 	return
 }
 
+/////////////////
+// COPY READER //
+/////////////////
+
+// copyReader puts a new object to a cluster, according to a reader taken from coi.DP.Reader(lom) The reader returned
+// from coi.DP is responsible for any locking or source LOM, if necessary. If the reader doesn't take any locks, it has
+// to consider object content changing in the middle of copying.
+func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
+	cmn.Assert(coi.DP != nil)
+	var (
+		si = coi.t.si
+
+		reader cmn.ReadOpenCloser
+		hdrLOM *cluster.LOM
+	)
+
+	if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
+		return
+	}
+
+	if si.ID() != coi.t.si.ID() {
+		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si, DM: coi.DM}
+		return coi.putRemote(lom, params) // NOTE: lom.Unlock inside
+	}
+
+	// local op
+	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
+	if err = dst.Init(coi.BckTo.Bck); err != nil {
+		return
+	}
+
+	if reader, hdrLOM, err = coi.DP.Reader(lom); err != nil {
+		return false, 0, err
+	}
+	params := cluster.PutObjectParams{
+		Reader:       reader,
+		WorkFQN:      fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "cpy-dp"),
+		WithFinalize: true,
+		RecvType:     cluster.Migrated,
+	}
+
+	if err := coi.t.PutObject(dst, params); err != nil {
+		return false, 0, err
+	}
+	return true, hdrLOM.Size(), err
+}
+
 // PUT object onto designated target
-func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (copied bool, err error) {
-	var file *cmn.FileHandle // Closed by `SendTo()`
-	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
-		return false, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
+func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (copied bool, size int64, err error) {
+	if coi.DP == nil {
+		var file *cmn.FileHandle // Closed by `SendTo()`
+		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
+			return false, 0, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
+		}
+		params.Reader = file
+		params.HdrMeta = lom
+	} else if params.Reader, params.HdrMeta, err = coi.DP.Reader(lom); err != nil {
+		return false, 0, err
 	}
-	params.Reader = file
 	params.BckTo = coi.BckTo
-	err = coi.t.SendTo(lom, params)
-	if err != nil {
-		return false, err
+	if err := coi.t.SendTo(lom, params); err != nil {
+		return false, 0, err
 	}
-	return true, nil
+	return true, params.HdrMeta.Size(), nil
 }
