@@ -6,8 +6,6 @@ package ais
 
 import (
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -698,37 +696,6 @@ func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
 }
 
 //
-// streaming receive via transport.DataMover
-//
-
-func (t *targetrunner) recvObj(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-	defer cmn.DrainReader(objReader)
-	lom := &cluster.LOM{T: t, ObjName: hdr.ObjName}
-	if err := lom.Init(hdr.Bck); err != nil {
-		glog.Error(err)
-		return
-	}
-	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
-	lom.SetVersion(hdr.ObjAttrs.Version)
-
-	params := cluster.PutObjectParams{
-		Reader:       ioutil.NopCloser(objReader),
-		WorkFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
-		RecvType:     cluster.Migrated,
-		Cksum:        cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
-		Started:      time.Now(),
-		WithFinalize: true,
-	}
-	if err := t.PutObject(lom, params); err != nil {
-		glog.Error(err)
-	}
-}
-
-//
 // notifications
 //
 
@@ -747,7 +714,7 @@ func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string) (*transport
 		Compression: rebcfg.Compression,     // TODO: define separately
 		Multiplier:  int(rebcfg.Multiplier), // ditto
 	}
-	dm, err := transport.NewDataMover(c.t, recvObjTrname+"/"+uuid, c.t.recvObj, dmExtra)
+	dm, err := transport.NewDataMover(c.t, recvObjTrname+"_"+uuid, c.t._recvObjDM, dmExtra)
 	if err != nil {
 		return nil, err
 	}

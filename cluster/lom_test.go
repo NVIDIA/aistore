@@ -356,7 +356,7 @@ var _ = Describe("LOM", func() {
 					Expect(cksum).To(BeEquivalentTo(dummyCksm))
 				})
 
-				It("should recompute checksum and not store anywhere", func() {
+				It("should compute missing checksum", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
 					expectedChecksum := getTestFileHash(localFQN)
 
@@ -365,8 +365,8 @@ var _ = Describe("LOM", func() {
 					cksumType, cksumValue := cksum.Get()
 					Expect(cksumType).To(BeEquivalentTo(cmn.ChecksumXXHash))
 					Expect(cksumValue).To(BeEquivalentTo(expectedChecksum))
+					Expect(lom.Cksum().Equal(cksum)).To(BeTrue())
 
-					Expect(lom.Cksum()).To(BeNil())
 					newLom := NewBasicLom(lom.FQN, tMock)
 					err = newLom.Load(false)
 					Expect(err).NotTo(HaveOccurred())

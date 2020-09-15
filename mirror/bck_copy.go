@@ -6,6 +6,7 @@ package mirror
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -48,15 +49,17 @@ func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *
 }
 
 func (r *XactBckCopy) Run() (err error) {
-	// TODO r.dm.Open
-	mpathCount := r.runJoggers()
+	r.dm.Open()
 
-	// TODO -- FIXME: quiesce first
-	// r.dm.Close()
-	// r.dm.UnregRecv()
+	mpathCount := r.runJoggers()
 
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
 	err = r.xactBckBase.waitDone(mpathCount)
+
+	time.Sleep(2 * time.Second) // TODO -- FIXME: quiesce
+	r.dm.Close()
+	r.dm.UnregRecv()
+
 	r.Finish(err)
 	return
 }
@@ -117,7 +120,7 @@ func (j *bccJogger) copyObject(lom *cluster.LOM) error {
 	)
 	if copied {
 		j.parent.ObjectsInc()
-		j.parent.BytesAdd(lom.Size() + lom.Size())
+		j.parent.BytesAdd(lom.Size() + lom.Size()) // FIXME: depends on whether local <-> remote
 		j.num++
 		if (j.num % throttleNumObjects) == 0 {
 			if cs := fs.GetCapStatus(); cs.Err != nil {

@@ -49,7 +49,7 @@ func (*TargetMock) EvictObject(_ *LOM) error                                    
 func (*TargetMock) CopyObject(_ *LOM, _ CopyObjectParams, _ ...bool) (bool, error) { return false, nil }
 func (*TargetMock) GetCold(_ context.Context, _ *LOM, _ bool) (error, int)         { return nil, http.StatusOK }
 func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)                  { return nil, nil }
-func (*TargetMock) SendTo(_ SendToParams) error                                    { return nil }
+func (*TargetMock) SendTo(_ *LOM, _ SendToParams) error                            { return nil }
 func (*TargetMock) GetDB() dbdriver.Driver                                         { return nil }
 func (*TargetMock) GetFSPRG() fs.PathRunGroup                                      { return nil }
 func (*TargetMock) Cloud(_ *Bck) CloudProvider                                     { return nil }

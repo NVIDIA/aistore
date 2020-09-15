@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"strings"
 	"time"
 
@@ -124,25 +123,21 @@ func (r *BucketXact) transformAndPut(entry *cmn.BucketEntry) error {
 		return err
 	}
 
-	if !r.t.Snode().Equals(destTarget) {
-		// Send object to a different target
-		header := make(http.Header, 1)
-		header.Add(cmn.HeaderContentLength, fmt.Sprintf("%d", length))
-		params := cluster.SendToParams{
-			Reader:    body,
-			BckTo:     r.bckTo,
-			ObjNameTo: newObjName,
-			Header:    header,
-			Tsi:       destTarget,
-		}
-		return r.t.SendTo(params)
-	}
-
-	// We have luck. Save object locally.
 	lom := &cluster.LOM{T: r.t, ObjName: newObjName}
 	err = lom.Init(r.bckTo.Bck)
 	if err != nil {
 		return err
+	}
+	lom.SetSize(length)
+
+	if !r.t.Snode().Equals(destTarget) {
+		params := cluster.SendToParams{
+			Reader:    cmn.NopOpener(body), // no reopening when unicast
+			BckTo:     r.bckTo,
+			ObjNameTo: newObjName,
+			Tsi:       destTarget,
+		}
+		return r.t.SendTo(lom, params)
 	}
 
 	// PUT object locally.

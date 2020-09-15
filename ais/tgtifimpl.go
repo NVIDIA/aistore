@@ -8,11 +8,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/cloud"
@@ -25,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -157,21 +160,89 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 // Send params.Reader to a given target directly.
 // Header should be populated with content length, checksum, version, atime.
 // Reader is closed always, even on errors.
-func (t *targetrunner) SendTo(params cluster.SendToParams) error {
+func (t *targetrunner) SendTo(lom *cluster.LOM, params cluster.SendToParams) error {
 	debug.Assert(!t.Snode().Equals(params.Tsi))
 
-	query := url.Values{}
-	query = cmn.AddBckToQuery(query, params.BckTo.Bck)
+	if params.DM != nil {
+		return _sendObjDM(lom, params)
+	}
+	err := t._sendPUT(lom, params)
+	if params.Locked {
+		lom.Unlock(false)
+	}
+	return err
+}
+
+//
+// streaming send/receive via transport.DataMover
+//
+
+func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
+	cb := func(hdr transport.Header, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
+		lom = (*cluster.LOM)(lomptr)
+		if params.Locked {
+			lom.Unlock(false)
+		}
+		if err != nil {
+			glog.Errorf("failed to send %s => %s @ %s, err: %v", lom, params.BckTo, params.Tsi, err)
+		}
+	}
+	hdr := transport.Header{}
+	hdr.FromLOM(lom, nil)
+	hdr.Bck = params.BckTo.Bck
+	hdr.ObjName = params.ObjNameTo
+	o := transport.Obj{Hdr: hdr, Callback: cb, CmplPtr: unsafe.Pointer(lom)}
+	dm := params.DM.(*transport.DataMover) // TODO -- FIXME
+	err := dm.Send(o, params.Reader, params.Tsi)
+	if err != nil {
+		if params.Locked {
+			lom.Unlock(false)
+		}
+		glog.Error(err)
+	}
+	return err
+}
+
+func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	defer cmn.DrainReader(objReader)
+	lom := &cluster.LOM{T: t, ObjName: hdr.ObjName}
+	if err := lom.Init(hdr.Bck); err != nil {
+		glog.Error(err)
+		return
+	}
+	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+	lom.SetVersion(hdr.ObjAttrs.Version)
+
+	params := cluster.PutObjectParams{
+		Reader:       ioutil.NopCloser(objReader),
+		WorkFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
+		RecvType:     cluster.Migrated,
+		Cksum:        cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Started:      time.Now(),
+		WithFinalize: true,
+	}
+	if err := t.PutObject(lom, params); err != nil {
+		glog.Error(err)
+	}
+}
+
+func (t *targetrunner) _sendPUT(lom *cluster.LOM, params cluster.SendToParams) error {
+	var (
+		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
+		hdr   = lom.ToHTTPHdr(nil)
+	)
+	hdr.Set(cmn.HeaderPutterID, t.si.ID())
 	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
-
-	params.Header.Set(cmn.HeaderPutterID, t.si.ID())
-
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetworkIntraData),
 		Path:   cmn.URLPath(cmn.Version, cmn.Objects, params.BckTo.Name, params.ObjNameTo),
 		Query:  query,
-		Header: params.Header,
+		Header: hdr,
 		BodyR:  params.Reader,
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)

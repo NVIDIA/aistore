@@ -675,7 +675,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	var (
 		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 	)
-	lom.ParseHdr(resp.Header)
+	lom.FromHTTPHdr(resp.Header)
 	poi := &putObjInfo{
 		t:        goi.t,
 		lom:      lom,
@@ -1017,9 +1017,8 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 	}
 
 	if si.ID() != coi.t.si.ID() {
-		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si}
-		copied, err := coi.putRemote(lom, params)
-		lom.Unlock(false)
+		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si, DM: coi.DM, Locked: true}
+		copied, err := coi.putRemote(lom, params) // NOTE: lom.Unlock inside
 		return copied, err
 	}
 
@@ -1083,8 +1082,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 	}
 	params.Reader = file
 	params.BckTo = coi.BckTo
-	params.Header = lom.PopulateHdr(nil)
-	err = coi.t.SendTo(params)
+	err = coi.t.SendTo(lom, params)
 	if err != nil {
 		return false, err
 	}

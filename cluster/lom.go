@@ -145,9 +145,13 @@ func (lom *LOM) CloneCopiesMd() int {
 	return num
 }
 
-func (lom *LOM) PopulateHdr(hdr http.Header) http.Header {
+// see also: transport.HdrFromLom()
+func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
 	if hdr == nil {
 		hdr = make(http.Header, 4)
+	}
+	if lom.Size() > 0 {
+		hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(lom.Size(), 10))
 	}
 	if lom.Cksum() != nil {
 		if ty, val := lom.Cksum().Get(); ty != cmn.ChecksumNone {
@@ -166,7 +170,7 @@ func (lom *LOM) PopulateHdr(hdr http.Header) http.Header {
 	}
 	return hdr
 }
-func (lom *LOM) ParseHdr(hdr http.Header) {
+func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 	// NOTE: We never set the `Cksum` from the header
 	//  (although we send it) - it should be computed.
 
@@ -616,6 +620,7 @@ func (lom *LOM) ComputeCksumIfMissing() (cksum *cmn.Cksum, err error) {
 	cksumHash, err = lom.ComputeCksum()
 	if cksumHash != nil && err == nil {
 		cksum = cksumHash.Clone()
+		lom.SetCksum(cksum)
 	}
 	return
 }

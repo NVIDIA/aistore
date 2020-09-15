@@ -77,11 +77,12 @@ type (
 		DM    DataMover
 	}
 	SendToParams struct {
-		Reader    io.ReadCloser
+		Reader    cmn.ReadOpenCloser
 		BckTo     *Bck
 		ObjNameTo string
-		Header    http.Header
 		Tsi       *Snode
+		DM        DataMover
+		Locked    bool
 	}
 	PromoteFileParams struct {
 		SrcFQN    string
@@ -112,9 +113,9 @@ type Target interface {
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
-	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
-	SendTo(params SendToParams) error
+	SendTo(lom *LOM, params SendToParams) error
 
+	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
 	GetGFN(gfnType GFNType) GFN
 	GetXactRegistry() XactRegistry
 	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)

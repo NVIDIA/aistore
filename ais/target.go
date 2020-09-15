@@ -1049,7 +1049,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 				http.StatusNotFound)
 			return
 		}
-		lom.PopulateHdr(hdr)
+		lom.ToHTTPHdr(hdr)
 	} else {
 		var objMeta cmn.SimpleKVs
 		objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(context.Background(), lom)
@@ -1293,7 +1293,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		cksumValue = header.Get(cmn.HeaderObjCksumVal)
 		recvType   = r.URL.Query().Get(cmn.URLParamRecvType)
 	)
-	lom.ParseHdr(header) // TODO: check that values parsed here are not coming from the user
+	lom.FromHTTPHdr(header) // TODO: check that values parsed here are not coming from the user
 	poi := &putObjInfo{
 		started:      started,
 		t:            t,

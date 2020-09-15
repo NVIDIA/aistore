@@ -2038,6 +2038,7 @@ func TestCopyBucketAbort(t *testing.T) {
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
 	defer func() {
 		tutils.DestroyBucket(t, m.proxyURL, srcBck)
+		time.Sleep(2 * time.Second)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck)
 	}()
 

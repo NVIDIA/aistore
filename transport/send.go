@@ -22,6 +22,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -776,4 +777,20 @@ ex:
 		err = io.EOF
 	}
 	return
+}
+
+//
+// misc ---------------------------
+//
+
+func (hdr Header) FromLOM(lom *cluster.LOM, opaque []byte) {
+	hdr.Bck = lom.Bck().Bck
+	hdr.ObjName = lom.ObjName
+	hdr.Opaque = opaque
+	hdr.ObjAttrs.Size = lom.Size()
+	hdr.ObjAttrs.Atime = lom.AtimeUnix()
+	if lom.Cksum() != nil {
+		hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = lom.Cksum().Get()
+	}
+	hdr.ObjAttrs.Version = lom.Version()
 }
