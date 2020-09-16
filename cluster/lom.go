@@ -118,16 +118,9 @@ func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
 func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
-// IsMirror compares if the LOMs are the mirror copies of each other.
-func (lom *LOM) IsMirror(dst *LOM) bool {
-	return lom.MirrorConf().Enabled &&
-		lom.ObjName == dst.ObjName &&
-		lom.Bck().Equal(dst.Bck(), true /* must have same BID*/, true /* same backend */)
-}
-
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
-	if lom.IsMirror(from) {
+	if lom.isMirror(from) {
 		lom.setCopiesMd(from.FQN, from.ParsedFQN.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
 			lom.addCopyMd(fqn, mpathInfo)
@@ -218,12 +211,22 @@ func (lom *LOM) GetCopies() fs.MPI {
 	return lom.md.copies
 }
 
+// given an existing (on-disk) object, determines whether it is a _copy_
+// (compare with isMirror below)
 func (lom *LOM) IsCopy() bool {
 	if lom.IsHRW() {
 		return false
 	}
 	_, ok := lom.md.copies[lom.FQN]
 	return ok
+}
+
+// determines whether the two LOM _structures_ represent objects that must be _copies_ of each other
+// (compare with IsCopy above)
+func (lom *LOM) isMirror(dst *LOM) bool {
+	return lom.MirrorConf().Enabled &&
+		lom.ObjName == dst.ObjName &&
+		lom.Bck().Equal(dst.Bck(), true /* must have same BID*/, true /* same backend */)
 }
 
 func (lom *LOM) setCopiesMd(copyFQN string, mpi *fs.MountpathInfo) {
@@ -405,15 +408,14 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}
-	if lom.IsMirror(dst) {
+	if lom.isMirror(dst) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
 				if errRemove := os.Remove(dst.FQN); errRemove != nil {
 					glog.Errorf("nested err: %v", errRemove)
 				}
 			}
-			// `lom.syncMetaWithCopies()` may have made changes so need to
-			// persist these changes.
+			// `lom.syncMetaWithCopies()` may have made changes notwithstanding
 			if errPersist := lom.Persist(); errPersist != nil {
 				glog.Errorf("nested err: %v", errPersist)
 			}

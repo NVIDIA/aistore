@@ -339,6 +339,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 	return
 }
 
+// TODO: unify with ActRenameObject (refactor)
 func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LOM, err error) {
 	lom := &cluster.LOM{T: t, ObjName: params.ObjName}
 	if err = lom.Init(params.Bck.Bck); err != nil {

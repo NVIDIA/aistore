@@ -1280,8 +1280,8 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		if !bck.IsAIS() {
-			p.invalmsghdlrf(w, r, "%q is not supported for Cloud buckets: %s", msg.Action, bck)
+		if bck.IsRemote() {
+			p.invalmsghdlrf(w, r, "%q is not supported for remote buckets (%s)", msg.Action, bck)
 			return
 		}
 		if err = bck.Allow(cmn.AccessObjRENAME); err != nil {

@@ -1393,6 +1393,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 // RENAME OBJECT //
 ///////////////////
 
+// TODO: unify with PromoteFile (refactor)
 func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
@@ -1410,14 +1411,13 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		return
 	}
 	if lom.Bck().IsRemote() {
-		t.invalmsghdlrf(w, r, "%s: cannot rename object from remote bucket", lom)
+		t.invalmsghdlrf(w, r, "%s: cannot rename object %s from a remote bucket", t.si, lom)
 		return
 	}
 	if lom.Bck().Props.EC.Enabled {
-		t.invalmsghdlrf(w, r, "%s: cannot rename erasure-coded object", lom)
+		t.invalmsghdlrf(w, r, "%s: cannot rename erasure-coded object %s", t.si, lom)
 		return
 	}
-
 	buf, slab := t.gmm.Alloc()
 	coi := &copyObjInfo{
 		CopyObjectParams: cluster.CopyObjectParams{
@@ -1434,15 +1434,10 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	// TODO: There is potential race between renaming and removing previous object.
-	//  Consider example:
-	//   1. Rename object (obj1 => obj2)
-	//   2. Come here and at the same time someone updates the obj1 with PUT.
-	//   3. Now obj1 will be deleted which is not expected.
 	if copied {
 		lom.Lock(true)
 		if err = lom.Remove(); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			glog.Warningf("%s: failed to delete renamed object source %s: %v", t.si, lom, err)
 		}
 		lom.Unlock(true)
 	}
