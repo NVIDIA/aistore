@@ -79,7 +79,6 @@ var _ = Describe("LOM", func() {
 				bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}},
 			),
-
 			cluster.NewBck(
 				bucketLocalC, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{
@@ -590,11 +589,11 @@ var _ = Describe("LOM", func() {
 			desiredVersion = "9002"
 		)
 
-		findMpath := func(bucket string, defaultLoc bool, ignoreFQNs ...string) string {
+		findMpath := func(objectName, bucket string, defaultLoc bool, ignoreFQNs ...string) string {
 		OuterLoop:
 			for _, mi := range mis {
 				bck := cmn.Bck{Name: bucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-				fqn := mi.MakePathFQN(bck, fs.ObjectType, testObjectName)
+				fqn := mi.MakePathFQN(bck, fs.ObjectType, objectName)
 				for _, ignoreFQN := range ignoreFQNs {
 					if fqn == ignoreFQN {
 						continue OuterLoop
@@ -614,19 +613,21 @@ var _ = Describe("LOM", func() {
 
 		mirrorFQNs := []string{
 			// Bucket with redundancy
-			findMpath(bucketLocalC, true /*defaultLoc*/),
-			findMpath(bucketLocalC, false /*defaultLoc*/),
+			findMpath(testObjectName, bucketLocalC, true /*defaultLoc*/),
+			findMpath(testObjectName, bucketLocalC, false /*defaultLoc*/),
 		}
 		// Add another mirrorFQN but it must be different than the second one.
 		mirrorFQNs = append(
 			mirrorFQNs,
-			findMpath(bucketLocalC, false /*defaultLoc*/, mirrorFQNs[1]),
+			findMpath(testObjectName, bucketLocalC, false /*defaultLoc*/, mirrorFQNs[1]),
 		)
+		// Object with different name as default one.
+		renamedObjFQN := findMpath("other.txt", bucketLocalC, true /*defaultLoc*/)
 
 		copyFQNs := []string{
 			// Bucket with no redundancy
-			findMpath(bucketLocalB, true /*defaultLoc*/),
-			findMpath(bucketLocalB, false /*defaultLoc*/),
+			findMpath(testObjectName, bucketLocalB, true /*defaultLoc*/),
+			findMpath(testObjectName, bucketLocalB, false /*defaultLoc*/),
 		}
 
 		prepareLOM := func(fqn string) (lom *cluster.LOM) {
@@ -813,6 +814,57 @@ var _ = Describe("LOM", func() {
 				// Check that the content of the copy is correct.
 				copyObjHash := getTestFileHash(nonMirroredLOM.FQN)
 				Expect(copyObjHash).To(BeEquivalentTo(expectedHash))
+			})
+
+			// This test case can happen when we rename object to some different name.
+			It("should not count object as mirror/copy if new object has different name", func() {
+				lom := prepareLOM(mirrorFQNs[0])
+				copyLOM := prepareCopy(lom, renamedObjFQN)
+				expectedHash := getTestFileHash(lom.FQN)
+
+				// Check that no copies were added to metadata.
+				Expect(lom.IsCopy()).To(BeFalse())
+				Expect(lom.IsHRW()).To(BeTrue())
+				Expect(lom.HasCopies()).To(BeFalse())
+				Expect(lom.NumCopies()).To(Equal(1))
+				Expect(lom.GetCopies()).To(BeNil())
+
+				// Check copy created.
+				Expect(copyLOM.FQN).NotTo(Equal(lom.FQN))
+				_, cksumValue := copyLOM.Cksum().Get()
+				Expect(cksumValue).To(Equal(expectedHash))
+				Expect(copyLOM.Version()).To(Equal(desiredVersion)) // TODO: ???
+				Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(copyLOM.IsHRW()).To(BeTrue())
+				Expect(copyLOM.IsCopy()).To(BeFalse())
+				Expect(copyLOM.HasCopies()).To(BeFalse())
+				Expect(copyLOM.NumCopies()).To(Equal(1))
+				Expect(copyLOM.GetCopies()).To(BeNil())
+			})
+
+			// This test case can happen when user adds new mountpath and all existing
+			// copies become non-HRW and now we need to create a HRW object.
+			It("should copy object if mirroring the non-HRW object to HRW object", func() {
+				copyLOM := prepareLOM(mirrorFQNs[1])
+				// Recreate main/HRW object from the copy.
+				lom := prepareCopy(copyLOM, mirrorFQNs[0])
+
+				// Check that HRW object was created correctly.
+				Expect(lom.IsCopy()).To(BeFalse())
+				Expect(lom.HasCopies()).To(BeTrue())
+				Expect(lom.NumCopies()).To(Equal(2))
+				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
+				Expect(lom.Version()).To(Equal(desiredVersion))
+				Expect(lom.Size()).To(BeEquivalentTo(testFileSize))
+
+				// Check that copy from which HRW object was created is also updated.
+				Expect(copyLOM.FQN).NotTo(Equal(lom.FQN))
+				Expect(copyLOM.Version()).To(Equal(desiredVersion))
+				Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+				Expect(copyLOM.IsCopy()).To(BeTrue())
+				Expect(copyLOM.HasCopies()).To(BeTrue())
+				Expect(copyLOM.NumCopies()).To(Equal(lom.NumCopies()))
+				Expect(copyLOM.GetCopies()).To(Equal(lom.GetCopies()))
 			})
 		})
 

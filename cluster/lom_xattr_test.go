@@ -68,11 +68,19 @@ var _ = Describe("LOM Xattributes", func() {
 			// Bucket needs to have checksum enabled
 			localFQN = mix.MakePathFQN(localBck, fs.ObjectType, testObjectName)
 
-			fqns = []string{
-				copyMpath + "/copy/fqn",
-				copyMpath + "/other/copy/fqn",
-			}
+			fqns []string
 		)
+
+		BeforeEach(func() {
+			fqns = []string{
+				copyMpathInfo.MakePathFQN(localBck, fs.ObjectType, "copy/fqn"),
+				copyMpathInfo.MakePathFQN(localBck, fs.ObjectType, "other/copy/fqn"),
+			}
+
+			for _, fqn := range fqns {
+				_ = filePut(fqn, testFileSize, tMock)
+			}
+		})
 
 		Describe("Persist", func() {
 			It("should save correct meta to disk", func() {

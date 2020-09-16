@@ -118,10 +118,16 @@ func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
 func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
+// IsMirror compares if the LOMs are the mirror copies of each other.
+func (lom *LOM) IsMirror(dst *LOM) bool {
+	return lom.MirrorConf().Enabled &&
+		lom.ObjName == dst.ObjName &&
+		lom.Bck().Equal(dst.Bck(), true /* must have same BID*/, true /* same backend */)
+}
+
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
-	bckEq := lom.Bck().Equal(from.Bck(), true /* must have same BID*/, true /* same backend */)
-	if lom.MirrorConf().Enabled && bckEq {
+	if lom.IsMirror(from) {
 		lom.setCopiesMd(from.FQN, from.ParsedFQN.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
 			lom.addCopyMd(fqn, mpathInfo)
@@ -309,7 +315,7 @@ func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 // NOTE: uname for LOM must be already locked.
 func (lom *LOM) syncMetaWithCopies() (err error) {
 	var copyFQN string
-	if !lom.IsHRW() || !lom.HasCopies() { // must have copies and be at the default location
+	if !lom.HasCopies() {
 		return nil
 	}
 	for {
@@ -399,15 +405,15 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}
-	bckEq := lom.Bck().Equal(dst.Bck(), true /* must have same BID*/, true /* same backend */)
-	if lom.IsHRW() && lom.MirrorConf().Enabled && bckEq {
+	if lom.IsMirror(dst) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
 				if errRemove := os.Remove(dst.FQN); errRemove != nil {
 					glog.Errorf("nested err: %v", errRemove)
 				}
 			}
-			// as lom.syncMetaWithCopies() may have made changes
+			// `lom.syncMetaWithCopies()` may have made changes so need to
+			// persist these changes.
 			if errPersist := lom.Persist(); errPersist != nil {
 				glog.Errorf("nested err: %v", errPersist)
 			}

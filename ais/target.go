@@ -1419,15 +1419,26 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 
 	buf, slab := t.gmm.Alloc()
-	coi := &copyObjInfo{t: t, localOnly: false, finalize: true}
-	coi.BckTo = lom.Bck()
-	coi.Buf = buf
+	coi := &copyObjInfo{
+		CopyObjectParams: cluster.CopyObjectParams{
+			BckTo: lom.Bck(),
+			Buf:   buf,
+		},
+		t:         t,
+		localOnly: false,
+		finalize:  true,
+	}
 	copied, err := coi.copyObject(lom, msg.Name /* new object name */)
 	slab.Free(buf)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
+	// TODO: There is potential race between renaming and removing previous object.
+	//  Consider example:
+	//   1. Rename object (obj1 => obj2)
+	//   2. Come here and at the same time someone updates the obj1 with PUT.
+	//   3. Now obj1 will be deleted which is not expected.
 	if copied {
 		lom.Lock(true)
 		if err = lom.Remove(); err != nil {
