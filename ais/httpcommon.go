@@ -318,8 +318,8 @@ func (server *netServer) shutdown() {
 ////////////////
 
 func (h *httprunner) Snode() *cluster.Snode      { return h.si }
-func (h *httprunner) GetBowner() cluster.Bowner  { return h.owner.bmd }
-func (h *httprunner) GetSowner() cluster.Sowner  { return h.owner.smap }
+func (h *httprunner) Bowner() cluster.Bowner     { return h.owner.bmd }
+func (h *httprunner) Sowner() cluster.Sowner     { return h.owner.smap }
 func (h *httprunner) ClusterStarted() bool       { return h.startup.cluster.Load() }
 func (h *httprunner) NodeStarted() bool          { return !h.startup.node.time.Load().IsZero() }
 func (h *httprunner) NodeStartedTime() time.Time { return h.startup.node.time.Load() }

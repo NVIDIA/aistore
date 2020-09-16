@@ -67,7 +67,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	cmn.Assert(filepath.IsAbs(fqn))
 
 	bck := cluster.NewBckEmbed(r.Bck())
-	if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+	if err := bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
 		return err
 	}
 	objName := r.params.ObjName

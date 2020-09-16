@@ -191,7 +191,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, nodes map[string]*Metadata) error {
 	var (
 		writer *memsys.SGL
-		mm     = c.parent.t.GetSmallMMSA()
+		mm     = c.parent.t.SmallMMSA()
 	)
 	// try read a replica from targets one by one until the replica is got
 	for node := range nodes {
@@ -240,7 +240,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 	var (
 		writer *os.File
 		n      int64
-		mm     = c.parent.t.GetSmallMMSA()
+		mm     = c.parent.t.SmallMMSA()
 	)
 	// try read a replica from targets one by one until the replica is got
 	objFQN := req.LOM.FQN
@@ -361,7 +361,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 
 	iReq := c.parent.newIntraReq(reqGet, meta)
 	iReq.isSlice = true
-	mm := c.parent.t.GetSmallMMSA()
+	mm := c.parent.t.SmallMMSA()
 	request := iReq.NewPack(mm)
 	hdr := transport.Header{
 		Bck:     req.LOM.Bck().Bck,

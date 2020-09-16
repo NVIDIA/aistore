@@ -93,7 +93,7 @@ func newAborter(t cluster.Target, uuid string) *Aborter {
 	return &Aborter{
 		uuid:        uuid,
 		t:           t,
-		currentSmap: t.GetSowner().Get(),
+		currentSmap: t.Sowner().Get(),
 	}
 }
 
@@ -107,7 +107,7 @@ func (e *Aborter) ListenSmapChanged() {
 	go func() {
 		e.mtx.Lock()
 		defer e.mtx.Unlock()
-		newSmap := e.t.GetSowner().Get()
+		newSmap := e.t.Sowner().Get()
 
 		if newSmap.Version <= e.currentSmap.Version {
 			return
@@ -275,7 +275,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	if err = reg.put(msg.ID, c); err != nil {
 		return
 	}
-	t.GetSowner().Listeners().Reg(c)
+	t.Sowner().Listeners().Reg(c)
 	return
 }
 
@@ -332,7 +332,7 @@ func Stop(t cluster.Target, id string) error {
 	)
 
 	// Abort any running offline ETLs.
-	t.GetXactRegistry().AbortAll(cmn.ActETLBucket)
+	t.XactRegistry().AbortAll(cmn.ActETLBucket)
 
 	c, err := GetCommunicator(id)
 	if err != nil {
@@ -346,7 +346,7 @@ func Stop(t cluster.Target, id string) error {
 	}
 
 	if c := reg.removeByUUID(id); c != nil {
-		t.GetSowner().Listeners().Unreg(c)
+		t.Sowner().Listeners().Unreg(c)
 	}
 
 	return nil

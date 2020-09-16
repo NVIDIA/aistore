@@ -422,14 +422,14 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 		bck      = cluster.NewBckEmbed(hdr.Bck)
 		needSave = req.md.SliceID == 0 // full object always saved
 	)
-	if err := bck.Init(reb.t.GetBowner(), reb.t.Snode()); err != nil {
+	if err := bck.Init(reb.t.Bowner(), reb.t.Snode()); err != nil {
 		return err
 	}
 	uname := bck.MakeUname(hdr.ObjName)
 	if !needSave {
 		// slice is saved only if this target is not "main" one.
 		// Main one receives slices as well but it uses them only to rebuild
-		tgt, err := cluster.HrwTarget(uname, reb.t.GetSowner().Get())
+		tgt, err := cluster.HrwTarget(uname, reb.t.Sowner().Get())
 		if err != nil {
 			return err
 		}
@@ -501,7 +501,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		return nil
 	}
 	size := cmn.MinI64(obj.objSize, cmn.MiB)
-	mmsa := reb.t.GetMMSA()
+	mmsa := reb.t.MMSA()
 	ct.sgl = mmsa.NewSGL(size)
 	ct.meta = req.md
 	buf, slab := mmsa.Alloc(size)
@@ -516,7 +516,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 		stats.NamedVal64{Name: stats.RebRxSize, Value: n},
 	)
 	if hdr.ObjAttrs.CksumValue != "" {
-		cksum, err := checksumSlice(memsys.NewReader(ct.sgl), ct.sgl.Size(), hdr.ObjAttrs.CksumType, reb.t.GetMMSA())
+		cksum, err := checksumSlice(memsys.NewReader(ct.sgl), ct.sgl.Size(), hdr.ObjAttrs.CksumType, reb.t.MMSA())
 		if err != nil {
 			return fmt.Errorf("failed to checksum slice %d for %s/%s: %v", sliceID, hdr.Bck, hdr.ObjName, err)
 		}
@@ -638,7 +638,7 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 			// default must contain only "full" object
 			if ct.SliceID != 0 {
 				b := cluster.NewBckEmbed(ct.Bck)
-				if err := b.Init(reb.t.GetBowner(), reb.t.Snode()); err != nil {
+				if err := b.Init(reb.t.Bowner(), reb.t.Snode()); err != nil {
 					reb.abortRebalance()
 					return nil
 				}
@@ -678,7 +678,7 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 // is not considered as broken one even if its target is not in HRW list
 func (reb *Manager) detectBroken(md *rebArgs, res *globalCTList) {
 	reb.ec.broken = make([]*rebObject, 0)
-	bowner := reb.t.GetBowner()
+	bowner := reb.t.Bowner()
 	bmd := bowner.Get()
 
 	for _, rebBck := range res.bcks {
@@ -780,7 +780,7 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	ct, err := cluster.NewCTFromFQN(fqn, reb.t.GetBowner())
+	ct, err := cluster.NewCTFromFQN(fqn, reb.t.Bowner())
 	if err != nil {
 		return nil
 	}
@@ -818,7 +818,7 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return err
 	}
 
-	ct, err = cluster.NewCTFromFQN(fileFQN, reb.t.GetBowner())
+	ct, err = cluster.NewCTFromFQN(fileFQN, reb.t.Bowner())
 	if err != nil {
 		return nil
 	}
@@ -952,7 +952,7 @@ func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string
 
 // Moves local misplaced CT to correct mpath
 func (reb *Manager) resilverCT() error {
-	buf, slab := reb.t.GetMMSA().Alloc()
+	buf, slab := reb.t.MMSA().Alloc()
 	defer slab.Free(buf)
 	for _, act := range reb.ec.localActions {
 		if glog.FastV(4, glog.SmoduleReb) {
@@ -1290,7 +1290,7 @@ func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 		if rec.sgl != nil {
 			continue
 		}
-		rec.sgl = reb.t.GetMMSA().NewSGL(cmn.MinI64(obj.objSize, cmn.MiB))
+		rec.sgl = reb.t.MMSA().NewSGL(cmn.MinI64(obj.objSize, cmn.MiB))
 		toRequest[daemonID] = &sliceGetResp{sliceID: rec.SliceID, sgl: rec.sgl}
 	}
 	if len(toRequest) == 0 {
@@ -1664,7 +1664,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 		if rd != nil {
 			continue
 		}
-		obj.rebuildSGLs[i] = reb.t.GetMMSA().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
+		obj.rebuildSGLs[i] = reb.t.MMSA().NewSGL(cmn.MinI64(obj.sliceSize, cmn.MiB))
 		writers[i] = obj.rebuildSGLs[i]
 	}
 
@@ -1713,7 +1713,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 		if len(freeTargets) == 0 {
 			return fmt.Errorf("failed to send slice %d of %s - no free target", sliceID, obj.uid)
 		}
-		cksum, err := checksumSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize, conf.Type, reb.t.GetMMSA())
+		cksum, err := checksumSlice(memsys.NewReader(obj.rebuildSGLs[i]), obj.sliceSize, conf.Type, reb.t.MMSA())
 		if err != nil {
 			return fmt.Errorf("failed to checksum %s: %v", obj.objName, err)
 		}
@@ -1787,7 +1787,7 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 	}
 
 	bck := cluster.NewBckEmbed(obj.bck)
-	if err := bck.Init(reb.t.GetBowner(), reb.t.Snode()); err != nil {
+	if err := bck.Init(reb.t.Bowner(), reb.t.Snode()); err != nil {
 		return err
 	}
 	conf := bck.CksumConf()
@@ -2006,7 +2006,7 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 	}
 
 	b := cluster.NewBckEmbed(ct.Bck)
-	if err := b.Init(tgt.GetBowner(), tgt.Snode()); err != nil {
+	if err := b.Init(tgt.Bowner(), tgt.Snode()); err != nil {
 		return err
 	}
 	obj, ok := bck.objs[ct.ObjName]

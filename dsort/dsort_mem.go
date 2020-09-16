@@ -307,7 +307,7 @@ func (ds *dsorterMem) preShardCreation(shardName string, mpathInfo *fs.Mountpath
 	bsi := &buildingShardInfo{
 		shardName: shardName,
 	}
-	opaque := bsi.NewPack(ds.m.ctx.t.GetSmallMMSA())
+	opaque := bsi.NewPack(ds.m.ctx.t.SmallMMSA())
 	if err := ds.streams.builder.Send(transport.Obj{Hdr: transport.Header{Opaque: opaque}}, nil); err != nil {
 		return err
 	}

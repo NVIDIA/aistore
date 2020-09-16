@@ -47,7 +47,7 @@ func (reb *Manager) RebStatus(status *Status) {
 		config     = cmn.GCO.Get()
 		sleepRetry = cmn.KeepaliveRetryDuration(config)
 		rsmap      = (*cluster.Smap)(reb.smap.Load())
-		tsmap      = reb.t.GetSowner().Get()
+		tsmap      = reb.t.Sowner().Get()
 		marked     = xaction.GetRebMarked()
 	)
 	status.Aborted, status.Running = marked.Interrupted, marked.Xact != nil
@@ -187,7 +187,7 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		}
 		glog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tsi, err, code)
 		time.Sleep(sleep)
-		nver := reb.t.GetSowner().Get().Version
+		nver := reb.t.Sowner().Get().Version
 		if nver > ver {
 			return
 		}

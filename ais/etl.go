@@ -262,7 +262,7 @@ func (p *proxyrunner) listETL(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.ETLList); err != nil {
 		return
 	}
-	si, err := p.GetSowner().Get().GetRandTarget()
+	si, err := p.Sowner().Get().GetRandTarget()
 	if err != nil {
 		p.invalmsghdlrf(w, r, "failed to pick random target, err: %v", err)
 		return

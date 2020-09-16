@@ -168,7 +168,7 @@ type mncEntry struct {
 }
 
 func (e *mncEntry) Start(bck cmn.Bck) error {
-	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 	xmnc := mirror.NewXactMNC(bck, e.t, slab, e.uuid, e.copies)
 	e.xact = xmnc
@@ -181,7 +181,7 @@ func (e *mncEntry) Get() cmn.Xact { return e.xact }
 func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 	var (
 		cfg      = cmn.GCO.Get()
-		bmd      = t.GetBowner().Get()
+		bmd      = t.Bowner().Get()
 		provider = cmn.ProviderAIS
 	)
 	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
@@ -288,7 +288,7 @@ type putMirrorEntry struct {
 }
 
 func (e *putMirrorEntry) Start(_ cmn.Bck) error {
-	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
 	x, err := mirror.RunXactPut(e.lom, slab)
 
@@ -374,7 +374,7 @@ type bccEntry struct {
 }
 
 func (e *bccEntry) Start(_ cmn.Bck) error {
-	slab, err := e.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 	e.xact = mirror.NewXactBCC(e.uuid, e.bckFrom, e.bckTo, e.t, slab, e.dm)
 	return nil

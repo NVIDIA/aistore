@@ -72,7 +72,7 @@ func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *Wal
 	}
 	return &WalkInfo{
 		t:            t, // targetrunner
-		smap:         t.GetSowner().Get(),
+		smap:         t.Sowner().Get(),
 		postCallback: postCallback,
 		prefix:       msg.Prefix,
 		Marker:       msg.ContinuationToken,

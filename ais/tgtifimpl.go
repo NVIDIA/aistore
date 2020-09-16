@@ -38,10 +38,10 @@ import (
 var _ cluster.Target = &targetrunner{}
 
 func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
-func (t *targetrunner) GetMMSA() *memsys.MMSA       { return t.gmm }
-func (t *targetrunner) GetSmallMMSA() *memsys.MMSA  { return t.smm }
-func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
-func (t *targetrunner) GetDB() dbdriver.Driver      { return t.dbDriver }
+func (t *targetrunner) MMSA() *memsys.MMSA          { return t.gmm }
+func (t *targetrunner) SmallMMSA() *memsys.MMSA     { return t.smm }
+func (t *targetrunner) FSPRG() fs.PathRunGroup      { return &t.fsprg }
+func (t *targetrunner) DB() dbdriver.Driver         { return t.dbDriver }
 
 func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 	if bck.Bck.IsRemoteAIS() {
@@ -62,7 +62,7 @@ func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 	return c
 }
 
-func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
+func (t *targetrunner) GFN(gfnType cluster.GFNType) cluster.GFN {
 	switch gfnType {
 	case cluster.GFNLocal:
 		return &t.gfn.local
@@ -73,7 +73,7 @@ func (t *targetrunner) GetGFN(gfnType cluster.GFNType) cluster.GFN {
 	return nil
 }
 
-func (t *targetrunner) GetXactRegistry() cluster.XactRegistry {
+func (t *targetrunner) XactRegistry() cluster.XactRegistry {
 	return xaction.Registry
 }
 

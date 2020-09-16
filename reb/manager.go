@@ -197,7 +197,7 @@ func (reb *Manager) beginStreams() {
 
 	reb.dm.Open()
 	pushArgs := bundle.Args{Network: reb.dm.NetC(), Trname: rebPushTrname}
-	reb.pushes = bundle.NewStreams(reb.t.GetSowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
+	reb.pushes = bundle.NewStreams(reb.t.Sowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
 
 	reb.laterx.Store(false)
 	reb.inQueue.Store(0)
@@ -277,7 +277,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		var (
 			ack = &regularAck{rebID: reb.RebID(), daemonID: reb.t.Snode().ID()}
-			mm  = reb.t.GetSmallMMSA()
+			mm  = reb.t.SmallMMSA()
 		)
 		hdr.Opaque = ack.NewPack(mm)
 		hdr.ObjAttrs.Size = 0
@@ -289,7 +289,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 }
 
 func (reb *Manager) rackSentCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
-	reb.t.GetSmallMMSA().Free(hdr.Opaque)
+	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 
 func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
@@ -362,7 +362,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 			rebID: reb.rebID.Load(), batch: int(batchID),
 		}
 		hdr = transport.Header{}
-		mm  = reb.t.GetSmallMMSA()
+		mm  = reb.t.SmallMMSA()
 	)
 	hdr.Opaque = reb.encodePushReq(&req, mm)
 	// second, notify all
@@ -373,7 +373,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 }
 
 func (reb *Manager) pushSentCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
-	reb.t.GetSmallMMSA().Free(hdr.Opaque)
+	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 
 func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
@@ -485,7 +485,7 @@ func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Re
 func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 	aborted := func() (yes bool) {
 		yes = reb.xact().Aborted()
-		yes = yes || (md.smap.Version != reb.t.GetSowner().Get().Version)
+		yes = yes || (md.smap.Version != reb.t.Sowner().Get().Version)
 		return
 	}
 	if aborted() {
@@ -558,7 +558,7 @@ func (reb *Manager) abortRebalance() {
 			stage:    rebStageAbort,
 		}
 		hdr = transport.Header{}
-		mm  = reb.t.GetSmallMMSA()
+		mm  = reb.t.SmallMMSA()
 	)
 	hdr.Opaque = reb.encodePushReq(&req, mm)
 	if err := reb.pushes.Send(transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {

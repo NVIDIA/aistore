@@ -118,7 +118,7 @@ func (r *BucketXact) transformAndPut(entry *cmn.BucketEntry) error {
 	newObjName := newETLObjName(entry.Name, r.bckMsg)
 
 	// If targets membership changes, this xaction will be aborted by ETL Aborter.
-	destTarget, err := cluster.HrwTarget(r.bckTo.MakeUname(newObjName), r.t.GetSowner().Get())
+	destTarget, err := cluster.HrwTarget(r.bckTo.MakeUname(newObjName), r.t.Sowner().Get())
 	if err != nil {
 		return err
 	}

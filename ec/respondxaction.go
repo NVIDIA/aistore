@@ -31,7 +31,7 @@ type (
 
 func NewRespondXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactRespond {
 	XactCount.Inc()
-	smap, si := t.GetSowner(), t.Snode()
+	smap, si := t.Sowner(), t.Snode()
 	runner := &XactRespond{
 		xactECBase: newXactECBase(t, smap, si, bck, reqBundle, respBundle),
 	}
@@ -111,7 +111,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 			}
-			ct, err := cluster.NewCTFromBO(bck.Bck.Name, bck.Bck.Provider, objName, r.t.GetBowner(), SliceType)
+			ct, err := cluster.NewCTFromBO(bck.Bck.Name, bck.Bck.Provider, objName, r.t.Bowner(), SliceType)
 			if err != nil {
 				glog.Error(err)
 				return

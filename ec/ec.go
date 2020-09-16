@@ -236,7 +236,7 @@ var (
 )
 
 func Init(t cluster.Target, reg XactRegistry) {
-	mm = t.GetMMSA()
+	mm = t.MMSA()
 	fs.CSM.RegisterContentType(SliceType, &SliceSpec{})
 	fs.CSM.RegisterContentType(MetaType, &MetaSpec{})
 	if err := initManager(t, reg); err != nil {
@@ -351,7 +351,7 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 
 // Saves slice and its metafile
 func WriteSliceAndMeta(t cluster.Target, hdr transport.Header, data io.Reader, md []byte) error {
-	ct, err := cluster.NewCTFromBO(hdr.Bck.Name, hdr.Bck.Provider, hdr.ObjName, t.GetBowner(), SliceType)
+	ct, err := cluster.NewCTFromBO(hdr.Bck.Name, hdr.Bck.Provider, hdr.ObjName, t.Bowner(), SliceType)
 	if err != nil {
 		return err
 	}

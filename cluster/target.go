@@ -52,8 +52,8 @@ type CloudProvider interface {
 	ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int)
 }
 
-// a callback called by EC PUT jogger after the object is processed and
-// all its slices/replicas are sent to other targets
+// Callback called by EC PUT jogger after the object is processed and
+// all its slices/replicas are sent to other targets.
 type OnFinishObj = func(lom *LOM, err error)
 
 type (
@@ -69,10 +69,10 @@ type (
 		Reader       io.ReadCloser
 		WorkFQN      string
 		RecvType     RecvType
-		Cksum        *cmn.Cksum // checksum to check
+		Cksum        *cmn.Cksum // Checksum to check.
 		Started      time.Time
-		WithFinalize bool // determines if we should also finalize the object
-		SkipEncode   bool // Do not run EC encode after finalizing
+		WithFinalize bool // Determines if we should also finalize the object.
+		SkipEncode   bool // Do not run EC encode after finalizing.
 	}
 	CopyObjectParams struct {
 		BckTo *Bck
@@ -99,17 +99,19 @@ type (
 	}
 )
 
-// NOTE: For implementations, please refer to ais/tgtifimpl.go and ais/httpcommon.go
+// NOTE: For implementations, please refer to `ais/tgtifimpl.go` and `ais/httpcommon.go`.
 type Target interface {
 	Node
-	FSHC(err error, path string)
-	GetMMSA() *memsys.MMSA
-	GetSmallMMSA() *memsys.MMSA
-	GetFSPRG() fs.PathRunGroup
-	GetDB() dbdriver.Driver
-	Cloud(*Bck) CloudProvider
-	RunLRU(id string, force bool, bcks ...cmn.Bck)
 
+	// Memory related functions.
+	MMSA() *memsys.MMSA
+	SmallMMSA() *memsys.MMSA
+
+	// Cloud related functions.
+	Cloud(*Bck) CloudProvider
+	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
+
+	// Object related functions.
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(lom *LOM, params PutObjectParams) error
 	EvictObject(lom *LOM) error
@@ -119,12 +121,20 @@ type Target interface {
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 	SendTo(lom *LOM, params SendToParams) error
 
-	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
-	GetGFN(gfnType GFNType) GFN
-	GetXactRegistry() XactRegistry
-	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
-	RebalanceNamespace(si *Snode) ([]byte, int, error)
+	// File-system related functions.
+	FSHC(err error, path string)
+	RunLRU(id string, force bool, bcks ...cmn.Bck)
+
+	// Getting other interfaces.
+	FSPRG() fs.PathRunGroup
+	DB() dbdriver.Driver
+	GFN(gfnType GFNType) GFN
+	XactRegistry() XactRegistry
+
+	// Other.
 	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
+	RebalanceNamespace(si *Snode) ([]byte, int, error)
+	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
 	K8sNodeName() string
 }
 

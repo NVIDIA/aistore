@@ -335,7 +335,7 @@ func (n *notifs) init(p *proxyrunner) {
 	n.m = make(map[string]notifListener, 64)
 	n.fin = make(map[string]notifListener, 64)
 	hk.Reg(notifsName+".gc", n.housekeep, notifsHousekeepT)
-	n.p.GetSowner().Listeners().Reg(n)
+	n.p.Sowner().Listeners().Reg(n)
 }
 
 func (n *notifs) String() string { return notifsName }

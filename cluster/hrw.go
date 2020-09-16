@@ -181,7 +181,7 @@ func HrwIterMatchingObjects(t Target, bck *Bck, template cmn.ParsedTemplate, app
 	var (
 		iter   = template.Iter()
 		config = cmn.GCO.Get()
-		smap   = t.GetSowner().Get()
+		smap   = t.Sowner().Get()
 	)
 
 	for objName, hasNext := iter(); hasNext; objName, hasNext = iter() {

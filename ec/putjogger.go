@@ -209,7 +209,7 @@ func (c *putJogger) encode(req *Request) error {
 }
 
 func (c *putJogger) ctSendCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, err error) {
-	c.parent.t.GetSmallMMSA().Free(hdr.Opaque)
+	c.parent.t.SmallMMSA().Free(hdr.Opaque)
 	if err != nil {
 		glog.Errorf("failed to send o[%s/%s], err: %v", hdr.Bck, hdr.ObjName, err)
 	}
@@ -230,7 +230,7 @@ func (c *putJogger) cleanup(req *Request) error {
 		glog.Errorf("Error removing metafile %q", fqnMeta)
 	}
 
-	mm := c.parent.t.GetSmallMMSA()
+	mm := c.parent.t.SmallMMSA()
 	request := c.parent.newIntraReq(reqDel, nil).NewPack(mm)
 	hdr := transport.Header{
 		Bck:     req.LOM.Bck().Bck,

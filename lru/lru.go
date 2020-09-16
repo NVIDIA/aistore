@@ -540,7 +540,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 
 func (j *lruJ) allow() (ok bool, err error) {
 	var (
-		bowner = j.ini.T.GetBowner()
+		bowner = j.ini.T.Bowner()
 		b      = cluster.NewBckEmbed(j.bck)
 	)
 	if err = b.Init(bowner, j.ini.T.Snode()); err != nil {

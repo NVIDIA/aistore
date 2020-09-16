@@ -26,7 +26,7 @@ var (
 // buildDlObjs returns list of objects that must be downloaded by target.
 func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]dlObj, error) {
 	var (
-		smap = t.GetSowner().Get()
+		smap = t.Sowner().Get()
 		sid  = t.Snode().ID()
 	)
 

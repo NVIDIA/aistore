@@ -65,7 +65,7 @@ func (r *XactBckEncode) Run() (err error) {
 	var numjs int
 
 	bck := cluster.NewBckEmbed(r.bck)
-	if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+	if err := bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
 		return err
 	}
 	if !bck.Props.EC.Enabled {
@@ -89,7 +89,7 @@ func (r *XactBckEncode) init() (int, error) {
 			parent:    r,
 			mpathInfo: mpathInfo,
 			config:    config,
-			smap:      r.t.GetSowner().Get(),
+			smap:      r.t.Sowner().Get(),
 			daemonID:  r.t.Snode().ID(),
 			stopCh:    cmn.NewStopCh(),
 		}

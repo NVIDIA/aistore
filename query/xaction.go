@@ -109,7 +109,7 @@ func (r *ObjectsListingXact) startFromTemplate() {
 		iter   = r.query.ObjectsSource.Pt.Iter()
 		bck    = r.query.BckSource.Bck
 		config = cmn.GCO.Get()
-		smap   = r.t.GetSowner().Get()
+		smap   = r.t.Sowner().Get()
 	)
 
 	cmn.Assert(bck.IsAIS())
@@ -166,7 +166,7 @@ func (r *ObjectsListingXact) startFromBck() {
 
 	// TODO: filtering for cloud buckets is not yet supported.
 	if bck.IsCloud() && !r.msg.IsFlagSet(cmn.SelectCached) {
-		si, err := cluster.HrwTargetTask(r.ID().String(), r.t.GetSowner().Get())
+		si, err := cluster.HrwTargetTask(r.ID().String(), r.t.Sowner().Get())
 		if err != nil {
 			// TODO: should we handle it somehow?
 			return

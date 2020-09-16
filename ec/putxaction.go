@@ -34,7 +34,7 @@ func NewPutXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Str
 	XactCount.Inc()
 	availablePaths, disabledPaths := fs.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
-	smap, si := t.GetSowner(), t.Snode()
+	smap, si := t.Sowner(), t.Snode()
 	runner := &XactPut{
 		putJoggers:  make(map[string]*putJogger, totalPaths),
 		xactECBase:  newXactECBase(t, smap, si, bck, reqBundle, respBundle),

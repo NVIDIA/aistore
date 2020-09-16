@@ -85,7 +85,7 @@ func (t *bckSummaryTask) IsMountpathXact() bool { return true }
 func (t *bckSummaryTask) Run() error {
 	var (
 		buckets []*cluster.Bck
-		bmd     = t.t.GetBowner().Get()
+		bmd     = t.t.Bowner().Get()
 	)
 	if t.Bck().Name != "" {
 		buckets = append(buckets, cluster.NewBckEmbed(t.Bck()))
@@ -123,7 +123,7 @@ func (t *bckSummaryTask) Run() error {
 		return err
 	}
 
-	si, err := cluster.HrwTargetTask(t.msg.UUID, t.t.GetSowner().Get())
+	si, err := cluster.HrwTargetTask(t.msg.UUID, t.t.Sowner().Get())
 	if err != nil {
 		t.UpdateResult(nil, err)
 		return err
@@ -137,7 +137,7 @@ func (t *bckSummaryTask) Run() error {
 		go func(bck *cluster.Bck) {
 			defer wg.Done()
 
-			if err := bck.Init(t.t.GetBowner(), t.t.Snode()); err != nil {
+			if err := bck.Init(t.t.Bowner(), t.t.Snode()); err != nil {
 				errCh <- err
 				return
 			}

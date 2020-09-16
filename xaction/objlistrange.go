@@ -177,7 +177,7 @@ func (r *listRangeBase) iterateRange(args *DeletePrefetchArgs, cb objCallback) e
 		return err
 	}
 
-	smap := r.t.GetSowner().Get()
+	smap := r.t.Sowner().Get()
 	if len(pt.Ranges) != 0 {
 		return r.iterateTemplate(args, smap, &pt, cb)
 	}
@@ -215,7 +215,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 	)
 
 	bck := cluster.NewBckEmbed(r.Bck())
-	if err := bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+	if err := bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
 		return err
 	}
 
@@ -265,7 +265,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 
 func (r *listRangeBase) iterateList(args *DeletePrefetchArgs, listMsg *cmn.ListMsg, cb objCallback) error {
 	var (
-		smap = r.t.GetSowner().Get()
+		smap = r.t.Sowner().Get()
 		sid  = r.t.Snode().ID()
 	)
 	for _, obj := range listMsg.ObjNames {

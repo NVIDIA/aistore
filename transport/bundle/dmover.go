@@ -50,7 +50,7 @@ var (
 func NewDataMover(t cluster.Target, trname string, recvCB transport.Receive, extra Extra) (*DataMover, error) {
 	var (
 		config = cmn.GCO.Get()
-		dm     = &DataMover{t: t, mem: t.GetMMSA()}
+		dm     = &DataMover{t: t, mem: t.MMSA()}
 	)
 	if extra.Multiplier == 0 {
 		extra.Multiplier = int(config.Rebalance.Multiplier)
@@ -122,9 +122,9 @@ func (dm *DataMover) Open() {
 			ManualResync: true,
 		}
 	)
-	dm.data.streams = NewStreams(dm.t.GetSowner(), dm.t.Snode(), dm.data.client, dataArgs)
+	dm.data.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.data.client, dataArgs)
 	if dm.useACKs() {
-		dm.ack.streams = NewStreams(dm.t.GetSowner(), dm.t.Snode(), dm.ack.client, ackArgs)
+		dm.ack.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
 	}
 }
 

@@ -255,7 +255,7 @@ func (d *Downloader) init() {
 // all it does is forwards the requests to dispatcher
 func (d *Downloader) Run() (err error) {
 	glog.Infof("Starting %s", d.GetRunName())
-	d.t.GetFSPRG().Reg(d)
+	d.t.FSPRG().Reg(d)
 	d.init()
 Loop:
 	for {
@@ -292,7 +292,7 @@ Loop:
 
 // Stop terminates the downloader
 func (d *Downloader) Stop(err error) {
-	d.t.GetFSPRG().Unreg(d)
+	d.t.FSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
 	d.dispatcher.Abort()
 	d.Finish()

@@ -56,7 +56,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader
 		debug.AssertNoErr(f.Close())
 	}()
 
-	buf, slab := t.t.GetMMSA().Alloc(r.Size())
+	buf, slab := t.t.MMSA().Alloc(r.Size())
 	defer slab.Free(buf)
 
 	offset := int64(0)

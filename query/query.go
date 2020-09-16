@@ -66,7 +66,7 @@ func AllObjSource() *ObjectsSource {
 
 func BckSource(bck cmn.Bck, node cluster.Node) (*BucketSource, error) {
 	b := cluster.NewBckEmbed(bck)
-	if err := b.Init(node.GetBowner(), node.Snode()); err != nil {
+	if err := b.Init(node.Bowner(), node.Snode()); err != nil {
 		return nil, err
 	}
 	return &BucketSource{Bck: b}, nil

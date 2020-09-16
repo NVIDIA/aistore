@@ -100,7 +100,7 @@ func (r *BckListTask) Do(msg *cmn.SelectMsg, ch chan *BckListResp) {
 // local cache is populated.
 func (r *BckListTask) init() error {
 	r.bck = cluster.NewBckEmbed(r.Bck())
-	if err := r.bck.Init(r.t.GetBowner(), r.t.Snode()); err != nil {
+	if err := r.bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
 		return err
 	}
 	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(cmn.SelectCached)

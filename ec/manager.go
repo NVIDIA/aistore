@@ -54,7 +54,7 @@ func initManager(t cluster.Target, reg XactRegistry) error {
 		netResp = cmn.NetworkPublic
 	}
 
-	sowner := t.GetSowner()
+	sowner := t.Sowner()
 	smap := sowner.Get()
 
 	ECM = &Manager{
@@ -64,7 +64,7 @@ func initManager(t cluster.Target, reg XactRegistry) error {
 		reg:       reg,
 		smap:      smap,
 		targetCnt: *atomic.NewInt32(int32(smap.CountTargets())),
-		bmd:       t.GetBowner().Get(),
+		bmd:       t.Bowner().Get(),
 		xacts:     make(map[string]*BckXacts),
 	}
 
@@ -115,7 +115,7 @@ func (mgr *Manager) initECBundles() {
 		Extra:      &transport.Extra{Compression: compression},
 	}
 
-	sowner := mgr.t.GetSowner()
+	sowner := mgr.t.Sowner()
 	mgr.reqBundle = bundle.NewStreams(sowner, mgr.t.Snode(), client, reqSbArgs)
 	mgr.respBundle = bundle.NewStreams(sowner, mgr.t.Snode(), client, respSbArgs)
 
@@ -135,7 +135,7 @@ func (mgr *Manager) closeECBundles() {
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
-	mgr.t.GetSowner().Listeners().Unreg(mgr)
+	mgr.t.Sowner().Listeners().Unreg(mgr)
 	mgr.reqBundle.Close(false)
 	mgr.reqBundle = nil
 	mgr.respBundle.Close(false)
@@ -225,7 +225,7 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, obj
 		}
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
-	if err = bck.Init(mgr.t.GetBowner(), mgr.t.Snode()); err != nil {
+	if err = bck.Init(mgr.t.Bowner(), mgr.t.Snode()); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
 			glog.Errorf("failed to init bucket %s: %v", bck, err)
 			return
@@ -255,7 +255,7 @@ func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, ob
 		return
 	}
 	bck := cluster.NewBckEmbed(hdr.Bck)
-	if err = bck.Init(mgr.t.GetBowner(), mgr.t.Snode()); err != nil {
+	if err = bck.Init(mgr.t.Bowner(), mgr.t.Snode()); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
 			glog.Error(err)
 			cmn.DrainReader(object)
@@ -378,7 +378,7 @@ func (mgr *Manager) enableBck(bck *cluster.Bck) {
 
 func (mgr *Manager) BucketsMDChanged() {
 	mgr.Lock()
-	newBckMD := mgr.t.GetBowner().Get()
+	newBckMD := mgr.t.Bowner().Get()
 	oldBckMD := mgr.bmd
 	if newBckMD.Version <= mgr.bmd.Version {
 		mgr.Unlock()
@@ -410,12 +410,12 @@ func (mgr *Manager) BucketsMDChanged() {
 }
 
 func (mgr *Manager) ListenSmapChanged() {
-	smap := mgr.t.GetSowner().Get()
+	smap := mgr.t.Sowner().Get()
 	if smap.Version <= mgr.smap.Version {
 		return
 	}
 
-	mgr.smap = mgr.t.GetSowner().Get()
+	mgr.smap = mgr.t.Sowner().Get()
 	targetCnt := mgr.smap.CountTargets()
 	mgr.targetCnt.Store(int32(targetCnt))
 

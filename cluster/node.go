@@ -11,10 +11,12 @@ import (
 
 type Node interface {
 	Snode() *Snode
-	GetBowner() Bowner
-	GetSowner() Sowner
+	Bowner() Bowner
+	Sowner() Sowner
+
 	ClusterStarted() bool
 	NodeStarted() bool
 	NodeStartedTime() time.Time
+
 	Client() *http.Client
 }

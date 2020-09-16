@@ -139,7 +139,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		storeType = SGLStoreType
 		contentPath, fullContentPath = rm.encodeRecordName(storeType, args.shardName, args.recordName)
 
-		sgl := rm.t.GetMMSA().NewSGL(r.Size() + int64(len(args.metadata)))
+		sgl := rm.t.MMSA().NewSGL(r.Size() + int64(len(args.metadata)))
 		if _, err = io.CopyBuffer(sgl, bytes.NewReader(args.metadata), args.buf); err != nil {
 			return 0, errors.WithStack(err)
 		}
@@ -386,7 +386,7 @@ func (rm *RecordManager) Cleanup() {
 
 	// NOTE: forcefully free all MMSA memory to the OS
 	// TODO: another reason to use a separate MMSA for extractions
-	rm.t.GetMMSA().FreeSpec(memsys.FreeSpec{
+	rm.t.MMSA().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
 		MinSize: 1, // force toGC to free all (even small) memory to system

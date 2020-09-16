@@ -118,7 +118,7 @@ func (ct *CT) Write(t Target, reader io.Reader, size int64, workFQN ...string) (
 	if err := fs.Access(bdir); err != nil {
 		return err
 	}
-	buf, slab := t.GetMMSA().Alloc()
+	buf, slab := t.MMSA().Alloc()
 	if len(workFQN) == 0 {
 		_, err = cmn.SaveReader(ct.fqn, reader, buf, cmn.ChecksumNone, size, "")
 	} else {

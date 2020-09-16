@@ -143,7 +143,7 @@ func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc s
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
-		limits.BytesPerHour /= t.GetSowner().Get().CountTargets()
+		limits.BytesPerHour /= t.Sowner().Get().CountTargets()
 	}
 
 	td, _ := time.ParseDuration(timeout)
@@ -243,7 +243,7 @@ func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
 func (j *cloudBucketDlJob) getNextObjs() error {
 	var (
 		sid   = j.t.Snode().ID()
-		smap  = j.t.GetSowner().Get()
+		smap  = j.t.Sowner().Get()
 		cloud = j.t.Cloud(j.bck)
 	)
 	j.objs = j.objs[:0]
@@ -294,7 +294,7 @@ func (j *rangeDlJob) genNext() ([]dlObj, bool, error) {
 
 func (j *rangeDlJob) getNextObjs() error {
 	var (
-		smap = j.t.GetSowner().Get()
+		smap = j.t.Sowner().Get()
 		sid  = j.t.Snode().ID()
 	)
 	j.objs = j.objs[:0]
@@ -335,7 +335,7 @@ func newCloudBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *
 
 func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
 	var (
-		smap = t.GetSowner().Get()
+		smap = t.Sowner().Get()
 		sid  = t.Snode().ID()
 		iter = pt.Iter()
 		si   *cluster.Snode

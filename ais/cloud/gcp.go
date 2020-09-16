@@ -383,7 +383,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	md[gcpChecksumType], md[gcpChecksumVal] = lom.Cksum().Get()
 
 	wc.Metadata = md
-	buf, slab := gcpp.t.GetMMSA().Alloc()
+	buf, slab := gcpp.t.MMSA().Alloc()
 	written, err := io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
 	if err != nil {

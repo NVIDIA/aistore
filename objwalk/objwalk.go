@@ -88,7 +88,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		config          = cmn.GCO.Get()
 		localURL        = w.t.Snode().URL(cmn.NetworkPublic)
 		localID         = w.t.Snode().ID()
-		smap            = w.t.GetSowner().Get()
+		smap            = w.t.Sowner().Get()
 		postCallback, _ = w.ctx.Value(walkinfo.CtxPostCallbackKey).(walkinfo.PostCallbackFunc)
 
 		needURL     = w.msg.WantProp(cmn.GetTargetURL)

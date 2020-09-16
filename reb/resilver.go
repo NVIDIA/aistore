@@ -46,7 +46,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...cmn
 
 	glog.Infoln(xreb.String())
 
-	slab, err := reb.t.GetMMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	slab, err := reb.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
 
 	wg := &sync.WaitGroup{}
@@ -68,7 +68,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...cmn
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode(), err)
 		}
 	}
-	reb.t.GetGFN(cluster.GFNLocal).Deactivate()
+	reb.t.GFN(cluster.GFNLocal).Deactivate()
 	xreb.Finish()
 }
 
@@ -91,7 +91,7 @@ func (rj *resilverJogger) jog(mpathInfo *fs.MountpathInfo) {
 		Callback: rj.walk,
 		Sorted:   false,
 	}
-	rj.m.t.GetBowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
+	rj.m.t.Bowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
 		opts.ErrCallback = nil
 		opts.Bck = bck.Bck
 		if err := fs.Walk(opts); err != nil {
@@ -233,7 +233,7 @@ func (rj *resilverJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	ct, err := cluster.NewCTFromFQN(fqn, t.GetBowner())
+	ct, err := cluster.NewCTFromFQN(fqn, t.Bowner())
 	if err != nil {
 		if cmn.IsErrBucketLevel(err) {
 			return err
@@ -246,7 +246,7 @@ func (rj *resilverJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	// optionally, skip those that must be globally rebalanced
 	if rj.skipGlobMisplaced {
 		uname := ct.Bck().MakeUname(ct.ObjName())
-		tsi, err := cluster.HrwTarget(uname, t.GetSowner().Get())
+		tsi, err := cluster.HrwTarget(uname, t.Sowner().Get())
 		if err != nil {
 			return err
 		}

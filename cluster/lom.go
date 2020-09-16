@@ -335,7 +335,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 	}
 
 	availablePaths, _ := fs.Get()
-	buf, slab := lom.T.GetMMSA().Alloc()
+	buf, slab := lom.T.MMSA().Alloc()
 	for path, mpathInfo := range availablePaths {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
@@ -622,7 +622,7 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err er
 	if file, err = os.Open(lom.FQN); err != nil {
 		return
 	}
-	buf, slab := lom.T.GetMMSA().Alloc(lom.Size())
+	buf, slab := lom.T.MMSA().Alloc(lom.Size())
 	_, cksum, err = cmn.CopyAndChecksum(ioutil.Discard, file, buf, cksumType)
 	debug.AssertNoErr(file.Close())
 	slab.Free(buf)
@@ -686,7 +686,7 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)", lom.FQN, bck.Ns, lom.ParsedFQN.Bck.Ns)
 		}
 	}
-	bowner := lom.T.GetBowner()
+	bowner := lom.T.Bowner()
 	lom.bck = NewBckEmbed(bck)
 	if err = lom.bck.Init(bowner, lom.T.Snode()); err != nil {
 		return
@@ -754,7 +754,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 func (lom *LOM) checkBucket() error {
 	debug.Assert(lom.loaded) // cannot check bucket without first calling lom.Load()
 	var (
-		bmd             = lom.T.GetBowner().Get()
+		bmd             = lom.T.Bowner().Get()
 		bprops, present = bmd.Get(lom.bck)
 	)
 	if !present { // bucket does not exist
@@ -889,7 +889,7 @@ func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 	var (
 		caches         = lomCaches()
 		now            = time.Now()
-		bmd            = t.GetBowner().Get()
+		bmd            = t.Bowner().Get()
 		wg             = &sync.WaitGroup{}
 		evicted, total atomic.Uint32
 	)

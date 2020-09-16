@@ -38,7 +38,7 @@ type (
 )
 
 func newDispatcher(parent *Downloader) *dispatcher {
-	initInfoStore(parent.t.GetDB()) // it will be initialized only once
+	initInfoStore(parent.t.DB()) // it will be initialized only once
 	return &dispatcher{
 		parent:  parent,
 		joggers: make(map[string]*jogger, 8),
@@ -347,7 +347,7 @@ func (d *dispatcher) checkAborted() bool {
 // returns false if dispatcher encountered hard error, true otherwise
 func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (err error, ok bool) {
 	bck := cluster.NewBckEmbed(task.job.Bck())
-	if err := bck.Init(d.parent.t.GetBowner(), d.parent.t.Snode()); err != nil {
+	if err := bck.Init(d.parent.t.Bowner(), d.parent.t.Snode()); err != nil {
 		return err, true
 	}
 

@@ -57,7 +57,7 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cmn.Notif) 
 		id:     id,
 		smap:   smap,
 		config: cmn.GCO.Get(),
-		ecUsed: reb.t.GetBowner().Get().IsECUsed(),
+		ecUsed: reb.t.Bowner().Get().IsECUsed(),
 	}
 
 	if !reb.rebPreInit(md) {
@@ -68,7 +68,7 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cmn.Notif) 
 	}
 
 	// At this point only one rebalance is running so we can safely enable regular GFN.
-	gfn := reb.t.GetGFN(cluster.GFNGlobal)
+	gfn := reb.t.GFN(cluster.GFNGlobal)
 	gfn.Activate()
 	defer gfn.Deactivate()
 
@@ -125,7 +125,7 @@ func (reb *Manager) rebPreInit(md *rebArgs) bool {
 		return false
 	}
 	if md.smap.Version == 0 {
-		md.smap = reb.t.GetSowner().Get()
+		md.smap = reb.t.Sowner().Get()
 	}
 
 	// 2. serialize (rebalancing operations - one at a time post this point)
@@ -135,7 +135,7 @@ func (reb *Manager) rebPreInit(md *rebArgs) bool {
 		return false
 	}
 	if md.smap.Version == 0 {
-		md.smap = reb.t.GetSowner().Get()
+		md.smap = reb.t.Sowner().Get()
 	}
 
 	md.paths, _ = fs.Get()
@@ -524,7 +524,7 @@ func (rj *rebalanceJogger) jog(mpathInfo *fs.MountpathInfo) {
 		Callback: rj.walk,
 		Sorted:   false,
 	}
-	rj.m.t.GetBowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
+	rj.m.t.Bowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
 		opts.ErrCallback = nil
 		opts.Bck = bck.Bck
 		if err := fs.Walk(opts); err != nil {
@@ -553,7 +553,7 @@ func (rj *rebalanceJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 	rj.m.inQueue.Dec()
 	lom.Unlock(false) // NOTE: can unlock now
 
-	rj.m.t.GetSmallMMSA().Free(hdr.Opaque)
+	rj.m.t.SmallMMSA().Free(hdr.Opaque)
 
 	if err != nil {
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode(), hdr.Bck, hdr.ObjName, err)
@@ -668,7 +668,7 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 	// transmit
 	var (
 		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.Snode().ID()}
-		mm     = rj.m.t.GetSmallMMSA()
+		mm     = rj.m.t.SmallMMSA()
 		opaque = ack.NewPack(mm)
 		hdr    = transport.Header{
 			Bck:     lom.Bck().Bck,
