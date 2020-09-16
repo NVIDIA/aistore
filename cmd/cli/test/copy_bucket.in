@@ -5,7 +5,7 @@ ais cp bucket $BUCKET_1/ $BUCKET_2/
 
 ais cp bucket ais://$BUCKET_1 cloud://$BUCKET_2 // FAIL "Copying of cloud buckets not supported"
 
-sleep 2
+sleep 10
 ais show xaction copybck $BUCKET_1/
 ais show xaction copybck
 ais wait xaction copybck $BUCKET_2/

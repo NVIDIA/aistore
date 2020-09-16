@@ -6,7 +6,6 @@ package mirror
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -49,6 +48,7 @@ func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *
 }
 
 func (r *XactBckCopy) Run() (err error) {
+	r.dm.SetXact(r)
 	r.dm.Open()
 
 	mpathCount := r.runJoggers()
@@ -56,7 +56,6 @@ func (r *XactBckCopy) Run() (err error) {
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
 	err = r.xactBckBase.waitDone(mpathCount)
 
-	time.Sleep(2 * time.Second) // TODO -- FIXME: quiesce
 	r.dm.Close()
 	r.dm.UnregRecv()
 

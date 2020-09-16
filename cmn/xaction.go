@@ -37,6 +37,7 @@ type (
 		String() string
 		Finished() bool
 		Aborted() bool
+		AbortedAfter(time.Duration) bool
 		ChanAbort() <-chan struct{}
 		IsMountpathXact() bool
 		Result() (interface{}, error)
@@ -138,6 +139,17 @@ func (xact *XactBase) Bck() Bck                   { return xact.bck }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
+
+func (xact *XactBase) AbortedAfter(dur time.Duration) (aborted bool) {
+	sleep := MinDuration(dur, 500*time.Millisecond)
+	for elapsed := time.Duration(0); elapsed < dur; elapsed += sleep {
+		time.Sleep(sleep)
+		if xact.Aborted() {
+			return true
+		}
+	}
+	return
+}
 
 func (xact *XactBase) String() string {
 	var (

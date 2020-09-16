@@ -147,7 +147,7 @@ func (j *joggerBckBase) yieldTerm() error {
 	diskConf := &j.config.Disk
 	select {
 	case <-j.stopCh.Listen():
-		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.bck)
+		return fmt.Errorf("jogger[%s/%s] aborted", j.mpathInfo, j.bck)
 	default:
 		curr := fs.GetMpathUtil(j.mpathInfo.Path, mono.NanoTime())
 		if curr >= diskConf.DiskUtilHighWM {

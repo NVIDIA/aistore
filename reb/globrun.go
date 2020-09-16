@@ -385,13 +385,12 @@ func (reb *Manager) rebWaitAck(md *rebArgs) (errCnt int) {
 // if `cb` returns true the wait loop interrupts immediately. It is used,
 // e.g., to wait for EC batch to finish: no need to wait until timeout if
 // all targets have sent push notification that they are done with the batch.
-func (reb *Manager) waitQuiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) (
-	aborted bool) {
-	cmn.Assert(maxWait > 0)
-	sleep := md.config.Timeout.CplaneOperation
-	maxQuiet := int(maxWait/sleep) + 1
-	quiescent := 0
-
+func (reb *Manager) waitQuiesce(md *rebArgs, maxWait time.Duration, cb func(md *rebArgs) bool) (aborted bool) {
+	var (
+		sleep     = md.config.Timeout.CplaneOperation
+		maxQuiet  = int(maxWait/sleep) + 1
+		quiescent int
+	)
 	aborted = reb.xact().Aborted()
 	for quiescent < maxQuiet && !aborted {
 		if !reb.laterx.CAS(true, false) {

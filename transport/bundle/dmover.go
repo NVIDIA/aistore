@@ -1,4 +1,5 @@
-// Package bundle TODO
+// Package bundle provides multi-streaming transport with the functionality
+// to dynamically (un)register receive endpoints, eastablish long-lived flows, and more.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -6,13 +7,18 @@ package bundle
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
+
+// NOTE: configuration-wise, currently using config.Rebalance.Multiplier and Rebalance.Quiesce
 
 type (
 	DataMover struct {
@@ -32,9 +38,12 @@ type (
 			client  transport.Client
 		}
 		mem         *memsys.MMSA
-		compression string
+		compression string // enum { cmn.CompressNever, ... }
+		xact        cmn.Xact
+		laterx      atomic.Bool
 		multiplier  int
 	}
+	// additional (and optional) params for new data mover
 	Extra struct {
 		RecvAck     transport.Receive
 		Compression string
@@ -91,12 +100,16 @@ func (dm *DataMover) useACKs() bool { return dm.ack.recv != nil }
 func (dm *DataMover) NetD() string  { return dm.data.net }
 func (dm *DataMover) NetC() string  { return dm.ack.net }
 
+// associate xaction with data mover, primarily to sync on aborts
+func (dm *DataMover) SetXact(xact cmn.Xact) { dm.xact = xact }
+
+// register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() (err error) {
-	if _, err = transport.Register(dm.data.net, dm.data.trname, dm.data.recv); err != nil {
+	if _, err = transport.Register(dm.data.net, dm.data.trname, dm.wrapRecvData); err != nil {
 		return
 	}
 	if dm.useACKs() {
-		_, err = transport.Register(dm.ack.net, dm.ack.trname, dm.ack.recv)
+		_, err = transport.Register(dm.ack.net, dm.ack.trname, dm.wrapRecvACK)
 	}
 	return
 }
@@ -137,6 +150,8 @@ func (dm *DataMover) Close() {
 }
 
 func (dm *DataMover) UnregRecv() {
+	_ = dm.waitQuiesce()
+
 	if err := transport.Unregister(dm.data.net, dm.data.trname); err != nil {
 		glog.Error(err)
 	}
@@ -147,10 +162,45 @@ func (dm *DataMover) UnregRecv() {
 	}
 }
 
-func (dm *DataMover) Send(obj transport.Obj, roc cmn.ReadOpenCloser, tsi *cluster.Snode) (err error) {
+func (dm *DataMover) Send(obj transport.Obj, roc cmn.ReadOpenCloser, tsi *cluster.Snode) error {
 	return dm.data.streams.Send(obj, roc, tsi)
 }
 
-func (dm *DataMover) ACK(hdr transport.Header, cb transport.SendCallback, tsi *cluster.Snode) (err error) {
+func (dm *DataMover) ACK(hdr transport.Header, cb transport.SendCallback, tsi *cluster.Snode) error {
 	return dm.ack.streams.Send(transport.Obj{Hdr: hdr, Callback: cb}, nil, tsi)
+}
+
+//
+// private
+//
+
+func (dm *DataMover) wrapRecvData(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	dm.laterx.Store(true)
+	dm.data.recv(w, hdr, object, err)
+	dm.laterx.Store(true)
+}
+func (dm *DataMover) wrapRecvACK(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	dm.laterx.Store(true)
+	dm.ack.recv(w, hdr, object, err)
+	dm.laterx.Store(true)
+}
+
+// NOTE: compare with reb.waitQuiesce where additional cluster-wide quiescent status is also enforced
+func (dm *DataMover) waitQuiesce() (aborted bool) {
+	var (
+		config    = cmn.GCO.Get()
+		sleep     = config.Timeout.CplaneOperation
+		maxWait   = config.Rebalance.Quiesce
+		maxQuiet  = cmn.MaxDuration(maxWait/sleep, 2)
+		quiescent int
+	)
+	for quiescent < int(maxQuiet) && !aborted {
+		if !dm.laterx.CAS(true, false) {
+			quiescent++
+		} else {
+			quiescent = 0
+		}
+		aborted = dm.xact.AbortedAfter(sleep)
+	}
+	return
 }

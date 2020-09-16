@@ -59,6 +59,7 @@ type OnFinishObj = func(lom *LOM, err error)
 type (
 	DataMover interface {
 		RegRecv() error
+		SetXact(xact cmn.Xact)
 		Open()
 		Close()
 		UnregRecv()

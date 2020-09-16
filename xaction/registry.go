@@ -153,17 +153,6 @@ func (xact *Rebalance) String() string {
 	return fmt.Sprintf("%s, %s", xact.RebBase.String(), xact.ID())
 }
 
-func (xact *Rebalance) AbortedAfter(dur time.Duration) (aborted bool) {
-	sleep := cmn.MinDuration(dur, 500*time.Millisecond)
-	for elapsed := time.Duration(0); elapsed < dur; elapsed += sleep {
-		time.Sleep(sleep)
-		if xact.Aborted() {
-			return true
-		}
-	}
-	return
-}
-
 // override/extend cmn.XactBase.Stats()
 func (xact *Rebalance) Stats() cmn.XactStats {
 	var (
