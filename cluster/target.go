@@ -135,7 +135,6 @@ type Target interface {
 	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 	RebalanceNamespace(si *Snode) ([]byte, int, error)
 	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
-	K8sNodeName() string
 }
 
 type RebManager interface {

@@ -1,15 +1,15 @@
-// Package etl provides utilities to initialize and use transformation pods.
+// Package k8s provides utilities for communicating with Kubernetes cluster.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package etl
+package k8s
 
 import (
 	"context"
 	"io/ioutil"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -19,14 +19,15 @@ import (
 )
 
 type (
-	// k8sClient is simplified version of default `kubernetes.Interface` client.
-	k8sClient interface {
+	// Client is simplified version of default `kubernetes.Interface` client.
+	Client interface {
 		Create(v interface{}) error
 		Delete(entityType, entityName string) error
 		CheckExists(entityType, entityName string) (bool, error)
 
 		Pod(name string) (*corev1.Pod, error)
 		Service(name string) (*corev1.Service, error)
+		Node(name string) (*corev1.Node, error)
 	}
 
 	// defaultClient implements k8sClient.
@@ -58,7 +59,7 @@ func (c *defaultClient) Create(v interface{}) (err error) {
 	case *corev1.Service:
 		_, err = c.services().Create(ctx, t, metav1.CreateOptions{})
 	default:
-		cmn.Assertf(false, "unknown entity type: %T", t)
+		debug.Assertf(false, "unknown entity type: %T", t)
 	}
 	return
 }
@@ -66,12 +67,12 @@ func (c *defaultClient) Create(v interface{}) (err error) {
 func (c *defaultClient) Delete(entityType, entityName string) (err error) {
 	ctx := context.Background()
 	switch entityType {
-	case cmn.KubePod:
+	case Pod:
 		err = c.pods().Delete(ctx, entityName, *metav1.NewDeleteOptions(0))
-	case cmn.KubeSvc:
+	case Svc:
 		err = c.services().Delete(ctx, entityName, *metav1.NewDeleteOptions(0))
 	default:
-		cmn.Assertf(false, "unknown entity type: %s", entityType)
+		debug.Assertf(false, "unknown entity type: %s", entityType)
 	}
 	return
 }
@@ -84,7 +85,7 @@ func (c *defaultClient) CheckExists(entityType, entityName string) (exists bool,
 		}
 	)
 	switch entityType {
-	case cmn.KubePod:
+	case Pod:
 		var pods *corev1.PodList
 		pods, err = c.pods().List(ctx, listOptions)
 		if err != nil {
@@ -93,7 +94,7 @@ func (c *defaultClient) CheckExists(entityType, entityName string) (exists bool,
 		if len(pods.Items) == 0 {
 			return false, nil
 		}
-	case cmn.KubeSvc:
+	case Svc:
 		var services *corev1.ServiceList
 		services, err = c.services().List(ctx, listOptions)
 		if err != nil {
@@ -103,7 +104,7 @@ func (c *defaultClient) CheckExists(entityType, entityName string) (exists bool,
 			return false, nil
 		}
 	default:
-		cmn.Assertf(false, "unknown entity type: %s", entityType)
+		debug.Assertf(false, "unknown entity type: %s", entityType)
 	}
 	return true, nil
 }
@@ -116,7 +117,11 @@ func (c *defaultClient) Service(name string) (*corev1.Service, error) {
 	return c.services().Get(context.Background(), name, metav1.GetOptions{})
 }
 
-func newK8sClient() (k8sClient, error) {
+func (c *defaultClient) Node(name string) (*corev1.Node, error) {
+	return c.client.CoreV1().Nodes().Get(context.Background(), name, metav1.GetOptions{})
+}
+
+func NewClient() (Client, error) {
 	_clientOnce.Do(func() {
 		config, err := rest.InClusterConfig()
 		if err != nil {

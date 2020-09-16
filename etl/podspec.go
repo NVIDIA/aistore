@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 )
@@ -91,18 +92,18 @@ func ValidateSpec(spec []byte) (msg InitMsg, err error) {
 	// Validate that user container supports health check.
 	// Currently we need the `default` port (on which the application runs) to be same as the
 	// `readiness` probe port.
-	if container.Ports[0].Name != cmn.KubeDefault {
-		return msg, cmn.NewETLError(errCtx, "expected port name %q got %q", cmn.KubeDefault, container.Ports[0].Name)
+	if container.Ports[0].Name != k8s.Default {
+		return msg, cmn.NewETLError(errCtx, "expected port name %q got %q", k8s.Default, container.Ports[0].Name)
 	}
 	if container.ReadinessProbe == nil {
 		return msg, cmn.NewETLError(errCtx, "readinessProbe is required in a container spec")
 	}
-	// TODO: add support for other healthchecks
+	// TODO: Add support for other health checks.
 	if container.ReadinessProbe.HTTPGet == nil {
 		return msg, cmn.NewETLError(errCtx, "httpGet missing in the readinessProbe")
 	}
-	if container.ReadinessProbe.HTTPGet.Port.StrVal != cmn.KubeDefault {
-		return msg, cmn.NewETLError(errCtx, "readinessProbe port must be the '%q' port", cmn.KubeDefault)
+	if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
+		return msg, cmn.NewETLError(errCtx, "readinessProbe port must be the '%q' port", k8s.Default)
 	}
 
 	// Check annotations.

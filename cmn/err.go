@@ -290,10 +290,10 @@ func (e *ETLError) Error() string {
 		s = append(s, fmt.Sprintf("etl=%q", e.ETLName))
 	}
 	if e.PodName != "" {
-		s = append(s, fmt.Sprintf("%s=%q", KubePod, e.PodName))
+		s = append(s, fmt.Sprintf("pod=%q", e.PodName))
 	}
 	if e.SvcName != "" {
-		s = append(s, fmt.Sprintf("%s=%q", KubeSvc, e.SvcName))
+		s = append(s, fmt.Sprintf("service=%q", e.SvcName))
 	}
 
 	return fmt.Sprintf("[%s] %s", strings.Join(s, ","), e.Reason)

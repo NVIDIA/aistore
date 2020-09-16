@@ -58,7 +58,6 @@ func (*TargetMock) GFN(_ GFNType) GFN                                           
 func (*TargetMock) LookupRemoteSingle(_ *LOM, _ *Snode) bool                       { return false }
 func (*TargetMock) RebalanceNamespace(_ *Snode) ([]byte, int, error)               { return nil, 0, nil }
 func (*TargetMock) BMDVersionFixup(_ *http.Request, _ cmn.Bck, _ bool)             {}
-func (*TargetMock) K8sNodeName() string                                            { return "" }
 func (*TargetMock) XactRegistry() XactRegistry                                     { return nil }
 func (*TargetMock) Health(_ *Snode, _ time.Duration, _ url.Values) ([]byte, error, int) {
 	return nil, nil, 0

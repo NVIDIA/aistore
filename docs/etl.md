@@ -30,13 +30,12 @@ Each specific ETL is defined by its specification - a regular Kubernetes YAML (s
 
 * When a target receives **build**/**init**, it starts the container locally on the same (the target's) machine.
 
-* Targets use `kubectl` to initialize the pods and gather necessary information for future runtime.
+* Targets use Kubernetes client to initialize the pods and gather necessary information for future runtime.
 
 ## Prerequisites
 
 There are a couple of steps that are required to make the ETL work:
-1. Target should be able to execute `kubectl` meaning the binary should be in the `$PATH`.
-2. `K8S_HOST_NAME = spec.nodeName` variable must be set inside the target pod's container (see more [here](https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/)).
+1. `K8S_HOST_NAME = spec.nodeName` variable must be set inside the target pod's container (see more [here](https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/)).
     Example:
     ```yaml
       containers:

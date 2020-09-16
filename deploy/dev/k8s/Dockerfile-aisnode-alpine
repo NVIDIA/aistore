@@ -18,10 +18,4 @@ ENV GOBIN $GOPATH/bin
 COPY . $GOPATH/src/github.com/NVIDIA/aistore/
 WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
 
-RUN cd /tmp &&\
-    curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl &&\
-    chmod +x ./kubectl &&\
-    mv ./kubectl /usr/local/bin/kubectl &&\
-    kubectl version --client
-
 RUN make node

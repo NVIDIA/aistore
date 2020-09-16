@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -124,7 +125,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		}
 	}
 	if args.K8s {
-		if cmn.DetectK8s() == "" {
+		if err := k8s.Check(); err != nil {
 			tb.Skipf("%s requires Kubernetes", tb.Name())
 		}
 	}

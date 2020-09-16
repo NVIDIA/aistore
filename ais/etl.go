@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 )
 
@@ -21,7 +22,7 @@ import (
 
 // [METHOD] /v1/etl
 func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
-	if err := t.checkK8s(); err != nil {
+	if err := k8s.Check(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -144,13 +145,13 @@ func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
 // entities so it doesn't stop when encountering an error.
 func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err error) {
 	if svcName != "" {
-		if deleteErr := deleteEntity(errCtx, cmn.KubeSvc, svcName); deleteErr != nil {
+		if deleteErr := deleteEntity(errCtx, k8s.Svc, svcName); deleteErr != nil {
 			err = deleteErr
 		}
 	}
 
 	if podName != "" {
-		if deleteErr := deleteEntity(errCtx, cmn.KubePod, podName); deleteErr != nil {
+		if deleteErr := deleteEntity(errCtx, k8s.Pod, podName); deleteErr != nil {
 			err = deleteErr
 		}
 	}
@@ -184,7 +185,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		UUID: msg.ID,
 	}
 
-	cmn.Assert(t.K8sNodeName() != "") // Corresponding 'if' done at the beginning of the request.
+	cmn.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
 	// Parse spec template.
 	if pod, err = ParsePodSpec(errCtx, msg.Spec); err != nil {
 		return
@@ -193,12 +194,12 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	originalPodName = pod.GetName()
 
 	// Override the name (add target's daemon ID and node ID to its name).
-	pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + t.K8sNodeName())
+	pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + k8s.NodeName)
 	errCtx.PodName = pod.GetName()
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string, 1)
 	}
-	pod.Labels[targetNode] = t.K8sNodeName()
+	pod.Labels[targetNode] = k8s.NodeName
 
 	// Create service spec
 	svc = createServiceSpec(pod)
@@ -209,11 +210,11 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	//  1. The ETL container is always scheduled on the target invoking it.
 	//  2. Not more than one ETL container with the same target, is scheduled on
 	//     the same node, at a given point of time.
-	if err = setTransformAffinity(errCtx, t, pod); err != nil {
+	if err = setTransformAffinity(errCtx, pod); err != nil {
 		return
 	}
 
-	if err = setTransformAntiAffinity(errCtx, t, pod); err != nil {
+	if err = setTransformAntiAffinity(errCtx, pod); err != nil {
 		return
 	}
 
@@ -224,7 +225,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 
 	// 2. Creating pod.
 	podName = pod.GetName()
-	if err = createEntity(errCtx, cmn.KubePod, pod); err != nil {
+	if err = createEntity(errCtx, k8s.Pod, pod); err != nil {
 		return
 	}
 
@@ -244,7 +245,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 
 	// 3. Creating service.
 	svcName = svc.GetName()
-	if err = createEntity(errCtx, cmn.KubeSvc, svc); err != nil {
+	if err = createEntity(errCtx, k8s.Svc, svc); err != nil {
 		return
 	}
 
@@ -363,7 +364,7 @@ func GetCommunicator(transformID string) (Communicator, error) {
 func List() []Info { return reg.list() }
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
-func setTransformAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *corev1.Pod) error {
+func setTransformAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
 	}
@@ -383,7 +384,7 @@ func setTransformAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *co
 			MatchExpressions: []corev1.NodeSelectorRequirement{{
 				Key:      nodeNameLabel,
 				Operator: corev1.NodeSelectorOpIn,
-				Values:   []string{t.K8sNodeName()},
+				Values:   []string{k8s.NodeName},
 			}}},
 		},
 	}
@@ -397,7 +398,7 @@ func setTransformAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *co
 
 // Sets pods node anti-affinity, so no two pods with the matching criteria is scheduled on the same node
 // at the same time.
-func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *corev1.Pod) error {
+func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
 	}
@@ -415,7 +416,7 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, t cluster.Target, pod
 	reqAntiAffinities = []corev1.PodAffinityTerm{{
 		LabelSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
-				targetNode: t.K8sNodeName(),
+				targetNode: k8s.NodeName,
 			},
 		},
 		TopologyKey: nodeNameLabel,
@@ -456,7 +457,7 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 // readinessProbe config specified the last step is skipped. Currently
 // readinessProbe config is required by us in ETL spec.
 func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
-	client, err := newK8sClient()
+	client, err := k8s.NewClient()
 	if err != nil {
 		return cmn.NewETLError(errCtx, err.Error())
 	}
@@ -492,7 +493,7 @@ func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.
 }
 
 func getPodIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
-	client, err := newK8sClient()
+	client, err := k8s.NewClient()
 	if err != nil {
 		return "", cmn.NewETLError(errCtx, err.Error())
 	}
@@ -504,7 +505,7 @@ func getPodIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
 }
 
 func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
-	client, err := newK8sClient()
+	client, err := k8s.NewClient()
 	if err != nil {
 		return "", cmn.NewETLError(errCtx, err.Error())
 	}
@@ -516,7 +517,7 @@ func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) 
 }
 
 func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) error {
-	client, err := newK8sClient()
+	client, err := k8s.NewClient()
 	if err != nil {
 		return cmn.NewETLError(errCtx, err.Error())
 	}
@@ -543,7 +544,7 @@ func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) er
 }
 
 func createEntity(errCtx *cmn.ETLErrorContext, entity string, spec interface{}) error {
-	client, err := newK8sClient()
+	client, err := k8s.NewClient()
 	if err != nil {
 		return err
 	}
@@ -554,7 +555,7 @@ func createEntity(errCtx *cmn.ETLErrorContext, entity string, spec interface{}) 
 }
 
 func getServiceNodePort(errCtx *cmn.ETLErrorContext, svc *corev1.Service) (uint, error) {
-	client, err := newK8sClient()
+	client, err := k8s.NewClient()
 	if err != nil {
 		return 0, cmn.NewETLError(errCtx, err.Error())
 	}

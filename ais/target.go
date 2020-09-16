@@ -88,7 +88,6 @@ type (
 		regstate regstate     // the state of being registered with the primary, can be (en/dis)abled via API
 		gmm      *memsys.MMSA // system pagesize-based memory manager and slab allocator
 		smm      *memsys.MMSA // system MMSA for small-size allocations
-		k8sNode  string       // env (cmn.k8sHostNameEnv)
 	}
 )
 
@@ -211,8 +210,6 @@ func (t *targetrunner) Run() error {
 
 	cluster.InitTarget()
 
-	t.k8sNode = cmn.DetectK8s()
-
 	//
 	// join cluster
 	//
@@ -292,13 +289,6 @@ func (t *targetrunner) Run() error {
 	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t.gmm, t, t.statsT)
 	if err := t.httprunner.run(); err != nil {
 		return err
-	}
-	return nil
-}
-
-func (t *targetrunner) checkK8s() error {
-	if t.k8sNode == "" {
-		return fmt.Errorf("%s: the operation requires Kubernetes deployment", t.si)
 	}
 	return nil
 }
@@ -1546,10 +1536,6 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsT.AddMany(stats.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
 	getfshealthchecker().OnErr(filepath)
-}
-
-func (t *targetrunner) K8sNodeName() string {
-	return t.k8sNode
 }
 
 func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...cmn.Notif) {

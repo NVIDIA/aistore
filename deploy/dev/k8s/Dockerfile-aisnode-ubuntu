@@ -37,12 +37,6 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
   tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 
-RUN cd tmp &&\
-    curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl &&\
-    chmod +x ./kubectl &&\
-    mv ./kubectl /usr/local/bin/kubectl &&\
-    kubectl version --client
-
 COPY . $GOPATH/src/github.com/NVIDIA/aistore/
 WORKDIR $GOPATH/src/github.com/NVIDIA/aistore
 

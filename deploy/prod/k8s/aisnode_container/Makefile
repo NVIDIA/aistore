@@ -21,24 +21,20 @@
 #
 TAG_AISNODE = .must_set_in_environment
 TAG_AISNODE_DEBUG = .must_set_in_environment
-TAG_INITCONTAINER =  .must_set_in_environment
 
 #
 # These are most likely fixed, but can be over-ridden from env if required
 #
 NAME_AISNODE=aisnode
 NAME_AISNODE_DEBUG=aisnode_debug
-NAME_INITCONTAINER=ais-kubectl
 
 #
 # Repos to publish to, override from env if needed
 #
 REPO_AISNODE=quay.io/nvidia/aisnode
 REPO_AISNODE_DEBUG=quay.io/nvidia/aisnode-debug
-REPO_INITCONTAINER=quay.io/nvidia/aisnode-kubectl
 REPO_TAG_AISNODE=$(TAG_AISNODE)
 REPO_TAG_AISNODE_DEBUG=$(TAG_AISNODE_DEBUG)
-REPO_TAG_INITCONTAINER=$(TAG_INITCONTAINER)
 
 DOCKER=docker
 BUILD_AISNODE=./build_ais_binary.sh
@@ -48,7 +44,6 @@ BUILD_AISNODE=./build_ais_binary.sh
 #
 DOCKERFILE_AISNODE = Dockerfile_aisnode
 DOCKERFILE_AISNODE_DEBUG = Dockerfile_aisnode_debug
-DOCKERFILE_INITCONTAINER = Dockerfile_initcontainer
 
 #
 # Docker start script.
@@ -92,14 +87,6 @@ aisnode_debug_image:
 		$(DOCKER_CTXDIR)
 	rm -rf $(DOCKER_CTXDIR)
 
-initcontainer_image:
-	cp $(DOCKERFILE_INITCONTAINER) $(DOCKER_CTXDIR)/Dockerfile
-	$(DOCKER) build \
-		-f $(DOCKER_CTXDIR)/Dockerfile \
-		-t $(NAME_INITCONTAINER):$(TAG_INITCONTAINER) \
-		$(DOCKER_CTXDIR)
-	rm -rf $(DOCKER_CTXDIR)
-
 #
 # Targets to tag and push an already-built image
 #
@@ -111,15 +98,9 @@ push_aisnode_debug:
 	$(DOCKER) image tag $(NAME_AISNODE_DEBUG):$(TAG_AISNODE_DEBUG) $(REPO_AISNODE_DEBUG):$(REPO_TAG_AISNODE_DEBUG)
 	$(DOCKER) push $(REPO_AISNODE_DEBUG):$(REPO_TAG_AISNODE_DEBUG)
 
-push_initcontainer:
-	$(DOCKER) image tag $(NAME_INITCONTAINER):$(TAG_INITCONTAINER) $(REPO_INITCONTAINER):$(REPO_TAG_INITCONTAINER)
-	$(DOCKER) push $(REPO_INITCONTAINER):$(REPO_TAG_INITCONTAINER)
-
 #
 # Build, tag & push container images
 #
 aisnode: aisnode_image push_aisnode
 
 aisnode_debug: aisnode_debug_image push_aisnode_debug
-
-initcontainer: initcontainer_image push_initcontainer
