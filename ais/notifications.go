@@ -468,6 +468,10 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if apiItems[0] != cmn.Progress && apiItems[0] != cmn.Finished {
+		n.p.invalmsghdlrf(w, r, "Invalid route /notifs/%s", apiItems[0])
+		return
+	}
 	if cmn.ReadJSON(w, r, notifMsg) != nil {
 		return
 	}
@@ -508,15 +512,17 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 	nl.runlock()
 
+	if notifMsg.ErrMsg != "" {
+		errMsg = errors.New(notifMsg.ErrMsg)
+	}
+
+	// Note: default case is not required - will reach here only for valid types
 	switch apiItems[0] {
 	// TODO: implement on Started notification
 	case cmn.Finished:
 		err = n.handleFinished(nl, tsi, notifMsg.Data, errMsg)
 	case cmn.Progress:
 		err = n.handleProgress(nl, tsi, notifMsg.Data, errMsg)
-	default:
-		n.p.invalmsghdlrf(w, r, "Invalid route /notifs/%s", apiItems[0])
-		return
 	}
 
 	if err != nil {
