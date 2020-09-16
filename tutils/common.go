@@ -132,6 +132,9 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 }
 
 func IsCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
+	if !bck.IsCloud() {
+		return false
+	}
 	baseParams := BaseAPIParams(proxyURL)
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
 	tassert.CheckFatal(tb, err)

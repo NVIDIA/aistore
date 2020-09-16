@@ -1920,9 +1920,12 @@ func TestCopyBucket(t *testing.T) {
 					tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
 				}
 			}
-			for _, dstm := range dstms {
-				defer tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
-			}
+
+			defer func() {
+				for _, dstm := range dstms {
+					tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
+				}
+			}()
 
 			srcProps, err := api.HeadBucket(baseParams, srcm.bck)
 			tassert.CheckFatal(t, err)
