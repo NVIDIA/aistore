@@ -37,7 +37,7 @@ func AddUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Users),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Users),
 		Body:       msg,
 	})
 }
@@ -47,7 +47,7 @@ func UpdateUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Users, newUser.ID),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Users, newUser.ID),
 		Body:       msg,
 	})
 }
@@ -56,7 +56,7 @@ func DeleteUser(baseParams BaseParams, userID string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Users, userID),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Users, userID),
 	})
 }
 
@@ -65,7 +65,7 @@ func LoginUser(baseParams BaseParams, userID, pass string) (token *AuthCreds, er
 
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Users, userID),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Users, userID),
 		Body:       cmn.MustMarshal(loginRec{Password: pass}),
 	}, &token)
 	if err != nil {
@@ -83,7 +83,7 @@ func RegisterClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error 
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Clusters),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Clusters),
 		Body:       msg,
 	})
 }
@@ -93,7 +93,7 @@ func UpdateClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Clusters, cluSpec.ID),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Clusters, cluSpec.ID),
 		Body:       msg,
 	})
 }
@@ -102,15 +102,15 @@ func UnregisterClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Clusters, spec.ID),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Clusters, spec.ID),
 	})
 }
 
 func GetClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) ([]*cmn.AuthCluster, error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Clusters)
+	path := cmn.JoinWords(cmn.Version, cmn.Clusters)
 	if spec.ID != "" {
-		path = cmn.URLPath(path, spec.ID)
+		path = cmn.JoinWords(path, spec.ID)
 	}
 	clusters := &cmn.AuthClusterList{}
 	err := DoHTTPRequest(ReqParams{
@@ -128,7 +128,7 @@ func GetClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) ([]*cmn.AuthCl
 
 func GetRolesAuthN(baseParams BaseParams) ([]*cmn.AuthRole, error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Roles)
+	path := cmn.JoinWords(cmn.Version, cmn.Roles)
 	roles := make([]*cmn.AuthRole, 0)
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -141,7 +141,7 @@ func GetRolesAuthN(baseParams BaseParams) ([]*cmn.AuthRole, error) {
 
 func GetUsersAuthN(baseParams BaseParams) ([]*cmn.AuthUser, error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Users)
+	path := cmn.JoinWords(cmn.Version, cmn.Users)
 	users := make(map[string]*cmn.AuthUser, 4)
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
@@ -165,7 +165,7 @@ func AddRoleAuthN(baseParams BaseParams, roleSpec *cmn.AuthRole) error {
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Roles),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Roles),
 		Body:       msg,
 	})
 }
@@ -174,6 +174,6 @@ func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Roles, role),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Roles, role),
 	})
 }

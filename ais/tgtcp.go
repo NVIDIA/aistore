@@ -113,7 +113,7 @@ func (t *targetrunner) unregister(_ ...string) (int, error) {
 		si: smap.Primary,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.ID()),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.ID()),
 		},
 		timeout: cmn.DefaultTimeout,
 	}
@@ -857,7 +857,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	if renamed != "" {
 		q.Add(whatRenamedLB, renamed)
 	}
-	path := cmn.URLPath(cmn.Version, cmn.Daemon)
+	path := cmn.JoinWords(cmn.Version, cmn.Daemon)
 	url := psi.URL(cmn.NetworkIntraControl)
 	timeout := cmn.GCO.Get().Timeout.CplaneOperation
 	args := callArgs{
@@ -1138,7 +1138,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
-			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
 		timeout: lom.Config().Timeout.CplaneOperation,
@@ -1157,7 +1157,7 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	res := t.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
-			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
 		smap: smap,

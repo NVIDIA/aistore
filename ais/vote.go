@@ -233,7 +233,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 		q   = url.Values{}
 	)
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.ID())
-	results := p.callAll(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Vote, cmn.Proxy), cmn.MustMarshal(&msg), q)
+	results := p.callAll(http.MethodGet, cmn.JoinWords(cmn.Version, cmn.Vote, cmn.Proxy), cmn.MustMarshal(&msg), q)
 	resCh := make(chan voteResult, len(results))
 	for res := range results {
 		if res.err != nil {
@@ -266,7 +266,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 		},
 	}
 
-	res := p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Vote, cmn.Voteres), cmn.MustMarshal(msg))
+	res := p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Vote, cmn.Voteres), cmn.MustMarshal(msg))
 	errors := make(map[string]bool)
 	for r := range res {
 		if r.err != nil {
@@ -514,7 +514,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 		req: cmn.ReqArgs{
 			Method: http.MethodPut,
 			Base:   nextPrimaryProxy.IntraControlNet.DirectURL,
-			Path:   cmn.URLPath(cmn.Version, cmn.Vote, cmn.VoteInit),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Vote, cmn.VoteInit),
 			Body:   body,
 		},
 		timeout: cmn.DefaultTimeout,

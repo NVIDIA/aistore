@@ -235,7 +235,7 @@ func (p *proxyrunner) unregisterSelf() (int, error) {
 		si: smap.Primary,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, p.si.ID()),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.Daemon, p.si.ID()),
 		},
 		timeout: cmn.DefaultTimeout,
 	}
@@ -1209,7 +1209,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		args   = bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
-				Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+				Path:   cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 				Query:  q,
 				Body:   body,
 			},
@@ -1783,7 +1783,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	args = bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
-			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 			Query:  cmn.AddBckToQuery(nil, bck.Bck),
 			Body:   cmn.MustMarshal(aisMsg),
 		},
@@ -1846,7 +1846,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		args   = bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
-				Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+				Path:   cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 				Query:  cmn.AddBckToQuery(nil, bck.Bck),
 				Body:   cmn.MustMarshal(aisMsg),
 			},
@@ -1963,7 +1963,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	// TODO -- FIXME: 2phase begin to check space, validate params, and check vs running xactions
 	//
 	query := cmn.AddBckToQuery(nil, bck.Bck)
-	results := p.callTargets(http.MethodPost, cmn.URLPath(cmn.Version, cmn.Objects, bucket),
+	results := p.callTargets(http.MethodPost, cmn.JoinWords(cmn.Version, cmn.Objects, bucket),
 		cmn.MustMarshal(msg), query)
 	for res := range results {
 		if res.err != nil {
@@ -1983,7 +1983,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAisMsg(msg, smap, nil, cmn.GenUUID())
 		body   = cmn.MustMarshal(aisMsg)
-		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+		path   = cmn.JoinWords(cmn.Version, cmn.Buckets, bucket)
 	)
 	if wait {
 		timeout = cmn.GCO.Get().Client.ListObjects
@@ -2016,7 +2016,7 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// rewrite URL path (removing `cmn.Reverse`)
-	r.URL.Path = cmn.URLPath(cmn.Version, apiItems[0])
+	r.URL.Path = cmn.JoinWords(cmn.Version, apiItems[0])
 
 	nodeID := r.Header.Get(cmn.HeaderNodeID)
 	if nodeID == "" {
@@ -2273,7 +2273,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 		req = cmn.ReqArgs{
 			Method: http.MethodGet,
 			Base:   baseURL,
-			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 		}
 		args = callArgs{req: req, timeout: cmn.DefaultTimeout, v: &smapX{}}
@@ -2460,7 +2460,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	// (I) prepare phase
-	urlPath := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Proxy, proxyid)
+	urlPath := cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.Proxy, proxyid)
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
 	results := p.callAll(http.MethodPut, urlPath, nil, q)
@@ -2561,7 +2561,7 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		q.Set(cmn.URLParamOrigURL, r.URL.String())
 		q.Set(cmn.URLParamProvider, cmn.ProviderHTTP)
-		r.URL.Path = cmn.URLPath(cmn.Version, cmn.Objects, bckName, objName)
+		r.URL.Path = cmn.JoinWords(cmn.Version, cmn.Objects, bckName, objName)
 		r.URL.RawQuery = q.Encode()
 		if r.Method == http.MethodGet {
 			p.httpobjget(w, r, origURLBck)
@@ -2601,7 +2601,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 				si: si,
 				req: cmn.ReqArgs{
 					Method: r.Method,
-					Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+					Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
 					Query:  query,
 				},
 				timeout: config.Timeout.CplaneOperation,
@@ -2656,7 +2656,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		return
 	}
 	var (
-		results       = p.callTargets(http.MethodGet, cmn.URLPath(cmn.Version, cmn.Xactions), body, query)
+		results       = p.callTargets(http.MethodGet, cmn.JoinWords(cmn.Version, cmn.Xactions), body, query)
 		targetResults = p._queryResults(w, r, results)
 	)
 	if targetResults != nil {
@@ -2669,7 +2669,7 @@ func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request
 		results := p.bcastToGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: r.Method,
-				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
 				Query:  r.URL.Query(),
 			},
 			timeout: cmn.GCO.Get().Client.Timeout,
@@ -2742,7 +2742,7 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 	results := p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: r.Method,
-			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
 			Query:  r.URL.Query(),
 			Body:   body,
 		},
@@ -2898,7 +2898,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 			bmd := p.owner.bmd.get()
 			meta := &nodeRegMeta{smap, bmd, p.si}
 			body := cmn.MustMarshal(meta)
-			path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.UserRegister)
+			path := cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.UserRegister)
 			args := callArgs{
 				si:      nsi,
 				req:     cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: body},
@@ -3109,7 +3109,7 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 			si: node,
 			req: cmn.ReqArgs{
 				Method: http.MethodDelete,
-				Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
+				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.Unregister),
 			},
 			timeout: timeoutCfg.CplaneOperation,
 		}
@@ -3198,7 +3198,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		results := p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Daemon), cmn.MustMarshal(msg)) // same message -> all targets and proxies
+		results := p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Daemon), cmn.MustMarshal(msg)) // same message -> all targets and proxies
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, res.details)
@@ -3208,7 +3208,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
-		p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Daemon), cmn.MustMarshal(msg))
+		p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Daemon), cmn.MustMarshal(msg))
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActXactStart, cmn.ActXactStop:
@@ -3243,7 +3243,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		var (
 			body    = cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
-			results = p.callTargets(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Xactions), body)
+			results = p.callTargets(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Xactions), body)
 		)
 		for res := range results {
 			if res.err != nil {
@@ -3294,7 +3294,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		// assign a different node to send table
 		result := p.call(callArgs{si: si,
 			req: cmn.ReqArgs{Method: http.MethodPut,
-				Path: cmn.URLPath(cmn.Version, cmn.Cluster),
+				Path: cmn.JoinWords(cmn.Version, cmn.Cluster),
 				Body: cmn.MustMarshal(msg),
 			}, timeout: cmn.LongTimeout},
 		)
@@ -3322,7 +3322,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		results := p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig), nil, query)
+		results := p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.ActSetConfig), nil, query)
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
@@ -3342,7 +3342,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
 		}
-		results := p.callAll(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Daemon, action), nil, query)
+		results := p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Daemon, action), nil, query)
 		// NOTE: save this config unconditionally
 		// TODO: metasync
 		if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", action, cmn.GetWhatRemoteAIS)); err != nil {
@@ -3421,7 +3421,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 			si: osi,
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
-				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
 				Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
 			},
 			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
@@ -3455,7 +3455,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	}
 	var (
 		results = p.bcastToGroup(bcastArgs{
-			req:     cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)},
+			req:     cmn.ReqArgs{Method: http.MethodGet, Path: cmn.JoinWords(cmn.Version, cmn.Buckets, cmn.AllBuckets)},
 			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 			fv:      func() interface{} { return &bucketMD{} },
 		})
@@ -3547,7 +3547,7 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 	var (
 		tsi   *cluster.Snode
 		pname = p.si.String()
-		path  = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		path  = cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name)
 	)
 	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {
 		return

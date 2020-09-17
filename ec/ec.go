@@ -305,7 +305,7 @@ func freeSlices(slices []*slice) {
 
 // requestECMeta returns an EC metadata found on a remote target.
 func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
-	path := cmn.URLPath(cmn.Version, cmn.EC, URLMeta, bck.Name, objName)
+	path := cmn.JoinWords(cmn.Version, cmn.EC, URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = cmn.AddBckToQuery(query, bck)
 	url := si.URL(cmn.NetworkIntraData) + path

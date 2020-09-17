@@ -14,7 +14,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -132,11 +131,6 @@ func NewHTTPError(r *http.Request, msg string, status int) (*HTTPError, bool) {
 	}
 	return &HTTPError{Status: status, Message: msg, Method: r.Method,
 		URLPath: r.URL.Path, RemoteAddr: r.RemoteAddr}, false
-}
-
-// URLPath returns a HTTP URL path by joining all segments with "/"
-func URLPath(segments ...string) string {
-	return path.Join("/", path.Join(segments...))
 }
 
 // PrependProtocol prepends protocol in URL in case it is missing.

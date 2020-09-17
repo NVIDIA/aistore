@@ -74,10 +74,32 @@ func ReparseQuery(r *http.Request) {
 	}
 }
 
-func JoinPath(urlBase, path string) string {
-	url := strings.TrimSuffix(urlBase, "/")
-	if !strings.HasPrefix(path, "/") {
-		url += "/"
+// JoinWords uses forward slash to join any number of words into a single path.
+// The words are assumed not to be prefixed with slashes.
+// Returned path is prefixed with a slash.
+func JoinWords(words ...string) (path string) {
+	switch len(words) {
+	case 1:
+		path = "/" + words[0]
+	case 2:
+		path = "/" + words[0] + "/" + words[1]
+	default:
+		for _, s := range words {
+			path += "/" + s
+		}
+	}
+	return
+}
+
+// JoinPath joins two path elements that may (or may not) be prefixed/suffixed with a slash.
+func JoinPath(url, path string) string {
+	suffix := url[len(url)-1:] == "/"
+	prefix := path[:1] == "/"
+	if suffix && prefix {
+		return url + path[1:]
+	}
+	if !suffix && !prefix {
+		return url + "/" + path
 	}
 	return url + path
 }

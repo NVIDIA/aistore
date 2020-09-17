@@ -349,7 +349,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 	msg := ic.p.newAisMsg(actMsg, nil, nil)
 	result := ic.p.call(callArgs{si: si,
 		req: cmn.ReqArgs{Method: http.MethodPost,
-			Path: cmn.URLPath(cmn.Version, cmn.IC),
+			Path: cmn.JoinWords(cmn.Version, cmn.IC),
 			Body: cmn.MustMarshal(msg),
 		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation},
 	)
@@ -370,7 +370,7 @@ func (ic *ic) syncICBundle() error {
 		si: si,
 		req: cmn.ReqArgs{
 			Method: http.MethodGet,
-			Path:   cmn.URLPath(cmn.Version, cmn.IC),
+			Path:   cmn.JoinWords(cmn.Version, cmn.IC),
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
 		},
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,

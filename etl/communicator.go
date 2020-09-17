@@ -224,7 +224,9 @@ func pruneQuery(rawQuery string) string {
 	return vals.Encode()
 }
 
-func transformerPath(bck *cluster.Bck, objName string) string { return cmn.URLPath(bck.Name, objName) }
+func transformerPath(bck *cluster.Bck, objName string) string {
+	return cmn.JoinWords(bck.Name, objName)
+}
 
 func handleResp(resp *http.Response, err error) (io.ReadCloser, int64, error) {
 	if err != nil {

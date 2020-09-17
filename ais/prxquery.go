@@ -96,7 +96,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	args := bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
-			Path:   cmn.URLPath(cmn.Version, cmn.Query, cmn.Init),
+			Path:   cmn.JoinWords(cmn.Version, cmn.Query, cmn.Init),
 			Body:   cmn.MustMarshal(msg),
 			Header: header,
 		},
@@ -199,7 +199,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		results = p.bcastToGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
-				Path:   cmn.URLPath(cmn.Version, cmn.Query, cmn.Peek),
+				Path:   cmn.JoinWords(cmn.Version, cmn.Query, cmn.Peek),
 				Body:   cmn.MustMarshal(msg),
 				Header: map[string][]string{cmn.HeaderAccept: {cmn.ContentMsgPack}},
 			},
@@ -228,7 +228,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 
 	if len(result.Entries) > 0 {
 		last := result.Entries[len(result.Entries)-1]
-		discardResults := p.callTargets(http.MethodPut, cmn.URLPath(cmn.Version, cmn.Query, cmn.Discard, msg.Handle, last.Name), nil)
+		discardResults := p.callTargets(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Query, cmn.Discard, msg.Handle, last.Name), nil)
 
 		for res := range discardResults {
 			if res.err != nil && res.status != http.StatusNotFound {

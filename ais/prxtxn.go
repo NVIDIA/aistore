@@ -86,7 +86,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			return res.err
 		}
@@ -107,7 +107,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	wg.Wait() // to synchronize prior to committing
 
 	// 5. commit
-	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // making exception for this critical op
 	c.req.Query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
@@ -173,7 +173,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
@@ -205,7 +205,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
-	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
 		if res.err != nil {
@@ -275,7 +275,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
@@ -325,7 +325,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	}
 
 	// 6. commit
-	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	return
 }
@@ -366,7 +366,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
@@ -411,7 +411,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 			// 6. commit
 			xactID = c.uuid
-			c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 			c.req.Body = cmn.MustMarshal(c.msg)
 
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
@@ -466,7 +466,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
@@ -506,7 +506,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
-	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	xactID = c.uuid
 	return
@@ -578,7 +578,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.URLPath(c.path, cmn.ActAbort)
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			err = res.err
 			return
@@ -613,7 +613,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	// 6. commit
 	unlockUpon = true
 	config := cmn.GCO.Get()
-	c.req.Path = cmn.URLPath(c.path, cmn.ActCommit)
+	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
 	for res := range results {
 		if res.err != nil {
@@ -641,14 +641,14 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 	c.msg = p.newAisMsg(msg, c.smap, nil, c.uuid)
 	body := cmn.MustMarshal(c.msg)
 
-	c.path = cmn.URLPath(cmn.Version, cmn.Txn, bck.Name)
+	c.path = cmn.JoinWords(cmn.Version, cmn.Txn, bck.Name)
 	c.timeout = cmn.GCO.Get().Timeout.CplaneOperation
 
 	query := make(url.Values, 2)
 	query = cmn.AddBckToQuery(query, bck.Bck)
 	query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
-	c.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPath(c.path, cmn.ActBegin), Query: query, Body: body}
+	c.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.JoinWords(c.path, cmn.ActBegin), Query: query, Body: body}
 	return c
 }
 

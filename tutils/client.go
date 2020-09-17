@@ -518,7 +518,7 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	baseParams.Method = http.MethodGet
 	err := api.DoHTTPRequest(api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Daemon),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Daemon),
 		Query:      url.Values{cmn.URLParamWhat: {cmn.GetWhatStats}},
 	}, &stats)
 	tassert.CheckFatal(t, err)

@@ -128,7 +128,7 @@ func Register(network, trname string, callback Receive, mems ...*memsys.MMSA) (u
 		mem = mems[0]
 	}
 	h := &handler{trname: trname, callback: callback, hkName: path.Join(network, trname, "oldSessions"), mem: mem}
-	upath = cmn.URLPath(cmn.Version, cmn.Transport, trname)
+	upath = cmn.JoinWords(cmn.Version, cmn.Transport, trname)
 	mux.HandleFunc(upath, h.receive)
 	if _, ok = handlers[network][trname]; ok {
 		glog.Errorf("Warning: re-registering transport handler %q", trname)
@@ -156,7 +156,7 @@ func Unregister(network, trname string) (err error) {
 	}
 	delete(handlers[network], trname)
 
-	upath := cmn.URLPath(cmn.Version, cmn.Transport, trname)
+	upath := cmn.JoinWords(cmn.Version, cmn.Transport, trname)
 	mux.Unhandle(upath)
 	mu.Unlock()
 

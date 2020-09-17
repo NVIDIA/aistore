@@ -131,7 +131,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 
 			glog.Errorf("[%s] start sort request failed to be broadcast, err: %s", managerUUID, resp.err.Error())
 
-			path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+			path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
 			broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
 
 			s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d", resp.err.Error(), resp.statusCode)
@@ -154,14 +154,14 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	// to not yet initialized target.
 
 	glog.V(4).Infof("[%s] broadcasting init request to all targets", managerUUID)
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Init, managerUUID)
+	path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Init, managerUUID)
 	responses := broadcast(http.MethodPost, path, nil, b, ctx.smapOwner.Get().Tmap)
 	if err := checkResponses(responses); err != nil {
 		return
 	}
 
 	glog.V(4).Infof("[%s] broadcasting start request to all targets", managerUUID)
-	path = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Start, managerUUID)
+	path = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Start, managerUUID)
 	responses = broadcast(http.MethodPost, path, nil, nil, ctx.smapOwner.Get().Tmap)
 	if err := checkResponses(responses); err != nil {
 		return
@@ -199,7 +199,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targets := ctx.smapOwner.Get().Tmap
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.List)
+	path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.List)
 	responses := broadcast(http.MethodGet, path, query, nil, targets)
 
 	resultList := make([]*JobInfo, 0)
@@ -243,7 +243,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 		targets     = ctx.smapOwner.Get().Tmap
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
-		path        = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
+		path        = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
 		responses   = broadcast(http.MethodGet, path, nil, nil, targets)
 	)
 
@@ -294,7 +294,7 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
-		path        = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+		path        = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
 		responses   = broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
 	)
 
@@ -331,7 +331,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		targets     = ctx.smapOwner.Get().Tmap
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
-		path        = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
+		path        = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
 		responses   = broadcast(http.MethodGet, path, nil, nil, targets)
 	)
 
@@ -364,7 +364,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
-	path = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Remove, managerUUID)
+	path = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Remove, managerUUID)
 	responses = broadcast(http.MethodDelete, path, nil, nil, targets, ctx.node)
 	failed := make([]string, 0)
 	for _, r := range responses {
@@ -491,7 +491,7 @@ func (m *Manager) startDSort() {
 			}
 
 			glog.Warning("broadcasting abort to other targets")
-			path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, m.ManagerUUID)
+			path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Abort, m.ManagerUUID)
 			broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap, ctx.node)
 		}
 	}
@@ -502,7 +502,7 @@ func (m *Manager) startDSort() {
 	}
 
 	glog.Info("broadcasting finished ack to other targets")
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.FinishedAck, m.ManagerUUID, m.ctx.node.DaemonID)
+	path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.FinishedAck, m.ManagerUUID, m.ctx.node.DaemonID)
 	broadcast(http.MethodPut, path, nil, nil, ctx.smapOwner.Get().Tmap, ctx.node)
 }
 
@@ -834,7 +834,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	// Get memory stats from targets
 	var (
 		err  error
-		path = cmn.URLPath(cmn.Version, cmn.Daemon)
+		path = cmn.JoinWords(cmn.Version, cmn.Daemon)
 
 		totalAvailMemory  = uint64(0)
 		moreThanThreshold = true

@@ -322,7 +322,7 @@ func (nxb *notifXactBase) bcastArgs() bcastArgs {
 	args.req.Query = make(url.Values, 2)
 	args.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
 	args.req.Query.Set(cmn.URLParamUUID, nxb.UUID())
-	args.req.Path = cmn.URLPath(cmn.Version, cmn.Xactions)
+	args.req.Path = cmn.JoinWords(cmn.Version, cmn.Xactions)
 	return args
 }
 

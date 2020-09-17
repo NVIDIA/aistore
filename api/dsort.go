@@ -17,7 +17,7 @@ func StartDSort(baseParams BaseParams, rs dsort.RequestSpec) (string, error) {
 	var id string
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Sort),
 		Body:       cmn.MustMarshal(rs),
 	}, &id)
 	return id, err
@@ -27,7 +27,7 @@ func AbortDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Abort),
 		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
 	})
 }
@@ -36,7 +36,7 @@ func MetricsDSort(baseParams BaseParams, managerUUID string) (metrics map[string
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Sort),
 		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
 	}, &metrics)
 	return metrics, err
@@ -46,7 +46,7 @@ func RemoveDSort(baseParams BaseParams, managerUUID string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Sort),
 		Query:      url.Values{cmn.URLParamUUID: []string{managerUUID}},
 	})
 }
@@ -56,7 +56,7 @@ func ListDSort(baseParams BaseParams, regex string) (jobsInfos []*dsort.JobInfo,
 
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Sort),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Sort),
 		Query:      url.Values{cmn.URLParamRegex: []string{regex}},
 	}, &jobsInfos)
 	return jobsInfos, err

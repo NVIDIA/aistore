@@ -336,7 +336,7 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 		if nh.r[0] == '/' { // Check if it's an absolute path.
 			path = nh.r
 		} else {
-			path = cmn.URLPath(cmn.Version, nh.r)
+			path = cmn.JoinWords(cmn.Version, nh.r)
 		}
 		if cmn.StringInSlice(cmn.NetworkPublic, nh.net) {
 			h.registerPublicNetHandler(path, nh.h)
@@ -756,7 +756,7 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 
 func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte) {
 	var (
-		path = cmn.URLPath(cmn.Version, cmn.Notifs)
+		path = cmn.JoinWords(cmn.Version, cmn.Notifs)
 	)
 
 	args := bcastArgs{
@@ -927,7 +927,7 @@ func (h *httprunner) bcastToIC(msg *aisMsg) chan callResult {
 	return h.bcastToNodes(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
-			Path:   cmn.URLPath(cmn.Version, cmn.IC),
+			Path:   cmn.JoinWords(cmn.Version, cmn.IC),
 			Body:   cmn.MustMarshal(msg),
 		},
 		network: cmn.NetworkIntraControl,
@@ -1105,7 +1105,7 @@ func (h *httprunner) invalmsghdlrf(w http.ResponseWriter, r *http.Request, forma
 
 func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) ([]byte, error, int) {
 	var (
-		path = cmn.URLPath(cmn.Version, cmn.Health)
+		path = cmn.JoinWords(cmn.Version, cmn.Health)
 		url  = si.URL(cmn.NetworkIntraControl)
 		args = callArgs{
 			si:      si,
@@ -1416,11 +1416,11 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 		regReq.Smap = h.owner.smap.get()
 	}
 	info := cmn.MustMarshal(regReq)
-	path := cmn.URLPath(cmn.Version, cmn.Cluster)
+	path := cmn.JoinWords(cmn.Version, cmn.Cluster)
 	if keepalive {
-		path += cmn.URLPath(cmn.Keepalive)
+		path += cmn.JoinWords(cmn.Keepalive)
 	} else {
-		path += cmn.URLPath(cmn.AutoRegister)
+		path += cmn.JoinWords(cmn.AutoRegister)
 	}
 	callArgs := callArgs{
 		si:      psi,

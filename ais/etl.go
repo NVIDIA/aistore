@@ -204,7 +204,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.ETL, cmn.ETLStop, msg.ID),
+			Path:   cmn.JoinWords(cmn.Version, cmn.ETL, cmn.ETLStop, msg.ID),
 		},
 		timeout: cmn.LongTimeout,
 	})
@@ -251,7 +251,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.ETL, cmn.ETLStop, msg.ID),
+			Path:   cmn.JoinWords(cmn.Version, cmn.ETL, cmn.ETLStop, msg.ID),
 		},
 		timeout: cmn.LongTimeout,
 	})

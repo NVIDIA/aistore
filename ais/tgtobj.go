@@ -657,7 +657,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
+		Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 		Query:  query,
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)

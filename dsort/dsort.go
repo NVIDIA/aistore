@@ -543,7 +543,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 				reqArgs := &cmn.ReqArgs{
 					Method: http.MethodPost,
 					Base:   sendTo.URL(cmn.NetworkIntraData),
-					Path:   cmn.URLPath(cmn.Version, cmn.Sort, cmn.Records, m.ManagerUUID),
+					Path:   cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Records, m.ManagerUUID),
 					Query:  query,
 					BodyR:  r,
 				}
@@ -866,7 +866,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				reqArgs := &cmn.ReqArgs{
 					Method: http.MethodPost,
 					Base:   si.URL(cmn.NetworkIntraData),
-					Path:   cmn.URLPath(cmn.Version, cmn.Sort, cmn.Shards, m.ManagerUUID),
+					Path:   cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Shards, m.ManagerUUID),
 					Query:  query,
 					BodyR:  r,
 				}

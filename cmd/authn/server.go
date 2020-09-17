@@ -105,10 +105,10 @@ func (a *authServ) registerHandler(path string, handler func(http.ResponseWriter
 }
 
 func (a *authServ) registerPublicHandlers() {
-	a.registerHandler(cmn.URLPath(cmn.Version, pathUsers), a.userHandler)
-	a.registerHandler(cmn.URLPath(cmn.Version, pathTokens), a.tokenHandler)
-	a.registerHandler(cmn.URLPath(cmn.Version, pathClusters), a.clusterHandler)
-	a.registerHandler(cmn.URLPath(cmn.Version, pathRoles), a.roleHandler)
+	a.registerHandler(cmn.JoinWords(cmn.Version, pathUsers), a.userHandler)
+	a.registerHandler(cmn.JoinWords(cmn.Version, pathTokens), a.tokenHandler)
+	a.registerHandler(cmn.JoinWords(cmn.Version, pathClusters), a.clusterHandler)
+	a.registerHandler(cmn.JoinWords(cmn.Version, pathRoles), a.roleHandler)
 }
 
 func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {

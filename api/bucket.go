@@ -64,7 +64,7 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 	}
 	q = cmn.AddBckToQuery(q, bck)
 	baseParams.Method = http.MethodPatch
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+	path := cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name)
 	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: path, Body: body, Query: q}, &xactID)
 	return
 }
@@ -76,7 +76,7 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 // corresponding counterparts in the BucketProps struct
 func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn.BucketProps, err error) {
 	var (
-		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		path = cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name)
 		q    url.Values
 	)
 	p = &cmn.BucketProps{}
@@ -104,7 +104,7 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketNames, error) {
 	var (
 		bucketNames = cmn.BucketNames{}
-		path        = cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
+		path        = cmn.JoinWords(cmn.Version, cmn.Buckets, cmn.AllBuckets)
 		query       = cmn.AddBckToQuery(nil, cmn.Bck(queryBcks))
 	)
 
@@ -127,7 +127,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.Bu
 
 	reqParams := ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, query.Name),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, query.Name),
 		Header:     http.Header{cmn.HeaderContentType: []string{cmn.ContentJSON}},
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
@@ -153,7 +153,7 @@ func CreateBucket(baseParams BaseParams, bck cmn.Bck, ops ...cmn.BucketPropsToUp
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateLB, Value: value}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
@@ -166,7 +166,7 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActDestroyLB}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
@@ -192,7 +192,7 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string, e
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, fromBck.Name),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, fromBck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Name: toBck.Name}),
 	}, &xactID)
 	return
@@ -205,7 +205,7 @@ func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) (xactID string,
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, oldBck.Name),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, oldBck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBck.Name}),
 	}, &xactID)
 	return
@@ -272,7 +272,7 @@ func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) e
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictCB}),
 		Query:      cmn.AddBckToQuery(q, bck),
 	})
@@ -358,7 +358,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 	var (
 		err  error
 		q    = cmn.AddBckToQuery(url.Values{}, bck)
-		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		path = cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name)
 
 		bckList = &cmn.BucketList{} // List with final result.
 		tmpPage = &cmn.BucketList{} // Temporary page for intermediate results.
@@ -465,7 +465,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 		actMsg    = cmn.ActionMsg{Action: cmn.ActListObjects, Value: smsg}
 		reqParams = ReqParams{
 			BaseParams: baseParams,
-			Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+			Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 			Header:     http.Header{cmn.HeaderAccept: []string{cmn.ContentMsgPack}},
 			Query:      cmn.AddBckToQuery(url.Values{}, bck),
 			Body:       cmn.MustMarshal(actMsg),
@@ -486,7 +486,7 @@ func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*
 func ListObjectsInvalidateCache(params BaseParams, bck cmn.Bck) error {
 	params.Method = http.MethodPost
 	var (
-		path = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		path = cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name)
 		q    = url.Values{}
 	)
 	return DoHTTPRequest(ReqParams{
@@ -510,7 +510,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, listR
 	}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: action, Value: listRangeMsg}),
 		Header: http.Header{
 			cmn.HeaderContentType: []string{cmn.ContentJSON},
@@ -526,7 +526,7 @@ func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactI
 	ecConf := string(cmn.MustMarshal(&cmn.ECConfToUpdate{DataSlices: &data, ParitySlices: &parity}))
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActECEncode, Value: ecConf}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	}, &xactID)

@@ -343,7 +343,7 @@ outer:
 
 	// step 3: b-cast
 	var (
-		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
+		urlPath = cmn.JoinWords(cmn.Version, cmn.Metasync)
 		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
 		to      = cluster.AllNodes
 	)
@@ -493,7 +493,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		pairs = append(pairs, revsPair{revs, msg})
 	}
 	var (
-		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
+		urlPath = cmn.JoinWords(cmn.Version, cmn.Metasync)
 		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
 	)
 	defer body.Free()

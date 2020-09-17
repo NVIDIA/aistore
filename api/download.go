@@ -37,7 +37,7 @@ func DownloadWithParam(baseParams BaseParams, dlt downloader.DlType, body interf
 	baseParams.Method = http.MethodPost
 	return doDlDownloadRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Download),
 		Body:       cmn.MustMarshal(downloader.DlBody{Type: dlt, RawMessage: cmn.MustMarshal(body)}),
 	})
 }
@@ -67,7 +67,7 @@ func DownloadStatus(baseParams BaseParams, id string) (downloader.DlStatusResp, 
 	baseParams.Method = http.MethodGet
 	return doDlStatusRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Download),
 		Body:       cmn.MustMarshal(dlBody),
 	})
 }
@@ -79,7 +79,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Download),
 		Body:       cmn.MustMarshal(dlBody),
 	}, &dlList)
 	sort.Sort(dlList)
@@ -93,7 +93,7 @@ func DownloadAbort(baseParams BaseParams, id string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download, cmn.Abort),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Download, cmn.Abort),
 		Body:       cmn.MustMarshal(dlBody),
 	})
 }
@@ -105,7 +105,7 @@ func DownloadRemove(baseParams BaseParams, id string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.URLPath(cmn.Version, cmn.Download, cmn.Remove),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Download, cmn.Remove),
 		Body:       cmn.MustMarshal(dlBody),
 	})
 }

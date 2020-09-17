@@ -54,7 +54,7 @@ func (m *userManager) broadcast(method, path string, body []byte) {
 func (m *userManager) proxyRequest(method, proxyURL, path string, injson []byte) error {
 	startRequest := time.Now()
 	for {
-		url := proxyURL + cmn.URLPath(cmn.Version, path)
+		url := proxyURL + cmn.JoinWords(cmn.Version, path)
 		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if err != nil {
 			return err
