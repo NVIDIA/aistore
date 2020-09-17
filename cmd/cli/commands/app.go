@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
@@ -23,8 +23,11 @@ const (
 	metadata = "md"
 )
 
-// Global config object
-var cfg *config.Config
+var (
+	// Global config object
+	cfg              *config.Config
+	unreachableRegex *regexp.Regexp = regexp.MustCompile("dial.*(timeout|refused)")
+)
 
 // AISCLI represents an instance of an AIS command line interface
 type AISCLI struct {
@@ -50,10 +53,6 @@ func New(build, version string) *AISCLI {
 
 // Run runs the CLI
 func (aisCLI *AISCLI) Run(input []string) error {
-	if err := testAISURL(); err != nil {
-		return err
-	}
-
 	if err := aisCLI.runOnce(input); err != nil {
 		return aisCLI.handleCLIError(err)
 	}
@@ -97,8 +96,24 @@ func (aisCLI *AISCLI) runNTimes(input []string) error {
 	return nil
 }
 
+func (aisCLI *AISCLI) isUnreachableError(err error) bool {
+	switch err := err.(type) {
+	case *cmn.HTTPError:
+		return cmn.IsUnreachable(err, err.Status)
+	case *usageError, *additionalInfoError:
+		return false
+	default:
+		return unreachableRegex.MatchString(err.Error())
+	}
+}
+
 // Formats the error message to a nice string
 func (aisCLI *AISCLI) handleCLIError(err error) error {
+	if aisCLI.isUnreachableError(err) {
+		return fmt.Errorf(
+			"AIStore proxy unreachable at %s. You may need to update environment variable AIS_ENDPOINT",
+			clusterURL)
+	}
 	switch err := err.(type) {
 	case *cmn.HTTPError:
 		return errors.New(cmn.CapitalizeString(err.Message))
@@ -212,14 +227,4 @@ func commandNotFoundHandler(c *cli.Context, cmd string) {
 
 func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
 	return incorrectUsageError(c, err)
-}
-
-// Checks if URL is valid by trying to get Smap
-func testAISURL() (err error) {
-	_, err = api.GetClusterMap(defaultAPIParams)
-	if err != nil {
-		return fmt.Errorf("AIStore proxy unreachable at %s. You may need to update environment variable AIS_ENDPOINT",
-			clusterURL)
-	}
-	return
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
@@ -64,6 +65,7 @@ func initClusterParams() {
 }
 
 func Init() (err error) {
+	unreachableRegex = regexp.MustCompile("dial.*(timeout|refused)")
 	cfg, err = config.Load()
 	if err != nil {
 		return err
