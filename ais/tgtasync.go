@@ -55,7 +55,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 
 	if isNew {
 		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifCache, Dsts: []string{equalIC}, F: t.xactCallerNotify},
+			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifCache, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		})
 
 		go xact.Run()

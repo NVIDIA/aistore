@@ -67,7 +67,6 @@ func (j *jogger) jog() {
 			j.mtx.Unlock()
 			break
 		}
-
 		j.task = t
 		j.mtx.Unlock()
 

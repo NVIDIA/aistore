@@ -202,9 +202,11 @@ type (
 	PeriodConf struct {
 		StatsTimeStr     string `json:"stats_time"`
 		RetrySyncTimeStr string `json:"retry_sync_time"`
+		NotifTimeStr     string `json:"notif_time"`
 		// omitempty
 		StatsTime     time.Duration `json:"-"`
 		RetrySyncTime time.Duration `json:"-"`
+		NotifTime     time.Duration `json:"-"`
 	}
 	// timeoutconfig contains timeouts used for intra-cluster communication
 	TimeoutConf struct {
@@ -831,6 +833,9 @@ func (c *PeriodConf) Validate(_ *Config) (err error) {
 	}
 	if c.RetrySyncTime, err = time.ParseDuration(c.RetrySyncTimeStr); err != nil {
 		return fmt.Errorf("invalid periodic.retry_sync_time format %s, err %v", c.RetrySyncTimeStr, err)
+	}
+	if c.NotifTime, err = time.ParseDuration(c.NotifTimeStr); err != nil {
+		return fmt.Errorf("invalid periodic.notif_time format %s, err %v", c.NotifTimeStr, err)
 	}
 	return nil
 }

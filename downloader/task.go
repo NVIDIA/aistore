@@ -194,6 +194,9 @@ func (t *singleObjectTask) wrapReader(ctx context.Context, r io.ReadCloser) io.R
 		r: r,
 		reporter: func(n int64) {
 			t.currentSize.Add(n)
+			if n := t.job.Notif(); n != nil {
+				n.OnProgress(n, nil)
+			}
 		},
 	}
 	// Wrap around throttler reader (noop if throttling is disabled).

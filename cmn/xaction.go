@@ -91,6 +91,7 @@ var (
 	// interface guards
 	_ Xact      = &XactBase{}
 	_ XactStats = &BaseXactStats{}
+	_ Notif     = &NotifXact{}
 )
 
 func NewErrXactExpired(msg string) *ErrXactExpired { return &ErrXactExpired{msg: msg} }
@@ -220,6 +221,9 @@ func (xact *XactBase) AddNotif(n Notif) {
 	Assert(ok)
 	xact.notif.Xact = xact
 	Assert(xact.notif.F != nil)
+	if n.Upon(UponProgress) {
+		Assert(xact.notif.P != nil)
+	}
 }
 
 func (xact *XactBase) Abort() {
@@ -274,4 +278,15 @@ func (xs *XactStatus) Finished() bool {
 
 func (xs *XactStatus) Aborted() bool {
 	return xs.AbortedX
+}
+
+//
+// NotifXact
+//
+
+func (nx *NotifXact) ToNotifMsg() NotifMsg {
+	msg := NotifMsg{Ty: int32(nx.Category())}
+	msg.UUID = nx.Xact.ID().String()
+	msg.Data = MustMarshal(nx.Xact.Stats())
+	return msg
 }

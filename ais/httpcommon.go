@@ -754,9 +754,9 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 // intra-cluster IPC, control plane: notify another node
 //
 
-func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte) {
+func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte, kind string) {
 	var (
-		path = cmn.JoinWords(cmn.Version, cmn.Notifs)
+		path = cmn.JoinWords(cmn.Version, cmn.Notifs, kind)
 	)
 
 	args := bcastArgs{
@@ -768,26 +768,39 @@ func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte) {
 	_ = h.bcastToNodes(args)
 }
 
-func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
-	var (
-		smap  = h.owner.smap.get()
-		msg   = notifMsg{Ty: int32(n.Category()), Snode: h.si}
-		notif = n.(*cmn.NotifXact)
-	)
+func (h *httprunner) callerNotifyFin(n cmn.Notif, err error) {
+	h.callerNotify(n, err, cmn.Finished)
+}
+
+func (h *httprunner) callerNotifyProgress(n cmn.Notif, err error) {
+	h.callerNotify(n, err, cmn.Progress)
+}
+
+func (h *httprunner) callerNotify(n cmn.Notif, err error, kind string) {
+	cmn.Assert(kind == cmn.Progress || kind == cmn.Finished)
+	msg := n.ToNotifMsg()
 	if err != nil {
 		msg.ErrMsg = err.Error()
 	}
-	msg.UUID = notif.Xact.ID().String()
-	msg.Data = cmn.MustMarshal(notif.Xact.Stats())
-	nodes := make(cluster.NodeMap)
-	for _, dst := range notif.Dsts {
+	msg.NodeID = h.si.ID()
+	nodes := h.notifDst(n)
+	h.notify(nodes, cmn.MustMarshal(&msg), kind)
+}
+
+// TODO: optimize avoid allocating a new NodeMap
+func (h *httprunner) notifDst(notif cmn.Notif) cluster.NodeMap {
+	var (
+		smap  = h.owner.smap.get()
+		nodes = make(cluster.NodeMap)
+	)
+	for _, dst := range notif.Subscribers() {
 		if dst == equalIC {
 			for si := range smap.IC {
 				if si != h.si.ID() {
 					nodes.Add(smap.GetProxy(si))
 				}
 			}
-			debug.Assert(len(notif.Dsts) == 1)
+			debug.Assert(len(notif.Subscribers()) == 1)
 			break
 		} else if si := smap.GetNode(dst); si != nil {
 			nodes.Add(si)
@@ -796,7 +809,7 @@ func (h *httprunner) xactCallerNotify(n cmn.Notif, err error) {
 			glog.Error(err)
 		}
 	}
-	h.notify(nodes, cmn.MustMarshal(&msg))
+	return nodes
 }
 
 ///////////////

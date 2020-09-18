@@ -704,7 +704,7 @@ func (c *txnServerCtx) addNotif(xact cmn.Xact) {
 	dsts, ok := c.query[cmn.URLParamNotifyMe]
 	if ok {
 		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifXact, Dsts: dsts, F: c.t.xactCallerNotify},
+			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifXact, Dsts: dsts, F: c.t.callerNotifyFin},
 		})
 	}
 }

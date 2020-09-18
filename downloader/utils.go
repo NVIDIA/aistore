@@ -81,7 +81,7 @@ func normalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *cluster.Bck, id string, dlb DlBody) (DlJob, error) {
+func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *cluster.Bck, id string, dlb DlBody, dlXact *Downloader) (DlJob, error) {
 	switch dlb.Type {
 	case DlTypeCloud:
 		dp := &DlCloudBody{}
@@ -92,7 +92,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newCloudBucketDlJob(ctx, t, id, bck, dp)
+		return newCloudBucketDlJob(ctx, t, id, bck, dp, dlXact)
 
 	case DlTypeMulti:
 		dp := &DlMultiBody{}
@@ -103,7 +103,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newMultiDlJob(t, id, bck, dp)
+		return newMultiDlJob(t, id, bck, dp, dlXact)
 
 	case DlTypeRange:
 		dp := &DlRangeBody{}
@@ -114,7 +114,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newRangeDlJob(t, id, bck, dp)
+		return newRangeDlJob(t, id, bck, dp, dlXact)
 
 	case DlTypeSingle:
 		dp := &DlSingleBody{}
@@ -125,7 +125,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newSingleDlJob(t, id, bck, dp)
+		return newSingleDlJob(t, id, bck, dp, dlXact)
 
 	default:
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")

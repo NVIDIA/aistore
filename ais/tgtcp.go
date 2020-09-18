@@ -738,7 +738,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 			When: cmn.UponTerm,
 			Ty:   notifXact,
 			Dsts: []string{equalIC},
-			F:    t.xactCallerNotify,
+			F:    t.callerNotifyFin,
 		},
 	}
 	if msg.Action == cmn.ActRebalance { // manual (triggered by user)

@@ -537,7 +537,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				When: cmn.UponTerm,
 				Ty:   notifXact,
 				Dsts: []string{equalIC},
-				F:    t.xactCallerNotify,
+				F:    t.callerNotifyFin,
 			},
 		})
 		go xact.Run()

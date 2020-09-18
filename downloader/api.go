@@ -62,6 +62,15 @@ type (
 		FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
 		Errs          []TaskErrInfo `json:"download_errors,omitempty"`
 	}
+
+	NotifDownload struct {
+		cmn.NotifBase
+		DlJob DlJob
+	}
+)
+
+var (
+	_ cmn.Notif = &NotifDownload{} // interface guard
 )
 
 func (j *DlJobInfo) Aggregate(rhs *DlJobInfo) {
@@ -233,8 +242,9 @@ func (b *DlSingleObj) Validate() error {
 
 // Internal status/delete request body
 type DlAdminBody struct {
-	ID    string `json:"id"`
-	Regex string `json:"regex"`
+	ID         string `json:"id"`
+	Regex      string `json:"regex"`
+	OnlyActive bool   `json:"only_active"`
 }
 
 func (b *DlAdminBody) Validate(requireID bool) error {
@@ -418,4 +428,15 @@ func (b *DlCloudBody) Describe() string {
 		return b.Description
 	}
 	return fmt.Sprintf("cloud prefetch -> %s", b.Bck)
+}
+
+//
+// NotifDownloader
+//
+
+func (nd *NotifDownload) ToNotifMsg() cmn.NotifMsg {
+	msg := cmn.NotifMsg{Ty: int32(nd.Category())}
+	msg.UUID = nd.DlJob.ID()
+	msg.Data = cmn.MustMarshal(nd.DlJob.ActiveStats())
+	return msg
 }

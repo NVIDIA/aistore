@@ -61,7 +61,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dlJob, err := downloader.ParseStartDownloadRequest(ctx, t, bck, uuid, dlb)
+		dlJob, err := downloader.ParseStartDownloadRequest(ctx, t, bck, uuid, dlb, downloaderXact)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -69,6 +69,16 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("Downloading: %s", dlJob.ID())
 		}
+
+		dlJob.AddNotif(&downloader.NotifDownload{
+			NotifBase: cmn.NotifBase{
+				When: cmn.UponProgress,
+				Ty:   notifDownload,
+				Dsts: []string{equalIC},
+				F:    t.callerNotifyFin,
+				P:    t.callerNotifyProgress,
+			},
+		}, dlJob)
 		response, respErr, statusCode = downloaderXact.Download(dlJob)
 	case http.MethodGet:
 		_, err := cmn.MatchRESTItems(r.URL.Path, 0, false, cmn.Version, cmn.Download)
@@ -82,9 +92,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		if payload.ID != "" {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Getting status of download: %s", payload)
+				glog.Infof("Getting status of download: %v", payload)
 			}
-			response, respErr, statusCode = downloaderXact.JobStatus(payload.ID)
+			response, respErr, statusCode = downloaderXact.JobStatus(payload.ID, payload.OnlyActive)
 		} else {
 			var regex *regexp.Regexp
 			if payload.Regex != "" {
@@ -111,12 +121,12 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		switch items[0] {
 		case cmn.Abort:
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Aborting download: %s", payload)
+				glog.Infof("Aborting download: %v", payload)
 			}
 			response, respErr, statusCode = downloaderXact.AbortJob(payload.ID)
 		case cmn.Remove:
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Removing download: %s", payload)
+				glog.Infof("Removing download: %v", payload)
 			}
 			response, respErr, statusCode = downloaderXact.RemoveJob(payload.ID)
 		default:

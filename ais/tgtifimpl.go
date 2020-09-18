@@ -109,7 +109,7 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 			When: cmn.UponTerm,
 			Ty:   notifXact,
 			Dsts: []string{equalIC},
-			F:    t.xactCallerNotify,
+			F:    t.callerNotifyFin,
 		},
 	})
 	lru.Run(&ini) // blocking

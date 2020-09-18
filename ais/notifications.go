@@ -14,9 +14,9 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
@@ -37,6 +37,7 @@ const (
 	notifInvalid = iota
 	notifXact
 	notifCache
+	notifDownload
 )
 
 var notifCatText = map[int]string{
@@ -70,8 +71,8 @@ type (
 	nlFilter xaction.RegistryXactFilter
 
 	notifListener interface {
-		callback(notifs *notifs, n notifListener, err error, timestamp int64)
-		onProgress(daeID string, rawMsg []byte) (bool, bool, error)
+		callback(n notifListener, err error, timestamp int64)
+		unmarshalStats(rawMsg []byte) (interface{}, bool, bool, error)
 		lock()
 		unlock()
 		rlock()
@@ -129,20 +130,16 @@ type (
 
 	notifXactBase struct {
 		notifListenerBase
-		Stats api.NodesXactStat
+	}
+
+	notifDownloadBase struct {
+		notifListenerBase
 	}
 
 	//
 	// notification messages
 	//
-	notifMsg struct {
-		UUID   string         `json:"string"`
-		Ty     int32          `json:"type"`    // enumerated type, one of (notifXact, et al.) - see above
-		Flags  int32          `json:"flags"`   // TODO: add
-		Snode  *cluster.Snode `json:"snode"`   // node
-		Data   []byte         `json:"message"` // typed message
-		ErrMsg string         `json:"err"`     // error.Error()
-	}
+
 	// receiver to start listening
 	// TODO: explore other encoding formats (e.g. GOB) to simplify Marshal and Unmarshal logic
 	notifListenMsg struct {
@@ -157,6 +154,7 @@ type (
 // interface guard
 var (
 	_ notifListener     = &notifXactBase{}
+	_ notifListener     = &notifDownloadBase{}
 	_ cluster.Slistener = &notifs{}
 )
 
@@ -177,7 +175,12 @@ func newNLB(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action strin
 func newXactNL(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *notifXactBase {
 	return &notifXactBase{
 		notifListenerBase: *newNLB(uuid, smap, srcs, ty, action, bck...),
-		Stats:             make(api.NodesXactStat, len(srcs)),
+	}
+}
+
+func newDownloadNL(uuid string, smap *smapX, srcs cluster.NodeMap, action string, bck ...cmn.Bck) *notifDownloadBase {
+	return &notifDownloadBase{
+		notifListenerBase: *newNLB(uuid, smap, srcs, notifDownload, action, bck...),
 	}
 }
 
@@ -186,16 +189,13 @@ func newXactNL(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action st
 ///////////////////////
 
 // is called after all notifiers will have notified OR on failure (err != nil)
-func (nlb *notifListenerBase) callback(notifs *notifs, nl notifListener, err error, timestamp int64) {
+func (nlb *notifListenerBase) callback(nl notifListener, err error, timestamp int64) {
 	if nlb.FinTime.CAS(0, 1) {
 		// is optional
 		if nlb.f != nil {
 			nlb.f(nl, err) // invoke user-supplied callback and pass user-supplied notifListener
 		}
 		nlb.FinTime.Store(timestamp)
-		notifs.fmu.Lock()
-		notifs.fin[nl.UUID()] = nl
-		notifs.fmu.Unlock()
 	}
 }
 func (nlb *notifListenerBase) lock()                       { nlb.Lock() }
@@ -302,14 +302,15 @@ func (nlb *notifListenerBase) finCount() int {
 ///////////////////////
 //   notifXactBase   //
 ///////////////////////
-func (nxb *notifXactBase) onProgress(daeID string, rawMsg []byte) (finished, aborted bool, err error) {
-	stats := &cmn.BaseXactStatsExt{}
-	if err = jsoniter.Unmarshal(rawMsg, stats); err != nil {
+
+func (nxb *notifXactBase) unmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
+	xactStats := &cmn.BaseXactStatsExt{}
+	if err = jsoniter.Unmarshal(rawMsg, xactStats); err != nil {
 		return
 	}
-	nxb.setStats(daeID, stats)
-	aborted = stats.Aborted()
-	finished = stats.Finished()
+	stats = xactStats
+	aborted = xactStats.Aborted()
+	finished = xactStats.Finished()
 	return
 }
 
@@ -323,6 +324,35 @@ func (nxb *notifXactBase) bcastArgs() bcastArgs {
 	args.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
 	args.req.Query.Set(cmn.URLParamUUID, nxb.UUID())
 	args.req.Path = cmn.JoinWords(cmn.Version, cmn.Xactions)
+	return args
+}
+
+///////////////////////////
+//   notifDownloadBase   //
+//////////////////////////
+
+func (nd *notifDownloadBase) unmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
+	dlStatus := &downloader.DlStatusResp{}
+	if err = jsoniter.Unmarshal(rawMsg, dlStatus); err != nil {
+		return
+	}
+	stats = dlStatus
+	aborted = dlStatus.Aborted
+	finished = dlStatus.JobFinished()
+	return
+}
+
+func (nd *notifDownloadBase) bcastArgs() bcastArgs {
+	args := bcastArgs{
+		req:     cmn.ReqArgs{Method: http.MethodGet},
+		network: cmn.NetworkIntraControl,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+	}
+	dlBody := downloader.DlAdminBody{
+		ID: nd.UUID(),
+	}
+	args.req.Path = cmn.JoinWords(cmn.Version, cmn.Download)
+	args.req.Body = cmn.MustMarshal(dlBody)
 	return args
 }
 
@@ -420,10 +450,10 @@ func _findNL(nls map[string]notifListener, flt nlFilter) (nl notifListener, exis
 	return
 }
 
-// verb /v1/notifs
+// verb /v1/notifs/{progress..finished}
 func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
-		notifMsg = &notifMsg{}
+		notifMsg = &cmn.NotifMsg{}
 		nl       notifListener
 		errMsg   error
 		uuid     string
@@ -434,7 +464,8 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /notifs path")
 		return
 	}
-	if _, err := n.p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Notifs); err != nil {
+	apiItems, err := n.p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Notifs)
+	if err != nil {
 		return
 	}
 	if cmn.ReadJSON(w, r, notifMsg) != nil {
@@ -456,50 +487,87 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		n.p.invalmsghdlrsilent(w, r, s, http.StatusGone)
 		return
 	}
+
+	var (
+		srcs    = nl.notifiers()
+		tsi, ok = srcs[tid]
+	)
+	if !ok {
+		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: %s from unknown node %s", n.p.si, nl, tid)
+		return
+	}
 	//
 	// notifListener and notifMsg must have the same type
 	//
 	cmn.Assert(nl.notifTy() == int(notifMsg.Ty))
-	if notifMsg.ErrMsg != "" {
-		errMsg = errors.New(notifMsg.ErrMsg)
+	nl.rlock()
+	if nl.hasFinished(tsi) {
+		n.p.invalmsghdlrf(w, r, "%s: duplicate %s from node %s", n.p.si, nl, tid)
+		nl.runlock()
+		return
 	}
-	nl.lock()
-	err, status, done := n.handleMsg(nl, tid, notifMsg.Data, errMsg)
-	nl.unlock()
-	if done {
-		nl.callback(n, nl, nil, time.Now().UnixNano())
-		n.del(nl)
+	nl.runlock()
+
+	switch apiItems[0] {
+	// TODO: implement on Started notification
+	case cmn.Finished:
+		err = n.handleFinished(nl, tsi, notifMsg.Data, errMsg)
+	case cmn.Progress:
+		err = n.handleProgress(nl, tsi, notifMsg.Data, errMsg)
+	default:
+		n.p.invalmsghdlrf(w, r, "Invalid route /notifs/%s", apiItems[0])
+		return
 	}
+
 	if err != nil {
-		n.p.invalmsghdlr(w, r, err.Error(), status)
+		n.p.invalmsghdlr(w, r, err.Error())
 	}
 }
 
-// is called under notifListener.lock()
-func (n *notifs) handleMsg(nl notifListener, tid string, rawMsg []byte, srcErr error) (err error, status int, done bool) {
+func (n *notifs) handleFinished(nl notifListener, tsi *cluster.Snode, rawMsg []byte, srcErr error) (err error) {
+	nl.lock()
+	defer nl.unlock()
 	var (
-		srcs              = nl.notifiers()
-		tsi, ok           = srcs[tid]
-		finished, aborted bool
+		aborted bool
+		stats   interface{}
 	)
-	if !ok {
-		err = fmt.Errorf("%s: %s from unknown node %s", n.p.si, nl, tid)
-		status = http.StatusNotFound
-		return
-	}
-	if nl.hasFinished(tsi) {
-		err = fmt.Errorf("%s: duplicate %s from node %s", n.p.si, nl, tid)
-		return
-	}
 
-	finished, aborted, err = nl.onProgress(tid, rawMsg)
+	stats, _, aborted, err = nl.unmarshalStats(rawMsg)
 	if err != nil {
 		return
 	}
 
-	if finished {
-		nl.markFinished(tsi)
+	n.markFinished(nl, tsi, aborted, srcErr)
+	nl.setStats(tsi.ID(), stats)
+	return
+}
+
+func (n *notifs) handleProgress(nl notifListener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
+	var (
+		stats interface{}
+	)
+	stats, _, _, err = nl.unmarshalStats(data)
+	if err != nil {
+		return
 	}
+
+	nl.lock()
+	nl.setStats(tsi.ID(), stats)
+	if srcErr != nil {
+		nl.setErr(srcErr)
+	}
+	nl.unlock()
+
+	return
+}
+
+// PRECONDITION: `nl` should be under lock
+func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool, srcErr error) (done bool) {
+	var (
+		srcs = nl.notifiers()
+	)
+
+	nl.markFinished(tsi)
 
 	if aborted {
 		nl.setAborted()
@@ -512,7 +580,14 @@ func (n *notifs) handleMsg(nl notifListener, tid string, rawMsg []byte, srcErr e
 		nl.setErr(srcErr)
 	}
 
-	done = nl.finCount() == len(srcs) || aborted
+	if nl.finCount() == len(srcs) || aborted {
+		nl.callback(nl, nil, time.Now().UnixNano())
+		n.fmu.Lock()
+		n.fin[nl.UUID()] = nl
+		n.fmu.Unlock()
+		n.del(nl)
+		done = true
+	}
 	return
 }
 
@@ -551,23 +626,28 @@ func (n *notifs) housekeep() time.Duration {
 				done bool
 			)
 			if res.err == nil {
+				stats, finished, aborted, err := nl.unmarshalStats(res.bytes)
+				if err != nil {
+					glog.Errorf("%s: failed to parse stats from %s (err: %s)", n.p.si, res.si, err)
+					continue
+				}
 				nl.lock()
-				err, _, done = n.handleMsg(nl, res.si.ID(), res.bytes, err)
+				if finished {
+					done = n.markFinished(nl, res.si, aborted, nil)
+				} else {
+					nl.setStats(res.si.ID(), stats)
+				}
 				nl.unlock()
 			} else if res.status == http.StatusNotFound { // consider silent done at res.si
 				err = fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si)
-				done = true // NOTE: not-found at one ==> all done
 				nl.lock()
-				nl.setAborted()
-				nl.setErr(err)
+				done = n.markFinished(nl, res.si, true, err) // NOTE: not-found at one ==> all done
 				nl.unlock()
 			} else if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si, res.err)
 			}
 
 			if done {
-				nl.callback(n, nl, err, now)
-				n.del(nl)
 				break
 			}
 		}
@@ -635,7 +715,7 @@ func (n *notifs) ListenSmapChanged() {
 		nl.setErr(err)
 		nl.setAborted()
 		nl.unlock()
-		nl.callback(n, nl, err, now)
+		nl.callback(nl, err, now)
 	}
 	n.Lock()
 	for uuid, nl := range remnl {
@@ -758,8 +838,4 @@ func notifText(ty int) string {
 		return txt
 	}
 	return unk
-}
-
-func (msg *notifMsg) String() string {
-	return fmt.Sprintf("%s[%s,%v]<=%s", notifText(int(msg.Ty)), string(msg.Data), msg.ErrMsg, msg.Snode)
 }

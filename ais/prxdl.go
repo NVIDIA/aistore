@@ -30,6 +30,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		notFoundCnt int
 		err         error
 	)
+	// TODO: check IC if stats cached
 	body := cmn.MustMarshal(msg)
 	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
 	respCnt := len(responses)
@@ -197,15 +198,25 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dlb := downloader.DlBody{}
+	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
+		return
+	}
+
 	if ok := p.validateStartDownloadRequest(w, r, body); !ok {
 		return
 	}
 
 	id := cmn.GenUUID()
+	smap := p.owner.smap.get()
+
 	if err, errCode := p.broadcastStartDownloadRequest(r, id, body); err != nil {
 		p.invalmsghdlrstatusf(w, r, errCode, "Error starting download: %v.", err.Error())
 		return
 	}
+	nl := newDownloadNL(id, smap, smap.Tmap.Clone(), string(dlb.Type))
+	nl.setOwner(equalIC)
+	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
 	p.respondWithID(w, id)
 }

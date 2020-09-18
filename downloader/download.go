@@ -166,6 +166,7 @@ type (
 		id         string         // id of the job task
 		regex      *regexp.Regexp // regex of descriptions to return if id is empty
 		responseCh chan *response // where the outcome of the request is written
+		onlyActive bool           // request status of only active tasks
 	}
 
 	progressReader struct {
@@ -348,12 +349,13 @@ func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCo
 	return r.resp, r.err, r.statusCode
 }
 
-func (d *Downloader) JobStatus(id string) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
 		action:     actStatus,
 		id:         id,
 		responseCh: make(chan *response, 1),
+		onlyActive: onlyActive,
 	}
 	d.adminCh <- req
 

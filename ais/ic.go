@@ -294,7 +294,6 @@ check:
 			ic.p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		cmn.Assert(nlMsg.nl.notifTy() == notifXact || nlMsg.nl.notifTy() == notifCache)
 		ic.p.notifs.add(nlMsg.nl)
 	case cmn.ActRegGlobalXaction:
 		regMsg := &xactRegMsg{}

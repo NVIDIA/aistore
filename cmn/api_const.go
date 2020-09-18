@@ -316,11 +316,13 @@ const (
 	AllBuckets   = "*"
 
 	// common
-	Init  = "init"
-	Start = "start"
-	Stop  = "stop"
-	Abort = "abort"
-	Sort  = "sort"
+	Init     = "init"
+	Start    = "start"
+	Stop     = "stop"
+	Abort    = "abort"
+	Sort     = "sort"
+	Finished = "finished"
+	Progress = "progress"
 
 	// dSort, downloader, query
 	Metrics     = "metrics"

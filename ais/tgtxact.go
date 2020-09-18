@@ -140,7 +140,7 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		notif := &cmn.NotifXact{
 			NotifBase: cmn.NotifBase{
 				When: cmn.UponTerm, Ty: notifXact,
-				Dsts: []string{equalIC}, F: t.xactCallerNotify,
+				Dsts: []string{equalIC}, F: t.callerNotifyFin,
 			},
 		}
 		go t.runResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
@@ -163,7 +163,7 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 				When: cmn.UponTerm,
 				Ty:   notifXact,
 				Dsts: []string{equalIC},
-				F:    t.xactCallerNotify,
+				F:    t.callerNotifyFin,
 			},
 		})
 		go xact.Run()

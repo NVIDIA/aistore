@@ -27,6 +27,7 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"periodic": {
 		"stats_time":        "10s",
+		"notif_time":        "30s",
 		"retry_sync_time":   "2s"
 	},
 	"timeout": {

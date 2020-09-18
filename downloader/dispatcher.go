@@ -420,26 +420,33 @@ func (d *dispatcher) dispatchAbort(req *request) {
 }
 
 func (d *dispatcher) dispatchStatus(req *request) {
+	var (
+		finishedTasks []TaskDlInfo
+		dlErrors      []TaskErrInfo
+	)
+
 	jInfo, err := d.parent.checkJob(req)
 	if err != nil || jInfo == nil {
 		return
 	}
 
 	currentTasks := d.activeTasks(req.id)
-	finishedTasks, err := dlStore.getTasks(req.id)
-	if err != nil {
-		req.writeErrResp(err, http.StatusInternalServerError)
-		return
+	if !req.onlyActive {
+		finishedTasks, err = dlStore.getTasks(req.id)
+		if err != nil {
+			req.writeErrResp(err, http.StatusInternalServerError)
+			return
+		}
+
+		dlErrors, err = dlStore.getErrors(req.id)
+		if err != nil {
+			req.writeErrResp(err, http.StatusInternalServerError)
+			return
+		}
+		sort.Sort(TaskErrByName(dlErrors))
 	}
 
-	dlErrors, err := dlStore.getErrors(req.id)
-	if err != nil {
-		req.writeErrResp(err, http.StatusInternalServerError)
-		return
-	}
-	sort.Sort(TaskErrByName(dlErrors))
-
-	req.writeResp(DlStatusResp{
+	req.writeResp(&DlStatusResp{
 		DlJobInfo:     jInfo.ToDlJobInfo(),
 		CurrentTasks:  currentTasks,
 		FinishedTasks: finishedTasks,

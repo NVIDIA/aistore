@@ -43,6 +43,10 @@ type (
 		Bck() cmn.Bck
 		Description() string
 		Timeout() time.Duration
+		ActiveStats() *DlStatusResp
+
+		Notif() cmn.Notif // notifications
+		AddNotif(n cmn.Notif, job DlJob)
 
 		// If total length (size) of download job is not known, -1 should be returned.
 		Len() int
@@ -68,6 +72,10 @@ type (
 		timeout     time.Duration
 		description string
 		t           *throttler
+		dlXact      *Downloader
+
+		// notif
+		notif *NotifDownload
 	}
 
 	sliceDlJob struct {
@@ -131,15 +139,37 @@ func (j *baseDlJob) Bck() cmn.Bck           { return j.bck.Bck }
 func (j *baseDlJob) Timeout() time.Duration { return j.timeout }
 func (j *baseDlJob) Description() string    { return j.description }
 func (j *baseDlJob) Sync() bool             { return false }
-func (j *baseDlJob) checkObj(string) bool   { cmn.Assert(false); return false }
-func (j *baseDlJob) throttler() *throttler  { return j.t }
+
+// Notifications
+func (j *baseDlJob) Notif() cmn.Notif { return j.notif }
+func (j *baseDlJob) AddNotif(n cmn.Notif, job DlJob) {
+	var ok bool
+	cmn.Assert(j.notif == nil) // currently, "add" means "set"
+	j.notif, ok = n.(*NotifDownload)
+	cmn.Assert(ok)
+	j.notif.DlJob = job
+	cmn.Assert(j.notif.F != nil)
+	if n.Upon(cmn.UponProgress) {
+		cmn.Assert(j.notif.P != nil)
+	}
+}
+
+func (j *baseDlJob) ActiveStats() *DlStatusResp {
+	resp, _, _ := j.dlXact.JobStatus(j.ID(), true)
+	return resp.(*DlStatusResp)
+}
+func (j *baseDlJob) checkObj(string) bool  { cmn.Assert(false); return false }
+func (j *baseDlJob) throttler() *throttler { return j.t }
 func (j *baseDlJob) cleanup() {
 	dlStore.markFinished(j.ID())
 	dlStore.flush(j.ID())
 	j.throttler().stop()
+	if n := j.Notif(); n != nil {
+		n.Callback(n, nil)
+	}
 }
 
-func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits DlLimits) *baseDlJob {
+func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits DlLimits, dlXact *Downloader) *baseDlJob {
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
@@ -153,6 +183,7 @@ func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc s
 		timeout:     td,
 		description: desc,
 		t:           newThrottler(limits),
+		dlXact:      dlXact,
 	}
 }
 
@@ -173,7 +204,7 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	return objs, true, nil
 }
 
-func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody) (*multiDlJob, error) {
+func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody, dlXact *Downloader) (*multiDlJob, error) {
 	if !bck.IsAIS() {
 		return nil, errAISBckReq
 	}
@@ -181,7 +212,7 @@ func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMul
 		objs cmn.SimpleKVs
 		err  error
 	)
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
 	if objs, err = payload.ExtractPayload(); err != nil {
 		return nil, err
 	}
@@ -192,7 +223,7 @@ func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMul
 	return &multiDlJob{sliceDlJob}, nil
 }
 
-func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody) (*singleDlJob, error) {
+func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody, dlXact *Downloader) (*singleDlJob, error) {
 	if !bck.IsAIS() {
 		return nil, errAISBckReq
 	}
@@ -201,7 +232,7 @@ func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSi
 		objs cmn.SimpleKVs
 		err  error
 	)
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
 	if objs, err = payload.ExtractPayload(); err != nil {
 		return nil, err
 	}
@@ -317,11 +348,11 @@ func (j *rangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newCloudBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlCloudBody) (*cloudBucketDlJob, error) {
+func newCloudBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlCloudBody, dlXact *Downloader) (*cloudBucketDlJob, error) {
 	if !bck.IsCloud() {
 		return nil, errors.New("bucket download requires a cloud bucket")
 	}
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
 	job := &cloudBucketDlJob{
 		baseDlJob: *base,
 		t:         t,
@@ -358,7 +389,7 @@ func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *clus
 	return cnt, nil
 }
 
-func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody) (*rangeDlJob, error) {
+func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (*rangeDlJob, error) {
 	if !bck.IsAIS() {
 		return nil, errAISBckReq
 	}
@@ -374,7 +405,7 @@ func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRan
 		return nil, err
 	}
 
-	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits)
+	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
 	cnt, err := countObjects(t, pt, payload.Subdir, base.bck)
 	if err != nil {
 		return nil, err
