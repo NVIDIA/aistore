@@ -2066,6 +2066,47 @@ func TestCopyBucketAbort(t *testing.T) {
 	*/
 }
 
+func TestCopyBucketStats(t *testing.T) {
+	var (
+		srcBck = cmn.Bck{Name: "cpybck_src", Provider: cmn.ProviderAIS}
+		dstBck = cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
+
+		m = ioContext{
+			t:         t,
+			num:       10,
+			fileSize:  512,
+			fixedSize: true,
+			bck:       srcBck,
+		}
+	)
+
+	tutils.Logln("Preparing a source bucket")
+	tutils.CreateFreshBucket(t, proxyURL, srcBck)
+	defer tutils.DestroyBucket(t, proxyURL, srcBck)
+	m.init()
+
+	tutils.Logln("Putting objects to the source bucket")
+	m.puts()
+
+	tutils.Logln("Start coping bucket")
+
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
+	tassert.CheckFatal(t, err)
+	defer tutils.DestroyBucket(t, proxyURL, dstBck)
+
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: time.Minute}
+	_, err = api.WaitForXactionV2(baseParams, args)
+	tassert.CheckFatal(t, err)
+	tutils.Logln("Coping bucket finished")
+
+	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, stats.ObjCount() == int64(m.num), "Stats expected to return %d objects in total", m.num)
+	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
+	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "Stats expected to return %d bytes, got %d",
+		expectedBytesCnt, stats.BytesCount())
+}
+
 // Tries to rename and then copy bucket at the same time.
 // TODO: This test should be enabled (not skipped)
 func TestRenameAndCopyBucket(t *testing.T) {

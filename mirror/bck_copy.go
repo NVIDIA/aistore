@@ -122,8 +122,7 @@ func (j *bccJogger) copyObject(lom *cluster.LOM) error {
 	)
 	if copied {
 		j.parent.ObjectsInc()
-		// FIXME: depends on whether local <-> remote and params.DP
-		j.parent.BytesAdd(lom.Size() + size)
+		j.parent.BytesAdd(size)
 		j.num++
 		if (j.num % throttleNumObjects) == 0 {
 			if cs := fs.GetCapStatus(); cs.Err != nil {
