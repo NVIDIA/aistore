@@ -188,12 +188,16 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 //
 // CopyBucket creates a new ais bucket newName and
 // copies into it contents of the existing oldName bucket
-func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string, err error) {
+func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.Bck2BckMsg) (xactID string, err error) {
+	var msg *cmn.Bck2BckMsg
+	if len(msgs) > 0 {
+		msg = msgs[0]
+	}
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Name: toBck.Name}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Name: toBck.Name, Value: msg}),
 	}, &xactID)
 	return
 }
@@ -214,8 +218,8 @@ func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) (xactID string,
 // DeleteList API
 //
 // DeleteList sends a HTTP request to remove a list of objects from a bucket
-func DeleteList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
-	deleteMsg := cmn.ListMsg{ObjNames: fileslist}
+func DeleteList(baseParams BaseParams, bck cmn.Bck, filesList []string) (string, error) {
+	deleteMsg := cmn.ListMsg{ObjNames: filesList}
 	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
 }
 

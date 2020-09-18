@@ -59,7 +59,7 @@ func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w 
 	return
 }
 
-func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *etl.OfflineMsg) (xactID string, err error) {
+func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2BckMsg) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

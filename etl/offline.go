@@ -5,31 +5,29 @@
 package etl
 
 import (
-	"strings"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
 type (
 	OfflineDataProvider struct {
-		bckMsg *OfflineMsg
+		bckMsg *cmn.Bck2BckMsg
 		comm   Communicator
 	}
 )
 
 var (
-	_ cluster.SendDataProvider = &OfflineDataProvider{}
+	_ cluster.LomReaderProvider = &OfflineDataProvider{}
 )
 
-func NewOfflineDataProvider(msg *OfflineBckMsg) (*OfflineDataProvider, error) {
+func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	return &OfflineDataProvider{
-		bckMsg: &msg.OfflineMsg,
+		bckMsg: msg,
 		comm:   comm,
 	}, nil
 }
@@ -48,22 +46,4 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, *cl
 	hdrLOM.SetSize(length)
 
 	return cmn.NopOpener(body), hdrLOM, nil
-}
-
-func (dp *OfflineDataProvider) ObjNameTo(objName string) string {
-	return newETLObjName(objName, dp.bckMsg)
-}
-
-// Replace extension and add suffix if provided.
-func newETLObjName(name string, msg *OfflineMsg) string {
-	if msg.Ext != "" {
-		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
-			name = name[:idx+1] + msg.Ext
-		}
-	}
-	if msg.Prefix != "" {
-		name = msg.Prefix + name
-	}
-
-	return name
 }

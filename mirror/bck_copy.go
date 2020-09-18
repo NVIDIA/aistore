@@ -24,7 +24,8 @@ type (
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 		dm      *bundle.DataMover
-		dp      cluster.SendDataProvider
+		dp      cluster.LomReaderProvider
+		meta    *cmn.Bck2BckMsg
 	}
 	bccJogger struct { // one per mountpath
 		joggerBckBase
@@ -39,7 +40,7 @@ type (
 
 // XactBckCopy copies one bucket to another. If dp is provided, bytes to save are taken from io.Reader from dp.Reader()
 func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab,
-	dm *bundle.DataMover, dp cluster.SendDataProvider) *XactBckCopy {
+	dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) *XactBckCopy {
 	return &XactBckCopy{
 		xactBckBase: *newXactBckBase(id, cmn.ActCopyBucket, bckTo.Bck, t),
 		slab:        slab,
@@ -47,6 +48,7 @@ func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *
 		bckTo:       bckTo,
 		dm:          dm,
 		dp:          dp,
+		meta:        meta,
 	}
 }
 
@@ -117,7 +119,15 @@ func (j *bccJogger) jog() {
 
 func (j *bccJogger) copyObject(lom *cluster.LOM) error {
 	var (
-		params            = cluster.CopyObjectParams{BckTo: j.parent.bckTo, Buf: j.buf, DM: j.parent.dm, DP: j.parent.dp}
+		objNameTo = cmn.ObjNameFromBck2BckMsg(lom.ObjName, j.parent.meta)
+
+		params = cluster.CopyObjectParams{
+			BckTo:     j.parent.bckTo,
+			ObjNameTo: objNameTo,
+			Buf:       j.buf,
+			DM:        j.parent.dm,
+			DP:        j.parent.dp,
+		}
 		copied, size, err = j.parent.Target().CopyObject(lom, params)
 	)
 	if copied {

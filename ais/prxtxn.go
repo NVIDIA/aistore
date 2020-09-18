@@ -430,8 +430,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 // copy-bucket/offline ETL: { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
 func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		nmsg      = &cmn.ActionMsg{} // + bckTo
-		etlBckMsg = &etl.OfflineMsg{}
+		nmsg    = &cmn.ActionMsg{} // + bckTo
+		metaMsg = &cmn.Bck2BckMsg{}
 	)
 	// 1. confirm existence
 	p.owner.bmd.Lock()
@@ -443,22 +443,26 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	}
 	p.owner.bmd.Unlock()
 
-	// msg{} => nmsg{bckTo} and prep context(nmsg)
 	*nmsg = *msg
-
-	nmsg.Value = bckTo.Bck
-	if msg.Action == cmn.ActETLBucket {
-		etlBckMsg, err = etl.ParseOfflineMsg(msg.Value)
-		if err != nil {
-			return "", err
+	if msg.Value == nil {
+		if msg.Action == cmn.ActETLBucket {
+			return "", etl.ErrMissingUUID
 		}
-		if etlBckMsg.DryRun {
-			// FIXME: bring back dry-run offline ETL
-			return "", errors.New("dry-run requests not supported")
+		nmsg.Value = bck2BckInternalMsg{BckTo: bckTo.Bck}
+	} else {
+		if err = cmn.MorphMarshal(msg.Value, metaMsg); err != nil {
+			return
 		}
-		nmsg.Value = &etl.OfflineBckMsg{
-			Bck:        bckTo.Bck,
-			OfflineMsg: *etlBckMsg,
+		if msg.Action == cmn.ActETLBucket && metaMsg.ID == "" {
+			return "", etl.ErrMissingUUID
+		}
+		if metaMsg.DryRun {
+			// TODO: remove once dry run is implemented
+			return "", fmt.Errorf("dry run feature not supported")
+		}
+		nmsg.Value = bck2BckInternalMsg{
+			Bck2BckMsg: *metaMsg,
+			BckTo:      bckTo.Bck,
 		}
 	}
 

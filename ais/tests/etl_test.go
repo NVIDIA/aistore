@@ -188,7 +188,7 @@ func testOfflineETL(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
 	}()
 
 	tutils.Logf("Start offline ETL %q\n", uuid)
-	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &etl.OfflineMsg{ID: uuid})
+	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBucket, Timeout: time.Minute}
@@ -365,7 +365,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	}()
 
 	tutils.Logf("Start offline ETL %q\n", uuid)
-	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &etl.OfflineMsg{ID: uuid, DryRun: true})
+	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, DryRun: true})
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBucket, Timeout: time.Minute}

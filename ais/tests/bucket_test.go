@@ -2080,6 +2080,10 @@ func TestCopyBucketStats(t *testing.T) {
 		}
 	)
 
+	if !testing.Short() {
+		m.num = 1000
+	}
+
 	tutils.Logln("Preparing a source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, srcBck)
 	defer tutils.DestroyBucket(t, proxyURL, srcBck)
@@ -2105,6 +2109,51 @@ func TestCopyBucketStats(t *testing.T) {
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
 	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "Stats expected to return %d bytes, got %d",
 		expectedBytesCnt, stats.BytesCount())
+}
+
+func TestCopyBucketPrefix(t *testing.T) {
+	var (
+		cpyPrefix = "cpyprefix" + cmn.RandString(5)
+		srcBck    = cmn.Bck{Name: "cpybck_src", Provider: cmn.ProviderAIS}
+		dstBck    = cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
+
+		m = ioContext{
+			t:        t,
+			num:      10,
+			fileSize: 512,
+			bck:      srcBck,
+		}
+	)
+
+	if !testing.Short() {
+		m.num = 1000
+	}
+
+	tutils.Logln("Preparing a source bucket")
+	tutils.CreateFreshBucket(t, proxyURL, srcBck)
+	defer tutils.DestroyBucket(t, proxyURL, srcBck)
+	m.init()
+
+	tutils.Logln("Putting objects to the source bucket")
+	m.puts()
+
+	tutils.Logln("Start coping bucket")
+
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.Bck2BckMsg{Prefix: cpyPrefix})
+	tassert.CheckFatal(t, err)
+	defer tutils.DestroyBucket(t, proxyURL, dstBck)
+
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: time.Minute}
+	_, err = api.WaitForXactionV2(baseParams, args)
+	tassert.CheckFatal(t, err)
+	tutils.Logln("Coping bucket finished")
+
+	list, err := api.ListObjects(baseParams, dstBck, nil, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(list.Entries) == m.num, "expected %d to be copied, got %d", m.num, len(list.Entries))
+	for _, e := range list.Entries {
+		tassert.Fatalf(t, strings.HasPrefix(e.Name, cpyPrefix), "expected %q to have prefix %q", e.Name, cpyPrefix)
+	}
 }
 
 // Tries to rename and then copy bucket at the same time.

@@ -82,6 +82,17 @@ type (
 		Available []string `json:"available"`
 		Disabled  []string `json:"disabled"`
 	}
+
+	Bck2BckMsg struct {
+		ID     string `json:"id,omitempty"` // optional for ETL
+		Prefix string `json:"prefix"`       // Prefix added to each resulting object.
+		DryRun bool   `json:"dry_run"`      // Don't perform any PUT
+
+		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the
+		// same base name, but different extension, specifying this field might cause object overriding. This is because
+		// of resulting name conflict.
+		Ext string `json:"ext"`
+	}
 )
 
 // bucket properties
@@ -481,4 +492,21 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 		}
 	}
 	return
+}
+
+// Replace extension and add suffix if provided.
+func ObjNameFromBck2BckMsg(name string, msg *Bck2BckMsg) string {
+	if msg == nil {
+		return name
+	}
+	if msg.Ext != "" {
+		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
+			name = name[:idx+1] + strings.TrimLeft(msg.Ext, ".")
+		}
+	}
+	if msg.Prefix != "" {
+		name = msg.Prefix + name
+	}
+
+	return name
 }

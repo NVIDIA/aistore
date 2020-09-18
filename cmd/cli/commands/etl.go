@@ -216,7 +216,7 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 		return objectNameArgumentNotSupported(c, toName)
 	}
 
-	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, &etl.OfflineMsg{
+	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, &cmn.Bck2BckMsg{
 		ID:     id,
 		Ext:    parseStrFlag(c, etlExtFlag),
 		Prefix: parseStrFlag(c, etlPrefixFlag),

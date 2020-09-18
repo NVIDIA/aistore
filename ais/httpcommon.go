@@ -166,6 +166,11 @@ type (
 		si   *cluster.Snode
 		smap *smapX
 	}
+
+	bck2BckInternalMsg struct {
+		cmn.Bck2BckMsg
+		BckTo cmn.Bck `json:"bck_to"`
+	}
 )
 
 ///////////////////

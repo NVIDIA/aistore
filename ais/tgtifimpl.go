@@ -284,15 +284,20 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 			uncache:          false,
 			finalize:         false,
 		}
+
+		objNameTo = lom.ObjName
 	)
 	if len(localOnly) > 0 {
 		coi.localOnly = localOnly[0]
 	}
+	if params.ObjNameTo != "" {
+		objNameTo = params.ObjNameTo
+	}
 	if params.DP != nil {
-		return coi.copyReader(lom, params.DP.ObjNameTo(lom.ObjName))
+		return coi.copyReader(lom, objNameTo)
 	}
 
-	copied, err = coi.copyObject(lom, lom.ObjName)
+	copied, err = coi.copyObject(lom, objNameTo)
 	return copied, lom.Size(), err
 }
 

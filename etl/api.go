@@ -5,8 +5,8 @@
 package etl
 
 import (
+	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/etl/runtime"
@@ -44,36 +44,9 @@ type (
 		// This is because of resulting name conflict.
 		Ext string `json:"ext"`
 	}
-
-	OfflineBckMsg struct {
-		cmn.Bck
-		OfflineMsg
-	}
 )
 
-func ParseOfflineBckMsg(v interface{}) (*OfflineBckMsg, error) {
-	bckMsg := OfflineBckMsg{}
-	if err := cmn.MorphMarshal(v, &bckMsg); err != nil {
-		return nil, fmt.Errorf("error unmarshaling OfflineBckMsg: %s", err.Error())
-	}
-
-	cleanUpBckMsg(&bckMsg.OfflineMsg)
-	return &bckMsg, nil
-}
-
-func ParseOfflineMsg(v interface{}) (*OfflineMsg, error) {
-	msg := OfflineMsg{}
-	if err := cmn.MorphMarshal(v, &msg); err != nil {
-		return nil, fmt.Errorf("error unmarshaling OfflineBckMsg: %s", err.Error())
-	}
-
-	cleanUpBckMsg(&msg)
-	return &msg, nil
-}
-
-func cleanUpBckMsg(msg *OfflineMsg) {
-	msg.Ext = strings.TrimLeft(msg.Ext, ".")
-}
+var ErrMissingUUID = errors.New("ETL UUID can't be empty")
 
 func (m BuildMsg) Validate() error {
 	if len(m.Code) == 0 {

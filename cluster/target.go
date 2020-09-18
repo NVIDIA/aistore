@@ -76,10 +76,11 @@ type (
 		SkipEncode   bool // Do not run EC encode after finalizing.
 	}
 	CopyObjectParams struct {
-		BckTo *Bck
-		Buf   []byte
-		DM    DataMover
-		DP    SendDataProvider // optional
+		BckTo     *Bck
+		ObjNameTo string
+		Buf       []byte
+		DM        DataMover
+		DP        LomReaderProvider // optional
 	}
 	SendToParams struct {
 		Reader    cmn.ReadOpenCloser
@@ -101,9 +102,8 @@ type (
 	}
 
 	// Defines what to send to a target.
-	SendDataProvider interface {
+	LomReaderProvider interface {
 		Reader(*LOM) (cmn.ReadOpenCloser, *LOM, error) // LOM is supposed to have http.Header metadata
-		ObjNameTo(string) string
 	}
 )
 

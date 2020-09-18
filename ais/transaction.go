@@ -98,7 +98,8 @@ type (
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 		dm      *bundle.DataMover
-		dp      cluster.SendDataProvider // optional
+		dp      cluster.LomReaderProvider // optional
+		metaMsg *cmn.Bck2BckMsg           // optional, for object name translation.
 	}
 )
 
@@ -475,13 +476,15 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 var _ txn = &txnCopyBucket{}
 
 // c-tor
-func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover, dp cluster.SendDataProvider) (txn *txnCopyBucket) {
+func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover,
+	dp cluster.LomReaderProvider, metaMsg *cmn.Bck2BckMsg) (txn *txnCopyBucket) {
 	txn = &txnCopyBucket{
 		*newTxnBckBase("bcp", *bckFrom),
 		bckFrom,
 		bckTo,
 		dm,
 		dp,
+		metaMsg,
 	}
 	txn.fillFromCtx(c)
 	return

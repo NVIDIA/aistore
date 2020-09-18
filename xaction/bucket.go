@@ -322,13 +322,14 @@ type bccEntry struct {
 	bckTo   *cluster.Bck
 	phase   string
 	dm      *bundle.DataMover
-	dp      cluster.SendDataProvider
+	dp      cluster.LomReaderProvider
+	meta    *cmn.Bck2BckMsg
 }
 
 func (e *bccEntry) Start(_ cmn.Bck) error {
 	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	e.xact = mirror.NewXactBCC(e.uuid, e.bckFrom, e.bckTo, e.t, slab, e.dm, e.dp)
+	e.xact = mirror.NewXactBCC(e.uuid, e.bckFrom, e.bckTo, e.t, slab, e.dm, e.dp, e.meta)
 	return nil
 }
 func (e *bccEntry) Kind() string  { return cmn.ActCopyBucket }
@@ -348,7 +349,7 @@ func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error
 }
 
 func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid,
-	phase string, dm *bundle.DataMover, dp cluster.SendDataProvider) (*mirror.XactBckCopy, error) {
+	phase string, dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) (*mirror.XactBckCopy, error) {
 	e := &bccEntry{
 		baseBckEntry: baseBckEntry{uuid},
 		t:            t,
@@ -357,6 +358,7 @@ func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, u
 		phase:        phase,
 		dm:           dm,
 		dp:           dp,
+		meta:         meta,
 	}
 	res := r.renewBucketXaction(e, bckTo)
 	if res.err != nil {

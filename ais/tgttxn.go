@@ -83,12 +83,20 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.renameBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-	case cmn.ActCopyBucket:
-		if err = t.copyBucket(c); err != nil {
+	case cmn.ActCopyBucket, cmn.ActETLBucket:
+		var (
+			bck2BckMsg = &bck2BckInternalMsg{}
+		)
+		if err = cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-	case cmn.ActETLBucket:
-		if err = t.etlBucket(c); err != nil {
+
+		if msg.Action == cmn.ActCopyBucket {
+			err = t.copyBucket(c, bck2BckMsg)
+		} else {
+			err = t.etlBucket(c, bck2BckMsg)
+		}
+		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActECEncode:
@@ -192,7 +200,7 @@ func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCo
 	}
 	// NOTE: #791 "limited coexistence" here and elsewhere
 	if err == nil {
-		err = t.coExists(bck, msg)
+		err = t.coExists(bck, msg.Action)
 	}
 	if err != nil {
 		return
@@ -378,7 +386,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return nil, cs.Err
 	}
-	if err = t.coExists(bckFrom, msg); err != nil {
+	if err = t.coExists(bckFrom, msg.Action); err != nil {
 		return
 	}
 	bckTo = cluster.NewBck(bTo.Name, bTo.Provider, bTo.Ns)
@@ -410,9 +418,10 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 // copyBucket //
 ////////////////
 
-func (t *targetrunner) copyBucket(c *txnServerCtx, dps ...cluster.SendDataProvider) error {
+func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMsg,
+	dps ...cluster.LomReaderProvider) error {
 	var (
-		dp cluster.SendDataProvider
+		dp cluster.LomReaderProvider
 	)
 	if len(dps) > 0 {
 		dp = dps[0]
@@ -424,13 +433,13 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, dps ...cluster.SendDataProvid
 	switch c.phase {
 	case cmn.ActBegin:
 		var (
-			bckTo   *cluster.Bck
+			bckTo   = cluster.NewBckEmbed(bck2BckMsg.BckTo)
 			bckFrom = c.bck
 			dm      *bundle.DataMover
 			config  = cmn.GCO.Get()
 			err     error
 		)
-		if bckTo, err = t.validateBckCpTxn(bckFrom, c.msg); err != nil {
+		if err := t.validateBckCpTxn(bckFrom, c.msg.Action); err != nil {
 			return err
 		}
 		if dm, err = c.newDM(&config.Rebalance, c.uuid); err != nil {
@@ -449,7 +458,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, dps ...cluster.SendDataProvid
 			nlpFrom.Unlock()
 			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
 		}
-		txn := newTxnCopyBucket(c, bckFrom, bckTo, dm, dp)
+		txn := newTxnCopyBucket(c, bckFrom, bckTo, dm, dp, &bck2BckMsg.Bck2BckMsg)
 		if err := t.transactions.begin(txn); err != nil {
 			dm.UnregRecv()
 			nlpTo.Unlock()
@@ -465,7 +474,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, dps ...cluster.SendDataProvid
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		txnCpBck := txn.(*txnCopyBucket)
+		txnCp := txn.(*txnCopyBucket)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout); err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
@@ -473,7 +482,8 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, dps ...cluster.SendDataProvid
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		xact, err = xaction.Registry.RenewBckCopy(t, txnCpBck.bckFrom, txnCpBck.bckTo, c.uuid, cmn.ActCommit, txnCpBck.dm, txnCpBck.dp)
+		xact, err = xaction.Registry.RenewBckCopy(t, txnCp.bckFrom, txnCp.bckTo, c.uuid, cmn.ActCommit, txnCp.dm,
+			txnCp.dp, txnCp.metaMsg)
 		if err != nil {
 			return err
 		}
@@ -486,26 +496,18 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, dps ...cluster.SendDataProvid
 	return nil
 }
 
-func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckTo *cluster.Bck, err error) {
-	var (
-		bTo  = cmn.Bck{}
-		body = cmn.MustMarshal(msg.Value)
-	)
-	if err = jsoniter.Unmarshal(body, &bTo); err != nil {
-		return
-	}
+func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, action string) (err error) {
 	if cs := fs.GetCapStatus(); cs.Err != nil {
-		return nil, cs.Err
+		return cs.Err
 	}
-	if err = t.coExists(bckFrom, msg); err != nil {
+	if err = t.coExists(bckFrom, action); err != nil {
 		return
 	}
-	bckTo = cluster.NewBckEmbed(bTo)
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return bckTo, cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
+		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
 	}
-	return
+	return nil
 }
 
 ///////////////
@@ -514,23 +516,19 @@ func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckT
 
 // etlBucket uses copyBucket xaction to transform the whole bucket. The only difference is that instead of copying the
 // same bytes, it creates a reader based on given ETL transformation.
-func (t *targetrunner) etlBucket(c *txnServerCtx) (err error) {
+func (t *targetrunner) etlBucket(c *txnServerCtx, msg *bck2BckInternalMsg) (err error) {
 	if err := k8s.Detect(); err != nil {
 		return err
 	}
 	var (
-		etlMsg *etl.OfflineBckMsg
-		dp     cluster.SendDataProvider
+		dp cluster.LomReaderProvider
 	)
-	if etlMsg, err = etl.ParseOfflineBckMsg(c.msg.Value); err != nil {
-		return err
-	}
 
-	if dp, err = etl.NewOfflineDataProvider(etlMsg); err != nil {
+	if dp, err = etl.NewOfflineDataProvider(&msg.Bck2BckMsg); err != nil {
 		return nil
 	}
 
-	return t.copyBucket(c, dp)
+	return t.copyBucket(c, msg, dp)
 }
 
 //////////////
@@ -574,7 +572,7 @@ func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
-	err = t.coExists(bck, msg)
+	err = t.coExists(bck, msg.Action)
 	return
 }
 
@@ -610,12 +608,12 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 }
 
 // TODO: #791 "limited coexistence" - extend and unify
-func (t *targetrunner) coExists(bck *cluster.Bck, msg *aisMsg) (err error) {
+func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
 	g, l := xaction.GetRebMarked(), xaction.GetResilverMarked()
 	if g.Xact != nil {
-		err = fmt.Errorf("%s: %s, cannot run %q on bucket %s", t.si, g.Xact, msg.Action, bck)
+		err = fmt.Errorf("%s: %s, cannot run %q on bucket %s", t.si, g.Xact, action, bck)
 	} else if l.Xact != nil {
-		err = fmt.Errorf("%s: %s, cannot run %q on bucket %s", t.si, l.Xact, msg.Action, bck)
+		err = fmt.Errorf("%s: %s, cannot run %q on bucket %s", t.si, l.Xact, action, bck)
 	}
 	return
 }
