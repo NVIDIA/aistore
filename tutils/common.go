@@ -125,7 +125,7 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		}
 	}
 	if args.K8s {
-		if err := k8s.Check(); err != nil {
+		if err := k8s.Detect(); err != nil {
 			tb.Skipf("%s requires Kubernetes", tb.Name())
 		}
 	}

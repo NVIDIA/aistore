@@ -507,7 +507,7 @@ func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckT
 // TODO: deduplicate with copyBucket?
 // TODO: add additional check like in (coi *copyObjInfo) copyObject
 func (t *targetrunner) etlBucket(c *txnServerCtx) error {
-	if err := k8s.Check(); err != nil {
+	if err := k8s.Detect(); err != nil {
 		return err
 	}
 	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {

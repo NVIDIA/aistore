@@ -22,30 +22,33 @@ const (
 )
 
 var (
-	_nodeNameOnce sync.Once
-	NodeName      string
+	detectOnce sync.Once
+	NodeName   string
 )
 
-func Check() error {
-	_nodeNameOnce.Do(func() {
-		if NodeName = os.Getenv(k8sHostNameEnv); NodeName == "" {
-			return
-		}
+func initDetect() {
+	if NodeName = os.Getenv(k8sHostNameEnv); NodeName == "" {
+		return
+	}
 
-		client, err := NewClient()
-		if err != nil {
-			glog.Errorf("couldn't initiate a K8s client, err: %v", err) // TODO: make it a Warning
-			NodeName = ""
-			return
-		}
-		node, err := client.Node(NodeName)
-		if err != nil {
-			glog.Errorf("failed to get node, err: %v", err) // TODO: make it a Warning
-			NodeName = ""
-			return
-		}
-		debug.Assert(node.Name == NodeName)
-	})
+	client, err := NewClient()
+	if err != nil {
+		glog.Errorf("couldn't initiate a K8s client, err: %v", err) // TODO: make it a Warning
+		NodeName = ""
+		return
+	}
+	node, err := client.Node(NodeName)
+	if err != nil {
+		glog.Errorf("failed to get node, err: %v", err) // TODO: make it a Warning
+		NodeName = ""
+		return
+	}
+	debug.Assert(node.Name == NodeName)
+}
+
+func Detect() error {
+	detectOnce.Do(initDetect)
+
 	if NodeName == "" {
 		return fmt.Errorf("operation requires Kubernetes deployment")
 	}

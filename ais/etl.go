@@ -22,7 +22,7 @@ import (
 
 // [METHOD] /v1/etl
 func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
-	if err := k8s.Check(); err != nil {
+	if err := k8s.Detect(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
