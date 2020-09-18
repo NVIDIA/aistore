@@ -30,7 +30,9 @@ type (
 		joggers  map[string]*jogger     // mpath -> jogger
 		abortJob map[string]*cmn.StopCh // jobID -> abort job chan
 
+		adminCh            chan *request
 		dispatchDownloadCh chan DlJob
+		mpathReqCh         chan fs.ChangeReq
 
 		stopCh *cmn.StopCh
 		sync.RWMutex
@@ -44,29 +46,52 @@ func newDispatcher(parent *Downloader) *dispatcher {
 		joggers: make(map[string]*jogger, 8),
 
 		dispatchDownloadCh: make(chan DlJob, jobsChSize),
-		stopCh:             cmn.NewStopCh(),
-		abortJob:           make(map[string]*cmn.StopCh, jobsChSize),
+		mpathReqCh:         make(chan fs.ChangeReq, 1),
+
+		stopCh:   cmn.NewStopCh(),
+		abortJob: make(map[string]*cmn.StopCh, jobsChSize),
+		adminCh:  make(chan *request),
 	}
 }
 
-func (d *dispatcher) init() {
-	availablePaths, _ := fs.Get()
-	for mpath := range availablePaths {
-		d.addJogger(mpath)
-	}
-
-	go d.run()
-}
-
-func (d *dispatcher) run() {
+func (d *dispatcher) run() (err error) {
 	var (
 		// Number of concurrent job dispatches - it basically limits the number
 		// of goroutines so they won't go out of hand.
 		sema       = cmn.NewDynSemaphore(5 * fs.NumAvail())
 		group, ctx = errgroup.WithContext(context.Background())
 	)
+
+	availablePaths, _ := fs.Get()
+	for mpath := range availablePaths {
+		d.addJogger(mpath)
+	}
+
+Loop:
 	for {
 		select {
+		case <-d.parent.IdleTimer():
+			glog.Infof("%s has timed out. Exiting...", d.parent.Name())
+			break Loop
+		case <-d.parent.ChanAbort():
+			glog.Infof("%s has been aborted. Exiting...", d.parent.Name())
+			break Loop
+		case req := <-d.adminCh:
+			switch req.action {
+			case actStatus:
+				d.dispatchStatus(req)
+			case actAbort:
+				d.dispatchAbort(req)
+			case actRemove:
+				d.dispatchRemove(req)
+			case actList:
+				d.dispatchList(req)
+			default:
+				cmn.Assertf(false, "%v; %v", req, req.action)
+			}
+		case req := <-d.mpathReqCh:
+			err = fmt.Errorf("mountpaths have changed when downloader was running; %s: %s; aborting", req.Action, req.Path)
+			break Loop
 		case <-ctx.Done():
 			d.stop()
 			group.Wait()
@@ -75,6 +100,10 @@ func (d *dispatcher) run() {
 			// Start dispatching each job in new goroutine to make sure that
 			// all joggers are busy downloading the tasks (jobs with limits
 			// may not saturate the full downloader throughput).
+			d.Lock()
+			d.abortJob[job.ID()] = cmn.NewStopCh()
+			d.Unlock()
+
 			sema.Acquire()
 			group.Go(func() error {
 				defer sema.Release()
@@ -83,20 +112,16 @@ func (d *dispatcher) run() {
 				}
 				return nil
 			})
-		case <-d.stopCh.Listen():
-			d.stop()
-			return
 		}
 	}
-}
-
-func (d *dispatcher) Abort() {
-	d.stopCh.Close()
+	d.stop()
+	return
 }
 
 // stop running joggers
 // no need to cleanup maps, dispatcher should not be used after stop()
 func (d *dispatcher) stop() {
+	d.stopCh.Close()
 	for _, jogger := range d.joggers {
 		jogger.stop()
 	}
@@ -124,14 +149,6 @@ func (d *dispatcher) cleanUpAborted(jobID string) {
 		delete(d.abortJob, jobID)
 	}
 	d.Unlock()
-}
-
-func (d *dispatcher) ScheduleForDownload(job DlJob) {
-	d.Lock()
-	d.abortJob[job.ID()] = cmn.NewStopCh()
-	d.Unlock()
-
-	d.dispatchDownloadCh <- job
 }
 
 /*

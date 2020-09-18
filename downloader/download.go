@@ -137,9 +137,6 @@ type (
 
 		t          cluster.Target
 		statsT     stats.Tracker
-		mpathReqCh chan fs.ChangeReq
-		adminCh    chan *request
-		downloadCh chan DlJob
 		dispatcher *dispatcher
 	}
 
@@ -223,20 +220,19 @@ func (d *Downloader) Name() string {
 	i := strconv.FormatInt(instance.Load(), 10)
 	return "downloader" + i
 }
-func (d *Downloader) IsMountpathXact() bool           { return true }
-func (d *Downloader) ReqAddMountpath(mpath string)    { d.mpathReqCh <- fs.MountpathAdd(mpath) }
-func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.MountpathRem(mpath) }
-func (d *Downloader) ReqEnableMountpath(_ string)     {}
-func (d *Downloader) ReqDisableMountpath(_ string)    {}
+func (d *Downloader) IsMountpathXact() bool        { return true }
+func (d *Downloader) ReqAddMountpath(mpath string) { d.dispatcher.mpathReqCh <- fs.MountpathAdd(mpath) }
+func (d *Downloader) ReqRemoveMountpath(mpath string) {
+	d.dispatcher.mpathReqCh <- fs.MountpathRem(mpath)
+}
+func (d *Downloader) ReqEnableMountpath(_ string)  {}
+func (d *Downloader) ReqDisableMountpath(_ string) {}
 
 func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{
 		XactDemandBase: *demand.NewXactDemandBaseBck(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
 		t:              t,
 		statsT:         statsT,
-		mpathReqCh:     make(chan fs.ChangeReq, 1),
-		adminCh:        make(chan *request),
-		downloadCh:     make(chan DlJob, jobsChSize),
 	}
 
 	downloader.dispatcher = newDispatcher(downloader)
@@ -245,45 +241,10 @@ func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	return downloader
 }
 
-func (d *Downloader) init() {
-	d.dispatcher.init()
-}
-
-// TODO: Downloader doesn't necessarily has to be a goroutine
-// all it does is forwards the requests to dispatcher
-func (d *Downloader) Run() (err error) {
+func (d *Downloader) Run() error {
 	glog.Infof("starting %s", d.Name())
 	d.t.FSPRG().Reg(d)
-	d.init()
-Loop:
-	for {
-		select {
-		case req := <-d.adminCh:
-			switch req.action {
-			case actStatus:
-				d.dispatcher.dispatchStatus(req)
-			case actAbort:
-				d.dispatcher.dispatchAbort(req)
-			case actRemove:
-				d.dispatcher.dispatchRemove(req)
-			case actList:
-				d.dispatcher.dispatchList(req)
-			default:
-				cmn.Assertf(false, "%v; %v", req, req.action)
-			}
-		case job := <-d.downloadCh:
-			d.dispatcher.ScheduleForDownload(job)
-		case req := <-d.mpathReqCh:
-			err = fmt.Errorf("mountpaths have changed when downloader was running; %s: %s; aborting", req.Action, req.Path)
-			break Loop
-		case <-d.IdleTimer():
-			glog.Infof("%s has timed out. Exiting...", d.Name())
-			break Loop
-		case <-d.ChanAbort():
-			glog.Infof("%s has been aborted. Exiting...", d.Name())
-			break Loop
-		}
-	}
+	err := d.dispatcher.run()
 	d.stop(err)
 	return nil
 }
@@ -292,7 +253,6 @@ Loop:
 func (d *Downloader) stop(err error) {
 	d.t.FSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
-	d.dispatcher.Abort()
 	d.Finish()
 	glog.Infof("stopped %s", d.Name())
 	if err != nil {
@@ -309,7 +269,7 @@ func (d *Downloader) Download(dJob DlJob) (resp interface{}, err error, statusCo
 	dlStore.setJob(dJob.ID(), dJob)
 
 	select {
-	case d.downloadCh <- dJob:
+	case d.dispatcher.dispatchDownloadCh <- dJob:
 		return nil, nil, http.StatusOK
 	default:
 		return "downloader job queue is full", nil, http.StatusTooManyRequests
@@ -324,7 +284,7 @@ func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCod
 		id:         id,
 		responseCh: make(chan *response, 1),
 	}
-	d.adminCh <- req
+	d.dispatcher.adminCh <- req
 
 	// await the response
 	r := <-req.responseCh
@@ -339,7 +299,7 @@ func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCo
 		id:         id,
 		responseCh: make(chan *response, 1),
 	}
-	d.adminCh <- req
+	d.dispatcher.adminCh <- req
 
 	// await the response
 	r := <-req.responseCh
@@ -355,7 +315,7 @@ func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, er
 		responseCh: make(chan *response, 1),
 		onlyActive: onlyActive,
 	}
-	d.adminCh <- req
+	d.dispatcher.adminCh <- req
 
 	// await the response
 	r := <-req.responseCh
@@ -370,7 +330,7 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error
 		regex:      regex,
 		responseCh: make(chan *response, 1),
 	}
-	d.adminCh <- req
+	d.dispatcher.adminCh <- req
 
 	// await the response
 	r := <-req.responseCh

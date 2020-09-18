@@ -96,6 +96,7 @@ func (j *jogger) stop() {
 		j.task.markFailed(internalErrorMsg)
 	}
 	j.mtx.Unlock()
+	j.q.close()
 
 	<-j.terminateCh.Listen()
 }
@@ -258,4 +259,8 @@ func (q *queue) removeJob(id string) int {
 	}
 	delete(q.m, id)
 	return len(jobM)
+}
+
+func (q *queue) close() {
+	close(q.ch)
 }
