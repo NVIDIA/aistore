@@ -1550,7 +1550,7 @@ func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...
 		t.registerIC(xactRegMsg{
 			UUID: id,
 			Kind: cmn.ActResilver,
-			Scrs: []string{t.si.ID()},
+			Srcs: []string{t.si.ID()},
 		})
 	}
 	t.rebManager.RunResilver(id, skipGlobMisplaced /*skipGlobMisplaced*/, notifs...)

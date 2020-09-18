@@ -42,7 +42,7 @@ type (
 	xactRegMsg struct {
 		UUID string   `json:"uuid"`
 		Kind string   `json:"kind"`
-		Scrs []string `json:"srcs"` // list of daemonIDs
+		Srcs []string `json:"srcs"` // list of daemonIDs
 	}
 
 	icBundle struct {
@@ -296,13 +296,31 @@ check:
 		}
 		ic.p.notifs.add(nlMsg.nl)
 	case cmn.ActRegGlobalXaction:
-		regMsg := &xactRegMsg{}
-		if err := cmn.MorphMarshal(msg.Value, regMsg); err != nil {
+		var (
+			regMsg = &xactRegMsg{}
+			srcs   cluster.NodeMap
+			err    error
+		)
+		if err = cmn.MorphMarshal(msg.Value, regMsg); err != nil {
 			ic.p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 
-		srcs, err := smap.GetTargetMap(regMsg.Scrs)
+		// Notification listener should have at least 1 notifier
+		cmn.Assert(len(regMsg.Srcs) != 0)
+
+		withLocalRetry(func() bool {
+			// Retry till we can get a notifier NodeMap from sources
+			// or till we have an smap version greater than the request.
+			// Note: If we have a greater smap version and an error occurred while creating a NodeMap
+			// implies a node has been removed from the cluster.
+			if smap.Version < msg.SmapVersion {
+				smap = ic.p.owner.smap.get()
+			}
+			srcs, err = smap.GetTargetMap(regMsg.Srcs)
+			return smap.Version >= msg.SmapVersion || err == nil
+		})
+
 		if err != nil {
 			ic.p.invalmsghdlr(w, r, err.Error())
 			return
