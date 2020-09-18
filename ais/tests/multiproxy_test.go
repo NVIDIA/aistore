@@ -1349,8 +1349,9 @@ func primaryAndNextCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
-// TODO: make it long test after IC development completes
 func TestIC(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
 	proxyURL := tutils.RandomProxyURL(t)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountProxies() < 4 {
