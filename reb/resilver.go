@@ -221,6 +221,8 @@ func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 			glog.Warningf("%s: failed to cleanup old metafile %q: %v", lom, metaOldPath, err)
 		}
 	}
+	rj.xreb.BytesAdd(lom.Size())
+	rj.xreb.ObjectsInc()
 	// NOTE: rely on LRU to remove "misplaced"
 }
 
