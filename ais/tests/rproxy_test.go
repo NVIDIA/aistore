@@ -122,6 +122,10 @@ func TestRProxyGCS(t *testing.T) {
 		smap     = tutils.GetClusterMap(t, proxyURL)
 	)
 
+	if cmn.IsHTTPS(proxyURL) {
+		t.Skip("test doesn't work for HTTPS")
+	}
+
 	// look for leftovers and cleanup if found
 	pathCached := pathForCached()
 	if pathCached != "" {
