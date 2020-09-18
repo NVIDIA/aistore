@@ -29,6 +29,7 @@ fmt)
       exit 1
     fi
 
+    check_gomod
     check_imports
     check_files_headers
     check_python_formatting

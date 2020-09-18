@@ -1,6 +1,23 @@
 #!/bin/bash
+
 function list_all_go_dirs {
   go list -f '{{.Dir}}' "${AISTORE_DIR}/..."
+}
+
+function check_gomod {
+  # For now there is no `-check` flag that would tell us if there is something
+  # that needs to be updated with `go.mod` or `go.sum`. Therefore, we can just
+  # run tidy and check if anything has changed in the files.
+  # See: https://github.com/golang/go/issues/27005.
+  if ! command -v git &>/dev/null; then
+    return
+  fi
+
+  go mod tidy &>/dev/null
+  if ! git diff --exit-code -- go.mod go.sum &>/dev/null; then
+    printf "\nproject requires to run 'go mod tidy'\n"
+    exit 1
+  fi
 }
 
 function check_files_headers {
