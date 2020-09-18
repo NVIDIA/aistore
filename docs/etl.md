@@ -18,7 +18,7 @@ which represents the data differently from the source(s) or in a different conte
 To run custom ETL transforms *inline* and *close to data*, AIStore supports running custom ETL containers *in the storage cluster*.
 
 As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io).
-Each specific ETL is defined by its specification - a regular Kubernetes YAML (see examples below).
+Each specific ETL is defined by its specification - a regular Kubernetes YAML (examples below).
 
 * To start distributed ETL processing, a user either:
   1. needs to send transform function in [**build** request](#build-request) to the AIStore endpoint, or
@@ -28,15 +28,16 @@ Each specific ETL is defined by its specification - a regular Kubernetes YAML (s
 
 * Upon receiving **build**/**init**, AIS proxy broadcasts the request to all AIS targets in the cluster.
 
-* When a target receives **build**/**init**, it starts the container locally on the same (the target's) machine.
+* When a target receives **build**/**init**, it starts the container **locally** on the target's machine (aka Kubernetes node).
 
-* Targets use Kubernetes client to initialize the pods and gather necessary information for future runtime.
+* AIS targets use Kubernetes client to initialize pods and query their status.
 
 ## Prerequisites
 
-There are a couple of steps that are required to make the ETL work:
-1. `K8S_HOST_NAME = spec.nodeName` variable must be set inside the target pod's container (see more [here](https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/)).
-    Example:
+First, allow targets to assign a ETL container to the same machine/node that the target is running on. To achieve that, `K8S_HOST_NAME = spec.nodeName` variable must be set inside the target pod's container (see more [here](https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/)).
+
+* Example:
+
     ```yaml
       containers:
       - env:
@@ -45,28 +46,29 @@ There are a couple of steps that are required to make the ETL work:
              fieldRef:
                fieldPath: spec.nodeName
     ```
-    This will allow the target to assign an ETL container to the same machine/node that the target is working on.
 
 ## `build` request
 
-Build simplifies the flow of creating an ETL.
-It is recommended to try the ETL feature and for simple transform functions.
-If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service) then you probably will find this type of starting ETL most intuitive.
+You can write your own custom `transform` function (see example below) that takes input object bytes as a parameter and must return output bytes (the content of the transformed object). You can then use `build` request to execute this `transform` on the entire distributed dataset.
 
-This request requires writing the `transform` function (see example below) that takes input object bytes as a parameter and must return output bytes (the content of the transformed object).
-It is also possible to install the required dependencies if the function uses non-standard packages/libraries.
+In effect, you can skip the entire step of writing your own Dockerfile and building custom ETL container - the `build` capability allows to skip this step entirely.
+
+> First time users: it is recommended to startr with simple, Hello, World! type transformations.
+
+> If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service) then you probably will find this type of starting ETL most intuitive.
 
 ### Runtimes
 
-Runtimes determine in which languages it is possible to write the `transform` function.
-Currently, these runtimes are supported:
+AIS-ETL provides a number of *runtimes* out of the box. Each *runtime* determines the language of your custom `transform` function and the set of pre-installed packages and tools that your `transform` can utilize.
+
+Currently, the following runtimes are supported:
 
 | Name | Description |
 | --- | --- |
 | `python2` | `python:2.7.18` is used to run the code. |
 | `python3` | `python:3.8.5` is used to run the code. |
 
-Since the number of runtimes is limited we recommend using [`init` request](#init-request) when you have bigger needs.
+We will be adding more *runtimes* in the future, with the plans to support the most popular ETL toolchains. Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your own ETL container and deploy it via [`init` request](#init-request).
 
 ## `init` request
 
@@ -76,10 +78,11 @@ It also requires writing pod specification to make sure the targets will know ho
 
 ### Requirements
 
-Additionally to the [prerequisites](#prerequisites), several requirements need to be fulfilled by the Docker image that is started:
-1. It needs to start a server that supports at least one of [communication mechanisms](#communication-mechanisms).
-2. The server inside the Docker image can listen on any port, but the port must be specified in pod spec with `containerPort` - the cluster must know how to contact the pod.
-3. Target(s) may send requests in parallel to a given server - therefore, any synchronization must be done on the server-side.
+Custom ETL container is expected to satisfy the following requirements:
+
+1. Start web server that supports at least one of the listed [communication mechanisms](#communication-mechanisms).
+2. The server can listen on any port but the port must be specified in pod spec with `containerPort` - the cluster must know how to contact the pod.
+3. AIS target(s) may send requests in parallel to the web server inside ETL container - any synchronization, therefore, must be done on the server-side.
 
 ### Communication Mechanisms
 

@@ -77,8 +77,8 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 |---|---|---|
 | `log.level` | `3` | Set global logging level. The greater number the more verbose log output |
 | `vmodule` | `""` | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
-| `periodic.stats_time` | `10s` | A node periodically does 'housekeeping': updates internal statistics, remove old logs, and executes extended actions prefetch and LRU waiting in the line |
-| `periodic.notif_time` | `30s` | A target node periodically notifies subscribers (IC members) the status and statistics of an asynchronous operation (e.g., Download, Copy Bucket, etc.)  |
+| `periodic.stats_time` | `10s` | A *housekeeping* time interval to periodically update and log internal statistics, remove/rotate old logs, check available space (and run LRU *xaction* if need be), etc. |
+| `periodic.notif_time` | `30s` | An interval of time to notify subscribers (IC members) of the status and statistics of a given asynchronous operation (such as Download, Copy Bucket, etc.)  |
 | `lru.enabled` | `true` | Enables and disabled the LRU |
 | `lru.lowwm` | `75` | If filesystem usage exceeds `highwm` LRU tries to evict objects so the filesystem usage drops to `lowwm` |
 | `lru.highwm` | `90` | LRU starts immediately if a filesystem usage exceeds the value |
