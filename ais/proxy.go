@@ -3219,7 +3219,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Action == cmn.ActXactStart && xactMsg.Kind == cmn.ActRebalance {
 			smap := p.owner.smap.get()
-			if err := p.canStartRebalance(); err != nil {
+			if err := p.canStartRebalance(true /*skip config*/); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -3501,9 +3501,13 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	p.owner.bmd.Unlock()
 }
 
-func (p *proxyrunner) canStartRebalance() error {
+func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {
+	var skipCfg bool
+	if len(skipConfigCheck) != 0 {
+		skipCfg = skipConfigCheck[0]
+	}
 	cfg := cmn.GCO.Get().Rebalance
-	if !cfg.Enabled {
+	if !skipCfg && !cfg.Enabled {
 		return fmt.Errorf("rebalance is not enabled in the configuration")
 	}
 	if dontRun := cfg.DontRunTime; dontRun > 0 {
