@@ -620,7 +620,7 @@ func TestDownloadStatus(t *testing.T) {
 
 	files := map[string]string{
 		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
-		longFileName:  "https://storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz",
+		longFileName:  "https://storage.googleapis.com/nvdata-openimages/imagenet_train-000001.tgz",
 	}
 
 	clearDownloadList(t)
