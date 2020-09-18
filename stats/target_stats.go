@@ -33,8 +33,8 @@ const (
 	// rebalance
 	RebTxCount = "reb.tx.n"
 	RebTxSize  = "reb.tx.size"
-	RebRxCount = "reb.tx.n"
-	RebRxSize  = "reb.tx.size"
+	RebRxCount = "reb.rx.n"
+	RebRxSize  = "reb.rx.size"
 	// errors
 	ErrCksumCount    = "err.cksum.n"
 	ErrCksumSize     = "err.cksum.size"
