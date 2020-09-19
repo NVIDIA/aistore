@@ -357,6 +357,14 @@ func (ss StringSet) Intersection(other StringSet) StringSet {
 	return result
 }
 
+func (ss StringSet) Clone() StringSet {
+	result := make(StringSet, len(ss))
+	for k, v := range ss {
+		result[k] = v
+	}
+	return result
+}
+
 func (ss StringSet) All(xs ...string) bool {
 	for _, x := range xs {
 		if !ss.Contains(x) {

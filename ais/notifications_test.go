@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -34,14 +35,22 @@ var _ = Describe("Notifications xaction test", func() {
 		getNodeMap = func(ids ...string) (snodes cluster.NodeMap) {
 			snodes = make(cluster.NodeMap, len(ids))
 			for _, id := range ids {
-				snodes[id] = &cluster.Snode{DaemonID: id}
+				server := discoverServerDefaultHandler(1, 1)
+				info := serverTCPAddr(server.URL)
+				snodes[id] = newSnode(id, httpProto, cmn.Target, info, &net.TCPAddr{}, &net.TCPAddr{})
 			}
 			return
 		}
 
 		testNotifs = func() *notifs {
 			n := &notifs{
-				p:   &proxyrunner{httprunner: httprunner{si: getNodeMap(pDaemonID)[pDaemonID], statsT: &stats.TrackerMock{}}},
+				p: &proxyrunner{
+					httprunner: httprunner{
+						si:               getNodeMap(pDaemonID)[pDaemonID],
+						statsT:           &stats.TrackerMock{},
+						httpclientGetPut: &http.Client{},
+						httpclient:       &http.Client{},
+					}},
 				fin: make(map[string]notifListener, 2),
 				m:   make(map[string]notifListener, 2),
 			}

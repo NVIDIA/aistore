@@ -91,6 +91,7 @@ type (
 		setStats(daeID string, stats interface{})
 		nodeStats() map[string]interface{}
 		bcastArgs() bcastArgs
+		abortArgs() bcastArgs
 		finTime() int64
 		hasFinished(node *cluster.Snode) bool
 		markFinished(node *cluster.Snode)
@@ -320,10 +321,26 @@ func (nxb *notifXactBase) bcastArgs() bcastArgs {
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	}
-	args.req.Query = make(url.Values, 2)
 	args.req.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
 	args.req.Query.Set(cmn.URLParamUUID, nxb.UUID())
 	args.req.Path = cmn.JoinWords(cmn.Version, cmn.Xactions)
+	return args
+}
+
+func (nxb *notifXactBase) abortArgs() bcastArgs {
+	msg := cmn.ActionMsg{
+		Action: cmn.ActXactStop,
+		Value: cmn.XactReqMsg{
+			ID: nxb.UUID(),
+		},
+	}
+	args := bcastArgs{
+		req:     cmn.ReqArgs{Method: http.MethodPut},
+		network: cmn.NetworkIntraControl,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+	}
+	args.req.Body = cmn.MustMarshal(msg)
+	args.req.Path = cmn.JoinWords(cmn.Version, cmn.Cluster)
 	return args
 }
 
@@ -352,6 +369,20 @@ func (nd *notifDownloadBase) bcastArgs() bcastArgs {
 		ID: nd.UUID(),
 	}
 	args.req.Path = cmn.JoinWords(cmn.Version, cmn.Download)
+	args.req.Body = cmn.MustMarshal(dlBody)
+	return args
+}
+
+func (nd *notifDownloadBase) abortArgs() bcastArgs {
+	args := bcastArgs{
+		req:     cmn.ReqArgs{Method: http.MethodDelete},
+		network: cmn.NetworkIntraControl,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+	}
+	dlBody := downloader.DlAdminBody{
+		ID: nd.UUID(),
+	}
+	args.req.Path = cmn.JoinWords(cmn.Version, cmn.Download, cmn.Abort)
 	args.req.Body = cmn.MustMarshal(dlBody)
 	return args
 }
@@ -581,6 +612,12 @@ func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool
 			detail := fmt.Sprintf("%s, node %s", nl, tsi)
 			srcErr = cmn.NewAbortedErrorDetails(nl.kind(), detail)
 		}
+
+		// TODO: implement a better async broadcast for abort
+		args := nl.abortArgs()
+		args.nodes = []cluster.NodeMap{nl.notifiers()}
+		args.skipNodes = nl.finNotifiers().Clone()
+		go n.p.bcastToNodes(args)
 	}
 	if srcErr != nil {
 		nl.setErr(srcErr)
