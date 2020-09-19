@@ -201,9 +201,9 @@ var GetPropsAll = append(GetPropsDefault,
 // SelectMsg //
 ///////////////
 
-// NeedLocalData returns true if ListObjects for a cloud bucket needs
+// NeedLocalMD returns true if ListObjects for a cloud bucket needs
 // to return object properties that can be retrieved only from local caches
-func (msg *SelectMsg) NeedLocalData() bool {
+func (msg *SelectMsg) NeedLocalMD() bool {
 	return msg.WantProp(GetPropsAtime) ||
 		msg.WantProp(GetPropsStatus) ||
 		msg.WantProp(GetPropsCopies) ||

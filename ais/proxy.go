@@ -1099,10 +1099,30 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		return
 	}
 
+	// If props were not explicitly specified always return default ones.
+	if smsg.Props == "" {
+		smsg.AddProps(cmn.GetPropsDefault...)
+	}
+
+	// Vanilla HTTP buckets do not support remote listing
+	if bck.IsHTTP() {
+		smsg.SetFlag(cmn.SelectCached)
+	}
+
+	locationIsAIS := bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached)
 	if smsg.UUID == "" {
+		var nl notifListener
 		smsg.UUID = cmn.GenUUID()
 		// TODO -- FIXME: must be consistent vs newQueryListener
-		nl := newXactNL(smsg.UUID, smap, smap.Tmap.Clone(), notifCache, cmn.ActListObjects, bck.Bck)
+		if locationIsAIS || smsg.NeedLocalMD() {
+			nl = newXactNL(smsg.UUID, smap, smap.Tmap.Clone(), notifCache, cmn.ActListObjects, bck.Bck)
+		} else {
+			// Select random target to execute `list-objects` on a Cloud bucket
+			for sid, si := range smap.Tmap {
+				nl = newXactNL(smsg.UUID, smap, cluster.NodeMap{sid: si}, notifCache, cmn.ActListObjects, bck.Bck)
+				break
+			}
+		}
 		nl.hrwOwner(smap)
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
 	}
@@ -1111,16 +1131,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		return
 	}
 
-	// If props were not explicitly specified always return default ones.
-	if smsg.Props == "" {
-		smsg.AddProps(cmn.GetPropsDefault...)
-	}
-
-	if bck.IsHTTP() {
-		smsg.SetFlag(cmn.SelectCached)
-	}
-
-	if bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached) {
+	if locationIsAIS {
 		bckList, err = p.listObjectsAIS(bck, smsg)
 	} else {
 		bckList, err = p.listObjectsRemote(bck, smsg)
@@ -1857,11 +1868,14 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		results chan callResult
 	)
 
-	if smsg.NeedLocalData() {
+	if smsg.NeedLocalMD() {
 		results = p.bcastToGroup(args)
 	} else {
-		// Only cloud options are requested - call random target for data.
-		for _, si := range smap.Tmap {
+		nl, exists := p.notifs.entry(smsg.UUID)
+		// NOTE: We register a listobj xaction before starting the actual listing
+		cmn.Assert(exists)
+
+		for _, si := range nl.notifiers() {
 			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout, v: &cmn.BucketList{}})
 			results = make(chan callResult, 1)
 			results <- res
