@@ -46,13 +46,21 @@ var (
 //     the objects. It is initiated by a target and runs on the same K8S node
 //     running the target.
 //
-// Flow:
-// 1. User initiates an ETL container, using the `Start` method (via proxy).
-// 2. The ETL container starts on the same node as the target. It creates
-//    `Communicator` instance based on provided communication type.
-// 3. The transformation is done using `Communicator.Do()`
-// 4. The ETL container is stopped using `Stop` (via proxy). All targets delete
-//    their ETL containers (K8s pods).
+// On-the-fly transformation flow:
+// 1. User initiates a custom ETL workload by executing one of the documented APIs
+//    and providing either the corresponding docker image or a *transforming function* -
+//    a piece of code that we further run using one of the pre-built `runtimes`
+//    (see https://github.com/NVIDIA/aistore/blob/master/docs/etl.md).
+// 2. The API call results in deploying multiple ETL containers (K8s pods)
+//    simultaneously: one container per storage target.
+// 3. Each target creates a local `Communicator` instance that is based on the specified
+//    `communication type`.
+// 4. Client-side application (e.g., PyTorch or TensorFlow based training model)
+//    starts (randomly) reading the data from a given dataset.
+// 5. User-defined transformation is then performed using `Communicator.Do()`
+//    on each read objects, on a per-object (or shard) basis.
+// 6. Finally, the ETL container is stopped using the `Stop` API. In response,
+//    each ais target in the cluster deletes its local ETL container (K8s pod).
 //
 // Limitations of the current implementation (soon to be removed):
 //
@@ -132,7 +140,7 @@ func (e *Aborter) ListenSmapChanged() {
 func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg, opts...)
 	if err != nil {
-		glog.Warning(cmn.NewETLError(errCtx, "Doing cleanup after unsuccessful Start"))
+		glog.Warning(cmn.NewETLError(errCtx, "Performinh cleanup after unsuccessful Start"))
 		if err := cleanupEntities(errCtx, podName, svcName); err != nil {
 			glog.Error(err)
 		}

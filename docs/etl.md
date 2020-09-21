@@ -136,18 +136,18 @@ There are two ways of approaching this problem:
 
     In this example, we will be using `python3` runtime.
     In simplified flow we are only expected to write a simple `transform` function, which can look like this (`code.py`):
-    
+
     ```python
     import hashlib
-    
+
     def transform(input_bytes):
         md5 = hashlib.md5()
         md5.update(input_bytes)
         return md5.hexdigest().encode()
     ```
-   
+
     `transform` function must take bytes as argument (the content of the object) and return output bytes that will be saved in the transformed object.
-   
+
     Once we have the `transform` function defined we can use CLI to build and initialize ETL:
     ```console
     $ ais etl build --from-file=code.py --runtime=python3
@@ -159,39 +159,39 @@ There are two ways of approaching this problem:
     First, we need to write a server.
     In this case, we will write a Python 3 HTTP server.
     The code for it can look like this (`server.py`):
-    
+
     ```python
     #!/usr/bin/env python
-    
+
     import argparse
     import hashlib
     from http.server import HTTPServer, BaseHTTPRequestHandler
-    
-    
+
+
     class S(BaseHTTPRequestHandler):
         def _set_headers(self):
             self.send_response(200)
             self.send_header("Content-type", "text/plain")
             self.end_headers()
-    
+
         def do_POST(self):
             content_length = int(self.headers["Content-Length"])
             post_data = self.rfile.read(content_length)
             md5 = hashlib.md5()
             md5.update(post_data)
-    
+
             self._set_headers()
             self.wfile.write(md5.hexdigest().encode())
-    
-    
+
+
     def run(server_class=HTTPServer, handler_class=S, addr="localhost", port=8000):
         server_address = (addr, port)
         httpd = server_class(server_address, handler_class)
-    
+
         print(f"Starting httpd server on {addr}:{port}")
         httpd.serve_forever()
-    
-    
+
+
     if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="Run a simple HTTP server")
         parser.add_argument(
@@ -210,32 +210,32 @@ There are two ways of approaching this problem:
         args = parser.parse_args()
         run(addr=args.listen, port=args.port)
     ```
-    
+
     Once we have a server that computes the MD5, we need to create an image out of it.
     For that we need to write `Dockerfile` which can look like this:
-    
+
     ```dockerfile
     FROM python:3.8.5-alpine3.11
-    
+
     RUN mkdir /code
     WORKDIR /code
     COPY server.py server.py
-    
+
     EXPOSE 80
-    
+
     ENTRYPOINT [ "/code/server.py", "--listen", "0.0.0.0", "--port", "80" ]
     ```
-    
-    Once we have the docker file we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/), so our Kubernetes cluster can pull this image later.
+
+    Once we have the docker file we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/) so that our Kubernetes cluster can pull this image later.
     In this example, we will use [quay.io](https://quay.io/) Docker Registry.
-    
+
     ```console
     $ docker build -t quay.io/user/md5_server:v1 .
     $ docker push quay.io/user/md5_server:v1
     ```
-    
+
     The next step would be to create a pod spec that would be run on Kubernetes (`spec.yaml`):
-    
+
     ```yaml
     apiVersion: v1
     kind: Pod
@@ -253,20 +253,20 @@ There are two ways of approaching this problem:
               containerPort: 80
           command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
     ```
-    
+
     **Important**: the server listens on the same port as specified in `ports.containerPort`.
     This is required, as a target needs to know precise address of the ETL container.
-    
+
     Another note is that we pass additional parameters via the `annotations` field.
     We specified the communication type and wait time (for the pod to start).
-    
+
     Once we have our `spec.yaml` we can initialize ETL with CLI:
     ```console
     $ ais etl init spec.yaml
-    JGHEoo89gg 
+    JGHEoo89gg
     ```
 
-Just before we started ETL containers our pods looked like this: 
+Just before we started ETL containers our pods looked like this:
 
 ```console
 $ kubectl get pods
