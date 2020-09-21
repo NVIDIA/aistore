@@ -210,8 +210,6 @@ func TestRProxyInvalidURL(t *testing.T) {
 		{url: "http://archive.ics.uci.edu/ml/datasets/Abalone", statusCode: http.StatusBadRequest},
 		{url: "http://storage.googleapis.com/kubernetes-release/release", statusCode: http.StatusNotFound},
 		{url: "http://invalid.invaliddomain.com/test/webpage.txt", statusCode: http.StatusBadRequest}, // Invalid domain
-		{url: "http://httpstat.us/403", statusCode: http.StatusForbidden},
-		{url: "http://httpstat.us/500", statusCode: http.StatusInternalServerError},
 	}
 
 	for _, test := range tests {
