@@ -169,7 +169,6 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		pod             *corev1.Pod
 		svc             *corev1.Service
 		hostIP          string
-		podIP           string
 		originalPodName string
 		nodePort        uint
 
@@ -238,11 +237,6 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		return
 	}
 
-	// Retrieve pod IP.
-	if podIP, err = getPodIP(errCtx, pod); err != nil {
-		return
-	}
-
 	// 3. Creating service.
 	svcName = svc.GetName()
 	if err = createEntity(errCtx, k8s.Svc, svc); err != nil {
@@ -267,10 +261,9 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		listener:       newAborter(t, msg.ID),
 		t:              t,
 		pod:            pod,
-		commType:       msg.CommType,
-		podIP:          podIP,
-		transformerURL: transformerURL,
 		name:           originalPodName,
+		commType:       msg.CommType,
+		transformerURL: transformerURL,
 	})
 	// NOTE: communicator is put to registry only if the whole tryStart was successful.
 	if err = reg.put(msg.ID, c); err != nil {
@@ -511,18 +504,6 @@ func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *c
 	}
 
 	return false, nil, nil
-}
-
-func getPodIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
-	client, err := k8s.NewClient()
-	if err != nil {
-		return "", cmn.NewETLError(errCtx, err.Error())
-	}
-	p, err := client.Pod(pod.GetName())
-	if err != nil {
-		return "", err
-	}
-	return p.Status.PodIP, nil
 }
 
 func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {

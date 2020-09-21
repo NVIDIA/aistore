@@ -29,9 +29,8 @@ type (
 	}
 
 	Info struct {
-		ID           string `json:"id"`
-		Name         string `json:"name"`
-		RemoteAddrIP string `json:"remote_addr_ip"`
+		ID   string `json:"id"`
+		Name string `json:"name"`
 	}
 
 	OfflineMsg struct {

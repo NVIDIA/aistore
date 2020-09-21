@@ -107,7 +107,6 @@ var _ = Describe("CommunicatorTest", func() {
 				t:              tMock,
 				pod:            pod,
 				commType:       commType,
-				podIP:          "dummyip",
 				transformerURL: transformerServer.URL,
 			})
 			resp, err := http.Get(proxyServer.URL)

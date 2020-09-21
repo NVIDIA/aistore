@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	// The ETL container receives POST request from target with the data. It must read
-	// the data and return response to the target which then will be transferred
-	// to the client.
+	// The ETL container receives POST request from target with the data. It
+	// must read the data and return response to the target which then will be
+	// transferred to the client.
 	PushCommType = "hpush://"
 	// Target redirects the GET request to the ETL container. Then ETL container
 	// contacts the target via `AIS_TARGET_URL` env variable to get the data.
@@ -75,9 +75,8 @@ func (r *registry) list() []Info {
 	etls := make([]Info, 0, len(r.byUUID))
 	for uuid, c := range r.byUUID {
 		etls = append(etls, Info{
-			ID:           uuid,
-			Name:         c.Name(),
-			RemoteAddrIP: c.RemoteAddrIP(),
+			ID:   uuid,
+			Name: c.Name(),
 		})
 	}
 	r.mtx.RUnlock()

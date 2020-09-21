@@ -29,8 +29,6 @@ type (
 		PodName() string
 		SvcName() string
 
-		RemoteAddrIP() string
-
 		// Do() uses one of the two ETL container endpoints:
 		// - Method "PUT", Path "/"
 		// - Method "GET", Path "/bucket/object"
@@ -46,10 +44,9 @@ type (
 		listener       cluster.Slistener
 		t              cluster.Target
 		pod            *corev1.Pod
-		commType       string
-		podIP          string
-		transformerURL string
 		name           string
+		commType       string
+		transformerURL string
 	}
 
 	baseComm struct {
@@ -59,8 +56,7 @@ type (
 		name    string
 		podName string
 
-		remoteAddr         string
-		transformerAddress string
+		transformerURL string
 	}
 
 	pushComm struct {
@@ -88,12 +84,11 @@ var (
 
 func makeCommunicator(args commArgs) Communicator {
 	baseComm := baseComm{
-		Slistener:          args.listener,
-		t:                  args.t,
-		name:               args.name,
-		podName:            args.pod.GetName(),
-		remoteAddr:         args.podIP,
-		transformerAddress: args.transformerURL,
+		Slistener:      args.listener,
+		t:              args.t,
+		name:           args.name,
+		podName:        args.pod.GetName(),
+		transformerURL: args.transformerURL,
 	}
 
 	switch args.commType {
@@ -102,7 +97,7 @@ func makeCommunicator(args commArgs) Communicator {
 	case RedirectCommType:
 		return &redirectComm{baseComm: baseComm}
 	case RevProxyCommType:
-		transURL, err := url.Parse(args.transformerURL)
+		transURL, err := url.Parse(baseComm.transformerURL)
 		cmn.AssertNoErr(err)
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
@@ -123,17 +118,16 @@ func makeCommunicator(args commArgs) Communicator {
 	return nil
 }
 
-func (c baseComm) Name() string         { return c.name }
-func (c baseComm) PodName() string      { return c.podName }
-func (c baseComm) SvcName() string      { return c.podName /*pod name is same as service name*/ }
-func (c baseComm) RemoteAddrIP() string { return c.remoteAddr }
+func (c baseComm) Name() string    { return c.name }
+func (c baseComm) PodName() string { return c.podName }
+func (c baseComm) SvcName() string { return c.podName /*pod name is same as service name*/ }
 
 //////////////
 // pushComm //
 //////////////
 
-func (pushc *pushComm) doRequest(bck *cluster.Bck, objName string) (*http.Response, error) {
-	lom := &cluster.LOM{T: pushc.t, ObjName: objName}
+func (pc *pushComm) doRequest(bck *cluster.Bck, objName string) (*http.Response, error) {
+	lom := &cluster.LOM{T: pc.t, ObjName: objName}
 	if err := lom.Init(bck.Bck); err != nil {
 		return nil, err
 	}
@@ -143,23 +137,23 @@ func (pushc *pushComm) doRequest(bck *cluster.Bck, objName string) (*http.Respon
 		return nil, err
 	}
 
-	// `fh` is closed by Do(req)
+	// `fh` is closed by Do(req).
 	fh, err := cmn.NewFileHandle(lom.GetFQN())
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPut, pushc.transformerAddress, fh)
+	req, err := http.NewRequest(http.MethodPut, pc.transformerURL, fh)
 	if err != nil {
 		return nil, err
 	}
 
 	req.ContentLength = lom.Size()
 	req.Header.Set(cmn.HeaderContentType, cmn.ContentBinary)
-	return pushc.t.Client().Do(req)
+	return pc.t.Client().Do(req)
 }
 
-func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
-	resp, err := pushc.doRequest(bck, objName)
+func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
+	resp, err := pc.doRequest(bck, objName)
 	if err != nil {
 		return err
 	}
@@ -173,8 +167,8 @@ func (pushc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.B
 	return nil
 }
 
-func (pushc *pushComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
-	resp, err := pushc.doRequest(bck, objName)
+func (pc *pushComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
+	resp, err := pc.doRequest(bck, objName)
 	return handleResp(resp, err)
 }
 
@@ -182,15 +176,15 @@ func (pushc *pushComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int
 //  redirectComm  //
 ////////////////////
 
-func (repc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	redirectURL := cmn.JoinPath(repc.transformerAddress, transformerPath(bck, objName))
+func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+	redirectURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	return nil
 }
 
-func (repc *redirectComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
-	etlURL := cmn.JoinPath(repc.transformerAddress, transformerPath(bck, objName))
-	resp, err := repc.t.Client().Get(etlURL)
+func (rc *redirectComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
+	etlURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
+	resp, err := rc.t.Client().Get(etlURL)
 	return handleResp(resp, err)
 }
 
@@ -198,15 +192,15 @@ func (repc *redirectComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, 
 // revProxyComm //
 //////////////////
 
-func (ppc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	r.URL.Path = transformerPath(bck, objName) // Reverse proxy should always use /bucket/object endpoint.
-	ppc.rp.ServeHTTP(w, r)
+	pc.rp.ServeHTTP(w, r)
 	return nil
 }
 
-func (ppc *revProxyComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
-	etlURL := cmn.JoinPath(ppc.transformerAddress, transformerPath(bck, objName))
-	resp, err := ppc.t.Client().Get(etlURL)
+func (pc *revProxyComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
+	etlURL := cmn.JoinPath(pc.transformerURL, transformerPath(bck, objName))
+	resp, err := pc.t.Client().Get(etlURL)
 	return handleResp(resp, err)
 }
 
