@@ -1,36 +1,25 @@
 image: golang:1.13
 
-.test_long_template: &test_long_def
-  stage: test-long
-  only:
-    - schedules
-  after_script:
-    - mkdir $CI_PROJECT_DIR/logs
-    - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
-  artifacts:
-    when: on_failure
-    paths: [logs/]
-    expire_in: 2 days
-
-.aws_cli_install: &aws_cli
-  - pip3 install awscli --upgrade --user
+stages:
+  - build
+  - test-short
+  - test-long
 
 variables:
   GOPATH: /go
   AIS_NODE_FLAGS: "-skip_startup"
   MODE: debug # run tests with debug asserts
+  NUM_TARGET: 5
+  NUM_PROXY: 5
+  FS_CNT: 3
 
 before_script:
   - export PATH="$PATH:$GOPATH/bin"
   - apt-get update -yq
-  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools coreutils
-  - export NUM_TARGET=5
-  - export NUM_PROXY=5
-  - export FS_CNT=3
-stages:
-  - build
-  - test-short
-  - test-long
+  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse coreutils
+
+
+# Templates
 
 .default_only_template: &default_only_def
   only:
@@ -44,28 +33,40 @@ stages:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
 
+.test_long_template: &test_long_def
+  stage: test-long
+  only:
+    - schedules
+  after_script:
+    - mkdir $CI_PROJECT_DIR/logs
+    - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+  artifacts:
+    when: on_failure
+    paths: [logs/]
+    expire_in: 2 days
+
 .test_kube_template: &test_kube_def
   stage: test-short
   variables:
     AIS_ENDPOINT: "localhost:8080"
     K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
+    NUM_TARGET: 1
+    NUM_PROXY: 1
   tags:
     - ais-kube
   before_script:
     - export PATH="$PATH:$GOPATH/bin"
     - apt-get update -yq
-    - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse python3-pip python3-setuptools coreutils
+    - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof coreutils
     - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
     - chmod +x ./kubectl
     - mv ./kubectl /usr/local/bin/kubectl
     - kubectl version --client
-    - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecylce of transformers is implemented.
-    - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecylce of transformers is implemented.
-    - export NUM_TARGET=1
-    - export NUM_PROXY=1
-    - export FS_CNT=3
+    - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecycle of transformers is implemented.
+    - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecycle of transformers is implemented.
 
 
+# Stages
 
 build:linux:
   stage: build
@@ -82,6 +83,7 @@ lint:linux:
   stage: build
   <<: *default_only_def
   script:
+    - apt-get -y install python3-pip python3-setuptools
     - pip3 install yapf pylint
     - make lint
     - make fmt-check
@@ -91,7 +93,6 @@ test:short:
   stage: test-short
   <<: *default_ref_def
   script:
-    - *aws_cli
     - make aisfs cli aisloader
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\n'
@@ -137,21 +138,22 @@ test:https:
 
 test:long:
   <<: *test_long_def
+  variables:
+    NUM_PROXY: 6
   script:
-    - *aws_cli
-    - make deploy <<< $'6\n5\n3\nn\nn\nn\n'
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo y; echo n; })
     - BUCKET="test" make test-long
 
 test:cloud:
   <<: *test_long_def
   variables:
     AWS_REGION: "us-east-2"
+    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
+    NUM_PROXY: 6
   script:
-    - export NUM_PROXY=6
-    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > /tmp/gcs.json
-    - export GOOGLE_APPLICATION_CREDENTIALS="/tmp/gcs.json"
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo y; echo n; })
-    - BUCKET="gs://ais-nv" make test-long
+    - BUCKET="gs://ais-ci" make test-long
     - BUCKET="aws://ais-ci" make test-long
 
 test:soak:
@@ -160,7 +162,7 @@ test:soak:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
     - FLAGS="--short --rec-cycles=1" make test-soak
 
 test:aisloader-long:
@@ -169,7 +171,7 @@ test:aisloader-long:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
 
@@ -183,6 +185,7 @@ test:aisloader-long:
 #    - make test-bench
 
 
+# Kubernetes stages
 
 test:kube-short:
   <<: *test_kube_def
@@ -192,7 +195,7 @@ test:kube-short:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   script:
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y;echo y;echo y;  })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo y; echo y;  })
     - status=0
     - BUCKET="test" RE="TestETL" make test-short || status=$?
     - make kill
@@ -205,7 +208,7 @@ test:kube:
     - if: '$CI_PIPELINE_SOURCE == "schedules"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
     - status=0
     - BUCKET="test" RE="TestETL" make test-run || status=$?
     - make kill
@@ -218,9 +221,9 @@ test:aisloader-short:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n;echo n;echo n; })
+    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
     - sleep 10 # TODO: better alternative ? adding sleep for targets to join.
     - status=0
-    - BUCKET="test" FLAGS="--duration=5s --tar2tf" make test-aisloader || status=$?
+    - BUCKET="test" FLAGS="--duration=5s --etl" make test-aisloader || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures

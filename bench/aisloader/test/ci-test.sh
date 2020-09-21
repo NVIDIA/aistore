@@ -2,7 +2,7 @@
 
 bucket_name=""
 duration="2m"
-tar2tf=false
+etl=false
 
 for i in "$@"; do
 case $i in
@@ -16,8 +16,8 @@ case $i in
         shift
         ;;
 
-    -tar2tf|--tar2tf|tar2tf)
-        tar2tf=true
+    -etl|--etl)
+        etl=true
         shift
         ;;
     *)
@@ -26,11 +26,11 @@ case $i in
   esac
 done
 
-if [ -z $bucket_name ]; then
+if [[ -z $bucket_name ]]; then
   bucket_name=$(cat /dev/urandom | LC_CTYPE=C tr -dc 'a-zA-Z0-9' | fold -w 12 | head -n 1)
 fi
 
-if [ $tar2tf = true ]; then
+if [ "$etl" = true ]; then
   # TODO: possibly we could do everything in one call.
   # However, aisloader teminates immediately, if there is no objects in the bucket and pctput != 100.
   aisloader -bucket="$bucket_name" -duration="$duration" -pctput=100 -provider=ais -maxsize=10Mib -minsize=1Mib -totalputsize=5Gib -cleanup=false -readertype=tar -numworkers=8
