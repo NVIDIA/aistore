@@ -360,13 +360,13 @@ func Test_matchdelete(t *testing.T) {
 }
 
 func TestOperationsWithRanges(t *testing.T) {
-	if numfiles < 10 || numfiles%10 != 0 {
+	if numfiles <= 0 || numfiles%10 != 0 {
 		t.Fatal("numfiles must be a positive multiple of 10")
 	}
 
 	const (
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
-		objSize      = 16 * 1024
+		objSize      = 16 * cmn.KiB
 	)
 	var (
 		proxyURL = tutils.RandomProxyURL(t)
@@ -470,9 +470,10 @@ func TestOperationsWithRanges(t *testing.T) {
 					}
 					if len(objList.Entries) != totalFiles {
 						t.Errorf("Incorrect number of remaining objects: %d, should be %d", len(objList.Entries), totalFiles)
-					} else {
-						tutils.Logf("  %d objects have been deleted/evicted\n", test.delta)
+						continue
 					}
+
+					tutils.Logf("  %d objects have been deleted/evicted\n", test.delta)
 				}
 
 				msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}

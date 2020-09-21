@@ -1416,11 +1416,13 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	smap, err = api.WaitNodeAdded(tutils.BaseAPIParams(primary.PublicNet.DirectURL), cmd.node.ID())
 	tassert.CheckFatal(t, err)
 
-	// Adding a new node shouldn't change IC members
+	// Adding a new node shouldn't change IC members.
 	tassert.Errorf(t, reflect.DeepEqual(updatedICs, smap.IC), "shouldn't update existing IC members")
 }
 
 func icKillAndRestorePrimary(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
 	proxyURL := tutils.RandomProxyURL(t)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
@@ -1439,13 +1441,13 @@ func icKillAndRestorePrimary(t *testing.T) {
 		smap.Version, testing.Verbose())
 	tassert.CheckFatal(t, err)
 
-	// OLD primary shouldn't be in IC
+	// Old primary shouldn't be in IC.
 	tassert.Errorf(t, !smap.IsIC(oldPrimary), "killed primary (%s) must be removed from IC", oldPrimaryID)
 
-	// New primary should be part of IC
+	// New primary should be part of IC.
 	tassert.Errorf(t, smap.IsIC(newPrimary), "new primary (%s) must be part of IC", newPrimaryID)
 
-	// remaining IC member should be unchanged
+	// Remaining IC member should be unchanged.
 	for sid := range oldIC {
 		if sid != oldPrimaryID {
 			tassert.Errorf(t, smap.IsIC(smap.GetProxy(sid)), "should not remove existing IC members (%s)", sid)
@@ -1456,7 +1458,7 @@ func icKillAndRestorePrimary(t *testing.T) {
 	_, maxVal := cmn.MaxValEntryInt(changedIC)
 	tassert.CheckError(t, err)
 
-	// Restore the killed primary back as primary
+	// Restore the killed primary back as primary.
 	err = restore(cmd, true, "proxy")
 	tassert.CheckFatal(t, err)
 
@@ -1465,11 +1467,11 @@ func icKillAndRestorePrimary(t *testing.T) {
 
 	smap = setPrimaryTo(t, oldPrimaryURL, smap, "", oldPrimaryID)
 
-	// when a node added as primary, it should add itself to IC
+	// When a node added as primary, it should add itself to IC.
 	tassert.Fatalf(t, smap.IsIC(oldPrimary), "primary (%s) should be a IC member, (were: %s)", oldPrimaryID, smap.StrIC(newPrimary))
 	tassert.Errorf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
 
-	// proxy with max version should be evicted
+	// Proxy with max version should be evicted.
 	for si, v := range changedIC {
 		if _, ok := smap.IC[si]; !ok {
 			tassert.Fatalf(t, v == maxVal,
@@ -1499,17 +1501,17 @@ func icSyncOwnershipTable(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, src)
 	defer tutils.DestroyBucket(t, proxyURL, src)
 
-	// Start any xaction and get ID
+	// Start any xaction and get ID.
 	xactID, err := api.CopyBucket(baseParams, src, dstBck)
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
-	// killing an IC member, should add a new IC member
-	// select IC member which is not primary and kill
+	// Killing an IC member, should add a new IC member.
+	// Select IC member which is not primary and kill.
 	origIC := smap.IC
 	cmd, smap := killRandNonPrimaryIC(t, smap)
 
-	// try getting xaction status from new IC member
+	// Try getting xaction status from new IC member.
 	var newICMemID string
 	for sid := range smap.IC {
 		if _, ok := origIC[sid]; !ok {
@@ -1532,7 +1534,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, !smap.IsIC(cmd.node), "newly joined node shouldn't be in IC (%s)", cmd.node)
 
-	// should sync ownership table when non-ic member become primary
+	// Should sync ownership table when non-ic member become primary.
 	smap = setPrimaryTo(t, primary.PublicNet.DirectURL, smap, "", cmd.node.ID())
 	tassert.Fatalf(t, smap.IsIC(cmd.node), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
 
@@ -1542,6 +1544,8 @@ func icSyncOwnershipTable(t *testing.T) {
 }
 
 func icSinglePrimaryRevamp(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
 	var (
 		proxyURL       = tutils.RandomProxyURL(t)
 		smap           = tutils.GetClusterMap(t, proxyURL)
@@ -1560,7 +1564,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 
 	nodesToRestore := make([]restoreCmd, 0, origProxyCount-1)
 
-	// kill all nodes except primary
+	// Kill all nodes except primary.
 	for i := origProxyCount; i > 1; i-- {
 		var cmd restoreCmd
 		cmd, smap = killRandNonPrimaryIC(t, smap)
@@ -1572,14 +1576,14 @@ func icSinglePrimaryRevamp(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, src)
 	defer tutils.DestroyBucket(t, proxyURL, src)
 
-	// Start any xaction and get ID
+	// Start any xaction and get ID.
 	xactID, err := api.CopyBucket(baseParams, src, dstBck)
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket}
 
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
-	// Restart all killed nodes and check for xaction status
+	// Restart all killed nodes and check for xaction status.
 	for _, cmd := range nodesToRestore {
 		err = restore(cmd, false, "proxy")
 		tassert.CheckError(t, err)
