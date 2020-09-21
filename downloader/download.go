@@ -128,13 +128,11 @@ var (
 	instance atomic.Int64
 )
 
-// public types
 type (
-	// Downloader implements the fs.PathRunner and XactDemand interface. When
-	// download related requests are made to AIS using the download endpoint,
+	// Downloader implements the fs.PathRunner and demand.XactDemand interface.
+	// When download related requests are made to AIS using the download endpoint,
 	// Downloader dispatches these requests to the corresponding jogger.
 	Downloader struct {
-		cmn.Named
 		demand.XactDemandBase
 
 		t          cluster.Target
@@ -144,10 +142,7 @@ type (
 		downloadCh chan DlJob
 		dispatcher *dispatcher
 	}
-)
 
-// private types
-type (
 	// The result of calling one of Downloader's exposed methods is encapsulated
 	// in a response object, which is used to communicate the outcome of the
 	// request.
@@ -182,7 +177,7 @@ func clientForURL(u string) *http.Client {
 	return httpClient
 }
 
-//==================================== Requests ===========================================
+// ============================ Requests =======================================
 
 func (req *request) write(resp interface{}, err error, statusCode int) {
 	req.responseCh <- &response{
@@ -224,7 +219,10 @@ var (
 	_ fs.PathRunner = &Downloader{}
 )
 
-func (d *Downloader) Name() string                    { return d.GetRunName() }
+func (d *Downloader) Name() string {
+	i := strconv.FormatInt(instance.Load(), 10)
+	return "downloader" + i
+}
 func (d *Downloader) IsMountpathXact() bool           { return true }
 func (d *Downloader) ReqAddMountpath(mpath string)    { d.mpathReqCh <- fs.MountpathAdd(mpath) }
 func (d *Downloader) ReqRemoveMountpath(mpath string) { d.mpathReqCh <- fs.MountpathRem(mpath) }
@@ -243,8 +241,7 @@ func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 
 	downloader.dispatcher = newDispatcher(downloader)
 	downloader.InitIdle()
-	i := strconv.FormatInt(instance.Inc(), 10)
-	downloader.SetRunName("downloader" + i)
+	instance.Inc()
 	return downloader
 }
 
@@ -252,10 +249,10 @@ func (d *Downloader) init() {
 	d.dispatcher.init()
 }
 
-// TODO: Downloader doesn't necessarily has to be a go routine
+// TODO: Downloader doesn't necessarily has to be a goroutine
 // all it does is forwards the requests to dispatcher
 func (d *Downloader) Run() (err error) {
-	glog.Infof("Starting %s", d.GetRunName())
+	glog.Infof("starting %s", d.Name())
 	d.t.FSPRG().Reg(d)
 	d.init()
 Loop:
@@ -280,26 +277,26 @@ Loop:
 			err = fmt.Errorf("mountpaths have changed when downloader was running; %s: %s; aborting", req.Action, req.Path)
 			break Loop
 		case <-d.IdleTimer():
-			glog.Infof("%s has timed out. Exiting...", d.GetRunName())
+			glog.Infof("%s has timed out. Exiting...", d.Name())
 			break Loop
 		case <-d.ChanAbort():
-			glog.Infof("%s has been aborted. Exiting...", d.GetRunName())
+			glog.Infof("%s has been aborted. Exiting...", d.Name())
 			break Loop
 		}
 	}
-	d.Stop(err)
+	d.stop(err)
 	return nil
 }
 
-// Stop terminates the downloader
-func (d *Downloader) Stop(err error) {
+// stop terminates the downloader and all dependent entities.
+func (d *Downloader) stop(err error) {
 	d.t.FSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
 	d.dispatcher.Abort()
 	d.Finish()
-	glog.Infof("Stopped %s", d.GetRunName())
+	glog.Infof("stopped %s", d.Name())
 	if err != nil {
-		glog.Errorf("stopping downloader; %s", err.Error())
+		glog.Errorf("stopping %s, err: %v", d.Name(), err)
 	}
 }
 
@@ -321,6 +318,7 @@ func (d *Downloader) Download(dJob DlJob) (resp interface{}, err error, statusCo
 
 func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
+	defer d.DecPending()
 	req := &request{
 		action:     actAbort,
 		id:         id,
@@ -330,12 +328,12 @@ func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCod
 
 	// await the response
 	r := <-req.responseCh
-	d.DecPending()
 	return r.resp, r.err, r.statusCode
 }
 
 func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
+	defer d.DecPending()
 	req := &request{
 		action:     actRemove,
 		id:         id,
@@ -345,12 +343,12 @@ func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCo
 
 	// await the response
 	r := <-req.responseCh
-	d.DecPending()
 	return r.resp, r.err, r.statusCode
 }
 
 func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
+	defer d.DecPending()
 	req := &request{
 		action:     actStatus,
 		id:         id,
@@ -361,12 +359,12 @@ func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, er
 
 	// await the response
 	r := <-req.responseCh
-	d.DecPending()
 	return r.resp, r.err, r.statusCode
 }
 
 func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
+	defer d.DecPending()
 	req := &request{
 		action:     actList,
 		regex:      regex,
@@ -376,7 +374,6 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error
 
 	// await the response
 	r := <-req.responseCh
-	d.DecPending()
 	return r.resp, r.err, r.statusCode
 }
 

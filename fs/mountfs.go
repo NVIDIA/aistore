@@ -53,7 +53,6 @@ var (
 // - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 
 type (
-	MPI          map[string]*MountpathInfo
 	PathRunGroup interface {
 		Reg(r PathRunner)
 		Unreg(r PathRunner)
@@ -64,13 +63,13 @@ type (
 	// redownload objects. These xactions should subscribe to mountpath changes
 	// as a `PathRunner`s to `PathRunGroup` events and adapt on the fly.
 	PathRunner interface {
-		cmn.Runner
 		Name() string
 		ReqAddMountpath(mpath string)
 		ReqRemoveMountpath(mpath string)
 		ReqEnableMountpath(mpath string)
 		ReqDisableMountpath(mpath string)
 	}
+
 	MountpathInfo struct {
 		Path       string // Cleaned OrigPath
 		OrigPath   string // As entered by the user, must be used for logging / returning errors
@@ -85,6 +84,8 @@ type (
 		cmu      sync.RWMutex
 		capacity Capacity
 	}
+	MPI map[string]*MountpathInfo
+
 	Capacity struct {
 		Used    uint64 `json:"used,string"`  // bytes
 		Avail   uint64 `json:"avail,string"` // ditto
