@@ -251,7 +251,8 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 	case cmn.ActResetBprops:
 		if bck.IsCloud() {
 			if bck.HasBackendBck() {
-				err = fmt.Errorf("%q has backend %q, detach the backend bucket before resetting the props", bck.Bck, bck.BackendBck())
+				err = fmt.Errorf("%q has backend %q - detach it prior to resetting the props",
+					bck.Bck, bck.BackendBck())
 				return
 			}
 			cloudProps, err, _ := p.headCloudBck(bck.Bck, nil)
@@ -405,7 +406,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.msg.RMDVersion = clone.version()
 
 			// 5. IC
-			nl := newXactNL(c.uuid, c.smap, c.smap.Tmap.Clone(), notifXact, msg.Action, bckFrom.Bck, bckTo.Bck)
+			nl := newXactNL(c.uuid, c.smap, c.smap.Tmap.Clone(), notifXact,
+				msg.Action, bckFrom.Bck, bckTo.Bck)
 			nl.setOwner(equalIC)
 			p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -418,7 +420,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 			// 7. start rebalance and resilver
 			wg = p.metasyncer.sync(revsPair{clone, c.msg})
-			nl = newXactNL(xaction.RebID(clone.Version).String(), c.smap, c.smap.Tmap.Clone(), notifXact, cmn.ActRebalance)
+			nl = newXactNL(xaction.RebID(clone.Version).String(), c.smap,
+				c.smap.Tmap.Clone(), notifXact, cmn.ActRebalance)
 			nl.setOwner(equalIC)
 			p.ic.registerEqual(regIC{smap: c.smap, nl: nl})
 		},
@@ -427,7 +430,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	return
 }
 
-// copy-bucket/offline ETL: { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
+// copy-bucket/offline ETL:
+// { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
 func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
 		nmsg    = &cmn.ActionMsg{} // + bckTo

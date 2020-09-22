@@ -106,7 +106,8 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 	t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 }
 
-func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string, xactQuery xaction.RegistryXactFilter) {
+func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string,
+	xactQuery xaction.RegistryXactFilter) {
 	if what != cmn.QueryXactStats {
 		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return
@@ -169,14 +170,14 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		go xact.Run()
 	// 3. cannot start
 	case cmn.ActPutCopies:
-		return fmt.Errorf("cannot start xaction %q - it is invoked automatically by PUTs into mirrored bucket", xactMsg.Kind)
+		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", xactMsg.Kind)
 	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete, cmn.ActMakeNCopies, cmn.ActECEncode:
-		return fmt.Errorf("initiating xaction %q must be done via a separate documented API", xactMsg.Kind)
+		return fmt.Errorf("initiating %q must be done via a separate documented API", xactMsg.Kind)
 	// 4. unknown
 	case "":
 		return errors.New("unspecified (empty) xaction kind")
 	default:
-		return fmt.Errorf("starting %q xaction is unsupported", xactMsg.Kind)
+		return fmt.Errorf("%q is not supported", xactMsg.Kind)
 	}
 	return nil
 }

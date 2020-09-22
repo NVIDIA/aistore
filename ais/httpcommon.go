@@ -65,17 +65,15 @@ type (
 
 	// bcastArgs contains arguments for an intra-cluster broadcast call.
 	bcastArgs struct {
-		req     cmn.ReqArgs
-		network string // on of the cmn.KnownNetworks
-		timeout time.Duration
-		// Function that returns fresh value that needs to be unmarshalled.
-		// See: `callArgs.v` field.
-		fv func() interface{}
-
-		nodes     []cluster.NodeMap
-		skipNodes cmn.StringSet // daeIDs of nodes to skip broadcast
-		smap      *smapX
-		to        int
+		req       cmn.ReqArgs        // http args
+		network   string             // one of the cmn.KnownNetworks
+		timeout   time.Duration      // timeout
+		fv        func() interface{} // optional; returns value to be unmarshalled (see `callArgs.v`)
+		nodes     []cluster.NodeMap  // broadcast destinations
+		skipNodes cmn.StringSet      // destination IDs to skip
+		smap      *smapX             // Smap to use
+		to        int                // enumerated alternative to nodes (above)
+		nodeCount int                // greater or equal destination count
 	}
 
 	networkHandler struct {
@@ -763,14 +761,14 @@ func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte, kind string)
 	var (
 		path = cmn.JoinWords(cmn.Version, cmn.Notifs, kind)
 	)
-
 	args := bcastArgs{
-		req:     cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: msgBody},
-		network: cmn.NetworkIntraControl,
-		timeout: cmn.DefaultTimeout,
-		nodes:   []cluster.NodeMap{snodes},
+		req:       cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: msgBody},
+		network:   cmn.NetworkIntraControl,
+		timeout:   cmn.DefaultTimeout,
+		nodes:     []cluster.NodeMap{snodes},
+		nodeCount: len(snodes),
 	}
-	_ = h.bcastToNodes(args)
+	_ = h.bcastToNodes(&args)
 }
 
 func (h *httprunner) callerNotifyFin(n cmn.Notif, err error) {
@@ -866,38 +864,30 @@ func (h *httprunner) bcastToGroup(args bcastArgs) chan callResult {
 	switch args.to {
 	case cluster.Targets:
 		args.nodes = []cluster.NodeMap{args.smap.Tmap}
+		args.nodeCount = len(args.smap.Tmap)
 	case cluster.Proxies:
 		args.nodes = []cluster.NodeMap{args.smap.Pmap}
+		args.nodeCount = len(args.smap.Pmap)
 	case cluster.AllNodes:
 		args.nodes = []cluster.NodeMap{args.smap.Pmap, args.smap.Tmap}
+		args.nodeCount = len(args.smap.Pmap) + len(args.smap.Tmap)
 	default:
 		cmn.Assert(false)
 	}
 	if !cmn.NetworkIsKnown(args.network) {
 		cmn.Assertf(false, "unknown network %q", args.network)
 	}
-	return h.bcastToNodes(args)
+	return h.bcastToNodes(&args)
 }
 
-// bcastToNodes broadcasts a message to specific nodes (`bargs.nodes`).
-// When using `bargs.req.BodyR` it must implement `cmn.ReadOpenCloser`.
-func (h *httprunner) bcastToNodes(bargs bcastArgs) chan callResult {
-	cmn.Assert(bargs.nodes != nil)
-
-	nodeCount := 0
-	for _, nodeMap := range bargs.nodes {
-		nodeCount += len(nodeMap)
-	}
-	if nodeCount == 0 {
-		ch := make(chan callResult)
-		close(ch)
-		glog.Warningf("node count zero in [%+v] bcast", bargs.req)
-		return ch
-	}
-
+// bcastToNodes broadcasts a message to the specified destinations (`bargs.nodes`).
+// It then waits and collects all the responses. Note that when `bargs.req.BodyR`
+// is used it is expected to implement `cmn.ReadOpenCloser`.
+func (h *httprunner) bcastToNodes(bargs *bcastArgs) chan callResult {
 	var (
-		wg = &sync.WaitGroup{}
-		ch = make(chan callResult, nodeCount)
+		wg  = &sync.WaitGroup{}
+		ch  = make(chan callResult, bargs.nodeCount)
+		cnt int
 	)
 	for _, nodeMap := range bargs.nodes {
 		for sid, si := range nodeMap {
@@ -905,53 +895,83 @@ func (h *httprunner) bcastToNodes(bargs bcastArgs) chan callResult {
 				continue
 			}
 			wg.Add(1)
-			go func(si *cluster.Snode) {
-				cargs := callArgs{
-					si:      si,
-					req:     bargs.req,
-					timeout: bargs.timeout,
-				}
-				cargs.req.Base = si.URL(bargs.network)
-				if bargs.req.BodyR != nil {
-					cargs.req.BodyR, _ = bargs.req.BodyR.(cmn.ReadOpenCloser).Open()
-				}
-				if bargs.fv != nil {
-					cargs.v = bargs.fv()
-				}
-
-				ch <- h.call(cargs)
-				wg.Done()
-			}(si)
+			cnt++
+			go h.unicastToNode(si, bargs, wg, ch)
 		}
 	}
-
 	wg.Wait()
 	close(ch)
+	if cnt == 0 {
+		glog.Warningf("%s: node count is zero in [%s %s] broadcast", h.si, bargs.req.Method, bargs.req.Path)
+	}
 	return ch
 }
 
-func (h *httprunner) bcastToIC(msg *aisMsg) chan callResult {
-	smap := h.owner.smap.get()
-	nodes := make(cluster.NodeMap, len(smap.IC))
-	for pid := range smap.IC {
-		if pid != h.si.ID() {
-			psi := smap.GetProxy(pid)
-			cmn.Assert(psi != nil)
-			nodes.Add(psi)
+func (h *httprunner) unicastToNode(si *cluster.Snode, bargs *bcastArgs, wg *sync.WaitGroup, ch chan callResult) {
+	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
+	cargs.req.Base = si.URL(bargs.network)
+	if bargs.req.BodyR != nil {
+		cargs.req.BodyR, _ = bargs.req.BodyR.(cmn.ReadOpenCloser).Open()
+	}
+	if bargs.fv != nil {
+		cargs.v = bargs.fv()
+	}
+	ch <- h.call(cargs)
+	wg.Done()
+}
+
+// asynchronous variation of the `bcastToNodes` (above)
+func (h *httprunner) bcastToNodesAsync(bargs *bcastArgs) {
+	var cnt int
+	for _, nodeMap := range bargs.nodes {
+		for sid, si := range nodeMap {
+			if sid == h.si.ID() || bargs.skipNodes.Contains(sid) {
+				continue
+			}
+			cnt++
+			go func(si *cluster.Snode) {
+				cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
+				cargs.req.Base = si.URL(bargs.network)
+				_ = h.call(cargs)
+			}(si)
+		}
+		if cnt == 0 {
+			glog.Warningf("%s: node count is zero in [%s %s] broadcast",
+				h.si, bargs.req.Method, bargs.req.Path)
 		}
 	}
-	cmn.Assert(len(nodes) > 0)
+}
 
-	return h.bcastToNodes(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.JoinWords(cmn.Version, cmn.IC),
-			Body:   cmn.MustMarshal(msg),
-		},
-		network: cmn.NetworkIntraControl,
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-		nodes:   []cluster.NodeMap{nodes},
-	})
+func (h *httprunner) bcastToIC(msg *aisMsg) chan callResult {
+	var (
+		smap  = h.owner.smap.get()
+		wg    = &sync.WaitGroup{}
+		ch    = make(chan callResult, len(smap.IC))
+		bargs = bcastArgs{
+			req: cmn.ReqArgs{
+				Method: http.MethodPost,
+				Path:   cmn.JoinWords(cmn.Version, cmn.IC),
+				Body:   cmn.MustMarshal(msg),
+			},
+			network: cmn.NetworkIntraControl,
+			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+		}
+		cnt int
+	)
+	for pid := range smap.IC {
+		if pid == h.si.ID() {
+			continue
+		}
+		wg.Add(1)
+		cnt++
+		go h.unicastToNode(smap.GetProxy(pid), &bargs, wg, ch)
+	}
+	wg.Wait()
+	close(ch)
+	if cnt == 0 {
+		glog.Errorf("%s: node count is zero in broadcast-to-IC, %+v(%d)", h.si, smap.IC, len(smap.IC))
+	}
+	return ch
 }
 
 //////////////////////////////////

@@ -413,14 +413,18 @@ func (y *metasyncer) syncDone(sid string, pairs []revsPair) {
 	}
 }
 
-func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap, pairs []revsPair,
-	config *cmn.Config) {
-	res := y.p.bcastToNodes(bcastArgs{
-		req:     cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
-		network: cmn.NetworkIntraControl,
-		timeout: config.Timeout.MaxKeepalive,
-		nodes:   []cluster.NodeMap{refused},
-	})
+func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap,
+	pairs []revsPair, config *cmn.Config) {
+	var (
+		bargs = bcastArgs{
+			req:       cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
+			network:   cmn.NetworkIntraControl,
+			timeout:   config.Timeout.MaxKeepalive,
+			nodes:     []cluster.NodeMap{refused},
+			nodeCount: len(refused),
+		}
+		res = y.p.bcastToNodes(&bargs)
+	)
 	for r := range res {
 		if r.err == nil {
 			delete(refused, r.si.ID())
@@ -495,21 +499,24 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	var (
 		urlPath = cmn.JoinWords(cmn.Version, cmn.Metasync)
 		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
+		bargs   = bcastArgs{
+			req:       cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body},
+			network:   cmn.NetworkIntraControl,
+			timeout:   cmn.GCO.Get().Timeout.MaxKeepalive,
+			nodes:     []cluster.NodeMap{pending},
+			nodeCount: len(pending),
+		}
 	)
 	defer body.Free()
-	res := y.p.bcastToNodes(bcastArgs{
-		req:     cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body},
-		network: cmn.NetworkIntraControl,
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-		nodes:   []cluster.NodeMap{pending},
-	})
+	res := y.p.bcastToNodes(&bargs)
 	for r := range res {
 		if r.err == nil {
 			y.syncDone(r.si.ID(), pairs)
 			glog.Infof("%s: handle-pending: sync-ed %s", y.p.si, r.si)
 		} else {
 			failedCnt++
-			glog.Warningf("%s: handle-pending: failing to sync %s, err: %v (%d)", y.p.si, r.si, r.err, r.status)
+			glog.Warningf("%s: handle-pending: failing to sync %s, err: %v (%d)",
+				y.p.si, r.si, r.err, r.status)
 		}
 	}
 	return

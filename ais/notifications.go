@@ -90,8 +90,8 @@ type (
 		status() *cmn.XactStatus
 		setStats(daeID string, stats interface{})
 		nodeStats() map[string]interface{}
-		bcastArgs() bcastArgs
-		abortArgs() bcastArgs
+		bcastArgs() *bcastArgs
+		abortArgs() *bcastArgs
 		finTime() int64
 		hasFinished(node *cluster.Snode) bool
 		markFinished(node *cluster.Snode)
@@ -159,8 +159,7 @@ var (
 	_ cluster.Slistener = &notifs{}
 )
 
-func newNLB(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string,
-	bck ...cmn.Bck) *notifListenerBase {
+func newNLB(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *notifListenerBase {
 	cmn.Assert(ty > notifInvalid)
 	cmn.Assert(len(srcs) != 0)
 	nlb := &notifListenerBase{Srcs: srcs, Stats: make(map[string]interface{}, len(srcs))}
@@ -300,9 +299,9 @@ func (nlb *notifListenerBase) finCount() int {
 	return len(nlb.FinSrcs)
 }
 
-///////////////////////
-//   notifXactBase   //
-///////////////////////
+///////////////////
+// notifXactBase //
+///////////////////
 
 func (nxb *notifXactBase) unmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
 	xactStats := &cmn.BaseXactStatsExt{}
@@ -315,8 +314,8 @@ func (nxb *notifXactBase) unmarshalStats(rawMsg []byte) (stats interface{}, fini
 	return
 }
 
-func (nxb *notifXactBase) bcastArgs() bcastArgs {
-	args := bcastArgs{
+func (nxb *notifXactBase) bcastArgs() *bcastArgs {
+	args := &bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodGet, Query: make(url.Values, 2)},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
@@ -327,14 +326,14 @@ func (nxb *notifXactBase) bcastArgs() bcastArgs {
 	return args
 }
 
-func (nxb *notifXactBase) abortArgs() bcastArgs {
+func (nxb *notifXactBase) abortArgs() *bcastArgs {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
 		Value: cmn.XactReqMsg{
 			ID: nxb.UUID(),
 		},
 	}
-	args := bcastArgs{
+	args := &bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodPut},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
@@ -344,9 +343,9 @@ func (nxb *notifXactBase) abortArgs() bcastArgs {
 	return args
 }
 
-///////////////////////////
-//   notifDownloadBase   //
-//////////////////////////
+///////////////////////
+// notifDownloadBase //
+///////////////////////
 
 func (nd *notifDownloadBase) unmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
 	dlStatus := &downloader.DlStatusResp{}
@@ -359,8 +358,8 @@ func (nd *notifDownloadBase) unmarshalStats(rawMsg []byte) (stats interface{}, f
 	return
 }
 
-func (nd *notifDownloadBase) bcastArgs() bcastArgs {
-	args := bcastArgs{
+func (nd *notifDownloadBase) bcastArgs() *bcastArgs {
+	args := &bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodGet},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
@@ -373,8 +372,8 @@ func (nd *notifDownloadBase) bcastArgs() bcastArgs {
 	return args
 }
 
-func (nd *notifDownloadBase) abortArgs() bcastArgs {
-	args := bcastArgs{
+func (nd *notifDownloadBase) abortArgs() *bcastArgs {
+	args := &bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodDelete},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
@@ -616,8 +615,9 @@ func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool
 		// TODO: implement a better async broadcast for abort
 		args := nl.abortArgs()
 		args.nodes = []cluster.NodeMap{nl.notifiers()}
+		args.nodeCount = len(args.nodes[0])
 		args.skipNodes = nl.finNotifiers().Clone()
-		go n.p.bcastToNodes(args)
+		n.p.bcastToNodesAsync(args)
 	}
 	if srcErr != nil {
 		nl.setErr(srcErr)
@@ -661,6 +661,7 @@ func (n *notifs) housekeep() time.Duration {
 		args := nl.bcastArgs()
 		// nodes to fetch stats from
 		args.nodes = []cluster.NodeMap{nl.notifiers()}
+		args.nodeCount = len(args.nodes[0])
 		args.skipNodes = nl.finNotifiers()
 		results := n.p.bcastToNodes(args)
 		for res := range results {
