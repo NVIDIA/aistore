@@ -181,7 +181,6 @@ func etlObjectHandler(c *cli.Context) (err error) {
 	return handleETLHTTPError(api.ETLObject(defaultAPIParams, id, bck, objName, w), id)
 }
 
-// TODO: add prefix, suffix and ext flags.
 func etlOfflineHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "ETL_ID")

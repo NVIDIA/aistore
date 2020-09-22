@@ -127,9 +127,13 @@ func (j *bccJogger) copyObject(lom *cluster.LOM) error {
 			Buf:       j.buf,
 			DM:        j.parent.dm,
 			DP:        j.parent.dp,
+			DryRun:    j.parent.meta.DryRun,
 		}
+
+		// TODO: for dry-run, put object names in IC, so user can see exactly what is put where.
 		copied, size, err = j.parent.Target().CopyObject(lom, params)
 	)
+
 	if copied {
 		j.parent.ObjectsInc()
 		j.parent.BytesAdd(size)

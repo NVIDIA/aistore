@@ -332,8 +332,7 @@ def transform(input_bytes: bytes) -> bytes:
 }
 
 func TestETLBucketDryRun(t *testing.T) {
-	t.Skip() // TODO: remove when dry-run is supported with ETL
-	// tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true}) //nolint:commentedOutCode // see TODO above
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	var (
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		bckTo   = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
@@ -368,7 +367,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, DryRun: true})
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBucket, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xactID, Timeout: time.Minute}
 	_, err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -378,7 +377,8 @@ func TestETLBucketDryRun(t *testing.T) {
 
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, stats.ObjCount() == int64(objCnt), "dry run stats expected to return %d objects", objCnt)
+	tassert.Errorf(t, stats.ObjCount() == int64(objCnt), "dry run stats expected to return %d objects, got %d",
+		objCnt, stats.ObjCount())
 	expectedBytesCnt := int64(m.fileSize * uint64(objCnt))
 	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "dry run stats expected to return %d bytes, got %d", expectedBytesCnt, stats.BytesCount())
 }

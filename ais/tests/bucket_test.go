@@ -2021,33 +2021,45 @@ func TestCopyBucket(t *testing.T) {
 	}
 }
 
-func TestCopyBucketAbort(t *testing.T) {
+// TODO: make some of those long-only, after they are considered stable.
+func TestCopyBucketSimple(t *testing.T) {
 	var (
-		m = ioContext{
-			t:   t,
-			num: 1000,
+		srcBck = cmn.Bck{Name: "cpybck_src", Provider: cmn.ProviderAIS}
+
+		m = &ioContext{
+			t:         t,
+			num:       1000,
+			fileSize:  512,
+			fixedSize: true,
+			bck:       srcBck,
 		}
-		baseParams = tutils.BaseAPIParams()
-		dstBck     = cmn.Bck{
+	)
+
+	tutils.Logln("Preparing a source bucket")
+	tutils.CreateFreshBucket(t, proxyURL, srcBck)
+	defer tutils.DestroyBucket(t, proxyURL, srcBck)
+	m.init()
+
+	tutils.Logln("Putting objects to the source bucket")
+	m.puts()
+
+	t.Run("Stats", func(t *testing.T) { testCopyBucketStats(t, srcBck, m) })
+	t.Run("Prefix", func(t *testing.T) { testCopyBucketPrefix(t, srcBck, m) })
+	t.Run("Abort", func(t *testing.T) { testCopyBucketAbort(t, srcBck, m) })
+	t.Run("DryRun", func(t *testing.T) { testCopyBucketDryRun(t, srcBck, m) })
+}
+
+func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
+	var (
+		dstBck = cmn.Bck{
 			Name:     TestBucketName + "_new1",
 			Provider: cmn.ProviderAIS,
 		}
 	)
 
-	// Initialize ioContext
-	m.init()
-
-	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
-	defer func() {
-		tutils.DestroyBucket(t, m.proxyURL, srcBck)
-		time.Sleep(2 * time.Second)
-		tutils.DestroyBucket(t, m.proxyURL, dstBck)
-	}()
-
-	m.puts()
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
 	tassert.CheckError(t, err)
+	defer tutils.DestroyBucket(t, m.proxyURL, dstBck)
 
 	err = api.AbortXaction(baseParams, api.XactReqArgs{ID: xactID})
 	tassert.CheckError(t, err)
@@ -2066,33 +2078,10 @@ func TestCopyBucketAbort(t *testing.T) {
 	*/
 }
 
-func TestCopyBucketStats(t *testing.T) {
+func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	var (
-		srcBck = cmn.Bck{Name: "cpybck_src", Provider: cmn.ProviderAIS}
 		dstBck = cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
-
-		m = ioContext{
-			t:         t,
-			num:       10,
-			fileSize:  512,
-			fixedSize: true,
-			bck:       srcBck,
-		}
 	)
-
-	if !testing.Short() {
-		m.num = 1000
-	}
-
-	tutils.Logln("Preparing a source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, srcBck)
-	defer tutils.DestroyBucket(t, proxyURL, srcBck)
-	m.init()
-
-	tutils.Logln("Putting objects to the source bucket")
-	m.puts()
-
-	tutils.Logln("Start coping bucket")
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
@@ -2101,7 +2090,6 @@ func TestCopyBucketStats(t *testing.T) {
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: time.Minute}
 	_, err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
-	tutils.Logln("Coping bucket finished")
 
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
@@ -2111,33 +2099,11 @@ func TestCopyBucketStats(t *testing.T) {
 		expectedBytesCnt, stats.BytesCount())
 }
 
-func TestCopyBucketPrefix(t *testing.T) {
+func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	var (
 		cpyPrefix = "cpyprefix" + cmn.RandString(5)
-		srcBck    = cmn.Bck{Name: "cpybck_src", Provider: cmn.ProviderAIS}
 		dstBck    = cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
-
-		m = ioContext{
-			t:        t,
-			num:      10,
-			fileSize: 512,
-			bck:      srcBck,
-		}
 	)
-
-	if !testing.Short() {
-		m.num = 1000
-	}
-
-	tutils.Logln("Preparing a source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, srcBck)
-	defer tutils.DestroyBucket(t, proxyURL, srcBck)
-	m.init()
-
-	tutils.Logln("Putting objects to the source bucket")
-	m.puts()
-
-	tutils.Logln("Start coping bucket")
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{Prefix: cpyPrefix})
 	tassert.CheckFatal(t, err)
@@ -2146,7 +2112,6 @@ func TestCopyBucketPrefix(t *testing.T) {
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: time.Minute}
 	_, err = api.WaitForXactionV2(baseParams, args)
 	tassert.CheckFatal(t, err)
-	tutils.Logln("Coping bucket finished")
 
 	list, err := api.ListObjects(baseParams, dstBck, nil, 0)
 	tassert.CheckFatal(t, err)
@@ -2154,6 +2119,30 @@ func TestCopyBucketPrefix(t *testing.T) {
 	for _, e := range list.Entries {
 		tassert.Fatalf(t, strings.HasPrefix(e.Name, cpyPrefix), "expected %q to have prefix %q", e.Name, cpyPrefix)
 	}
+}
+
+func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
+	var (
+		dstBck = cmn.Bck{Name: "cpybck_dst" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+	)
+
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{DryRun: true})
+	tassert.CheckFatal(t, err)
+	defer tutils.DestroyBucket(t, proxyURL, dstBck)
+
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: time.Minute}
+	_, err = api.WaitForXactionV2(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, stats.ObjCount() == int64(m.num), "dry run stats expected to return %d objects", m.num)
+	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
+	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "dry run stats expected to return %d bytes, got %d", expectedBytesCnt, stats.BytesCount())
+
+	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(dstBck))
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, exists == false, "expected destination bucket to not be created")
 }
 
 // Tries to rename and then copy bucket at the same time.

@@ -438,6 +438,8 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMs
 			dm      *bundle.DataMover
 			config  = cmn.GCO.Get()
 			err     error
+
+			nlpTo, nlpFrom *cluster.NameLockPair
 		)
 		if err := t.validateBckCpTxn(bckFrom, c.msg.Action); err != nil {
 			return err
@@ -446,26 +448,34 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMs
 			return err
 		}
 
-		// TODO: add dry-run for ETL or for both etl and cpy bck.
-		nlpFrom := bckFrom.GetNameLockPair()
-		nlpTo := bckTo.GetNameLockPair()
+		nlpFrom = bckFrom.GetNameLockPair()
 		if !nlpFrom.TryRLock() {
 			dm.UnregRecv()
 			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
 		}
-		if !nlpTo.TryLock() {
-			dm.UnregRecv()
-			nlpFrom.Unlock()
-			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
+
+		if !bck2BckMsg.DryRun {
+			nlpTo = bckTo.GetNameLockPair()
+			if !nlpTo.TryLock() {
+				dm.UnregRecv()
+				nlpFrom.Unlock()
+				return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
+			}
 		}
+
 		txn := newTxnCopyBucket(c, bckFrom, bckTo, dm, dp, &bck2BckMsg.Bck2BckMsg)
 		if err := t.transactions.begin(txn); err != nil {
 			dm.UnregRecv()
-			nlpTo.Unlock()
+			if nlpTo != nil {
+				nlpTo.Unlock()
+			}
 			nlpFrom.Unlock()
 			return err
 		}
-		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
+		txn.nlps = []cmn.NLP{nlpFrom}
+		if nlpTo != nil {
+			txn.nlps = append(txn.nlps, nlpTo)
+		}
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:

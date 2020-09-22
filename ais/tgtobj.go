@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -1023,6 +1024,15 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 		return
 	}
 
+	if coi.DryRun {
+		defer lom.Unlock(false)
+		// TODO: replace with something similar to lom.FQN == dst.FQN, but dstBck might not exist.
+		if lom.Bck().Bck.Equal(coi.BckTo.Bck) && lom.ObjName == objNameTo {
+			return false, nil
+		}
+		return true, nil
+	}
+
 	if !lom.TryUpgradeLock() {
 		// We haven't managed to upgrade the lock so we must do it slow way...
 		lom.Unlock(false)
@@ -1098,10 +1108,19 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 
 	if si.ID() != coi.t.si.ID() {
 		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si, DM: coi.DM}
-		return coi.putRemote(lom, params) // NOTE: lom.Unlock inside
+		return coi.putRemote(lom, params)
 	}
 
-	// local op
+	// DryRun: just get a reader and discard it. Init on dstLOM would cause and error as dstBck doesn't exist.
+	if coi.DryRun {
+		if reader, _, err = coi.DP.Reader(lom); err != nil {
+			return false, 0, err
+		}
+
+		written, err := io.Copy(ioutil.Discard, reader)
+		return err == nil, written, err
+	}
+
 	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
 	if err = dst.Init(coi.BckTo.Bck); err != nil {
 		return
@@ -1110,6 +1129,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	if reader, hdrLOM, err = coi.DP.Reader(lom); err != nil {
 		return false, 0, err
 	}
+
 	params := cluster.PutObjectParams{
 		Reader:       reader,
 		WorkFQN:      fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "cpy-dp"),
@@ -1126,14 +1146,27 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 // PUT object onto designated target
 func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (copied bool, size int64, err error) {
 	if coi.DP == nil {
+		if coi.DryRun {
+			if params.Locked {
+				lom.Unlock(false)
+			}
+			return true, lom.Size(), nil
+		}
+
 		var file *cmn.FileHandle // Closed by `SendTo()`
 		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 			return false, 0, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
 		}
 		params.Reader = file
 		params.HdrMeta = lom
-	} else if params.Reader, params.HdrMeta, err = coi.DP.Reader(lom); err != nil {
-		return false, 0, err
+	} else {
+		if params.Reader, params.HdrMeta, err = coi.DP.Reader(lom); err != nil {
+			return false, 0, err
+		}
+		if coi.DryRun {
+			written, err := io.Copy(ioutil.Discard, params.Reader)
+			return err == nil, written, err
+		}
 	}
 	params.BckTo = coi.BckTo
 	if err := coi.t.SendTo(lom, params); err != nil {

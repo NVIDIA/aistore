@@ -81,6 +81,7 @@ type (
 		Buf       []byte
 		DM        DataMover
 		DP        LomReaderProvider // optional
+		DryRun    bool
 	}
 	SendToParams struct {
 		Reader    cmn.ReadOpenCloser
@@ -103,7 +104,7 @@ type (
 
 	// Defines what to send to a target.
 	LomReaderProvider interface {
-		Reader(*LOM) (cmn.ReadOpenCloser, *LOM, error) // LOM is supposed to have http.Header metadata
+		Reader(lom *LOM) (cmn.ReadOpenCloser, *LOM, error) // LOM is supposed to have http.Header metadata
 	}
 )
 

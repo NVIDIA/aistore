@@ -434,8 +434,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 // { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
 func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		nmsg    = &cmn.ActionMsg{} // + bckTo
-		metaMsg = &cmn.Bck2BckMsg{}
+		nmsg        = &cmn.ActionMsg{} // + bckTo
+		internalMsg *bck2BckInternalMsg
 	)
 	// 1. confirm existence
 	p.owner.bmd.Lock()
@@ -453,28 +453,30 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 		if msg.Value == nil {
 			return "", fmt.Errorf("request body should not be empty")
 		}
-		if err := cmn.MorphMarshal(msg.Value, metaMsg); err != nil {
+		bck2BckMsg := &cmn.Bck2BckMsg{}
+		if err := cmn.MorphMarshal(msg.Value, bck2BckMsg); err != nil {
 			return "", err
 		}
-		if metaMsg.ID == "" {
+		if bck2BckMsg.ID == "" {
 			return "", etl.ErrMissingUUID
 		}
-		nmsg.Value = bck2BckInternalMsg{BckTo: bckTo.Bck, Bck2BckMsg: *metaMsg}
+		internalMsg = &bck2BckInternalMsg{BckTo: bckTo.Bck, Bck2BckMsg: *bck2BckMsg}
 	case cmn.ActCopyBucket:
 		cpyBckMsg := &cmn.CopyBckMsg{}
 		if err = cmn.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
 			return
 		}
-		nmsg.Value = bck2BckInternalMsg{
+		internalMsg = &bck2BckInternalMsg{
 			BckTo: bckTo.Bck,
 			Bck2BckMsg: cmn.Bck2BckMsg{
 				Prefix: cpyBckMsg.Prefix,
 				DryRun: cpyBckMsg.DryRun,
 			},
 		}
-	default:
-		cmn.Assert(false)
 	}
+
+	cmn.Assert(internalMsg != nil)
+	nmsg.Value = internalMsg
 
 	// 2. begin
 	var (
@@ -497,9 +499,8 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	bprops, present := clone.Get(bckFrom)
 	cmn.Assert(present)
 
-	// create destination bucket but only if it doesn't exist
-	// TODO: don't do it when it's dry run request.
-	if _, present = clone.Get(bckTo); !present {
+	// Create destination bucket, but only if it doesn't exist and it's not dry run request
+	if _, present = clone.Get(bckTo); !internalMsg.DryRun && !present {
 		bckFrom.Props = bprops.Clone()
 		bckTo.Props = bprops.Clone()
 		added := clone.add(bckTo, bckTo.Props)
