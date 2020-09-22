@@ -40,6 +40,7 @@ type (
 		mem         *memsys.MMSA
 		compression string // enum { cmn.CompressNever, ... }
 		xact        cmn.Xact
+		isOpen      atomic.Bool
 		laterx      atomic.Bool
 		multiplier  int
 	}
@@ -139,9 +140,11 @@ func (dm *DataMover) Open() {
 	if dm.useACKs() {
 		dm.ack.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
 	}
+	dm.isOpen.Store(true)
 }
 
 func (dm *DataMover) Close() {
+	cmn.Assert(dm.isOpen.Load())
 	dm.data.streams.Close(true /* graceful */)
 	dm.data.streams = nil
 	if dm.useACKs() {
@@ -187,6 +190,10 @@ func (dm *DataMover) wrapRecvACK(w http.ResponseWriter, hdr transport.Header, ob
 
 // NOTE: compare with reb.waitQuiesce where additional cluster-wide quiescent status is also enforced
 func (dm *DataMover) waitQuiesce() (aborted bool) {
+	if !dm.isOpen.Load() {
+		// nothing to quiesce when not open - e.g., 2PC (begin => abort) sequence
+		return true
+	}
 	var (
 		config    = cmn.GCO.Get()
 		sleep     = config.Timeout.CplaneOperation
@@ -194,6 +201,7 @@ func (dm *DataMover) waitQuiesce() (aborted bool) {
 		maxQuiet  = cmn.MaxDuration(maxWait/sleep, 2)
 		quiescent int
 	)
+	cmn.Assert(dm.xact != nil)
 	for quiescent < int(maxQuiet) && !aborted {
 		if !dm.laterx.CAS(true, false) {
 			quiescent++

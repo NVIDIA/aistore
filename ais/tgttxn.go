@@ -612,11 +612,12 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 
 // TODO: #791 "limited coexistence" - extend and unify
 func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
+	const fmterr = "%s: [%s] is currently running, cannot run %q (bucket %s) concurrently"
 	g, l := xaction.GetRebMarked(), xaction.GetResilverMarked()
 	if g.Xact != nil {
-		err = fmt.Errorf("%s: %s, cannot run %q on bucket %s", t.si, g.Xact, action, bck)
+		err = fmt.Errorf(fmterr, t.si, g.Xact, action, bck)
 	} else if l.Xact != nil {
-		err = fmt.Errorf("%s: %s, cannot run %q on bucket %s", t.si, l.Xact, action, bck)
+		err = fmt.Errorf(fmterr, t.si, l.Xact, action, bck)
 	}
 	return
 }
