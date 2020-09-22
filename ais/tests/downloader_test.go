@@ -243,9 +243,9 @@ func TestDownloadSingle(t *testing.T) {
 		objName       = "object"
 		objNameSecond = "object-second"
 
-		// links below don't contain protocols to test that no error occurs
+		// Links below don't contain protocols to test that no error occurs
 		// in case they are missing.
-		link      = "storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz"
+		linkLarge = "storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar"
 		linkSmall = "storage.googleapis.com/minikube/iso/minikube-v0.23.0.iso.sha256"
 	)
 
@@ -254,25 +254,25 @@ func TestDownloadSingle(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, link)
+	id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, linkLarge)
 	tassert.CheckError(t, err)
 
 	time.Sleep(time.Second)
 
-	// Schedule second object
-	idSecond, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objNameSecond, link)
+	// Schedule second object.
+	idSecond, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objNameSecond, linkLarge)
 	tassert.CheckError(t, err)
 
-	// Cancel second object
+	// Cancel second object.
 	err = api.DownloadAbort(baseParams, idSecond)
 	tassert.CheckError(t, err)
 
-	// Cancel first object
+	// Cancel first object.
 	abortDownload(t, id)
 
 	time.Sleep(time.Second)
 
-	// Check if the status is still available after some time
+	// Check if the status is still available after some time.
 	if resp, err := api.DownloadStatus(baseParams, id); err != nil {
 		t.Errorf("got error when getting status for link that is not being downloaded: %v", err)
 	} else if !resp.Aborted {
@@ -428,7 +428,7 @@ func TestDownloadTimeout(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 		objName    = "object"
-		link       = "https://storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz"
+		link       = "https://storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar"
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
@@ -605,9 +605,8 @@ func TestDownloadStatus(t *testing.T) {
 			Name:     TestBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		baseParams    = tutils.BaseAPIParams()
-		shortFileName = "shortFile"
-		m             = ioContext{t: t}
+		baseParams = tutils.BaseAPIParams()
+		m          = ioContext{t: t}
 	)
 
 	m.saveClusterState()
@@ -616,11 +615,14 @@ func TestDownloadStatus(t *testing.T) {
 		return
 	}
 
-	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
+	var (
+		shortFileName = "shortFile"
+		longFileName  = tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
+	)
 
 	files := map[string]string{
 		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
-		longFileName:  "https://storage.googleapis.com/nvdata-openimages/imagenet_train-000001.tgz",
+		longFileName:  "https://storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar",
 	}
 
 	clearDownloadList(t)
@@ -823,7 +825,7 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		objName    = "object"
-		obj        = "storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-000001.tgz"
+		obj        = "storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar"
 	)
 
 	bucket, err := tutils.GenerateNonexistentBucketName("download", baseParams)
@@ -849,12 +851,12 @@ func TestDownloadMpathEvents(t *testing.T) {
 		}
 		objsCnt = 100
 
-		template = "storage.googleapis.com/nvdata-openimages/imagenet/imagenet_train-{000000..000050}.tgz"
+		template = "storage.googleapis.com/nvdata-openimages/openimages-train-{000000..000050}.tar"
 		m        = make(map[string]string, objsCnt)
 	)
 
-	// prepare objects to be downloaded to targets. Multiple objects to make sure that at least
-	// one of them gets into target with disabled mountpath
+	// Prepare objects to be downloaded to targets. Multiple objects to make
+	// sure that at least one of them gets into target with disabled mountpath.
 	for i := 0; i < objsCnt; i++ {
 		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
 	}
@@ -880,15 +882,15 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		// Enable mountpah
 		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 	}()
 
-	// wait until downloader is aborted
+	// Wait until downloader is aborted.
 	waitForDownloaderToFinish(t, baseParams, removeTarget.ID(), time.Second*30)
-	// downloader finished on required target, safe to abort the rest
+
+	// Downloader finished on required target, safe to abort the rest.
 	tutils.Logf("Aborting download job %s\n", id)
 	err = api.DownloadAbort(baseParams, id)
 	tassert.CheckFatal(t, err)
@@ -904,7 +906,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	waitForDownload(t, id, 2*time.Minute)
 	objs, err = tutils.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
-	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs)) // 21: from cifar10.tgz to cifar30.tgz
+	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs))
 }
 
 func TestDownloadOverrideObject(t *testing.T) {
