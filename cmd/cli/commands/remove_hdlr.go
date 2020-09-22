@@ -21,7 +21,10 @@ var (
 			ignoreErrorFlag,
 		},
 		subcmdRemoveObject: baseLstRngFlags,
-		subcmdRemoveNode:   {},
+		subcmdRemoveNode: {
+			suspendModeFlag,
+			rebalanceFlag,
+		},
 		subcmdRemoveDownload: {
 			allJobsFlag,
 		},
@@ -133,8 +136,35 @@ func removeObjectHandler(c *cli.Context) error {
 }
 
 func removeNodeHandler(c *cli.Context) (err error) {
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "daemon ID")
+	}
 	daemonID := c.Args().First()
-	return clusterRemoveNode(c, daemonID)
+	mode := parseStrFlag(c, suspendModeFlag)
+	action := ""
+	if mode != "" {
+		if action, err = suspendModeToAction(c, mode); err != nil {
+			return err
+		}
+	}
+	if action == cmn.ActDecomission && !flagIsSet(c, rebalanceFlag) {
+		return fmt.Errorf("flag %q requires flag %q", suspendModeFlag.Name, rebalanceFlag.Name)
+	}
+	switch mode {
+	case "":
+		return clusterRemoveNode(c, daemonID)
+	default:
+		err = api.Maintenance(defaultAPIParams, daemonID, action)
+		if err != nil {
+			return err
+		}
+		if action == cmn.ActUnsuspend {
+			fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", daemonID)
+		} else {
+			fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", daemonID)
+		}
+	}
+	return nil
 }
 
 func removeDownloadHandler(c *cli.Context) (err error) {

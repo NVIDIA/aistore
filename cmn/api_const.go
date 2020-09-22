@@ -76,6 +76,9 @@ const (
 	ActRecoverBck     = "recoverbck"
 	ActAttach         = "attach"
 	ActDetach         = "detach"
+	ActSuspend        = "suspend"     // put into maintenance state
+	ActDecomission    = "decomission" // start rebalance and remove node from Smap when it finishes
+	ActUnsuspend      = "unsuspend"   // cancel maintenance state
 	// IC
 	ActSendOwnershipTbl  = "ic-send-ownership-tbl"
 	ActListenToNotif     = "watch-xaction"
@@ -367,4 +370,10 @@ const (
 const (
 	DefaultTimeout = time.Duration(-1)
 	LongTimeout    = time.Duration(-2)
+)
+
+// Node statuses
+const (
+	NodeStatusSuspended = iota + 1 // marked for removal
+	NodeStatusRemoval              // cleaning up: rebalancing/erasing is in progress
 )

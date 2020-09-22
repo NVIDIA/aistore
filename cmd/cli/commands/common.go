@@ -319,6 +319,10 @@ var (
 		Usage: "runtime which should be used when running the provided code", Required: true}
 	waitTimeoutFlag = cli.DurationFlag{Name: "wait-timeout",
 		Usage: "determines how long ais target should wait for pod to become ready"}
+	suspendModeFlag = cli.StringFlag{Name: "mode",
+		Usage: "node suspension mode: start-maintenance, stop-maintenance, decommission"}
+	rebalanceFlag = cli.StringFlag{Name: "rebalance",
+		Usage: "start rebalance automatically after moving a node under maintenance if rebalance=on"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 

@@ -63,18 +63,19 @@ const (
 	AllProxyInfoTmpl     = ProxyInfoHeader + AllProxyInfoBodyTmpl
 
 	// Target Info
-	TargetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t UPTIME\t STATUS\n"
-	TargetInfoBody   = "{{$value.Snode.ID}}\t " +
-		"{{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
+	TargetInfoHeader   = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t UPTIME\t STATUS\n"
+	TargetInfoIDSingle = "{{$value.Snode.ID}}\t "
+	TargetInfoIDAll    = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t "
+	TargetInfoBody     = "{{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
 		"{{FormatXactStatus $value.TStatus }}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
 		"{{$value.Status}}\n"
 
-	TargetInfoBodyTmpl       = "{{ range $key, $value := .Status.Tmap }}" + TargetInfoBody + "{{end}}"
+	TargetInfoBodyTmpl       = "{{ range $key, $value := .Status.Tmap }}" + TargetInfoIDAll + TargetInfoBody + "{{end}}"
 	TargetInfoTmpl           = TargetInfoHeader + TargetInfoBodyTmpl
-	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoBody
+	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoIDSingle + TargetInfoBody
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
 	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{len .Smap.NonElects}} - unelectable)\n " +

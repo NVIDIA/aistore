@@ -76,7 +76,7 @@ var (
 //
 func newSmap() (smap *smapX) {
 	smap = &smapX{}
-	smap.init(8, 8, 8)
+	smap.init(8, 8, 8, 2)
 	return
 }
 
@@ -119,11 +119,12 @@ func newSnode(id, proto, daeType string, publicAddr, intraControlAddr,
 // smapX //
 ///////////
 
-func (m *smapX) init(tsize, psize, elsize int) {
+func (m *smapX) init(tsize, psize, elsize, msize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
 	m.Pmap = make(cluster.NodeMap, psize)
 	m.NonElects = make(cmn.SimpleKVs, elsize)
 	m.IC = make(cmn.SimpleKVsInt, ICGroupSize)
+	m.Suspend = make(cmn.SimpleKVsInt, msize)
 }
 
 func (m *smapX) _fillIC() {
@@ -244,6 +245,7 @@ func (m *smapX) delTarget(sid string) {
 		cmn.Assertf(false, "FATAL: target: %s is not in: %s", sid, m.pp())
 	}
 	delete(m.Tmap, sid)
+	delete(m.Suspend, sid)
 	m.Version++
 }
 
@@ -254,6 +256,7 @@ func (m *smapX) delProxy(pid string) {
 	delete(m.Pmap, pid)
 	delete(m.NonElects, pid)
 	delete(m.IC, pid)
+	delete(m.Suspend, pid)
 	m.Version++
 }
 
@@ -294,7 +297,7 @@ func (m *smapX) clone() *smapX {
 
 func (m *smapX) deepCopy(dst *smapX) {
 	cmn.CopyStruct(dst, m)
-	dst.init(m.CountTargets(), m.CountProxies(), len(m.NonElects))
+	dst.init(m.CountTargets(), m.CountProxies(), len(m.NonElects), len(m.Suspend))
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v
 	}
@@ -306,6 +309,9 @@ func (m *smapX) deepCopy(dst *smapX) {
 	}
 	for id, v := range m.IC {
 		dst.IC[id] = v
+	}
+	for id, v := range m.Suspend {
+		dst.Suspend[id] = v
 	}
 }
 
@@ -387,6 +393,27 @@ func (m *smapX) validateUUID(newSmap *smapX, si, nsi *cluster.Snode, caller stri
 func (m *smapX) pp() string {
 	s, _ := jsoniter.MarshalIndent(m, "", " ")
 	return string(s)
+}
+
+func (m *smapX) suspendNode(sid string, stage int64) {
+	if m.GetNode(sid) == nil {
+		cmn.Assertf(false, "FATAL: node: %s is not in: %s", sid, m)
+	}
+	m.Suspend[sid] = stage
+	m.Version++
+}
+
+func (m *smapX) unsuspendNode(sid string) error {
+	stage, ok := m.Suspend[sid]
+	if !ok {
+		return fmt.Errorf("node %q is not under maintenance", sid)
+	}
+	if stage > cmn.NodeStatusSuspended {
+		return fmt.Errorf("node %q removal is already in progress", sid)
+	}
+	delete(m.Suspend, sid)
+	m.Version++
+	return nil
 }
 
 ///////////////

@@ -3316,6 +3316,48 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if result.err != nil {
 			p.invalmsghdlr(w, r, result.err.Error())
 		}
+	case cmn.ActSuspend, cmn.ActDecomission:
+		// TODO: Decomission must start rebalance and remove the node from Smap at the end.
+		var (
+			smap = p.owner.smap.get()
+			sid  string
+		)
+		if err := cmn.MorphMarshal(msg.Value, &sid); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		si := smap.GetNode(sid)
+		if si == nil {
+			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", sid, cmn.DoesNotExist)
+			return
+		}
+		if _, ok := smap.IsSuspended(sid); ok {
+			p.invalmsghdlrf(w, r, "Node %q already in maintenance state", sid)
+			return
+		}
+		stage := int64(cmn.NodeStatusSuspended)
+		if msg.Action == cmn.ActDecomission {
+			stage = cmn.NodeStatusRemoval
+		}
+		if err := p.owner.smap.modify(func(clone *smapX) error {
+			clone.suspendNode(sid, stage)
+			return nil
+		}); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
+	case cmn.ActUnsuspend:
+		var (
+			sid string
+		)
+		if err := cmn.MorphMarshal(msg.Value, &sid); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		if err := p.owner.smap.modify(func(clone *smapX) error {
+			return clone.unsuspendNode(sid)
+		}); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}

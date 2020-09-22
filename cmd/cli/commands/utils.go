@@ -52,6 +52,10 @@ const (
 	unitsArg = "UNITS"
 
 	incorrectCmdDistance = 3
+
+	suspendModeStart        = "start-maintenance"
+	suspendModeStop         = "stop-maintenance"
+	suspendModeDecommission = "decommission"
 )
 
 var (
@@ -61,6 +65,12 @@ var (
 	defaultAPIParams  api.BaseParams
 	authParams        api.BaseParams
 	mu                sync.Mutex
+
+	suspendModes = map[string]string{
+		suspendModeStart:        cmn.ActSuspend,
+		suspendModeStop:         cmn.ActUnsuspend,
+		suspendModeDecommission: cmn.ActDecomission,
+	}
 )
 
 type (
@@ -223,15 +233,21 @@ func fillMap() (*cluster.Smap, error) {
 	targetCount := smapPrimary.CountTargets()
 
 	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smapPrimary.Pmap, proxy, wg)
-	retrieveStatus(smapPrimary.Tmap, target, wg)
+	retrieveStatus(smapPrimary.Pmap, proxy, wg, smapPrimary.Suspend)
+	retrieveStatus(smapPrimary.Tmap, target, wg, smapPrimary.Suspend)
 	wg.Wait()
 	return smapPrimary, nil
 }
 
-func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup) {
-	fill := func(node *cluster.Snode) {
+func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, suspended cmn.SimpleKVsInt) {
+	fill := func(node *cluster.Snode, stage int64) {
 		obj, _ := api.GetDaemonStatus(defaultAPIParams, node)
+		switch stage {
+		case cmn.NodeStatusSuspended:
+			obj.Status = "suspended"
+		case cmn.NodeStatusRemoval:
+			obj.Status = "removal"
+		}
 		mu.Lock()
 		daeMap[node.ID()] = obj
 		mu.Unlock()
@@ -239,7 +255,7 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStat
 
 	for _, si := range nodeMap {
 		go func(si *cluster.Snode) {
-			fill(si)
+			fill(si, suspended[si.ID()])
 			wg.Done()
 		}(si)
 	}
@@ -983,4 +999,12 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	bck.Provider = cmn.ProviderHTTP
 	bck.Name = cmn.OrigURLBck2Name(strURL)
 	return
+}
+
+func suspendModeToAction(c *cli.Context, mode string) (string, error) {
+	if action, ok := suspendModes[mode]; ok {
+		return action, nil
+	}
+	return "", incorrectUsageMsg(c, "'mode' is one of %s, %s, and %s",
+		suspendModeStart, suspendModeStop, suspendModeDecommission)
 }
