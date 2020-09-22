@@ -32,25 +32,36 @@ var _ = Describe("Notifications xaction test", func() {
 
 	// helper functions
 	var (
+		mockNode = func(id, daeType string) *cluster.Snode {
+			server := discoverServerDefaultHandler(1, 1)
+			info := serverTCPAddr(server.URL)
+			return newSnode(id, httpProto, daeType, info, &net.TCPAddr{}, &net.TCPAddr{})
+		}
+
 		getNodeMap = func(ids ...string) (snodes cluster.NodeMap) {
 			snodes = make(cluster.NodeMap, len(ids))
 			for _, id := range ids {
-				server := discoverServerDefaultHandler(1, 1)
-				info := serverTCPAddr(server.URL)
-				snodes[id] = newSnode(id, httpProto, cmn.Target, info, &net.TCPAddr{}, &net.TCPAddr{})
+				snodes[id] = mockNode(id, cmn.Target)
 			}
 			return
 		}
 
+		mockProxyRunner = func(name string) *proxyrunner {
+			tracker := &stats.TrackerMock{}
+			p := &proxyrunner{
+				httprunner: httprunner{
+					si:               mockNode(name, cmn.Proxy),
+					statsT:           tracker,
+					httpclientGetPut: &http.Client{},
+					httpclient:       &http.Client{},
+				}}
+			p.keepalive = newProxyKeepaliveRunner(p, tracker, atomic.NewBool(true))
+			return p
+		}
+
 		testNotifs = func() *notifs {
 			n := &notifs{
-				p: &proxyrunner{
-					httprunner: httprunner{
-						si:               getNodeMap(pDaemonID)[pDaemonID],
-						statsT:           &stats.TrackerMock{},
-						httpclientGetPut: &http.Client{},
-						httpclient:       &http.Client{},
-					}},
+				p:   mockProxyRunner(pDaemonID),
 				fin: make(map[string]notifListener, 2),
 				m:   make(map[string]notifListener, 2),
 			}
