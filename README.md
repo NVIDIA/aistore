@@ -105,7 +105,7 @@ Enter number of proxies (gateways):
 3
 Number of local cache directories (enter 0 to use preconfigured filesystems):
 2
-Select the cloud providers you wish to support:
+Select cloud providers:
 Amazon S3: (y/n) ?
 n
 Google Cloud Storage: (y/n) ?

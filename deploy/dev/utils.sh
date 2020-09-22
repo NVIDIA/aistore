@@ -19,7 +19,7 @@ is_boolean() {
 
 parse_cld_providers() {
   AIS_CLD_PROVIDERS=""
-  echo "Select the cloud providers you wish to support:"
+  echo "Select cloud providers:"
   echo "Amazon S3: (y/n) ?"
   read -r CLD_AWS
   is_boolean $CLD_AWS
