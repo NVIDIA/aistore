@@ -2139,7 +2139,7 @@ func TestCopyBucketPrefix(t *testing.T) {
 
 	tutils.Logln("Start coping bucket")
 
-	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.Bck2BckMsg{Prefix: cpyPrefix})
+	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{Prefix: cpyPrefix})
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 

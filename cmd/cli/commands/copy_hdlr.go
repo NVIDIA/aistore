@@ -14,7 +14,10 @@ import (
 
 var (
 	copyCmdsFlags = map[string][]cli.Flag{
-		subcmdCopyBucket: {},
+		subcmdCopyBucket: {
+			cpBckDryRunFlag,
+			cpBckPrefixFlag,
+		},
 	}
 
 	copyCmds = []cli.Command{
@@ -62,6 +65,17 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	}
 
 	fromBck.Provider, toBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
+	msg := &cmn.CopyBckMsg{
+		Prefix: parseStrFlag(c, cpBckPrefixFlag),
+		DryRun: flagIsSet(c, cpBckDryRunFlag),
+	}
 
-	return copyBucket(c, fromBck, toBck)
+	if msg.DryRun {
+		// TODO: once IC is integrated with copy-bck stats, show something more relevant, like stream of object names
+		// with destination which they would have been copied to. Then additionally, make output consistent with etl
+		// dry-run output.
+		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
+	}
+
+	return copyBucket(c, fromBck, toBck, msg)
 }

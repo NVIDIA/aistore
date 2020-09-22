@@ -67,8 +67,8 @@ var (
 					Action:    etlOfflineHandler,
 					Flags: []cli.Flag{
 						etlExtFlag,
-						etlPrefixFlag,
-						etlDryRunFlag,
+						cpBckPrefixFlag,
+						cpBckDryRunFlag,
 					},
 				},
 			},
@@ -219,15 +219,15 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, &cmn.Bck2BckMsg{
 		ID:     id,
 		Ext:    parseStrFlag(c, etlExtFlag),
-		Prefix: parseStrFlag(c, etlPrefixFlag),
-		DryRun: flagIsSet(c, etlDryRunFlag),
+		Prefix: parseStrFlag(c, cpBckPrefixFlag),
+		DryRun: flagIsSet(c, cpBckDryRunFlag),
 	})
 
 	if err := handleETLHTTPError(err, id); err != nil {
 		return err
 	}
 
-	if !flagIsSet(c, etlDryRunFlag) {
+	if !flagIsSet(c, cpBckDryRunFlag) {
 		fmt.Fprintln(c.App.Writer, xactID)
 		return nil
 	}

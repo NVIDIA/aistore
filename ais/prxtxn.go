@@ -444,26 +444,32 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	p.owner.bmd.Unlock()
 
 	*nmsg = *msg
-	if msg.Value == nil {
-		if msg.Action == cmn.ActETLBucket {
+	switch msg.Action {
+	case cmn.ActETLBucket:
+		if msg.Value == nil {
+			return "", fmt.Errorf("request body should not be empty")
+		}
+		if err := cmn.MorphMarshal(msg.Value, metaMsg); err != nil {
+			return "", err
+		}
+		if metaMsg.ID == "" {
 			return "", etl.ErrMissingUUID
 		}
-		nmsg.Value = bck2BckInternalMsg{BckTo: bckTo.Bck}
-	} else {
-		if err = cmn.MorphMarshal(msg.Value, metaMsg); err != nil {
+		nmsg.Value = bck2BckInternalMsg{BckTo: bckTo.Bck, Bck2BckMsg: *metaMsg}
+	case cmn.ActCopyBucket:
+		cpyBckMsg := &cmn.CopyBckMsg{}
+		if err = cmn.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
 			return
 		}
-		if msg.Action == cmn.ActETLBucket && metaMsg.ID == "" {
-			return "", etl.ErrMissingUUID
-		}
-		if metaMsg.DryRun {
-			// TODO: remove once dry run is implemented
-			return "", fmt.Errorf("dry run feature not supported")
-		}
 		nmsg.Value = bck2BckInternalMsg{
-			Bck2BckMsg: *metaMsg,
-			BckTo:      bckTo.Bck,
+			BckTo: bckTo.Bck,
+			Bck2BckMsg: cmn.Bck2BckMsg{
+				Prefix: cpyBckMsg.Prefix,
+				DryRun: cpyBckMsg.DryRun,
+			},
 		}
+	default:
+		cmn.Assert(false)
 	}
 
 	// 2. begin

@@ -83,15 +83,22 @@ type (
 		Disabled  []string `json:"disabled"`
 	}
 
+	CopyBckMsg struct {
+		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
+		DryRun bool   `json:"dry_run"` // Don't perform any PUT
+	}
+
 	Bck2BckMsg struct {
-		ID     string `json:"id,omitempty"` // optional for ETL
-		Prefix string `json:"prefix"`       // Prefix added to each resulting object.
-		DryRun bool   `json:"dry_run"`      // Don't perform any PUT
+		ID string `json:"id,omitempty"` // optional, ETL only
 
 		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the
 		// same base name, but different extension, specifying this field might cause object overriding. This is because
 		// of resulting name conflict.
 		Ext string `json:"ext"`
+
+		// The same as CopyBckMsg
+		Prefix string `json:"prefix"`
+		DryRun bool   `json:"dry_run"`
 	}
 )
 

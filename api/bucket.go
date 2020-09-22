@@ -188,8 +188,8 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 //
 // CopyBucket creates a new ais bucket newName and
 // copies into it contents of the existing oldName bucket
-func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.Bck2BckMsg) (xactID string, err error) {
-	var msg *cmn.Bck2BckMsg
+func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.CopyBckMsg) (xactID string, err error) {
+	var msg *cmn.CopyBckMsg
 	if len(msgs) > 0 {
 		msg = msgs[0]
 	}

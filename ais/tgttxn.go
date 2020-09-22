@@ -520,6 +520,9 @@ func (t *targetrunner) etlBucket(c *txnServerCtx, msg *bck2BckInternalMsg) (err 
 	if err := k8s.Detect(); err != nil {
 		return err
 	}
+	if msg.ID == "" {
+		return etl.ErrMissingUUID
+	}
 	var (
 		dp cluster.LomReaderProvider
 	)

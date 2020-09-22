@@ -304,12 +304,16 @@ var (
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "save token to file"}
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 
+	// Copy Bucket
+	cpBckDryRunFlag = cli.BoolFlag{Name: "dry-run",
+		Usage: "show total size of new objects without really creating them"}
+	cpBckPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to every new object's name"}
+
 	// ETL
-	etlPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to each transformed object's name"}
-	etlExtFlag    = cli.StringFlag{Name: "ext", Usage: "new extension of transformed object's name"}
-	etlDryRunFlag = cli.BoolFlag{Name: "dry-run", Usage: "show total size of created objects, without really creating them"}
-	fromFileFlag  = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the code for ETL", Required: true}
-	depsFileFlag  = cli.StringFlag{Name: "deps-file",
+	etlExtFlag = cli.StringFlag{Name: "ext", Usage: "new extension of every new object's name"}
+
+	fromFileFlag = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the code for ETL", Required: true}
+	depsFileFlag = cli.StringFlag{Name: "deps-file",
 		Usage: "absolute path to the file with dependencies that must be installed before running the code"}
 	runtimeFlag = cli.StringFlag{Name: "runtime",
 		Usage: "runtime which should be used when running the provided code", Required: true}

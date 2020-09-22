@@ -294,6 +294,12 @@ Renaming cloud buckets (cloud://new_bucket_name) not supported
 
 Copy an existing ais bucket to a new ais bucket.
 
+### Options
+| Name | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--dry-run` | `bool` | Don't actually copy bucket, only include stats what would happen | `false` |
+| `--prefix` | `string` | Prefix added to every new object's name | `""` |
+
 ### Examples
 
 #### Copy local bucket
