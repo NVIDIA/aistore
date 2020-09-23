@@ -2035,6 +2035,10 @@ func TestCopyBucketSimple(t *testing.T) {
 		}
 	)
 
+	if testing.Short() {
+		m.num = 10
+	}
+
 	tutils.Logln("Preparing a source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, srcBck)
 	defer tutils.DestroyBucket(t, proxyURL, srcBck)

@@ -92,7 +92,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg.Action == cmn.ActCopyBucket {
-			err = t.copyBucket(c, bck2BckMsg)
+			err = t.transferBucket(c, bck2BckMsg)
 		} else {
 			err = t.etlBucket(c, bck2BckMsg)
 		}
@@ -414,12 +414,11 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 	return
 }
 
-////////////////
-// copyBucket //
-////////////////
+////////////////////
+// transferBucket //
+////////////////////
 
-func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMsg,
-	dps ...cluster.LomReaderProvider) error {
+func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMsg, dps ...cluster.LomReaderProvider) error {
 	var (
 		dp cluster.LomReaderProvider
 	)
@@ -441,7 +440,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMs
 
 			nlpTo, nlpFrom *cluster.NameLockPair
 		)
-		if err := t.validateBckCpTxn(bckFrom, c.msg.Action); err != nil {
+		if err := t.validateTransferBckTxn(bckFrom, c.msg.Action); err != nil {
 			return err
 		}
 		if dm, err = c.newDM(&config.Rebalance, c.uuid); err != nil {
@@ -463,7 +462,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMs
 			}
 		}
 
-		txn := newTxnCopyBucket(c, bckFrom, bckTo, dm, dp, &bck2BckMsg.Bck2BckMsg)
+		txn := newTxnTransferBucket(c, bckFrom, bckTo, dm, dp, &bck2BckMsg.Bck2BckMsg)
 		if err := t.transactions.begin(txn); err != nil {
 			dm.UnregRecv()
 			if nlpTo != nil {
@@ -479,12 +478,12 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMs
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
-		var xact *mirror.XactBckCopy
+		var xact *mirror.XactTransferBck
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		txnCp := txn.(*txnCopyBucket)
+		txnCp := txn.(*txnTransferBucket)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout); err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
@@ -492,8 +491,8 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMs
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		xact, err = xaction.Registry.RenewBckCopy(t, txnCp.bckFrom, txnCp.bckTo, c.uuid, cmn.ActCommit, txnCp.dm,
-			txnCp.dp, txnCp.metaMsg)
+		xact, err = xaction.Registry.RenewTransferBck(t, txnCp.bckFrom, txnCp.bckTo, c.uuid, c.msg.Action, cmn.ActCommit,
+			txnCp.dm, txnCp.dp, txnCp.metaMsg)
 		if err != nil {
 			return err
 		}
@@ -506,7 +505,7 @@ func (t *targetrunner) copyBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMs
 	return nil
 }
 
-func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, action string) (err error) {
+func (t *targetrunner) validateTransferBckTxn(bckFrom *cluster.Bck, action string) (err error) {
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}
@@ -524,7 +523,7 @@ func (t *targetrunner) validateBckCpTxn(bckFrom *cluster.Bck, action string) (er
 // etlBucket //
 ///////////////
 
-// etlBucket uses copyBucket xaction to transform the whole bucket. The only difference is that instead of copying the
+// etlBucket uses transferBucket xaction to transform the whole bucket. The only difference is that instead of copying the
 // same bytes, it creates a reader based on given ETL transformation.
 func (t *targetrunner) etlBucket(c *txnServerCtx, msg *bck2BckInternalMsg) (err error) {
 	if err := k8s.Detect(); err != nil {
@@ -541,7 +540,7 @@ func (t *targetrunner) etlBucket(c *txnServerCtx, msg *bck2BckInternalMsg) (err 
 		return nil
 	}
 
-	return t.copyBucket(c, msg, dp)
+	return t.transferBucket(c, msg, dp)
 }
 
 //////////////

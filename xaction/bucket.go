@@ -312,31 +312,32 @@ func (r *registry) RenewPutMirror(lom *cluster.LOM) *mirror.XactPut {
 }
 
 //
-// bccEntry
+// transferBckEntry
 //
-type bccEntry struct {
+type transferBckEntry struct {
 	baseBckEntry
 	t       cluster.Target
-	xact    *mirror.XactBckCopy
+	xact    *mirror.XactTransferBck
 	bckFrom *cluster.Bck
 	bckTo   *cluster.Bck
 	phase   string
+	kind    string
 	dm      *bundle.DataMover
 	dp      cluster.LomReaderProvider
 	meta    *cmn.Bck2BckMsg
 }
 
-func (e *bccEntry) Start(_ cmn.Bck) error {
+func (e *transferBckEntry) Start(_ cmn.Bck) error {
 	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	e.xact = mirror.NewXactBCC(e.uuid, e.bckFrom, e.bckTo, e.t, slab, e.dm, e.dp, e.meta)
+	e.xact = mirror.NewXactTransferBck(e.uuid, e.kind, e.bckFrom, e.bckTo, e.t, slab, e.dm, e.dp, e.meta)
 	return nil
 }
-func (e *bccEntry) Kind() string  { return cmn.ActCopyBucket }
-func (e *bccEntry) Get() cmn.Xact { return e.xact }
+func (e *transferBckEntry) Kind() string  { return e.kind }
+func (e *transferBckEntry) Get() cmn.Xact { return e.xact }
 
-func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
-	prev := previousEntry.(*bccEntry)
+func (e *transferBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
+	prev := previousEntry.(*transferBckEntry)
 	bckEq := prev.bckFrom.Equal(e.bckFrom, true /*same BID*/, true /* same backend */)
 	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition
@@ -348,9 +349,9 @@ func (e *bccEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error
 	return
 }
 
-func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid,
-	phase string, dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) (*mirror.XactBckCopy, error) {
-	e := &bccEntry{
+func (r *registry) RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, kind,
+	phase string, dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) (*mirror.XactTransferBck, error) {
+	e := &transferBckEntry{
 		baseBckEntry: baseBckEntry{uuid},
 		t:            t,
 		bckFrom:      bckFrom,
@@ -359,12 +360,13 @@ func (r *registry) RenewBckCopy(t cluster.Target, bckFrom, bckTo *cluster.Bck, u
 		dm:           dm,
 		dp:           dp,
 		meta:         meta,
+		kind:         kind,
 	}
 	res := r.renewBucketXaction(e, bckTo)
 	if res.err != nil {
 		return nil, res.err
 	}
-	return res.entry.Get().(*mirror.XactBckCopy), nil
+	return res.entry.Get().(*mirror.XactTransferBck), nil
 }
 
 //

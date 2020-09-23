@@ -93,7 +93,7 @@ type (
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 	}
-	txnCopyBucket struct {
+	txnTransferBucket struct {
 		txnBckBase
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
@@ -358,7 +358,7 @@ func (txn *txnBckBase) abort() {
 	}
 }
 
-// NOTE: not keeping locks for the duration; see also: txnCopyBucket
+// NOTE: not keeping locks for the duration; see also: txnTransferBucket
 func (txn *txnBckBase) commit() { txn.abort() }
 
 func (txn *txnBckBase) String() string {
@@ -470,15 +470,15 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 	return
 }
 
-///////////////////
-// txnCopyBucket //
-///////////////////
-var _ txn = &txnCopyBucket{}
+///////////////////////
+// txnTransferBucket //
+///////////////////////
+var _ txn = &txnTransferBucket{}
 
 // c-tor
-func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover,
-	dp cluster.LomReaderProvider, metaMsg *cmn.Bck2BckMsg) (txn *txnCopyBucket) {
-	txn = &txnCopyBucket{
+func newTxnTransferBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover,
+	dp cluster.LomReaderProvider, metaMsg *cmn.Bck2BckMsg) (txn *txnTransferBucket) {
+	txn = &txnTransferBucket{
 		*newTxnBckBase("bcp", *bckFrom),
 		bckFrom,
 		bckTo,
@@ -490,7 +490,7 @@ func newTxnCopyBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.D
 	return
 }
 
-func (txn *txnCopyBucket) abort() {
+func (txn *txnTransferBucket) abort() {
 	txn.txnBckBase.abort()
 	txn.dm.UnregRecv()
 }

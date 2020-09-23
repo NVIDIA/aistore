@@ -15,10 +15,11 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
-// XactBckCopy copies a bucket locally within the same cluster
+// XactTransferBck transfers a bucket locally within the same cluster. If xact.dp is empty, transfer bck is just copy
+// bck. If xact.dp is not empty, transfer bck applies specified transformation to each object.
 
 type (
-	XactBckCopy struct {
+	XactTransferBck struct {
 		xactBckBase
 		slab    *memsys.Slab
 		bckFrom *cluster.Bck
@@ -27,9 +28,9 @@ type (
 		dp      cluster.LomReaderProvider
 		meta    *cmn.Bck2BckMsg
 	}
-	bccJogger struct { // one per mountpath
+	bckTransferJogger struct { // one per mountpath
 		joggerBckBase
-		parent *XactBckCopy
+		parent *XactTransferBck
 		buf    []byte
 	}
 )
@@ -38,11 +39,12 @@ type (
 // public methods
 //
 
-// XactBckCopy copies one bucket to another. If dp is provided, bytes to save are taken from io.Reader from dp.Reader()
-func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab,
-	dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) *XactBckCopy {
-	return &XactBckCopy{
-		xactBckBase: *newXactBckBase(id, cmn.ActCopyBucket, bckTo.Bck, t),
+// XactTransferBck transfers one bucket to another. If dp is not provided, transfer bucket just copies a bucket into
+// another one. If dp is provided, bytes to save are taken from io.Reader from dp.Reader().
+func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab,
+	dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) *XactTransferBck {
+	return &XactTransferBck{
+		xactBckBase: *newXactBckBase(id, kind, bckTo.Bck, t),
 		slab:        slab,
 		bckFrom:     bckFrom,
 		bckTo:       bckTo,
@@ -52,7 +54,7 @@ func NewXactBCC(id string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *
 	}
 }
 
-func (r *XactBckCopy) Run() (err error) {
+func (r *XactTransferBck) Run() (err error) {
 	r.dm.SetXact(r)
 	r.dm.Open()
 
@@ -68,13 +70,15 @@ func (r *XactBckCopy) Run() (err error) {
 	return
 }
 
-func (r *XactBckCopy) String() string { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
+func (r *XactTransferBck) String() string {
+	return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom)
+}
 
 //
 // private methods
 //
 
-func (r *XactBckCopy) runJoggers() (mpathCount int) {
+func (r *XactTransferBck) runJoggers() (mpathCount int) {
 	var (
 		availablePaths, _ = fs.Get()
 		config            = cmn.GCO.Get()
@@ -91,11 +95,11 @@ func (r *XactBckCopy) runJoggers() (mpathCount int) {
 }
 
 //
-// mpath bccJogger - main
+// mpath bckTransferJogger - main
 //
 
-func newBCCJogger(parent *XactBckCopy, mpathInfo *fs.MountpathInfo, config *cmn.Config) *bccJogger {
-	j := &bccJogger{
+func newBCCJogger(parent *XactTransferBck, mpathInfo *fs.MountpathInfo, config *cmn.Config) *bckTransferJogger {
+	j := &bckTransferJogger{
 		joggerBckBase: joggerBckBase{
 			parent:    &parent.xactBckBase,
 			bck:       parent.bckFrom.Bck,
@@ -110,14 +114,14 @@ func newBCCJogger(parent *XactBckCopy, mpathInfo *fs.MountpathInfo, config *cmn.
 	return j
 }
 
-func (j *bccJogger) jog() {
+func (j *bckTransferJogger) jog() {
 	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.bckFrom.Bck)
 	j.buf = j.parent.slab.Alloc()
 	j.joggerBckBase.jog()
 	j.parent.slab.Free(j.buf)
 }
 
-func (j *bccJogger) copyObject(lom *cluster.LOM) error {
+func (j *bckTransferJogger) copyObject(lom *cluster.LOM) error {
 	var (
 		objNameTo = cmn.ObjNameFromBck2BckMsg(lom.ObjName, j.parent.meta)
 
