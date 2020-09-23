@@ -5,15 +5,18 @@
 package etl
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/memsys"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -34,9 +37,10 @@ type (
 		// - Method "GET", Path "/bucket/object"
 		Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 
-		// Get should be called when there is no incoming request from a user,
-		// so there's nothing to redirect/reverse proxy. This is the case for
-		// offline-ETL: target starts transforming objects on their own.
+		// Get() interface implementations realize offline ETL.
+		// Get() is driven by `OfflineDataProvider` - not to confuse with
+		// GET requests from users (such as training models and apps)
+		// to perform on-the-fly transformation.
 		Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error)
 	}
 
@@ -61,6 +65,7 @@ type (
 
 	pushComm struct {
 		baseComm
+		mem *memsys.MMSA
 	}
 	redirectComm struct {
 		baseComm
@@ -93,7 +98,7 @@ func makeCommunicator(args commArgs) Communicator {
 
 	switch args.commType {
 	case PushCommType:
-		return &pushComm{baseComm: baseComm}
+		return &pushComm{baseComm: baseComm, mem: args.t.MMSA()}
 	case RedirectCommType:
 		return &redirectComm{baseComm: baseComm}
 	case RevProxyCommType:
@@ -153,17 +158,28 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string) (*http.Response,
 }
 
 func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
-	resp, err := pc.doRequest(bck, objName)
+	var (
+		size      int64
+		resp, err = pc.doRequest(bck, objName)
+	)
 	if err != nil {
 		return err
 	}
 	if contentLength := resp.Header.Get(cmn.HeaderContentLength); contentLength != "" {
-		w.Header().Add(cmn.HeaderContentLength, contentLength)
+		size, err = strconv.ParseInt(contentLength, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid Content-Length %q", contentLength)
+		}
+		w.Header().Set(cmn.HeaderContentLength, contentLength)
 	}
-	_, err = io.Copy(w, resp.Body)
-	debug.AssertNoErr(err)
-	err = resp.Body.Close()
-	debug.AssertNoErr(err)
+	buf, slab := pc.mem.Alloc(size)
+	_, err = io.CopyBuffer(w, resp.Body, buf)
+	slab.Free(buf)
+	erc := resp.Body.Close()
+	debug.AssertNoErr(erc)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -172,9 +188,9 @@ func (pc *pushComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64,
 	return handleResp(resp, err)
 }
 
-////////////////////
-//  redirectComm  //
-////////////////////
+//////////////////
+// redirectComm //
+//////////////////
 
 func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	redirectURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
@@ -193,7 +209,7 @@ func (rc *redirectComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, in
 //////////////////
 
 func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	r.URL.Path = transformerPath(bck, objName) // Reverse proxy should always use /bucket/object endpoint.
+	r.URL.Path = transformerPath(bck, objName) // NOTE: using /bucket/object endpoint
 	pc.rp.ServeHTTP(w, r)
 	return nil
 }
@@ -209,7 +225,7 @@ func (pc *revProxyComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, in
 func pruneQuery(rawQuery string) string {
 	vals, err := url.ParseQuery(rawQuery)
 	if err != nil {
-		glog.Errorf("error parsing raw query: %q", rawQuery)
+		glog.Errorf("failed to parse raw query %q, err: %v", rawQuery, err)
 		return ""
 	}
 	for _, filtered := range []string{cmn.URLParamUUID, cmn.URLParamProxyID, cmn.URLParamUnixTime} {
@@ -226,6 +242,5 @@ func handleResp(resp *http.Response, err error) (io.ReadCloser, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-
 	return resp.Body, resp.ContentLength, nil
 }
