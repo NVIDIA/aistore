@@ -63,6 +63,7 @@ const (
 	subcmdInit      = "init"
 	subcmdBuild     = "build"
 	subcmdList      = commandList
+	subcmdLogs      = "logs"
 	subcmdStop      = "stop"
 	subcmdLRU       = cmn.ActLRU
 

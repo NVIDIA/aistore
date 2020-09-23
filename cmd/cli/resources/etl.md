@@ -65,6 +65,13 @@ JGHEoo89gg
 
 Lists all available ETLs.
 
+## Logs ETL
+
+`ais etl logs ETL_ID [TARGET_ID]`
+
+Output logs produced by given ETL.
+It is possible to pass additional parameter to specify particular `TARGET_ID` from which the logs must be retrieved.
+
 ## Stop ETL
 
 `ais etl stop ETL_ID`

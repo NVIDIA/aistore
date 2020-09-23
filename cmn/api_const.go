@@ -350,6 +350,7 @@ const (
 	ETLInit  = Init
 	ETLBuild = "build"
 	ETLList  = List
+	ETLLogs  = "logs"
 	ETLStop  = Stop
 )
 

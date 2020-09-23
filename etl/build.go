@@ -14,14 +14,14 @@ import (
 
 func Build(t cluster.Target, msg BuildMsg) error {
 	// Initialize runtime.
-	runtime, exists := runtime.Runtimes[msg.Runtime]
+	r, exists := runtime.Runtimes[msg.Runtime]
 	cmn.Assert(exists) // Runtime should be checked in proxy during validation.
 
 	var (
 		// We clean up the `msg.ID` as K8s doesn't allow `_` and uppercase
 		// letters in the names.
 		name    = "etl-" + strings.ReplaceAll(strings.ToLower(msg.ID), "_", "-")
-		podSpec = runtime.PodSpec()
+		podSpec = r.PodSpec()
 	)
 
 	podSpec = strings.ReplaceAll(podSpec, "<NAME>", name)
@@ -33,7 +33,7 @@ func Build(t cluster.Target, msg BuildMsg) error {
 		CommType:    PushCommType,
 		WaitTimeout: msg.WaitTimeout,
 	}, StartOpts{Env: map[string]string{
-		runtime.CodeEnvName(): string(msg.Code),
-		runtime.DepsEnvName(): string(msg.Deps),
+		r.CodeEnvName(): string(msg.Code),
+		r.DepsEnvName(): string(msg.Deps),
 	}})
 }

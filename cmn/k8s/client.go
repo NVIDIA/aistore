@@ -30,9 +30,11 @@ type (
 		Pod(name string) (*corev1.Pod, error)
 		Service(name string) (*corev1.Service, error)
 		Node(name string) (*corev1.Node, error)
+
+		Logs(podName string) ([]byte, error)
 	}
 
-	// defaultClient implements k8sClient.
+	// defaultClient implements Client interface.
 	defaultClient struct {
 		client    kubernetes.Interface
 		namespace string
@@ -121,6 +123,15 @@ func (c *defaultClient) Service(name string) (*corev1.Service, error) {
 
 func (c *defaultClient) Node(name string) (*corev1.Node, error) {
 	return c.client.CoreV1().Nodes().Get(context.Background(), name, metav1.GetOptions{})
+}
+
+func (c *defaultClient) Logs(podName string) ([]byte, error) {
+	logStream, err := c.pods().GetLogs(podName, &corev1.PodLogOptions{}).Stream(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer logStream.Close()
+	return ioutil.ReadAll(logStream)
 }
 
 func GetClient() (Client, error) {

@@ -42,6 +42,19 @@ func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 	return list, err
 }
 
+func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg, err error) {
+	baseParams.Method = http.MethodGet
+	path := cmn.JoinWords(cmn.Version, cmn.ETL, cmn.ETLLogs, id)
+	if len(targetID) > 0 && targetID[0] != "" {
+		path = cmn.JoinWords(path, targetID[0])
+	}
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       path,
+	}, &logs)
+	return logs, err
+}
+
 func ETLStop(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
 	err = DoHTTPRequest(ReqParams{

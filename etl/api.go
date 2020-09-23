@@ -33,6 +33,12 @@ type (
 		Name string `json:"name"`
 	}
 
+	PodsLogsMsg []PodLogsMsg
+	PodLogsMsg  struct {
+		TargetID string `json:"target_id"`
+		Logs     []byte `json:"logs"`
+	}
+
 	OfflineMsg struct {
 		ID     string `json:"id"`      // ETL ID
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
@@ -60,3 +66,7 @@ func (m BuildMsg) Validate() error {
 	}
 	return nil
 }
+
+func (p PodsLogsMsg) Len() int           { return len(p) }
+func (p PodsLogsMsg) Less(i, j int) bool { return p[i].TargetID < p[j].TargetID }
+func (p PodsLogsMsg) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }

@@ -357,12 +357,31 @@ func Stop(t cluster.Target, id string) error {
 func GetCommunicator(transformID string) (Communicator, error) {
 	c, exists := reg.getByUUID(transformID)
 	if !exists {
-		return nil, cmn.NewNotFoundError("ETL with %q id", transformID)
+		return nil, cmn.NewNotFoundError("ETL %q", transformID)
 	}
 	return c, nil
 }
 
 func List() []Info { return reg.list() }
+
+func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) {
+	c, err := GetCommunicator(transformID)
+	if err != nil {
+		return logs, err
+	}
+	client, err := k8s.GetClient()
+	if err != nil {
+		return logs, err
+	}
+	b, err := client.Logs(c.PodName())
+	if err != nil {
+		return logs, err
+	}
+	return PodLogsMsg{
+		TargetID: t.Snode().ID(),
+		Logs:     b,
+	}, nil
+}
 
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func setTransformAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {

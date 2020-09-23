@@ -50,6 +50,12 @@ var (
 					Action: etlListHandler,
 				},
 				{
+					Name:      subcmdLogs,
+					Usage:     "retrieve logs produced by ETL",
+					ArgsUsage: "ETL_ID [TARGET_ID]",
+					Action:    etlLogsHandler,
+				},
+				{
 					Name:      subcmdStop,
 					Usage:     "stop ETL with given id",
 					ArgsUsage: "ETL_ID",
@@ -133,6 +139,36 @@ func etlListHandler(c *cli.Context) (err error) {
 		return err
 	}
 	return templates.DisplayOutput(list, c.App.Writer, templates.TransformListTmpl)
+}
+
+func etlLogsHandler(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "ETL_ID")
+	}
+
+	var (
+		id       = c.Args().Get(0)
+		targetID = c.Args().Get(1) // optional
+	)
+
+	logs, err := api.ETLLogs(defaultAPIParams, id, targetID)
+	if err != nil {
+		return err
+	}
+
+	if targetID != "" {
+		fmt.Fprintln(c.App.Writer, string(logs[0].Logs))
+		return nil
+	}
+
+	for idx, log := range logs {
+		if idx > 0 {
+			fmt.Fprintln(c.App.Writer)
+		}
+		fmt.Fprintf(c.App.Writer, "%s:\n%s\n", log.TargetID, string(log.Logs))
+	}
+
+	return nil
 }
 
 func etlStopHandler(c *cli.Context) (err error) {
