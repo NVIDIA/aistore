@@ -310,7 +310,7 @@ var (
 	cpBckPrefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix added to every new object's name"}
 
 	// ETL
-	etlExtFlag = cli.StringFlag{Name: "ext", Usage: "new extension of every new object's name"}
+	etlExtFlag = cli.StringFlag{Name: "ext", Usage: "mapping from old to new extensions of transformed objects' names"}
 
 	fromFileFlag = cli.StringFlag{Name: "from-file", Usage: "absolute path to the file with the code for ETL", Required: true}
 	depsFileFlag = cli.StringFlag{Name: "deps-file",

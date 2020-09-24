@@ -111,7 +111,7 @@ $ XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2)
 $ ais wait xaction $XACT_ID # wait until offline ETL finishes
 ```
 
-#### The same as above, but objects names will have `.out` extension and `etl-` prefix
+#### The same as above, but objects will have `etl-` prefix and objects with extension `.in1` will have `.out1` extension, objects with extension `.in2` will have `.out2` extension.
 
 ```console
 $ ais ls bucket BUCKET1 --props=name
@@ -119,12 +119,12 @@ NAME
 obj1.in1
 obj2.in2
 (...)
-$ XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2 --ext=".out" --prefix="etl-")
+$ XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2 --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-")
 $ ais wait xaction $XACT_ID # wait until offline ETL finishes
 $ ais ls bucket BUCKET2 --props=name
 NAME
-etl-obj1.out
-etl-obj2.out
+etl-obj1.out1
+etl-obj2.out2
 (...)
 ```
 

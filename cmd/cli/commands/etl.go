@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/etl"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -215,9 +216,18 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 		return objectNameArgumentNotSupported(c, toName)
 	}
 
+	var extMap cmn.SimpleKVs
+	if flagIsSet(c, etlExtFlag) {
+		mapStr := parseStrFlag(c, etlExtFlag)
+		extMap = make(cmn.SimpleKVs, 1)
+		if err = jsoniter.UnmarshalFromString(mapStr, &extMap); err != nil {
+			return fmt.Errorf("couldn't parse ext flag: %s", err.Error())
+		}
+	}
+
 	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, &cmn.Bck2BckMsg{
 		ID:     id,
-		Ext:    parseStrFlag(c, etlExtFlag),
+		Ext:    extMap,
 		Prefix: parseStrFlag(c, cpBckPrefixFlag),
 		DryRun: flagIsSet(c, cpBckDryRunFlag),
 	})

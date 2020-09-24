@@ -94,7 +94,8 @@ type (
 		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the
 		// same base name, but different extension, specifying this field might cause object overriding. This is because
 		// of resulting name conflict.
-		Ext string `json:"ext"`
+		// TODO: this field might not be required when transformation on subset (template) of bucket is supported.
+		Ext SimpleKVs `json:"ext"`
 
 		// The same as CopyBckMsg
 		Prefix string `json:"prefix"`
@@ -506,9 +507,12 @@ func ObjNameFromBck2BckMsg(name string, msg *Bck2BckMsg) string {
 	if msg == nil {
 		return name
 	}
-	if msg.Ext != "" {
+	if msg.Ext != nil {
 		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
-			name = name[:idx+1] + strings.TrimLeft(msg.Ext, ".")
+			ext := name[:idx]
+			if replacement, exists := msg.Ext[ext]; exists {
+				name = name[:idx+1] + strings.TrimLeft(replacement, ".")
+			}
 		}
 	}
 	if msg.Prefix != "" {
