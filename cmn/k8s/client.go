@@ -7,6 +7,8 @@ package k8s
 import (
 	"context"
 	"io/ioutil"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -121,38 +123,44 @@ func (c *defaultClient) Node(name string) (*corev1.Node, error) {
 	return c.client.CoreV1().Nodes().Get(context.Background(), name, metav1.GetOptions{})
 }
 
-func NewClient() (Client, error) {
-	_clientOnce.Do(func() {
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			_defaultK8sClient = &defaultClient{err: err}
-			return
-		}
-		client, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			_defaultK8sClient = &defaultClient{err: err}
-			return
-		}
-
-		// This seems like only sane option to get the current K8s virtual
-		// namespace the target is in.
-		//
-		// More:
-		//  * https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
-		//  * https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod.
-		namespace, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-		if err != nil {
-			_defaultK8sClient = &defaultClient{err: err}
-			return
-		}
-
-		_defaultK8sClient = &defaultClient{
-			namespace: string(namespace),
-			client:    client,
-		}
-	})
+func GetClient() (Client, error) {
+	_clientOnce.Do(_initClient)
 	if _defaultK8sClient.err != nil {
 		return nil, _defaultK8sClient.err
 	}
 	return _defaultK8sClient, nil
+}
+
+func _initClient() {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		_defaultK8sClient = &defaultClient{err: err}
+		return
+	}
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		_defaultK8sClient = &defaultClient{err: err}
+		return
+	}
+	_defaultK8sClient = &defaultClient{
+		namespace: _namespace(),
+		client:    client,
+	}
+}
+
+// Retrieve pod namespace
+// See:
+//  * https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/client-go/tools/clientcmd/client_config.go
+//  * https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+//  * https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod.
+func _namespace() (namespace string) {
+	if namespace = os.Getenv("POD_NAMESPACE"); namespace != "" {
+		return
+	}
+	if ns, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
+		if namespace = strings.TrimSpace(string(ns)); len(namespace) > 0 {
+			return
+		}
+	}
+	return "default"
 }

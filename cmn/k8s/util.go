@@ -31,7 +31,7 @@ func initDetect() {
 		return
 	}
 
-	client, err := NewClient()
+	client, err := GetClient()
 	if err != nil {
 		glog.Errorf("couldn't initiate a K8s client, err: %v", err) // TODO: make it a Warning
 		NodeName = ""

@@ -461,7 +461,7 @@ func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.
 	var (
 		latestPodCondition *corev1.PodCondition
 
-		client, err = k8s.NewClient()
+		client, err = k8s.GetClient()
 	)
 	if err != nil {
 		return cmn.NewETLError(errCtx, err.Error())
@@ -515,7 +515,7 @@ func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *c
 }
 
 func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
-	client, err := k8s.NewClient()
+	client, err := k8s.GetClient()
 	if err != nil {
 		return "", cmn.NewETLError(errCtx, err.Error())
 	}
@@ -527,7 +527,7 @@ func getPodHostIP(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) 
 }
 
 func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) error {
-	client, err := k8s.NewClient()
+	client, err := k8s.GetClient()
 	if err != nil {
 		return cmn.NewETLError(errCtx, err.Error())
 	}
@@ -554,7 +554,7 @@ func deleteEntity(errCtx *cmn.ETLErrorContext, entityType, entityName string) er
 }
 
 func createEntity(errCtx *cmn.ETLErrorContext, entity string, spec interface{}) error {
-	client, err := k8s.NewClient()
+	client, err := k8s.GetClient()
 	if err != nil {
 		return err
 	}
@@ -565,7 +565,7 @@ func createEntity(errCtx *cmn.ETLErrorContext, entity string, spec interface{}) 
 }
 
 func getServiceNodePort(errCtx *cmn.ETLErrorContext, svc *corev1.Service) (uint, error) {
-	client, err := k8s.NewClient()
+	client, err := k8s.GetClient()
 	if err != nil {
 		return 0, cmn.NewETLError(errCtx, err.Error())
 	}
