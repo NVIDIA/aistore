@@ -115,7 +115,7 @@ func waitDownloadHandler(c *cli.Context) (err error) {
 	}
 
 	for {
-		resp, err := api.DownloadStatus(defaultAPIParams, id)
+		resp, err := api.DownloadStatus(defaultAPIParams, id, true)
 		if err != nil {
 			return err
 		}

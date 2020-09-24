@@ -56,8 +56,8 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if dlBodyBase.ProgressInterval != "" {
-			intervalStr = dlBodyBase.ProgressInterval
+		if dlBodyBase.MonitorInterval != "" {
+			intervalStr = dlBodyBase.MonitorInterval
 		}
 
 		if dur, err := time.ParseDuration(intervalStr); err == nil {
@@ -111,7 +111,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Getting status of download: %v", payload)
 			}
-			response, respErr, statusCode = downloaderXact.JobStatus(payload.ID, payload.OnlyActive)
+			response, respErr, statusCode = downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
 		} else {
 			var regex *regexp.Regexp
 			if payload.Regex != "" {

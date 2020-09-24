@@ -476,7 +476,7 @@ func parseChecksumFlags(c *cli.Context) []*cmn.Cksum {
 
 func calcRefreshRate(c *cli.Context) time.Duration {
 	const (
-		refreshRateMin = 500 * time.Millisecond
+		refreshRateMin = time.Second
 	)
 
 	refreshRate := refreshRateDefault

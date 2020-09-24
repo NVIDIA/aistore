@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -31,6 +32,7 @@ var (
 			descriptionFlag,
 			limitConnectionsFlag,
 			objectsListFlag,
+			monitorIntervalFlag,
 		},
 		subcmdStartDsort: {
 			specFileFlag,
@@ -213,6 +215,7 @@ func startDownloadHandler(c *cli.Context) error {
 		description     = parseStrFlag(c, descriptionFlag)
 		timeout         = parseStrFlag(c, timeoutFlag)
 		objectsListPath = parseStrFlag(c, objectsListFlag)
+		monitorInterval = parseStrFlag(c, monitorIntervalFlag)
 		id              string
 	)
 
@@ -247,14 +250,20 @@ func startDownloadHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	if _, err := time.ParseDuration(monitorInterval); err != nil {
+		return err
+	}
+
 	basePayload := downloader.DlBase{
 		Bck: cmn.Bck{
 			Name:     bucket,
 			Provider: cmn.ProviderAIS,
 			Ns:       cmn.NsGlobal,
 		},
-		Timeout:     timeout,
-		Description: description,
+		Timeout:         timeout,
+		Description:     description,
+		MonitorInterval: monitorInterval,
 		Limits: downloader.DlLimits{
 			Connections:  parseIntFlag(c, limitConnectionsFlag),
 			BytesPerHour: int(limitBPH),

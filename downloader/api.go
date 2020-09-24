@@ -194,11 +194,11 @@ type DlLimits struct {
 }
 
 type DlBase struct {
-	Description      string   `json:"description"`
-	Bck              cmn.Bck  `json:"bucket"`
-	Timeout          string   `json:"timeout"`
-	ProgressInterval string   `json:"progress_interval"`
-	Limits           DlLimits `json:"limits"`
+	Description     string   `json:"description"`
+	Bck             cmn.Bck  `json:"bucket"`
+	Timeout         string   `json:"timeout"`
+	MonitorInterval string   `json:"monitor_interval"`
+	Limits          DlLimits `json:"limits"`
 }
 
 func (b *DlBase) Validate() error {
@@ -244,9 +244,9 @@ func (b *DlSingleObj) Validate() error {
 
 // Internal status/delete request body
 type DlAdminBody struct {
-	ID         string `json:"id"`
-	Regex      string `json:"regex"`
-	OnlyActive bool   `json:"only_active"`
+	ID              string `json:"id"`
+	Regex           string `json:"regex"`
+	OnlyActiveTasks bool   `json:"only_active_tasks"` // Skips detailed info about tasks finished/errored
 }
 
 func (b *DlAdminBody) Validate(requireID bool) error {

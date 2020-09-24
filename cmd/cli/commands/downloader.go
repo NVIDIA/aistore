@@ -25,6 +25,7 @@ type (
 	downloadingResult struct {
 		totalFiles        int
 		finishedFiles     int
+		errFiles          int
 		downloadingErrors map[string]string
 		finished          bool
 		aborted           bool
@@ -50,11 +51,10 @@ type (
 		totalFiles     int
 		finishedFiles  int
 		scheduledFiles int
+		errFiles       int
 
 		aborted       bool
 		allDispatched bool
-
-		errors map[string]string
 	}
 )
 
@@ -98,7 +98,6 @@ func newDownloaderPB(baseParams api.BaseParams, id string, refreshTime time.Dura
 		refreshTime: refreshTime,
 		states:      make(map[string]*fileDownloadingState),
 		p:           mpb.New(mpb.WithWidth(progressBarWidth)),
-		errors:      make(map[string]string),
 	}
 }
 
@@ -115,7 +114,7 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 	for !b.jobFinished() {
 		time.Sleep(b.refreshTime)
 
-		resp, err := api.DownloadStatus(b.params, b.id)
+		resp, err := api.DownloadStatus(b.params, b.id, true)
 		if err != nil {
 			b.cleanBars()
 			return downloadingResult{}, err
@@ -125,7 +124,6 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 			break
 		}
 
-		b.updateDownloadingErrors(resp.Errs)
 		b.updateBars(resp)
 	}
 
@@ -134,16 +132,15 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 }
 
 func (b *downloaderPB) start() (bool, error) {
-	resp, err := api.DownloadStatus(b.params, b.id)
+	resp, err := api.DownloadStatus(b.params, b.id, true)
 	if err != nil {
 		return false, err
 	}
 
-	b.updateDownloadingErrors(resp.Errs)
-
 	b.finishedFiles = resp.FinishedCnt
 	b.totalFiles = resp.Total
 	b.scheduledFiles = resp.ScheduledCnt
+	b.errFiles = resp.ErrorCnt
 
 	b.allDispatched = resp.AllDispatched
 	b.aborted = resp.Aborted
@@ -167,7 +164,7 @@ func (b *downloaderPB) start() (bool, error) {
 			),
 			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
 		)
-		b.totalBar.IncrBy(b.finishedFiles)
+		b.totalBar.IncrBy(b.finishedFiles + b.errFiles)
 	}
 
 	b.updateBars(resp)
@@ -190,15 +187,17 @@ func (b *downloaderPB) updateBars(downloadStatus downloader.DlStatusResp) {
 		b.updateFileBar(newState, oldState)
 	}
 	if downloadStatus.TotalCnt() > 1 {
-		b.updateTotalBar(downloadStatus.FinishedCnt+len(downloadStatus.Errs), downloadStatus.TotalCnt())
+		b.updateTotalBar(downloadStatus.FinishedCnt+downloadStatus.ErrorCnt, downloadStatus.TotalCnt())
+		b.finishedFiles = downloadStatus.FinishedCnt
+		b.errFiles = downloadStatus.ErrorCnt
 	}
 }
 
 func (b *downloaderPB) updateFinishedFiles(fileStates []downloader.TaskDlInfo) {
 	// The finished files are those that are in b.states, but were not included in CurrentTasks of the status response
-	fileStatesMap := make(map[string]struct{})
+	fileStatesMap := make(cmn.StringSet)
 	for _, file := range fileStates {
-		fileStatesMap[file.Name] = struct{}{}
+		fileStatesMap.Add(file.Name)
 	}
 
 	finishedFiles := make([]string, 0)
@@ -265,20 +264,12 @@ func (b *downloaderPB) updateFileBar(newState downloader.TaskDlInfo, state *file
 }
 
 func (b *downloaderPB) updateTotalBar(newFinished, total int) {
-	progress := newFinished - b.finishedFiles
-
+	progress := newFinished - (b.finishedFiles + b.errFiles)
 	if progress > 0 {
 		b.totalBar.IncrBy(progress)
 	}
 
 	b.totalBar.SetTotal(int64(total), false)
-	b.finishedFiles = newFinished
-}
-
-func (b *downloaderPB) updateDownloadingErrors(dlErrs []downloader.TaskErrInfo) {
-	for _, dlErr := range dlErrs {
-		b.errors[dlErr.Name] = dlErr.Err
-	}
 }
 
 func (b *downloaderPB) cleanBars() {
@@ -294,16 +285,16 @@ func (b *downloaderPB) cleanBars() {
 
 func (b *downloaderPB) result() downloadingResult {
 	return downloadingResult{
-		totalFiles:        b.totalFiles,
-		finishedFiles:     b.finishedFiles,
-		downloadingErrors: b.errors,
-		finished:          b.jobFinished(),
-		aborted:           b.aborted,
+		totalFiles:    b.totalFiles,
+		finishedFiles: b.finishedFiles,
+		errFiles:      b.errFiles,
+		finished:      b.jobFinished(),
+		aborted:       b.aborted,
 	}
 }
 
 func (b *downloaderPB) jobFinished() bool {
-	return b.aborted || (b.allDispatched && b.scheduledFiles == b.finishedFiles+len(b.errors))
+	return b.aborted || (b.allDispatched && b.scheduledFiles == b.finishedFiles+b.errFiles)
 }
 
 func (b *downloaderPB) totalFilesCnt() int {
@@ -338,12 +329,12 @@ func downloadJobStatus(c *cli.Context, id string) error {
 	}
 
 	// without progress bar
-	resp, err := api.DownloadStatus(defaultAPIParams, id)
+	verbose := flagIsSet(c, verboseFlag)
+	resp, err := api.DownloadStatus(defaultAPIParams, id, !verbose)
 	if err != nil {
 		return err
 	}
 
-	verbose := flagIsSet(c, verboseFlag)
 	printDownloadStatus(c.App.Writer, resp, verbose)
 	return nil
 }

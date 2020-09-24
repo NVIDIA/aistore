@@ -31,7 +31,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		notFoundCnt int
 		err         error
 	)
-	if msg.ID != "" && method == http.MethodGet && msg.OnlyActive {
+	if msg.ID != "" && method == http.MethodGet && msg.OnlyActiveTasks {
 		if stats, exists := p.notifs.queryStats(msg.ID); exists {
 			var resp *downloader.DlStatusResp
 			stats.Range(func(_, status interface{}) bool {
@@ -229,8 +229,8 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if dlBase.ProgressInterval != "" {
-		intervalStr = dlBase.ProgressInterval
+	if dlBase.MonitorInterval != "" {
+		intervalStr = dlBase.MonitorInterval
 	}
 
 	if dur, err := time.ParseDuration(intervalStr); err == nil {
