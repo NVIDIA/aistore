@@ -162,10 +162,11 @@ func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 
 func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 	var (
-		msg    = &cmn.XactReqMsg{}
-		bck    *cluster.Bck
-		nl     notifListener
-		exists bool
+		msg      = &cmn.XactReqMsg{}
+		bck      *cluster.Bck
+		nl       notifListener
+		exists   bool
+		interval = int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
 	)
 
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
@@ -212,6 +213,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 		return
 	}
 
+	ic.p.notifs.syncStats(nl, interval)
 	nl.rlock()
 	defer nl.runlock()
 
