@@ -127,7 +127,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		if pid == idToSkip {
 			continue
 		}
-		if _, ok := smap.NonElects[pid]; ok {
+		if smap.NonElects.Contains(pid) {
 			continue
 		}
 		if psi.idDigest >= max {

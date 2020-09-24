@@ -557,7 +557,7 @@ func fmtDaemonID(id string, smap cluster.Smap) string {
 	if id == smap.Primary.ID() {
 		return id + primarySuffix
 	}
-	if _, ok := smap.NonElects[id]; ok {
+	if smap.NonElects.Contains(id) {
 		return id + nonElectableSuffix
 	}
 	return id

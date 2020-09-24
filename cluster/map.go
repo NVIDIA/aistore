@@ -53,7 +53,7 @@ type (
 	Smap struct {
 		Tmap         NodeMap          `json:"tmap"`                    // targetID -> targetInfo
 		Pmap         NodeMap          `json:"pmap"`                    // proxyID -> proxyInfo
-		NonElects    cmn.SimpleKVs    `json:"non_electable,omitempty"` // non-electables: DaemonID => [info]
+		NonElects    cmn.SimpleKVs    `json:"non_electable,omitempty"` // non-electables: set of DaemonID
 		IC           cmn.SimpleKVsInt `json:"ic"`                      // cluster IC: DaemonID => [Smap version]
 		Suspend      cmn.SimpleKVsInt `json:"suspend,omitempty"`       // nodes under maintenance: DaemonID => Stage (see cmn.NodeStatus* consts)
 		Primary      *Snode           `json:"proxy_si"`                // (json tag preserved for back. compat.)
@@ -296,6 +296,14 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 		return
 	}
 	if !m.NonElects.Compare(other.NonElects) {
+		eq = false
+		return
+	}
+	if !m.Suspend.Compare(other.Suspend) {
+		eq = false
+		return
+	}
+	if !m.IC.Compare(other.IC) {
 		eq = false
 		return
 	}

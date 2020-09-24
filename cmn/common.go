@@ -287,6 +287,23 @@ func (kv SimpleKVs) Keys() []string {
 	return keys
 }
 
+func (kv SimpleKVs) Contains(key string) (ok bool) {
+	if len(kv) == 0 {
+		return false
+	}
+	_, ok = kv[key]
+	return
+}
+
+func (kv SimpleKVsInt) Compare(other SimpleKVsInt) bool {
+	if len(kv) != len(other) {
+		return false
+	} else if len(kv) > 0 {
+		return reflect.DeepEqual(kv, other)
+	}
+	return true
+}
+
 func (kv SimpleKVsInt) Keys() []string {
 	keys := make([]string, 0, len(kv))
 	for k := range kv {

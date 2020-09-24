@@ -134,7 +134,7 @@ func (m *smapX) _fillIC() {
 
 	// try to select the missing members - upto ICGroupSize - if available
 	for pid, si := range m.Pmap {
-		if _, ok := m.NonElects[pid]; ok {
+		if m.NonElects.Contains(pid) {
 			continue
 		}
 		m.addIC(si)
