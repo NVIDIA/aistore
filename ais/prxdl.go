@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -30,7 +31,26 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		notFoundCnt int
 		err         error
 	)
-	// TODO: check IC if stats cached
+	if msg.ID != "" && method == http.MethodGet && msg.OnlyActive {
+		if stats, exists := p.notifs.queryStats(msg.ID); exists {
+			var resp *downloader.DlStatusResp
+			stats.Range(func(_, status interface{}) bool {
+				dlStatus, ok := status.(*downloader.DlStatusResp)
+				cmn.Assert(ok)
+				if resp == nil {
+					resp = &downloader.DlStatusResp{}
+					err := cmn.MorphMarshal(dlStatus, resp)
+					cmn.AssertNoErr(err)
+					return true
+				}
+				resp.Aggregate(*dlStatus)
+				return true
+			})
+
+			respJSON := cmn.MustMarshal(resp)
+			return respJSON, http.StatusOK, nil
+		}
+	}
 	body := cmn.MustMarshal(msg)
 	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
 	respCnt := len(responses)
@@ -77,18 +97,18 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 			return result, http.StatusOK, nil
 		}
 
-		stats := make([]downloader.DlStatusResp, len(validResponses))
-		for i, resp := range validResponses {
-			err := jsoniter.Unmarshal(resp.bytes, &stats[i])
+		var stResp *downloader.DlStatusResp
+		for _, resp := range validResponses {
+			status := downloader.DlStatusResp{}
+			err := jsoniter.Unmarshal(resp.bytes, &status)
 			cmn.AssertNoErr(err)
+			if stResp == nil {
+				stResp = &status
+				continue
+			}
+			stResp.Aggregate(status)
 		}
-
-		resp := stats[0]
-		for i := 1; i < len(stats); i++ {
-			resp.Aggregate(stats[i])
-		}
-
-		respJSON := cmn.MustMarshal(resp)
+		respJSON := cmn.MustMarshal(stResp)
 		return respJSON, http.StatusOK, nil
 	case http.MethodDelete:
 		res := validResponses[0]
@@ -173,7 +193,9 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("httpDownloadAdmin payload %v", payload)
 	}
-
+	if payload.ID != "" && p.ic.redirectToIC(w, r) {
+		return
+	}
 	resp, statusCode, err := p.broadcastDownloadAdminRequest(r.Method, r.URL.Path, payload)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), statusCode)
@@ -188,22 +210,37 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 
 // POST /v1/download
 func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Download); err != nil {
+	var (
+		body             []byte
+		dlb              downloader.DlBody
+		dlBase           downloader.DlBase
+		err              error
+		ok               bool
+		progressInterval int64
+		intervalStr      = downloader.DownloadProgressInterval
+	)
+
+	if _, err = p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Download); err != nil {
 		return
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
+	if body, err = ioutil.ReadAll(r.Body); err != nil {
 		p.invalmsghdlrstatusf(w, r, http.StatusInternalServerError, "Error starting download: %v.", err.Error())
 		return
 	}
 
-	dlb := downloader.DlBody{}
-	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
+	if dlb, dlBase, ok = p.validateStartDownloadRequest(w, r, body); !ok {
 		return
 	}
 
-	if ok := p.validateStartDownloadRequest(w, r, body); !ok {
+	if dlBase.ProgressInterval != "" {
+		intervalStr = dlBase.ProgressInterval
+	}
+
+	if dur, err := time.ParseDuration(intervalStr); err == nil {
+		progressInterval = int64(dur.Seconds())
+	} else {
+		p.invalmsghdlrf(w, r, "%s: invalid progress interval %q (err: %v)", p.si, intervalStr, err)
 		return
 	}
 
@@ -214,7 +251,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlrstatusf(w, r, errCode, "Error starting download: %v.", err.Error())
 		return
 	}
-	nl := newDownloadNL(id, smap, smap.Tmap.Clone(), string(dlb.Type))
+	nl := newDownloadNL(id, smap, smap.Tmap.Clone(), string(dlb.Type), progressInterval)
 	nl.setOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
@@ -223,19 +260,18 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 // Helper methods
 
-func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request, body []byte) (ok bool) {
-	dlb := downloader.DlBody{}
+func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request, body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	payload := downloader.DlBase{}
-	err := jsoniter.Unmarshal(dlb.RawMessage, &payload)
+
+	err := jsoniter.Unmarshal(dlb.RawMessage, &dlBase)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	bck := cluster.NewBckEmbed(payload.Bck)
+	bck := cluster.NewBckEmbed(dlBase.Bck)
 	if err := bck.Init(p.owner.bmd, p.si); err != nil {
 		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
 		if bck, err = args.try(); err != nil {
@@ -246,7 +282,8 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
-	return true
+	ok = true
+	return
 }
 
 func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {

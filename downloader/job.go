@@ -161,9 +161,9 @@ func (j *baseDlJob) ActiveStats() *DlStatusResp {
 func (j *baseDlJob) checkObj(string) bool  { cmn.Assert(false); return false }
 func (j *baseDlJob) throttler() *throttler { return j.t }
 func (j *baseDlJob) cleanup() {
+	j.throttler().stop()
 	dlStore.markFinished(j.ID())
 	dlStore.flush(j.ID())
-	j.throttler().stop()
 	if n := j.Notif(); n != nil {
 		n.Callback(n, nil)
 	}

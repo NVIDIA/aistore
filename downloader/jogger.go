@@ -262,5 +262,7 @@ func (q *queue) removeJob(id string) int {
 }
 
 func (q *queue) close() {
-	close(q.ch)
+	if q.ch != nil {
+		close(q.ch)
+	}
 }

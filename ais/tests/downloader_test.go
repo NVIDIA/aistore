@@ -102,7 +102,7 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 		}
 
 		all := true
-		if resp, err := api.DownloadStatus(tutils.BaseAPIParams(), id); err == nil {
+		if resp, err := api.DownloadStatus(tutils.BaseAPIParams(), id, true); err == nil {
 			if !resp.JobFinished() {
 				all = false
 			}

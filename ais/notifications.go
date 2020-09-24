@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xaction"
@@ -89,7 +90,7 @@ type (
 		aborted() bool
 		status() *cmn.XactStatus
 		setStats(daeID string, stats interface{})
-		nodeStats() map[string]interface{}
+		nodeStats() *sync.Map
 		bcastArgs() *bcastArgs
 		abortArgs() *bcastArgs
 		finTime() int64
@@ -101,6 +102,9 @@ type (
 		getOwner() string
 		setOwner(string)
 		hrwOwner(smap *smapX)
+		lastUpdated(si *cluster.Snode) int64
+		progressInterval() int64
+		nodesUptoDate(intervals ...int64) (cmn.StringSet, bool)
 	}
 
 	// Note: variables capitablized to allow marshal and unmarshal
@@ -118,10 +122,12 @@ type (
 			Ty  int // notification category (above)
 		}
 
-		Srcs    cluster.NodeMap        // expected notifiers
-		FinSrcs cmn.StringSet          // daeID of notifiers finished
-		f       notifCallback          // optional listening-side callback
-		Stats   map[string]interface{} // [daeID => Stats (e.g. cmn.BaseXactStatsExt)]
+		Srcs             cluster.NodeMap  // expected notifiers
+		FinSrcs          cmn.StringSet    // daeID of notifiers finished
+		f                notifCallback    // optional listening-side callback
+		Stats            *sync.Map        // [daeID => Stats (e.g. cmn.BaseXactStatsExt)]
+		LastUpdated      map[string]int64 // [daeID => last update time]
+		ProgressInterval int64            // time in secs at which progress is monitored
 
 		ErrMsg   string        // ErrMsg
 		FinTime  atomic.Int64  // timestamp when finished
@@ -159,10 +165,16 @@ var (
 	_ cluster.Slistener = &notifs{}
 )
 
-func newNLB(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *notifListenerBase {
+func newNLB(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string, progressInterval int64,
+	bck ...cmn.Bck) *notifListenerBase {
 	cmn.Assert(ty > notifInvalid)
 	cmn.Assert(len(srcs) != 0)
-	nlb := &notifListenerBase{Srcs: srcs, Stats: make(map[string]interface{}, len(srcs))}
+	nlb := &notifListenerBase{
+		Srcs:             srcs,
+		Stats:            &sync.Map{},
+		ProgressInterval: progressInterval,
+		LastUpdated:      make(map[string]int64, len(srcs)),
+	}
 	nlb.Common.UUID = uuid
 	nlb.Common.Action = action
 	nlb.Common.SmapVersion = smap.version()
@@ -174,13 +186,13 @@ func newNLB(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action strin
 
 func newXactNL(uuid string, smap *smapX, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *notifXactBase {
 	return &notifXactBase{
-		notifListenerBase: *newNLB(uuid, smap, srcs, ty, action, bck...),
+		notifListenerBase: *newNLB(uuid, smap, srcs, ty, action, 0, bck...),
 	}
 }
 
-func newDownloadNL(uuid string, smap *smapX, srcs cluster.NodeMap, action string, bck ...cmn.Bck) *notifDownloadBase {
+func newDownloadNL(uuid string, smap *smapX, srcs cluster.NodeMap, action string, progressInterval int64, bck ...cmn.Bck) *notifDownloadBase {
 	return &notifDownloadBase{
-		notifListenerBase: *newNLB(uuid, smap, srcs, notifDownload, action, bck...),
+		notifListenerBase: *newNLB(uuid, smap, srcs, notifDownload, action, progressInterval, bck...),
 	}
 }
 
@@ -230,15 +242,42 @@ func (nlb *notifListenerBase) err() error {
 func (nlb *notifListenerBase) setStats(daeID string, stats interface{}) {
 	_, ok := nlb.Srcs[daeID]
 	cmn.Assert(ok)
-	if nlb.Stats == nil {
-		nlb.Stats = make(map[string]interface{}, len(nlb.Srcs))
-	}
-	nlb.Stats[daeID] = stats
+	nlb.Stats.Store(daeID, stats)
+	nlb.LastUpdated[daeID] = mono.NanoTime()
 }
 
-// Note: should be used under lock
-func (nlb *notifListenerBase) nodeStats() map[string]interface{} {
+func (nlb *notifListenerBase) lastUpdated(si *cluster.Snode) int64 {
+	return nlb.LastUpdated[si.DaemonID]
+}
+func (nlb *notifListenerBase) progressInterval() int64 {
+	return nlb.ProgressInterval
+}
+func (nlb *notifListenerBase) nodeStats() *sync.Map {
 	return nlb.Stats
+}
+
+func (nlb *notifListenerBase) nodesUptoDate(intervals ...int64) (uptoDate cmn.StringSet, tardy bool) {
+	var (
+		period = int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
+	)
+	uptoDate = cmn.NewStringSet()
+
+	if len(intervals) > 0 {
+		period = intervals[0]
+	} else if nlb.progressInterval() != 0 {
+		period = nlb.progressInterval()
+	}
+
+	for _, si := range nlb.notifiers() {
+		ts := nlb.lastUpdated(si)
+		diff := int64(mono.Since(ts).Seconds())
+		if _, ok := nlb.Stats.Load(si.ID()); ok && (nlb.hasFinished(si) || diff < period) {
+			uptoDate.Add(si.DaemonID)
+			continue
+		}
+		tardy = true
+	}
+	return
 }
 
 func (nlb *notifListenerBase) status() *cmn.XactStatus {
@@ -536,7 +575,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	cmn.Assert(nl.notifTy() == int(notifMsg.Ty))
 	nl.rlock()
 	if nl.hasFinished(tsi) {
-		n.p.invalmsghdlrf(w, r, "%s: duplicate %s from node %s", n.p.si, nl, tid)
+		n.p.invalmsghdlrsilent(w, r, fmt.Sprintf("%s: duplicate %s from node %s", n.p.si, nl, tid))
 		nl.runlock()
 		return
 	}
@@ -598,7 +637,7 @@ func (n *notifs) handleProgress(nl notifListener, tsi *cluster.Snode, data []byt
 }
 
 // PRECONDITION: `nl` should be under lock
-func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool, srcErr error) (done bool) {
+func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool, srcErr error) {
 	var (
 		srcs = nl.notifiers()
 	)
@@ -629,9 +668,7 @@ func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool
 		n.fin[nl.UUID()] = nl
 		n.fmu.Unlock()
 		n.del(nl)
-		done = true
 	}
-	return
 }
 
 //
@@ -658,49 +695,64 @@ func (n *notifs) housekeep() time.Duration {
 	}
 	n.RUnlock()
 	for _, nl := range tempn {
-		args := nl.bcastArgs()
-		// nodes to fetch stats from
-		args.nodes = []cluster.NodeMap{nl.notifiers()}
-		args.nodeCount = len(args.nodes[0])
-		args.skipNodes = nl.finNotifiers()
-		results := n.p.bcastToNodes(args)
-		for res := range results {
-			var (
-				err  error
-				done bool
-			)
-			if res.err == nil {
-				stats, finished, aborted, err := nl.unmarshalStats(res.bytes)
-				if err != nil {
-					glog.Errorf("%s: failed to parse stats from %s (err: %s)", n.p.si, res.si, err)
-					continue
-				}
-				nl.lock()
-				if finished {
-					done = n.markFinished(nl, res.si, aborted, nil)
-				} else {
-					nl.setStats(res.si.ID(), stats)
-				}
-				nl.unlock()
-			} else if res.status == http.StatusNotFound { // consider silent done at res.si
-				err = fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si)
-				nl.lock()
-				done = n.markFinished(nl, res.si, true, err) // NOTE: not-found at one ==> all done
-				nl.unlock()
-			} else if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si, res.err)
-			}
-
-			if done {
-				break
-			}
-		}
+		n.syncStats(nl, int64(notifsHousekeepT.Seconds()))
 	}
 	// cleanup temp cloned notifs
 	for u := range tempn {
 		delete(tempn, u)
 	}
 	return notifsHousekeepT
+}
+
+func (n *notifs) syncStats(nl notifListener, intervals ...int64 /*secs*/) {
+	nl.rlock()
+	uptoDateNodes, syncRequired := nl.nodesUptoDate(intervals...)
+	nl.runlock()
+	if !syncRequired {
+		return
+	}
+	args := nl.bcastArgs()
+	// nodes to fetch stats from
+	args.nodes = []cluster.NodeMap{nl.notifiers()}
+	args.skipNodes = uptoDateNodes
+	args.nodeCount = len(args.nodes[0]) - len(args.skipNodes)
+	results := n.p.bcastToNodes(args)
+	for res := range results {
+		if res.err == nil {
+			stats, finished, aborted, err := nl.unmarshalStats(res.bytes)
+			if err != nil {
+				glog.Errorf("%s: failed to parse stats from %s (err: %s)", n.p.si, res.si, err)
+				continue
+			}
+			nl.lock()
+			if finished {
+				n.markFinished(nl, res.si, aborted, nil)
+			}
+			nl.setStats(res.si.ID(), stats)
+			nl.unlock()
+		} else if res.status == http.StatusNotFound { // consider silent done at res.si
+			err := fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si)
+			nl.lock()
+			n.markFinished(nl, res.si, true, err) // NOTE: not-found at one ==> all done
+			nl.unlock()
+		} else if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si, res.err)
+		}
+	}
+}
+
+// Return stats from each node for a given UUID.
+func (n *notifs) queryStats(uuid string, intervals ...int64 /*seconds*/) (stats *sync.Map, exists bool) {
+	var (
+		nl notifListener
+	)
+	nl, exists = n.entry(uuid)
+	if !exists {
+		return
+	}
+	n.syncStats(nl, intervals...)
+	stats = nl.nodeStats()
+	return
 }
 
 func (n *notifs) getOwner(uuid string) (o string, exists bool) {
@@ -840,6 +892,8 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	}
 	if t.Type == cmn.ActQueryObjects {
 		n.nl = &notifListenerQuery{}
+	} else if isDLType(t.Type) {
+		n.nl = &notifDownloadBase{}
 	} else {
 		n.nl = &notifXactBase{}
 	}
@@ -848,6 +902,13 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 		return
 	}
 	return
+}
+
+func isDLType(t string) bool {
+	return t == string(downloader.DlTypeMulti) ||
+		t == string(downloader.DlTypeCloud) ||
+		t == string(downloader.DlTypeSingle) ||
+		t == string(downloader.DlTypeRange)
 }
 
 //

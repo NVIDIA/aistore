@@ -190,7 +190,8 @@ var _ = Describe("Notifications xaction test", func() {
 			// Handle fist set of stats
 			err := n.handleProgress(nl, targets[target1ID], cmn.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
-			statsXact, ok := nl.nodeStats()[target1ID].(*cmn.BaseXactStatsExt)
+			val, _ := nl.nodeStats().Load(target1ID)
+			statsXact, ok := val.(*cmn.BaseXactStatsExt)
 			Expect(ok).To(BeTrue())
 			Expect(statsXact.ObjCount()).To(BeEquivalentTo(initObjCount))
 			Expect(statsXact.BytesCount()).To(BeEquivalentTo(initByteCount))
@@ -198,7 +199,8 @@ var _ = Describe("Notifications xaction test", func() {
 			// Next a Finished notification with stats
 			err = n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
-			statsXact, ok = nl.nodeStats()[target1ID].(*cmn.BaseXactStatsExt)
+			val, _ = nl.nodeStats().Load(target1ID)
+			statsXact, ok = val.(*cmn.BaseXactStatsExt)
 			Expect(ok).To(BeTrue())
 			Expect(statsXact.ObjCount()).To(BeEquivalentTo(updatedObjCount))
 			Expect(statsXact.BytesCount()).To(BeEquivalentTo(updatedByteCount))

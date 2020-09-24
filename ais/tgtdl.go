@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -38,9 +39,11 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		debug.AssertNoErr(err)
 
 		var (
-			ctx  = context.Background()
-			uuid = r.URL.Query().Get(cmn.URLParamUUID)
-			dlb  = downloader.DlBody{}
+			ctx              = context.Background()
+			uuid             = r.URL.Query().Get(cmn.URLParamUUID)
+			dlb              = downloader.DlBody{}
+			intervalStr      = downloader.DownloadProgressInterval
+			progressInterval int64
 		)
 		debug.Assert(uuid != "")
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
@@ -51,6 +54,18 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		if err := jsoniter.Unmarshal(dlb.RawMessage, &dlBodyBase); err != nil {
 			return
 		}
+
+		if dlBodyBase.ProgressInterval != "" {
+			intervalStr = dlBodyBase.ProgressInterval
+		}
+
+		if dur, err := time.ParseDuration(intervalStr); err == nil {
+			progressInterval = int64(dur.Seconds())
+		} else {
+			t.invalmsghdlrf(w, r, "%s: invalid progress interval %q (err: %v)", t.si, intervalStr, err)
+			return
+		}
+
 		bck := cluster.NewBckEmbed(dlBodyBase.Bck)
 		if err := bck.Init(t.Bowner(), t.Snode()); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
@@ -72,11 +87,12 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		dlJob.AddNotif(&downloader.NotifDownload{
 			NotifBase: cmn.NotifBase{
-				When: cmn.UponProgress,
-				Ty:   notifDownload,
-				Dsts: []string{equalIC},
-				F:    t.callerNotifyFin,
-				P:    t.callerNotifyProgress,
+				When:     cmn.UponProgress,
+				Ty:       notifDownload,
+				Interval: progressInterval,
+				Dsts:     []string{equalIC},
+				F:        t.callerNotifyFin,
+				P:        t.callerNotifyProgress,
 			},
 		}, dlJob)
 		response, respErr, statusCode = downloaderXact.Download(dlJob)

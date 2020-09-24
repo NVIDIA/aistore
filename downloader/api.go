@@ -23,6 +23,8 @@ const (
 	DlTypeRange  DlType = "range"
 	DlTypeMulti  DlType = "multi"
 	DlTypeCloud  DlType = "cloud"
+
+	DownloadProgressInterval = "1s"
 )
 
 type (
@@ -193,10 +195,11 @@ type DlLimits struct {
 }
 
 type DlBase struct {
-	Description string   `json:"description"`
-	Bck         cmn.Bck  `json:"bucket"`
-	Timeout     string   `json:"timeout"`
-	Limits      DlLimits `json:"limits"`
+	Description      string   `json:"description"`
+	Bck              cmn.Bck  `json:"bucket"`
+	Timeout          string   `json:"timeout"`
+	ProgressInterval string   `json:"progress_interval"`
+	Limits           DlLimits `json:"limits"`
 }
 
 func (b *DlBase) Validate() error {
@@ -437,6 +440,6 @@ func (b *DlCloudBody) Describe() string {
 func (nd *NotifDownload) ToNotifMsg() cmn.NotifMsg {
 	msg := cmn.NotifMsg{Ty: int32(nd.Category())}
 	msg.UUID = nd.DlJob.ID()
-	msg.Data = cmn.MustMarshal(nd.DlJob.ActiveStats())
+	msg.Data = cmn.MustMarshal(*nd.DlJob.ActiveStats())
 	return msg
 }

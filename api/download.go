@@ -60,10 +60,16 @@ func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefi
 	return DownloadWithParam(baseParams, downloader.DlTypeCloud, dlBody)
 }
 
-func DownloadStatus(baseParams BaseParams, id string) (downloader.DlStatusResp, error) {
+func DownloadStatus(baseParams BaseParams, id string, onlyActive ...bool) (downloader.DlStatusResp, error) {
 	dlBody := downloader.DlAdminBody{
 		ID: id,
 	}
+
+	if len(onlyActive) > 0 {
+		// Status of only active downloader tasks
+		dlBody.OnlyActive = onlyActive[0]
+	}
+
 	baseParams.Method = http.MethodGet
 	return doDlStatusRequest(ReqParams{
 		BaseParams: baseParams,

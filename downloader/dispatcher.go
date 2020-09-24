@@ -158,8 +158,8 @@ func (d *dispatcher) cleanUpAborted(jobID string) {
 func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	defer func() {
 		d.waitFor(job)
-		job.cleanup()
 		d.cleanUpAborted(job.ID())
+		job.cleanup()
 	}()
 
 	if aborted := d.checkAborted(); aborted || d.checkAbortedJob(job) {
@@ -511,7 +511,7 @@ func (d *dispatcher) pending(reqID string) bool {
 
 func (d *dispatcher) waitFor(job DlJob) {
 	// PRECONDITION: all tasks should be dispatched.
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
 		if !d.pending(job.ID()) {
