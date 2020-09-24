@@ -324,8 +324,8 @@ var (
 		Usage: "determines how long ais target should wait for pod to become ready"}
 	suspendModeFlag = cli.StringFlag{Name: "mode",
 		Usage: "node suspension mode: start-maintenance, stop-maintenance, decommission"}
-	rebalanceFlag = cli.StringFlag{Name: "rebalance",
-		Usage: "start rebalance automatically after moving a node under maintenance if rebalance=on"}
+	noRebalanceFlag = cli.BoolFlag{Name: "no-rebalance",
+		Usage: "do not run rebalance before decommissioning a node from a cluster"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 

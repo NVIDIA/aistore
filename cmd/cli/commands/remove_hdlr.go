@@ -23,7 +23,7 @@ var (
 		subcmdRemoveObject: baseLstRngFlags,
 		subcmdRemoveNode: {
 			suspendModeFlag,
-			rebalanceFlag,
+			noRebalanceFlag,
 		},
 		subcmdRemoveDownload: {
 			allJobsFlag,
@@ -139,7 +139,15 @@ func removeNodeHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "daemon ID")
 	}
-	daemonID := c.Args().First()
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	sid := c.Args().First()
+	node := smap.GetNode(sid)
+	if node == nil {
+		return fmt.Errorf("node %q does not exist", sid)
+	}
 	mode := parseStrFlag(c, suspendModeFlag)
 	action := ""
 	if mode != "" {
@@ -147,21 +155,28 @@ func removeNodeHandler(c *cli.Context) (err error) {
 			return err
 		}
 	}
-	if action == cmn.ActDecomission && !flagIsSet(c, rebalanceFlag) {
-		return fmt.Errorf("flag %q requires flag %q", suspendModeFlag.Name, rebalanceFlag.Name)
-	}
+	doRebalance := !flagIsSet(c, noRebalanceFlag)
 	switch mode {
 	case "":
-		return clusterRemoveNode(c, daemonID)
+		return clusterRemoveNode(c, sid)
 	default:
-		err = api.Maintenance(defaultAPIParams, daemonID, action)
+		var id string
+		actValue := &cmn.ActValDecommision{DaemonID: sid, Rebalance: doRebalance}
+		id, err = api.Maintenance(defaultAPIParams, action, actValue)
 		if err != nil {
 			return err
 		}
+
 		if action == cmn.ActUnsuspend {
-			fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", daemonID)
+			fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", sid)
+		} else if action == cmn.ActDecommission && (node.IsProxy() || !doRebalance) {
+			fmt.Fprintf(c.App.Writer, "Node %q removed from the cluster\n", sid)
+		} else if action == cmn.ActSuspend {
+			fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", sid)
 		} else {
-			fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", daemonID)
+			fmt.Fprintf(c.App.Writer,
+				"Node %q is under maintenance\nStarted rebalance %q, use 'ais show xaction %s' to monitor progress\n",
+				sid, id, id)
 		}
 	}
 	return nil

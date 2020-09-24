@@ -42,8 +42,11 @@ func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
 		max    uint64
 		digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
 	)
-	for _, tsi := range smap.Tmap {
+	for tid, tsi := range smap.Tmap {
 		// Assumes that sinfo.idDigest is initialized
+		if _, suspended := smap.IsSuspended(tid); suspended {
+			continue
+		}
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
 		if cs >= max {
 			max = cs
@@ -107,9 +110,12 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 	digest := xxhash.ChecksumString64S(uname, cmn.MLCG32)
 	hlist := newHrwList(count)
 
-	for _, sinfo := range smap.Tmap {
-		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
-		hlist.add(cs, sinfo)
+	for tid, tsi := range smap.Tmap {
+		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
+		if _, suspended := smap.IsSuspended(tid); suspended {
+			continue
+		}
+		hlist.add(cs, tsi)
 	}
 	sis = hlist.get()
 	if count != cnt && len(sis) < count {
@@ -130,6 +136,9 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		if smap.NonElects.Contains(pid) {
 			continue
 		}
+		if _, suspended := smap.IsSuspended(pid); suspended {
+			continue
+		}
 		if psi.idDigest >= max {
 			max = psi.idDigest
 			pi = psi
@@ -148,6 +157,9 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 	)
 	for pid := range smap.IC {
 		psi := smap.GetProxy(pid)
+		if _, suspended := smap.IsSuspended(pid); suspended {
+			continue
+		}
 		cs := xoshiro256.Hash(psi.idDigest ^ digest)
 		if cs >= max {
 			max = cs
@@ -167,12 +179,15 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		max    uint64
 		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
 	)
-	for _, sinfo := range smap.Tmap {
+	for tid, tsi := range smap.Tmap {
+		if _, suspended := smap.IsSuspended(tid); suspended {
+			continue
+		}
 		// Assumes that sinfo.idDigest is initialized
-		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
+		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
 		if cs >= max {
 			max = cs
-			si = sinfo
+			si = tsi
 		}
 	}
 	if si == nil {

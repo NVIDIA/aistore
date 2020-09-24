@@ -35,6 +35,10 @@ type (
 		KeepOrig  bool   `json:"keep_original"`
 		Verbose   bool   `json:"verbose"`
 	}
+	ActValDecommision struct {
+		DaemonID  string `json:"sid"`
+		Rebalance bool   `json:"rebalance"`
+	}
 
 	// TODO: `UUID` should be merged into `ContinuationToken`.
 	// SelectMsg represents properties and options for listing objects.

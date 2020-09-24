@@ -3184,6 +3184,104 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, sid string) {
+	err := p.owner.smap.modify(
+		func(clone *smapX) error {
+			_, err := p.unregisterNode(clone, sid)
+			return err
+		},
+		func(clone *smapX) {
+			var (
+				aisMsg = p.newAisMsg(msg, clone, nil)
+				pairs  = []revsPair{{clone, aisMsg}}
+			)
+			_ = p.metasyncer.sync(pairs...)
+		},
+	)
+	if err != nil {
+		glog.Errorf("Failed to unregister %s: %v", sid, err)
+	}
+}
+
+func (p *proxyrunner) rebalanceAndRemove(smap *smapX, sid string) (wg *sync.WaitGroup, rebID xaction.RebID) {
+	rmdClone := p.owner.rmd.modify(
+		func(clone *rebMD) {
+			clone.inc()
+		},
+	)
+	msg := &cmn.ActionMsg{Action: cmn.ActRebalance}
+	aisMsg := p.newAisMsg(msg, nil, nil)
+	wg = p.metasyncer.sync(
+		revsPair{smap, aisMsg},
+		revsPair{rmdClone, aisMsg},
+	)
+
+	rebID = xaction.RebID(rmdClone.Version)
+	nl := xaction.NewXactNL(rebID.String(), &smap.Smap, smap.Tmap.Clone(), notifications.NotifXact, cmn.ActRebalance)
+	nl.SetOwner(equalIC)
+	nl.F = func(nl notifications.NotifListener, err error) {
+		if err != nil || nl.Aborted() {
+			glog.Errorf("Rebalance not finished, err: %v, aborted: %v", err, nl.Aborted())
+			return
+		}
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Rebalance %q finished. Removing node %q", rebID.String(), sid)
+		}
+
+		// Rebalance finished successfully, remove the node from the cluster
+		p.removeNode(msg, sid)
+	}
+	p.ic.registerEqual(regIC{smap: smap, nl: nl})
+	return
+}
+
+func (p *proxyrunner) suspendNode(si *cluster.Snode, stage int64) error {
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Suspending node %s", si)
+	}
+	return p.owner.smap.modify(
+		func(clone *smapX) error {
+			clone.suspendNode(si.ID(), stage)
+			return nil
+		},
+	)
+}
+
+func (p *proxyrunner) decommissionNode(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
+	var opts cmn.ActValDecommision
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Decommissioning node %s", si)
+	}
+	if si.IsTarget() {
+		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
+			return
+		}
+	}
+
+	// No extra actions at this moment for(works as a regular node removal):
+	//    - decommissioning a proxy
+	//    - decommissioning a target with rebalance=off
+	if si.IsProxy() || !opts.Rebalance {
+		p.removeNode(msg, si.ID())
+		return
+	}
+
+	if err = p.canStartRebalance(true /*skip config*/); err != nil {
+		return
+	}
+
+	// Suspend a node
+	if err = p.suspendNode(si, cmn.NodeStatusRemoval); err != nil {
+		return
+	}
+
+	// Run rebalance to move all the data from the suspended node to others
+	var wg *sync.WaitGroup
+	wg, rebID = p.rebalanceAndRemove(p.owner.smap.get(), si.ID())
+	wg.Wait()
+	return
+}
+
 func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
@@ -3318,45 +3416,46 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if result.err != nil {
 			p.invalmsghdlr(w, r, result.err.Error())
 		}
-	case cmn.ActSuspend, cmn.ActDecomission:
-		// TODO: Decomission must start rebalance and remove the node from Smap at the end.
+	case cmn.ActSuspend, cmn.ActDecommission:
 		var (
 			smap = p.owner.smap.get()
-			sid  string
+			opts cmn.ActValDecommision
 		)
-		if err := cmn.MorphMarshal(msg.Value, &sid); err != nil {
+		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		si := smap.GetNode(sid)
+		si := smap.GetNode(opts.DaemonID)
 		if si == nil {
-			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", sid, cmn.DoesNotExist)
+			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 			return
 		}
-		if _, ok := smap.IsSuspended(sid); ok {
-			p.invalmsghdlrf(w, r, "Node %q already in maintenance state", sid)
+		if _, ok := smap.IsSuspended(opts.DaemonID); ok {
+			p.invalmsghdlrf(w, r, "Node %q already in maintenance state", opts.DaemonID)
 			return
 		}
-		stage := int64(cmn.NodeStatusSuspended)
-		if msg.Action == cmn.ActDecomission {
-			stage = cmn.NodeStatusRemoval
+
+		var rebID xaction.RebID
+		if msg.Action == cmn.ActSuspend {
+			err = p.suspendNode(si, cmn.NodeStatusSuspended)
+		} else {
+			rebID, err = p.decommissionNode(msg, si)
 		}
-		if err := p.owner.smap.modify(func(clone *smapX) error {
-			clone.suspendNode(sid, stage)
-			return nil
-		}); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+		if err != nil {
+			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
+			return
 		}
+		w.Write([]byte(rebID.String()))
 	case cmn.ActUnsuspend:
 		var (
-			sid string
+			opts cmn.ActValDecommision
 		)
-		if err := cmn.MorphMarshal(msg.Value, &sid); err != nil {
+		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 		if err := p.owner.smap.modify(func(clone *smapX) error {
-			return clone.unsuspendNode(sid)
+			return clone.unsuspendNode(opts.DaemonID)
 		}); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}

@@ -155,18 +155,20 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 	})
 }
 
-func Maintenance(baseParams BaseParams, sid, action string) error {
+// Maintenance API
+//
+func Maintenance(baseParams BaseParams, action string, actValue *cmn.ActValDecommision) (id string, err error) {
 	msg := cmn.ActionMsg{
 		Action: action,
-		Value:  sid,
+		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut
-	err := DoHTTPRequest(ReqParams{
+	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
 		Body:       cmn.MustMarshal(msg),
-	})
-	return err
+	}, &id)
+	return id, err
 }
 
 func Health(baseParams BaseParams) error {

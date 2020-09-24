@@ -70,7 +70,7 @@ var (
 	suspendModes = map[string]string{
 		suspendModeStart:        cmn.ActSuspend,
 		suspendModeStop:         cmn.ActUnsuspend,
-		suspendModeDecommission: cmn.ActDecomission,
+		suspendModeDecommission: cmn.ActDecommission,
 	}
 )
 

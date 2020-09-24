@@ -76,9 +76,9 @@ const (
 	ActRecoverBck     = "recoverbck"
 	ActAttach         = "attach"
 	ActDetach         = "detach"
-	ActSuspend        = "suspend"     // put into maintenance state
-	ActDecomission    = "decomission" // start rebalance and remove node from Smap when it finishes
-	ActUnsuspend      = "unsuspend"   // cancel maintenance state
+	ActSuspend        = "suspend"      // put into maintenance state
+	ActDecommission   = "decommission" // start rebalance and remove node from Smap when it finishes
+	ActUnsuspend      = "unsuspend"    // cancel maintenance state
 	// IC
 	ActSendOwnershipTbl  = "ic-send-ownership-tbl"
 	ActListenToNotif     = "watch-xaction"
