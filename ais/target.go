@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
@@ -732,33 +732,50 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // httpobj* handlers //
 ///////////////////////
 
-// GET /v1/objects/bucket[+"/"+objName]
+// GET /v1/objects/<bucket-name>/<object-name>
+//
+// Initially validates if the request is internal request (either from proxy
+// or target) and calls getObject.
+//
 // Checks if the object exists locally (if not, downloads it) and sends it back
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
-	var (
-		query        = r.URL.Query()
-		ptime        = isRedirect(query)
-		config       = cmn.GCO.Get()
-		features     = config.Client.Features
-		isGFNRequest = cmn.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
-	)
-	// TODO: return TCP RST here and elsewhere
-	// TODO: etl.IsCaller() currently always true
-	if ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
-		if !etl.IsCaller(r.RemoteAddr) {
-			t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-				t.si, r.Method, r.RemoteAddr)
-			return
-		}
-	}
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objName := apiItems[0], apiItems[1]
-	started := time.Now()
+
+	var (
+		query    = r.URL.Query()
+		ptime    = isRedirect(query)
+		features = cmn.GCO.Get().Client.Features
+
+		bucket  = apiItems[0]
+		objName = apiItems[1]
+	)
+
+	if ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
+		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+			t.si, r.Method, r.RemoteAddr)
+		return
+	}
+
+	t.getObject(w, r, query, bucket, objName)
+}
+
+// getObject is main function to get the object. It doesn't check request origin,
+// so it must be done by the caller (if necessary).
+func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query url.Values, bucket, objName string) {
+	var (
+		ptime        = isRedirect(query)
+		config       = cmn.GCO.Get()
+		isGFNRequest = cmn.IsParseBool(query.Get(cmn.URLParamIsGFNRequest))
+		started      = time.Now()
+	)
+
+	// TODO: return TCP RST here and elsewhere
+
 	if ptime != "" {
 		if redelta := redirectLatency(started, ptime); redelta != 0 {
 			t.statsT.Add(stats.GetRedirLatency, redelta)
@@ -962,32 +979,42 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HEAD /v1/objects/bucket-name/object-name
+// HEAD /v1/objects/<bucket-name>/<object-name>
+//
+// Initially validates if the request is internal request (either from proxy
+// or target) and calls headObject.
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		features       = cmn.GCO.Get().Client.Features
-		query          = r.URL.Query()
-		checkExists    = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
-		checkExistsAny = cmn.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
-		errCode        int
-		exists         bool
-		silent         = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
+		features = cmn.GCO.Get().Client.Features
+		query    = r.URL.Query()
 	)
 	if isRedirect(query) == "" && !features.IsSet(cmn.FeatureDirectAccess) {
-		if !etl.IsCaller(r.RemoteAddr) {
-			t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
-				t.si, r.Method, r.RemoteAddr)
-			return
-		}
+		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+			t.si, r.Method, r.RemoteAddr)
+		return
 	}
 	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
+
 	var (
-		bucket, objName = apiItems[0], apiItems[1]
-		invalidHandler  = t.invalmsghdlr
-		hdr             = w.Header()
+		bucket  = apiItems[0]
+		objName = apiItems[1]
+	)
+
+	t.headObject(w, r, query, bucket, objName)
+}
+
+// headObject is main function to head the object. It doesn't check request origin,
+// so it must be done by the caller (if necessary).
+func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bucket, objName string) {
+	var (
+		invalidHandler = t.invalmsghdlr
+		hdr            = w.Header()
+		checkExists    = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
+		checkExistsAny = cmn.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
+		silent         = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
 	if silent {
 		invalidHandler = t.invalmsghdlrsilent
@@ -1017,7 +1044,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, lom, pid)
 	}
 
-	exists = err == nil
+	exists := err == nil
 
 	// * checkExists and checkExistsAny establish local presence of the object by looking up all mountpaths
 	// * checkExistsAny does it *even* if the object *may* not have local copies
@@ -1044,8 +1071,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		}
 		lom.ToHTTPHdr(hdr)
 	} else {
-		var objMeta cmn.SimpleKVs
-		objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(context.Background(), lom)
+		objMeta, err, errCode := t.Cloud(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: HEAD request failed, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)

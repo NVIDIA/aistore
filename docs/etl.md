@@ -121,7 +121,9 @@ metadata:
 (...)
 ```
 
-> NOTE: ETL container will have `AIS_TARGET_URL` environment variable set to the address of its corresponding target.
+> NOTE: ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
+> To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
+
 
 ## Examples
 

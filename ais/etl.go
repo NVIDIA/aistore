@@ -53,7 +53,11 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 			t.listETL(w, r)
 		case cmn.ETLLogs:
 			t.logsETL(w, r)
+		case cmn.ETLObject: // TODO: maybe it should be just a default
+			t.getObjectETL(w, r)
 		}
+	case r.Method == http.MethodHead:
+		t.headObjectETL(w, r)
 	case r.Method == http.MethodDelete:
 		t.stopETL(w, r)
 	default:
@@ -149,6 +153,56 @@ func (t *targetrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.writeJSON(w, r, logs, "logs-ETL")
+}
+
+// GET /v1/etl/objects/<secret>/<bucket-name>/<object-name>
+//
+// getObjectETL is the handler for the requests that come from the K8s Pods.
+// It validates the secret that was inject into the Pod during initialization
+// to ensure that the origin is indeed correct.
+func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.ETL, cmn.ETLObject)
+	if err != nil {
+		return
+	}
+
+	var (
+		secret  = apiItems[0]
+		bucket  = apiItems[1]
+		objName = apiItems[2]
+	)
+
+	if err := etl.CheckSecret(secret); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	t.getObject(w, r, r.URL.Query(), bucket, objName)
+}
+
+// HEAD /v1/etl/objects/<secret>/<bucket-name>/<object-name>
+//
+// headObjectETL is the handler for the requests that come from the K8s Pods.
+// It validates the secret that was inject into the Pod during initialization
+// to ensure that the origin is indeed correct.
+func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.ETL, cmn.ETLObject)
+	if err != nil {
+		return
+	}
+
+	var (
+		secret  = apiItems[0]
+		bucket  = apiItems[1]
+		objName = apiItems[2]
+	)
+
+	if err := etl.CheckSecret(secret); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	t.headObject(w, r, r.URL.Query(), bucket, objName)
 }
 
 ////////////////

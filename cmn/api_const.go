@@ -346,12 +346,13 @@ const (
 	GetTargetObjects = "objects"
 
 	// ETL
-	ETL      = "etl"
-	ETLInit  = Init
-	ETLBuild = "build"
-	ETLList  = List
-	ETLLogs  = "logs"
-	ETLStop  = Stop
+	ETL       = "etl"
+	ETLInit   = Init
+	ETLBuild  = "build"
+	ETLList   = List
+	ETLLogs   = "logs"
+	ETLObject = "object"
+	ETLStop   = Stop
 )
 
 // enum: compression

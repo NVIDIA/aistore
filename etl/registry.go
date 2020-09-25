@@ -31,13 +31,15 @@ type (
 	}
 )
 
-var reg *registry
+var (
+	reg       *registry
+	reqSecret string
+)
 
 func init() {
 	reg = &registry{byUUID: make(map[string]Communicator)}
+	reqSecret = cmn.RandString(10)
 }
-
-func IsCaller(_ string) bool { return true } // TODO: refine
 
 func (r *registry) put(uuid string, c Communicator) error {
 	cmn.Assert(uuid != "")
@@ -81,4 +83,11 @@ func (r *registry) list() []Info {
 	}
 	r.mtx.RUnlock()
 	return etls
+}
+
+func CheckSecret(secret string) error {
+	if secret != reqSecret {
+		return fmt.Errorf("unrecognized request source")
+	}
+	return nil
 }

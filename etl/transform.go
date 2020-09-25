@@ -452,7 +452,7 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
-			Value: t.Snode().URL(cmn.NetworkPublic),
+			Value: t.Snode().URL(cmn.NetworkPublic) + cmn.JoinWords(cmn.Version, cmn.ETL, cmn.ETLObject, reqSecret),
 		})
 		for k, v := range customEnv {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
@@ -461,6 +461,7 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 			})
 		}
 	}
+
 	for idx := range pod.Spec.InitContainers {
 		for k, v := range customEnv {
 			pod.Spec.InitContainers[idx].Env = append(pod.Spec.InitContainers[idx].Env, corev1.EnvVar{
