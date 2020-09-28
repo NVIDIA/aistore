@@ -5,6 +5,7 @@
 package downloader
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -327,11 +328,8 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error
 func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {
 	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
-		if err == errJobNotFound {
-			req.writeErrResp(fmt.Errorf("download job %q not found", req.id), http.StatusNotFound)
-			return nil, err
-		}
-		req.writeErrResp(err, http.StatusInternalServerError)
+		cmn.Assert(errors.Is(err, errJobNotFound))
+		req.writeErrResp(fmt.Errorf("download job %q not found", req.id), http.StatusNotFound)
 		return nil, err
 	}
 	return jInfo, nil

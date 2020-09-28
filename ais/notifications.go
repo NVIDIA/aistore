@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
@@ -386,9 +387,9 @@ func (nxb *notifXactBase) abortArgs() *bcastArgs {
 // notifDownloadBase //
 ///////////////////////
 
-func (nd *notifDownloadBase) unmarshalStats(rawMsg []byte) (stats interface{}, finished, aborted bool, err error) {
+func (nd *notifDownloadBase) unmarshalStats(data []byte) (stats interface{}, finished, aborted bool, err error) {
 	dlStatus := &downloader.DlStatusResp{}
-	if err = jsoniter.Unmarshal(rawMsg, dlStatus); err != nil {
+	if err = jsoniter.Unmarshal(data, dlStatus); err != nil {
 		return
 	}
 	stats = dlStatus
@@ -499,7 +500,7 @@ func (n *notifs) find(flt nlFilter) (nl notifListener, exists bool) {
 	return
 }
 
-// PRECONDITION: Lock for `nls` must be held
+// PRECONDITION: Lock for `nls` must be held.
 // returns a listener that matches the filter condition.
 // for finished xaction listeners, returns latest listener (i.e. having highest finish time)
 func _findNL(nls map[string]notifListener, flt nlFilter) (nl notifListener, exists bool) {
@@ -519,7 +520,7 @@ func _findNL(nls map[string]notifListener, flt nlFilter) (nl notifListener, exis
 	return
 }
 
-// verb /v1/notifs/{progress..finished}
+// verb /v1/notifs/[progress|finished]
 func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
 		notifMsg = &cmn.NotifMsg{}
@@ -585,13 +586,13 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		errMsg = errors.New(notifMsg.ErrMsg)
 	}
 
-	// Note: default case is not required - will reach here only for valid types
+	// NOTE: Default case is not required - will reach here only for valid types.
 	switch apiItems[0] {
 	// TODO: implement on Started notification
-	case cmn.Finished:
-		err = n.handleFinished(nl, tsi, notifMsg.Data, errMsg)
 	case cmn.Progress:
 		err = n.handleProgress(nl, tsi, notifMsg.Data, errMsg)
+	case cmn.Finished:
+		err = n.handleFinished(nl, tsi, notifMsg.Data, errMsg)
 	}
 
 	if err != nil {
@@ -599,49 +600,41 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (n *notifs) handleFinished(nl notifListener, tsi *cluster.Snode, rawMsg []byte, srcErr error) (err error) {
+func (n *notifs) handleProgress(nl notifListener, tsi *cluster.Snode, data []byte, srcErr error) error {
 	nl.lock()
 	defer nl.unlock()
-	var (
-		aborted bool
-		stats   interface{}
-	)
 
-	stats, _, aborted, err = nl.unmarshalStats(rawMsg)
-	if err != nil {
-		return
-	}
-
-	n.markFinished(nl, tsi, aborted, srcErr)
-	nl.setStats(tsi.ID(), stats)
-	return
-}
-
-func (n *notifs) handleProgress(nl notifListener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
-	var (
-		stats interface{}
-	)
-	stats, _, _, err = nl.unmarshalStats(data)
-	if err != nil {
-		return
-	}
-
-	nl.lock()
-	nl.setStats(tsi.ID(), stats)
 	if srcErr != nil {
 		nl.setErr(srcErr)
+	} else {
+		stats, _, _, err := nl.unmarshalStats(data)
+		if err != nil {
+			return err
+		}
+		nl.setStats(tsi.ID(), stats)
 	}
-	nl.unlock()
-
-	return
+	return nil
 }
 
-// PRECONDITION: `nl` should be under lock
-func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool, srcErr error) {
-	var (
-		srcs = nl.notifiers()
-	)
+func (n *notifs) handleFinished(nl notifListener, tsi *cluster.Snode, data []byte, srcErr error) error {
+	nl.lock()
+	defer nl.unlock()
 
+	if srcErr != nil {
+		n.markFinished(nl, tsi, false, srcErr)
+	} else {
+		stats, _, aborted, err := nl.unmarshalStats(data)
+		if err != nil {
+			return err
+		}
+		nl.setStats(tsi.ID(), stats)
+		n.markFinished(nl, tsi, aborted, srcErr)
+	}
+	return nil
+}
+
+// PRECONDITION: `nl` should be under lock.
+func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool, srcErr error) {
 	nl.markFinished(tsi)
 
 	if aborted {
@@ -662,7 +655,7 @@ func (n *notifs) markFinished(nl notifListener, tsi *cluster.Snode, aborted bool
 		nl.setErr(srcErr)
 	}
 
-	if nl.finCount() == len(srcs) || aborted {
+	if nl.finCount() == len(nl.notifiers()) || aborted {
 		nl.callback(nl, nil, time.Now().UnixNano())
 		n.fmu.Lock()
 		n.fin[nl.UUID()] = nl
@@ -711,11 +704,13 @@ func (n *notifs) syncStats(nl notifListener, intervals ...int64 /*secs*/) {
 	if !syncRequired {
 		return
 	}
+
 	args := nl.bcastArgs()
-	// nodes to fetch stats from
-	args.nodes = []cluster.NodeMap{nl.notifiers()}
+	args.nodes = []cluster.NodeMap{nl.notifiers()} // Nodes to fetch stats from.
 	args.skipNodes = uptoDateNodes
 	args.nodeCount = len(args.nodes[0]) - len(args.skipNodes)
+	debug.Assert(args.nodeCount > 0) // Ensure that there is at least one node to fetch.
+
 	results := n.p.bcastToNodes(args)
 	for res := range results {
 		if res.err == nil {

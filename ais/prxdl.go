@@ -35,15 +35,8 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		if stats, exists := p.notifs.queryStats(msg.ID); exists {
 			var resp *downloader.DlStatusResp
 			stats.Range(func(_, status interface{}) bool {
-				dlStatus, ok := status.(*downloader.DlStatusResp)
-				cmn.Assert(ok)
-				if resp == nil {
-					resp = &downloader.DlStatusResp{}
-					err := cmn.MorphMarshal(dlStatus, resp)
-					cmn.AssertNoErr(err)
-					return true
-				}
-				resp.Aggregate(*dlStatus)
+				dlStatus := status.(*downloader.DlStatusResp)
+				resp = resp.Aggregate(*dlStatus)
 				return true
 			})
 
@@ -51,10 +44,15 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 			return respJSON, http.StatusOK, nil
 		}
 	}
-	body := cmn.MustMarshal(msg)
-	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
-	respCnt := len(responses)
+
+	var (
+		body      = cmn.MustMarshal(msg)
+		responses = p.broadcastDownloadRequest(method, path, body, url.Values{})
+		respCnt   = len(responses)
+	)
+
 	cmn.Assert(respCnt > 0)
+
 	validResponses := make([]callResult, 0, respCnt)
 	for resp := range responses {
 		if resp.status == http.StatusOK {
@@ -79,8 +77,9 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 			aggregate := make(map[string]*downloader.DlJobInfo)
 			for _, resp := range validResponses {
 				var parsedResp map[string]*downloader.DlJobInfo
-				err := jsoniter.Unmarshal(resp.bytes, &parsedResp)
-				cmn.AssertNoErr(err)
+				if err := jsoniter.Unmarshal(resp.bytes, &parsedResp); err != nil {
+					return nil, http.StatusInternalServerError, err
+				}
 				for k, v := range parsedResp {
 					if oldMetric, ok := aggregate[k]; ok {
 						v.Aggregate(oldMetric)
@@ -100,16 +99,13 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		var stResp *downloader.DlStatusResp
 		for _, resp := range validResponses {
 			status := downloader.DlStatusResp{}
-			err := jsoniter.Unmarshal(resp.bytes, &status)
-			cmn.AssertNoErr(err)
-			if stResp == nil {
-				stResp = &status
-				continue
+			if err := jsoniter.Unmarshal(resp.bytes, &status); err != nil {
+				return nil, http.StatusInternalServerError, err
 			}
-			stResp.Aggregate(status)
+			stResp = stResp.Aggregate(status)
 		}
-		respJSON := cmn.MustMarshal(stResp)
-		return respJSON, http.StatusOK, nil
+		body := cmn.MustMarshal(stResp)
+		return body, http.StatusOK, nil
 	case http.MethodDelete:
 		res := validResponses[0]
 		return res.bytes, res.status, res.err

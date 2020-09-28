@@ -182,11 +182,19 @@ func (d DlJobInfos) Swap(i, j int) {
 	d[i], d[j] = d[j], d[i]
 }
 
-func (d *DlStatusResp) Aggregate(rhs DlStatusResp) {
+func (d *DlStatusResp) Aggregate(rhs DlStatusResp) *DlStatusResp {
+	if d == nil {
+		r := DlStatusResp{}
+		err := cmn.MorphMarshal(rhs, &r)
+		cmn.AssertNoErr(err)
+		return &r
+	}
+
 	d.DlJobInfo.Aggregate(&rhs.DlJobInfo)
 	d.CurrentTasks = append(d.CurrentTasks, rhs.CurrentTasks...)
 	d.FinishedTasks = append(d.FinishedTasks, rhs.FinishedTasks...)
 	d.Errs = append(d.Errs, rhs.Errs...)
+	return d
 }
 
 type DlLimits struct {
@@ -438,8 +446,15 @@ func (b *DlCloudBody) Describe() string {
 //
 
 func (nd *NotifDownload) ToNotifMsg() cmn.NotifMsg {
-	msg := cmn.NotifMsg{Ty: int32(nd.Category())}
-	msg.UUID = nd.DlJob.ID()
-	msg.Data = cmn.MustMarshal(*nd.DlJob.ActiveStats())
+	msg := cmn.NotifMsg{
+		UUID: nd.DlJob.ID(),
+		Ty:   int32(nd.Category()),
+	}
+	stats, err := nd.DlJob.ActiveStats()
+	if err != nil {
+		msg.ErrMsg = err.Error()
+	} else {
+		msg.Data = cmn.MustMarshal(stats)
+	}
 	return msg
 }

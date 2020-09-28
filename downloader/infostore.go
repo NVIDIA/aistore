@@ -119,6 +119,7 @@ func (is *infoStore) markFinished(id string) {
 	jInfo, err := is.getJob(id)
 	cmn.AssertNoErr(err)
 	jInfo.FinishedTime.Store(time.Now())
+	cmn.Assert(jInfo.valid())
 }
 
 func (is *infoStore) setAborted(id string) {

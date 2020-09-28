@@ -145,7 +145,7 @@ func downloaderCompleted(t *testing.T, targetID string, targetsStats api.NodesXa
 		}
 	}
 
-	tassert.Fatalf(t, exists, "target %s not found in downloader stats", targetID)
+	tassert.Fatalf(t, exists, "Target %s not found in downloader stats", targetID)
 	return true
 }
 
@@ -156,7 +156,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 		timeout = timeouts[0]
 	}
 
-	tutils.Logf("waiting %s for downloader to finish\n", timeout)
+	tutils.Logf("Waiting %s for downloader to finish\n", timeout)
 	time.Sleep(time.Second * 2)
 
 	xactArgs := api.XactReqArgs{Kind: cmn.ActDownload}
@@ -166,7 +166,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams api.BaseParams, targetID
 		tassert.CheckFatal(t, err)
 
 		if downloaderCompleted(t, targetID, downloaderStats) {
-			tutils.Logf("downloader has finished\n")
+			tutils.Logf("Downloader has finished\n")
 			return
 		}
 

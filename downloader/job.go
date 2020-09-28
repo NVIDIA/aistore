@@ -43,7 +43,7 @@ type (
 		Bck() cmn.Bck
 		Description() string
 		Timeout() time.Duration
-		ActiveStats() *DlStatusResp
+		ActiveStats() (*DlStatusResp, error)
 
 		Notif() cmn.Notif // notifications
 		AddNotif(n cmn.Notif, job DlJob)
@@ -154,9 +154,12 @@ func (j *baseDlJob) AddNotif(n cmn.Notif, job DlJob) {
 	}
 }
 
-func (j *baseDlJob) ActiveStats() *DlStatusResp {
-	resp, _, _ := j.dlXact.JobStatus(j.ID(), true)
-	return resp.(*DlStatusResp)
+func (j *baseDlJob) ActiveStats() (*DlStatusResp, error) {
+	resp, err, _ := j.dlXact.JobStatus(j.ID(), true)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*DlStatusResp), nil
 }
 func (j *baseDlJob) checkObj(string) bool  { cmn.Assert(false); return false }
 func (j *baseDlJob) throttler() *throttler { return j.t }
@@ -434,4 +437,15 @@ func (d *downloadJobInfo) ToDlJobInfo() DlJobInfo {
 		StartedTime:   d.StartedTime,
 		FinishedTime:  d.FinishedTime.Load(),
 	}
+}
+
+// Used for debugging purposes to ensure integrity of the struct.
+func (d *downloadJobInfo) valid() bool {
+	if d.Aborted.Load() {
+		return true
+	}
+	if !d.AllDispatched.Load() {
+		return true
+	}
+	return d.ScheduledCnt.Load() == d.FinishedCnt.Load()+d.ErrorCnt.Load()
 }

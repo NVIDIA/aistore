@@ -64,8 +64,15 @@ func (j *jogger) jog() {
 
 		j.mtx.Lock()
 		if j.stopAgent {
+			// Jogger has been stopped so we must mark task as failed. We do not
+			// `break` here because we want to drain the queue, otherwise some
+			// of the tasks may be in the queue and therefore the finished
+			// counter won't be correct.
+			t.job.throttler().release()
+			t.markFailed(internalErrorMsg)
+
 			j.mtx.Unlock()
-			break
+			continue
 		}
 		j.task = t
 		j.mtx.Unlock()
@@ -86,14 +93,14 @@ func (j *jogger) jog() {
 	j.terminateCh.Close()
 }
 
-// Stop terminates the jogger
+// stop terminates the jogger and waits for it to finish.
 func (j *jogger) stop() {
 	glog.Infof("Stopping jogger for mpath: %s", j.mpath)
 
 	j.mtx.Lock()
 	j.stopAgent = true
 	if j.task != nil {
-		j.task.markFailed(internalErrorMsg)
+		j.task.cancel() // Stops running task (cancels download).
 	}
 	j.mtx.Unlock()
 	j.q.close()

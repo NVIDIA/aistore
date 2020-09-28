@@ -88,8 +88,7 @@ Loop:
 				cmn.Assertf(false, "%v; %v", req, req.action)
 			}
 		case <-ctx.Done():
-			d.stop()
-			return group.Wait()
+			break Loop
 		case job := <-d.dispatchDownloadCh:
 			// Start dispatching each job in new goroutine to make sure that
 			// all joggers are busy downloading the tasks (jobs with limits
@@ -109,7 +108,7 @@ Loop:
 		}
 	}
 	d.stop()
-	return
+	return group.Wait()
 }
 
 // stop running joggers
@@ -313,6 +312,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 				return ok
 			}
 			if !ok {
+				dlStore.setAborted(job.ID())
 				return false
 			}
 		case DiffResolverSend:
@@ -437,7 +437,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 	)
 
 	jInfo, err := d.parent.checkJob(req)
-	if err != nil || jInfo == nil {
+	if err != nil {
 		return
 	}
 
