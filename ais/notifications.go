@@ -252,37 +252,39 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (n *notifs) handleProgress(nl notifications.NotifListener, tsi *cluster.Snode, data []byte, srcErr error) error {
+func (n *notifs) handleProgress(nl notifications.NotifListener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
 	nl.Lock()
 	defer nl.Unlock()
 
 	if srcErr != nil {
 		nl.SetErr(srcErr)
-	} else {
+	}
+
+	if data != nil {
 		stats, _, _, err := nl.UnmarshalStats(data)
-		if err != nil {
-			return err
-		}
+		debug.AssertNoErr(err)
 		nl.SetStats(tsi.ID(), stats)
 	}
-	return nil
+	return
 }
 
-func (n *notifs) handleFinished(nl notifications.NotifListener, tsi *cluster.Snode, data []byte, srcErr error) error {
+func (n *notifs) handleFinished(nl notifications.NotifListener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
+	var (
+		stats   interface{}
+		aborted bool
+	)
+
 	nl.Lock()
 	defer nl.Unlock()
 
-	if srcErr != nil {
-		n.markFinished(nl, tsi, false, srcErr)
-	} else {
-		stats, _, aborted, err := nl.UnmarshalStats(data)
-		if err != nil {
-			return err
-		}
+	if data != nil {
+		// NOTE: data can either be `nil` or a valid encoded stats
+		stats, _, aborted, err = nl.UnmarshalStats(data)
+		debug.AssertNoErr(err)
 		nl.SetStats(tsi.ID(), stats)
-		n.markFinished(nl, tsi, aborted, srcErr)
 	}
-	return nil
+	n.markFinished(nl, tsi, aborted, srcErr)
+	return
 }
 
 // PRECONDITION: `nl` should be under lock.
