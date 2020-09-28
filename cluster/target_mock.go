@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dbdriver"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -53,7 +52,6 @@ func (*TargetMock) GetCold(_ context.Context, _ *LOM, _ bool) (error, int) { ret
 func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)          { return nil, nil }
 func (*TargetMock) SendTo(_ *LOM, _ SendToParams) error                    { return nil }
 func (*TargetMock) DB() dbdriver.Driver                                    { return nil }
-func (*TargetMock) FSPRG() fs.PathRunGroup                                 { return nil }
 func (*TargetMock) Cloud(_ *Bck) CloudProvider                             { return nil }
 func (*TargetMock) StartTime() time.Time                                   { return time.Now() }
 func (*TargetMock) GFN(_ GFNType) GFN                                      { return nil }

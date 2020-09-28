@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/demand"
 )
@@ -211,22 +210,11 @@ func (pr *progressReader) Close() error {
 
 // ============================= Downloader ====================================
 
-var (
-	// interface guard
-	_ fs.PathRunner = &Downloader{}
-)
-
 func (d *Downloader) Name() string {
 	i := strconv.FormatInt(instance.Load(), 10)
 	return "downloader" + i
 }
-func (d *Downloader) IsMountpathXact() bool        { return true }
-func (d *Downloader) ReqAddMountpath(mpath string) { d.dispatcher.mpathReqCh <- fs.MountpathAdd(mpath) }
-func (d *Downloader) ReqRemoveMountpath(mpath string) {
-	d.dispatcher.mpathReqCh <- fs.MountpathRem(mpath)
-}
-func (d *Downloader) ReqEnableMountpath(_ string)  {}
-func (d *Downloader) ReqDisableMountpath(_ string) {}
+func (d *Downloader) IsMountpathXact() bool { return true }
 
 func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{
@@ -243,7 +231,6 @@ func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 
 func (d *Downloader) Run() error {
 	glog.Infof("starting %s", d.Name())
-	d.t.FSPRG().Reg(d)
 	err := d.dispatcher.run()
 	d.stop(err)
 	return nil
@@ -251,12 +238,12 @@ func (d *Downloader) Run() error {
 
 // stop terminates the downloader and all dependent entities.
 func (d *Downloader) stop(err error) {
-	d.t.FSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
 	d.Finish()
-	glog.Infof("stopped %s", d.Name())
 	if err != nil {
 		glog.Errorf("stopping %s, err: %v", d.Name(), err)
+	} else {
+		glog.Infof("stopped %s", d.Name())
 	}
 }
 

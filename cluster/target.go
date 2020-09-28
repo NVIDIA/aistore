@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dbdriver"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
@@ -135,7 +134,6 @@ type Target interface {
 	RunLRU(id string, force bool, bcks ...cmn.Bck)
 
 	// Getting other interfaces.
-	FSPRG() fs.PathRunGroup
 	DB() dbdriver.Driver
 	GFN(gfnType GFNType) GFN
 	XactRegistry() XactRegistry

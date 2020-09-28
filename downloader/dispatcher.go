@@ -32,7 +32,6 @@ type (
 
 		adminCh            chan *request
 		dispatchDownloadCh chan DlJob
-		mpathReqCh         chan fs.ChangeReq
 
 		stopCh *cmn.StopCh
 		sync.RWMutex
@@ -46,7 +45,6 @@ func newDispatcher(parent *Downloader) *dispatcher {
 		joggers: make(map[string]*jogger, 8),
 
 		dispatchDownloadCh: make(chan DlJob, jobsChSize),
-		mpathReqCh:         make(chan fs.ChangeReq, 1),
 
 		stopCh:   cmn.NewStopCh(),
 		abortJob: make(map[string]*cmn.StopCh, jobsChSize),
@@ -89,13 +87,9 @@ Loop:
 			default:
 				cmn.Assertf(false, "%v; %v", req, req.action)
 			}
-		case req := <-d.mpathReqCh:
-			err = fmt.Errorf("mountpaths have changed when downloader was running; %s: %s; aborting", req.Action, req.Path)
-			break Loop
 		case <-ctx.Done():
 			d.stop()
-			group.Wait()
-			return
+			return group.Wait()
 		case job := <-d.dispatchDownloadCh:
 			// Start dispatching each job in new goroutine to make sure that
 			// all joggers are busy downloading the tasks (jobs with limits

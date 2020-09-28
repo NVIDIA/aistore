@@ -40,7 +40,6 @@ var _ cluster.Target = &targetrunner{}
 func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
 func (t *targetrunner) MMSA() *memsys.MMSA          { return t.gmm }
 func (t *targetrunner) SmallMMSA() *memsys.MMSA     { return t.smm }
-func (t *targetrunner) FSPRG() fs.PathRunGroup      { return &t.fsprg }
 func (t *targetrunner) DB() dbdriver.Driver         { return t.dbDriver }
 
 func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
