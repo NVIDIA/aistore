@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/stats/statsd"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -114,7 +115,7 @@ type (
 	}
 
 	RebalanceTargetStats struct {
-		cmn.BaseXactStats
+		xaction.BaseXactStats
 		Ext ExtRebalanceStats `json:"ext"`
 	}
 
@@ -143,10 +144,10 @@ type (
 
 // interface guard
 var (
-	_ Tracker       = &statsRunner{}
-	_ Tracker       = &Prunner{}
-	_ Tracker       = &Trunner{}
-	_ cmn.XactStats = &RebalanceTargetStats{}
+	_ Tracker           = &statsRunner{}
+	_ Tracker           = &Prunner{}
+	_ Tracker           = &Trunner{}
+	_ cluster.XactStats = &RebalanceTargetStats{}
 )
 
 //

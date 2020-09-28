@@ -23,7 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 // runners
@@ -252,7 +252,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	}
 
 	daemon.rg.add(hk.DefaultHK, xhk)
-	xaction.Init()
+	registry.Init()
 	if daemon.cli.role == cmn.Proxy {
 		rmain = initProxy()
 	} else {

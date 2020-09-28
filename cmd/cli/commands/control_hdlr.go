@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v2"
@@ -131,16 +132,16 @@ func xactionCmds() cli.Commands {
 	splCmdKinds.Add(cmn.ActPrefetch, cmn.ActECEncode, cmn.ActMakeNCopies, cmn.ActLRU)
 
 	startable := listXactions(true)
-	for _, xaction := range startable {
-		if splCmdKinds.Contains(xaction) {
+	for _, xact := range startable {
+		if splCmdKinds.Contains(xact) {
 			continue
 		}
 		cmd := cli.Command{
-			Name:   xaction,
-			Usage:  fmt.Sprintf("start %s", xaction),
+			Name:   xact,
+			Usage:  fmt.Sprintf("start %s", xact),
 			Action: startXactionHandler,
 		}
-		if cmn.IsXactTypeBck(xaction) {
+		if xaction.IsXactTypeBck(xact) {
 			cmd.ArgsUsage = bucketArgument
 			cmd.BashComplete = bucketCompletions()
 		}
@@ -151,7 +152,7 @@ func xactionCmds() cli.Commands {
 
 func startXactionHandler(c *cli.Context) (err error) {
 	xactKind := c.Command.Name
-	if cmn.IsXactTypeBck(xactKind) && c.NArg() == 0 {
+	if xaction.IsXactTypeBck(xactKind) && c.NArg() == 0 {
 		return missingArgumentsError(c, bucketArgument)
 	}
 

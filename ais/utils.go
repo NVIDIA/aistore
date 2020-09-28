@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 //
@@ -211,7 +211,7 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 	if !nprops.EC.Enabled {
 		if bprops.EC.Enabled {
 			// kill running ec-encode xact if it is active
-			xaction.Registry.DoAbort(cmn.ActECEncode, bck)
+			registry.Registry.DoAbort(cmn.ActECEncode, bck)
 		}
 		return false
 	}

@@ -1,8 +1,8 @@
-// Package xaction provides core functionality for the AIStore extended actions.
+// Package registry provides core functionality for the AIStore extended actions registry.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package registry
 
 import (
 	"context"
@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
+	"github.com/NVIDIA/aistore/xaction"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -46,8 +47,8 @@ func (e *bckListTaskEntry) Start(bck cmn.Bck) error {
 	return nil
 }
 
-func (e *bckListTaskEntry) Kind() string  { return cmn.ActListObjects }
-func (e *bckListTaskEntry) Get() cmn.Xact { return e.xact }
+func (e *bckListTaskEntry) Kind() string      { return cmn.ActListObjects }
+func (e *bckListTaskEntry) Get() cluster.Xact { return e.xact }
 
 //
 // bckSummaryTaskEntry
@@ -63,7 +64,7 @@ type bckSummaryTaskEntry struct {
 
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckSummaryTask{
-		XactBase: *cmn.NewXactBaseBck(e.uuid, cmn.ActSummaryBucket, bck),
+		XactBase: *xaction.NewXactBaseBck(e.uuid, cmn.ActSummaryBucket, bck),
 		t:        e.t,
 		msg:      e.msg,
 		ctx:      e.ctx,
@@ -73,8 +74,8 @@ func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	return nil
 }
 
-func (e *bckSummaryTaskEntry) Kind() string  { return cmn.ActSummaryBucket }
-func (e *bckSummaryTaskEntry) Get() cmn.Xact { return e.xact }
+func (e *bckSummaryTaskEntry) Kind() string      { return cmn.ActSummaryBucket }
+func (e *bckSummaryTaskEntry) Get() cluster.Xact { return e.xact }
 
 //
 // bckSummaryTask

@@ -14,7 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 const (
@@ -139,7 +140,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 		glog.Infoln("Already in primary state")
 		return
 	}
-	xele := xaction.Registry.RenewElection()
+	xele := registry.Registry.RenewElection()
 	if xele == nil {
 		return
 	}
@@ -148,7 +149,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	xele.Finish()
 }
 
-func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact *xaction.Election) {
+func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact *runners.Election) {
 	var (
 		err    = context.DeadlineExceeded
 		config = cmn.GCO.Get()
@@ -189,7 +190,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */)
 }
 
-func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *xaction.Election) (winner bool, errors map[string]bool) {
+func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *runners.Election) (winner bool, errors map[string]bool) {
 	// Simple Majority Vote
 	resch := p.requestVotes(vr)
 	errors = make(map[string]bool)

@@ -33,7 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
@@ -771,15 +771,15 @@ func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte, kind string)
 	_ = h.bcastToNodes(&args)
 }
 
-func (h *httprunner) callerNotifyFin(n cmn.Notif, err error) {
+func (h *httprunner) callerNotifyFin(n cluster.Notif, err error) {
 	h.callerNotify(n, err, cmn.Finished)
 }
 
-func (h *httprunner) callerNotifyProgress(n cmn.Notif, err error) {
+func (h *httprunner) callerNotifyProgress(n cluster.Notif, err error) {
 	h.callerNotify(n, err, cmn.Progress)
 }
 
-func (h *httprunner) callerNotify(n cmn.Notif, err error, kind string) {
+func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 	cmn.Assert(kind == cmn.Progress || kind == cmn.Finished)
 	msg := n.ToNotifMsg()
 	if err != nil {
@@ -791,7 +791,7 @@ func (h *httprunner) callerNotify(n cmn.Notif, err error, kind string) {
 }
 
 // TODO: optimize avoid allocating a new NodeMap
-func (h *httprunner) notifDst(notif cmn.Notif) cluster.NodeMap {
+func (h *httprunner) notifDst(notif cluster.Notif) cluster.NodeMap {
 	var (
 		smap  = h.owner.smap.get()
 		nodes = make(cluster.NodeMap)
@@ -1100,7 +1100,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatBMD:
 		body = h.owner.bmd.get()
 	case cmn.GetWhatSmapVote:
-		xact := xaction.Registry.GetXactRunning(cmn.ActElection)
+		xact := registry.Registry.GetXactRunning(cmn.ActElection)
 		msg := SmapVoteMsg{VoteInProgress: xact != nil, Smap: h.owner.smap.get(), BucketMD: h.owner.bmd.get()}
 		body = msg
 	case cmn.GetWhatSnode:

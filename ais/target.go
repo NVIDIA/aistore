@@ -31,10 +31,13 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/runners"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -275,9 +278,9 @@ func (t *targetrunner) Run() error {
 	}
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
 	t.initRecvHandlers()
-	ec.Init(t, xaction.Registry)
+	ec.Init(t, registry.Registry)
 
-	marked := xaction.GetResilverMarked()
+	marked := registry.GetResilverMarked()
 	if marked.Interrupted {
 		go func() {
 			glog.Infoln("resuming resilver...")
@@ -366,7 +369,7 @@ func (t *targetrunner) initRecvHandlers() {
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.GetRunName(), err)
-	xaction.Registry.AbortAll()
+	registry.Registry.AbortAll()
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
 	}
@@ -513,7 +516,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
 		)
-		args := &xaction.DeletePrefetchArgs{
+		args := &runners.DeletePrefetchArgs{
 			Ctx:   context.Background(),
 			UUID:  msg.UUID,
 			Evict: msg.Action == cmn.ActEvictObjects,
@@ -526,16 +529,16 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
 			return
 		}
-		xact, err := xaction.Registry.RenewEvictDelete(t, bck, args)
+		xact, err := registry.Registry.RenewEvictDelete(t, bck, args)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 
-		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{
-				When: cmn.UponTerm,
-				Ty:   notifXact,
+		xact.AddNotif(&xaction.NotifXact{
+			NotifBase: notifications.NotifBase{
+				When: cluster.UponTerm,
+				Ty:   notifications.NotifXact,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},
@@ -605,10 +608,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		var (
 			err      error
-			xact     *xaction.Prefetch
+			xact     *runners.Prefetch
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
-			args     = &xaction.DeletePrefetchArgs{Ctx: context.Background()}
+			args     = &runners.DeletePrefetchArgs{Ctx: context.Background()}
 		)
 		if err = cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
@@ -619,7 +622,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		args.UUID = msg.UUID
-		xact, err = xaction.Registry.RenewPrefetch(t, bck, args)
+		xact, err = registry.Registry.RenewPrefetch(t, bck, args)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -1324,12 +1327,12 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		return
 	}
 	for i := 0; i < retries; i++ {
-		xputlrep := xaction.Registry.RenewPutMirror(lom)
+		xputlrep := registry.Registry.RenewPutMirror(lom)
 		if xputlrep == nil {
 			return
 		}
 		err = xputlrep.Repl(lom)
-		if cmn.IsErrXactExpired(err) {
+		if xaction.IsErrXactExpired(err) {
 			break
 		}
 		// retry upon race vs (just finished/timed_out)
@@ -1498,7 +1501,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 			glog.Infof("%s: promote %+v", t.si, promoteArgs)
 		}
 		var xact *mirror.XactDirPromote
-		xact, err = xaction.Registry.RenewDirPromote(srcFQN, bck, t, &promoteArgs)
+		xact, err = registry.Registry.RenewDirPromote(srcFQN, bck, t, &promoteArgs)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -1544,7 +1547,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	getfshealthchecker().OnErr(filepath)
 }
 
-func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...cmn.Notif) {
+func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...cluster.Notif) {
 	if id == "" {
 		id = cmn.GenUUID()
 		t.registerIC(xactRegMsg{
@@ -1554,4 +1557,8 @@ func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...
 		})
 	}
 	t.rebManager.RunResilver(id, skipGlobMisplaced /*skipGlobMisplaced*/, notifs...)
+}
+
+func (t *targetrunner) AbortAllXacts(tys ...string) {
+	registry.Registry.AbortAll(tys...)
 }

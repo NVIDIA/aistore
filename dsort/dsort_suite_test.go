@@ -11,13 +11,13 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 func TestDSort(t *testing.T) {
-	xaction.Init()
+	registry.Init()
 	RegisterFailHandler(Fail)
 	go hk.DefaultHK.Run()
 	RunSpecs(t, fmt.Sprintf("%s Suite", cmn.DSortName))

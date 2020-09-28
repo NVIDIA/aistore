@@ -15,18 +15,19 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 type (
 	ObjectsListingXact struct {
-		cmn.XactBase // ID() serves as well as a query handle
-		t            cluster.Target
-		ctx          context.Context
-		msg          *cmn.SelectMsg
-		timer        *time.Timer
-		mtx          sync.Mutex
-		buff         []*cmn.BucketEntry
-		fetchingDone bool
+		xaction.XactBase // ID() serves as well as a query handle
+		t                cluster.Target
+		ctx              context.Context
+		msg              *cmn.SelectMsg
+		timer            *time.Timer
+		mtx              sync.Mutex
+		buff             []*cmn.BucketEntry
+		fetchingDone     bool
 
 		query               *ObjectsQuery
 		resultCh            chan *Result
@@ -47,7 +48,7 @@ func NewObjectsListing(ctx context.Context, t cluster.Target, query *ObjectsQuer
 	cmn.Assert(query.BckSource.Bck != nil)
 	cmn.Assert(msg.UUID != "")
 	return &ObjectsListingXact{
-		XactBase: *cmn.NewXactBaseBck(msg.UUID, cmn.ActQueryObjects, query.BckSource.Bck.Bck),
+		XactBase: *xaction.NewXactBaseBck(msg.UUID, cmn.ActQueryObjects, query.BckSource.Bck.Bck),
 		t:        t,
 		ctx:      ctx,
 		msg:      msg,

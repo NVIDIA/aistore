@@ -14,18 +14,19 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 type (
 	XactBck interface {
-		cmn.Xact
+		cluster.Xact
 		DoneCh() chan struct{}
 		Target() cluster.Target
 		Mpathers() map[string]mpather
 	}
 	xactBckBase struct {
 		// implements cmn.Xact and cmn.Runner interfaces
-		cmn.XactBase
+		xaction.XactBase
 		// runtime
 		doneCh   chan struct{}
 		mpathers map[string]mpather
@@ -49,7 +50,7 @@ type (
 )
 
 func newXactBckBase(id, kind string, bck cmn.Bck, t cluster.Target) *xactBckBase {
-	return &xactBckBase{XactBase: *cmn.NewXactBaseBck(id, kind, bck), t: t}
+	return &xactBckBase{XactBase: *xaction.NewXactBaseBck(id, kind, bck), t: t}
 }
 
 //

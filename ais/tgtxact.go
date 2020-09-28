@@ -13,7 +13,10 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 // TODO: uplift via higher-level query and similar (#668)
@@ -21,7 +24,7 @@ import (
 // verb /v1/xactions
 func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		xactMsg cmn.XactReqMsg
+		xactMsg xaction.XactReqMsg
 		bck     *cluster.Bck
 	)
 	if _, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Xactions); err != nil {
@@ -49,7 +52,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactQuery := xaction.RegistryXactFilter{
+		xactQuery := registry.RegistryXactFilter{
 			ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRunning: xactMsg.OnlyRunning,
 		}
 		t.queryMatchingXact(w, r, what, xactQuery)
@@ -79,10 +82,10 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case cmn.ActXactStop:
 			if xactMsg.ID != "" {
-				xaction.Registry.DoAbortByID(xactMsg.ID)
+				registry.Registry.DoAbortByID(xactMsg.ID)
 				return
 			}
-			xaction.Registry.DoAbort(xactMsg.Kind, bck)
+			registry.Registry.DoAbort(xactMsg.Kind, bck)
 			return
 		default:
 			t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
@@ -97,7 +100,7 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	xact := xaction.Registry.GetXact(uuid)
+	xact := registry.Registry.GetXact(uuid)
 	if xact != nil {
 		t.writeJSON(w, r, xact.Stats(), what)
 		return
@@ -107,12 +110,12 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 }
 
 func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string,
-	xactQuery xaction.RegistryXactFilter) {
+	xactQuery registry.RegistryXactFilter) {
 	if what != cmn.QueryXactStats {
 		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	stats, err := xaction.Registry.GetStats(xactQuery)
+	stats, err := registry.Registry.GetStats(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what)
 		return
@@ -124,7 +127,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) error {
+func (t *targetrunner) cmdXactStart(xactMsg xaction.XactReqMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 	switch xactMsg.Kind {
@@ -138,9 +141,9 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		if bck != nil {
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
-		notif := &cmn.NotifXact{
-			NotifBase: cmn.NotifBase{
-				When: cmn.UponTerm, Ty: notifXact,
+		notif := &xaction.NotifXact{
+			NotifBase: notifications.NotifBase{
+				When: cluster.UponTerm, Ty: notifications.NotifXact,
 				Dsts: []string{equalIC}, F: t.callerNotifyFin,
 			},
 		}
@@ -150,19 +153,19 @@ func (t *targetrunner) cmdXactStart(xactMsg cmn.XactReqMsg, bck *cluster.Bck) er
 		if bck == nil {
 			return fmt.Errorf(erfmn, xactMsg.Kind)
 		}
-		args := &xaction.DeletePrefetchArgs{
+		args := &runners.DeletePrefetchArgs{
 			Ctx:      context.Background(),
 			RangeMsg: &cmn.RangeMsg{},
 		}
-		xact, err := xaction.Registry.RenewPrefetch(t, bck, args)
+		xact, err := registry.Registry.RenewPrefetch(t, bck, args)
 		if err != nil {
 			return err
 		}
 
-		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{
-				When: cmn.UponTerm,
-				Ty:   notifXact,
+		xact.AddNotif(&xaction.NotifXact{
+			NotifBase: notifications.NotifBase{
+				When: cluster.UponTerm,
+				Ty:   notifications.NotifXact,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},

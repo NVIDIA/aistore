@@ -7,7 +7,7 @@ package ais
 import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 const (
@@ -88,23 +88,23 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 }
 
 func (g *fsprungroup) addMpathEvent(action, mpath string) {
-	xaction.Registry.AbortAllMountpathsXactions()
+	registry.Registry.AbortAllMountpathsXactions()
 	go func() {
 		g.t.runResilver("", false /*skipGlobMisplaced*/)
-		xaction.Registry.MakeNCopiesOnMpathEvent(g.t, "add-mp")
+		registry.Registry.MakeNCopiesOnMpathEvent(g.t, "add-mp")
 	}()
 	g.checkEnable(action, mpath)
 }
 
 func (g *fsprungroup) delMpathEvent(action string) {
-	xaction.Registry.AbortAllMountpathsXactions()
+	registry.Registry.AbortAllMountpathsXactions()
 	if g.checkZeroMountpaths(action) {
 		return
 	}
 
 	go func() {
 		g.t.runResilver("", false /*skipGlobMisplaced*/)
-		xaction.Registry.MakeNCopiesOnMpathEvent(g.t, "del-mp")
+		registry.Registry.MakeNCopiesOnMpathEvent(g.t, "del-mp")
 	}()
 }
 

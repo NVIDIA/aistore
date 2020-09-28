@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 type (
@@ -288,7 +289,7 @@ func (r *XactGet) removeMpath(mpath string) {
 }
 
 type GetTargetStats struct {
-	cmn.BaseXactStats
+	xaction.BaseXactStats
 	Ext ExtECGetStats `json:"ext"`
 }
 
@@ -301,11 +302,11 @@ type ExtECGetStats struct {
 
 var (
 	// interface guard
-	_ cmn.XactStats = &GetTargetStats{}
+	_ cluster.XactStats = &GetTargetStats{}
 )
 
-func (r *XactGet) Stats() cmn.XactStats {
-	baseStats := r.XactBase.Stats().(*cmn.BaseXactStats)
+func (r *XactGet) Stats() cluster.XactStats {
+	baseStats := r.XactBase.Stats().(*xaction.BaseXactStats)
 	getStats := GetTargetStats{BaseXactStats: *baseStats}
 	st := r.stats.stats()
 	getStats.Ext.AvgTime = cmn.DurationJSON(st.DecodeTime.Nanoseconds())

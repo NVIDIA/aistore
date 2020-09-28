@@ -1,8 +1,8 @@
-// Package xaction provides core functionality for the AIStore extended actions.
+// Package registry provides core functionality for the AIStore extended actions registry.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package registry
 
 import (
 	"fmt"
@@ -14,10 +14,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 // Smoke tests for xactions
-
 func TestXactionRenewLRU(t *testing.T) {
 	var (
 		num      = 10
@@ -50,7 +51,7 @@ func TestXactionRenewLRU(t *testing.T) {
 func TestXactionRenewEvictDelete(t *testing.T) {
 	var (
 		xactions = newRegistry()
-		evArgs   = &DeletePrefetchArgs{}
+		evArgs   = &runners.DeletePrefetchArgs{}
 
 		bmd     = cluster.NewBaseBownerMock()
 		bckFrom = cluster.NewBck(
@@ -63,7 +64,7 @@ func TestXactionRenewEvictDelete(t *testing.T) {
 
 	defer xactions.AbortAll()
 
-	ch := make(chan *EvictDelete, 10)
+	ch := make(chan *runners.EvictDelete, 10)
 	wg := &sync.WaitGroup{}
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
@@ -77,7 +78,7 @@ func TestXactionRenewEvictDelete(t *testing.T) {
 	wg.Wait()
 	close(ch)
 
-	res := make(map[*EvictDelete]struct{}, 10)
+	res := make(map[*runners.EvictDelete]struct{}, 10)
 	for xact := range ch {
 		if xact != nil {
 			res[xact] = struct{}{}
@@ -129,7 +130,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xactBck, err := xactions.RenewBckFastRename(tMock, "uuid", 123, bckFrom, bckTo, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
-	xactions.AbortAll(cmn.XactTypeGlobal)
+	xactions.AbortAll(xaction.XactTypeGlobal)
 
 	tassert.Errorf(t, xactGlob != nil && xactGlob.Aborted(),
 		"AbortAllGlobal: expected global xaction to be aborted")
@@ -188,7 +189,7 @@ func TestXactionQueryFinished(t *testing.T) {
 	xactBck1.Finish()
 	xactBck1, err = xactions.RenewBckFastRename(tMock, "uuid", 123, bck1, bck1, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
-	_, err = xactions.RenewEvictDelete(tMock, bck1, &DeletePrefetchArgs{})
+	_, err = xactions.RenewEvictDelete(tMock, bck1, &runners.DeletePrefetchArgs{})
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
 
 	printStates := func(showActive *bool) string {

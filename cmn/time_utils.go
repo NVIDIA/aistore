@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+const (
+	timestampFormat = "15:04:05.000000"
+)
+
 func FormatUnixNano(unixnano int64, format string) string {
 	t := time.Unix(0, unixnano)
 	switch format {

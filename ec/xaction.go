@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
-	"github.com/NVIDIA/aistore/xaction/demand"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 
 type (
 	xactECBase struct {
-		demand.XactDemandBase
+		xaction.XactDemandBase
 		t cluster.Target
 
 		smap  cluster.Sowner // cluster map

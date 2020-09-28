@@ -247,8 +247,8 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlrstatusf(w, r, errCode, "Error starting download: %v.", err.Error())
 		return
 	}
-	nl := newDownloadNL(id, smap, smap.Tmap.Clone(), string(dlb.Type), progressInterval)
-	nl.setOwner(equalIC)
+	nl := downloader.NewDownloadNL(id, &smap.Smap, smap.Tmap.Clone(), string(dlb.Type), progressInterval)
+	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
 	p.respondWithID(w, id)

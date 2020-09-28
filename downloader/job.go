@@ -45,8 +45,8 @@ type (
 		Timeout() time.Duration
 		ActiveStats() (*DlStatusResp, error)
 
-		Notif() cmn.Notif // notifications
-		AddNotif(n cmn.Notif, job DlJob)
+		Notif() cluster.Notif // notifications
+		AddNotif(n cluster.Notif, job DlJob)
 
 		// If total length (size) of download job is not known, -1 should be returned.
 		Len() int
@@ -141,15 +141,15 @@ func (j *baseDlJob) Description() string    { return j.description }
 func (j *baseDlJob) Sync() bool             { return false }
 
 // Notifications
-func (j *baseDlJob) Notif() cmn.Notif { return j.notif }
-func (j *baseDlJob) AddNotif(n cmn.Notif, job DlJob) {
+func (j *baseDlJob) Notif() cluster.Notif { return j.notif }
+func (j *baseDlJob) AddNotif(n cluster.Notif, job DlJob) {
 	var ok bool
 	cmn.Assert(j.notif == nil) // currently, "add" means "set"
 	j.notif, ok = n.(*NotifDownload)
 	cmn.Assert(ok)
 	j.notif.DlJob = job
 	cmn.Assert(j.notif.F != nil)
-	if n.Upon(cmn.UponProgress) {
+	if n.Upon(cluster.UponProgress) {
 		cmn.Assert(j.notif.P != nil)
 	}
 }

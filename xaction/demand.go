@@ -2,12 +2,13 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package demand
+package xaction
 
 import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
@@ -25,7 +26,7 @@ type (
 	// with an added capability to renew itself and ref-count its pending work
 	//
 	XactDemand interface {
-		cmn.Xact
+		cluster.Xact
 		IdleTimer() <-chan struct{}
 		IncPending()
 		DecPending()
@@ -39,7 +40,7 @@ type (
 	}
 
 	XactDemandBase struct {
-		cmn.XactBase
+		XactBase
 
 		pending atomic.Int64
 		active  atomic.Int64
@@ -64,7 +65,7 @@ func NewXactDemandBaseBck(kind string, bck cmn.Bck, idleTimes ...time.Duration) 
 		idleTime = idleTimes[0]
 	}
 	r := &XactDemandBase{
-		XactBase: *cmn.NewXactBaseBck("", kind, bck),
+		XactBase: *NewXactBaseBck("", kind, bck),
 		hkName:   kind + "/" + cmn.GenUUID(),
 		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
 	}
@@ -81,7 +82,7 @@ func NewXactDemandBaseBckUUID(uuid, kind string, bck cmn.Bck, idleTimes ...time.
 		idleTime = idleTimes[0]
 	}
 	r := &XactDemandBase{
-		XactBase: *cmn.NewXactBaseBck(uuid, kind, bck),
+		XactBase: *NewXactBaseBck(uuid, kind, bck),
 		hkName:   kind + "/" + uuid,
 		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
 	}
@@ -101,7 +102,7 @@ func NewXactDemandBase(uuid, kind string, idleTimes ...time.Duration) *XactDeman
 		hkName = kind + "/" + uuid
 	}
 	r := &XactDemandBase{
-		XactBase: *cmn.NewXactBase(cmn.XactBaseID(uuid), kind),
+		XactBase: *NewXactBase(XactBaseID(uuid), kind),
 		hkName:   hkName,
 		idle:     idleInfo{dur: idleTime, ticks: cmn.NewStopCh()},
 	}

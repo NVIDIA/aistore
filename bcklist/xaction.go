@@ -20,14 +20,14 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
-	"github.com/NVIDIA/aistore/xaction/demand"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 // Xaction is on-demand one to avoid creating a new xaction per page even
 // in passthrough mode. It just restarts `walk` if needed.
 // Xaction is created once per bucket list request (per UUID)
 type BckListTask struct {
-	demand.XactDemandBase
+	xaction.XactDemandBase
 	ctx        context.Context
 	t          cluster.Target
 	bck        *cluster.Bck
@@ -74,7 +74,7 @@ func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck,
 		workCh:   make(chan *bckListReq, bckListReqSize),
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
-	xact.XactDemandBase = *demand.NewXactDemandBaseBckUUID(uuid, cmn.ActListObjects, bck, idleTime)
+	xact.XactDemandBase = *xaction.NewXactDemandBaseBckUUID(uuid, cmn.ActListObjects, bck, idleTime)
 	xact.InitIdle()
 	return xact
 }

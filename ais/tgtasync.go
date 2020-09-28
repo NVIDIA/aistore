@@ -14,7 +14,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
@@ -42,11 +44,11 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 	cmn.Assert(msg.PageSize != 0)
 
-	xact, isNew, err := xaction.Registry.RenewBckListNewXact(t, bck, msg.UUID, msg)
+	xact, isNew, err := registry.Registry.RenewBckListNewXact(t, bck, msg.UUID, msg)
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
 	if err == bcklist.ErrGone {
-		xact, isNew, err = xaction.Registry.RenewBckListNewXact(t, bck, msg.UUID, msg)
+		xact, isNew, err = registry.Registry.RenewBckListNewXact(t, bck, msg.UUID, msg)
 	}
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -54,8 +56,8 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 
 	if isNew {
-		xact.AddNotif(&cmn.NotifXact{
-			NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifCache, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+		xact.AddNotif(&xaction.NotifXact{
+			NotifBase: notifications.NotifBase{When: cluster.UponTerm, Ty: notifications.NotifCache, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		})
 
 		go xact.Run()
@@ -117,7 +119,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 		switch action {
 		case cmn.ActSummaryBucket:
-			_, err = xaction.Registry.RenewBckSummaryXact(ctx, t, bck, msg)
+			_, err = registry.Registry.RenewBckSummaryXact(ctx, t, bck, msg)
 		default:
 			t.invalmsghdlrf(w, r, "invalid action: %s", action)
 			return false
@@ -132,7 +134,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return true
 	}
 
-	xact := xaction.Registry.GetXact(msg.UUID)
+	xact := registry.Registry.GetXact(msg.UUID)
 	// task never started
 	if xact == nil {
 		s := fmt.Sprintf("Task %s not found", msg.UUID)

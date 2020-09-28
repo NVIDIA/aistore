@@ -1,13 +1,10 @@
-// Package xaction provides core functionality for the AIStore extended actions.
+// Package registry provides core functionality for the AIStore extended actions registry.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package registry
 
 import (
-	"fmt"
-	"strconv"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -16,7 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction/demand"
+	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 type globalEntry interface {
@@ -42,7 +40,7 @@ type lruEntry struct {
 
 func (e *lruEntry) Start(_ cmn.Bck) error {
 	e.xact = &lru.Xaction{
-		XactDemandBase: *demand.NewXactDemandBase(e.id, cmn.ActLRU, lruIdleTime),
+		XactDemandBase: *xaction.NewXactDemandBase(e.id, cmn.ActLRU, lruIdleTime),
 		Renewed:        make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := GetRebMarked(), GetResilverMarked()
@@ -53,8 +51,8 @@ func (e *lruEntry) Start(_ cmn.Bck) error {
 	return nil
 }
 
-func (e *lruEntry) Kind() string  { return cmn.ActLRU }
-func (e *lruEntry) Get() cmn.Xact { return e.xact }
+func (e *lruEntry) Kind() string      { return cmn.ActLRU }
+func (e *lruEntry) Get() cluster.Xact { return e.xact }
 
 func (e *lruEntry) preRenewHook(_ globalEntry) bool { return true }
 
@@ -62,52 +60,19 @@ func (e *lruEntry) preRenewHook(_ globalEntry) bool { return true }
 // rebalanceEntry
 //
 
-type RebID int64
-
 type rebalanceEntry struct {
-	id          RebID // rebalance id
-	xact        *Rebalance
+	id          xaction.RebID // rebalance id
+	xact        *runners.Rebalance
 	statsRunner *stats.Trunner
 }
 
-var (
-	// interface guard
-	_ cmn.XactID = RebID(0)
-)
-
-func (id RebID) String() string { return fmt.Sprintf("g%d", id) }
-
-func (id RebID) Int() int64 { return int64(id) }
-func (id RebID) Compare(other string) int {
-	var (
-		o   int64
-		err error
-	)
-	if o, err = strconv.ParseInt(other, 10, 64); err == nil {
-		goto compare
-	} else if o, err = strconv.ParseInt(other[1:], 10, 64); err == nil {
-		goto compare
-	} else {
-		return -1
-	}
-compare:
-	if int64(id) < o {
-		return -1
-	}
-	if int64(id) > o {
-		return 1
-	}
-	return 0
-}
-
 func (e *rebalanceEntry) Start(_ cmn.Bck) error {
-	xreb := &Rebalance{RebBase: makeXactRebBase(e.id, cmn.ActRebalance)}
-	xreb.statsRunner = e.statsRunner
+	xreb := runners.NewRebalance(e.id, e.Kind(), e.statsRunner, GetRebMarked)
 	e.xact = xreb
 	return nil
 }
-func (e *rebalanceEntry) Kind() string  { return cmn.ActRebalance }
-func (e *rebalanceEntry) Get() cmn.Xact { return e.xact }
+func (e *rebalanceEntry) Kind() string      { return cmn.ActRebalance }
+func (e *rebalanceEntry) Get() cluster.Xact { return e.xact }
 
 func (e *rebalanceEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
 	xreb := previousEntry.(*rebalanceEntry)
@@ -130,34 +95,20 @@ func (e *rebalanceEntry) postRenewHook(previousEntry globalEntry) {
 }
 
 //
-// resilver|rebalance helper
-//
-func makeXactRebBase(id cmn.XactID, kind string) RebBase {
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	return RebBase{
-		XactBase: *cmn.NewXactBase(id, kind),
-		wg:       wg,
-	}
-}
-
-//
 // resilverEntry
 //
 type resilverEntry struct {
 	baseGlobalEntry
 	id   string
-	xact *Resilver
+	xact *runners.Resilver
 }
 
 func (e *resilverEntry) Start(_ cmn.Bck) error {
-	e.xact = &Resilver{
-		RebBase: makeXactRebBase(cmn.XactBaseID(e.id), cmn.ActResilver),
-	}
+	e.xact = runners.NewResilver(e.id, e.Kind())
 	return nil
 }
-func (e *resilverEntry) Get() cmn.Xact { return e.xact }
-func (e *resilverEntry) Kind() string  { return cmn.ActResilver }
+func (e *resilverEntry) Get() cluster.Xact { return e.xact }
+func (e *resilverEntry) Kind() string      { return cmn.ActResilver }
 
 func (e *resilverEntry) postRenewHook(previousEntry globalEntry) {
 	xresilver := previousEntry.(*resilverEntry).xact
@@ -170,17 +121,17 @@ func (e *resilverEntry) postRenewHook(previousEntry globalEntry) {
 //
 type electionEntry struct {
 	baseGlobalEntry
-	xact *Election
+	xact *runners.Election
 }
 
 func (e *electionEntry) Start(_ cmn.Bck) error {
-	e.xact = &Election{
-		XactBase: *cmn.NewXactBase(cmn.XactBaseID(""), cmn.ActElection),
+	e.xact = &runners.Election{
+		XactBase: *xaction.NewXactBase(xaction.XactBaseID(""), cmn.ActElection),
 	}
 	return nil
 }
-func (e *electionEntry) Get() cmn.Xact { return e.xact }
-func (e *electionEntry) Kind() string  { return cmn.ActElection }
+func (e *electionEntry) Get() cluster.Xact { return e.xact }
+func (e *electionEntry) Kind() string      { return cmn.ActElection }
 
 func (e *electionEntry) preRenewHook(_ globalEntry) bool { return true }
 
@@ -201,8 +152,8 @@ func (e *downloaderEntry) Start(_ cmn.Bck) error {
 	go xdl.Run()
 	return nil
 }
-func (e *downloaderEntry) Get() cmn.Xact { return e.xact }
-func (e *downloaderEntry) Kind() string  { return cmn.ActDownload }
+func (e *downloaderEntry) Get() cluster.Xact { return e.xact }
+func (e *downloaderEntry) Kind() string      { return cmn.ActDownload }
 
 //
 // baseGlobalEntry
@@ -214,7 +165,7 @@ type (
 
 func (b *baseGlobalEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
 	e := previousEntry.Get()
-	_, keep = e.(demand.XactDemand)
+	_, keep = e.(xaction.XactDemand)
 	return
 }
 

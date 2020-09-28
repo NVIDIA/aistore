@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 type (
@@ -215,7 +216,7 @@ func (r *XactPut) dispatchRequest(req *Request) {
 }
 
 type PutTargetStats struct {
-	cmn.BaseXactStats
+	xaction.BaseXactStats
 	Ext ExtECPutStats `json:"ext"`
 }
 
@@ -233,11 +234,11 @@ type ExtECPutStats struct {
 
 var (
 	// interface guard
-	_ cmn.XactStats = &PutTargetStats{}
+	_ cluster.XactStats = &PutTargetStats{}
 )
 
-func (r *XactPut) Stats() cmn.XactStats {
-	baseStats := r.XactBase.Stats().(*cmn.BaseXactStats)
+func (r *XactPut) Stats() cluster.XactStats {
+	baseStats := r.XactBase.Stats().(*xaction.BaseXactStats)
 	putStats := PutTargetStats{BaseXactStats: *baseStats}
 	st := r.stats.stats()
 	putStats.Ext.AvgEncodeTime = cmn.DurationJSON(st.EncodeTime.Nanoseconds())

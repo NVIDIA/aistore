@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/urfave/cli"
 )
 
@@ -291,7 +292,7 @@ func putPromoteObjectCompletions(c *cli.Context) {
 func xactionCompletions(cmd string) func(ctx *cli.Context) {
 	return func(c *cli.Context) {
 		if c.NArg() == 0 {
-			for kind, meta := range cmn.XactsDtor {
+			for kind, meta := range xaction.XactsDtor {
 				if (cmd != cmn.ActXactStart) || (cmd == cmn.ActXactStart && meta.Startable) {
 					fmt.Println(kind)
 				}
@@ -300,7 +301,7 @@ func xactionCompletions(cmd string) func(ctx *cli.Context) {
 		}
 
 		xactName := c.Args().First()
-		if cmn.IsXactTypeBck(xactName) {
+		if xaction.IsXactTypeBck(xactName) {
 			bucketCompletions()(c)
 			return
 		}

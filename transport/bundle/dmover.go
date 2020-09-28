@@ -39,7 +39,7 @@ type (
 		}
 		mem         *memsys.MMSA
 		compression string // enum { cmn.CompressNever, ... }
-		xact        cmn.Xact
+		xact        cluster.Xact
 		isOpen      atomic.Bool
 		laterx      atomic.Bool
 		multiplier  int
@@ -102,7 +102,7 @@ func (dm *DataMover) NetD() string  { return dm.data.net }
 func (dm *DataMover) NetC() string  { return dm.ack.net }
 
 // associate xaction with data mover, primarily to sync on aborts
-func (dm *DataMover) SetXact(xact cmn.Xact) { dm.xact = xact }
+func (dm *DataMover) SetXact(xact cluster.Xact) { dm.xact = xact }
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() (err error) {

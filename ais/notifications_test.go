@@ -16,7 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -62,8 +64,8 @@ var _ = Describe("Notifications xaction test", func() {
 		testNotifs = func() *notifs {
 			n := &notifs{
 				p:   mockProxyRunner(pDaemonID),
-				fin: make(map[string]notifListener, 2),
-				m:   make(map[string]notifListener, 2),
+				fin: make(map[string]notifications.NotifListener, 2),
+				m:   make(map[string]notifications.NotifListener, 2),
 			}
 			smap := &smapX{Smap: cluster.Smap{Version: 1}}
 			n.p.httprunner.owner.smap = newSmapOwner()
@@ -72,7 +74,7 @@ var _ = Describe("Notifications xaction test", func() {
 			return n
 		}
 
-		baseXact = func(xactID string, counts ...int64) *cmn.BaseXactStatsExt {
+		baseXact = func(xactID string, counts ...int64) *xaction.BaseXactStatsExt {
 			var (
 				objCount  int64
 				byteCount int64
@@ -83,27 +85,27 @@ var _ = Describe("Notifications xaction test", func() {
 			if len(counts) > 1 {
 				byteCount = counts[1]
 			}
-			return &cmn.BaseXactStatsExt{BaseXactStats: cmn.BaseXactStats{
+			return &xaction.BaseXactStatsExt{BaseXactStats: xaction.BaseXactStats{
 				IDX:         xactID,
 				BytesCountX: byteCount,
 				ObjCountX:   objCount,
 			}}
 		}
 
-		finishedXact = func(xactID string, counts ...int64) (stats *cmn.BaseXactStatsExt) {
+		finishedXact = func(xactID string, counts ...int64) (stats *xaction.BaseXactStatsExt) {
 			stats = baseXact(xactID, counts...)
 			stats.EndTimeX = time.Now()
 			return
 		}
 
-		abortedXact = func(xactID string, counts ...int64) (stats *cmn.BaseXactStatsExt) {
+		abortedXact = func(xactID string, counts ...int64) (stats *xaction.BaseXactStatsExt) {
 			stats = finishedXact(xactID, counts...)
 			stats.AbortedX = true
 			return
 		}
 
 		notifRequest = func(daeID, xactID, notifKind string, notifTy int32, stats interface{}) *http.Request {
-			nm := cmn.NotifMsg{
+			nm := cluster.NotifMsg{
 				UUID: xactID,
 				Ty:   notifTy,
 				Data: cmn.MustMarshal(stats),
@@ -129,51 +131,51 @@ var _ = Describe("Notifications xaction test", func() {
 	var (
 		n       *notifs
 		smap    = &smapX{}
-		nl      notifListener
+		nl      notifications.NotifListener
 		targets = getNodeMap(target1ID, target2ID)
 	)
 
 	BeforeEach(func() {
 		n = testNotifs()
-		nl = newXactNL(xactID, smap, targets, notifXact, cmn.ActECEncode)
+		nl = xaction.NewXactNL(xactID, &smap.Smap, targets, notifications.NotifXact, cmn.ActECEncode)
 	})
 
 	Describe("handleMsg", func() {
 		It("should add node to finished set on receiving finished stats", func() {
-			Expect(nl.finCount()).To(BeEquivalentTo(0))
+			Expect(nl.FinCount()).To(BeEquivalentTo(0))
 			stats := finishedXact(xactID)
 			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
 			Expect(err).To(BeNil())
-			Expect(nl.finNotifiers().Contains(target1ID)).To(BeTrue())
-			Expect(nl.finished()).To(BeFalse())
+			Expect(nl.FinNotifiers().Contains(target1ID)).To(BeTrue())
+			Expect(nl.Finished()).To(BeFalse())
 		})
 
 		It("should set error when source sends an error message", func() {
-			Expect(nl.err()).To(BeNil())
+			Expect(nl.Err()).To(BeNil())
 			stats := finishedXact(xactID)
 			srcErr := errors.New("some error")
 			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), srcErr)
 			Expect(err).To(BeNil())
-			Expect(srcErr).To(BeEquivalentTo(nl.err()))
-			Expect(nl.finNotifiers().Contains(target1ID)).To(BeTrue())
+			Expect(srcErr).To(BeEquivalentTo(nl.Err()))
+			Expect(nl.FinNotifiers().Contains(target1ID)).To(BeTrue())
 		})
 
-		It("should finish when all the notifiers finished", func() {
-			Expect(nl.finCount()).To(BeEquivalentTo(0))
+		It("should finish when all the Notifiers finished", func() {
+			Expect(nl.FinCount()).To(BeEquivalentTo(0))
 			stats := finishedXact(xactID)
 			n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
 			err := n.handleFinished(nl, targets[target2ID], cmn.MustMarshal(stats), nil)
 			Expect(err).To(BeNil())
-			Expect(nl.finCount()).To(BeEquivalentTo(len(targets)))
-			Expect(nl.finished()).To(BeTrue())
+			Expect(nl.FinCount()).To(BeEquivalentTo(len(targets)))
+			Expect(nl.Finished()).To(BeTrue())
 		})
 
 		It("should be done if xaction Aborted", func() {
 			stats := abortedXact(xactID)
 			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
 			Expect(err).To(BeNil())
-			Expect(nl.aborted()).To(BeTrue())
-			Expect(nl.err()).NotTo(BeNil())
+			Expect(nl.Aborted()).To(BeTrue())
+			Expect(nl.Err()).NotTo(BeNil())
 		})
 
 		It("should update local stats upon progress", func() {
@@ -190,8 +192,8 @@ var _ = Describe("Notifications xaction test", func() {
 			// Handle fist set of stats
 			err := n.handleProgress(nl, targets[target1ID], cmn.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
-			val, _ := nl.nodeStats().Load(target1ID)
-			statsXact, ok := val.(*cmn.BaseXactStatsExt)
+			val, _ := nl.NodeStats().Load(target1ID)
+			statsXact, ok := val.(*xaction.BaseXactStatsExt)
 			Expect(ok).To(BeTrue())
 			Expect(statsXact.ObjCount()).To(BeEquivalentTo(initObjCount))
 			Expect(statsXact.BytesCount()).To(BeEquivalentTo(initByteCount))
@@ -199,8 +201,8 @@ var _ = Describe("Notifications xaction test", func() {
 			// Next a Finished notification with stats
 			err = n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
-			val, _ = nl.nodeStats().Load(target1ID)
-			statsXact, ok = val.(*cmn.BaseXactStatsExt)
+			val, _ = nl.NodeStats().Load(target1ID)
+			statsXact, ok = val.(*xaction.BaseXactStatsExt)
 			Expect(ok).To(BeTrue())
 			Expect(statsXact.ObjCount()).To(BeEquivalentTo(updatedObjCount))
 			Expect(statsXact.BytesCount()).To(BeEquivalentTo(updatedByteCount))
@@ -208,9 +210,9 @@ var _ = Describe("Notifications xaction test", func() {
 	})
 
 	Describe("ListenSmapChanged", func() {
-		It("should mark xaction aborted when node not in smap", func() {
+		It("should mark xaction Aborted when node not in smap", func() {
 			notifiers := getNodeMap(target1ID, target2ID)
-			nl = newXactNL(xactID, smap, notifiers, notifXact, cmn.ActECEncode)
+			nl = xaction.NewXactNL(xactID, &smap.Smap, notifiers, notifications.NotifXact, cmn.ActECEncode)
 			n = testNotifs()
 			n.add(nl)
 
@@ -221,8 +223,8 @@ var _ = Describe("Notifications xaction test", func() {
 			n.p.owner.smap.put(smap)
 
 			n.ListenSmapChanged()
-			Expect(nl.finished()).To(BeTrue())
-			Expect(nl.aborted()).To(BeTrue())
+			Expect(nl.Finished()).To(BeTrue())
+			Expect(nl.Aborted()).To(BeTrue())
 		})
 	})
 
@@ -231,38 +233,38 @@ var _ = Describe("Notifications xaction test", func() {
 			stats := finishedXact(xactID)
 			n.add(nl)
 
-			request := notifRequest(target1ID, xactID, cmn.Finished, notifXact, stats)
+			request := notifRequest(target1ID, xactID, cmn.Finished, notifications.NotifXact, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// Second target sends progress
-			request = notifRequest(target2ID, xactID, cmn.Progress, notifXact, stats)
+			request = notifRequest(target2ID, xactID, cmn.Progress, notifications.NotifXact, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should not be marked finished on progress notification
-			Expect(nl.finished()).To(BeFalse())
+			Expect(nl.Finished()).To(BeFalse())
 
 			// Second target finished
-			request = notifRequest(target2ID, xactID, cmn.Finished, notifXact, stats)
+			request = notifRequest(target2ID, xactID, cmn.Finished, notifications.NotifXact, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished
-			Expect(nl.finished()).To(BeTrue())
+			Expect(nl.Finished()).To(BeTrue())
 		})
 
 		// Error cases
 		Context("erroneous cases handler", func() {
 			It("should respond with error if xactionID not found", func() {
-				request := notifRequest(target1ID, xactID, cmn.Finished, notifXact, nil)
+				request := notifRequest(target1ID, xactID, cmn.Finished, notifications.NotifXact, nil)
 				checkRequest(n, request, http.StatusNotFound)
 			})
 
 			It("should respond with error if requested with invalid path", func() {
-				request := notifRequest(target1ID, "", "invalid-kind", notifInvalid, nil)
+				request := notifRequest(target1ID, "", "invalid-kind", notifications.NotifInvalid, nil)
 				checkRequest(n, request, http.StatusBadRequest)
 			})
 
 			It("should respond with error if requested if invalid data provided in body", func() {
-				request := notifRequest(target1ID, xactID, cmn.Finished, notifXact, nil)
+				request := notifRequest(target1ID, xactID, cmn.Finished, notifications.NotifXact, nil)
 				// set invalid body
 				request.Body = ioutil.NopCloser(bytes.NewBuffer([]byte{}))
 
@@ -272,15 +274,15 @@ var _ = Describe("Notifications xaction test", func() {
 
 			It("should responding with StatusGone for finished notifications", func() {
 				notifiers := getNodeMap(target1ID)
-				nl = newXactNL(xactID, smap, notifiers, notifXact, cmn.ActECEncode)
+				nl = xaction.NewXactNL(xactID, &smap.Smap, notifiers, notifications.NotifXact, cmn.ActECEncode)
 				n.add(nl)
 
 				// Send a Finished notification
-				request := notifRequest(target1ID, xactID, cmn.Finished, notifXact, finishedXact(xactID))
+				request := notifRequest(target1ID, xactID, cmn.Finished, notifications.NotifXact, finishedXact(xactID))
 				checkRequest(n, request, http.StatusOK)
 
 				// Send a notification after finishing
-				request = notifRequest(target1ID, xactID, cmn.Progress, notifXact, nil)
+				request = notifRequest(target1ID, xactID, cmn.Progress, notifications.NotifXact, nil)
 				checkRequest(n, request, http.StatusGone)
 			})
 		})

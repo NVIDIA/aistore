@@ -26,9 +26,11 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 //
@@ -72,10 +74,6 @@ func (t *targetrunner) GFN(gfnType cluster.GFNType) cluster.GFN {
 	return nil
 }
 
-func (t *targetrunner) XactRegistry() cluster.XactRegistry {
-	return xaction.Registry
-}
-
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
@@ -84,7 +82,7 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 		id = cmn.GenUUID()
 	}
 
-	xlru := xaction.Registry.RenewLRU(id)
+	xlru := registry.Registry.RenewLRU(id)
 	if xlru == nil {
 		return
 	}
@@ -103,10 +101,10 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 		GetFSStats:          ios.GetFSStats,
 	}
 
-	xlru.AddNotif(&cmn.NotifXact{
-		NotifBase: cmn.NotifBase{
-			When: cmn.UponTerm,
-			Ty:   notifXact,
+	xlru.AddNotif(&xaction.NotifXact{
+		NotifBase: notifications.NotifBase{
+			When: cluster.UponTerm,
+			Ty:   notifications.NotifXact,
 			Dsts: []string{equalIC},
 			F:    t.callerNotifyFin,
 		},

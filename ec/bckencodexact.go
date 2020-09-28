@@ -13,11 +13,12 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 type (
 	XactBckEncode struct {
-		cmn.XactBase
+		xaction.XactBase
 		doneCh   chan struct{}
 		mpathers map[string]*joggerBckEncode
 		t        cluster.Target
@@ -38,7 +39,7 @@ type (
 
 func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode {
 	return &XactBckEncode{
-		XactBase: *cmn.NewXactBaseBck(uuid, cmn.ActECEncode, bck),
+		XactBase: *xaction.NewXactBaseBck(uuid, cmn.ActECEncode, bck),
 		t:        t,
 		bck:      bck,
 		wg:       &sync.WaitGroup{},

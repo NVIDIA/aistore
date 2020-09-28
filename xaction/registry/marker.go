@@ -1,12 +1,13 @@
-// Package xaction provides core functionality for the AIStore extended actions.
+// Package registry provides core functionality for the AIStore extended actions registry.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package registry
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 const (
@@ -14,17 +15,13 @@ const (
 	resilverMarker  = ".resilver_marker"
 )
 
-type XactMarked struct {
-	Xact        cmn.Xact
-	Interrupted bool
-}
-
-func GetRebMarked() (out XactMarked) {
+func GetRebMarked() (out xaction.XactMarked) {
 	out.Xact = Registry.GetXactRunning(cmn.ActRebalance)
 	out.Interrupted = fs.MarkerExists(GetMarkerName(cmn.ActRebalance)) && out.Xact == nil
 	return
 }
-func GetResilverMarked() (out XactMarked) {
+
+func GetResilverMarked() (out xaction.XactMarked) {
 	out.Xact = Registry.GetXactRunning(cmn.ActResilver)
 	out.Interrupted = fs.MarkerExists(GetMarkerName(cmn.ActResilver)) && out.Xact == nil
 	return

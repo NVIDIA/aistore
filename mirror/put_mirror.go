@@ -14,13 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xaction/demand"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 type (
 	XactPut struct {
 		// implements cmn.Xact a cmn.Runner interfaces
-		demand.XactDemandBase
+		xaction.XactDemandBase
 		// runtime
 		workCh   chan *cluster.LOM
 		mpathers map[string]mpather
@@ -48,7 +48,7 @@ func RunXactPut(lom *cluster.LOM, slab *memsys.Slab) (r *XactPut, err error) {
 		mpathCount        = len(availablePaths)
 	)
 	r = &XactPut{
-		XactDemandBase: *demand.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bck().Bck),
+		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bck().Bck),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
 	}
@@ -108,7 +108,7 @@ func (r *XactPut) Run() error {
 // main method: replicate a given locally stored object
 func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 	if r.Finished() {
-		err = cmn.NewErrXactExpired("Cannot replicate: " + r.String())
+		err = xaction.NewErrXactExpired("Cannot replicate: " + r.String())
 		return
 	}
 	r.total.Inc()

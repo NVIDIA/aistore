@@ -20,7 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/runners"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 )
@@ -52,7 +53,7 @@ type (
 // 4. Global rebalance performs checks such as `stage > rebStageTraverse` or
 //    `stage < rebStageWaitAck`. Since all EC stages are between
 //    `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
-func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cmn.Notif) {
+func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cluster.Notif) {
 	md := &rebArgs{
 		id:     id,
 		smap:   smap,
@@ -175,14 +176,14 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 		}
 
 		// Check current xaction
-		entry := xaction.Registry.GetRunning(xaction.RegistryXactFilter{Kind: cmn.ActRebalance})
+		entry := registry.Registry.GetRunning(registry.RegistryXactFilter{Kind: cmn.ActRebalance})
 		if entry == nil {
 			if canRun {
 				return
 			}
 			glog.Warningf("%s: waiting for ???...", logHdr)
 		} else {
-			otherXreb := entry.Get().(*xaction.Rebalance) // running or previous
+			otherXreb := entry.Get().(*runners.Rebalance) // running or previous
 			if canRun {
 				return
 			}
@@ -196,13 +197,13 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 	}
 }
 
-func (reb *Manager) rebInit(md *rebArgs, notif cmn.Notif) bool {
+func (reb *Manager) rebInit(md *rebArgs, notif cluster.Notif) bool {
 	reb.stages.stage.Store(rebStageInit)
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("rebalance (v%d) in %s state", md.id, stages[rebStageInit])
 	}
 
-	xact := xaction.Registry.RenewRebalance(md.id, reb.statRunner)
+	xact := registry.Registry.RenewRebalance(md.id, reb.statRunner)
 	if xact == nil {
 		return false
 	}
@@ -226,7 +227,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif cmn.Notif) bool {
 	}
 
 	// 4. create persistent mark
-	err := fs.PutMarker(xaction.GetMarkerName(cmn.ActRebalance))
+	err := fs.PutMarker(registry.GetMarkerName(cmn.ActRebalance))
 	if err != nil {
 		glog.Errorf("Failed to create marker: %v", err)
 	}
@@ -438,7 +439,7 @@ func (reb *Manager) rebFini(md *rebArgs) {
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
-		if err := fs.RemoveMarker(xaction.GetMarkerName(cmn.ActRebalance)); err != nil {
+		if err := fs.RemoveMarker(registry.GetMarkerName(cmn.ActRebalance)); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.logHdr(md), err)
 		}
 	}

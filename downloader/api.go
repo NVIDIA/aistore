@@ -64,15 +64,6 @@ type (
 		FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
 		Errs          []TaskErrInfo `json:"download_errors,omitempty"`
 	}
-
-	NotifDownload struct {
-		cmn.NotifBase
-		DlJob DlJob
-	}
-)
-
-var (
-	_ cmn.Notif = &NotifDownload{} // interface guard
 )
 
 func (j *DlJobInfo) Aggregate(rhs *DlJobInfo) {
@@ -439,22 +430,4 @@ func (b *DlCloudBody) Describe() string {
 		return b.Description
 	}
 	return fmt.Sprintf("cloud prefetch -> %s", b.Bck)
-}
-
-//
-// NotifDownloader
-//
-
-func (nd *NotifDownload) ToNotifMsg() cmn.NotifMsg {
-	msg := cmn.NotifMsg{
-		UUID: nd.DlJob.ID(),
-		Ty:   int32(nd.Category()),
-	}
-	stats, err := nd.DlJob.ActiveStats()
-	if err != nil {
-		msg.ErrMsg = err.Error()
-	} else {
-		msg.Data = cmn.MustMarshal(stats)
-	}
-	return msg
 }

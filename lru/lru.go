@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction/demand"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 // The LRU module implements a well-known least-recently-used cache replacement policy.
@@ -95,7 +95,7 @@ type (
 		allowDelObj bool
 	}
 	Xaction struct {
-		demand.XactDemandBase
+		xaction.XactDemandBase
 		Renewed           chan struct{}
 		OkRemoveMisplaced func() bool
 	}

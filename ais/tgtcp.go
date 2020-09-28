@@ -26,10 +26,12 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -308,7 +310,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		tstats := getstorstatsrunner()
 
 		var rebStats *stats.RebalanceTargetStats
-		if entry := xaction.Registry.GetLatest(xaction.RegistryXactFilter{Kind: cmn.ActRebalance}); entry != nil {
+		if entry := registry.Registry.GetLatest(registry.RegistryXactFilter{Kind: cmn.ActRebalance}); entry != nil {
 			if xact := entry.Get(); xact != nil {
 				var ok bool
 				rebStats, ok = xact.Stats().(*stats.RebalanceTargetStats)
@@ -416,7 +418,7 @@ func (t *targetrunner) handleUnregisterReq() {
 	dsort.Managers.AbortAll(errors.New("target was removed from the cluster"))
 
 	// Stop all xactions
-	xaction.Registry.AbortAll()
+	registry.Registry.AbortAll()
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
@@ -641,11 +643,11 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 			}
 			present = true
 			if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-				xaction.Registry.DoAbort(cmn.ActPutCopies, nbck)
+				registry.Registry.DoAbort(cmn.ActPutCopies, nbck)
 				// NOTE: cmn.ActMakeNCopies takes care of itself
 			}
 			if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-				xaction.Registry.DoAbort(cmn.ActECEncode, nbck)
+				registry.Registry.DoAbort(cmn.ActECEncode, nbck)
 			}
 			return true
 		})
@@ -668,7 +670,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 
 	// evict LOM cache
 	if len(bcksToDelete) > 0 {
-		xaction.Registry.AbortAllBuckets(bcksToDelete...)
+		registry.Registry.AbortAllBuckets(bcksToDelete...)
 		go func(bcks ...*cluster.Bck) {
 			for _, b := range bcks {
 				cluster.EvictLomCache(b)
@@ -733,10 +735,10 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 	}
 
 	smap := t.owner.smap.Get()
-	notif := &cmn.NotifXact{
-		NotifBase: cmn.NotifBase{
-			When: cmn.UponTerm,
-			Ty:   notifXact,
+	notif := &xaction.NotifXact{
+		NotifBase: notifications.NotifBase{
+			When: cluster.UponTerm,
+			Ty:   notifications.NotifXact,
 			Dsts: []string{equalIC},
 			F:    t.callerNotifyFin,
 		},

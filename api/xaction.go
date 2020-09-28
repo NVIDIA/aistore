@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 const (
@@ -19,8 +21,8 @@ const (
 )
 
 type (
-	NodesXactStat       map[string]*cmn.BaseXactStatsExt
-	NodesXactMultiStats map[string][]*cmn.BaseXactStatsExt
+	NodesXactStat       map[string]*xaction.BaseXactStatsExt
+	NodesXactMultiStats map[string][]*xaction.BaseXactStatsExt
 
 	XactStatsHelper interface {
 		Running() bool
@@ -124,11 +126,11 @@ func (xs NodesXactMultiStats) GetNodesXactStat(id string) (xactStat NodesXactSta
 //
 // StartXaction starts a given xaction.
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
-	if !cmn.XactsDtor[args.Kind].Startable {
+	if !xaction.XactsDtor[args.Kind].Startable {
 		return id, fmt.Errorf("cannot start \"kind=%s\" xaction", args.Kind)
 	}
 
-	xactMsg := cmn.XactReqMsg{
+	xactMsg := xaction.XactReqMsg{
 		Kind: args.Kind,
 		Bck:  args.Bck,
 	}
@@ -159,7 +161,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	msg := cmn.ActionMsg{
 		Action: cmn.ActXactStop,
-		Value: cmn.XactReqMsg{
+		Value: xaction.XactReqMsg{
 			ID:   args.ID,
 			Kind: args.Kind,
 			Bck:  args.Bck,
@@ -190,7 +192,7 @@ func GetXactionStatsByID(baseParams BaseParams, id string) (xactStat NodesXactSt
 //
 // QueryXactionStats gets all xaction stats for given kind and bucket (optional).
 func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactMultiStats, err error) {
-	msg := cmn.XactReqMsg{
+	msg := xaction.XactReqMsg{
 		ID:   args.ID,
 		Kind: args.Kind,
 		Bck:  args.Bck,
@@ -239,9 +241,9 @@ func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
 	return nil
 }
 
-func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *cmn.XactStatus, err error) {
+func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *notifications.NotifStatus, err error) {
 	baseParams.Method = http.MethodGet
-	msg := cmn.XactReqMsg{
+	msg := xaction.XactReqMsg{
 		ID:   args.ID,
 		Kind: args.Kind,
 		Bck:  args.Bck,
@@ -250,7 +252,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *cmn.Xact
 		msg.OnlyRunning = Bool(true)
 	}
 
-	status = &cmn.XactStatus{}
+	status = &notifications.NotifStatus{}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
@@ -263,7 +265,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *cmn.Xact
 }
 
 // TODO: Rename this function after IC is stable
-func WaitForXactionV2(baseParams BaseParams, args XactReqArgs, refreshIntervals ...time.Duration) (status *cmn.XactStatus, err error) {
+func WaitForXactionV2(baseParams BaseParams, args XactReqArgs, refreshIntervals ...time.Duration) (status *notifications.NotifStatus, err error) {
 	var (
 		ctx           = context.Background()
 		retryInterval = xactRetryInterval

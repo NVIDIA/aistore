@@ -10,9 +10,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 // There are 3 methods exposed by targets:
@@ -68,7 +71,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		smsg.Flags = cmn.SelectCached
 	}
 
-	xact, isNew, err := xaction.Registry.RenewObjectsListingXact(ctx, t, q, smsg)
+	xact, isNew, err := registry.Registry.RenewObjectsListingXact(ctx, t, q, smsg)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -77,8 +80,8 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	xact.AddNotif(&cmn.NotifXact{
-		NotifBase: cmn.NotifBase{When: cmn.UponTerm, Ty: notifCache, Dsts: smap.IC.Keys(), F: t.callerNotifyFin},
+	xact.AddNotif(&xaction.NotifXact{
+		NotifBase: notifications.NotifBase{When: cluster.UponTerm, Ty: notifications.NotifCache, Dsts: smap.IC.Keys(), F: t.callerNotifyFin},
 	})
 	go xact.Start()
 }

@@ -154,7 +154,7 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 }
 
 // static helper
-func checkInsufficientMpaths(xact cmn.Xact, mpathCount int) error {
+func checkInsufficientMpaths(xact cluster.Xact, mpathCount int) error {
 	if mpathCount < 2 {
 		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", xact, mpathCount)
 	}

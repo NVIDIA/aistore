@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction/demand"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
 // =============================== Summary ====================================
@@ -133,7 +133,7 @@ type (
 	// When download related requests are made to AIS using the download endpoint,
 	// Downloader dispatches these requests to the corresponding jogger.
 	Downloader struct {
-		demand.XactDemandBase
+		xaction.XactDemandBase
 
 		t          cluster.Target
 		statsT     stats.Tracker
@@ -219,7 +219,7 @@ func (d *Downloader) IsMountpathXact() bool { return true }
 
 func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{
-		XactDemandBase: *demand.NewXactDemandBaseBck(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
+		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
 		t:              t,
 		statsT:         statsT,
 	}

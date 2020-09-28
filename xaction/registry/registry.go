@@ -1,8 +1,8 @@
-// Package xaction provides core functionality for the AIStore extended actions.
+// Package registry provides core functionality for the AIStore extended actions registry.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package xaction
+package registry
 
 import (
 	"context"
@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 const (
@@ -40,20 +42,6 @@ const (
 
 // public types
 type (
-	RebBase struct {
-		cmn.XactBase
-		wg *sync.WaitGroup
-	}
-	Rebalance struct {
-		RebBase
-		statsRunner *stats.Trunner // extended stats
-	}
-	Resilver struct {
-		RebBase
-	}
-	Election struct {
-		cmn.XactBase
-	}
 	RegistryXactFilter struct {
 		ID          string
 		Kind        string
@@ -86,7 +74,7 @@ type (
 		Err    error       `json:"error"`
 	}
 	bckSummaryTask struct {
-		cmn.XactBase
+		xaction.XactBase
 		ctx context.Context
 		t   cluster.Target
 		msg *cmn.BucketSummaryMsg
@@ -95,7 +83,7 @@ type (
 	baseEntry interface {
 		Start(bck cmn.Bck) error // starts an xaction, will be called when entry is stored into registry
 		Kind() string
-		Get() cmn.Xact
+		Get() cluster.Xact
 	}
 	registryEntries struct {
 		mtx       sync.RWMutex
@@ -112,7 +100,7 @@ type (
 	}
 )
 
-func (rxf RegistryXactFilter) genericMatcher(xact cmn.Xact) bool {
+func (rxf RegistryXactFilter) genericMatcher(xact cluster.Xact) bool {
 	condition := true
 	if rxf.OnlyRunning != nil {
 		condition = condition && !xact.Finished() == *rxf.OnlyRunning
@@ -132,54 +120,6 @@ var Registry *registry
 
 func Init() {
 	Registry = newRegistry()
-}
-
-func (xact *RebBase) MarkDone()      { xact.wg.Done() }
-func (xact *RebBase) WaitForFinish() { xact.wg.Wait() }
-
-// rebalance
-
-func (xact *RebBase) String() string {
-	s := xact.XactBase.String()
-	if xact.Bck().Name != "" {
-		s += ", bucket " + xact.Bck().String()
-	}
-	return s
-}
-
-func (xact *Rebalance) IsMountpathXact() bool { return false }
-
-func (xact *Rebalance) String() string {
-	return fmt.Sprintf("%s, %s", xact.RebBase.String(), xact.ID())
-}
-
-// override/extend cmn.XactBase.Stats()
-func (xact *Rebalance) Stats() cmn.XactStats {
-	var (
-		baseStats   = xact.XactBase.Stats().(*cmn.BaseXactStats)
-		rebStats    = stats.RebalanceTargetStats{BaseXactStats: *baseStats}
-		statsRunner = xact.statsRunner
-	)
-	rebStats.Ext.RebTxCount = statsRunner.Get(stats.RebTxCount)
-	rebStats.Ext.RebTxSize = statsRunner.Get(stats.RebTxSize)
-	rebStats.Ext.RebRxCount = statsRunner.Get(stats.RebRxCount)
-	rebStats.Ext.RebRxSize = statsRunner.Get(stats.RebRxSize)
-	if marked := GetRebMarked(); marked.Xact != nil {
-		rebStats.Ext.RebID = marked.Xact.ID().Int()
-	} else {
-		rebStats.Ext.RebID = 0
-	}
-	rebStats.ObjCountX = rebStats.Ext.RebTxCount + rebStats.Ext.RebRxCount
-	rebStats.BytesCountX = rebStats.Ext.RebTxSize + rebStats.Ext.RebRxSize
-	return &rebStats
-}
-
-// resilver
-
-func (xact *Resilver) IsMountpathXact() bool { return true }
-
-func (xact *Resilver) String() string {
-	return xact.RebBase.String()
 }
 
 //
@@ -203,7 +143,7 @@ func (e *registryEntries) findUnlocked(flt RegistryXactFilter) baseEntry {
 			}
 		}
 	} else {
-		cmn.AssertMsg(flt.Kind == "" || cmn.IsValidXaction(flt.Kind), flt.Kind)
+		cmn.AssertMsg(flt.Kind == "" || xaction.IsValidXaction(flt.Kind), flt.Kind)
 		finishedCnt := 0
 		for _, entry := range e.active {
 			if entry.Get().Finished() {
@@ -257,7 +197,7 @@ func (e *registryEntries) remove(id string) {
 			e.entries[idx] = e.entries[len(e.entries)-1]
 			e.entries = e.entries[:len(e.entries)-1]
 
-			if cmn.XactsDtor[entry.Kind()].Type == cmn.XactTypeTask {
+			if xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeTask {
 				e.taskCount.Dec()
 			}
 			break
@@ -280,7 +220,7 @@ func (e *registryEntries) insert(entry baseEntry) {
 
 	// Increase after cleanup to not force trigger it. If it was just added, for
 	// sure it didn't yet finish.
-	if cmn.XactsDtor[entry.Kind()].Type == cmn.XactTypeTask {
+	if xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeTask {
 		e.taskCount.Inc()
 	}
 }
@@ -299,7 +239,7 @@ func newRegistry() *registry {
 	return xar
 }
 
-func (r *registry) GetXact(uuid string) (xact cmn.Xact) {
+func (r *registry) GetXact(uuid string) (xact cluster.Xact) {
 	r.entries.forEach(func(entry baseEntry) bool {
 		x := entry.Get()
 		if x != nil && x.ID().Compare(uuid) == 0 {
@@ -311,7 +251,7 @@ func (r *registry) GetXact(uuid string) (xact cmn.Xact) {
 	return
 }
 
-func (r *registry) GetXactRunning(kind string) (xact cmn.Xact) {
+func (r *registry) GetXactRunning(kind string) (xact cluster.Xact) {
 	entry := r.entries.find(RegistryXactFilter{Kind: kind, OnlyRunning: api.Bool(true)})
 	if entry != nil {
 		xact = entry.Get()
@@ -373,7 +313,7 @@ func (r *registry) abort(args abortArgs) {
 			}
 		} else if args.all {
 			abort = true
-			if args.ty != "" && args.ty != cmn.XactsDtor[xact.Kind()].Type {
+			if args.ty != "" && args.ty != xaction.XactsDtor[xact.Kind()].Type {
 				abort = false
 			}
 		}
@@ -390,7 +330,7 @@ func (r *registry) abort(args abortArgs) {
 	wg.Wait()
 }
 
-func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []cmn.XactStats {
+func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []cluster.XactStats {
 	matchingEntries := make([]baseEntry, 0, 20)
 	r.entries.forEach(func(entry baseEntry) bool {
 		if !match(entry.Get()) {
@@ -402,15 +342,15 @@ func (r *registry) matchingXactsStats(match func(xact cmn.Xact) bool) []cmn.Xact
 
 	// TODO: we cannot do this inside `forEach` because possibly
 	//  we have recursive RLock what can deadlock.
-	sts := make([]cmn.XactStats, 0, len(matchingEntries))
+	sts := make([]cluster.XactStats, 0, len(matchingEntries))
 	for _, entry := range matchingEntries {
 		sts = append(sts, entry.Get().Stats())
 	}
 	return sts
 }
 
-func (r *registry) matchXactsStatsByID(xactID string) ([]cmn.XactStats, error) {
-	matchedStat := r.matchingXactsStats(func(xact cmn.Xact) bool {
+func (r *registry) matchXactsStatsByID(xactID string) ([]cluster.XactStats, error) {
+	matchedStat := r.matchingXactsStats(func(xact cluster.Xact) bool {
 		return xact.ID().Compare(xactID) == 0
 	})
 	if len(matchedStat) == 0 {
@@ -419,12 +359,12 @@ func (r *registry) matchXactsStatsByID(xactID string) ([]cmn.XactStats, error) {
 	return matchedStat, nil
 }
 
-func (r *registry) GetStats(flt RegistryXactFilter) ([]cmn.XactStats, error) {
+func (r *registry) GetStats(flt RegistryXactFilter) ([]cluster.XactStats, error) {
 	if flt.ID != "" {
 		if flt.OnlyRunning == nil || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
 			return r.matchXactsStatsByID(flt.ID)
 		}
-		return r.matchingXactsStats(func(xact cmn.Xact) bool {
+		return r.matchingXactsStats(func(xact cluster.Xact) bool {
 			if xact.Kind() == cmn.ActRebalance {
 				// Any rebalance after a given ID that finished and was not aborted
 				return xact.ID().Compare(flt.ID) >= 0 && xact.Finished() && !xact.Aborted()
@@ -434,7 +374,7 @@ func (r *registry) GetStats(flt RegistryXactFilter) ([]cmn.XactStats, error) {
 	}
 	if flt.Bck != nil || flt.Kind != "" {
 		// Error checks
-		if flt.Kind != "" && !cmn.IsValidXaction(flt.Kind) {
+		if flt.Kind != "" && !xaction.IsValidXaction(flt.Kind) {
 			return nil, cmn.NewXactionNotFoundError(flt.Kind)
 		}
 		if flt.Bck != nil && !flt.Bck.HasProvider() {
@@ -443,9 +383,9 @@ func (r *registry) GetStats(flt RegistryXactFilter) ([]cmn.XactStats, error) {
 
 		// TODO: investigate how does the following fare against genericMatcher
 		if flt.OnlyRunning != nil && *flt.OnlyRunning {
-			matching := make([]cmn.XactStats, 0, 10)
+			matching := make([]cluster.XactStats, 0, 10)
 			if flt.Kind == "" {
-				for kind := range cmn.XactsDtor {
+				for kind := range xaction.XactsDtor {
 					entry := r.GetRunning(RegistryXactFilter{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Stats())
@@ -543,13 +483,13 @@ func (r *registry) cleanUpFinished() time.Duration {
 		//
 		// We need to check if the entry is not the most recent entry for
 		// given kind. If it is we want to keep it anyway.
-		switch cmn.XactsDtor[entry.Kind()].Type {
-		case cmn.XactTypeGlobal:
+		switch xaction.XactsDtor[entry.Kind()].Type {
+		case xaction.XactTypeGlobal:
 			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), OnlyRunning: api.Bool(true)})
 			if entry != nil && entry.Get().ID() == eID {
 				return true
 			}
-		case cmn.XactTypeBck:
+		case xaction.XactTypeBck:
 			bck := cluster.NewBckEmbed(xact.Bck())
 			cmn.Assert(bck.HasProvider())
 			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), Bck: bck, OnlyRunning: api.Bool(true)})
@@ -661,8 +601,8 @@ func (r *registry) RenewLRU(id string) *lru.Xaction {
 	return entry.xact
 }
 
-func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) *Rebalance {
-	res := r.renewGlobalXaction(&rebalanceEntry{id: RebID(id), statsRunner: statsRunner})
+func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) *runners.Rebalance {
+	res := r.renewGlobalXaction(&rebalanceEntry{id: xaction.RebID(id), statsRunner: statsRunner})
 	entry := res.entry.(*rebalanceEntry)
 	if !res.isNew { // previous global rebalance is still running
 		return nil
@@ -670,14 +610,14 @@ func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) *Rebalan
 	return entry.xact
 }
 
-func (r *registry) RenewResilver(id string) *Resilver {
+func (r *registry) RenewResilver(id string) *runners.Resilver {
 	res := r.renewGlobalXaction(&resilverEntry{id: id})
 	entry := res.entry.(*resilverEntry)
 	cmn.Assert(res.isNew) // resilver must be always preempted
 	return entry.xact
 }
 
-func (r *registry) RenewElection() *Election {
+func (r *registry) RenewElection() *runners.Election {
 	res := r.renewGlobalXaction(&electionEntry{})
 	entry := res.entry.(*electionEntry)
 	if !res.isNew { // previous election is still running
@@ -685,8 +625,6 @@ func (r *registry) RenewElection() *Election {
 	}
 	return entry.xact
 }
-
-func (e *Election) IsMountpathXact() bool { return false }
 
 func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*downloader.Downloader, error) {
 	res := r.renewGlobalXaction(&downloaderEntry{t: t, statsT: statsT})

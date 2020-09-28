@@ -16,7 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/downloader"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/xaction/registry"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -28,7 +29,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		respErr    error
 		statusCode int
 	)
-	downloaderXact, err := xaction.Registry.RenewDownloader(t, t.statsT)
+	downloaderXact, err := registry.Registry.RenewDownloader(t, t.statsT)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
@@ -86,9 +87,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		dlJob.AddNotif(&downloader.NotifDownload{
-			NotifBase: cmn.NotifBase{
-				When:     cmn.UponProgress,
-				Ty:       notifDownload,
+			NotifBase: notifications.NotifBase{
+				When:     cluster.UponProgress,
+				Ty:       notifications.NotifDownload,
 				Interval: progressInterval,
 				Dsts:     []string{equalIC},
 				F:        t.callerNotifyFin,

@@ -27,7 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 //
@@ -579,7 +579,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 		tsi, gfnNode         *cluster.Snode
 		smap                 = goi.t.owner.smap.get()
 		tname                = goi.t.si.String()
-		marked               = xaction.GetResilverMarked()
+		marked               = registry.GetResilverMarked()
 		interrupted, running = marked.Interrupted, marked.Xact != nil
 		gfnActive            = goi.t.gfn.local.active()
 		ecEnabled            = goi.lom.Bprops().EC.Enabled
@@ -605,7 +605,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountTargets()
 
 	// cluster-wide lookup ("get from neighbor")
-	marked = xaction.GetRebMarked()
+	marked = registry.GetRebMarked()
 	interrupted, running = marked.Interrupted, marked.Xact != nil
 	if running {
 		doubleCheck = true

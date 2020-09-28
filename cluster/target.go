@@ -59,7 +59,7 @@ type OnFinishObj = func(lom *LOM, err error)
 type (
 	DataMover interface {
 		RegRecv() error
-		SetXact(xact cmn.Xact)
+		SetXact(xact Xact)
 		Open()
 		Close()
 		UnregRecv()
@@ -137,12 +137,13 @@ type Target interface {
 	// Getting other interfaces.
 	DB() dbdriver.Driver
 	GFN(gfnType GFNType) GFN
-	XactRegistry() XactRegistry
 
 	// Other.
 	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 	RebalanceNamespace(si *Snode) ([]byte, int, error)
 	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
+	// TODO: Remove when we are able to access registry directly in other packages (e.g. etl)
+	AbortAllXacts(tys ...string)
 }
 
 type RebManager interface {

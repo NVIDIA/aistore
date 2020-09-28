@@ -14,6 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -33,7 +35,7 @@ const (
 
 type (
 	regIC struct {
-		nl    notifListener
+		nl    notifications.NotifListener
 		smap  *smapX
 		query url.Values
 		msg   interface{}
@@ -144,14 +146,14 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifListener, ok bool) {
+func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifications.NotifListener, ok bool) {
 	nl, exists := ic.p.notifs.entry(uuid)
 	if !exists {
 		smap := ic.p.owner.smap.get()
 		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 		return
 	}
-	if nl.finished() {
+	if nl.Finished() {
 		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
 		smap := ic.p.owner.smap.get()
 		ic.p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.StrIC(ic.p.si))
@@ -162,9 +164,9 @@ func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 
 func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 	var (
-		msg      = &cmn.XactReqMsg{}
+		msg      = &xaction.XactReqMsg{}
 		bck      *cluster.Bck
-		nl       notifListener
+		nl       notifications.NotifListener
 		exists   bool
 		interval = int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
 	)
@@ -207,23 +209,23 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 		return
 	}
 
-	if msg.Kind != "" && nl.kind() != msg.Kind {
+	if msg.Kind != "" && nl.Kind() != msg.Kind {
 		ic.p.invalmsghdlrf(w, r, "xaction kind mismatch (ID: %s, KIND: %s != %s)",
-			msg.ID, msg.Kind, nl.kind())
+			msg.ID, msg.Kind, nl.Kind())
 		return
 	}
 
 	ic.p.notifs.syncStats(nl, interval)
-	nl.rlock()
-	defer nl.runlock()
+	nl.RLock()
+	defer nl.RUnlock()
 
-	if err := nl.err(); err != nil && !nl.aborted() {
+	if err := nl.Err(); err != nil && !nl.Aborted() {
 		ic.p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	// TODO: Also send stats, eg. progress when ready
-	w.Write(cmn.MustMarshal(nl.status()))
+	w.Write(cmn.MustMarshal(nl.Status()))
 }
 
 // verb /v1/ic
@@ -327,7 +329,7 @@ check:
 			ic.p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		nl := newXactNL(regMsg.UUID, smap, srcs, notifXact, regMsg.Kind)
+		nl := xaction.NewXactNL(regMsg.UUID, &smap.Smap, srcs, notifications.NotifXact, regMsg.Kind)
 		ic.p.notifs.add(nl)
 	default:
 		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
@@ -347,7 +349,7 @@ func (ic *ic) registerEqual(a regIC) {
 	}
 }
 
-func (ic *ic) bcastListenIC(nl notifListener, smap *smapX) (err error) {
+func (ic *ic) bcastListenIC(nl notifications.NotifListener, smap *smapX) (err error) {
 	var (
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAisMsg(&actMsg, smap, nil)

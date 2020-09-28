@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -619,16 +620,16 @@ ret:
 func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck, err error) {
 	xactKind = c.Args().Get(0)
 	bckName := c.Args().Get(1)
-	if !cmn.IsValidXaction(xactKind) {
+	if !xaction.IsValidXaction(xactKind) {
 		xactID = xactKind
 		xactKind = ""
 	} else {
-		switch cmn.XactsDtor[xactKind].Type {
-		case cmn.XactTypeGlobal:
+		switch xaction.XactsDtor[xactKind].Type {
+		case xaction.XactTypeGlobal:
 			if c.NArg() > 1 {
 				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a global xaction, ignoring bucket name\n", xactKind)
 			}
-		case cmn.XactTypeBck:
+		case xaction.XactTypeBck:
 			var objName string
 			bck, objName, err = cmn.ParseBckObjectURI(bckName)
 			if err != nil {
@@ -640,7 +641,7 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 			if bck, _, err = validateBucket(c, bck, "", true); err != nil {
 				return "", "", bck, err
 			}
-		case cmn.XactTypeTask:
+		case xaction.XactTypeTask:
 			// TODO: we probably should not ignore bucket...
 			if c.NArg() > 1 {
 				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a task xaction, ignoring bucket name\n", xactKind)
@@ -653,7 +654,7 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 // Get list of xactions
 func listXactions(onlyStartable bool) []string {
 	xactKinds := make([]string, 0)
-	for kind, meta := range cmn.XactsDtor {
+	for kind, meta := range xaction.XactsDtor {
 		if !onlyStartable || (onlyStartable && meta.Startable) {
 			xactKinds = append(xactKinds, kind)
 		}
