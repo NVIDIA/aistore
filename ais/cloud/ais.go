@@ -438,6 +438,21 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 	return extractErrCode(err)
 }
 
+func (m *AisCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
+	expectedCksm *cmn.Cksum, err error, errCode int) {
+	var (
+		remoteBck = lom.Bck().Bck
+	)
+	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+	if err != nil {
+		return nil, nil, err, errCode
+	}
+
+	r, err := api.GetObjectReader(aisCluster.bp, remoteBck, lom.ObjName)
+	err, errCode = extractErrCode(err)
+	return r, nil, err, errCode
+}
+
 func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
 		remoteBck = lom.Bck().Bck

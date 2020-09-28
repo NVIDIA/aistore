@@ -165,6 +165,28 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 }
 
 func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+	reader, _, err, errCode := hp.GetObjReader(ctx, lom)
+	if err != nil {
+		return err, errCode
+	}
+	params := cluster.PutObjectParams{
+		Reader:       reader,
+		WorkFQN:      workFQN,
+		RecvType:     cluster.ColdGet,
+		WithFinalize: false,
+	}
+	err = hp.t.PutObject(lom, params)
+	if err != nil {
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("[get_object] %s", lom)
+	}
+	return
+}
+
+func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
+	expectedCksm *cmn.Cksum, err error, errCode int) {
 	var (
 		h   = cmn.CloudHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().BackendBck()`
@@ -177,13 +199,12 @@ func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster
 		glog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
-	resp, err := hp.client(origURL).Get(origURL)
+	resp, err := hp.client(origURL).Get(origURL) // nolint:bodyclose // is closed by the caller
 	if err != nil {
-		return err, http.StatusInternalServerError
+		return nil, nil, err, http.StatusInternalServerError
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error occurred: %v", resp.StatusCode), resp.StatusCode
+		return nil, nil, fmt.Errorf("error occurred: %v", resp.StatusCode), resp.StatusCode
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -200,18 +221,5 @@ func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster
 
 	lom.SetCustomMD(customMD)
 	setSize(ctx, resp.ContentLength)
-	params := cluster.PutObjectParams{
-		Reader:       wrapReader(ctx, resp.Body),
-		WorkFQN:      workFQN,
-		RecvType:     cluster.ColdGet,
-		WithFinalize: false,
-	}
-	err = hp.t.PutObject(lom, params)
-	if err != nil {
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[get_object] %s", lom)
-	}
-	return
+	return wrapReader(ctx, resp.Body), nil, nil, 0
 }

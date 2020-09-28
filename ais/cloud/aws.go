@@ -349,12 +349,38 @@ func (awsp *awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta c
 ////////////////
 
 func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+	r, cksumToCheck, err, errCode := awsp.GetObjReader(ctx, lom)
+	if err != nil {
+		return err, errCode
+	}
+	params := cluster.PutObjectParams{
+		Reader:       r,
+		WorkFQN:      workFQN,
+		RecvType:     cluster.ColdGet,
+		Cksum:        cksumToCheck,
+		WithFinalize: false,
+	}
+	err = awsp.t.PutObject(lom, params)
+	if err != nil {
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("[get_object] %s", lom)
+	}
+	return
+}
+
+//////////////////
+// GetObjReader //
+/////////////////
+
+func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
+	expectedCksm *cmn.Cksum, err error, errCode int) {
 	var (
-		svc          *s3.S3
-		cksum        *cmn.Cksum
-		cksumToCheck *cmn.Cksum
-		h            = cmn.CloudHelpers.Amazon
-		cloudBck     = lom.Bck().BackendBck()
+		svc      *s3.S3
+		cksum    *cmn.Cksum
+		h        = cmn.CloudHelpers.Amazon
+		cloudBck = lom.Bck().BackendBck()
 	)
 
 	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[get_object]")
@@ -387,27 +413,13 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		customMD[cluster.VersionObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(obj.ETag); ok {
-		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, v)
+		expectedCksm = cmn.NewCksum(cmn.ChecksumMD5, v)
 		customMD[cluster.MD5ObjMD] = v
 	}
 	lom.SetCksum(cksum)
 	lom.SetCustomMD(customMD)
 	setSize(ctx, *obj.ContentLength)
-	params := cluster.PutObjectParams{
-		Reader:       wrapReader(ctx, obj.Body),
-		WorkFQN:      workFQN,
-		RecvType:     cluster.ColdGet,
-		Cksum:        cksumToCheck,
-		WithFinalize: false,
-	}
-	err = awsp.t.PutObject(lom, params)
-	if err != nil {
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[get_object] %s", lom)
-	}
-	return
+	return wrapReader(ctx, obj.Body), expectedCksm, nil, 0
 }
 
 ////////////////

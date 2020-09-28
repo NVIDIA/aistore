@@ -301,10 +301,12 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 // GET OBJECT //
 ////////////////
 
-func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
+	expectedCksm *cmn.Cksum, err error, errCode int) {
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
-		return
+		err, errCode = gcpp.gcpErrorToAISError(err, &lom.Bck().Bck)
+		return nil, nil, err, errCode
 	}
 	var (
 		h        = cmn.CloudHelpers.Google
@@ -314,18 +316,17 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
 		err, errCode = gcpp.gcpErrorToAISError(err, cloudBck)
-		return
+		return nil, nil, err, errCode
 	}
 
 	cksum := cmn.NewCksum(attrs.Metadata[gcpChecksumType], attrs.Metadata[gcpChecksumVal])
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		return
+		return nil, nil, err, 0
 	}
 
 	var (
-		cksumToCheck *cmn.Cksum
-		customMD     = cmn.SimpleKVs{
+		customMD = cmn.SimpleKVs{
 			cluster.SourceObjMD: cluster.SourceGoogleObjMD,
 		}
 	)
@@ -335,7 +336,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 		customMD[cluster.VersionObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.MD5); ok {
-		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, v)
+		expectedCksm = cmn.NewCksum(cmn.ChecksumMD5, v)
 		customMD[cluster.MD5ObjMD] = v
 	}
 	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
@@ -345,8 +346,17 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	lom.SetCksum(cksum)
 	lom.SetCustomMD(customMD)
 	setSize(ctx, rc.Attrs.Size)
+	reader = wrapReader(ctx, rc)
+	return
+}
+
+func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+	reader, cksumToCheck, err, errCode := gcpp.GetObjReader(ctx, lom)
+	if err != nil {
+		return err, errCode
+	}
 	params := cluster.PutObjectParams{
-		Reader:       wrapReader(ctx, rc),
+		Reader:       reader,
 		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,

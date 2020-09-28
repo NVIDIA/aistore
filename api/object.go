@@ -323,7 +323,7 @@ func PutObject(args PutObjectArgs) (err error) {
 		setAuthToken(req, args.BaseParams)
 		return req, nil
 	}
-	_, err = DoReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // it's closed inside
+	_, err = DoReqWithRetry(args.BaseParams.Client, newRequest, reqArgs) // nolint:bodyclose // is closed inside
 	return err
 }
 

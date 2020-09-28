@@ -52,6 +52,10 @@ func (m *dummyCloudProvider) GetObj(ctx context.Context, fqn string, lom *cluste
 	bck, node := lom.Bck().Bck, m._dummyNode()
 	return cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound
 }
+func (m *dummyCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser,
+	expectedCksm *cmn.Cksum, err error, errCode int) {
+	return nil, nil, nil, 0
+}
 func (m *dummyCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	bck, node := lom.Bck().Bck, m._dummyNode()
 	return "", cmn.NewErrorRemoteBucketDoesNotExist(bck, node), http.StatusNotFound

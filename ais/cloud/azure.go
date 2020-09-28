@@ -125,7 +125,7 @@ func NewAzure(t cluster.Target) (cluster.CloudProvider, error) {
 	key := azureUserKey()
 	creds, err := azblob.NewSharedKeyCredential(name, key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to init credentials", err)
+		return nil, fmt.Errorf("failed to init credentials %v", err)
 	}
 	p := azblob.NewPipeline(creds, azblob.PipelineOptions{})
 	return &azureProvider{
@@ -327,6 +327,29 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 }
 
 func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+	reader, cksumToCheck, err, errCode := ap.GetObjReader(ctx, lom)
+	if err != nil {
+		return err, errCode
+	}
+	params := cluster.PutObjectParams{
+		Reader:       reader,
+		WorkFQN:      workFQN,
+		RecvType:     cluster.ColdGet,
+		Cksum:        cksumToCheck,
+		WithFinalize: false,
+	}
+	err = ap.t.PutObject(lom, params)
+	if err != nil {
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("[get_object] %s", lom)
+	}
+	return
+}
+
+func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
+	expectedCksm *cmn.Cksum, err error, errCode int) {
 	var (
 		h        = cmn.CloudHelpers.Azure
 		cloudBck = lom.Bck().BackendBck()
@@ -338,18 +361,19 @@ func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 	respProps, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{})
 	if err != nil {
 		err, status := ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
-		return err, status
+		return nil, nil, err, status
 	}
 	if respProps.StatusCode() >= http.StatusBadRequest {
-		return fmt.Errorf("failed to get object props %s/%s", cloudBck, lom.ObjName), respProps.StatusCode()
+		return nil, nil, fmt.Errorf("failed to get object props %s/%s", cloudBck, lom.ObjName), respProps.StatusCode()
 	}
 	// 0, 0 = read range: the whole object
 	resp, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false)
 	if err != nil {
-		return ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
+		err, errCode = ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
+		return nil, nil, err, errCode
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return fmt.Errorf("failed to GET object %s/%s", cloudBck, lom.ObjName), resp.StatusCode()
+		return nil, nil, fmt.Errorf("failed to GET object %s/%s", cloudBck, lom.ObjName), resp.StatusCode()
 	}
 
 	var (
@@ -370,21 +394,8 @@ func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 
 	lom.SetCustomMD(customMD)
 	setSize(ctx, resp.ContentLength())
-	params := cluster.PutObjectParams{
-		Reader:       wrapReader(ctx, resp.Body(retryOpts)),
-		WorkFQN:      workFQN,
-		RecvType:     cluster.ColdGet,
-		Cksum:        cksumToCheck,
-		WithFinalize: false,
-	}
-	err = ap.t.PutObject(lom, params)
-	if err != nil {
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[get_object] %s", lom)
-	}
-	return
+
+	return wrapReader(ctx, resp.Body(retryOpts)), cksumToCheck, nil, 0
 }
 
 func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
