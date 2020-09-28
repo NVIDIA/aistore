@@ -422,18 +422,10 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 		return err, errCode
 	}
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
-		var (
-			r, w  = io.Pipe()
-			errCh = make(chan error, 1)
-		)
-		go func() {
-			goi := api.GetObjectInput{
-				Writer: w,
-			}
-			_, err = api.GetObject(aisCluster.bp, bck, lom.ObjName, goi)
-			w.CloseWithError(err)
-			errCh <- err
-		}()
+		r, err := api.GetObjectReader(aisCluster.bp, bck, lom.ObjName)
+		if err != nil {
+			return err
+		}
 
 		params := cluster.PutObjectParams{
 			Reader:       r,
@@ -441,15 +433,7 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 			WorkFQN:      workFQN,
 			WithFinalize: false,
 		}
-		err := m.t.PutObject(lom, params)
-		r.CloseWithError(err)
-		if err != nil {
-			return err
-		}
-		if err := <-errCh; err != nil {
-			return err
-		}
-		return nil
+		return m.t.PutObject(lom, params)
 	})
 	return extractErrCode(err)
 }

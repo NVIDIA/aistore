@@ -71,9 +71,35 @@ func DoHTTPRequest(reqParams ReqParams, vs ...interface{}) error {
 	return err
 }
 
-// doHTTPRequestGetResp sends one HTTP request, decodes the `v` structure
+// doHTTPRequestGetResp makes HTTP request, retries on connection refused or reset errors, decodes the `v` structure
 // (if provided) from `resp.Body` and returns the whole response.
+// The function returns an error if response status code is >= 400.
 func doHTTPRequestGetResp(reqParams ReqParams, v interface{}) (*wrappedResp, error) {
+	resp, err := doHTTPRequestGetHTTPResp(reqParams)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return readResp(reqParams, resp, v)
+}
+
+// doHTTPRequestGetResp makes HTTP request, retries on connection refused or reset errors, and returns response body.
+// The caller is responsible for closing returned reader.
+// The function returns an error if response status code is >= 400.
+func doHTTPRequestGetRespReader(reqParams ReqParams) (io.ReadCloser, error) {
+	resp, err := doHTTPRequestGetHTTPResp(reqParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := checkResp(reqParams, resp); err != nil {
+		return nil, err
+	}
+
+	return resp.Body, nil
+}
+
+func doHTTPRequestGetHTTPResp(reqParams ReqParams) (*http.Response, error) {
 	var (
 		reqBody io.Reader
 	)
@@ -89,50 +115,29 @@ func doHTTPRequestGetResp(reqParams ReqParams, v interface{}) (*wrappedResp, err
 	setRequestOptParams(req, reqParams)
 	setAuthToken(req, reqParams.BaseParams)
 
-	resp, err := reqParams.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
+	resp, err := reqParams.BaseParams.Client.Do(req)
 	if err != nil {
 		sleep := httpRetrySleep
 		if cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
-				resp, err = reqParams.BaseParams.Client.Do(req) // nolint:bodyclose // it's closed later
+				resp, err = reqParams.BaseParams.Client.Do(req)
 				sleep += sleep / 2
 			}
 		}
 	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to %s, err: %v", reqParams.BaseParams.Method, err)
+		err = fmt.Errorf("failed to %s, err: %v", reqParams.BaseParams.Method, err)
 	}
-	defer resp.Body.Close()
-	return readResp(reqParams, resp, v)
+	return resp, err
 }
 
 func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrappedResp, error) {
 	defer cmn.DrainReader(resp.Body)
 
-	if resp.StatusCode >= http.StatusBadRequest {
-		var httpErr *cmn.HTTPError
-		if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
-			if jsonErr := jsoniter.NewDecoder(resp.Body).Decode(&httpErr); jsonErr == nil {
-				return nil, httpErr
-			}
-		}
-		msg, _ := ioutil.ReadAll(resp.Body)
-		strMsg := string(msg)
-
-		if resp.StatusCode == http.StatusServiceUnavailable && strMsg == "" {
-			strMsg = fmt.Sprintf("[%s]: starting up, please try again later...",
-				http.StatusText(http.StatusServiceUnavailable))
-		}
-		// HEAD request does not return the body - create http error
-		// 503 is also to be preserved
-		httpErr = &cmn.HTTPError{
-			Status:  resp.StatusCode,
-			Method:  reqParams.BaseParams.Method,
-			URLPath: reqParams.Path,
-			Message: strMsg,
-		}
-		return nil, httpErr
+	if err := checkResp(reqParams, resp); err != nil {
+		return nil, err
 	}
 	wresp := &wrappedResp{Response: resp}
 	if v == nil {
@@ -180,6 +185,34 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 		}
 	}
 	return wresp, nil
+}
+
+func checkResp(reqParams ReqParams, resp *http.Response) error {
+	if resp.StatusCode < http.StatusBadRequest {
+		return nil
+	}
+	var httpErr *cmn.HTTPError
+	if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
+		if jsonErr := jsoniter.NewDecoder(resp.Body).Decode(&httpErr); jsonErr == nil {
+			return httpErr
+		}
+	}
+	msg, _ := ioutil.ReadAll(resp.Body)
+	strMsg := string(msg)
+
+	if resp.StatusCode == http.StatusServiceUnavailable && strMsg == "" {
+		strMsg = fmt.Sprintf("[%s]: starting up, please try again later...",
+			http.StatusText(http.StatusServiceUnavailable))
+	}
+	// HEAD request does not return the body - create http error
+	// 503 is also to be preserved
+	httpErr = &cmn.HTTPError{
+		Status:  resp.StatusCode,
+		Method:  reqParams.BaseParams.Method,
+		URLPath: reqParams.Path,
+		Message: strMsg,
+	}
+	return httpErr
 }
 
 // Given an existing HTTP Request and optional API parameters, setRequestOptParams

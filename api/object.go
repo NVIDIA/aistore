@@ -181,6 +181,31 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 	return resp.n, nil
 }
 
+// GetObjectReader API
+//
+// Returns reader of the requested object. It does not read body bytes, nor validates a checksum.
+// Caller is responsible for closing the reader.
+func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, err error) {
+	var (
+		q   url.Values
+		hdr http.Header
+	)
+	if len(options) != 0 {
+		var w io.Writer
+		w, q, hdr = getObjectOptParams(options[0])
+		cmn.Assert(w == nil)
+	}
+
+	q = cmn.AddBckToQuery(q, bck)
+	baseParams.Method = http.MethodGet
+	return doHTTPRequestGetRespReader(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.JoinWords(cmn.Version, cmn.Objects, bck.Name, object),
+		Query:      q,
+		Header:     hdr,
+	})
+}
+
 // GetObjectWithValidation API
 //
 // Same behavior as GetObject, but performs checksum validation of the object
