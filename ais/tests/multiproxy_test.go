@@ -163,7 +163,7 @@ func primaryCrashElectRestart(t *testing.T) {
 
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
-	checkPmapVersions(t, proxyURL)
+	checkSmaps(t, proxyURL)
 
 	oldPrimaryURL := smap.Primary.PublicNet.DirectURL
 	oldPrimaryID := smap.Primary.ID()
@@ -191,7 +191,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
 		t.Fatalf("Previous primary proxy did not rejoin the cluster")
 	}
-	checkPmapVersions(t, newPrimaryURL)
+	checkSmaps(t, newPrimaryURL)
 }
 
 // primaryAndTargetCrash kills the primary p[roxy and one random target, verifies the next in
@@ -864,7 +864,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, 
 	if newSmap.Primary.ID() != toID {
 		t.Fatalf("Expected primary=%s, got %s", toID, newSmap.Primary.ID())
 	}
-	checkPmapVersions(t, proxyURL)
+	checkSmaps(t, proxyURL)
 	return
 }
 
@@ -1002,20 +1002,21 @@ func getProcess(port string) (string, string, []string, error) {
 	return pid, fields[0], fields[1:], nil
 }
 
-// Read Pmap from all proxies and checks versions. If any proxy's smap version
-// differs from primary's one then an error returned
-func checkPmapVersions(t *testing.T, proxyURL string) {
-	smapPrimary := tutils.GetClusterMap(t, proxyURL)
-	for proxyID, proxyInfo := range smapPrimary.Pmap {
-		if proxyURL == proxyInfo.PublicNet.DirectURL {
+// For each proxy: compare its Smap vs primary(*) and return an error if differs
+func checkSmaps(t *testing.T, proxyURL string) {
+	var (
+		smap1   = tutils.GetClusterMap(t, proxyURL)
+		primary = smap1.Primary // primary according to the `proxyURL`(*)
+	)
+	for _, psi := range smap1.Pmap {
+		smap2 := tutils.GetClusterMap(t, psi.PublicNet.DirectURL)
+		uuid, sameOrigin, sameVersion, eq := smap1.Compare(smap2)
+		if eq {
 			continue
 		}
-		smap := tutils.GetClusterMap(t, proxyInfo.PublicNet.DirectURL)
-		if smap.Version != smapPrimary.Version {
-			err := fmt.Errorf("proxy %s has version %d, but primary proxy has version %d of Pmap",
-				proxyID, smap.Version, smapPrimary.Version)
-			t.Error(err)
-		}
+		err := fmt.Errorf("(%s %s, primary=%s) != (%s %s, primary=%s): (uuid=%s, same-orig=%t, same-ver=%t)",
+			proxyURL, smap1, primary, psi.PublicNet.DirectURL, smap2, smap2.Primary, uuid, sameOrigin, sameVersion)
+		t.Error(err)
 	}
 }
 
