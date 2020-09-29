@@ -20,9 +20,7 @@ const (
 	waitNodeStarted = 10 * time.Second
 )
 
-// GetClusterMap API
-//
-// GetClusterMap retrieves AIStore cluster map
+// GetClusterMap retrieves AIStore cluster map.
 func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
@@ -33,9 +31,7 @@ func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 	return
 }
 
-// GetNodeClusterMap API
-//
-// GetNodeClusterMap retrieves AIStore cluster map from specific node
+// GetNodeClusterMap retrieves AIStore cluster map from specific node.
 func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
@@ -47,9 +43,7 @@ func GetNodeClusterMap(baseParams BaseParams, nodeID string) (smap *cluster.Smap
 	return
 }
 
-// GetClusterSysInfo API
-//
-// GetClusterSysInfo retrieves AIStore system info
+// GetClusterSysInfo retrieves AIStore system info.
 func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
@@ -60,9 +54,7 @@ func GetClusterSysInfo(baseParams BaseParams) (sysInfo cmn.ClusterSysInfo, err e
 	return
 }
 
-// GetClusterStats API
-//
-// GetClusterStats retrieves AIStore cluster stats (all targets and current proxy)
+// GetClusterStats retrieves AIStore cluster stats (all targets and current proxy).
 func GetClusterStats(baseParams BaseParams) (clusterStats stats.ClusterStats, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
@@ -94,9 +86,7 @@ func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.CloudInfoAIS, err error) {
 	return
 }
 
-// RegisterNode API
-//
-// Registers an existing node to the clustermap.
+// RegisterNode registers an existing node to the cluster map.
 func RegisterNode(baseParams BaseParams, nodeInfo *cluster.Snode) error {
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
@@ -106,9 +96,7 @@ func RegisterNode(baseParams BaseParams, nodeInfo *cluster.Snode) error {
 	})
 }
 
-// UnregisterNode API
-//
-// Unregisters an existing node from the clustermap.
+// UnregisterNode unregisters an existing node from the cluster map.
 func UnregisterNode(baseParams BaseParams, unregisterSID string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
@@ -117,9 +105,8 @@ func UnregisterNode(baseParams BaseParams, unregisterSID string) error {
 	})
 }
 
-// SetPrimaryProxy API
-//
-// Given a daemonID, it sets that corresponding proxy as the primary proxy of the cluster
+// SetPrimaryProxy given a daemonID sets that corresponding proxy as the
+// primary proxy of the cluster.
 func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
@@ -128,24 +115,9 @@ func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 	})
 }
 
-// SendOwnershipTbl API
-//
-// Given a daemonID of a IC member, send the ownership table
-func SendOwnershipTbl(baseParams BaseParams, daemonID string) error {
-	baseParams.Method = http.MethodPut
-	msg := cmn.ActionMsg{Action: cmn.ActSendOwnershipTbl, Value: daemonID}
-	return DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
-		Body:       cmn.MustMarshal(msg),
-	})
-}
-
-// SetClusterConfig API
-//
-// Given key-value pairs of cluster configuration parameters,
-// this operation sets the cluster-wide configuration accordingly.
-// Setting cluster-wide configuration requires sending the request to a proxy
+// SetClusterConfig given key-value pairs of cluster configuration parameters,
+// sets the cluster-wide configuration accordingly. Setting cluster-wide
+// configuration requires sending the request to a proxy.
 func SetClusterConfig(baseParams BaseParams, nvs cmn.SimpleKVs) error {
 	q := url.Values{}
 	for key, val := range nvs {
@@ -159,10 +131,6 @@ func SetClusterConfig(baseParams BaseParams, nvs cmn.SimpleKVs) error {
 	})
 }
 
-// AttachRemoteAIS API
-//
-// TODO: add APIs to attach or enable (detach or disable) mountpath - use cmn.GetWhatMountpaths
-//
 func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 	q := make(url.Values)
 	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)
@@ -175,8 +143,6 @@ func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 	})
 }
 
-// DetachRemoteAIS API
-//
 func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 	q := make(url.Values)
 	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)
@@ -189,8 +155,6 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 	})
 }
 
-// Maintenance API
-//
 func Maintenance(baseParams BaseParams, sid, action string) error {
 	msg := cmn.ActionMsg{
 		Action: action,

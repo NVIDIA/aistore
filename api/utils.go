@@ -25,6 +25,7 @@ type (
 		Method string
 		Token  string
 	}
+
 	// ReqParams is used in constructing client-side API requests to the AIStore.
 	// Stores Query and Headers for providing arguments that are not used commonly in API requests
 	ReqParams struct {
@@ -41,6 +42,7 @@ type (
 		// Determines if the response should be validated with the checksum
 		Validate bool
 	}
+
 	wrappedResp struct {
 		*http.Response
 		n          int64  // number bytes read from `resp.Body`
@@ -219,8 +221,8 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 	return httpErr
 }
 
-// Given an existing HTTP Request and optional API parameters, setRequestOptParams
-// sets the optional fields of the request if provided
+// setRequestOptParams given an existing HTTP Request and optional API parameters,
+// sets the optional fields of the request if provided.
 func setRequestOptParams(req *http.Request, reqParams ReqParams) {
 	if len(reqParams.Query) != 0 {
 		req.URL.RawQuery = reqParams.Query.Encode()

@@ -39,19 +39,14 @@ type (
 	ProgressCallback = func(pi *ProgressContext)
 )
 
-// SetBucketProps API
-//
-// Set the properties of a bucket using the bucket name and the entire bucket
-// property structure to be set.
+// SetBucketProps sets the properties of a bucket.
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToUpdate, query ...url.Values) (string, error) {
 	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
 	return patchBucketProps(baseParams, bck, b, query...)
 }
 
-// ResetBucketProps API
-//
-// Reset the properties of a bucket, identified by its name, to the global configuration.
+// ResetBucketProps resets the properties of a bucket to the global configuration.
 func ResetBucketProps(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (string, error) {
 	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActResetBprops})
 	return patchBucketProps(baseParams, bck, b, query...)
@@ -69,11 +64,9 @@ func patchBucketProps(baseParams BaseParams, bck cmn.Bck, body []byte, query ...
 	return
 }
 
-// HeadBucket API
-//
-// Returns the properties of a bucket specified by its name.
+// HeadBucket returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
-// corresponding counterparts in the BucketProps struct
+// corresponding counterparts in the cmn.BucketProps struct.
 func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn.BucketProps, err error) {
 	var (
 		path = cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name)
@@ -97,10 +90,9 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 	return
 }
 
-// ListBuckets API
-//
-// provider takes one of Cloud Provider enum names (see cmn/bucket.go). If provider is empty, return all names.
-// Otherwise, return cloud or ais bucket names.
+// ListBuckets returns bucket names for the given provider. Provider takes one
+// of Cloud Provider enum names (see cmn/bucket.go). If provider is empty,
+// return all names. Otherwise, return cloud or ais bucket names.
 func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketNames, error) {
 	var (
 		bucketNames = cmn.BucketNames{}
@@ -116,9 +108,8 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketName
 	return bucketNames, nil
 }
 
-// GetBucketsSummaries API
-//
-// Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
+// GetBucketsSummaries returns bucket summaries for the specified bucket provider
+// (and all bucket summaries for unspecified ("") provider).
 func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.BucketSummaryMsg) (cmn.BucketsSummaries, error) {
 	if msg == nil {
 		msg = &cmn.BucketSummaryMsg{}
@@ -139,9 +130,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.Bu
 	return summaries, nil
 }
 
-// CreateBucket API
-//
-// CreateBucket sends a HTTP request to a proxy to create an ais bucket with the given name
+// CreateBucket sends a HTTP request to a proxy to create an AIS bucket with the given name.
 func CreateBucket(baseParams BaseParams, bck cmn.Bck, ops ...cmn.BucketPropsToUpdate) error {
 	if len(ops) > 1 {
 		return fmt.Errorf("only a single BucketPropsToUpdate parameter can be accepted")
@@ -159,9 +148,7 @@ func CreateBucket(baseParams BaseParams, bck cmn.Bck, ops ...cmn.BucketPropsToUp
 	})
 }
 
-// DestroyBucket API
-//
-// DestroyBucket sends a HTTP request to a proxy to remove an ais bucket with the given name
+// DestroyBucket sends a HTTP request to a proxy to remove an AIS bucket with the given name.
 func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
@@ -172,9 +159,7 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	})
 }
 
-// DoesBucketExist API
-//
-// DoesBucketExist queries a proxy or target to get a list of all ais buckets,
+// DoesBucketExist queries a proxy or target to get a list of all AIS buckets,
 // returns true if the bucket is present in the list.
 func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 	bcks, err := ListBuckets(baseParams, query)
@@ -184,10 +169,8 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 	return bcks.Contains(query), nil
 }
 
-// CopyBucket API
-//
-// CopyBucket creates a new ais bucket newName and
-// copies into it contents of the existing oldName bucket
+// CopyBucket creates a new AIS bucket `toBck` and copies into it contents of
+// the existing `fromBck` bucket.
 func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.CopyBckMsg) (xactID string, err error) {
 	var msg *cmn.CopyBckMsg
 	if len(msgs) > 0 {
@@ -202,9 +185,7 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.Copy
 	return
 }
 
-// RenameBucket API
-//
-// RenameBucket changes the name of a bucket from oldName to newBucketName
+// RenameBucket changes the name of a bucket from `oldBck` to `newBck`.
 func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
@@ -215,56 +196,42 @@ func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) (xactID string,
 	return
 }
 
-// DeleteList API
-//
-// DeleteList sends a HTTP request to remove a list of objects from a bucket
+// DeleteList sends a HTTP request to remove a list of objects from a bucket.
 func DeleteList(baseParams BaseParams, bck cmn.Bck, filesList []string) (string, error) {
 	deleteMsg := cmn.ListMsg{ObjNames: filesList}
 	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
 }
 
-// DeleteRange API
-//
-// DeleteRange sends a HTTP request to remove a range of objects from a bucket
+// DeleteRange sends a HTTP request to remove a range of objects from a bucket.
 func DeleteRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	deleteMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActDelete, deleteMsg)
 }
 
-// PrefetchList API
-//
-// PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket
+// PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket.
 func PrefetchList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	prefetchMsg := cmn.ListMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, prefetchMsg)
 }
 
-// PrefetchRange API
-//
-// PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket
+// PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket.
 func PrefetchRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	prefetchMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActPrefetch, prefetchMsg)
 }
 
-// EvictList API
-//
-// EvictList sends a HTTP request to evict a list of objects from a cloud bucket
+// EvictList sends a HTTP request to evict a list of objects from a cloud bucket.
 func EvictList(baseParams BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	evictMsg := cmn.ListMsg{ObjNames: fileslist}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
-// EvictRange API
-//
-// EvictRange sends a HTTP request to evict a range of objects from a cloud bucket
+// EvictRange sends a HTTP request to evict a range of objects from a cloud bucket.
 func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) {
 	evictMsg := cmn.RangeMsg{Template: rng}
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
-// EvictCloudBucket API
-//
 // EvictCloudBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
 // - the operation results in eliminating all traces of the specified cloud bucket in the AIStore
 func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) error {
@@ -335,10 +302,8 @@ func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.Bucket
 	return err
 }
 
-// ListObjects API
-
-// ListObjects returns list of objects in a bucket. numObjects is the
-// maximum number of objects returned by ListObjects (0 - return all objects in a bucket)
+// ListObjects returns list of objects in a bucket. `numObjects` is the
+// maximum number of objects returned (0 - return all objects in a bucket).
 func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObjects uint, args ...*ProgressContext) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 
@@ -457,7 +422,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 }
 
 // ListObjectsPage returns the first page of bucket objects.
-// On success the function updates smsg.ContinuationToken, so a client can reuse
+// On success the function updates `smsg.ContinuationToken`, so a client can reuse
 // the message to fetch the next page.
 func ListObjectsPage(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
@@ -526,7 +491,7 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, listR
 
 func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
-	// without `string` conversion it makes base64 from []byte in `Body`
+	// Without `string` conversion it makes base64 from []byte in `Body`.
 	ecConf := string(cmn.MustMarshal(&cmn.ECConfToUpdate{DataSlices: &data, ParitySlices: &parity}))
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

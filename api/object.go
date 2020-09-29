@@ -81,9 +81,7 @@ type FlushArgs struct {
 	Cksum      *cmn.Cksum
 }
 
-// HeadObject API
-//
-// Returns the size and version of the object specified by bucket/object
+// HeadObject returns the size and version of the object specified by bucket/object.
 func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
 	checkIsCached := false
 	if len(checkExists) > 0 {
@@ -125,9 +123,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 	return objProps, nil
 }
 
-// DeleteObject API
-//
-// Deletes an object specified by bucket/object
+// DeleteObject deletes an object specified by bucket/object.
 func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
@@ -137,9 +133,7 @@ func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	})
 }
 
-// EvictObject API
-//
-// Evicts an object specified by bucket/object
+// EvictObject evicts an object specified by bucket/object.
 func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete
 	actMsg := cmn.ActionMsg{Action: cmn.ActEvictObjects, Name: cmn.JoinWords(bck.Name, object)}
@@ -150,12 +144,11 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	})
 }
 
-// GetObject API
+// GetObject returns the length of the object. Does not validate checksum of the
+// object in the response.
 //
-// Returns the length of the object. Does not validate checksum of the object in the response.
-//
-// Writes the response body to a writer if one is specified in the optional GetObjectInput.Writer.
-// Otherwise, it discards the response body read.
+// Writes the response body to a writer if one is specified in the optional
+// `GetObjectInput.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
 func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
@@ -181,10 +174,8 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 	return resp.n, nil
 }
 
-// GetObjectReader API
-//
-// Returns reader of the requested object. It does not read body bytes, nor validates a checksum.
-// Caller is responsible for closing the reader.
+// GetObjectReader returns reader of the requested object. It does not read body
+// bytes, nor validates a checksum. Caller is responsible for closing the reader.
 func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (r io.ReadCloser, err error) {
 	var (
 		q   url.Values
@@ -206,16 +197,16 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 	})
 }
 
-// GetObjectWithValidation API
+// GetObjectWithValidation has same behavior as GetObject, but performs checksum
+// validation of the object by comparing the checksum in the response header
+// with the calculated checksum value derived from the returned object.
 //
-// Same behavior as GetObject, but performs checksum validation of the object
-// by comparing the checksum in the response header with the calculated checksum
-// value derived from the returned object.
+// Similar to GetObject, if a memory manager/slab allocator is not specified, a
+// temporary buffer is allocated when reading from the response body to compute
+// the object checksum.
 //
-// Similar to GetObject, if a memory manager/slab allocator is not specified, a temporary buffer
-// is allocated when reading from the response body to compute the object checksum.
-//
-// Returns InvalidCksumError when the expected and actual checksum values are different.
+// Returns `cmn.InvalidCksumError` when the expected and actual checksum values
+// are different.
 func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w   = ioutil.Discard
@@ -245,13 +236,11 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 	return resp.n, nil
 }
 
-// GetObjectWithResp API
-//
-// Returns the response of the request and length of the object. Does not
-// validate checksum of the object in the response.
+// GetObjectWithResp returns the response of the request and length of the object.
+// Does not validate checksum of the object in the response.
 //
 // Writes the response body to a writer if one is specified in the optional
-// GetObjectInput.Writer. Otherwise, it discards the response body read.
+// `GetObjectInput.Writer`. Otherwise, it discards the response body read.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
 func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, options ...GetObjectInput) (*http.Response, int64, error) {
@@ -277,14 +266,10 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 	return resp.Response, resp.n, nil
 }
 
-// PutObject API
+// PutObject creates an object from the body of the reader argument and puts
+// it in the specified bucket.
 //
-// Creates an object from the body of the io.Reader parameter and puts it in the 'bucket' bucket
-// If there is an ais bucket and cloud bucket with the same name, specify with provider ("ais", "cloud")
-// The object name is specified by the 'object' argument.
-// If the object hash passed in is not empty, the value is set
-// in the request header with the default checksum type "xxhash"
-// Assumes that args.Reader is already opened and ready for usage
+// Assumes that `args.Reader` is already opened and ready for usage.
 func PutObject(args PutObjectArgs) (err error) {
 	query := cmn.AddBckToQuery(nil, args.Bck)
 	reqArgs := cmn.ReqArgs{
@@ -327,9 +312,7 @@ func PutObject(args PutObjectArgs) (err error) {
 	return err
 }
 
-// AppendObject API
-//
-// Append builds the object which should be finished with `FlushObject` request.
+// AppendObject builds the object which should be finished with `FlushObject` request.
 // It returns handle which works as id for subsequent append requests so the
 // correct object can be identified.
 //
@@ -373,8 +356,70 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	return resp.Header.Get(cmn.HeaderAppendHandle), err
 }
 
-// Makes Client.Do request and retries it when got Broken Pipe or Connection Refused error
-// Should be used for PUT requests as it puts reader into a request
+// FlushObject should occur once all appends have finished successfully.
+// This call will create a fully operational object and requires handle to be set.
+func FlushObject(args FlushArgs) (err error) {
+	query := make(url.Values)
+	query.Add(cmn.URLParamAppendType, cmn.FlushOp)
+	query.Add(cmn.URLParamAppendHandle, args.Handle)
+	query = cmn.AddBckToQuery(query, args.Bck)
+
+	var header http.Header
+	if args.Cksum != nil {
+		header = make(http.Header)
+		header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
+		header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
+	}
+
+	args.BaseParams.Method = http.MethodPut
+	return DoHTTPRequest(ReqParams{
+		BaseParams: args.BaseParams,
+		Path:       cmn.JoinWords(cmn.Version, cmn.Objects, args.Bck.Name, args.Object),
+		Query:      query,
+		Header:     header,
+	})
+}
+
+// RenameObject renames object name from `oldName` to `newName`. Works only
+// across single, specified bucket.
+//
+// FIXME: handle cloud provider - here and elsewhere
+func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
+	baseParams.Method = http.MethodPost
+	return DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.JoinWords(cmn.Version, cmn.Objects, bck.Name, oldName),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName}),
+	})
+}
+
+// PromoteFileOrDir promotes AIS-colocated files and directories to objects.
+//
+// NOTE: Advanced usage only.
+func PromoteFileOrDir(args *PromoteArgs) error {
+	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN}
+	actMsg.Value = &cmn.ActValPromote{
+		Target:    args.Target,
+		ObjName:   args.Object,
+		Recurs:    args.Recurs,
+		Overwrite: args.Overwrite,
+		KeepOrig:  args.KeepOrig,
+		Verbose:   args.Verbose,
+	}
+
+	args.BaseParams.Method = http.MethodPost
+	return DoHTTPRequest(ReqParams{
+		BaseParams: args.BaseParams,
+		Path:       cmn.JoinWords(cmn.Version, cmn.Objects, args.Bck.Name),
+		Body:       cmn.MustMarshal(actMsg),
+		Query:      cmn.AddBckToQuery(nil, args.Bck),
+	})
+}
+
+// DoReqWithRetry makes `client.Do` request and retries it when got "Broken Pipe"
+// or "Connection Refused" error.
+//
+// Should be used for PUT requests as it puts reader into a request.
 func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error),
 	reqArgs cmn.ReqArgs) (resp *http.Response, err error) {
 	var (
@@ -425,68 +470,4 @@ func shouldRetryHTTP(err error, resp *http.Response) bool {
 		return true
 	}
 	return err != nil && (cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err))
-}
-
-// FlushObject API
-//
-// Flushing should occur once all appends have finished successfully.
-// This call will create a fully operational object and requires handle to be set.
-func FlushObject(args FlushArgs) (err error) {
-	query := make(url.Values)
-	query.Add(cmn.URLParamAppendType, cmn.FlushOp)
-	query.Add(cmn.URLParamAppendHandle, args.Handle)
-	query = cmn.AddBckToQuery(query, args.Bck)
-
-	var header http.Header
-	if args.Cksum != nil {
-		header = make(http.Header)
-		header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
-		header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
-	}
-
-	args.BaseParams.Method = http.MethodPut
-	return DoHTTPRequest(ReqParams{
-		BaseParams: args.BaseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Objects, args.Bck.Name, args.Object),
-		Query:      query,
-		Header:     header,
-	})
-}
-
-// RenameObject API
-//
-// Creates a cmn.ActionMsg with the new name of the object
-// and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
-//
-// FIXME: handle cloud provider - here and elsewhere
-func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
-	baseParams.Method = http.MethodPost
-	return DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Objects, bck.Name, oldName),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName}),
-	})
-}
-
-// PromoteFileOrDir API
-//
-// promote AIS-colocated files and directories to objects (NOTE: advanced usage only)
-func PromoteFileOrDir(args *PromoteArgs) error {
-	actMsg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN}
-	actMsg.Value = &cmn.ActValPromote{
-		Target:    args.Target,
-		ObjName:   args.Object,
-		Recurs:    args.Recurs,
-		Overwrite: args.Overwrite,
-		KeepOrig:  args.KeepOrig,
-		Verbose:   args.Verbose,
-	}
-
-	args.BaseParams.Method = http.MethodPost
-	return DoHTTPRequest(ReqParams{
-		BaseParams: args.BaseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Objects, args.Bck.Name),
-		Body:       cmn.MustMarshal(actMsg),
-		Query:      cmn.AddBckToQuery(nil, args.Bck),
-	})
 }

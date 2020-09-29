@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-// s3/bckName/objName[!tf]
+// s3/<bucket-name>/<object-name>
 func GetObjectS3(baseParams BaseParams, bck cmn.Bck, objectName string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w   = ioutil.Discard
