@@ -277,7 +277,7 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 		return nil
 	}
 
-	if _, err := api.WaitForXactionV2(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
+	if _, err := api.WaitForXaction(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
 		return err
 	}
 

@@ -77,7 +77,7 @@ func waitXactionHandler(c *cli.Context) error {
 		refreshRate = calcRefreshRate(c)
 	)
 	xactArgs := api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
-	status, err := api.WaitForXactionV2(defaultAPIParams, xactArgs, refreshRate)
+	status, err := api.WaitForXaction(defaultAPIParams, xactArgs, refreshRate)
 	if err != nil {
 		return err
 	}

@@ -1462,7 +1462,7 @@ func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies i
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActMakeNCopies}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 }
 
@@ -1600,7 +1600,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: uuid, Kind: cmn.ActRenameLB, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
@@ -1666,7 +1666,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActRenameLB, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// Gets on renamed ais bucket
@@ -1794,7 +1794,7 @@ func TestRenameBucketTwice(t *testing.T) {
 
 	// Wait for rename to complete
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActRenameLB, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
@@ -1961,7 +1961,7 @@ func TestCopyBucket(t *testing.T) {
 
 			for _, uuid := range xactIDs {
 				args := api.XactReqArgs{ID: uuid, Kind: cmn.ActCopyBucket, Timeout: copyBucketTimeout}
-				_, err = api.WaitForXactionV2(baseParams, args)
+				_, err = api.WaitForXaction(baseParams, args)
 				tassert.CheckFatal(t, err)
 			}
 
@@ -2092,7 +2092,7 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: time.Minute}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
@@ -2114,7 +2114,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: time.Minute}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(baseParams, dstBck, nil, 0)
@@ -2135,7 +2135,7 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: time.Minute}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
@@ -2214,7 +2214,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 
 	// Wait for rename to complete
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list
@@ -2298,7 +2298,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 
 	// Wait for copy to complete
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActRenameLB, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// Check if the new bucket appears in the list

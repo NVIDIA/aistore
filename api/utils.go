@@ -48,7 +48,7 @@ type (
 	}
 )
 
-// HTTPStatus returns HTTP status or (-1) for non-HTTP error
+// HTTPStatus returns HTTP status or (-1) for non-HTTP error.
 func HTTPStatus(err error) int {
 	if err == nil {
 		return http.StatusOK
@@ -71,8 +71,10 @@ func DoHTTPRequest(reqParams ReqParams, vs ...interface{}) error {
 	return err
 }
 
-// doHTTPRequestGetResp makes HTTP request, retries on connection refused or reset errors, decodes the `v` structure
-// (if provided) from `resp.Body` and returns the whole response.
+// doHTTPRequestGetResp makes HTTP request, retries on connection refused or
+// reset errors, decodes the `v` structure (if provided) from `resp.Body` and
+// returns the whole response.
+//
 // The function returns an error if response status code is >= 400.
 func doHTTPRequestGetResp(reqParams ReqParams, v interface{}) (*wrappedResp, error) {
 	resp, err := doHTTPRequestGetHTTPResp(reqParams)
@@ -83,8 +85,10 @@ func doHTTPRequestGetResp(reqParams ReqParams, v interface{}) (*wrappedResp, err
 	return readResp(reqParams, resp, v)
 }
 
-// doHTTPRequestGetResp makes HTTP request, retries on connection refused or reset errors, and returns response body.
-// The caller is responsible for closing returned reader.
+// doHTTPRequestGetResp makes HTTP request, retries on connection refused or
+// reset errors, and returns response body. The caller is responsible for
+// closing returned reader.
+//
 // The function returns an error if response status code is >= 400.
 func doHTTPRequestGetRespReader(reqParams ReqParams) (io.ReadCloser, error) {
 	resp, err := doHTTPRequestGetHTTPResp(reqParams)

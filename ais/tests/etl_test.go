@@ -192,7 +192,7 @@ func testOfflineETL(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBucket, Timeout: time.Minute}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(baseParams, bckTo, nil, 0)
@@ -368,7 +368,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	args := api.XactReqArgs{ID: xactID, Timeout: time.Minute}
-	_, err = api.WaitForXactionV2(baseParams, args)
+	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(bckTo))

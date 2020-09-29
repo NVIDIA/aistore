@@ -122,8 +122,6 @@ func (xs NodesXactMultiStats) GetNodesXactStat(id string) (xactStat NodesXactSta
 	return
 }
 
-// StartXaction API
-//
 // StartXaction starts a given xaction.
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
 	if !xaction.XactsDtor[args.Kind].Startable {
@@ -155,8 +153,6 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 	return id, err
 }
 
-// AbortXaction API
-//
 // AbortXaction aborts a given xaction.
 func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	msg := cmn.ActionMsg{
@@ -176,8 +172,6 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	})
 }
 
-// GetXactionStatsByID API
-//
 // GetXactionStatsByID gets all xaction stats for given id.
 func GetXactionStatsByID(baseParams BaseParams, id string) (xactStat NodesXactStat, err error) {
 	xactStats, err := QueryXactionStats(baseParams, XactReqArgs{ID: id})
@@ -188,8 +182,6 @@ func GetXactionStatsByID(baseParams BaseParams, id string) (xactStat NodesXactSt
 	return
 }
 
-// QueryXactionStats API
-//
 // QueryXactionStats gets all xaction stats for given kind and bucket (optional).
 func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats NodesXactMultiStats, err error) {
 	msg := xaction.XactReqMsg{
@@ -210,37 +202,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 	return xactStats, err
 }
 
-// WaitForXaction API
-//
-// WaitForXaction waits for a given xaction to complete.
-func WaitForXaction(baseParams BaseParams, args XactReqArgs) error {
-	ctx := context.Background()
-	if args.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
-		defer cancel()
-	}
-
-	for {
-		xactStats, err := QueryXactionStats(baseParams, args)
-		if err != nil {
-			return err
-		}
-		if xactStats.Finished() {
-			break
-		}
-		time.Sleep(xactRetryInterval)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			break
-		}
-	}
-
-	return nil
-}
-
+// GetXactionStatus retrieves the status of the xaction.
 func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *notifications.NotifStatus, err error) {
 	baseParams.Method = http.MethodGet
 	msg := xaction.XactReqMsg{
@@ -264,8 +226,8 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *notifica
 	return
 }
 
-// TODO: Rename this function after IC is stable
-func WaitForXactionV2(baseParams BaseParams, args XactReqArgs, refreshIntervals ...time.Duration) (status *notifications.NotifStatus, err error) {
+// WaitForXaction waits for a given xaction to complete.
+func WaitForXaction(baseParams BaseParams, args XactReqArgs, refreshIntervals ...time.Duration) (status *notifications.NotifStatus, err error) {
 	var (
 		ctx           = context.Background()
 		retryInterval = xactRetryInterval
@@ -297,8 +259,6 @@ func WaitForXactionV2(baseParams BaseParams, args XactReqArgs, refreshIntervals 
 	}
 }
 
-// WaitForXaction API
-//
 // WaitForXactionToStart waits for a given xaction to start.
 func WaitForXactionToStart(baseParams BaseParams, args XactReqArgs) error {
 	ctx := context.Background()
@@ -331,9 +291,8 @@ func WaitForXactionToStart(baseParams BaseParams, args XactReqArgs) error {
 	return nil
 }
 
-// MakeNCopies API
-//
-// MakeNCopies starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies)
+// MakeNCopies starts an extended action (xaction) to bring a given bucket to a
+// certain redundancy level (num copies).
 func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{

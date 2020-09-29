@@ -1184,7 +1184,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	})
 	tassert.CheckError(t, err)
 	reqArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: bck, Latest: true}
-	api.WaitForXactionV2(baseParams, reqArgs)
+	api.WaitForXaction(baseParams, reqArgs)
 
 	close(abortCh)
 	wgPut.Wait()
@@ -2246,7 +2246,7 @@ func TestECBucketEncode(t *testing.T) {
 
 	tutils.Logf("EC encode must start automatically for bucket %s\n", m.bck)
 	xactArgs := api.XactReqArgs{Kind: cmn.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
-	_, err = api.WaitForXactionV2(baseParams, xactArgs)
+	_, err = api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
 
 	reslist, err = api.ListObjects(baseParams, m.bck, nil, 0)
