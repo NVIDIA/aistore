@@ -652,12 +652,15 @@ gfn:
 }
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
+	header := make(http.Header)
+	header.Add(cmn.HeaderCallerID, goi.t.Snode().ID())
 	query := url.Values{}
 	query.Add(cmn.URLParamIsGFNRequest, "true")
 	query = cmn.AddBckToQuery(query, lom.Bck().Bck)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
+		Header: header,
 		Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 		Query:  query,
 	}

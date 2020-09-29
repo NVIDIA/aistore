@@ -1133,12 +1133,15 @@ func (t *targetrunner) enable() error {
 
 // lookupRemoteSingle sends the message to the given target to see if it has the specific object.
 func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
+	header := make(http.Header)
+	header.Add(cmn.HeaderCallerID, t.Snode().ID())
 	query := make(url.Values)
 	query.Add(cmn.URLParamSilent, "true")
 	args := callArgs{
 		si: tsi,
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
+			Header: header,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
 			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 			Query:  query,
@@ -1153,12 +1156,15 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 // lookupRemoteAll sends the broadcast message to all targets to see if they
 // have the specific object.
 func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
+	header := make(http.Header)
+	header.Add(cmn.HeaderCallerID, t.Snode().ID())
 	query := make(url.Values)
 	query.Add(cmn.URLParamSilent, "true")
 	query.Add(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
 	res := t.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
+			Header: header,
 			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},

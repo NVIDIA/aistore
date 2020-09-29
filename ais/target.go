@@ -755,7 +755,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		objName = apiItems[1]
 	)
 
-	if ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
+	if !isIntraCall(r.Header) && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
 		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 			t.si, r.Method, r.RemoteAddr)
 		return
@@ -988,7 +988,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		features = cmn.GCO.Get().Client.Features
 		query    = r.URL.Query()
 	)
-	if isRedirect(query) == "" && !features.IsSet(cmn.FeatureDirectAccess) {
+	if isRedirect(query) == "" && !isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
 		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 			t.si, r.Method, r.RemoteAddr)
 		return
