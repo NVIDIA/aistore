@@ -17,7 +17,7 @@ import (
 // ais config //
 ////////////////
 
-func LoadConfigOrFail(confPath string) {
+func MustLoadConfig(confPath string) {
 	if err := LoadConfig(confPath); err != nil {
 		cmn.ExitLogf("%v", err)
 	}

@@ -1,4 +1,30 @@
 #!/bin/bash
+
+run_tests() {
+  SECONDS=0
+  if [[ -n "$RE" ]]; then
+    re_val="-run=${RE}"
+  fi
+
+  timeout_val="2h"
+  if [[ -n "$SHORT" ]]; then
+    short_val="-short"
+    timeout_val="30m"
+  fi
+
+  errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 \
+    -timeout "${timeout_val}" ${short_val} ${re_val} "${AISTORE_DIR}/..." 2>&1)
+  exit_code=$?
+
+  failed_tests=$(echo "$errs" | tee -a /dev/stderr | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$")
+  echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
+
+  if [[ $exit_code -ne 0 ]]; then
+    echo "${failed_tests}"
+    exit $exit_code
+  fi
+}
+
 AISTORE_DIR="$(cd "$(dirname "$0")/../../"; pwd -P)"
 YAPF_STYLE="$(dirname ${0})/config/.style.yapf"
 PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
@@ -94,28 +120,17 @@ test-env)
 
 test-short)
   echo "Running short tests..." >&2
-  SECONDS=0
-  if [[ -n "$RE" ]]; then
-    RE="-run=${RE}"
-  fi
-  errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 -timeout 30m -short ${RE} "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^--- FAIL: Bench\|^--- FAIL: Test" )
-  echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
-  perror $1 "${errs}"
+  SHORT="true" run_tests
   ;;
 
 test-long)
   echo "Running long tests..." >&2
-  SECONDS=0
-  errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 -timeout 2h "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -ae "^--- FAIL: Bench\|^--- FAIL: Test" )
-  echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
-  perror $1 "${errs}"
+  run_tests
   ;;
 
 test-run)
   echo "Running test with regex..." >&2
-  errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 -timeout 2h  -run="${RE}" "${AISTORE_DIR}/..." 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL: Bench\|^--- FAIL: Test" )
-  echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
-  perror $1 "${errs}"
+  run_tests
   ;;
 
 test-docker)

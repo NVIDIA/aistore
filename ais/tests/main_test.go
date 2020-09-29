@@ -6,6 +6,7 @@ package integration
 
 import (
 	"flag"
+	"fmt"
 	"math/rand"
 	"os"
 	"strconv"
@@ -17,9 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/tutils"
 )
 
-func setBucket() {
+func setBucket() (bck cmn.Bck, err error) {
 	var (
-		err      error
 		bucket   = os.Getenv("BUCKET")
 		provider = os.Getenv("PROVIDER")
 	)
@@ -27,25 +27,24 @@ func setBucket() {
 		bucket = cmn.RandString(7)
 		tutils.Logf("Using BUCKET=%q\n", bucket)
 	}
-	cliBck, _, err = cmn.ParseBckObjectURI(bucket)
+	bck, _, err = cmn.ParseBckObjectURI(bucket)
 	if err != nil {
-		tutils.Logf("Failed to parse 'BUCKET' env variable, err: %v\n", err)
-		os.Exit(1)
+		return bck, fmt.Errorf("failed to parse 'BUCKET' env variable, err: %v", err)
 	}
 	if provider != "" {
-		if cliBck.Provider != "" && cliBck.Provider != provider {
-			tutils.Logf("Provider is set for both 'BUCKET' (%q) and 'PROVIDER' (%q) env variables\n", cliBck, provider)
-			os.Exit(1)
+		if bck.Provider != "" && bck.Provider != provider {
+			return bck, fmt.Errorf("provider is set for both 'BUCKET' (%q) and 'PROVIDER' (%q) env variables",
+				bck, provider)
 		}
 		if !cmn.IsValidProvider(provider) {
-			tutils.Logf("Invalid provider set for 'PROVIDER' (%q) env variable\n", provider)
-			os.Exit(1)
+			return bck, fmt.Errorf("invalid provider set for 'PROVIDER' (%q) env variable", provider)
 		}
-		cliBck.Provider = provider
+		bck.Provider = provider
 	}
+	return bck, nil
 }
 
-func waitForCluster() {
+func waitForCluster() error {
 	var (
 		err        error
 		proxyCnt   int
@@ -58,13 +57,11 @@ func waitForCluster() {
 	if pc != "" || tc != "" {
 		proxyCnt, err = strconv.Atoi(pc)
 		if err != nil {
-			tutils.Logf("Error EnvVars: %s. err: %v", cmn.EnvVars.NumProxy, err)
-			os.Exit(1)
+			return fmt.Errorf("error EnvVars: %s. err: %v", cmn.EnvVars.NumProxy, err)
 		}
 		targetCnt, err = strconv.Atoi(tc)
 		if err != nil {
-			tutils.Logf("Error EnvVars: %s. err: %v", cmn.EnvVars.NumTarget, err)
-			os.Exit(1)
+			return fmt.Errorf("error EnvVars: %s. err: %v", cmn.EnvVars.NumTarget, err)
 		}
 	}
 
@@ -75,8 +72,7 @@ func waitForCluster() {
 	}
 	_, err = tutils.WaitForPrimaryProxy(tutils.GetPrimaryURL(), "startup", -1, true, cntNodes...)
 	if err != nil {
-		tutils.Logf("Error waiting for cluster startup, err: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
 	}
 
 	tutils.Logln("Waiting for primary proxy healthcheck...")
@@ -88,14 +84,14 @@ func waitForCluster() {
 			break
 		}
 		if retry == retryCount {
-			tutils.Logf("Error waiting for cluster startup, err: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error waiting for cluster startup, err: %v", err)
 		}
 		retry++
 		time.Sleep(sleep)
 	}
 	tutils.Logln("Cluster ready...")
 	time.Sleep(2 * time.Second)
+	return nil
 }
 
 func TestMain(m *testing.M) {
@@ -120,8 +116,15 @@ func TestMain(m *testing.M) {
 
 	flag.Parse()
 
-	setBucket()
-	waitForCluster()
+	var err error
+	if cliBck, err = setBucket(); err == nil {
+		err = waitForCluster()
+	}
+
+	if err != nil {
+		tutils.Logln("FAIL: " + err.Error())
+		os.Exit(1)
+	}
 
 	rand.Seed(time.Now().UnixNano())
 	os.Exit(m.Run())

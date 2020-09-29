@@ -194,7 +194,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		str += "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> ..."
 		cmn.ExitLogf(str)
 	}
-	jsp.LoadConfigOrFail(daemon.cli.confPath)
+	jsp.MustLoadConfig(daemon.cli.confPath)
 
 	// even more config changes, e.g:
 	// -config=/etc/ais.json -role=target -persist=true -config_custom="client.timeout=13s, proxy.primary_url=https://localhost:10080"
