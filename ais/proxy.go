@@ -3235,13 +3235,13 @@ func (p *proxyrunner) rebalanceAndRemove(smap *smapX, sid string) (wg *sync.Wait
 	return
 }
 
-func (p *proxyrunner) suspendNode(si *cluster.Snode, stage int64) error {
+func (p *proxyrunner) startMaintenance(si *cluster.Snode, stage int64) error {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Suspending node %s", si)
 	}
 	return p.owner.smap.modify(
 		func(clone *smapX) error {
-			clone.suspendNode(si.ID(), stage)
+			clone.startMaintenance(si.ID(), stage)
 			return nil
 		},
 	)
@@ -3271,11 +3271,11 @@ func (p *proxyrunner) decommissionNode(msg *cmn.ActionMsg, si *cluster.Snode) (r
 	}
 
 	// Suspend a node
-	if err = p.suspendNode(si, cmn.NodeStatusRemoval); err != nil {
+	if err = p.startMaintenance(si, cmn.NodeStatusDecommission); err != nil {
 		return
 	}
 
-	// Run rebalance to move all the data from the suspended node to others
+	// Run rebalance to move all the data from the node under maintenance
 	var wg *sync.WaitGroup
 	wg, rebID = p.rebalanceAndRemove(p.owner.smap.get(), si.ID())
 	wg.Wait()
@@ -3416,7 +3416,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if result.err != nil {
 			p.invalmsghdlr(w, r, result.err.Error())
 		}
-	case cmn.ActSuspend, cmn.ActDecommission:
+	case cmn.ActStartMaintenance, cmn.ActDecommission:
 		var (
 			smap = p.owner.smap.get()
 			opts cmn.ActValDecommision
@@ -3430,14 +3430,14 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 			return
 		}
-		if _, ok := smap.IsSuspended(opts.DaemonID); ok {
+		if _, ok := smap.UnderMaintenance(opts.DaemonID); ok {
 			p.invalmsghdlrf(w, r, "Node %q already in maintenance state", opts.DaemonID)
 			return
 		}
 
 		var rebID xaction.RebID
-		if msg.Action == cmn.ActSuspend {
-			err = p.suspendNode(si, cmn.NodeStatusSuspended)
+		if msg.Action == cmn.ActStartMaintenance {
+			err = p.startMaintenance(si, cmn.NodeStatusMaintenance)
 		} else {
 			rebID, err = p.decommissionNode(msg, si)
 		}
@@ -3446,7 +3446,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Write([]byte(rebID.String()))
-	case cmn.ActUnsuspend:
+	case cmn.ActStopMaintenance:
 		var (
 			opts cmn.ActValDecommision
 		)
@@ -3455,7 +3455,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := p.owner.smap.modify(func(clone *smapX) error {
-			return clone.unsuspendNode(opts.DaemonID)
+			return clone.stopMaintenance(opts.DaemonID)
 		}); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}

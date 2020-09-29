@@ -124,7 +124,7 @@ func (m *smapX) init(tsize, psize, elsize, msize int) {
 	m.Pmap = make(cluster.NodeMap, psize)
 	m.NonElects = make(cmn.SimpleKVs, elsize)
 	m.IC = make(cmn.SimpleKVsInt, ICGroupSize)
-	m.Suspend = make(cmn.SimpleKVsInt, msize)
+	m.Maintenance = make(cmn.SimpleKVsInt, msize)
 }
 
 func (m *smapX) _fillIC() {
@@ -245,7 +245,7 @@ func (m *smapX) delTarget(sid string) {
 		cmn.Assertf(false, "FATAL: target: %s is not in: %s", sid, m.pp())
 	}
 	delete(m.Tmap, sid)
-	delete(m.Suspend, sid)
+	delete(m.Maintenance, sid)
 	m.Version++
 }
 
@@ -256,7 +256,7 @@ func (m *smapX) delProxy(pid string) {
 	delete(m.Pmap, pid)
 	delete(m.NonElects, pid)
 	delete(m.IC, pid)
-	delete(m.Suspend, pid)
+	delete(m.Maintenance, pid)
 	m.Version++
 }
 
@@ -297,7 +297,7 @@ func (m *smapX) clone() *smapX {
 
 func (m *smapX) deepCopy(dst *smapX) {
 	cmn.CopyStruct(dst, m)
-	dst.init(m.CountTargets(), m.CountProxies(), len(m.NonElects), len(m.Suspend))
+	dst.init(m.CountTargets(), m.CountProxies(), len(m.NonElects), len(m.Maintenance))
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v
 	}
@@ -310,8 +310,8 @@ func (m *smapX) deepCopy(dst *smapX) {
 	for id, v := range m.IC {
 		dst.IC[id] = v
 	}
-	for id, v := range m.Suspend {
-		dst.Suspend[id] = v
+	for id, v := range m.Maintenance {
+		dst.Maintenance[id] = v
 	}
 }
 
@@ -395,23 +395,23 @@ func (m *smapX) pp() string {
 	return string(s)
 }
 
-func (m *smapX) suspendNode(sid string, stage int64) {
+func (m *smapX) startMaintenance(sid string, stage int64) {
 	if m.GetNode(sid) == nil {
 		cmn.Assertf(false, "FATAL: node: %s is not in: %s", sid, m)
 	}
-	m.Suspend[sid] = stage
+	m.Maintenance[sid] = stage
 	m.Version++
 }
 
-func (m *smapX) unsuspendNode(sid string) error {
-	stage, ok := m.Suspend[sid]
+func (m *smapX) stopMaintenance(sid string) error {
+	stage, ok := m.Maintenance[sid]
 	if !ok {
 		return fmt.Errorf("node %q is not under maintenance", sid)
 	}
-	if stage > cmn.NodeStatusSuspended {
+	if stage > cmn.NodeStatusMaintenance {
 		return fmt.Errorf("node %q removal is already in progress", sid)
 	}
-	delete(m.Suspend, sid)
+	delete(m.Maintenance, sid)
 	m.Version++
 	return nil
 }

@@ -36,7 +36,7 @@ func (e *NoNodesError) Error() string {
 	return fmt.Sprintf("no available targets, %s%s", e.smap.StringEx(), skip)
 }
 
-// Returns the target with highest HRW that is "available"(e.g, is not in suspend list).
+// Returns the target with highest HRW that is "available"(e.g, is not under maintenance).
 func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
 	var (
 		max    uint64
@@ -44,7 +44,7 @@ func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
 	)
 	for tid, tsi := range smap.Tmap {
 		// Assumes that sinfo.idDigest is initialized
-		if _, suspended := smap.IsSuspended(tid); suspended {
+		if _, ok := smap.UnderMaintenance(tid); ok {
 			continue
 		}
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
@@ -112,7 +112,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 
 	for tid, tsi := range smap.Tmap {
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
-		if _, suspended := smap.IsSuspended(tid); suspended {
+		if _, ok := smap.UnderMaintenance(tid); ok {
 			continue
 		}
 		hlist.add(cs, tsi)
@@ -136,7 +136,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		if smap.NonElects.Contains(pid) {
 			continue
 		}
-		if _, suspended := smap.IsSuspended(pid); suspended {
+		if _, ok := smap.UnderMaintenance(pid); ok {
 			continue
 		}
 		if psi.idDigest >= max {
@@ -157,7 +157,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 	)
 	for pid := range smap.IC {
 		psi := smap.GetProxy(pid)
-		if _, suspended := smap.IsSuspended(pid); suspended {
+		if _, ok := smap.UnderMaintenance(pid); ok {
 			continue
 		}
 		cs := xoshiro256.Hash(psi.idDigest ^ digest)
@@ -180,7 +180,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
 	)
 	for tid, tsi := range smap.Tmap {
-		if _, suspended := smap.IsSuspended(tid); suspended {
+		if _, ok := smap.UnderMaintenance(tid); ok {
 			continue
 		}
 		// Assumes that sinfo.idDigest is initialized

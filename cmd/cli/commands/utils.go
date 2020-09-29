@@ -54,9 +54,9 @@ const (
 
 	incorrectCmdDistance = 3
 
-	suspendModeStart        = "start-maintenance"
-	suspendModeStop         = "stop-maintenance"
-	suspendModeDecommission = "decommission"
+	maintenanceModeStart        = "start-maintenance"
+	maintenanceModeStop         = "stop-maintenance"
+	maintenanceModeDecommission = "decommission"
 )
 
 var (
@@ -67,10 +67,10 @@ var (
 	authParams        api.BaseParams
 	mu                sync.Mutex
 
-	suspendModes = map[string]string{
-		suspendModeStart:        cmn.ActSuspend,
-		suspendModeStop:         cmn.ActUnsuspend,
-		suspendModeDecommission: cmn.ActDecommission,
+	maintenanceModes = map[string]string{
+		maintenanceModeStart:        cmn.ActStartMaintenance,
+		maintenanceModeStop:         cmn.ActStopMaintenance,
+		maintenanceModeDecommission: cmn.ActDecommission,
 	}
 )
 
@@ -234,8 +234,8 @@ func fillMap() (*cluster.Smap, error) {
 	targetCount := smapPrimary.CountTargets()
 
 	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smapPrimary.Pmap, proxy, wg, smapPrimary.Suspend)
-	retrieveStatus(smapPrimary.Tmap, target, wg, smapPrimary.Suspend)
+	retrieveStatus(smapPrimary.Pmap, proxy, wg, smapPrimary.Maintenance)
+	retrieveStatus(smapPrimary.Tmap, target, wg, smapPrimary.Maintenance)
 	wg.Wait()
 	return smapPrimary, nil
 }
@@ -244,10 +244,10 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStat
 	fill := func(node *cluster.Snode, stage int64) {
 		obj, _ := api.GetDaemonStatus(defaultAPIParams, node)
 		switch stage {
-		case cmn.NodeStatusSuspended:
-			obj.Status = "suspended"
-		case cmn.NodeStatusRemoval:
-			obj.Status = "removal"
+		case cmn.NodeStatusMaintenance:
+			obj.Status = "maintenance"
+		case cmn.NodeStatusDecommission:
+			obj.Status = "decomission"
 		}
 		mu.Lock()
 		daeMap[node.ID()] = obj
@@ -1002,10 +1002,10 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	return
 }
 
-func suspendModeToAction(c *cli.Context, mode string) (string, error) {
-	if action, ok := suspendModes[mode]; ok {
+func maintenanceModeToAction(c *cli.Context, mode string) (string, error) {
+	if action, ok := maintenanceModes[mode]; ok {
 		return action, nil
 	}
 	return "", incorrectUsageMsg(c, "'mode' is one of %s, %s, and %s",
-		suspendModeStart, suspendModeStop, suspendModeDecommission)
+		maintenanceModeStart, maintenanceModeStop, maintenanceModeDecommission)
 }

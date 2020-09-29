@@ -22,7 +22,7 @@ var (
 		},
 		subcmdRemoveObject: baseLstRngFlags,
 		subcmdRemoveNode: {
-			suspendModeFlag,
+			maintenanceModeFlag,
 			noRebalanceFlag,
 		},
 		subcmdRemoveDownload: {
@@ -148,10 +148,10 @@ func removeNodeHandler(c *cli.Context) (err error) {
 	if node == nil {
 		return fmt.Errorf("node %q does not exist", sid)
 	}
-	mode := parseStrFlag(c, suspendModeFlag)
+	mode := parseStrFlag(c, maintenanceModeFlag)
 	action := ""
 	if mode != "" {
-		if action, err = suspendModeToAction(c, mode); err != nil {
+		if action, err = maintenanceModeToAction(c, mode); err != nil {
 			return err
 		}
 	}
@@ -167,11 +167,11 @@ func removeNodeHandler(c *cli.Context) (err error) {
 			return err
 		}
 
-		if action == cmn.ActUnsuspend {
+		if action == cmn.ActStopMaintenance {
 			fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", sid)
 		} else if action == cmn.ActDecommission && (node.IsProxy() || !doRebalance) {
 			fmt.Fprintf(c.App.Writer, "Node %q removed from the cluster\n", sid)
-		} else if action == cmn.ActSuspend {
+		} else if action == cmn.ActStartMaintenance {
 			fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", sid)
 		} else {
 			fmt.Fprintf(c.App.Writer,

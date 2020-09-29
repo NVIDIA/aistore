@@ -132,7 +132,7 @@ Currently, `ais rm node` without the `--mode=` option immediately removes the sp
 
 Further, the `--mode` values are:
 
-- `start-maintenance` - put a given node in maintenance mode. The operation results in cluster gradually transitioning to operating without the specified node (which is labeled `suspended` in the cluster map).
+- `start-maintenance` - put a given node in maintenance mode. The operation results in cluster gradually transitioning to operating without the specified node (which is labeled `maintenance` in the cluster map).
 - `stop-maintenance` - take a node out of maintenance.
 - `decommission` - permanently remove a node from the cluster.
 
@@ -166,7 +166,7 @@ PROXY            MEM USED %      MEM AVAIL       CPU USED %      UPTIME  STATUS
 279128p8080[P]   0.11            31.28GiB        0.36            80s     healthy
 
 TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  STATUS
-147665t8084      0.10            31.28GiB        16              2.458TiB        0.12            not started     70s     suspended
+147665t8084      0.10            31.28GiB        16              2.458TiB        0.12            not started     70s     maintenance
 165274t8087      0.10            31.28GiB        16              2.458TiB        0.12            not started     70s     healthy
 ```
 

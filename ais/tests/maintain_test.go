@@ -20,17 +20,17 @@ func TestMaintenanceOnOff(t *testing.T) {
 
 	// Invalid target case
 	msg := &cmn.ActValDecommision{DaemonID: "fakeID"}
-	_, err := api.Maintenance(baseParams, cmn.ActSuspend, msg)
+	_, err := api.Maintenance(baseParams, cmn.ActStartMaintenance, msg)
 	tassert.Fatalf(t, err != nil, "Maintenance for invalid daemon ID succeeded")
 
 	mntTarget := tutils.ExtractTargetNodes(smap)[0]
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	msg.DaemonID = mntTarget.ID()
-	_, err = api.Maintenance(baseParams, cmn.ActSuspend, msg)
+	_, err = api.Maintenance(baseParams, cmn.ActStartMaintenance, msg)
 	tassert.CheckError(t, err)
-	_, err = api.Maintenance(baseParams, cmn.ActUnsuspend, msg)
+	_, err = api.Maintenance(baseParams, cmn.ActStopMaintenance, msg)
 	tassert.CheckError(t, err)
-	_, err = api.Maintenance(baseParams, cmn.ActUnsuspend, msg)
+	_, err = api.Maintenance(baseParams, cmn.ActStopMaintenance, msg)
 	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
 }
 

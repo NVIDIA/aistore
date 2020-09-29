@@ -55,7 +55,7 @@ type (
 		Pmap         NodeMap          `json:"pmap"`                    // proxyID -> proxyInfo
 		NonElects    cmn.SimpleKVs    `json:"non_electable,omitempty"` // non-electables: set of DaemonID
 		IC           cmn.SimpleKVsInt `json:"ic"`                      // cluster IC: DaemonID => [Smap version]
-		Suspend      cmn.SimpleKVsInt `json:"suspend,omitempty"`       // nodes under maintenance: DaemonID => Stage (see cmn.NodeStatus* consts)
+		Maintenance  cmn.SimpleKVsInt `json:"maintenance,omitempty"`   // nodes under maintenance: DaemonID => Stage (see cmn.NodeStatus* consts)
 		Primary      *Snode           `json:"proxy_si"`                // (json tag preserved for back. compat.)
 		Version      int64            `json:"version,string"`          // version
 		UUID         string           `json:"uuid"`                    // UUID (assigned once at creation time)
@@ -299,7 +299,7 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 		eq = false
 		return
 	}
-	if !m.Suspend.Compare(other.Suspend) {
+	if !m.Maintenance.Compare(other.Maintenance) {
 		eq = false
 		return
 	}
@@ -343,8 +343,8 @@ func (m *Smap) StrIC(psi *Snode) string {
 	return strings.Join(all, ",")
 }
 
-func (m *Smap) IsSuspended(id string) (int64, bool) {
-	stage, ok := m.Suspend[id]
+func (m *Smap) UnderMaintenance(id string) (int64, bool) {
+	stage, ok := m.Maintenance[id]
 	return stage, ok
 }
 
