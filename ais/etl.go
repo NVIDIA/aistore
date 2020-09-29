@@ -157,9 +157,8 @@ func (t *targetrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/etl/objects/<secret>/<bucket-name>/<object-name>
 //
-// getObjectETL is the handler for the requests that come from the K8s Pods.
-// It validates the secret that was inject into the Pod during initialization
-// to ensure that the origin is indeed correct.
+// getObjectETL handles GET requests from ETL containers (K8s Pods).
+// getObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.ETL, cmn.ETLObject)
 	if err != nil {
@@ -182,9 +181,8 @@ func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/etl/objects/<secret>/<bucket-name>/<object-name>
 //
-// headObjectETL is the handler for the requests that come from the K8s Pods.
-// It validates the secret that was inject into the Pod during initialization
-// to ensure that the origin is indeed correct.
+// headObjectETL handles HEAD requests from ETL containers (K8s Pods).
+// headObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.ETL, cmn.ETLObject)
 	if err != nil {
@@ -248,12 +246,12 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/etl/init
 //
-// initETL creates new ETL following steps:
-//  1. Validate user provided pod specification.
-//  2. Generate UUID of an ETL.
+// initETL creates a new ETL (instance) as follows:
+//  1. Validate user-provided pod specification.
+//  2. Generate UUID.
 //  3. Broadcast initETL message to all targets.
-//  4. If any of targets failed starting an ETL, stop the ETL on all targets.
-//  5. Return UUID to the user if all above steps succeeded.
+//  4. If any target fails to start ETL stop it on all (targets).
+//  5. In the event of success return ETL's UUID to the user.
 func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	_, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.ETL, cmn.ETLInit)
 	if err != nil {
@@ -290,9 +288,9 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// At least one init call has failed. Terminate all started ETL pods.
-	// Discard the stop results. Calls may succeed (for targets that successfully started a pod),
-	// or fail (for targets that didn't start successfully a pod).
+	// At least one `init` call has failed. Terminate all started ETL pods.
+	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
+	//  or fail otherwise - ignore the failures).
 	p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
@@ -337,9 +335,9 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// At least one init call has failed. Terminate all started ETL pods.
-	// Discard the stop results. Calls may succeed (for targets that successfully started a pod),
-	// or fail (for targets that didn't start successfully a pod).
+	// At least one `build` call has failed. Terminate all `build`s.
+	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
+	//  or fail otherwise - ignore the failures).
 	p.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
@@ -379,7 +377,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		results chan callResult
 	)
 	if len(apiItems) > 1 {
-		// Request specific target for the logs.
+		// specific target
 		var (
 			tid = apiItems[1]
 			si  = p.owner.smap.get().GetTarget(tid)
@@ -390,13 +388,17 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		}
 		results = make(chan callResult, 1)
 		results <- p.call(callArgs{
-			req:     cmn.ReqArgs{Method: http.MethodGet, Path: cmn.JoinWords(cmn.Version, cmn.ETL, cmn.ETLLogs, uuid)},
+			req: cmn.ReqArgs{
+				Method: http.MethodGet,
+				Path:   cmn.JoinWords(cmn.Version, cmn.ETL, cmn.ETLLogs, uuid),
+			},
 			si:      si,
 			timeout: cmn.DefaultTimeout,
 			v:       &etl.PodLogsMsg{},
 		})
 		close(results)
 	} else {
+		// all targets
 		results = p.bcastToGroup(bcastArgs{
 			req:     cmn.ReqArgs{Method: http.MethodGet, Path: r.URL.Path},
 			timeout: cmn.DefaultTimeout,
