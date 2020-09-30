@@ -222,22 +222,14 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 		bprops.EC.ParitySlices != nprops.EC.ParitySlices
 }
 
-func withLocalRetry(pred func() bool, maxTries ...int) {
-	var (
-		sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
-		max   = 3
-	)
-
-	if len(maxTries) > 0 {
-		max = maxTries[0]
-	}
-
-	for i := 0; i < max; i++ {
+func withLocalRetry(cond func() bool) (ok bool) {
+	const retries = 3
+	var sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
+	for i := 0; i < retries && !ok; i++ {
 		time.Sleep(sleep)
-		if pred() {
-			return
-		}
+		ok = cond()
 	}
+	return
 }
 
 func isETLRequest(query url.Values) bool {

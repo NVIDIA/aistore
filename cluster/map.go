@@ -212,15 +212,15 @@ func (m *Smap) GetTarget(sid string) *Snode {
 	return tsi
 }
 
-func (m *Smap) GetTargetMap(sids []string) (np NodeMap, err error) {
-	np = make(NodeMap, len(sids))
-	for _, id := range sids {
-		node := m.GetTarget(id)
-		if node == nil {
-			err = cmn.NewNotFoundError("Daemon: %s", id)
-			continue
+func (m *Smap) NewTmap(tids []string) (tmap NodeMap, err error) {
+	for _, tid := range tids {
+		if m.GetTarget(tid) == nil {
+			return nil, cmn.NewNotFoundError("t[%s]", tid)
 		}
-		np.Add(node)
+	}
+	tmap = make(NodeMap, len(tids))
+	for _, tid := range tids {
+		tmap[tid] = m.GetTarget(tid)
 	}
 	return
 }

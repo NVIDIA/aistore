@@ -1576,13 +1576,9 @@ func (t *targetrunner) fshc(err error, filepath string) {
 func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...cluster.Notif) {
 	if id == "" {
 		id = cmn.GenUUID()
-		t.registerIC(xactRegMsg{
-			UUID: id,
-			Kind: cmn.ActResilver,
-			Srcs: []string{t.si.ID()},
-		})
+		t.registerIC(xactRegMsg{UUID: id, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}})
 	}
-	t.rebManager.RunResilver(id, skipGlobMisplaced /*skipGlobMisplaced*/, notifs...)
+	t.rebManager.RunResilver(id, skipGlobMisplaced, notifs...)
 }
 
 func (t *targetrunner) AbortAllXacts(tys ...string) {

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
@@ -62,8 +63,7 @@ func (ic *ic) init(p *proxyrunner) {
 }
 
 // TODO -- FIXME: add redirect-to-owner capability to support list/query caching
-func (ic *ic) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string,
-	msg interface{}) (reversedOrFailed bool) {
+func (ic *ic) reverseToOwner(w http.ResponseWriter, r *http.Request, uuid string, msg interface{}) (reversedOrFailed bool) {
 	retry := true
 begin:
 	var (
@@ -77,14 +77,13 @@ begin:
 	}
 	if selfIC {
 		if !exists && !retry {
-			ic.p.invalmsghdlrf(w, r, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
+			ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 			return true
 		} else if retry {
 			withLocalRetry(func() bool {
 				owner, exists = ic.p.notifs.getOwner(uuid)
 				return exists
 			})
-
 			if !exists {
 				retry = false
 				_ = ic.syncICBundle() // TODO -- handle error
@@ -167,8 +166,8 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 		msg      = &xaction.XactReqMsg{}
 		bck      *cluster.Bck
 		nl       notifications.NotifListener
-		exists   bool
 		interval = int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
+		exists   bool
 	)
 
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
@@ -196,12 +195,10 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 		}
 	}
 	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
-
 	withLocalRetry(func() bool {
 		nl, exists = ic.p.notifs.find(flt)
 		return exists
-	}, 2)
-
+	})
 	if !exists {
 		smap := ic.p.owner.smap.get()
 		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound,
@@ -262,28 +259,22 @@ func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/ic
 func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
-	smap := ic.p.owner.smap.get()
-	msg := &aisMsg{}
+	var (
+		smap = ic.p.owner.smap.get()
+		msg  = &aisMsg{}
+	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		ic.p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
-	reCheck := true
-check:
 	if !smap.IsIC(ic.p.si) {
-		if msg.SmapVersion < smap.Version || !reCheck {
+		if !withLocalRetry(func() bool {
+			smap = ic.p.owner.smap.get()
+			return smap.IsIC(ic.p.si)
+		}) {
 			ic.p.invalmsghdlrf(w, r, "%s: not an IC member", ic.p.si)
 			return
 		}
-
-		reCheck = false
-		// wait for smap update
-		withLocalRetry(func() bool {
-			smap = ic.p.owner.smap.get()
-			return smap.IsIC(ic.p.si)
-		})
-		goto check
 	}
 
 	switch msg.Action {
@@ -302,34 +293,30 @@ check:
 	case cmn.ActRegGlobalXaction:
 		var (
 			regMsg = &xactRegMsg{}
-			srcs   cluster.NodeMap
+			ver    = smap.Version
+			tmap   cluster.NodeMap
 			err    error
 		)
 		if err = cmn.MorphMarshal(msg.Value, regMsg); err != nil {
 			ic.p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-
-		// Notification listener should have at least 1 notifier
-		cmn.Assert(len(regMsg.Srcs) != 0)
-
+		debug.Assert(len(regMsg.Srcs) != 0)
 		withLocalRetry(func() bool {
-			// Retry till we can get a notifier NodeMap from sources
-			// or till we have an smap version greater than the request.
-			// Note: If we have a greater smap version and an error occurred while creating a NodeMap
-			// implies a node has been removed from the cluster.
-			if smap.Version < msg.SmapVersion {
+			if smap.Version < msg.SmapVersion || err != nil {
 				smap = ic.p.owner.smap.get()
 			}
-			srcs, err = smap.GetTargetMap(regMsg.Srcs)
-			return smap.Version >= msg.SmapVersion || err == nil
+			if smap.Version == ver && err != nil {
+				return false
+			}
+			tmap, err = smap.NewTmap(regMsg.Srcs)
+			return err == nil
 		})
-
 		if err != nil {
-			ic.p.invalmsghdlr(w, r, err.Error())
+			ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p.si, msg.Action, err)
 			return
 		}
-		nl := xaction.NewXactNL(regMsg.UUID, &smap.Smap, srcs, notifications.NotifXact, regMsg.Kind)
+		nl := xaction.NewXactNL(regMsg.UUID, &smap.Smap, tmap, notifications.NotifXact, regMsg.Kind)
 		ic.p.notifs.add(nl)
 	default:
 		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
