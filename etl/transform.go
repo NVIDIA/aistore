@@ -5,7 +5,6 @@
 package etl
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -472,65 +471,59 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 	}
 }
 
-// waitPodReady waits until Kubernetes marks a pod's state READY. This happens
-// only after the pod's containers have started and the pods readinessProbe
-// request (made by kubernetes itself) is successful. If pod doesn't have
-// readinessProbe config specified the last step is skipped. Currently
+// waitPodReady waits until Kubernetes marks a Pod's state READY. This happens
+// only after the Pod's containers have started and the Pods readinessProbe
+// request (made by Kubernetes itself) is successful. If Pod doesn't have
+// readinessProbe config specified the last step is skipped. Currently,
 // readinessProbe config is required by us in ETL spec.
 func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 	var (
 		latestPodCondition *corev1.PodCondition
-
-		client, err = k8s.GetClient()
+		client, err        = k8s.GetClient()
 	)
 	if err != nil {
-		return cmn.NewETLError(errCtx, err.Error())
+		return cmn.NewETLError(errCtx, "%v", err)
 	}
 
 	err = wait.PollImmediate(time.Second, time.Duration(waitTimeout), func() (ready bool, err error) {
 		ready, latestPodCondition, err = checkPodReady(client, pod.Name)
 		return ready, err
 	})
-
-	if err == nil {
-		return nil
+	if err != nil {
+		if latestPodCondition == nil {
+			return cmn.NewETLError(errCtx, "%v", err)
+		}
+		return cmn.NewETLError(errCtx, "%v (latest pod condition: %s, expected status Ready)",
+			err, latestPodCondition.Message)
 	}
-
-	if latestPodCondition == nil {
-		return cmn.NewETLError(errCtx, err.Error())
-	}
-	return cmn.NewETLError(errCtx, fmt.Sprintf("%s (latest pod condition: %s, expected status Ready)", err.Error(),
-		latestPodCondition.Message))
+	return nil
 }
 
-// TODO: find out more about failure: `kubectl get logs`, `kubectl describe pod` ...
-// Pod conditions describe state transitions of a pod. Conditions are not chronologically sorted. First we check that
-// the pod is still running (not succeeded, nor failed), then we check if the last (chronologically) transition was into
-// Ready state.
+// Pod conditions describe state transitions of a Pod. Conditions are not
+// chronologically sorted. First we check that the Pod is still running (not
+// succeeded, nor failed), then we check if the last (chronologically)
+// transition was into Ready state.
 func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *corev1.PodCondition, err error) {
-	var (
-		p               *corev1.Pod
-		podCompletedErr = errors.New("pod ran to completion")
-	)
-
+	var p *corev1.Pod
 	if p, err = client.Pod(podName); err != nil {
 		return false, nil, err
 	}
 
-	// Pod has run to completion, either by failing or by succeeding. We don't expect any of these to happen, as ETL
-	// containers are supposed to constantly listen to upcoming requests and never terminate.
+	// Pod has run to completion, either by failing or by succeeding. We don't
+	// expect any of these to happen, as ETL containers are supposed to constantly
+	// listen to upcoming requests and never terminate.
 	switch p.Status.Phase {
 	case corev1.PodFailed, corev1.PodSucceeded:
+		err = fmt.Errorf("pod ran to completion (phase: %s), state message: %q", p.Status.Phase, p.Status.Message)
 		if cond, exists := latestCondition(p.Status.Conditions); exists {
-			return false, &cond, podCompletedErr
+			return false, &cond, err
 		}
-		return false, nil, podCompletedErr
+		return false, nil, err
 	}
 
 	if cond, exists := latestCondition(p.Status.Conditions); exists {
 		return cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue, &cond, nil
 	}
-
 	return false, nil, nil
 }
 
