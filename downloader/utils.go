@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -237,7 +236,7 @@ func headLink(link string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	debug.AssertNoErr(resp.Body.Close())
+	cmn.Close(resp.Body)
 	return resp, nil
 }
 

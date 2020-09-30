@@ -224,7 +224,7 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 
 	defer func() {
 		rdReader.free()
-		debug.AssertNoErr(tw.Close())
+		cmn.Close(tw)
 	}()
 
 	for _, rec := range s.Records.All() {

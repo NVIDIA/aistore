@@ -322,9 +322,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				if err != nil {
 					return written, errors.WithMessage(err, "(offset) open local content failed")
 				}
-				defer func() {
-					debug.AssertNoErr(f.Close())
-				}()
+				defer cmn.Close(f)
 				_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
 				if err != nil {
 					return written, errors.WithMessage(err, "(offset) seek local content failed")
@@ -346,9 +344,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				if err != nil {
 					return written, errors.WithMessage(err, "(disk) open local content failed")
 				}
-				defer func() {
-					debug.AssertNoErr(f.Close())
-				}()
+				defer cmn.Close(f)
 				if n, err = io.CopyBuffer(w, f, buf); err != nil {
 					return written, errors.WithMessage(err, "(disk) copy local content failed")
 				}
@@ -552,13 +548,13 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			r, err := cmn.NewFileSectionHandle(f, req.RecordObj.Offset-req.RecordObj.MetadataSize,
 				respHdr.ObjAttrs.Size, 0)
 			if err != nil {
-				debug.AssertNoErr(f.Close())
+				cmn.Close(f)
 				errHandler(err, respHdr, fromNode)
 				return
 			}
 			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
-				debug.AssertNoErr(f.Close())
+				cmn.Close(f)
 				ds.m.abort(err)
 			}
 		case extract.SGLStoreType:
@@ -580,14 +576,14 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			}
 			fi, err := f.Stat()
 			if err != nil {
-				debug.AssertNoErr(f.Close())
+				cmn.Close(f)
 				errHandler(err, respHdr, fromNode)
 				return
 			}
 			respHdr.ObjAttrs.Size = fi.Size()
 			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, f, fromNode); err != nil {
-				debug.AssertNoErr(f.Close())
+				cmn.Close(f)
 				ds.m.abort(err)
 			}
 		default:

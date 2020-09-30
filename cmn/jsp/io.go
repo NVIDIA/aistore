@@ -102,9 +102,7 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		version byte      = vlatest
 		cksum   *cmn.CksumHash
 	)
-	defer func() {
-		debug.AssertNoErr(reader.Close())
-	}()
+	defer cmn.Close(reader)
 	if opts.Signature {
 		var prefix [prefLen]byte
 		if _, err := r.Read(prefix[:]); err != nil {

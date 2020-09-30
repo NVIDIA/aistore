@@ -196,12 +196,12 @@ func (s *slice) free() {
 	freeObject(s.obj)
 	s.obj = nil
 	if s.reader != nil {
-		debug.AssertNoErr(s.reader.Close())
+		cmn.Close(s.reader)
 	}
 	if s.writer != nil {
 		switch w := s.writer.(type) {
 		case *os.File:
-			debug.AssertNoErr(w.Close())
+			cmn.Close(w)
 		case *memsys.SGL:
 			w.Free()
 		default:
@@ -209,7 +209,8 @@ func (s *slice) free() {
 		}
 	}
 	if s.workFQN != "" {
-		debug.AssertNoErr(os.RemoveAll(s.workFQN))
+		errRm := os.RemoveAll(s.workFQN)
+		debug.AssertNoErr(errRm)
 	}
 }
 
@@ -287,7 +288,7 @@ func freeObject(r interface{}) {
 	}
 	if f, ok := r.(*cmn.FileHandle); ok {
 		if f != nil {
-			debug.AssertNoErr(f.Close())
+			cmn.Close(f)
 		}
 		return
 	}
@@ -314,11 +315,11 @@ func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 		return nil, err
 	}
 	rq.URL.RawQuery = query.Encode()
-	resp, err := client.Do(rq)
+	resp, err := client.Do(rq) // nolint:bodyclose // closed inside cmn.Close
 	if err != nil {
 		return nil, err
 	}
-	defer func() { debug.AssertNoErr(resp.Body.Close()) }()
+	defer cmn.Close(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("%s/%s not found on %s", bck, objName, si.ID())
 	} else if resp.StatusCode != http.StatusOK {

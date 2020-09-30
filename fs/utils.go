@@ -11,7 +11,6 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 var (
@@ -71,9 +70,7 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	defer func() {
-		debug.AssertNoErr(f.Close())
-	}()
+	defer cmn.Close(f)
 
 	// Try listing small number of files/dirs to do a quick emptiness check.
 	// If seems empty try a bigger sample to determine if it actually is.

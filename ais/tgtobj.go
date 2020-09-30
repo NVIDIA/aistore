@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -252,7 +251,7 @@ func (poi *putObjInfo) putCloud() (ver string, err error, errCode int) {
 		customMD[cluster.VersionObjMD] = ver
 	}
 	lom.SetCustomMD(customMD)
-	debug.AssertNoErr(file.Close())
+	cmn.Close(file)
 	return
 }
 
@@ -304,7 +303,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	// cleanup
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
-		debug.AssertNoErr(reader.Close())
+		cmn.Close(reader)
 
 		if err != nil {
 			if nestedErr := file.Close(); nestedErr != nil {
@@ -707,7 +706,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	)
 	defer func() {
 		if file != nil {
-			debug.AssertNoErr(file.Close())
+			cmn.Close(file)
 		}
 		if buf != nil {
 			slab.Free(buf)
@@ -917,7 +916,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode i
 		_, err = io.CopyBuffer(w, aoi.r, buf)
 
 		slab.Free(buf)
-		debug.AssertNoErr(f.Close())
+		cmn.Close(f)
 		if err != nil {
 			errCode = http.StatusInternalServerError
 			return

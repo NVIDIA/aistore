@@ -40,9 +40,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader
 	if err != nil {
 		return 0, 0, err
 	}
-	defer func() {
-		debug.AssertNoErr(gzr.Close())
-	}()
+	defer cmn.Close(gzr)
 	tr := tar.NewReader(gzr)
 
 	// extract to .tar
@@ -52,8 +50,8 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader
 	}
 	tw := tar.NewWriter(f)
 	defer func() {
-		debug.AssertNoErr(tw.Close())
-		debug.AssertNoErr(f.Close())
+		cmn.Close(tw)
+		cmn.Close(f)
 	}()
 
 	buf, slab := t.t.MMSA().Alloc(r.Size())
@@ -135,8 +133,8 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 
 	defer func() {
 		rdReader.free()
-		debug.AssertNoErr(tw.Close())
-		debug.AssertNoErr(gzw.Close())
+		cmn.Close(tw)
+		cmn.Close(gzw)
 	}()
 
 	for _, rec := range s.Records.All() {

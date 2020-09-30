@@ -51,11 +51,12 @@ func Save(path string, v interface{}, opts Options) (err error) {
 	}
 	defer func() {
 		if err != nil {
-			debug.AssertNoErr(os.Remove(tmp))
+			errRm := os.Remove(tmp)
+			debug.AssertNoErr(errRm)
 		}
 	}()
 	if err = Encode(file, v, opts); err != nil {
-		debug.AssertNoErr(file.Close())
+		cmn.Close(file)
 		return
 	}
 	if err = file.Close(); err != nil {

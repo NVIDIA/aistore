@@ -152,10 +152,10 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 				buf:           buf,
 			}
 			if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-				debug.AssertNoErr(file.Close())
+				cmn.Close(file)
 				return extractedSize, extractedCount, err
 			}
-			debug.AssertNoErr(file.Close())
+			cmn.Close(file)
 		}
 
 		extractedSize += size
@@ -174,9 +174,7 @@ func NewZipExtractCreator(t cluster.Target) ExtractCreator {
 func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (written int64, err error) {
 	var n int64
 	zw := zip.NewWriter(w)
-	defer func() {
-		debug.AssertNoErr(zw.Close())
-	}()
+	defer cmn.Close(zw)
 
 	rdReader := newZipRecordDataReader(z.t)
 	for _, rec := range s.Records.All() {

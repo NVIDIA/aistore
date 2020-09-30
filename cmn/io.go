@@ -343,15 +343,15 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 	}
 	if dstFile, err = CreateFile(dst); err != nil {
 		glog.Errorf("Failed to create %s: %v", dst, err)
-		debug.AssertNoErr(srcFile.Close())
+		Close(srcFile)
 		return
 	}
 	written, cksum, err = CopyAndChecksum(dstFile, srcFile, buf, cksumType)
 	if err != nil {
 		glog.Errorf("Failed to copy %s -> %s: %v", src, dst, err)
 	}
-	debug.AssertNoErr(dstFile.Close())
-	debug.AssertNoErr(srcFile.Close())
+	Close(dstFile)
+	Close(srcFile)
 	return
 }
 
@@ -499,4 +499,10 @@ func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
 		return nil, err
 	}
 	return &hash.Cksum, nil
+}
+
+func Close(closer io.Closer) error {
+	err := closer.Close()
+	debug.AssertNoErr(err)
+	return err
 }

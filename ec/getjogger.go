@@ -258,7 +258,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		lomClone := req.LOM.Clone(tmpFQN)
 		n, err = c.parent.readRemote(lomClone, node, uname, iReqBuf, w)
 		mm.Free(iReqBuf)
-		debug.AssertNoErr(w.Close())
+		cmn.Close(w)
 
 		if err == nil && n != 0 {
 			// a valid replica is found - break and do not free SGL
@@ -267,7 +267,8 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 			break
 		}
 
-		debug.AssertNoErr(os.RemoveAll(tmpFQN))
+		errRm := os.RemoveAll(tmpFQN)
+		debug.AssertNoErr(errRm)
 	}
 	if glog.V(4) {
 		glog.Infof("Found meta -> obj get %s/%s, writer found: %v", req.LOM.Bck(), req.LOM.ObjName, writer != nil)

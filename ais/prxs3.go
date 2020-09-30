@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3compat"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -179,9 +178,7 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 // DEL s3/bck-name?delete
 // Delete list of objects
 func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
-	defer func() {
-		debug.AssertNoErr(r.Body.Close())
-	}()
+	defer cmn.Close(r.Body)
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	if err := bck.Init(p.owner.bmd, p.si); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
@@ -497,9 +494,7 @@ func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)
-	defer func() {
-		debug.AssertNoErr(r.Body.Close())
-	}()
+	defer cmn.Close(r.Body)
 	vconf := &s3compat.VersioningConfiguration{}
 	if err := decoder.Decode(vconf); err != nil {
 		p.invalmsghdlr(w, r, err.Error())

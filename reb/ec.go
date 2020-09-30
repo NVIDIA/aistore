@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -346,7 +345,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 
 	if err := reb.dm.Send(transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, target); err != nil {
 		reb.ec.onAir.Dec()
-		debug.AssertNoErr(fh.Close())
+		cmn.Close(fh)
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
 	reb.statRunner.AddMany(
@@ -1235,17 +1234,17 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	}
 	rq.Header.Add(cmn.HeaderCallerID, reb.t.Snode().ID())
 	rq.URL.RawQuery = qMeta.Encode()
-	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil {
+	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cmn.Close
 		return
 	}
 	if resp.StatusCode != http.StatusOK {
-		debug.AssertNoErr(resp.Body.Close())
+		cmn.Close(resp.Body)
 		slice.err = fmt.Errorf("failed to read metadata, HTTP status: %d", resp.StatusCode)
 		return
 	}
 	metadata := ec.Metadata{}
 	slice.err = jsoniter.NewDecoder(resp.Body).Decode(&metadata)
-	defer func() { debug.AssertNoErr(resp.Body.Close()) }()
+	defer cmn.Close(resp.Body)
 	if slice.err != nil {
 		return
 	}
@@ -1262,12 +1261,10 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	}
 	rq.Header.Add(cmn.HeaderCallerID, reb.t.Snode().ID())
 	rq.URL.RawQuery = qMeta.Encode()
-	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil {
+	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cmn.Close
 		return
 	}
-	defer func() {
-		debug.AssertNoErr(resp.Body.Close())
-	}()
+	defer cmn.Close(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		cmn.DrainReader(resp.Body)
 		slice.err = fmt.Errorf("failed to read slice, HTTP status: %d", resp.StatusCode)
@@ -1612,7 +1609,7 @@ func (reb *Manager) releaseSGLs(md *rebArgs, objList []*rebObject) {
 			}
 			obj.rebuildSGLs = nil
 			if obj.fh != nil {
-				debug.AssertNoErr(obj.fh.Close())
+				cmn.Close(obj.fh)
 				obj.fh = nil
 			}
 			for _, ct := range obj.locCT {

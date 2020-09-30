@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -122,9 +121,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	if err != nil {
 		return err
 	}
-	defer func() {
-		debug.AssertNoErr(resp.Body.Close())
-	}()
+	defer cmn.Close(resp.Body)
 
 	if resp.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf("request failed with %d status code (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
