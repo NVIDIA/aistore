@@ -2,6 +2,7 @@
 
 run_tests() {
   SECONDS=0
+
   if [[ -n "$RE" ]]; then
     re_val="-run=${RE}"
   fi
@@ -12,11 +13,15 @@ run_tests() {
     timeout_val="30m"
   fi
 
-  errs=$(BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} go test -v -p 1 -parallel 4 -count 1 \
-    -timeout "${timeout_val}" ${short_val} ${re_val} "${AISTORE_DIR}/..." 2>&1)
+  failed_tests=$(
+    BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} \
+      go test -v -p 1 -parallel 4 -count 1 -timeout "${timeout_val}" ${short_val} ${re_val} "${AISTORE_DIR}/..." 2>&1 \
+    | tee -a /dev/stderr \
+    | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$"; \
+    exit ${PIPESTATUS[0]} # Exit with the status of the first command in the pipe(line).
+  )
   exit_code=$?
 
-  failed_tests=$(echo "$errs" | tee -a /dev/stderr | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$")
   echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
 
   if [[ $exit_code -ne 0 ]]; then
