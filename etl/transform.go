@@ -473,11 +473,11 @@ func setPodEnvVariables(t cluster.Target, pod *corev1.Pod, customEnv map[string]
 	}
 }
 
-// waitPodReady waits until Kubernetes marks a Pod's state READY. This happens
-// only after the Pod's containers have started and the Pods readinessProbe
-// request (made by Kubernetes itself) is successful. If Pod doesn't have
-// readinessProbe config specified the last step is skipped. Currently,
-// readinessProbe config is required by us in ETL spec.
+// waitPodReady waits until ETL Pod becomes `Ready`. This happens
+// only after the Pod's containers will have started and the Pod's `readinessProbe`
+// request (made by the Kubernetes itself) returns OK. If the Pod doesn't have
+// `readinessProbe` config specified the last step gets skipped.
+// NOTE: However, currently, we do require readinessProbe config in the ETL spec.
 func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.DurationJSON) error {
 	var (
 		latestPodCondition *corev1.PodCondition
@@ -501,10 +501,11 @@ func waitPodReady(errCtx *cmn.ETLErrorContext, pod *corev1.Pod, waitTimeout cmn.
 	return nil
 }
 
-// Pod conditions describe state transitions of a Pod. Conditions are not
-// chronologically sorted. First we check that the Pod is still running (not
-// succeeded, nor failed), then we check if the last (chronologically)
-// transition was into Ready state.
+// Pod conditions include enumerated lifecycle states, such as `PodScheduled`,
+// `ContainersReady`, `Initialized`, `Ready`
+// (see https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle).
+// First, we check that the Pod is still running (neither succeeded, nor failed),
+// and secondly, whether the last (chronologically) transition is `Ready`.
 func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *corev1.PodCondition, err error) {
 	var p *corev1.Pod
 	if p, err = client.Pod(podName); err != nil {
@@ -516,7 +517,8 @@ func checkPodReady(client k8s.Client, podName string) (ready bool, latestCond *c
 	// listen to upcoming requests and never terminate.
 	switch p.Status.Phase {
 	case corev1.PodFailed, corev1.PodSucceeded:
-		err = fmt.Errorf("pod ran to completion (phase: %s), state message: %q", p.Status.Phase, p.Status.Message)
+		err = fmt.Errorf("pod ran to completion (phase: %s), state message: %q",
+			p.Status.Phase, p.Status.Message)
 		if cond, exists := latestCondition(p.Status.Conditions); exists {
 			return false, &cond, err
 		}
