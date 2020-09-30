@@ -33,10 +33,10 @@ func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 }
 
 // Returns reader resulting from lom ETL transformation. Fills hdrLOM with lom metadata required for http.Header.
-func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, *cluster.LOM, error) {
+func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, *cluster.LOM, func(), error) {
 	body, length, err := dp.comm.Get(lom.Bck(), lom.ObjName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	hdrLOM := &cluster.LOM{}
@@ -45,5 +45,5 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, *cl
 	hdrLOM.SetVersion(lom.Version())
 	hdrLOM.SetSize(length)
 
-	return cmn.NopOpener(body), hdrLOM, nil
+	return cmn.NopOpener(body), hdrLOM, func() {}, nil
 }

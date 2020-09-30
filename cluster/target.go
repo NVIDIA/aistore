@@ -101,11 +101,6 @@ type (
 		KeepOrig  bool
 		Verbose   bool
 	}
-
-	// Defines what to send to a target.
-	LomReaderProvider interface {
-		Reader(lom *LOM) (cmn.ReadOpenCloser, *LOM, error) // LOM is supposed to have http.Header metadata
-	}
 )
 
 // NOTE: For implementations, please refer to `ais/tgtifimpl.go` and `ais/httpcommon.go`.

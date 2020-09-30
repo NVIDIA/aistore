@@ -24,7 +24,7 @@ var (
 )
 
 // readDiskStats returns disk stats
-func readDiskStats(disks, sysfnames cmn.SimpleKVs) diskBlockStats {
+func readDiskStats(disks, _ cmn.SimpleKVs) diskBlockStats {
 	driveStats, err := iostat.ReadDriveStats()
 	if err != nil {
 		return diskBlockStats{}

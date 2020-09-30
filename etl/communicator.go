@@ -131,6 +131,7 @@ func (c baseComm) SvcName() string { return c.podName /*pod name is same as serv
 // pushComm //
 //////////////
 
+// TODO: make it work with cloud, including not cached objects.
 func (pc *pushComm) doRequest(bck *cluster.Bck, objName string) (*http.Response, error) {
 	lom := &cluster.LOM{T: pc.t, ObjName: objName}
 	if err := lom.Init(bck.Bck); err != nil {
@@ -192,6 +193,7 @@ func (pc *pushComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64,
 // redirectComm //
 //////////////////
 
+// TODO: make sure that it works with cloud, even when cold get by ETL transformer is required.
 func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	redirectURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)

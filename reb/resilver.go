@@ -30,11 +30,14 @@ type (
 
 func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...cluster.Notif) {
 	cmn.Assert(id != "")
-	var (
-		availablePaths, _ = fs.Get()
-		err               = fs.PutMarker(registry.GetMarkerName(cmn.ActResilver))
-	)
-	if err != nil {
+
+	availablePaths, _ := fs.Get()
+	if len(availablePaths) < 2 {
+		glog.Errorf("Cannot run resilver with less than 2 mountpaths (%d)", len(availablePaths))
+		return
+	}
+
+	if err := fs.PutMarker(registry.GetMarkerName(cmn.ActResilver)); err != nil {
 		glog.Errorln("failed to create resilver marker", err)
 	}
 

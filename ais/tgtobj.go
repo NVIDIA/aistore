@@ -998,8 +998,18 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cmn.CksumHash) s
 // COPY OBJECT //
 /////////////////
 
-func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied bool, err error) {
+func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copied bool, err error) {
 	cmn.Assert(coi.DP == nil)
+
+	if srcLOM.Bck().IsRemote() || coi.BckTo.IsRemote() {
+		// There will be no logic to create local copies etc, we can simply use copyReader
+		coi.DP = &cluster.LomReader{}
+		copied, _, err = coi.copyReader(srcLOM, objNameTo)
+		return copied, err
+	}
+
+	// Local bucket to local bucket copying.
+
 	si := coi.t.si
 	if !coi.localOnly {
 		smap := coi.t.owner.smap.Get()
@@ -1008,45 +1018,46 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 		}
 	}
 
-	lom.Lock(false)
-	if err = lom.Load(false); err != nil {
+	srcLOM.Lock(false)
+	if err = srcLOM.Load(false); err != nil {
 		if !cmn.IsObjNotExist(err) {
-			err = fmt.Errorf("%s: err: %v", lom, err)
+			err = fmt.Errorf("%s: err: %v", srcLOM, err)
 		}
-		lom.Unlock(false)
+
+		srcLOM.Unlock(false)
 		return
 	}
+
 	if coi.uncache {
-		defer lom.Uncache()
+		defer srcLOM.Uncache()
 	}
 
 	if si.ID() != coi.t.si.ID() {
 		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si, DM: coi.DM, Locked: true}
-		copied, _, err = coi.putRemote(lom, params) // NOTE: lom.Unlock inside
+		copied, _, err = coi.putRemote(srcLOM, params) // NOTE: srcLOM.Unlock inside
 		return
 	}
-
 	if coi.DryRun {
-		defer lom.Unlock(false)
-		// TODO: replace with something similar to lom.FQN == dst.FQN, but dstBck might not exist.
-		if lom.Bck().Bck.Equal(coi.BckTo.Bck) && lom.ObjName == objNameTo {
+		defer srcLOM.Unlock(false)
+		// TODO: replace with something similar to srcLOM.FQN == dst.FQN, but dstBck might not exist.
+		if srcLOM.Bck().Bck.Equal(coi.BckTo.Bck) && srcLOM.ObjName == objNameTo {
 			return false, nil
 		}
 		return true, nil
 	}
 
-	if !lom.TryUpgradeLock() {
+	if !srcLOM.TryUpgradeLock() {
 		// We haven't managed to upgrade the lock so we must do it slow way...
-		lom.Unlock(false)
-		lom.Lock(true)
-		if err = lom.Load(false); err != nil {
-			lom.Unlock(true)
+		srcLOM.Unlock(false)
+		srcLOM.Lock(true)
+		if err = srcLOM.Load(false); err != nil {
+			srcLOM.Unlock(true)
 			return
 		}
 	}
 
 	// At this point we must have an exclusive lock for the object.
-	defer lom.Unlock(true)
+	defer srcLOM.Unlock(true)
 
 	// local op
 	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
@@ -1056,28 +1067,25 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 	}
 
 	// Lock destination for writing if the destination has a different uname.
-	if lom.Uname() != dst.Uname() {
+	if srcLOM.Uname() != dst.Uname() {
 		dst.Lock(true)
 		defer dst.Unlock(true)
 	}
 
-	// If before initializing the `dst` all mountpaths would be removed except
-	// the one on which the `lom` is placed then both `lom` and `dst` will have
-	// the same FQN in which case we should not copy. The exeception is when DP
-	// is not nil, meaning that content of a destination object can be different.
-	if lom.FQN == dst.FQN {
+	// Resilvering with a single mountpath.
+	if srcLOM.FQN == dst.FQN {
 		return
 	}
 
 	if err = dst.Load(false); err == nil {
-		if lom.Cksum().Equal(dst.Cksum()) {
+		if srcLOM.Cksum().Equal(dst.Cksum()) {
 			return
 		}
 	} else if cmn.IsErrBucketNought(err) {
 		return
 	}
 
-	if dst, err = lom.CopyObject(dst.FQN, coi.Buf); err == nil {
+	if dst, err = srcLOM.CopyObject(dst.FQN, coi.Buf); err == nil {
 		copied = true
 		dst.ReCache()
 		if coi.finalize {
@@ -1095,13 +1103,22 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (copied b
 // copyReader puts a new object to a cluster, according to a reader taken from coi.DP.Reader(lom) The reader returned
 // from coi.DP is responsible for any locking or source LOM, if necessary. If the reader doesn't take any locks, it has
 // to consider object content changing in the middle of copying.
+//
+// LOM can be meta of a cloud object. It creates some problems. However, it's DP who is responsible for providing a reader,
+// so DP should tak any steps necessary to do so. It includes handling cold get, warm get etc.
+//
+// If destination bucket is remote bucket, copyReader will always create a cached copy of an object on one of the
+// targets as well as make put to the relevant cloud provider.
+// TODO: make it possible to skip caching an object from a cloud bucket.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
 	cmn.Assert(coi.DP != nil)
+
 	var (
 		si = coi.t.si
 
-		reader cmn.ReadOpenCloser
-		hdrLOM *cluster.LOM
+		reader  cmn.ReadOpenCloser
+		hdrLOM  *cluster.LOM
+		cleanUp func()
 	)
 
 	if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
@@ -1115,12 +1132,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 
 	// DryRun: just get a reader and discard it. Init on dstLOM would cause and error as dstBck doesn't exist.
 	if coi.DryRun {
-		if reader, _, err = coi.DP.Reader(lom); err != nil {
-			return false, 0, err
-		}
-
-		written, err := io.Copy(ioutil.Discard, reader)
-		return err == nil, written, err
+		return coi.dryRunCopyReader(lom)
 	}
 
 	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
@@ -1128,9 +1140,10 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 		return
 	}
 
-	if reader, hdrLOM, err = coi.DP.Reader(lom); err != nil {
+	if reader, hdrLOM, cleanUp, err = coi.DP.Reader(lom); err != nil {
 		return false, 0, err
 	}
+	defer cleanUp()
 
 	params := cluster.PutObjectParams{
 		Reader:       reader,
@@ -1143,6 +1156,59 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 		return false, 0, err
 	}
 	return true, hdrLOM.Size(), err
+}
+
+//nolint:unused // This function might become useful if we decide to introduce copying an object directly to a cloud
+// provider, without intermediate object caching on a target.
+func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
+	cmn.Assert(coi.BckTo.IsRemote())
+	var (
+		reader  io.ReadCloser
+		hdrLOM  *cluster.LOM
+		cleanUp func()
+	)
+
+	if reader, hdrLOM, cleanUp, err = coi.DP.Reader(lom); err != nil {
+		return false, 0, err
+	}
+
+	defer func() {
+		reader.Close()
+		cleanUp()
+	}()
+
+	dstLOM := &cluster.LOM{T: coi.t, ObjName: objNameTo}
+	// Cloud bucket has to exist, so it has to be in BMD
+	if err := dstLOM.Init(coi.BckTo.Bck); err != nil {
+		return false, 0, err
+	}
+
+	if _, err, _ = coi.t.Cloud(coi.BckTo).PutObj(context.Background(), reader, dstLOM); err != nil {
+		return false, 0, err
+	}
+	return true, hdrLOM.Size(), nil
+}
+
+func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (copied bool, size int64, err error) {
+	cmn.Assert(coi.DryRun)
+	cmn.Assert(coi.DP != nil)
+
+	var (
+		reader  io.ReadCloser
+		cleanUp func()
+	)
+
+	if reader, _, cleanUp, err = coi.DP.Reader(lom); err != nil {
+		return false, 0, err
+	}
+
+	defer func() {
+		reader.Close()
+		cleanUp()
+	}()
+
+	written, err := io.Copy(ioutil.Discard, reader)
+	return err == nil, written, err
 }
 
 // PUT object onto designated target
@@ -1162,11 +1228,14 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 		params.Reader = file
 		params.HdrMeta = lom
 	} else {
-		if params.Reader, params.HdrMeta, err = coi.DP.Reader(lom); err != nil {
+		var cleanUp func()
+		if params.Reader, params.HdrMeta, cleanUp, err = coi.DP.Reader(lom); err != nil {
 			return false, 0, err
 		}
+		defer cleanUp()
 		if coi.DryRun {
 			written, err := io.Copy(ioutil.Discard, params.Reader)
+			params.Reader.Close()
 			return err == nil, written, err
 		}
 	}
