@@ -1233,6 +1233,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
 		return
 	}
+	rq.Header.Add(cmn.HeaderCallerID, reb.t.Snode().ID())
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil {
 		return
@@ -1259,6 +1260,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
 		return
 	}
+	rq.Header.Add(cmn.HeaderCallerID, reb.t.Snode().ID())
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil {
 		return
@@ -1308,7 +1310,7 @@ func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 			if slice.err != nil {
 				// It is OK to have one or few reads failed. Later it
 				// checks if there are enough slices to rebuild.
-				glog.Errorf("Failed to read slice %d from %s: %v", slice.sliceID, si.Name(), slice.err)
+				glog.Errorf("Failed to read slice %d from %s: %v", slice.sliceID, si, slice.err)
 			}
 		}(si, slice)
 	}
