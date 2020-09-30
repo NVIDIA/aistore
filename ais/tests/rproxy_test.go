@@ -7,7 +7,6 @@ package integration
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -196,9 +195,6 @@ func TestRProxyInvalidURL(t *testing.T) {
 	var (
 		proxyURL   = tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		urlObj     *url.URL
-		bckName    string
-		bck        cmn.Bck
 	)
 
 	client := tutils.NewClientWithProxy(proxyURL)
@@ -213,18 +209,17 @@ func TestRProxyInvalidURL(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		urlObj, _ = url.ParseRequestURI(test.url)
-		bckName, _, _ = cmn.URL2BckObj(urlObj)
-		bck = cmn.Bck{Name: bckName, Provider: cmn.ProviderHTTP, Ns: cmn.NsGlobal}
-		api.DestroyBucket(baseParams, bck)
+		hbo, err := cmn.NewHTTPObjPath(test.url)
+		tassert.CheckError(t, err)
+		api.DestroyBucket(baseParams, hbo.Bck)
 
 		res, err := client.Get(test.url)
 		tassert.CheckError(t, err)
 		res.Body.Close()
 		tassert.Errorf(t, res.StatusCode == test.statusCode, "%q: expected status %d - got %d", test.url, test.statusCode, res.StatusCode)
 
-		_, err = api.HeadBucket(baseParams, bck)
-		tassert.Errorf(t, err != nil, "shouldn't create bucket (%s) for invalid resource URL", bck)
-		api.DestroyBucket(baseParams, bck)
+		_, err = api.HeadBucket(baseParams, hbo.Bck)
+		tassert.Errorf(t, err != nil, "shouldn't create bucket (%s) for invalid resource URL", hbo.Bck)
+		api.DestroyBucket(baseParams, hbo.Bck)
 	}
 }

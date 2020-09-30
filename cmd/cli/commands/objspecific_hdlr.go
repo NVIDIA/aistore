@@ -202,41 +202,8 @@ func evictHandler(c *cli.Context) (err error) {
 }
 
 func getHandler(c *cli.Context) (err error) {
-	var (
-		bck         cmn.Bck
-		objName     string
-		origURL     string
-		fullObjName = c.Args().Get(0) // empty string if arg not given
-		outFile     = c.Args().Get(1) // empty string if arg not given
-	)
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
-	}
-	if c.NArg() < 2 && !flagIsSet(c, isCachedFlag) {
-		return missingArgumentsError(c, "output file")
-	}
-
-	if isWebURL(fullObjName) {
-		bck, objName, _, err = cmn.RawURL2BckObj(fullObjName)
-		origURL = fullObjName
-	} else {
-		bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	if origURL == "" || !flagIsSet(c, forceFlag) {
-		if bck, _, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
-			return
-		}
-	}
-
-	if objName == "" {
-		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
-	}
-	return getObject(c, bck, objName, origURL, outFile, false /*silent*/)
+	outFile := c.Args().Get(1) // empty string if arg not given
+	return getObject(c, outFile, false /*silent*/)
 }
 
 func putHandler(c *cli.Context) (err error) {
@@ -325,37 +292,5 @@ func promoteHandler(c *cli.Context) (err error) {
 }
 
 func catHandler(c *cli.Context) (err error) {
-	var (
-		bck         cmn.Bck
-		objName     string
-		origURL     string
-		fullObjName = c.Args().Get(0) // empty string if arg not given
-	)
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
-	}
-	if c.NArg() > 1 {
-		return incorrectUsageError(c, fmt.Errorf("too many arguments"))
-	}
-
-	if isWebURL(fullObjName) {
-		bck, objName, _, err = cmn.RawURL2BckObj(fullObjName)
-		origURL = fullObjName
-	} else {
-		bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
-	}
-
-	if err != nil {
-		return
-	}
-	if origURL == "" || !flagIsSet(c, forceFlag) {
-		if bck, _, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
-			return
-		}
-	}
-
-	if objName == "" {
-		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
-	}
-	return getObject(c, bck, objName, origURL, fileStdIO, true /*silent*/)
+	return getObject(c, fileStdIO, true /*silent*/)
 }

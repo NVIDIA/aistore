@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -102,27 +101,6 @@ func JoinPath(url, path string) string {
 		return url + "/" + path
 	}
 	return url + path
-}
-
-func RawURL2BckObj(rawURL string) (bck Bck, objName, origURLBck string, err error) {
-	var (
-		urlObj *url.URL
-	)
-	urlObj, err = url.ParseRequestURI(rawURL)
-	if err != nil {
-		return
-	}
-	bck.Name, objName, origURLBck = URL2BckObj(urlObj)
-	bck.Provider = ProviderHTTP
-	bck.Ns = NsGlobal
-	return
-}
-
-func URL2BckObj(u *url.URL) (bckName, objName, origURLBck string) {
-	origURLBck, objName = filepath.Split(u.Path)
-	origURLBck = u.Scheme + "://" + u.Host + origURLBck
-	bckName = OrigURLBck2Name(origURLBck)
-	return
 }
 
 func OrigURLBck2Name(origURLBck string) (bckName string) {

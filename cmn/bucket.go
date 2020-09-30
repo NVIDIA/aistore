@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 )
 
@@ -54,6 +55,14 @@ type (
 		Ns       Ns           `json:"namespace" list:"omitempty"`
 		Props    *BucketProps `json:"-"`
 	}
+
+	// Represents the AIS bucket, object and URL associated with a HTTP resource
+	HTTPBckObj struct {
+		Bck        Bck
+		ObjName    string
+		OrigURLBck string // HTTP URL of the bucket (object name excluded)
+	}
+
 	QueryBcks Bck
 
 	BucketNames []Bck
@@ -412,4 +421,29 @@ func (names BucketNames) Equal(other BucketNames) bool {
 		}
 	}
 	return true
+}
+
+////////////////
+// HTTPBckObj //
+////////////////
+
+func NewHTTPObj(u *url.URL) *HTTPBckObj {
+	hbo := &HTTPBckObj{
+		Bck: Bck{
+			Provider: ProviderHTTP,
+			Ns:       NsGlobal,
+		},
+	}
+	hbo.OrigURLBck, hbo.ObjName = filepath.Split(u.Path)
+	hbo.OrigURLBck = u.Scheme + "://" + u.Host + hbo.OrigURLBck
+	hbo.Bck.Name = OrigURLBck2Name(hbo.OrigURLBck)
+	return hbo
+}
+
+func NewHTTPObjPath(rawURL string) (*HTTPBckObj, error) {
+	urlObj, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	return NewHTTPObj(urlObj), nil
 }

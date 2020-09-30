@@ -376,11 +376,12 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 			args.origURLBck = origURLBck[0]
 		} else if query.Get(cmn.URLParamOrigURL) != "" {
 			origURL := query.Get(cmn.URLParamOrigURL)
-			_, _, args.origURLBck, err = cmn.RawURL2BckObj(origURL)
+			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
 			}
+			args.origURLBck = hbo.OrigURLBck
 		}
 		if bck, err = args.try(); err != nil {
 			return
@@ -1492,11 +1493,12 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 			args.origURLBck = origURLBck[0]
 		} else if query.Get(cmn.URLParamOrigURL) != "" {
 			origURL := query.Get(cmn.URLParamOrigURL)
-			_, _, args.origURLBck, err = cmn.RawURL2BckObj(origURL)
+			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
 			}
+			args.origURLBck = hbo.OrigURLBck
 		}
 		if bck, err = args.try(); err != nil {
 			return
@@ -2573,16 +2575,16 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		// bck.IsHTTP()
-		bckName, objName, origURLBck := cmn.URL2BckObj(r.URL)
+		hbo := cmn.NewHTTPObj(r.URL)
 		q := r.URL.Query()
 		q.Set(cmn.URLParamOrigURL, r.URL.String())
 		q.Set(cmn.URLParamProvider, cmn.ProviderHTTP)
-		r.URL.Path = cmn.JoinWords(cmn.Version, cmn.Objects, bckName, objName)
+		r.URL.Path = cmn.JoinWords(cmn.Version, cmn.Objects, hbo.Bck.Name, hbo.ObjName)
 		r.URL.RawQuery = q.Encode()
 		if r.Method == http.MethodGet {
-			p.httpobjget(w, r, origURLBck)
+			p.httpobjget(w, r, hbo.OrigURLBck)
 		} else {
-			p.httpobjhead(w, r, origURLBck)
+			p.httpobjhead(w, r, hbo.OrigURLBck)
 		}
 		return
 	}

@@ -120,19 +120,19 @@ func TestCloudBucketObject(t *testing.T) {
 
 func TestHttpProviderObjectGet(t *testing.T) {
 	var (
-		proxyURL     = tutils.RandomProxyURL()
-		baseParams   = tutils.BaseAPIParams(proxyURL)
-		bck, _, _, _ = cmn.RawURL2BckObj(httpObjectURL)
-		w            = bytes.NewBuffer(nil)
-		options      = api.GetObjectInput{Writer: w}
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		hbo, _     = cmn.NewHTTPObjPath(httpObjectURL)
+		w          = bytes.NewBuffer(nil)
+		options    = api.GetObjectInput{Writer: w}
 	)
-	_ = api.DestroyBucket(baseParams, bck)
-	defer api.DestroyBucket(baseParams, bck)
+	_ = api.DestroyBucket(baseParams, hbo.Bck)
+	defer api.DestroyBucket(baseParams, hbo.Bck)
 
 	// get using the HTTP API
 	options.Query = make(url.Values, 1)
 	options.Query.Set(cmn.URLParamOrigURL, httpObjectURL)
-	_, err := api.GetObject(baseParams, bck, httpObjectName, options)
+	_, err := api.GetObject(baseParams, hbo.Bck, httpObjectName, options)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpObjectOutput, "bad content (expected:%s got:%s)", httpObjectOutput, w.String())
 
@@ -140,12 +140,12 @@ func TestHttpProviderObjectGet(t *testing.T) {
 	w.Reset()
 	options.Query = make(url.Values, 1)
 	options.Query.Set(cmn.URLParamOrigURL, httpAnotherObjectURL)
-	_, err = api.GetObject(baseParams, bck, httpAnotherObjectName, options)
+	_, err = api.GetObject(baseParams, hbo.Bck, httpAnotherObjectName, options)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpAnotherObjectOutput, "bad content (expected:%s got:%s)", httpAnotherObjectOutput, w.String())
 
 	// list object should contain both the objects
-	reslist, err := api.ListObjects(baseParams, bck, &cmn.SelectMsg{}, 0)
+	reslist, err := api.ListObjects(baseParams, hbo.Bck, &cmn.SelectMsg{}, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == 2, "should have exactly 2 entries in bucket")
 
@@ -155,7 +155,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 			matchCount++
 		}
 	}
-	tassert.Errorf(t, matchCount == 2, "objects %s and %s should be present in the bucket %s", httpObjectName, httpAnotherObjectName, bck)
+	tassert.Errorf(t, matchCount == 2, "objects %s and %s should be present in the bucket %s", httpObjectName, httpAnotherObjectName, hbo.Bck)
 }
 
 func TestAppendObject(t *testing.T) {

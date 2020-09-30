@@ -43,16 +43,44 @@ const (
 	dryRunExplanation = "No modifications on the cluster"
 )
 
-func getObject(c *cli.Context, bck cmn.Bck, object, origURL, outFile string, silent bool) (err error) {
+func getObject(c *cli.Context, outFile string, silent bool) (err error) {
+	var (
+		objArgs                api.GetObjectInput
+		bck                    cmn.Bck
+		object, origURL        string
+		fullObjName            = c.Args().Get(0)
+		objLen, offset, length int64
+	)
+
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
+	}
+
+	if isWebURL(fullObjName) {
+		hbo, err := cmn.NewHTTPObjPath(fullObjName)
+		if err != nil {
+			return err
+		}
+		bck, object = hbo.Bck, hbo.ObjName
+		origURL = fullObjName
+	} else if bck, object, err = cmn.ParseBckObjectURI(fullObjName); err != nil {
+		return
+	}
+
+	if origURL == "" || !flagIsSet(c, forceFlag) {
+		if bck, _, err = validateBucket(c, bck, fullObjName, false /* optional */); err != nil {
+			return
+		}
+	}
+
+	if object == "" {
+		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
+	}
+
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
 		return objectCheckExists(c, bck, object)
 	}
-
-	var (
-		objArgs                api.GetObjectInput
-		objLen, offset, length int64
-	)
 
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
 		return incorrectUsageMsg(c, "%q and %q flags both need to be set", lengthFlag.Name, offsetFlag.Name)
