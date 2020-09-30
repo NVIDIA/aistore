@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	xactRegistry "github.com/NVIDIA/aistore/xaction/registry"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -335,7 +336,7 @@ func Stop(t cluster.Target, id string) error {
 	)
 
 	// Abort any running offline ETLs.
-	t.AbortAllXacts(cmn.ActETLBucket)
+	xactRegistry.Registry.AbortAll(cmn.ActETLBucket)
 
 	c, err := GetCommunicator(id)
 	if err != nil {

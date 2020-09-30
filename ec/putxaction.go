@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 type (
@@ -25,10 +26,34 @@ type (
 		xactReqBase
 		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
 	}
+
+	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	XactPutProvider struct {
+		xact *XactPut
+	}
 )
 
+func (r *XactPutProvider) New(_ registry.XactArgs) registry.BucketEntry {
+	return &XactPutProvider{}
+}
+func (r *XactPutProvider) Start(bck cmn.Bck) error {
+	var (
+		xec      = ECM.NewPutXact(bck)
+		idleTime = cmn.GCO.Get().Timeout.SendFile
+	)
+	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(r.Kind(), bck, idleTime)
+	xec.InitIdle()
+	r.xact = xec
+	go xec.Run()
+	return nil
+}
+func (r *XactPutProvider) Kind() string                                      { return cmn.ActECPut }
+func (r *XactPutProvider) Get() cluster.Xact                                 { return r.xact }
+func (r *XactPutProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
+func (r *XactPutProvider) PostRenewHook(_ registry.BucketEntry)              {}
+
 //
-// XactGet
+// XactPut
 //
 
 func NewPutXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactPut {

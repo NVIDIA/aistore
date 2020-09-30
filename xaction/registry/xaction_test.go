@@ -9,7 +9,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/lru"
@@ -169,7 +168,7 @@ func TestXactionQueryFinished(t *testing.T) {
 	type testConfig struct {
 		bckNil           bool
 		kindNil          bool
-		showActive       *bool
+		showActive       bool
 		expectedStatsLen int
 	}
 	var (
@@ -192,16 +191,12 @@ func TestXactionQueryFinished(t *testing.T) {
 	_, err = xactions.RenewEvictDelete(tMock, bck1, &runners.DeletePrefetchArgs{})
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
 
-	printStates := func(showActive *bool) string {
+	printStates := func(showActive bool) string {
 		s := ""
-		if showActive == nil {
-			s += "|RUNNING|FINISHED"
+		if showActive {
+			s += "|RUNNING"
 		} else {
-			if *showActive {
-				s += "|RUNNING"
-			} else {
-				s += "|FINISHED"
-			}
+			s += "|FINISHED"
 		}
 		return s
 	}
@@ -230,17 +225,17 @@ func TestXactionQueryFinished(t *testing.T) {
 			if !tc.kindNil {
 				query.Kind = xactBck1.Kind()
 			}
-			query.OnlyRunning = tc.showActive
+			query.OnlyRunning = &tc.showActive
 			stats, err := xactions.GetStats(query)
 			tassert.Errorf(t, err == nil, "Error fetching Xact Stats %v for query %v", err, query)
 			tassert.Errorf(t, len(stats) == tc.expectedStatsLen, "Length of result: %d != %d", len(stats), tc.expectedStatsLen)
 		})
 	}
 	tests := []testConfig{
-		{bckNil: true, kindNil: true, showActive: api.Bool(false), expectedStatsLen: 1},
-		{bckNil: true, kindNil: false, showActive: api.Bool(false), expectedStatsLen: 1},
-		{bckNil: false, kindNil: true, showActive: api.Bool(false), expectedStatsLen: 1},
-		{bckNil: false, kindNil: false, showActive: api.Bool(false), expectedStatsLen: 1},
+		{bckNil: true, kindNil: true, showActive: false, expectedStatsLen: 1},
+		{bckNil: true, kindNil: false, showActive: false, expectedStatsLen: 1},
+		{bckNil: false, kindNil: true, showActive: false, expectedStatsLen: 1},
+		{bckNil: false, kindNil: false, showActive: false, expectedStatsLen: 1},
 	}
 	for _, test := range tests {
 		f(t, test)

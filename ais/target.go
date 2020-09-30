@@ -275,7 +275,7 @@ func (t *targetrunner) Run() error {
 	}
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
 	t.initRecvHandlers()
-	ec.Init(t, registry.Registry)
+	ec.Init(t)
 
 	marked := registry.GetResilverMarked()
 	if marked.Interrupted {

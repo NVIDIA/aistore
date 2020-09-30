@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 type (
@@ -35,7 +36,42 @@ type (
 		smap     *cluster.Smap
 		daemonID string
 	}
+
+	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	XactBckEncodeProvider struct {
+		xact  *XactBckEncode
+		t     cluster.Target
+		uuid  string
+		phase string
+	}
 )
+
+func (r *XactBckEncodeProvider) New(args registry.XactArgs) registry.BucketEntry {
+	return &XactBckEncodeProvider{
+		t:     args.T,
+		uuid:  args.UUID,
+		phase: args.Phase,
+	}
+}
+func (r *XactBckEncodeProvider) Start(bck cmn.Bck) error {
+	xec := NewXactBckEncode(bck, r.t, r.uuid)
+	r.xact = xec
+	return nil
+}
+func (r *XactBckEncodeProvider) Kind() string      { return cmn.ActECEncode }
+func (r *XactBckEncodeProvider) Get() cluster.Xact { return r.xact }
+func (r *XactBckEncodeProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep bool, err error) {
+	// TODO: add more checks?
+	prev := previousEntry.(*XactBckEncodeProvider)
+	if prev.phase == cmn.ActBegin && r.phase == cmn.ActCommit {
+		prev.phase = cmn.ActCommit // transition
+		keep = true
+		return
+	}
+	err = fmt.Errorf("%s(%s, phase %s): cannot %s", r.Kind(), prev.xact.Bck().Name, prev.phase, r.phase)
+	return
+}
+func (r *XactBckEncodeProvider) PostRenewHook(_ registry.BucketEntry) {}
 
 func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode {
 	return &XactBckEncode{

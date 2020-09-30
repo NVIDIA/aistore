@@ -9,11 +9,9 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bcklist"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/query"
@@ -30,147 +28,70 @@ type baseBckEntry struct {
 	uuid string
 }
 
-// nolint:unparam // `err` is set in different implementations
-func (b *baseBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
+func (b *baseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
 	e := previousEntry.Get()
 	_, keep = e.(xaction.XactDemand)
 	return
 }
 
-func (b *baseBckEntry) postRenewHook(_ bucketEntry) {}
+func (b *baseBckEntry) PostRenewHook(_ BucketEntry) {}
 
 type (
-	bucketEntry interface {
-		baseEntry
+	BucketEntry interface {
+		BaseEntry
 		// pre-renew: returns true iff the current active one exists and is either
 		// - ok to keep running as is, or
 		// - has been renew(ed) and is still ok
-		preRenewHook(previousEntry bucketEntry) (keep bool, err error)
+		PreRenewHook(previousEntry BucketEntry) (keep bool, err error)
 		// post-renew hook
-		postRenewHook(previousEntry bucketEntry)
+		PostRenewHook(previousEntry BucketEntry)
+	}
+
+	// BucketEntryProvider is an interface to provider a new instance of BucketEntry interface.
+	BucketEntryProvider interface {
+		// New should create empty stub for bucket xaction that could be started
+		// with `Start()` method.
+		New(args XactArgs) BucketEntry
+		Kind() string
+	}
+
+	XactArgs struct {
+		Ctx    context.Context
+		T      cluster.Target
+		UUID   string
+		Phase  string
+		Custom interface{} // Additional arguments that are specific for a given xaction.
 	}
 )
 
-var (
-	_ ec.XactRegistry = &registry{}
-)
+func (r *registry) RegisterBucketXact(entry BucketEntryProvider) {
+	cmn.Assert(xaction.IsValidXaction(entry.Kind()))
 
-//
-// ecGetEntry
-//
-type ecGetEntry struct {
-	baseBckEntry
-	xact *ec.XactGet
+	// It is expected that registrations happen at the init time. Therefore, it
+	// is safe to assume that no `RenewXYZ` will happen before all xactions
+	// are registered. Thus, no locking is needed.
+	r.registered[entry.Kind()] = entry
 }
 
-func (e *ecGetEntry) Start(bck cmn.Bck) error {
-	var (
-		xec      = ec.ECM.NewGetXact(bck)
-		idleTime = cmn.GCO.Get().Timeout.SendFile
-	)
-	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(cmn.ActECGet, bck, idleTime)
-	xec.InitIdle()
-	e.xact = xec
-	go xec.Run()
-	return nil
+// RenewBucketXact is general function to renew bucket xaction without any
+// additional or specific parameters.
+func (r *registry) RenewBucketXact(kind string, bck *cluster.Bck) cluster.Xact {
+	e := r.registered[kind].New(XactArgs{})
+	res := r.renewBucketXaction(e, bck)
+	return res.entry.Get()
 }
 
-func (*ecGetEntry) Kind() string        { return cmn.ActECGet }
-func (e *ecGetEntry) Get() cluster.Xact { return e.xact }
-func (r *registry) RenewGetEC(bck *cluster.Bck) *ec.XactGet {
-	res := r.renewBucketXaction(&ecGetEntry{}, bck) // TODO: handle error
-	return res.entry.Get().(*ec.XactGet)
-}
-
-//
-// ecPutEntry
-//
-type ecPutEntry struct {
-	baseBckEntry
-	xact *ec.XactPut
-}
-
-func (e *ecPutEntry) Start(bck cmn.Bck) error {
-	var (
-		xec      = ec.ECM.NewPutXact(bck)
-		idleTime = cmn.GCO.Get().Timeout.SendFile
-	)
-	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(cmn.ActECPut, bck, idleTime)
-	xec.InitIdle()
-	go xec.Run()
-	e.xact = xec
-	return nil
-}
-func (*ecPutEntry) Kind() string        { return cmn.ActECPut }
-func (e *ecPutEntry) Get() cluster.Xact { return e.xact }
-func (r *registry) RenewPutEC(bck *cluster.Bck) *ec.XactPut {
-	res := r.renewBucketXaction(&ecPutEntry{}, bck) // TODO: handle error
-	return res.entry.Get().(*ec.XactPut)
-}
-
-//
-// ecRespondEntry
-//
-type ecRespondEntry struct {
-	baseBckEntry
-	xact *ec.XactRespond
-}
-
-func (e *ecRespondEntry) Start(bck cmn.Bck) error {
-	var (
-		xec      = ec.ECM.NewRespondXact(bck)
-		idleTime = cmn.GCO.Get().Timeout.SendFile
-	)
-	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(cmn.ActECRespond, bck, idleTime)
-	xec.InitIdle()
-	go xec.Run()
-	e.xact = xec
-	return nil
-}
-func (*ecRespondEntry) Kind() string        { return cmn.ActECRespond }
-func (e *ecRespondEntry) Get() cluster.Xact { return e.xact }
-func (r *registry) RenewRespondEC(bck *cluster.Bck) *ec.XactRespond {
-	res := r.renewBucketXaction(&ecRespondEntry{}, bck)
-	return res.entry.Get().(*ec.XactRespond)
-}
-
-//
-// ecEncodeEntry
-//
-type ecEncodeEntry struct {
-	baseBckEntry
-	t     cluster.Target
-	xact  *ec.XactBckEncode
-	phase string
-}
-
-func (e *ecEncodeEntry) Start(bck cmn.Bck) error {
-	xec := ec.NewXactBckEncode(bck, e.t, e.uuid)
-	e.xact = xec
-	return nil
-}
-
-func (*ecEncodeEntry) Kind() string        { return cmn.ActECEncode }
-func (e *ecEncodeEntry) Get() cluster.Xact { return e.xact }
-func (r *registry) RenewECEncodeXact(t cluster.Target, bck *cluster.Bck, uuid, phase string) (*ec.XactBckEncode, error) {
-	e := &ecEncodeEntry{baseBckEntry: baseBckEntry{uuid}, t: t, phase: phase}
+func (r *registry) RenewECEncodeXact(t cluster.Target, bck *cluster.Bck, uuid, phase string) (cluster.Xact, error) {
+	e := r.registered[cmn.ActECEncode].New(XactArgs{
+		T:     t,
+		UUID:  uuid,
+		Phase: phase,
+	})
 	res := r.renewBucketXaction(e, bck)
 	if res.err != nil {
 		return nil, res.err
 	}
-	return res.entry.Get().(*ec.XactBckEncode), nil
-}
-
-func (e *ecEncodeEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
-	// TODO: add more checks?
-	prev := previousEntry.(*ecEncodeEntry)
-	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit {
-		prev.phase = cmn.ActCommit // transition
-		keep = true
-		return
-	}
-	err = fmt.Errorf("%s(%s, phase %s): cannot %s", e.Kind(), prev.xact.Bck().Name, prev.phase, e.phase)
-	return
+	return res.entry.Get(), nil
 }
 
 //
@@ -289,7 +210,7 @@ func (r *registry) RenewBckLoadLomCache(t cluster.Target, bck *cluster.Bck) {
 	r.renewBucketXaction(e, bck)
 }
 
-func (e *loadLomCacheEntry) preRenewHook(_ bucketEntry) (bool, error) {
+func (e *loadLomCacheEntry) PreRenewHook(_ BucketEntry) (bool, error) {
 	return true, nil
 }
 
@@ -353,7 +274,7 @@ func (e *transferBckEntry) Start(_ cmn.Bck) error {
 func (e *transferBckEntry) Kind() string      { return e.kind }
 func (e *transferBckEntry) Get() cluster.Xact { return e.xact }
 
-func (e *transferBckEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
+func (e *transferBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
 	prev := previousEntry.(*transferBckEntry)
 	bckEq := prev.bckFrom.Equal(e.bckFrom, true /*same BID*/, true /* same backend */)
 	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && bckEq {
@@ -403,10 +324,11 @@ type (
 
 func (e *fastRenEntry) Start(bck cmn.Bck) error {
 	f := func() ([]cluster.XactStats, error) {
+		onlyRunning := false
 		return Registry.GetStats(RegistryXactFilter{
 			ID:          e.rebID.String(),
 			Kind:        cmn.ActRebalance,
-			OnlyRunning: api.Bool(false),
+			OnlyRunning: &onlyRunning,
 		})
 	}
 
@@ -416,7 +338,7 @@ func (e *fastRenEntry) Start(bck cmn.Bck) error {
 func (e *fastRenEntry) Kind() string      { return cmn.ActRenameLB }
 func (e *fastRenEntry) Get() cluster.Xact { return e.xact }
 
-func (e *fastRenEntry) preRenewHook(previousEntry bucketEntry) (keep bool, err error) {
+func (e *fastRenEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
 	if e.phase == cmn.ActBegin {
 		if !previousEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", e.Kind(), e.bckFrom, e.bckTo)
@@ -477,7 +399,7 @@ func (e *evictDeleteEntry) Kind() string {
 }
 func (e *evictDeleteEntry) Get() cluster.Xact { return e.xact }
 
-func (e *evictDeleteEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
+func (e *evictDeleteEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
 	return false, nil
 }
 
@@ -508,7 +430,7 @@ type (
 
 func (e *prefetchEntry) Kind() string      { return cmn.ActPrefetch }
 func (e *prefetchEntry) Get() cluster.Xact { return e.xact }
-func (e *prefetchEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
+func (e *prefetchEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
 	return false, nil
 }
 func (e *prefetchEntry) Start(bck cmn.Bck) error {
@@ -582,7 +504,7 @@ func (r *registry) RenewObjectsListingXact(ctx context.Context, t cluster.Target
 	return xact, res.isNew, nil
 }
 
-func (e *queryEntry) preRenewHook(_ bucketEntry) (keep bool, err error) {
+func (e *queryEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
 	return query.Registry.Get(e.msg.UUID) != nil, nil
 }
 

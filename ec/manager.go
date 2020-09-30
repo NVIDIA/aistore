@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 // nolint:maligned // no performance critical code
@@ -26,7 +27,6 @@ type Manager struct {
 	sync.RWMutex
 
 	t         cluster.Target
-	reg       XactRegistry
 	smap      *cluster.Smap
 	targetCnt atomic.Int32 // atomic, to avoid races between read/write on smap
 	bmd       *cluster.BMD // bmd owner
@@ -44,7 +44,7 @@ var (
 	ECM *Manager
 )
 
-func initManager(t cluster.Target, reg XactRegistry) error {
+func initManager(t cluster.Target) error {
 	config := cmn.GCO.Get()
 	netReq, netResp := cmn.NetworkIntraControl, cmn.NetworkIntraData
 	if !config.Net.UseIntraControl {
@@ -61,7 +61,6 @@ func initManager(t cluster.Target, reg XactRegistry) error {
 		netReq:    netReq,
 		netResp:   netResp,
 		t:         t,
-		reg:       reg,
 		smap:      smap,
 		targetCnt: *atomic.NewInt32(int32(smap.CountTargets())),
 		bmd:       t.Bowner().Get(),
@@ -155,30 +154,27 @@ func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
 func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {
 	xact := mgr.getBckXacts(bck.Name).Get()
 	if xact == nil || xact.Finished() {
-		xact = mgr.reg.RenewGetEC(bck)
+		xact = registry.Registry.RenewBucketXact(cmn.ActECGet, bck).(*XactGet)
 		mgr.getBckXacts(bck.Name).SetGet(xact)
 	}
-
 	return xact
 }
 
 func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) *XactPut {
 	xact := mgr.getBckXacts(bck.Name).Put()
 	if xact == nil || xact.Finished() {
-		xact = mgr.reg.RenewPutEC(bck)
+		xact = registry.Registry.RenewBucketXact(cmn.ActECPut, bck).(*XactPut)
 		mgr.getBckXacts(bck.Name).SetPut(xact)
 	}
-
 	return xact
 }
 
 func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) *XactRespond {
 	xact := mgr.getBckXacts(bck.Name).Req()
 	if xact == nil || xact.Finished() {
-		xact = mgr.reg.RenewRespondEC(bck)
+		xact = registry.Registry.RenewBucketXact(cmn.ActECRespond, bck).(*XactRespond)
 		mgr.getBckXacts(bck.Name).SetReq(xact)
 	}
-
 	return xact
 }
 

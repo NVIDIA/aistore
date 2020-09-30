@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xaction/registry"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -183,12 +184,6 @@ type (
 		isSlice  bool               // is it slice or replica
 		reqType  intraReqType       // request's type, slice/meta request/response
 	}
-
-	XactRegistry interface {
-		RenewGetEC(bck *cluster.Bck) *XactGet
-		RenewPutEC(bck *cluster.Bck) *XactPut
-		RenewRespondEC(bck *cluster.Bck) *XactRespond
-	}
 )
 
 // frees all allocated memory and removes slice's temporary file
@@ -236,11 +231,18 @@ var (
 	ErrorInsufficientTargets = errors.New("insufficient targets")
 )
 
-func Init(t cluster.Target, reg XactRegistry) {
+func Init(t cluster.Target) {
 	mm = t.MMSA()
+
 	fs.CSM.RegisterContentType(SliceType, &SliceSpec{})
 	fs.CSM.RegisterContentType(MetaType, &MetaSpec{})
-	if err := initManager(t, reg); err != nil {
+
+	registry.Registry.RegisterBucketXact(&XactGetProvider{})
+	registry.Registry.RegisterBucketXact(&XactPutProvider{})
+	registry.Registry.RegisterBucketXact(&XactRespondProvider{})
+	registry.Registry.RegisterBucketXact(&XactBckEncodeProvider{})
+
+	if err := initManager(t); err != nil {
 		glog.Fatal(err)
 	}
 }

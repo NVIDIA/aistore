@@ -16,6 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 type (
@@ -27,7 +29,31 @@ type (
 	XactRespond struct {
 		xactECBase
 	}
+
+	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	XactRespondProvider struct {
+		xact *XactRespond
+	}
 )
+
+func (r *XactRespondProvider) New(_ registry.XactArgs) registry.BucketEntry {
+	return &XactRespondProvider{}
+}
+func (r *XactRespondProvider) Start(bck cmn.Bck) error {
+	var (
+		xec      = ECM.NewRespondXact(bck)
+		idleTime = cmn.GCO.Get().Timeout.SendFile
+	)
+	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(r.Kind(), bck, idleTime)
+	xec.InitIdle()
+	r.xact = xec
+	go xec.Run()
+	return nil
+}
+func (r *XactRespondProvider) Kind() string                                      { return cmn.ActECRespond }
+func (r *XactRespondProvider) Get() cluster.Xact                                 { return r.xact }
+func (r *XactRespondProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
+func (r *XactRespondProvider) PostRenewHook(_ registry.BucketEntry)              {}
 
 func NewRespondXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactRespond {
 	XactCount.Inc()

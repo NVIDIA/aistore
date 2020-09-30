@@ -18,7 +18,7 @@ import (
 )
 
 type globalEntry interface {
-	baseEntry
+	BaseEntry
 	// pre-renew: returns true iff the current active one exists and is either
 	// - ok to keep running as is, or
 	// - has been renew(ed) and is still ok
