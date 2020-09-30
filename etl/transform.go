@@ -281,8 +281,10 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 }
 
 func waitTransformerReady(url, path string) (err error) {
-	var resp *http.Response
-	tfProbeSleep := cmn.GCO.Get().Timeout.MaxKeepalive
+	var (
+		resp         *http.Response
+		tfProbeSleep = cmn.GCO.Get().Timeout.MaxKeepalive
+	)
 	tfProbeClient.Timeout = tfProbeSleep
 	for i := 0; i < tfProbeRetries; i++ {
 		resp, err = tfProbeClient.Get(cmn.JoinPath(url, path))
@@ -315,7 +317,7 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 				{Port: pod.Spec.Containers[0].Ports[0].ContainerPort},
 			},
 			Selector: map[string]string{
-				"app": pod.Labels["app"],
+				podLabel: pod.Labels[podLabel],
 			},
 			Type: corev1.ServiceTypeNodePort,
 		},

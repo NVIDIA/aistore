@@ -14,6 +14,13 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
+const (
+	podLabel = "app"
+
+	commTypeAnnotation    = "communication_type"
+	waitTimeoutAnnotation = "wait_timeout"
+)
+
 // Currently we need the `default` port (on which the application runs) to be same as the
 // `readiness` probe port in the pod spec.
 func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error) {
@@ -27,22 +34,22 @@ func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error)
 		kind := obj.GetObjectKind().GroupVersionKind().Kind
 		return nil, cmn.NewETLError(errCtx, "expected pod spec, got: %s", kind)
 	}
-	if _, ok := pod.Labels["app"]; !ok {
+	if _, ok := pod.Labels[podLabel]; !ok {
 		if pod.Labels == nil {
 			pod.Labels = map[string]string{}
 		}
-		pod.Labels["app"] = pod.GetName() + "-app"
+		pod.Labels[podLabel] = pod.GetName() + "-app"
 	}
 	return pod, nil
 }
 
 func podTransformCommType(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {
-	if pod.Annotations == nil || pod.Annotations["communication_type"] == "" {
+	if pod.Annotations == nil || pod.Annotations[commTypeAnnotation] == "" {
 		// By default assume `PushCommType`.
 		return PushCommType, nil
 	}
 
-	commType := pod.Annotations["communication_type"]
+	commType := pod.Annotations[commTypeAnnotation]
 	if err := validateCommType(commType); err != nil {
 		return "", cmn.NewETLError(errCtx, err.Error()).WithPodName(pod.Name)
 	}
@@ -57,11 +64,11 @@ func validateCommType(commType string) error {
 }
 
 func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cmn.DurationJSON, error) {
-	if pod.Annotations == nil || pod.Annotations["wait_timeout"] == "" {
+	if pod.Annotations == nil || pod.Annotations[waitTimeoutAnnotation] == "" {
 		return 0, nil
 	}
 
-	v, err := time.ParseDuration(pod.Annotations["wait_timeout"])
+	v, err := time.ParseDuration(pod.Annotations[waitTimeoutAnnotation])
 	if err != nil {
 		return cmn.DurationJSON(v), cmn.NewETLError(errCtx, err.Error()).WithPodName(pod.Name)
 	}
@@ -81,29 +88,31 @@ func ValidateSpec(spec []byte) (msg InitMsg, err error) {
 
 	// Check pod specification constraints.
 	if len(pod.Spec.Containers) != 1 {
-		// TODO: we could allow more but we would need to enforce that the "main" one is specified first.
 		return msg, cmn.NewETLError(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
 	}
 	container := pod.Spec.Containers[0]
 	if len(container.Ports) != 1 {
 		return msg, cmn.NewETLError(errCtx, "unsupported number of container ports (%d), expected: 1", len(container.Ports))
 	}
+	if container.Ports[0].Name != k8s.Default {
+		return msg, cmn.NewETLError(errCtx, "expected port name: %q, got: %q", k8s.Default, container.Ports[0].Name)
+	}
 
 	// Validate that user container supports health check.
-	// Currently we need the `default` port (on which the application runs) to be same as the
-	// `readiness` probe port.
-	if container.Ports[0].Name != k8s.Default {
-		return msg, cmn.NewETLError(errCtx, "expected port name %q got %q", k8s.Default, container.Ports[0].Name)
-	}
+	// Currently we need the `default` port (on which the application runs) to
+	// be same as the `readiness` probe port.
 	if container.ReadinessProbe == nil {
-		return msg, cmn.NewETLError(errCtx, "readinessProbe is required in a container spec")
+		return msg, cmn.NewETLError(errCtx, "readinessProbe section is required in a container spec")
 	}
 	// TODO: Add support for other health checks.
 	if container.ReadinessProbe.HTTPGet == nil {
 		return msg, cmn.NewETLError(errCtx, "httpGet missing in the readinessProbe")
 	}
+	if container.ReadinessProbe.HTTPGet.Path == "" {
+		return msg, cmn.NewETLError(errCtx, "expected non-empty path for readinessProbe")
+	}
 	if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
-		return msg, cmn.NewETLError(errCtx, "readinessProbe port must be the '%q' port", k8s.Default)
+		return msg, cmn.NewETLError(errCtx, "readinessProbe port must be the %q port", k8s.Default)
 	}
 
 	// Check annotations.
