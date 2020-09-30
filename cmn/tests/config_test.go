@@ -22,7 +22,7 @@ func TestConfigTestEnv(t *testing.T) {
 	}()
 
 	confPath := filepath.Join(thisFileDir(t), "configs", "configtest.json")
-	jsp.LoadConfig(confPath)
+	tassert.CheckFatal(t, jsp.LoadConfig(confPath))
 }
 
 func TestConfigFSPaths(t *testing.T) {
@@ -33,7 +33,7 @@ func TestConfigFSPaths(t *testing.T) {
 	}()
 
 	confPath := filepath.Join(thisFileDir(t), "configs", "configfspaths.json")
-	jsp.LoadConfig(confPath)
+	tassert.CheckFatal(t, jsp.LoadConfig(confPath))
 }
 
 func thisFileDir(t *testing.T) string {

@@ -26,7 +26,8 @@
   },
   "periodic": {
     "stats_time":        "10s",
-    "retry_sync_time":   "2s"
+    "retry_sync_time":   "2s",
+    "notif_time":        "30s"
   },
   "timeout": {
     "max_keepalive":        "4s",

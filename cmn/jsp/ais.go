@@ -17,13 +17,13 @@ import (
 // ais config //
 ////////////////
 
-func LoadConfig(confPath string) {
-	if err := loadConfig(confPath); err != nil {
+func LoadConfigOrFail(confPath string) {
+	if err := LoadConfig(confPath); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 }
 
-func loadConfig(confPath string) (err error) {
+func LoadConfig(confPath string) (err error) {
 	cmn.GCO.SetConfigFile(confPath)
 
 	config := cmn.GCO.BeginUpdate()
