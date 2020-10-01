@@ -22,14 +22,12 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 func TestLRUMain(t *testing.T) {
 	RegisterFailHandler(Fail)
-	registry.Init()
 	cluster.InitTarget()
 	go hk.DefaultHK.Run()
 	RunSpecs(t, "LRU Suite")

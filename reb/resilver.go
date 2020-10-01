@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 type (
@@ -37,7 +38,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...clu
 		glog.Errorln("failed to create resilver marker", err)
 	}
 
-	xreb := registry.Registry.RenewResilver(id)
+	xreb := registry.Registry.RenewResilver(id).(*runners.Resilver)
 	defer xreb.MarkDone()
 
 	if len(notifs) != 0 {

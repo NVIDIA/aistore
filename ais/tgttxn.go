@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/registry"
-	"github.com/NVIDIA/aistore/xaction/runners"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -345,7 +344,6 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
-		var xact *runners.FastRen
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
@@ -355,7 +353,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if err = t.transactions.wait(txn, c.timeout); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		xact, err = registry.Registry.RenewBckFastRename(t, c.uuid, c.msg.RMDVersion,
+		xact, err := registry.Registry.RenewBckFastRename(t, c.uuid, c.msg.RMDVersion,
 			txnRenB.bckFrom, txnRenB.bckTo, cmn.ActCommit)
 		if err != nil {
 			return err // must not happen at commit time

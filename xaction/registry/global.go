@@ -7,24 +7,71 @@ package registry
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
-type globalEntry interface {
-	BaseEntry
-	// pre-renew: returns true iff the current active one exists and is either
-	// - ok to keep running as is, or
-	// - has been renew(ed) and is still ok
-	preRenewHook(previousEntry globalEntry) (keep bool)
-	// post-renew hook
-	postRenewHook(previousEntry globalEntry)
+type (
+	GlobalEntry interface {
+		BaseEntry
+		// pre-renew: returns true iff the current active one exists and is either
+		// - ok to keep running as is, or
+		// - has been renew(ed) and is still ok
+		PreRenewHook(previousEntry GlobalEntry) (keep bool)
+		// post-renew hook
+		PostRenewHook(previousEntry GlobalEntry)
+	}
+
+	GlobalEntryProvider interface {
+		New(args XactArgs) GlobalEntry
+		Kind() string
+	}
+
+	RebalanceArgs struct {
+		ID          xaction.RebID
+		StatsRunner *stats.Trunner
+	}
+)
+
+func (r *registry) RegisterGlobalXact(entry GlobalEntryProvider) {
+	cmn.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
+
+	// It is expected that registrations happen at the init time. Therefore, it
+	// is safe to assume that no `RenewXYZ` will happen before all xactions
+	// are registered. Thus, no locking is needed.
+	r.globalXacts[entry.Kind()] = entry
+}
+
+func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) cluster.Xact {
+	e := r.globalXacts[cmn.ActRebalance].New(XactArgs{Custom: &RebalanceArgs{
+		ID:          xaction.RebID(id),
+		StatsRunner: statsRunner,
+	}})
+	res := r.renewGlobalXaction(e)
+	if !res.isNew { // previous global rebalance is still running
+		return nil
+	}
+	return res.entry.Get()
+}
+
+func (r *registry) RenewResilver(id string) cluster.Xact {
+	e := r.globalXacts[cmn.ActResilver].New(XactArgs{UUID: id})
+	res := r.renewGlobalXaction(e)
+	cmn.Assert(res.isNew) // resilver must be always preempted
+	return res.entry.Get()
+}
+
+func (r *registry) RenewElection() cluster.Xact {
+	e := r.globalXacts[cmn.ActElection].New(XactArgs{})
+	res := r.renewGlobalXaction(e)
+	if !res.isNew { // previous election is still running
+		return nil
+	}
+	return res.entry.Get()
 }
 
 //
@@ -54,86 +101,7 @@ func (e *lruEntry) Start(_ cmn.Bck) error {
 func (e *lruEntry) Kind() string      { return cmn.ActLRU }
 func (e *lruEntry) Get() cluster.Xact { return e.xact }
 
-func (e *lruEntry) preRenewHook(_ globalEntry) bool { return true }
-
-//
-// rebalanceEntry
-//
-
-type rebalanceEntry struct {
-	id          xaction.RebID // rebalance id
-	xact        *runners.Rebalance
-	statsRunner *stats.Trunner
-}
-
-func (e *rebalanceEntry) Start(_ cmn.Bck) error {
-	xreb := runners.NewRebalance(e.id, e.Kind(), e.statsRunner, GetRebMarked)
-	e.xact = xreb
-	return nil
-}
-func (e *rebalanceEntry) Kind() string      { return cmn.ActRebalance }
-func (e *rebalanceEntry) Get() cluster.Xact { return e.xact }
-
-func (e *rebalanceEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
-	xreb := previousEntry.(*rebalanceEntry)
-	if xreb.id > e.id {
-		glog.Errorf("(reb: %s) g%d is greater than g%d", xreb.xact, xreb.id, e.id)
-		keep = true
-	} else if xreb.id == e.id {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s already running, nothing to do", xreb.xact)
-		}
-		keep = true
-	}
-	return
-}
-
-func (e *rebalanceEntry) postRenewHook(previousEntry globalEntry) {
-	xreb := previousEntry.(*rebalanceEntry).xact
-	xreb.Abort()
-	xreb.WaitForFinish()
-}
-
-//
-// resilverEntry
-//
-type resilverEntry struct {
-	baseGlobalEntry
-	id   string
-	xact *runners.Resilver
-}
-
-func (e *resilverEntry) Start(_ cmn.Bck) error {
-	e.xact = runners.NewResilver(e.id, e.Kind())
-	return nil
-}
-func (e *resilverEntry) Get() cluster.Xact { return e.xact }
-func (e *resilverEntry) Kind() string      { return cmn.ActResilver }
-
-func (e *resilverEntry) postRenewHook(previousEntry globalEntry) {
-	xresilver := previousEntry.(*resilverEntry).xact
-	xresilver.Abort()
-	xresilver.WaitForFinish()
-}
-
-//
-// electionEntry
-//
-type electionEntry struct {
-	baseGlobalEntry
-	xact *runners.Election
-}
-
-func (e *electionEntry) Start(_ cmn.Bck) error {
-	e.xact = &runners.Election{
-		XactBase: *xaction.NewXactBase(xaction.XactBaseID(""), cmn.ActElection),
-	}
-	return nil
-}
-func (e *electionEntry) Get() cluster.Xact { return e.xact }
-func (e *electionEntry) Kind() string      { return cmn.ActElection }
-
-func (e *electionEntry) preRenewHook(_ globalEntry) bool { return true }
+func (e *lruEntry) PreRenewHook(_ GlobalEntry) bool { return true }
 
 //
 // downloadEntry
@@ -163,10 +131,10 @@ type (
 	baseGlobalEntry struct{}
 )
 
-func (b *baseGlobalEntry) preRenewHook(previousEntry globalEntry) (keep bool) {
+func (b *baseGlobalEntry) PreRenewHook(previousEntry GlobalEntry) (keep bool) {
 	e := previousEntry.Get()
 	_, keep = e.(xaction.XactDemand)
 	return
 }
 
-func (b *baseGlobalEntry) postRenewHook(_ globalEntry) {}
+func (b *baseGlobalEntry) PostRenewHook(_ GlobalEntry) {}

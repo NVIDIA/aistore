@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/registry"
-	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 // TODO: uplift via higher-level query and similar (#668)
@@ -153,7 +152,7 @@ func (t *targetrunner) cmdXactStart(xactMsg xaction.XactReqMsg, bck *cluster.Bck
 		if bck == nil {
 			return fmt.Errorf(erfmn, xactMsg.Kind)
 		}
-		args := &runners.DeletePrefetchArgs{
+		args := &registry.DeletePrefetchArgs{
 			Ctx:      context.Background(),
 			RangeMsg: &cmn.RangeMsg{},
 		}

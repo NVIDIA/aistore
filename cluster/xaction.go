@@ -36,8 +36,10 @@ type (
 		Stats() XactStats
 
 		// modifiers
+		Finish(errs ...error)
 		Abort()
 		AddNotif(n Notif)
+		ObjectsAdd(cnt int64) int64
 	}
 
 	XactStats interface {

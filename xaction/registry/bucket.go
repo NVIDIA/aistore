@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 //
@@ -65,24 +64,24 @@ type (
 )
 
 func (r *registry) RegisterBucketXact(entry BucketEntryProvider) {
-	cmn.Assert(xaction.IsValidXaction(entry.Kind()))
+	cmn.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeBck)
 
 	// It is expected that registrations happen at the init time. Therefore, it
 	// is safe to assume that no `RenewXYZ` will happen before all xactions
 	// are registered. Thus, no locking is needed.
-	r.registered[entry.Kind()] = entry
+	r.bckXacts[entry.Kind()] = entry
 }
 
 // RenewBucketXact is general function to renew bucket xaction without any
 // additional or specific parameters.
 func (r *registry) RenewBucketXact(kind string, bck *cluster.Bck) cluster.Xact {
-	e := r.registered[kind].New(XactArgs{})
+	e := r.bckXacts[kind].New(XactArgs{})
 	res := r.renewBucketXaction(e, bck)
 	return res.entry.Get()
 }
 
 func (r *registry) RenewECEncodeXact(t cluster.Target, bck *cluster.Bck, uuid, phase string) (cluster.Xact, error) {
-	e := r.registered[cmn.ActECEncode].New(XactArgs{
+	e := r.bckXacts[cmn.ActECEncode].New(XactArgs{
 		T:     t,
 		UUID:  uuid,
 		Phase: phase,
@@ -307,149 +306,68 @@ func (r *registry) RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bc
 	return res.entry.Get().(*mirror.XactTransferBck), nil
 }
 
-//
-// fastRenEntry
-//
 type (
-	fastRenEntry struct {
-		baseBckEntry
-		t       cluster.Target
-		xact    *runners.FastRen
-		rebID   xaction.RebID
-		bckFrom *cluster.Bck
-		bckTo   *cluster.Bck
-		phase   string
+	DeletePrefetchArgs struct {
+		Ctx      context.Context
+		UUID     string
+		RangeMsg *cmn.RangeMsg
+		ListMsg  *cmn.ListMsg
+		Evict    bool
+	}
+	FastRenameArgs struct {
+		RebID   xaction.RebID
+		BckFrom *cluster.Bck
+		BckTo   *cluster.Bck
 	}
 )
 
-func (e *fastRenEntry) Start(bck cmn.Bck) error {
-	f := func() ([]cluster.XactStats, error) {
-		onlyRunning := false
-		return Registry.GetStats(RegistryXactFilter{
-			ID:          e.rebID.String(),
-			Kind:        cmn.ActRebalance,
-			OnlyRunning: &onlyRunning,
-		})
+func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (cluster.Xact, error) {
+	kind := cmn.ActDelete
+	if args.Evict {
+		kind = cmn.ActEvictObjects
 	}
-
-	e.xact = runners.NewFastRen(e.uuid, e.Kind(), bck, e.t, e.bckFrom, e.bckTo, f)
-	return nil
+	e := r.bckXacts[kind].New(XactArgs{
+		T:      t,
+		UUID:   args.UUID,
+		Custom: args,
+	})
+	res := r.renewBucketXaction(e, bck)
+	if res.err != nil {
+		return nil, res.err
+	}
+	return res.entry.Get(), nil
 }
-func (e *fastRenEntry) Kind() string      { return cmn.ActRenameLB }
-func (e *fastRenEntry) Get() cluster.Xact { return e.xact }
 
-func (e *fastRenEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
-	if e.phase == cmn.ActBegin {
-		if !previousEntry.Get().Finished() {
-			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", e.Kind(), e.bckFrom, e.bckTo)
-			return
-		}
-		// TODO: more checks
+func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (cluster.Xact, error) {
+	e := r.bckXacts[cmn.ActPrefetch].New(XactArgs{
+		T:      t,
+		UUID:   args.UUID,
+		Custom: args,
+	})
+	res := r.renewBucketXaction(e, bck)
+	if res.err != nil {
+		return nil, res.err
 	}
-	prev := previousEntry.(*fastRenEntry)
-	bckEq := prev.bckTo.Equal(e.bckTo, false /*sameID*/, false /* same backend */)
-	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && bckEq {
-		prev.phase = cmn.ActCommit // transition
-		keep = true
-		return
-	}
-	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)",
-		e.Kind(), prev.bckFrom, prev.bckTo, prev.phase, e.phase, e.bckFrom)
-	return
+	return res.entry.Get(), nil
 }
 
 func (r *registry) RenewBckFastRename(t cluster.Target, uuid string, rmdVersion int64,
-	bckFrom, bckTo *cluster.Bck, phase string) (*runners.FastRen, error) {
-	e := &fastRenEntry{
-		baseBckEntry: baseBckEntry{uuid},
-		t:            t,
-		rebID:        xaction.RebID(rmdVersion),
-		bckFrom:      bckFrom,
-		bckTo:        bckTo,
-		phase:        phase,
-	}
+	bckFrom, bckTo *cluster.Bck, phase string) (cluster.Xact, error) {
+	e := r.bckXacts[cmn.ActRenameLB].New(XactArgs{
+		T:     t,
+		UUID:  uuid,
+		Phase: phase,
+		Custom: &FastRenameArgs{
+			RebID:   xaction.RebID(rmdVersion),
+			BckFrom: bckFrom,
+			BckTo:   bckTo,
+		},
+	})
 	res := r.renewBucketXaction(e, bckTo)
 	if res.err != nil {
 		return nil, res.err
 	}
-	return res.entry.Get().(*runners.FastRen), nil
-}
-
-//
-// EvictDeleteEntry & EvictDelete
-//
-type (
-	evictDeleteEntry struct {
-		baseBckEntry
-		t    cluster.Target
-		xact *runners.EvictDelete
-		args *runners.DeletePrefetchArgs
-	}
-)
-
-func (e *evictDeleteEntry) Start(bck cmn.Bck) error {
-	e.xact = runners.NewEvictDelete(e.uuid, e.Kind(), bck, e.t, e.args)
-	return nil
-}
-func (e *evictDeleteEntry) Kind() string {
-	if e.args.Evict {
-		return cmn.ActEvictObjects
-	}
-	return cmn.ActDelete
-}
-func (e *evictDeleteEntry) Get() cluster.Xact { return e.xact }
-
-func (e *evictDeleteEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
-	return false, nil
-}
-
-func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *runners.DeletePrefetchArgs) (*runners.EvictDelete, error) {
-	e := &evictDeleteEntry{
-		baseBckEntry: baseBckEntry{args.UUID},
-		t:            t,
-		args:         args,
-	}
-	res := r.renewBucketXaction(e, bck)
-	if res.err != nil {
-		return nil, res.err
-	}
-	return res.entry.Get().(*runners.EvictDelete), nil
-}
-
-//
-// Prefetch
-//
-type (
-	prefetchEntry struct {
-		baseBckEntry
-		t    cluster.Target
-		xact *runners.Prefetch
-		args *runners.DeletePrefetchArgs
-	}
-)
-
-func (e *prefetchEntry) Kind() string      { return cmn.ActPrefetch }
-func (e *prefetchEntry) Get() cluster.Xact { return e.xact }
-func (e *prefetchEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
-	return false, nil
-}
-func (e *prefetchEntry) Start(bck cmn.Bck) error {
-	e.xact = runners.NewPrefetch(e.uuid, e.Kind(), bck, e.t, e.args)
-	return nil
-}
-
-func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck,
-	args *runners.DeletePrefetchArgs) (*runners.Prefetch, error) {
-	e := &prefetchEntry{
-		baseBckEntry: baseBckEntry{args.UUID},
-		t:            t,
-		args:         args,
-	}
-	res := r.renewBucketXaction(e, bck)
-	if res.err != nil {
-		return nil, res.err
-	}
-	return res.entry.Get().(*runners.Prefetch), nil
+	return res.entry.Get(), nil
 }
 
 //

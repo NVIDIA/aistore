@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xaction/registry"
-	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 const (
@@ -149,7 +148,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	xele.Finish()
 }
 
-func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact *runners.Election) {
+func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact cluster.Xact) {
 	var (
 		err    = context.DeadlineExceeded
 		config = cmn.GCO.Get()
@@ -190,7 +189,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */)
 }
 
-func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *runners.Election) (winner bool, errors map[string]bool) {
+func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact cluster.Xact) (winner bool, errors map[string]bool) {
 	// Simple Majority Vote
 	resch := p.requestVotes(vr)
 	errors = make(map[string]bool)

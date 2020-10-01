@@ -8,10 +8,19 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
+
+func init() {
+	registry.Registry.RegisterGlobalXact(&electionProvider{})
+	registry.Registry.RegisterGlobalXact(&resilverProvider{})
+	registry.Registry.RegisterGlobalXact(&rebalanceProvider{})
+}
 
 type (
 	getMarked = func() xaction.XactMarked
@@ -20,16 +29,27 @@ type (
 		wg *sync.WaitGroup
 	}
 
+	rebalanceProvider struct {
+		xact *Rebalance
+		args *registry.RebalanceArgs
+	}
 	Rebalance struct {
 		RebBase
 		statsRunner  *stats.Trunner // extended stats
 		getRebMarked getMarked
 	}
 
+	resilverProvider struct {
+		id   string
+		xact *Resilver
+	}
 	Resilver struct {
 		RebBase
 	}
 
+	electionProvider struct {
+		xact *Election
+	}
 	Election struct {
 		xaction.XactBase
 	}
@@ -59,6 +79,35 @@ func makeXactRebBase(id cluster.XactID, kind string) RebBase {
 }
 
 // Rebalance
+
+func (e *rebalanceProvider) New(args registry.XactArgs) registry.GlobalEntry {
+	return &rebalanceProvider{args: args.Custom.(*registry.RebalanceArgs)}
+}
+func (e *rebalanceProvider) Start(_ cmn.Bck) error {
+	xreb := NewRebalance(e.args.ID, e.Kind(), e.args.StatsRunner, registry.GetRebMarked)
+	e.xact = xreb
+	return nil
+}
+func (e *rebalanceProvider) Kind() string      { return cmn.ActRebalance }
+func (e *rebalanceProvider) Get() cluster.Xact { return e.xact }
+func (e *rebalanceProvider) PreRenewHook(previousEntry registry.GlobalEntry) (keep bool) {
+	xreb := previousEntry.(*rebalanceProvider)
+	if xreb.args.ID > e.args.ID {
+		glog.Errorf("(reb: %s) g%d is greater than g%d", xreb.xact, xreb.args.ID, e.args.ID)
+		keep = true
+	} else if xreb.args.ID == e.args.ID {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s already running, nothing to do", xreb.xact)
+		}
+		keep = true
+	}
+	return
+}
+func (e *rebalanceProvider) PostRenewHook(previousEntry registry.GlobalEntry) {
+	xreb := previousEntry.(*rebalanceProvider).xact
+	xreb.Abort()
+	xreb.WaitForFinish()
+}
 
 func NewRebalance(id cluster.XactID, kind string, statsRunner *stats.Trunner, getMarked getMarked) *Rebalance {
 	return &Rebalance{
@@ -97,6 +146,22 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 
 // Resilver
 
+func (e *resilverProvider) New(args registry.XactArgs) registry.GlobalEntry {
+	return &resilverProvider{id: args.UUID}
+}
+func (e *resilverProvider) Start(_ cmn.Bck) error {
+	e.xact = NewResilver(e.id, e.Kind())
+	return nil
+}
+func (e *resilverProvider) Kind() string                             { return cmn.ActResilver }
+func (e *resilverProvider) Get() cluster.Xact                        { return e.xact }
+func (e *resilverProvider) PreRenewHook(_ registry.GlobalEntry) bool { return false }
+func (e *resilverProvider) PostRenewHook(previousEntry registry.GlobalEntry) {
+	xresilver := previousEntry.(*resilverProvider).xact
+	xresilver.Abort()
+	xresilver.WaitForFinish()
+}
+
 func NewResilver(uuid, kind string) *Resilver {
 	return &Resilver{
 		RebBase: makeXactRebBase(xaction.XactBaseID(uuid), kind),
@@ -110,4 +175,19 @@ func (xact *Resilver) String() string {
 }
 
 // Election
+
+func (e *electionProvider) New(_ registry.XactArgs) registry.GlobalEntry {
+	return &electionProvider{}
+}
+func (e *electionProvider) Start(_ cmn.Bck) error {
+	e.xact = &Election{
+		XactBase: *xaction.NewXactBase(xaction.XactBaseID(""), cmn.ActElection),
+	}
+	return nil
+}
+func (e *electionProvider) Get() cluster.Xact                        { return e.xact }
+func (e *electionProvider) Kind() string                             { return cmn.ActElection }
+func (e *electionProvider) PreRenewHook(_ registry.GlobalEntry) bool { return true }
+func (e *electionProvider) PostRenewHook(_ registry.GlobalEntry)     {}
+
 func (e *Election) IsMountpathXact() bool { return false }

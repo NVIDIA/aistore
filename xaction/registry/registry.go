@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/runners"
 )
 
 const (
@@ -97,7 +96,8 @@ type (
 		// to make sure that we don't keep old entries forever.
 		entries *registryEntries
 
-		registered map[string]BucketEntryProvider
+		bckXacts    map[string]BucketEntryProvider
+		globalXacts map[string]GlobalEntryProvider
 	}
 )
 
@@ -119,8 +119,8 @@ func (rxf RegistryXactFilter) genericMatcher(xact cluster.Xact) bool {
 // In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`
 var Registry *registry
 
-func Init() {
-	Registry = newRegistry()
+func init() {
+	Registry = NewRegistry()
 }
 
 //
@@ -232,10 +232,12 @@ func (e *registryEntries) len() int {
 	return len(e.entries)
 }
 
-func newRegistry() *registry {
+// nolint:golint // It is used only by tests so no need to export the type.
+func NewRegistry() *registry {
 	xar := &registry{
-		entries:    newRegistryEntries(),
-		registered: make(map[string]BucketEntryProvider, 10),
+		entries:     newRegistryEntries(),
+		bckXacts:    make(map[string]BucketEntryProvider, 10),
+		globalXacts: make(map[string]GlobalEntryProvider, 10),
 	}
 	hk.Reg("xactions", xar.cleanUpFinished)
 	return xar
@@ -561,11 +563,11 @@ func (r *registry) renewBucketXaction(entry BucketEntry, bck *cluster.Bck, uuids
 	return renewRes{entry: entry, isNew: true, err: nil}
 }
 
-func (r *registry) renewGlobalXaction(entry globalEntry) (res renewRes) {
+func (r *registry) renewGlobalXaction(entry GlobalEntry) (res renewRes) {
 	r.mtx.RLock()
 	if e := r.GetRunning(RegistryXactFilter{Kind: entry.Kind()}); e != nil {
-		prevEntry := e.(globalEntry)
-		if entry.preRenewHook(prevEntry) {
+		prevEntry := e.(GlobalEntry)
+		if entry.PreRenewHook(prevEntry) {
 			r.mtx.RUnlock()
 			return renewRes{entry: prevEntry, isNew: false, err: nil}
 		}
@@ -576,12 +578,12 @@ func (r *registry) renewGlobalXaction(entry globalEntry) (res renewRes) {
 	defer r.mtx.Unlock()
 	var (
 		running   = false
-		prevEntry globalEntry
+		prevEntry GlobalEntry
 	)
 	if e := r.GetRunning(RegistryXactFilter{Kind: entry.Kind()}); e != nil {
-		prevEntry = e.(globalEntry)
+		prevEntry = e.(GlobalEntry)
 		running = true
-		if entry.preRenewHook(prevEntry) {
+		if entry.PreRenewHook(prevEntry) {
 			return renewRes{entry: prevEntry, isNew: false, err: nil}
 		}
 	}
@@ -591,7 +593,7 @@ func (r *registry) renewGlobalXaction(entry globalEntry) (res renewRes) {
 	}
 	r.storeEntry(entry)
 	if running {
-		entry.postRenewHook(prevEntry)
+		entry.PostRenewHook(prevEntry)
 	}
 	return renewRes{entry: entry, isNew: true, err: nil}
 }
@@ -601,31 +603,6 @@ func (r *registry) RenewLRU(id string) *lru.Xaction {
 	entry := res.entry.(*lruEntry)
 	if !res.isNew { // previous LRU is still running
 		entry.xact.Renew()
-		return nil
-	}
-	return entry.xact
-}
-
-func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) *runners.Rebalance {
-	res := r.renewGlobalXaction(&rebalanceEntry{id: xaction.RebID(id), statsRunner: statsRunner})
-	entry := res.entry.(*rebalanceEntry)
-	if !res.isNew { // previous global rebalance is still running
-		return nil
-	}
-	return entry.xact
-}
-
-func (r *registry) RenewResilver(id string) *runners.Resilver {
-	res := r.renewGlobalXaction(&resilverEntry{id: id})
-	entry := res.entry.(*resilverEntry)
-	cmn.Assert(res.isNew) // resilver must be always preempted
-	return entry.xact
-}
-
-func (r *registry) RenewElection() *runners.Election {
-	res := r.renewGlobalXaction(&electionEntry{})
-	entry := res.entry.(*electionEntry)
-	if !res.isNew { // previous election is still running
 		return nil
 	}
 	return entry.xact

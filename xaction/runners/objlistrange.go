@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/objwalk"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 func isLocalObject(smap *cluster.Smap, b cmn.Bck, objName, sid string) (bool, error) {
@@ -46,7 +47,7 @@ func parseTemplate(template string) (cmn.ParsedTemplate, error) {
 // Evict/Delete/Prefect
 //
 
-func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) error {
+func (r *EvictDelete) objDelete(args *registry.DeletePrefetchArgs, lom *cluster.LOM) error {
 	var (
 		cloudErr   error
 		delFromAIS bool
@@ -86,7 +87,7 @@ func (r *EvictDelete) objDelete(args *DeletePrefetchArgs, lom *cluster.LOM) erro
 	return cloudErr
 }
 
-func (r *EvictDelete) doObjEvictDelete(args *DeletePrefetchArgs, objName string) error {
+func (r *EvictDelete) doObjEvictDelete(args *registry.DeletePrefetchArgs, objName string) error {
 	lom := &cluster.LOM{T: r.t, ObjName: objName}
 	err := lom.Init(r.Bck())
 	if err != nil {
@@ -109,15 +110,15 @@ func (r *EvictDelete) doObjEvictDelete(args *DeletePrefetchArgs, objName string)
 	return nil
 }
 
-func (r *EvictDelete) listOperation(args *DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
+func (r *EvictDelete) listOperation(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
 	return r.iterateList(args, listMsg, r.doObjEvictDelete)
 }
 
-func (r *EvictDelete) iterateBucketRange(args *DeletePrefetchArgs) error {
+func (r *EvictDelete) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
 	return r.iterateRange(args, r.doObjEvictDelete)
 }
 
-func (r *Prefetch) prefetchMissing(args *DeletePrefetchArgs, objName string) error {
+func (r *Prefetch) prefetchMissing(args *registry.DeletePrefetchArgs, objName string) error {
 	var coldGet bool
 	lom := &cluster.LOM{T: r.t, ObjName: objName}
 	err := lom.Init(r.Bck())
@@ -158,11 +159,11 @@ func (r *Prefetch) prefetchMissing(args *DeletePrefetchArgs, objName string) err
 	return nil
 }
 
-func (r *Prefetch) listOperation(args *DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
+func (r *Prefetch) listOperation(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
 	return r.iterateList(args, listMsg, r.prefetchMissing)
 }
 
-func (r *Prefetch) iterateBucketRange(args *DeletePrefetchArgs) error {
+func (r *Prefetch) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
 	return r.iterateRange(args, r.prefetchMissing)
 }
 
@@ -170,7 +171,7 @@ func (r *Prefetch) iterateBucketRange(args *DeletePrefetchArgs) error {
 // Common methods
 //
 
-func (r *listRangeBase) iterateRange(args *DeletePrefetchArgs, cb objCallback) error {
+func (r *listRangeBase) iterateRange(args *registry.DeletePrefetchArgs, cb objCallback) error {
 	cmn.Assert(args.RangeMsg != nil)
 	pt, err := parseTemplate(args.RangeMsg.Template)
 	if err != nil {
@@ -184,7 +185,7 @@ func (r *listRangeBase) iterateRange(args *DeletePrefetchArgs, cb objCallback) e
 	return r.iteratePrefix(args, smap, pt.Prefix, cb)
 }
 
-func (r *listRangeBase) iterateTemplate(args *DeletePrefetchArgs, smap *cluster.Smap, pt *cmn.ParsedTemplate, cb objCallback) error {
+func (r *listRangeBase) iterateTemplate(args *registry.DeletePrefetchArgs, smap *cluster.Smap, pt *cmn.ParsedTemplate, cb objCallback) error {
 	var (
 		getNext = pt.Iter()
 		sid     = r.t.Snode().ID()
@@ -207,7 +208,7 @@ func (r *listRangeBase) iterateTemplate(args *DeletePrefetchArgs, smap *cluster.
 	return nil
 }
 
-func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Smap, prefix string, cb objCallback) error {
+func (r *listRangeBase) iteratePrefix(args *registry.DeletePrefetchArgs, smap *cluster.Smap, prefix string, cb objCallback) error {
 	var (
 		objList *cmn.BucketList
 		sid     = r.t.Snode().ID()
@@ -263,7 +264,7 @@ func (r *listRangeBase) iteratePrefix(args *DeletePrefetchArgs, smap *cluster.Sm
 	return nil
 }
 
-func (r *listRangeBase) iterateList(args *DeletePrefetchArgs, listMsg *cmn.ListMsg, cb objCallback) error {
+func (r *listRangeBase) iterateList(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg, cb objCallback) error {
 	var (
 		smap = r.t.Sowner().Get()
 		sid  = r.t.Snode().ID()

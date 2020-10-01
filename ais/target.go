@@ -36,7 +36,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/registry"
-	"github.com/NVIDIA/aistore/xaction/runners"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -513,7 +512,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
 		)
-		args := &runners.DeletePrefetchArgs{
+		args := &registry.DeletePrefetchArgs{
 			Ctx:   context.Background(),
 			UUID:  msg.UUID,
 			Evict: msg.Action == cmn.ActEvictObjects,
@@ -605,10 +604,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		var (
 			err      error
-			xact     *runners.Prefetch
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
-			args     = &runners.DeletePrefetchArgs{Ctx: context.Background()}
+			args     = &registry.DeletePrefetchArgs{Ctx: context.Background()}
 		)
 		if err = cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
@@ -619,7 +617,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		args.UUID = msg.UUID
-		xact, err = registry.Registry.RenewPrefetch(t, bck, args)
+		xact, err := registry.Registry.RenewPrefetch(t, bck, args)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return

@@ -214,7 +214,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif cluster.Notif) bool {
 		reb.cleanupEC()
 	}
 
-	reb.setXact(xact)
+	reb.setXact(xact.(*runners.Rebalance))
 	defer reb.xact().MarkDone()
 
 	// 3. init streams and data structures
