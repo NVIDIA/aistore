@@ -92,15 +92,6 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 	return fmt.Errorf(invalidDaemonMsg, daemonID)
 }
 
-// Removes existing node from the cluster.
-func clusterRemoveNode(c *cli.Context, daemonID string) (err error) {
-	if err := api.UnregisterNode(defaultAPIParams, daemonID); err != nil {
-		return err
-	}
-	fmt.Fprintf(c.App.Writer, "Node with ID %q successfully removed from the cluster\n", daemonID)
-	return nil
-}
-
 // Displays the disk stats of a target
 func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {

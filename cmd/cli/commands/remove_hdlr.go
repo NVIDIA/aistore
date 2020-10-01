@@ -148,36 +148,30 @@ func removeNodeHandler(c *cli.Context) (err error) {
 	if node == nil {
 		return fmt.Errorf("node %q does not exist", sid)
 	}
+	var (
+		id, action string
+	)
 	mode := parseStrFlag(c, maintenanceModeFlag)
-	action := ""
-	if mode != "" {
-		if action, err = maintenanceModeToAction(c, mode); err != nil {
-			return err
-		}
+	if action, err = maintenanceModeToAction(c, mode); err != nil {
+		return err
 	}
 	skipRebalance := flagIsSet(c, noRebalanceFlag) || node.IsProxy()
-	switch mode {
-	case "":
-		return clusterRemoveNode(c, sid)
-	default:
-		var id string
-		actValue := &cmn.ActValDecommision{DaemonID: sid, Rebalance: !skipRebalance}
-		id, err = api.Maintenance(defaultAPIParams, action, actValue)
-		if err != nil {
-			return err
-		}
+	actValue := &cmn.ActValDecommision{DaemonID: sid, SkipRebalance: skipRebalance}
+	id, err = api.Maintenance(defaultAPIParams, action, actValue)
+	if err != nil {
+		return err
+	}
 
-		if action == cmn.ActStopMaintenance {
-			fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", sid)
-		} else if action == cmn.ActDecommission && skipRebalance {
-			fmt.Fprintf(c.App.Writer, "Node %q removed from the cluster\n", sid)
-		} else if action == cmn.ActStartMaintenance && skipRebalance {
-			fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", sid)
-		} else {
-			fmt.Fprintf(c.App.Writer,
-				"Node %q is under maintenance\nStarted rebalance %q, use 'ais show xaction %s' to monitor progress\n",
-				sid, id, id)
-		}
+	if action == cmn.ActStopMaintenance {
+		fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", sid)
+	} else if action == cmn.ActDecommission && skipRebalance {
+		fmt.Fprintf(c.App.Writer, "Node %q removed from the cluster\n", sid)
+	} else {
+		fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", sid)
+	}
+	if id != "" {
+		fmt.Fprintf(c.App.Writer,
+			"Started rebalance %q, use 'ais show xaction %s' to monitor progress\n", id, id)
 	}
 	return nil
 }

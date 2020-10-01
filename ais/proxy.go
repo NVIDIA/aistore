@@ -3236,8 +3236,8 @@ func (p *proxyrunner) removeAfterRebalance(
 	p.removeNode(msg, si)
 }
 
-// Run rebalance and remove on success nodes labeled "decommission".
-func (p *proxyrunner) doMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
+// Run rebalance and call a callback after the rebalance finishes
+func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, cb ...notifications.NotifCallback) (rebID xaction.RebID, err error) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("put %s under maintenance and rebalance: action %s", si, msg.Action)
 	}
@@ -3254,14 +3254,31 @@ func (p *proxyrunner) doMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) (rebI
 	rebID = xaction.RebID(rmdClone.Version)
 	nl := xaction.NewXactNL(rebID.String(), &smap.Smap, smap.Tmap.Clone(), notifications.NotifXact, cmn.ActRebalance)
 	nl.SetOwner(equalIC)
-	if msg.Action == cmn.ActDecommission {
-		nl.F = func(nl notifications.NotifListener, err error) {
-			p.removeAfterRebalance(nl, err, msg, si)
-		}
+	if len(cb) != 0 {
+		nl.F = cb[0]
 	}
 	p.ic.registerEqual(regIC{smap: smap, nl: nl})
 	wg.Wait()
 	return
+}
+
+// Stops rebalance if needed, do cleanup, and get a node back to the cluster.
+func (p *proxyrunner) cancelMaintenance(opts *cmn.ActValDecommision) error {
+	if !opts.SkipRebalance {
+		xactMsg := &xaction.XactReqMsg{Kind: cmn.ActRebalance}
+		body := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActXactStop, Value: xactMsg})
+		results := p.callTargets(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Xactions), body)
+		for res := range results {
+			if res.err != nil {
+				return res.err
+			}
+		}
+	}
+
+	err := p.owner.smap.modify(func(clone *smapX) error {
+		return clone.stopMaintenance(opts.DaemonID)
+	})
+	return err
 }
 
 func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
@@ -3421,34 +3438,58 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
 			return
 		}
-		opts.Rebalance = opts.Rebalance && si.IsTarget()
+		opts.SkipRebalance = opts.SkipRebalance || si.IsProxy()
 		if err = p.markMaintenance(si, msg.Action); err != nil {
 			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
 			return
 		}
-		if opts.Rebalance {
-			rebID, err = p.doMaintenance(msg, si)
-		} else if msg.Action == cmn.ActDecommission {
+		if opts.SkipRebalance {
 			// Decommissioning: just remove the node
 			err = p.removeNode(msg, si)
+		} else {
+			cb := func(nl notifications.NotifListener, err error) {
+				p.removeAfterRebalance(nl, err, msg, si)
+			}
+			rebID, err = p.finalizeMaintenance(msg, si, cb)
+			if err == nil {
+				w.Write([]byte(rebID.String()))
+			}
 		}
 		if err != nil {
 			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
 			return
 		}
-		w.Write([]byte(rebID.String()))
 	case cmn.ActStopMaintenance:
 		var (
 			opts cmn.ActValDecommision
+			smap = p.owner.smap.get()
 		)
 		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if err := p.owner.smap.modify(func(clone *smapX) error {
-			return clone.stopMaintenance(opts.DaemonID)
-		}); err != nil {
+		si := smap.GetNode(opts.DaemonID)
+		if si == nil {
+			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
+			return
+		}
+		if _, ok := smap.UnderMaintenance(opts.DaemonID); !ok {
+			p.invalmsghdlrf(w, r, "Node %q is not under maintenance", opts.DaemonID)
+			return
+		}
+
+		if err := p.cancelMaintenance(&opts); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
+		if si.IsTarget() && !opts.SkipRebalance {
+			rebID, err := p.finalizeMaintenance(msg, si)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			w.Write([]byte(rebID.String()))
 		}
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)

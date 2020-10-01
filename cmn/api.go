@@ -36,8 +36,8 @@ type (
 		Verbose   bool   `json:"verbose"`
 	}
 	ActValDecommision struct {
-		DaemonID  string `json:"sid"`
-		Rebalance bool   `json:"rebalance"`
+		DaemonID      string `json:"sid"`
+		SkipRebalance bool   `json:"skip_rebalance"`
 	}
 
 	// TODO: `UUID` should be merged into `ContinuationToken`.

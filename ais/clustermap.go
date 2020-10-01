@@ -404,12 +404,9 @@ func (m *smapX) startMaintenance(sid string, stage int64) {
 }
 
 func (m *smapX) stopMaintenance(sid string) error {
-	stage, ok := m.Maintenance[sid]
+	_, ok := m.Maintenance[sid]
 	if !ok {
 		return fmt.Errorf("node %q is not under maintenance", sid)
-	}
-	if stage > cmn.NodeStatusMaintenance {
-		return fmt.Errorf("node %q removal is already in progress", sid)
 	}
 	delete(m.Maintenance, sid)
 	m.Version++

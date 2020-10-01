@@ -117,13 +117,13 @@ Proxy with ID "23kfa10f" successfully joined the cluster.
 
 ## Remove a node
 
-`ais rm node DAEMON_ID`
+`ais rm node DAEMON_ID --mode=OPERATION`
 
 Remove an existing node from the cluster.
 
 ### Options
 
-Currently, `ais rm node` without the `--mode=` option immediately removes the specified node from the cluster. We therefore strongly recommend to always specify the `--mode` as documented below:
+Currently, `ais rm node` requires option `--mode=`(administrative operation) to be defined.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -134,7 +134,7 @@ Further, the `--mode` values are:
 
 - `start-maintenance` - put a given node in maintenance mode. The operation results in cluster gradually transitioning to operating without the specified node (which is labeled `maintenance` in the cluster map).
 - `stop-maintenance` - take a node out of maintenance.
-- `decommission` - permanently remove a node from the cluster.
+- `decommission` - permanently remove a node from the cluster. While rebalance is running, the node still exists in the cluster map labeled `decommission`.
 
 ### Examples
 

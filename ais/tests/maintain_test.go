@@ -46,7 +46,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 			bck:             bck,
 			numGetsEachFile: 1,
 		}
-		actVal     = &cmn.ActValDecommision{Rebalance: true}
+		actVal     = &cmn.ActValDecommision{}
 		proxyURL   = tutils.RandomProxyURL(t)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		baseParams = tutils.BaseAPIParams(proxyURL)
