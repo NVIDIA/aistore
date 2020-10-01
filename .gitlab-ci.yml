@@ -94,7 +94,7 @@ test:short:
   <<: *default_ref_def
   script:
     - make aisfs cli aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\n'
     - sleep 3
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
@@ -112,7 +112,7 @@ test:authn:
     AUTHN_SU_PASS: "admin"
   script:
     - make cli
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - ais auth login $AUTHN_SU_NAME -p $AUTHN_SU_PASS
     - BUCKET="test" RE="TestAuth" make test-run
     - ais auth logout
@@ -130,7 +130,7 @@ test:https:
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - make aisfs cli
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\n'
     - sleep 3
     - ais attach remote alias=https://127.0.0.1:11080 # attach to remote cluster
@@ -141,7 +141,7 @@ test:long:
   variables:
     NUM_PROXY: 6
   script:
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo y; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo y; echo n; })
     - BUCKET="test" make test-long
 
 test:cloud:
@@ -152,7 +152,7 @@ test:cloud:
     NUM_PROXY: 6
   script:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo y; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo y; echo n; })
     - BUCKET="gs://ais-ci" make test-long
     - BUCKET="aws://ais-ci" make test-long
 
@@ -162,7 +162,7 @@ test:soak:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - FLAGS="--short --rec-cycles=1" make test-soak
 
 test:aisloader-long:
@@ -171,7 +171,7 @@ test:aisloader-long:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
 
@@ -195,7 +195,7 @@ test:kube-short:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   script:
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo y; echo y; echo y;  })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo y; echo y;  })
     - status=0
     - BUCKET="test" RE="TestETL" make test-short || status=$?
     - make kill
@@ -208,7 +208,7 @@ test:kube:
     - if: '$CI_PIPELINE_SOURCE == "schedules"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - status=0
     - BUCKET="test" RE="TestETL" make test-run || status=$?
     - make kill
@@ -221,7 +221,7 @@ test:aisloader-short:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_PROXY; echo $NUM_TARGET; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - sleep 10 # TODO: better alternative ? adding sleep for targets to join.
     - status=0
     - BUCKET="test" FLAGS="--duration=5s --etl" make test-aisloader || status=$?
