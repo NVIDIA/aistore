@@ -2,8 +2,8 @@
 - hosts: all
   gather_facts: no
   pre_tasks:
-    - name: 'install python2'
-      raw: sudo apt-get -y install python-simplejson
+    - name: 'install deps'
+      raw: sudo apt-get update -y && sudo apt-get -y install unzip python git python-simplejson make attr sysstat
   tasks:
     - copy:
         src: "{{ playbook_dir }}/{{ item }}"
