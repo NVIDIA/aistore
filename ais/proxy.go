@@ -3186,10 +3186,10 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, sid string) {
+func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, si *cluster.Snode) error {
 	err := p.owner.smap.modify(
 		func(clone *smapX) error {
-			_, err := p.unregisterNode(clone, sid)
+			_, err := p.unregisterNode(clone, si.ID())
 			return err
 		},
 		func(clone *smapX) {
@@ -3200,46 +3200,19 @@ func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, sid string) {
 			_ = p.metasyncer.sync(pairs...)
 		},
 	)
-	if err != nil {
-		glog.Errorf("Failed to unregister %s: %v", sid, err)
-	}
+	return err
 }
 
-func (p *proxyrunner) rebalanceAndRemove(smap *smapX, sid string) (wg *sync.WaitGroup, rebID xaction.RebID) {
-	rmdClone := p.owner.rmd.modify(
-		func(clone *rebMD) {
-			clone.inc()
-		},
-	)
-	msg := &cmn.ActionMsg{Action: cmn.ActRebalance}
-	aisMsg := p.newAisMsg(msg, nil, nil)
-	wg = p.metasyncer.sync(
-		revsPair{smap, aisMsg},
-		revsPair{rmdClone, aisMsg},
-	)
-
-	rebID = xaction.RebID(rmdClone.Version)
-	nl := xaction.NewXactNL(rebID.String(), &smap.Smap, smap.Tmap.Clone(), notifications.NotifXact, cmn.ActRebalance)
-	nl.SetOwner(equalIC)
-	nl.F = func(nl notifications.NotifListener, err error) {
-		if err != nil || nl.Aborted() {
-			glog.Errorf("Rebalance not finished, err: %v, aborted: %v", err, nl.Aborted())
-			return
-		}
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Rebalance %q finished. Removing node %q", rebID.String(), sid)
-		}
-
-		// Rebalance finished successfully, remove the node from the cluster
-		p.removeNode(msg, sid)
-	}
-	p.ic.registerEqual(regIC{smap: smap, nl: nl})
-	return
-}
-
-func (p *proxyrunner) startMaintenance(si *cluster.Snode, stage int64) error {
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Suspending node %s", si)
+// Put a node under maintenance
+func (p *proxyrunner) markMaintenance(si *cluster.Snode, action string) error {
+	var stage int64
+	switch action {
+	case cmn.ActDecommission:
+		stage = cmn.NodeStatusDecommission
+	case cmn.ActStartMaintenance:
+		stage = cmn.NodeStatusMaintenance
+	default:
+		return fmt.Errorf("invalid action: %s", action)
 	}
 	return p.owner.smap.modify(
 		func(clone *smapX) error {
@@ -3249,37 +3222,44 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, stage int64) error {
 	)
 }
 
-func (p *proxyrunner) decommissionNode(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
-	var opts cmn.ActValDecommision
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Decommissioning node %s", si)
-	}
-	if si.IsTarget() {
-		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
-			return
-		}
-	}
-
-	// No extra actions at this moment for(works as a regular node removal):
-	//    - decommissioning a proxy
-	//    - decommissioning a target with rebalance=off
-	if si.IsProxy() || !opts.Rebalance {
-		p.removeNode(msg, si.ID())
+// Callback: remove the node from the cluster if rebalance finished successfully
+func (p *proxyrunner) removeAfterRebalance(
+	nl notifications.NotifListener, err error, msg *cmn.ActionMsg,
+	si *cluster.Snode) {
+	if err != nil || nl.Aborted() {
+		glog.Errorf("Rebalance not finished, err: %v, aborted: %v", err, nl.Aborted())
 		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Rebalance finished. Removing node %s", si)
+	}
+	p.removeNode(msg, si)
+}
+
+// Run rebalance and remove on success nodes labeled "decommission".
+func (p *proxyrunner) doMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("put %s under maintenance and rebalance: action %s", si, msg.Action)
 	}
 
 	if err = p.canStartRebalance(true /*skip config*/); err != nil {
 		return
 	}
+	smap := p.owner.smap.get()
+	rmdClone := p.owner.rmd.modify(func(clone *rebMD) { clone.inc() })
+	rebMsg := &cmn.ActionMsg{Action: cmn.ActRebalance}
+	aisMsg := p.newAisMsg(rebMsg, nil, nil)
+	wg := p.metasyncer.sync(revsPair{smap, aisMsg}, revsPair{rmdClone, aisMsg})
 
-	// Suspend a node
-	if err = p.startMaintenance(si, cmn.NodeStatusDecommission); err != nil {
-		return
+	rebID = xaction.RebID(rmdClone.Version)
+	nl := xaction.NewXactNL(rebID.String(), &smap.Smap, smap.Tmap.Clone(), notifications.NotifXact, cmn.ActRebalance)
+	nl.SetOwner(equalIC)
+	if msg.Action == cmn.ActDecommission {
+		nl.F = func(nl notifications.NotifListener, err error) {
+			p.removeAfterRebalance(nl, err, msg, si)
+		}
 	}
-
-	// Run rebalance to move all the data from the node under maintenance
-	var wg *sync.WaitGroup
-	wg, rebID = p.rebalanceAndRemove(p.owner.smap.get(), si.ID())
+	p.ic.registerEqual(regIC{smap: smap, nl: nl})
 	wg.Wait()
 	return
 }
@@ -3420,8 +3400,9 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActStartMaintenance, cmn.ActDecommission:
 		var (
-			smap = p.owner.smap.get()
-			opts cmn.ActValDecommision
+			rebID xaction.RebID
+			smap  = p.owner.smap.get()
+			opts  cmn.ActValDecommision
 		)
 		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
@@ -3437,11 +3418,19 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var rebID xaction.RebID
-		if msg.Action == cmn.ActStartMaintenance {
-			err = p.startMaintenance(si, cmn.NodeStatusMaintenance)
-		} else {
-			rebID, err = p.decommissionNode(msg, si)
+		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
+			return
+		}
+		opts.Rebalance = opts.Rebalance && si.IsTarget()
+		if err = p.markMaintenance(si, msg.Action); err != nil {
+			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
+			return
+		}
+		if opts.Rebalance {
+			rebID, err = p.doMaintenance(msg, si)
+		} else if msg.Action == cmn.ActDecommission {
+			// Decommissioning: just remove the node
+			err = p.removeNode(msg, si)
 		}
 		if err != nil {
 			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)

@@ -155,13 +155,13 @@ func removeNodeHandler(c *cli.Context) (err error) {
 			return err
 		}
 	}
-	doRebalance := !flagIsSet(c, noRebalanceFlag)
+	skipRebalance := flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 	switch mode {
 	case "":
 		return clusterRemoveNode(c, sid)
 	default:
 		var id string
-		actValue := &cmn.ActValDecommision{DaemonID: sid, Rebalance: doRebalance}
+		actValue := &cmn.ActValDecommision{DaemonID: sid, Rebalance: !skipRebalance}
 		id, err = api.Maintenance(defaultAPIParams, action, actValue)
 		if err != nil {
 			return err
@@ -169,9 +169,9 @@ func removeNodeHandler(c *cli.Context) (err error) {
 
 		if action == cmn.ActStopMaintenance {
 			fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", sid)
-		} else if action == cmn.ActDecommission && (node.IsProxy() || !doRebalance) {
+		} else if action == cmn.ActDecommission && skipRebalance {
 			fmt.Fprintf(c.App.Writer, "Node %q removed from the cluster\n", sid)
-		} else if action == cmn.ActStartMaintenance {
+		} else if action == cmn.ActStartMaintenance && skipRebalance {
 			fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", sid)
 		} else {
 			fmt.Fprintf(c.App.Writer,
