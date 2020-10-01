@@ -82,6 +82,8 @@ MacOS/Darwin is also supported, albeit for development only. Certain capabilitie
 
 > For local production deployment, please refer to this [README](/deploy/prod/docker/single/README.md).
 
+> For local playground deployment on GCP, please refer to this [README](/deploy/dev/terraform/README.md).
+ 
 Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
 ```console
