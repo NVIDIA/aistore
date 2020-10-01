@@ -354,9 +354,7 @@ func Test_matchdelete(t *testing.T) {
 }
 
 func TestOperationsWithRanges(t *testing.T) {
-	if numfiles <= 0 || numfiles%10 != 0 {
-		t.Fatal("numfiles must be a positive multiple of 10")
-	}
+	tassert.Fatalf(t, numfiles > 0 && numfiles%10 == 0, "numfiles must be a positive multiple of 10")
 
 	const (
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>

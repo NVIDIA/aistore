@@ -44,8 +44,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			ctx              = context.Background()
 			uuid             = r.URL.Query().Get(cmn.URLParamUUID)
 			dlb              = downloader.DlBody{}
-			intervalStr      = downloader.DownloadProgressInterval
-			progressInterval time.Duration
+			progressInterval = downloader.DownloadProgressInterval
 		)
 		debug.Assert(uuid != "")
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
@@ -58,14 +57,12 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if dlBodyBase.ProgressInterval != "" {
-			intervalStr = dlBodyBase.ProgressInterval
-		}
-
-		if dur, err := time.ParseDuration(intervalStr); err == nil {
-			progressInterval = dur
-		} else {
-			t.invalmsghdlrf(w, r, "%s: invalid progress interval %q (err: %v)", t.si, intervalStr, err)
-			return
+			if dur, err := time.ParseDuration(dlBodyBase.ProgressInterval); err == nil {
+				progressInterval = dur
+			} else {
+				t.invalmsghdlrf(w, r, "%s: invalid progress interval %q, err: %v", t.si, dlBodyBase.ProgressInterval, err)
+				return
+			}
 		}
 
 		bck := cluster.NewBckEmbed(dlBodyBase.Bck)

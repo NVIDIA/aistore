@@ -210,8 +210,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		dlBase           downloader.DlBase
 		err              error
 		ok               bool
-		progressInterval time.Duration
-		intervalStr      = downloader.DownloadProgressInterval
+		progressInterval = downloader.DownloadProgressInterval
 	)
 
 	if _, err = p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Download); err != nil {
@@ -228,14 +227,12 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if dlBase.ProgressInterval != "" {
-		intervalStr = dlBase.ProgressInterval
-	}
-
-	if dur, err := time.ParseDuration(intervalStr); err == nil {
-		progressInterval = dur
-	} else {
-		p.invalmsghdlrf(w, r, "%s: invalid progress interval %q (err: %v)", p.si, intervalStr, err)
-		return
+		if dur, err := time.ParseDuration(dlBase.ProgressInterval); err == nil {
+			progressInterval = dur
+		} else {
+			p.invalmsghdlrf(w, r, "%s: invalid progress interval %q, err: %v", p.si, dlBase.ProgressInterval, err)
+			return
+		}
 	}
 
 	id := cmn.GenUUID()

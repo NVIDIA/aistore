@@ -283,7 +283,7 @@ var (
 		Usage: "path to file containing JSON array of strings with object names to download",
 	}
 	syncFlag             = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
-	progressIntervalFlag = cli.StringFlag{Name: "progress-interval", Value: downloader.DownloadProgressInterval, Usage: "interval(in secs) at which progress will be monitored, e.g. '10s'"}
+	progressIntervalFlag = cli.StringFlag{Name: "progress-interval", Value: downloader.DownloadProgressInterval.String(), Usage: "interval(in secs) at which progress will be monitored, e.g. '10s'"}
 
 	// dSort
 	dsortBucketFlag = cli.StringFlag{

@@ -762,7 +762,7 @@ func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte, kind string)
 		nodes:     []cluster.NodeMap{snodes},
 		nodeCount: len(snodes),
 	}
-	_ = h.bcastToNodes(&args)
+	h.bcastToNodesAsync(&args)
 }
 
 func (h *httprunner) callerNotifyFin(n cluster.Notif, err error) {

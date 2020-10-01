@@ -24,7 +24,7 @@ const (
 	DlTypeMulti  DlType = "multi"
 	DlTypeCloud  DlType = "cloud"
 
-	DownloadProgressInterval = "1s"
+	DownloadProgressInterval = 10 * time.Second
 )
 
 type (
