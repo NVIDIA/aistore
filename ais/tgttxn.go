@@ -479,7 +479,6 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *bck2BckIntern
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
-		var xact *mirror.XactTransferBck
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
@@ -492,7 +491,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *bck2BckIntern
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		xact, err = registry.Registry.RenewTransferBck(t, txnCp.bckFrom, txnCp.bckTo, c.uuid, c.msg.Action, cmn.ActCommit,
+		xact, err := registry.Registry.RenewTransferBck(t, txnCp.bckFrom, txnCp.bckTo, c.uuid, c.msg.Action, cmn.ActCommit,
 			txnCp.dm, txnCp.dp, txnCp.metaMsg)
 		if err != nil {
 			return err

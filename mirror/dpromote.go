@@ -13,17 +13,39 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 // XactDirPromote copies a bucket locally within the same cluster
 
 type (
+	dirPromoteProvider struct {
+		xact   *XactDirPromote
+		t      cluster.Target
+		dir    string
+		params *cmn.ActValPromote
+	}
 	XactDirPromote struct {
 		xactBckBase
 		dir    string
 		params *cmn.ActValPromote
 	}
 )
+
+func (*dirPromoteProvider) New(args registry.XactArgs) registry.BucketEntry {
+	c := args.Custom.(*registry.DirPromoteArgs)
+	return &dirPromoteProvider{t: args.T, dir: c.Dir, params: c.Params}
+}
+func (e *dirPromoteProvider) Start(bck cmn.Bck) error {
+	xact := NewXactDirPromote(e.dir, bck, e.t, e.params)
+	go xact.Run()
+	e.xact = xact
+	return nil
+}
+func (*dirPromoteProvider) Kind() string                                        { return cmn.ActPromote }
+func (e *dirPromoteProvider) Get() cluster.Xact                                 { return e.xact }
+func (e *dirPromoteProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return false, nil }
+func (e *dirPromoteProvider) PostRenewHook(_ registry.BucketEntry)              {}
 
 //
 // public methods

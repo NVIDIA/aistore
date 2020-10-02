@@ -15,9 +15,16 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 type (
+	putMirrorProvider struct {
+		xact *XactPut
+		t    cluster.Target
+		uuid string
+		lom  *cluster.LOM
+	}
 	XactPut struct {
 		// implements cmn.Xact a cmn.Runner interfaces
 		xaction.XactDemandBase
@@ -37,6 +44,25 @@ type (
 		stopCh    *cmn.StopCh
 	}
 )
+
+func (*putMirrorProvider) New(args registry.XactArgs) registry.BucketEntry {
+	return &putMirrorProvider{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
+}
+func (e *putMirrorProvider) Start(_ cmn.Bck) error {
+	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	cmn.AssertNoErr(err)
+	x, err := RunXactPut(e.lom, slab)
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
+	e.xact = x
+	return nil
+}
+func (*putMirrorProvider) Kind() string                                        { return cmn.ActPutCopies }
+func (e *putMirrorProvider) Get() cluster.Xact                                 { return e.xact }
+func (e *putMirrorProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
+func (e *putMirrorProvider) PostRenewHook(_ registry.BucketEntry)              {}
 
 //
 // public methods

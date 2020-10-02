@@ -9,9 +9,14 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 type (
+	loadLomCacheProvider struct {
+		t    cluster.Target
+		xact *XactBckLoadLomCache
+	}
 	XactBckLoadLomCache struct {
 		xactBckBase
 	}
@@ -20,6 +25,20 @@ type (
 		parent *XactBckLoadLomCache
 	}
 )
+
+func (*loadLomCacheProvider) New(args registry.XactArgs) registry.BucketEntry {
+	return &loadLomCacheProvider{t: args.T}
+}
+func (e *loadLomCacheProvider) Start(bck cmn.Bck) error {
+	x := NewXactLLC(e.t, bck)
+	go x.Run()
+	e.xact = x
+	return nil
+}
+func (*loadLomCacheProvider) Kind() string                                        { return cmn.ActLoadLomCache }
+func (e *loadLomCacheProvider) Get() cluster.Xact                                 { return e.xact }
+func (e *loadLomCacheProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
+func (e *loadLomCacheProvider) PostRenewHook(_ registry.BucketEntry)              {}
 
 //
 // public methods

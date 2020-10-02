@@ -1352,7 +1352,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		if xputlrep == nil {
 			return
 		}
-		err = xputlrep.Repl(lom)
+		err = xputlrep.(*mirror.XactPut).Repl(lom)
 		if xaction.IsErrXactExpired(err) {
 			break
 		}
@@ -1521,8 +1521,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		if promoteArgs.Verbose {
 			glog.Infof("%s: promote %+v", t.si, promoteArgs)
 		}
-		var xact *mirror.XactDirPromote
-		xact, err = registry.Registry.RenewDirPromote(srcFQN, bck, t, &promoteArgs)
+		xact, err := registry.Registry.RenewDirPromote(srcFQN, bck, t, &promoteArgs)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return

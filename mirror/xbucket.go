@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 type (
@@ -48,6 +49,15 @@ type (
 		skipLoad  bool // true: skip lom.Load() and further checks (e.g. done in callback under lock)
 	}
 )
+
+func init() {
+	registry.Registry.RegisterBucketXact(&transferBckProvider{kind: cmn.ActCopyBucket})
+	registry.Registry.RegisterBucketXact(&transferBckProvider{kind: cmn.ActETLBucket})
+	registry.Registry.RegisterBucketXact(&dirPromoteProvider{})
+	registry.Registry.RegisterBucketXact(&mncProvider{})
+	registry.Registry.RegisterBucketXact(&loadLomCacheProvider{})
+	registry.Registry.RegisterBucketXact(&putMirrorProvider{})
+}
 
 func newXactBckBase(id, kind string, bck cmn.Bck, t cluster.Target) *xactBckBase {
 	return &xactBckBase{XactBase: *xaction.NewXactBaseBck(id, kind, bck), t: t}
