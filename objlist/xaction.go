@@ -1,8 +1,8 @@
-// Package bcklist provides xaction and utilities for listing bucket objects.
+// Package objlist provides xaction and utilities for listing bucket objects.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package bcklist
+package objlist
 
 import (
 	"context"

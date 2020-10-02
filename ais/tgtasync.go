@@ -10,11 +10,11 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/bcklist"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/objlist"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/registry"
 )
@@ -47,7 +47,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	xact, isNew, err := registry.Registry.RenewObjList(t, bck, msg.UUID, msg)
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
-	if err == bcklist.ErrGone {
+	if err == objlist.ErrGone {
 		xact, isNew, err = registry.Registry.RenewObjList(t, bck, msg.UUID, msg)
 	}
 	if err != nil {
@@ -63,7 +63,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		go xact.Run()
 	}
 
-	bckList, status, err := t.waitBckListResp(xact.(*bcklist.Xact), msg)
+	bckList, status, err := t.waitObjListResp(xact.(*objlist.Xact), msg)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), status)
 		return false
@@ -92,8 +92,8 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	return
 }
 
-func (t *targetrunner) waitBckListResp(xact *bcklist.Xact, msg *cmn.SelectMsg) (*cmn.BucketList, int, error) {
-	ch := make(chan *bcklist.Resp) // unbuffered
+func (t *targetrunner) waitObjListResp(xact *objlist.Xact, msg *cmn.SelectMsg) (*cmn.BucketList, int, error) {
+	ch := make(chan *objlist.Resp) // unbuffered
 	xact.Do(msg, ch)
 	resp := <-ch
 	return resp.BckList, resp.Status, resp.Err
