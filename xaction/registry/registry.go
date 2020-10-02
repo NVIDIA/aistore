@@ -38,18 +38,14 @@ const (
 	hkFinishedCntThreshold = 50
 )
 
-// public types
 type (
-	RegistryXactFilter struct {
+	XactFilter struct {
 		ID          string
 		Kind        string
 		Bck         *cluster.Bck
 		OnlyRunning *bool
 	}
-)
 
-// private types
-type (
 	// Selects subset of xactions to abort.
 	abortArgs struct {
 		// run on `bcks` buckets
@@ -89,7 +85,6 @@ type (
 		entries   []BaseEntry
 		taskCount atomic.Int64
 	}
-	// The registry
 	registry struct {
 		mtx sync.RWMutex // lock for transactions
 		// All entries in the registry. The entries are periodically cleaned up
@@ -101,7 +96,7 @@ type (
 	}
 )
 
-func (rxf RegistryXactFilter) genericMatcher(xact cluster.Xact) bool {
+func (rxf XactFilter) genericMatcher(xact cluster.Xact) bool {
 	condition := true
 	if rxf.OnlyRunning != nil {
 		condition = condition && !xact.Finished() == *rxf.OnlyRunning
@@ -116,7 +111,7 @@ func (rxf RegistryXactFilter) genericMatcher(xact cluster.Xact) bool {
 }
 
 // Registry is a global registry (see above) that keeps track of all running xactions
-// In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`
+// In addition, the registry retains already finished xactions subject to lazy cleanup via `hk`.
 var Registry *registry
 
 func init() {
@@ -133,7 +128,7 @@ func newRegistryEntries() *registryEntries {
 	}
 }
 
-func (e *registryEntries) findUnlocked(flt RegistryXactFilter) BaseEntry {
+func (e *registryEntries) findUnlocked(flt XactFilter) BaseEntry {
 	if flt.OnlyRunning == nil {
 		// Loop in reverse to search for the latest (there is great chance
 		// that searched xaction at the end rather at the beginning).
@@ -162,7 +157,7 @@ func (e *registryEntries) findUnlocked(flt RegistryXactFilter) BaseEntry {
 	return nil
 }
 
-func (e *registryEntries) find(flt RegistryXactFilter) BaseEntry {
+func (e *registryEntries) find(flt XactFilter) BaseEntry {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
 	return e.findUnlocked(flt)
@@ -257,21 +252,21 @@ func (r *registry) GetXact(uuid string) (xact cluster.Xact) {
 
 func (r *registry) GetXactRunning(kind string) (xact cluster.Xact) {
 	onlyRunning := false
-	entry := r.entries.find(RegistryXactFilter{Kind: kind, OnlyRunning: &onlyRunning})
+	entry := r.entries.find(XactFilter{Kind: kind, OnlyRunning: &onlyRunning})
 	if entry != nil {
 		xact = entry.Get()
 	}
 	return
 }
 
-func (r *registry) GetRunning(flt RegistryXactFilter) BaseEntry {
+func (r *registry) GetRunning(flt XactFilter) BaseEntry {
 	onlyRunning := true
 	flt.OnlyRunning = &onlyRunning
 	entry := r.entries.find(flt)
 	return entry
 }
 
-func (r *registry) GetLatest(flt RegistryXactFilter) BaseEntry {
+func (r *registry) GetLatest(flt XactFilter) BaseEntry {
 	entry := r.entries.find(flt)
 	return entry
 }
@@ -365,7 +360,7 @@ func (r *registry) matchXactsStatsByID(xactID string) ([]cluster.XactStats, erro
 	return matchedStat, nil
 }
 
-func (r *registry) GetStats(flt RegistryXactFilter) ([]cluster.XactStats, error) {
+func (r *registry) GetStats(flt XactFilter) ([]cluster.XactStats, error) {
 	if flt.ID != "" {
 		if flt.OnlyRunning == nil || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
 			return r.matchXactsStatsByID(flt.ID)
@@ -392,13 +387,13 @@ func (r *registry) GetStats(flt RegistryXactFilter) ([]cluster.XactStats, error)
 			matching := make([]cluster.XactStats, 0, 10)
 			if flt.Kind == "" {
 				for kind := range xaction.XactsDtor {
-					entry := r.GetRunning(RegistryXactFilter{Kind: kind, Bck: flt.Bck})
+					entry := r.GetRunning(XactFilter{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Stats())
 					}
 				}
 			} else {
-				entry := r.GetRunning(RegistryXactFilter{Kind: flt.Kind, Bck: flt.Bck})
+				entry := r.GetRunning(XactFilter{Kind: flt.Kind, Bck: flt.Bck})
 				if entry != nil {
 					matching = append(matching, entry.Get().Stats())
 				}
@@ -421,7 +416,7 @@ func (r *registry) DoAbort(kind string, bck *cluster.Bck) (aborted bool) {
 		}
 		aborted = true
 	} else {
-		entry := r.GetRunning(RegistryXactFilter{Kind: kind, Bck: bck})
+		entry := r.GetRunning(XactFilter{Kind: kind, Bck: bck})
 		if entry == nil {
 			return false
 		}
@@ -441,7 +436,7 @@ func (r *registry) DoAbortByID(uuid string) (aborted bool) {
 }
 
 func (r *registry) removeFinishedByID(id string) error {
-	entry := r.entries.find(RegistryXactFilter{ID: id})
+	entry := r.entries.find(XactFilter{ID: id})
 	if entry == nil {
 		return nil
 	}
@@ -492,14 +487,14 @@ func (r *registry) cleanUpFinished() time.Duration {
 		onlyRunning := true
 		switch xaction.XactsDtor[entry.Kind()].Type {
 		case xaction.XactTypeGlobal:
-			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), OnlyRunning: &onlyRunning})
+			entry := r.entries.findUnlocked(XactFilter{Kind: entry.Kind(), OnlyRunning: &onlyRunning})
 			if entry != nil && entry.Get().ID() == eID {
 				return true
 			}
 		case xaction.XactTypeBck:
 			bck := cluster.NewBckEmbed(xact.Bck())
 			cmn.Assert(bck.HasProvider())
-			entry := r.entries.findUnlocked(RegistryXactFilter{Kind: entry.Kind(), Bck: bck, OnlyRunning: &onlyRunning})
+			entry := r.entries.findUnlocked(XactFilter{Kind: entry.Kind(), Bck: bck, OnlyRunning: &onlyRunning})
 			if entry != nil && entry.Get().ID() == eID {
 				return true
 			}
@@ -530,7 +525,7 @@ func (r *registry) renewBucketXaction(entry BucketEntry, bck *cluster.Bck, uuids
 		uuid = uuids[0]
 	}
 	r.mtx.RLock()
-	if e := r.GetRunning(RegistryXactFilter{ID: uuid, Kind: entry.Kind(), Bck: bck}); e != nil {
+	if e := r.GetRunning(XactFilter{ID: uuid, Kind: entry.Kind(), Bck: bck}); e != nil {
 		prevEntry := e.(BucketEntry)
 		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
 			r.mtx.RUnlock()
@@ -545,7 +540,7 @@ func (r *registry) renewBucketXaction(entry BucketEntry, bck *cluster.Bck, uuids
 		running   = false
 		prevEntry BucketEntry
 	)
-	if e := r.GetRunning(RegistryXactFilter{ID: uuid, Kind: entry.Kind(), Bck: bck}); e != nil {
+	if e := r.GetRunning(XactFilter{ID: uuid, Kind: entry.Kind(), Bck: bck}); e != nil {
 		prevEntry = e.(BucketEntry)
 		running = true
 		if keep, err := entry.PreRenewHook(prevEntry); keep || err != nil {
@@ -565,7 +560,7 @@ func (r *registry) renewBucketXaction(entry BucketEntry, bck *cluster.Bck, uuids
 
 func (r *registry) renewGlobalXaction(entry GlobalEntry) (res renewRes) {
 	r.mtx.RLock()
-	if e := r.GetRunning(RegistryXactFilter{Kind: entry.Kind()}); e != nil {
+	if e := r.GetRunning(XactFilter{Kind: entry.Kind()}); e != nil {
 		prevEntry := e.(GlobalEntry)
 		if entry.PreRenewHook(prevEntry) {
 			r.mtx.RUnlock()
@@ -580,7 +575,7 @@ func (r *registry) renewGlobalXaction(entry GlobalEntry) (res renewRes) {
 		running   = false
 		prevEntry GlobalEntry
 	)
-	if e := r.GetRunning(RegistryXactFilter{Kind: entry.Kind()}); e != nil {
+	if e := r.GetRunning(XactFilter{Kind: entry.Kind()}); e != nil {
 		prevEntry = e.(GlobalEntry)
 		running = true
 		if entry.PreRenewHook(prevEntry) {
@@ -635,7 +630,7 @@ func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bc
 	return e.xact, nil
 }
 
-func matchEntry(entry BaseEntry, flt RegistryXactFilter) (matches bool) {
+func matchEntry(entry BaseEntry, flt XactFilter) (matches bool) {
 	if flt.ID != "" {
 		return entry.Get().ID().Compare(flt.ID) == 0
 	}

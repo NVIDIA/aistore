@@ -223,7 +223,7 @@ func TestXactionQueryFinished(t *testing.T) {
 
 	f := func(t *testing.T, tc testConfig) {
 		t.Run(scenarioName(tc), func(t *testing.T) {
-			query := registry.RegistryXactFilter{}
+			query := registry.XactFilter{}
 			if !tc.bckNil {
 				query.Bck = bck1
 			}

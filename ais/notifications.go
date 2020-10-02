@@ -56,7 +56,7 @@ type (
 		Finished []*notifListenMsg `json:"finished"`
 	}
 
-	nlFilter registry.RegistryXactFilter
+	nlFilter registry.XactFilter
 
 	//
 	// notification messages

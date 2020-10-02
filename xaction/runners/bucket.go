@@ -52,7 +52,7 @@ func (r *FastRenProvider) New(args registry.XactArgs) registry.BucketEntry {
 func (r *FastRenProvider) Start(bck cmn.Bck) error {
 	f := func() ([]cluster.XactStats, error) {
 		onlyRunning := false
-		return registry.Registry.GetStats(registry.RegistryXactFilter{
+		return registry.Registry.GetStats(registry.XactFilter{
 			ID:          r.args.RebID.String(),
 			Kind:        cmn.ActRebalance,
 			OnlyRunning: &onlyRunning,

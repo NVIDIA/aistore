@@ -176,7 +176,7 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 		}
 
 		// Check current xaction
-		entry := registry.Registry.GetRunning(registry.RegistryXactFilter{Kind: cmn.ActRebalance})
+		entry := registry.Registry.GetRunning(registry.XactFilter{Kind: cmn.ActRebalance})
 		if entry == nil {
 			if canRun {
 				return
