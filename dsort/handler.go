@@ -16,8 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tinylib/msgp/msgp"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -25,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tinylib/msgp/msgp"
 )
 
 type response struct {

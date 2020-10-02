@@ -2,11 +2,15 @@ linters:
   enable-all: false
   disable-all: true
   enable:
+    - asciicheck
     - bodyclose
     - deadcode
     - errcheck
+    - exportloopref
+    - gci
     - gocritic
     - gofmt
+    - goheader
     - goimports
     - golint
     - goprintffuncname
@@ -16,29 +20,32 @@ linters:
     - interfacer
     - maligned
     - misspell
+    - nolintlint
     - prealloc
     - staticcheck
     - typecheck
     - unconvert
     - unparam
-    - unparam
     - unused
     - varcheck
     - whitespace
-    - asciicheck
-    - nolintlint
-    - exportloopref
 
     # TODO: Fix code to include these linters:
     # - gofumpt
+    #
+    # See: https://golangci-lint.run/usage/linters/
     #
     # Following linters produce false positives (enable only when needed):
     # - goerr113
     # - gosec
     # - nestif
     # - scopelint
-    # - exhaustive - doesn't produce helpful output
     # - structcheck - doesn't handle embedded structs
+    #
+    # Following linters are not really helpful:
+    # - exhaustive
+    # - nlreturn
+    # - testpackage
 
 linters-settings:
   govet:
@@ -58,7 +65,6 @@ linters-settings:
           - (github.com/NVIDIA/cmn/debug).Infof
           - (github.com/NVIDIA/cmn).Exitf
           - (github.com/NVIDIA/cmn).ExitLogf
-
   golint:
     min-confidence: 0
   errcheck:
@@ -130,7 +136,7 @@ run:
   tests: true # enable linting test files
 
   build-tags:
-    - hrw aws # build hrw and aws so that staticcheck doesn't complain about unused export functions
+    - hrw aws azure gcp # build hrw and aws so that staticcheck doesn't complain about unused export functions
 
   concurrency: 4
   deadline: 5m

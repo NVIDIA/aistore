@@ -5,19 +5,20 @@
 package main
 
 import (
-	"os"
-	"time"
-
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
+
+const iostatColumnCnt = 14
 
 var (
 	devices = make(map[string]struct{}) // Replace with the device name to track
@@ -28,8 +29,6 @@ var (
 	oldIOMs        map[string]int64
 	oldIOQueueMs   map[string]int64
 	oldMeasureTime time.Time
-
-	iostatnumdsk = 14
 )
 
 func main() {
@@ -72,7 +71,7 @@ func main() {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) < iostatnumdsk {
+		if len(fields) < iostatColumnCnt {
 			continue
 		}
 		if strings.HasPrefix(fields[0], "Device") {

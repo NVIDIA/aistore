@@ -151,8 +151,10 @@ func (ap *azureProvider) azureErrorToAISError(azureError error, bck *cmn.Bck, ob
 		msg := fmt.Sprintf("%s/%s not found", bck, objName)
 		return &cmn.HTTPError{Status: http.StatusNotFound, Message: msg}, http.StatusNotFound
 	default:
-		if stgErr.Response() != nil {
-			return azureError, stgErr.Response().StatusCode
+		resp := stgErr.Response()
+		if resp != nil {
+			resp.Body.Close()
+			return azureError, resp.StatusCode
 		}
 		return azureError, http.StatusInternalServerError
 	}
@@ -176,9 +178,9 @@ func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 			return
 		}
 
-		for _, container := range containers.ContainerItems {
+		for idx := range containers.ContainerItems {
 			buckets = append(buckets, cmn.Bck{
-				Name:     container.Name,
+				Name:     containers.ContainerItems[idx].Name,
 				Provider: cmn.ProviderAzure,
 			})
 		}
@@ -267,8 +269,11 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		return nil, fmt.Errorf("failed to list objects %q", cloudBck.Name), resp.StatusCode()
 	}
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(resp.Segment.BlobItems))}
-	for _, blob := range resp.Segment.BlobItems {
-		entry := &cmn.BucketEntry{Name: blob.Name}
+	for idx := range resp.Segment.BlobItems {
+		var (
+			blob  = &resp.Segment.BlobItems[idx]
+			entry = &cmn.BucketEntry{Name: blob.Name}
+		)
 		if blob.Properties.ContentLength != nil && msg.WantProp(cmn.GetPropsSize) {
 			entry.Size = *blob.Properties.ContentLength
 		}
@@ -434,8 +439,10 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 		err, status := ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return "", err, status
 	}
-	if putResp.Response().StatusCode >= http.StatusBadRequest {
-		return "", fmt.Errorf("failed to put object %s/%s", cloudBck, lom.ObjName), putResp.Response().StatusCode
+	resp := putResp.Response()
+	resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return "", fmt.Errorf("failed to put object %s/%s", cloudBck, lom.ObjName), resp.StatusCode
 	}
 	if v, ok := h.EncodeVersion(string(putResp.ETag())); ok {
 		version = v
