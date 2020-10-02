@@ -8,10 +8,10 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
+	gatomic "sync/atomic"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/bcklist"
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -21,46 +21,24 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-//
-// baseTaskEntry
-//
+type (
+	bckSummaryTask struct {
+		xaction.XactBase
+		ctx context.Context
+		t   cluster.Target
+		msg *cmn.BucketSummaryMsg
+		res atomic.Pointer
+	}
 
-type baseTaskEntry struct {
-	uuid string
-}
+	bckSummaryTaskEntry struct {
+		xact *bckSummaryTask
 
-//
-// bckListTaskEntry
-//
-
-type bckListTaskEntry struct {
-	baseBckEntry
-	ctx  context.Context
-	xact *bcklist.BckListTask
-	t    cluster.Target
-	msg  *cmn.SelectMsg
-}
-
-func (e *bckListTaskEntry) Start(bck cmn.Bck) error {
-	xact := bcklist.NewBckListTask(e.ctx, e.t, bck, e.msg, e.uuid)
-	e.xact = xact
-	return nil
-}
-
-func (e *bckListTaskEntry) Kind() string      { return cmn.ActListObjects }
-func (e *bckListTaskEntry) Get() cluster.Xact { return e.xact }
-
-//
-// bckSummaryTaskEntry
-//
-
-type bckSummaryTaskEntry struct {
-	baseTaskEntry
-	ctx  context.Context
-	xact *bckSummaryTask
-	t    cluster.Target
-	msg  *cmn.BucketSummaryMsg
-}
+		ctx  context.Context
+		t    cluster.Target
+		uuid string
+		msg  *cmn.BucketSummaryMsg
+	}
+)
 
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckSummaryTask{
@@ -258,8 +236,8 @@ func (t *bckSummaryTask) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint
 					fileCount = fileCount/copies + fileCount%copies
 				}
 
-				atomic.AddUint64(&objCount, uint64(fileCount))
-				atomic.AddUint64(&size, dirSize)
+				gatomic.AddUint64(&objCount, uint64(fileCount))
+				gatomic.AddUint64(&size, dirSize)
 
 				t.ObjectsAdd(int64(fileCount))
 				t.BytesAdd(int64(dirSize))

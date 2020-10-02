@@ -67,13 +67,6 @@ type (
 		Result interface{} `json:"res"`
 		Err    error       `json:"error"`
 	}
-	bckSummaryTask struct {
-		xaction.XactBase
-		ctx context.Context
-		t   cluster.Target
-		msg *cmn.BucketSummaryMsg
-		res atomic.Pointer
-	}
 	BaseEntry interface {
 		Start(bck cmn.Bck) error // starts an xaction, will be called when entry is stored into registry
 		Kind() string
@@ -617,12 +610,7 @@ func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bc
 	if err := r.removeFinishedByID(msg.UUID); err != nil {
 		return nil, err
 	}
-	e := &bckSummaryTaskEntry{
-		baseTaskEntry: baseTaskEntry{msg.UUID},
-		ctx:           ctx,
-		t:             t,
-		msg:           msg,
-	}
+	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
 	if err := e.Start(bck.Bck); err != nil {
 		return nil, err
 	}

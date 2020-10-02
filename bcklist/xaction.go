@@ -21,38 +21,48 @@ import (
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 // Xaction is on-demand one to avoid creating a new xaction per page even
 // in passthrough mode. It just restarts `walk` if needed.
 // Xaction is created once per bucket list request (per UUID)
-type BckListTask struct {
-	xaction.XactDemandBase
-	ctx        context.Context
-	t          cluster.Target
-	bck        *cluster.Bck
-	workCh     chan *bckListReq      // incoming requests
-	objCache   chan *cmn.BucketEntry // local cache filled when idle
-	lastPage   []*cmn.BucketEntry    // last sent page and a little more
-	msg        *cmn.SelectMsg
-	walkStopCh *cmn.StopCh    // to abort file walk
-	token      string         // the continuation token for the last sent page (for re-requests)
-	nextToken  string         // continuation token returned by Cloud to get the next page
-	walkWg     sync.WaitGroup // to wait until walk finishes
-	walkDone   bool           // true: done walking or Cloud returned all objects
-	fromRemote bool           // whether to request remote data (Cloud/Remote/Backend)
-}
+type (
+	xactProvider struct {
+		xact *Xact
 
-type bckListReq struct {
-	msg *cmn.SelectMsg
-	ch  chan *BckListResp
-}
-type BckListResp struct {
-	BckList *cmn.BucketList
-	Status  int
-	Err     error
-}
-type BckListCallback = func(resp *BckListResp)
+		ctx  context.Context
+		t    cluster.Target
+		uuid string
+		msg  *cmn.SelectMsg
+	}
+	Xact struct {
+		xaction.XactDemandBase
+		ctx        context.Context
+		t          cluster.Target
+		bck        *cluster.Bck
+		workCh     chan *bckListReq      // incoming requests
+		objCache   chan *cmn.BucketEntry // local cache filled when idle
+		lastPage   []*cmn.BucketEntry    // last sent page and a little more
+		msg        *cmn.SelectMsg
+		walkStopCh *cmn.StopCh    // to abort file walk
+		token      string         // the continuation token for the last sent page (for re-requests)
+		nextToken  string         // continuation token returned by Cloud to get the next page
+		walkWg     sync.WaitGroup // to wait until walk finishes
+		walkDone   bool           // true: done walking or Cloud returned all objects
+		fromRemote bool           // whether to request remote data (Cloud/Remote/Backend)
+	}
+
+	bckListReq struct {
+		msg *cmn.SelectMsg
+		ch  chan *Resp
+	}
+	Resp struct {
+		BckList *cmn.BucketList
+		Status  int
+		Err     error
+	}
+)
 
 const (
 	bckListReqSize = 32  // the size of xaction request queue
@@ -64,10 +74,27 @@ var (
 	ErrGone    = errors.New("gone")
 )
 
-func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck,
-	smsg *cmn.SelectMsg, uuid string) *BckListTask {
+func init() {
+	registry.Registry.RegisterBucketXact(&xactProvider{})
+}
+
+func (e *xactProvider) New(args registry.XactArgs) registry.BucketEntry {
+	return &xactProvider{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
+}
+func (e *xactProvider) Start(bck cmn.Bck) error {
+	xact := newXact(e.ctx, e.t, bck, e.msg, e.uuid)
+	e.xact = xact
+	return nil
+}
+func (e *xactProvider) Kind() string                                      { return cmn.ActListObjects }
+func (e *xactProvider) Get() cluster.Xact                                 { return e.xact }
+func (e *xactProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
+func (e *xactProvider) PostRenewHook(_ registry.BucketEntry)              {}
+
+func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck,
+	smsg *cmn.SelectMsg, uuid string) *Xact {
 	idleTime := cmn.GCO.Get().Timeout.SendFile
-	xact := &BckListTask{
+	xact := &Xact{
 		ctx:      ctx,
 		t:        t,
 		msg:      smsg,
@@ -79,13 +106,13 @@ func NewBckListTask(ctx context.Context, t cluster.Target, bck cmn.Bck,
 	return xact
 }
 
-func (r *BckListTask) String() string {
+func (r *Xact) String() string {
 	return fmt.Sprintf("%s: %s", r.t.Snode(), &r.XactDemandBase)
 }
 
-func (r *BckListTask) Do(msg *cmn.SelectMsg, ch chan *BckListResp) {
+func (r *Xact) Do(msg *cmn.SelectMsg, ch chan *Resp) {
 	if r.Finished() {
-		ch <- &BckListResp{Err: ErrGone}
+		ch <- &Resp{Err: ErrGone}
 		close(ch)
 		return
 	}
@@ -98,7 +125,7 @@ func (r *BckListTask) Do(msg *cmn.SelectMsg, ch chan *BckListResp) {
 
 // Starts fs.Walk beforehand if needed so that by the time we read the next page
 // local cache is populated.
-func (r *BckListTask) init() error {
+func (r *Xact) init() error {
 	r.bck = cluster.NewBckEmbed(r.Bck())
 	if err := r.bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
 		return err
@@ -112,7 +139,7 @@ func (r *BckListTask) init() error {
 	return nil
 }
 
-func (r *BckListTask) initTraverse() {
+func (r *Xact) initTraverse() {
 	if r.walkStopCh != nil {
 		r.walkStopCh.Close()
 		r.walkWg.Wait()
@@ -125,7 +152,7 @@ func (r *BckListTask) initTraverse() {
 	go r.traverseBucket()
 }
 
-func (r *BckListTask) Run() (err error) {
+func (r *Xact) Run() (err error) {
 	glog.Infoln(r.String())
 	if err := r.init(); err != nil {
 		return err
@@ -153,14 +180,14 @@ func (r *BckListTask) Run() (err error) {
 	}
 }
 
-func (r *BckListTask) stopWalk() {
+func (r *Xact) stopWalk() {
 	if r.walkStopCh != nil {
 		r.walkStopCh.Close()
 		r.walkWg.Wait()
 	}
 }
 
-func (r *BckListTask) Stop(err error) {
+func (r *Xact) Stop(err error) {
 	r.XactDemandBase.Stop()
 	r.Finish()
 	close(r.workCh)
@@ -172,7 +199,7 @@ func (r *BckListTask) Stop(err error) {
 	}
 }
 
-func (r *BckListTask) dispatchRequest() *BckListResp {
+func (r *Xact) dispatchRequest() *Resp {
 	var (
 		cnt   = r.msg.PageSize
 		token = r.msg.ContinuationToken
@@ -184,7 +211,7 @@ func (r *BckListTask) dispatchRequest() *BckListResp {
 	defer r.DecPending()
 
 	if err := r.genNextPage(token, cnt); err != nil {
-		return &BckListResp{
+		return &Resp{
 			Status: http.StatusInternalServerError,
 			Err:    err,
 		}
@@ -194,20 +221,20 @@ func (r *BckListTask) dispatchRequest() *BckListResp {
 	debug.Assert(r.pageIsValid(token, cnt))
 
 	objList := r.getPage(token, cnt)
-	return &BckListResp{
+	return &Resp{
 		BckList: objList,
 		Status:  http.StatusOK,
 	}
 }
 
-func (r *BckListTask) IsMountpathXact() bool { return true }
+func (r *Xact) IsMountpathXact() bool { return true }
 
-func (r *BckListTask) walkCallback(lom *cluster.LOM) {
+func (r *Xact) walkCallback(lom *cluster.LOM) {
 	r.ObjectsInc()
 	r.BytesAdd(lom.Size())
 }
 
-func (r *BckListTask) walkCtx() context.Context {
+func (r *Xact) walkCtx() context.Context {
 	return context.WithValue(
 		context.Background(),
 		walkinfo.CtxPostCallbackKey,
@@ -215,7 +242,7 @@ func (r *BckListTask) walkCtx() context.Context {
 	)
 }
 
-func (r *BckListTask) nextPageAIS(cnt uint) error {
+func (r *Xact) nextPageAIS(cnt uint) error {
 	if r.isPageCached(r.token, cnt) {
 		return nil
 	}
@@ -236,7 +263,7 @@ func (r *BckListTask) nextPageAIS(cnt uint) error {
 }
 
 // Returns an index of the first objects in the cache that follows marker
-func (r *BckListTask) findMarker(marker string) uint {
+func (r *Xact) findMarker(marker string) uint {
 	if r.fromRemote && r.token == marker {
 		return 0
 	}
@@ -245,7 +272,7 @@ func (r *BckListTask) findMarker(marker string) uint {
 	}))
 }
 
-func (r *BckListTask) isPageCached(marker string, cnt uint) bool {
+func (r *Xact) isPageCached(marker string, cnt uint) bool {
 	if r.walkDone {
 		return true
 	}
@@ -253,7 +280,7 @@ func (r *BckListTask) isPageCached(marker string, cnt uint) bool {
 	return idx+cnt < uint(len(r.lastPage))
 }
 
-func (r *BckListTask) nextPageCloud() error {
+func (r *Xact) nextPageCloud() error {
 	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.bck, r.msg)
 	bckList, err := walk.CloudObjPage()
 	if err != nil {
@@ -272,7 +299,7 @@ func (r *BckListTask) nextPageCloud() error {
 // Called before generating a page for a proxy. It is OK if the page is
 // still in progress. If the page is done, the function ensures that the
 // local cache contains the requested data.
-func (r *BckListTask) pageIsValid(marker string, cnt uint) bool {
+func (r *Xact) pageIsValid(marker string, cnt uint) bool {
 	// The same page is re-requested
 	if r.token == marker {
 		return true
@@ -289,7 +316,7 @@ func (r *BckListTask) pageIsValid(marker string, cnt uint) bool {
 	return inCache || r.walkDone
 }
 
-func (r *BckListTask) getPage(marker string, cnt uint) *cmn.BucketList {
+func (r *Xact) getPage(marker string, cnt uint) *cmn.BucketList {
 	debug.Assert(r.msg.UUID != "")
 	if r.fromRemote {
 		return &cmn.BucketList{
@@ -319,7 +346,7 @@ func (r *BckListTask) getPage(marker string, cnt uint) *cmn.BucketList {
 
 // genNextPage calls DecPending either immediately on error or inside
 // a goroutine if some work must be done.
-func (r *BckListTask) genNextPage(token string, cnt uint) error {
+func (r *Xact) genNextPage(token string, cnt uint) error {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[%s] token: %q", r, r.msg.ContinuationToken)
 	}
@@ -351,7 +378,7 @@ func (r *BckListTask) genNextPage(token string, cnt uint) error {
 // Removes from local cache, the objects that have been already sent.
 // Use only for AIS buckets(or Cached:true requests) - in other cases
 // the marker, in general, is not an object name
-func (r *BckListTask) discardObsolete(token string) {
+func (r *Xact) discardObsolete(token string) {
 	if token == "" || len(r.lastPage) == 0 {
 		return
 	}
@@ -371,7 +398,7 @@ func (r *BckListTask) discardObsolete(token string) {
 	r.lastPage = r.lastPage[:l-j]
 }
 
-func (r *BckListTask) traverseBucket() {
+func (r *Xact) traverseBucket() {
 	wi := walkinfo.NewWalkInfo(r.walkCtx(), r.t, r.msg)
 	defer r.walkWg.Done()
 	cb := func(fqn string, de fs.DirEntry) error {

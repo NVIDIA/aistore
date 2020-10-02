@@ -44,11 +44,11 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 	cmn.Assert(msg.PageSize != 0)
 
-	xact, isNew, err := registry.Registry.RenewBckListNewXact(t, bck, msg.UUID, msg)
+	xact, isNew, err := registry.Registry.RenewBckListXact(t, bck, msg.UUID, msg)
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
 	if err == bcklist.ErrGone {
-		xact, isNew, err = registry.Registry.RenewBckListNewXact(t, bck, msg.UUID, msg)
+		xact, isNew, err = registry.Registry.RenewBckListXact(t, bck, msg.UUID, msg)
 	}
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -63,7 +63,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		go xact.Run()
 	}
 
-	bckList, status, err := t.waitBckListResp(xact, msg)
+	bckList, status, err := t.waitBckListResp(xact.(*bcklist.Xact), msg)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), status)
 		return false
@@ -92,8 +92,8 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	return
 }
 
-func (t *targetrunner) waitBckListResp(xact *bcklist.BckListTask, msg *cmn.SelectMsg) (*cmn.BucketList, int, error) {
-	ch := make(chan *bcklist.BckListResp) // unbuffered
+func (t *targetrunner) waitBckListResp(xact *bcklist.Xact, msg *cmn.SelectMsg) (*cmn.BucketList, int, error) {
+	ch := make(chan *bcklist.Resp) // unbuffered
 	xact.Do(msg, ch)
 	resp := <-ch
 	return resp.BckList, resp.Status, resp.Err

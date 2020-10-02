@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/bcklist"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
@@ -430,18 +429,21 @@ func (e *queryEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
 // Objects list
 //
 
-func (r *registry) RenewBckListNewXact(t cluster.Target, bck *cluster.Bck, uuid string,
-	msg *cmn.SelectMsg) (listXact *bcklist.BckListTask, isNew bool, err error) {
+func (r *registry) RenewBckListXact(t cluster.Target, bck *cluster.Bck, uuid string,
+	msg *cmn.SelectMsg) (listXact cluster.Xact, isNew bool, err error) {
 	xact := r.GetXact(uuid)
 	if xact == nil || xact.Finished() {
-		e := &bckListTaskEntry{baseBckEntry: baseBckEntry{uuid}, t: t, msg: msg}
+		e := r.bckXacts[cmn.ActListObjects].New(XactArgs{
+			Ctx:    context.Background(),
+			T:      t,
+			UUID:   uuid,
+			Custom: msg,
+		})
 		res := r.renewBucketXaction(e, bck, uuid)
 		if res.err != nil {
 			return nil, res.isNew, res.err
 		}
-		listXact = res.entry.Get().(*bcklist.BckListTask)
-		return listXact, res.isNew, nil
+		return res.entry.Get(), res.isNew, nil
 	}
-	listXact = xact.(*bcklist.BckListTask)
-	return listXact, false, nil
+	return xact, false, nil
 }

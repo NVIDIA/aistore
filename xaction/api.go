@@ -99,7 +99,7 @@ var XactsDtor = map[string]XactDescriptor{
 	cmn.ActPrefetch:      {Type: XactTypeBck, Startable: true},
 	cmn.ActPromote:       {Type: XactTypeBck, Startable: false},
 	cmn.ActQueryObjects:  {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
-	cmn.ActListObjects:   {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true},
+	cmn.ActListObjects:   {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
 	cmn.ActSummaryBucket: {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true},
 }
 
