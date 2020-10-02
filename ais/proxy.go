@@ -75,11 +75,13 @@ type (
 		p        *proxyrunner
 		w        http.ResponseWriter
 		r        *http.Request
+		query    url.Values
 		queryBck *cluster.Bck
 		err      error
 		msg      *cmn.ActionMsg
 		// bck.IsHTTP()
-		origURLBck string
+		origURLBck   string
+		allowHTTPBck bool
 	}
 )
 
@@ -358,35 +360,19 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	var (
 		started = time.Now()
-		query   = r.URL.Query()
 	)
 	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
-	bck, err := newBckFromQuery(bucket, query)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: r.URL.Query(), allowHTTPBck: true}
+	bck := bckArgs.tryBckInit(bucket, origURLBck...)
+	if bck == nil {
 		return
 	}
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
-		if len(origURLBck) > 0 {
-			args.origURLBck = origURLBck[0]
-		} else if query.Get(cmn.URLParamOrigURL) != "" {
-			origURL := query.Get(cmn.URLParamOrigURL)
-			hbo, err := cmn.NewHTTPObjPath(origURL)
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-				return
-			}
-			args.origURLBck = hbo.OrigURLBck
-		}
-		if bck, err = args.try(); err != nil {
-			return
-		}
-	}
+
 	if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessGET); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
@@ -420,19 +406,9 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
-	bck, err := newBckFromQuery(bucket, query)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
-		if bck, err = args.try(); err != nil {
-			return
-		}
-	}
-	if bck.IsHTTP() {
-		p.invalmsghdlrf(w, r, "%q provider doesn't support %q", cmn.ProviderHTTP, r.Method)
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query}
+	bck := bckArgs.tryBckInit(bucket)
+	if bck == nil {
 		return
 	}
 
@@ -500,23 +476,16 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		started = time.Now()
-		query   = r.URL.Query()
 	)
 	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
-	bck, err := newBckFromQuery(bucket, query)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: r.URL.Query()}
+	bck := bckArgs.tryBckInit(bucket)
+	if bck == nil {
 		return
-	}
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
-		if bck, err = args.try(); err != nil {
-			return
-		}
 	}
 	if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjDELETE); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
@@ -555,13 +524,9 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apiItems[0]
-	bck, err := newBckFromQuery(bucket, query)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query}
+	bck := bckArgs.tryBckInit(bucket)
+	if bck == nil {
 		return
 	}
 	if err = bck.Allow(cmn.AccessBckDELETE); err != nil {
@@ -975,6 +940,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 		// NOTE: destination MUST be AIS; TODO: support destination namespace via API
 		bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
+
 		bmd := p.owner.bmd.get()
 		if _, present := bmd.Get(bckTo); present {
 			if err = bckTo.Init(p.owner.bmd, p.si); err == nil {
@@ -1283,6 +1249,8 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// TODO: revisit versus cloud bucket not being present, see p.tryBckInit
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -1483,27 +1451,10 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
-	bck, err := newBckFromQuery(bucket, query)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query, allowHTTPBck: true}
+	bck := bckArgs.tryBckInit(bucket, origURLBck...)
+	if bck == nil {
 		return
-	}
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
-		if len(origURLBck) > 0 {
-			args.origURLBck = origURLBck[0]
-		} else if query.Get(cmn.URLParamOrigURL) != "" {
-			origURL := query.Get(cmn.URLParamOrigURL)
-			hbo, err := cmn.NewHTTPObjPath(origURL)
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-				return
-			}
-			args.origURLBck = hbo.OrigURLBck
-		}
-		if bck, err = args.try(); err != nil {
-			return
-		}
 	}
 	if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjHEAD); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
@@ -3766,6 +3717,50 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 // lookup and add remote bucket on the fly //
 /////////////////////////////////////////////
 
+func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck *cluster.Bck) {
+	var (
+		err error
+	)
+
+	if len(origURLBck) > 0 {
+		args.allowHTTPBck = true
+	}
+	if args.queryBck == nil {
+		if args.query == nil {
+			args.query = args.r.URL.Query()
+		}
+		bck, err = newBckFromQuery(bucket, args.query)
+		if err != nil {
+			args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
+			return nil
+		}
+	}
+
+	if err = bck.Init(args.p.owner.bmd, args.p.si); err != nil {
+		args.queryBck = bck
+		args.err = err
+		if args.allowHTTPBck {
+			if len(origURLBck) > 0 {
+				args.allowHTTPBck = true
+				args.origURLBck = origURLBck[0]
+			} else if origURL := args.query.Get(cmn.URLParamOrigURL); origURL != "" {
+				hbo, err := cmn.NewHTTPObjPath(origURL)
+				if err != nil {
+					args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
+					return nil
+				}
+				args.origURLBck = hbo.OrigURLBck
+			}
+		}
+
+		if bck, err = args.try(); err != nil {
+			return nil
+		}
+	}
+
+	return bck
+}
+
 func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 	if _, ok := args.err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
 		err = args.err
@@ -3777,10 +3772,17 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 		return
 	}
 	if !cmn.IsValidProvider(args.queryBck.Provider) {
-		err = cmn.NewErrorBucketDoesNotExist(args.queryBck.Bck, args.p.si.Name())
-		args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusNotFound)
+		err = cmn.NewErrorInvalidBucketProvider(args.queryBck.Bck, args.p.si.Name())
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	if args.queryBck.IsHTTP() && !args.allowHTTPBck {
+		err = errors.New("operation does not support http buckets")
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	if args.p.forwardCP(args.w, args.r, args.msg, "add-remote-bucket", nil) {
 		err = errors.New("forwarded")
 		return

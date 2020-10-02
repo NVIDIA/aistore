@@ -27,6 +27,7 @@ type (
 	ErrorRemoteBucketDoesNotExist nodeBckPair
 	ErrorCloudBucketOffline       nodeBckPair
 	ErrorBucketDoesNotExist       nodeBckPair
+	ErrorInvalidBucketProvider    nodeBckPair
 	ErrorBucketIsBusy             nodeBckPair
 
 	ErrorCapacityExceeded struct {
@@ -166,6 +167,13 @@ func NewErrorBucketDoesNotExist(bck Bck, node string) *ErrorBucketDoesNotExist {
 }
 func (e *ErrorBucketDoesNotExist) Error() string {
 	return _errBucket(fmt.Sprintf("bucket %s does not exist", e.bck), e.node)
+}
+
+func NewErrorInvalidBucketProvider(bck Bck, node string) *ErrorInvalidBucketProvider {
+	return &ErrorInvalidBucketProvider{node: node, bck: bck}
+}
+func (e *ErrorInvalidBucketProvider) Error() string {
+	return _errBucket(fmt.Sprintf("invalid provider %q of bucket %s", e.bck.Provider, e.bck), e.node)
 }
 
 func NewErrorBucketIsBusy(bck Bck, node string) *ErrorBucketIsBusy {
