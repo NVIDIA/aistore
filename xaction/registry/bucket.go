@@ -15,23 +15,18 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-//
-// baseBckEntry
-//
+type BaseBckEntry struct{}
 
-type baseBckEntry struct{}
-
-func (b *baseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
+func (b *BaseBckEntry) PreRenewHook(previousEntry BucketEntry) (keep bool, err error) {
 	e := previousEntry.Get()
 	_, keep = e.(xaction.XactDemand)
 	return
 }
-
-func (b *baseBckEntry) PostRenewHook(_ BucketEntry) {}
+func (b *BaseBckEntry) PostRenewHook(_ BucketEntry) {}
 
 type (
 	BucketEntry interface {
-		BaseEntry
+		baseEntry
 		// pre-renew: returns true iff the current active one exists and is either
 		// - ok to keep running as is, or
 		// - has been renew(ed) and is still ok
@@ -55,6 +50,33 @@ type (
 		Phase  string
 		Custom interface{} // Additional arguments that are specific for a given xaction.
 	}
+
+	DirPromoteArgs struct {
+		Dir    string
+		Params *cmn.ActValPromote
+	}
+
+	TransferBckArgs struct {
+		BckFrom *cluster.Bck
+		BckTo   *cluster.Bck
+		DM      *bundle.DataMover
+		DP      cluster.LomReaderProvider
+		Meta    *cmn.Bck2BckMsg
+	}
+
+	DeletePrefetchArgs struct {
+		Ctx      context.Context
+		UUID     string
+		RangeMsg *cmn.RangeMsg
+		ListMsg  *cmn.ListMsg
+		Evict    bool
+	}
+
+	FastRenameArgs struct {
+		RebID   xaction.RebID
+		BckFrom *cluster.Bck
+		BckTo   *cluster.Bck
+	}
 )
 
 func (r *registry) RegisterBucketXact(entry BucketEntryProvider) {
@@ -74,7 +96,7 @@ func (r *registry) RenewBucketXact(kind string, bck *cluster.Bck) cluster.Xact {
 	return res.entry.Get()
 }
 
-func (r *registry) RenewECEncodeXact(t cluster.Target, bck *cluster.Bck, uuid, phase string) (cluster.Xact, error) {
+func (r *registry) RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) (cluster.Xact, error) {
 	e := r.bckXacts[cmn.ActECEncode].New(XactArgs{
 		T:     t,
 		UUID:  uuid,
@@ -87,21 +109,6 @@ func (r *registry) RenewECEncodeXact(t cluster.Target, bck *cluster.Bck, uuid, p
 	return res.entry.Get(), nil
 }
 
-type (
-	DirPromoteArgs struct {
-		Dir    string
-		Params *cmn.ActValPromote
-	}
-
-	TransferBckArgs struct {
-		BckFrom *cluster.Bck
-		BckTo   *cluster.Bck
-		DM      *bundle.DataMover
-		DP      cluster.LomReaderProvider
-		Meta    *cmn.Bck2BckMsg
-	}
-)
-
 // TODO: restart the EC (#531) in case of mountpath event
 func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 	var (
@@ -111,7 +118,7 @@ func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 	)
 	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
 		if bck.Props.Mirror.Enabled {
-			xact, err := r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
+			xact, err := r.RenewBckMakeNCopies(t, bck, tag, int(bck.Props.Mirror.Copies))
 			if err == nil {
 				go xact.Run()
 			}
@@ -122,7 +129,7 @@ func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 	for name, ns := range cfg.Cloud.Providers {
 		bmd.Range(&name, &ns, func(bck *cluster.Bck) bool {
 			if bck.Props.Mirror.Enabled {
-				xact, err := r.RenewBckMakeNCopies(bck, t, tag, int(bck.Props.Mirror.Copies))
+				xact, err := r.RenewBckMakeNCopies(t, bck, tag, int(bck.Props.Mirror.Copies))
 				if err == nil {
 					go xact.Run()
 				}
@@ -132,8 +139,7 @@ func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
 	}
 }
 
-func (r *registry) RenewBckMakeNCopies(bck *cluster.Bck, t cluster.Target,
-	uuid string, copies int) (cluster.Xact, error) {
+func (r *registry) RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid string, copies int) (cluster.Xact, error) {
 	e := r.bckXacts[cmn.ActMakeNCopies].New(XactArgs{
 		T:      t,
 		UUID:   uuid,
@@ -149,7 +155,7 @@ func (r *registry) RenewBckMakeNCopies(bck *cluster.Bck, t cluster.Target,
 	return res.entry.Get(), nil
 }
 
-func (r *registry) RenewDirPromote(dir string, bck *cluster.Bck, t cluster.Target, params *cmn.ActValPromote) (cluster.Xact, error) {
+func (r *registry) RenewDirPromote(t cluster.Target, bck *cluster.Bck, dir string, params *cmn.ActValPromote) (cluster.Xact, error) {
 	e := r.bckXacts[cmn.ActPromote].New(XactArgs{
 		T: t,
 		Custom: &DirPromoteArgs{
@@ -202,21 +208,6 @@ func (r *registry) RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bc
 	return res.entry.Get(), nil
 }
 
-type (
-	DeletePrefetchArgs struct {
-		Ctx      context.Context
-		UUID     string
-		RangeMsg *cmn.RangeMsg
-		ListMsg  *cmn.ListMsg
-		Evict    bool
-	}
-	FastRenameArgs struct {
-		RebID   xaction.RebID
-		BckFrom *cluster.Bck
-		BckTo   *cluster.Bck
-	}
-)
-
 func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (cluster.Xact, error) {
 	kind := cmn.ActDelete
 	if args.Evict {
@@ -247,8 +238,7 @@ func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *Delet
 	return res.entry.Get(), nil
 }
 
-func (r *registry) RenewBckFastRename(t cluster.Target, uuid string, rmdVersion int64,
-	bckFrom, bckTo *cluster.Bck, phase string) (cluster.Xact, error) {
+func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) (cluster.Xact, error) {
 	e := r.bckXacts[cmn.ActRenameLB].New(XactArgs{
 		T:     t,
 		UUID:  uuid,
@@ -271,9 +261,10 @@ func (r *registry) RenewBckFastRename(t cluster.Target, uuid string, rmdVersion 
 //
 
 type queryEntry struct {
-	baseBckEntry
+	BaseBckEntry
+	xact *query.ObjectsListingXact
+
 	t     cluster.Target
-	xact  *query.ObjectsListingXact
 	query *query.ObjectsQuery
 	ctx   context.Context
 	msg   *cmn.SelectMsg
@@ -287,11 +278,13 @@ func (e *queryEntry) Start(_ cmn.Bck) error {
 	}
 	return nil
 }
-
-func (e *queryEntry) Kind() string      { return cmn.ActQueryObjects }
+func (*queryEntry) Kind() string        { return cmn.ActQueryObjects }
 func (e *queryEntry) Get() cluster.Xact { return e.xact }
+func (e *queryEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
+	return query.Registry.Get(e.msg.UUID) != nil, nil
+}
 
-func (r *registry) RenewObjectsListingXact(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) (*query.ObjectsListingXact, bool, error) {
+func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.ObjectsQuery, msg *cmn.SelectMsg) (cluster.Xact, bool, error) {
 	cmn.Assert(msg.UUID != "")
 	if xact := query.Registry.Get(msg.UUID); xact != nil {
 		if xact.Aborted() {
@@ -314,19 +307,14 @@ func (r *registry) RenewObjectsListingXact(ctx context.Context, t cluster.Target
 	if res.err != nil {
 		return nil, res.isNew, res.err
 	}
-	xact := res.entry.Get().(*query.ObjectsListingXact)
-	return xact, res.isNew, nil
-}
-
-func (e *queryEntry) PreRenewHook(_ BucketEntry) (keep bool, err error) {
-	return query.Registry.Get(e.msg.UUID) != nil, nil
+	return res.entry.Get(), res.isNew, nil
 }
 
 //
 // Objects list
 //
 
-func (r *registry) RenewBckListXact(t cluster.Target, bck *cluster.Bck, uuid string,
+func (r *registry) RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
 	msg *cmn.SelectMsg) (listXact cluster.Xact, isNew bool, err error) {
 	xact := r.GetXact(uuid)
 	if xact == nil || xact.Finished() {

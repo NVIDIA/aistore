@@ -44,11 +44,11 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 	cmn.Assert(msg.PageSize != 0)
 
-	xact, isNew, err := registry.Registry.RenewBckListXact(t, bck, msg.UUID, msg)
+	xact, isNew, err := registry.Registry.RenewObjList(t, bck, msg.UUID, msg)
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
 	if err == bcklist.ErrGone {
-		xact, isNew, err = registry.Registry.RenewBckListXact(t, bck, msg.UUID, msg)
+		xact, isNew, err = registry.Registry.RenewObjList(t, bck, msg.UUID, msg)
 	}
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -119,7 +119,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 		switch action {
 		case cmn.ActSummaryBucket:
-			_, err = registry.Registry.RenewBckSummaryXact(ctx, t, bck, msg)
+			_, err = registry.Registry.RenewBckSummary(ctx, t, bck, msg)
 		default:
 			t.invalmsghdlrf(w, r, "invalid action: %s", action)
 			return false

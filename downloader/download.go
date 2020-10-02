@@ -217,7 +217,9 @@ func init() {
 }
 
 type downloaderProvider struct {
-	xact   *Downloader
+	registry.BaseGlobalEntry
+	xact *Downloader
+
 	t      cluster.Target
 	statsT stats.Tracker
 }
@@ -225,16 +227,14 @@ type downloaderProvider struct {
 func (*downloaderProvider) New(args registry.XactArgs) registry.GlobalEntry {
 	return &downloaderProvider{t: args.T, statsT: args.Custom.(stats.Tracker)}
 }
-func (e *downloaderProvider) Start(_ cmn.Bck) error {
-	xdl := newDownloader(e.t, e.statsT)
-	e.xact = xdl
+func (p *downloaderProvider) Start(_ cmn.Bck) error {
+	xdl := newDownloader(p.t, p.statsT)
+	p.xact = xdl
 	go xdl.Run()
 	return nil
 }
-func (e *downloaderProvider) Get() cluster.Xact                        { return e.xact }
-func (e *downloaderProvider) Kind() string                             { return cmn.ActDownload }
-func (e *downloaderProvider) PreRenewHook(_ registry.GlobalEntry) bool { return true }
-func (e *downloaderProvider) PostRenewHook(_ registry.GlobalEntry)     {}
+func (*downloaderProvider) Kind() string        { return cmn.ActDownload }
+func (p *downloaderProvider) Get() cluster.Xact { return p.xact }
 
 func (d *Downloader) Name() string {
 	i := strconv.FormatInt(instance.Load(), 10)

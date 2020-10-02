@@ -11,9 +11,18 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
+type BaseGlobalEntry struct{}
+
+func (b *BaseGlobalEntry) PreRenewHook(previousEntry GlobalEntry) (keep bool) {
+	e := previousEntry.Get()
+	_, keep = e.(xaction.XactDemand)
+	return
+}
+func (b *BaseGlobalEntry) PostRenewHook(_ GlobalEntry) {}
+
 type (
 	GlobalEntry interface {
-		BaseEntry
+		baseEntry
 		// pre-renew: returns true iff the current active one exists and is either
 		// - ok to keep running as is, or
 		// - has been renew(ed) and is still ok
@@ -70,19 +79,24 @@ func (r *registry) RenewElection() cluster.Xact {
 	return res.entry.Get()
 }
 
-//
-// baseGlobalEntry
-//
-
-type (
-	// nolint:unused // For now unused, soon it must change.
-	baseGlobalEntry struct{}
-)
-
-func (b *baseGlobalEntry) PreRenewHook(previousEntry GlobalEntry) (keep bool) {
-	e := previousEntry.Get()
-	_, keep = e.(xaction.XactDemand)
-	return
+func (r *registry) RenewLRU(id string) cluster.Xact {
+	e := r.globalXacts[cmn.ActLRU].New(XactArgs{UUID: id})
+	res := r.renewGlobalXaction(e)
+	if !res.isNew { // Previous LRU is still running.
+		res.entry.Get().Renew()
+		return nil
+	}
+	return res.entry.Get()
 }
 
-func (b *baseGlobalEntry) PostRenewHook(_ GlobalEntry) {}
+func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (cluster.Xact, error) {
+	e := r.globalXacts[cmn.ActDownload].New(XactArgs{
+		T:      t,
+		Custom: statsT,
+	})
+	res := r.renewGlobalXaction(e)
+	if res.err != nil {
+		return nil, res.err
+	}
+	return res.entry.Get(), nil
+}

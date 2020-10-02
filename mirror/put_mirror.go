@@ -20,13 +20,15 @@ import (
 
 type (
 	putMirrorProvider struct {
+		registry.BaseBckEntry
 		xact *XactPut
+
 		t    cluster.Target
 		uuid string
 		lom  *cluster.LOM
 	}
 	XactPut struct {
-		// implements cmn.Xact a cmn.Runner interfaces
+		// implements cluster.Xact and cmn.Runner interfaces
 		xaction.XactDemandBase
 		// runtime
 		workCh   chan *cluster.LOM
@@ -48,21 +50,19 @@ type (
 func (*putMirrorProvider) New(args registry.XactArgs) registry.BucketEntry {
 	return &putMirrorProvider{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
 }
-func (e *putMirrorProvider) Start(_ cmn.Bck) error {
-	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+func (p *putMirrorProvider) Start(_ cmn.Bck) error {
+	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
-	x, err := RunXactPut(e.lom, slab)
+	xact, err := RunXactPut(p.lom, slab)
 	if err != nil {
 		glog.Error(err)
 		return err
 	}
-	e.xact = x
+	p.xact = xact
 	return nil
 }
-func (*putMirrorProvider) Kind() string                                        { return cmn.ActPutCopies }
-func (e *putMirrorProvider) Get() cluster.Xact                                 { return e.xact }
-func (e *putMirrorProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
-func (e *putMirrorProvider) PostRenewHook(_ registry.BucketEntry)              {}
+func (*putMirrorProvider) Kind() string        { return cmn.ActPutCopies }
+func (p *putMirrorProvider) Get() cluster.Xact { return p.xact }
 
 //
 // public methods

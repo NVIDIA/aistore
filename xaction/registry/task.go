@@ -40,6 +40,19 @@ type (
 	}
 )
 
+func (r *registry) RenewBckSummary(ctx context.Context, t cluster.Target, bck *cluster.Bck,
+	msg *cmn.BucketSummaryMsg) (*bckSummaryTask, error) {
+	if err := r.removeFinishedByID(msg.UUID); err != nil {
+		return nil, err
+	}
+	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
+	if err := e.Start(bck.Bck); err != nil {
+		return nil, err
+	}
+	r.storeEntry(e)
+	return e.xact, nil
+}
+
 func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	xact := &bckSummaryTask{
 		XactBase: *xaction.NewXactBaseBck(e.uuid, cmn.ActSummaryBucket, bck),
@@ -51,7 +64,6 @@ func (e *bckSummaryTaskEntry) Start(bck cmn.Bck) error {
 	go xact.Run()
 	return nil
 }
-
 func (e *bckSummaryTaskEntry) Kind() string      { return cmn.ActSummaryBucket }
 func (e *bckSummaryTaskEntry) Get() cluster.Xact { return e.xact }
 

@@ -18,6 +18,12 @@ import (
 )
 
 type (
+	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	xactPutProvider struct {
+		registry.BaseBckEntry
+		xact *XactPut
+	}
+
 	// Erasure coding runner: accepts requests and dispatches them to
 	// a correct mountpath runner. Runner uses dedicated to EC memory manager
 	// inherited by dependent mountpath runners
@@ -26,31 +32,22 @@ type (
 		xactReqBase
 		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
 	}
-
-	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
-	XactPutProvider struct {
-		xact *XactPut
-	}
 )
 
-func (r *XactPutProvider) New(_ registry.XactArgs) registry.BucketEntry {
-	return &XactPutProvider{}
-}
-func (r *XactPutProvider) Start(bck cmn.Bck) error {
+func (*xactPutProvider) New(_ registry.XactArgs) registry.BucketEntry { return &xactPutProvider{} }
+func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	var (
 		xec      = ECM.NewPutXact(bck)
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(r.Kind(), bck, idleTime)
+	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(p.Kind(), bck, idleTime)
 	xec.InitIdle()
-	r.xact = xec
+	p.xact = xec
 	go xec.Run()
 	return nil
 }
-func (r *XactPutProvider) Kind() string                                      { return cmn.ActECPut }
-func (r *XactPutProvider) Get() cluster.Xact                                 { return r.xact }
-func (r *XactPutProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
-func (r *XactPutProvider) PostRenewHook(_ registry.BucketEntry)              {}
+func (*xactPutProvider) Kind() string        { return cmn.ActECPut }
+func (p *xactPutProvider) Get() cluster.Xact { return p.xact }
 
 //
 // XactPut

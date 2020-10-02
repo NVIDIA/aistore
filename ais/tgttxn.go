@@ -179,7 +179,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 
 		// do the work in xaction
-		xact, err := registry.Registry.RenewBckMakeNCopies(c.bck, t, c.uuid, int(copies))
+		xact, err := registry.Registry.RenewBckMakeNCopies(t, c.bck, c.uuid, int(copies))
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
@@ -256,7 +256,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		if reMirror(txnSetBprops.bprops, txnSetBprops.nprops) {
 			n := int(txnSetBprops.nprops.Mirror.Copies)
-			xact, err := registry.Registry.RenewBckMakeNCopies(c.bck, t, c.uuid, n)
+			xact, err := registry.Registry.RenewBckMakeNCopies(t, c.bck, c.uuid, n)
 			if err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
@@ -267,7 +267,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		if reEC(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
 			registry.Registry.DoAbort(cmn.ActECEncode, c.bck)
-			xact, err := registry.Registry.RenewECEncodeXact(t, c.bck, c.uuid, cmn.ActCommit)
+			xact, err := registry.Registry.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 			if err != nil {
 				return err
 			}
@@ -353,8 +353,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if err = t.transactions.wait(txn, c.timeout); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		xact, err := registry.Registry.RenewBckFastRename(t, c.uuid, c.msg.RMDVersion,
-			txnRenB.bckFrom, txnRenB.bckTo, cmn.ActCommit)
+		xact, err := registry.Registry.RenewBckFastRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, cmn.ActCommit)
 		if err != nil {
 			return err // must not happen at commit time
 		}
@@ -561,13 +560,13 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
 		}
 		nlp.Unlock() // TODO -- FIXME: introduce txn, unlock when done
-		if _, err := registry.Registry.RenewECEncodeXact(t, c.bck, c.uuid, cmn.ActBegin); err != nil {
+		if _, err := registry.Registry.RenewECEncode(t, c.bck, c.uuid, cmn.ActBegin); err != nil {
 			return err
 		}
 	case cmn.ActAbort:
 		// do nothing
 	case cmn.ActCommit:
-		xact, err := registry.Registry.RenewECEncodeXact(t, c.bck, c.uuid, cmn.ActCommit)
+		xact, err := registry.Registry.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err)
 			return err

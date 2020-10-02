@@ -99,8 +99,10 @@ type (
 	}
 
 	XactProvider struct {
-		id   string
+		registry.BaseGlobalEntry
 		xact *Xaction
+
+		id string
 	}
 
 	Xaction struct {
@@ -110,25 +112,27 @@ type (
 	}
 )
 
+func init() {
+	registry.Registry.RegisterGlobalXact(&XactProvider{})
+}
+
 func (*XactProvider) New(args registry.XactArgs) registry.GlobalEntry {
 	return &XactProvider{id: args.UUID}
 }
-func (e *XactProvider) Start(_ cmn.Bck) error {
-	e.xact = &Xaction{
-		XactDemandBase: *xaction.NewXactDemandBase(e.id, cmn.ActLRU, xactIdleTime),
+func (p *XactProvider) Start(_ cmn.Bck) error {
+	p.xact = &Xaction{
+		XactDemandBase: *xaction.NewXactDemandBase(p.id, cmn.ActLRU, xactIdleTime),
 		Renewed:        make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
 			g, l := registry.GetRebMarked(), registry.GetResilverMarked()
 			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
 		},
 	}
-	e.xact.InitIdle()
+	p.xact.InitIdle()
 	return nil
 }
-func (e *XactProvider) Kind() string                             { return cmn.ActLRU }
-func (e *XactProvider) Get() cluster.Xact                        { return e.xact }
-func (e *XactProvider) PreRenewHook(_ registry.GlobalEntry) bool { return true }
-func (e *XactProvider) PostRenewHook(_ registry.GlobalEntry)     {}
+func (p *XactProvider) Kind() string      { return cmn.ActLRU }
+func (p *XactProvider) Get() cluster.Xact { return p.xact }
 
 func Run(ini *InitLRU) {
 	var (

@@ -65,7 +65,7 @@ func (r *ObjectsListingXact) stop() {
 
 func (r *ObjectsListingXact) IsMountpathXact() bool { return false } // TODO -- FIXME
 
-func (r *ObjectsListingXact) Start() {
+func (r *ObjectsListingXact) Run() error {
 	defer func() {
 		r.fetchingDone = true
 	}()
@@ -78,10 +78,11 @@ func (r *ObjectsListingXact) Start() {
 
 	if r.query.ObjectsSource.Pt != nil {
 		r.startFromTemplate()
-		return
+		return nil
 	}
 
 	r.startFromBck()
+	return nil
 }
 
 // TODO: make thread-safe

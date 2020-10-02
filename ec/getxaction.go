@@ -20,6 +20,12 @@ import (
 )
 
 type (
+	// Implements `registry.BucketEntry` and `registry.BucketEntryProvider` interface.
+	xactGetProvider struct {
+		registry.BaseBckEntry
+		xact *XactGet
+	}
+
 	// Erasure coding runner: accepts requests and dispatches them to
 	// a correct mountpath runner. Runner uses dedicated to EC memory manager
 	// inherited by dependent mountpath runners
@@ -30,31 +36,22 @@ type (
 	}
 
 	bgProcess = func(req *Request, toDisk bool, cb func(error))
-
-	// Implements `registry.BucketEntry` and `registry.BucketEntryProvider` interface.
-	XactGetProvider struct {
-		xact *XactGet
-	}
 )
 
-func (r *XactGetProvider) New(_ registry.XactArgs) registry.BucketEntry {
-	return &XactGetProvider{}
-}
-func (r *XactGetProvider) Start(bck cmn.Bck) error {
+func (*xactGetProvider) New(_ registry.XactArgs) registry.BucketEntry { return &xactGetProvider{} }
+func (p *xactGetProvider) Start(bck cmn.Bck) error {
 	var (
 		xec      = ECM.NewGetXact(bck)
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(r.Kind(), bck, idleTime)
+	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(p.Kind(), bck, idleTime)
 	xec.InitIdle()
-	r.xact = xec
+	p.xact = xec
 	go xec.Run()
 	return nil
 }
-func (r *XactGetProvider) Kind() string                                      { return cmn.ActECGet }
-func (r *XactGetProvider) Get() cluster.Xact                                 { return r.xact }
-func (r *XactGetProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
-func (r *XactGetProvider) PostRenewHook(_ registry.BucketEntry)              {}
+func (*xactGetProvider) Kind() string        { return cmn.ActECGet }
+func (p *xactGetProvider) Get() cluster.Xact { return p.xact }
 
 //
 // XactGet

@@ -47,7 +47,7 @@ func parseTemplate(template string) (cmn.ParsedTemplate, error) {
 // Evict/Delete/Prefect
 //
 
-func (r *EvictDelete) objDelete(args *registry.DeletePrefetchArgs, lom *cluster.LOM) error {
+func (r *evictDelete) objDelete(args *registry.DeletePrefetchArgs, lom *cluster.LOM) error {
 	var (
 		cloudErr   error
 		delFromAIS bool
@@ -87,7 +87,7 @@ func (r *EvictDelete) objDelete(args *registry.DeletePrefetchArgs, lom *cluster.
 	return cloudErr
 }
 
-func (r *EvictDelete) doObjEvictDelete(args *registry.DeletePrefetchArgs, objName string) error {
+func (r *evictDelete) doObjEvictDelete(args *registry.DeletePrefetchArgs, objName string) error {
 	lom := &cluster.LOM{T: r.t, ObjName: objName}
 	err := lom.Init(r.Bck())
 	if err != nil {
@@ -110,15 +110,15 @@ func (r *EvictDelete) doObjEvictDelete(args *registry.DeletePrefetchArgs, objNam
 	return nil
 }
 
-func (r *EvictDelete) listOperation(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
+func (r *evictDelete) listOperation(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
 	return r.iterateList(args, listMsg, r.doObjEvictDelete)
 }
 
-func (r *EvictDelete) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
+func (r *evictDelete) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
 	return r.iterateRange(args, r.doObjEvictDelete)
 }
 
-func (r *Prefetch) prefetchMissing(args *registry.DeletePrefetchArgs, objName string) error {
+func (r *prefetch) prefetchMissing(args *registry.DeletePrefetchArgs, objName string) error {
 	var coldGet bool
 	lom := &cluster.LOM{T: r.t, ObjName: objName}
 	err := lom.Init(r.Bck())
@@ -159,11 +159,11 @@ func (r *Prefetch) prefetchMissing(args *registry.DeletePrefetchArgs, objName st
 	return nil
 }
 
-func (r *Prefetch) listOperation(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
+func (r *prefetch) listOperation(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
 	return r.iterateList(args, listMsg, r.prefetchMissing)
 }
 
-func (r *Prefetch) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
+func (r *prefetch) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
 	return r.iterateRange(args, r.prefetchMissing)
 }
 

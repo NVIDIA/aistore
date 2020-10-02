@@ -237,10 +237,10 @@ func Init(t cluster.Target) {
 	fs.CSM.RegisterContentType(SliceType, &SliceSpec{})
 	fs.CSM.RegisterContentType(MetaType, &MetaSpec{})
 
-	registry.Registry.RegisterBucketXact(&XactGetProvider{})
-	registry.Registry.RegisterBucketXact(&XactPutProvider{})
-	registry.Registry.RegisterBucketXact(&XactRespondProvider{})
-	registry.Registry.RegisterBucketXact(&XactBckEncodeProvider{})
+	registry.Registry.RegisterBucketXact(&xactGetProvider{})
+	registry.Registry.RegisterBucketXact(&xactPutProvider{})
+	registry.Registry.RegisterBucketXact(&xactRespondProvider{})
+	registry.Registry.RegisterBucketXact(&xactBckEncodeProvider{})
 
 	if err := initManager(t); err != nil {
 		glog.Fatal(err)

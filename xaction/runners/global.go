@@ -40,8 +40,8 @@ type (
 	}
 
 	resilverProvider struct {
-		id   string
 		xact *Resilver
+		id   string
 	}
 	Resilver struct {
 		RebBase
@@ -80,22 +80,21 @@ func makeXactRebBase(id cluster.XactID, kind string) RebBase {
 
 // Rebalance
 
-func (e *rebalanceProvider) New(args registry.XactArgs) registry.GlobalEntry {
+func (p *rebalanceProvider) New(args registry.XactArgs) registry.GlobalEntry {
 	return &rebalanceProvider{args: args.Custom.(*registry.RebalanceArgs)}
 }
-func (e *rebalanceProvider) Start(_ cmn.Bck) error {
-	xreb := NewRebalance(e.args.ID, e.Kind(), e.args.StatsRunner, registry.GetRebMarked)
-	e.xact = xreb
+func (p *rebalanceProvider) Start(_ cmn.Bck) error {
+	p.xact = NewRebalance(p.args.ID, p.Kind(), p.args.StatsRunner, registry.GetRebMarked)
 	return nil
 }
-func (e *rebalanceProvider) Kind() string      { return cmn.ActRebalance }
-func (e *rebalanceProvider) Get() cluster.Xact { return e.xact }
-func (e *rebalanceProvider) PreRenewHook(previousEntry registry.GlobalEntry) (keep bool) {
+func (*rebalanceProvider) Kind() string        { return cmn.ActRebalance }
+func (p *rebalanceProvider) Get() cluster.Xact { return p.xact }
+func (p *rebalanceProvider) PreRenewHook(previousEntry registry.GlobalEntry) (keep bool) {
 	xreb := previousEntry.(*rebalanceProvider)
-	if xreb.args.ID > e.args.ID {
-		glog.Errorf("(reb: %s) g%d is greater than g%d", xreb.xact, xreb.args.ID, e.args.ID)
+	if xreb.args.ID > p.args.ID {
+		glog.Errorf("(reb: %s) g%d is greater than g%d", xreb.xact, xreb.args.ID, p.args.ID)
 		keep = true
-	} else if xreb.args.ID == e.args.ID {
+	} else if xreb.args.ID == p.args.ID {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s already running, nothing to do", xreb.xact)
 		}
@@ -103,7 +102,7 @@ func (e *rebalanceProvider) PreRenewHook(previousEntry registry.GlobalEntry) (ke
 	}
 	return
 }
-func (e *rebalanceProvider) PostRenewHook(previousEntry registry.GlobalEntry) {
+func (p *rebalanceProvider) PostRenewHook(previousEntry registry.GlobalEntry) {
 	xreb := previousEntry.(*rebalanceProvider).xact
 	xreb.Abort()
 	xreb.WaitForFinish()
@@ -146,17 +145,17 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 
 // Resilver
 
-func (e *resilverProvider) New(args registry.XactArgs) registry.GlobalEntry {
+func (*resilverProvider) New(args registry.XactArgs) registry.GlobalEntry {
 	return &resilverProvider{id: args.UUID}
 }
-func (e *resilverProvider) Start(_ cmn.Bck) error {
-	e.xact = NewResilver(e.id, e.Kind())
+func (p *resilverProvider) Start(_ cmn.Bck) error {
+	p.xact = NewResilver(p.id, p.Kind())
 	return nil
 }
-func (e *resilverProvider) Kind() string                             { return cmn.ActResilver }
-func (e *resilverProvider) Get() cluster.Xact                        { return e.xact }
-func (e *resilverProvider) PreRenewHook(_ registry.GlobalEntry) bool { return false }
-func (e *resilverProvider) PostRenewHook(previousEntry registry.GlobalEntry) {
+func (*resilverProvider) Kind() string                               { return cmn.ActResilver }
+func (p *resilverProvider) Get() cluster.Xact                        { return p.xact }
+func (p *resilverProvider) PreRenewHook(_ registry.GlobalEntry) bool { return false }
+func (p *resilverProvider) PostRenewHook(previousEntry registry.GlobalEntry) {
 	xresilver := previousEntry.(*resilverProvider).xact
 	xresilver.Abort()
 	xresilver.WaitForFinish()
@@ -176,18 +175,16 @@ func (xact *Resilver) String() string {
 
 // Election
 
-func (e *electionProvider) New(_ registry.XactArgs) registry.GlobalEntry {
-	return &electionProvider{}
-}
-func (e *electionProvider) Start(_ cmn.Bck) error {
-	e.xact = &Election{
+func (*electionProvider) New(_ registry.XactArgs) registry.GlobalEntry { return &electionProvider{} }
+func (p *electionProvider) Start(_ cmn.Bck) error {
+	p.xact = &Election{
 		XactBase: *xaction.NewXactBase(xaction.XactBaseID(""), cmn.ActElection),
 	}
 	return nil
 }
-func (e *electionProvider) Get() cluster.Xact                        { return e.xact }
-func (e *electionProvider) Kind() string                             { return cmn.ActElection }
-func (e *electionProvider) PreRenewHook(_ registry.GlobalEntry) bool { return true }
-func (e *electionProvider) PostRenewHook(_ registry.GlobalEntry)     {}
+func (*electionProvider) Kind() string                               { return cmn.ActElection }
+func (p *electionProvider) Get() cluster.Xact                        { return p.xact }
+func (p *electionProvider) PreRenewHook(_ registry.GlobalEntry) bool { return true }
+func (p *electionProvider) PostRenewHook(_ registry.GlobalEntry)     {}
 
 func (e *Election) IsMountpathXact() bool { return false }

@@ -26,22 +26,24 @@ const (
 
 type (
 	mncProvider struct {
-		xact   *XactMNC
+		registry.BaseBckEntry
+		xact *xactMNC
+
 		t      cluster.Target
 		uuid   string
 		copies int
 	}
 
-	// XactMNC runs in a background, traverses all local mountpaths, and makes sure
+	// xactMNC runs in a background, traverses all local mountpaths, and makes sure
 	// the bucket is N-way replicated (where N >= 1).
-	XactMNC struct {
+	xactMNC struct {
 		xactBckBase
 		slab   *memsys.Slab
 		copies int
 	}
 	mncJogger struct { // one per mountpath
 		joggerBckBase
-		parent *XactMNC
+		parent *xactMNC
 		buf    []byte
 	}
 )
@@ -49,31 +51,24 @@ type (
 func (*mncProvider) New(args registry.XactArgs) registry.BucketEntry {
 	return &mncProvider{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}
 }
-func (e *mncProvider) Start(bck cmn.Bck) error {
-	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
+func (p *mncProvider) Start(bck cmn.Bck) error {
+	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
-	xmnc := NewXactMNC(bck, e.t, slab, e.uuid, e.copies)
-	e.xact = xmnc
+	p.xact = newXactMNC(bck, p.t, slab, p.uuid, p.copies)
 	return nil
 }
-func (*mncProvider) Kind() string                                        { return cmn.ActMakeNCopies }
-func (e *mncProvider) Get() cluster.Xact                                 { return e.xact }
-func (e *mncProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return false, nil }
-func (e *mncProvider) PostRenewHook(_ registry.BucketEntry)              {}
+func (*mncProvider) Kind() string        { return cmn.ActMakeNCopies }
+func (p *mncProvider) Get() cluster.Xact { return p.xact }
 
-//
-// public methods
-//
-
-func NewXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, copies int) *XactMNC {
-	return &XactMNC{
+func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, copies int) *xactMNC {
+	return &xactMNC{
 		xactBckBase: *newXactBckBase(id, cmn.ActMakeNCopies, bck, t),
 		slab:        slab,
 		copies:      copies,
 	}
 }
 
-func (r *XactMNC) Run() (err error) {
+func (r *xactMNC) Run() (err error) {
 	var mpathersCount int
 	if mpathersCount, err = r.runJoggers(); err != nil {
 		return
@@ -103,7 +98,7 @@ func ValidateNCopies(prefix string, copies int) error {
 // private methods
 //
 
-func (r *XactMNC) runJoggers() (mpathCount int, err error) {
+func (r *xactMNC) runJoggers() (mpathCount int, err error) {
 	tname := r.Target().Snode().Name()
 	if err = ValidateNCopies(tname, r.copies); err != nil {
 		return
@@ -132,7 +127,7 @@ func (r *XactMNC) runJoggers() (mpathCount int, err error) {
 // mpath mncJogger - main
 //
 
-func newMNCJogger(parent *XactMNC, mpathInfo *fs.MountpathInfo, config *cmn.Config) *mncJogger {
+func newMNCJogger(parent *xactMNC, mpathInfo *fs.MountpathInfo, config *cmn.Config) *mncJogger {
 	j := &mncJogger{
 		joggerBckBase: joggerBckBase{
 			parent:    &parent.xactBckBase,

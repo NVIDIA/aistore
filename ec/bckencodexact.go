@@ -18,6 +18,16 @@ import (
 )
 
 type (
+	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	xactBckEncodeProvider struct {
+		registry.BaseBckEntry
+		xact *XactBckEncode
+
+		t     cluster.Target
+		uuid  string
+		phase string
+	}
+
 	XactBckEncode struct {
 		xaction.XactBase
 		doneCh   chan struct{}
@@ -26,6 +36,7 @@ type (
 		bck      cmn.Bck
 		wg       *sync.WaitGroup // to wait for EC finishes all objects
 	}
+
 	joggerBckEncode struct { // per mountpath
 		parent    *XactBckEncode
 		mpathInfo *fs.MountpathInfo
@@ -36,42 +47,33 @@ type (
 		smap     *cluster.Smap
 		daemonID string
 	}
-
-	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
-	XactBckEncodeProvider struct {
-		xact  *XactBckEncode
-		t     cluster.Target
-		uuid  string
-		phase string
-	}
 )
 
-func (r *XactBckEncodeProvider) New(args registry.XactArgs) registry.BucketEntry {
-	return &XactBckEncodeProvider{
+func (*xactBckEncodeProvider) New(args registry.XactArgs) registry.BucketEntry {
+	return &xactBckEncodeProvider{
 		t:     args.T,
 		uuid:  args.UUID,
 		phase: args.Phase,
 	}
 }
-func (r *XactBckEncodeProvider) Start(bck cmn.Bck) error {
-	xec := NewXactBckEncode(bck, r.t, r.uuid)
-	r.xact = xec
+func (p *xactBckEncodeProvider) Start(bck cmn.Bck) error {
+	xec := NewXactBckEncode(bck, p.t, p.uuid)
+	p.xact = xec
 	return nil
 }
-func (r *XactBckEncodeProvider) Kind() string      { return cmn.ActECEncode }
-func (r *XactBckEncodeProvider) Get() cluster.Xact { return r.xact }
-func (r *XactBckEncodeProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep bool, err error) {
+func (*xactBckEncodeProvider) Kind() string        { return cmn.ActECEncode }
+func (p *xactBckEncodeProvider) Get() cluster.Xact { return p.xact }
+func (p *xactBckEncodeProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep bool, err error) {
 	// TODO: add more checks?
-	prev := previousEntry.(*XactBckEncodeProvider)
-	if prev.phase == cmn.ActBegin && r.phase == cmn.ActCommit {
+	prev := previousEntry.(*xactBckEncodeProvider)
+	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit {
 		prev.phase = cmn.ActCommit // transition
 		keep = true
 		return
 	}
-	err = fmt.Errorf("%s(%s, phase %s): cannot %s", r.Kind(), prev.xact.Bck().Name, prev.phase, r.phase)
+	err = fmt.Errorf("%s(%s, phase %s): cannot %s", p.Kind(), prev.xact.Bck().Name, prev.phase, p.phase)
 	return
 }
-func (r *XactBckEncodeProvider) PostRenewHook(_ registry.BucketEntry) {}
 
 func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode {
 	return &XactBckEncode{

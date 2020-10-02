@@ -20,7 +20,9 @@ import (
 
 type (
 	dirPromoteProvider struct {
-		xact   *XactDirPromote
+		registry.BaseBckEntry
+		xact *XactDirPromote
+
 		t      cluster.Target
 		dir    string
 		params *cmn.ActValPromote
@@ -36,16 +38,14 @@ func (*dirPromoteProvider) New(args registry.XactArgs) registry.BucketEntry {
 	c := args.Custom.(*registry.DirPromoteArgs)
 	return &dirPromoteProvider{t: args.T, dir: c.Dir, params: c.Params}
 }
-func (e *dirPromoteProvider) Start(bck cmn.Bck) error {
-	xact := NewXactDirPromote(e.dir, bck, e.t, e.params)
+func (p *dirPromoteProvider) Start(bck cmn.Bck) error {
+	xact := NewXactDirPromote(p.dir, bck, p.t, p.params)
 	go xact.Run()
-	e.xact = xact
+	p.xact = xact
 	return nil
 }
-func (*dirPromoteProvider) Kind() string                                        { return cmn.ActPromote }
-func (e *dirPromoteProvider) Get() cluster.Xact                                 { return e.xact }
-func (e *dirPromoteProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return false, nil }
-func (e *dirPromoteProvider) PostRenewHook(_ registry.BucketEntry)              {}
+func (*dirPromoteProvider) Kind() string        { return cmn.ActPromote }
+func (p *dirPromoteProvider) Get() cluster.Xact { return p.xact }
 
 //
 // public methods

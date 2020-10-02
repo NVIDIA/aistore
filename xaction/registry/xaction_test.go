@@ -88,7 +88,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 		}
 	}
 
-	tassert.Errorf(t, len(res) > 0, "expected some EvictDelete xactions to be created, got %d", len(res))
+	tassert.Errorf(t, len(res) > 0, "expected some evictDelete xactions to be created, got %d", len(res))
 }
 
 func TestXactionAbortAll(t *testing.T) {
@@ -108,7 +108,7 @@ func TestXactionAbortAll(t *testing.T) {
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, "uuid", 123, bckFrom, bckTo, "phase")
+	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAll()
@@ -136,7 +136,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, "uuid", 123, bckFrom, bckTo, "phase")
+	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAll(xaction.XactTypeGlobal)
@@ -164,7 +164,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, "uuid", 123, bckFrom, bckTo, "phase")
+	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAllBuckets(bckFrom)
@@ -197,12 +197,12 @@ func TestXactionQueryFinished(t *testing.T) {
 	xactions.RegisterBucketXact(&runners.PrefetchProvider{})
 	xactions.RegisterBucketXact(&runners.FastRenProvider{})
 
-	xactBck1, err := xactions.RenewBckFastRename(tMock, "uuid", 123, bck1, bck1, "phase")
+	xactBck1, err := xactions.RenewBckFastRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
-	xactBck2, err := xactions.RenewBckFastRename(tMock, "uuid", 123, bck2, bck2, "phase")
+	xactBck2, err := xactions.RenewBckFastRename(tMock, bck2, bck2, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
 	xactBck1.Finish()
-	xactBck1, err = xactions.RenewBckFastRename(tMock, "uuid", 123, bck1, bck1, "phase")
+	xactBck1, err = xactions.RenewBckFastRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
 	_, err = xactions.RenewPrefetch(tMock, bck1, &registry.DeletePrefetchArgs{})
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)

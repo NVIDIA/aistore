@@ -24,36 +24,35 @@ type (
 	// FIXME: Does `XactRespond` needs to be a `XactDemand`?
 	//  - it doesn't use `incPending()`
 
+	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	xactRespondProvider struct {
+		registry.BaseBckEntry
+		xact *XactRespond
+	}
+
 	// Xaction responsible for responding to EC requests of other targets.
 	// Should not be stopped if number of known targets is small.
 	XactRespond struct {
 		xactECBase
 	}
-
-	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
-	XactRespondProvider struct {
-		xact *XactRespond
-	}
 )
 
-func (r *XactRespondProvider) New(_ registry.XactArgs) registry.BucketEntry {
-	return &XactRespondProvider{}
+func (p *xactRespondProvider) New(_ registry.XactArgs) registry.BucketEntry {
+	return &xactRespondProvider{}
 }
-func (r *XactRespondProvider) Start(bck cmn.Bck) error {
+func (p *xactRespondProvider) Start(bck cmn.Bck) error {
 	var (
 		xec      = ECM.NewRespondXact(bck)
 		idleTime = cmn.GCO.Get().Timeout.SendFile
 	)
-	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(r.Kind(), bck, idleTime)
+	xec.XactDemandBase = *xaction.NewXactDemandBaseBck(p.Kind(), bck, idleTime)
 	xec.InitIdle()
-	r.xact = xec
+	p.xact = xec
 	go xec.Run()
 	return nil
 }
-func (r *XactRespondProvider) Kind() string                                      { return cmn.ActECRespond }
-func (r *XactRespondProvider) Get() cluster.Xact                                 { return r.xact }
-func (r *XactRespondProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
-func (r *XactRespondProvider) PostRenewHook(_ registry.BucketEntry)              {}
+func (*xactRespondProvider) Kind() string        { return cmn.ActECRespond }
+func (p *xactRespondProvider) Get() cluster.Xact { return p.xact }
 
 func NewRespondXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactRespond {
 	XactCount.Inc()

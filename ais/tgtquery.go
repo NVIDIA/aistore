@@ -71,7 +71,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		smsg.Flags = cmn.SelectCached
 	}
 
-	xact, isNew, err := registry.Registry.RenewObjectsListingXact(ctx, t, q, smsg)
+	xact, isNew, err := registry.Registry.RenewQuery(ctx, t, q, smsg)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -83,7 +83,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	xact.AddNotif(&xaction.NotifXact{
 		NotifBase: notifications.NotifBase{When: cluster.UponTerm, Ty: notifications.NotifCache, Dsts: smap.IC.Keys(), F: t.callerNotifyFin},
 	})
-	go xact.Start()
+	go xact.Run()
 }
 
 func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {

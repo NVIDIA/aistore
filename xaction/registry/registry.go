@@ -5,7 +5,6 @@
 package registry
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -57,7 +55,7 @@ type (
 	}
 	// Represents result of renewing given xaction.
 	renewRes struct {
-		entry BaseEntry // Depending on situation can be new or old entry.
+		entry baseEntry // Depending on situation can be new or old entry.
 		err   error     // Error that occurred during renewal.
 		isNew bool      // true: a new entry has been created; false: old one returned
 	}
@@ -65,15 +63,15 @@ type (
 		Result interface{} `json:"res"`
 		Err    error       `json:"error"`
 	}
-	BaseEntry interface {
+	baseEntry interface {
 		Start(bck cmn.Bck) error // starts an xaction, will be called when entry is stored into registry
 		Kind() string
 		Get() cluster.Xact
 	}
 	registryEntries struct {
 		mtx       sync.RWMutex
-		active    []BaseEntry // running entries - finished entries are gradually removed
-		entries   []BaseEntry
+		active    []baseEntry // running entries - finished entries are gradually removed
+		entries   []baseEntry
 		taskCount atomic.Int64
 	}
 	registry struct {
@@ -115,11 +113,11 @@ func init() {
 
 func newRegistryEntries() *registryEntries {
 	return &registryEntries{
-		entries: make([]BaseEntry, 0, registryEntriesCap),
+		entries: make([]baseEntry, 0, registryEntriesCap),
 	}
 }
 
-func (e *registryEntries) findUnlocked(flt XactFilter) BaseEntry {
+func (e *registryEntries) findUnlocked(flt XactFilter) baseEntry {
 	if flt.OnlyRunning == nil {
 		// Loop in reverse to search for the latest (there is great chance
 		// that searched xaction at the end rather at the beginning).
@@ -148,7 +146,7 @@ func (e *registryEntries) findUnlocked(flt XactFilter) BaseEntry {
 	return nil
 }
 
-func (e *registryEntries) find(flt XactFilter) BaseEntry {
+func (e *registryEntries) find(flt XactFilter) baseEntry {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
 	return e.findUnlocked(flt)
@@ -166,7 +164,7 @@ func (e *registryEntries) housekeepActive() {
 	e.active = newActive
 }
 
-func (e *registryEntries) forEach(matcher func(entry BaseEntry) bool) {
+func (e *registryEntries) forEach(matcher func(entry baseEntry) bool) {
 	e.mtx.RLock()
 	defer e.mtx.RUnlock()
 	for _, entry := range e.entries {
@@ -199,7 +197,7 @@ func (e *registryEntries) remove(id string) {
 	}
 }
 
-func (e *registryEntries) insert(entry BaseEntry) {
+func (e *registryEntries) insert(entry baseEntry) {
 	e.mtx.Lock()
 	e.active = append(e.active, entry)
 	e.entries = append(e.entries, entry)
@@ -230,7 +228,7 @@ func NewRegistry() *registry {
 }
 
 func (r *registry) GetXact(uuid string) (xact cluster.Xact) {
-	r.entries.forEach(func(entry BaseEntry) bool {
+	r.entries.forEach(func(entry baseEntry) bool {
 		x := entry.Get()
 		if x != nil && x.ID().Compare(uuid) == 0 {
 			xact = x
@@ -250,14 +248,14 @@ func (r *registry) GetXactRunning(kind string) (xact cluster.Xact) {
 	return
 }
 
-func (r *registry) GetRunning(flt XactFilter) BaseEntry {
+func (r *registry) GetRunning(flt XactFilter) baseEntry {
 	onlyRunning := true
 	flt.OnlyRunning = &onlyRunning
 	entry := r.entries.find(flt)
 	return entry
 }
 
-func (r *registry) GetLatest(flt XactFilter) BaseEntry {
+func (r *registry) GetLatest(flt XactFilter) baseEntry {
 	entry := r.entries.find(flt)
 	return entry
 }
@@ -285,7 +283,7 @@ func (r *registry) AbortAllMountpathsXactions() {
 
 func (r *registry) abort(args abortArgs) {
 	wg := &sync.WaitGroup{}
-	r.entries.forEach(func(entry BaseEntry) bool {
+	r.entries.forEach(func(entry baseEntry) bool {
 		xact := entry.Get()
 		if xact.Finished() {
 			return true
@@ -323,8 +321,8 @@ func (r *registry) abort(args abortArgs) {
 }
 
 func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []cluster.XactStats {
-	matchingEntries := make([]BaseEntry, 0, 20)
-	r.entries.forEach(func(entry BaseEntry) bool {
+	matchingEntries := make([]baseEntry, 0, 20)
+	r.entries.forEach(func(entry baseEntry) bool {
 		if !match(entry.Get()) {
 			return true
 		}
@@ -443,7 +441,7 @@ func (r *registry) removeFinishedByID(id string) error {
 	return nil
 }
 
-func (r *registry) storeEntry(entry BaseEntry) {
+func (r *registry) storeEntry(entry baseEntry) {
 	r.entries.insert(entry)
 }
 
@@ -460,7 +458,7 @@ func (r *registry) cleanUpFinished() time.Duration {
 		}
 	}
 	toRemove := make([]string, 0, 100)
-	r.entries.forEach(func(entry BaseEntry) bool {
+	r.entries.forEach(func(entry baseEntry) bool {
 		var (
 			xact = entry.Get()
 			eID  = xact.ID()
@@ -584,42 +582,7 @@ func (r *registry) renewGlobalXaction(entry GlobalEntry) (res renewRes) {
 	return renewRes{entry: entry, isNew: true, err: nil}
 }
 
-func (r *registry) RenewLRU(id string) cluster.Xact {
-	e := r.globalXacts[cmn.ActLRU].New(XactArgs{UUID: id})
-	res := r.renewGlobalXaction(e)
-	if !res.isNew { // Previous LRU is still running.
-		res.entry.Get().Renew()
-		return nil
-	}
-	return res.entry.Get()
-}
-
-func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (cluster.Xact, error) {
-	e := r.globalXacts[cmn.ActDownload].New(XactArgs{
-		T:      t,
-		Custom: statsT,
-	})
-	res := r.renewGlobalXaction(e)
-	if res.err != nil {
-		return nil, res.err
-	}
-	return res.entry.Get(), nil
-}
-
-func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,
-	msg *cmn.BucketSummaryMsg) (*bckSummaryTask, error) {
-	if err := r.removeFinishedByID(msg.UUID); err != nil {
-		return nil, err
-	}
-	e := &bckSummaryTaskEntry{ctx: ctx, t: t, uuid: msg.UUID, msg: msg}
-	if err := e.Start(bck.Bck); err != nil {
-		return nil, err
-	}
-	r.storeEntry(e)
-	return e.xact, nil
-}
-
-func matchEntry(entry BaseEntry, flt XactFilter) (matches bool) {
+func matchEntry(entry baseEntry, flt XactFilter) (matches bool) {
 	if flt.ID != "" {
 		return entry.Get().ID().Compare(flt.ID) == 0
 	}

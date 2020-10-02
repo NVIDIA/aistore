@@ -55,7 +55,7 @@ func init() {
 	registry.Registry.RegisterBucketXact(&transferBckProvider{kind: cmn.ActETLBucket})
 	registry.Registry.RegisterBucketXact(&dirPromoteProvider{})
 	registry.Registry.RegisterBucketXact(&mncProvider{})
-	registry.Registry.RegisterBucketXact(&loadLomCacheProvider{})
+	registry.Registry.RegisterBucketXact(&llcProvider{})
 	registry.Registry.RegisterBucketXact(&putMirrorProvider{})
 }
 

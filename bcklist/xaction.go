@@ -29,6 +29,7 @@ import (
 // Xaction is created once per bucket list request (per UUID)
 type (
 	xactProvider struct {
+		registry.BaseBckEntry
 		xact *Xact
 
 		ctx  context.Context
@@ -78,18 +79,15 @@ func init() {
 	registry.Registry.RegisterBucketXact(&xactProvider{})
 }
 
-func (e *xactProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (*xactProvider) New(args registry.XactArgs) registry.BucketEntry {
 	return &xactProvider{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
 }
-func (e *xactProvider) Start(bck cmn.Bck) error {
-	xact := newXact(e.ctx, e.t, bck, e.msg, e.uuid)
-	e.xact = xact
+func (p *xactProvider) Start(bck cmn.Bck) error {
+	p.xact = newXact(p.ctx, p.t, bck, p.msg, p.uuid)
 	return nil
 }
-func (e *xactProvider) Kind() string                                      { return cmn.ActListObjects }
-func (e *xactProvider) Get() cluster.Xact                                 { return e.xact }
-func (e *xactProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
-func (e *xactProvider) PostRenewHook(_ registry.BucketEntry)              {}
+func (*xactProvider) Kind() string        { return cmn.ActListObjects }
+func (p *xactProvider) Get() cluster.Xact { return p.xact }
 
 func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck,
 	smsg *cmn.SelectMsg, uuid string) *Xact {

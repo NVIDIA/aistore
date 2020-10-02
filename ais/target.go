@@ -1521,7 +1521,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		if promoteArgs.Verbose {
 			glog.Infof("%s: promote %+v", t.si, promoteArgs)
 		}
-		xact, err := registry.Registry.RenewDirPromote(srcFQN, bck, t, &promoteArgs)
+		xact, err := registry.Registry.RenewDirPromote(t, bck, srcFQN, &promoteArgs)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return

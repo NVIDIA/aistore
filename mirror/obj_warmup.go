@@ -13,52 +13,46 @@ import (
 )
 
 type (
-	loadLomCacheProvider struct {
+	llcProvider struct {
 		t    cluster.Target
-		xact *XactBckLoadLomCache
+		xact *xactLLC
 	}
-	XactBckLoadLomCache struct {
+	xactLLC struct {
 		xactBckBase
 	}
-	xwarmJogger struct { // one per mountpath
+	llcJogger struct { // one per mountpath
 		joggerBckBase
-		parent *XactBckLoadLomCache
+		parent *xactLLC
 	}
 )
 
-func (*loadLomCacheProvider) New(args registry.XactArgs) registry.BucketEntry {
-	return &loadLomCacheProvider{t: args.T}
+func (*llcProvider) New(args registry.XactArgs) registry.BucketEntry {
+	return &llcProvider{t: args.T}
 }
-func (e *loadLomCacheProvider) Start(bck cmn.Bck) error {
-	x := NewXactLLC(e.t, bck)
-	go x.Run()
-	e.xact = x
+func (p *llcProvider) Start(bck cmn.Bck) error {
+	xact := newXactLLC(p.t, bck)
+	go xact.Run()
+	p.xact = xact
 	return nil
 }
-func (*loadLomCacheProvider) Kind() string                                        { return cmn.ActLoadLomCache }
-func (e *loadLomCacheProvider) Get() cluster.Xact                                 { return e.xact }
-func (e *loadLomCacheProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
-func (e *loadLomCacheProvider) PostRenewHook(_ registry.BucketEntry)              {}
+func (*llcProvider) Kind() string        { return cmn.ActLoadLomCache }
+func (p *llcProvider) Get() cluster.Xact { return p.xact }
 
-//
-// public methods
-//
+// NOTE: Not using registry.BaseBckEntry because it would return `false, nil`.
+func (p *llcProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
+func (p *llcProvider) PostRenewHook(_ registry.BucketEntry)              {}
 
-func NewXactLLC(t cluster.Target, bck cmn.Bck) *XactBckLoadLomCache {
-	return &XactBckLoadLomCache{xactBckBase: *newXactBckBase("", cmn.ActLoadLomCache, bck, t)}
+func newXactLLC(t cluster.Target, bck cmn.Bck) *xactLLC {
+	return &xactLLC{xactBckBase: *newXactBckBase("", cmn.ActLoadLomCache, bck, t)}
 }
 
-func (r *XactBckLoadLomCache) Run() (err error) {
+func (r *xactLLC) Run() (err error) {
 	mpathCount := r.runJoggers()
 	glog.Infoln(r.String())
 	return r.xactBckBase.waitDone(mpathCount)
 }
 
-//
-// private methods
-//
-
-func (r *XactBckLoadLomCache) runJoggers() (mpathCount int) {
+func (r *xactLLC) runJoggers() (mpathCount int) {
 	var (
 		availablePaths, _ = fs.Get()
 		config            = cmn.GCO.Get()
@@ -66,20 +60,20 @@ func (r *XactBckLoadLomCache) runJoggers() (mpathCount int) {
 	mpathCount = len(availablePaths)
 	r.xactBckBase.init(mpathCount)
 	for _, mpathInfo := range availablePaths {
-		xwarmJogger := newXwarmJogger(r, mpathInfo, config)
+		jogger := newLLCJogger(r, mpathInfo, config)
 		mpathLC := mpathInfo.MakePathCT(r.Bck(), fs.ObjectType)
-		r.mpathers[mpathLC] = xwarmJogger
-		go xwarmJogger.jog()
+		r.mpathers[mpathLC] = jogger
+		go jogger.jog()
 	}
 	return
 }
 
 //
-// mpath xwarmJogger - main
+// mpath llcJogger - main
 //
 
-func newXwarmJogger(parent *XactBckLoadLomCache, mpathInfo *fs.MountpathInfo, config *cmn.Config) *xwarmJogger {
-	j := &xwarmJogger{
+func newLLCJogger(parent *xactLLC, mpathInfo *fs.MountpathInfo, config *cmn.Config) *llcJogger {
+	j := &llcJogger{
 		joggerBckBase: joggerBckBase{
 			parent:    &parent.xactBckBase,
 			bck:       parent.Bck(),
@@ -92,10 +86,10 @@ func newXwarmJogger(parent *XactBckLoadLomCache, mpathInfo *fs.MountpathInfo, co
 	return j
 }
 
-func (j *xwarmJogger) jog() {
+func (j *llcJogger) jog() {
 	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bck())
 	j.joggerBckBase.jog()
 }
 
 // note: consider j.parent.ObjectsInc() here
-func (j *xwarmJogger) noop(*cluster.LOM) error { return nil }
+func (j *llcJogger) noop(*cluster.LOM) error { return nil }
