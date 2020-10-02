@@ -268,8 +268,8 @@ var (
 		Usage: "number of bytes (can end with suffix (k, MB, GiB, ...)) that all targets can maximally download in hour"}
 	objectsListFlag = cli.StringFlag{Name: "object-list,from",
 		Usage: "path to file containing JSON array of strings with object names to download"}
-	syncFlag            = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
-	monitorIntervalFlag = cli.StringFlag{Name: "monitor-interval", Value: downloader.DownloadProgressInterval, Usage: "interval(in secs) at which progress will be monitored, e.g. '10s'"}
+	syncFlag             = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
+	progressIntervalFlag = cli.StringFlag{Name: "progress-interval", Value: downloader.DownloadProgressInterval, Usage: "interval(in secs) at which progress will be monitored, e.g. '10s'"}
 
 	// dSort
 	dsortBucketFlag = cli.StringFlag{Name: "bucket",

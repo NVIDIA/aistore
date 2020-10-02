@@ -194,11 +194,11 @@ type DlLimits struct {
 }
 
 type DlBase struct {
-	Description     string   `json:"description"`
-	Bck             cmn.Bck  `json:"bucket"`
-	Timeout         string   `json:"timeout"`
-	MonitorInterval string   `json:"monitor_interval"`
-	Limits          DlLimits `json:"limits"`
+	Description      string   `json:"description"`
+	Bck              cmn.Bck  `json:"bucket"`
+	Timeout          string   `json:"timeout"`
+	ProgressInterval string   `json:"progress_interval"`
+	Limits           DlLimits `json:"limits"`
 }
 
 func (b *DlBase) Validate() error {

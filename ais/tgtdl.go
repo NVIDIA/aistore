@@ -57,8 +57,8 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if dlBodyBase.MonitorInterval != "" {
-			intervalStr = dlBodyBase.MonitorInterval
+		if dlBodyBase.ProgressInterval != "" {
+			intervalStr = dlBodyBase.ProgressInterval
 		}
 
 		if dur, err := time.ParseDuration(intervalStr); err == nil {

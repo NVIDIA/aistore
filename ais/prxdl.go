@@ -229,8 +229,8 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if dlBase.MonitorInterval != "" {
-		intervalStr = dlBase.MonitorInterval
+	if dlBase.ProgressInterval != "" {
+		intervalStr = dlBase.ProgressInterval
 	}
 
 	if dur, err := time.ParseDuration(intervalStr); err == nil {

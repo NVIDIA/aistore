@@ -32,7 +32,7 @@ var (
 			descriptionFlag,
 			limitConnectionsFlag,
 			objectsListFlag,
-			monitorIntervalFlag,
+			progressIntervalFlag,
 		},
 		subcmdStartDsort: {
 			specFileFlag,
@@ -212,11 +212,11 @@ func stopXactionHandler(c *cli.Context) (err error) {
 
 func startDownloadHandler(c *cli.Context) error {
 	var (
-		description     = parseStrFlag(c, descriptionFlag)
-		timeout         = parseStrFlag(c, timeoutFlag)
-		objectsListPath = parseStrFlag(c, objectsListFlag)
-		monitorInterval = parseStrFlag(c, monitorIntervalFlag)
-		id              string
+		description      = parseStrFlag(c, descriptionFlag)
+		timeout          = parseStrFlag(c, timeoutFlag)
+		objectsListPath  = parseStrFlag(c, objectsListFlag)
+		progressInterval = parseStrFlag(c, progressIntervalFlag)
+		id               string
 	)
 
 	if c.NArg() == 0 {
@@ -251,7 +251,7 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	if _, err := time.ParseDuration(monitorInterval); err != nil {
+	if _, err := time.ParseDuration(progressInterval); err != nil {
 		return err
 	}
 
@@ -261,9 +261,9 @@ func startDownloadHandler(c *cli.Context) error {
 			Provider: cmn.ProviderAIS,
 			Ns:       cmn.NsGlobal,
 		},
-		Timeout:         timeout,
-		Description:     description,
-		MonitorInterval: monitorInterval,
+		Timeout:          timeout,
+		Description:      description,
+		ProgressInterval: progressInterval,
 		Limits: downloader.DlLimits{
 			Connections:  parseIntFlag(c, limitConnectionsFlag),
 			BytesPerHour: int(limitBPH),
