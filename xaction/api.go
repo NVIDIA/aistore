@@ -5,6 +5,7 @@
 package xaction
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -26,7 +27,6 @@ type (
 	}
 
 	XactReqMsg struct {
-		Target      string    `json:"target,omitempty"`
 		ID          string    `json:"id"`
 		Kind        string    `json:"kind"`
 		Bck         cmn.Bck   `json:"bck"`
@@ -52,29 +52,13 @@ type (
 	}
 )
 
+// interface guard
 var (
-	// interface guards
 	_ cluster.XactStats = &BaseXactStats{}
 )
 
-//
-// BaseXactStats
-//
-
-func (b *BaseXactStats) ID() string           { return b.IDX }
-func (b *BaseXactStats) Kind() string         { return b.KindX }
-func (b *BaseXactStats) Bck() cmn.Bck         { return b.BckX }
-func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }
-func (b *BaseXactStats) EndTime() time.Time   { return b.EndTimeX }
-func (b *BaseXactStats) ObjCount() int64      { return b.ObjCountX }
-func (b *BaseXactStats) BytesCount() int64    { return b.BytesCountX }
-func (b *BaseXactStats) Aborted() bool        { return b.AbortedX }
-func (b *BaseXactStats) Running() bool        { return b.EndTimeX.IsZero() }
-func (b *BaseXactStats) Finished() bool       { return !b.EndTimeX.IsZero() }
-
-// XactsDtor is a statically declared table of the form: [xaction-kind => xaction-descriptor]
-// TODO add progress-bar-supported and  limited-coexistence(#791)
-//      consider adding on-demand column as well
+// XactsDtor is a static kind => [xaction-descriptor] table documenting
+// properties of a given xaction kind: `Startable`, `Owned`, etc.
 var XactsDtor = map[string]XactDescriptor{
 	// bucket-less (aka "global") xactions with scope = (target | cluster)
 	cmn.ActLRU:       {Type: XactTypeGlobal, Startable: true},
@@ -105,3 +89,33 @@ var XactsDtor = map[string]XactDescriptor{
 
 func IsValidXaction(kind string) bool { _, ok := XactsDtor[kind]; return ok }
 func IsXactTypeBck(kind string) bool  { return XactsDtor[kind].Type == XactTypeBck }
+
+///////////////////
+// BaseXactStats //
+///////////////////
+
+func (b *BaseXactStats) ID() string           { return b.IDX }
+func (b *BaseXactStats) Kind() string         { return b.KindX }
+func (b *BaseXactStats) Bck() cmn.Bck         { return b.BckX }
+func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }
+func (b *BaseXactStats) EndTime() time.Time   { return b.EndTimeX }
+func (b *BaseXactStats) ObjCount() int64      { return b.ObjCountX }
+func (b *BaseXactStats) BytesCount() int64    { return b.BytesCountX }
+func (b *BaseXactStats) Aborted() bool        { return b.AbortedX }
+func (b *BaseXactStats) Running() bool        { return b.EndTimeX.IsZero() }
+func (b *BaseXactStats) Finished() bool       { return !b.EndTimeX.IsZero() }
+
+////////////////
+// XactReqMsg //
+////////////////
+func (msg *XactReqMsg) String() (s string) {
+	if msg.ID == "" {
+		s = fmt.Sprintf("xmsg-%s", msg.Kind)
+	} else {
+		s = fmt.Sprintf("xmsg-%s[%s]", msg.Kind, msg.ID)
+	}
+	if msg.Bck.IsEmpty() {
+		return
+	}
+	return fmt.Sprintf("%s, bucket %s", s, msg.Bck)
+}

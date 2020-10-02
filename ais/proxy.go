@@ -2608,7 +2608,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case cmn.QueryXactStats:
 		p.queryXaction(w, r, what)
 	case cmn.GetWhatStatus:
-		p.ic.writeStatus(w, r, what)
+		p.ic.writeStatus(w, r)
 	case cmn.GetWhatMountpaths:
 		p.queryClusterMountpaths(w, r, what)
 	case cmn.GetWhatRemoteAIS:

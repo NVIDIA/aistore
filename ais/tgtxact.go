@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -75,7 +74,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		switch msg.Action {
 		case cmn.ActXactStart:
-			if err := t.cmdXactStart(xactMsg, bck); err != nil {
+			if err := t.cmdXactStart(&xactMsg, bck); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -126,7 +125,7 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (t *targetrunner) cmdXactStart(xactMsg xaction.XactReqMsg, bck *cluster.Bck) error {
+func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 	switch xactMsg.Kind {
@@ -172,14 +171,14 @@ func (t *targetrunner) cmdXactStart(xactMsg xaction.XactReqMsg, bck *cluster.Bck
 		go xact.Run()
 	// 3. cannot start
 	case cmn.ActPutCopies:
-		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", xactMsg.Kind)
+		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", xactMsg)
 	case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete, cmn.ActMakeNCopies, cmn.ActECEncode:
-		return fmt.Errorf("initiating %q must be done via a separate documented API", xactMsg.Kind)
+		return fmt.Errorf("initiating %q must be done via a separate documented API", xactMsg)
 	// 4. unknown
 	case "":
-		return errors.New("unspecified (empty) xaction kind")
+		return fmt.Errorf("%q: unspecified (empty) xaction kind", xactMsg)
 	default:
-		return fmt.Errorf("%q is not supported", xactMsg.Kind)
+		return fmt.Errorf("%q: kind is not supported", xactMsg)
 	}
 	return nil
 }

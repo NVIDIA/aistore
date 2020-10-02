@@ -161,7 +161,7 @@ func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 	return nl, true
 }
 
-func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
+func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg      = &xaction.XactReqMsg{}
 		bck      *cluster.Bck
@@ -169,21 +169,19 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 		interval = int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
 		exists   bool
 	)
-
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
-
 	if msg.ID == "" && msg.Kind == "" {
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusBadRequest,
-			"missing `id` and `kind` for `what`: %v", what)
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "invalid %s", msg)
 		return
 	}
 
 	// for queries of type {Kind: cmn.ActRebalance}
 	if msg.ID == "" && ic.redirectToIC(w, r) {
 		return
-	} else if msg.ID != "" && ic.reverseToOwner(w, r, msg.ID, msg) {
+	}
+	if msg.ID != "" && ic.reverseToOwner(w, r, msg.ID, msg) {
 		return
 	}
 
@@ -201,14 +199,12 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request, what string) {
 	})
 	if !exists {
 		smap := ic.p.owner.smap.get()
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound,
-			"id:%q, kind:%q, bck:%q not found (%s)", msg.ID, msg.Kind, msg.Bck, smap.StrIC(ic.p.si))
+		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s, %s", smap.StrIC(ic.p.si), msg)
 		return
 	}
 
 	if msg.Kind != "" && nl.Kind() != msg.Kind {
-		ic.p.invalmsghdlrf(w, r, "xaction kind mismatch (ID: %s, KIND: %s != %s)",
-			msg.ID, msg.Kind, nl.Kind())
+		ic.p.invalmsghdlrf(w, r, "kind mismatch: %s, expected kind=%s", msg, nl.Kind())
 		return
 	}
 

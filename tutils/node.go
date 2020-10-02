@@ -6,6 +6,7 @@ package tutils
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -101,6 +102,9 @@ while503:
 		return ""
 	}
 	proxies := ExtractProxyNodes(smap)
+	if flag.Parsed() {
+		Logf("targets: %d, proxies: %d\n", smap.CountTargets(), smap.CountProxies())
+	}
 	return proxies[rand.Intn(len(proxies))].URL(cmn.NetworkPublic)
 }
 

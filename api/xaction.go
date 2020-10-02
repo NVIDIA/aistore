@@ -227,7 +227,8 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *notifica
 }
 
 // WaitForXaction waits for a given xaction to complete.
-func WaitForXaction(baseParams BaseParams, args XactReqArgs, refreshIntervals ...time.Duration) (status *notifications.NotifStatus, err error) {
+func WaitForXaction(baseParams BaseParams, args XactReqArgs,
+	refreshIntervals ...time.Duration) (status *notifications.NotifStatus, err error) {
 	var (
 		ctx           = context.Background()
 		retryInterval = xactRetryInterval

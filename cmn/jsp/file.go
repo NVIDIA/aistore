@@ -6,8 +6,11 @@
 package jsp
 
 import (
+	"errors"
+	"flag"
 	"os"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -71,5 +74,16 @@ func Load(path string, v interface{}, opts Options) error {
 	if err != nil {
 		return err
 	}
-	return Decode(file, v, opts, path)
+	err = Decode(file, v, opts, path)
+	if err != nil && errors.Is(err, &cmn.BadCksumError{}) {
+		if errRm := os.Remove(path); errRm == nil {
+			if flag.Parsed() {
+				glog.Errorf("bad checksum: removing %s", path)
+			}
+		} else if flag.Parsed() {
+			glog.Errorf("bad checksum: failed to remove %s: %v", path, errRm)
+		}
+		return err
+	}
+	return err
 }

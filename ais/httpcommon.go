@@ -1129,7 +1129,8 @@ func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, 
 	cmn.InvalidHandlerDetailedNoLog(w, r, msg, errCode...)
 }
 
-func (h *httprunner) invalmsghdlrstatusf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...interface{}) {
+func (h *httprunner) invalmsghdlrstatusf(w http.ResponseWriter, r *http.Request, errCode int,
+	format string, a ...interface{}) {
 	h.invalmsghdlr(w, r, fmt.Sprintf(format, a...), errCode)
 }
 
