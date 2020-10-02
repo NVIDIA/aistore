@@ -183,10 +183,20 @@ func (j *bckTransferJogger) copyObject(lom *cluster.LOM) error {
 		j.parent.ObjectsInc()
 		j.parent.BytesAdd(size)
 		j.num++
+
 		if (j.num % throttleNumObjects) == 0 {
+			if errstop := j.yieldTerm(); errstop != nil {
+				return errstop
+			}
+
 			if cs := fs.GetCapStatus(); cs.Err != nil {
 				what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
 				return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
+			}
+
+			if (j.num % logNumProcessed) == 0 {
+				glog.Infof("%s jogger[%s/%s] processed %d objects...", j.parent.Kind(), j.mpathInfo, j.parent.Bck(),
+					j.num)
 			}
 		}
 	}
