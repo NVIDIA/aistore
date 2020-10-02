@@ -272,14 +272,16 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
 	return err
 }
 
-// CopyObject copies one object to another. Destination object can have different name and different bucket.
+// CopyObject creates a replica of an object (the `lom` argument) in accordance with the
+// `params` specification.  The destination _may_ have a different name and be located
+// in a different bucket.
 // There are a few possible scenarios:
-// - src and dst LOMs are from local buckets -> copying takes place between AIS targets
-// - src LOM is from cloud bucket:
-//   a. If object content is present on this target, then it's used, without contacting cloud provider.
-//   b. If object content is not present on this target, it's downloaded from a cloud provider.
-// - dst LOM is from cloud bucket: putting a new object always happens through AIS target, so a new object is cached
-//   on AIS target and then it's put to the cloud provider itself.
+// - if both src and dst LOMs are from local buckets the copying then takes place between AIS targets
+//   (of this same cluster);
+// - if the src is located in a cloud bucket, we always first make sure it is also present in
+//   the AIS cluster (by performing a cold GET if need be).
+// - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
+//   replica gets created in the cloud bucket of _this_ AIS cluster.
 func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams,
 	localOnly ...bool) (copied bool, size int64, err error) {
 	var (
