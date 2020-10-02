@@ -9,7 +9,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
@@ -102,26 +101,6 @@ func (e *lruEntry) Kind() string      { return cmn.ActLRU }
 func (e *lruEntry) Get() cluster.Xact { return e.xact }
 
 func (e *lruEntry) PreRenewHook(_ GlobalEntry) bool { return true }
-
-//
-// downloadEntry
-//
-
-type downloaderEntry struct {
-	baseGlobalEntry
-	xact   *downloader.Downloader
-	t      cluster.Target
-	statsT stats.Tracker
-}
-
-func (e *downloaderEntry) Start(_ cmn.Bck) error {
-	xdl := downloader.NewDownloader(e.t, e.statsT)
-	e.xact = xdl
-	go xdl.Run()
-	return nil
-}
-func (e *downloaderEntry) Get() cluster.Xact { return e.xact }
-func (e *downloaderEntry) Kind() string      { return cmn.ActDownload }
 
 //
 // baseGlobalEntry

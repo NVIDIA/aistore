@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
@@ -596,13 +595,16 @@ func (r *registry) RenewLRU(id string) *lru.Xaction {
 	return entry.xact
 }
 
-func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (*downloader.Downloader, error) {
-	res := r.renewGlobalXaction(&downloaderEntry{t: t, statsT: statsT})
+func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (cluster.Xact, error) {
+	e := r.globalXacts[cmn.ActDownload].New(XactArgs{
+		T:      t,
+		Custom: statsT,
+	})
+	res := r.renewGlobalXaction(e)
 	if res.err != nil {
 		return nil, res.err
 	}
-	entry := res.entry.(*downloaderEntry)
-	return entry.xact, nil
+	return res.entry.Get(), nil
 }
 
 func (r *registry) RenewBckSummaryXact(ctx context.Context, t cluster.Target, bck *cluster.Bck,

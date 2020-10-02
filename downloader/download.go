@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 // =============================== Summary ====================================
@@ -211,13 +212,37 @@ func (pr *progressReader) Close() error {
 
 // ============================= Downloader ====================================
 
+func init() {
+	registry.Registry.RegisterGlobalXact(&downloaderProvider{})
+}
+
+type downloaderProvider struct {
+	xact   *Downloader
+	t      cluster.Target
+	statsT stats.Tracker
+}
+
+func (*downloaderProvider) New(args registry.XactArgs) registry.GlobalEntry {
+	return &downloaderProvider{t: args.T, statsT: args.Custom.(stats.Tracker)}
+}
+func (e *downloaderProvider) Start(_ cmn.Bck) error {
+	xdl := newDownloader(e.t, e.statsT)
+	e.xact = xdl
+	go xdl.Run()
+	return nil
+}
+func (e *downloaderProvider) Get() cluster.Xact                        { return e.xact }
+func (e *downloaderProvider) Kind() string                             { return cmn.ActDownload }
+func (e *downloaderProvider) PreRenewHook(_ registry.GlobalEntry) bool { return true }
+func (e *downloaderProvider) PostRenewHook(_ registry.GlobalEntry)     {}
+
 func (d *Downloader) Name() string {
 	i := strconv.FormatInt(instance.Load(), 10)
 	return "downloader" + i
 }
 func (d *Downloader) IsMountpathXact() bool { return true }
 
-func NewDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
+func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{
 		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.Download, cmn.Bck{Provider: cmn.ProviderAIS}),
 		t:              t,

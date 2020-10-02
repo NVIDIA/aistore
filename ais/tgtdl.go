@@ -29,11 +29,12 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		respErr    error
 		statusCode int
 	)
-	downloaderXact, err := registry.Registry.RenewDownloader(t, t.statsT)
+	xact, err := registry.Registry.RenewDownloader(t, t.statsT)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	downloaderXact := xact.(*downloader.Downloader)
 	switch r.Method {
 	case http.MethodPost:
 		_, err := cmn.MatchRESTItems(r.URL.Path, 0, false, cmn.Version, cmn.Download)
