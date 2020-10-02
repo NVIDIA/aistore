@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -585,14 +584,14 @@ func (r *registry) renewGlobalXaction(entry GlobalEntry) (res renewRes) {
 	return renewRes{entry: entry, isNew: true, err: nil}
 }
 
-func (r *registry) RenewLRU(id string) *lru.Xaction {
-	res := r.renewGlobalXaction(&lruEntry{id: id})
-	entry := res.entry.(*lruEntry)
-	if !res.isNew { // previous LRU is still running
-		entry.xact.Renew()
+func (r *registry) RenewLRU(id string) cluster.Xact {
+	e := r.globalXacts[cmn.ActLRU].New(XactArgs{UUID: id})
+	res := r.renewGlobalXaction(e)
+	if !res.isNew { // Previous LRU is still running.
+		res.entry.Get().Renew()
 		return nil
 	}
-	return entry.xact
+	return res.entry.Get()
 }
 
 func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (cluster.Xact, error) {

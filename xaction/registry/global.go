@@ -5,11 +5,8 @@
 package registry
 
 import (
-	"time"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -74,39 +71,11 @@ func (r *registry) RenewElection() cluster.Xact {
 }
 
 //
-// lruEntry
-//
-const lruIdleTime = 30 * time.Second
-
-type lruEntry struct {
-	baseGlobalEntry
-	id   string
-	xact *lru.Xaction
-}
-
-func (e *lruEntry) Start(_ cmn.Bck) error {
-	e.xact = &lru.Xaction{
-		XactDemandBase: *xaction.NewXactDemandBase(e.id, cmn.ActLRU, lruIdleTime),
-		Renewed:        make(chan struct{}, 10),
-		OkRemoveMisplaced: func() bool {
-			g, l := GetRebMarked(), GetResilverMarked()
-			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
-		},
-	}
-	e.xact.InitIdle()
-	return nil
-}
-
-func (e *lruEntry) Kind() string      { return cmn.ActLRU }
-func (e *lruEntry) Get() cluster.Xact { return e.xact }
-
-func (e *lruEntry) PreRenewHook(_ GlobalEntry) bool { return true }
-
-//
 // baseGlobalEntry
 //
 
 type (
+	// nolint:unused // For now unused, soon it must change.
 	baseGlobalEntry struct{}
 )
 

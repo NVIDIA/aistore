@@ -185,6 +185,9 @@ func (xact *XactBase) AddNotif(n cluster.Notif) {
 	}
 }
 
+// TODO: Consider moving it to separate interface.
+func (xact *XactBase) Renew() {}
+
 func (xact *XactBase) Abort() {
 	if !xact.aborted.CAS(false, true) {
 		glog.Infof("already aborted: " + xact.String())

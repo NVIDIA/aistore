@@ -36,6 +36,7 @@ type (
 		Stats() XactStats
 
 		// modifiers
+		Renew()
 		Finish(errs ...error)
 		Abort()
 		AddNotif(n Notif)

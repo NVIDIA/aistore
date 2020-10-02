@@ -93,7 +93,7 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 
 	ini := lru.InitLRU{
 		T:                   t,
-		Xaction:             xlru,
+		Xaction:             xlru.(*lru.Xaction),
 		StatsT:              t.statsT,
 		Force:               force,
 		Buckets:             bcks,

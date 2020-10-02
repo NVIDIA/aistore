@@ -22,11 +22,14 @@ func TestXactionRenewLRU(t *testing.T) {
 	var (
 		num      = 10
 		xactions = registry.NewRegistry()
-		xactCh   = make(chan *lru.Xaction, num)
+		xactCh   = make(chan cluster.Xact, num)
 		wg       = &sync.WaitGroup{}
 	)
+
+	xactions.RegisterGlobalXact(&lru.XactProvider{})
 	defer xactions.AbortAll()
 	cmn.InitShortID(0)
+
 	wg.Add(num)
 	for i := 0; i < num; i++ {
 		go func() {
@@ -100,6 +103,7 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
+	xactions.RegisterGlobalXact(&lru.XactProvider{})
 	xactions.RegisterBucketXact(&runners.FastRenProvider{})
 
 	xactGlob := xactions.RenewLRU("")
@@ -127,6 +131,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
+	xactions.RegisterGlobalXact(&lru.XactProvider{})
 	xactions.RegisterBucketXact(&runners.FastRenProvider{})
 
 	xactGlob := xactions.RenewLRU("")
@@ -154,6 +159,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
+	xactions.RegisterGlobalXact(&lru.XactProvider{})
 	xactions.RegisterBucketXact(&runners.FastRenProvider{})
 
 	xactGlob := xactions.RenewLRU("")

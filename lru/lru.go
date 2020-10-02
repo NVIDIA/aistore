@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/NVIDIA/aistore/xaction/registry"
 )
 
 // The LRU module implements a well-known least-recently-used cache replacement policy.
@@ -47,6 +48,8 @@ import (
 const (
 	minEvictThresh = 10 * cmn.MiB
 	capCheckThresh = 256 * cmn.MiB // capacity checking threshold, when exceeded may result in lru throttling
+
+	xactIdleTime = 30 * time.Second
 )
 
 type (
@@ -94,12 +97,38 @@ type (
 		throttle    bool
 		allowDelObj bool
 	}
+
+	XactProvider struct {
+		id   string
+		xact *Xaction
+	}
+
 	Xaction struct {
 		xaction.XactDemandBase
 		Renewed           chan struct{}
 		OkRemoveMisplaced func() bool
 	}
 )
+
+func (*XactProvider) New(args registry.XactArgs) registry.GlobalEntry {
+	return &XactProvider{id: args.UUID}
+}
+func (e *XactProvider) Start(_ cmn.Bck) error {
+	e.xact = &Xaction{
+		XactDemandBase: *xaction.NewXactDemandBase(e.id, cmn.ActLRU, xactIdleTime),
+		Renewed:        make(chan struct{}, 10),
+		OkRemoveMisplaced: func() bool {
+			g, l := registry.GetRebMarked(), registry.GetResilverMarked()
+			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
+		},
+	}
+	e.xact.InitIdle()
+	return nil
+}
+func (e *XactProvider) Kind() string                             { return cmn.ActLRU }
+func (e *XactProvider) Get() cluster.Xact                        { return e.xact }
+func (e *XactProvider) PreRenewHook(_ registry.GlobalEntry) bool { return true }
+func (e *XactProvider) PostRenewHook(_ registry.GlobalEntry)     {}
 
 func Run(ini *InitLRU) {
 	var (
@@ -554,12 +583,10 @@ func (j *lruJ) allow() (ok bool, err error) {
 // min-heap //
 //////////////
 
-func (h minHeap) Len() int           { return len(h) }
-func (h minHeap) Less(i, j int) bool { return h[i].Atime().Before(h[j].Atime()) }
-func (h minHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-
+func (h minHeap) Len() int            { return len(h) }
+func (h minHeap) Less(i, j int) bool  { return h[i].Atime().Before(h[j].Atime()) }
+func (h minHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
 func (h *minHeap) Push(x interface{}) { *h = append(*h, x.(*cluster.LOM)) }
-
 func (h *minHeap) Pop() interface{} {
 	old := *h
 	n := len(old)
