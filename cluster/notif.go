@@ -47,6 +47,7 @@ type (
 		Ty     int32  `json:"type"`    // enumerated type, one of (notifXact, et al.) - see above
 		Flags  int32  `json:"flags"`   // TODO: add
 		NodeID string `json:"node_id"` // notifier node id
+		Kind   string `json:"kind"`    // kind of xaction
 		Data   []byte `json:"message"` // typed message
 		ErrMsg string `json:"err"`     // error.Error()
 	}

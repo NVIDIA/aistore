@@ -203,7 +203,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		nl, exists = n.entry(uuid)
 		return exists
 	}) {
-		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown UUID %q", n.p.si, uuid)
+		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown (UUID: %q, Kind: %q)", n.p.si, uuid, notifMsg.Kind)
 		return
 	}
 	if nl.Finished() {

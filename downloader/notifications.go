@@ -73,6 +73,7 @@ func (nd *NotifDownloadListerner) AbortArgs() cmn.ReqArgs {
 func (nd *NotifDownload) ToNotifMsg() cluster.NotifMsg {
 	msg := cluster.NotifMsg{
 		UUID: nd.DlJob.ID(),
+		Kind: cmn.ActDownload,
 		Ty:   int32(nd.Category()),
 	}
 	stats, err := nd.DlJob.ActiveStats()
