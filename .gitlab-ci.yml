@@ -1,4 +1,4 @@
-image: golang:1.13
+image: aistore/ci:1.13
 
 stages:
   - build
@@ -6,17 +6,11 @@ stages:
   - test-long
 
 variables:
-  GOPATH: /go
   AIS_NODE_FLAGS: "-skip_startup"
   MODE: debug # run tests with debug asserts
   NUM_TARGET: 5
   NUM_PROXY: 5
   FS_CNT: 3
-
-before_script:
-  - export PATH="$PATH:$GOPATH/bin"
-  - apt-get update -yq
-  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse coreutils
 
 
 # Templates
@@ -55,13 +49,6 @@ before_script:
   tags:
     - ais-kube
   before_script:
-    - export PATH="$PATH:$GOPATH/bin"
-    - apt-get update -yq
-    - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof coreutils
-    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
-    - chmod +x ./kubectl
-    - mv ./kubectl /usr/local/bin/kubectl
-    - kubectl version --client
     - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecycle of transformers is implemented.
     - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecycle of transformers is implemented.
 
@@ -83,8 +70,6 @@ lint:linux:
   stage: build
   <<: *default_only_def
   script:
-    - apt-get -y install python3-pip python3-setuptools
-    - pip3 install yapf pylint
     - make lint
     - make fmt-check
     - make spell-check

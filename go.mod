@@ -2,6 +2,8 @@ module github.com/NVIDIA/aistore
 
 go 1.13
 
+// NOTE: Remember to update `deploy/test/ci` image if the dependencies are updated.
+
 require (
 	cloud.google.com/go/storage v1.12.0
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
