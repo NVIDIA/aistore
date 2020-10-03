@@ -271,20 +271,24 @@ func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []
 	)
 
 	nl.Lock()
-	defer nl.Unlock()
-
 	// data can either be `nil` or a valid encoded stats
 	if data != nil {
 		stats, _, aborted, err = nl.UnmarshalStats(data)
 		debug.AssertNoErr(err)
 		nl.SetStats(tsi.ID(), stats)
 	}
-	n.markFinished(nl, tsi, srcErr, aborted)
+
+	done := n.markFinished(nl, tsi, srcErr, aborted)
+	nl.Unlock()
+
+	if done {
+		nl.Callback(nl, nil, time.Now().UnixNano())
+	}
 	return
 }
 
 // PRECONDITION: `nl` should be under lock.
-func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr error, aborted bool) {
+func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr error, aborted bool) (done bool) {
 	nl.MarkFinished(tsi)
 
 	if aborted {
@@ -308,12 +312,13 @@ func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr er
 		nl.SetErr(srcErr)
 	}
 	if nl.AllFinished() || aborted {
-		nl.Callback(nl, nil, time.Now().UnixNano())
 		n.fmu.Lock()
 		n.fin[nl.UUID()] = nl
 		n.fmu.Unlock()
 		n.del(nl)
+		done = true
 	}
+	return
 }
 
 //
@@ -350,6 +355,10 @@ func (n *notifs) housekeep() time.Duration {
 }
 
 func (n *notifs) syncStats(nl nl.NotifListener, intervals ...int64 /*secs*/) {
+	var (
+		done bool
+	)
+
 	nl.RLock()
 	uptoDateNodes, syncRequired := nl.NodesUptoDate(intervals...)
 	nl.RUnlock()
@@ -379,18 +388,22 @@ func (n *notifs) syncStats(nl nl.NotifListener, intervals ...int64 /*secs*/) {
 			}
 			nl.Lock()
 			if finished {
-				n.markFinished(nl, res.si, nil, aborted)
+				done = done || n.markFinished(nl, res.si, nil, aborted)
 			}
 			nl.SetStats(res.si.ID(), stats)
 			nl.Unlock()
 		} else if res.status == http.StatusNotFound { // consider silent done at res.si
 			err := fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si)
 			nl.Lock()
-			n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
+			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
 		} else if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si, res.err)
 		}
+	}
+
+	if done {
+		nl.Callback(nl, nil, time.Now().UnixNano())
 	}
 }
 
@@ -536,6 +549,8 @@ func newNLMsg(nl nl.NotifListener) *notifListenMsg {
 }
 
 func (n *notifListenMsg) MarshalJSON() (data []byte, err error) {
+	n.nl.RLock()
+	defer n.nl.RUnlock()
 	t := jsonNL{Type: n.nl.Kind()}
 	t.NL, err = jsoniter.Marshal(n.nl)
 	if err != nil {

@@ -327,25 +327,25 @@ func (ic *ic) registerEqual(a regIC) {
 		ic.p.notifs.add(a.nl)
 	}
 	if len(a.smap.IC) > 1 {
-		// TODO -- FIXME: handle errors, here and elsewhere
-		_ = ic.bcastListenIC(a.nl, a.smap)
+		ic.bcastListenIC(a.nl, a.smap)
 	}
 }
 
-func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) (err error) {
+func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
 	var (
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAisMsg(&actMsg, smap, nil)
 	)
 
-	results := ic.p.bcastToIC(msg)
-	for res := range results {
-		if res.err != nil {
-			glog.Error(res.err)
-			err = res.err
+	go func() {
+		results := ic.p.bcastToIC(msg)
+		for res := range results {
+			if res.err != nil {
+				glog.Error(res.err)
+				// TODO -- FIXME - handle error - should retry registering to failed IC members
+			}
 		}
-	}
-	return
+	}()
 }
 
 func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {

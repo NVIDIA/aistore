@@ -133,11 +133,11 @@ func (nlb *NotifListenerBase) FinCount() int               { return len(nlb.FinS
 // is called after all Notifiers will have notified OR on failure (err != nil)
 func (nlb *NotifListenerBase) Callback(nl NotifListener, err error, timestamp int64) {
 	if nlb.FinTime.CAS(0, 1) {
+		nlb.FinTime.Store(timestamp)
 		// is optional
 		if nlb.F != nil {
 			nlb.F(nl, err) // invoke user-supplied callback and pass user-supplied NotifListener
 		}
-		nlb.FinTime.Store(timestamp)
 	}
 }
 

@@ -683,9 +683,11 @@ func (p *proxyrunner) syncNewICOwners(smap, newSmap *smapX) {
 	for sid := range newSmap.IC {
 		node := newSmap.GetProxy(sid)
 		if !smap.IsIC(node) {
-			if err := p.ic.sendOwnershipTbl(node); err != nil {
-				glog.Errorf("%s: failed to send ownership table to %s, err:%v", p.si, node, err)
-			}
+			go func() {
+				if err := p.ic.sendOwnershipTbl(node); err != nil {
+					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p.si, node, err)
+				}
+			}()
 		}
 	}
 }
