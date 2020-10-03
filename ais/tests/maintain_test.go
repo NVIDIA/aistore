@@ -77,14 +77,16 @@ func TestMaintenanceRebalance(t *testing.T) {
 	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: time.Minute}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForPrimaryProxy(
+
+	smap2, err2 := tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"to target removed from the cluster",
 		smap.Version, testing.Verbose(),
 		smap.CountProxies(),
 		smap.CountTargets()-1,
 	)
-	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, err2)
+	smap = smap2
 
 	m.gets()
 	m.ensureNoErrors()
