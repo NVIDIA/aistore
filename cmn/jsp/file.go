@@ -16,9 +16,7 @@ import (
 )
 
 const (
-	v1 = 1 + iota
-	v2
-	vlatest = v2
+	v2 = 2 // supported version
 )
 
 const (
