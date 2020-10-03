@@ -54,7 +54,7 @@ type (
 )
 
 func (msg *NotifMsg) String() (s string) {
-	s = fmt.Sprintf("nmsg-%s[%s](%q)<=%s", msg.Kind, msg.UUID, string(msg.Data), msg.NodeID)
+	s = fmt.Sprintf("nmsg-%s[%s]<=%s", msg.Kind, msg.UUID, msg.NodeID)
 	if msg.ErrMsg != "" {
 		s += ", err: " + msg.ErrMsg
 	}
