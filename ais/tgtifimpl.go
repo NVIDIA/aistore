@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
@@ -102,9 +102,9 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 	}
 
 	xlru.AddNotif(&xaction.NotifXact{
-		NotifBase: notifications.NotifBase{
+		NotifBase: nl.NotifBase{
 			When: cluster.UponTerm,
-			Ty:   notifications.NotifXact,
+			Ty:   cmn.NotifXact,
 			Dsts: []string{equalIC},
 			F:    t.callerNotifyFin,
 		},

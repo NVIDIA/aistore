@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/objlist"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/registry"
@@ -57,7 +57,12 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 
 	if isNew {
 		xact.AddNotif(&xaction.NotifXact{
-			NotifBase: notifications.NotifBase{When: cluster.UponTerm, Ty: notifications.NotifCache, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+			NotifBase: nl.NotifBase{
+				When: cluster.UponTerm,
+				Ty:   cmn.NotifCache,
+				Dsts: []string{equalIC},
+				F:    t.callerNotifyFin,
+			},
 		})
 
 		go xact.Run()

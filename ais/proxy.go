@@ -29,7 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
@@ -1114,15 +1114,17 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 
 	locationIsAIS := bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached)
 	if smsg.UUID == "" {
-		var nl notifications.NotifListener
+		var nl nl.NotifListener
 		smsg.UUID = cmn.GenUUID()
 		// TODO -- FIXME: must be consistent vs NewQueryListener
 		if locationIsAIS || smsg.NeedLocalMD() {
-			nl = xaction.NewXactNL(smsg.UUID, &smap.Smap, smap.Tmap.Clone(), notifications.NotifCache, cmn.ActListObjects, bck.Bck)
+			nl = xaction.NewXactNL(smsg.UUID, &smap.Smap, smap.Tmap.Clone(),
+				cmn.NotifCache, cmn.ActListObjects, bck.Bck)
 		} else {
 			// Select random target to execute `list-objects` on a Cloud bucket
 			for sid, si := range smap.Tmap {
-				nl = xaction.NewXactNL(smsg.UUID, &smap.Smap, cluster.NodeMap{sid: si}, notifications.NotifCache, cmn.ActListObjects, bck.Bck)
+				nl = xaction.NewXactNL(smsg.UUID, &smap.Smap, cluster.NodeMap{sid: si},
+					cmn.NotifCache, cmn.ActListObjects, bck.Bck)
 				break
 			}
 		}
@@ -2009,7 +2011,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		timeout = cmn.DefaultTimeout
 	}
 
-	nlb := xaction.NewXactNL(aisMsg.UUID, &smap.Smap, smap.Tmap.Clone(), notifications.NotifXact, aisMsg.Action)
+	nlb := xaction.NewXactNL(aisMsg.UUID, &smap.Smap, smap.Tmap.Clone(), cmn.NotifXact, aisMsg.Action)
 	nlb.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
 	results = p.bcastToGroup(bcastArgs{
@@ -2979,7 +2981,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 			var (
 				tokens = p.authn.revokedTokenList()
 				bmd    = p.owner.bmd.get()
-				nl     notifications.NotifListener
+				nl     nl.NotifListener
 			)
 			// metasync
 			aisMsg := p.newAisMsg(msg, clone, bmd)
@@ -2994,7 +2996,8 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 						clone.inc()
 					})
 					pairs = append(pairs, revsPair{rmdClone, aisMsg})
-					nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &clone.Smap, clone.Tmap, notifications.NotifXact, cmn.ActRebalance)
+					nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(),
+						&clone.Smap, clone.Tmap, cmn.NotifXact, cmn.ActRebalance)
 					nl.SetOwner(equalIC)
 				}
 			} else {
@@ -3088,14 +3091,15 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			var (
 				aisMsg = p.newAisMsg(msg, clone, nil)
 				pairs  = []revsPair{{clone, aisMsg}}
-				nl     notifications.NotifListener
+				nl     nl.NotifListener
 			)
 			if p.requiresRebalance(smap, clone) {
 				rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
 					clone.inc()
 				})
 				pairs = append(pairs, revsPair{rmdClone, aisMsg})
-				nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &clone.Smap, clone.Tmap, notifications.NotifXact, cmn.ActRebalance)
+				nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &clone.Smap,
+					clone.Tmap, cmn.NotifXact, cmn.ActRebalance)
 				nl.SetOwner(equalIC)
 			}
 			_ = p.metasyncer.sync(pairs...)
@@ -3224,7 +3228,7 @@ func (p *proxyrunner) markMaintenance(si *cluster.Snode, action string) error {
 
 // Callback: remove the node from the cluster if rebalance finished successfully
 func (p *proxyrunner) removeAfterRebalance(
-	nl notifications.NotifListener, err error, msg *cmn.ActionMsg,
+	nl nl.NotifListener, err error, msg *cmn.ActionMsg,
 	si *cluster.Snode) {
 	if err != nil || nl.Aborted() {
 		glog.Errorf("Rebalance not finished, err: %v, aborted: %v", err, nl.Aborted())
@@ -3237,7 +3241,8 @@ func (p *proxyrunner) removeAfterRebalance(
 }
 
 // Run rebalance and call a callback after the rebalance finishes
-func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode, cb ...notifications.NotifCallback) (rebID xaction.RebID, err error) {
+func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
+	cb ...nl.NotifCallback) (rebID xaction.RebID, err error) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("put %s under maintenance and rebalance: action %s", si, msg.Action)
 	}
@@ -3252,12 +3257,12 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
 	wg := p.metasyncer.sync(revsPair{smap, aisMsg}, revsPair{rmdClone, aisMsg})
 
 	rebID = xaction.RebID(rmdClone.Version)
-	nl := xaction.NewXactNL(rebID.String(), &smap.Smap, smap.Tmap.Clone(), notifications.NotifXact, cmn.ActRebalance)
-	nl.SetOwner(equalIC)
+	rebnl := xaction.NewXactNL(rebID.String(), &smap.Smap, smap.Tmap.Clone(), cmn.NotifXact, cmn.ActRebalance)
+	rebnl.SetOwner(equalIC)
 	if len(cb) != 0 {
-		nl.F = cb[0]
+		rebnl.F = cb[0]
 	}
-	p.ic.registerEqual(regIC{smap: smap, nl: nl})
+	p.ic.registerEqual(regIC{smap: smap, nl: rebnl})
 	wg.Wait()
 	return
 }
@@ -3343,7 +3348,8 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 
 			_ = p.metasyncer.sync(revsPair{rmdClone, p.newAisMsg(msg, nil, nil)})
 
-			nl := xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &smap.Smap, smap.Tmap.Clone(), notifications.NotifXact, cmn.ActRebalance)
+			nl := xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &smap.Smap,
+				smap.Tmap.Clone(), cmn.NotifXact, cmn.ActRebalance)
 			nl.SetOwner(equalIC)
 			p.ic.registerEqual(regIC{smap: smap, nl: nl})
 
@@ -3366,7 +3372,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Action == cmn.ActXactStart {
 			smap := p.owner.smap.get()
-			nl := xaction.NewXactNL(xactMsg.ID, &smap.Smap, smap.Tmap.Clone(), notifications.NotifXact, xactMsg.Kind)
+			nl := xaction.NewXactNL(xactMsg.ID, &smap.Smap, smap.Tmap.Clone(), cmn.NotifXact, xactMsg.Kind)
 			p.ic.registerEqual(regIC{smap: smap, nl: nl})
 			w.Write([]byte(xactMsg.ID))
 		}
@@ -3447,9 +3453,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			// Decommissioning: just remove the node
 			err = p.removeNode(msg, si)
 		} else {
-			cb := func(nl notifications.NotifListener, err error) {
-				p.removeAfterRebalance(nl, err, msg, si)
-			}
+			cb := func(nl nl.NotifListener, err error) { p.removeAfterRebalance(nl, err, msg, si) }
 			rebID, err = p.finalizeMaintenance(msg, si, cb)
 			if err == nil {
 				w.Write([]byte(rebID.String()))

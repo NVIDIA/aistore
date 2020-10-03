@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -36,7 +36,7 @@ const (
 
 type (
 	regIC struct {
-		nl    notifications.NotifListener
+		nl    nl.NotifListener
 		smap  *smapX
 		query url.Values
 		msg   interface{}
@@ -145,7 +145,7 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl notifications.NotifListener, ok bool) {
+func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (nl nl.NotifListener, ok bool) {
 	nl, exists := ic.p.notifs.entry(uuid)
 	if !exists {
 		smap := ic.p.owner.smap.get()
@@ -165,7 +165,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg      = &xaction.XactReqMsg{}
 		bck      *cluster.Bck
-		nl       notifications.NotifListener
+		nl       nl.NotifListener
 		interval = int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
 		exists   bool
 	)
@@ -312,7 +312,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p.si, msg.Action, err)
 			return
 		}
-		nl := xaction.NewXactNL(regMsg.UUID, &smap.Smap, tmap, notifications.NotifXact, regMsg.Kind)
+		nl := xaction.NewXactNL(regMsg.UUID, &smap.Smap, tmap, cmn.NotifXact, regMsg.Kind)
 		ic.p.notifs.add(nl)
 	default:
 		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
@@ -332,7 +332,7 @@ func (ic *ic) registerEqual(a regIC) {
 	}
 }
 
-func (ic *ic) bcastListenIC(nl notifications.NotifListener, smap *smapX) (err error) {
+func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) (err error) {
 	var (
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAisMsg(&actMsg, smap, nil)

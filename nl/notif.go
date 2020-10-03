@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package notifications
+package nl
 
 import (
 	"time"

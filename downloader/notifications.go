@@ -9,29 +9,30 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
 
 type (
 	NotifDownloadListerner struct {
-		notifications.NotifListenerBase
+		nl.NotifListenerBase
 	}
 
 	NotifDownload struct {
-		notifications.NotifBase
+		nl.NotifBase
 		DlJob DlJob
 	}
 )
 
 var (
-	_ notifications.NotifListener = &NotifDownloadListerner{}
-	_ cluster.Notif               = &NotifDownload{} // interface guard
+	_ nl.NotifListener = &NotifDownloadListerner{}
+	_ cluster.Notif    = &NotifDownload{} // interface guard
 )
 
-func NewDownloadNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string, progressInterval int64, bck ...cmn.Bck) *NotifDownloadListerner {
+func NewDownloadNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string,
+	progressInterval int64, bck ...cmn.Bck) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
-		NotifListenerBase: *notifications.NewNLB(uuid, smap, srcs, notifications.NotifDownload, action, progressInterval, bck...),
+		NotifListenerBase: *nl.NewNLB(uuid, smap, srcs, cmn.NotifDownload, action, progressInterval, bck...),
 	}
 }
 

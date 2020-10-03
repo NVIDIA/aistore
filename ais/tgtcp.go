@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -736,9 +736,9 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 
 	smap := t.owner.smap.Get()
 	notif := &xaction.NotifXact{
-		NotifBase: notifications.NotifBase{
+		NotifBase: nl.NotifBase{
 			When: cluster.UponTerm,
-			Ty:   notifications.NotifXact,
+			Ty:   cmn.NotifXact,
 			Dsts: []string{equalIC},
 			F:    t.callerNotifyFin,
 		},

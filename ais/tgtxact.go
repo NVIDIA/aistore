@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/registry"
 )
@@ -140,9 +140,11 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 			glog.Errorf(erfmb, xactMsg.Kind, bck)
 		}
 		notif := &xaction.NotifXact{
-			NotifBase: notifications.NotifBase{
-				When: cluster.UponTerm, Ty: notifications.NotifXact,
-				Dsts: []string{equalIC}, F: t.callerNotifyFin,
+			NotifBase: nl.NotifBase{
+				When: cluster.UponTerm,
+				Ty:   cmn.NotifXact,
+				Dsts: []string{equalIC},
+				F:    t.callerNotifyFin,
 			},
 		}
 		go t.runResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
@@ -161,9 +163,9 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		}
 
 		xact.AddNotif(&xaction.NotifXact{
-			NotifBase: notifications.NotifBase{
+			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
-				Ty:   notifications.NotifXact,
+				Ty:   cmn.NotifXact,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},

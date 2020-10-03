@@ -30,7 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
@@ -532,9 +532,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 
 		xact.AddNotif(&xaction.NotifXact{
-			NotifBase: notifications.NotifBase{
+			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
-				Ty:   notifications.NotifXact,
+				Ty:   cmn.NotifXact,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -203,7 +203,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 }
 
 // GetXactionStatus retrieves the status of the xaction.
-func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *notifications.NotifStatus, err error) {
+func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.NotifStatus, err error) {
 	baseParams.Method = http.MethodGet
 	msg := xaction.XactReqMsg{
 		ID:   args.ID,
@@ -214,7 +214,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *notifica
 		msg.OnlyRunning = Bool(true)
 	}
 
-	status = &notifications.NotifStatus{}
+	status = &nl.NotifStatus{}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
@@ -228,7 +228,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *notifica
 
 // WaitForXaction waits for a given xaction to complete.
 func WaitForXaction(baseParams BaseParams, args XactReqArgs,
-	refreshIntervals ...time.Duration) (status *notifications.NotifStatus, err error) {
+	refreshIntervals ...time.Duration) (status *nl.NotifStatus, err error) {
 	var (
 		ctx           = context.Background()
 		retryInterval = xactRetryInterval

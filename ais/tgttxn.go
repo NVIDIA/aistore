@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/registry"
@@ -638,7 +638,12 @@ func (c *txnServerCtx) addNotif(xact cluster.Xact) {
 	dsts, ok := c.query[cmn.URLParamNotifyMe]
 	if ok {
 		xact.AddNotif(&xaction.NotifXact{
-			NotifBase: notifications.NotifBase{When: cluster.UponTerm, Ty: notifications.NotifXact, Dsts: dsts, F: c.t.callerNotifyFin},
+			NotifBase: nl.NotifBase{
+				When: cluster.UponTerm,
+				Ty:   cmn.NotifXact,
+				Dsts: dsts,
+				F:    c.t.callerNotifyFin,
+			},
 		})
 	}
 }

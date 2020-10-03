@@ -53,7 +53,10 @@ type (
 	}
 )
 
-func (msg *NotifMsg) String() string {
-	// TODO: print text msg.Ty after moving notifs to a new package
-	return fmt.Sprintf("%d[%s,%v]<=%s", msg.Ty, string(msg.Data), msg.ErrMsg, msg.NodeID)
+func (msg *NotifMsg) String() (s string) {
+	s = fmt.Sprintf("nmsg-%s[%s](%q)<=%s", msg.Kind, msg.UUID, string(msg.Data), msg.NodeID)
+	if msg.ErrMsg != "" {
+		s += ", err: " + msg.ErrMsg
+	}
+	return
 }

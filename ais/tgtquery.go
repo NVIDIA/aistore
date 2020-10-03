@@ -12,7 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/registry"
@@ -81,7 +81,12 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	xact.AddNotif(&xaction.NotifXact{
-		NotifBase: notifications.NotifBase{When: cluster.UponTerm, Ty: notifications.NotifCache, Dsts: smap.IC.Keys(), F: t.callerNotifyFin},
+		NotifBase: nl.NotifBase{
+			When: cluster.UponTerm,
+			Ty:   cmn.NotifCache,
+			Dsts: smap.IC.Keys(),
+			F:    t.callerNotifyFin,
+		},
 	})
 	go xact.Run()
 }

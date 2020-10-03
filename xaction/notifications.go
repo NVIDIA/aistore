@@ -10,29 +10,30 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/notifications"
+	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
 
 type (
 	NotifXactListener struct {
-		notifications.NotifListenerBase
+		nl.NotifListenerBase
 	}
 
 	NotifXact struct {
-		notifications.NotifBase
+		nl.NotifBase
 		Xact cluster.Xact
 	}
 )
 
 var (
-	_ cluster.Notif               = &NotifXact{}
-	_ notifications.NotifListener = &NotifXactListener{}
+	_ cluster.Notif    = &NotifXact{}
+	_ nl.NotifListener = &NotifXactListener{}
 )
 
-func NewXactNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, action string, bck ...cmn.Bck) *NotifXactListener {
+func NewXactNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, action string,
+	bck ...cmn.Bck) *NotifXactListener {
 	return &NotifXactListener{
-		NotifListenerBase: *notifications.NewNLB(uuid, smap, srcs, ty, action, 0, bck...),
+		NotifListenerBase: *nl.NewNLB(uuid, smap, srcs, ty, action, 0, bck...),
 	}
 }
 

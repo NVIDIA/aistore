@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/etl"
-	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -201,7 +200,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	wg.Wait()
 
 	// 5. IC
-	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), notifications.NotifXact, msg.Action, bck.Bck)
+	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), cmn.NotifXact, msg.Action, bck.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -320,7 +319,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 		if reec {
 			action = cmn.ActECEncode
 		}
-		nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), notifications.NotifXact, action, bck.Bck)
+		nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), cmn.NotifXact, action, bck.Bck)
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 		xactID = c.uuid
@@ -407,7 +406,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			c.msg.RMDVersion = clone.version()
 
 			// 5. IC
-			nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), notifications.NotifXact,
+			nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), cmn.NotifXact,
 				msg.Action, bckFrom.Bck, bckTo.Bck)
 			nl.SetOwner(equalIC)
 			p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
@@ -422,7 +421,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 			// 7. start rebalance and resilver
 			wg = p.metasyncer.sync(revsPair{clone, c.msg})
 			nl = xaction.NewXactNL(xaction.RebID(clone.Version).String(), &c.smap.Smap,
-				c.smap.Tmap.Clone(), notifications.NotifXact, cmn.ActRebalance)
+				c.smap.Tmap.Clone(), cmn.NotifXact, cmn.ActRebalance)
 			nl.SetOwner(equalIC)
 			p.ic.registerEqual(regIC{smap: c.smap, nl: nl})
 		},
@@ -521,7 +520,8 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	}
 
 	// 5. IC
-	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), notifications.NotifXact, msg.Action, bckFrom.Bck, bckTo.Bck)
+	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), cmn.NotifXact, msg.Action,
+		bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -626,7 +626,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	wg.Wait()
 
 	// 5. IC
-	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), notifications.NotifXact, msg.Action, bck.Bck)
+	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), cmn.NotifXact, msg.Action, bck.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 

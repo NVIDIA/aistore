@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/notifications"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -41,9 +40,10 @@ func NewQueryListener(uuid string, smap *cluster.Smap, msg *InitMsg) (*NotifList
 		return targets[i].DaemonID < targets[j].DaemonID
 	})
 	nl := &NotifListenerQuery{
-		NotifXactListener: *xaction.NewXactNL(uuid, smap, smap.Tmap.Clone(), notifications.NotifCache, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
-		WorkersCnt:        msg.WorkersCnt,
-		Targets:           targets,
+		NotifXactListener: *xaction.NewXactNL(uuid, smap, smap.Tmap.Clone(),
+			cmn.NotifCache, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+		WorkersCnt: msg.WorkersCnt,
+		Targets:    targets,
 	}
 	return nl, nil
 }
