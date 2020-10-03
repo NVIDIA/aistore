@@ -52,14 +52,16 @@ type (
 	}
 	bmdOwner interface {
 		sync.Locker
-		init()
-		put(bmd *bucketMD)
-		get() (bmd *bucketMD)
 		Get() *cluster.BMD
+
+		init()
+		get() (bmd *bucketMD)
+		put(bmd *bucketMD)
+		modify(pre func(clone *bucketMD) (bool, error), post ...func(clone *bucketMD)) error
 	}
 	bmdOwnerBase struct {
 		sync.Mutex
-		bucketmd atomic.Pointer
+		bmd atomic.Pointer
 	}
 	bmdOwnerPrx struct {
 		bmdOwnerBase
@@ -186,13 +188,12 @@ func (m *bucketMD) marshal() []byte {
 // bmdOwnerBase //
 //////////////////
 
-func (bo *bmdOwnerBase) _put(bucketmd *bucketMD) {
-	bucketmd.vstr = strconv.FormatInt(bucketmd.Version, 10)
-	bo.bucketmd.Store(unsafe.Pointer(bucketmd))
+func (bo *bmdOwnerBase) Get() *cluster.BMD    { return &bo.get().BMD }
+func (bo *bmdOwnerBase) get() (bmd *bucketMD) { return (*bucketMD)(bo.bmd.Load()) }
+func (bo *bmdOwnerBase) _put(bmd *bucketMD) {
+	bmd.vstr = strconv.FormatInt(bmd.Version, 10)
+	bo.bmd.Store(unsafe.Pointer(bmd))
 }
-
-func (bo *bmdOwnerBase) Get() *cluster.BMD         { return &bo.get().BMD }
-func (bo *bmdOwnerBase) get() (bucketmd *bucketMD) { return (*bucketMD)(bo.bucketmd.Load()) }
 
 /////////////////
 // bmdOwnerPrx //
@@ -217,6 +218,22 @@ func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
 	if err != nil {
 		glog.Errorf("failed to write %s as %s, err: %v", bmdTermName, bo.fpath, err)
 	}
+}
+
+func (bo *bmdOwnerPrx) modify(pre func(clone *bucketMD) (bool, error), post ...func(clone *bucketMD)) error {
+	bo.Lock()
+	defer bo.Unlock()
+	clone := bo.get().clone()
+	if cont, err := pre(clone); err != nil {
+		return err
+	} else if !cont {
+		return nil
+	}
+	bo.put(clone)
+	if len(post) == 1 {
+		post[0](clone)
+	}
+	return nil
 }
 
 /////////////////
@@ -282,11 +299,13 @@ func (bo *bmdOwnerTgt) init() {
 
 func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	var (
-		avail, curr, prev = bo.find()
 		cnt               int
+		avail, curr, prev = bo.find()
 	)
+
 	bo._put(bmd)
-	// write new
+
+	// Write new `bmd` into available mountpaths.
 	for mpath := range avail {
 		fpath := filepath.Join(mpath, bmdFname)
 		if err := jsp.Save(fpath, bmd, jsp.CCSign()); err != nil {
@@ -303,7 +322,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 		glog.Errorf("failed to store %s (have zero copies)", bmdTermName)
 		return
 	}
-	// rename remaining prev
+	// Rename old BMDs and keep the for some time.
 	for mpath := range curr {
 		from := filepath.Join(mpath, bmdFname)
 		to := from + bmdFext
@@ -312,11 +331,17 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 		}
 		delete(prev, mpath)
 	}
-	// remove remaining older
+	// Remove old BMDs.
 	for mpath := range prev {
 		fpath := filepath.Join(mpath, bmdFname) + bmdFext
 		if err := os.Remove(fpath); err != nil {
 			glog.Errorf("failed to remove %s prev version, err: %v", bmdTermName, err)
 		}
 	}
+}
+
+func (bo *bmdOwnerTgt) modify(_ func(clone *bucketMD) (bool, error), _ ...func(clone *bucketMD)) error {
+	// Method should not be used on targets.
+	cmn.Assert(false)
+	return nil
 }

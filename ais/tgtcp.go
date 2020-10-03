@@ -587,9 +587,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		act = ", action " + msg.Action
 	}
 	glog.Infof("%s: %s cur=%s, new=%s%s%s", t.si, tag, bmd, newBMD, act, call)
-	//
-	// lock =======================
-	//
+
 	t.owner.bmd.Lock()
 	bmd = t.owner.bmd.get()
 	curVer = bmd.version()
@@ -661,7 +659,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		return false
 	})
 
-	t.owner.bmd.Unlock() // unlock ================
+	t.owner.bmd.Unlock()
 
 	if destroyErrs != "" {
 		// TODO: revisit error handling

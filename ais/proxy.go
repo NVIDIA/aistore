@@ -1383,27 +1383,26 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	glog.Warningf("%s: Cloud bucket %s properties have changed, resynchronizing...", p.si, bck)
 
-	p.owner.bmd.Lock()
-	bmd := p.owner.bmd.get()
-	bprops, present := bmd.Get(bck)
-	if !present {
-		p.owner.bmd.Unlock()
-		glog.Warningf("%s: Cloud bucket %s has been deleted, nothing to do", p.si, bck)
-		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+	err = p.owner.bmd.modify(func(clone *bucketMD) (bool, error) {
+		bprops, present := clone.Get(bck)
+		if !present {
+			return false, cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+		}
+		nprops = cmn.MergeCloudBckProps(bprops, cloudProps)
+		if nprops.Equal(bprops) {
+			glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, bck)
+			return false, nil
+		}
+		clone.set(bck, nprops)
+		return true, nil
+	}, func(clone *bucketMD) {
+		msg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActResyncBprops}, nil, clone)
+		_ = p.metasyncer.sync(revsPair{clone, msg})
+	})
+	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
-	nprops = cmn.MergeCloudBckProps(bprops, cloudProps)
-	if nprops.Equal(bprops) {
-		p.owner.bmd.Unlock()
-		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, bck)
-		return
-	}
-	clone := bmd.clone()
-	clone.set(bck, nprops)
-	p.owner.bmd.put(clone)
-	_ = p.metasyncer.sync(revsPair{clone, p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActResyncBprops}, nil, bmd)})
-	p.owner.bmd.Unlock()
 
 	p.bucketPropsToHdr(bck, w.Header())
 }
@@ -2092,25 +2091,23 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
-	p.owner.bmd.Lock()
-	defer p.owner.bmd.Unlock()
-	bmd := p.owner.bmd.get()
 	bck := cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, p.si); err != nil {
-		// Already removed via the the very first target calling here.
-		return
-	}
-	if bck.Props.Renamed == "" {
-		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, renamedBucket, *bck.Props)
-		p.owner.bmd.Unlock()
-		return
-	}
-	clone := bmd.clone()
-	clone.del(bck)
-	p.owner.bmd.put(clone)
-
-	msg := p.newAisMsgStr(cmn.ActRenameLB, nil, clone)
-	_ = p.metasyncer.sync(revsPair{clone, msg})
+	_ = p.owner.bmd.modify(func(clone *bucketMD) (bool, error) {
+		props, present := clone.Get(bck)
+		if !present {
+			// Already removed via the the very first target calling here.
+			return false, nil
+		}
+		if props.Renamed == "" {
+			glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, renamedBucket, *bck.Props)
+			return false, nil
+		}
+		clone.del(bck)
+		return true, nil
+	}, func(clone *bucketMD) {
+		msg := p.newAisMsgStr(cmn.ActRenameLB, nil, clone)
+		_ = p.metasyncer.sync(revsPair{clone, msg})
+	})
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
@@ -3686,11 +3683,10 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		}
 	}
 	rbmd.Version += 100
+
 	p.owner.bmd.Lock()
 	p.owner.bmd.put(rbmd)
-
 	_ = p.metasyncer.sync(revsPair{rbmd, p.newAisMsg(msg, nil, rbmd)})
-
 	p.owner.bmd.Unlock()
 }
 

@@ -7,6 +7,7 @@ package ais
 import (
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -270,19 +271,21 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	}
 	p.owner.smap.Unlock()
 
-	p.owner.bmd.Lock()
-	bmd := p.owner.bmd.get()
-	if bmd.Version == 0 {
-		clone := bmd.clone()
-		clone.Version = 1 // init BMD
-		clone.UUID = smap.UUID
-		p.owner.bmd.put(clone)
+	var (
+		wg  *sync.WaitGroup
+		bmd *bucketMD
+	)
+	_ = p.owner.bmd.modify(func(clone *bucketMD) (bool, error) {
+		if clone.Version == 0 {
+			clone.Version = 1 // init BMD
+			clone.UUID = smap.UUID
+		}
+		return true, nil
+	}, func(clone *bucketMD) {
+		msg := p.newAisMsgStr(metaction2, smap, clone)
+		wg = p.metasyncer.sync(revsPair{smap, msg}, revsPair{clone, msg})
 		bmd = clone
-	}
-	p.owner.bmd.Unlock()
-
-	msg := p.newAisMsgStr(metaction2, smap, bmd)
-	wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
+	})
 
 	// 6: started up as primary
 	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), bmd.StringEx())
