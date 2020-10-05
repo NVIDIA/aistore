@@ -62,6 +62,19 @@ type (
 		wg        sync.WaitGroup
 		running   atomic.Bool
 	}
+	smapModifier struct {
+		pre          func(ctx *smapModifier, clone *smapX) error
+		post         func(ctx *smapModifier, clone *smapX)
+		smap         *smapX
+		msg          *cmn.ActionMsg
+		nsi          *cluster.Snode
+		nid          string
+		sid          string
+		stage        int64
+		status       int
+		nonElectable bool
+		exists       bool
+	}
 )
 
 // interface guard
@@ -491,20 +504,19 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 	return nil
 }
 
-func (r *smapOwner) modify(pre func(clone *smapX) error, post ...func(clone *smapX)) error {
+func (r *smapOwner) modify(ctx *smapModifier) error {
 	r.Lock()
 	defer r.Unlock()
 	clone := r.get().clone()
-	if err := pre(clone); err != nil {
+	if err := ctx.pre(ctx, clone); err != nil {
 		return err
 	}
-
 	if err := r.persist(clone); err != nil {
-		glog.Errorf("failed to persist smap: %v", err)
+		glog.Errorf("failed to persist %s: %v", clone, err)
 	}
 	r.put(clone)
-	if len(post) == 1 {
-		post[0](clone)
+	if ctx.post != nil {
+		ctx.post(ctx, clone)
 	}
 	return nil
 }

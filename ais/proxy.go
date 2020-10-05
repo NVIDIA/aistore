@@ -55,7 +55,7 @@ type (
 		cloud   *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
 		primary struct {
 			sync.Mutex
-			rp  *httputil.ReverseProxy // requests that modify cluster-level metadata => current primary gateway
+			rp  *httputil.ReverseProxy // modify cluster-level md => current primary gateway
 			url string                 // URL of the current primary
 		}
 		nodes sync.Map // map of reverse proxies keyed by node DaemonIDs
@@ -2292,18 +2292,17 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if proxyID != newSmap.Primary.ID() {
+	primary := newSmap.Primary
+	if proxyID != primary.ID() {
 		p.invalmsghdlrf(w, r, "%s: proxy %s is not the primary, current %s", p.si, proxyID, newSmap.pp())
 		return
 	}
 
-	// notify metasync to cancel all pending sync requests
-	p.metasyncer.becomeNonPrimary()
+	p.metasyncer.becomeNonPrimary() // metasync to stop syncing and cancel all pending requests
 	p.owner.smap.put(newSmap)
-	res := p.registerToURL(newSmap.Primary.IntraControlNet.DirectURL, newSmap.Primary, cmn.DefaultTimeout, nil, false)
+	res := p.registerToURL(primary.IntraControlNet.DirectURL, primary, cmn.DefaultTimeout, nil, false)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.err.Error())
-		return
 	}
 }
 
@@ -2359,52 +2358,46 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		}
 		return
 	}
-
-	err = p.owner.smap.modify(func(clone *smapX) error {
-		clone.Primary = psi
-		return nil
-	})
-	cmn.AssertNoErr(err)
+	ctx := &smapModifier{pre: func(_ *smapModifier, clone *smapX) error { clone.Primary = psi; return nil }}
+	err = p.owner.smap.modify(ctx)
+	debug.AssertNoErr(err)
 }
 
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
-	smap := p.owner.smap.get()
-	err := p.owner.smap.modify(
-		func(clone *smapX) error {
-			if !clone.isPresent(p.si) {
-				cmn.Assertf(false, "This proxy %q must always be present in the %v", p.si.ID(), clone.pp())
-			}
-			// FIXME: may be premature at this point
-			if proxyIDToRemove != "" {
-				glog.Infof("%s: removing failed primary %s", p.si, proxyIDToRemove)
-				clone.delProxy(proxyIDToRemove)
-			}
-
-			clone.Primary = p.si
-			clone.Version += 100
-			delete(clone.IC, proxyIDToRemove)
-			clone.staffIC()
-			return nil
-		},
-		func(clone *smapX) {
-			bmd := p.owner.bmd.get()
-			rmd := p.owner.rmd.get()
-			if glog.V(3) {
-				glog.Infof("%s: distributing %s with newly elected primary (self)", p.si, clone)
-				glog.Infof("%s: distributing %s as well", p.si, bmd)
-				glog.Infof("%s: distributing %s as well", p.si, rmd)
-			}
-
-			msg := p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
-			_ = p.metasyncer.sync(
-				revsPair{clone, msg},
-				revsPair{bmd, msg},
-				revsPair{rmd, msg},
-			)
-			p.syncNewICOwners(smap, clone)
-		},
-	)
+	ctx := &smapModifier{
+		pre:  p._becomePre,
+		post: p._becomePost,
+		sid:  proxyIDToRemove,
+	}
+	err := p.owner.smap.modify(ctx)
 	cmn.AssertNoErr(err)
+}
+
+func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
+	ctx.smap = p.owner.smap.get()
+	if !clone.isPresent(p.si) {
+		cmn.Assertf(false, "%s must always be present in the %s", p.si, clone.pp())
+	}
+	// FIXME: may be premature at this point
+	if ctx.sid != "" {
+		glog.Infof("%s: removing failed primary %s", p.si, ctx.sid)
+		clone.delProxy(ctx.sid)
+	}
+
+	clone.Primary = p.si
+	clone.Version += 100
+	delete(clone.IC, ctx.sid)
+	clone.staffIC()
+	return nil
+}
+
+func (p *proxyrunner) _becomePost(ctx *smapModifier, clone *smapX) {
+	bmd := p.owner.bmd.get()
+	rmd := p.owner.rmd.get()
+	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
+	msg := p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
+	_ = p.metasyncer.sync(revsPair{clone, msg}, revsPair{bmd, msg}, revsPair{rmd, msg})
+	p.syncNewICOwners(ctx.smap, clone)
 }
 
 func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Request) {
@@ -2436,18 +2429,20 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	results := p.callAll(http.MethodPut, urlPath, nil, q)
 	for res := range results {
 		if res.err != nil {
-			p.invalmsghdlrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase", proxyid, res.err, res.si)
+			p.invalmsghdlrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase",
+				proxyid, res.err, res.si)
 			return
 		}
 	}
 
 	// (I.5) commit locally
-	err = p.owner.smap.modify(func(clone *smapX) error {
+	ctx := &smapModifier{pre: func(_ *smapModifier, clone *smapX) error {
 		clone.Primary = psi
 		p.metasyncer.becomeNonPrimary()
 		return nil
-	})
-	cmn.AssertNoErr(err)
+	}}
+	err = p.owner.smap.modify(ctx)
+	debug.AssertNoErr(err)
 
 	// (II) commit phase
 	q.Set(cmn.URLParamPrepare, "false")
@@ -2808,7 +2803,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		p.invalmsghdlrf(w, r, "%s: failed to %s %s - invalid IP address %v", p.si, tag, nsi, nsi.PublicNet.NodeIPAddr)
+		p.invalmsghdlrf(w, r, "%s: failed to %s %s - invalid IPv4 %v", p.si, tag, nsi, nsi.PublicNet.NodeIPAddr)
 		return
 	}
 
@@ -2880,7 +2875,8 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 					err = fmt.Errorf("failed to reach %s at %s:%s",
 						nsi, nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
 				} else {
-					err = fmt.Errorf("%s: failed to %s %s: %v, %s", p.si, tag, nsi, res.err, res.details)
+					err = fmt.Errorf("%s: failed to %s %s: %v, %s",
+						p.si, tag, nsi, res.err, res.details)
 				}
 				code = res.status
 				return
@@ -2906,70 +2902,72 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 }
 
 func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, nonElectable bool) {
-	var (
-		smap   *smapX
-		exists bool
-	)
-	err := p.owner.smap.modify(
-		func(clone *smapX) error {
-			smap = p.owner.smap.get()
-			if !smap.isPrimary(p.si) {
-				return fmt.Errorf("%s is not primary(%s, %s): cannot add %s",
-					p.si, smap.Primary, smap, nsi)
-			}
-			exists = clone.putNode(nsi, nonElectable)
-			if nsi.IsTarget() {
-				// Notify targets that they need to set up GFN
-				aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
-				notifyPairs := revsPair{clone, aisMsg}
-				_ = p.metasyncer.notify(true, notifyPairs)
-			}
-			clone.staffIC()
-			return nil
-		},
-		func(clone *smapX) {
-			var (
-				tokens = p.authn.revokedTokenList()
-				bmd    = p.owner.bmd.get()
-				nl     nl.NotifListener
-			)
-			// metasync
-			aisMsg := p.newAisMsg(msg, clone, bmd)
-			pairs := []revsPair{{clone, aisMsg}, {bmd, aisMsg}}
-			if nsi.IsTarget() {
-				// Trigger rebalance (in case target with given ID already exists
-				// we must trigger the rebalance and assume it is a new target
-				// with the same ID).
-				if exists || p.requiresRebalance(smap, clone) {
-					rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
-						clone.TargetIDs = []string{nsi.ID()}
-						clone.inc()
-					})
-					pairs = append(pairs, revsPair{rmdClone, aisMsg})
-					nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(),
-						&clone.Smap, clone.Tmap, cmn.NotifXact, cmn.ActRebalance)
-					nl.SetOwner(equalIC)
-				}
-			} else {
-				// Send RMD to proxies to make sure that they have
-				// the latest one - newly joined can become primary in a second.
-				rmd := p.owner.rmd.get()
-				pairs = append(pairs, revsPair{rmd, aisMsg})
-			}
-			if len(tokens.Tokens) > 0 {
-				pairs = append(pairs, revsPair{tokens, aisMsg})
-			}
-			_ = p.metasyncer.sync(pairs...)
-			if nl != nil {
-				p.ic.registerEqual(regIC{smap: clone, nl: nl})
-			}
-			p.syncNewICOwners(smap, clone)
-		},
-	)
+	ctx := &smapModifier{
+		pre:          p._updPre,
+		post:         p._updPost,
+		nsi:          nsi,
+		msg:          msg,
+		nonElectable: nonElectable,
+	}
+	err := p.owner.smap.modify(ctx)
 	if err != nil {
 		glog.Errorf("FATAL: %v", err)
 		return
 	}
+}
+
+func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
+	ctx.smap = p.owner.smap.get()
+	if !ctx.smap.isPrimary(p.si) {
+		return fmt.Errorf("%s is not primary(%s, %s): cannot add %s", p.si, ctx.smap.Primary, ctx.smap, ctx.nsi)
+	}
+	ctx.exists = clone.putNode(ctx.nsi, ctx.nonElectable)
+	if ctx.nsi.IsTarget() {
+		// Notify targets that they need to set up GFN
+		aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
+		notifyPairs := revsPair{clone, aisMsg}
+		_ = p.metasyncer.notify(true, notifyPairs)
+	}
+	clone.staffIC()
+	return nil
+}
+
+func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
+	var (
+		tokens = p.authn.revokedTokenList()
+		bmd    = p.owner.bmd.get()
+		aisMsg = p.newAisMsg(ctx.msg, clone, bmd)
+		pairs  = []revsPair{{clone, aisMsg}, {bmd, aisMsg}}
+		nl     nl.NotifListener
+	)
+	if ctx.nsi.IsTarget() {
+		// Trigger rebalance (in case target with given ID already exists
+		// we must trigger the rebalance and assume it is a new target
+		// with the same ID).
+		if ctx.exists || p.requiresRebalance(ctx.smap, clone) {
+			rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
+				clone.TargetIDs = []string{ctx.nsi.ID()}
+				clone.inc()
+			})
+			pairs = append(pairs, revsPair{rmdClone, aisMsg})
+			nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(),
+				&clone.Smap, clone.Tmap, cmn.NotifXact, cmn.ActRebalance)
+			nl.SetOwner(equalIC)
+		}
+	} else {
+		// Send RMD to proxies to make sure that they have
+		// the latest one - newly joined can become primary in a second.
+		rmd := p.owner.rmd.get()
+		pairs = append(pairs, revsPair{rmd, aisMsg})
+	}
+	if len(tokens.Tokens) > 0 {
+		pairs = append(pairs, revsPair{tokens, aisMsg})
+	}
+	_ = p.metasyncer.sync(pairs...)
+	if nl != nil {
+		p.ic.registerEqual(regIC{smap: clone, nl: nl})
+	}
+	p.syncNewICOwners(ctx.smap, clone)
 }
 
 func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) bool {
@@ -3029,38 +3027,41 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, sid, nil) {
 		return
 	}
-
-	var status int
-	err = p.owner.smap.modify(
-		func(clone *smapX) error {
-			smap = p.owner.smap.get()
-			status, err = p.unregisterNode(clone, sid)
-			return err
-		},
-		func(clone *smapX) {
-			var (
-				aisMsg = p.newAisMsg(msg, clone, nil)
-				pairs  = []revsPair{{clone, aisMsg}}
-				nl     nl.NotifListener
-			)
-			if p.requiresRebalance(smap, clone) {
-				rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
-					clone.inc()
-				})
-				pairs = append(pairs, revsPair{rmdClone, aisMsg})
-				nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &clone.Smap,
-					clone.Tmap, cmn.NotifXact, cmn.ActRebalance)
-				nl.SetOwner(equalIC)
-			}
-			_ = p.metasyncer.sync(pairs...)
-			if nl != nil {
-				p.ic.registerEqual(regIC{smap: clone, nl: nl})
-			}
-		},
-	)
+	ctx := &smapModifier{
+		pre:  p._unregNodePre,
+		post: p._unregNodePost,
+		msg:  msg,
+		sid:  sid}
+	err = p.owner.smap.modify(ctx)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), status)
-		return
+		p.invalmsghdlr(w, r, err.Error(), ctx.status)
+	}
+}
+
+func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) (err error) {
+	ctx.smap = p.owner.smap.get()
+	ctx.status, err = p.unregisterNode(clone, ctx.sid)
+	return err
+}
+
+func (p *proxyrunner) _unregNodePost(ctx *smapModifier, clone *smapX) {
+	var (
+		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
+		pairs  = []revsPair{{clone, aisMsg}}
+		nl     nl.NotifListener
+	)
+	if p.requiresRebalance(ctx.smap, clone) {
+		rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
+			clone.inc()
+		})
+		pairs = append(pairs, revsPair{rmdClone, aisMsg})
+		nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &clone.Smap,
+			clone.Tmap, cmn.NotifXact, cmn.ActRebalance)
+		nl.SetOwner(equalIC)
+	}
+	_ = p.metasyncer.sync(pairs...)
+	if nl != nil {
+		p.ic.registerEqual(regIC{smap: clone, nl: nl})
 	}
 }
 
@@ -3140,21 +3141,28 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, si *cluster.Snode) error {
-	err := p.owner.smap.modify(
-		func(clone *smapX) error {
-			_, err := p.unregisterNode(clone, si.ID())
-			return err
-		},
-		func(clone *smapX) {
-			var (
-				aisMsg = p.newAisMsg(msg, clone, nil)
-				pairs  = []revsPair{{clone, aisMsg}}
-			)
-			_ = p.metasyncer.sync(pairs...)
-		},
+func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, si *cluster.Snode) (err error) {
+	ctx := &smapModifier{
+		pre:  p._remnPre,
+		post: p._remnPost,
+		sid:  si.ID(),
+		msg:  msg,
+	}
+	err = p.owner.smap.modify(ctx)
+	return
+}
+
+func (p *proxyrunner) _remnPre(ctx *smapModifier, clone *smapX) (err error) {
+	_, err = p.unregisterNode(clone, ctx.sid)
+	return
+}
+
+func (p *proxyrunner) _remnPost(ctx *smapModifier, clone *smapX) {
+	var (
+		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
+		pairs  = []revsPair{{clone, aisMsg}}
 	)
-	return err
+	_ = p.metasyncer.sync(pairs...)
 }
 
 // Put a node under maintenance
@@ -3168,12 +3176,13 @@ func (p *proxyrunner) markMaintenance(si *cluster.Snode, action string) error {
 	default:
 		return fmt.Errorf("invalid action: %s", action)
 	}
-	return p.owner.smap.modify(
-		func(clone *smapX) error {
-			clone.startMaintenance(si.ID(), stage)
-			return nil
-		},
-	)
+	ctx := &smapModifier{pre: p._markMaint, sid: si.ID(), stage: stage}
+	return p.owner.smap.modify(ctx)
+}
+
+func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
+	clone.startMaintenance(ctx.sid, ctx.stage)
+	return nil
 }
 
 // Callback: remove the node from the cluster if rebalance finished successfully
@@ -3229,11 +3238,12 @@ func (p *proxyrunner) cancelMaintenance(opts *cmn.ActValDecommision) error {
 			}
 		}
 	}
+	ctx := &smapModifier{pre: p._cancelMaint, sid: opts.DaemonID}
+	return p.owner.smap.modify(ctx)
+}
 
-	err := p.owner.smap.modify(func(clone *smapX) error {
-		return clone.stopMaintenance(opts.DaemonID)
-	})
-	return err
+func (p *proxyrunner) _cancelMaint(ctx *smapModifier, clone *smapX) error {
+	return clone.stopMaintenance(ctx.sid)
 }
 
 func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
@@ -3266,10 +3276,12 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		results := p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Daemon), cmn.MustMarshal(msg)) // same message -> all targets and proxies
+		// same message -> all targets and proxies
+		results := p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Daemon), cmn.MustMarshal(msg))
 		for res := range results {
 			if res.err != nil {
-				p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, res.details)
+				p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s",
+					msg.Action, msg.Name, value, res.details)
 				p.keepalive.onerr(err, res.status)
 				return
 			}
@@ -3465,7 +3477,8 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		results := p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.ActSetConfig), nil, query)
+		results := p.callAll(http.MethodPut,
+			cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.ActSetConfig), nil, query)
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
@@ -3597,8 +3610,9 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		return
 	}
 	var (
+		path    = cmn.JoinWords(cmn.Version, cmn.Buckets, cmn.AllBuckets)
 		results = p.bcastToGroup(bcastArgs{
-			req:     cmn.ReqArgs{Method: http.MethodGet, Path: cmn.JoinWords(cmn.Version, cmn.Buckets, cmn.AllBuckets)},
+			req:     cmn.ReqArgs{Method: http.MethodGet, Path: path},
 			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 			fv:      func() interface{} { return &bucketMD{} },
 		})
@@ -3873,13 +3887,15 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	}
 	for u, lst := range mlist {
 		if l == len(lst) && u != uuid {
-			s := fmt.Sprintf("%s: BMDs have different uuids with no simple majority:\n%v", ciError(60), mlist)
+			s := fmt.Sprintf("%s: BMDs have different uuids with no simple majority:\n%v",
+				ciError(60), mlist)
 			return nil, &errBmdUUIDSplit{s}
 		}
 	}
 	var err error
 	if len(mlist) > 1 {
-		s := fmt.Sprintf("%s: BMDs have different uuids with simple majority: %s:\n%v", ciError(70), uuid, mlist)
+		s := fmt.Sprintf("%s: BMDs have different uuids with simple majority: %s:\n%v",
+			ciError(70), uuid, mlist)
 		err = &errTgtBmdUUIDDiffer{s}
 	}
 	bmd := maxor[uuid]

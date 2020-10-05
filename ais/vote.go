@@ -478,31 +478,40 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Voteres); err != nil {
 		return
 	}
-
 	msg := VoteResultMessage{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-
 	vr := msg.Result
-	glog.Infof("%s: received vote result: new primary %s", h.si, vr.Candidate)
+	glog.Infof("%s: received vote result: new primary %s (old %s)", h.si, vr.Candidate, vr.Primary)
 
-	newPrimary, oldPrimary := vr.Candidate, vr.Primary
-	err := h.owner.smap.modify(func(clone *smapX) error {
-		psi := clone.GetProxy(newPrimary)
-		if psi == nil {
-			return &errNodeNotFound{"cannot accept new primary election", newPrimary, h.si, clone}
-		}
-		clone.Primary = psi
-		if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {
-			clone.delProxy(oldPrimary)
-		}
-		glog.Infof("resulting %s", clone.pp())
-		return nil
-	})
+	ctx := &smapModifier{
+		pre: h._votedPrimary,
+		nid: vr.Candidate,
+		sid: vr.Primary,
+	}
+	err := h.owner.smap.modify(ctx)
 	if err != nil {
 		h.invalmsghdlr(w, r, err.Error())
 	}
+}
+
+func (h *httprunner) _votedPrimary(ctx *smapModifier, clone *smapX) error {
+	newPrimary, oldPrimary := ctx.nid, ctx.sid
+	psi := clone.GetProxy(newPrimary)
+	if psi == nil {
+		return &errNodeNotFound{"cannot accept new primary election", newPrimary, h.si, clone}
+	}
+	clone.Primary = psi
+	if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {
+		clone.delProxy(oldPrimary)
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: voted-primary result: %s", h.si, clone.pp())
+	} else {
+		glog.Infof("%s: voted-primary result: %s", h.si, clone)
+	}
+	return nil
 }
 
 func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) error {

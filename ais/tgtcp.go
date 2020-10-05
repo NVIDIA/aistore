@@ -249,28 +249,29 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	smap := t.owner.smap.get()
-	psi := smap.GetProxy(proxyID)
-	if psi == nil {
-		err := &errNodeNotFound{"cannot set new primary", proxyID, t.si, smap}
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
 	if prepare {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
 		}
 		return
 	}
+	ctx := &smapModifier{pre: t._setPrim, sid: proxyID}
+	err = t.owner.smap.modify(ctx)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+	}
+}
 
-	err = t.owner.smap.modify(func(clone *smapX) error {
-		if clone.Primary.ID() != psi.ID() {
-			clone.Primary = psi
-		}
-		return nil
-	})
-	cmn.AssertNoErr(err)
+func (t *targetrunner) _setPrim(ctx *smapModifier, clone *smapX) (err error) {
+	if clone.Primary.ID() == ctx.sid {
+		return
+	}
+	psi := clone.GetProxy(ctx.sid)
+	if psi == nil {
+		return &errNodeNotFound{"cannot set new primary", ctx.sid, t.si, clone}
+	}
+	clone.Primary = psi
+	return
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
