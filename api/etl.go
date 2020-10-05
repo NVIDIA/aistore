@@ -74,6 +74,7 @@ func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w 
 
 func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2BckMsg) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
+	bckMsg.BckTo = toBck
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, fromBck.Name),

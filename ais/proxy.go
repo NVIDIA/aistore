@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
@@ -925,31 +926,76 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		bckFrom, bucketTo := bck, msg.Name
-		if bucket == bucketTo {
+		if msg.Value == nil {
+			p.invalmsghdlr(w, r, "request body can't be empty", http.StatusBadRequest)
+			return
+		}
+
+		var (
+			internalMsg = &cmn.Bck2BckMsg{}
+			errCode     int
+			bckTo       *cluster.Bck
+		)
+
+		switch msg.Action {
+		case cmn.ActETLBucket:
+			if err := cmn.MorphMarshal(msg.Value, internalMsg); err != nil {
+				p.invalmsghdlr(w, r, "request body can't be empty", http.StatusBadRequest)
+				return
+			}
+
+			if internalMsg.ID == "" {
+				p.invalmsghdlr(w, r, etl.ErrMissingUUID.Error(), http.StatusBadRequest)
+				return
+			}
+		case cmn.ActCopyBucket:
+			cpyBckMsg := &cmn.CopyBckMsg{}
+			if err = cmn.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
+				return
+			}
+			internalMsg.BckTo = cpyBckMsg.BckTo
+			internalMsg.DryRun = cpyBckMsg.DryRun
+			internalMsg.Prefix = cpyBckMsg.Prefix
+		}
+
+		bckFrom, msgBckTo := bck, cluster.NewBckEmbed(internalMsg.BckTo)
+		msg.Value = internalMsg
+
+		if bckFrom.Equal(msgBckTo, false, true) {
 			p.invalmsghdlrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bucket)
 			return
 		}
-		if err := cmn.ValidateBckName(bucketTo); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
 
-		// NOTE: destination MUST be AIS; TODO: support destination namespace via API
-		bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
+		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, msgBckTo)
 
-		bmd := p.owner.bmd.get()
-		if _, present := bmd.Get(bckTo); present {
-			if err = bckTo.Init(p.owner.bmd, p.si); err == nil {
-				if err = bckTo.Allow(cmn.AccessSYNC); err != nil {
-					p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
-					return
-				}
+		bckToArgs := remBckAddArgs{p: p, w: w, r: r, queryBck: msgBckTo}
+		if bckTo, err, errCode = bckToArgs.tryBckInitWithErr(msgBckTo.Name); err != nil {
+			if err == cmn.ErrForwarded {
+				return
+			}
+			if _, ok := err.(*cmn.ErrorBucketDoesNotExist); !ok {
+				p.invalmsghdlr(w, r, err.Error(), errCode)
+				return
 			}
 		}
+
+		if bckTo != nil {
+			if err = bckTo.Allow(cmn.AccessSYNC); err != nil {
+				p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+				return
+			}
+
+			if bckTo.IsHTTP() {
+				p.invalmsghdlr(w, r, "copying to HTTP buckets not supported")
+				return
+			}
+		} else {
+			// It is a non existing ais bucket.
+			bckTo = msgBckTo
+		}
+
 		var xactID string
-		if xactID, err = p.bucketToBucketTxn(bckFrom, bckTo, &msg); err != nil {
+		if xactID, err = p.bucketToBucketTxn(bckFrom, bckTo, &msg, internalMsg.DryRun); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3741,6 +3787,8 @@ func (args *remBckAddArgs) tryBckInitWithErr(bucket string, origURLBck ...string
 		if err != nil {
 			return bck, err, http.StatusBadRequest
 		}
+	} else {
+		bck = args.queryBck
 	}
 
 	if err = bck.Init(args.p.owner.bmd, args.p.si); err != nil {

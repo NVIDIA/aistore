@@ -172,15 +172,16 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 // CopyBucket creates a new AIS bucket `toBck` and copies into it contents of
 // the existing `fromBck` bucket.
 func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.CopyBckMsg) (xactID string, err error) {
-	var msg *cmn.CopyBckMsg
-	if len(msgs) > 0 {
+	msg := &cmn.CopyBckMsg{}
+	if len(msgs) > 0 && msgs[0] != nil {
 		msg = msgs[0]
 	}
+	msg.BckTo = toBck
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Name: toBck.Name, Value: msg}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Value: msg}),
 	}, &xactID)
 	return
 }

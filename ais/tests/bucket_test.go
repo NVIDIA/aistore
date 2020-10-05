@@ -1808,31 +1808,39 @@ func TestRenameBucketTwice(t *testing.T) {
 
 func TestCopyBucket(t *testing.T) {
 	tests := []struct {
-		cloud            bool
+		srcCloud         bool
+		dstCloud         bool
 		dstBckExist      bool // determines if destination bucket exists before copy or not
 		dstBckHasObjects bool // determines if destination bucket contains any objects before copy or not
 		multipleDests    bool // determines if there are multiple destinations to which objects are copied
 	}{
-		// ais
-		{cloud: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: false},
-		{cloud: false, dstBckExist: true, dstBckHasObjects: false, multipleDests: false},
-		{cloud: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: false},
-		{cloud: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
-		{cloud: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+		// ais -> ais
+		{srcCloud: false, dstCloud: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: false},
+		{srcCloud: false, dstCloud: false, dstBckExist: true, dstBckHasObjects: false, multipleDests: false},
+		{srcCloud: false, dstCloud: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: false},
+		{srcCloud: false, dstCloud: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
+		{srcCloud: false, dstCloud: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 
-		// cloud
-		{cloud: true, dstBckExist: false, dstBckHasObjects: false},
-		{cloud: true, dstBckExist: true, dstBckHasObjects: false},
-		{cloud: true, dstBckExist: true, dstBckHasObjects: true},
-		{cloud: true, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
-		{cloud: true, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+		// cloud -> ais
+		{srcCloud: true, dstCloud: false, dstBckExist: false, dstBckHasObjects: false},
+		{srcCloud: true, dstCloud: false, dstBckExist: true, dstBckHasObjects: false},
+		{srcCloud: true, dstCloud: false, dstBckExist: true, dstBckHasObjects: true},
+		{srcCloud: true, dstCloud: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
+		{srcCloud: true, dstCloud: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+
+		// ais -> cloud
+		{srcCloud: false, dstCloud: true, dstBckExist: true, dstBckHasObjects: false},
 	}
 
 	for _, test := range tests {
 		// Bucket must exist when we require it to have objects.
 		cmn.Assert(test.dstBckExist || !test.dstBckHasObjects)
 
-		testName := fmt.Sprintf("cloud=%t/", test.cloud)
+		// We only have 1 cloud bucket available (cliBck), coping from the same bucket to the same bucket would fail.
+		// TODO: remove this limitation and add cloud -> cloud test cases.
+		cmn.Assert(!test.srcCloud || !test.dstCloud)
+
+		testName := fmt.Sprintf("src-cloud=%t/dst-cloud=%t/", test.srcCloud, test.dstCloud)
 		if test.dstBckExist {
 			testName += "present/"
 			if test.dstBckHasObjects {
@@ -1884,17 +1892,34 @@ func TestCopyBucket(t *testing.T) {
 				})
 			}
 			bckTest := cmn.Bck{Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-			if test.cloud {
+			if test.srcCloud {
 				srcm.bck = cliBck
 				bckTest.Provider = cliBck.Provider
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: srcm.bck})
 			}
+			if test.dstCloud {
+				dstms = []*ioContext{
+					{
+						t:   t,
+						num: 0, // Make sure to not put anything new to destination cloud bucket
+						bck: cliBck,
+					},
+				}
+				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: dstms[0].bck})
+			}
 
 			// Initialize ioContext
 			srcm.saveClusterState()
+
 			for _, dstm := range dstms {
 				dstm.init()
+
+				if dstm.bck.IsCloud() {
+					// Remove unnecessary local objects.
+					tassert.CheckFatal(t, api.EvictCloudBucket(baseParams, dstm.bck))
+				}
 			}
+
 			if srcm.originalTargetCount < 1 {
 				t.Fatalf("Must have 1 or more targets in the cluster, have only %d", srcm.originalTargetCount)
 			}
@@ -1906,18 +1931,33 @@ func TestCopyBucket(t *testing.T) {
 
 			if test.dstBckExist {
 				for _, dstm := range dstms {
-					tutils.CreateFreshBucket(t, dstm.proxyURL, dstm.bck)
-					dstm.setRandBucketProps()
+					if !dstm.bck.IsCloud() {
+						tutils.CreateFreshBucket(t, dstm.proxyURL, dstm.bck)
+						dstm.setRandBucketProps()
+					}
 				}
 			} else { // cleanup
 				for _, dstm := range dstms {
-					tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
+					if !dstm.bck.IsCloud() {
+						tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
+					}
 				}
 			}
 
 			defer func() {
 				for _, dstm := range dstms {
-					tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
+					if !dstm.bck.IsCloud() {
+						tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
+					} else {
+						msg := &cmn.SelectMsg{Flags: cmn.SelectCached}
+						entries, err := api.ListObjects(baseParams, dstm.bck, msg, 0)
+						tassert.CheckFatal(t, err)
+						for _, e := range entries.Entries {
+							if err := api.DeleteObject(baseParams, dstm.bck, e.Name); err != nil {
+								tutils.Logf("failed to delete object %s/%s", dstm.bck, e.Name)
+							}
+						}
+					}
 				}
 			}()
 
@@ -1926,7 +1966,10 @@ func TestCopyBucket(t *testing.T) {
 
 			if test.dstBckHasObjects {
 				for _, dstm := range dstms {
-					dstm.puts()
+					// Don't make PUTs to cloud bucket
+					if !dstm.bck.IsCloud() {
+						dstm.puts()
+					}
 				}
 			}
 
@@ -1959,8 +2002,12 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			}
 
-			tutils.Logln("checking and comparing bucket props")
 			for _, dstm := range dstms {
+				if dstm.bck.IsCloud() {
+					continue
+				}
+
+				tutils.Logf("checking and comparing bucket %s props\n", dstm.bck)
 				dstProps, err := api.HeadBucket(baseParams, dstm.bck)
 				tassert.CheckFatal(t, err)
 
@@ -1985,15 +2032,21 @@ func TestCopyBucket(t *testing.T) {
 				}
 			}
 
-			tutils.Logln("checking and comparing objects")
-
 			for _, dstm := range dstms {
+				tutils.Logf("checking and comparing objects of bucket %s\n", dstm.bck)
 				expectedObjCount := srcm.num
 				if test.dstBckHasObjects {
 					expectedObjCount += dstm.num
 				}
 
-				dstBckList, err := api.ListObjects(baseParams, dstm.bck, nil, 0)
+				_, err := api.HeadBucket(baseParams, srcm.bck)
+				tassert.CheckFatal(t, err)
+
+				msg := &cmn.SelectMsg{}
+				if test.dstCloud {
+					msg.Flags = cmn.SelectCached
+				}
+				dstBckList, err := api.ListObjects(baseParams, dstm.bck, msg, 0)
 				tassert.CheckFatal(t, err)
 				if len(dstBckList.Entries) != expectedObjCount {
 					t.Fatalf("list_objects: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)

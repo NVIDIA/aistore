@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -424,11 +423,9 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 // copy-bucket/offline ETL:
 // { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
-func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
-	var (
-		nmsg        = &cmn.ActionMsg{} // + bckTo
-		internalMsg *bck2BckInternalMsg
-	)
+func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
+	cmn.Assert(!bckTo.IsHTTP())
+	cmn.Assert(msg.Value != nil)
 
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
@@ -437,40 +434,9 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 		return
 	}
 
-	*nmsg = *msg
-	switch msg.Action {
-	case cmn.ActETLBucket:
-		if msg.Value == nil {
-			return "", fmt.Errorf("request body should not be empty")
-		}
-		bck2BckMsg := &cmn.Bck2BckMsg{}
-		if err := cmn.MorphMarshal(msg.Value, bck2BckMsg); err != nil {
-			return "", err
-		}
-		if bck2BckMsg.ID == "" {
-			return "", etl.ErrMissingUUID
-		}
-		internalMsg = &bck2BckInternalMsg{BckTo: bckTo.Bck, Bck2BckMsg: *bck2BckMsg}
-	case cmn.ActCopyBucket:
-		cpyBckMsg := &cmn.CopyBckMsg{}
-		if err = cmn.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
-			return
-		}
-		internalMsg = &bck2BckInternalMsg{
-			BckTo: bckTo.Bck,
-			Bck2BckMsg: cmn.Bck2BckMsg{
-				Prefix: cpyBckMsg.Prefix,
-				DryRun: cpyBckMsg.DryRun,
-			},
-		}
-	}
-
-	cmn.Assert(internalMsg != nil)
-	nmsg.Value = internalMsg
-
 	// 2. begin
 	var (
-		c       = p.prepTxnClient(nmsg, bckFrom)
+		c       = p.prepTxnClient(msg, bckFrom)
 		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
 	for res := range results {
@@ -490,10 +456,11 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 		cmn.Assert(present)
 
 		// Skip destination bucket creation if it's dry run or it's already present.
-		if _, present = clone.Get(bckTo); internalMsg.DryRun || present {
+		if _, present = clone.Get(bckTo); dryRun || present {
 			return false, nil
 		}
 
+		cmn.Assert(!bckTo.IsRemote())
 		bckFrom.Props = bprops.Clone()
 		bckTo.Props = bprops.Clone()
 		added := clone.add(bckTo, bckTo.Props)

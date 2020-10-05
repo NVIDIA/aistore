@@ -227,7 +227,7 @@ Creates an ais bucket with a given name
 Error from AIStore in completing the request
 ___
 
-#### CopyLocalBucket
+#### CopyBucket
 Create new bucket and copy into it all objects from the existing (old) one
 
 ##### Parameters

@@ -86,7 +86,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActCopyBucket, cmn.ActETLBucket:
-		bck2BckMsg := &bck2BckInternalMsg{}
+		bck2BckMsg := &cmn.Bck2BckMsg{}
 		if err = cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
@@ -416,7 +416,8 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 // transferBucket //
 ////////////////////
 
-func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMsg, dps ...cluster.LomReaderProvider) error {
+func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMsg,
+	dps ...cluster.LomReaderProvider) error {
 	var dp cluster.LomReaderProvider
 	if len(dps) > 0 {
 		dp = dps[0]
@@ -458,7 +459,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *bck2BckIntern
 			}
 		}
 
-		txn := newTxnTransferBucket(c, bckFrom, bckTo, dm, dp, &bck2BckMsg.Bck2BckMsg)
+		txn := newTxnTransferBucket(c, bckFrom, bckTo, dm, dp, bck2BckMsg)
 		if err := t.transactions.begin(txn); err != nil {
 			dm.UnregRecv()
 			if nlpTo != nil {
@@ -520,7 +521,7 @@ func (t *targetrunner) validateTransferBckTxn(bckFrom *cluster.Bck, action strin
 
 // etlBucket uses transferBucket xaction to transform the whole bucket. The only difference is that instead of copying the
 // same bytes, it creates a reader based on given ETL transformation.
-func (t *targetrunner) etlBucket(c *txnServerCtx, msg *bck2BckInternalMsg) (err error) {
+func (t *targetrunner) etlBucket(c *txnServerCtx, msg *cmn.Bck2BckMsg) (err error) {
 	if err := k8s.Detect(); err != nil {
 		return err
 	}
@@ -529,7 +530,7 @@ func (t *targetrunner) etlBucket(c *txnServerCtx, msg *bck2BckInternalMsg) (err 
 	}
 	var dp cluster.LomReaderProvider
 
-	if dp, err = etl.NewOfflineDataProvider(&msg.Bck2BckMsg); err != nil {
+	if dp, err = etl.NewOfflineDataProvider(msg); err != nil {
 		return nil
 	}
 
