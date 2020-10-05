@@ -412,6 +412,7 @@ func (m *smapX) startMaintenance(sid string, stage int64) {
 	if m.GetNode(sid) == nil {
 		cmn.Assertf(false, "FATAL: node: %s is not in: %s", sid, m)
 	}
+	delete(m.IC, sid)
 	m.Maintenance[sid] = stage
 	m.Version++
 }

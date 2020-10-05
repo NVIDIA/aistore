@@ -3228,6 +3228,7 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 
 func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
 	clone.startMaintenance(ctx.sid, ctx.stage)
+	clone.staffIC()
 	return nil
 }
 
@@ -3289,7 +3290,11 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDeco
 }
 
 func (p *proxyrunner) _cancelMaint(ctx *smapModifier, clone *smapX) error {
-	return clone.stopMaintenance(ctx.sid)
+	err := clone.stopMaintenance(ctx.sid)
+	if err == nil {
+		clone.staffIC()
+	}
+	return err
 }
 
 func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
