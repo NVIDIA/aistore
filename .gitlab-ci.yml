@@ -136,7 +136,7 @@ test:cloud:
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
     NUM_PROXY: 6
   script:
-    - echo -e "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo y; echo n; })
     - BUCKET="gs://ais-ci" make test-long
     - BUCKET="aws://ais-ci" make test-long
