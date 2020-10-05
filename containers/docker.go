@@ -23,9 +23,7 @@ const (
 	pattern   = "^\"" + prefixStr + "\\d+" + proxyStr + "[1-9]+\"$" // Checking '_proxy_' should suffice
 )
 
-var (
-	dockerRunning = false
-)
+var dockerRunning = false
 
 // Detect docker cluster at startup
 func init() {

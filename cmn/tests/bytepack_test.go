@@ -35,6 +35,7 @@ func (p *pck) Pack(wr *cmn.BytePack) {
 		wr.WriteAny(p.parent)
 	}
 }
+
 func (p *pck) Unpack(rd *cmn.ByteUnpack) error {
 	var (
 		err    error
@@ -69,6 +70,7 @@ func (p *pck) Unpack(rd *cmn.ByteUnpack) error {
 	}
 	return nil
 }
+
 func (p *pck) PackedSize() int {
 	//    id              name&data len
 	sz := cmn.SizeofI64 + cmn.SizeofLen*2 +

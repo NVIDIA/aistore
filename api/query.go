@@ -41,9 +41,7 @@ func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filte
 }
 
 func NextQueryResults(baseParams BaseParams, handle string, size uint) ([]*cmn.BucketEntry, error) {
-	var (
-		objectsNames []*cmn.BucketEntry
-	)
+	var objectsNames []*cmn.BucketEntry
 
 	baseParams.Method = http.MethodGet
 	err := DoHTTPRequest(ReqParams{

@@ -18,9 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/tutils/readers"
 )
 
-var (
-	mmsa *memsys.MMSA
-)
+var mmsa *memsys.MMSA
 
 func init() {
 	mmsa = memsys.DefaultPageMM()

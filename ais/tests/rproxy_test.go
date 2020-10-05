@@ -33,10 +33,8 @@ const (
 	gcsTmpFile  = "/tmp/rproxy_test_download.tiff"
 )
 
-var (
-	// reformat object name from XML to JSON API requirements
-	gcsObjJSON = strings.ReplaceAll(gcsObjXML, "/", "%2F")
-)
+// reformat object name from XML to JSON API requirements
+var gcsObjJSON = strings.ReplaceAll(gcsObjXML, "/", "%2F")
 
 // search for the full path of cached object
 func pathForCached() string {

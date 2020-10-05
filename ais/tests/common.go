@@ -560,8 +560,10 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		},
 		{
 			name: "remote",
-			bck: cmn.Bck{Name: cmn.RandString(10),
-				Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID}},
+			bck: cmn.Bck{
+				Name:     cmn.RandString(10),
+				Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
+			},
 			skipArgs: tutils.SkipTestArgs{
 				RequiresRemote: true,
 			},
@@ -713,7 +715,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 	for i := 0; i < len(letters); i++ {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
-		var msg = &cmn.SelectMsg{Prefix: lookFor}
+		msg := &cmn.SelectMsg{Prefix: lookFor}
 		objList, err := api.ListObjects(baseParams, bck, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
@@ -750,13 +752,11 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck) {
 		{"dir1", "dir1", 2},
 		{"dir1/", "dir1/", 2},
 	}
-	var (
-		baseParams = tutils.BaseAPIParams(proxyURL)
-	)
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
 		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
-		var msg = &cmn.SelectMsg{Prefix: p}
+		msg := &cmn.SelectMsg{Prefix: p}
 		objList, err := api.ListObjects(baseParams, bck, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)

@@ -12,11 +12,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-var (
-	// It is 2019-01-01, midnight in UnixNano. Used as creation date
-	// for buckets that do not have creation date(created with older AIS)
-	defaultDate = time.Unix(0, 1546300800000000000)
-)
+// It is 2019-01-01, midnight in UnixNano. Used as creation date
+// for buckets that do not have creation date(created with older AIS)
+var defaultDate = time.Unix(0, 1546300800000000000)
 
 type (
 	// List bucket response

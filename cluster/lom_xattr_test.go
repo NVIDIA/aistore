@@ -23,9 +23,7 @@ var _ = Describe("LOM Xattributes", func() {
 		bucketLocal = "LOM_TEST_Local"
 	)
 
-	var (
-		localBck = cmn.Bck{Name: bucketLocal, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
-	)
+	localBck := cmn.Bck{Name: bucketLocal, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})

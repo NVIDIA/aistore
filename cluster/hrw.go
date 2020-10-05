@@ -126,9 +126,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 }
 
 func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
-	var (
-		max uint64
-	)
+	var max uint64
 	for pid, psi := range smap.Pmap {
 		if pid == idToSkip {
 			continue

@@ -158,9 +158,7 @@ func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize in
 
 func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType string,
 	bck cmn.Bck, dir string, objCount, fnlen int) []string {
-	var (
-		objNames = make([]string, objCount)
-	)
+	objNames := make([]string, objCount)
 	for i := 0; i < objCount; i++ {
 		fname := GenRandomString(fnlen)
 		objName := filepath.Join(dir, fname)

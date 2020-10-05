@@ -41,9 +41,7 @@ type (
 	}
 )
 
-var (
-	_ cluster.CloudProvider = &awsProvider{}
-)
+var _ cluster.CloudProvider = &awsProvider{}
 
 func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvider{t: t}, nil }
 

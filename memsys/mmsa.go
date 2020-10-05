@@ -78,6 +78,7 @@ import (
 // ========================== end of TOO ========================================
 
 const readme = "https://github.com/NVIDIA/aistore/blob/master/memsys/README.md"
+
 const (
 	PageSize            = cmn.KiB * 4
 	DefaultBufSize      = PageSize * 8
@@ -234,6 +235,7 @@ func DefaultPageMM() *MMSA {
 	})
 	return gmm
 }
+
 func DefaultSmallMM() *MMSA {
 	smmOnce.Do(func() {
 		smm.Init(true)
@@ -708,7 +710,7 @@ func (s *Slab) cleanup() (freed int64) {
 func (s *Slab) ringIdx() int { return int(s.bufSize/s.m.slabIncStep) - 1 }
 func (s *Slab) hitsInc()     { s.m.slabStats.hits[s.ringIdx()].Inc() }
 func (s *Slab) idleDur(statsSnapshot *Stats) (d time.Duration) {
-	var idx = s.ringIdx()
+	idx := s.ringIdx()
 	d = statsSnapshot.Idle[idx]
 	if d == 0 {
 		return

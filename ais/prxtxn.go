@@ -333,9 +333,7 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
-	var (
-		nmsg = &cmn.ActionMsg{} // + bckTo
-	)
+	nmsg := &cmn.ActionMsg{} // + bckTo
 	if rebErr := p.canStartRebalance(); rebErr != nil {
 		err = fmt.Errorf("%s: bucket cannot be renamed: %w", p.si, rebErr)
 		return
@@ -639,9 +637,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnClientCtx {
-	var (
-		c = &txnClientCtx{}
-	)
+	c := &txnClientCtx{}
 	c.uuid = cmn.GenUUID()
 	c.smap = p.owner.smap.get()
 

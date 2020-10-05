@@ -42,9 +42,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		handle = r.Header.Get(cmn.HeaderHandle) // TODO: should it be from header or from body?
-	)
+	handle := r.Header.Get(cmn.HeaderHandle) // TODO: should it be from header or from body?
 	smap := t.owner.smap.get()
 	msg := &query.InitMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
@@ -114,9 +112,7 @@ func (t *targetrunner) httpquerygetworkertarget(w http.ResponseWriter, _ *http.R
 }
 
 func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Request) {
-	var (
-		entries []*cmn.BucketEntry
-	)
+	var entries []*cmn.BucketEntry
 
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Query)
 	if err != nil {

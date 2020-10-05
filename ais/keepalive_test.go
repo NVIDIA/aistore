@@ -69,7 +69,8 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 	{
 		k := &keepalive{
 			tt:               &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)},
-			maxKeepaliveTime: minKeepaliveTime}
+			maxKeepaliveTime: minKeepaliveTime,
+		}
 		for i := 0; i < 100; i++ {
 			initial := k.timeoutStatsForDaemon(daemonID)
 			nextRTT := time.Duration(initial.srtt * 0.25)

@@ -182,13 +182,11 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 
 	for i := 0; i < bckCount; i++ {
 		group.Go(func() error {
-			var (
-				m = &ioContext{
-					t:      t,
-					num:    100,
-					silent: true,
-				}
-			)
+			m := &ioContext{
+				t:      t,
+				num:    100,
+				silent: true,
+			}
 
 			m.init()
 
@@ -1277,7 +1275,8 @@ func TestBucketSingleProp(t *testing.T) {
 
 	// Change mirroring threshold
 	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{UtilThresh: api.Int64(mirrorThreshold)}},
+		Mirror: &cmn.MirrorConfToUpdate{UtilThresh: api.Int64(mirrorThreshold)},
+	},
 	)
 	tassert.CheckError(t, err)
 	p, err = api.HeadBucket(baseParams, m.bck)
@@ -1294,9 +1293,7 @@ func TestBucketSingleProp(t *testing.T) {
 }
 
 func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
-	var (
-		baseParams = tutils.BaseAPIParams()
-	)
+	baseParams := tutils.BaseAPIParams()
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
 	tassert.CheckFatal(t, err)
 
@@ -1382,18 +1379,17 @@ func TestLocalMirror(t *testing.T) {
 		})
 	}
 }
+
 func testLocalMirror(t *testing.T, numCopies []int) {
-	var (
-		m = ioContext{
-			t:               t,
-			num:             10000,
-			numGetsEachFile: 5,
-			bck: cmn.Bck{
-				Name:     cmn.RandString(10),
-				Provider: cmn.ProviderAIS,
-			},
-		}
-	)
+	m := ioContext{
+		t:               t,
+		num:             10000,
+		numGetsEachFile: 5,
+		bck: cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		},
+	}
 
 	if testing.Short() {
 		m.num = 250
@@ -1521,13 +1517,11 @@ func TestCloudMirror(t *testing.T) {
 }
 
 func TestBucketReadOnly(t *testing.T) {
-	var (
-		m = ioContext{
-			t:               t,
-			num:             10,
-			numGetsEachFile: 2,
-		}
-	)
+	m := ioContext{
+		t:               t,
+		num:             10,
+		numGetsEachFile: 2,
+	}
 	m.init()
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -2054,12 +2048,10 @@ func TestCopyBucketSimple(t *testing.T) {
 }
 
 func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	var (
-		dstBck = cmn.Bck{
-			Name:     TestBucketName + "_new1",
-			Provider: cmn.ProviderAIS,
-		}
-	)
+	dstBck := cmn.Bck{
+		Name:     TestBucketName + "_new1",
+		Provider: cmn.ProviderAIS,
+	}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
 	tassert.CheckError(t, err)
@@ -2083,9 +2075,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	var (
-		dstBck = cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
-	)
+	dstBck := cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
@@ -2126,9 +2116,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	var (
-		dstBck = cmn.Bck{Name: "cpybck_dst" + cmn.RandString(5), Provider: cmn.ProviderAIS}
-	)
+	dstBck := cmn.Bck{Name: "cpybck_dst" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
@@ -2465,6 +2453,7 @@ func TestAllChecksums(t *testing.T) {
 		})
 	}
 }
+
 func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	const (
 		copyCnt   = 2

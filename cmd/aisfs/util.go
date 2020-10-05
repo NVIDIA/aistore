@@ -60,9 +60,7 @@ func discoverClusterURL(c *cli.Context) string {
 		defaultAISDockerURL = "http://172.50.0.2:8080"
 		dockerErrMsgFmt     = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
 	)
-	var (
-		setURLMsg = fmt.Sprintf("Set URL with: export %s=`url`.", cmn.EnvVars.Endpoint)
-	)
+	setURLMsg := fmt.Sprintf("Set URL with: export %s=`url`.", cmn.EnvVars.Endpoint)
 
 	if envURL := os.Getenv(cmn.EnvVars.Endpoint); envURL != "" {
 		return envURL

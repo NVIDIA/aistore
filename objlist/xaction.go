@@ -82,6 +82,7 @@ func init() {
 func (*xactProvider) New(args registry.XactArgs) registry.BucketEntry {
 	return &xactProvider{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
 }
+
 func (p *xactProvider) Start(bck cmn.Bck) error {
 	p.xact = newXact(p.ctx, p.t, bck, p.msg, p.uuid)
 	return nil

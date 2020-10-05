@@ -50,7 +50,6 @@ func HostMem() (MemStat, error) {
 		setValue(name, valStr)
 		return nil
 	})
-
 	if err != nil {
 		return mem, err
 	}

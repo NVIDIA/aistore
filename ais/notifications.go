@@ -355,9 +355,7 @@ func (n *notifs) housekeep() time.Duration {
 }
 
 func (n *notifs) syncStats(nl nl.NotifListener, intervals ...int64 /*secs*/) {
-	var (
-		done bool
-	)
+	var done bool
 
 	nl.RLock()
 	uptoDateNodes, syncRequired := nl.NodesUptoDate(intervals...)
@@ -409,9 +407,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, intervals ...int64 /*secs*/) {
 
 // Return stats from each node for a given UUID.
 func (n *notifs) queryStats(uuid string, intervals ...int64 /*seconds*/) (stats *sync.Map, exists bool) {
-	var (
-		nl nl.NotifListener
-	)
+	var nl nl.NotifListener
 	nl, exists = n.entry(uuid)
 	if !exists {
 		return

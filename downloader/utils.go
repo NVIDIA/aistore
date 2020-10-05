@@ -18,9 +18,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-var (
-	errInvalidTarget = errors.New("invalid target")
-)
+var errInvalidTarget = errors.New("invalid target")
 
 // buildDlObjs returns list of objects that must be downloaded by target.
 func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]dlObj, error) {

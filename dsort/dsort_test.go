@@ -109,6 +109,7 @@ type extractCreatorMock struct {
 func (ec *extractCreatorMock) ExtractShard(lom *cluster.LOM, f *io.SectionReader, extractor extract.RecordExtractor, toDisk bool) (int64, int, error) {
 	return 0, 0, nil
 }
+
 func (ec *extractCreatorMock) CreateShard(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) (int64, error) {
 	ec.createShard(s, w, loadContent)
 	return 0, nil
@@ -288,7 +289,7 @@ var _ = Describe("Distributed Sort", func() {
 
 	Describe("participateInRecordDistribution", func() {
 		Describe("Simple smoke tests", func() {
-			var runSmokeRecordDistribution = func(targetCnt int) {
+			runSmokeRecordDistribution := func(targetCnt int) {
 				ctx := &testContext{
 					targetCnt: targetCnt,
 				}

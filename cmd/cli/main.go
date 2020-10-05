@@ -16,9 +16,7 @@ const (
 	version = "0.4"
 )
 
-var (
-	build string
-)
+var build string
 
 func dispatchInterruptHandler() {
 	stopCh := make(chan os.Signal, 1)

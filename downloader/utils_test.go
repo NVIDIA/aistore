@@ -16,7 +16,7 @@ import (
 )
 
 func TestNormalizeObjName(t *testing.T) {
-	var normalizeObjTests = []struct {
+	normalizeObjTests := []struct {
 		objName  string
 		expected string
 	}{
@@ -31,7 +31,6 @@ func TestNormalizeObjName(t *testing.T) {
 
 	for _, test := range normalizeObjTests {
 		actual, err := normalizeObjName(test.objName)
-
 		if err != nil {
 			t.Errorf("Unexpected error while normalizing %s: %v", test.objName, err)
 		}

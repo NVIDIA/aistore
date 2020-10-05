@@ -1823,9 +1823,7 @@ func (reb *Manager) objByUID(batchSize int, uid string) *rebObject {
 
 // Returns the first object that has received enough slices to rebuild object
 func (reb *Manager) firstReadyObj(md *rebArgs) *rebObject {
-	var (
-		start = int(reb.stages.currBatch.Load())
-	)
+	start := int(reb.stages.currBatch.Load())
 	for objIdx := start; objIdx < start+md.config.EC.BatchSize; objIdx++ {
 		if objIdx >= len(reb.ec.broken) {
 			break
@@ -1840,9 +1838,7 @@ func (reb *Manager) firstReadyObj(md *rebArgs) *rebObject {
 // Returns the number of objects waiting for a slice/replica, and the
 // number of objects waiting for full object reconstuction.
 func (reb *Manager) toWait(batchSize int) (wait, rebuild int) {
-	var (
-		start = int(reb.stages.currBatch.Load())
-	)
+	start := int(reb.stages.currBatch.Load())
 	for objIdx := start; objIdx < start+batchSize; objIdx++ {
 		if objIdx >= len(reb.ec.broken) {
 			break

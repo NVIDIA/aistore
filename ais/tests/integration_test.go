@@ -32,14 +32,12 @@ import (
 func TestGetAndReRegisterInParallel(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		m = ioContext{
-			t:               t,
-			num:             50000,
-			numGetsEachFile: 3,
-			fileSize:        10 * cmn.KiB,
-		}
-	)
+	m := ioContext{
+		t:               t,
+		num:             50000,
+		numGetsEachFile: 3,
+		fileSize:        10 * cmn.KiB,
+	}
 
 	// Step 1.
 	m.saveClusterState()
@@ -94,13 +92,11 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		m = ioContext{
-			t:                   t,
-			otherTasksToTrigger: 1,
-			num:                 150000,
-		}
-	)
+	m := ioContext{
+		t:                   t,
+		otherTasksToTrigger: 1,
+		num:                 150000,
+	}
 
 	// Step 1.
 	m.saveClusterState()
@@ -235,11 +231,9 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 }
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
-	var (
-		m = ioContext{
-			t: t,
-		}
-	)
+	m := ioContext{
+		t: t,
+	}
 
 	// Initialize ioContext
 	m.saveClusterState()
@@ -276,12 +270,10 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		m = ioContext{
-			t:   t,
-			num: 10000,
-		}
-	)
+	m := ioContext{
+		t:   t,
+		num: 10000,
+	}
 
 	// Initialize ioContext
 	m.saveClusterState()
@@ -344,13 +336,11 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 func TestAckRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		md = ioContext{
-			t:             t,
-			num:           30000,
-			getErrIsFatal: true,
-		}
-	)
+	md := ioContext{
+		t:             t,
+		num:           30000,
+		getErrIsFatal: true,
+	}
 
 	md.saveClusterState()
 	if md.originalTargetCount < 3 {
@@ -391,11 +381,9 @@ func TestAckRebalance(t *testing.T) {
 func TestStressRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		md = &ioContext{
-			t: t,
-		}
-	)
+	md := &ioContext{
+		t: t,
+	}
 
 	md.saveClusterState()
 	if md.originalTargetCount < 4 {
@@ -413,14 +401,12 @@ func TestStressRebalance(t *testing.T) {
 }
 
 func testStressRebalance(t *testing.T, bck cmn.Bck) {
-	var (
-		md = &ioContext{
-			t:             t,
-			bck:           bck,
-			num:           50000,
-			getErrIsFatal: true,
-		}
-	)
+	md := &ioContext{
+		t:             t,
+		bck:           bck,
+		num:           50000,
+		getErrIsFatal: true,
+	}
 
 	md.saveClusterState()
 
@@ -479,12 +465,10 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		m = ioContext{
-			t:   t,
-			num: 10000,
-		}
-	)
+	m := ioContext{
+		t:   t,
+		num: 10000,
+	}
 
 	// Initialize ioContext
 	m.saveClusterState()
@@ -552,12 +536,10 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 func TestPutDuringRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		m = ioContext{
-			t:   t,
-			num: 10000,
-		}
-	)
+	m := ioContext{
+		t:   t,
+		num: 10000,
+	}
 
 	// Init. ioContext
 	m.saveClusterState()
@@ -787,12 +769,10 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 func TestGetDuringRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		md = ioContext{
-			t:   t,
-			num: 30000,
-		}
-	)
+	md := ioContext{
+		t:   t,
+		num: 30000,
+	}
 
 	md.saveClusterState()
 
@@ -848,11 +828,9 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		newBucketCount        = 3
 	)
 
-	var (
-		m = ioContext{
-			t: t,
-		}
-	)
+	m := ioContext{
+		t: t,
+	}
 
 	// Initialize ioContext
 	m.saveClusterState()
@@ -1175,14 +1153,12 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 }
 
 func TestForwardCP(t *testing.T) {
-	var (
-		m = ioContext{
-			t:               t,
-			num:             10000,
-			numGetsEachFile: 2,
-			fileSize:        128,
-		}
-	)
+	m := ioContext{
+		t:               t,
+		num:             10000,
+		numGetsEachFile: 2,
+		fileSize:        128,
+	}
 
 	// Step 1.
 	m.saveClusterState()
@@ -1227,13 +1203,11 @@ func TestForwardCP(t *testing.T) {
 func TestAtimeRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		m = ioContext{
-			t:               t,
-			num:             2000,
-			numGetsEachFile: 2,
-		}
-	)
+	m := ioContext{
+		t:               t,
+		num:             2000,
+		numGetsEachFile: 2,
+	}
 
 	// Initialize ioContext
 	m.saveClusterState()
@@ -1442,13 +1416,11 @@ func TestAtimeLocalPut(t *testing.T) {
 func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		m = ioContext{
-			t:               t,
-			num:             10000,
-			numGetsEachFile: 5,
-		}
-	)
+	m := ioContext{
+		t:               t,
+		num:             10000,
+		numGetsEachFile: 5,
+	}
 
 	// Initialize ioContext
 	m.saveClusterState()
@@ -1487,14 +1459,12 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	var (
-		m = ioContext{
-			t:               t,
-			num:             10000,
-			fileSize:        1024,
-			numGetsEachFile: 5,
-		}
-	)
+	m := ioContext{
+		t:               t,
+		num:             10000,
+		fileSize:        1024,
+		numGetsEachFile: 5,
+	}
 
 	// Initialize ioContext
 	m.saveClusterState()

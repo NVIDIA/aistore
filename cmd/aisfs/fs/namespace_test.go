@@ -20,9 +20,7 @@ type (
 	}
 )
 
-var (
-	_ ais.Bucket = &bucketMock{}
-)
+var _ ais.Bucket = &bucketMock{}
 
 func newBucketMock() *bucketMock {
 	return &bucketMock{
@@ -40,6 +38,7 @@ func (bm *bucketMock) HeadObject(objName string) (obj *ais.Object, exists bool, 
 	_, ok := bm.objs[objName]
 	return nil, ok, nil
 }
+
 func (bm *bucketMock) ListObjects(prefix, _ string, pageSize uint) (objs []*ais.Object, nextToken string, err error) {
 	for obj := range bm.objs {
 		if !strings.HasPrefix(obj, prefix) {
@@ -54,6 +53,7 @@ func (bm *bucketMock) ListObjects(prefix, _ string, pageSize uint) (objs []*ais.
 
 	return objs, "", nil
 }
+
 func (bm *bucketMock) DeleteObject(objName string) (err error) {
 	delete(bm.objs, objName)
 	return nil
@@ -155,12 +155,10 @@ var _ = Describe("Namespace", func() {
 			})
 
 			It("should remove nonempty directory from namespace", func() {
-				var (
-					filesPaths = []string{
-						dpath + "d",
-						dpath + "e/f",
-					}
-				)
+				filesPaths := []string{
+					dpath + "d",
+					dpath + "e/f",
+				}
 
 				ns.add(entryDirTy, dtAttrs{
 					id:   invalidInodeID,

@@ -12,7 +12,7 @@ import (
 )
 
 func TestParseSourceValidURIs(t *testing.T) {
-	var parseSourceTests = []struct {
+	parseSourceTests := []struct {
 		input    string
 		expected dlSource
 	}{
@@ -191,7 +191,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 }
 
 func TestParseDestValidURIs(t *testing.T) {
-	var parseDestTests = []struct {
+	parseDestTests := []struct {
 		url     string
 		bucket  string
 		objName string
@@ -204,7 +204,6 @@ func TestParseDestValidURIs(t *testing.T) {
 
 	for _, test := range parseDestTests {
 		bucket, pathSuffix, err := parseDest(test.url)
-
 		if err != nil {
 			t.Errorf("unexpected error while parsing dest URI %s: %v", test.url, err)
 		}
@@ -219,7 +218,7 @@ func TestParseDestValidURIs(t *testing.T) {
 }
 
 func TestParseDestInvalidURIs(t *testing.T) {
-	var parseDestTests = []string{
+	parseDestTests := []string{
 		"gcp://bucket",
 		"gcp://bucket/objname",
 		"s3://bucket/objname",
@@ -237,21 +236,26 @@ func TestParseDestInvalidURIs(t *testing.T) {
 }
 
 func TestMakePairs(t *testing.T) {
-	var makePairsTest = []struct {
+	makePairsTest := []struct {
 		input []string
 		nvs   cmn.SimpleKVs
 	}{
-		{[]string{"key1=value1", "key2=value2", "key3=value3"},
-			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"}},
-		{[]string{"key1", "value1", "key2", "value2", "key3", "value3"},
-			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"}},
-		{[]string{"key1=value1", "key2", "value2", "key3=value3"},
-			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"}},
+		{
+			[]string{"key1=value1", "key2=value2", "key3=value3"},
+			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"},
+		},
+		{
+			[]string{"key1", "value1", "key2", "value2", "key3", "value3"},
+			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"},
+		},
+		{
+			[]string{"key1=value1", "key2", "value2", "key3=value3"},
+			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"},
+		},
 	}
 
 	for _, test := range makePairsTest {
 		nvs, err := makePairs(test.input)
-
 		if err != nil {
 			t.Fatalf("unexpected error of make pairs for input %#v: %v", test.input, err)
 		}
@@ -263,7 +267,7 @@ func TestMakePairs(t *testing.T) {
 }
 
 func TestMakePairsErrors(t *testing.T) {
-	var makePairsTest = []struct {
+	makePairsTest := []struct {
 		input []string
 	}{
 		{[]string{"key1", "value1", "key2=value2", "key3"}},
@@ -279,7 +283,7 @@ func TestMakePairsErrors(t *testing.T) {
 }
 
 func TestParseBckObjectURI(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		uri         string
 		query       bool
 		expectedErr bool

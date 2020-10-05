@@ -17,9 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-var (
-	mmsa = memsys.DefaultPageMM()
-)
+var mmsa = memsys.DefaultPageMM()
 
 func TestFileReader(t *testing.T) {
 	r, err := readers.NewFileReader("/tmp", "seek", 10240, cmn.ChecksumNone)

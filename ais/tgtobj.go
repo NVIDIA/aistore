@@ -675,9 +675,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		glog.Errorf("GFN failure, URL %q, err: %v", reqArgs.URL(), err)
 		return
 	}
-	var (
-		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
-	)
+	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 	lom.FromHTTPHdr(resp.Header)
 	poi := &putObjInfo{
 		t:        goi.t,
@@ -894,7 +892,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode i
 			}
 			aoi.hi.partialCksum = cmn.NewCksumHash(aoi.lom.CksumConf().Type)
 		} else {
-			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0o644)
 			if err != nil {
 				errCode = http.StatusInternalServerError
 				return

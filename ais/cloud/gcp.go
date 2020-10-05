@@ -43,9 +43,7 @@ type (
 	}
 )
 
-var (
-	_ cluster.CloudProvider = &gcpProvider{}
-)
+var _ cluster.CloudProvider = &gcpProvider{}
 
 func readCredFile() (projectID string) {
 	credFile, err := os.Open(os.Getenv(credPathEnvVar))
@@ -206,9 +204,7 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	if err != nil {
 		return
 	}
-	var (
-		cloudBck = bck.BackendBck()
-	)
+	cloudBck := bck.BackendBck()
 	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(gctx)
 	if err != nil {
 		err, errCode = gcpp.gcpErrorToAISError(err, cloudBck)
@@ -325,11 +321,9 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 		return nil, nil, err, 0
 	}
 
-	var (
-		customMD = cmn.SimpleKVs{
-			cluster.SourceObjMD: cluster.SourceGoogleObjMD,
-		}
-	)
+	customMD := cmn.SimpleKVs{
+		cluster.SourceObjMD: cluster.SourceGoogleObjMD,
+	}
 
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		lom.SetVersion(v)

@@ -22,9 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/tutils/readers"
 )
 
-var (
-	baseParams api.BaseParams
-)
+var baseParams api.BaseParams
 
 func TestPutFile(t *testing.T) {
 	err := putFile(1024, cmn.ChecksumXXHash)

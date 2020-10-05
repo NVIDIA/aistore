@@ -156,9 +156,7 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/download?id=...
 // DELETE /v1/download/{abort, remove}?id=...
 func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
-	var (
-		payload = &downloader.DlAdminBody{}
-	)
+	payload := &downloader.DlAdminBody{}
 	if !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return

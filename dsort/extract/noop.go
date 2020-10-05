@@ -10,9 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 )
 
-var (
-	_ ExtractCreator = &nopExtractCreator{}
-)
+var _ ExtractCreator = &nopExtractCreator{}
 
 type nopExtractCreator struct {
 	internal ExtractCreator
@@ -29,9 +27,7 @@ func (t *nopExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 
 // CreateShard creates a new shard locally based on the Shard.
 func (t *nopExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (written int64, err error) {
-	var (
-		n int64
-	)
+	var n int64
 
 	for _, rec := range s.Records.All() {
 		for _, obj := range rec.Objects {

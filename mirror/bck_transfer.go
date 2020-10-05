@@ -54,6 +54,7 @@ func (e *transferBckProvider) New(args registry.XactArgs) registry.BucketEntry {
 		args:  args.Custom.(*registry.TransferBckArgs),
 	}
 }
+
 func (e *transferBckProvider) Start(_ cmn.Bck) error {
 	slab, err := e.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)

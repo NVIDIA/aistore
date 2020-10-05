@@ -26,9 +26,7 @@ func MarkerExists(marker string) bool {
 }
 
 func PutMarker(marker string) error {
-	var (
-		mpath *MountpathInfo
-	)
+	var mpath *MountpathInfo
 	availableMpaths, _ := Get()
 	// get random mountpath
 	for _, mp := range availableMpaths {

@@ -144,9 +144,7 @@ func (c *namespaceCache) refresh() (bool, error) {
 }
 
 func (c *namespaceCache) add(ty entryType, dta dtAttrs) {
-	var (
-		entry nsEntry
-	)
+	var entry nsEntry
 
 	arms := splitEntryName(dta.path)
 	for idx := 0; idx < len(arms)-1; idx++ {

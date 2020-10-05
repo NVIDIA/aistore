@@ -31,6 +31,7 @@ func isRedirect(q url.Values) (delta string) {
 	}
 	return q.Get(cmn.URLParamUnixTime)
 }
+
 func redirectLatency(started time.Time, ptime string) (redelta int64) {
 	pts, err := cmn.S2UnixNano(ptime)
 	if err != nil {
@@ -224,7 +225,7 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 
 func withLocalRetry(cond func() bool) (ok bool) {
 	const retries = 3
-	var sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
+	sleep := cmn.GCO.Get().Timeout.CplaneOperation / 2
 	for i := 0; i < retries && !ok; i++ {
 		time.Sleep(sleep)
 		ok = cond()

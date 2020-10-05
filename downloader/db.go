@@ -27,9 +27,7 @@ const (
 	taskInfoCacheSize = 1000
 )
 
-var (
-	errJobNotFound = errors.New("job not found")
-)
+var errJobNotFound = errors.New("job not found")
 
 type downloaderDB struct {
 	mtx    sync.RWMutex

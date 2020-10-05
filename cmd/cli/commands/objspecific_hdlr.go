@@ -136,7 +136,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
-	//FIXME: it can be easily handled
+	// FIXME: it can be easily handled
 	if objName != "" {
 		return incorrectUsageMsg(c, "object name not supported, use list flag or range flag")
 	}

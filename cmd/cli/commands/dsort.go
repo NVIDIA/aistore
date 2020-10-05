@@ -94,7 +94,7 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 			Name:     name,
 			Uid:      os.Getuid(),
 			Gid:      os.Getgid(),
-			Mode:     0664,
+			Mode:     0o664,
 		}
 		if err := tw.WriteHeader(h); err != nil {
 			return err
@@ -602,9 +602,8 @@ func dsortJobStatus(c *cli.Context, id string) error {
 	}
 
 	// Show metrics once in a while.
-	var (
-		w = c.App.Writer
-	)
+
+	w := c.App.Writer
 
 	rate := calcRefreshRate(c)
 	if logging {

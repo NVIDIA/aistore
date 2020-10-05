@@ -201,7 +201,7 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	clone := &bucketMD{}
 	bmd.deepCopy(clone)
 
-	var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+	jsonCompat := jsoniter.ConfigCompatibleWithStandardLibrary
 	b1, _ := jsonCompat.Marshal(bmd)
 	s1 := string(b1)
 	b2, _ := jsonCompat.Marshal(clone)

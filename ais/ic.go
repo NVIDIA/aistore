@@ -351,11 +351,14 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
 func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 	actMsg := &cmn.ActionMsg{Action: cmn.ActMergeOwnershipTbl, Value: &ic.p.notifs}
 	msg := ic.p.newAisMsg(actMsg, nil, nil)
-	result := ic.p.call(callArgs{si: si,
-		req: cmn.ReqArgs{Method: http.MethodPost,
-			Path: cmn.JoinWords(cmn.Version, cmn.IC),
-			Body: cmn.MustMarshal(msg),
-		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation},
+	result := ic.p.call(callArgs{
+		si: si,
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Path:   cmn.JoinWords(cmn.Version, cmn.IC),
+			Body:   cmn.MustMarshal(msg),
+		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+	},
 	)
 	return result.err
 }

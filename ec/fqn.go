@@ -8,8 +8,10 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-type SliceSpec struct{}
-type MetaSpec struct{}
+type (
+	SliceSpec struct{}
+	MetaSpec  struct{}
+)
 
 var (
 	_ fs.ContentResolver = &SliceSpec{}

@@ -38,17 +38,15 @@ const (
 	CtxPostCallbackKey ctxKey = iota
 )
 
-var (
-	wiProps = []string{
-		cmn.GetPropsSize,
-		cmn.GetPropsAtime,
-		cmn.GetPropsChecksum,
-		cmn.GetPropsVersion,
-		cmn.GetPropsStatus,
-		cmn.GetPropsCopies,
-		cmn.GetTargetURL,
-	}
-)
+var wiProps = []string{
+	cmn.GetPropsSize,
+	cmn.GetPropsAtime,
+	cmn.GetPropsChecksum,
+	cmn.GetPropsVersion,
+	cmn.GetPropsStatus,
+	cmn.GetPropsCopies,
+	cmn.GetTargetURL,
+}
 
 func NewWalkInfo(ctx context.Context, t cluster.Target, msg *cmn.SelectMsg) *WalkInfo {
 	// TODO: this should be removed.
@@ -181,9 +179,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 		return nil, nil
 	}
 
-	var (
-		objStatus uint16 = cmn.ObjStatusOK
-	)
+	var objStatus uint16 = cmn.ObjStatusOK
 	lom := &cluster.LOM{T: wi.t, FQN: fqn}
 	if err := lom.Init(cmn.Bck{}); err != nil {
 		return nil, err

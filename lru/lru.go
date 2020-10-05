@@ -119,6 +119,7 @@ func init() {
 func (*XactProvider) New(args registry.XactArgs) registry.GlobalEntry {
 	return &XactProvider{id: args.UUID}
 }
+
 func (p *XactProvider) Start(_ cmn.Bck) error {
 	p.xact = &Xaction{
 		XactDemandBase: *xaction.NewXactDemandBase(p.id, cmn.ActLRU, xactIdleTime),

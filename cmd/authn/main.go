@@ -44,9 +44,7 @@ func updateLogOptions() error {
 func main() {
 	fmt.Printf("version: %s | build_time: %s\n", version, build)
 
-	var (
-		err error
-	)
+	var err error
 
 	flag.Parse()
 	confFlag := flag.Lookup("config")

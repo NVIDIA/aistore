@@ -536,7 +536,7 @@ func (r *statsRunner) recycleLogs() time.Duration {
 }
 
 func (r *statsRunner) removeLogs(config *cmn.Config) {
-	var maxtotal = int64(config.Log.MaxTotal)
+	maxtotal := int64(config.Log.MaxTotal)
 	logfinfos, err := ioutil.ReadDir(config.Log.Dir)
 	if err != nil {
 		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
@@ -544,7 +544,7 @@ func (r *statsRunner) removeLogs(config *cmn.Config) {
 		return
 	}
 	// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-	var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
+	logtypes := []string{".INFO.", ".WARNING.", ".ERROR."}
 	for _, logtype := range logtypes {
 		var (
 			tot   = int64(0)

@@ -55,13 +55,11 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...clu
 
 	wg := &sync.WaitGroup{}
 	for _, mpathInfo := range availablePaths {
-		var (
-			jogger = &resilverJogger{
-				joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
-				slab:              slab,
-				skipGlobMisplaced: skipGlobMisplaced,
-			}
-		)
+		jogger := &resilverJogger{
+			joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
+			slab:              slab,
+			skipGlobMisplaced: skipGlobMisplaced,
+		}
 		wg.Add(1)
 		go jogger.jog(mpathInfo)
 	}
@@ -231,7 +229,7 @@ func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 }
 
 func (rj *resilverJogger) walk(fqn string, de fs.DirEntry) (err error) {
-	var t = rj.m.t
+	t := rj.m.t
 	if rj.xreb.Aborted() {
 		return cmn.NewAbortedErrorDetails("traversal", rj.xreb.String())
 	}

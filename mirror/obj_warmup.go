@@ -29,6 +29,7 @@ type (
 func (*llcProvider) New(args registry.XactArgs) registry.BucketEntry {
 	return &llcProvider{t: args.T}
 }
+
 func (p *llcProvider) Start(bck cmn.Bck) error {
 	xact := newXactLLC(p.t, bck)
 	go xact.Run()

@@ -56,6 +56,7 @@ func (*xactBckEncodeProvider) New(args registry.XactArgs) registry.BucketEntry {
 		phase: args.Phase,
 	}
 }
+
 func (p *xactBckEncodeProvider) Start(bck cmn.Bck) error {
 	xec := NewXactBckEncode(bck, p.t, p.uuid)
 	p.xact = xec

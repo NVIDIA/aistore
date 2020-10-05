@@ -56,9 +56,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		}
 
 		Describe(node, func() {
-			var (
-				bowner bmdOwner
-			)
+			var bowner bmdOwner
 
 			BeforeEach(func() {
 				bowner = makeBMDOwner()

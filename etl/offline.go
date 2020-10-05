@@ -16,9 +16,7 @@ type (
 	}
 )
 
-var (
-	_ cluster.LomReaderProvider = &OfflineDataProvider{}
-)
+var _ cluster.LomReaderProvider = &OfflineDataProvider{}
 
 func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID)

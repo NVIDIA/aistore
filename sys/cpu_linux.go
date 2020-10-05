@@ -20,9 +20,7 @@ const (
 	uninitialized = -1
 )
 
-var (
-	inContainer = atomic.NewInt32(uninitialized) // can be bool, but bool does not support 3-state
-)
+var inContainer = atomic.NewInt32(uninitialized) // can be bool, but bool does not support 3-state
 
 // Containerized returns true if the application is running
 // inside a container(docker/lxc/k8s)

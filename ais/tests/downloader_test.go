@@ -29,9 +29,7 @@ const (
 	downloadDescAllRegex  = "^" + downloadDescAllPrefix
 )
 
-var (
-	downloadDescCurPrefix = fmt.Sprintf("%s-%d-", downloadDescAllPrefix, os.Getpid())
-)
+var downloadDescCurPrefix = fmt.Sprintf("%s-%d-", downloadDescAllPrefix, os.Getpid())
 
 func generateDownloadDesc() string {
 	return downloadDescCurPrefix + time.Now().Format(time.RFC3339Nano)
@@ -187,9 +185,7 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 }
 
 func downloadObjectCloud(t *testing.T, body downloader.DlCloudBody, expectedFinished, expectedSkipped int) {
-	var (
-		baseParams = tutils.BaseAPIParams()
-	)
+	baseParams := tutils.BaseAPIParams()
 	body.Description = generateDownloadDesc()
 	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeCloud, body)
 	tassert.CheckFatal(t, err)

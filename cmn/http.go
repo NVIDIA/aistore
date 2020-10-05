@@ -128,8 +128,10 @@ func NewHTTPError(r *http.Request, msg string, status int) (*HTTPError, bool) {
 	if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
 		return &httpErr, true
 	}
-	return &HTTPError{Status: status, Message: msg, Method: r.Method,
-		URLPath: r.URL.Path, RemoteAddr: r.RemoteAddr}, false
+	return &HTTPError{
+		Status: status, Message: msg, Method: r.Method,
+		URLPath: r.URL.Path, RemoteAddr: r.RemoteAddr,
+	}, false
 }
 
 // PrependProtocol prepends protocol in URL in case it is missing.
@@ -276,9 +278,7 @@ func InvalidHandlerDetailedNoLog(w http.ResponseWriter, r *http.Request, msg str
 }
 
 func ReadBytes(r *http.Request) (b []byte, err error) {
-	var (
-		e error
-	)
+	var e error
 
 	b, e = ioutil.ReadAll(r.Body)
 	if e != nil {

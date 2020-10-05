@@ -17,8 +17,10 @@ import (
 // Running these benchmarks with different objNamesSize returns different results
 // Almost for every number of objects, permutation strategies outcompete random
 
-const objNamesSize = 200000
-const smallSampleSize = 1000
+const (
+	objNamesSize    = 200000
+	smallSampleSize = 1000
+)
 
 var objNames []string
 

@@ -51,6 +51,7 @@ type (
 func (*mncProvider) New(args registry.XactArgs) registry.BucketEntry {
 	return &mncProvider{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}
 }
+
 func (p *mncProvider) Start(bck cmn.Bck) error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)

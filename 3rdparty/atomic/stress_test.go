@@ -241,7 +241,7 @@ func stressBool() func() {
 }
 
 func stressDuration() func() {
-	var atom = NewDuration(0)
+	atom := NewDuration(0)
 	return func() {
 		atom.Load()
 		atom.Add(1)

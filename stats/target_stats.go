@@ -176,7 +176,7 @@ func (r *Trunner) GetWhatStats() interface{} {
 }
 
 func (r *Trunner) log(uptime time.Duration) {
-	var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+	jsonCompat := jsoniter.ConfigCompatibleWithStandardLibrary
 	r.lines = r.lines[:0]
 
 	// copy stats, reset latencies

@@ -50,6 +50,7 @@ type (
 func (*putMirrorProvider) New(args registry.XactArgs) registry.BucketEntry {
 	return &putMirrorProvider{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
 }
+
 func (p *putMirrorProvider) Start(_ cmn.Bck) error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)

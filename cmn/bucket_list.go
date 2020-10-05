@@ -28,6 +28,7 @@ type BucketEntry struct {
 func (be *BucketEntry) CheckExists() bool {
 	return be.Flags&EntryIsCached != 0
 }
+
 func (be *BucketEntry) SetExists() {
 	be.Flags |= EntryIsCached
 }

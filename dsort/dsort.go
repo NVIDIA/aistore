@@ -261,9 +261,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 // extractLocalShards iterates through files local to the current target and
 // calls ExtractShard on matching files based on the given ParsedRequestSpec.
 func (m *Manager) extractLocalShards() (err error) {
-	var (
-		phaseInfo = &m.extractionPhase
-	)
+	phaseInfo := &m.extractionPhase
 
 	phaseInfo.adjuster.start()
 	defer phaseInfo.adjuster.stop()
@@ -673,9 +671,9 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	// TODO: handle very large files > GB - in case the file is very big we
 	// need to save file to the disk and operate on the file directly rather
 	// than keeping everything in memory.
-	var (
-		lineReader = bufio.NewReader(resp.Body)
-	)
+
+	lineReader := bufio.NewReader(resp.Body)
+
 	for idx := 0; ; idx++ {
 		l, _, err := lineReader.ReadLine()
 		if err == io.EOF {

@@ -191,7 +191,7 @@ func (m *smapX) addIC(psi *cluster.Snode) {
 func (m *smapX) tag() string    { return revsSmapTag }
 func (m *smapX) version() int64 { return m.Version }
 func (m *smapX) marshal() (b []byte) {
-	var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+	jsonCompat := jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := jsonCompat.Marshal(m) // jsoniter + sorting
 	cmn.AssertNoErr(err)
 	return b

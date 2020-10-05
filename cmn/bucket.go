@@ -292,6 +292,7 @@ func (n Ns) IsRemote() bool    { return n.UUID != "" }
 func (b *Bck) HasBackendBck() bool {
 	return b.Provider == ProviderAIS && b.Props != nil && !b.Props.BackendBck.IsEmpty()
 }
+
 func (b *Bck) BackendBck() *Bck {
 	if !b.IsRemote() {
 		return nil

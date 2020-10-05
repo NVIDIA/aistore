@@ -166,6 +166,7 @@ func (reb *Manager) addLomAck(lom *cluster.LOM) {
 	lomAck.q[lom.Uname()] = lom
 	lomAck.mu.Unlock()
 }
+
 func (reb *Manager) delLomAck(lom *cluster.LOM) {
 	_, idx := lom.Hkey()
 	lomAck := reb.lomAcks()[idx]
@@ -175,9 +176,10 @@ func (reb *Manager) delLomAck(lom *cluster.LOM) {
 }
 
 func (reb *Manager) logHdr(md *rebArgs) string {
-	var stage = stages[reb.stages.stage.Load()]
+	stage := stages[reb.stages.stage.Load()]
 	return fmt.Sprintf("%s[g%d,v%d,%s]", reb.t.Snode(), md.id, md.smap.Version, stage)
 }
+
 func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
 	return fmt.Sprintf("rebalance IDs mismatch: local %d, remote %d", reb.RebID(), remoteID)
 }
@@ -493,8 +495,10 @@ func (reb *Manager) retransmit(md *rebArgs) (cnt int) {
 		return
 	}
 	var (
-		rj = &rebalanceJogger{joggerBase: joggerBase{m: reb, xreb: &reb.xact().RebBase,
-			wg: &sync.WaitGroup{}}, smap: md.smap}
+		rj = &rebalanceJogger{joggerBase: joggerBase{
+			m: reb, xreb: &reb.xact().RebBase,
+			wg: &sync.WaitGroup{},
+		}, smap: md.smap}
 		query = url.Values{}
 	)
 	query.Add(cmn.URLParamSilent, "true")

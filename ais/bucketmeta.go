@@ -178,7 +178,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 func (m *bucketMD) tag() string    { return revsBMDTag }
 func (m *bucketMD) version() int64 { return m.Version }
 func (m *bucketMD) marshal() []byte {
-	var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+	jsonCompat := jsoniter.ConfigCompatibleWithStandardLibrary
 	b, err := jsonCompat.Marshal(m) // jsoniter + sorting
 	cmn.AssertNoErr(err)
 	return b
@@ -204,7 +204,7 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 }
 
 func (bo *bmdOwnerPrx) init() {
-	var bmd = newBucketMD()
+	bmd := newBucketMD()
 	err := jsp.Load(bo.fpath, bmd, jsp.CCSign())
 	if err != nil && !os.IsNotExist(err) {
 		glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bo.fpath, err)

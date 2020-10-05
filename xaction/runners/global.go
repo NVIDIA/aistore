@@ -83,6 +83,7 @@ func makeXactRebBase(id cluster.XactID, kind string) RebBase {
 func (p *rebalanceProvider) New(args registry.XactArgs) registry.GlobalEntry {
 	return &rebalanceProvider{args: args.Custom.(*registry.RebalanceArgs)}
 }
+
 func (p *rebalanceProvider) Start(_ cmn.Bck) error {
 	p.xact = NewRebalance(p.args.ID, p.Kind(), p.args.StatsRunner, registry.GetRebMarked)
 	return nil
@@ -102,6 +103,7 @@ func (p *rebalanceProvider) PreRenewHook(previousEntry registry.GlobalEntry) (ke
 	}
 	return
 }
+
 func (p *rebalanceProvider) PostRenewHook(previousEntry registry.GlobalEntry) {
 	xreb := previousEntry.(*rebalanceProvider).xact
 	xreb.Abort()
@@ -148,6 +150,7 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 func (*resilverProvider) New(args registry.XactArgs) registry.GlobalEntry {
 	return &resilverProvider{id: args.UUID}
 }
+
 func (p *resilverProvider) Start(_ cmn.Bck) error {
 	p.xact = NewResilver(p.id, p.Kind())
 	return nil
@@ -176,6 +179,7 @@ func (xact *Resilver) String() string {
 // Election
 
 func (*electionProvider) New(_ registry.XactArgs) registry.GlobalEntry { return &electionProvider{} }
+
 func (p *electionProvider) Start(_ cmn.Bck) error {
 	p.xact = &Election{
 		XactBase: *xaction.NewXactBase(xaction.XactBaseID(""), cmn.ActElection),

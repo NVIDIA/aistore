@@ -832,9 +832,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 func multiObjOp(c *cli.Context, command string) error {
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
-		var (
-			bck, objectName, err = cmn.ParseBckObjectURI(fullObjName)
-		)
+		bck, objectName, err := cmn.ParseBckObjectURI(fullObjName)
 		if err != nil {
 			return err
 		}

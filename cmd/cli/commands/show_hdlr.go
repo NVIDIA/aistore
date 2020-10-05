@@ -395,9 +395,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 }
 
 func showObjectHandler(c *cli.Context) (err error) {
-	var (
-		fullObjName = c.Args().Get(0) // empty string if no arg given
-	)
+	fullObjName := c.Args().Get(0) // empty string if no arg given
 
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in format bucket/object")

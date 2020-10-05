@@ -373,9 +373,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
 		return
 	}
-	var (
-		results chan callResult
-	)
+	var results chan callResult
 	if len(apiItems) > 1 {
 		// specific target
 		var (

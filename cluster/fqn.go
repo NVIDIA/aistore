@@ -12,9 +12,7 @@ import (
 // resolve and validate fqn
 //
 func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
-	var (
-		digest uint64
-	)
+	var digest uint64
 	parsedFQN, err = fs.ParseFQN(fqn)
 	if err != nil {
 		return

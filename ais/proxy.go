@@ -358,9 +358,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
-	var (
-		started = time.Now()
-	)
+	started := time.Now()
 	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -474,9 +472,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
-	var (
-		started = time.Now()
-	)
+	started := time.Now()
 	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -599,7 +595,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlrf(w, r, msg, p.si, detail)
 		return
 	}
-	var payload = make(msPayload)
+	payload := make(msPayload)
 	if err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
 		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
@@ -1548,9 +1544,7 @@ func (p *proxyrunner) reverseNodeRequest(w http.ResponseWriter, r *http.Request,
 }
 
 func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID string, parsedURL *url.URL) {
-	var (
-		rproxy *httputil.ReverseProxy
-	)
+	var rproxy *httputil.ReverseProxy
 
 	val, ok := p.rproxy.nodes.Load(nodeID)
 	if ok {
@@ -2131,7 +2125,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.httpdaesetprimaryproxy(w, r)
 			return
 		case cmn.SyncSmap:
-			var newsmap = &smapX{}
+			newsmap := &smapX{}
 			if cmn.ReadJSON(w, r, newsmap) != nil {
 				return
 			}
@@ -3031,7 +3025,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		pre:  p._unregNodePre,
 		post: p._unregNodePost,
 		msg:  msg,
-		sid:  sid}
+		sid:  sid,
+	}
 	err = p.owner.smap.modify(ctx)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), ctx.status)
@@ -3373,11 +3368,14 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// assign a different node to send table
-		result := p.call(callArgs{si: si,
-			req: cmn.ReqArgs{Method: http.MethodPut,
-				Path: cmn.JoinWords(cmn.Version, cmn.Cluster),
-				Body: cmn.MustMarshal(msg),
-			}, timeout: cmn.LongTimeout},
+		result := p.call(callArgs{
+			si: si,
+			req: cmn.ReqArgs{
+				Method: http.MethodPut,
+				Path:   cmn.JoinWords(cmn.Version, cmn.Cluster),
+				Body:   cmn.MustMarshal(msg),
+			}, timeout: cmn.LongTimeout,
+		},
 		)
 
 		if result.err != nil {
@@ -3487,9 +3485,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			}
 		}
 	case cmn.ActAttach, cmn.ActDetach:
-		var (
-			what = query.Get(cmn.URLParamWhat)
-		)
+		what := query.Get(cmn.URLParamWhat)
 		if what != cmn.GetWhatRemoteAIS {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf(fmtUnknownQue, what))
 			return
@@ -3734,9 +3730,7 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 /////////////////////////////////////////////
 
 func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck *cluster.Bck) {
-	var (
-		err error
-	)
+	var err error
 
 	if len(origURLBck) > 0 {
 		args.allowHTTPBck = true
@@ -3842,9 +3836,7 @@ func (args *remBckAddArgs) _tryAdd(bck *cluster.Bck) (err error) {
 }
 
 func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, err error, statusCode int) {
-	var (
-		q = url.Values{}
-	)
+	q := url.Values{}
 	if bck.IsHTTP() {
 		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)
 		q.Set(cmn.URLParamOrigURL, origURL)
@@ -3879,7 +3871,7 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 		return nil, errNoBMD
 	}
 	// by simple majority
-	var uuid, l = "", 0
+	uuid, l := "", 0
 	for u, lst := range mlist {
 		if l < len(lst) {
 			uuid, l = u, len(lst)

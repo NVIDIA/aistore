@@ -80,6 +80,7 @@ func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	}
 	return &o
 }
+
 func (o *ecOptions) sliceTotal() int {
 	return o.dataCnt + o.parityCnt
 }
@@ -488,7 +489,7 @@ func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objC
 }
 
 func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	return len(reslist.Entries)
@@ -511,7 +512,6 @@ func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		o.dataCnt, o.parityCnt, o.seed, o.concurrency)
 	_, err := api.SetBucketProps(baseParams, bck, bckProps)
-
 	if err != nil {
 		tutils.DestroyBucket(t, proxyURL, bck)
 	}
@@ -1238,7 +1238,7 @@ func TestECStress(t *testing.T) {
 
 			doECPutsAndCheck(t, baseParams, bck, o)
 
-			var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+			msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 			reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, len(reslist.Entries) == o.objCount,
@@ -1299,7 +1299,7 @@ func TestECStressManyBuckets(t *testing.T) {
 	}()
 	wg.Wait()
 
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck1, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(reslist.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(reslist.Entries), o1.objCount)
@@ -1431,7 +1431,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	delta := time.Since(started)
 	t.Logf("Total test time %v\n", delta)
 
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
@@ -1540,7 +1540,7 @@ func TestECXattrs(t *testing.T) {
 		}
 	}
 
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -1635,7 +1635,7 @@ func TestECDestroyBucket(t *testing.T) {
 	doECPutsAndCheck(t, baseParams, bck, o)
 
 	// check if get requests are successful
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
@@ -1745,7 +1745,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	// 4. Check that ListObjects returns correct number of items
 	tutils.Logln("DONE\nReading bucket list...")
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
@@ -1990,7 +1990,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	// 4. Check that ListObjects returns correct number of items
 	tutils.Logf("DONE\nReading bucket list...\n")
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(reslist.Entries) != o.objCount {
@@ -2088,9 +2088,7 @@ func TestECRebalance(t *testing.T) {
 // The test only checks that the number of object after rebalance equals
 // the number of objects before it
 func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
-	var (
-		baseParams = tutils.BaseAPIParams(proxyURL)
-	)
+	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -2475,9 +2473,7 @@ func TestECResilver(t *testing.T) {
 }
 
 func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
-	var (
-		baseParams = tutils.BaseAPIParams(proxyURL)
-	)
+	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -2516,7 +2512,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.Logf("Wait for resilver to complete...\n")
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	var msg = &cmn.SelectMsg{PageSize: pagesize, Props: cmn.GetPropsSize}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: cmn.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckError(t, err)
 	tutils.Logf("%d objects in %s after rebalance\n", len(resEC.Entries), bck)

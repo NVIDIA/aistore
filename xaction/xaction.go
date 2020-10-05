@@ -82,6 +82,7 @@ func NewXactBase(id cluster.XactID, kind string) *XactBase {
 	xact.setStartTime(time.Now())
 	return xact
 }
+
 func NewXactBaseBck(id, kind string, bck cmn.Bck) *XactBase {
 	xact := NewXactBase(XactBaseID(id), kind)
 	xact.bck = bck
@@ -112,9 +113,7 @@ func (xact *XactBase) AbortedAfter(dur time.Duration) (aborted bool) {
 }
 
 func (xact *XactBase) String() string {
-	var (
-		prefix = xact.Kind()
-	)
+	prefix := xact.Kind()
 	if xact.bck.Name != "" {
 		prefix += "@" + xact.bck.Name
 	}
@@ -138,6 +137,7 @@ func (xact *XactBase) StartTime() time.Time {
 	}
 	return time.Time{}
 }
+
 func (xact *XactBase) setStartTime(s time.Time) {
 	xact.sutime.Store(s.UnixNano())
 }
@@ -149,6 +149,7 @@ func (xact *XactBase) EndTime() time.Time {
 	}
 	return time.Time{}
 }
+
 func (xact *XactBase) _setEndTime(errs ...error) {
 	xact.eutime.Store(time.Now().UnixNano())
 

@@ -141,6 +141,7 @@ func IsUnreachable(err error, status int) bool {
 func NewErrorBucketAlreadyExists(bck Bck, node string) *ErrorBucketAlreadyExists {
 	return &ErrorBucketAlreadyExists{node: node, bck: bck}
 }
+
 func (e *ErrorBucketAlreadyExists) Error() string {
 	return _errBucket(fmt.Sprintf("bucket %s already exists", e.bck), e.node)
 }
@@ -148,6 +149,7 @@ func (e *ErrorBucketAlreadyExists) Error() string {
 func NewErrorRemoteBucketDoesNotExist(bck Bck, node string) *ErrorRemoteBucketDoesNotExist {
 	return &ErrorRemoteBucketDoesNotExist{node: node, bck: bck}
 }
+
 func (e *ErrorRemoteBucketDoesNotExist) Error() string {
 	if e.bck.IsCloud() {
 		return _errBucket(fmt.Sprintf("cloud bucket %s does not exist", e.bck), e.node)
@@ -158,6 +160,7 @@ func (e *ErrorRemoteBucketDoesNotExist) Error() string {
 func NewErrorCloudBucketOffline(bck Bck, node string) *ErrorCloudBucketOffline {
 	return &ErrorCloudBucketOffline{node: node, bck: bck}
 }
+
 func (e *ErrorCloudBucketOffline) Error() string {
 	return _errBucket(fmt.Sprintf("bucket %s is currently unreachable", e.bck), e.node)
 }
@@ -165,6 +168,7 @@ func (e *ErrorCloudBucketOffline) Error() string {
 func NewErrorBucketDoesNotExist(bck Bck, node string) *ErrorBucketDoesNotExist {
 	return &ErrorBucketDoesNotExist{node: node, bck: bck}
 }
+
 func (e *ErrorBucketDoesNotExist) Error() string {
 	return _errBucket(fmt.Sprintf("bucket %s does not exist", e.bck), e.node)
 }
@@ -172,6 +176,7 @@ func (e *ErrorBucketDoesNotExist) Error() string {
 func NewErrorInvalidBucketProvider(bck Bck, node string) *ErrorInvalidBucketProvider {
 	return &ErrorInvalidBucketProvider{node: node, bck: bck}
 }
+
 func (e *ErrorInvalidBucketProvider) Error() string {
 	return _errBucket(fmt.Sprintf("invalid provider %q of bucket %s", e.bck.Provider, e.bck), e.node)
 }
@@ -179,6 +184,7 @@ func (e *ErrorInvalidBucketProvider) Error() string {
 func NewErrorBucketIsBusy(bck Bck, node string) *ErrorBucketIsBusy {
 	return &ErrorBucketIsBusy{node: node, bck: bck}
 }
+
 func (e *ErrorBucketIsBusy) Error() string {
 	return _errBucket(fmt.Sprintf("bucket %s is currently busy, please retry later", e.bck), e.node)
 }
@@ -208,6 +214,7 @@ func (e *ErrorCapacityExceeded) Error() string {
 func (e InvalidCksumError) Error() string {
 	return fmt.Sprintf("checksum: expected [%s], actual [%s]", e.expectedHash, e.actualHash)
 }
+
 func NewInvalidCksumError(eHash, aHash string) InvalidCksumError {
 	return InvalidCksumError{actualHash: aHash, expectedHash: eHash}
 }
@@ -219,6 +226,7 @@ func NewNoMountpathError(mpath string) NoMountpathError { return NoMountpathErro
 func (e InvalidMountpathError) Error() string {
 	return "invalid mountpath [" + e.mpath + "]; " + e.cause
 }
+
 func NewInvalidaMountpathError(mpath, cause string) InvalidMountpathError {
 	return InvalidMountpathError{mpath: mpath, cause: cause}
 }

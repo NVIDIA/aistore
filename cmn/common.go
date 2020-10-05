@@ -50,7 +50,7 @@ const (
 	SizeofI16 = int(unsafe.Sizeof(uint16(0)))
 
 	configHomeEnvVar = "XDG_CONFIG_HOME" // https://wiki.archlinux.org/index.php/XDG_Base_Directory
-	configDirMode    = 0755 | os.ModeDir
+	configDirMode    = 0o755 | os.ModeDir
 
 	assertMsg = "assertion failed"
 
@@ -67,29 +67,27 @@ const (
 	QuantityBytes   = "bytes"
 )
 
-var (
-	EnvVars = struct {
-		Endpoint string
+var EnvVars = struct {
+	Endpoint string
 
-		IsPrimary string
-		PrimaryID string
+	IsPrimary string
+	PrimaryID string
 
-		SkipVerifyCrt string
-		UseHTTPS      string
-		NumTarget     string
-		NumProxy      string
-	}{
-		Endpoint:      "AIS_ENDPOINT",
-		IsPrimary:     "AIS_IS_PRIMARY",
-		PrimaryID:     "AIS_PRIMARY_ID",
-		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
-		UseHTTPS:      "AIS_USE_HTTPS",
+	SkipVerifyCrt string
+	UseHTTPS      string
+	NumTarget     string
+	NumProxy      string
+}{
+	Endpoint:      "AIS_ENDPOINT",
+	IsPrimary:     "AIS_IS_PRIMARY",
+	PrimaryID:     "AIS_PRIMARY_ID",
+	SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
+	UseHTTPS:      "AIS_USE_HTTPS",
 
-		// Env variables used for tests or CI
-		NumTarget: "NUM_TARGET",
-		NumProxy:  "NUM_PROXY",
-	}
-)
+	// Env variables used for tests or CI
+	NumTarget: "NUM_TARGET",
+	NumProxy:  "NUM_PROXY",
+}
 
 type (
 	StringSet      map[string]struct{}
@@ -167,6 +165,7 @@ var (
 	bucketReg *regexp.Regexp
 	nsReg     *regexp.Regexp
 )
+
 var (
 	ErrInvalidFmtFormat  = errors.New("input 'fmt' format is invalid should be 'prefix-%06d-suffix")
 	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix-{0001..0010..1}-suffix'")
@@ -176,28 +175,28 @@ var (
 	ErrNegativeStart   = errors.New("'start' is negative")
 	ErrNonPositiveStep = errors.New("'step' is non positive number")
 )
+
 var (
 	ErrInvalidQuantityUsage       = errors.New("invalid quantity, format should be '81%' or '1GB'")
 	errInvalidQuantityNonNegative = errors.New("quantity should not be negative")
 	ErrInvalidQuantityPercent     = errors.New("percent must be in the range (0, 100)")
 	ErrInvalidQuantityBytes       = errors.New("value (bytes) must be non-negative")
 )
-var (
-	toBiBytes = map[string]int64{
-		"K":   KiB,
-		"KB":  KiB,
-		"KIB": KiB,
-		"M":   MiB,
-		"MB":  MiB,
-		"MIB": MiB,
-		"G":   GiB,
-		"GB":  GiB,
-		"GIB": GiB,
-		"T":   TiB,
-		"TB":  TiB,
-		"TIB": TiB,
-	}
-)
+
+var toBiBytes = map[string]int64{
+	"K":   KiB,
+	"KB":  KiB,
+	"KIB": KiB,
+	"M":   MiB,
+	"MB":  MiB,
+	"MIB": MiB,
+	"G":   GiB,
+	"GB":  GiB,
+	"GIB": GiB,
+	"T":   TiB,
+	"TB":  TiB,
+	"TIB": TiB,
+}
 
 func init() {
 	// General

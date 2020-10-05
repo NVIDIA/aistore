@@ -162,9 +162,7 @@ func (r *ObjectsListingXact) startFromBck() {
 	cmn.Assert(r.msg != nil)
 	cmn.Assert(r.ctx != nil)
 
-	var (
-		bck = r.query.BckSource.Bck
-	)
+	bck := r.query.BckSource.Bck
 
 	// TODO: filtering for cloud buckets is not yet supported.
 	if bck.IsCloud() && !r.msg.IsFlagSet(cmn.SelectCached) {

@@ -23,9 +23,7 @@ const (
 	SortKindContent      = "content" // sort by content of given file
 )
 
-var (
-	supportedAlgorithms = []string{sortKindEmpty, SortKindAlphanumeric, SortKindMD5, SortKindShuffle, SortKindContent, SortKindNone}
-)
+var supportedAlgorithms = []string{sortKindEmpty, SortKindAlphanumeric, SortKindMD5, SortKindShuffle, SortKindContent, SortKindNone}
 
 type (
 	alphaByKey struct {
@@ -36,9 +34,7 @@ type (
 	}
 )
 
-var (
-	_ sort.Interface = &alphaByKey{}
-)
+var _ sort.Interface = &alphaByKey{}
 
 func (s *alphaByKey) Less(i, j int) bool {
 	var (

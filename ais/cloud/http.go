@@ -26,9 +26,7 @@ type (
 	}
 )
 
-var (
-	_ cluster.CloudProvider = &httpProvider{}
-)
+var _ cluster.CloudProvider = &httpProvider{}
 
 func NewHTTP(t cluster.Target, config *cmn.Config) (cluster.CloudProvider, error) {
 	hp := &httpProvider{t: t}

@@ -161,7 +161,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		}
 	}
 
-	var fqns = make([]string, 0, 100)
+	fqns := make([]string, 0, 100)
 	err := fs.WalkBck(&fs.WalkBckOptions{
 		Options: fs.Options{
 			Bck:         bck,

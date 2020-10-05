@@ -25,9 +25,7 @@ const (
 	managersKey     = "managers"
 )
 
-var (
-	Managers *ManagerGroup
-)
+var Managers *ManagerGroup
 
 // ManagerGroup abstracts multiple dsort managers into single struct.
 type ManagerGroup struct {

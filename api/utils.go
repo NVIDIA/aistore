@@ -106,9 +106,7 @@ func doHTTPRequestGetRespReader(reqParams ReqParams) (io.ReadCloser, error) {
 }
 
 func doHTTPRequestGetHTTPResp(reqParams ReqParams) (*http.Response, error) {
-	var (
-		reqBody io.Reader
-	)
+	var reqBody io.Reader
 	if reqParams.Body != nil {
 		reqBody = bytes.NewBuffer(reqParams.Body)
 	}

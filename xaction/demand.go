@@ -14,11 +14,9 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-var (
-	// Default on-demand xaction idle timeout
-	// (to confirm idle-ness we may in fact stay around for twice as much)
-	xactIdleTimeout = time.Minute
-)
+// Default on-demand xaction idle timeout
+// (to confirm idle-ness we may in fact stay around for twice as much)
+var xactIdleTimeout = time.Minute
 
 type (
 	//
@@ -50,9 +48,7 @@ type (
 	}
 )
 
-var (
-	_ XactDemand = &XactDemandBase{}
-)
+var _ XactDemand = &XactDemandBase{}
 
 ////////////////////
 // XactDemandBase //

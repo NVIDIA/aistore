@@ -28,20 +28,18 @@ const (
 	internalErrorMsg = "internal server error"
 )
 
-var (
-	// List of HTTP status codes on which we should
-	// not retry and just mark job as failed.
-	terminalStatuses = map[int]struct{}{
-		http.StatusNotFound:          {},
-		http.StatusPaymentRequired:   {},
-		http.StatusUnauthorized:      {},
-		http.StatusForbidden:         {},
-		http.StatusMethodNotAllowed:  {},
-		http.StatusNotAcceptable:     {},
-		http.StatusProxyAuthRequired: {},
-		http.StatusGone:              {},
-	}
-)
+// List of HTTP status codes on which we should
+// not retry and just mark job as failed.
+var terminalStatuses = map[int]struct{}{
+	http.StatusNotFound:          {},
+	http.StatusPaymentRequired:   {},
+	http.StatusUnauthorized:      {},
+	http.StatusForbidden:         {},
+	http.StatusMethodNotAllowed:  {},
+	http.StatusNotAcceptable:     {},
+	http.StatusProxyAuthRequired: {},
+	http.StatusGone:              {},
+}
 
 type (
 	singleObjectTask struct {
@@ -100,9 +98,7 @@ func (t *singleObjectTask) download() {
 }
 
 func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) error {
-	var (
-		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
-	)
+	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 	ctx, cancel := context.WithTimeout(t.downloadCtx, timeout)
 	defer cancel()
 

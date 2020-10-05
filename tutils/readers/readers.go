@@ -219,7 +219,7 @@ func NewFileReader(filepath, name string, size int64, cksumType string) (Reader,
 	var (
 		cksum  *cmn.Cksum
 		fn     = path.Join(filepath, name)
-		f, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0666) // wr-wr-wr-
+		f, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0o666) // wr-wr-wr-
 	)
 	if err != nil {
 		return nil, err

@@ -159,6 +159,7 @@ type BlockDevice struct {
 	Name         string        `json:"name"`
 	BlockDevices []BlockDevice `json:"children"`
 }
+
 type LsBlk struct {
 	BlockDevices []BlockDevice `json:"blockdevices"`
 }
@@ -176,6 +177,7 @@ func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cmn.StringSet) {
 
 	return disks
 }
+
 func findDevDisks(devList []BlockDevice, disks cmn.StringSet) {
 	for _, bd := range devList {
 		if !strings.HasPrefix(bd.Name, "loop") {

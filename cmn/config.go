@@ -436,12 +436,10 @@ var (
 	}
 )
 
-var (
-	// GCO stands for global config owner which is responsible for updating
-	// and notifying listeners about any changes in the config. Config is loaded
-	// at startup and then can be accessed/updated by other services.
-	GCO *globalConfigOwner
-)
+// GCO stands for global config owner which is responsible for updating
+// and notifying listeners about any changes in the config. Config is loaded
+// at startup and then can be accessed/updated by other services.
+var GCO *globalConfigOwner
 
 ///////////////////////
 // globalConfigOwner //
@@ -610,9 +608,7 @@ func (c *CloudConf) MarshalJSON() (data []byte, err error) {
 
 func (c *CloudConf) Validate(_ *Config) (err error) {
 	for provider := range c.Conf {
-		var (
-			b = MustMarshal(c.Conf[provider])
-		)
+		b := MustMarshal(c.Conf[provider])
 		switch provider {
 		case ProviderAIS:
 			var aisConf CloudConfAIS
@@ -960,7 +956,6 @@ func (c *DSortConf) ValidateWithOpts(_ *Config, allowEmpty bool) (err error) {
 func (c *FSPathsConf) UnmarshalJSON(data []byte) error {
 	m := make(map[string]string)
 	err := jsoniter.Unmarshal(data, &m)
-
 	if err != nil {
 		return err
 	}

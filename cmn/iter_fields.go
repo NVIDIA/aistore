@@ -137,12 +137,10 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 			continue
 		}
 
-		var (
-			// Determines if the pointer to struct was allocated.
-			// In case it was  but no field in the struct was
-			// updated we must later set it to `nil`.
-			allocatedStruct bool
-		)
+		// Determines if the pointer to struct was allocated.
+		// In case it was  but no field in the struct was
+		// updated we must later set it to `nil`.
+		var allocatedStruct bool
 
 		// If the field is a pointer to a struct we must dereference it.
 		if srcValField.Kind() == reflect.Ptr && srcValField.Type().Elem().Kind() == reflect.Struct {

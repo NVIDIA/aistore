@@ -49,9 +49,7 @@ type (
 	CleanupFunc = func() time.Duration
 )
 
-var (
-	DefaultHK *housekeeper
-)
+var DefaultHK *housekeeper
 
 func init() {
 	DefaultHK = &housekeeper{

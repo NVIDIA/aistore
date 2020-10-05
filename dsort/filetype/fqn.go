@@ -18,9 +18,7 @@ const (
 	WorkfileCreateShard = "create-shard"
 )
 
-var (
-	_ fs.ContentResolver = &DSortFile{}
-)
+var _ fs.ContentResolver = &DSortFile{}
 
 type DSortFile struct{}
 

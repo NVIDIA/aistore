@@ -359,9 +359,7 @@ MainLoop:
 // the final major step in the primary startup sequence:
 // discover cluster-wide metadata and resolve remaining conflicts
 func (p *proxyrunner) discoverMeta(smap *smapX) {
-	var (
-		maxVerSmap, maxVerBMD = p.uncoverMeta(smap)
-	)
+	maxVerSmap, maxVerBMD := p.uncoverMeta(smap)
 	if maxVerBMD != nil {
 		p.owner.bmd.Lock()
 		bmd := p.owner.bmd.get()

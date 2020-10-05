@@ -310,12 +310,10 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
 // It unregisters ETL smap listener.
 func Stop(t cluster.Target, id string) error {
-	var (
-		errCtx = &cmn.ETLErrorContext{
-			TID:  t.Snode().DaemonID,
-			UUID: id,
-		}
-	)
+	errCtx := &cmn.ETLErrorContext{
+		TID:  t.Snode().DaemonID,
+		UUID: id,
+	}
 
 	// Abort any running offline ETLs.
 	xactRegistry.Registry.AbortAll(cmn.ActETLBucket)
@@ -384,12 +382,14 @@ func setTransformAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {
 	}
 
 	nodeSelector := &corev1.NodeSelector{
-		NodeSelectorTerms: []corev1.NodeSelectorTerm{{
-			MatchExpressions: []corev1.NodeSelectorRequirement{{
-				Key:      nodeNameLabel,
-				Operator: corev1.NodeSelectorOpIn,
-				Values:   []string{k8s.NodeName},
-			}}},
+		NodeSelectorTerms: []corev1.NodeSelectorTerm{
+			{
+				MatchExpressions: []corev1.NodeSelectorRequirement{{
+					Key:      nodeNameLabel,
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{k8s.NodeName},
+				}},
+			},
 		},
 	}
 	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that ETL container

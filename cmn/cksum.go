@@ -46,16 +46,14 @@ type (
 	}
 )
 
-var (
-	checksums = StringSet{
-		ChecksumNone:   {},
-		ChecksumXXHash: {},
-		ChecksumMD5:    {},
-		ChecksumCRC32C: {},
-		ChecksumSHA256: {},
-		ChecksumSHA512: {},
-	}
-)
+var checksums = StringSet{
+	ChecksumNone:   {},
+	ChecksumXXHash: {},
+	ChecksumMD5:    {},
+	ChecksumCRC32C: {},
+	ChecksumSHA256: {},
+	ChecksumSHA512: {},
+}
 
 var (
 	_ hash.Hash                  = &noopHash{}

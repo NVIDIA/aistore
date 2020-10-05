@@ -758,9 +758,7 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 //
 
 func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte, kind string) {
-	var (
-		path = cmn.JoinWords(cmn.Version, cmn.Notifs, kind)
-	)
+	path := cmn.JoinWords(cmn.Version, cmn.Notifs, kind)
 	args := bcastArgs{
 		req:       cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: msgBody},
 		network:   cmn.NetworkIntraControl,

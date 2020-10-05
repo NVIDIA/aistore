@@ -15,10 +15,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-var (
-	// interface guard
-	_ ExtractCreator = &zipExtractCreator{}
-)
+// interface guard
+var _ ExtractCreator = &zipExtractCreator{}
 
 type (
 	zipExtractCreator struct {
@@ -137,7 +135,7 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 				return extractedSize, extractedCount, err
 			}
 
-			var extractMethod = ExtractToMem
+			extractMethod := ExtractToMem
 			if toDisk {
 				extractMethod = ExtractToDisk
 			}

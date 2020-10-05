@@ -320,10 +320,8 @@ type ExtECGetStats struct {
 	AvgQueueLen float64          `json:"ec.queue.len.n"`
 }
 
-var (
-	// interface guard
-	_ cluster.XactStats = &GetTargetStats{}
-)
+// interface guard
+var _ cluster.XactStats = &GetTargetStats{}
 
 func (r *XactGet) Stats() cluster.XactStats {
 	baseStats := r.XactBase.Stats().(*xaction.BaseXactStats)

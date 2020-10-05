@@ -27,9 +27,7 @@ var (
 	_ DlJob = &rangeDlJob{}
 )
 
-var (
-	errAISBckReq = errors.New("regular download requires ais bucket")
-)
+var errAISBckReq = errors.New("regular download requires ais bucket")
 
 type (
 	dlObj struct {
@@ -142,6 +140,7 @@ func (j *baseDlJob) Sync() bool             { return false }
 
 // Notifications
 func (j *baseDlJob) Notif() cluster.Notif { return j.notif }
+
 func (j *baseDlJob) AddNotif(n cluster.Notif, job DlJob) {
 	var ok bool
 	cmn.Assert(j.notif == nil) // currently, "add" means "set"
@@ -262,6 +261,7 @@ func (j *cloudBucketDlJob) Sync() bool { return j.sync }
 func (j *cloudBucketDlJob) checkObj(objName string) bool {
 	return strings.HasPrefix(objName, j.prefix) && strings.HasSuffix(objName, j.suffix)
 }
+
 func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	if j.done {
 		return nil, false, nil

@@ -22,12 +22,10 @@ const (
 	regBucketPrefix = "soaktest-reg"
 )
 
-var (
-	bck = cmn.Bck{
-		Name:     fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid()),
-		Provider: cmn.ProviderAIS,
-	}
-)
+var bck = cmn.Bck{
+	Name:     fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid()),
+	Provider: cmn.ProviderAIS,
+}
 
 type regressionContext struct {
 	wg     *sync.WaitGroup

@@ -227,6 +227,7 @@ type downloaderProvider struct {
 func (*downloaderProvider) New(args registry.XactArgs) registry.GlobalEntry {
 	return &downloaderProvider{t: args.T, statsT: args.Custom.(stats.Tracker)}
 }
+
 func (p *downloaderProvider) Start(_ cmn.Bck) error {
 	xdl := newDownloader(p.t, p.statsT)
 	p.xact = xdl

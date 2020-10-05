@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	FilePermissionBits      os.FileMode = 0644
-	DirectoryPermissionBits os.FileMode = 0755
+	FilePermissionBits      os.FileMode = 0o644
+	DirectoryPermissionBits os.FileMode = 0o755
 )
 
 type Owner struct {

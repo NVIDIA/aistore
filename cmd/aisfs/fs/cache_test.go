@@ -116,12 +116,10 @@ var _ = Describe("Cache", func() {
 			})
 
 			It("should remove nonempty directory from cache", func() {
-				var (
-					filesPaths = []string{
-						dpath + "d",
-						dpath + "e/f",
-					}
-				)
+				filesPaths := []string{
+					dpath + "d",
+					dpath + "e/f",
+				}
 
 				cache.add(entryDirTy, dtAttrs{
 					id:   invalidInodeID,

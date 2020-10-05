@@ -428,9 +428,7 @@ func (m *Manager) setDSorter() (err error) {
 
 // setExtractCreator sets what type of file extraction and creation is used based on the RequestSpec.
 func (m *Manager) setExtractCreator() (err error) {
-	var (
-		keyExtractor extract.KeyExtractor
-	)
+	var keyExtractor extract.KeyExtractor
 
 	switch m.rs.Algorithm.Kind {
 	case SortKindContent:

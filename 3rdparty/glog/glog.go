@@ -126,9 +126,7 @@ const (
 	_smoduleLast
 )
 
-var (
-	smodules [_smoduleLast]Level
-)
+var smodules [_smoduleLast]Level
 
 // get returns the value of the severity.
 func (s *severity) get() severity {

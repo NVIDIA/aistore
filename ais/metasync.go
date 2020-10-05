@@ -28,6 +28,7 @@ const (
 	revsTokenTag  = "token"
 	revsActionTag = "-action" // to make a pair (revs, action)
 )
+
 const (
 	revsReqSync = iota
 	revsReqNotify
@@ -129,9 +130,7 @@ type (
 	}
 )
 
-var (
-	jspMetasyncOpts = jsp.Options{Signature: true, Checksum: true}
-)
+var jspMetasyncOpts = jsp.Options{Signature: true, Checksum: true}
 
 //
 // inner helpers
@@ -235,9 +234,7 @@ func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
 	cmn.Assert(y.isPrimary()) // caller must ensure
 	cmn.Assert(len(pairs) > 0)
-	var (
-		req = revsReq{pairs: pairs}
-	)
+	req := revsReq{pairs: pairs}
 	req.wg = &sync.WaitGroup{}
 	req.wg.Add(1)
 	req.reqType = revsReqSync
@@ -319,7 +316,7 @@ outer:
 	// step 2: build payload and update last sync-ed
 	payload := make(msPayload, 2*len(pairsToSend))
 	for _, pair := range pairsToSend {
-		var revs, msg, tag, s = pair.revs, pair.msg, pair.revs.tag(), ""
+		revs, msg, tag, s := pair.revs, pair.msg, pair.revs.tag(), ""
 		if msg.Action != "" {
 			s = ", action " + msg.Action
 		}

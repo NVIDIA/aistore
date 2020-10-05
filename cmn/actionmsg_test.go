@@ -30,50 +30,59 @@ func testRawUnmarshal(t *testing.T, tc actmsgTestConf) {
 
 func TestActMsgRawUnmarshal(t *testing.T) {
 	tests := []actmsgTestConf{
-		{action: ActEvictObjects,
+		{
+			action: ActEvictObjects,
 			vals: []string{
 				`{"action":"evictobj","value":{"template":"__tst/test-{1000..2000}"}}`,
 				`{"action":"evictobj","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
-		{action: ActPrefetch,
+		{
+			action: ActPrefetch,
 			vals: []string{
 				`{"action":"prefetch","value":{"template":"__tst/test-{1000..2000}"}}`,
 				`{"action":"prefetch","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
-		{action: ActDelete,
+		{
+			action: ActDelete,
 			vals: []string{
 				`{"action":"delete","value":{"template":"__tst/test-{1000..2000}"}}`,
 				`{"action":"delete","value":{"objnames":["o1","o2","o3"]}}`,
 			},
 		},
-		{action: ActSetBprops,
+		{
+			action: ActSetBprops,
 			vals: []string{
 				`{"action":"setbprops","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
-		{action: ActCreateLB,
+		{
+			action: ActCreateLB,
 			vals: []string{
 				`{"action":"createlb","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
-		{action: ActXactStart,
+		{
+			action: ActXactStart,
 			vals: []string{
 				`{"action":"start","value":{"kind": "rebalance"}}`,
 			},
 		},
-		{action: ActXactStop,
+		{
+			action: ActXactStop,
 			vals: []string{
 				`{"action":"stop","value":{"kind": "rebalance"}}`,
 			},
 		},
-		{action: ActListObjects,
+		{
+			action: ActListObjects,
 			vals: []string{
 				`{"action":"listobj","value":{"props": "size"}}`,
 			},
 		},
-		{action: ActPromote,
+		{
+			action: ActPromote,
 			vals: []string{
 				`{"action":"promote","value":{"target": "234ed78", "recurs": true, "keep": false}}`,
 			},

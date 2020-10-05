@@ -47,6 +47,7 @@ const (
 
 	nodeRestartedMarker = ".noderestarted"
 )
+
 const (
 	clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
 )
@@ -97,6 +98,7 @@ type (
 //////////////
 
 func (gfn *baseGFN) active() bool { return gfn.lookup.Load() }
+
 func (gfn *baseGFN) Activate() bool {
 	previous := gfn.lookup.Swap(true)
 	glog.Infoln(gfn.tag, "activated")
@@ -330,35 +332,41 @@ func (c clouds) initExt(t *targetrunner) (err error) {
 }
 
 func (t *targetrunner) initRecvHandlers() {
-	var (
-		networkHandlers = []networkHandler{
-			{r: cmn.Buckets, h: t.bucketHandler,
-				net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
-			{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
-			{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-			{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
-			{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
-			{r: cmn.Xactions, h: t.xactHandler, net: []string{cmn.NetworkIntraControl}},
-			{r: cmn.Rebalance, h: t.rebManager.RespHandler, net: []string{cmn.NetworkIntraData}},
-			{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
-			{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
-			{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
+	networkHandlers := []networkHandler{
+		{
+			r: cmn.Buckets, h: t.bucketHandler,
+			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData},
+		},
+		{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
+		{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Xactions, h: t.xactHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Rebalance, h: t.rebManager.RespHandler, net: []string{cmn.NetworkIntraData}},
+		{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
+		{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
 
-			{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
 
-			{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
-			{r: cmn.Sort, h: dsort.SortHandler,
-				net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
-			{r: cmn.ETL, h: t.etlHandler,
-				net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
+		{
+			r: cmn.Sort, h: dsort.SortHandler,
+			net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData},
+		},
+		{
+			r: cmn.ETL, h: t.etlHandler,
+			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl},
+		},
 
-			{r: cmn.Query, h: t.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		{r: cmn.Query, h: t.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 
-			{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
-			{r: "/", h: cmn.InvalidHandler,
-				net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
-		}
-	)
+		{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
+		{
+			r: "/", h: cmn.InvalidHandler,
+			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData},
+		},
+	}
 	t.registerNetworkHandlers(networkHandlers)
 }
 
@@ -1154,9 +1162,7 @@ func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, ap
 }
 
 func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems []string) {
-	var (
-		config = cmn.GCO.Get()
-	)
+	config := cmn.GCO.Get()
 	bucket, objName := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {

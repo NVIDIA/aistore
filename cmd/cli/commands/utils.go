@@ -217,9 +217,7 @@ func newAdditionalInfoError(err error, info string) error {
 
 // Populates the proxy and target maps
 func fillMap() (*cluster.Smap, error) {
-	var (
-		wg = &sync.WaitGroup{}
-	)
+	wg := &sync.WaitGroup{}
 	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return nil, err

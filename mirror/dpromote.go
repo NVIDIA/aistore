@@ -38,6 +38,7 @@ func (*dirPromoteProvider) New(args registry.XactArgs) registry.BucketEntry {
 	c := args.Custom.(*registry.DirPromoteArgs)
 	return &dirPromoteProvider{t: args.T, dir: c.Dir, params: c.Params}
 }
+
 func (p *dirPromoteProvider) Start(bck cmn.Bck) error {
 	xact := NewXactDirPromote(p.dir, bck, p.t, p.params)
 	go xact.Run()

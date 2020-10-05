@@ -9,10 +9,8 @@ type (
 	TrackerMock struct{}
 )
 
-var (
-	// interface guard
-	_ Tracker = &TrackerMock{}
-)
+// interface guard
+var _ Tracker = &TrackerMock{}
 
 func NewTrackerMock() Tracker {
 	return &TrackerMock{}

@@ -137,7 +137,7 @@ func (rctx *RecipeContext) GetCfg(duration time.Duration) {
 	}()
 }
 
-//TODO: DELETE, AISLOADER
+// TODO: DELETE, AISLOADER
 
 func (rctx *RecipeContext) Rename(bucketName, newName string) {
 	tag := rctx.startPrim("Rename")

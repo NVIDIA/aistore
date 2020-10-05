@@ -124,7 +124,8 @@ func (dm *DataMover) Open() {
 			Extra: &transport.Extra{
 				Compression: dm.compression,
 				Config:      config,
-				MMSA:        dm.mem},
+				MMSA:        dm.mem,
+			},
 			Ntype:        cluster.Targets,
 			Multiplier:   dm.multiplier,
 			ManualResync: true,
@@ -182,6 +183,7 @@ func (dm *DataMover) wrapRecvData(w http.ResponseWriter, hdr transport.Header, o
 	dm.data.recv(w, hdr, object, err)
 	dm.laterx.Store(true)
 }
+
 func (dm *DataMover) wrapRecvACK(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 	dm.laterx.Store(true)
 	dm.ack.recv(w, hdr, object, err)

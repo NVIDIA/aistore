@@ -9,10 +9,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 )
 
-var (
-	// interface guard
-	_ IOStater = &IOStaterMock{}
-)
+// interface guard
+var _ IOStater = &IOStaterMock{}
 
 type (
 	IOStaterMock struct {

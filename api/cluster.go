@@ -177,9 +177,7 @@ func Health(baseParams BaseParams) error {
 }
 
 func WaitNodeAdded(baseParams BaseParams, nodeID string) (*cluster.Smap, error) {
-	var (
-		i, max = 0, 2
-	)
+	i, max := 0, 2
 
 retry:
 	smap, err := GetClusterMap(baseParams)
@@ -201,9 +199,7 @@ retry:
 }
 
 func waitStarted(baseParams BaseParams) (err error) {
-	var (
-		i, max = 0, 2
-	)
+	i, max := 0, 2
 while503:
 	err = Health(baseParams)
 	if err == nil {

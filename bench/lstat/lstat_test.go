@@ -26,6 +26,7 @@ func BenchmarkAccess(b *testing.B) {
 		}
 	}
 }
+
 func BenchmarkStat(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if _, err := os.Stat(filename); err != nil {
@@ -33,6 +34,7 @@ func BenchmarkStat(b *testing.B) {
 		}
 	}
 }
+
 func BenchmarkLstat(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if _, err := os.Lstat(filename); err != nil {

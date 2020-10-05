@@ -159,9 +159,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 		return !aborted
 	}
 
-	var (
-		diffResolver = NewDiffResolver(nil)
-	)
+	diffResolver := NewDiffResolver(nil)
 
 	diffResolver.Start()
 

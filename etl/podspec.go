@@ -76,9 +76,7 @@ func podTransformTimeout(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (cmn.Dura
 }
 
 func ValidateSpec(spec []byte) (msg InitMsg, err error) {
-	var (
-		errCtx = &cmn.ETLErrorContext{}
-	)
+	errCtx := &cmn.ETLErrorContext{}
 	msg.Spec = spec
 	pod, err := ParsePodSpec(errCtx, msg.Spec)
 	if err != nil {

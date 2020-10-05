@@ -143,9 +143,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 		freeObject(reader)
 		return
 	}
-	var (
-		srcReader cmn.ReadOpenCloser
-	)
+	var srcReader cmn.ReadOpenCloser
 
 	switch r := reader.(type) {
 	case *memsys.SGL:
@@ -330,7 +328,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 		// create SGL to receive the slice data and save it to correct
 		// position in the slice list
 		var writer *slice
-		var lom = *(req.LOM)
+		lom := *(req.LOM)
 		if toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
 			fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)

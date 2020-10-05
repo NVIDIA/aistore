@@ -35,8 +35,10 @@ import (
 //   bucket that contains the object, etc.
 //
 
-const fmtNestedErr = "nested err: %v"
-const lomInitialVersion = "1"
+const (
+	fmtNestedErr      = "nested err: %v"
+	lomInitialVersion = "1"
+)
 
 type (
 	// NOTE: sizeof(lmeta) = 88 as of 5/26
@@ -150,6 +152,7 @@ func (lom *LOM) CloneCopiesMd() int {
 func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
 	return cmn.ToHTTPHdr(lom, hdr)
 }
+
 func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 	// NOTE: We never set the `Cksum` from the header
 	//  (although we send it) - it should be computed.
@@ -234,6 +237,7 @@ func (lom *LOM) setCopiesMd(copyFQN string, mpi *fs.MountpathInfo) {
 	lom.md.copies[copyFQN] = mpi
 	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
 }
+
 func (lom *LOM) addCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
 	if lom.md.copies == nil {
 		lom.md.copies = make(fs.MPI, 2)
@@ -241,6 +245,7 @@ func (lom *LOM) addCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
 	lom.md.copies[copyFQN] = mpi
 	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
 }
+
 func (lom *LOM) delCopyMd(copyFQN string) {
 	delete(lom.md.copies, copyFQN)
 	if len(lom.md.copies) <= 1 {
@@ -889,9 +894,7 @@ const (
 	minSize2Evict = cmn.KiB * 256
 )
 
-var (
-	minEvict = int(minSize2Evict / unsafe.Sizeof(lmeta{}))
-)
+var minEvict = int(minSize2Evict / unsafe.Sizeof(lmeta{}))
 
 func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 	var (
@@ -1028,6 +1031,7 @@ func (lom *LOM) TryLock(exclusive bool) bool {
 	)
 	return nlc.TryLock(lom.Uname(), exclusive)
 }
+
 func (lom *LOM) Lock(exclusive bool) {
 	var (
 		_, idx = lom.Hkey()
@@ -1035,6 +1039,7 @@ func (lom *LOM) Lock(exclusive bool) {
 	)
 	nlc.Lock(lom.Uname(), exclusive)
 }
+
 func (lom *LOM) DowngradeLock() {
 	var (
 		_, idx = lom.Hkey()
@@ -1042,6 +1047,7 @@ func (lom *LOM) DowngradeLock() {
 	)
 	nlc.DowngradeLock(lom.Uname())
 }
+
 func (lom *LOM) TryUpgradeLock() bool {
 	var (
 		_, idx = lom.Hkey()
@@ -1049,6 +1055,7 @@ func (lom *LOM) TryUpgradeLock() bool {
 	)
 	return nlc.TryUpgradeLock(lom.Uname())
 }
+
 func (lom *LOM) Unlock(exclusive bool) {
 	var (
 		_, idx = lom.Hkey()

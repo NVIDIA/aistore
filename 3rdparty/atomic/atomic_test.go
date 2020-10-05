@@ -202,5 +202,4 @@ var _ = Describe("Primitive atomics tests", func() {
 		Expect(x).To(Equal(42))
 		Expect(y).To(Equal(0))
 	})
-
 })

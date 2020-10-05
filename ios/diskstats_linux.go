@@ -35,15 +35,11 @@ type dblockStat struct {
 	ioMsWeighted  int64 // 11 - weighted # of milliseconds spent doing I/Os
 }
 
-var (
-	// interface guard
-	_ diskBlockStat = dblockStat{}
-)
+// interface guard
+var _ diskBlockStat = dblockStat{}
 
-var (
-	// Allocated here to reduce number of allocations in `readDiskStats`.
-	blockStats = make(diskBlockStats, 10)
-)
+// Allocated here to reduce number of allocations in `readDiskStats`.
+var blockStats = make(diskBlockStats, 10)
 
 // readDiskStats returns disk stats FIXME: optimize
 func readDiskStats(disks, sysfnames cmn.SimpleKVs) diskBlockStats {

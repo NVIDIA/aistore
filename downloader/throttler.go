@@ -13,9 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-var (
-	errThrottlerStopped = errors.New("throttler has been stopped")
-)
+var errThrottlerStopped = errors.New("throttler has been stopped")
 
 type (
 	throttler struct {

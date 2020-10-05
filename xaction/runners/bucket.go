@@ -49,6 +49,7 @@ func (*BckRenameProvider) New(args registry.XactArgs) registry.BucketEntry {
 		args:  args.Custom.(*registry.BckRenameArgs),
 	}
 }
+
 func (p *BckRenameProvider) Start(bck cmn.Bck) error {
 	f := func() ([]cluster.XactStats, error) {
 		onlyRunning := false
@@ -148,6 +149,7 @@ func (p *evictDeleteProvider) New(args registry.XactArgs) registry.BucketEntry {
 		args: args.Custom.(*registry.DeletePrefetchArgs),
 	}
 }
+
 func (p *evictDeleteProvider) Start(bck cmn.Bck) error {
 	p.xact = newEvictDelete(p.args.UUID, p.kind, bck, p.t, p.args)
 	return nil
@@ -201,6 +203,7 @@ func (*PrefetchProvider) New(args registry.XactArgs) registry.BucketEntry {
 		args: args.Custom.(*registry.DeletePrefetchArgs),
 	}
 }
+
 func (p *PrefetchProvider) Start(bck cmn.Bck) error {
 	p.xact = newPrefetch(p.args.UUID, p.Kind(), bck, p.t, p.args)
 	return nil

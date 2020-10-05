@@ -19,8 +19,10 @@ type hashFuncs struct {
 	countObjs []int
 }
 
-const objNameLen = 50
-const fqnMaxLen = 128
+const (
+	objNameLen = 50
+	fqnMaxLen  = 128
+)
 
 // Duplicated on purpose to avoid dependency on any AIStore code.
 func randFileName(src *rand.Rand, nameLen int) string {

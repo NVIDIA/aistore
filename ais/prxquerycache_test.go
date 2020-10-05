@@ -170,9 +170,7 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 		})
 
 		It("should correctly distinguish between different caches", func() {
-			var (
-				otherID = cacheReqID{bck: cmn.Bck{Name: "something"}}
-			)
+			otherID := cacheReqID{bck: cmn.Bck{Name: "something"}}
 
 			cache.set(id, "", makeEntries("a", "b", "c"), 3)
 			entries, hasEnough := cache.get(id, "", 3)
@@ -192,9 +190,7 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 
 		Describe("prefix", func() {
 			It("should get prefixed entries from `id='bck'` cache", func() {
-				var (
-					prefixID = cacheReqID{bck: id.bck, prefix: "p-"}
-				)
+				prefixID := cacheReqID{bck: id.bck, prefix: "p-"}
 
 				cache.set(id, "", makeEntries("a", "p-b", "p-c", "p-d", "z"), 5)
 				entries, hasEnough := cache.get(id, "", 3)
@@ -269,9 +265,7 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			})
 
 			It("should correctly behave in `id='bck'` cache if prefix is contained in interval but there aren't matching entries", func() {
-				var (
-					prefixID = cacheReqID{bck: id.bck, prefix: "b-"}
-				)
+				prefixID := cacheReqID{bck: id.bck, prefix: "b-"}
 
 				cache.set(id, "", makeEntries("a", "p-b", "p-c", "p-d", "z"), 5)
 				entries, hasEnough := cache.get(id, "", 3)
@@ -300,9 +294,7 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			})
 
 			It("should get prefixed entries from `id='bck+prefix'` cache", func() {
-				var (
-					prefixID = cacheReqID{bck: id.bck, prefix: "p-"}
-				)
+				prefixID := cacheReqID{bck: id.bck, prefix: "p-"}
 
 				cache.set(id, "", makeEntries("p-a", "p-b", "p-c", "p-d", "p-e"), 5)
 				entries, hasEnough := cache.get(prefixID, "", 3)
@@ -319,9 +311,7 @@ var _ = Describe("QueryCache+QueryBuffer", func() {
 			})
 
 			It("should fallback to `id='bck'` cache when there is not enough entries in `id='bck+prefix'` cache", func() {
-				var (
-					prefixID = cacheReqID{bck: id.bck, prefix: "p-"}
-				)
+				prefixID := cacheReqID{bck: id.bck, prefix: "p-"}
 
 				cache.set(id, "", makeEntries("a", "p-b", "p-c", "p-d"), 4)
 				cache.set(prefixID, "", makeEntries("p-b", "p-c"), 2)

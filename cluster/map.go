@@ -95,6 +95,7 @@ func (d *Snode) SetName() {
 		d.name = "t[" + d.DaemonID + "]"
 	}
 }
+
 func (d *Snode) String() string {
 	if d.Name() == "" {
 		d.SetName()
@@ -186,6 +187,7 @@ func (m *Smap) String() string {
 	}
 	return "Smap v" + strconv.FormatInt(m.Version, 10)
 }
+
 func (m *Smap) StringEx() string {
 	if m == nil {
 		return "Smap <nil>"

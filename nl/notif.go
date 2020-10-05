@@ -28,6 +28,7 @@ type (
 func (notif *NotifBase) Callback(n cluster.Notif, err error) {
 	notif.F(n, err)
 }
+
 func (notif *NotifBase) OnProgress(n cluster.Notif, err error) {
 	if !notif.Upon(cluster.UponProgress) {
 		return
@@ -42,6 +43,7 @@ func (notif *NotifBase) Category() int            { return notif.Ty }
 func (notif *NotifBase) Subscribers() []string {
 	return notif.Dsts
 }
+
 func (notif *NotifBase) NotifyInterval() int64 {
 	if notif.Interval == 0 {
 		return int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())

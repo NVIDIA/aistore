@@ -40,6 +40,7 @@ type (
 func (p *xactRespondProvider) New(_ registry.XactArgs) registry.BucketEntry {
 	return &xactRespondProvider{}
 }
+
 func (p *xactRespondProvider) Start(bck cmn.Bck) error {
 	var (
 		xec      = ECM.NewRespondXact(bck)

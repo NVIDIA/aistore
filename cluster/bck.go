@@ -37,9 +37,7 @@ var (
 	_ cmn.NLP = &NameLockPair{}
 )
 
-var (
-	bckLocker nameLocker
-)
+var bckLocker nameLocker
 
 func Init() {
 	bckLocker = make(nameLocker, cmn.MultiSyncMapCount)
@@ -66,9 +64,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }
 
 func parseUname(uname string) (b Bck, objName string) {
-	var (
-		prev, itemIdx int
-	)
+	var prev, itemIdx int
 	for i := 0; i < len(uname); i++ {
 		if uname[i] != filepath.Separator {
 			continue
@@ -264,6 +260,7 @@ func (nlp *NameLockPair) Lock() {
 	nlp.nlc.Lock(nlp.uname, true)
 	nlp.exclusive = true
 }
+
 func (nlp *NameLockPair) TryLock() (ok bool) {
 	ok = nlp.withRetry(nlpTryDuration, true)
 	nlp.exclusive = ok

@@ -413,9 +413,7 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 
 func propsMainTest(t *testing.T, versioning bool) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		var (
-			config = tutils.GetClusterConfig(t)
-		)
+		config := tutils.GetClusterConfig(t)
 
 		oldChkVersion := config.Versioning.ValidateWarmGet
 		oldVersioning := config.Versioning.Enabled
@@ -493,14 +491,12 @@ func TestObjProps(t *testing.T) {
 			test.checkExists, test.verEnabled, test.cloud, test.evict,
 		)
 		t.Run(name, func(t *testing.T) {
-			var (
-				m = ioContext{
-					t:         t,
-					num:       10,
-					fileSize:  512,
-					fixedSize: true,
-				}
-			)
+			m := ioContext{
+				t:         t,
+				num:       10,
+				fileSize:  512,
+				fixedSize: true,
+			}
 
 			m.init()
 

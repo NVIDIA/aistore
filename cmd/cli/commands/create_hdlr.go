@@ -36,9 +36,7 @@ var (
 )
 
 func createBucketHandler(c *cli.Context) (err error) {
-	var (
-		props *cmn.BucketPropsToUpdate
-	)
+	var props *cmn.BucketPropsToUpdate
 	if flagIsSet(c, bucketPropsFlag) {
 		propSingleBck, err := parseBckPropsFromContext(c)
 		if err != nil {

@@ -177,9 +177,7 @@ func CheckPathNotExists(t *testing.T, path string) {
 }
 
 func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
-	var (
-		fileNames = make([]string, 0, 100)
-	)
+	fileNames := make([]string, 0, 100)
 	topDirName, err := ioutil.TempDir(desc.InitDir, "")
 	tassert.CheckFatal(tb, err)
 

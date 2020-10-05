@@ -17,10 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-var (
-	// interface guard
-	_ ExtractCreator = &targzExtractCreator{}
-)
+// interface guard
+var _ ExtractCreator = &targzExtractCreator{}
 
 type targzExtractCreator struct {
 	t cluster.Target
@@ -83,7 +81,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader
 		} else if header.Typeflag == tar.TypeReg {
 			data := cmn.NewSizedReader(tr, header.Size)
 
-			var extractMethod = ExtractToMem
+			extractMethod := ExtractToMem
 			if toDisk {
 				extractMethod = ExtractToDisk
 			}

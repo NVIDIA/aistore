@@ -82,7 +82,6 @@ var _ = Describe("CommunicatorTest", func() {
 		proxyServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, targetServer.URL, http.StatusMovedPermanently)
 		}))
-
 	})
 
 	AfterEach(func() {

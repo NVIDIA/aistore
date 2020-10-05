@@ -6,9 +6,7 @@ package soakcmn
 
 import "time"
 
-var (
-	Params SoakParams
-)
+var Params SoakParams
 
 // nolint:maligned // no performance critical code
 type SoakParams struct {

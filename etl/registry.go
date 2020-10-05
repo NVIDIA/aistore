@@ -60,9 +60,7 @@ func (r *registry) getByUUID(uuid string) (c Communicator, exists bool) {
 }
 
 func (r *registry) removeByUUID(uuid string) (c Communicator) {
-	var (
-		ok bool
-	)
+	var ok bool
 	cmn.Assert(uuid != "")
 	r.mtx.Lock()
 	if c, ok = r.byUUID[uuid]; ok {

@@ -363,9 +363,7 @@ func (s *Stream) objDone(obj *Obj, err error) {
 }
 
 func (s *Stream) doRequest() (err error) {
-	var (
-		body io.Reader = s
-	)
+	var body io.Reader = s
 	s.Numcur, s.Sizecur = 0, 0
 	if s.compressed() {
 		s.lz4s.sgl.Reset()
@@ -473,7 +471,7 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 // NOTE: reader.Close() is done by the completion handling code objDone
 //
 func (s *Stream) eoObj(err error) {
-	var obj = &s.sendoff.obj
+	obj := &s.sendoff.obj
 	s.Sizecur += s.sendoff.off
 	s.stats.Offset.Add(s.sendoff.off)
 	if err != nil {
@@ -552,7 +550,7 @@ func insString(off int, to []byte, str string) int {
 }
 
 func insByte(off int, to, b []byte) int {
-	var l = len(b)
+	l := len(b)
 	binary.BigEndian.PutUint64(to[off:], uint64(l))
 	off += cmn.SizeofI64
 	n := copy(to[off:], b)

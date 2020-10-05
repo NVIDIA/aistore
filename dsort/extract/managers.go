@@ -28,9 +28,7 @@ const (
 	ExtractToWriter
 )
 
-var (
-	_ RecordExtractor = &RecordManager{}
-)
+var _ RecordExtractor = &RecordManager{}
 
 type (
 	extractRecordArgs struct {

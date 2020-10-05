@@ -255,9 +255,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 // same as above with HTTP trace
 func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool,
 	offset, length int64) (int64, httpLatencies, error) {
-	var (
-		hdrCksumValue, hdrCksumType string
-	)
+	var hdrCksumValue, hdrCksumType string
 
 	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
 	if err != nil {
@@ -306,9 +304,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 
 // getDiscard sends a GET request and discards returned data
 func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
-	var (
-		hdrCksumValue, hdrCksumType string
-	)
+	var hdrCksumValue, hdrCksumType string
 
 	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
 	if err != nil {

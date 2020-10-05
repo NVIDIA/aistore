@@ -53,9 +53,7 @@ const (
 	leaseTime = 60
 )
 
-var (
-	_ cluster.CloudProvider = &azureProvider{}
-)
+var _ cluster.CloudProvider = &azureProvider{}
 
 func azureProto() string {
 	proto := os.Getenv(azureProtoEnvVar)

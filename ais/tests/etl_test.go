@@ -177,9 +177,7 @@ func testETL(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath str
 //  the same target which they are currently stored on. That's because our
 //  minikube tests only run with a single target.
 func testOfflineETL(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
-	var (
-		bckTo = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
-	)
+	bckTo := cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 
 	defer func() {
 		tutils.Logf("Stop %q\n", uuid)

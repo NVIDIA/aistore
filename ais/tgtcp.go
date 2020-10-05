@@ -183,7 +183,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 		// PUT /v1/daemon/proxy/newprimaryproxyid
 		t.httpdaesetprimaryproxy(w, r, apiItems)
 	case cmn.SyncSmap:
-		var newsmap = &smapX{}
+		newsmap := &smapX{}
 		if cmn.ReadJSON(w, r, newsmap) != nil {
 			return
 		}
@@ -570,6 +570,7 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller str
 	}
 	return
 }
+
 func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {
 	const (
 		downgrade = "attempt to downgrade"
@@ -690,9 +691,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 }
 
 func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (err error) {
-	var (
-		s, from string
-	)
+	var s, from string
 	if caller != "" {
 		from = " from " + caller
 	}
@@ -892,7 +891,7 @@ func (t *targetrunner) smapVersionFixup(r *http.Request) {
 		glog.Error(err)
 		return
 	}
-	var msg = t.newAisMsgStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
+	msg := t.newAisMsgStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}
@@ -946,7 +945,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/metasync
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
-	var payload = make(msPayload)
+	payload := make(msPayload)
 	if err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
 		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
@@ -1008,7 +1007,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 
 // POST /v1/metasync
 func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
-	var payload = make(msPayload)
+	payload := make(msPayload)
 	if err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync post"); err != nil {
 		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return

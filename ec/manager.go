@@ -40,9 +40,7 @@ type Manager struct {
 	respBundle    *bundle.Streams
 }
 
-var (
-	ECM *Manager
-)
+var ECM *Manager
 
 func initManager(t cluster.Target) error {
 	config := cmn.GCO.Get()
@@ -144,9 +142,11 @@ func (mgr *Manager) closeECBundles() {
 func (mgr *Manager) NewGetXact(bck cmn.Bck) *XactGet {
 	return NewGetXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
 }
+
 func (mgr *Manager) NewPutXact(bck cmn.Bck) *XactPut {
 	return NewPutXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
 }
+
 func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
 	return NewRespondXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
 }

@@ -157,7 +157,7 @@ func (s *DynSemaphore) SetSize(n int) {
 }
 
 func (s *DynSemaphore) Acquire(cnts ...int) {
-	var cnt = 1
+	cnt := 1
 	if len(cnts) > 0 {
 		cnt = cnts[0]
 	}
@@ -175,7 +175,7 @@ check:
 }
 
 func (s *DynSemaphore) Release(cnts ...int) {
-	var cnt = 1
+	cnt := 1
 	if len(cnts) > 0 {
 		cnt = cnts[0]
 	}

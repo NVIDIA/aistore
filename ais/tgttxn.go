@@ -86,9 +86,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActCopyBucket, cmn.ActETLBucket:
-		var (
-			bck2BckMsg = &bck2BckInternalMsg{}
-		)
+		bck2BckMsg := &bck2BckInternalMsg{}
 		if err = cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
@@ -419,9 +417,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 ////////////////////
 
 func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *bck2BckInternalMsg, dps ...cluster.LomReaderProvider) error {
-	var (
-		dp cluster.LomReaderProvider
-	)
+	var dp cluster.LomReaderProvider
 	if len(dps) > 0 {
 		dp = dps[0]
 	}
@@ -531,9 +527,7 @@ func (t *targetrunner) etlBucket(c *txnServerCtx, msg *bck2BckInternalMsg) (err 
 	if msg.ID == "" {
 		return etl.ErrMissingUUID
 	}
-	var (
-		dp cluster.LomReaderProvider
-	)
+	var dp cluster.LomReaderProvider
 
 	if dp, err = etl.NewOfflineDataProvider(&msg.Bck2BckMsg); err != nil {
 		return nil

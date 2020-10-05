@@ -52,9 +52,7 @@ HOW TO UNMOUNT:
 `
 )
 
-var (
-	build string
-)
+var build string
 
 func init() {
 	// Set custom app help template.

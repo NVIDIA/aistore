@@ -41,9 +41,7 @@ type (
 	}
 )
 
-var (
-	_ cluster.CloudProvider = &AisCloudProvider{}
-)
+var _ cluster.CloudProvider = &AisCloudProvider{}
 
 // TODO - FIXME: review/refactor try{}
 // TODO: house-keep refreshing remote Smap
@@ -96,7 +94,7 @@ func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 	}
 	// init and attach
 	for alias, clusterURLs := range clusterConf {
-		var remAis = &remAisClust{}
+		remAis := &remAisClust{}
 		if offline, err := remAis.init(alias, clusterURLs, cfg); err != nil { // and check connectivity
 			if offline {
 				continue
@@ -287,7 +285,7 @@ func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	remAis, ok := m.remote[uuid]
 	if !ok {
 		// double take (see "for user convenience" above)
-		var orig = uuid
+		orig := uuid
 		if uuid, ok = m.alias[uuid /* alias? */]; !ok {
 			m.mu.RUnlock()
 			return nil, fmt.Errorf("%s: unknown uuid (or alias) %q", aisCloudPrefix, orig)
@@ -394,9 +392,7 @@ func (m *AisCloudProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks)
 }
 
 func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
-	var (
-		remoteBck = lom.Bck().Bck
-	)
+	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return nil, err, errCode
@@ -414,9 +410,7 @@ func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMe
 }
 
 func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
-	var (
-		remoteBck = lom.Bck().Bck
-	)
+	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return err, errCode
@@ -440,9 +434,7 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 
 func (m *AisCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
 	expectedCksm *cmn.Cksum, err error, errCode int) {
-	var (
-		remoteBck = lom.Bck().Bck
-	)
+	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return nil, nil, err, errCode
@@ -454,9 +446,7 @@ func (m *AisCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (
 }
 
 func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
-	var (
-		remoteBck = lom.Bck().Bck
-	)
+	remoteBck := lom.Bck().Bck
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -480,9 +470,7 @@ func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 }
 
 func (m *AisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
-	var (
-		remoteBck = lom.Bck().Bck
-	)
+	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return err, errCode

@@ -78,9 +78,7 @@ type (
 	}
 )
 
-var (
-	_ dsorter = &dsorterGeneral{}
-)
+var _ dsorter = &dsorterGeneral{}
 
 func newDSorterGeneral(m *Manager) (*dsorterGeneral, error) {
 	// Memory watcher
@@ -237,9 +235,7 @@ func (ds *dsorterGeneral) postRecordDistribution() {
 // createShardsLocally waits until it's given the signal to start creating
 // shards, then creates shards in parallel.
 func (ds *dsorterGeneral) createShardsLocally() (err error) {
-	var (
-		phaseInfo = &ds.m.creationPhase
-	)
+	phaseInfo := &ds.m.creationPhase
 
 	ds.creationPhase.adjuster.start()
 	defer ds.creationPhase.adjuster.stop()

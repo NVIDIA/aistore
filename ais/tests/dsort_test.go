@@ -375,9 +375,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 				}
 			}
 		} else {
-			var (
-				files []os.FileInfo
-			)
+			var files []os.FileInfo
 
 			if df.extension == cmn.ExtTar || df.extension == cmn.ExtTarTgz {
 				files, err = tutils.GetFileInfosFromTarBuffer(buffer, gzipped)
@@ -489,9 +487,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 }
 
 func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
-	var (
-		allShardRecords = make([]shardRecords, 0, 10)
-	)
+	allShardRecords := make([]shardRecords, 0, 10)
 
 	list, err := api.ListObjects(df.baseParams, bck, nil, 0)
 	tassert.CheckFatal(df.m.t, err)
@@ -545,17 +541,15 @@ func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metri
 
 // helper for dispatching i-th dSort job
 func dispatchDSortJob(m *ioContext, dsorterType string, i int) {
-	var (
-		df = &dsortFramework{
-			m:                m,
-			dsorterType:      dsorterType,
-			inputTempl:       fmt.Sprintf("input%d-{0..999}", i),
-			outputTempl:      fmt.Sprintf("output%d-{00000..01000}", i),
-			tarballCnt:       1000,
-			fileInTarballCnt: 50,
-			maxMemUsage:      "99%",
-		}
-	)
+	df := &dsortFramework{
+		m:                m,
+		dsorterType:      dsorterType,
+		inputTempl:       fmt.Sprintf("input%d-{0..999}", i),
+		outputTempl:      fmt.Sprintf("output%d-{00000..01000}", i),
+		tarballCnt:       1000,
+		fileInTarballCnt: 50,
+		maxMemUsage:      "99%",
+	}
 
 	df.init()
 	df.createInputShards()
@@ -1233,21 +1227,19 @@ func TestDistributedSortWithContent(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
-			var (
-				cases = []struct {
-					extension   string
-					formatType  string
-					missingKeys bool
-				}{
-					{".loss", extract.FormatTypeInt, false},
-					{".cls", extract.FormatTypeFloat, false},
-					{".smth", extract.FormatTypeString, false},
+			cases := []struct {
+				extension   string
+				formatType  string
+				missingKeys bool
+			}{
+				{".loss", extract.FormatTypeInt, false},
+				{".cls", extract.FormatTypeFloat, false},
+				{".smth", extract.FormatTypeString, false},
 
-					{".loss", extract.FormatTypeInt, true},
-					{".cls", extract.FormatTypeFloat, true},
-					{".smth", extract.FormatTypeString, true},
-				}
-			)
+				{".loss", extract.FormatTypeInt, true},
+				{".cls", extract.FormatTypeFloat, true},
+				{".smth", extract.FormatTypeString, true},
+			}
 
 			for _, entry := range cases {
 				entry := entry // pin

@@ -197,13 +197,14 @@ func (ctx *IostatContext) GetMpathUtil(mpath string, nowTs int64) int64 {
 	cache := ctx.refreshIostatCache(nowTs)
 	return cache.mpathUtil[mpath]
 }
+
 func (ctx *IostatContext) GetAllMpathUtils(nowTs int64) (map[string]int64, map[string]*atomic.Int32) {
 	cache := ctx.refreshIostatCache(nowTs)
 	return cache.mpathUtil, cache.mpathRR
 }
 
 func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStats) {
-	var cache = ctx.refreshIostatCache()
+	cache := ctx.refreshIostatCache()
 	m = make(map[string]*SelectedDiskStats)
 	for disk := range cache.diskIOms {
 		m[disk] = &SelectedDiskStats{
@@ -216,7 +217,7 @@ func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStat
 }
 
 func (ctx *IostatContext) LogAppend(lines []string) []string {
-	var cache = ctx.refreshIostatCache()
+	cache := ctx.refreshIostatCache()
 	for _, disk := range ctx.sorted {
 		if _, ok := cache.diskIOms[disk]; !ok {
 			continue

@@ -116,9 +116,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 		t.invalmsghdlr(w, r, "object name is undefined")
 		return
 	}
-	var (
-		err error
-	)
+	var err error
 	objName := path.Join(items[1:]...)
 	lom := &cluster.LOM{T: t, ObjName: objName}
 	if err = lom.Init(bck.Bck, config); err != nil {

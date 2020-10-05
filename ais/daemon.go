@@ -171,9 +171,7 @@ func dryRunInit() {
 }
 
 func initDaemon(version, build string) (rmain cmn.Runner) {
-	var (
-		err error
-	)
+	var err error
 	flag.Parse()
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
 		cmn.ExitLogf(

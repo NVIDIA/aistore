@@ -39,8 +39,10 @@ const (
 	mdCksumTyXXHash = 1 // the one and only currently supported checksum type == xxhash
 )
 
-const XattrLOM = "user.ais.lom" // on-disk xattr name
-const xattrMaxSize = memsys.MaxSmallSlabSize
+const (
+	XattrLOM     = "user.ais.lom" // on-disk xattr name
+	xattrMaxSize = memsys.MaxSmallSlabSize
+)
 
 // packing format internal attrs
 const (

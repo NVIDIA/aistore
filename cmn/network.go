@@ -19,9 +19,7 @@ const (
 	NetworkIntraData    = "intra_data"
 )
 
-var (
-	KnownNetworks = []string{NetworkPublic, NetworkIntraControl, NetworkIntraData}
-)
+var KnownNetworks = []string{NetworkPublic, NetworkIntraControl, NetworkIntraData}
 
 type (
 	// Options to create a transport for HTTP client

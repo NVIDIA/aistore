@@ -53,9 +53,7 @@ func (w *Walk) DefaultLocalObjPage(msg *cmn.SelectMsg) (*cmn.BucketList, error) 
 // bucket based on query.ObjectsListingXact. The bucket can be local or cloud one. In latter case the
 // function returns the list of cloud objects cached locally
 func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketList, error) {
-	var (
-		err error
-	)
+	var err error
 
 	entries, err := xact.NextN(objectsCnt)
 	list := &cmn.BucketList{Entries: entries}

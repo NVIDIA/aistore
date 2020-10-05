@@ -266,7 +266,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	objName := <-filenameCh
 	fqn := findObjOnDisk(bck, objName)
 	tutils.Logf("Corrupting file data[%s]: %s\n", objName, fqn)
-	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
+	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0o644)
 	tassert.CheckFatal(t, err)
 	_, err = api.GetObjectWithValidation(baseParams, bck, path.Join(subdir, objName))
 	if err == nil {
@@ -314,8 +314,10 @@ func TestRenameBucket(t *testing.T) {
 			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
 			tassert.CheckFatal(t, err)
 
-			regData := regressionTestData{bck: bck, renamedBck: renamedBck,
-				numBuckets: len(bcks), rename: true, wait: wait}
+			regData := regressionTestData{
+				bck: bck, renamedBck: renamedBck,
+				numBuckets: len(bcks), rename: true, wait: wait,
+			}
 			doBucketRegressionTest(t, proxyURL, regData, cksumType)
 		})
 	}
@@ -471,9 +473,7 @@ func TestRenameObjects(t *testing.T) {
 
 func TestObjectPrefix(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		var (
-			proxyURL = tutils.RandomProxyURL(t)
-		)
+		proxyURL := tutils.RandomProxyURL(t)
 
 		prefixFileNumber = numfiles
 		fileNames := prefixCreateFiles(t, proxyURL, bck.Bck, bck.Props.Cksum.Type)

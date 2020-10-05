@@ -18,13 +18,11 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-var (
-	flags struct {
-		in, out string
-		extract bool
-		help    bool
-	}
-)
+var flags struct {
+	in, out string
+	extract bool
+	help    bool
+}
 
 const (
 	helpMsg = `Build:
@@ -123,7 +121,7 @@ func dumpRMD() error {
 }
 
 func dumpMeta(v interface{}, opts jsp.Options) (err error) {
-	var f = os.Stdout
+	f := os.Stdout
 	if flags.out != "" {
 		f, err = cmn.CreateFile(flags.out)
 		if err != nil {

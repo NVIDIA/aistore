@@ -173,9 +173,7 @@ func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileT
 }
 
 func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int) error {
-	var (
-		zw *zip.Writer
-	)
+	var zw *zip.Writer
 
 	extension := ".zip"
 	name := zipName + extension

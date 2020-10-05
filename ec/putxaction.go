@@ -254,10 +254,8 @@ type ExtECPutStats struct {
 	AvgQueueLen    float64          `json:"ec.queue.len.n"`
 }
 
-var (
-	// interface guard
-	_ cluster.XactStats = &PutTargetStats{}
-)
+// interface guard
+var _ cluster.XactStats = &PutTargetStats{}
 
 func (r *XactPut) Stats() cluster.XactStats {
 	baseStats := r.XactBase.Stats().(*xaction.BaseXactStats)

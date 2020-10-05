@@ -159,7 +159,6 @@ func startXactionHandler(c *cli.Context) (err error) {
 	}
 
 	bck, _, err := cmn.ParseBckObjectURI(c.Args().First())
-
 	if err != nil {
 		return err
 	}

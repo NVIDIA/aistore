@@ -318,9 +318,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 	} else {
 		lom.Lock(true) // one cold-GET at a time
 	}
-	var (
-		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
-	)
+	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	if err, errCode = t.Cloud(lom.Bck()).GetObj(ctx, workFQN, lom); err != nil {
 		lom.Unlock(true)
 		glog.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)

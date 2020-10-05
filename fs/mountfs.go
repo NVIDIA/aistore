@@ -415,13 +415,16 @@ func LoadBalanceGET(objFQN, objMpath string, copies MPI) (fqn string) {
 func GetMpathUtil(mpath string, nowTs int64) int64 {
 	return mfs.ios.GetMpathUtil(mpath, nowTs)
 }
+
 func GetAllMpathUtils(nowTs int64) (utils map[string]int64) {
 	utils, _ = mfs.ios.GetAllMpathUtils(nowTs)
 	return
 }
+
 func LogAppend(lines []string) []string {
 	return mfs.ios.LogAppend(lines)
 }
+
 func GetSelectedDiskStats() (m map[string]*ios.SelectedDiskStats) {
 	return mfs.ios.GetSelectedDiskStats()
 }

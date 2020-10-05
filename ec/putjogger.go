@@ -245,9 +245,7 @@ func (c *putJogger) cleanup(req *Request) error {
 // Sends object replicas to targets that must have replicas after the client
 // uploads the main replica
 func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
-	var (
-		copies = req.LOM.Bprops().EC.ParitySlices
-	)
+	copies := req.LOM.Bprops().EC.ParitySlices
 
 	// generate a list of target to send the replica (all excluding this one)
 	targets, err := cluster.HrwTargetList(req.LOM.Uname(), c.parent.smap.Get(), copies+1)

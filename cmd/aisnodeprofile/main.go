@@ -16,8 +16,10 @@ import (
 	"github.com/NVIDIA/aistore/ais"
 )
 
-var cpuProfile = flag.String("cpuprofile", "", "write cpu profile to `file`")
-var memProfile = flag.String("memprofile", "", "write memory profile to `file`")
+var (
+	cpuProfile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+	memProfile = flag.String("memprofile", "", "write memory profile to `file`")
+)
 
 // NOTE: these variables are set by ldflags
 var (

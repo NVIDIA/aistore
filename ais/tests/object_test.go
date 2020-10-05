@@ -67,9 +67,7 @@ func TestCloudBucketObject(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s:%v", test.ty, test.exists), func(t *testing.T) {
-			var (
-				object = cmn.RandString(10)
-			)
+			object := cmn.RandString(10)
 			if !test.exists {
 				bck.Name = cmn.RandString(10)
 			} else {
@@ -232,9 +230,7 @@ func TestAppendObject(t *testing.T) {
 func Test_putdelete(t *testing.T) {
 	const fileSize = 512 * cmn.KiB
 
-	var (
-		proxyURL = tutils.RandomProxyURL(t)
-	)
+	proxyURL := tutils.RandomProxyURL(t)
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
@@ -255,7 +251,7 @@ func Test_putdelete(t *testing.T) {
 		}
 
 		// Start the worker pools
-		var wg = &sync.WaitGroup{}
+		wg := &sync.WaitGroup{}
 		// Get the workers started
 		for i := 0; i < numworkers; i++ {
 			wg.Add(1)
@@ -299,9 +295,7 @@ func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg,
 
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
-	var (
-		proxyURL = tutils.RandomProxyURL(t)
-	)
+	proxyURL := tutils.RandomProxyURL(t)
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		// Declare one channel per worker to pass the keyname
@@ -312,7 +306,7 @@ func Test_matchdelete(t *testing.T) {
 		}
 		// Start the worker pools
 		errCh := make(chan error, 100)
-		var wg = &sync.WaitGroup{}
+		wg := &sync.WaitGroup{}
 		// Get the workers started
 		for i := 0; i < numworkers; i++ {
 			wg.Add(1)
@@ -320,7 +314,7 @@ func Test_matchdelete(t *testing.T) {
 		}
 
 		// list the bucket
-		var msg = &cmn.SelectMsg{PageSize: pagesize}
+		msg := &cmn.SelectMsg{PageSize: pagesize}
 		baseParams := tutils.BaseAPIParams(proxyURL)
 		reslist, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 		if err != nil {
@@ -368,9 +362,7 @@ func TestOperationsWithRanges(t *testing.T) {
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
 		objSize      = 16 * cmn.KiB
 	)
-	var (
-		proxyURL = tutils.RandomProxyURL(t)
-	)
+	proxyURL := tutils.RandomProxyURL(t)
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		for _, evict := range []bool{false, true} {
@@ -488,7 +480,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					nameChans[i] = make(chan string, 100)
 				}
 				// Start the worker pools
-				var wg = &sync.WaitGroup{}
+				wg := &sync.WaitGroup{}
 				// Get the workers started
 				for i := 0; i < numworkers; i++ {
 					wg.Add(1)
@@ -981,7 +973,7 @@ func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.
 
 func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch string,
 	keynameChans []chan string, outputChan chan string) int {
-	var msg = &cmn.SelectMsg{PageSize: pagesize}
+	msg := &cmn.SelectMsg{PageSize: pagesize}
 	reslist := testListObjects(t, proxyURL, bck, msg, 0)
 	if reslist == nil {
 		return 0
@@ -1093,7 +1085,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 	// Test when the contents of the file are changed
 	tutils.Logf("Changing contents of the file [%s]: %s\n", fileName, fqn)
-	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
+	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0o644)
 	tassert.CheckFatal(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
 
@@ -1298,7 +1290,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName := filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
 	fqn = findObjOnDisk(bck, objName)
 	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
-	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
+	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0o644)
 	tassert.CheckFatal(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
 
@@ -1762,7 +1754,7 @@ func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {
 	)
 	tassert.CheckFatal(t, err)
 	off := rand.Int63n(fi.Size())
-	file, err := os.OpenFile(fqn, os.O_RDWR, 0644)
+	file, err := os.OpenFile(fqn, os.O_RDWR, 0o644)
 	tassert.CheckFatal(t, err)
 	_, err = file.Seek(off, 0)
 	tassert.CheckFatal(t, err)

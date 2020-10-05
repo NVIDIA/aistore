@@ -21,67 +21,65 @@ import (
 	"github.com/urfave/cli"
 )
 
-var (
-	etlCmds = []cli.Command{
-		{
-			Name:  commandETL,
-			Usage: "use ETLs",
-			Subcommands: []cli.Command{
-				{
-					Name:      subcmdInit,
-					Usage:     "initialize ETL with yaml spec",
-					ArgsUsage: "SPEC_FILE",
-					Action:    etlInitHandler,
+var etlCmds = []cli.Command{
+	{
+		Name:  commandETL,
+		Usage: "use ETLs",
+		Subcommands: []cli.Command{
+			{
+				Name:      subcmdInit,
+				Usage:     "initialize ETL with yaml spec",
+				ArgsUsage: "SPEC_FILE",
+				Action:    etlInitHandler,
+			},
+			{
+				Name:  subcmdBuild,
+				Usage: "build",
+				Flags: []cli.Flag{
+					fromFileFlag,
+					depsFileFlag,
+					runtimeFlag,
+					waitTimeoutFlag,
 				},
-				{
-					Name:  subcmdBuild,
-					Usage: "build",
-					Flags: []cli.Flag{
-						fromFileFlag,
-						depsFileFlag,
-						runtimeFlag,
-						waitTimeoutFlag,
-					},
-					Action: etlBuildHandler,
-				},
-				{
-					Name:   subcmdList,
-					Usage:  "list all ETLs",
-					Action: etlListHandler,
-				},
-				{
-					Name:      subcmdLogs,
-					Usage:     "retrieve logs produced by ETL",
-					ArgsUsage: "ETL_ID [TARGET_ID]",
-					Action:    etlLogsHandler,
-				},
-				{
-					Name:      subcmdStop,
-					Usage:     "stop ETL with given id",
-					ArgsUsage: "ETL_ID",
-					Action:    etlStopHandler,
-				},
-				{
-					Name:      subcmdObject,
-					Usage:     "transform object with given ETL",
-					ArgsUsage: "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
-					Action:    etlObjectHandler,
-				},
-				{
-					Name:      subcmdBucket,
-					Usage:     "offline transform bucket with given ETL",
-					ArgsUsage: "ETL_ID BUCKET_FROM BUCKET_TO",
-					Action:    etlOfflineHandler,
-					Flags: []cli.Flag{
-						etlExtFlag,
-						cpBckPrefixFlag,
-						cpBckDryRunFlag,
-					},
+				Action: etlBuildHandler,
+			},
+			{
+				Name:   subcmdList,
+				Usage:  "list all ETLs",
+				Action: etlListHandler,
+			},
+			{
+				Name:      subcmdLogs,
+				Usage:     "retrieve logs produced by ETL",
+				ArgsUsage: "ETL_ID [TARGET_ID]",
+				Action:    etlLogsHandler,
+			},
+			{
+				Name:      subcmdStop,
+				Usage:     "stop ETL with given id",
+				ArgsUsage: "ETL_ID",
+				Action:    etlStopHandler,
+			},
+			{
+				Name:      subcmdObject,
+				Usage:     "transform object with given ETL",
+				ArgsUsage: "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
+				Action:    etlObjectHandler,
+			},
+			{
+				Name:      subcmdBucket,
+				Usage:     "offline transform bucket with given ETL",
+				ArgsUsage: "ETL_ID BUCKET_FROM BUCKET_TO",
+				Action:    etlOfflineHandler,
+				Flags: []cli.Flag{
+					etlExtFlag,
+					cpBckPrefixFlag,
+					cpBckDryRunFlag,
 				},
 			},
 		},
-	}
-)
+	},
+}
 
 func etlInitHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
@@ -227,9 +225,7 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "BUCKET_TO")
 	}
 
-	var (
-		id = c.Args()[0]
-	)
+	id := c.Args()[0]
 
 	fromBck, toName, err := cmn.ParseBckObjectURI(c.Args()[1])
 	if err != nil {

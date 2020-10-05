@@ -118,6 +118,7 @@ func NewByteHandle(bt []byte) *ByteHandle {
 func (b *ByteHandle) Close() error {
 	return nil
 }
+
 func (b *ByteHandle) Open() (io.ReadCloser, error) {
 	return ioutil.NopCloser(bytes.NewReader(b.b)), nil
 }
@@ -335,9 +336,7 @@ func RemoveFile(path string) error {
 
 // and computes checksum if requested
 func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cksum *CksumHash, err error) {
-	var (
-		srcFile, dstFile *os.File
-	)
+	var srcFile, dstFile *os.File
 	if srcFile, err = os.Open(src); err != nil {
 		return
 	}

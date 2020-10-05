@@ -48,10 +48,8 @@ type (
 	}
 )
 
-var (
-	// interface guard
-	_ revs = &rebMD{}
-)
+// interface guard
+var _ revs = &rebMD{}
 
 func (r *rebMD) tag() string     { return revsRMDTag }
 func (r *rebMD) version() int64  { return r.Version }
@@ -62,6 +60,7 @@ func (r *rebMD) clone() *rebMD {
 	cmn.CopyStruct(dst, r)
 	return dst
 }
+
 func (r *rebMD) String() string {
 	if r == nil {
 		return "RMD <nil>"
@@ -81,6 +80,7 @@ func (r *rmdOwner) persist(rmd *rebMD) {
 		glog.Errorf("error writing rmd to %s: %v", rmdPathName, err)
 	}
 }
+
 func (r *rmdOwner) load() {
 	err := jsp.Load(filepath.Join(cmn.GCO.Get().Confdir, rmdFname), &r.rmd, jsp.CCSign())
 	if err != nil && !os.IsNotExist(err) {

@@ -49,12 +49,10 @@ const (
 	soaktestDirname = "/tmp/ais-soak"
 )
 
-var (
-	aisloaderPath string
-)
+var aisloaderPath string
 
 func init() {
-	os.MkdirAll(soaktestDirname, 0755)
+	os.MkdirAll(soaktestDirname, 0o755)
 
 	// We expect the `aisloader` binary to be present in `$GOPATH/bin` directory.
 	aisloaderPath = filepath.Join(os.Getenv("GOPATH"), "bin", "aisloader")
@@ -130,7 +128,6 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bck cmn.Bck, numWorker
 	}
 
 	aisloaderStats, err := parseAisloaderResponse(opType, result)
-
 	if err != nil {
 		report.Writef(report.SummaryLevel, "error parsing aisloader response")
 		ch <- &stats.PrimitiveStat{Fatal: true}
@@ -143,7 +140,6 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bck cmn.Bck, numWorker
 func parseAisloaderResponse(opType string, response []byte) (*stats.PrimitiveStat, error) {
 	aisloaderresp := make([]aisloaderResponse, 0)
 	err := jsoniter.Unmarshal(response, &aisloaderresp)
-
 	if err != nil {
 		return nil, err
 	}

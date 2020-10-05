@@ -148,9 +148,7 @@ func removeNodeHandler(c *cli.Context) (err error) {
 	if node == nil {
 		return fmt.Errorf("node %q does not exist", sid)
 	}
-	var (
-		id, action string
-	)
+	var id, action string
 	mode := parseStrFlag(c, maintenanceModeFlag)
 	if action, err = maintenanceModeToAction(c, mode); err != nil {
 		return err

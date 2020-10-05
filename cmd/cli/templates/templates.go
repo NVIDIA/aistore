@@ -429,10 +429,8 @@ type (
 	}
 )
 
-var (
-	// interface guard
-	_ forMarshaler = SmapTemplateHelper{}
-)
+// interface guard
+var _ forMarshaler = SmapTemplateHelper{}
 
 func (sth SmapTemplateHelper) forMarshal() interface{} {
 	return sth.Smap
@@ -491,33 +489,31 @@ func fmtObjStatus(obj *cmn.BucketEntry) string {
 	return "moved"
 }
 
-var (
-	ConfigSectionTmpl = map[string]string{
-		"global":               GlobalConfTmpl,
-		"mirror":               MirrorConfTmpl,
-		"log":                  LogConfTmpl,
-		"client":               ClientConfTmpl,
-		"periodic":             PeriodConfTmpl,
-		"timeout":              TimeoutConfTmpl,
-		"proxy":                ProxyConfTmpl,
-		"lru":                  LRUConfTmpl,
-		"disk":                 DiskConfTmpl,
-		"rebalance":            RebalanceConfTmpl,
-		"checksum":             CksumConfTmpl,
-		"versioning":           VerConfTmpl,
-		"fspath":               FSpathsConfTmpl,
-		"testfs":               TestFSPConfTmpl,
-		"network":              NetConfTmpl,
-		"fshc":                 FSHCConfTmpl,
-		"auth":                 AuthConfTmpl,
-		"keepalive":            KeepaliveConfTmpl,
-		"downloader":           DownloaderConfTmpl,
-		cmn.DSortNameLowercase: DSortConfTmpl,
-		"compression":          CompressionTmpl,
-		"ec":                   ECTmpl,
-		"replication":          ReplicationConfTmpl,
-	}
-)
+var ConfigSectionTmpl = map[string]string{
+	"global":               GlobalConfTmpl,
+	"mirror":               MirrorConfTmpl,
+	"log":                  LogConfTmpl,
+	"client":               ClientConfTmpl,
+	"periodic":             PeriodConfTmpl,
+	"timeout":              TimeoutConfTmpl,
+	"proxy":                ProxyConfTmpl,
+	"lru":                  LRUConfTmpl,
+	"disk":                 DiskConfTmpl,
+	"rebalance":            RebalanceConfTmpl,
+	"checksum":             CksumConfTmpl,
+	"versioning":           VerConfTmpl,
+	"fspath":               FSpathsConfTmpl,
+	"testfs":               TestFSPConfTmpl,
+	"network":              NetConfTmpl,
+	"fshc":                 FSHCConfTmpl,
+	"auth":                 AuthConfTmpl,
+	"keepalive":            KeepaliveConfTmpl,
+	"downloader":           DownloaderConfTmpl,
+	cmn.DSortNameLowercase: DSortConfTmpl,
+	"compression":          CompressionTmpl,
+	"ec":                   ECTmpl,
+	"replication":          ReplicationConfTmpl,
+}
 
 func fmtObjIsCached(obj *cmn.BucketEntry) string {
 	return fmtBool(obj.CheckExists())

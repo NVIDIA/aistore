@@ -33,9 +33,7 @@ func unregisteredNodeHealth(t *testing.T, si *cluster.Snode) {
 }
 
 func TestPrimaryProxyHealth(t *testing.T) {
-	var (
-		smap = tutils.GetClusterMap(t, proxyURL)
-	)
+	smap := tutils.GetClusterMap(t, proxyURL)
 	err := api.Health(tutils.BaseAPIParams(smap.Primary.PublicNet.DirectURL))
 	tassert.CheckError(t, err)
 }

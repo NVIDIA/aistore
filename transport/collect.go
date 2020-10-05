@@ -41,6 +41,7 @@ func (sc *StreamCollector) Run() (err error) {
 	cmn.Printf("Starting %s", sc.GetRunName())
 	return gc.run()
 }
+
 func (sc *StreamCollector) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", sc.GetRunName(), err)
 	gc.stop()

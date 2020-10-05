@@ -81,9 +81,7 @@ type (
 	}
 )
 
-var (
-	_ dsorter = &dsorterMem{}
-)
+var _ dsorter = &dsorterMem{}
 
 func newRWConnection(r io.Reader, w io.Writer) *rwConnection {
 	cmn.Assert(r != nil || w != nil)
@@ -332,9 +330,7 @@ func (ds *dsorterMem) loadContent() extract.LoadContentFunc {
 // createShardsLocally waits until it's given the signal to start creating
 // shards, then creates shards in parallel.
 func (ds *dsorterMem) createShardsLocally() (err error) {
-	var (
-		phaseInfo = &ds.m.creationPhase
-	)
+	phaseInfo := &ds.m.creationPhase
 
 	ds.creationPhase.adjuster.read.start()
 	ds.creationPhase.adjuster.write.start()

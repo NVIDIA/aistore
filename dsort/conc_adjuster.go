@@ -157,9 +157,7 @@ func (ca *concAdjuster) run() {
 				adjuster.tickCnt++
 
 				if float64(adjuster.tickCnt) >= adjuster.curBatchSize {
-					var (
-						totalUtil int64
-					)
+					var totalUtil int64
 					for _, util := range adjuster.lastUtils {
 						totalUtil += util
 					}

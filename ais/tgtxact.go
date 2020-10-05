@@ -55,9 +55,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		t.queryMatchingXact(w, r, what, xactQuery)
 	case http.MethodPut:
-		var (
-			msg cmn.ActionMsg
-		)
+		var msg cmn.ActionMsg
 		if cmn.ReadJSON(w, r, &msg) != nil {
 			return
 		}

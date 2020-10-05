@@ -307,9 +307,7 @@ func WalkBck(opts *WalkBckOptions) error {
 	// TODO: handle case when `opts.Sorted == false`
 	cmn.Assert(opts.Sorted)
 	group.Go(func() error {
-		var (
-			h = &objInfos{}
-		)
+		h := &objInfos{}
 		heap.Init(h)
 
 		for i := 0; i < len(mpathChs); i++ {

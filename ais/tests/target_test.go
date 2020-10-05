@@ -49,9 +49,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 }
 
 func TestDeleteInvalidDaemonID(t *testing.T) {
-	var (
-		sid = "abcde:abcde"
-	)
+	sid := "abcde:abcde"
 	if err := api.UnregisterNode(tutils.BaseAPIParams(), sid); err == nil {
 		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}
