@@ -6,7 +6,7 @@ package etl
 
 import (
 	"fmt"
-	"net/http"
+	"net"
 	"sync"
 	"time"
 
@@ -26,12 +26,6 @@ const (
 	// built-in label https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
 	nodeNameLabel = "kubernetes.io/hostname"
 	targetNode    = "target_node"
-
-	tfProbeRetries = 5
-)
-
-var (
-	tfProbeClient = &http.Client{}
 )
 
 // Definitions:
@@ -227,10 +221,16 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 
 	setPodEnvVariables(t, pod, customEnv)
 
-	// 1. Doing cleanup of any pre-existing entities.
-	cleanupEntities(errCtx, pod.Name, svc.Name)
+	// 1. Cleanup previously started entities (if any).
+	_ = cleanupEntities(errCtx, pod.Name, svc.Name)
 
-	// 2. Creating pod.
+	// 2. Creating service.
+	svcName = svc.GetName()
+	if err = createEntity(errCtx, k8s.Svc, svc); err != nil {
+		return
+	}
+
+	// 3. Creating pod.
 	podName = pod.GetName()
 	if err = createEntity(errCtx, k8s.Pod, pod); err != nil {
 		return
@@ -245,23 +245,16 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		return
 	}
 
-	// 3. Creating service.
-	svcName = svc.GetName()
-	if err = createEntity(errCtx, k8s.Svc, svc); err != nil {
-		return
-	}
-
+	// Retrieve assigned port by the service.
 	if nodePort, err = getServiceNodePort(errCtx, svc); err != nil {
 		return
 	}
 
-	transformerURL := fmt.Sprintf("http://%s:%d", hostIP, nodePort)
-
-	// TODO: Temporary workaround. Debug this further to find the root cause.
-	//  (not waiting sometimes causes the first `Do()` to fail).
-	readinessPath := pod.Spec.Containers[0].ReadinessProbe.HTTPGet.Path
-	if waitErr := waitTransformerReady(transformerURL, readinessPath); waitErr != nil {
-		err = cmn.NewETLError(errCtx, waitErr.Error())
+	// Make sure we can access the pod via TCP socket address to ensure that
+	// it is accessible from target.
+	etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
+	if err = checkETLConnection(etlSocketAddr); err != nil {
+		err = cmn.NewETLError(errCtx, err.Error())
 		return
 	}
 
@@ -271,7 +264,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		pod:            pod,
 		name:           originalPodName,
 		commType:       msg.CommType,
-		transformerURL: transformerURL,
+		transformerURL: "http://" + etlSocketAddr,
 	})
 	// NOTE: communicator is put to registry only if the whole tryStart was successful.
 	if err = reg.put(msg.ID, c); err != nil {
@@ -281,27 +274,16 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	return
 }
 
-func waitTransformerReady(url, path string) (err error) {
+func checkETLConnection(socketAddr string) error {
 	var (
-		resp         *http.Response
 		tfProbeSleep = cmn.GCO.Get().Timeout.MaxKeepalive
+		conn, err    = net.DialTimeout("tcp", socketAddr, tfProbeSleep)
 	)
-	tfProbeClient.Timeout = tfProbeSleep
-	for i := 0; i < tfProbeRetries; i++ {
-		resp, err = tfProbeClient.Get(cmn.JoinPath(url, path))
-		if err != nil {
-			glog.Errorf("failing to GET %s, err: %v, cnt: %d", cmn.JoinPath(url, path), err, i+1)
-			if cmn.IsReqCanceled(err) || cmn.IsErrConnectionRefused(err) {
-				time.Sleep(tfProbeSleep)
-				continue
-			}
-			return
-		}
-		err = cmn.DrainReader(resp.Body)
-		resp.Body.Close()
-		break
+	if err != nil {
+		return err
 	}
-	return
+	cmn.AssertNoErr(conn.Close())
+	return nil
 }
 
 func createServiceSpec(pod *corev1.Pod) *corev1.Service {
