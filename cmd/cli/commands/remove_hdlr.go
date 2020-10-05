@@ -184,7 +184,7 @@ func removeDownloadHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "download job ID")
 	}
-	if err = api.DownloadRemove(defaultAPIParams, id); err != nil {
+	if err = api.RemoveDownload(defaultAPIParams, id); err != nil {
 		return
 	}
 
@@ -207,7 +207,7 @@ func removeDownloadRegex(c *cli.Context) (err error) {
 		if !dl.JobFinished() {
 			continue
 		}
-		if err = api.DownloadRemove(defaultAPIParams, dl.ID); err == nil {
+		if err = api.RemoveDownload(defaultAPIParams, dl.ID); err == nil {
 			fmt.Fprintf(c.App.Writer, "removed download job %q\n", dl.ID)
 			cnt++
 		} else {

@@ -1,5 +1,5 @@
 // Package bundle provides multi-streaming transport with the functionality
-// to dynamically (un)register receive endpoints, eastablish long-lived flows, and more.
+// to dynamically (un)register receive endpoints, establish long-lived flows, and more.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */

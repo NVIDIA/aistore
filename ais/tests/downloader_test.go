@@ -48,7 +48,7 @@ func clearDownloadList(t *testing.T) {
 	for _, v := range listDownload {
 		if v.JobRunning() {
 			tutils.Logf("Canceling: %v...\n", v.ID)
-			err := api.DownloadAbort(tutils.BaseAPIParams(), v.ID)
+			err := api.AbortDownload(tutils.BaseAPIParams(), v.ID)
 			tassert.CheckFatal(t, err)
 		}
 	}
@@ -70,7 +70,7 @@ func clearDownloadList(t *testing.T) {
 
 	for _, v := range listDownload {
 		tutils.Logf("Removing: %v...\n", v.ID)
-		err := api.DownloadRemove(tutils.BaseAPIParams(), v.ID)
+		err := api.RemoveDownload(tutils.BaseAPIParams(), v.ID)
 		tassert.CheckFatal(t, err)
 	}
 }
@@ -205,7 +205,7 @@ func downloadObjectCloud(t *testing.T, body downloader.DlCloudBody, expectedFini
 func abortDownload(t *testing.T, id string) {
 	baseParams := tutils.BaseAPIParams()
 
-	err := api.DownloadAbort(baseParams, id)
+	err := api.AbortDownload(baseParams, id)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 30*time.Second)
@@ -264,7 +264,7 @@ func TestDownloadSingle(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Cancel second object.
-	err = api.DownloadAbort(baseParams, idSecond)
+	err = api.AbortDownload(baseParams, idSecond)
 	tassert.CheckError(t, err)
 
 	// Cancel first object.
@@ -279,13 +279,13 @@ func TestDownloadSingle(t *testing.T) {
 		t.Errorf("canceled link not marked: %v", resp)
 	}
 
-	err = api.DownloadAbort(baseParams, id)
+	err = api.AbortDownload(baseParams, id)
 	tassert.CheckError(t, err)
 
-	err = api.DownloadRemove(baseParams, id)
+	err = api.RemoveDownload(baseParams, id)
 	tassert.CheckError(t, err)
 
-	err = api.DownloadRemove(baseParams, id)
+	err = api.RemoveDownload(baseParams, id)
 	tassert.Errorf(t, err != nil, "expected error when removing non-existent task")
 
 	id, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, linkSmall)
@@ -585,7 +585,7 @@ func TestDownloadCloud(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 
 			tutils.Logln("aborting cloud download...")
-			err = api.DownloadAbort(baseParams, id)
+			err = api.AbortDownload(baseParams, id)
 			tassert.CheckFatal(t, err)
 
 			resp, err := api.DownloadStatus(baseParams, id)
@@ -892,7 +892,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 
 	// Downloader finished on required target, safe to abort the rest.
 	tutils.Logf("Aborting download job %s\n", id)
-	err = api.DownloadAbort(baseParams, id)
+	err = api.AbortDownload(baseParams, id)
 	tassert.CheckFatal(t, err)
 
 	objs, err := tutils.ListObjectNames(proxyURL, bck, "", 0)

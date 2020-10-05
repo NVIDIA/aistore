@@ -379,7 +379,7 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "download job ID")
 	}
 
-	if err = api.DownloadAbort(defaultAPIParams, id); err != nil {
+	if err = api.AbortDownload(defaultAPIParams, id); err != nil {
 		return
 	}
 

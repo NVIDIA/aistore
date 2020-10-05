@@ -114,7 +114,7 @@ func DownloadGetList(baseParams BaseParams, regex string) (dlList downloader.DlJ
 	return dlList, err
 }
 
-func DownloadAbort(baseParams BaseParams, id string) error {
+func AbortDownload(baseParams BaseParams, id string) error {
 	dlBody := downloader.DlAdminBody{
 		ID: id,
 	}
@@ -126,7 +126,7 @@ func DownloadAbort(baseParams BaseParams, id string) error {
 	})
 }
 
-func DownloadRemove(baseParams BaseParams, id string) error {
+func RemoveDownload(baseParams BaseParams, id string) error {
 	dlBody := downloader.DlAdminBody{
 		ID: id,
 	}
