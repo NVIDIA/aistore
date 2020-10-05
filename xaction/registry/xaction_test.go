@@ -104,11 +104,11 @@ func TestXactionAbortAll(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xactions.RegisterGlobalXact(&lru.XactProvider{})
-	xactions.RegisterBucketXact(&runners.FastRenProvider{})
+	xactions.RegisterBucketXact(&runners.BckRenameProvider{})
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck, err := xactions.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAll()
@@ -132,11 +132,11 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xactions.RegisterGlobalXact(&lru.XactProvider{})
-	xactions.RegisterBucketXact(&runners.FastRenProvider{})
+	xactions.RegisterBucketXact(&runners.BckRenameProvider{})
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck, err := xactions.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAll(xaction.XactTypeGlobal)
@@ -160,11 +160,11 @@ func TestXactionAbortBuckets(t *testing.T) {
 	bmd.Add(bckTo)
 
 	xactions.RegisterGlobalXact(&lru.XactProvider{})
-	xactions.RegisterBucketXact(&runners.FastRenProvider{})
+	xactions.RegisterBucketXact(&runners.BckRenameProvider{})
 
 	xactGlob := xactions.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckFastRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck, err := xactions.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
 	xactions.AbortAllBuckets(bckFrom)
@@ -195,14 +195,14 @@ func TestXactionQueryFinished(t *testing.T) {
 	bmd.Add(bck2)
 
 	xactions.RegisterBucketXact(&runners.PrefetchProvider{})
-	xactions.RegisterBucketXact(&runners.FastRenProvider{})
+	xactions.RegisterBucketXact(&runners.BckRenameProvider{})
 
-	xactBck1, err := xactions.RenewBckFastRename(tMock, bck1, bck1, "uuid", 123, "phase")
+	xactBck1, err := xactions.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
-	xactBck2, err := xactions.RenewBckFastRename(tMock, bck2, bck2, "uuid", 123, "phase")
+	xactBck2, err := xactions.RenewBckRename(tMock, bck2, bck2, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
 	xactBck1.Finish()
-	xactBck1, err = xactions.RenewBckFastRename(tMock, bck1, bck1, "uuid", 123, "phase")
+	xactBck1, err = xactions.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
 	_, err = xactions.RenewPrefetch(tMock, bck1, &registry.DeletePrefetchArgs{})
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)

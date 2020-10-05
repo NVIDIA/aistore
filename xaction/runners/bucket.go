@@ -16,23 +16,23 @@ import (
 )
 
 func init() {
-	registry.Registry.RegisterBucketXact(&FastRenProvider{})
+	registry.Registry.RegisterBucketXact(&BckRenameProvider{})
 	registry.Registry.RegisterBucketXact(&evictDeleteProvider{kind: cmn.ActEvictObjects})
 	registry.Registry.RegisterBucketXact(&evictDeleteProvider{kind: cmn.ActDelete})
 	registry.Registry.RegisterBucketXact(&PrefetchProvider{})
 }
 
 type (
-	FastRenProvider struct {
-		xact *FastRen
+	BckRenameProvider struct {
+		xact *bckRename
 
 		t     cluster.Target
 		uuid  string
 		phase string
-		args  *registry.FastRenameArgs
+		args  *registry.BckRenameArgs
 	}
 
-	FastRen struct {
+	bckRename struct {
 		xaction.XactBase
 		t         cluster.Target
 		bckFrom   *cluster.Bck
@@ -41,15 +41,15 @@ type (
 	}
 )
 
-func (*FastRenProvider) New(args registry.XactArgs) registry.BucketEntry {
-	return &FastRenProvider{
+func (*BckRenameProvider) New(args registry.XactArgs) registry.BucketEntry {
+	return &BckRenameProvider{
 		t:     args.T,
 		uuid:  args.UUID,
 		phase: args.Phase,
-		args:  args.Custom.(*registry.FastRenameArgs),
+		args:  args.Custom.(*registry.BckRenameArgs),
 	}
 }
-func (p *FastRenProvider) Start(bck cmn.Bck) error {
+func (p *BckRenameProvider) Start(bck cmn.Bck) error {
 	f := func() ([]cluster.XactStats, error) {
 		onlyRunning := false
 		return registry.Registry.GetStats(registry.XactFilter{
@@ -58,12 +58,12 @@ func (p *FastRenProvider) Start(bck cmn.Bck) error {
 			OnlyRunning: &onlyRunning,
 		})
 	}
-	p.xact = newFastRen(p.uuid, p.Kind(), bck, p.t, p.args.BckFrom, p.args.BckTo, f)
+	p.xact = newBckRename(p.uuid, p.Kind(), bck, p.t, p.args.BckFrom, p.args.BckTo, f)
 	return nil
 }
-func (*FastRenProvider) Kind() string        { return cmn.ActRenameLB }
-func (p *FastRenProvider) Get() cluster.Xact { return p.xact }
-func (p *FastRenProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep bool, err error) {
+func (*BckRenameProvider) Kind() string        { return cmn.ActRenameLB }
+func (p *BckRenameProvider) Get() cluster.Xact { return p.xact }
+func (p *BckRenameProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep bool, err error) {
 	if p.phase == cmn.ActBegin {
 		if !previousEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", p.Kind(), p.args.BckFrom, p.args.BckTo)
@@ -71,7 +71,7 @@ func (p *FastRenProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep
 		}
 		// TODO: more checks
 	}
-	prev := previousEntry.(*FastRenProvider)
+	prev := previousEntry.(*BckRenameProvider)
 	bckEq := prev.args.BckTo.Equal(p.args.BckTo, false /*sameID*/, false /* same backend */)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit && bckEq {
 		prev.phase = cmn.ActCommit // transition
@@ -82,11 +82,11 @@ func (p *FastRenProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep
 		p.Kind(), prev.args.BckFrom, prev.args.BckTo, prev.phase, p.phase, p.args.BckFrom)
 	return
 }
-func (p *FastRenProvider) PostRenewHook(_ registry.BucketEntry) {}
+func (p *BckRenameProvider) PostRenewHook(_ registry.BucketEntry) {}
 
-func newFastRen(uuid, kind string, bck cmn.Bck, t cluster.Target,
-	bckFrom, bckTo *cluster.Bck, rebF func() ([]cluster.XactStats, error)) *FastRen {
-	return &FastRen{
+func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
+	bckFrom, bckTo *cluster.Bck, rebF func() ([]cluster.XactStats, error)) *bckRename {
+	return &bckRename{
 		XactBase:  *xaction.NewXactBaseBck(uuid, kind, bck),
 		t:         t,
 		bckFrom:   bckFrom,
@@ -95,10 +95,10 @@ func newFastRen(uuid, kind string, bck cmn.Bck, t cluster.Target,
 	}
 }
 
-func (r *FastRen) IsMountpathXact() bool { return true }
-func (r *FastRen) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
+func (r *bckRename) IsMountpathXact() bool { return true }
+func (r *bckRename) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
-func (r *FastRen) Run() error {
+func (r *bckRename) Run() error {
 	glog.Infoln(r.String())
 
 	// FIXME: smart wait for resilver. For now assuming that rebalance takes longer than resilver.

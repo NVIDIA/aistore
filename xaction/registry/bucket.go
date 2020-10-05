@@ -72,7 +72,7 @@ type (
 		Evict    bool
 	}
 
-	FastRenameArgs struct {
+	BckRenameArgs struct {
 		RebID   xaction.RebID
 		BckFrom *cluster.Bck
 		BckTo   *cluster.Bck
@@ -238,12 +238,12 @@ func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *Delet
 	return res.entry.Get(), nil
 }
 
-func (r *registry) RenewBckFastRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) (cluster.Xact, error) {
+func (r *registry) RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) (cluster.Xact, error) {
 	e := r.bckXacts[cmn.ActRenameLB].New(XactArgs{
 		T:     t,
 		UUID:  uuid,
 		Phase: phase,
-		Custom: &FastRenameArgs{
+		Custom: &BckRenameArgs{
 			RebID:   xaction.RebID(rmdVersion),
 			BckFrom: bckFrom,
 			BckTo:   bckTo,
@@ -264,9 +264,9 @@ type queryEntry struct {
 	BaseBckEntry
 	xact *query.ObjectsListingXact
 
+	ctx   context.Context
 	t     cluster.Target
 	query *query.ObjectsQuery
-	ctx   context.Context
 	msg   *cmn.SelectMsg
 }
 
@@ -298,9 +298,9 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 		return nil, false, err
 	}
 	e := &queryEntry{
+		ctx:   ctx,
 		t:     t,
 		query: q,
-		ctx:   ctx,
 		msg:   msg,
 	}
 	res := r.renewBucketXaction(e, q.BckSource.Bck)
