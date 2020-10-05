@@ -80,14 +80,14 @@ const (
 	ErrDownloadCount = "err.dl.n"
 
 	// KindLatency
-	GetLatency          = "get.µs"
-	ListLatency         = "lst.µs"
-	KeepAliveMinLatency = "kalive.µs.min"
-	KeepAliveMaxLatency = "kalive.µs.max"
-	KeepAliveLatency    = "kalive.µs"
+	GetLatency          = "get.ns"
+	ListLatency         = "lst.ns"
+	KeepAliveMinLatency = "kalive.ns.min"
+	KeepAliveMaxLatency = "kalive.ns.max"
+	KeepAliveLatency    = "kalive.ns"
 
 	// KindSpecial
-	Uptime = "up.µs.time"
+	Uptime = "up.ns.time"
 )
 
 //
@@ -226,15 +226,15 @@ func (s *CoreStats) get(name string) (val int64) {
 }
 
 //
-// NOTE naming convention: ".n" for the count and ".µs" for microseconds
+// NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
 //
 func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	v, ok := s.Tracker[name]
 	cmn.Assertf(ok, "invalid stats name %q", name)
 	switch v.kind {
 	case KindLatency:
-		if strings.HasSuffix(name, ".µs") {
-			nroot := strings.TrimSuffix(name, ".µs")
+		if strings.HasSuffix(name, ".ns") {
+			nroot := strings.TrimSuffix(name, ".ns")
 			if nameSuffix != "" {
 				nroot += "." + nameSuffix
 			}
@@ -246,7 +246,6 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 		}
 		v.Lock()
 		v.numSamples++
-		val = int64(time.Duration(val) / time.Microsecond)
 		v.cumulative += val
 		v.Value += val
 		v.Unlock()

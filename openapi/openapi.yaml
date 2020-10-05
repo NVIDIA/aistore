@@ -656,7 +656,7 @@ paths:
               schema:
                 type: string
     get:
-        summary: Get the download status of a previously requested download. 
+        summary: Get the download status of a previously requested download.
         operationId: downloadStatus
         tags:
           - Download
@@ -940,7 +940,7 @@ components:
           minimum: 0
       required:
         - bucket
-        - base  
+        - base
     DownloadMulti:
       type: object
       properties:
@@ -956,7 +956,7 @@ components:
           description: JSON object where the key (string) is the objname the object will be saved as and value (string) is a URL pointing to some file.
         object_list:
           type: array
-          description: JSON array where each item is a URL (string) pointing to some file. The objname for each file will be the last element in the URL's path. 
+          description: JSON array where each item is a URL (string) pointing to some file. The objname for each file will be the last element in the URL's path.
           items:
             type: string
             example: http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz
@@ -1017,7 +1017,7 @@ components:
         order_file:
           type: string
           example: https://google.com/file.txt
-          description: URL to the file containing external key map (it should contains lines in format `record_key[sep]shard-%d-fmt`) 
+          description: URL to the file containing external key map (it should contains lines in format `record_key[sep]shard-%d-fmt`)
         order_file_sep:
           type: string
           default: "\t"
@@ -1215,7 +1215,7 @@ components:
     BucketPropsCksum:
       type: object
       properties:
-        type: 
+        type:
           type: string
           enum: [xxhash, none, inherit]
           default: inherit
@@ -1384,13 +1384,13 @@ components:
         lst.n:
           type: integer
           format: int64
-        get.µs:
+        get.ns:
           type: integer
           format: int64
-        put.µs:
+        put.ns:
           type: integer
           format: int64
-        lst.µs:
+        lst.ns:
           type: integer
           format: int64
         err.n:
@@ -1446,13 +1446,13 @@ components:
             vchange.size:
               type: integer
               format: int64
-            get.µs:
+            get.ns:
               type: integer
               format: int64
-            put.µs:
+            put.ns:
               type: integer
               format: int64
-            lst.µs:
+            lst.ns:
               type: integer
               format: int64
             err.n:
@@ -1482,7 +1482,7 @@ components:
             err.dl.n:
               type: integer
               format: int64
-            up.µs.time:
+            up.ns.time:
               type: integer
               format: int64
             err.cksum.n:

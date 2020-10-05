@@ -18,10 +18,12 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-//
-// NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes),
-// "*.bps" - throughput (in byte/s), "*.id" - ID
-//
+// Naming Convention:
+//  -> "*.n" - counter
+//  -> "*.ns" - latency (nanoseconds)
+//  -> "*.size" - size (bytes)
+//  -> "*.bps" - throughput (in byte/s)
+//  -> "*.id" - ID
 const (
 	// KindCounter - QPS and byte counts (always incremented, never reset)
 	GetColdCount   = "get.cold.n"
@@ -44,17 +46,17 @@ const (
 	RestartCount = "restart.n"
 
 	// KindLatency
-	PutLatency      = "put.µs"
-	AppendLatency   = "append.µs"
-	GetRedirLatency = "get.redir.µs"
-	PutRedirLatency = "put.redir.µs"
-	DownloadLatency = "dl.µs"
+	PutLatency      = "put.ns"
+	AppendLatency   = "append.ns"
+	GetRedirLatency = "get.redir.ns"
+	PutRedirLatency = "put.redir.ns"
+	DownloadLatency = "dl.ns"
 
 	// DSort
 	DSortCreationReqCount    = "dsort.creation.req.n"
-	DSortCreationReqLatency  = "dsort.creation.req.µs"
+	DSortCreationReqLatency  = "dsort.creation.req.ns"
 	DSortCreationRespCount   = "dsort.creation.resp.n"
-	DSortCreationRespLatency = "dsort.creation.resp.µs"
+	DSortCreationRespLatency = "dsort.creation.resp.ns"
 
 	// Downloader
 	DownloadSize = "dl.size"

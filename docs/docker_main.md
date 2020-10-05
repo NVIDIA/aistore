@@ -150,9 +150,9 @@ To view docker logs, use `docker logs <container_name>`. Example:
 ```console
 $ docker logs ais0_proxy_1
 I 21:23:56.400794 metasync.go:142] Starting metasyncer
-I 21:24:06.415473 stats.go:422] {"err.n":0,"get.n":0,"del.n":0,"get.µs":0,"kalive.µs":0,"err.get.n":0,"err.list.n":0,"pst.n":0,"ren.n":0,
-"lst.µs":0,"uptime.µs":0,"kalive.µs.max":0,"err.delete.n":0,"err.post.n":0,"err.range.n":0,"err.head.n":0,"put.n":0,"lst.n":0,
-"kalive.µs.min":0,"err.put.n":0}
+I 21:24:06.415473 stats.go:422] {"err.n":0,"get.n":0,"del.n":0,"get.ns":0,"kalive.ns":0,"err.get.n":0,"err.list.n":0,"pst.n":0,"ren.n":0,
+"lst.ns":0,"uptime.ns":0,"kalive.ns.max":0,"err.delete.n":0,"err.post.n":0,"err.range.n":0,"err.head.n":0,"put.n":0,"lst.n":0,
+"kalive.ns.min":0,"err.put.n":0}
 I 21:24:08.386182 proxy.go:2236] joined target 1463af8ddcd3 (num targets 1)
 I 21:24:11.759453 proxy.go:2236] joined target 3c86e5e71978 (num targets 2)
 I 21:24:12.411714 earlystart.go:262] Reached the expected 2/2 target registrations

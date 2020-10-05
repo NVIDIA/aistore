@@ -1172,8 +1172,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 
 	delta := mono.Since(begin)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		latency := int64(delta / time.Microsecond)
-		glog.Infof("LIST: bck: %q, token: %q, %d µs", bck, bckList.ContinuationToken, latency)
+		glog.Infof("LIST: bck: %q, token: %q, %s", bck, bckList.ContinuationToken, delta)
 	}
 
 	// Free memory allocated for temporary slice immediately as it can take up to a few GB

@@ -15,10 +15,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-//
-// NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes)
-//
-
 type (
 	Prunner struct {
 		statsRunner

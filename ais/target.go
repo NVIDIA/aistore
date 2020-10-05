@@ -644,7 +644,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			stats.NamedVal64{Name: stats.ListLatency, Value: int64(delta)},
 		)
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("LIST: %s, %d µs", bucket, int64(delta/time.Microsecond))
+			glog.Infof("LIST: %s, %s", bucket, delta)
 		}
 	case cmn.ActSummaryBucket:
 		if !t.bucketSummary(w, r, bck, msg) {

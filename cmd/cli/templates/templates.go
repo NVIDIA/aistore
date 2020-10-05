@@ -47,7 +47,7 @@ const (
 	ProxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t CPU USED %\t UPTIME\t STATUS\n"
 	ProxyInfoBody   = "{{$value.Snode.ID}}\t {{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
+		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}\t " +
 		"{{$value.Status}}\n"
 
 	ProxyInfoBodyTmpl       = "{{ range $key, $value := .Status.Pmap }}" + ProxyInfoBody + "{{end}}"
@@ -57,7 +57,7 @@ const (
 
 	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
+		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}\t " +
 		"{{$value.Status}}\n"
 	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status.Pmap }}" + AllProxyInfoBody + "{{end}}"
 	AllProxyInfoTmpl     = ProxyInfoHeader + AllProxyInfoBodyTmpl
@@ -70,7 +70,7 @@ const (
 		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
 		"{{FormatXactStatus $value.TStatus }}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t " +
+		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}\t " +
 		"{{$value.Status}}\n"
 
 	TargetInfoBodyTmpl       = "{{ range $key, $value := .Status.Tmap }}" + TargetInfoIDAll + TargetInfoBody + "{{end}}"
@@ -544,10 +544,7 @@ func fmtEC(data, parity int, isCopy bool) string {
 	return info
 }
 
-func fmtDuration(d int64) string {
-	dNano := time.Duration(d * int64(time.Microsecond))
-	return duration.HumanDuration(dNano)
-}
+func fmtDuration(ns int64) string { return duration.HumanDuration(time.Duration(ns)) }
 
 func fmtDaemonID(id string, smap cluster.Smap) string {
 	if id == smap.Primary.ID() {

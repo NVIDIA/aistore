@@ -143,7 +143,7 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 			stats.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
 		)
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("PUT %s: %d µs", lom, int64(delta/time.Microsecond))
+			glog.Infof("PUT %s: %s", lom, delta)
 		}
 	}
 	return nil, 0
@@ -860,7 +860,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 
 	delta := time.Since(goi.started)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		s := fmt.Sprintf("GET: %s(%s), %d µs", goi.lom, cmn.B2S(written, 1), int64(delta/time.Microsecond))
+		s := fmt.Sprintf("GET: %s(%s), %s", goi.lom, cmn.B2S(written, 1), delta)
 		if coldGet {
 			s += " (cold)"
 		}
@@ -957,7 +957,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode i
 		stats.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("PUT %s: %d µs", aoi.lom, int64(delta/time.Microsecond))
+		glog.Infof("PUT %s: %s", aoi.lom, delta)
 	}
 	return
 }
