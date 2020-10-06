@@ -97,8 +97,10 @@ func (n *notifs) add(nl nl.NotifListener) {
 	cmn.Assert(nl.UUID() != "")
 	cmn.Assert(nl.NotifTy() > cmn.NotifInvalid)
 	n.Lock()
-	_, ok := n.m[nl.UUID()]
-	cmn.AssertMsg(!ok, nl.UUID())
+	if _, ok := n.m[nl.UUID()]; ok {
+		n.Unlock()
+		return
+	}
 	n.m[nl.UUID()] = nl
 	n.Unlock()
 	glog.Infoln("add " + nl.String())

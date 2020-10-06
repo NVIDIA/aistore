@@ -59,6 +59,7 @@ var (
 		{"ICKillAndRestorePrimary", icKillAndRestorePrimary},
 		{"ICSyncOwnTbl", icSyncOwnershipTable},
 		{"ICSinglePrimaryRevamp", icSinglePrimaryRevamp},
+		{"ICStressMonitorXactMultiICFail", icStressMonitorXactMultiICFail},
 	}
 )
 
@@ -165,7 +166,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	checkSmaps(t, proxyURL)
 
-	oldPrimaryURL := smap.Primary.PublicNet.DirectURL
+	oldPrimaryURL := smap.Primary.URL(cmn.NetworkPublic)
 	oldPrimaryID := smap.Primary.ID()
 	tutils.Logf("New primary: %s --> %s\n", newPrimaryID, newPrimaryURL)
 	tutils.Logf("Killing primary: %s --> %s\n", oldPrimaryURL, oldPrimaryID)
@@ -208,7 +209,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 
-	oldPrimaryURL := smap.Primary.PublicNet.DirectURL
+	oldPrimaryURL := smap.Primary.URL(cmn.NetworkPublic)
 	tutils.Logf("Killing proxy %s - %s\n", oldPrimaryURL, smap.Primary.ID())
 	killedID := smap.Primary.ID()
 	cmd, err := kill(smap.Primary)
@@ -224,7 +225,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	)
 
 	for _, v := range smap.Tmap {
-		targetURL = v.PublicNet.DirectURL
+		targetURL = v.URL(cmn.NetworkPublic)
 		targetID = v.ID()
 		targetNode = v
 		break
@@ -259,7 +260,7 @@ func proxyCrash(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tutils.Logf("targets: %d, proxies: %d\n", smap.CountTargets(), smap.CountProxies())
 
-	oldPrimaryURL, oldPrimaryID := smap.Primary.PublicNet.DirectURL, smap.Primary.ID()
+	oldPrimaryURL, oldPrimaryID := smap.Primary.URL(cmn.NetworkPublic), smap.Primary.ID()
 	tutils.Logf("Primary proxy: %s\n", oldPrimaryURL)
 
 	var (
@@ -272,7 +273,7 @@ func proxyCrash(t *testing.T) {
 	// Select a random non-primary proxy
 	for k, v := range smap.Pmap {
 		if k != oldPrimaryID {
-			secondURL = v.PublicNet.DirectURL
+			secondURL = v.URL(cmn.NetworkPublic)
 			secondID = v.ID()
 			secondNode = v
 			break
@@ -306,7 +307,7 @@ func primaryAndProxyCrash(t *testing.T) {
 		proxyURL                    = tutils.RandomProxyURL(t)
 		smap                        = tutils.GetClusterMap(t, proxyURL)
 		origProxyCount              = smap.CountProxies()
-		oldPrimaryURL, oldPrimaryID = smap.Primary.PublicNet.DirectURL, smap.Primary.ID()
+		oldPrimaryURL, oldPrimaryID = smap.Primary.URL(cmn.NetworkPublic), smap.Primary.ID()
 		secondNode                  *cluster.Snode
 		secondURL, secondID         string
 	)
@@ -325,7 +326,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	for k, v := range smap.Pmap {
 		if k != newPrimaryID && k != oldPrimaryID {
 			secondNode = v
-			secondURL, secondID = secondNode.PublicNet.DirectURL, secondNode.ID()
+			secondURL, secondID = secondNode.URL(cmn.NetworkPublic), secondNode.ID()
 			break
 		}
 	}
@@ -611,7 +612,7 @@ func concurrentPutGetDel(t *testing.T) {
 			go func(url string) {
 				defer wg.Done()
 				errCh <- proxyPutGetDelete(100, url, bck.Bck, cksumType)
-			}(v.PublicNet.DirectURL)
+			}(v.URL(cmn.NetworkPublic))
 		}
 
 		wg.Wait()
@@ -849,7 +850,7 @@ loop:
 // toID, toURL 	- DaemonID and DirectURL of the proxy that must become the new primary
 func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, toID string) (newSmap *cluster.Smap) {
 	if directURL == "" {
-		directURL = smap.Primary.PublicNet.DirectURL
+		directURL = smap.Primary.URL(cmn.NetworkPublic)
 	}
 	// http://host:8081/v1/cluster/proxy/15205:8080
 
@@ -875,7 +876,7 @@ func chooseNextProxy(smap *cluster.Smap) (proxyid, proxyURL string, err error) {
 		return
 	}
 
-	return pi.ID(), pi.PublicNet.DirectURL, nil
+	return pi.ID(), pi.URL(cmn.NetworkPublic), nil
 }
 
 func kill(node *cluster.Snode) (cmd restoreCmd, err error) {
@@ -1009,13 +1010,13 @@ func checkSmaps(t *testing.T, proxyURL string) {
 		primary = smap1.Primary // primary according to the `proxyURL`(*)
 	)
 	for _, psi := range smap1.Pmap {
-		smap2 := tutils.GetClusterMap(t, psi.PublicNet.DirectURL)
+		smap2 := tutils.GetClusterMap(t, psi.URL(cmn.NetworkPublic))
 		uuid, sameOrigin, sameVersion, eq := smap1.Compare(smap2)
 		if eq {
 			continue
 		}
 		err := fmt.Errorf("(%s %s, primary=%s) != (%s %s, primary=%s): (uuid=%s, same-orig=%t, same-ver=%t)",
-			proxyURL, smap1, primary, psi.PublicNet.DirectURL, smap2, smap2.Primary, uuid, sameOrigin, sameVersion)
+			proxyURL, smap1, primary, psi.URL(cmn.NetworkPublic), smap2, smap2.Primary, uuid, sameOrigin, sameVersion)
 		t.Error(err)
 	}
 }
@@ -1033,7 +1034,7 @@ func primarySetToOriginal(t *testing.T) {
 		byURL, byPort, origID string
 	)
 	currID = smap.Primary.ID()
-	currURL = smap.Primary.PublicNet.DirectURL
+	currURL = smap.Primary.URL(cmn.NetworkPublic)
 	if currURL != proxyURL {
 		t.Fatalf("Err in the test itself: expecting currURL %s == proxyurl %s", currURL, proxyURL)
 	}
@@ -1050,12 +1051,12 @@ func primarySetToOriginal(t *testing.T) {
 	proxyPort := urlparts[len(urlparts)-1]
 
 	for key, val := range smap.Pmap {
-		if val.PublicNet.DirectURL == origURL {
+		if val.URL(cmn.NetworkPublic) == origURL {
 			byURL = key
 			break
 		}
 
-		keyparts := strings.Split(val.PublicNet.DirectURL, ":")
+		keyparts := strings.Split(val.URL(cmn.NetworkPublic), ":")
 		port := keyparts[len(keyparts)-1]
 		if port == proxyPort {
 			byPort = key
@@ -1204,7 +1205,7 @@ func networkFailurePrimary(t *testing.T) {
 	}
 
 	proxyCount, targetCount := smap.CountProxies(), smap.CountTargets()
-	oldPrimaryID, oldPrimaryURL := smap.Primary.ID(), smap.Primary.PublicNet.DirectURL
+	oldPrimaryID, oldPrimaryURL := smap.Primary.ID(), smap.Primary.URL(cmn.NetworkPublic)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 
@@ -1314,7 +1315,7 @@ func primaryAndNextCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// kill the current primary
-	oldPrimaryURL, oldPrimaryID := smap.Primary.PublicNet.DirectURL, smap.Primary.ID()
+	oldPrimaryURL, oldPrimaryID := smap.Primary.URL(cmn.NetworkPublic), smap.Primary.ID()
 	tutils.Logf("Killing primary proxy: %s - %s\n", oldPrimaryURL, oldPrimaryID)
 	cmdFirst, err := kill(smap.Primary)
 	tassert.CheckFatal(t, err)
@@ -1368,7 +1369,7 @@ func TestIC(t *testing.T) {
 	clusterHealthCheck(t, smap)
 }
 
-func killRandNonPrimaryIC(t *testing.T, smap *cluster.Smap) (restoreCmd, *cluster.Smap) {
+func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (restoreCmd, *cluster.Smap) {
 	origProxyCount := smap.CountProxies()
 	primary := smap.Primary
 	var killNode *cluster.Snode
@@ -1381,7 +1382,7 @@ func killRandNonPrimaryIC(t *testing.T, smap *cluster.Smap) (restoreCmd, *cluste
 	cmd, err := kill(killNode)
 	tassert.CheckFatal(t, err)
 
-	smap, err = tutils.WaitForPrimaryProxy(primary.PublicNet.DirectURL, "to propagate new Smap",
+	smap, err = tutils.WaitForPrimaryProxy(primary.URL(cmn.NetworkPublic), "to propagate new Smap",
 		smap.Version, testing.Verbose(), origProxyCount-1)
 	tassert.CheckError(t, err)
 	return cmd, smap
@@ -1414,7 +1415,7 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	updatedICs := smap.IC
-	smap, err = api.WaitNodeAdded(tutils.BaseAPIParams(primary.PublicNet.DirectURL), cmd.node.ID())
+	smap, err = api.WaitNodeAdded(tutils.BaseAPIParams(primary.URL(cmn.NetworkPublic)), cmd.node.ID())
 	tassert.CheckFatal(t, err)
 
 	// Adding a new node shouldn't change IC members.
@@ -1432,7 +1433,7 @@ func icKillAndRestorePrimary(t *testing.T) {
 
 	oldIC := smap.IC
 	oldPrimary := smap.Primary
-	oldPrimaryURL := smap.Primary.PublicNet.DirectURL
+	oldPrimaryURL := smap.Primary.URL(cmn.NetworkPublic)
 	oldPrimaryID := smap.Primary.ID()
 
 	cmd, err := kill(smap.Primary)
@@ -1513,13 +1514,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	cmd, smap := killRandNonPrimaryIC(t, smap)
 
 	// Try getting xaction status from new IC member.
-	var newICMemID string
-	for sid := range smap.IC {
-		if _, ok := origIC[sid]; !ok {
-			tassert.Errorf(t, newICMemID == "", "should change only one IC member")
-			newICMemID = sid
-		}
-	}
+	newICMemID := getNewICMember(t, origIC, smap.IC)
 
 	newICNode := smap.GetProxy(newICMemID)
 
@@ -1536,7 +1531,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	tassert.Fatalf(t, !smap.IsIC(cmd.node), "newly joined node shouldn't be in IC (%s)", cmd.node)
 
 	// Should sync ownership table when non-ic member become primary.
-	smap = setPrimaryTo(t, primary.PublicNet.DirectURL, smap, "", cmd.node.ID())
+	smap = setPrimaryTo(t, primary.URL(cmn.NetworkPublic), smap, "", cmd.node.ID())
 	tassert.Fatalf(t, smap.IsIC(cmd.node), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
 
 	baseParams = tutils.BaseAPIParams(cmd.node.URL(cmn.NetworkPublic))
@@ -1596,4 +1591,97 @@ func icSinglePrimaryRevamp(t *testing.T) {
 		_, err = api.GetXactionStatus(baseParams, xactArgs)
 		tassert.CheckError(t, err)
 	}
+}
+
+func icStressMonitorXactMultiICFail(t *testing.T) {
+	var (
+		proxyURL = tutils.GetPrimaryURL()
+		smap     = tutils.GetClusterMap(t, proxyURL)
+
+		m = ioContext{
+			t:        t,
+			num:      1000,
+			fileSize: 50 * cmn.KiB,
+		}
+		numCopyXacts = 20
+	)
+
+	// 1. Populate a bucket required for copy xactions
+	m.init()
+	tutils.CreateFreshBucket(t, proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, proxyURL, m.bck)
+	m.puts()
+
+	// 2. Kill and restore random IC members in background
+	stopCh := cmn.NewStopCh()
+	go killRestoreIC(t, smap, stopCh)
+
+	// 3. Start multiple xactions and poll random proxy for status till xaction is complete
+	wg := startCPBckAndWait(t, m.bck, numCopyXacts)
+	wg.Wait()
+
+	// 4. Stop the background kill and restore task
+	stopCh.Close()
+}
+
+func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup {
+	var (
+		proxyURL   = tutils.GetPrimaryURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		wg         = &sync.WaitGroup{}
+	)
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			dstBck := cmn.Bck{
+				Name:     fmt.Sprintf("%s_dst_par_%d", TestBucketName, idx),
+				Provider: cmn.ProviderAIS,
+			}
+			xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)
+			tassert.CheckError(t, err)
+			defer func() {
+				tutils.DestroyBucket(t, proxyURL, dstBck)
+				wg.Done()
+			}()
+			err = tutils.WaitForXactionByID(xactID, rebalanceTimeout)
+			tassert.CheckError(t, err)
+		}(i)
+	}
+	return wg
+}
+
+// Continuously kill and restore IC nodes
+func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cmn.StopCh) {
+	var (
+		cmd      restoreCmd
+		proxyURL = smap.Primary.URL(cmn.NetworkPublic)
+	)
+	for {
+		cmd, smap = killRandNonPrimaryIC(t, smap)
+		err := restore(cmd, false, "proxy")
+		tassert.CheckFatal(t, err)
+
+		smap = tutils.WaitNodeRestored(t, proxyURL, "to restore", cmd.node.ID(), smap.Version, testing.Verbose())
+		time.Sleep(2 * time.Second)
+
+		select {
+		case <-stopCh.Listen():
+			return
+		default:
+			break
+		}
+	}
+}
+
+// misc
+
+func getNewICMember(t testing.TB, oldMap, newMap cmn.SimpleKVsInt) (daeID string) {
+	for sid := range newMap {
+		if _, ok := oldMap[sid]; !ok {
+			tassert.Errorf(t, daeID == "", "should change only one IC member")
+			daeID = sid
+		}
+	}
+	tassert.Fatalf(t, daeID != "", "should change at least one IC member")
+	return
 }
