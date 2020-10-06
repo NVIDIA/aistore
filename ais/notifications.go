@@ -347,7 +347,7 @@ func (n *notifs) housekeep() time.Duration {
 	}
 	n.RUnlock()
 	for _, nl := range tempn {
-		n.syncStats(nl, int64(notifsHousekeepT.Seconds()))
+		n.syncStats(nl, notifsHousekeepT)
 	}
 	// cleanup temp cloned notifs
 	for u := range tempn {
@@ -356,11 +356,11 @@ func (n *notifs) housekeep() time.Duration {
 	return notifsHousekeepT
 }
 
-func (n *notifs) syncStats(nl nl.NotifListener, intervals ...int64 /*secs*/) {
+func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 	var done bool
 
 	nl.RLock()
-	uptoDateNodes, syncRequired := nl.NodesUptoDate(intervals...)
+	uptoDateNodes, syncRequired := nl.NodesUptoDate(dur...)
 	nl.RUnlock()
 	if !syncRequired {
 		return
@@ -408,13 +408,13 @@ func (n *notifs) syncStats(nl nl.NotifListener, intervals ...int64 /*secs*/) {
 }
 
 // Return stats from each node for a given UUID.
-func (n *notifs) queryStats(uuid string, intervals ...int64 /*seconds*/) (stats *sync.Map, exists bool) {
+func (n *notifs) queryStats(uuid string, durs ...time.Duration) (stats *sync.Map, exists bool) {
 	var nl nl.NotifListener
 	nl, exists = n.entry(uuid)
 	if !exists {
 		return
 	}
-	n.syncStats(nl, intervals...)
+	n.syncStats(nl, durs...)
 	stats = nl.NodeStats()
 	return
 }

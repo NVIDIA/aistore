@@ -210,7 +210,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		dlBase           downloader.DlBase
 		err              error
 		ok               bool
-		progressInterval int64
+		progressInterval time.Duration
 		intervalStr      = downloader.DownloadProgressInterval
 	)
 
@@ -232,7 +232,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if dur, err := time.ParseDuration(intervalStr); err == nil {
-		progressInterval = int64(dur.Seconds())
+		progressInterval = dur
 	} else {
 		p.invalmsghdlrf(w, r, "%s: invalid progress interval %q (err: %v)", p.si, intervalStr, err)
 		return

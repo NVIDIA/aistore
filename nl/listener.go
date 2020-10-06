@@ -49,8 +49,8 @@ type NotifListener interface {
 	SetOwner(string)
 	SetHrwOwner(smap *cluster.Smap)
 	LastUpdated(si *cluster.Snode) int64
-	ProgressInterval() int64
-	NodesUptoDate(intervals ...int64) (cmn.StringSet, bool)
+	ProgressInterval() time.Duration
+	NodesUptoDate(dur ...time.Duration) (cmn.StringSet, bool)
 }
 
 type (
@@ -74,8 +74,8 @@ type (
 		FinSrcs           cmn.StringSet    // daeID of Notifiers finished
 		F                 NotifCallback    `json:"-"` // optional listening-side callback
 		Stats             *sync.Map        // [daeID => Stats (e.g. cmn.BaseXactStatsExt)]
-		LastUpdatedX      map[string]int64 // [daeID => last update time]
-		ProgressIntervalX int64            // time in secs at which progress is monitored
+		LastUpdatedX      map[string]int64 // [daeID => last update time(nanoseconds)]
+		ProgressIntervalX time.Duration    // time interval to monitor the progress
 
 		ErrMsg   string        // ErrMsg
 		FinTime  atomic.Int64  // timestamp when finished
@@ -91,8 +91,8 @@ type (
 	}
 )
 
-func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, action string, progressInterval int64,
-	bck ...cmn.Bck) *NotifListenerBase {
+func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, action string,
+	progressInterval time.Duration, bck ...cmn.Bck) *NotifListenerBase {
 	cmn.Assert(ty > cmn.NotifInvalid)
 	cmn.Assert(len(srcs) != 0)
 	nlb := &NotifListenerBase{
@@ -114,21 +114,21 @@ func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, actio
 // notifListenerBase //
 ///////////////////////
 
-func (nlb *NotifListenerBase) Notifiers() cluster.NodeMap  { return nlb.Srcs }
-func (nlb *NotifListenerBase) FinNotifiers() cmn.StringSet { return nlb.FinSrcs }
-func (nlb *NotifListenerBase) NotifTy() int                { return nlb.Common.Ty }
-func (nlb *NotifListenerBase) UUID() string                { return nlb.Common.UUID }
-func (nlb *NotifListenerBase) Aborted() bool               { return nlb.AbortedX.Load() }
-func (nlb *NotifListenerBase) SetAborted()                 { nlb.AbortedX.CAS(false, true) }
-func (nlb *NotifListenerBase) EndTime() int64              { return nlb.FinTime.Load() }
-func (nlb *NotifListenerBase) Finished() bool              { return nlb.EndTime() > 0 }
-func (nlb *NotifListenerBase) ProgressInterval() int64     { return nlb.ProgressIntervalX }
-func (nlb *NotifListenerBase) NodeStats() *sync.Map        { return nlb.Stats }
-func (nlb *NotifListenerBase) GetOwner() string            { return nlb.Common.Owned }
-func (nlb *NotifListenerBase) SetOwner(o string)           { nlb.Common.Owned = o }
-func (nlb *NotifListenerBase) Kind() string                { return nlb.Common.Action }
-func (nlb *NotifListenerBase) Bcks() []cmn.Bck             { return nlb.Common.Bck }
-func (nlb *NotifListenerBase) FinCount() int               { return len(nlb.FinSrcs) }
+func (nlb *NotifListenerBase) Notifiers() cluster.NodeMap      { return nlb.Srcs }
+func (nlb *NotifListenerBase) FinNotifiers() cmn.StringSet     { return nlb.FinSrcs }
+func (nlb *NotifListenerBase) NotifTy() int                    { return nlb.Common.Ty }
+func (nlb *NotifListenerBase) UUID() string                    { return nlb.Common.UUID }
+func (nlb *NotifListenerBase) Aborted() bool                   { return nlb.AbortedX.Load() }
+func (nlb *NotifListenerBase) SetAborted()                     { nlb.AbortedX.CAS(false, true) }
+func (nlb *NotifListenerBase) EndTime() int64                  { return nlb.FinTime.Load() }
+func (nlb *NotifListenerBase) Finished() bool                  { return nlb.EndTime() > 0 }
+func (nlb *NotifListenerBase) ProgressInterval() time.Duration { return nlb.ProgressIntervalX }
+func (nlb *NotifListenerBase) NodeStats() *sync.Map            { return nlb.Stats }
+func (nlb *NotifListenerBase) GetOwner() string                { return nlb.Common.Owned }
+func (nlb *NotifListenerBase) SetOwner(o string)               { nlb.Common.Owned = o }
+func (nlb *NotifListenerBase) Kind() string                    { return nlb.Common.Action }
+func (nlb *NotifListenerBase) Bcks() []cmn.Bck                 { return nlb.Common.Bck }
+func (nlb *NotifListenerBase) FinCount() int                   { return len(nlb.FinSrcs) }
 
 // is called after all Notifiers will have notified OR on failure (err != nil)
 func (nlb *NotifListenerBase) Callback(nl NotifListener, err error, timestamp int64) {
@@ -142,8 +142,7 @@ func (nlb *NotifListenerBase) Callback(nl NotifListener, err error, timestamp in
 }
 
 func (nlb *NotifListenerBase) SetErr(err error) {
-	ecount := nlb.ErrCount.Inc()
-	if ecount == 1 {
+	if nlb.ErrCount.Inc() == 1 {
 		nlb.ErrMsg = err.Error()
 	}
 }
@@ -169,19 +168,19 @@ func (nlb *NotifListenerBase) LastUpdated(si *cluster.Snode) int64 {
 	return nlb.LastUpdatedX[si.DaemonID]
 }
 
-func (nlb *NotifListenerBase) NodesUptoDate(intervals ...int64) (uptoDate cmn.StringSet, tardy bool) {
-	period := int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
+func (nlb *NotifListenerBase) NodesUptoDate(durs ...time.Duration) (uptoDate cmn.StringSet, tardy bool) {
+	dur := cmn.GCO.Get().Periodic.NotifTime
 	uptoDate = cmn.NewStringSet()
 
-	if len(intervals) > 0 {
-		period = intervals[0]
+	if len(durs) > 0 {
+		dur = durs[0]
 	} else if nlb.ProgressInterval() != 0 {
-		period = nlb.ProgressInterval()
+		dur = nlb.ProgressInterval()
 	}
 	for _, si := range nlb.Notifiers() {
 		ts := nlb.LastUpdated(si)
-		diff := int64(mono.Since(ts).Seconds())
-		if _, ok := nlb.Stats.Load(si.ID()); ok && (nlb.HasFinished(si) || diff < period) {
+		diff := mono.Since(ts)
+		if _, ok := nlb.Stats.Load(si.ID()); ok && (nlb.HasFinished(si) || diff < dur) {
 			uptoDate.Add(si.DaemonID)
 			continue
 		}

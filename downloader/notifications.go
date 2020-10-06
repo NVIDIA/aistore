@@ -6,6 +6,7 @@ package downloader
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -30,7 +31,7 @@ var (
 )
 
 func NewDownloadNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string,
-	progressInterval int64, bck ...cmn.Bck) *NotifDownloadListerner {
+	progressInterval time.Duration, bck ...cmn.Bck) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
 		NotifListenerBase: *nl.NewNLB(uuid, smap, srcs, cmn.NotifDownload, action, progressInterval, bck...),
 	}

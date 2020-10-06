@@ -166,7 +166,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		msg      = &xaction.XactReqMsg{}
 		bck      *cluster.Bck
 		nl       nl.NotifListener
-		interval = int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
+		interval = cmn.GCO.Get().Periodic.NotifTime
 		exists   bool
 	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
