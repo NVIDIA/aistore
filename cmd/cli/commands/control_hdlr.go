@@ -158,7 +158,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, bucketArgument)
 	}
 
-	bck, _, err := cmn.ParseBckObjectURI(c.Args().First())
+	bck, err := parseBckURI(c, c.Args().First())
 	if err != nil {
 		return err
 	}
@@ -478,7 +478,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 	bckArgs := makeList(parseStrFlag(c, listBucketsFlag), ",")
 	buckets := make([]cmn.Bck, len(bckArgs))
 	for idx, bckArg := range bckArgs {
-		bck, _, err := cmn.ParseBckObjectURI(bckArg)
+		bck, err := parseBckURI(c, bckArg)
 		if err != nil {
 			return err
 		}

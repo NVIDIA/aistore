@@ -385,6 +385,28 @@ func parseDest(rawURL string) (bucket, pathSuffix string, err error) {
 	return destBucket, destPathSuffix, nil
 }
 
+func parseBckURI(c *cli.Context, bucketDef string, query ...bool) (bck cmn.Bck, err error) {
+	var objName string
+	bck, objName, err = parseBckObjectURI(c, bucketDef, query...)
+	if err != nil {
+		return
+	}
+	if objName != "" {
+		err = objectNameArgumentNotSupported(c, objName)
+		return
+	}
+
+	return
+}
+
+func parseBckObjectURI(c *cli.Context, objName string, query ...bool) (bck cmn.Bck, object string, err error) {
+	bck, object, err = cmn.ParseBckObjectURI(objName, query...)
+	if err != nil {
+		return bck, object, incorrectUsageError(c, err)
+	}
+	return
+}
+
 func parseURI(rawURL string) (scheme, bucket, objName string, err error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -628,13 +650,9 @@ func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck,
 				fmt.Fprintf(c.App.ErrWriter, "Warning: %q is a global xaction, ignoring bucket name\n", xactKind)
 			}
 		case xaction.XactTypeBck:
-			var objName string
-			bck, objName, err = cmn.ParseBckObjectURI(bckName)
+			bck, err = parseBckURI(c, bckName)
 			if err != nil {
 				return "", "", bck, err
-			}
-			if objName != "" {
-				return "", "", bck, objectNameArgumentNotSupported(c, objName)
 			}
 			if bck, _, err = validateBucket(c, bck, "", true); err != nil {
 				return "", "", bck, err

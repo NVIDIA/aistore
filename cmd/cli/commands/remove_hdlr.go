@@ -104,7 +104,7 @@ func removeObjectHandler(c *cli.Context) error {
 
 	// single fullObjName provided. Either remove one object or listFlag/templateFlag provided
 	if c.NArg() == 1 {
-		bck, objName, err := cmn.ParseBckObjectURI(c.Args().First())
+		bck, objName, err := parseBckObjectURI(c, c.Args().First())
 		if err != nil {
 			return err
 		}

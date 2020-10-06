@@ -227,11 +227,11 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 
 	id := c.Args()[0]
 
-	fromBck, toName, err := cmn.ParseBckObjectURI(c.Args()[1])
+	fromBck, err := parseBckURI(c, c.Args()[1])
 	if err != nil {
 		return err
 	}
-	toBck, fromObjName, err := cmn.ParseBckObjectURI(c.Args()[2])
+	toBck, err := parseBckURI(c, c.Args()[2])
 	if err != nil {
 		return err
 	}
@@ -240,12 +240,6 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 	}
 	if fromBck.IsRemoteAIS() || toBck.IsRemoteAIS() {
 		return fmt.Errorf("ETL of remote ais buckets not supported")
-	}
-	if toName != "" {
-		return objectNameArgumentNotSupported(c, toName)
-	}
-	if fromObjName != "" {
-		return objectNameArgumentNotSupported(c, toName)
 	}
 
 	var extMap cmn.SimpleKVs

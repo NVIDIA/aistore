@@ -65,13 +65,11 @@ func setConfigHandler(c *cli.Context) (err error) {
 
 func setPropsHandler(c *cli.Context) (err error) {
 	var origProps *cmn.BucketProps
-	bck, objName, err := cmn.ParseBckObjectURI(c.Args().First())
+	bck, err := parseBckURI(c, c.Args().First())
 	if err != nil {
 		return
 	}
-	if objName != "" {
-		return objectNameArgumentNotSupported(c, objName)
-	}
+
 	if bck, origProps, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}

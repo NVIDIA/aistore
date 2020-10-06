@@ -43,11 +43,11 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	fromBck, objName, err := cmn.ParseBckObjectURI(bucketName)
+	fromBck, err := parseBckURI(c, bucketName)
 	if err != nil {
 		return err
 	}
-	toBck, newObjName, err := cmn.ParseBckObjectURI(newBucketName)
+	toBck, err := parseBckURI(c, newBucketName)
 	if err != nil {
 		return err
 	}
@@ -56,12 +56,6 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	}
 	if fromBck.IsRemoteAIS() || toBck.IsRemoteAIS() {
 		return fmt.Errorf("copying of remote ais buckets not supported")
-	}
-	if objName != "" {
-		return objectNameArgumentNotSupported(c, objName)
-	}
-	if newObjName != "" {
-		return objectNameArgumentNotSupported(c, objName)
 	}
 
 	fromBck.Provider, toBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS

@@ -127,7 +127,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 	objPath = c.Args().First()
 	if isWebURL(objPath) {
 		bck = parseURLtoBck(objPath)
-	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath); err != nil {
+	} else if bck, objName, err = parseBckObjectURI(c, objPath); err != nil {
 		return
 	}
 	if bck.IsAIS() {
@@ -164,7 +164,7 @@ func evictHandler(c *cli.Context) (err error) {
 		objPath := c.Args().First()
 		if isWebURL(objPath) {
 			bck = parseURLtoBck(objPath)
-		} else if bck, objName, err = cmn.ParseBckObjectURI(objPath); err != nil {
+		} else if bck, objName, err = parseBckObjectURI(c, objPath); err != nil {
 			return
 		}
 
@@ -220,7 +220,7 @@ func putHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
-	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
+	bck, objName, err = parseBckObjectURI(c, fullObjName)
 	if err != nil {
 		return
 	}
@@ -250,7 +250,7 @@ func concatHandler(c *cli.Context) (err error) {
 		fileNames[i] = c.Args().Get(i)
 	}
 
-	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
+	bck, objName, err = parseBckObjectURI(c, fullObjName)
 	if err != nil {
 		return
 	}
@@ -281,7 +281,7 @@ func promoteHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "promoted source (file or directory) must have an absolute path")
 	}
 
-	bck, objName, err = cmn.ParseBckObjectURI(fullObjName)
+	bck, objName, err = parseBckObjectURI(c, fullObjName)
 	if err != nil {
 		return
 	}

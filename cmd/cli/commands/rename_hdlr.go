@@ -50,23 +50,17 @@ func renameBucketHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	bck, objName, err := cmn.ParseBckObjectURI(bucketName)
+	bck, err := parseBckURI(c, bucketName)
 	if err != nil {
 		return err
 	}
-	newBck, newObjName, err := cmn.ParseBckObjectURI(newBucketName)
+	newBck, err := parseBckURI(c, newBucketName)
 	if err != nil {
 		return err
 	}
 
 	if err := validateLocalBuckets([]cmn.Bck{bck, newBck}, "renaming"); err != nil {
 		return err
-	}
-	if objName != "" {
-		return objectNameArgumentNotSupported(c, objName)
-	}
-	if newObjName != "" {
-		return objectNameArgumentNotSupported(c, objName)
 	}
 
 	bck.Provider, newBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
@@ -86,7 +80,7 @@ func renameObjectHandler(c *cli.Context) (err error) {
 		bck    cmn.Bck
 	)
 
-	if bck, oldObj, err = cmn.ParseBckObjectURI(oldObjFull); err != nil {
+	if bck, oldObj, err = parseBckObjectURI(c, oldObjFull); err != nil {
 		return
 	}
 	if oldObj == "" {

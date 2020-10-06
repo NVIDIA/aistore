@@ -45,17 +45,12 @@ var (
 func defaultListHandler(c *cli.Context) (err error) {
 	var (
 		bck     cmn.Bck
-		objName string
 		objPath = c.Args().First()
 	)
 	if isWebURL(objPath) {
 		bck = parseURLtoBck(objPath)
-	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath, true /*query*/); err != nil {
+	} else if bck, err = parseBckURI(c, objPath, true /*query*/); err != nil {
 		return
-	}
-
-	if objName != "" {
-		return objectNameArgumentNotSupported(c, objName)
 	}
 
 	if bck, _, err = validateBucket(c, bck, "ls", true); err != nil {

@@ -63,7 +63,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		}
 		bck, object = hbo.Bck, hbo.ObjName
 		origURL = fullObjName
-	} else if bck, object, err = cmn.ParseBckObjectURI(fullObjName); err != nil {
+	} else if bck, object, err = parseBckObjectURI(c, fullObjName); err != nil {
 		return
 	}
 
@@ -832,7 +832,7 @@ func rangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 func multiObjOp(c *cli.Context, command string) error {
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
-		bck, objectName, err := cmn.ParseBckObjectURI(fullObjName)
+		bck, objectName, err := parseBckObjectURI(c, fullObjName)
 		if err != nil {
 			return err
 		}

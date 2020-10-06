@@ -45,16 +45,13 @@ var (
 
 func setCopiesHandler(c *cli.Context) (err error) {
 	var (
-		bck        cmn.Bck
-		p          *cmn.BucketProps
-		objectName string
+		bck cmn.Bck
+		p   *cmn.BucketProps
 	)
-	if bck, objectName, err = cmn.ParseBckObjectURI(c.Args().First()); err != nil {
+	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
 		return
 	}
-	if objectName != "" {
-		return objectNameArgumentNotSupported(c, objectName)
-	}
+
 	if bck, p, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}
@@ -73,16 +70,13 @@ func setCopiesHandler(c *cli.Context) (err error) {
 
 func ecEncodeHandler(c *cli.Context) (err error) {
 	var (
-		bck        cmn.Bck
-		p          *cmn.BucketProps
-		objectName string
+		bck cmn.Bck
+		p   *cmn.BucketProps
 	)
-	if bck, objectName, err = cmn.ParseBckObjectURI(c.Args().First()); err != nil {
+	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
 		return
 	}
-	if objectName != "" {
-		return objectNameArgumentNotSupported(c, objectName)
-	}
+
 	if bck, p, err = validateBucket(c, bck, "", false); err != nil {
 		return
 	}

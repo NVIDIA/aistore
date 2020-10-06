@@ -376,9 +376,8 @@ func resetBucketProps(c *cli.Context, bck cmn.Bck) (err error) {
 // Get bucket props
 func showBucketProps(c *cli.Context) (err error) {
 	var (
-		bck     cmn.Bck
-		p       *cmn.BucketProps
-		objName string
+		bck cmn.Bck
+		p   *cmn.BucketProps
 	)
 
 	if c.NArg() > 2 {
@@ -390,12 +389,8 @@ func showBucketProps(c *cli.Context) (err error) {
 
 	if isWebURL(objPath) {
 		bck = parseURLtoBck(objPath)
-	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath); err != nil {
+	} else if bck, err = parseBckURI(c, objPath); err != nil {
 		return
-	}
-
-	if objName != "" {
-		return objectNameArgumentNotSupported(c, objName)
 	}
 	if _, p, err = validateBucket(c, bck, "", false); err != nil {
 		return

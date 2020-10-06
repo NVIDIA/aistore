@@ -231,19 +231,15 @@ var (
 func showBucketHandler(c *cli.Context) (err error) {
 	var (
 		bck     cmn.Bck
-		objName string
 		objPath = c.Args().First()
 	)
 
 	if isWebURL(objPath) {
 		bck = parseURLtoBck(objPath)
-	} else if bck, objName, err = cmn.ParseBckObjectURI(objPath, true); err != nil {
+	} else if bck, err = parseBckURI(c, objPath, true); err != nil {
 		return
 	}
 
-	if objName != "" {
-		return objectNameArgumentNotSupported(c, objName)
-	}
 	var props *cmn.BucketProps
 	if bck, props, err = validateBucket(c, bck, "", true); err != nil {
 		return
@@ -400,7 +396,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in format bucket/object")
 	}
-	bck, object, err := cmn.ParseBckObjectURI(fullObjName)
+	bck, object, err := parseBckObjectURI(c, fullObjName)
 	if err != nil {
 		return
 	}
