@@ -76,6 +76,7 @@ var etlCmds = []cli.Command{
 					cpBckPrefixFlag,
 					cpBckDryRunFlag,
 				},
+				BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */),
 			},
 		},
 	},
@@ -235,11 +236,9 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if fromBck.IsCloud() || toBck.IsCloud() {
-		return fmt.Errorf("ETL of cloud buckets not supported")
-	}
-	if fromBck.IsRemoteAIS() || toBck.IsRemoteAIS() {
-		return fmt.Errorf("ETL of remote ais buckets not supported")
+
+	if fromBck.Equal(toBck) {
+		return fmt.Errorf("cannot ETL bucket %q onto itself", fromBck)
 	}
 
 	var extMap cmn.SimpleKVs

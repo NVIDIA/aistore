@@ -290,9 +290,9 @@ Renaming cloud buckets (cloud://new_bucket_name) not supported
 
 ## Copy bucket
 
-`ais cp bucket BUCKET_NAME NEW_NAME`
+`ais cp bucket SRC_BUCKET DST_BUCKET`
 
-Copy an existing ais bucket to a new ais bucket.
+Copy an existing bucket to a new bucket. If destination bucket is a cloud bucket it has to exist.
 
 ### Options
 | Name | Type | Description | Default |
@@ -308,17 +308,32 @@ Copy local bucket `bucket_name` to local bucket `new_bucket_name`.
 
 ```console
 $ ais cp bucket ais://bucket_name new_bucket_name
-Copying bucket "bucket_name" to "new_bucket_name" in progress.
+Copying bucket "ais://bucket_name" to "new_bucket_name" in progress.
 To check the status, run: ais show xaction copybck new_bucket_name
+```
+
+#### Copy cloud bucket to another cloud bucket
+
+Copy AWS bucket `bucket` to AWS bucket `dst_bucket`.
+
+```console
+# Make sure that both buckets exist.
+$ ais ls cloud://
+AWS Buckets (2)
+  aws://bucket
+  aws://dst_bucket
+$ ais cp bucket aws://bucket aws://dst_bucket
+Copying bucket "aws://bucket" to "aws://dst_bucket" in progress.
+To check the status, run: ais show xaction copybck aws://dst_bucket
 ```
 
 #### Incorrect bucket rename
 
-Copying cloud buckets is not supported.
+Copying bucket to the same bucket.
 
 ```console
-$ ais cp bucket cloud://bucket_name cloud://new_bucket_name
-Copying of cloud buckets not supported
+$ ais cp bucket bucket_name bucket_name
+Cannot copy bucket "bucket_name" onto itself.
 ```
 
 ## Show bucket summary

@@ -31,7 +31,7 @@ var (
 					ArgsUsage:    bucketOldNewArgument,
 					Flags:        copyCmdsFlags[subcmdCopyBucket],
 					Action:       copyBucketHandler,
-					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.ProviderAIS),
+					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */),
 				},
 			},
 		},
@@ -51,11 +51,9 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if fromBck.IsCloud() || toBck.IsCloud() {
-		return fmt.Errorf("copying of cloud buckets not supported")
-	}
-	if fromBck.IsRemoteAIS() || toBck.IsRemoteAIS() {
-		return fmt.Errorf("copying of remote ais buckets not supported")
+
+	if fromBck.Equal(toBck) {
+		return fmt.Errorf("cannot copy bucket %q onto itself", fromBck)
 	}
 
 	fromBck.Provider, toBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
