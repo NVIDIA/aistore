@@ -210,7 +210,7 @@ func (s *CoreStats) init(size int) {
 func (s *CoreStats) UpdateUptime(d time.Duration) {
 	v := s.Tracker[Uptime]
 	v.Lock()
-	v.Value = d.Nanoseconds() / int64(time.Microsecond)
+	v.Value = d.Nanoseconds()
 	v.Unlock()
 }
 
