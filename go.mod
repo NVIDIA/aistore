@@ -8,7 +8,7 @@ require (
 	cloud.google.com/go/storage v1.12.0
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
 	github.com/Azure/azure-storage-blob-go v0.10.0
-	github.com/NVIDIA/go-tfdata v0.0.0-20200507111544-07609cc6c32e
+	github.com/NVIDIA/go-tfdata v0.3.1
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/aws/aws-sdk-go v1.34.33
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
@@ -29,7 +29,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lufia/iostat v1.1.0
 	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
-	github.com/onsi/ginkgo v1.12.1
+	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pierrec/lz4/v3 v3.3.2
@@ -54,5 +54,5 @@ require (
 	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.19.2
 	k8s.io/apimachinery v0.19.2
-	k8s.io/client-go v0.19.0
+	k8s.io/client-go v0.19.2
 )
