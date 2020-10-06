@@ -3184,7 +3184,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, si *cluster.Snode) (err error) {
 	ctx := &smapModifier{
 		pre:  p._remnPre,
-		post: p._remnPost,
+		post: p._syncPost,
 		sid:  si.ID(),
 		msg:  msg,
 	}
@@ -3197,7 +3197,7 @@ func (p *proxyrunner) _remnPre(ctx *smapModifier, clone *smapX) (err error) {
 	return
 }
 
-func (p *proxyrunner) _remnPost(ctx *smapModifier, clone *smapX) {
+func (p *proxyrunner) _syncPost(ctx *smapModifier, clone *smapX) {
 	var (
 		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
 		pairs  = []revsPair{{clone, aisMsg}}
@@ -3206,17 +3206,23 @@ func (p *proxyrunner) _remnPost(ctx *smapModifier, clone *smapX) {
 }
 
 // Put a node under maintenance
-func (p *proxyrunner) markMaintenance(si *cluster.Snode, action string) error {
+func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
 	var stage int64
-	switch action {
+	switch msg.Action {
 	case cmn.ActDecommission:
 		stage = cmn.NodeStatusDecommission
 	case cmn.ActStartMaintenance:
 		stage = cmn.NodeStatusMaintenance
 	default:
-		return fmt.Errorf("invalid action: %s", action)
+		return fmt.Errorf("invalid action: %s", msg.Action)
 	}
-	ctx := &smapModifier{pre: p._markMaint, sid: si.ID(), stage: stage}
+	ctx := &smapModifier{
+		pre:   p._markMaint,
+		post:  p._syncPost,
+		sid:   si.ID(),
+		stage: stage,
+		msg:   msg,
+	}
 	return p.owner.smap.modify(ctx)
 }
 
@@ -3267,7 +3273,7 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
 }
 
 // Stops rebalance if needed, do cleanup, and get a node back to the cluster.
-func (p *proxyrunner) cancelMaintenance(opts *cmn.ActValDecommision) error {
+func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDecommision) error {
 	if !opts.SkipRebalance {
 		xactMsg := &xaction.XactReqMsg{Kind: cmn.ActRebalance}
 		body := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActXactStop, Value: xactMsg})
@@ -3278,7 +3284,7 @@ func (p *proxyrunner) cancelMaintenance(opts *cmn.ActValDecommision) error {
 			}
 		}
 	}
-	ctx := &smapModifier{pre: p._cancelMaint, sid: opts.DaemonID}
+	ctx := &smapModifier{pre: p._cancelMaint, sid: opts.DaemonID, post: p._syncPost, msg: msg}
 	return p.owner.smap.modify(ctx)
 }
 
@@ -3450,19 +3456,21 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		opts.SkipRebalance = opts.SkipRebalance || si.IsProxy()
-		if err = p.markMaintenance(si, msg.Action); err != nil {
+		if err = p.markMaintenance(msg, si); err != nil {
 			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
 			return
 		}
-		if opts.SkipRebalance {
-			// Decommissioning: just remove the node
-			err = p.removeNode(msg, si)
-		} else {
-			cb := func(nl nl.NotifListener, err error) { p.removeAfterRebalance(nl, err, msg, si) }
+		if !opts.SkipRebalance {
+			var cb nl.NotifCallback
+			if msg.Action == cmn.ActDecommission {
+				cb = func(nl nl.NotifListener, err error) { p.removeAfterRebalance(nl, err, msg, si) }
+			}
 			rebID, err = p.finalizeMaintenance(msg, si, cb)
 			if err == nil {
 				w.Write([]byte(rebID.String()))
 			}
+		} else if msg.Action == cmn.ActDecommission {
+			err = p.removeNode(msg, si)
 		}
 		if err != nil {
 			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
@@ -3487,7 +3495,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := p.cancelMaintenance(&opts); err != nil {
+		if err := p.cancelMaintenance(msg, &opts); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
