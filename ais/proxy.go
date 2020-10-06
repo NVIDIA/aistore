@@ -3729,9 +3729,7 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 // lookup and add remote bucket on the fly //
 /////////////////////////////////////////////
 
-func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck *cluster.Bck) {
-	var err error
-
+func (args *remBckAddArgs) tryBckInitWithErr(bucket string, origURLBck ...string) (bck *cluster.Bck, err error, errCode int) {
 	if len(origURLBck) > 0 {
 		args.allowHTTPBck = true
 	}
@@ -3741,8 +3739,7 @@ func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck 
 		}
 		bck, err = newBckFromQuery(bucket, args.query)
 		if err != nil {
-			args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
-			return nil
+			return bck, err, http.StatusBadRequest
 		}
 	}
 
@@ -3756,46 +3753,55 @@ func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck 
 			} else if origURL := args.query.Get(cmn.URLParamOrigURL); origURL != "" {
 				hbo, err := cmn.NewHTTPObjPath(origURL)
 				if err != nil {
-					args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
-					return nil
+					return bck, err, http.StatusBadRequest
 				}
 				args.origURLBck = hbo.OrigURLBck
 			}
 		}
 
-		if bck, err = args.try(); err != nil {
-			return nil
+		if bck, err, errCode = args.tryWithErr(); err != nil {
+			return bck, err, errCode
 		}
+	}
+
+	return bck, nil, 0
+}
+
+func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck *cluster.Bck) {
+	var (
+		err     error
+		errCode int
+	)
+	if bck, err, errCode = args.tryBckInitWithErr(bucket, origURLBck...); err != nil {
+		if err != cmn.ErrForwarded {
+			args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+		}
+		return nil
 	}
 
 	return bck
 }
 
-func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
+func (args *remBckAddArgs) tryWithErr() (bck *cluster.Bck, err error, errCode int) {
 	if _, ok := args.err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
 		err = args.err
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
-			args.p.invalmsghdlr(args.w, args.r, args.err.Error(), http.StatusNotFound)
-			return
+			return bck, args.err, http.StatusNotFound
 		}
-		args.p.invalmsghdlr(args.w, args.r, args.err.Error())
-		return
+		return bck, args.err, http.StatusBadRequest
 	}
 	if !cmn.IsValidProvider(args.queryBck.Provider) {
 		err = cmn.NewErrorInvalidBucketProvider(args.queryBck.Bck, args.p.si.Name())
-		args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
-		return
+		return bck, err, http.StatusBadRequest
 	}
 
 	if args.queryBck.IsHTTP() && !args.allowHTTPBck {
 		err = errors.New("operation does not support http buckets")
-		args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
-		return
+		return bck, err, http.StatusBadRequest
 	}
 
 	if args.p.forwardCP(args.w, args.r, args.msg, "add-remote-bucket", nil) {
-		err = errors.New("forwarded")
-		return
+		return bck, cmn.ErrForwarded, 0
 	}
 	//
 	// from this point on it's the primary - lookup via random target, perform more checks
@@ -3804,19 +3810,25 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 	if bck.Props != nil && bck.HasBackendBck() {
 		bck = cluster.NewBckEmbed(bck.Props.BackendBck)
 	}
-	err = args._tryAdd(bck)
+	err, errCode = args._tryAddWithErr(bck)
+	return bck, err, errCode
+}
+
+func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
+	var errCode int
+	if bck, err, errCode = args.tryWithErr(); err != nil && err != cmn.ErrForwarded {
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+	}
 	return
 }
 
-func (args *remBckAddArgs) _tryAdd(bck *cluster.Bck) (err error) {
+func (args *remBckAddArgs) _tryAddWithErr(bck *cluster.Bck) (err error, errCode int) {
 	var (
 		cloudProps http.Header
-		errCode    int
 	)
 
 	if cloudProps, err, errCode = args._lookup(bck); err != nil {
-		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
-		return
+		return err, errCode
 	}
 	if args.queryBck.IsHTTP() {
 		debug.Assert(args.origURLBck != "")
@@ -3824,13 +3836,23 @@ func (args *remBckAddArgs) _tryAdd(bck *cluster.Bck) (err error) {
 	}
 	if err = args.p.createBucket(&cmn.ActionMsg{Action: cmn.ActRegisterCB}, bck, cloudProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
-			args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusConflict)
-			return
+			return err, http.StatusConflict
 		}
 	}
 	err = bck.Init(args.p.owner.bmd, args.p.si)
 	if err != nil {
-		glog.Errorf("%s: unexpected failure to add remote %s, err: %v", args.p.si, bck, err)
+		return fmt.Errorf("%s: unexpected failure to add remote %s, err: %v", args.p.si, bck, err), http.StatusInternalServerError
+	}
+	return
+}
+
+func (args *remBckAddArgs) _tryAdd(bck *cluster.Bck) (err error) {
+	var errCode int
+
+	err, errCode = args._tryAddWithErr(bck)
+	if err != nil {
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+		return
 	}
 	return
 }

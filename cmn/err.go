@@ -90,6 +90,7 @@ type (
 var (
 	ErrSkip           = errors.New("skip")
 	ErrStartupTimeout = errors.New("startup timeout")
+	ErrForwarded      = errors.New("forwarded")
 )
 
 func _errBucket(msg, node string) string {
