@@ -1096,7 +1096,7 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 			skipped++
 			continue
 		}
-		if smap.NonElects.Contains(id) {
+		if snode.NonElectable() {
 			skipped++
 			continue
 		}

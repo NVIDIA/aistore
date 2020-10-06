@@ -374,9 +374,3 @@ const (
 	DefaultTimeout = time.Duration(-1)
 	LongTimeout    = time.Duration(-2)
 )
-
-// Node statuses
-const (
-	NodeStatusMaintenance  = iota + 1 // under maintenance
-	NodeStatusDecommission            // marked for rebalance and removal
-)

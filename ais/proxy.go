@@ -607,6 +607,8 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 			errs = append(errs, err)
 			goto ExtractRMD
 		}
+		node := newSmap.GetNode(p.si.ID())
+		p.si.Flags = node.Flags
 
 		// When some node was removed from the cluster we need to clean up the
 		// reverse proxy structure.
@@ -2825,8 +2827,12 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	p.statsT.Add(stats.PostCount, 1)
 
+	var flags cluster.SnodeFlags
+	if nonElectable {
+		flags = cluster.SnodeNonElectable
+	}
 	p.owner.smap.Lock()
-	smap, err, code, update := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, userRegister, nonElectable)
+	smap, err, code, update := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, userRegister, flags)
 	p.owner.smap.Unlock()
 
 	if err != nil {
@@ -2844,12 +2850,12 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		meta := &nodeRegMeta{smap, bmd, p.si}
 		p.writeJSON(w, r, meta, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
-	go p.updateAndDistribute(nsi, msg, nonElectable)
+	go p.updateAndDistribute(nsi, msg, flags)
 }
 
 // NOTE: under lock
 func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
-	tag string, keepalive, userRegister, nonElectable bool) (smap *smapX, err error, code int, update bool) {
+	tag string, keepalive, userRegister bool, flags cluster.SnodeFlags) (smap *smapX, err error, code int, update bool) {
 	code = http.StatusBadRequest
 	smap = p.owner.smap.get()
 
@@ -2906,7 +2912,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 	// no further checks join when cluster's starting up
 	if !p.ClusterStarted() {
 		clone := smap.clone()
-		clone.putNode(nsi, nonElectable)
+		clone.putNode(nsi, flags)
 		p.owner.smap.put(clone)
 		return
 	}
@@ -2917,13 +2923,13 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 	return
 }
 
-func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, nonElectable bool) {
+func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, flags cluster.SnodeFlags) {
 	ctx := &smapModifier{
-		pre:          p._updPre,
-		post:         p._updPost,
-		nsi:          nsi,
-		msg:          msg,
-		nonElectable: nonElectable,
+		pre:   p._updPre,
+		post:  p._updPost,
+		nsi:   nsi,
+		msg:   msg,
+		flags: flags,
 	}
 	err := p.owner.smap.modify(ctx)
 	if err != nil {
@@ -2937,7 +2943,7 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 	if !ctx.smap.isPrimary(p.si) {
 		return fmt.Errorf("%s is not primary(%s, %s): cannot add %s", p.si, ctx.smap.Primary, ctx.smap, ctx.nsi)
 	}
-	ctx.exists = clone.putNode(ctx.nsi, ctx.nonElectable)
+	ctx.exists = clone.putNode(ctx.nsi, ctx.flags)
 	if ctx.nsi.IsTarget() {
 		// Notify targets that they need to set up GFN
 		aisMsg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
@@ -3184,12 +3190,12 @@ func (p *proxyrunner) _syncPost(ctx *smapModifier, clone *smapX) {
 
 // Put a node under maintenance
 func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
-	var stage int64
+	var flags cluster.SnodeFlags
 	switch msg.Action {
 	case cmn.ActDecommission:
-		stage = cmn.NodeStatusDecommission
+		flags = cluster.SnodeDecomission
 	case cmn.ActStartMaintenance:
-		stage = cmn.NodeStatusMaintenance
+		flags = cluster.SnodeMaintenance
 	default:
 		return fmt.Errorf("invalid action: %s", msg.Action)
 	}
@@ -3197,14 +3203,14 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 		pre:   p._markMaint,
 		post:  p._syncPost,
 		sid:   si.ID(),
-		stage: stage,
+		flags: flags,
 		msg:   msg,
 	}
 	return p.owner.smap.modify(ctx)
 }
 
 func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
-	clone.startMaintenance(ctx.sid, ctx.stage)
+	clone.setNodeFlags(ctx.sid, ctx.flags)
 	clone.staffIC()
 	return nil
 }
@@ -3262,16 +3268,19 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDeco
 			}
 		}
 	}
-	ctx := &smapModifier{pre: p._cancelMaint, sid: opts.DaemonID, post: p._syncPost, msg: msg}
+	ctx := &smapModifier{
+		pre:  p._cancelMaint,
+		sid:  opts.DaemonID,
+		post: p._syncPost,
+		msg:  msg, flags: cluster.SnodeMaintenanceMask,
+	}
 	return p.owner.smap.modify(ctx)
 }
 
 func (p *proxyrunner) _cancelMaint(ctx *smapModifier, clone *smapX) error {
-	err := clone.stopMaintenance(ctx.sid)
-	if err == nil {
-		clone.staffIC()
-	}
-	return err
+	clone.clearNodeFlags(ctx.sid, ctx.flags)
+	clone.staffIC()
+	return nil
 }
 
 func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
@@ -3429,7 +3438,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 			return
 		}
-		if _, ok := smap.UnderMaintenance(opts.DaemonID); ok {
+		if si.InMaintenance() {
 			p.invalmsghdlrf(w, r, "Node %q already in maintenance state", opts.DaemonID)
 			return
 		}
@@ -3472,7 +3481,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 			return
 		}
-		if _, ok := smap.UnderMaintenance(opts.DaemonID); !ok {
+		if !si.InMaintenance() {
 			p.invalmsghdlrf(w, r, "Node %q is not under maintenance", opts.DaemonID)
 			return
 		}
@@ -3489,6 +3498,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.Write([]byte(rebID.String()))
+		} else {
+			smap := p.owner.smap.get()
+			rebMsg := &cmn.ActionMsg{Action: msg.Action}
+			aisMsg := p.newAisMsg(rebMsg, nil, nil)
+			_ = p.metasyncer.sync(revsPair{smap, aisMsg})
 		}
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)

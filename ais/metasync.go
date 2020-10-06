@@ -350,10 +350,11 @@ outer:
 		to = cluster.Targets
 	}
 	res := y.p.bcastToGroup(bcastArgs{
-		req:     cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
-		smap:    smap,
-		timeout: config.Timeout.MaxKeepalive, // making exception for this critical op
-		to:      to,
+		req:               cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
+		smap:              smap,
+		timeout:           config.Timeout.MaxKeepalive, // making exception for this critical op
+		to:                to,
+		ignoreMaintenance: true,
 	})
 
 	// step 4: count failures and fill-in refused

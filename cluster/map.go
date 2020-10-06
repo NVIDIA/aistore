@@ -22,12 +22,23 @@ const (
 	AllNodes
 )
 
+// enum: Snode flags
+const (
+	SnodeNonElectable = 1 << iota
+	SnodeIC
+	SnodeMaintenance
+	SnodeDecomission
+)
+const SnodeMaintenanceMask SnodeFlags = SnodeMaintenance | SnodeDecomission
+
 type (
 	// interface to Get current cluster-map instance
 	Sowner interface {
 		Get() (smap *Smap)
 		Listeners() SmapListeners
 	}
+
+	SnodeFlags uint64
 
 	// Snode's networking info
 	NetInfo struct {
@@ -38,11 +49,12 @@ type (
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
-		DaemonID        string  `json:"daemon_id"`
-		DaemonType      string  `json:"daemon_type"`       // enum: "target" or "proxy"
-		PublicNet       NetInfo `json:"public_net"`        // cmn.NetworkPublic
-		IntraControlNet NetInfo `json:"intra_control_net"` // cmn.NetworkIntraControl
-		IntraDataNet    NetInfo `json:"intra_data_net"`    // cmn.NetworkIntraData
+		DaemonID        string     `json:"daemon_id"`
+		DaemonType      string     `json:"daemon_type"`       // enum: "target" or "proxy"
+		PublicNet       NetInfo    `json:"public_net"`        // cmn.NetworkPublic
+		IntraControlNet NetInfo    `json:"intra_control_net"` // cmn.NetworkIntraControl
+		IntraDataNet    NetInfo    `json:"intra_data_net"`    // cmn.NetworkIntraData
+		Flags           SnodeFlags `json:"flags"`             // enum cmn.Snode*
 		idDigest        uint64
 		name            string
 		LocalNet        *net.IPNet `json:"-"`
@@ -51,15 +63,13 @@ type (
 	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes
 
 	Smap struct {
-		Tmap         NodeMap          `json:"tmap"`                    // targetID -> targetInfo
-		Pmap         NodeMap          `json:"pmap"`                    // proxyID -> proxyInfo
-		NonElects    cmn.SimpleKVs    `json:"non_electable,omitempty"` // non-electables: set of DaemonID
-		IC           cmn.SimpleKVsInt `json:"ic"`                      // cluster IC: DaemonID => [Smap version]
-		Maintenance  cmn.SimpleKVsInt `json:"maintenance,omitempty"`   // nodes under maintenance: DaemonID => Stage (see cmn.NodeStatus* consts)
-		Primary      *Snode           `json:"proxy_si"`                // (json tag preserved for back. compat.)
-		Version      int64            `json:"version,string"`          // version
-		UUID         string           `json:"uuid"`                    // UUID (assigned once at creation time)
-		CreationTime string           `json:"creation_time"`           // creation time
+		Tmap         NodeMap          `json:"tmap"`           // targetID -> targetInfo
+		Pmap         NodeMap          `json:"pmap"`           // proxyID -> proxyInfo
+		IC           cmn.SimpleKVsInt `json:"ic"`             // cluster IC: DaemonID => [Smap version]
+		Primary      *Snode           `json:"proxy_si"`       // (json tag preserved for back. compat.)
+		Version      int64            `json:"version,string"` // version
+		UUID         string           `json:"uuid"`           // UUID (assigned once at creation time)
+		CreationTime string           `json:"creation_time"`  // creation time
 	}
 
 	// Smap on-change listeners
@@ -72,6 +82,26 @@ type (
 		Unreg(sl Slistener)
 	}
 )
+
+////////////////
+// SnodeFlags //
+////////////////
+
+func (f SnodeFlags) Set(flags SnodeFlags) SnodeFlags {
+	return f | flags
+}
+
+func (f SnodeFlags) Clear(flags SnodeFlags) SnodeFlags {
+	return f &^ flags
+}
+
+func (f SnodeFlags) IsSet(flags SnodeFlags) bool {
+	return f&flags == flags
+}
+
+func (f SnodeFlags) IsAnySet(flags SnodeFlags) bool {
+	return f&flags != 0
+}
 
 ///////////
 // Snode //
@@ -161,8 +191,10 @@ func (d *Snode) isDuplicateURL(n *Snode) bool {
 	return false
 }
 
-func (d *Snode) IsProxy() bool  { return d.DaemonType == cmn.Proxy }
-func (d *Snode) IsTarget() bool { return d.DaemonType == cmn.Target }
+func (d *Snode) IsProxy() bool       { return d.DaemonType == cmn.Proxy }
+func (d *Snode) IsTarget() bool      { return d.DaemonType == cmn.Target }
+func (d *Snode) InMaintenance() bool { return d.Flags.IsAnySet(SnodeMaintenanceMask) }
+func (d *Snode) NonElectable() bool  { return d.Flags.IsSet(SnodeNonElectable) }
 
 //===============================================================
 //
@@ -297,14 +329,6 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 		eq = false
 		return
 	}
-	if !m.NonElects.Compare(other.NonElects) {
-		eq = false
-		return
-	}
-	if !m.Maintenance.Compare(other.Maintenance) {
-		eq = false
-		return
-	}
 	if !m.IC.Compare(other.IC) {
 		eq = false
 		return
@@ -343,11 +367,6 @@ func (m *Smap) StrIC(psi *Snode) string {
 		}
 	}
 	return strings.Join(all, ",")
-}
-
-func (m *Smap) UnderMaintenance(id string) (int64, bool) {
-	stage, ok := m.Maintenance[id]
-	return stage, ok
 }
 
 /////////////

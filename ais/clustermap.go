@@ -63,17 +63,16 @@ type (
 		running   atomic.Bool
 	}
 	smapModifier struct {
-		pre          func(ctx *smapModifier, clone *smapX) error
-		post         func(ctx *smapModifier, clone *smapX)
-		smap         *smapX
-		msg          *cmn.ActionMsg
-		nsi          *cluster.Snode
-		nid          string
-		sid          string
-		stage        int64
-		status       int
-		nonElectable bool
-		exists       bool
+		pre    func(ctx *smapModifier, clone *smapX) error
+		post   func(ctx *smapModifier, clone *smapX)
+		smap   *smapX
+		msg    *cmn.ActionMsg
+		nsi    *cluster.Snode
+		nid    string
+		sid    string
+		flags  cluster.SnodeFlags
+		status int
+		exists bool
 	}
 )
 
@@ -89,7 +88,7 @@ var (
 //
 func newSmap() (smap *smapX) {
 	smap = &smapX{}
-	smap.init(8, 8, 8, 2)
+	smap.init(8, 8)
 	return
 }
 
@@ -132,12 +131,10 @@ func newSnode(id, proto, daeType string, publicAddr, intraControlAddr,
 // smapX //
 ///////////
 
-func (m *smapX) init(tsize, psize, elsize, msize int) {
+func (m *smapX) init(tsize, psize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
 	m.Pmap = make(cluster.NodeMap, psize)
-	m.NonElects = make(cmn.SimpleKVs, elsize)
 	m.IC = make(cmn.SimpleKVsInt, ICGroupSize)
-	m.Maintenance = make(cmn.SimpleKVsInt, msize)
 }
 
 func (m *smapX) _fillIC() {
@@ -146,8 +143,8 @@ func (m *smapX) _fillIC() {
 	}
 
 	// try to select the missing members - upto ICGroupSize - if available
-	for pid, si := range m.Pmap {
-		if m.NonElects.Contains(pid) {
+	for _, si := range m.Pmap {
+		if si.Flags.IsSet(cluster.SnodeNonElectable) {
 			continue
 		}
 		m.addIC(si)
@@ -258,7 +255,6 @@ func (m *smapX) delTarget(sid string) {
 		cmn.Assertf(false, "FATAL: target: %s is not in: %s", sid, m.pp())
 	}
 	delete(m.Tmap, sid)
-	delete(m.Maintenance, sid)
 	m.Version++
 }
 
@@ -267,13 +263,11 @@ func (m *smapX) delProxy(pid string) {
 		cmn.Assertf(false, "FATAL: proxy: %s is not in: %s", pid, m.pp())
 	}
 	delete(m.Pmap, pid)
-	delete(m.NonElects, pid)
 	delete(m.IC, pid)
-	delete(m.Maintenance, pid)
 	m.Version++
 }
 
-func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) (exists bool) {
+func (m *smapX) putNode(nsi *cluster.Snode, flags cluster.SnodeFlags) (exists bool) {
 	id := nsi.ID()
 	if nsi.IsProxy() {
 		if m.GetProxy(id) != nil {
@@ -281,8 +275,8 @@ func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) (exists bool) {
 			exists = true
 		}
 		m.addProxy(nsi)
-		if nonElectable {
-			m.NonElects[id] = ""
+		nsi.Flags = flags
+		if nsi.NonElectable() {
 			glog.Warningf("%s won't be electable", nsi)
 		}
 		if glog.V(3) {
@@ -310,21 +304,15 @@ func (m *smapX) clone() *smapX {
 
 func (m *smapX) deepCopy(dst *smapX) {
 	cmn.CopyStruct(dst, m)
-	dst.init(m.CountTargets(), m.CountProxies(), len(m.NonElects), len(m.Maintenance))
+	dst.init(m.CountTargets(), m.CountProxies())
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v
 	}
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v
 	}
-	for id, v := range m.NonElects {
-		dst.NonElects[id] = v
-	}
 	for id, v := range m.IC {
 		dst.IC[id] = v
-	}
-	for id, v := range m.Maintenance {
-		dst.Maintenance[id] = v
 	}
 }
 
@@ -408,23 +396,36 @@ func (m *smapX) pp() string {
 	return string(s)
 }
 
-func (m *smapX) startMaintenance(sid string, stage int64) {
-	if m.GetNode(sid) == nil {
-		cmn.Assertf(false, "FATAL: node: %s is not in: %s", sid, m)
+func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
+	// Minor optimization to avoid copying struct if nothing changed
+	if si.Flags == newFlags {
+		return
 	}
-	delete(m.IC, sid)
-	m.Maintenance[sid] = stage
+	// Assigning directly to si.Flags results in CoW violation
+	var copySI cluster.Snode
+	cmn.CopyStruct(&copySI, si)
+	copySI.Flags = newFlags
+	if si.IsTarget() {
+		m.Tmap[si.ID()] = &copySI
+	} else {
+		m.Pmap[si.ID()] = &copySI
+	}
+	delete(m.IC, si.ID())
 	m.Version++
 }
 
-func (m *smapX) stopMaintenance(sid string) error {
-	_, ok := m.Maintenance[sid]
-	if !ok {
-		return fmt.Errorf("node %q is not under maintenance", sid)
-	}
-	delete(m.Maintenance, sid)
-	m.Version++
-	return nil
+// Must be called under lock and for smap clone (e.g, inside `smap.modify`)
+func (m *smapX) setNodeFlags(id string, flags cluster.SnodeFlags) {
+	si := m.GetNode(id)
+	cmn.Assert(si != nil)
+	m._applyFlags(si, si.Flags.Set(flags))
+}
+
+// Must be called under lock and for smap clone (e.g, inside `smap.modify`)
+func (m *smapX) clearNodeFlags(id string, flags cluster.SnodeFlags) {
+	si := m.GetNode(id)
+	cmn.Assert(si != nil)
+	m._applyFlags(si, si.Flags.Clear(flags))
 }
 
 ///////////////

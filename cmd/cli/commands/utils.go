@@ -232,19 +232,18 @@ func fillMap() (*cluster.Smap, error) {
 	targetCount := smapPrimary.CountTargets()
 
 	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smapPrimary.Pmap, proxy, wg, smapPrimary.Maintenance)
-	retrieveStatus(smapPrimary.Tmap, target, wg, smapPrimary.Maintenance)
+	retrieveStatus(smapPrimary.Pmap, proxy, wg)
+	retrieveStatus(smapPrimary.Tmap, target, wg)
 	wg.Wait()
 	return smapPrimary, nil
 }
 
-func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, suspended cmn.SimpleKVsInt) {
-	fill := func(node *cluster.Snode, stage int64) {
+func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup) {
+	fill := func(node *cluster.Snode) {
 		obj, _ := api.GetDaemonStatus(defaultAPIParams, node)
-		switch stage {
-		case cmn.NodeStatusMaintenance:
+		if node.Flags.IsSet(cluster.SnodeMaintenance) {
 			obj.Status = "maintenance"
-		case cmn.NodeStatusDecommission:
+		} else if node.Flags.IsSet(cluster.SnodeDecomission) {
 			obj.Status = "decomission"
 		}
 		mu.Lock()
@@ -254,7 +253,7 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStat
 
 	for _, si := range nodeMap {
 		go func(si *cluster.Snode) {
-			fill(si, suspended[si.ID()])
+			fill(si)
 			wg.Done()
 		}(si)
 	}

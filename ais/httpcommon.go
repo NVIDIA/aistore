@@ -65,15 +65,16 @@ type (
 
 	// bcastArgs contains arguments for an intra-cluster broadcast call.
 	bcastArgs struct {
-		req       cmn.ReqArgs        // http args
-		network   string             // one of the cmn.KnownNetworks
-		timeout   time.Duration      // timeout
-		fv        func() interface{} // optional; returns value to be unmarshalled (see `callArgs.v`)
-		nodes     []cluster.NodeMap  // broadcast destinations
-		skipNodes cmn.StringSet      // destination IDs to skip
-		smap      *smapX             // Smap to use
-		to        int                // enumerated alternative to nodes (above)
-		nodeCount int                // greater or equal destination count
+		req               cmn.ReqArgs        // http args
+		network           string             // one of the cmn.KnownNetworks
+		timeout           time.Duration      // timeout
+		fv                func() interface{} // optional; returns value to be unmarshalled (see `callArgs.v`)
+		nodes             []cluster.NodeMap  // broadcast destinations
+		skipNodes         cmn.StringSet      // destination IDs to skip
+		smap              *smapX             // Smap to use
+		to                int                // enumerated alternative to nodes (above)
+		nodeCount         int                // greater or equal destination count
+		ignoreMaintenance bool               // do not skip nodes under maintenance
 	}
 
 	networkHandler struct {
@@ -885,6 +886,9 @@ func (h *httprunner) bcastToNodes(bargs *bcastArgs) chan callResult {
 	for _, nodeMap := range bargs.nodes {
 		for sid, si := range nodeMap {
 			if sid == h.si.ID() || bargs.skipNodes.Contains(sid) {
+				continue
+			}
+			if !bargs.ignoreMaintenance && si.InMaintenance() {
 				continue
 			}
 			wg.Add(1)

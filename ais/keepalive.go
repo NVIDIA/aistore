@@ -200,6 +200,10 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 			if !pkr.isTimeToPing(sid) {
 				continue
 			}
+			// Skip nodes under maintenance
+			if si.InMaintenance() {
+				continue
+			}
 			wg.Add(1)
 			go func(si *cluster.Snode) {
 				if len(stoppedCh) > 0 {
