@@ -169,8 +169,15 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 	return bcks.Contains(query), nil
 }
 
-// CopyBucket creates a new AIS bucket `toBck` and copies into it contents of
-// the existing `fromBck` bucket.
+// CopyBucket copies existing `fromBck` bucket to the destination `toBck` thus,
+// effectively, creating a copy of the `fromBck`.
+// * AIS will create `toBck` on the fly but only if the destination bucket does not
+//   exist and is provided by AIStore (note that Cloud-based `toBck` must exist
+//   for the copy operation to be successful)
+// * There are no limitations on copying buckets across Cloud providers:
+//   you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
+//   bucket, etc.
+// * Copying multiple buckets to the same destination bucket is also permitted.
 func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.CopyBckMsg) (xactID string, err error) {
 	msg := &cmn.CopyBckMsg{}
 	if len(msgs) > 0 && msgs[0] != nil {

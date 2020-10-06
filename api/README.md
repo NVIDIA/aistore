@@ -228,15 +228,18 @@ Error from AIStore in completing the request
 ___
 
 #### CopyBucket
-Create new bucket and copy into it all objects from the existing (old) one
+Copies existing `fromBck` bucket to the destination `toBck` thus, effectively, creating a copy of the `fromBck`.
+* AIS will create `toBck` on the fly, but only if the destination bucket does not exist and is provided by AIStore (note that Cloud-based `toBck` must exist for the copy operation to be successful)
+* There are no limitations on copying buckets across Cloud providers: you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure bucket, etc.
+* Copying multiple buckets to the same destination bucket is also permitted.
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string       | URL of the proxy (gateway)                                                            |
-| oldName    | string       | Name of the existing bucket                                                           |
-| newName    | string       | Name of the new bucket                                                                |
+| fromBck    | string       | Name of the existing bucket                                                           |
+| toBck      | string       | Name of the destination bucket                                                                |
 
 #### RenameLocalBucket
 Rename an existing bucket to the new name provided
