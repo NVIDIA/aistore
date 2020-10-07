@@ -527,19 +527,7 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 }
 
 func GetClusterMap(t *testing.T, url string) (smap *cluster.Smap) {
-	var (
-		baseParams = BaseAPIParams(url)
-		err        error
-	)
-while503:
-	smap, err = api.GetClusterMap(baseParams)
-	if err != nil && api.HTTPStatus(err) == http.StatusServiceUnavailable {
-		t.Log("waiting for the cluster to start up...")
-		time.Sleep(waitClusterStartup)
-		goto while503
-	}
-	tassert.CheckFatal(t, err)
-	return smap
+	return waitForStartup(BaseAPIParams(url), t)
 }
 
 func GetClusterConfig(t *testing.T) (config *cmn.Config) {
@@ -622,41 +610,6 @@ func WaitForXactionByID(id string, timeouts ...time.Duration) error {
 	}
 }
 
-func StartXaction(t *testing.T, xactKind string, bck cmn.Bck) (xactID string) {
-	var (
-		proxyURL   = GetPrimaryURL()
-		baseParams = BaseAPIParams(proxyURL)
-		xactArgs   = api.XactReqArgs{Kind: xactKind, Bck: bck}
-	)
-	xactID, err := api.StartXaction(baseParams, xactArgs)
-	tassert.CheckFatal(t, err)
-
-	xactStats := GetXactionStatsByID(t, xactID)
-	tassert.Fatalf(t, len(xactStats) != 0, "ID %q missing for xaction %q", xactID, xactKind)
-	for _, xact := range xactStats {
-		tassert.Fatalf(t, xact.Kind() == xactKind, "%q != %q", xact.Kind(), xactKind)
-	}
-
-	return
-}
-
-func AbortXaction(t *testing.T, xactID, xactKind string, bck cmn.Bck) {
-	var (
-		proxyURL   = GetPrimaryURL()
-		baseParams = BaseAPIParams(proxyURL)
-		xactArgs   = api.XactReqArgs{ID: xactID, Kind: xactKind, Bck: bck}
-	)
-	err := api.AbortXaction(baseParams, xactArgs)
-	tassert.CheckFatal(t, err)
-
-	xactStats := GetXactionStatsByID(t, xactID)
-	tassert.Fatalf(t, len(xactStats) != 0, "ID %q missing for xaction %q", xactID, xactKind)
-	for _, xact := range xactStats {
-		tassert.Fatalf(t, xact.Kind() == xactKind, "%q != %q", xact.Kind(), xactKind)
-		tassert.Fatalf(t, xact.Finished() || xact.Aborted(), "xaction(%s) ID=%q not aborted", xact.Kind(), xactID)
-	}
-}
-
 func CheckErrIsNotFound(t *testing.T, err error) {
 	if err == nil {
 		t.Errorf("expected error")
@@ -668,4 +621,24 @@ func CheckErrIsNotFound(t *testing.T, err error) {
 		t, httpErr.Status == http.StatusNotFound,
 		"expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status,
 	)
+}
+
+func waitForStartup(baseParams api.BaseParams, ts ...*testing.T) *cluster.Smap {
+	for {
+		smap, err := api.GetClusterMap(baseParams)
+		if err != nil {
+			if api.HTTPStatus(err) == http.StatusServiceUnavailable {
+				Logln("waiting for the cluster to start up...")
+				time.Sleep(waitClusterStartup)
+				continue
+			}
+
+			Logf("unable to get usable cluster map, err: %v\n", err)
+			if len(ts) > 0 {
+				tassert.CheckFatal(ts[0], err)
+			}
+			return nil
+		}
+		return smap
+	}
 }
