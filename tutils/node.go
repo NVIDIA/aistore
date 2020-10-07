@@ -72,19 +72,41 @@ func ExtractTargetNodes(smap *cluster.Smap) cluster.Nodes {
 }
 
 func ExtractProxyNodes(smap *cluster.Smap) cluster.Nodes {
-	proxies := make(cluster.Nodes, 0, smap.CountTargets())
+	proxies := make(cluster.Nodes, 0, smap.CountProxies())
 	for _, proxy := range smap.Pmap {
 		proxies = append(proxies, proxy)
 	}
 	return proxies
 }
 
-func RandomProxyURL(ts ...*testing.T) string {
+func RandomProxyURL(ts ...*testing.T) (url string) {
 	var (
 		baseParams = BaseAPIParams(proxyURLReadOnly)
-		smap       = waitForStartup(baseParams, ts...)
-		proxies    = ExtractProxyNodes(smap)
+		smap, err  = waitForStartup(baseParams, ts...)
+		retries    = 3
 	)
+	if err == nil {
+		return _getRandomProxyURL(smap)
+	}
+	for _, node := range pmapReadOnly {
+		url := node.URL(cmn.NetworkPublic)
+		if url == proxyURLReadOnly {
+			continue
+		}
+		if retries == 0 {
+			return ""
+		}
+		baseParams = BaseAPIParams(url)
+		if smap, err = waitForStartup(baseParams, ts...); err == nil {
+			return _getRandomProxyURL(smap)
+		}
+		retries--
+	}
+	return ""
+}
+
+func _getRandomProxyURL(smap *cluster.Smap) string {
+	proxies := ExtractProxyNodes(smap)
 	return proxies[rand.Intn(len(proxies))].URL(cmn.NetworkPublic)
 }
 

@@ -527,7 +527,8 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 }
 
 func GetClusterMap(t *testing.T, url string) (smap *cluster.Smap) {
-	return waitForStartup(BaseAPIParams(url), t)
+	smap, _ = waitForStartup(BaseAPIParams(url), t)
+	return
 }
 
 func GetClusterConfig(t *testing.T) (config *cmn.Config) {
@@ -623,7 +624,7 @@ func CheckErrIsNotFound(t *testing.T, err error) {
 	)
 }
 
-func waitForStartup(baseParams api.BaseParams, ts ...*testing.T) *cluster.Smap {
+func waitForStartup(baseParams api.BaseParams, ts ...*testing.T) (*cluster.Smap, error) {
 	for {
 		smap, err := api.GetClusterMap(baseParams)
 		if err != nil {
@@ -637,8 +638,8 @@ func waitForStartup(baseParams api.BaseParams, ts ...*testing.T) *cluster.Smap {
 			if len(ts) > 0 {
 				tassert.CheckFatal(ts[0], err)
 			}
-			return nil
+			return nil, err
 		}
-		return smap
+		return smap, nil
 	}
 }

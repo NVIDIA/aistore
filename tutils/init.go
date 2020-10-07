@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
@@ -31,7 +32,8 @@ const (
 )
 
 var (
-	proxyURLReadOnly string // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
+	proxyURLReadOnly string          // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
+	pmapReadOnly     cluster.NodeMap // initial proxy map - it is read-only variable
 
 	transportArgs = cmn.TransportArgs{
 		Timeout:          600 * time.Second,
@@ -66,6 +68,7 @@ func init() {
 	HTTPClientGetPut = cmn.NewClient(transportArgs)
 
 	initProxyURL()
+	initPmap()
 	initRemoteCluster()
 	initAuthToken()
 }
@@ -77,7 +80,7 @@ func initProxyURL() {
 	primaryHostIP, port := envVars["PRIMARY_HOST_IP"], envVars["PORT"]
 
 	proxyURLReadOnly = proxyURL
-	if containers.DockerRunning() && proxyURLReadOnly == proxyURL {
+	if containers.DockerRunning() {
 		proxyURLReadOnly = "http://" + primaryHostIP + ":" + port
 	}
 
@@ -111,6 +114,13 @@ func initProxyURL() {
 		cmn.Exitf("")
 	}
 	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
+}
+
+func initPmap() {
+	baseParams := BaseAPIParams(proxyURLReadOnly)
+	smap, err := waitForStartup(baseParams)
+	cmn.AssertNoErr(err)
+	pmapReadOnly = smap.Pmap
 }
 
 func initRemoteCluster() {
