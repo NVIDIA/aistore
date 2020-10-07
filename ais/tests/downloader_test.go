@@ -851,6 +851,8 @@ func TestDownloadMpathEvents(t *testing.T) {
 		m        = make(map[string]string, objsCnt)
 	)
 
+	clearDownloadList(t)
+
 	// Prepare objects to be downloaded to targets. Multiple objects to make
 	// sure that at least one of them gets into target with disabled mountpath.
 	for i := 0; i < objsCnt; i++ {
@@ -860,9 +862,12 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
+	id1, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("Started large download job %s, meant to be aborted\n", id)
+	tutils.Logf("Started large download job %s, meant to be aborted\n", id1)
+
+	// Abort just in case something goes wrong.
+	defer abortDownload(t, id1)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
 	removeTarget := tutils.ExtractTargetNodes(smap)[0]
@@ -887,19 +892,18 @@ func TestDownloadMpathEvents(t *testing.T) {
 	waitForDownloaderToFinish(t, baseParams, removeTarget.ID(), time.Second*30)
 
 	// Downloader finished on required target, safe to abort the rest.
-	tutils.Logf("Aborting download job %s\n", id)
-	err = api.AbortDownload(baseParams, id)
-	tassert.CheckFatal(t, err)
+	tutils.Logf("Aborting download job %s\n", id1)
+	abortDownload(t, id1)
 
 	objs, err := tutils.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
-	id, err = api.DownloadMulti(baseParams, generateDownloadDesc(), bck, m)
+	id2, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, m)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("Started download job %s, waiting for it to finish\n", id)
+	tutils.Logf("Started download job %s, waiting for it to finish\n", id2)
 
-	waitForDownload(t, id, 2*time.Minute)
+	waitForDownload(t, id2, 2*time.Minute)
 	objs, err = tutils.ListObjectNames(proxyURL, bck, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs))
@@ -920,6 +924,8 @@ func TestDownloadOverrideObject(t *testing.T) {
 
 		expectedSize int64 = 65
 	)
+
+	clearDownloadList(t)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
@@ -963,6 +969,8 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 		expectedSize int64 = 1075
 		newSize      int64 = 10
 	)
+
+	clearDownloadList(t)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)

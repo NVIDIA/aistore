@@ -501,11 +501,9 @@ func (d *dispatcher) pending(reqID string) bool {
 	return false
 }
 
+// PRECONDITION: All tasks should be dispatched.
 func (d *dispatcher) waitFor(job DlJob) {
-	// PRECONDITION: all tasks should be dispatched.
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
+	for ; ; time.Sleep(time.Second) {
 		if !d.pending(job.ID()) {
 			break
 		}
