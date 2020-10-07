@@ -126,7 +126,7 @@ test:long:
   variables:
     NUM_PROXY: 6
   script:
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo y; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - BUCKET="test" make test-long
 
 test:cloud:
