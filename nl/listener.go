@@ -40,6 +40,8 @@ type NotifListener interface {
 	EndTime() int64
 	HasFinished(node *cluster.Snode) bool
 	MarkFinished(node *cluster.Snode)
+	SetAddedTime()
+	AddedTime() int64
 	AllFinished() bool
 	FinCount() int
 	Finished() bool
@@ -74,6 +76,7 @@ type (
 		Stats             *sync.Map        // [daeID => Stats (e.g. cmn.BaseXactStatsExt)]
 		LastUpdatedX      map[string]int64 // [daeID => last update time(nanoseconds)]
 		ProgressIntervalX time.Duration    // time interval to monitor the progress
+		addedTime         atomic.Int64     // Time when `nl` is added
 
 		ErrMsg   string        // ErrMsg
 		FinTime  atomic.Int64  // timestamp when finished
@@ -124,6 +127,7 @@ func (nlb *NotifListenerBase) SetOwner(o string)               { nlb.Common.Owne
 func (nlb *NotifListenerBase) Kind() string                    { return nlb.Common.Action }
 func (nlb *NotifListenerBase) Bcks() []cmn.Bck                 { return nlb.Common.Bck }
 func (nlb *NotifListenerBase) FinCount() int                   { return len(nlb.FinSrcs) }
+func (nlb *NotifListenerBase) AddedTime() int64                { return nlb.addedTime.Load() }
 
 // is called after all Notifiers will have notified OR on failure (err != nil)
 func (nlb *NotifListenerBase) Callback(nl NotifListener, err error, timestamp int64) {
@@ -233,6 +237,10 @@ func (nlb *NotifListenerBase) MarkFinished(node *cluster.Snode) {
 		nlb.FinSrcs = make(cmn.StringSet)
 	}
 	nlb.FinSrcs.Add(node.ID())
+}
+
+func (nlb *NotifListenerBase) SetAddedTime() {
+	nlb.addedTime.Store(mono.NanoTime())
 }
 
 func (nlb *NotifListenerBase) AllFinished() bool {

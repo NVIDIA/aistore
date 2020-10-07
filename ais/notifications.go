@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
@@ -101,6 +102,7 @@ func (n *notifs) add(nl nl.NotifListener) {
 		return
 	}
 	n.m[nl.UUID()] = nl
+	nl.SetAddedTime()
 	n.Unlock()
 	glog.Infoln("add " + nl.String())
 }
@@ -355,7 +357,10 @@ func (n *notifs) housekeep() time.Duration {
 }
 
 func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
-	var done bool
+	var (
+		progressInterval = cmn.GCO.Get().Periodic.NotifTime
+		done             bool
+	)
 
 	nl.RLock()
 	uptoDateNodes, syncRequired := nl.NodesUptoDate(dur...)
@@ -390,7 +395,11 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 			}
 			nl.SetStats(res.si.ID(), stats)
 			nl.Unlock()
-		} else if res.status == http.StatusNotFound { // consider silent done at res.si
+		} else if res.status == http.StatusNotFound {
+			if mono.Since(nl.AddedTime()) < progressInterval {
+				// likely didn't start yet - skipping
+				continue
+			}
 			err := fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si)
 			nl.Lock()
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
@@ -536,6 +545,7 @@ func _mergeNLs(nls map[string]nl.NotifListener, msgs []*notifListenMsg) {
 	for _, m := range msgs {
 		if _, ok := nls[m.nl.UUID()]; !ok {
 			nls[m.nl.UUID()] = m.nl
+			m.nl.SetAddedTime()
 		}
 	}
 }

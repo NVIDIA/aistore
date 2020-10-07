@@ -3236,11 +3236,11 @@ func (p *proxyrunner) removeAfterRebalance(
 	nl nl.NotifListener, err error, msg *cmn.ActionMsg,
 	si *cluster.Snode) {
 	if err != nil || nl.Aborted() {
-		glog.Errorf("Rebalance not finished, err: %v, aborted: %v", err, nl.Aborted())
+		glog.Errorf("Rebalance(%s) didn't finish successfully,  err: %v, aborted: %v", nl.UUID(), err, nl.Aborted())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Rebalance finished. Removing node %s", si)
+		glog.Infof("Rebalance(%s) finished. Removing node %s", nl.UUID(), si)
 	}
 	p.removeNode(msg, si)
 }
