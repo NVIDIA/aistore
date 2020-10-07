@@ -631,16 +631,12 @@ func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
 
 func (c *txnServerCtx) addNotif(xact cluster.Xact) {
 	dsts, ok := c.query[cmn.URLParamNotifyMe]
-	if ok {
-		xact.AddNotif(&xaction.NotifXact{
-			NotifBase: nl.NotifBase{
-				When: cluster.UponTerm,
-				Ty:   cmn.NotifXact,
-				Dsts: dsts,
-				F:    c.t.callerNotifyFin,
-			},
-		})
+	if !ok {
+		return
 	}
+	xact.AddNotif(&xaction.NotifXact{
+		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: dsts, F: c.t.callerNotifyFin},
+	})
 }
 
 func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string) (*bundle.DataMover, error) {

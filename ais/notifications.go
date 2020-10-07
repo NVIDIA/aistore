@@ -95,7 +95,6 @@ func (n *notifs) String() string { return notifsName }
 // start listening
 func (n *notifs) add(nl nl.NotifListener) {
 	cmn.Assert(nl.UUID() != "")
-	cmn.Assert(nl.NotifTy() > cmn.NotifInvalid)
 	n.Lock()
 	if _, ok := n.m[nl.UUID()]; ok {
 		n.Unlock()
@@ -222,7 +221,6 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	//
 	// NotifListener and notifMsg must have the same type
 	//
-	cmn.Assert(nl.NotifTy() == int(notifMsg.Ty))
 	nl.RLock()
 	if nl.HasFinished(tsi) {
 		n.p.invalmsghdlrsilent(w, r, fmt.Sprintf("%s: duplicate %s from %s, %s", n.p.si, notifMsg, tid, nl))

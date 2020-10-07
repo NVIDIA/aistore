@@ -90,7 +90,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		dlJob.AddNotif(&downloader.NotifDownload{
 			NotifBase: nl.NotifBase{
 				When:     cluster.UponProgress,
-				Ty:       cmn.NotifDownload,
 				Interval: progressInterval,
 				Dsts:     []string{equalIC},
 				F:        t.callerNotifyFin,

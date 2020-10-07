@@ -33,7 +33,7 @@ var (
 func NewDownloadNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string,
 	progressInterval time.Duration, bck ...cmn.Bck) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
-		NotifListenerBase: *nl.NewNLB(uuid, smap, srcs, cmn.NotifDownload, action, progressInterval, bck...),
+		NotifListenerBase: *nl.NewNLB(uuid, smap, srcs, action, progressInterval, bck...),
 	}
 }
 
@@ -73,11 +73,7 @@ func (nd *NotifDownloadListerner) AbortArgs() cmn.ReqArgs {
 //
 
 func (nd *NotifDownload) ToNotifMsg() cluster.NotifMsg {
-	msg := cluster.NotifMsg{
-		UUID: nd.DlJob.ID(),
-		Kind: cmn.ActDownload,
-		Ty:   int32(nd.Category()),
-	}
+	msg := cluster.NotifMsg{UUID: nd.DlJob.ID(), Kind: cmn.ActDownload}
 	stats, err := nd.DlJob.ActiveStats()
 	if err != nil {
 		msg.ErrMsg = err.Error()

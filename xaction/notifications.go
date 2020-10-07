@@ -30,10 +30,9 @@ var (
 	_ nl.NotifListener = &NotifXactListener{}
 )
 
-func NewXactNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, action string,
-	bck ...cmn.Bck) *NotifXactListener {
+func NewXactNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string, bck ...cmn.Bck) *NotifXactListener {
 	return &NotifXactListener{
-		NotifListenerBase: *nl.NewNLB(uuid, smap, srcs, ty, action, 0, bck...),
+		NotifListenerBase: *nl.NewNLB(uuid, smap, srcs, action, 0, bck...),
 	}
 }
 
@@ -75,7 +74,6 @@ func (nxb *NotifXactListener) AbortArgs() cmn.ReqArgs {
 func (nx *NotifXact) ToNotifMsg() cluster.NotifMsg {
 	return cluster.NotifMsg{
 		UUID: nx.Xact.ID().String(),
-		Ty:   int32(nx.Category()),
 		Kind: nx.Xact.Kind(),
 		Data: cmn.MustMarshal(nx.Xact.Stats()),
 	}

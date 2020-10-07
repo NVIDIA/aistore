@@ -734,12 +734,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 
 	smap := t.owner.smap.Get()
 	notif := &xaction.NotifXact{
-		NotifBase: nl.NotifBase{
-			When: cluster.UponTerm,
-			Ty:   cmn.NotifXact,
-			Dsts: []string{equalIC},
-			F:    t.callerNotifyFin,
-		},
+		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 	}
 	if msg.Action == cmn.ActRebalance { // manual (triggered by user)
 		glog.Infof("%s: manual rebalance (version: %d)", t.si, newRMD.version())

@@ -79,12 +79,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	xact.AddNotif(&xaction.NotifXact{
-		NotifBase: nl.NotifBase{
-			When: cluster.UponTerm,
-			Ty:   cmn.NotifCache,
-			Dsts: smap.IC.Keys(),
-			F:    t.callerNotifyFin,
-		},
+		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: smap.IC.Keys(), F: t.callerNotifyFin},
 	})
 	go xact.Run()
 }

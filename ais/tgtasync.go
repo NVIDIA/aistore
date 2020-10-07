@@ -59,7 +59,6 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		xact.AddNotif(&xaction.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
-				Ty:   cmn.NotifCache,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},

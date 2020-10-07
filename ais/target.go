@@ -542,7 +542,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		xact.AddNotif(&xaction.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
-				Ty:   cmn.NotifXact,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},

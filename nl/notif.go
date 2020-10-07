@@ -14,20 +14,15 @@ import (
 
 type (
 	NotifBase struct {
-		When     cluster.Upon                     // see the enum below
-		Interval int64                            // interval at which progress needs to be updated
+		When     cluster.Upon                     // enum { UponTerm, etc. }
+		Interval int64                            // progress-updating time interval
 		Dsts     []string                         // node IDs to notify
 		F        func(n cluster.Notif, err error) // notification callback
 		P        func(n cluster.Notif, err error) // on progress notification callback
 
 		lastNotified atomic.Int64
-		Ty           int // notification category enum
 	}
 )
-
-func (notif *NotifBase) Callback(n cluster.Notif, err error) {
-	notif.F(n, err)
-}
 
 func (notif *NotifBase) OnProgress(n cluster.Notif, err error) {
 	if !notif.Upon(cluster.UponProgress) {
@@ -38,11 +33,9 @@ func (notif *NotifBase) OnProgress(n cluster.Notif, err error) {
 		notif.P(n, err)
 	}
 }
-func (notif *NotifBase) Upon(u cluster.Upon) bool { return notif != nil && notif.When&u != 0 }
-func (notif *NotifBase) Category() int            { return notif.Ty }
-func (notif *NotifBase) Subscribers() []string {
-	return notif.Dsts
-}
+func (notif *NotifBase) Callback(n cluster.Notif, err error) { notif.F(n, err) }
+func (notif *NotifBase) Upon(u cluster.Upon) bool            { return notif != nil && notif.When&u != 0 }
+func (notif *NotifBase) Subscribers() []string               { return notif.Dsts }
 
 func (notif *NotifBase) NotifyInterval() int64 {
 	if notif.Interval == 0 {

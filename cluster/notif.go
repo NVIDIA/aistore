@@ -36,16 +36,13 @@ type (
 		OnProgress(n Notif, err error)
 		NotifyInterval() int64 // notify interval in secs
 		Upon(u Upon) bool
-		Category() int
 		Subscribers() []string
 		ToNotifMsg() NotifMsg
 	}
 	// intra-cluster notification base
 
 	NotifMsg struct {
-		UUID   string `json:"string"`
-		Ty     int32  `json:"type"`    // enumerated type, one of (notifXact, et al.) - see above
-		Flags  int32  `json:"flags"`   // TODO: add
+		UUID   string `json:"uuid"`    // uuid
 		NodeID string `json:"node_id"` // notifier node id
 		Kind   string `json:"kind"`    // kind of xaction
 		Data   []byte `json:"message"` // typed message

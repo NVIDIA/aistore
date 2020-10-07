@@ -41,7 +41,7 @@ func NewQueryListener(uuid string, smap *cluster.Smap, msg *InitMsg) (*NotifList
 	})
 	nl := &NotifListenerQuery{
 		NotifXactListener: *xaction.NewXactNL(uuid, smap, smap.Tmap.Clone(),
-			cmn.NotifCache, cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+			cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
 		WorkersCnt: msg.WorkersCnt,
 		Targets:    targets,
 	}

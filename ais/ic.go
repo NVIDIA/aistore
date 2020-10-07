@@ -312,7 +312,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p.si, msg.Action, err)
 			return
 		}
-		nl := xaction.NewXactNL(regMsg.UUID, &smap.Smap, tmap, cmn.NotifXact, regMsg.Kind)
+		nl := xaction.NewXactNL(regMsg.UUID, &smap.Smap, tmap, regMsg.Kind)
 		ic.p.notifs.add(nl)
 	default:
 		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)

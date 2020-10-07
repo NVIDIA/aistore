@@ -380,11 +380,3 @@ const (
 	NodeStatusMaintenance  = iota + 1 // under maintenance
 	NodeStatusDecommission            // marked for rebalance and removal
 )
-
-// notification category
-const (
-	NotifInvalid = iota
-	NotifXact
-	NotifCache
-	NotifDownload
-)

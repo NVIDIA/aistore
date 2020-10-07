@@ -25,7 +25,6 @@ type NotifListener interface {
 	RUnlock()
 	Notifiers() cluster.NodeMap
 	FinNotifiers() cmn.StringSet
-	NotifTy() int
 	Kind() string
 	Bcks() []cmn.Bck
 	SetErr(error)
@@ -67,7 +66,6 @@ type (
 			SmapVersion int64  // smap version in which NL is added
 
 			Bck []cmn.Bck
-			Ty  int // notification category (above)
 		}
 
 		Srcs              cluster.NodeMap  // expected Notifiers
@@ -91,9 +89,8 @@ type (
 	}
 )
 
-func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, action string,
-	progressInterval time.Duration, bck ...cmn.Bck) *NotifListenerBase {
-	cmn.Assert(ty > cmn.NotifInvalid)
+func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string, progressInterval time.Duration,
+	bck ...cmn.Bck) *NotifListenerBase {
 	cmn.Assert(len(srcs) != 0)
 	nlb := &NotifListenerBase{
 		Srcs:              srcs,
@@ -105,7 +102,6 @@ func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, actio
 	nlb.Common.Action = action
 	nlb.Common.SmapVersion = smap.Version
 	nlb.Common.Bck = bck
-	nlb.Common.Ty = ty
 	nlb.FinSrcs = make(cmn.StringSet, len(srcs))
 	return nlb
 }
@@ -116,7 +112,6 @@ func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, ty int, actio
 
 func (nlb *NotifListenerBase) Notifiers() cluster.NodeMap      { return nlb.Srcs }
 func (nlb *NotifListenerBase) FinNotifiers() cmn.StringSet     { return nlb.FinSrcs }
-func (nlb *NotifListenerBase) NotifTy() int                    { return nlb.Common.Ty }
 func (nlb *NotifListenerBase) UUID() string                    { return nlb.Common.UUID }
 func (nlb *NotifListenerBase) Aborted() bool                   { return nlb.AbortedX.Load() }
 func (nlb *NotifListenerBase) SetAborted()                     { nlb.AbortedX.CAS(false, true) }
