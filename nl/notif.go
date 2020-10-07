@@ -31,7 +31,7 @@ func (notif *NotifBase) OnProgressCB() func(cluster.Notif)        { return notif
 func (notif *NotifBase) Upon(u cluster.Upon) bool                 { return notif != nil && notif.When&u != 0 }
 func (notif *NotifBase) Subscribers() []string                    { return notif.Dsts }
 func (notif *NotifBase) LastNotifTime() int64                     { return notif.lastNotified.Load() }
-
+func (notif *NotifBase) SetLastNotified(now int64)                { notif.lastNotified.Store(now) }
 func (notif *NotifBase) NotifyInterval() time.Duration {
 	if notif.Interval == 0 {
 		return cmn.GCO.Get().Periodic.NotifTime
@@ -49,6 +49,7 @@ func OnProgress(n cluster.Notif) {
 		return
 	}
 	if cb := n.OnProgressCB(); cb != nil && shouldNotify(n) {
+		n.SetLastNotified(mono.NanoTime())
 		cb(n)
 	}
 }

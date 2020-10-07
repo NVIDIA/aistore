@@ -37,6 +37,7 @@ type (
 		OnProgressCB() func(Notif)
 		NotifyInterval() time.Duration // notify interval in secs
 		LastNotifTime() int64          // time last notified
+		SetLastNotified(now int64)
 		Upon(u Upon) bool
 		Subscribers() []string
 		ToNotifMsg() NotifMsg
