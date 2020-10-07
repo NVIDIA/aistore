@@ -6,6 +6,7 @@ package cluster
 
 import (
 	"fmt"
+	"time"
 )
 
 // On the sending side, intra-cluster notification is a tuple containing answers
@@ -32,9 +33,10 @@ type (
 
 	// intra-cluster notification interface
 	Notif interface {
-		Callback(n Notif, err error)
-		OnProgress(n Notif, err error)
-		NotifyInterval() int64 // notify interval in secs
+		OnFinishedCB() func(Notif, error)
+		OnProgressCB() func(Notif)
+		NotifyInterval() time.Duration // notify interval in secs
+		LastNotifTime() int64          // time last notified
 		Upon(u Upon) bool
 		Subscribers() []string
 		ToNotifMsg() NotifMsg

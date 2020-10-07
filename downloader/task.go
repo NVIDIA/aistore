@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -187,9 +188,7 @@ func (t *singleObjectTask) wrapReader(ctx context.Context, r io.ReadCloser) io.R
 		r: r,
 		reporter: func(n int64) {
 			t.currentSize.Add(n)
-			if n := t.job.Notif(); n != nil {
-				n.OnProgress(n, nil)
-			}
+			nl.OnProgress(t.job.Notif())
 		},
 	}
 	// Wrap around throttler reader (noop if throttling is disabled).

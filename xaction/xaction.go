@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/nl"
 )
 
 type (
@@ -154,12 +155,12 @@ func (xact *XactBase) _setEndTime(errs ...error) {
 	xact.eutime.Store(time.Now().UnixNano())
 
 	// notifications
-	if n := xact.Notif(); n != nil && n.Upon(cluster.UponTerm) {
+	if n := xact.Notif(); n != nil {
 		var err error
 		if len(errs) > 0 {
 			err = errs[0]
 		}
-		n.Callback(n, err)
+		nl.OnFinished(n, err)
 	}
 
 	if xact.Kind() != cmn.ActListObjects {

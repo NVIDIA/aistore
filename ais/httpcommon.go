@@ -768,8 +768,8 @@ func (h *httprunner) callerNotifyFin(n cluster.Notif, err error) {
 	h.callerNotify(n, err, cmn.Finished)
 }
 
-func (h *httprunner) callerNotifyProgress(n cluster.Notif, err error) {
-	h.callerNotify(n, err, cmn.Progress)
+func (h *httprunner) callerNotifyProgress(n cluster.Notif) {
+	h.callerNotify(n, nil, cmn.Progress)
 }
 
 func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {

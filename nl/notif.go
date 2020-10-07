@@ -10,41 +10,54 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 type (
 	NotifBase struct {
-		When     cluster.Upon                     // enum { UponTerm, etc. }
-		Interval int64                            // progress-updating time interval
-		Dsts     []string                         // node IDs to notify
-		F        func(n cluster.Notif, err error) // notification callback
-		P        func(n cluster.Notif, err error) // on progress notification callback
+		When     cluster.Upon  // see the enum below
+		Interval time.Duration // interval at which progress needs to be updated
 
-		lastNotified atomic.Int64
+		Dsts []string                         // node IDs to notify
+		F    func(n cluster.Notif, err error) // notification callback
+		P    func(n cluster.Notif)            // on progress notification callback
+
+		lastNotified atomic.Int64 // time when last notified
 	}
 )
 
-func (notif *NotifBase) OnProgress(n cluster.Notif, err error) {
-	if !notif.Upon(cluster.UponProgress) {
-		return
-	}
-	if notif.shouldNotify() {
-		notif.lastNotified.Store(time.Now().Unix())
-		notif.P(n, err)
-	}
-}
-func (notif *NotifBase) Callback(n cluster.Notif, err error) { notif.F(n, err) }
-func (notif *NotifBase) Upon(u cluster.Upon) bool            { return notif != nil && notif.When&u != 0 }
-func (notif *NotifBase) Subscribers() []string               { return notif.Dsts }
+func (notif *NotifBase) OnFinishedCB() func(cluster.Notif, error) { return notif.F }
+func (notif *NotifBase) OnProgressCB() func(cluster.Notif)        { return notif.P }
+func (notif *NotifBase) Upon(u cluster.Upon) bool                 { return notif != nil && notif.When&u != 0 }
+func (notif *NotifBase) Subscribers() []string                    { return notif.Dsts }
+func (notif *NotifBase) LastNotifTime() int64                     { return notif.lastNotified.Load() }
 
-func (notif *NotifBase) NotifyInterval() int64 {
+func (notif *NotifBase) NotifyInterval() time.Duration {
 	if notif.Interval == 0 {
-		return int64(cmn.GCO.Get().Periodic.NotifTime.Seconds())
+		return cmn.GCO.Get().Periodic.NotifTime
 	}
 	return notif.Interval
 }
 
-func (notif *NotifBase) shouldNotify() bool {
-	lastTime := notif.lastNotified.Load()
-	return lastTime == 0 || time.Now().Unix()-lastTime > notif.NotifyInterval()
+func shouldNotify(n cluster.Notif) bool {
+	lastTime := n.LastNotifTime()
+	return lastTime == 0 || mono.Since(lastTime) > n.NotifyInterval()
+}
+
+func OnProgress(n cluster.Notif) {
+	if n == nil {
+		return
+	}
+	if cb := n.OnProgressCB(); cb != nil && shouldNotify(n) {
+		cb(n)
+	}
+}
+
+func OnFinished(n cluster.Notif, err error) {
+	if n == nil {
+		return
+	}
+	if cb := n.OnFinishedCB(); cb != nil {
+		cb(n, err)
+	}
 }

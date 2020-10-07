@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/nl"
 )
 
 const (
@@ -166,9 +167,7 @@ func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
 	dlStore.markFinished(j.ID())
 	dlStore.flush(j.ID())
-	if n := j.Notif(); n != nil {
-		n.Callback(n, nil)
-	}
+	nl.OnFinished(j.Notif(), nil)
 }
 
 func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits DlLimits, dlXact *Downloader) *baseDlJob {
