@@ -31,10 +31,6 @@ type (
 		timeout time.Duration
 		req     cmn.ReqArgs
 	}
-	backendDoesNotExistErr struct {
-		backend *cluster.Bck
-		err     error
-	}
 )
 
 // NOTE
@@ -217,7 +213,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 }
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }
-func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
+func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck *cluster.Bck,
 	propsToUpdate cmn.BucketPropsToUpdate) (xactID string, err error) {
 	var (
 		nprops *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
@@ -239,7 +235,20 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 		if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
 			return
 		}
-		if err = p.checkBackendBck(bck, nprops); err != nil {
+
+		if !nprops.BackendBck.IsEmpty() {
+			// Makes sure that there will be no other forwarding to proxy.
+			cmn.Assert(p.owner.smap.get().isPrimary(p.si))
+			// Make sure that destination bucket exists.
+			backendBck := cluster.NewBckEmbed(nprops.BackendBck)
+			args := remBckAddArgs{p: p, w: w, r: r, queryBck: backendBck, err: err, msg: msg}
+			if _, err, _ = args.tryBckInit(backendBck.Name); err != nil {
+				return
+			}
+		}
+
+		// Make sure that backend bucket was initialized correctly.
+		if err = p.checkBackendBck(nprops); err != nil {
 			return
 		}
 	case cmn.ActResetBprops:
@@ -293,7 +302,9 @@ func (p *proxyrunner) setBucketProps(msg *cmn.ActionMsg, bck *cluster.Bck,
 			if err != nil {
 				return false, err
 			}
-			if err := p.checkBackendBck(bck, nprops); err != nil {
+
+			// BackendBck (if present) should be already locally available (see cmn.ActSetBprops).
+			if err := p.checkBackendBck(nprops); err != nil {
 				return false, err
 			}
 		}
@@ -710,23 +721,16 @@ func _versioning(v bool) string {
 	return "disabled"
 }
 
-func (p *proxyrunner) checkBackendBck(bck *cluster.Bck, nprops *cmn.BucketProps) (err error) {
+func (p *proxyrunner) checkBackendBck(nprops *cmn.BucketProps) (err error) {
 	if nprops.BackendBck.IsEmpty() {
 		return
 	}
 	backend := cluster.NewBckEmbed(nprops.BackendBck)
 	if err = backend.InitNoBackend(p.owner.bmd, p.si); err != nil {
-		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
-			err = &backendDoesNotExistErr{
-				backend,
-				fmt.Errorf("failed to initialize backend %s for bucket %s", backend, bck),
-			}
-		}
 		return
 	}
+
 	// NOTE: backend versioning override
 	nprops.Versioning.Enabled = backend.Props.Versioning.Enabled
 	return
 }
-
-func (e *backendDoesNotExistErr) Error() string { return e.err.Error() }

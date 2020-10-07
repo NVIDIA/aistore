@@ -254,7 +254,8 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 // Helper methods
 
-func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request, body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
+func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request,
+	body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
@@ -267,8 +268,8 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 	}
 	bck := cluster.NewBckEmbed(dlBase.Bck)
 	if err := bck.Init(p.owner.bmd, p.si); err != nil {
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
-		if bck, err = args.try(); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, termInvalMsg: true}
+		if bck, err, _ = args.try(); err != nil {
 			return
 		}
 	}

@@ -193,20 +193,23 @@ func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 	return
 }
 
-func (m *BMD) initBckAnyProvider(bck *Bck) {
+func (m *BMD) initBckAnyProvider(bck *Bck) (present bool) {
 	if namespaces, ok := m.Providers[cmn.ProviderAIS]; ok {
 		if buckets, ok := namespaces[cmn.NsGlobal.Uname()]; ok {
 			if p, present := buckets[bck.Name]; present {
 				bck.Provider = cmn.ProviderAIS
 				bck.Ns = cmn.NsGlobal
 				bck.Props = p
-				return
+				return true
 			}
 		}
 	}
-	if !m.initBckCloudProvider(bck) {
-		bck.Provider = cmn.ProviderAIS
+	if m.initBckCloudProvider(bck) {
+		return true
 	}
+
+	bck.Provider = cmn.ProviderAIS
+	return false
 }
 
 func (m *BMD) initBckCloudProvider(bck *Bck) (present bool) {
