@@ -10,6 +10,7 @@ linters:
     - gci
     - gocritic
     - gofmt
+    - gofumpt
     - goheader
     - goimports
     - golint
@@ -30,9 +31,6 @@ linters:
     - varcheck
     - whitespace
 
-    # TODO: Fix code to include these linters:
-    # - gofumpt
-    #
     # See: https://golangci-lint.run/usage/linters/
     #
     # Following linters produce false positives (enable only when needed):
