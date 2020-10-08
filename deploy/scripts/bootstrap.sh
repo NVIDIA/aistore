@@ -46,13 +46,16 @@ lint)
 
 fmt)
   err_count=0
-  echo "Running style check..." >&2
   case $2 in
   --fix)
-    gofmt -w ${AISTORE_DIR}
+    echo "Running style fixing..." >&2
+
+    gofumpt -s -w ${AISTORE_DIR}
     python_yapf_fix
     ;;
   *)
+    echo "Running style check..." >&2
+
     out=$(gofmt -l -e ${AISTORE_DIR})
 
     if [[ -n ${out} ]]; then
@@ -64,7 +67,6 @@ fmt)
     check_imports
     check_files_headers
     check_python_formatting
-
     ;;
   esac
   ;;

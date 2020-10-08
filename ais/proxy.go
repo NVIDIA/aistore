@@ -44,6 +44,7 @@ const (
 	githubHome    = "https://github.com/NVIDIA/aistore"
 	listBuckets   = "listBuckets"
 )
+
 const (
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 	fmtUnknownAct = "unexpected action message <- JSON [%v]"
