@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type NotifListener interface {
@@ -34,7 +35,7 @@ type NotifListener interface {
 	Aborted() bool
 	Status() *NotifStatus
 	SetStats(daeID string, stats interface{})
-	NodeStats() *sync.Map
+	NodeStats() *NodeStats
 	QueryArgs() cmn.ReqArgs
 	AbortArgs() cmn.ReqArgs
 	EndTime() int64
@@ -57,6 +58,11 @@ type NotifListener interface {
 type (
 	NotifCallback func(n NotifListener, err error)
 
+	NodeStats struct {
+		sync.RWMutex
+		stats map[string]interface{} // daeID => Stats (e.g. cmn.BaseXactStatsExt)
+	}
+
 	NotifListenerBase struct {
 		sync.RWMutex
 		Common struct {
@@ -73,8 +79,8 @@ type (
 		Srcs              cluster.NodeMap  // expected Notifiers
 		FinSrcs           cmn.StringSet    // daeID of Notifiers finished
 		F                 NotifCallback    `json:"-"` // optional listening-side callback
-		Stats             *sync.Map        // [daeID => Stats (e.g. cmn.BaseXactStatsExt)]
-		LastUpdatedX      map[string]int64 // [daeID => last update time(nanoseconds)]
+		Stats             *NodeStats       // [daeID => Stats (e.g. cmn.BaseXactStatsExt)]
+		lastUpdated       map[string]int64 // [daeID => last update time(nanoseconds)]
 		ProgressIntervalX time.Duration    // time interval to monitor the progress
 		addedTime         atomic.Int64     // Time when `nl` is added
 
@@ -97,9 +103,9 @@ func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string
 	cmn.Assert(len(srcs) != 0)
 	nlb := &NotifListenerBase{
 		Srcs:              srcs,
-		Stats:             &sync.Map{},
+		Stats:             NewNodeStats(len(srcs)),
 		ProgressIntervalX: progressInterval,
-		LastUpdatedX:      make(map[string]int64, len(srcs)),
+		lastUpdated:       make(map[string]int64, len(srcs)),
 	}
 	nlb.Common.UUID = uuid
 	nlb.Common.Action = action
@@ -121,7 +127,7 @@ func (nlb *NotifListenerBase) SetAborted()                     { nlb.AbortedX.CA
 func (nlb *NotifListenerBase) EndTime() int64                  { return nlb.FinTime.Load() }
 func (nlb *NotifListenerBase) Finished() bool                  { return nlb.EndTime() > 0 }
 func (nlb *NotifListenerBase) ProgressInterval() time.Duration { return nlb.ProgressIntervalX }
-func (nlb *NotifListenerBase) NodeStats() *sync.Map            { return nlb.Stats }
+func (nlb *NotifListenerBase) NodeStats() *NodeStats           { return nlb.Stats }
 func (nlb *NotifListenerBase) GetOwner() string                { return nlb.Common.Owned }
 func (nlb *NotifListenerBase) SetOwner(o string)               { nlb.Common.Owned = o }
 func (nlb *NotifListenerBase) Kind() string                    { return nlb.Common.Action }
@@ -160,11 +166,17 @@ func (nlb *NotifListenerBase) SetStats(daeID string, stats interface{}) {
 	_, ok := nlb.Srcs[daeID]
 	cmn.Assert(ok)
 	nlb.Stats.Store(daeID, stats)
-	nlb.LastUpdatedX[daeID] = mono.NanoTime()
+	if nlb.lastUpdated == nil {
+		nlb.lastUpdated = make(map[string]int64, len(nlb.Srcs))
+	}
+	nlb.lastUpdated[daeID] = mono.NanoTime()
 }
 
 func (nlb *NotifListenerBase) LastUpdated(si *cluster.Snode) int64 {
-	return nlb.LastUpdatedX[si.DaemonID]
+	if nlb.lastUpdated == nil {
+		return 0
+	}
+	return nlb.lastUpdated[si.DaemonID]
 }
 
 func (nlb *NotifListenerBase) NodesUptoDate(durs ...time.Duration) (uptoDate cmn.StringSet, tardy bool) {
@@ -258,3 +270,65 @@ func (nlb *NotifListenerBase) AllFinished() bool {
 
 func (xs *NotifStatus) Finished() bool { return xs.FinTime > 0 }
 func (xs *NotifStatus) Aborted() bool  { return xs.AbortedX }
+
+/////////////////
+//  NodeStats  //
+/////////////////
+
+func NewNodeStats(sizes ...int) *NodeStats {
+	size := 0
+	if len(sizes) > 0 {
+		size = sizes[0]
+	}
+	return &NodeStats{
+		stats: make(map[string]interface{}, size),
+	}
+}
+
+func (ns *NodeStats) Store(key string, stats interface{}) {
+	ns.Lock()
+	if ns.stats == nil {
+		ns.stats = make(map[string]interface{})
+	}
+	ns.stats[key] = stats
+	ns.Unlock()
+}
+
+func (ns *NodeStats) Range(f func(string, interface{}) bool) {
+	ns.RLock()
+	defer ns.RUnlock()
+
+	for key, val := range ns.stats {
+		if !f(key, val) {
+			return
+		}
+	}
+}
+
+func (ns *NodeStats) Load(key string) (val interface{}, ok bool) {
+	ns.RLock()
+	val, ok = ns.stats[key]
+	ns.RUnlock()
+	return
+}
+
+func (ns *NodeStats) Len() (l int) {
+	ns.RLock()
+	l = len(ns.stats)
+	ns.RUnlock()
+	return
+}
+
+func (ns *NodeStats) MarshalJSON() (data []byte, err error) {
+	ns.RLock()
+	data, err = jsoniter.Marshal(ns.stats)
+	ns.RUnlock()
+	return
+}
+
+func (ns *NodeStats) UnmarshalJSON(data []byte) (err error) {
+	if len(data) == 0 {
+		return nil
+	}
+	return jsoniter.Unmarshal(data, &ns.stats)
+}

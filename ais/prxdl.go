@@ -34,7 +34,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	if msg.ID != "" && method == http.MethodGet && msg.OnlyActiveTasks {
 		if stats, exists := p.notifs.queryStats(msg.ID); exists {
 			var resp *downloader.DlStatusResp
-			stats.Range(func(_, status interface{}) bool {
+			stats.Range(func(_ string, status interface{}) bool {
 				dlStatus := status.(*downloader.DlStatusResp)
 				resp = resp.Aggregate(*dlStatus)
 				return true

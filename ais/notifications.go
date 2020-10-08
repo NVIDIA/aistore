@@ -415,7 +415,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 }
 
 // Return stats from each node for a given UUID.
-func (n *notifs) queryStats(uuid string, durs ...time.Duration) (stats *sync.Map, exists bool) {
+func (n *notifs) queryStats(uuid string, durs ...time.Duration) (stats *nl.NodeStats, exists bool) {
 	var nl nl.NotifListener
 	nl, exists = n.entry(uuid)
 	if !exists {
