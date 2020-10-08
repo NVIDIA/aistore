@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/pierrec/lz4/v3"
@@ -199,31 +200,25 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 	return
 }
 
-// Asynchronously send an object defined by its header and its reader.
-// ---------------------------------------------------------------------------------------
+// Asynchronously send an object (transport.Obj) defined by its header and its reader.
 //
-// The sending pipeline is implemented as a pair (SQ, SCQ) where the former is a send queue
-// realized as workCh, and the latter is a send completion queue (cmplCh).
-// Together, SQ and SCQ form a FIFO as far as ordering of transmitted objects.
+// The sending pipeline is implemented as a pair (SQ, SCQ) where the former is a send
+// queue realized as workCh, and the latter is a send completion queue (cmplCh).
+// Together SQ and SCQ form a FIFO.
 //
-// NOTE: header-only objects are supported; when there's no data to send (that is,
-// when the header's Dsize field is set to zero), the reader is not required and the
-// corresponding argument in Send() can be set to nil.
-//
-// NOTE: object reader is always closed by the code that handles send completions.
-// In the case when SendCallback is provided (i.e., non-nil), the closing is done
-// right after calling this callback - see objDone below for details.
-//
-// NOTE: Optional reference counting is also done by (and in) the objDone, so that the
-// SendCallback gets called if and only when the refcount (if provided i.e., non-nil)
-// reaches zero.
-//
-// NOTE: For every transmission of every object there's always an objDone() completion
-// (with its refcounting and reader-closing). This holds true in all cases including
-// network errors that may cause sudden and instant termination of the underlying
-// stream(s).
-//
-// ---------------------------------------------------------------------------------------
+// * header-only objects are supported; when there's no data to send (that is,
+//   when the header's Dsize field is set to zero), the reader is not required and the
+//   corresponding argument in Send() can be set to nil.
+// * object reader is always closed by the code that handles send completions.
+//   In the case when SendCallback is provided (i.e., non-nil), the closing is done
+//   right after calling this callback - see objDone below for details.
+// * Optional reference counting is also done by (and in) the objDone, so that the
+//   SendCallback gets called if and only when the refcount (if provided i.e., non-nil)
+//   reaches zero.
+// * For every transmission of every object there's always an objDone() completion
+//   (with its refcounting and reader-closing). This holds true in all cases including
+//   network errors that may cause sudden and instant termination of the underlying
+//   stream(s).
 func (s *Stream) Send(obj Obj) (err error) {
 	s.time.inSend.Store(true) // an indication for Collector to postpone cleanup
 	hdr := &obj.Hdr
@@ -347,7 +342,7 @@ func (s *Stream) objDone(obj *Obj, err error) {
 	var rc int64
 	if obj.prc != nil {
 		rc = obj.prc.Dec()
-		cmn.Assert(rc >= 0) // remove
+		debug.Assert(rc >= 0)
 	}
 	// SCQ completion callback
 	if rc == 0 {
@@ -401,8 +396,14 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		}
 	}
 repeat:
+	var ok bool
 	select {
-	case s.sendoff.obj = <-s.workCh: // next object OR idle tick
+	case s.sendoff.obj, ok = <-s.workCh: // next object OR idle tick
+		if !ok {
+			err = fmt.Errorf("%s closed prior to stopping", s)
+			debug.Infof("%v", err)
+			return
+		}
 		if s.sendoff.obj.Hdr.IsIdleTick() {
 			if len(s.workCh) > 0 {
 				goto repeat

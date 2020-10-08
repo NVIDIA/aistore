@@ -384,11 +384,11 @@ func (mgr *Manager) BucketsMDChanged() {
 	mgr.Unlock()
 
 	if newBckMD.IsECUsed() && !oldBckMD.IsECUsed() {
-		// init EC streams if there were not initialized on the start
-		// no need to close them when last EC bucket is disabled
-		// as they close itself on idle
+		// init EC streams if there were not initialized at startup;
+		// no need to close them when the last EC bucket is disabled
+		// as they timeout (when idle) and auto-close.
 		mgr.initECBundles()
-	} else if !newBckMD.IsECUsed() {
+	} else if !newBckMD.IsECUsed() && oldBckMD.IsECUsed() {
 		mgr.closeECBundles()
 	}
 	provider := cmn.ProviderAIS

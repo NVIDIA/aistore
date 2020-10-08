@@ -175,13 +175,12 @@ func (gc *collector) do() {
 
 // drain terminated stream
 func (gc *collector) drain(s *Stream) {
-DrainFor:
 	for {
 		select {
 		case obj := <-s.workCh:
 			s.objDone(&obj, s.term.err)
 		default:
-			break DrainFor
+			return
 		}
 	}
 }

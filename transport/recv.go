@@ -210,7 +210,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		reader    io.Reader = r.Body
 		lz4Reader *lz4.Reader
 		fbuf      *fixedBuffer
-		debug     = bool(glog.FastV(4, glog.SmoduleTransport))
+		verbose   = bool(glog.FastV(4, glog.SmoduleTransport))
 	)
 	// compression
 	if compressionType := r.Header.Get(cmn.HeaderCompress); compressionType != "" {
@@ -229,10 +229,10 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	}
 	uid := uniqueID(r, sessID)
 	statsif, loaded := h.sessions.LoadOrStore(uid, &Stats{})
-	if !loaded && debug {
+	if !loaded && debug.Enabled {
 		xxh, id := UID2SessID(uid)
-		cmn.Assert(id == uint64(sessID))
-		glog.Infof("%s[%d:%d]: start-of-stream from %s", trname, xxh, sessID, r.RemoteAddr) // r.RemoteAddr => xxh
+		debug.Assert(id == uint64(sessID))
+		debug.Infof("%s[%d:%d]: start-of-stream from %s", trname, xxh, sessID, r.RemoteAddr) // r.RemoteAddr => xxh
 	}
 	stats := statsif.(*Stats)
 
@@ -256,7 +256,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 					siz = stats.Size.Add(hdr.ObjAttrs.Size)
 					off = stats.Offset.Add(hdr.ObjAttrs.Size)
 				)
-				if debug {
+				if verbose {
 					xxh, _ := UID2SessID(uid)
 					glog.Infof("%s[%d:%d]: off=%d, size=%d(%d), num=%d - %s/%s",
 						trname, xxh, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Bck, hdr.ObjName)
