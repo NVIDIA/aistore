@@ -181,12 +181,11 @@ test:kube-short:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   script:
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo y; echo y;  })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n;  })
     - status=0
     - BUCKET="test" RE="TestETL" make test-short || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
-
 
 test:kube:
   <<: *test_kube_def
@@ -210,8 +209,7 @@ test:kube-aisloader:
   script:
     - make aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
-    - sleep 10 # TODO: better alternative ? adding sleep for targets to join.
     - status=0
-    - BUCKET="test" FLAGS="--duration=5s --etl" make test-aisloader || status=$?
+    - BUCKET="test" FLAGS="--duration=2m --etl" make test-aisloader || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures

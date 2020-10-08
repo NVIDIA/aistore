@@ -450,10 +450,11 @@ func parseCmdLine() (params, error) {
 
 	if p.etlSpecPath != "" {
 		fh, err := os.Open(p.etlSpecPath)
-		if err == nil {
-			etlSpec, err = ioutil.ReadAll(fh)
-			defer fh.Close()
+		if err != nil {
+			return params{}, err
 		}
+		etlSpec, err = ioutil.ReadAll(fh)
+		fh.Close()
 		if err != nil {
 			return params{}, err
 		}
@@ -737,17 +738,21 @@ func Start() error {
 	defer statsdC.Close()
 
 	if etlSpec != nil {
-		baseParams := api.BaseParams{
-			Client: httpClient,
-			URL:    runParams.proxyURL,
-		}
-
-		fmt.Printf("waiting for an ETL to start")
-		etlID, err = api.ETLInit(baseParams, etlSpec)
+		fmt.Println(prettyTimestamp() + " Waiting for an ETL to start...")
+		etlID, err = api.ETLInit(runParams.bp, etlSpec)
 		if err != nil {
-			return fmt.Errorf("failed to initialize transform: %v", err)
+			return fmt.Errorf("failed to initialize ETL: %v", err)
 		}
-		defer api.ETLStop(baseParams, etlID)
+		fmt.Println(prettyTimestamp() + " ETL started")
+
+		defer func() {
+			fmt.Println(prettyTimestamp() + " Stopping the ETL...")
+			if err := api.ETLStop(runParams.bp, etlID); err != nil {
+				fmt.Printf("%s Failed to stop the ETL: %v\n", prettyTimestamp(), err)
+				return
+			}
+			fmt.Println(prettyTimestamp() + " ETL stopped")
+		}()
 	}
 
 	workOrders = make(chan *workOrder, runParams.numWorkers)
@@ -1070,20 +1075,22 @@ func completeWorkOrder(wo *workOrder) {
 }
 
 func cleanup() {
-	var wg sync.WaitGroup
-	fmt.Println(prettyTimeStamp() + " Cleaning up ...")
+	fmt.Println(prettyTimestamp() + " Cleaning up...")
 	if bucketObjsNames != nil {
-		// bucketObjsNames has been actually assigned to/initialized
-		w := runParams.numWorkers
-		objsLen := bucketObjsNames.Len()
-		n := objsLen / w
+		// `bucketObjsNames` has been actually assigned to/initialized.
+		var (
+			w       = runParams.numWorkers
+			objsLen = bucketObjsNames.Len()
+			n       = objsLen / w
+			wg      = &sync.WaitGroup{}
+		)
 		for i := 0; i < w; i++ {
 			wg.Add(1)
-			go cleanupObjs(bucketObjsNames.Names()[i*n:(i+1)*n], &wg)
+			go cleanupObjs(bucketObjsNames.Names()[i*n:(i+1)*n], wg)
 		}
 		if objsLen%w != 0 {
 			wg.Add(1)
-			go cleanupObjs(bucketObjsNames.Names()[n*w:], &wg)
+			go cleanupObjs(bucketObjsNames.Names()[n*w:], wg)
 		}
 		wg.Wait()
 	}
@@ -1091,7 +1098,7 @@ func cleanup() {
 	if runParams.bck.IsAIS() {
 		api.DestroyBucket(runParams.bp, runParams.bck)
 	}
-	fmt.Println(prettyTimeStamp() + " Done")
+	fmt.Println(prettyTimestamp() + " Done")
 }
 
 func cleanupObjs(objs []string, wg *sync.WaitGroup) {
@@ -1101,36 +1108,38 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	if t == 0 {
 		return
 	}
-	b := cmn.Min(t, runParams.batchSize)
-	n := t / b
-	for i := 0; i < n; i++ {
-		xactID, err := api.DeleteList(runParams.bp, runParams.bck, objs[i*b:(i+1)*b])
-		if err != nil {
-			fmt.Println("delete err ", err)
-		}
-		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete}
-		_, err = api.WaitForXaction(runParams.bp, args)
-		if err != nil {
-			fmt.Println("wait for xaction err ", err)
-		}
-	}
 
-	if t%b != 0 {
-		xactID, err := api.DeleteList(runParams.bp, runParams.bck, objs[n*b:])
-		if err != nil {
-			fmt.Println("delete err ", err)
+	// Only clean up the objects if it's not AIS bucket (the whole bucket is
+	// removed if it's AIS)
+	if !runParams.bck.IsAIS() {
+		b := cmn.Min(t, runParams.batchSize)
+		n := t / b
+		for i := 0; i < n; i++ {
+			xactID, err := api.DeleteList(runParams.bp, runParams.bck, objs[i*b:(i+1)*b])
+			if err != nil {
+				fmt.Println("delete err ", err)
+			}
+			args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete}
+			if _, err = api.WaitForXaction(runParams.bp, args); err != nil {
+				fmt.Println("wait for xaction err ", err)
+			}
 		}
-		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete}
-		_, err = api.WaitForXaction(runParams.bp, args)
-		if err != nil {
-			fmt.Println("wait for xaction err ", err)
+
+		if t%b != 0 {
+			xactID, err := api.DeleteList(runParams.bp, runParams.bck, objs[n*b:])
+			if err != nil {
+				fmt.Println("delete err ", err)
+			}
+			args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete}
+			if _, err = api.WaitForXaction(runParams.bp, args); err != nil {
+				fmt.Println("wait for xaction err ", err)
+			}
 		}
 	}
 
 	if runParams.usingFile {
 		for _, obj := range objs {
-			err := os.Remove(runParams.tmpDir + "/" + obj)
-			if err != nil {
+			if err := os.Remove(runParams.tmpDir + "/" + obj); err != nil {
 				fmt.Println("delete local file err ", err)
 			}
 		}
