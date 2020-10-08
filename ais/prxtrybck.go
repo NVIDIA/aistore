@@ -25,15 +25,18 @@ type remBckAddArgs struct {
 	// bck.IsHTTP()
 	origURLBck   string
 	allowHTTPBck bool
-	// terminate request via invalmsg*
-	termInvalMsg bool
+	// If set then error is not returned when bucket does not exist.
+	allowBckNotExist bool
 }
 
 /////////////////////////////////////////////
 // lookup and add remote bucket on the fly //
 /////////////////////////////////////////////
 
-func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck *cluster.Bck, err error, errCode int) {
+// initAndTry initializes bucket and tries to add it if doesn't exist.
+// The method sets and returns err if was not successful and any point (if err
+// is set then `p.invalmsghdlr` is called so caller doesn't need to).
+func (args *remBckAddArgs) initAndTry(bucket string, origURLBck ...string) (bck *cluster.Bck, err error) {
 	if len(origURLBck) > 0 {
 		args.allowHTTPBck = true
 	}
@@ -43,13 +46,14 @@ func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck 
 		}
 		bck, err = newBckFromQuery(bucket, args.query)
 		if err != nil {
-			return bck, err, http.StatusBadRequest
+			args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
+			return nil, err
 		}
 	} else {
 		bck = args.queryBck
 	}
 	if err = bck.Init(args.p.owner.bmd, args.p.si); err == nil {
-		return
+		return bck, nil
 	}
 
 	args.queryBck = bck
@@ -61,21 +65,26 @@ func (args *remBckAddArgs) tryBckInit(bucket string, origURLBck ...string) (bck 
 		} else if origURL := args.query.Get(cmn.URLParamOrigURL); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
-				return bck, err, http.StatusBadRequest
+				args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
+				return nil, err
 			}
 			args.origURLBck = hbo.OrigURLBck
 		}
 	}
-	bck, err, errCode = args.try()
+	bck, err = args.try()
 	return
 }
 
-func (args *remBckAddArgs) try() (bck *cluster.Bck, err error, errCode int) {
-	bck, err, errCode = args._try()
-	if err != nil && err != cmn.ErrForwarded && args.termInvalMsg {
-		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
+	bck, err, errCode := args._try()
+	if err != nil && err != cmn.ErrForwarded {
+		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok && args.allowBckNotExist {
+			err = nil
+		} else {
+			args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+		}
 	}
-	return
+	return bck, err
 }
 
 //

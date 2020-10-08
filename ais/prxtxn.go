@@ -242,7 +242,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 			// Make sure that destination bucket exists.
 			backendBck := cluster.NewBckEmbed(nprops.BackendBck)
 			args := remBckAddArgs{p: p, w: w, r: r, queryBck: backendBck, err: err, msg: msg}
-			if _, err, _ = args.tryBckInit(backendBck.Name); err != nil {
+			if _, err = args.initAndTry(backendBck.Name); err != nil {
 				return
 			}
 		}

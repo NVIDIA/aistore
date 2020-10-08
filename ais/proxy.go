@@ -358,9 +358,9 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 	}
 	bucket, objName := apiItems[0], apiItems[1]
 
-	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: r.URL.Query(), allowHTTPBck: true, termInvalMsg: true}
-	bck, _, _ := bckArgs.tryBckInit(bucket, origURLBck...)
-	if bck == nil {
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: r.URL.Query(), allowHTTPBck: true}
+	bck, err := bckArgs.initAndTry(bucket, origURLBck...)
+	if err != nil {
 		return
 	}
 
@@ -397,9 +397,10 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
-	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query, termInvalMsg: true}
-	bck, _, _ := bckArgs.tryBckInit(bucket)
-	if bck == nil {
+
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query}
+	bck, err := bckArgs.initAndTry(bucket)
+	if err != nil {
 		return
 	}
 
@@ -471,9 +472,9 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
-	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: r.URL.Query(), termInvalMsg: true}
-	bck, _, _ := bckArgs.tryBckInit(bucket)
-	if bck == nil {
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: r.URL.Query()}
+	bck, err := bckArgs.initAndTry(bucket)
+	if err != nil {
 		return
 	}
 	if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjDELETE); err != nil {
@@ -513,9 +514,10 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apiItems[0]
-	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query, msg: &msg, termInvalMsg: true}
-	bck, _, _ := bckArgs.tryBckInit(bucket)
-	if bck == nil {
+
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query, msg: &msg}
+	bck, err := bckArgs.initAndTry(bucket)
+	if err != nil {
 		return
 	}
 	if err = bck.Allow(cmn.AccessBckDELETE); err != nil {
@@ -783,8 +785,8 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 				msg.Action, bucket)
 			return
 		}
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg, termInvalMsg: true}
-		if bck, err, _ = args.try(); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg}
+		if bck, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -840,7 +842,6 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 		var (
 			internalMsg = &cmn.Bck2BckMsg{}
-			errCode     int
 			bckTo       *cluster.Bck
 		)
 
@@ -875,15 +876,9 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, msgBckTo)
 
-		bckToArgs := remBckAddArgs{p: p, w: w, r: r, queryBck: msgBckTo}
-		if bckTo, err, errCode = bckToArgs.tryBckInit(msgBckTo.Name); err != nil {
-			if err == cmn.ErrForwarded {
-				return
-			}
-			if _, ok := err.(*cmn.ErrorBucketDoesNotExist); !ok {
-				p.invalmsghdlr(w, r, err.Error(), errCode)
-				return
-			}
+		bckToArgs := remBckAddArgs{p: p, w: w, r: r, queryBck: msgBckTo, allowBckNotExist: true}
+		if bckTo, err = bckToArgs.initAndTry(msgBckTo.Name); err != nil {
+			return
 		}
 
 		if bckTo != nil {
@@ -1045,8 +1040,8 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 						bck, backend, err)
 					return
 				}
-				args := remBckAddArgs{p: p, w: w, r: r, queryBck: backend, err: err, msg: msg, termInvalMsg: true}
-				if _, err, _ = args.try(); err != nil {
+				args := remBckAddArgs{p: p, w: w, r: r, queryBck: backend, err: err, msg: msg}
+				if _, err = args.try(); err != nil {
 					return
 				}
 			}
@@ -1362,8 +1357,8 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 			return
 		}
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, termInvalMsg: true}
-		if _, err, _ = args.try(); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
+		if _, err = args.try(); err != nil {
 			return
 		}
 		hasLatest = true
@@ -1444,8 +1439,8 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = bck.InitNoBackend(p.owner.bmd, p.si); err != nil {
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg, termInvalMsg: true}
-		if bck, err, _ = args.try(); err != nil {
+		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg}
+		if bck, err = args.try(); err != nil {
 			return
 		}
 	}
@@ -1482,9 +1477,10 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
-	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query, allowHTTPBck: true, termInvalMsg: true}
-	bck, _, _ := bckArgs.tryBckInit(bucket, origURLBck...)
-	if bck == nil {
+
+	bckArgs := remBckAddArgs{p: p, w: w, r: r, query: query, allowHTTPBck: true}
+	bck, err := bckArgs.initAndTry(bucket, origURLBck...)
+	if err != nil {
 		return
 	}
 	if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjHEAD); err != nil {
