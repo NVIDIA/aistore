@@ -671,16 +671,13 @@ func (p *proxyrunner) syncNewICOwners(smap, newSmap *smapX) {
 		return
 	}
 
-	// node is IC member in both old and new smap
-	// send ownership table to newly added members
-	for sid := range newSmap.IC {
-		node := newSmap.GetProxy(sid)
-		if !smap.IsIC(node) {
-			go func() {
-				if err := p.ic.sendOwnershipTbl(node); err != nil {
-					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p.si, node, err)
+	for _, psi := range newSmap.Pmap {
+		if p.si.ID() != psi.ID() && psi.IsIC() && !smap.IsIC(psi) {
+			go func(psi *cluster.Snode) {
+				if err := p.ic.sendOwnershipTbl(psi); err != nil {
+					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p.si, psi, err)
 				}
-			}()
+			}(psi)
 		}
 	}
 }
@@ -2396,6 +2393,14 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 	cmn.AssertNoErr(err)
 }
 
+// Must be called under Lock, preferably inside `smap.modify` `pre()` callback.
+// smapX.staffIC modifies only current node flags, and this function updates
+// all other places that can be affected.
+func (p *proxyrunner) _staffIC(clone *smapX) {
+	clone.staffIC()
+	p.si = clone.GetNode(p.si.ID())
+}
+
 func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
 	ctx.smap = p.owner.smap.get()
 	if !clone.isPresent(p.si) {
@@ -2409,8 +2414,11 @@ func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
 
 	clone.Primary = p.si
 	clone.Version += 100
-	delete(clone.IC, ctx.sid)
-	clone.staffIC()
+	psi := clone.GetProxy(ctx.sid)
+	if psi != nil && psi.IsIC() {
+		clone.clearNodeFlags(ctx.sid, cluster.SnodeIC)
+	}
+	p._staffIC(clone)
 	return nil
 }
 
@@ -2955,7 +2963,7 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 		notifyPairs := revsPair{clone, aisMsg}
 		_ = p.metasyncer.notify(true, notifyPairs)
 	}
-	clone.staffIC()
+	p._staffIC(clone)
 	return nil
 }
 
@@ -3138,7 +3146,7 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 		clone.delTarget(sid)
 		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
 	}
-	clone.staffIC()
+	p._staffIC(clone)
 
 	if !p.NodeStarted() {
 		return
@@ -3216,7 +3224,7 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 
 func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
 	clone.setNodeFlags(ctx.sid, ctx.flags)
-	clone.staffIC()
+	p._staffIC(clone)
 	return nil
 }
 
@@ -3284,7 +3292,7 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDeco
 
 func (p *proxyrunner) _cancelMaint(ctx *smapModifier, clone *smapX) error {
 	clone.clearNodeFlags(ctx.sid, ctx.flags)
-	clone.staffIC()
+	p._staffIC(clone)
 	return nil
 }
 
@@ -3400,7 +3408,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if smap.IsIC(p.si) && smap.IC[p.si.ID()] < smap.IC[dstID] {
+		if smap.IsIC(p.si) && !p.si.Equals(dst) {
 			// node has older version than dst node handle locally
 			if err := p.ic.sendOwnershipTbl(dst); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
@@ -3408,25 +3416,24 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		si, _ := smap.OldestIC()
-		if si.ID() == dstID {
-			// sync not required. daemon is one of the older nodes
-			return
-		}
-
-		// assign a different node to send table
-		result := p.call(callArgs{
-			si: si,
-			req: cmn.ReqArgs{
-				Method: http.MethodPut,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Cluster),
-				Body:   cmn.MustMarshal(msg),
-			}, timeout: cmn.LongTimeout,
-		},
-		)
-
-		if result.err != nil {
-			p.invalmsghdlr(w, r, result.err.Error())
+		for pid, psi := range smap.Pmap {
+			if !psi.IsIC() || pid == dstID {
+				continue
+			}
+			result := p.call(
+				callArgs{
+					si: psi,
+					req: cmn.ReqArgs{
+						Method: http.MethodPut,
+						Path:   cmn.JoinWords(cmn.Version, cmn.Cluster),
+						Body:   cmn.MustMarshal(msg),
+					}, timeout: cmn.LongTimeout,
+				},
+			)
+			if result.err != nil {
+				p.invalmsghdlr(w, r, result.err.Error())
+			}
+			break
 		}
 	case cmn.ActStartMaintenance, cmn.ActDecommission:
 		var (

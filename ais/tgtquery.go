@@ -78,8 +78,14 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dsts := make([]string, smap.DefaultICSize())
+	for pid, psi := range smap.Pmap {
+		if psi.IsIC() {
+			dsts = append(dsts, pid)
+		}
+	}
 	xact.AddNotif(&xaction.NotifXact{
-		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: smap.IC.Keys(), F: t.callerNotifyFin},
+		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: dsts, F: t.callerNotifyFin},
 	})
 	go xact.Run()
 }

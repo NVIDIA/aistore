@@ -20,10 +20,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const (
-	ICGroupSize = 3 // desirable gateway count in the Information Center
-)
-
 // NOTE: to access Snode, Smap and related structures, external
 //       packages and HTTP clients must import aistore/cluster (and not ais)
 
@@ -134,22 +130,21 @@ func newSnode(id, proto, daeType string, publicAddr, intraControlAddr,
 func (m *smapX) init(tsize, psize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
 	m.Pmap = make(cluster.NodeMap, psize)
-	m.IC = make(cmn.SimpleKVsInt, ICGroupSize)
 }
 
 func (m *smapX) _fillIC() {
-	if len(m.IC) >= ICGroupSize {
+	if m.ICCount() >= m.DefaultICSize() {
 		return
 	}
 
-	// try to select the missing members - upto ICGroupSize - if available
+	// try to select the missing members - upto DefaultICSize - if available
 	for _, si := range m.Pmap {
 		if si.Flags.IsSet(cluster.SnodeNonElectable) {
 			continue
 		}
 		m.addIC(si)
-		if len(m.IC) >= ICGroupSize {
-			break
+		if m.ICCount() >= m.DefaultICSize() {
+			return
 		}
 	}
 }
@@ -157,6 +152,7 @@ func (m *smapX) _fillIC() {
 // only used by primary
 func (m *smapX) staffIC() {
 	m.addIC(m.Primary)
+	m.Primary = m.GetNode(m.Primary.ID())
 	m._fillIC()
 	m.evictIC()
 }
@@ -164,24 +160,21 @@ func (m *smapX) staffIC() {
 // ensure num IC members doesn't exceed max value
 // Evict the most recently added IC member
 func (m *smapX) evictIC() {
-	if len(m.IC) <= ICGroupSize {
+	if m.ICCount() <= m.DefaultICSize() {
 		return
 	}
-	// everything except new primary
-	var maxVer int64
-	maxSid := ""
-	for sid, ver := range m.IC {
-		if ver > maxVer && sid != m.Primary.ID() {
-			maxSid = sid
-			maxVer = ver
+	for sid, si := range m.Pmap {
+		if sid == m.Primary.ID() || !si.IsIC() {
+			continue
 		}
+		m.clearNodeFlags(sid, cluster.SnodeIC)
+		break
 	}
-	delete(m.IC, maxSid)
 }
 
 func (m *smapX) addIC(psi *cluster.Snode) {
 	if !m.IsIC(psi) {
-		m.IC[psi.ID()] = m.Version
+		m.setNodeFlags(psi.ID(), cluster.SnodeIC)
 	}
 }
 
@@ -263,7 +256,6 @@ func (m *smapX) delProxy(pid string) {
 		cmn.Assertf(false, "FATAL: proxy: %s is not in: %s", pid, m.pp())
 	}
 	delete(m.Pmap, pid)
-	delete(m.IC, pid)
 	m.Version++
 }
 
@@ -310,9 +302,6 @@ func (m *smapX) deepCopy(dst *smapX) {
 	}
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v
-	}
-	for id, v := range m.IC {
-		dst.IC[id] = v
 	}
 }
 
@@ -397,10 +386,6 @@ func (m *smapX) pp() string {
 }
 
 func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
-	// Minor optimization to avoid copying struct if nothing changed
-	if si.Flags == newFlags {
-		return
-	}
 	// Assigning directly to si.Flags results in CoW violation
 	var copySI cluster.Snode
 	cmn.CopyStruct(&copySI, si)
@@ -410,18 +395,21 @@ func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
 	} else {
 		m.Pmap[si.ID()] = &copySI
 	}
-	delete(m.IC, si.ID())
 	m.Version++
 }
 
-// Must be called under lock and for smap clone (e.g, inside `smap.modify`)
-func (m *smapX) setNodeFlags(id string, flags cluster.SnodeFlags) {
-	si := m.GetNode(id)
+// Must be called under lock and for smap clone
+func (m *smapX) setNodeFlags(sid string, flags cluster.SnodeFlags) {
+	si := m.GetNode(sid)
 	cmn.Assert(si != nil)
-	m._applyFlags(si, si.Flags.Set(flags))
+	newFlags := si.Flags.Set(flags)
+	if flags.IsAnySet(cluster.SnodeMaintenanceMask) {
+		newFlags = newFlags.Clear(cluster.SnodeIC)
+	}
+	m._applyFlags(si, newFlags)
 }
 
-// Must be called under lock and for smap clone (e.g, inside `smap.modify`)
+// Must be called under lock and for smap clone
 func (m *smapX) clearNodeFlags(id string, flags cluster.SnodeFlags) {
 	si := m.GetNode(id)
 	cmn.Assert(si != nil)

@@ -792,9 +792,9 @@ func (h *httprunner) notifDst(notif cluster.Notif) cluster.NodeMap {
 	)
 	for _, dst := range notif.Subscribers() {
 		if dst == equalIC {
-			for si := range smap.IC {
-				if si != h.si.ID() {
-					nodes.Add(smap.GetProxy(si))
+			for pid, psi := range smap.Pmap {
+				if psi.IsIC() && pid != h.si.ID() {
+					nodes.Add(psi)
 				}
 			}
 			debug.Assert(len(notif.Subscribers()) == 1)
@@ -943,7 +943,7 @@ func (h *httprunner) bcastToIC(msg *aisMsg) chan callResult {
 	var (
 		smap  = h.owner.smap.get()
 		wg    = &sync.WaitGroup{}
-		ch    = make(chan callResult, len(smap.IC))
+		ch    = make(chan callResult, smap.ICCount())
 		bargs = bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
@@ -955,18 +955,18 @@ func (h *httprunner) bcastToIC(msg *aisMsg) chan callResult {
 		}
 		cnt int
 	)
-	for pid := range smap.IC {
-		if pid == h.si.ID() {
+	for pid, psi := range smap.Pmap {
+		if !psi.IsIC() || pid == h.si.ID() {
 			continue
 		}
 		wg.Add(1)
 		cnt++
-		go h.unicastToNode(smap.GetProxy(pid), &bargs, wg, ch)
+		go h.unicastToNode(psi, &bargs, wg, ch)
 	}
 	wg.Wait()
 	close(ch)
 	if cnt == 0 {
-		glog.Errorf("%s: node count is zero in broadcast-to-IC, %+v(%d)", h.si, smap.IC, len(smap.IC))
+		glog.Errorf("%s: node count is zero in broadcast-to-IC, %s", h.si, smap.StrIC(h.si))
 	}
 	return ch
 }

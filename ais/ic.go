@@ -106,10 +106,12 @@ outer:
 		if selfIC {
 			owner = ic.p.si.ID()
 		} else {
-			for pid := range smap.IC {
+			for pid, si := range smap.Pmap {
+				if !psi.IsIC() {
+					continue
+				}
 				owner = pid
-				psi = smap.GetProxy(owner)
-				cmn.Assert(smap.IsIC(psi))
+				psi = si
 				break outer
 			}
 		}
@@ -134,9 +136,11 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	smap := ic.p.owner.smap.get()
 	if !smap.IsIC(ic.p.si) {
 		var node *cluster.Snode
-		for nodeID := range smap.IC {
-			node = smap.GetNode(nodeID)
-			break
+		for _, psi := range smap.Pmap {
+			if psi.IsIC() {
+				node = psi
+				break
+			}
 		}
 		redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetworkIntraControl)
 		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -326,7 +330,7 @@ func (ic *ic) registerEqual(a regIC) {
 	if a.smap.IsIC(ic.p.si) {
 		ic.p.notifs.add(a.nl)
 	}
-	if len(a.smap.IC) > 1 {
+	if a.smap.ICCount() > 1 {
 		ic.bcastListenIC(a.nl, a.smap)
 	}
 }
@@ -366,8 +370,13 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 // sync ownership table
 func (ic *ic) syncICBundle() error {
 	smap := ic.p.owner.smap.get()
-	si, _ := smap.OldestIC()
-	cmn.Assert(si != nil)
+	si := ic.p.si
+	for _, psi := range smap.Pmap {
+		if psi.IsIC() && psi.ID() != si.ID() {
+			si = psi
+			break
+		}
+	}
 
 	if si.Equals(ic.p.si) {
 		return nil

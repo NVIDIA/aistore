@@ -29,7 +29,12 @@ const (
 	SnodeMaintenance
 	SnodeDecomission
 )
-const SnodeMaintenanceMask SnodeFlags = SnodeMaintenance | SnodeDecomission
+
+const (
+	SnodeMaintenanceMask SnodeFlags = SnodeMaintenance | SnodeDecomission
+
+	icGroupSize = 3 // desirable gateway count in the Information Center
+)
 
 type (
 	// interface to Get current cluster-map instance
@@ -63,13 +68,12 @@ type (
 	NodeMap map[string]*Snode // map of Snodes: DaemonID => Snodes
 
 	Smap struct {
-		Tmap         NodeMap          `json:"tmap"`           // targetID -> targetInfo
-		Pmap         NodeMap          `json:"pmap"`           // proxyID -> proxyInfo
-		IC           cmn.SimpleKVsInt `json:"ic"`             // cluster IC: DaemonID => [Smap version]
-		Primary      *Snode           `json:"proxy_si"`       // (json tag preserved for back. compat.)
-		Version      int64            `json:"version,string"` // version
-		UUID         string           `json:"uuid"`           // UUID (assigned once at creation time)
-		CreationTime string           `json:"creation_time"`  // creation time
+		Tmap         NodeMap `json:"tmap"`           // targetID -> targetInfo
+		Pmap         NodeMap `json:"pmap"`           // proxyID -> proxyInfo
+		Primary      *Snode  `json:"proxy_si"`       // (json tag preserved for back. compat.)
+		Version      int64   `json:"version,string"` // version
+		UUID         string  `json:"uuid"`           // UUID (assigned once at creation time)
+		CreationTime string  `json:"creation_time"`  // creation time
 	}
 
 	// Smap on-change listeners
@@ -195,6 +199,7 @@ func (d *Snode) IsProxy() bool       { return d.DaemonType == cmn.Proxy }
 func (d *Snode) IsTarget() bool      { return d.DaemonType == cmn.Target }
 func (d *Snode) InMaintenance() bool { return d.Flags.IsAnySet(SnodeMaintenanceMask) }
 func (d *Snode) NonElectable() bool  { return d.Flags.IsSet(SnodeNonElectable) }
+func (d *Snode) IsIC() bool          { return d.Flags.IsSet(SnodeIC) }
 
 //===============================================================
 //
@@ -329,10 +334,6 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 		eq = false
 		return
 	}
-	if !m.IC.Compare(other.IC) {
-		eq = false
-		return
-	}
 	eq = mapsEq(m.Tmap, other.Tmap) && mapsEq(m.Pmap, other.Pmap)
 	return
 }
@@ -341,26 +342,20 @@ func (m *Smap) CompareTargets(other *Smap) (equal bool) {
 	return mapsEq(m.Tmap, other.Tmap)
 }
 
+// Method is used when comparing one SMap to another ones, so
+// it cannot be replaced with single `psi.IsIC()` call
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
-	_, ok = m.IC[psi.ID()]
-	return
+	node := m.GetProxy(psi.ID())
+	return node != nil && node.IsIC()
 }
 
-func (m *Smap) OldestIC() (psi *Snode, version int64) {
-	version = m.Version
-	for sid, v := range m.IC {
-		if v <= version {
-			version = v
-			psi = m.GetProxy(sid)
+func (m *Smap) StrIC(node *Snode) string {
+	all := make([]string, 0, m.DefaultICSize())
+	for pid, psi := range m.Pmap {
+		if !psi.IsIC() {
+			continue
 		}
-	}
-	return
-}
-
-func (m *Smap) StrIC(psi *Snode) string {
-	all := make([]string, 0, len(m.IC))
-	for pid := range m.IC {
-		if pid == psi.ID() {
+		if node != nil && pid == node.ID() {
 			all = append(all, pid+"(*)")
 		} else {
 			all = append(all, pid)
@@ -368,6 +363,18 @@ func (m *Smap) StrIC(psi *Snode) string {
 	}
 	return strings.Join(all, ",")
 }
+
+func (m *Smap) ICCount() int {
+	count := 0
+	for _, psi := range m.Pmap {
+		if psi.IsIC() {
+			count++
+		}
+	}
+	return count
+}
+
+func (m *Smap) DefaultICSize() int { return icGroupSize }
 
 /////////////
 // NodeMap //

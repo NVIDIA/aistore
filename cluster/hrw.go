@@ -153,9 +153,8 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 		max    uint64
 		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
 	)
-	for pid := range smap.IC {
-		psi := smap.GetProxy(pid)
-		if psi.InMaintenance() {
+	for _, psi := range smap.Pmap {
+		if psi.InMaintenance() || !psi.IsIC() {
 			continue
 		}
 		cs := xoshiro256.Hash(psi.idDigest ^ digest)
@@ -165,7 +164,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 		}
 	}
 	if pi == nil {
-		err = fmt.Errorf("IC is empty %v, %s", smap.IC, smap)
+		err = fmt.Errorf("IC is empty %s: %s", smap, smap.StrIC(nil))
 	}
 	return
 }

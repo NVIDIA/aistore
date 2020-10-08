@@ -19,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -1373,9 +1372,9 @@ func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (restoreCmd, *cluste
 	origProxyCount := smap.CountProxies()
 	primary := smap.Primary
 	var killNode *cluster.Snode
-	for sid := range smap.IC {
-		if prx := smap.GetProxy(sid); !prx.Equals(primary) {
-			killNode = prx
+	for _, psi := range smap.Pmap {
+		if psi.IsIC() && !psi.Equals(primary) {
+			killNode = psi
 			break
 		}
 	}
@@ -1388,18 +1387,27 @@ func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (restoreCmd, *cluste
 	return cmd, smap
 }
 
+func icFromSmap(smap *cluster.Smap) cmn.StringSet {
+	lst := make(cmn.StringSet, smap.DefaultICSize())
+	for pid, psi := range smap.Pmap {
+		if psi.IsIC() {
+			lst.Add(pid)
+		}
+	}
+	return lst
+}
+
 func icMemberLeaveAndRejoin(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	primary := smap.Primary
-
-	tassert.Fatalf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
+	tassert.Fatalf(t, smap.ICCount() == smap.DefaultICSize(), "should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
 
 	// Primary must be an IC member
 	tassert.Fatalf(t, smap.IsIC(primary), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
 
 	// killing an IC member, should add a new IC member
 	// select IC member which is not primary and kill
-	origIC := smap.IC
+	origIC := icFromSmap(smap)
 	cmd, smap := killRandNonPrimaryIC(t, smap)
 	delete(origIC, cmd.node.DaemonID)
 
@@ -1409,17 +1417,18 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	for sid := range origIC {
 		tassert.Errorf(t, smap.IsIC(smap.GetProxy(sid)), "Should not remove existing IC members (%s)", sid)
 	}
-	tassert.Errorf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
+	tassert.Errorf(t, smap.ICCount() == smap.DefaultICSize(), "should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
 
 	err := restore(cmd, false, "proxy")
 	tassert.CheckFatal(t, err)
 
-	updatedICs := smap.IC
+	updatedICs := icFromSmap(smap)
 	smap, err = api.WaitNodeAdded(tutils.BaseAPIParams(primary.URL(cmn.NetworkPublic)), cmd.node.ID())
 	tassert.CheckFatal(t, err)
 
 	// Adding a new node shouldn't change IC members.
-	tassert.Errorf(t, reflect.DeepEqual(updatedICs, smap.IC), "shouldn't update existing IC members")
+	newIC := icFromSmap(smap)
+	tassert.Errorf(t, reflect.DeepEqual(updatedICs, newIC), "shouldn't update existing IC members")
 }
 
 func icKillAndRestorePrimary(t *testing.T) {
@@ -1431,7 +1440,7 @@ func icKillAndRestorePrimary(t *testing.T) {
 	newPrimary := smap.GetProxy(newPrimaryID)
 	tassert.CheckFatal(t, err)
 
-	oldIC := smap.IC
+	oldIC := icFromSmap(smap)
 	oldPrimary := smap.Primary
 	oldPrimaryURL := smap.Primary.URL(cmn.NetworkPublic)
 	oldPrimaryID := smap.Primary.ID()
@@ -1456,10 +1465,6 @@ func icKillAndRestorePrimary(t *testing.T) {
 		}
 	}
 
-	changedIC := smap.IC
-	_, maxVal := cmn.MaxValEntryInt(changedIC)
-	tassert.CheckError(t, err)
-
 	// Restore the killed primary back as primary.
 	err = restore(cmd, true, "proxy")
 	tassert.CheckFatal(t, err)
@@ -1471,15 +1476,7 @@ func icKillAndRestorePrimary(t *testing.T) {
 
 	// When a node added as primary, it should add itself to IC.
 	tassert.Fatalf(t, smap.IsIC(oldPrimary), "primary (%s) should be a IC member, (were: %s)", oldPrimaryID, smap.StrIC(newPrimary))
-	tassert.Errorf(t, len(smap.IC) == ais.ICGroupSize, "should have %d members in IC, has %d", ais.ICGroupSize, len(smap.IC))
-
-	// Proxy with max version should be evicted.
-	for si, v := range changedIC {
-		if _, ok := smap.IC[si]; !ok {
-			tassert.Fatalf(t, v == maxVal,
-				"should remove IC member with maxVersion v:(%d) - deleted v:(%d) instead", maxVal, v)
-		}
-	}
+	tassert.Errorf(t, smap.ICCount() == smap.DefaultICSize(), "should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
 }
 
 func icSyncOwnershipTable(t *testing.T) {
@@ -1510,11 +1507,12 @@ func icSyncOwnershipTable(t *testing.T) {
 
 	// Killing an IC member, should add a new IC member.
 	// Select IC member which is not primary and kill.
-	origIC := smap.IC
+	origIC := icFromSmap(smap)
 	cmd, smap := killRandNonPrimaryIC(t, smap)
 
 	// Try getting xaction status from new IC member.
-	newICMemID := getNewICMember(t, origIC, smap.IC)
+	updatedIC := icFromSmap(smap)
+	newICMemID := getNewICMember(t, origIC, updatedIC)
 
 	newICNode := smap.GetProxy(newICMemID)
 
@@ -1675,7 +1673,7 @@ func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cmn.StopCh) {
 
 // misc
 
-func getNewICMember(t testing.TB, oldMap, newMap cmn.SimpleKVsInt) (daeID string) {
+func getNewICMember(t testing.TB, oldMap, newMap cmn.StringSet) (daeID string) {
 	for sid := range newMap {
 		if _, ok := oldMap[sid]; !ok {
 			tassert.Errorf(t, daeID == "", "should change only one IC member")
