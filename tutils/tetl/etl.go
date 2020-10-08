@@ -1,8 +1,8 @@
-// Package transformation
+// Package tetl provides helpers for ETL.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package tutils
+package tetl
 
 import (
 	"fmt"

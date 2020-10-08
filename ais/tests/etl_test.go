@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	"github.com/NVIDIA/aistore/tutils/tetl"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -99,7 +100,7 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 
 func etlInit(name, comm string) (string, error) {
 	tutils.Logln("Reading template")
-	spec, err := tutils.GetTransformYaml(name)
+	spec, err := tetl.GetTransformYaml(name)
 	if err != nil {
 		return "", err
 	}
@@ -201,15 +202,15 @@ func testOfflineETL(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
 func TestETLObject(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	tests := []testConfig{
-		{transformer: tutils.Echo, comm: etl.RedirectCommType, onlyLong: true},
-		{transformer: tutils.Echo, comm: etl.RevProxyCommType, onlyLong: true},
-		{transformer: tutils.Echo, comm: etl.PushCommType, onlyLong: true},
-		{tutils.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tutils.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tutils.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tutils.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
-		{tutils.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
-		{tutils.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.RevProxyCommType, onlyLong: true},
+		{transformer: tetl.Echo, comm: etl.PushCommType, onlyLong: true},
+		{tetl.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tetl.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tetl.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tetl.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{tetl.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{tetl.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
 	}
 
 	for _, test := range tests {
@@ -234,9 +235,9 @@ func TestETLBucket(t *testing.T) {
 		}
 
 		tests = []testConfig{
-			{transformer: tutils.Echo, comm: etl.RedirectCommType, onlyLong: true},
-			{transformer: tutils.Md5, comm: etl.RevProxyCommType},
-			{transformer: tutils.Md5, comm: etl.PushCommType, onlyLong: true},
+			{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
+			{transformer: tetl.Md5, comm: etl.RevProxyCommType},
+			{transformer: tetl.Md5, comm: etl.PushCommType, onlyLong: true},
 		}
 	)
 
@@ -353,7 +354,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tutils.Logln("Putting objects to source bucket")
 	m.puts()
 
-	uuid, err := etlInit(tutils.Echo, etl.RevProxyCommType)
+	uuid, err := etlInit(tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
 
 	defer func() {

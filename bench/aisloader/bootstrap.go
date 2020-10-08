@@ -59,8 +59,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
+	"github.com/NVIDIA/aistore/tutils/tetl"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -461,7 +461,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	if p.etlName != "" {
-		etlSpec, err = tutils.GetTransformYaml(p.etlName)
+		etlSpec, err = tetl.GetTransformYaml(p.etlName)
 		if err != nil {
 			return params{}, err
 		}

@@ -18,12 +18,13 @@ import (
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/readers"
 	"github.com/NVIDIA/aistore/tutils/tassert"
+	"github.com/NVIDIA/aistore/tutils/tetl"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 	jsoniter "github.com/json-iterator/go"
 )
 
 func startTar2TfTransformer(t *testing.T) (uuid string) {
-	spec, err := tutils.GetTransformYaml(tutils.Tar2TF)
+	spec, err := tetl.GetTransformYaml(tetl.Tar2TF)
 	tassert.CheckError(t, err)
 
 	pod, err := etl.ParsePodSpec(nil, spec)

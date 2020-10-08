@@ -65,6 +65,7 @@ fmt)
 
     check_gomod
     check_imports
+    check_deps
     check_files_headers
     check_python_formatting
     ;;

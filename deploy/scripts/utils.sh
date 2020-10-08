@@ -49,6 +49,17 @@ function check_imports {
   done
 }
 
+function check_deps {
+  # Check if `aisloader` package imports `tutils`.
+  for f in $(find ${AISTORE_DIR}/bench/aisloader -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do
+    out=$(cat $f | grep -Pz '"github.com/NVIDIA/aistore/tutils"')
+    if [[ $? -eq 0 ]]; then
+      echo "$f: imports 'tutils' package which is forbidden"
+      exit 1
+    fi
+  done
+}
+
 function check_python_formatting {
   i=0
   for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex $EXTERNAL_SRC_REGEX); do
