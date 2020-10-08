@@ -700,8 +700,6 @@ func TestDownloadStatusError(t *testing.T) {
 }
 
 func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -714,7 +712,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		objNameSecond = "object-second"
 
 		linkFirst  = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
-		linkSecond = "github.com/NVIDIA/aistore"
+		linkSecond = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
 
 		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
@@ -732,8 +730,8 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	id2, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objNameSecond, linkSecond)
 	tassert.CheckError(t, err)
 
-	waitForDownload(t, id, 5*time.Second)
-	waitForDownload(t, id2, 5*time.Second)
+	waitForDownload(t, id, 10*time.Second)
+	waitForDownload(t, id2, 10*time.Second)
 
 	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
 	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
@@ -742,8 +740,6 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 }
 
 func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -757,7 +753,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 
 		m = map[string]string{
 			"linkFirst":  "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
-			"linkSecond": "github.com/NVIDIA/aistore",
+			"linkSecond": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
 		}
 
 		expectedObjects = []string{objNameFirst, objNameSecond}
