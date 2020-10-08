@@ -227,9 +227,9 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 
 func WaitNodeRestored(t *testing.T, proxyURL, reason, nodeID string, origVersion int64, verbose bool, nodeCnt ...int) *cluster.Smap {
 	smap, err := WaitForPrimaryProxy(proxyURL, reason, origVersion, verbose, nodeCnt...)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	_, err = api.WaitNodeAdded(BaseAPIParams(proxyURL), nodeID)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	return smap
 }
 
