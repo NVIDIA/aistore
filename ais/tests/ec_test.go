@@ -52,7 +52,7 @@ type ecOptions struct {
 	objCount    int
 	dataCnt     int
 	parityCnt   int
-	minTgt      int
+	minTargets  int
 	pattern     string
 	sema        *cmn.DynSemaphore
 	silent      bool
@@ -60,13 +60,13 @@ type ecOptions struct {
 	smap        *cluster.Smap
 }
 
-// Intializes the EC options, validatas the number of targets.
+// Initializes the EC options, validates the number of targets.
 // If initial dataCnt value is negative, it sets the number of data and
 // parity slices to maximum possible for the cluster.
 func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	o.smap = tutils.GetClusterMap(t, proxyURL)
-	if o.smap.CountTargets() <= o.minTgt {
-		t.Fatalf("insufficient number of targets. Required at least %d targets", o.minTgt)
+	if o.smap.CountTargets() < o.minTargets {
+		t.Fatalf("insufficient number of targets, required at least %d targets", o.minTargets)
 	}
 	if o.concurrency > 0 {
 		o.sema = cmn.NewDynSemaphore(o.concurrency)
@@ -835,7 +835,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		objCount:    100,
 		concurrency: 8,
 		pattern:     "obj-rest-cloud-%04d",
@@ -888,7 +888,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		objCount:    50,
 		concurrency: 8,
 		pattern:     "obj-rest-%04d",
@@ -968,10 +968,10 @@ func TestECChecksum(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:    3,
-		dataCnt:   1,
-		parityCnt: 1,
-		pattern:   "obj-cksum-%04d",
+		minTargets: 4,
+		dataCnt:    1,
+		parityCnt:  1,
+		pattern:    "obj-cksum-%04d",
 	}.init(t, proxyURL)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
@@ -1033,7 +1033,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		dataCnt:     1,
 		parityCnt:   1,
 		objCount:    25,
@@ -1122,7 +1122,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		dataCnt:     1,
 		parityCnt:   1,
 		objCount:    5,
@@ -1219,7 +1219,7 @@ func TestECStress(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		objCount:    400,
 		concurrency: 12,
 		pattern:     "obj-stress-%04d",
@@ -1264,7 +1264,7 @@ func TestECStressManyBuckets(t *testing.T) {
 	)
 
 	o1 := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		parityCnt:   1,
 		dataCnt:     1,
 		objCount:    200,
@@ -1272,7 +1272,7 @@ func TestECStressManyBuckets(t *testing.T) {
 		pattern:     "obj-stress-manybck-%04d",
 	}.init(t, proxyURL)
 	o2 := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		parityCnt:   1,
 		dataCnt:     1,
 		objCount:    200,
@@ -1333,7 +1333,7 @@ func TestECExtraStress(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		objCount:    400,
 		concurrency: 12,
 		pattern:     objStart + "%04d",
@@ -1459,7 +1459,7 @@ func TestECXattrs(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		dataCnt:     1,
 		parityCnt:   1,
 		objCount:    30,
@@ -1574,7 +1574,7 @@ func TestECDestroyBucket(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  4,
 		dataCnt:     1,
 		parityCnt:   1,
 		objCount:    100,
@@ -1664,7 +1664,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      4,
+		minTargets:  5,
 		dataCnt:     -1,
 		objCount:    100,
 		concurrency: 12,
@@ -1763,7 +1763,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      4,
+		minTargets:  5,
 		dataCnt:     -1,
 		objCount:    50,
 		concurrency: 8,
@@ -1908,7 +1908,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	)
 
 	o := ecOptions{
-		minTgt:      3,
+		minTargets:  5,
 		dataCnt:     1,
 		parityCnt:   1,
 		objCount:    400,
@@ -2321,7 +2321,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 		proxyURL = tutils.RandomProxyURL()
 	)
 	o := ecOptions{
-		minTgt:      4,
+		minTargets:  5,
 		objCount:    90,
 		concurrency: 8,
 		pattern:     "obj-reb-chk-%04d",
@@ -2554,7 +2554,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		o          = ecOptions{
-			minTgt:      4,
+			minTargets:  5,
 			objCount:    300,
 			concurrency: 8,
 			pattern:     "obj-reb-chk-%04d",
