@@ -204,7 +204,7 @@ func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 		}
 	}
 	params := cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: rj.buf}
-	copied, _, err := t.CopyObject(lom, params, true /*local only*/)
+	copied, _, err := t.CopyObject(lom, params, true /*localOnly*/)
 	if err != nil || !copied {
 		if err != nil {
 			glog.Errorf("%s: %v", lom, err)

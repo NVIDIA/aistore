@@ -177,7 +177,7 @@ func (j *bckTransferJogger) copyObject(lom *cluster.LOM) error {
 		}
 
 		// TODO: for dry-run, put object names in IC, so user can see exactly what is put where.
-		copied, size, err = j.parent.Target().CopyObject(lom, params)
+		copied, size, err = j.parent.Target().CopyObject(lom, params, false /*localOnly*/)
 	)
 
 	if copied {

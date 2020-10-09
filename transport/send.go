@@ -238,6 +238,9 @@ func (s *Stream) Send(obj Obj) (err error) {
 	if obj.Reader == nil {
 		cmn.Assert(hdr.IsHeaderOnly())
 		obj.Reader = nopRC
+	} else if debug.Enabled && hdr.IsHeaderOnly() {
+		b, _ := ioutil.ReadAll(obj.Reader)
+		debug.Assert(len(b) == 0)
 	}
 	s.workCh <- obj
 	if glog.FastV(4, glog.SmoduleTransport) {

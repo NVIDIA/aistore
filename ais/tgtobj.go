@@ -1057,7 +1057,6 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 	// At this point we must have an exclusive lock for the object.
 	defer srcLOM.Unlock(true)
 
-	// local op
 	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
 	err = dst.Init(coi.BckTo.Bck)
 	if err != nil {
@@ -1115,7 +1114,6 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 		si = coi.t.si
 
 		reader  cmn.ReadOpenCloser
-		hdrLOM  *cluster.LOM
 		cleanUp func()
 	)
 
@@ -1138,7 +1136,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 		return
 	}
 
-	if reader, hdrLOM, cleanUp, err = coi.DP.Reader(lom); err != nil {
+	if reader, _, cleanUp, err = coi.DP.Reader(lom); err != nil {
 		return false, 0, err
 	}
 	defer cleanUp()
@@ -1153,20 +1151,21 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	if err := coi.t.PutObject(dst, params); err != nil {
 		return false, 0, err
 	}
-	return true, hdrLOM.Size(), err
+	return true, dst.Size(), err
 }
 
-//nolint:unused // This function might become useful if we decide to introduce copying an object directly to a cloud
-// provider, without intermediate object caching on a target.
+// nolint:unused // This function might become useful if we decide to introduce copying an object directly to a cloud.
+//
+// Provider, without intermediate object caching on a target.
 func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
 	cmn.Assert(coi.BckTo.IsRemote())
 	var (
 		reader  io.ReadCloser
-		hdrLOM  *cluster.LOM
+		objMeta cmn.ObjHeaderMetaProvider
 		cleanUp func()
 	)
 
-	if reader, hdrLOM, cleanUp, err = coi.DP.Reader(lom); err != nil {
+	if reader, objMeta, cleanUp, err = coi.DP.Reader(lom); err != nil {
 		return false, 0, err
 	}
 
@@ -1176,7 +1175,7 @@ func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo st
 	}()
 
 	dstLOM := &cluster.LOM{T: coi.t, ObjName: objNameTo}
-	// Cloud bucket has to exist, so it has to be in BMD
+	// Cloud bucket has to exist, so it has to be in BMD.
 	if err := dstLOM.Init(coi.BckTo.Bck); err != nil {
 		return false, 0, err
 	}
@@ -1184,7 +1183,7 @@ func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo st
 	if _, err, _ = coi.t.Cloud(coi.BckTo).PutObj(context.Background(), reader, dstLOM); err != nil {
 		return false, 0, err
 	}
-	return true, hdrLOM.Size(), nil
+	return true, objMeta.Size(), nil
 }
 
 func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (copied bool, size int64, err error) {

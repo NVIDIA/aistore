@@ -427,18 +427,23 @@ func Test_ObjAttrs(t *testing.T) {
 
 	random := newRand(mono.NanoTime())
 	for idx, attrs := range testAttrs {
-		hdr := transport.Header{
-			Bck: cmn.Bck{
-				Provider: cmn.ProviderAIS,
-			},
-			ObjAttrs: attrs,
-			Opaque:   []byte{byte(idx)},
-		}
+		var (
+			reader io.ReadCloser
+			hdr    = transport.Header{
+				Bck: cmn.Bck{
+					Provider: cmn.ProviderAIS,
+				},
+				ObjAttrs: attrs,
+				Opaque:   []byte{byte(idx)},
+			}
+		)
 		slab, err := MMSA.GetSlab(memsys.PageSize)
 		if err != nil {
 			t.Fatal(err)
 		}
-		reader := newRandReader(random, hdr, slab)
+		if hdr.ObjAttrs.Size > 0 {
+			reader = newRandReader(random, hdr, slab)
+		}
 		if err := stream.Send(transport.Obj{Hdr: hdr, Reader: reader}); err != nil {
 			t.Fatal(err)
 		}

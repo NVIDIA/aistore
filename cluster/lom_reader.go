@@ -15,9 +15,8 @@ type (
 
 	// Defines what to send to a target.
 	LomReaderProvider interface {
-		// returned LOM is supposed to have http.Header metadata
-		// returned func() will be called after reading from reader is done.
-		Reader(lom *LOM) (cmn.ReadOpenCloser, *LOM, func(), error)
+		// Returned func() will be called after reading from reader is done.
+		Reader(lom *LOM) (reader cmn.ReadOpenCloser, objMeta cmn.ObjHeaderMetaProvider, cleanUp func(), err error)
 	}
 
 	LomReader struct{}
@@ -26,7 +25,7 @@ type (
 // interface guard
 var _ LomReaderProvider = &LomReader{}
 
-func (r *LomReader) Reader(lom *LOM) (cmn.ReadOpenCloser, *LOM, func(), error) {
+func (r *LomReader) Reader(lom *LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, func(), error) {
 	var lomLoadErr, err error
 
 	lom.Lock(false)

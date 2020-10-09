@@ -10,13 +10,30 @@ import (
 )
 
 type (
+	objMeta struct {
+		size    int64
+		atime   int64
+		cksum   *cmn.Cksum
+		version string
+	}
+
 	OfflineDataProvider struct {
 		bckMsg *cmn.Bck2BckMsg
 		comm   Communicator
 	}
 )
 
-var _ cluster.LomReaderProvider = &OfflineDataProvider{}
+// interface guard
+var (
+	_ cluster.LomReaderProvider = &OfflineDataProvider{}
+	_ cmn.ObjHeaderMetaProvider = &objMeta{}
+)
+
+func (om *objMeta) Size() int64          { return om.size }
+func (om *objMeta) Cksum() *cmn.Cksum    { return om.cksum }
+func (om *objMeta) Version() string      { return om.version }
+func (om *objMeta) AtimeUnix() int64     { return om.atime }
+func (*objMeta) CustomMD() cmn.SimpleKVs { return nil }
 
 func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID)
@@ -30,18 +47,18 @@ func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 	}, nil
 }
 
-// Returns reader resulting from lom ETL transformation. Fills hdrLOM with lom metadata required for http.Header.
-func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, *cluster.LOM, func(), error) {
+// Returns reader resulting from lom ETL transformation.
+func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, func(), error) {
 	body, length, err := dp.comm.Get(lom.Bck(), lom.ObjName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	hdrLOM := &cluster.LOM{}
-	hdrLOM.SetCksum(cmn.NewCksum(cmn.ChecksumNone, ""))
-	hdrLOM.SetAtimeUnix(lom.AtimeUnix())
-	hdrLOM.SetVersion(lom.Version())
-	hdrLOM.SetSize(length)
-
-	return cmn.NopOpener(body), hdrLOM, func() {}, nil
+	om := &objMeta{
+		size:    length,
+		version: lom.Version(),
+		cksum:   cmn.NewCksum(cmn.ChecksumNone, ""),
+		atime:   lom.AtimeUnix(),
+	}
+	return cmn.NopOpener(body), om, func() {}, nil
 }

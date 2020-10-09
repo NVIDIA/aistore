@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -150,14 +151,13 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 }
 
 // Send params.Reader to a given target directly.
-// Header should be populated with content length, checksum, version, atime.
-// Reader is closed always, even on errors.
+// `params.HdrMeta` should be populated with content length, checksum, version, atime.
+// `params.Reader` is closed always, even on errors.
 func (t *targetrunner) SendTo(lom *cluster.LOM, params cluster.SendToParams) error {
 	debug.Assert(!t.Snode().Equals(params.Tsi))
+	cmn.Assert(params.HdrMeta != nil)
+	cmn.Assert(params.HdrMeta.Size() >= 0)
 
-	if params.HdrMeta == nil {
-		params.HdrMeta = lom
-	}
 	if params.DM != nil {
 		return _sendObjDM(lom, params)
 	}
@@ -172,29 +172,40 @@ func (t *targetrunner) SendTo(lom *cluster.LOM, params cluster.SendToParams) err
 // streaming send/receive via bundle.DataMover
 //
 
-// _sendObjDM requires params.HdrMeta not to be nil.
+// _sendObjDM requires params.HdrMeta not to be nil. Even though it uses
+// transport the whole function is synchronous as callers expect that the reader
+// will be sent when function finishes.
 func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 	cmn.Assert(params.HdrMeta != nil)
-	cb := func(_ transport.Header, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
-		lom = (*cluster.LOM)(lomptr)
-		if params.Locked {
-			lom.Unlock(false)
+
+	var (
+		wg  = &sync.WaitGroup{}
+		hdr = transport.Header{}
+		cb  = func(_ transport.Header, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
+			lom = (*cluster.LOM)(lomptr)
+			if params.Locked {
+				lom.Unlock(false)
+			}
+			if err != nil {
+				glog.Errorf("failed to send %s => %s @ %s, err: %v", lom, params.BckTo, params.Tsi, err)
+			}
+			wg.Done()
 		}
-		if err != nil {
-			glog.Errorf("failed to send %s => %s @ %s, err: %v", lom, params.BckTo, params.Tsi, err)
-		}
-	}
-	hdr := transport.Header{}
+	)
+
+	wg.Add(1)
+
 	hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
 	o := transport.Obj{Hdr: hdr, Callback: cb, CmplPtr: unsafe.Pointer(lom)}
-	err := params.DM.Send(o, params.Reader, params.Tsi)
-	if err != nil {
+	if err := params.DM.Send(o, params.Reader, params.Tsi); err != nil {
 		if params.Locked {
 			lom.Unlock(false)
 		}
 		glog.Error(err)
+		return err
 	}
-	return err
+	wg.Wait()
+	return nil
 }
 
 func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
@@ -277,21 +288,18 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
 //   the AIS cluster (by performing a cold GET if need be).
 // - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //   replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams,
-	localOnly ...bool) (copied bool, size int64, err error) {
+func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams, localOnly bool) (copied bool, size int64, err error) {
 	var (
 		coi = &copyObjInfo{
 			CopyObjectParams: params,
 			t:                t,
 			uncache:          false,
 			finalize:         false,
+			localOnly:        localOnly,
 		}
 
 		objNameTo = lom.ObjName
 	)
-	if len(localOnly) > 0 {
-		coi.localOnly = localOnly[0]
-	}
 	if params.ObjNameTo != "" {
 		objNameTo = params.ObjNameTo
 	}
