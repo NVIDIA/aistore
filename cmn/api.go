@@ -381,8 +381,7 @@ func (c *ECConf) RequiredEncodeTargets() int {
 }
 
 func (c *ECConf) RequiredRestoreTargets() int {
-	// data slices + 1 target for original object
-	return c.DataSlices + 1
+	return c.DataSlices
 }
 
 //
