@@ -61,7 +61,7 @@ type (
 		RegRecv() error
 		SetXact(xact Xact)
 		Open()
-		Close()
+		Close(err error)
 		UnregRecv()
 		Send(obj transport.Obj, roc cmn.ReadOpenCloser, tsi *Snode) error
 		ACK(hdr transport.Header, cb transport.SendCallback, tsi *Snode) error

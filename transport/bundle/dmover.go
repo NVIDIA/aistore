@@ -144,10 +144,12 @@ func (dm *DataMover) Open() {
 	dm.isOpen.Store(true)
 }
 
-func (dm *DataMover) Close() {
+func (dm *DataMover) Close(err error) {
 	cmn.Assert(dm.isOpen.Load())
-	dm.data.streams.Close(true /* graceful */)
-	dm.data.streams = nil
+	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin` and abort otherwise
+	if err == nil {
+		dm.data.streams = nil // safe when closed gracefully
+	}
 	if dm.useACKs() {
 		dm.ack.streams.Close(true)
 	}

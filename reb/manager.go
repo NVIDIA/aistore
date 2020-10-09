@@ -206,9 +206,9 @@ func (reb *Manager) beginStreams() {
 	reb.inQueue.Store(0)
 }
 
-func (reb *Manager) endStreams() {
+func (reb *Manager) endStreams(err error) {
 	if reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) {
-		reb.dm.Close()
+		reb.dm.Close(err)
 		reb.pushes.Close(true)
 	}
 }

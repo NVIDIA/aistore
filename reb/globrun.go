@@ -74,7 +74,8 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cluster.Not
 	defer gfn.Deactivate()
 
 	errCnt := 0
-	if err := reb.rebSyncAndRun(md); err == nil {
+	err := reb.rebSyncAndRun(md)
+	if err == nil {
 		errCnt = reb.rebWaitAck(md)
 	} else {
 		glog.Warning(err)
@@ -87,7 +88,7 @@ func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cluster.Not
 	for errCnt != 0 && !reb.xact().Aborted() {
 		errCnt = reb.bcast(md, reb.waitFinExtended)
 	}
-	reb.rebFini(md)
+	reb.rebFini(md, err)
 }
 
 // To optimize goroutine creation:
@@ -434,7 +435,7 @@ func (reb *Manager) waitEvent(md *rebArgs, cb func(md *rebArgs) bool, maxWait ..
 	return aborted
 }
 
-func (reb *Manager) rebFini(md *rebArgs) {
+func (reb *Manager) rebFini(md *rebArgs, err error) {
 	// 10.5. keep at it... (can't close the streams as long as)
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
@@ -443,7 +444,7 @@ func (reb *Manager) rebFini(md *rebArgs) {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.logHdr(md), err)
 		}
 	}
-	reb.endStreams()
+	reb.endStreams(err)
 	reb.filterGFN.Reset()
 
 	if !reb.xact().Finished() {

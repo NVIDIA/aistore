@@ -104,8 +104,7 @@ func (r *XactTransferBck) Run() (err error) {
 
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
 	err = r.xactBckBase.waitDone(mpathCount)
-
-	r.dm.Close()
+	r.dm.Close(err)
 	r.dm.UnregRecv()
 
 	r.Finish(err)
@@ -166,8 +165,7 @@ func (j *bckTransferJogger) jog() {
 func (j *bckTransferJogger) copyObject(lom *cluster.LOM) error {
 	var (
 		objNameTo = cmn.ObjNameFromBck2BckMsg(lom.ObjName, j.parent.meta)
-
-		params = cluster.CopyObjectParams{
+		params    = cluster.CopyObjectParams{
 			BckTo:     j.parent.bckTo,
 			ObjNameTo: objNameTo,
 			Buf:       j.buf,
@@ -175,10 +173,10 @@ func (j *bckTransferJogger) copyObject(lom *cluster.LOM) error {
 			DP:        j.parent.dp,
 			DryRun:    j.parent.meta.DryRun,
 		}
-
-		// TODO: for dry-run, put object names in IC, so user can see exactly what is put where.
-		copied, size, err = j.parent.Target().CopyObject(lom, params, false /*localOnly*/)
 	)
+
+	// TODO: if dry-run show to-be-copied objects
+	copied, size, err := j.parent.Target().CopyObject(lom, params, false /*localOnly*/)
 
 	if copied {
 		j.parent.ObjectsInc()
