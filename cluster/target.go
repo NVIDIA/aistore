@@ -123,7 +123,6 @@ type Target interface {
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
-	SendTo(lom *LOM, params SendToParams) error
 
 	// File-system related functions.
 	FSHC(err error, path string)

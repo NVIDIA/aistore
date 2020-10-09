@@ -48,7 +48,6 @@ func (*TargetMock) CopyObject(_ *LOM, _ CopyObjectParams, _ bool) (bool, int64, 
 }
 func (*TargetMock) GetCold(_ context.Context, _ *LOM, _ bool) (error, int) { return nil, http.StatusOK }
 func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)          { return nil, nil }
-func (*TargetMock) SendTo(_ *LOM, _ SendToParams) error                    { return nil }
 func (*TargetMock) DB() dbdriver.Driver                                    { return nil }
 func (*TargetMock) Cloud(_ *Bck) CloudProvider                             { return nil }
 func (*TargetMock) StartTime() time.Time                                   { return time.Now() }

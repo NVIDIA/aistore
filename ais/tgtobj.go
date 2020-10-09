@@ -1237,7 +1237,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 		}
 	}
 	params.BckTo = coi.BckTo
-	if err := coi.t.SendTo(lom, params); err != nil {
+	if err := coi.t.sendTo(lom, params); err != nil {
 		return false, 0, err
 	}
 	return true, params.HdrMeta.Size(), nil

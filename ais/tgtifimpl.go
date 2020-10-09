@@ -153,7 +153,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 // Send params.Reader to a given target directly.
 // `params.HdrMeta` should be populated with content length, checksum, version, atime.
 // `params.Reader` is closed always, even on errors.
-func (t *targetrunner) SendTo(lom *cluster.LOM, params cluster.SendToParams) error {
+func (t *targetrunner) sendTo(lom *cluster.LOM, params cluster.SendToParams) error {
 	debug.Assert(!t.Snode().Equals(params.Tsi))
 	cmn.Assert(params.HdrMeta != nil)
 	cmn.Assert(params.HdrMeta.Size() >= 0)
