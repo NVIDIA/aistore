@@ -275,7 +275,7 @@ def transform(input_bytes):
 `
 
 		numpy = `
-import numpy
+import numpy as np
 
 def transform(input_bytes: bytes) -> bytes:
     x = np.array([[0, 1], [2, 3]], dtype='<u2')
