@@ -59,6 +59,7 @@ var (
 		{"ICSyncOwnTbl", icSyncOwnershipTable},
 		{"ICSinglePrimaryRevamp", icSinglePrimaryRevamp},
 		{"ICStressMonitorXactMultiICFail", icStressMonitorXactMultiICFail},
+		{"ICStressCachedXactions", icStressCachedXactions},
 	}
 )
 
@@ -1612,14 +1613,108 @@ func icStressMonitorXactMultiICFail(t *testing.T) {
 
 	// 2. Kill and restore random IC members in background
 	stopCh := cmn.NewStopCh()
-	go killRestoreIC(t, smap, stopCh)
+	krWg := &sync.WaitGroup{}
+	krWg.Add(1)
+	go killRestoreIC(t, smap, stopCh, krWg)
+	defer func() {
+		// Stop the background kill and restore task
+		stopCh.Close()
+		krWg.Wait()
+	}()
 
 	// 3. Start multiple xactions and poll random proxy for status till xaction is complete
 	wg := startCPBckAndWait(t, m.bck, numCopyXacts)
 	wg.Wait()
+}
 
-	// 4. Stop the background kill and restore task
-	stopCh.Close()
+func icStressCachedXactions(t *testing.T) {
+	// TODO: This test doesn't stress test cached xactions as notifications
+	// are temporarily disabled for list-objects. ref. #922
+	t.Skip("IC and notifications are temporarily disabled for list-objects")
+
+	var (
+		bck = cmn.Bck{
+			Name:     TestBucketName,
+			Provider: cmn.ProviderAIS,
+		}
+
+		proxyURL          = tutils.GetPrimaryURL()
+		baseParams        = tutils.BaseAPIParams(proxyURL)
+		smap              = tutils.GetClusterMap(t, proxyURL)
+		numObjs           = 5000
+		objSize    uint64 = cmn.KiB
+
+		errCh     = make(chan error, numObjs*5)
+		objsPutCh = make(chan string, numObjs)
+		objList   = make([]string, 0, numObjs)
+
+		numListObjXacts = 20 // number of list obj xactions to run in parallel
+	)
+
+	// 1. Populate a bucket required for copy xactions
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	p, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+
+	for i := 0; i < numObjs; i++ {
+		fname := fmt.Sprintf("%04d", i)
+		objList = append(objList, fname)
+	}
+
+	tutils.PutObjsFromList(proxyURL, bck, "", objSize, objList, errCh, objsPutCh, p.Cksum.Type)
+	tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
+	close(objsPutCh)
+
+	// 2. Kill and restore random IC members in background
+	stopCh := cmn.NewStopCh()
+	krWg := &sync.WaitGroup{}
+	krWg.Add(1)
+	go killRestoreIC(t, smap, stopCh, krWg)
+	defer func() {
+		// Stop the background kill and restore task
+		stopCh.Close()
+		krWg.Wait()
+	}()
+
+	// 3. Start multiple list obj range operation in background
+	wg := startListObjRange(t, baseParams, bck, numListObjXacts, numObjs, 500, 10)
+	wg.Wait()
+}
+
+// nolint:unused // will be used when icStressCachedXaction test is enabled
+//
+// Expects objects to be numbered as {%04d}; BaseParams of primary proxy
+func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, numJobs, numObjs, rangeSize int, pageSize uint) *sync.WaitGroup {
+	tassert.Fatalf(t, numObjs > rangeSize, "number of objects (%d) should be greater than range size (%d)", numObjs, rangeSize)
+
+	wg := &sync.WaitGroup{}
+	for i := 0; i < numJobs; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Start list object xactions with a small lag
+			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
+			var (
+				after = fmt.Sprintf("%04d", rand.Intn(numObjs-1-rangeSize))
+				msg   = &cmn.SelectMsg{PageSize: pageSize, StartAfter: after}
+			)
+
+			resList, err := api.ListObjects(baseParams, bck, msg, uint(rangeSize))
+			if err == nil {
+				tassert.Errorf(t, len(resList.Entries) == rangeSize, "should list %d objects", rangeSize)
+				return
+			}
+			if hErr, ok := err.(*cmn.HTTPError); ok && hErr.Status == http.StatusBadGateway {
+				// TODO -- FIXME : handle internally when cache owner is killed
+				return
+			}
+			tassert.Errorf(t, err == nil, "List objects %s failed, err = %v", bck, err)
+		}()
+	}
+	return wg
 }
 
 func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup {
@@ -1649,11 +1744,13 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 }
 
 // Continuously kill and restore IC nodes
-func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cmn.StopCh) {
+func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cmn.StopCh, wg *sync.WaitGroup) {
 	var (
 		cmd      restoreCmd
 		proxyURL = smap.Primary.URL(cmn.NetworkPublic)
 	)
+	defer wg.Done()
+
 	for {
 		cmd, smap = killRandNonPrimaryIC(t, smap)
 		err := restore(cmd, false, "proxy")

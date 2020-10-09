@@ -117,7 +117,14 @@ outer:
 		}
 	default: // cached + owned
 		psi = smap.GetProxy(owner)
-		cmn.Assertf(smap.IsIC(psi), "%s, %s", owner, smap.StrIC(ic.p.si)) // TODO -- FIXME: handle
+		if psi == nil || !smap.IsIC(psi) {
+			var err error
+			if psi, err = cluster.HrwIC(&smap.Smap, uuid); err != nil {
+				ic.p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+				return true
+			}
+		}
+		cmn.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si))
 	}
 	if owner == ic.p.si.ID() {
 		return
