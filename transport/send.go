@@ -81,9 +81,11 @@ type (
 		s   *Stream
 		add bool
 	}
+	nopReadCloser struct{}
 )
 
 var (
+	nopRC   = &nopReadCloser{}      // read() and close() stubs
 	nextSID = *atomic.NewInt64(100) // unique session IDs starting from 101
 	sc      = &StreamCollector{}    // idle timer and house-keeping (slow path)
 	gc      *collector              // real stream collector
@@ -509,6 +511,13 @@ func (stats *Stats) CompressionRatio() float64 {
 	bytesSent := stats.CompressedSize.Load()
 	return float64(bytesRead) / float64(bytesSent)
 }
+
+///////////////////
+// nopReadCloser //
+///////////////////
+
+func (r *nopReadCloser) Read([]byte) (n int, err error) { return }
+func (r *nopReadCloser) Close() error                   { return nil }
 
 ///////////////
 // lz4Stream //

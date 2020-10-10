@@ -143,6 +143,7 @@ func (s *Stream) Send(obj Obj) (err error) {
 	}
 	if obj.Reader == nil {
 		debug.Assert(hdr.IsHeaderOnly())
+		obj.Reader = nopRC
 	} else if debug.Enabled && hdr.IsHeaderOnly() {
 		b, _ := ioutil.ReadAll(obj.Reader)
 		debug.Assert(len(b) == 0)
