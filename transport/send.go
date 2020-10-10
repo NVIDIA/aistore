@@ -198,7 +198,7 @@ func (s *Stream) sendLoop(dryrun bool) {
 		s.wg.Wait()
 
 		// second, handle the last interrupted send
-		if s.sendoff.obj.Reader != nil {
+		if s.inObj() {
 			obj := &s.sendoff.obj
 			s.objDone(obj, s.term.err)
 		}
@@ -264,13 +264,13 @@ func (s *Stream) doRequest() (err error) {
 // as io.Reader
 func (s *Stream) Read(b []byte) (n int, err error) {
 	s.time.inSend.Store(true) // indication for Collector to delay cleanup
-	obj := &s.sendoff.obj
-	if obj.Reader != nil { // have object - fast path
+	if s.inObj() {
+		hdr := &s.sendoff.obj.Hdr
 		if s.sendoff.dod != 0 {
-			if !obj.Hdr.IsHeaderOnly() {
+			if !hdr.IsHeaderOnly() {
 				return s.sendData(b)
 			}
-			if !obj.Hdr.IsLast() {
+			if !hdr.IsLast() {
 				s.eoObj(nil)
 			} else {
 				err = io.EOF
@@ -352,10 +352,8 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 	return
 }
 
-//
-// end-of-object: updates stats, reset idle timeout, and post completion
+// end-of-object updates stats, reset idle timeout, and post completion
 // NOTE: reader.Close() is done by the completion handling code objDone
-//
 func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
 	hdr := &obj.Hdr
@@ -383,6 +381,8 @@ exit:
 	s.cmplCh <- cmpl{s.sendoff.obj, err}
 	s.sendoff = sendoff{}
 }
+
+func (s *Stream) inObj() bool { return s.sendoff.obj.Reader != nil } // see also: eoObj()
 
 ////////////////////
 // Obj and ObjHdr //
