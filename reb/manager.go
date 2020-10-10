@@ -213,7 +213,7 @@ func (reb *Manager) endStreams(err error) {
 	}
 }
 
-func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unpacker *cmn.ByteUnpack, objReader io.Reader) {
+func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cmn.ByteUnpack, objReader io.Reader) {
 	defer cmn.DrainReader(objReader)
 
 	ack := &regularAck{}
@@ -291,7 +291,7 @@ func (reb *Manager) recvObjRegular(hdr transport.Header, smap *cluster.Smap, unp
 	}
 }
 
-func (reb *Manager) rackSentCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+func (reb *Manager) rackSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 
@@ -323,7 +323,7 @@ func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
 	return smap, nil
 }
 
-func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 	if err != nil {
 		glog.Error(err)
 		return
@@ -364,7 +364,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 			daemonID: reb.t.Snode().DaemonID, stage: newStage,
 			rebID: reb.rebID.Load(), batch: int(batchID),
 		}
-		hdr = transport.Header{}
+		hdr = transport.ObjHdr{}
 		mm  = reb.t.SmallMMSA()
 	)
 	hdr.Opaque = reb.encodePushReq(&req, mm)
@@ -375,11 +375,11 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 	}
 }
 
-func (reb *Manager) pushSentCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+func (reb *Manager) pushSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 	reb.t.SmallMMSA().Free(hdr.Opaque)
 }
 
-func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 	if err != nil {
 		glog.Errorf("Failed to get notification %s from %s: %v", hdr.ObjName, hdr.Bck, err)
 		return
@@ -414,7 +414,7 @@ func (reb *Manager) recvPush(w http.ResponseWriter, hdr transport.Header, objRea
 	reb.stages.setStage(req.daemonID, req.stage, int64(req.batch))
 }
 
-func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
+func (reb *Manager) recvECAck(hdr transport.ObjHdr, unpacker *cmn.ByteUnpack) {
 	ack := &ecAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to unmarshal EC ACK for %s/%s: %v", hdr.Bck, hdr.ObjName, err)
@@ -422,7 +422,7 @@ func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
 	}
 
 	rt := &retransmitCT{
-		header:  transport.Header{Bck: hdr.Bck, ObjName: hdr.ObjName},
+		header:  transport.ObjHdr{Bck: hdr.Bck, ObjName: hdr.ObjName},
 		sliceID: int16(ack.sliceID), daemonID: ack.daemonID,
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
@@ -432,7 +432,7 @@ func (reb *Manager) recvECAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
 	reb.ec.ackCTs.remove(rt)
 }
 
-func (reb *Manager) recvRegularAck(hdr transport.Header, unpacker *cmn.ByteUnpack) {
+func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cmn.ByteUnpack) {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse acknowledge: %v", err)
@@ -461,7 +461,7 @@ func (reb *Manager) recvRegularAck(hdr transport.Header, unpacker *cmn.ByteUnpac
 	lom.Unlock(true)
 }
 
-func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.Header, _ io.Reader, err error) {
+func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.ObjHdr, _ io.Reader, err error) {
 	if err != nil {
 		glog.Error(err)
 		return
@@ -562,7 +562,7 @@ func (reb *Manager) abortRebalance() {
 			rebID:    reb.RebID(),
 			stage:    rebStageAbort,
 		}
-		hdr = transport.Header{}
+		hdr = transport.ObjHdr{}
 		mm  = reb.t.SmallMMSA()
 	)
 	hdr.Opaque = reb.encodePushReq(&req, mm)

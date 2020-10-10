@@ -163,7 +163,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 	// _ io.ReadCloser: pass copyMisssingReplicas reader argument(memsys.SGL type)
 	// instead of callback's reader argument(memsys.Reader type) to freeObject
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
-	cb := func(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
 			glog.Errorf("%s failed to send %s/%s to %v: %v", c.parent.t.Snode(), lom.Bck(), lom.ObjName, daemons, err)
 		}
@@ -362,7 +362,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	iReq.isSlice = true
 	mm := c.parent.t.SmallMMSA()
 	request := iReq.NewPack(mm)
-	hdr := transport.Header{
+	hdr := transport.ObjHdr{
 		Bck:     req.LOM.Bck().Bck,
 		ObjName: req.LOM.ObjName,
 		Opaque:  request,
@@ -667,8 +667,8 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 		}
 
 		// every slice's SGL must be freed upon transfer completion
-		cb := func(daemonID string, s *slice) transport.SendCallback {
-			return func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+		cb := func(daemonID string, s *slice) transport.ObjSentCB {
+			return func(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 				if err != nil {
 					glog.Errorf("%s failed to send %s/%s to %v: %v", c.parent.t.Snode(), req.LOM.Bck(), req.LOM.ObjName, daemonID, err)
 				}

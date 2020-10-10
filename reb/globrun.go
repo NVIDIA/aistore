@@ -546,7 +546,7 @@ func (rj *rebalanceJogger) jog(mpathInfo *fs.MountpathInfo) {
 	}
 }
 
-func (rj *rebalanceJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
+func (rj *rebalanceJogger) objSentCallback(hdr transport.ObjHdr, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
 	var (
 		lom = (*cluster.LOM)(lomptr)
 		t   = rj.m.t
@@ -671,7 +671,7 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.Snode().ID()}
 		mm     = rj.m.t.SmallMMSA()
 		opaque = ack.NewPack(mm)
-		hdr    = transport.Header{
+		hdr    = transport.ObjHdr{
 			Bck:     lom.Bck().Bck,
 			ObjName: lom.ObjName,
 			Opaque:  opaque,

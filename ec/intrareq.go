@@ -29,7 +29,7 @@ type (
 	// must set the same request type in response header
 	intraReqType = int
 
-	// An EC request sent via transport using Opaque field of transport.Header
+	// An EC request sent via transport using Opaque field of transport.ObjHdr
 	// between targets inside a cluster
 	intraReq struct {
 		// Request type

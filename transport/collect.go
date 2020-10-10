@@ -140,8 +140,9 @@ func (gc *collector) do() {
 				if s.term.err == nil {
 					s.term.err = errors.New(reasonUnknown)
 				}
-				for obj := range s.workCh {
-					s.objDone(&obj, s.term.err)
+				for streamable := range s.workCh {
+					obj := streamable.obj() // TODO -- FIXME
+					s.objDone(obj, s.term.err)
 				}
 				for cmpl := range s.cmplCh {
 					if !cmpl.obj.Hdr.IsLast() {
@@ -162,7 +163,7 @@ func (gc *collector) do() {
 			continue
 		}
 		if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
-			s.workCh <- Obj{Hdr: Header{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
+			s.workCh <- Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: active => inactive", s)
 			}
@@ -177,8 +178,9 @@ func (gc *collector) do() {
 func (gc *collector) drain(s *Stream) {
 	for {
 		select {
-		case obj := <-s.workCh:
-			s.objDone(&obj, s.term.err)
+		case streamable := <-s.workCh:
+			obj := streamable.obj() // TODO -- FIXME
+			s.objDone(obj, s.term.err)
 		default:
 			return
 		}

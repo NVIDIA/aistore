@@ -177,11 +177,10 @@ func (t *targetrunner) sendTo(lom *cluster.LOM, params cluster.SendToParams) err
 // will be sent when function finishes.
 func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 	cmn.Assert(params.HdrMeta != nil)
-
 	var (
 		wg  = &sync.WaitGroup{}
-		hdr = transport.Header{}
-		cb  = func(_ transport.Header, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
+		hdr = transport.ObjHdr{}
+		cb  = func(_ transport.ObjHdr, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
 			lom = (*cluster.LOM)(lomptr)
 			if params.Locked {
 				lom.Unlock(false)
@@ -208,7 +207,7 @@ func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 	return nil
 }
 
-func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 	if err != nil {
 		glog.Error(err)
 		return

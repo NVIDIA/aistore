@@ -207,7 +207,7 @@ func (c *putJogger) encode(req *Request) error {
 	return nil
 }
 
-func (c *putJogger) ctSendCallback(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
 	c.parent.t.SmallMMSA().Free(hdr.Opaque)
 	if err != nil {
 		glog.Errorf("failed to send o[%s/%s], err: %v", hdr.Bck, hdr.ObjName, err)
@@ -231,7 +231,7 @@ func (c *putJogger) cleanup(req *Request) error {
 
 	mm := c.parent.t.SmallMMSA()
 	request := c.parent.newIntraReq(reqDel, nil).NewPack(mm)
-	hdr := transport.Header{
+	hdr := transport.ObjHdr{
 		Bck:     req.LOM.Bck().Bck,
 		ObjName: req.LOM.ObjName,
 		Opaque:  request,
@@ -267,7 +267,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	}
 
 	// broadcast the replica to the targets
-	cb := func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+	cb := func(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
 			glog.Errorf("Failed to to %v: %v", nodes, err)
 		}

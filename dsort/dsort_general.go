@@ -376,7 +376,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				RecordObj: obj,
 			}
 			opaque := cmn.MustMarshal(req)
-			hdr := transport.Header{
+			hdr := transport.ObjHdr{
 				Opaque: opaque,
 			}
 
@@ -384,7 +384,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				beforeSend = mono.NanoTime()
 			}
 
-			cb := func(hdr transport.Header, r io.ReadCloser, _ unsafe.Pointer, err error) {
+			cb := func(hdr transport.ObjHdr, r io.ReadCloser, _ unsafe.Pointer, err error) {
 				if err != nil {
 					cbErr = err
 				}
@@ -481,7 +481,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 }
 
 func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
-	errHandler := func(err error, hdr transport.Header, node *cluster.Snode) {
+	errHandler := func(err error, hdr transport.ObjHdr, node *cluster.Snode) {
 		hdr.Opaque = []byte(err.Error())
 		hdr.ObjAttrs.Size = 0
 		if err = ds.streams.response.Send(transport.Obj{Hdr: hdr}, nil, node); err != nil {
@@ -489,7 +489,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 		}
 	}
 
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		req := remoteRequest{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 			ds.m.abort(fmt.Errorf("received damaged request: %s", err))
@@ -507,7 +507,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
-		respHdr := transport.Header{
+		respHdr := transport.ObjHdr{
 			ObjName: req.Record.MakeUniqueName(req.RecordObj),
 		}
 
@@ -588,7 +588,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 	}
 }
 
-func (ds *dsorterGeneral) responseCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.Pointer, err error) {
+func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, x unsafe.Pointer, err error) {
 	if ds.m.Metrics.extended {
 		dur := mono.Since(*(*int64)(x))
 		ds.m.Metrics.Creation.Lock()
@@ -612,7 +612,7 @@ func (ds *dsorterGeneral) postExtraction() {
 
 func (ds *dsorterGeneral) makeRecvResponseFunc() transport.Receive {
 	metrics := ds.m.Metrics.Creation
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		if err != nil {
 			ds.m.abort(err)
 			return

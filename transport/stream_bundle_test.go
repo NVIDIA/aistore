@@ -104,12 +104,12 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	slab, _ := MMSA.GetSlab(32 * cmn.KiB)
 	rbuf := slab.Alloc()
 	defer slab.Free(rbuf)
-	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		tassert.CheckFatal(t, err)
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, rbuf)
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 	}
-	callback := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 		numCompleted.Inc()
 	}
 

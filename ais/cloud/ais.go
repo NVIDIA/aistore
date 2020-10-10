@@ -357,9 +357,12 @@ func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bc
 
 func (m *AisCloudProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (buckets cmn.BucketNames, err error) {
 	var (
-		aisCluster, _ = m.remoteCluster(uuid)
-		remoteQuery   = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: query.Ns.Name}}
+		aisCluster  *remAisClust
+		remoteQuery = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: query.Ns.Name}}
 	)
+	if aisCluster, err = m.remoteCluster(uuid); err != nil {
+		return
+	}
 	err = m.try(cmn.Bck{}, func(_ cmn.Bck) (err error) {
 		buckets, err = api.ListBuckets(aisCluster.bp, remoteQuery)
 		if err != nil {

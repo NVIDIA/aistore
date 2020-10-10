@@ -172,7 +172,7 @@ func (dm *DataMover) Send(obj transport.Obj, roc cmn.ReadOpenCloser, tsi *cluste
 	return dm.data.streams.Send(obj, roc, tsi)
 }
 
-func (dm *DataMover) ACK(hdr transport.Header, cb transport.SendCallback, tsi *cluster.Snode) error {
+func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *cluster.Snode) error {
 	return dm.ack.streams.Send(transport.Obj{Hdr: hdr, Callback: cb}, nil, tsi)
 }
 
@@ -180,13 +180,13 @@ func (dm *DataMover) ACK(hdr transport.Header, cb transport.SendCallback, tsi *c
 // private
 //
 
-func (dm *DataMover) wrapRecvData(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+func (dm *DataMover) wrapRecvData(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 	dm.laterx.Store(true)
 	dm.data.recv(w, hdr, object, err)
 	dm.laterx.Store(true)
 }
 
-func (dm *DataMover) wrapRecvACK(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+func (dm *DataMover) wrapRecvACK(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 	dm.laterx.Store(true)
 	dm.ack.recv(w, hdr, object, err)
 	dm.laterx.Store(true)

@@ -601,7 +601,7 @@ func (m *Manager) unlock() {
 	m.mu.Unlock()
 }
 
-func (m *Manager) sentCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.Pointer, err error) {
+func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x unsafe.Pointer, err error) {
 	if m.Metrics.extended {
 		dur := mono.Since(*(*int64)(x))
 		m.Metrics.Creation.Lock()
@@ -620,7 +620,7 @@ func (m *Manager) sentCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.
 }
 
 func (m *Manager) makeRecvShardFunc() transport.Receive {
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		if err != nil {
 			m.abort(err)
 			return

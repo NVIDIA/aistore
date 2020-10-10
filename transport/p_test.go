@@ -32,7 +32,7 @@ import (
 
 var cpbuf = make([]byte, 32*cmn.KiB)
 
-func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+func receive10G(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 	cmn.AssertNoErr(err)
 	written, _ := io.CopyBuffer(ioutil.Discard, objReader, cpbuf)
 	cmn.Assert(written == hdr.ObjAttrs.Size)
@@ -147,13 +147,13 @@ func Test_CompletionCount(t *testing.T) {
 		mux                       = mux.NewServeMux()
 	)
 
-	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, cpbuf)
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
 	}
-	callback := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 		numCompleted.Inc()
 	}
 

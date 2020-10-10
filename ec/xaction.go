@@ -209,7 +209,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 	}
 	cmn.Assert((objAttrs.Size == 0 && reader == nil) || (objAttrs.Size != 0 && reader != nil))
 
-	rHdr := transport.Header{
+	rHdr := transport.ObjHdr{
 		Bck:      bck.Bck,
 		ObjName:  objName,
 		ObjAttrs: objAttrs,
@@ -219,7 +219,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 	r.ObjectsInc()
 	r.BytesAdd(objAttrs.Size)
 
-	cb := func(hdr transport.Header, c io.ReadCloser, _ unsafe.Pointer, err error) {
+	cb := func(hdr transport.ObjHdr, c io.ReadCloser, _ unsafe.Pointer, err error) {
 		r.t.SmallMMSA().Free(hdr.Opaque)
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
@@ -239,8 +239,8 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 //		- true - send lightweight request to all targets (usually reader is nil
 //			in this case)
 //	    - false - send a slice/replica/metadata to targets
-func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
-	reader cmn.ReadOpenCloser, cb transport.SendCallback, isRequest bool) error {
+func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
+	reader cmn.ReadOpenCloser, cb transport.ObjSentCB, isRequest bool) error {
 	nodes := make([]*cluster.Snode, 0, len(daemonIDs))
 	smap := r.smap.Get()
 	for _, id := range daemonIDs {
@@ -275,7 +275,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 // * request - request to send
 // * writer - an opened writer that will receive the replica/slice/meta
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
-	hdr := transport.Header{
+	hdr := transport.ObjHdr{
 		Bck:     lom.Bck().Bck,
 		ObjName: lom.ObjName,
 		Opaque:  request,
@@ -350,7 +350,7 @@ func (r *xactECBase) unregWriter(uname string) {
 //      The counter is used for sending slices of one big SGL to a few nodes. In
 //		this case every slice must be sent to only one target, and transport bundle
 //		cannot help to track automatically when SGL should be freed.
-func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSource, cb transport.SendCallback) error {
+func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSource, cb transport.ObjSentCB) error {
 	if src.metadata != nil && src.metadata.ObjVersion == "" {
 		src.metadata.ObjVersion = lom.Version()
 	}
@@ -375,7 +375,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	} else if lom.Cksum() != nil {
 		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
 	}
-	hdr := transport.Header{
+	hdr := transport.ObjHdr{
 		Bck:      lom.Bck().Bck,
 		ObjName:  lom.ObjName,
 		ObjAttrs: objAttrs,
@@ -383,7 +383,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	}
 	if cb == nil && src.obj != nil {
 		obj := src.obj
-		cb = func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+		cb = func(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 			mm.Free(hdr.Opaque)
 			if obj != nil {
 				obj.release()
@@ -395,7 +395,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	} else {
 		// wrapper to properly cleanup memory allocated by MMSA
 		oldCallback := cb
-		cb = func(hdr transport.Header, reader io.ReadCloser, ptr unsafe.Pointer, err error) {
+		cb = func(hdr transport.ObjHdr, reader io.ReadCloser, ptr unsafe.Pointer, err error) {
 			mm.Free(hdr.Opaque)
 			if oldCallback != nil {
 				oldCallback(hdr, reader, ptr, err)

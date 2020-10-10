@@ -13,7 +13,6 @@ import (
 	"math"
 	"runtime"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -48,73 +47,12 @@ const (
 	reasonStopped = "stopped"
 )
 
-// API types
+// private types
 type (
-	Stream struct {
-		workCh   chan Obj     // aka SQ: next object to stream
-		cmplCh   chan cmpl    // aka SCQ; note that SQ and SCQ together form a FIFO
-		callback SendCallback // to free SGLs, close files, etc.
-		sendoff  sendoff
-		lz4s     lz4Stream
-		streamBase
+	streamable interface {
+		obj() *Obj
+		msg() *Msg
 	}
-	// advanced usage: additional stream control
-	Extra struct {
-		IdleTimeout time.Duration // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
-		Callback    SendCallback  // typical usage: to free SGLs, close files, etc.
-		Compression string        // see CompressAlways, etc. enum
-		MMSA        *memsys.MMSA  // compression-related buffering
-		Config      *cmn.Config
-	}
-	// stream stats
-	Stats struct {
-		Num            atomic.Int64 // number of transferred objects including zero size (header-only) objects
-		Size           atomic.Int64 // transferred object size (does not include transport headers)
-		Offset         atomic.Int64 // stream offset, in bytes
-		CompressedSize atomic.Int64 // compressed size (NOTE: converges to the actual compressed size over time)
-	}
-	EndpointStats map[uint64]*Stats // all stats for a given http endpoint defined by a tuple(network, trname) by session ID
-
-	// object attrs
-	ObjectAttrs struct {
-		Atime      int64  // access time - nanoseconds since UNIX epoch
-		Size       int64  // size of objects in bytes
-		CksumType  string // checksum type
-		CksumValue string // checksum of the object produced by given checksum type
-		Version    string // version of the object
-	}
-	// object header
-	Header struct {
-		Bck      cmn.Bck
-		ObjName  string
-		ObjAttrs ObjectAttrs // attributes/metadata of the sent object
-		Opaque   []byte      // custom control (optional)
-	}
-	// object to transmit
-	Obj struct {
-		Hdr      Header         // object header
-		Reader   io.ReadCloser  // reader, to read the object, and close when done
-		Callback SendCallback   // callback fired when sending is done OR when the stream terminates (see term.reason)
-		CmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
-		// private
-		prc *atomic.Int64 // if present, ref-counts num sent objects to call SendCallback only once
-	}
-
-	// object-sent callback that has the following signature can optionally be defined on a:
-	// a) per-stream basis (via NewStream constructor - see Extra struct above)
-	// b) for a given object that is being sent (for instance, to support a call-per-batch semantics)
-	// Naturally, object callback "overrides" the per-stream one: when object callback is defined
-	// (i.e., non-nil), the stream callback is ignored/skipped.
-	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
-	SendCallback func(Header, io.ReadCloser, unsafe.Pointer, error)
-
-	StreamCollector struct {
-		cmn.Named
-	}
-)
-
-// internal types
-type (
 	lz4Stream struct {
 		s             *Stream
 		zw            *lz4.Writer // orig reader => zw
@@ -132,8 +70,6 @@ type (
 		obj Obj
 		err error
 	}
-	nopReadCloser struct{}
-
 	collector struct {
 		streams map[string]*Stream
 		heap    []*Stream
@@ -148,110 +84,35 @@ type (
 )
 
 var (
-	nopRC   = &nopReadCloser{}      // read and close stubs
 	nextSID = *atomic.NewInt64(100) // unique session IDs starting from 101
 	sc      = &StreamCollector{}    // idle timer and house-keeping (slow path)
 	gc      *collector              // real stream collector
 )
 
-////////////////////////////
-// Stream: public methods //
-////////////////////////////
+// interface guard
+var (
+	_ streamable = &Obj{}
+	_ streamable = &Msg{}
+)
 
-func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
-	s = &Stream{streamBase: *newStreamBase(client, toURL, extra)}
+/////////////////////////////
+// Stream: private methods //
+/////////////////////////////
 
-	if extra != nil {
-		s.callback = extra.Callback
-		if extra.Compressed() {
-			config := extra.Config
-			if config == nil {
-				config = cmn.GCO.Get()
-			}
-			s.lz4s.s = s
-			s.lz4s.blockMaxSize = config.Compression.BlockMaxSize
-			s.lz4s.frameChecksum = config.Compression.Checksum
-			mem := extra.MMSA
-			if mem == nil {
-				mem = memsys.DefaultPageMM()
-				glog.Warningln("Using global memory manager for streaming inline compression")
-			}
-			if s.lz4s.blockMaxSize >= memsys.MaxPageSlabSize {
-				s.lz4s.sgl = mem.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
-			} else {
-				s.lz4s.sgl = mem.NewSGL(cmn.KiB*64, cmn.KiB*64)
-			}
-
-			s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cmn.B2S(int64(s.lz4s.blockMaxSize), 0))
-		}
-	}
-
-	// burst size: the number of objects the caller is permitted to post for sending
-	// without experiencing any sort of back-pressure
-	burst := burst()
-	s.workCh = make(chan Obj, burst)  // Send Qeueue or SQ
-	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue or SCQ
-
-	s.wg.Add(2)
-	go s.sendLoop(dryrun()) // handle SQ
-	go s.cmplLoop()         // handle SCQ
-
-	gc.ctrlCh <- ctrl{s, true /* collect */}
-	return
-}
-
-// Asynchronously send an object (transport.Obj) defined by its header and its reader.
-//
-// The sending pipeline is implemented as a pair (SQ, SCQ) where the former is a send
-// queue realized as workCh, and the latter is a send completion queue (cmplCh).
-// Together SQ and SCQ form a FIFO.
-//
-// * header-only objects are supported; when there's no data to send (that is,
-//   when the header's Dsize field is set to zero), the reader is not required and the
-//   corresponding argument in Send() can be set to nil.
-// * object reader is always closed by the code that handles send completions.
-//   In the case when SendCallback is provided (i.e., non-nil), the closing is done
-//   right after calling this callback - see objDone below for details.
-// * Optional reference counting is also done by (and in) the objDone, so that the
-//   SendCallback gets called if and only when the refcount (if provided i.e., non-nil)
-//   reaches zero.
-// * For every transmission of every object there's always an objDone() completion
-//   (with its refcounting and reader-closing). This holds true in all cases including
-//   network errors that may cause sudden and instant termination of the underlying
-//   stream(s).
-func (s *Stream) Send(obj Obj) (err error) {
-	s.time.inSend.Store(true) // an indication for Collector to postpone cleanup
-	hdr := &obj.Hdr
+func (s *Stream) startSend(hdr fmt.Stringer, verbose bool) (err error) {
+	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
 	if s.Terminated() {
-		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
-			s, *s.term.reason, s.term.err, hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Size)
-		glog.Errorln(err)
+		err = fmt.Errorf("%s terminated(%s, %v), dropping %s", s, *s.term.reason, s.term.err, hdr)
+		glog.Error(err)
 		return
 	}
 	if s.sessST.CAS(inactive, active) {
 		s.postCh <- struct{}{}
-		if glog.FastV(4, glog.SmoduleTransport) {
+		if verbose {
 			glog.Infof("%s: inactive => active", s)
 		}
 	}
-	// next object => SQ
-	if obj.Reader == nil {
-		cmn.Assert(hdr.IsHeaderOnly())
-		obj.Reader = nopRC
-	} else if debug.Enabled && hdr.IsHeaderOnly() {
-		b, _ := ioutil.ReadAll(obj.Reader)
-		debug.Assert(len(b) == 0)
-	}
-	s.workCh <- obj
-	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s: send %s/%s(%d)[sq=%d]", s, hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Size, len(s.workCh))
-	}
 	return
-}
-
-func (s *Stream) Fin() {
-	_ = s.Send(Obj{Hdr: Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}})
-	s.wg.Wait()
 }
 
 func (s *Stream) terminate() {
@@ -261,7 +122,7 @@ func (s *Stream) terminate() {
 
 	s.Stop()
 
-	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
+	hdr := ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}
 	obj := Obj{Hdr: hdr}
 	s.cmplCh <- cmpl{obj, s.term.err}
 	s.term.mu.Unlock()
@@ -279,9 +140,27 @@ func (s *Stream) terminate() {
 	}
 }
 
-//
-// internal methods including sending and receiving-completions logic, each running in its own goroutine
-//
+func (s *Stream) initCompression(extra *Extra) {
+	config := extra.Config
+	if config == nil {
+		config = cmn.GCO.Get()
+	}
+	s.lz4s.s = s
+	s.lz4s.blockMaxSize = config.Compression.BlockMaxSize
+	s.lz4s.frameChecksum = config.Compression.Checksum
+	mem := extra.MMSA
+	if mem == nil {
+		mem = memsys.DefaultPageMM()
+		glog.Warningln("Using global memory manager for streaming inline compression")
+	}
+	if s.lz4s.blockMaxSize >= memsys.MaxPageSlabSize {
+		s.lz4s.sgl = mem.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
+	} else {
+		s.lz4s.sgl = mem.NewSGL(cmn.KiB*64, cmn.KiB*64)
+	}
+
+	s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cmn.B2S(int64(s.lz4s.blockMaxSize), 0))
+}
 
 func (s *Stream) compressed() bool { return s.lz4s.s == s }
 
@@ -316,14 +195,15 @@ func (s *Stream) sendLoop(dryrun bool) {
 		// first, wait for the SCQ/cmplCh to empty
 		s.wg.Wait()
 
-		// second, handle the last send that was interrupted
+		// second, handle the last interrupted send
 		if s.sendoff.obj.Reader != nil {
 			obj := &s.sendoff.obj
 			s.objDone(obj, s.term.err)
 		}
 		// finally, handle pending SQ
-		for obj := range s.workCh {
-			s.objDone(&obj, s.term.err)
+		for streamable := range s.workCh {
+			obj := streamable.obj() // TODO -- FIXME
+			s.objDone(obj, s.term.err)
 		}
 	}
 }
@@ -399,14 +279,14 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		}
 	}
 repeat:
-	var ok bool
 	select {
-	case s.sendoff.obj, ok = <-s.workCh: // next object OR idle tick
+	case streamable, ok := <-s.workCh: // next object OR idle tick
 		if !ok {
 			err = fmt.Errorf("%s closed prior to stopping", s)
 			debug.Infof("%v", err)
 			return
 		}
+		s.sendoff.obj = *streamable.obj() // TODO -- FIXME
 		if s.sendoff.obj.Hdr.IsIdleTick() {
 			if len(s.workCh) > 0 {
 				goto repeat
@@ -476,21 +356,21 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 //
 func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
+	hdr := &obj.Hdr
 	s.Sizecur += s.sendoff.off
 	s.stats.Offset.Add(s.sendoff.off)
 	if err != nil {
 		goto exit
 	}
-	if s.sendoff.off != obj.Hdr.ObjAttrs.Size {
-		err = fmt.Errorf("%s: obj %s/%s offset %d != %d size",
-			s, s.sendoff.obj.Hdr.Bck, s.sendoff.obj.Hdr.ObjName, s.sendoff.off, obj.Hdr.ObjAttrs.Size)
+	if s.sendoff.off != hdr.ObjAttrs.Size {
+		err = fmt.Errorf("%s: %s offset %d != size", s, hdr, s.sendoff.off)
 		goto exit
 	}
-	s.stats.Size.Add(obj.Hdr.ObjAttrs.Size)
+	s.stats.Size.Add(hdr.ObjAttrs.Size)
 	s.Numcur++
 	s.stats.Num.Inc()
 	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.Hdr.ObjAttrs.Size, s.Numcur, s.stats.Num.Load(), obj.Hdr.ObjName)
+		glog.Infof("%s: sent %s (%d/%d)", s, hdr, s.Numcur, s.stats.Num.Load())
 	}
 exit:
 	if err != nil {
@@ -503,8 +383,11 @@ exit:
 }
 
 ////////////////////
-// Obj and Header //
+// Obj and ObjHdr //
 ////////////////////
+
+func (obj Obj) obj() *Obj { return &obj }
+func (obj Obj) msg() *Msg { return nil }
 
 func (obj *Obj) SetPrc(n int) {
 	// when there's a `sent` callback and more than one destination
@@ -513,11 +396,11 @@ func (obj *Obj) SetPrc(n int) {
 	}
 }
 
-func (hdr *Header) IsLast() bool       { return hdr.ObjAttrs.Size == lastMarker }
-func (hdr *Header) IsIdleTick() bool   { return hdr.ObjAttrs.Size == tickMarker }
-func (hdr *Header) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.IsLast() }
+func (hdr *ObjHdr) IsLast() bool       { return hdr.ObjAttrs.Size == lastMarker }
+func (hdr *ObjHdr) IsIdleTick() bool   { return hdr.ObjAttrs.Size == tickMarker }
+func (hdr *ObjHdr) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.IsLast() }
 
-func (hdr *Header) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName string, bck cmn.Bck, opaque []byte) {
+func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName string, bck cmn.Bck, opaque []byte) {
 	hdr.Bck = bck
 	hdr.ObjName = objName
 	hdr.Opaque = opaque
@@ -529,11 +412,27 @@ func (hdr *Header) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName strin
 	hdr.ObjAttrs.Version = meta.Version()
 }
 
+func (hdr *ObjHdr) String() string {
+	if hdr.IsHeaderOnly() {
+		return fmt.Sprintf("hdr %s/%s", hdr.Bck, hdr.ObjName)
+	}
+	return fmt.Sprintf("obj %s/%s(size=%d)", hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Size)
+}
+
+////////////////////
+// Msg and MsgHdr //
+////////////////////
+
+func (msg Msg) obj() *Obj { return nil }
+func (msg Msg) msg() *Msg { return &msg }
+
+func (hdr *MsgHdr) String() string { return hdr.RecvHandler }
+
 //////////////////////////
 // header serialization //
 //////////////////////////
 
-func (s *Stream) insHeader(hdr Header) (l int) {
+func (s *Stream) insHeader(hdr ObjHdr) (l int) {
 	l = cmn.SizeofI64 * 2
 	l = insString(l, s.maxheader, hdr.Bck.Name)
 	l = insString(l, s.maxheader, hdr.ObjName)
@@ -610,13 +509,6 @@ func (stats *Stats) CompressionRatio() float64 {
 	bytesSent := stats.CompressedSize.Load()
 	return float64(bytesRead) / float64(bytesSent)
 }
-
-///////////////////
-// nopReadCloser //
-///////////////////
-
-func (r *nopReadCloser) Read([]byte) (n int, err error) { return }
-func (r *nopReadCloser) Close() error                   { return nil }
 
 ///////////////
 // lz4Stream //

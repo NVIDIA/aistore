@@ -305,7 +305,7 @@ func (ds *dsorterMem) preShardCreation(shardName string, mpathInfo *fs.Mountpath
 		shardName: shardName,
 	}
 	opaque := bsi.NewPack(ds.m.ctx.t.SmallMMSA())
-	if err := ds.streams.builder.Send(transport.Obj{Hdr: transport.Header{Opaque: opaque}}, nil); err != nil {
+	if err := ds.streams.builder.Send(transport.Obj{Hdr: transport.ObjHdr{Opaque: opaque}}, nil); err != nil {
 		return err
 	}
 	ds.creationPhase.requestedShards <- shardName // we also need to inform ourselves
@@ -478,7 +478,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 			RecordObj: obj,
 		}
 		opaque = cmn.MustMarshal(req)
-		hdr    = transport.Header{
+		hdr    = transport.ObjHdr{
 			Opaque: opaque,
 		}
 
@@ -572,7 +572,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 func (ds *dsorterMem) postExtraction() {}
 
 func (ds *dsorterMem) makeRecvRequestFunc() transport.Receive {
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		if err != nil {
 			ds.m.abort(err)
 			return
@@ -597,7 +597,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.Receive {
 
 func (ds *dsorterMem) makeRecvResponseFunc() transport.Receive {
 	metrics := ds.m.Metrics.Creation
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		if err != nil {
 			ds.m.abort(err)
 			return

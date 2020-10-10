@@ -85,7 +85,7 @@ func (mgr *Manager) initECBundles() {
 	}
 	cmn.AssertMsg(mgr.reqBundle == nil && mgr.respBundle == nil, "EC Bundles have been already initialized")
 
-	cbReq := func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
 			glog.Errorf("failed to request %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		}
@@ -194,7 +194,7 @@ func (mgr *Manager) getBckXactsUnlocked(bckName string) *BckXacts {
 }
 
 // A function to process command requests from other targets
-func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 	if err != nil {
 		glog.Errorf("request failed: %v", err)
 		return
@@ -231,7 +231,7 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.Header, obj
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
-func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 	if err != nil {
 		glog.Errorf("receive failed: %v", err)
 		return
@@ -384,9 +384,9 @@ func (mgr *Manager) BucketsMDChanged() {
 	mgr.Unlock()
 
 	if newBckMD.IsECUsed() && !oldBckMD.IsECUsed() {
-		// init EC streams if there were not initialized at startup;
-		// no need to close them when the last EC bucket is disabled
-		// as they timeout (when idle) and auto-close.
+		// init EC streams if they were not initialized at startup;
+		// no need to close when the last EC bucket is disabled -
+		// streams timeout (when idle) and auto-close.
 		mgr.initECBundles()
 	} else if !newBckMD.IsECUsed() && oldBckMD.IsECUsed() {
 		mgr.closeECBundles()

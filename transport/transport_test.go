@@ -95,7 +95,7 @@ func Example_headers() {
 			return
 		}
 		var (
-			hdr       transport.Header
+			hdr       transport.ObjHdr
 			hlen, off int
 		)
 		for {
@@ -127,12 +127,12 @@ func Example_headers() {
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
 	var wg sync.WaitGroup
-	cb := func(transport.Header, io.ReadCloser, unsafe.Pointer, error) {
+	cb := func(transport.ObjHdr, io.ReadCloser, unsafe.Pointer, error) {
 		wg.Done()
 	}
 	sgl1 := MMSA.NewSGL(0)
 	sgl1.Write([]byte(txt1))
-	hdr := transport.Header{
+	hdr := transport.ObjHdr{
 		Bck: cmn.Bck{
 			Name:     "abc",
 			Provider: cmn.ProviderAmazon,
@@ -154,7 +154,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 
 	sgl2 := MMSA.NewSGL(0)
 	sgl2.Write([]byte(txt2))
-	hdr = transport.Header{
+	hdr = transport.ObjHdr{
 		Bck: cmn.Bck{
 			Name:     "abracadabra",
 			Provider: cmn.ProviderAIS,
@@ -176,7 +176,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 }
 
 func Example_mux() {
-	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		object, err := ioutil.ReadAll(objReader)
 		if err != nil {
@@ -403,7 +403,7 @@ func Test_ObjAttrs(t *testing.T) {
 	defer ts.Close()
 
 	var receivedCount atomic.Int64
-	recvFunc := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	recvFunc := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
@@ -429,7 +429,7 @@ func Test_ObjAttrs(t *testing.T) {
 	for idx, attrs := range testAttrs {
 		var (
 			reader io.ReadCloser
-			hdr    = transport.Header{
+			hdr    = transport.ObjHdr{
 				Bck: cmn.Bck{
 					Provider: cmn.ProviderAIS,
 				},
@@ -527,7 +527,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 
 func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 	totalReceived := new(int64)
-	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	return totalReceived, func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		slab, _ := MMSA.GetSlab(32 * cmn.KiB)
 		buf := slab.Alloc()
@@ -549,7 +549,7 @@ func newRand(seed int64) *rand.Rand {
 	return random
 }
 
-func genStaticHeader() (hdr transport.Header) {
+func genStaticHeader() (hdr transport.ObjHdr) {
 	hdr.Bck = cmn.Bck{
 		Name:     "a",
 		Provider: cmn.ProviderAIS,
@@ -560,7 +560,7 @@ func genStaticHeader() (hdr transport.Header) {
 	return
 }
 
-func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
+func genRandomHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 	x := random.Int63()
 	hdr.Bck.Name = strconv.FormatInt(x, 10)
 	hdr.ObjName = path.Join(hdr.Bck.Name, strconv.FormatInt(math.MaxInt64-x, 10))
@@ -586,14 +586,14 @@ func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 
 type randReader struct {
 	buf    []byte
-	hdr    transport.Header
+	hdr    transport.ObjHdr
 	slab   *memsys.Slab
 	off    int64
 	random *rand.Rand
 	clone  bool
 }
 
-func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab) *randReader {
+func newRandReader(random *rand.Rand, hdr transport.ObjHdr, slab *memsys.Slab) *randReader {
 	buf := slab.Alloc()
 	_, err := random.Read(buf)
 	if err != nil {
@@ -602,7 +602,7 @@ func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab) *
 	return &randReader{buf: buf, hdr: hdr, slab: slab, random: random}
 }
 
-func makeRandReader() (transport.Header, *randReader) {
+func makeRandReader() (transport.ObjHdr, *randReader) {
 	slab, err := MMSA.GetSlab(32 * cmn.KiB)
 	if err != nil {
 		panic("Failed getting slab: " + err.Error())
@@ -654,7 +654,7 @@ type randReaderCtx struct {
 	idx    int
 }
 
-func (rrc *randReaderCtx) sentCallback(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
+func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 	if err != nil {
 		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bck, hdr.ObjName, err)
 	}

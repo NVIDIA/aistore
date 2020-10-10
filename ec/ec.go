@@ -353,7 +353,7 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 }
 
 // Saves slice and its metafile
-func WriteSliceAndMeta(t cluster.Target, hdr transport.Header, data io.Reader, md []byte) error {
+func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, data io.Reader, md []byte) error {
 	ct, err := cluster.NewCTFromBO(hdr.Bck.Name, hdr.Bck.Provider, hdr.ObjName, t.Bowner(), SliceType)
 	if err != nil {
 		return err
@@ -372,7 +372,7 @@ func WriteSliceAndMeta(t cluster.Target, hdr transport.Header, data io.Reader, m
 	return err
 }
 
-func LomFromHeader(t cluster.Target, hdr transport.Header) (*cluster.LOM, error) {
+func LomFromHeader(t cluster.Target, hdr transport.ObjHdr) (*cluster.LOM, error) {
 	lom := &cluster.LOM{T: t, ObjName: hdr.ObjName}
 	if err := lom.Init(hdr.Bck); err != nil {
 		return nil, err

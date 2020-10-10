@@ -162,7 +162,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 	}
 }
 
-func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.Header, object io.Reader) {
+func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object io.Reader) {
 	drain := func() {
 		if err := cmn.DrainReader(object); err != nil {
 			glog.Warningf("Failed to drain reader %s/%s: %v", hdr.Bck, hdr.ObjName, err)

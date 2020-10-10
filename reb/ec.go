@@ -156,7 +156,7 @@ type (
 	// CT destination (to use later for retransmitting lost CTs)
 	retransmitCT struct {
 		daemonID string           // destination
-		header   transport.Header // original transport header copy
+		header   transport.ObjHdr // original transport header copy
 		sliceID  int16
 	}
 	// Struct to receive data from GET slice API request
@@ -324,7 +324,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 			rebID:    reb.rebID.Load(),
 			md:       ct.meta,
 		}
-		hdr = transport.Header{
+		hdr = transport.ObjHdr{
 			Bck:      ct.Bck,
 			ObjName:  ct.ObjName,
 			ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
@@ -356,7 +356,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 }
 
 // Track the number of sent CTs
-func (reb *Manager) transportECCB(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, _ error) {
+func (reb *Manager) transportECCB(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, _ error) {
 	reb.ec.onAir.Dec()
 }
 
@@ -377,7 +377,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 			md:       &newMeta,
 		}
 		size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
-		hdr  = transport.Header{
+		hdr  = transport.ObjHdr{
 			Bck:      ct.Bck,
 			ObjName:  ct.ObjName,
 			ObjAttrs: transport.ObjectAttrs{Size: size},
@@ -414,7 +414,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 //   1. Full object/replica is received
 //   2. A CT is received and this target is not the default target (it
 //      means that the CTs came from default target after EC had been rebuilt)
-func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Header) error {
+func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.ObjHdr) error {
 	cmn.Assert(req.md != nil)
 	var (
 		err      error
@@ -452,7 +452,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Hea
 }
 
 // Receives a CT from another target, saves to local drive because it is a missing one
-func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Reader) error {
+func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Reader) error {
 	const fmtErrCleanedUp = "%s/%s slice %d has been already cleaned up"
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s GOT CT for %s/%s from %s", reb.t.Snode(), hdr.Bck, hdr.ObjName, req.daemonID)
@@ -568,7 +568,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.Header, reader io.Read
 }
 
 // receiving EC CT or EC namespace
-func (reb *Manager) recvECData(hdr transport.Header, unpacker *cmn.ByteUnpack, reader io.Reader) {
+func (reb *Manager) recvECData(hdr transport.ObjHdr, unpacker *cmn.ByteUnpack, reader io.Reader) {
 	defer cmn.DrainReader(reader)
 
 	req := &pushReq{}
@@ -880,7 +880,7 @@ func (reb *Manager) exchange(md *rebArgs) error {
 		}
 		body   = cmn.MustMarshal(cts)
 		opaque = req.NewPack(nil, rebMsgEC)
-		hdr    = transport.Header{
+		hdr    = transport.ObjHdr{
 			ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
 			Opaque:   opaque,
 		}
@@ -1770,7 +1770,7 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 		if cksumType == "" && cksumValue != "" {
 			glog.Errorf("%s/%s[%d] missing checksum type", obj.bck.Name, obj.objName, s.SliceID)
 		}
-		hdr := transport.Header{
+		hdr := transport.ObjHdr{
 			Bck:     obj.bck,
 			ObjName: obj.objName,
 			ObjAttrs: transport.ObjectAttrs{
