@@ -119,6 +119,7 @@ type Target interface {
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(lom *LOM, params PutObjectParams) error
 	EvictObject(lom *LOM) error
+	DeleteObject(ctx context.Context, lom *LOM, evict bool) (error, int)
 	CopyObject(lom *LOM, params CopyObjectParams, localOnly bool) (bool, int64, error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)

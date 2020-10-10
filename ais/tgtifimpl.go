@@ -274,7 +274,7 @@ func (t *targetrunner) _sendPUT(params cluster.SendToParams) error {
 
 func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
 	ctx := context.Background()
-	err, _ := t.objDelete(ctx, lom, true /*evict*/)
+	err, _ := t.DeleteObject(ctx, lom, true /*evict*/)
 	return err
 }
 

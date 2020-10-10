@@ -7,7 +7,6 @@ package runners
 import (
 	"errors"
 	"net/http"
-	"os"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -47,44 +46,9 @@ func parseTemplate(template string) (cmn.ParsedTemplate, error) {
 // Evict/Delete/Prefect
 //
 
-func (r *evictDelete) objDelete(args *registry.DeletePrefetchArgs, lom *cluster.LOM) error {
-	var (
-		cloudErr   error
-		delFromAIS bool
-	)
-	lom.Lock(true)
-	defer lom.Unlock(true)
-
-	var (
-		bck          = lom.Bck()
-		delFromCloud = bck.IsRemote() && !args.Evict
-	)
-	if err := lom.Load(false); err == nil {
-		delFromAIS = true
-	} else if !cmn.IsErrObjNought(err) {
-		return err
-	}
-
-	if delFromCloud {
-		if err, _ := r.t.Cloud(bck).DeleteObj(args.Ctx, lom); err != nil {
-			cloudErr = err
-		}
-	}
-	if delFromAIS {
-		errRet := lom.Remove()
-		if errRet != nil {
-			if !os.IsNotExist(errRet) {
-				if cloudErr != nil {
-					glog.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
-				}
-				return errRet
-			}
-		}
-		if args.Evict {
-			cmn.Assert(bck.IsRemote())
-		}
-	}
-	return cloudErr
+func (r *evictDelete) objDelete(args *registry.DeletePrefetchArgs, lom *cluster.LOM) (err error) {
+	err, _ = r.t.DeleteObject(args.Ctx, lom, args.Evict)
+	return
 }
 
 func (r *evictDelete) doObjEvictDelete(args *registry.DeletePrefetchArgs, objName string) error {

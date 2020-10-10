@@ -937,7 +937,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	err, errCode := t.objDelete(context.Background(), lom, evict)
+	err, errCode := t.DeleteObject(context.Background(), lom, evict)
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.invalmsghdlrsilent(w, r,
@@ -1368,7 +1368,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	}
 }
 
-func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bool) (error, int) {
+func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict bool) (error, int) {
 	var (
 		cloudErr     error
 		cloudErrCode int
