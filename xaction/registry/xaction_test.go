@@ -73,8 +73,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			xact, _ := xactions.RenewPrefetch(tMock, bck, evArgs)
-			ch <- xact
+			ch <- xactions.RenewPrefetch(tMock, bck, evArgs)
 		}()
 	}
 
@@ -128,6 +127,9 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		tMock   = cluster.NewTargetMock(bmd)
 	)
+
+	defer xactions.AbortAll()
+
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
@@ -145,7 +147,6 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 		"AbortAllGlobal: expected global xaction to be aborted")
 	tassert.Errorf(t, xactBck != nil && !xactBck.Aborted(),
 		"AbortAllGlobal: expected bucket xaction to be running")
-	xactions.AbortAll()
 }
 
 func TestXactionAbortBuckets(t *testing.T) {
@@ -156,6 +157,9 @@ func TestXactionAbortBuckets(t *testing.T) {
 		bckTo    = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		tMock    = cluster.NewTargetMock(bmd)
 	)
+
+	defer xactions.AbortAll()
+
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
@@ -173,7 +177,6 @@ func TestXactionAbortBuckets(t *testing.T) {
 		"AbortAllGlobal: expected global xaction to be running")
 	tassert.Errorf(t, xactBck != nil && xactBck.Aborted(),
 		"AbortAllGlobal: expected bucket xaction to be aborted")
-	xactions.AbortAll()
 }
 
 // TODO: extend this to include all cases of the Query
@@ -191,6 +194,9 @@ func TestXactionQueryFinished(t *testing.T) {
 		bck2     = cluster.NewBck("test2", cmn.ProviderAIS, cmn.NsGlobal)
 		tMock    = cluster.NewTargetMock(bmd)
 	)
+
+	defer xactions.AbortAll()
+
 	bmd.Add(bck1)
 	bmd.Add(bck2)
 
@@ -204,8 +210,8 @@ func TestXactionQueryFinished(t *testing.T) {
 	xactBck1.Finish()
 	xactBck1, err = xactions.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
-	_, err = xactions.RenewPrefetch(tMock, bck1, &registry.DeletePrefetchArgs{})
-	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
+	xactBck3 := xactions.RenewPrefetch(tMock, bck1, &registry.DeletePrefetchArgs{})
+	tassert.Errorf(t, xactBck3 != nil, "Xaction must be created %v", err)
 
 	scenarioName := func(tc testConfig) string {
 		name := ""

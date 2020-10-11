@@ -154,7 +154,10 @@ func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
 func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {
 	xact := mgr.getBckXacts(bck.Name).Get()
 	if xact == nil || xact.Finished() {
-		xact = registry.Registry.RenewBucketXact(cmn.ActECGet, bck).(*XactGet)
+		x, err := registry.Registry.RenewBucketXact(cmn.ActECGet, bck)
+		cmn.AssertNoErr(err)
+
+		xact = x.(*XactGet)
 		mgr.getBckXacts(bck.Name).SetGet(xact)
 	}
 	return xact
@@ -163,7 +166,10 @@ func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {
 func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) *XactPut {
 	xact := mgr.getBckXacts(bck.Name).Put()
 	if xact == nil || xact.Finished() {
-		xact = registry.Registry.RenewBucketXact(cmn.ActECPut, bck).(*XactPut)
+		x, err := registry.Registry.RenewBucketXact(cmn.ActECPut, bck)
+		cmn.AssertNoErr(err)
+
+		xact = x.(*XactPut)
 		mgr.getBckXacts(bck.Name).SetPut(xact)
 	}
 	return xact
@@ -172,7 +178,10 @@ func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) *XactPut {
 func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) *XactRespond {
 	xact := mgr.getBckXacts(bck.Name).Req()
 	if xact == nil || xact.Finished() {
-		xact = registry.Registry.RenewBucketXact(cmn.ActECRespond, bck).(*XactRespond)
+		x, err := registry.Registry.RenewBucketXact(cmn.ActECRespond, bck)
+		cmn.AssertNoErr(err)
+
+		xact = x.(*XactRespond)
 		mgr.getBckXacts(bck.Name).SetReq(xact)
 	}
 	return xact

@@ -91,7 +91,7 @@ func (g *fsprungroup) addMpathEvent(action, mpath string) {
 	registry.Registry.AbortAllMountpathsXactions()
 	go func() {
 		g.t.runResilver("", false /*skipGlobMisplaced*/)
-		registry.Registry.MakeNCopiesOnMpathEvent(g.t, "add-mp")
+		registry.Registry.RenewMakeNCopies(g.t, "add-mp")
 	}()
 	g.checkEnable(action, mpath)
 }
@@ -104,7 +104,7 @@ func (g *fsprungroup) delMpathEvent(action string) {
 
 	go func() {
 		g.t.runResilver("", false /*skipGlobMisplaced*/)
-		registry.Registry.MakeNCopiesOnMpathEvent(g.t, "del-mp")
+		registry.Registry.RenewMakeNCopies(g.t, "del-mp")
 	}()
 }
 

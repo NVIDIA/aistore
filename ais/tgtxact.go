@@ -154,11 +154,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 			Ctx:      context.Background(),
 			RangeMsg: &cmn.RangeMsg{},
 		}
-		xact, err := registry.Registry.RenewPrefetch(t, bck, args)
-		if err != nil {
-			return err
-		}
-
+		xact := registry.Registry.RenewPrefetch(t, bck, args)
 		xact.AddNotif(&xaction.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,

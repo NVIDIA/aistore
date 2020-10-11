@@ -624,11 +624,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		args.UUID = msg.UUID
-		xact, err := registry.Registry.RenewPrefetch(t, bck, args)
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
+		xact := registry.Registry.RenewPrefetch(t, bck, args)
 		go xact.Run()
 	case cmn.ActListObjects:
 		// list the bucket and return

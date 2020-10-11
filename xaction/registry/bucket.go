@@ -90,18 +90,12 @@ func (r *registry) RegisterBucketXact(entry BucketEntryProvider) {
 
 // RenewBucketXact is general function to renew bucket xaction without any
 // additional or specific parameters.
-func (r *registry) RenewBucketXact(kind string, bck *cluster.Bck) cluster.Xact {
-	e := r.bckXacts[kind].New(XactArgs{})
-	res := r.renewBucketXaction(e, bck)
-	return res.entry.Get()
-}
-
-func (r *registry) RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) (cluster.Xact, error) {
-	e := r.bckXacts[cmn.ActECEncode].New(XactArgs{
-		T:     t,
-		UUID:  uuid,
-		Phase: phase,
-	})
+func (r *registry) RenewBucketXact(kind string, bck *cluster.Bck, args ...XactArgs) (cluster.Xact, error) {
+	var xactArgs XactArgs
+	if len(args) > 0 {
+		xactArgs = args[0]
+	}
+	e := r.bckXacts[kind].New(xactArgs)
 	res := r.renewBucketXaction(e, bck)
 	if res.err != nil {
 		return nil, res.err
@@ -109,8 +103,16 @@ func (r *registry) RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase
 	return res.entry.Get(), nil
 }
 
-// TODO: restart the EC (#531) in case of mountpath event
-func (r *registry) MakeNCopiesOnMpathEvent(t cluster.Target, tag string) {
+func (r *registry) RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) (cluster.Xact, error) {
+	return r.RenewBucketXact(cmn.ActECEncode, bck, XactArgs{
+		T:     t,
+		UUID:  uuid,
+		Phase: phase,
+	})
+}
+
+// TODO: Restart the EC (#531) in case of mountpath event.
+func (r *registry) RenewMakeNCopies(t cluster.Target, tag string) {
 	var (
 		cfg      = cmn.GCO.Get()
 		bmd      = t.Bowner().Get()
@@ -156,40 +158,32 @@ func (r *registry) RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid 
 }
 
 func (r *registry) RenewDirPromote(t cluster.Target, bck *cluster.Bck, dir string, params *cmn.ActValPromote) (cluster.Xact, error) {
-	e := r.bckXacts[cmn.ActPromote].New(XactArgs{
+	return r.RenewBucketXact(cmn.ActPromote, bck, XactArgs{
 		T: t,
 		Custom: &DirPromoteArgs{
 			Dir:    dir,
 			Params: params,
 		},
 	})
-	res := r.renewBucketXaction(e, bck)
-	if res.err != nil {
-		return nil, res.err
-	}
-	return res.entry.Get(), nil
 }
 
 func (r *registry) RenewBckLoadLomCache(t cluster.Target, bck *cluster.Bck) {
-	e := r.bckXacts[cmn.ActLoadLomCache].New(XactArgs{T: t})
-	r.renewBucketXaction(e, bck)
+	_, err := r.RenewBucketXact(cmn.ActLoadLomCache, bck, XactArgs{T: t})
+	cmn.AssertNoErr(err)
 }
 
 func (r *registry) RenewPutMirror(lom *cluster.LOM) cluster.Xact {
-	e := r.bckXacts[cmn.ActPutCopies].New(XactArgs{
+	xact, err := r.RenewBucketXact(cmn.ActPutCopies, lom.Bck(), XactArgs{
 		T:      lom.T,
 		Custom: lom,
 	})
-	res := r.renewBucketXaction(e, lom.Bck())
-	if res.err != nil {
-		return nil
-	}
-	return res.entry.Get()
+	cmn.AssertNoErr(err)
+	return xact
 }
 
 func (r *registry) RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid, kind,
 	phase string, dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) (cluster.Xact, error) {
-	e := r.bckXacts[kind].New(XactArgs{
+	return r.RenewBucketXact(kind, bckTo, XactArgs{
 		T:     t,
 		UUID:  uuid,
 		Phase: phase,
@@ -201,11 +195,6 @@ func (r *registry) RenewTransferBck(t cluster.Target, bckFrom, bckTo *cluster.Bc
 			Meta:    meta,
 		},
 	})
-	res := r.renewBucketXaction(e, bckTo)
-	if res.err != nil {
-		return nil, res.err
-	}
-	return res.entry.Get(), nil
 }
 
 func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (cluster.Xact, error) {
@@ -213,33 +202,26 @@ func (r *registry) RenewEvictDelete(t cluster.Target, bck *cluster.Bck, args *De
 	if args.Evict {
 		kind = cmn.ActEvictObjects
 	}
-	e := r.bckXacts[kind].New(XactArgs{
+	return r.RenewBucketXact(kind, bck, XactArgs{
 		T:      t,
 		UUID:   args.UUID,
 		Custom: args,
 	})
-	res := r.renewBucketXaction(e, bck)
-	if res.err != nil {
-		return nil, res.err
-	}
-	return res.entry.Get(), nil
 }
 
-func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) (cluster.Xact, error) {
-	e := r.bckXacts[cmn.ActPrefetch].New(XactArgs{
+func (r *registry) RenewPrefetch(t cluster.Target, bck *cluster.Bck, args *DeletePrefetchArgs) cluster.Xact {
+	xact, err := r.RenewBucketXact(cmn.ActPrefetch, bck, XactArgs{
 		T:      t,
 		UUID:   args.UUID,
 		Custom: args,
 	})
-	res := r.renewBucketXaction(e, bck)
-	if res.err != nil {
-		return nil, res.err
-	}
-	return res.entry.Get(), nil
+	cmn.AssertNoErr(err)
+	return xact
 }
 
-func (r *registry) RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) (cluster.Xact, error) {
-	e := r.bckXacts[cmn.ActRenameLB].New(XactArgs{
+func (r *registry) RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
+	uuid string, rmdVersion int64, phase string) (cluster.Xact, error) {
+	return r.RenewBucketXact(cmn.ActRenameLB, bckTo, XactArgs{
 		T:     t,
 		UUID:  uuid,
 		Phase: phase,
@@ -249,11 +231,29 @@ func (r *registry) RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
 			BckTo:   bckTo,
 		},
 	})
-	res := r.renewBucketXaction(e, bckTo)
-	if res.err != nil {
-		return nil, res.err
+}
+
+//
+// Objects list
+//
+
+func (r *registry) RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
+	msg *cmn.SelectMsg) (xact cluster.Xact, isNew bool, err error) {
+	xact = r.GetXact(uuid)
+	if xact == nil || xact.Finished() {
+		e := r.bckXacts[cmn.ActListObjects].New(XactArgs{
+			Ctx:    context.Background(),
+			T:      t,
+			UUID:   uuid,
+			Custom: msg,
+		})
+		res := r.renewBucketXaction(e, bck, uuid)
+		if res.err != nil {
+			return nil, res.isNew, res.err
+		}
+		return res.entry.Get(), res.isNew, nil
 	}
-	return res.entry.Get(), nil
+	return xact, false, nil
 }
 
 //
@@ -308,27 +308,4 @@ func (r *registry) RenewQuery(ctx context.Context, t cluster.Target, q *query.Ob
 		return nil, res.isNew, res.err
 	}
 	return res.entry.Get(), res.isNew, nil
-}
-
-//
-// Objects list
-//
-
-func (r *registry) RenewObjList(t cluster.Target, bck *cluster.Bck, uuid string,
-	msg *cmn.SelectMsg) (listXact cluster.Xact, isNew bool, err error) {
-	xact := r.GetXact(uuid)
-	if xact == nil || xact.Finished() {
-		e := r.bckXacts[cmn.ActListObjects].New(XactArgs{
-			Ctx:    context.Background(),
-			T:      t,
-			UUID:   uuid,
-			Custom: msg,
-		})
-		res := r.renewBucketXaction(e, bck, uuid)
-		if res.err != nil {
-			return nil, res.isNew, res.err
-		}
-		return res.entry.Get(), res.isNew, nil
-	}
-	return xact, false, nil
 }
