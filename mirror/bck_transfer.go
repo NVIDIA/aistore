@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -31,17 +32,11 @@ type (
 	}
 	XactTransferBck struct {
 		xactBckBase
-		slab    *memsys.Slab
 		bckFrom *cluster.Bck
 		bckTo   *cluster.Bck
 		dm      *bundle.DataMover
 		dp      cluster.LomReaderProvider
 		meta    *cmn.Bck2BckMsg
-	}
-	bckTransferJogger struct { // one per mountpath
-		joggerBckBase
-		parent *XactTransferBck
-		buf    []byte
 	}
 )
 
@@ -88,25 +83,31 @@ func (e *transferBckProvider) PostRenewHook(_ xreg.BucketEntry) {}
 // another one. If dp is provided, bytes to save are taken from io.Reader from dp.Reader().
 func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.Target, slab *memsys.Slab,
 	dm *bundle.DataMover, dp cluster.LomReaderProvider, meta *cmn.Bck2BckMsg) *XactTransferBck {
-	return &XactTransferBck{
-		xactBckBase: *newXactBckBase(id, kind, bckTo.Bck, t),
-		slab:        slab,
-		bckFrom:     bckFrom,
-		bckTo:       bckTo,
-		dm:          dm,
-		dp:          dp,
-		meta:        meta,
+	xact := &XactTransferBck{
+		bckFrom: bckFrom,
+		bckTo:   bckTo,
+		dm:      dm,
+		dp:      dp,
+		meta:    meta,
 	}
+	xact.xactBckBase = *newXactBckBase(id, kind, &mpather.JoggerGroupOpts{
+		Bck:      bckFrom.Bck,
+		T:        t,
+		CTs:      []string{fs.ObjectType},
+		Callback: xact.copyObject,
+		Slab:     slab,
+		Throttle: true,
+	})
+	return xact
 }
 
 func (r *XactTransferBck) Run() (err error) {
 	r.dm.SetXact(r)
 	r.dm.Open()
 
-	mpathCount := r.runJoggers()
-
+	r.xactBckBase.runJoggers()
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
-	err = r.xactBckBase.waitDone(mpathCount)
+	err = r.xactBckBase.waitDone()
 	r.dm.Close(err)
 	r.dm.UnregRecv()
 
@@ -122,89 +123,38 @@ func (r *XactTransferBck) String() string {
 // private methods
 //
 
-func (r *XactTransferBck) runJoggers() (mpathCount int) {
+func (r *XactTransferBck) copyObject(lom *cluster.LOM, buf []byte) error {
 	var (
-		availablePaths, _ = fs.Get()
-		config            = cmn.GCO.Get()
-	)
-	mpathCount = len(availablePaths)
-	r.xactBckBase.init(mpathCount)
-	for _, mpathInfo := range availablePaths {
-		bccJogger := newBCCJogger(r, mpathInfo, config)
-		mpathLC := mpathInfo.MakePathCT(r.bckFrom.Bck, fs.ObjectType)
-		r.mpathers[mpathLC] = bccJogger
-		go bccJogger.jog()
-	}
-	return
-}
-
-//
-// mpath bckTransferJogger - main
-//
-
-func newBCCJogger(parent *XactTransferBck, mpathInfo *fs.MountpathInfo, config *cmn.Config) *bckTransferJogger {
-	j := &bckTransferJogger{
-		joggerBckBase: joggerBckBase{
-			parent:    &parent.xactBckBase,
-			bck:       parent.bckFrom.Bck,
-			mpathInfo: mpathInfo,
-			config:    config,
-			skipLoad:  true,
-			stopCh:    cmn.NewStopCh(),
-		},
-		parent: parent,
-	}
-	j.joggerBckBase.callback = j.copyObject
-	return j
-}
-
-func (j *bckTransferJogger) jog() {
-	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.bckFrom.Bck)
-	j.buf = j.parent.slab.Alloc()
-	j.joggerBckBase.jog()
-	j.parent.slab.Free(j.buf)
-}
-
-func (j *bckTransferJogger) copyObject(lom *cluster.LOM) error {
-	var (
-		objNameTo = cmn.ObjNameFromBck2BckMsg(lom.ObjName, j.parent.meta)
+		objNameTo = cmn.ObjNameFromBck2BckMsg(lom.ObjName, r.meta)
 		params    = cluster.CopyObjectParams{
-			BckTo:     j.parent.bckTo,
+			BckTo:     r.bckTo,
 			ObjNameTo: objNameTo,
-			Buf:       j.buf,
-			DM:        j.parent.dm,
-			DP:        j.parent.dp,
-			DryRun:    j.parent.meta.DryRun,
+			Buf:       buf,
+			DM:        r.dm,
+			DP:        r.dp,
+			DryRun:    r.meta.DryRun,
 		}
 	)
 
 	// TODO: if dry-run show to-be-copied objects
-	copied, size, err := j.parent.Target().CopyObject(lom, params, false /*localOnly*/)
+	copied, size, err := r.Target().CopyObject(lom, params, false /*localOnly*/)
+	if err != nil {
+		if cmn.IsErrOOS(err) {
+			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
+			return cmn.NewAbortedErrorDetails(what, err.Error())
+		}
+		return err
+	}
 
 	if copied {
-		j.parent.ObjectsInc()
-		j.parent.BytesAdd(size)
-		j.num++
-
-		if (j.num % throttleNumObjects) == 0 {
-			if errstop := j.yieldTerm(); errstop != nil {
-				return errstop
-			}
-
-			if cs := fs.GetCapStatus(); cs.Err != nil {
-				what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
-				return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
-			}
-
-			if (j.num % logNumProcessed) == 0 {
-				glog.Infof("%s jogger[%s/%s] processed %d objects...", j.parent.Kind(), j.mpathInfo, j.parent.Bck(),
-					j.num)
-			}
-		}
+		r.ObjectsInc()
+		r.BytesAdd(size)
 	}
-	if cmn.IsErrOOS(err) {
-		what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
-		return cmn.NewAbortedErrorDetails(what, err.Error())
+
+	if cs := fs.GetCapStatus(); cs.Err != nil {
+		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
+		return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
 	}
-	return err
+
+	return nil
 }

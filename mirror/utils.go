@@ -14,12 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-type mpather interface {
-	mountpathInfo() *fs.MountpathInfo
-	stop() int
-	post(lom *cluster.LOM)
-}
-
 func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
@@ -58,7 +52,7 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 	return
 }
 
-func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []byte) (size int64, err error) {
+func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error) {
 	// TODO: We could potentially change it to `lom.Lock(false)` if we would
 	//  take an exclusive lock for updating metadata (but for now we dont have
 	//  mechanism for locking only metadata so we need to lock exclusively).
@@ -82,9 +76,9 @@ func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []
 	//  While copying we may find out that some copies do not exist -
 	//  these copies will be removed and `NumCopies()` will decrease.
 	for lom.NumCopies() < copies {
-		if mpather := findLeastUtilized(lom, mpathers); mpather != nil {
+		if mpathInfo := findLeastUtilized(lom); mpathInfo != nil {
 			var clone *cluster.LOM
-			if clone, err = copyTo(lom, mpather.mountpathInfo(), buf); err != nil {
+			if clone, err = copyTo(lom, mpathInfo, buf); err != nil {
 				glog.Errorln(err)
 				return
 			}
@@ -101,13 +95,13 @@ func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []
 	return
 }
 
-func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpather) {
+func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 	var (
 		copiesMpath cmn.StringSet
 
-		util       int64 = 101
-		nowTs            = mono.NanoTime()
-		mpathUtils       = fs.GetAllMpathUtils(nowTs)
+		minUtil    = int64(101)
+		mpathUtils = fs.GetAllMpathUtils(mono.NanoTime())
+		mpaths, _  = fs.Get()
 	)
 
 	if lom.HasCopies() {
@@ -117,28 +111,22 @@ func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpath
 		}
 	}
 
-	for _, j := range mpathers {
-		jpath := j.mountpathInfo().Path
-		if jpath == lom.ParsedFQN.MpathInfo.Path {
+	for mpath, mpathInfo := range mpaths {
+		if mpath == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
 		if lom.HasCopies() {
-			// skip existing
-			if copiesMpath.Contains(jpath) {
+			if copiesMpath.Contains(mpath) { // Skip existing copies.
 				continue
 			}
 		}
-		if u, ok := mpathUtils[jpath]; ok && u < util {
-			out = j
-			util = u
+		if curUtil, ok := mpathUtils[mpath]; ok && curUtil < minUtil {
+			minUtil = curUtil
+			out = mpathInfo
 		} else if !ok && out == nil {
-			// Since we cannot relay on the fact that `mpathUtils` has all
-			// mountpaths (because it might not refresh it now) we randomly
-			// pick a mountpath.
-			availMpaths, _ := fs.Get()
-			if _, ok := availMpaths[jpath]; ok { // ensure that mountpath actually exists
-				out = j
-			}
+			// Since we cannot relay on the fact that `mpathUtils` has all mountpaths
+			// (because it might not refresh it now) we randomly pick a mountpath.
+			out = mpathInfo
 		}
 	}
 	return
@@ -153,19 +141,10 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	return
 }
 
-// static helper
-func checkInsufficientMpaths(xact cluster.Xact, mpathCount int) error {
-	if mpathCount < 2 {
-		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", xact, mpathCount)
-	}
-	return nil
-}
-
-func drainWorkCh(workCh chan *cluster.LOM, tag string) (n int) {
+func drainWorkCh(workCh chan *cluster.LOM) (n int) {
 	for {
 		select {
-		case lom := <-workCh:
-			glog.Errorf("%s: %s", tag, lom)
+		case <-workCh:
 			n++
 		default:
 			return

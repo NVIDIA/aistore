@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -36,11 +37,25 @@ type (
 	}
 
 	DirTreeDesc struct {
-		InitDir string // directory where the tree is created (can be empty)
-		Dirs    int    // number of (initially empty) directories at each depth (we recurse into single directory at each depth)
-		Files   int    // number of files at each depth
-		Depth   int    // depth of tree/nesting
-		Empty   bool   // determines if there is a file somewhere in the directories
+		InitDir string // Directory where the tree is created (can be empty).
+		Dirs    int    // Number of (initially empty) directories at each depth (we recurse into single directory at each depth).
+		Files   int    // Number of files at each depth.
+		Depth   int    // Depth of tree/nesting.
+		Empty   bool   // Determines if there is a file somewhere in the directories.
+	}
+
+	ObjectsDesc struct {
+		CTs           []string // Content types which are interesting for the test.
+		MountpathsCnt int      // Number of mountpaths to be created.
+		ObjectsCnt    int      // Total number of objects on all mountpaths.
+		ObjectSize    int64
+	}
+
+	ObjectsOut struct {
+		Dir  string
+		T    cluster.Target
+		Bck  cmn.Bck
+		FQNs []string
 	}
 )
 
@@ -209,6 +224,86 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 		f.Close()
 	}
 	return topDirName, fileNames
+}
+
+func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
+	var (
+		buf  = make([]byte, desc.ObjectSize)
+		fqns = make([]string, 0, desc.ObjectsCnt)
+
+		bck = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+			Ns:       cmn.NsGlobal,
+			Props:    &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+		}
+		bmd   = cluster.NewBaseBownerMock(cluster.NewBckEmbed(bck))
+		tMock = cluster.NewTargetMock(bmd)
+	)
+
+	mios := ios.NewIOStaterMock()
+	fs.Init(mios)
+	fs.DisableFsIDCheck()
+
+	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+
+	cluster.InitTarget()
+
+	dir, err := ioutil.TempDir("/tmp", "")
+	tassert.CheckFatal(t, err)
+
+	for i := 0; i < desc.MountpathsCnt; i++ {
+		mpath, err := ioutil.TempDir(dir, "")
+		tassert.CheckFatal(t, err)
+		err = fs.Add(mpath)
+		tassert.CheckFatal(t, err)
+	}
+
+	errs := fs.CreateBuckets("testing", bck)
+	if len(errs) > 0 {
+		tassert.CheckFatal(t, errs[0])
+	}
+
+	for _, contentType := range []string{fs.WorkfileType, fs.ObjectType} {
+		for i := 0; i < desc.ObjectsCnt; i++ {
+			fqn, _, err := cluster.HrwFQN(cluster.NewBckEmbed(bck), contentType, cmn.RandString(15))
+			tassert.CheckFatal(t, err)
+
+			if cmn.StringInSlice(contentType, desc.CTs) {
+				fqns = append(fqns, fqn)
+			}
+
+			f, err := cmn.CreateFile(fqn)
+			tassert.CheckFatal(t, err)
+			_, _ = rand.Read(buf)
+			_, err = f.Write(buf)
+			f.Close()
+			tassert.CheckFatal(t, err)
+
+			switch contentType {
+			case fs.ObjectType:
+				lom := &cluster.LOM{T: tMock, FQN: fqn}
+				err = lom.Init(cmn.Bck{})
+				tassert.CheckFatal(t, err)
+
+				lom.SetSize(desc.ObjectSize)
+				err = lom.Persist()
+				tassert.CheckFatal(t, err)
+			case fs.WorkfileType:
+				break
+			default:
+				cmn.AssertMsg(false, "non-implemented type")
+			}
+		}
+	}
+
+	return ObjectsOut{
+		Dir:  dir,
+		T:    tMock,
+		Bck:  bck,
+		FQNs: fqns,
+	}
 }
 
 func IsTrashDir(path string) bool {

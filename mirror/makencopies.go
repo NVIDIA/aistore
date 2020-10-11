@@ -7,21 +7,18 @@ package mirror
 import (
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 const (
-	throttleNumObjects = 16                      // unit of self-throttling
-	minThrottleSize    = 256 * cmn.KiB           // throttle every 4MB (= 16K*256) or greater
-	logNumProcessed    = throttleNumObjects * 16 // unit of house-keeping
-	MaxNCopies         = 16                      // validation
+	MaxNCopies = 16 // validation
 )
 
 type (
@@ -38,13 +35,7 @@ type (
 	// the bucket is N-way replicated (where N >= 1).
 	xactMNC struct {
 		xactBckBase
-		slab   *memsys.Slab
 		copies int
-	}
-	mncJogger struct { // one per mountpath
-		joggerBckBase
-		parent *xactMNC
-		buf    []byte
 	}
 )
 
@@ -65,22 +56,61 @@ func (*mncProvider) Kind() string        { return cmn.ActMakeNCopies }
 func (p *mncProvider) Get() cluster.Xact { return p.xact }
 
 func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, copies int) *xactMNC {
-	return &xactMNC{
-		xactBckBase: *newXactBckBase(id, cmn.ActMakeNCopies, bck, t),
-		slab:        slab,
-		copies:      copies,
+	xact := &xactMNC{
+		copies: copies,
 	}
+	xact.xactBckBase = *newXactBckBase(id, cmn.ActMakeNCopies, &mpather.JoggerGroupOpts{
+		Bck:      bck,
+		T:        t,
+		CTs:      []string{fs.ObjectType},
+		Callback: xact.jogCallback,
+		Slab:     slab,
+		DoLoad:   mpather.Load, // Required to fetch `NumCopies()` and skip copies.
+		Throttle: true,
+	})
+	return xact
 }
 
 func (r *xactMNC) Run() (err error) {
-	var mpathersCount int
-	if mpathersCount, err = r.runJoggers(); err != nil {
+	if err = ValidateNCopies(r.Target().Snode().Name(), r.copies); err != nil {
 		return
 	}
+
+	r.xactBckBase.runJoggers()
 	glog.Infoln(r.String(), "copies=", r.copies)
-	err = r.xactBckBase.waitDone(mpathersCount)
+	err = r.xactBckBase.waitDone()
 	r.Finish(err)
 	return
+}
+
+func (r *xactMNC) jogCallback(lom *cluster.LOM, buf []byte) (err error) {
+	var size int64
+	if n := lom.NumCopies(); n == r.copies {
+		return nil
+	} else if n > r.copies {
+		size, err = delCopies(lom, r.copies)
+	} else {
+		size, err = addCopies(lom, r.copies, buf)
+	}
+
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil && cmn.IsErrOOS(err) {
+		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
+		return cmn.NewAbortedErrorDetails(what, err.Error())
+	}
+
+	r.ObjectsInc()
+	r.BytesAdd(size)
+
+	if r.ObjCount()%100 == 0 {
+		if cs := fs.GetCapStatus(); cs.Err != nil {
+			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
+			return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
+		}
+	}
+	return nil
 }
 
 func ValidateNCopies(prefix string, copies int) error {
@@ -96,107 +126,4 @@ func ValidateNCopies(prefix string, copies int) error {
 		return fmt.Errorf("%s: number of copies (%d) exceeds the number of mountpaths (%d)", prefix, copies, mpathCount)
 	}
 	return nil
-}
-
-//
-// private methods
-//
-
-func (r *xactMNC) runJoggers() (mpathCount int, err error) {
-	tname := r.Target().Snode().Name()
-	if err = ValidateNCopies(tname, r.copies); err != nil {
-		return
-	}
-
-	var (
-		availablePaths, _ = fs.Get()
-		config            = cmn.GCO.Get()
-	)
-	mpathCount = len(availablePaths)
-
-	r.xactBckBase.init(mpathCount)
-	for _, mpathInfo := range availablePaths {
-		mncJogger := newMNCJogger(r, mpathInfo, config)
-		mpathLC := mpathInfo.MakePathCT(r.Bck(), fs.ObjectType)
-		r.mpathers[mpathLC] = mncJogger
-	}
-	for _, mpather := range r.mpathers {
-		mncJogger := mpather.(*mncJogger)
-		go mncJogger.jog()
-	}
-	return
-}
-
-//
-// mpath mncJogger - main
-//
-
-func newMNCJogger(parent *xactMNC, mpathInfo *fs.MountpathInfo, config *cmn.Config) *mncJogger {
-	j := &mncJogger{
-		joggerBckBase: joggerBckBase{
-			parent:    &parent.xactBckBase,
-			bck:       parent.Bck(),
-			mpathInfo: mpathInfo,
-			config:    config,
-		},
-		parent: parent,
-	}
-	j.joggerBckBase.callback = j.delAddCopies
-	return j
-}
-
-func (j *mncJogger) jog() {
-	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bck())
-	j.buf = j.parent.slab.Alloc()
-	j.joggerBckBase.jog()
-	j.parent.slab.Free(j.buf)
-}
-
-func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
-	if j.parent.Aborted() {
-		return cmn.NewAbortedError("makenaction xaction")
-	}
-
-	var size int64
-	if n := lom.NumCopies(); n == j.parent.copies {
-		return nil
-	} else if n > j.parent.copies {
-		size, err = delCopies(lom, j.parent.copies)
-	} else {
-		size, err = addCopies(lom, j.parent.copies, j.parent.Mpathers(), j.buf)
-	}
-
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil && cmn.IsErrOOS(err) {
-		what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
-		return cmn.NewAbortedErrorDetails(what, err.Error())
-	}
-
-	j.num++
-	j.size += size
-
-	j.parent.ObjectsInc()
-	j.parent.BytesAdd(size)
-
-	if (j.num % throttleNumObjects) == 0 {
-		if j.size > minThrottleSize*throttleNumObjects {
-			j.size = 0
-			if errstop := j.yieldTerm(); errstop != nil {
-				return errstop
-			}
-		}
-		if (j.num % logNumProcessed) == 0 {
-			glog.Infof("jogger[%s/%s] processed %d objects...", j.mpathInfo, j.parent.Bck(), j.num)
-			j.config = cmn.GCO.Get()
-		}
-		if cs := fs.GetCapStatus(); cs.Err != nil {
-			what := fmt.Sprintf("%s(%q)", j.parent.Kind(), j.parent.ID())
-			return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
-		}
-	} else {
-		runtime.Gosched()
-	}
-	return
 }

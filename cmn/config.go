@@ -166,14 +166,14 @@ type (
 
 	MirrorConf struct {
 		Copies      int64 `json:"copies"`       // num local copies
-		Burst       int64 `json:"burst_buffer"` // channel buffer size
+		Burst       int   `json:"burst_buffer"` // channel buffer size
 		UtilThresh  int64 `json:"util_thresh"`  // considered equivalent when below threshold
 		OptimizePUT bool  `json:"optimize_put"` // optimization objective
 		Enabled     bool  `json:"enabled"`      // will only generate local copies when set to true
 	}
 	MirrorConfToUpdate struct {
 		Copies      *int64 `json:"copies"`
-		Burst       *int64 `json:"burst_buffer"`
+		Burst       *int   `json:"burst_buffer"`
 		UtilThresh  *int64 `json:"util_thresh"`
 		OptimizePUT *bool  `json:"optimize_put"`
 		Enabled     *bool  `json:"enabled"`

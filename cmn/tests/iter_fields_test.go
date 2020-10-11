@@ -61,7 +61,7 @@ var _ = Describe("IterFields", func() {
 					"mirror.enabled":      false,
 					"mirror.copies":       int64(0),
 					"mirror.util_thresh":  int64(0),
-					"mirror.burst_buffer": int64(0),
+					"mirror.burst_buffer": 0,
 					"mirror.optimize_put": false,
 
 					"ec.enabled":       true,
@@ -113,7 +113,7 @@ var _ = Describe("IterFields", func() {
 					"mirror.enabled":      (*bool)(nil),
 					"mirror.copies":       (*int64)(nil),
 					"mirror.util_thresh":  (*int64)(nil),
-					"mirror.burst_buffer": (*int64)(nil),
+					"mirror.burst_buffer": (*int)(nil),
 					"mirror.optimize_put": (*bool)(nil),
 
 					"ec.enabled":       api.Bool(true),
@@ -248,7 +248,7 @@ var _ = Describe("IterFields", func() {
 					Mirror: &cmn.MirrorConfToUpdate{
 						Enabled: api.Bool(true),
 						Copies:  api.Int64(120),
-						Burst:   api.Int64(9560),
+						Burst:   api.Int(9560),
 					},
 					EC: &cmn.ECConfToUpdate{
 						Enabled:      api.Bool(true),

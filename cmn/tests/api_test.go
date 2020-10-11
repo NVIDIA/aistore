@@ -134,7 +134,7 @@ var _ = Describe("API", func() {
 					},
 					Mirror: &cmn.MirrorConfToUpdate{
 						Copies:      api.Int64(10),
-						Burst:       api.Int64(32),
+						Burst:       api.Int(32),
 						UtilThresh:  api.Int64(64),
 						OptimizePUT: api.Bool(true),
 						Enabled:     api.Bool(false),

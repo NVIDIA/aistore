@@ -1,0 +1,59 @@
+// Package mpather provides per-mountpath concepts.
+/*
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+ */
+package mpather_test
+
+import (
+	"os"
+	"testing"
+	"time"
+
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/mpather"
+	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
+)
+
+func TestWorkerGroup(t *testing.T) {
+	var (
+		desc = tutils.ObjectsDesc{
+			CTs:           []string{fs.ObjectType},
+			MountpathsCnt: 10,
+			ObjectsCnt:    100,
+			ObjectSize:    cmn.KiB,
+		}
+		out     = tutils.PrepareObjects(t, desc)
+		counter = atomic.NewInt32(0)
+	)
+	defer os.RemoveAll(out.Dir)
+
+	wg := mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
+		Callback: func(lom *cluster.LOM, buf []byte) {
+			counter.Inc()
+		},
+		QueueSize: 10,
+	})
+	defer wg.Stop()
+
+	wg.Run()
+
+	for _, fqn := range out.FQNs {
+		lom := &cluster.LOM{T: out.T, FQN: fqn}
+		err := lom.Init(out.Bck)
+		tassert.CheckError(t, err)
+
+		wg.Do(lom)
+	}
+
+	// Give some time for the workers to pick all the tasks.
+	time.Sleep(time.Second)
+
+	tassert.Errorf(
+		t, int(counter.Load()) == desc.ObjectsCnt,
+		"invalid number of objects visited (%d vs %d)", counter.Load(), desc.ObjectsCnt,
+	)
+}

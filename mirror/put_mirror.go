@@ -13,9 +13,14 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
+)
+
+const (
+	logNumProcessed = 256 // unit of house-keeping
 )
 
 type (
@@ -28,22 +33,15 @@ type (
 		lom  *cluster.LOM
 	}
 	XactPut struct {
-		// implements cluster.Xact and cmn.Runner interfaces
+		// implements cluster.Xact interface
 		xaction.XactDemandBase
 		// runtime
-		workCh   chan *cluster.LOM
-		mpathers map[string]mpather
+		workers *mpather.WorkerGroup
+		workCh  chan *cluster.LOM
 		// init
 		mirror  cmn.MirrorConf
-		slab    *memsys.Slab
 		total   atomic.Int64
 		dropped int64
-	}
-	xputJogger struct { // one per mountpath
-		parent    *XactPut
-		mpathInfo *fs.MountpathInfo
-		workCh    chan *cluster.LOM
-		stopCh    *cmn.StopCh
 	}
 )
 
@@ -77,37 +75,45 @@ func RunXactPut(lom *cluster.LOM, slab *memsys.Slab) (r *XactPut, err error) {
 		availablePaths, _ = fs.Get()
 		mpathCount        = len(availablePaths)
 	)
+	if mpathCount < 2 {
+		return nil, fmt.Errorf("number of mountpaths (%d) is insufficient for local mirroring, exiting", mpathCount)
+	}
+
+	mirror := *lom.MirrorConf()
 	r = &XactPut{
 		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bck().Bck),
-		slab:           slab,
-		mirror:         *lom.MirrorConf(),
+		mirror:         mirror,
+		workCh:         make(chan *cluster.LOM, mirror.Burst),
+		workers: mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
+			Slab:      slab,
+			QueueSize: mirror.Burst,
+			Callback: func(lom *cluster.LOM, buf []byte) {
+				copies := int(lom.Bprops().Mirror.Copies)
+				if _, err := addCopies(lom, copies, buf); err != nil {
+					glog.Error(err)
+				} else {
+					r.ObjectsAdd(int64(copies))
+					r.BytesAdd(lom.Size() * int64(copies))
+				}
+				r.DecPending() // to support action renewal on-demand
+			},
+		}),
 	}
-	if err = checkInsufficientMpaths(r, mpathCount); err != nil {
-		r = nil
-		return
-	}
-	r.workCh = make(chan *cluster.LOM, r.mirror.Burst)
-	r.mpathers = make(map[string]mpather, mpathCount)
 	r.InitIdle()
 
 	// Run
-	for _, mpathInfo := range availablePaths {
-		mpathLC := mpathInfo.MakePathCT(r.Bck(), fs.ObjectType)
-		r.mpathers[mpathLC] = newXputJogger(r, mpathInfo)
-	}
 	go func() {
 		err := r.Run()
 		r.Finish(err)
 	}()
-	for _, mpather := range r.mpathers {
-		xputJogger := mpather.(*xputJogger)
-		go xputJogger.jog()
-	}
 	return
 }
 
 func (r *XactPut) Run() error {
 	glog.Infoln(r.String())
+
+	r.workers.Run()
+
 	for {
 		select {
 		case src := <-r.workCh:
@@ -116,11 +122,8 @@ func (r *XactPut) Run() error {
 				glog.Error(err)
 				break
 			}
-			path := lom.ParsedFQN.MpathInfo.MakePathCT(r.Bck(), fs.ObjectType)
-			if mpather, ok := r.mpathers[path]; ok {
-				mpather.post(lom)
-			} else {
-				glog.Errorf("failed to get mpather with path: %s", path)
+			if ok := r.workers.Do(lom); !ok {
+				glog.Errorf("failed to get post with path: %s", lom)
 			}
 		case <-r.IdleTimer():
 			return r.stop()
@@ -140,10 +143,11 @@ func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 		return
 	}
 	r.total.Inc()
+
 	// [throttle]
 	// when the optimization objective is write perf,
 	// we start dropping requests to make sure callers don't block
-	pending, max := r.Pending(), r.mirror.Burst
+	pending, max := int(r.Pending()), r.mirror.Burst
 	if r.mirror.OptimizePUT {
 		if pending > 1 && pending >= max {
 			r.dropped++
@@ -168,92 +172,15 @@ func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 	return
 }
 
-//
-// private methods
-//
-
-// =================== load balancing and self-throttling ========================
-// Generally,
-// load balancing decision must (... TODO ...) be configurable and a function of:
-// - current utilization (%) of the filesystem's disks;
-// - current disk queue lengths and their respective minimums and maximums during
-//   the reporting period (config.Periodic.IostatTimeLong);
-// - previous values of the same, and their corresponding averages.
-//
-// Further, load balancers must take into account relative priorities of
-// other workloads that are simultaneously present in the system -
-// and self-throttle accordingly. E.g., in most cases we'd want GET to have the
-// top (default, configurable) priority which would mean that the filesystems that
-// serve GETs are even less available for other extended actions than otherwise, etc.
-// =================== load balancing and self-throttling ========================
-
 func (r *XactPut) stop() (err error) {
 	r.XactDemandBase.Stop()
-	var n int
-	for _, mpather := range r.mpathers {
-		n += mpather.stop()
-	}
-	if nn := drainWorkCh(r.workCh, r.String()+" drop"); nn > 0 {
+	n := r.workers.Stop()
+	if nn := drainWorkCh(r.workCh); nn > 0 {
 		n += nn
-		r.SubPending(nn)
 	}
 	if n > 0 {
+		r.SubPending(n)
 		err = fmt.Errorf("%s: dropped %d object(s)", r, n)
 	}
-	return
-}
-
-//
-// xputJogger - main
-//
-
-func newXputJogger(parent *XactPut, mpathInfo *fs.MountpathInfo) *xputJogger {
-	return &xputJogger{
-		parent:    parent,
-		mpathInfo: mpathInfo,
-		workCh:    make(chan *cluster.LOM, parent.mirror.Burst),
-		stopCh:    cmn.NewStopCh(),
-	}
-}
-
-func (j *xputJogger) jog() {
-	buf := j.parent.slab.Alloc()
-	glog.Infof("xputJogger[%s] started", j.mpathInfo)
-
-	for {
-		select {
-		case src := <-j.workCh:
-			lom := src.Clone(src.FQN)
-			copies := int(lom.Bprops().Mirror.Copies)
-			if _, err := addCopies(lom, copies, j.parent.mpathers, buf); err != nil {
-				glog.Error(err)
-			} else {
-				if v := j.parent.ObjectsAdd(int64(copies)); (v % logNumProcessed) == 0 {
-					glog.Infof("%s: total=%d, copied=%d", j.parent.String(), j.parent.total.Load(), v)
-				}
-				j.parent.BytesAdd(lom.Size() * int64(copies))
-			}
-			j.parent.DecPending() // to support action renewal on-demand
-		case <-j.stopCh.Listen():
-			j.parent.slab.Free(buf)
-			return
-		}
-	}
-}
-
-//
-// xputJogger - as mpather
-//
-
-func (j *xputJogger) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
-func (j *xputJogger) post(lom *cluster.LOM)            { j.workCh <- lom }
-
-func (j *xputJogger) stop() (n int) {
-	tag := fmt.Sprintf("%s/%s drop", j.parent, j.mpathInfo)
-	n = drainWorkCh(j.workCh, tag)
-	if n > 0 {
-		j.parent.SubPending(n)
-	}
-	j.stopCh.Close()
-	return
+	return err
 }
