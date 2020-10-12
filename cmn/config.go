@@ -1050,7 +1050,7 @@ func KeepaliveRetryDuration(cs ...*Config) time.Duration {
 
 func Printf(format string, a ...interface{}) {
 	if flag.Parsed() {
-		glog.Infof(format, a...)
+		glog.InfoDepth(1, fmt.Sprintf(format, a...))
 	} else {
 		fmt.Printf(format+"\n", a...)
 	}

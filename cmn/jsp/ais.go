@@ -115,7 +115,7 @@ func SaveConfig(action string) (err error) {
 	if err = Save(cmn.GCO.GetConfigFile(), conf, Options{}); err != nil {
 		glog.Errorf("%s: failed to write, err: %v", action, err)
 	} else {
-		glog.Infof("%s: stored", action)
+		glog.Infof("Stored config (action=%s)", action)
 	}
 	return
 }

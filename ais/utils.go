@@ -127,30 +127,26 @@ func selectConfiguredIPv4(addrlist []*localIPv4Info, configuredList []string) (i
 }
 
 // detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a daemon to listen on it
-func detectLocalIPv4(addrlist []*localIPv4Info) (ip net.IP, err error) {
-	if len(addrlist) == 0 {
+func detectLocalIPv4(addrList []*localIPv4Info) (ip net.IP, err error) {
+	if len(addrList) == 0 {
 		return nil, fmt.Errorf("no addresses to choose from")
-	} else if len(addrlist) == 1 {
-		msg := fmt.Sprintf("Found only one IPv4: %s, MTU %d", addrlist[0].ipv4, addrlist[0].mtu)
-		glog.Info(msg)
-		if addrlist[0].mtu <= 1500 {
-			glog.Warningf("IPv4 %s MTU size is small: %d\n", addrlist[0].ipv4, addrlist[0].mtu)
+	} else if len(addrList) == 1 {
+		glog.Infof("Found only one IPv4: %s, MTU %d", addrList[0].ipv4, addrList[0].mtu)
+		if addrList[0].mtu <= 1500 {
+			glog.Warningf("IPv4 %s MTU size is small: %d\n", addrList[0].ipv4, addrList[0].mtu)
 		}
-		ip = net.ParseIP(addrlist[0].ipv4)
-		if ip == nil {
-			return nil, fmt.Errorf("failed to parse IP address: %s", addrlist[0].ipv4)
+		if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
+			return nil, fmt.Errorf("failed to parse IP address: %s", addrList[0].ipv4)
 		}
 		return ip, nil
 	}
 
-	glog.Warningf("Warning: %d IPv4s available", len(addrlist))
-	for _, intf := range addrlist {
-		glog.Warningf("    %#v\n", *intf)
+	glog.Warningf("%d IPv4s available", len(addrList))
+	for _, addr := range addrList {
+		glog.Warningf("    %#v\n", *addr)
 	}
-	// FIXME: temp hack - make sure to keep working on laptops with dockers
-	ip = net.ParseIP(addrlist[0].ipv4)
-	if ip == nil {
-		return nil, fmt.Errorf("failed to parse IP address: %s", addrlist[0].ipv4)
+	if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
+		return nil, fmt.Errorf("failed to parse IP address: %s", addrList[0].ipv4)
 	}
 	return ip, nil
 }
