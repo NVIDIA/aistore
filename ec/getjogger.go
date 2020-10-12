@@ -833,7 +833,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 			defer wg.Done()
 			md, err := requestECMeta(req.LOM.Bck().Bck, req.LOM.ObjName, si, c.client)
 			if err != nil {
-				if glog.FastV(4, glog.SmoduleAIS) {
+				if glog.V(4) {
 					glog.Infof("No EC meta %s from %s: %v", req.LOM.ObjName, si, err)
 				}
 				return

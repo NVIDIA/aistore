@@ -328,7 +328,6 @@ func generateSlicesToMemory(lom *cluster.LOM, dataSlices, paritySlices int) (cmn
 	}
 
 	err = finalizeSlices(ctx, lom, sliceWriters, dataSlices, paritySlices)
-	ctx.wgCksmReaders.Wait()
 	return ctx.fh, ctx.slices, err
 }
 
@@ -404,6 +403,7 @@ func finalizeSlices(ctx *encodeCtx, lom *cluster.LOM, writers []io.Writer, dataS
 		return err
 	}
 
+	ctx.wgCksmReaders.Wait()
 	conf := lom.CksumConf()
 	if conf.Type != cmn.ChecksumNone {
 		for i := range ctx.cksums {
@@ -556,7 +556,8 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			return
 		}
 
-		mcopy := *meta
+		mcopy := &Metadata{}
+		cmn.CopyStruct(mcopy, meta)
 		mcopy.SliceID = i + 1
 		mcopy.ObjVersion = req.LOM.Version()
 		if mcopy.SliceID != 0 && slices[i].cksum != nil {
@@ -567,7 +568,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			reader:   reader,
 			size:     sliceSize,
 			obj:      data,
-			metadata: &mcopy,
+			metadata: mcopy,
 			isSlice:  true,
 			reqType:  reqPut,
 		}

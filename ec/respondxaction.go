@@ -187,8 +187,8 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 		}
 
 		if glog.V(4) {
-			glog.Infof("Got slice=%t from %s (#%d of %s/%s) v%s",
-				iReq.isSlice, iReq.sender, iReq.meta.SliceID, hdr.Bck, hdr.ObjName, meta.ObjVersion)
+			glog.Infof("Got slice=%t from %s (#%d of %s/%s) v%s, chsum: %s",
+				iReq.isSlice, iReq.sender, iReq.meta.SliceID, hdr.Bck, hdr.ObjName, meta.ObjVersion, meta.CksumValue)
 		}
 		md := meta.Marshal()
 		if iReq.isSlice {
