@@ -149,7 +149,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		Opaque: nil,
 	}
 	wg.Add(1)
-	stream.Send(transport.Obj{Hdr: hdr, Reader: sgl1, Callback: cb})
+	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl1, Callback: cb})
 	wg.Wait()
 
 	sgl2 := MMSA.NewSGL(0)
@@ -171,7 +171,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		Opaque: []byte{'1', '2', '3'},
 	}
 	wg.Add(1)
-	stream.Send(transport.Obj{Hdr: hdr, Reader: sgl2, Callback: cb})
+	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl2, Callback: cb})
 	wg.Wait()
 }
 
@@ -308,7 +308,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	totalSend := int64(0)
 	for _, stream := range streams {
 		hdr, reader := makeRandReader()
-		stream.Send(transport.Obj{Hdr: hdr, Reader: reader})
+		stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 		totalSend += hdr.ObjAttrs.Size
 	}
 
@@ -357,7 +357,7 @@ func Test_OnSendCallback(t *testing.T) {
 		posted[idx] = rr
 		mu.Unlock()
 		rrc := &randReaderCtx{t, rr, posted, &mu, idx}
-		stream.Send(transport.Obj{Hdr: hdr, Reader: rr, Callback: rrc.sentCallback})
+		stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, Callback: rrc.sentCallback})
 		totalSend += hdr.ObjAttrs.Size
 	}
 	stream.Fin()
@@ -444,7 +444,7 @@ func Test_ObjAttrs(t *testing.T) {
 		if hdr.ObjAttrs.Size > 0 {
 			reader = newRandReader(random, hdr, slab)
 		}
-		if err := stream.Send(transport.Obj{Hdr: hdr, Reader: reader}); err != nil {
+		if err := stream.Send(&transport.Obj{Hdr: hdr, Reader: reader}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -494,7 +494,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 	for time.Since(now) < runFor {
 		hdr, reader := makeRandReader()
-		stream.Send(transport.Obj{Hdr: hdr, Reader: reader})
+		stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*4 {

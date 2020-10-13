@@ -101,10 +101,10 @@ var (
 // Stream: private methods //
 /////////////////////////////
 
-func (s *Stream) startSend(hdr fmt.Stringer, verbose bool) (err error) {
+func (s *Stream) startSend(streamable fmt.Stringer, verbose bool) (err error) {
 	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
 	if s.Terminated() {
-		err = fmt.Errorf("%s terminated(%s, %v), dropping %s", s, *s.term.reason, s.term.err, hdr)
+		err = fmt.Errorf("%s terminated(%s, %v), dropping %s", s, *s.term.reason, s.term.err, streamable)
 		glog.Error(err)
 		return
 	}
@@ -124,8 +124,7 @@ func (s *Stream) terminate() {
 
 	s.Stop()
 
-	hdr := ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}
-	obj := Obj{Hdr: hdr}
+	obj := Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}}
 	s.cmplCh <- cmpl{obj, s.term.err}
 	s.term.mu.Unlock()
 
@@ -265,12 +264,12 @@ func (s *Stream) doRequest() (err error) {
 func (s *Stream) Read(b []byte) (n int, err error) {
 	s.time.inSend.Store(true) // indication for Collector to delay cleanup
 	if s.inObj() {
-		hdr := &s.sendoff.obj.Hdr
+		obj := &s.sendoff.obj
 		if s.sendoff.dod != 0 {
-			if !hdr.IsHeaderOnly() {
+			if !obj.IsHeaderOnly() {
 				return s.sendData(b)
 			}
-			if !hdr.IsLast() {
+			if !obj.IsLast() {
 				s.eoObj(nil)
 			} else {
 				err = io.EOF
@@ -289,7 +288,7 @@ repeat:
 			return
 		}
 		s.sendoff.obj = *streamable.obj() // TODO -- FIXME
-		if s.sendoff.obj.Hdr.IsIdleTick() {
+		if s.sendoff.obj.IsIdleTick() {
 			if len(s.workCh) > 0 {
 				goto repeat
 			}
@@ -356,21 +355,21 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 // NOTE: reader.Close() is done by the completion handling code objDone
 func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
-	hdr := &obj.Hdr
+	size := obj.Hdr.ObjAttrs.Size
 	s.Sizecur += s.sendoff.off
 	s.stats.Offset.Add(s.sendoff.off)
 	if err != nil {
 		goto exit
 	}
-	if s.sendoff.off != hdr.ObjAttrs.Size {
-		err = fmt.Errorf("%s: %s offset %d != size", s, hdr, s.sendoff.off)
+	if s.sendoff.off != size {
+		err = fmt.Errorf("%s: %s offset %d != size", s, obj, s.sendoff.off)
 		goto exit
 	}
-	s.stats.Size.Add(hdr.ObjAttrs.Size)
+	s.stats.Size.Add(size)
 	s.Numcur++
 	s.stats.Num.Inc()
 	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s: sent %s (%d/%d)", s, hdr, s.Numcur, s.stats.Num.Load())
+		glog.Infof("%s: sent %s (%d/%d)", s, obj, s.Numcur, s.stats.Num.Load())
 	}
 exit:
 	if err != nil {
@@ -388,8 +387,18 @@ func (s *Stream) inObj() bool { return s.sendoff.obj.Reader != nil } // see also
 // Obj and ObjHdr //
 ////////////////////
 
-func (obj Obj) obj() *Obj { return &obj }
-func (obj Obj) msg() *Msg { return nil }
+func (obj Obj) obj() *Obj           { return &obj }
+func (obj Obj) msg() *Msg           { return nil }
+func (obj *Obj) IsLast() bool       { return obj.Hdr.IsLast() }
+func (obj *Obj) IsIdleTick() bool   { return obj.Hdr.ObjAttrs.Size == tickMarker }
+func (obj *Obj) IsHeaderOnly() bool { return obj.Hdr.ObjAttrs.Size == 0 || obj.Hdr.IsLast() }
+func (obj *Obj) String() string {
+	s := fmt.Sprintf("sobj-%s/%s", obj.Hdr.Bck, obj.Hdr.ObjName)
+	if obj.IsHeaderOnly() {
+		return s
+	}
+	return fmt.Sprintf("%s(size=%d)", s, obj.Hdr.ObjAttrs.Size)
+}
 
 func (obj *Obj) SetPrc(n int) {
 	// when there's a `sent` callback and more than one destination
@@ -398,9 +407,7 @@ func (obj *Obj) SetPrc(n int) {
 	}
 }
 
-func (hdr *ObjHdr) IsLast() bool       { return hdr.ObjAttrs.Size == lastMarker }
-func (hdr *ObjHdr) IsIdleTick() bool   { return hdr.ObjAttrs.Size == tickMarker }
-func (hdr *ObjHdr) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.IsLast() }
+func (hdr *ObjHdr) IsLast() bool { return hdr.ObjAttrs.Size == lastMarker }
 
 func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName string, bck cmn.Bck, opaque []byte) {
 	hdr.Bck = bck
@@ -414,21 +421,17 @@ func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName strin
 	hdr.ObjAttrs.Version = meta.Version()
 }
 
-func (hdr *ObjHdr) String() string {
-	if hdr.IsHeaderOnly() {
-		return fmt.Sprintf("hdr %s/%s", hdr.Bck, hdr.ObjName)
-	}
-	return fmt.Sprintf("obj %s/%s(size=%d)", hdr.Bck, hdr.ObjName, hdr.ObjAttrs.Size)
-}
-
 ////////////////////
 // Msg and MsgHdr //
 ////////////////////
 
-func (msg Msg) obj() *Obj { return nil }
-func (msg Msg) msg() *Msg { return &msg }
+func (msg Msg) obj() *Obj           { return nil }
+func (msg Msg) msg() *Msg           { return &msg }
+func (msg *Msg) IsLast() bool       { return msg.Flags == lastMarker }
+func (msg *Msg) IsIdleTick() bool   { return msg.Flags == tickMarker }
+func (msg *Msg) IsHeaderOnly() bool { return true }
 
-func (hdr *MsgHdr) String() string { return hdr.RecvHandler }
+func (msg *Msg) String() string { return "smsg-" + msg.RecvHandler }
 
 //////////////////////////
 // header serialization //

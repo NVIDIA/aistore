@@ -131,7 +131,7 @@ func (sb *Streams) Close(gracefully bool) {
 }
 
 // (nodes == nil): transmit via all established streams
-func (sb *Streams) Send(obj transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
+func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
 	var (
 		streams = sb.get()
 		reopen  bool
@@ -216,22 +216,23 @@ func (sb *Streams) get() (bun bundle) {
 }
 
 // one obj, one stream
-func (sb *Streams) sendOne(obj transport.Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) (err error) {
-	obj.Reader = roc // reduce to io.ReadCloser
+func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) (err error) {
+	one := *obj
+	one.Reader = roc // reduce to io.ReadCloser
 	if reopen && roc != nil {
 		var reader io.ReadCloser
 		if reader, err = roc.Open(); err != nil { // reopen for every destination
 			return fmt.Errorf("unexpected: %s failed to reopen reader, err: %v", sb, err)
 		}
-		obj.Reader = reader
+		one.Reader = reader
 	}
 	if sb.multiplier <= 1 {
 		s0 := robin.stsdest[0]
-		return s0.Send(obj)
+		return s0.Send(&one)
 	}
 	i := int(robin.i.Inc()) % len(robin.stsdest)
 	s := robin.stsdest[i]
-	return s.Send(obj)
+	return s.Send(&one)
 }
 
 func (sb *Streams) apply(action int) {

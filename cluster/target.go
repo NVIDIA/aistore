@@ -63,7 +63,7 @@ type (
 		Open()
 		Close(err error)
 		UnregRecv()
-		Send(obj transport.Obj, roc cmn.ReadOpenCloser, tsi *Snode) error
+		Send(obj *transport.Obj, roc cmn.ReadOpenCloser, tsi *Snode) error
 		ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *Snode) error
 	}
 	PutObjectParams struct {

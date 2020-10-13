@@ -258,9 +258,9 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
 
 	var err error
 	if isRequest {
-		err = r.reqBundle.Send(transport.Obj{Hdr: hdr, Callback: cb}, reader, nodes...)
+		err = r.reqBundle.Send(&transport.Obj{Hdr: hdr, Callback: cb}, reader, nodes...)
 	} else {
-		err = r.respBundle.Send(transport.Obj{Hdr: hdr, Callback: cb}, reader, nodes...)
+		err = r.respBundle.Send(&transport.Obj{Hdr: hdr, Callback: cb}, reader, nodes...)
 	}
 	return err
 }

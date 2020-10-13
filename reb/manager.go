@@ -369,7 +369,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 	)
 	hdr.Opaque = reb.encodePushReq(&req, mm)
 	// second, notify all
-	if err := reb.pushes.Send(transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
+	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
 		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
 		mm.Free(hdr.Opaque)
 	}
@@ -566,7 +566,7 @@ func (reb *Manager) abortRebalance() {
 		mm  = reb.t.SmallMMSA()
 	)
 	hdr.Opaque = reb.encodePushReq(&req, mm)
-	if err := reb.pushes.Send(transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
+	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr, Callback: reb.pushSentCallback}, nil); err != nil {
 		glog.Errorf("Failed to broadcast abort notification: %v", err)
 	}
 }

@@ -168,12 +168,12 @@ func (dm *DataMover) UnregRecv() {
 	}
 }
 
-func (dm *DataMover) Send(obj transport.Obj, roc cmn.ReadOpenCloser, tsi *cluster.Snode) error {
+func (dm *DataMover) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, tsi *cluster.Snode) error {
 	return dm.data.streams.Send(obj, roc, tsi)
 }
 
 func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *cluster.Snode) error {
-	return dm.ack.streams.Send(transport.Obj{Hdr: hdr, Callback: cb}, nil, tsi)
+	return dm.ack.streams.Send(&transport.Obj{Hdr: hdr, Callback: cb}, nil, tsi)
 }
 
 //

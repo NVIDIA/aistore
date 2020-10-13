@@ -239,7 +239,7 @@ func (c *putJogger) cleanup(req *Request) error {
 			Size: 0,
 		},
 	}
-	return c.parent.reqBundle.Send(transport.Obj{Hdr: hdr, Callback: c.ctSendCallback}, nil)
+	return c.parent.reqBundle.Send(&transport.Obj{Hdr: hdr, Callback: c.ctSendCallback}, nil)
 }
 
 // Sends object replicas to targets that must have replicas after the client

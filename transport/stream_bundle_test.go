@@ -149,10 +149,10 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		hdr := genRandomHeader(random)
 		if num%7 == 0 {
 			hdr.ObjAttrs.Size = 0
-			err = sb.Send(transport.Obj{Hdr: hdr, Callback: callback}, nil)
+			err = sb.Send(&transport.Obj{Hdr: hdr, Callback: callback}, nil)
 		} else {
 			reader := &randReader{buf: wbuf, hdr: hdr, slab: slab, clone: true} // FIXME: multiplier reopen
-			err = sb.Send(transport.Obj{Hdr: hdr, Callback: callback}, reader)
+			err = sb.Send(&transport.Obj{Hdr: hdr, Callback: callback}, reader)
 		}
 		if err != nil {
 			t.Fatalf("%s: exiting with err [%v]\n", sb, err)

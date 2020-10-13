@@ -403,7 +403,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			}
 
 			wg.Add(1)
-			if err := ds.streams.request.Send(transport.Obj{Hdr: hdr, Callback: cb}, nil, toNode); err != nil {
+			if err := ds.streams.request.Send(&transport.Obj{Hdr: hdr, Callback: cb}, nil, toNode); err != nil {
 				return 0, errors.WithStack(err)
 			}
 
@@ -484,7 +484,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 	errHandler := func(err error, hdr transport.ObjHdr, node *cluster.Snode) {
 		hdr.Opaque = []byte(err.Error())
 		hdr.ObjAttrs.Size = 0
-		if err = ds.streams.response.Send(transport.Obj{Hdr: hdr}, nil, node); err != nil {
+		if err = ds.streams.response.Send(&transport.Obj{Hdr: hdr}, nil, node); err != nil {
 			ds.m.abort(err)
 		}
 	}
@@ -526,7 +526,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			lr := cmn.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
 			r := cmn.NopOpener(ioutil.NopCloser(lr))
 			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
 				ds.m.abort(err)
 			}
@@ -548,7 +548,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 				errHandler(err, respHdr, fromNode)
 				return
 			}
-			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
 				cmn.Close(f)
 				ds.m.abort(err)
@@ -559,7 +559,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 			ds.m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			respHdr.ObjAttrs.Size = sgl.Size()
-			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, sgl, fromNode); err != nil {
 				sgl.Free()
 				ds.m.abort(err)
@@ -577,7 +577,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
 				return
 			}
 			respHdr.ObjAttrs.Size = fi.Size()
-			o := transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
+			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, f, fromNode); err != nil {
 				cmn.Close(f)
 				ds.m.abort(err)

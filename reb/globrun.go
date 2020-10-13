@@ -683,7 +683,7 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 				Version:    lom.Version(),
 			},
 		}
-		o = transport.Obj{Hdr: hdr, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
+		o = &transport.Obj{Hdr: hdr, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
 	)
 
 	rj.m.inQueue.Inc()

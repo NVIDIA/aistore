@@ -65,16 +65,13 @@ type (
 		Reader   io.ReadCloser  // reader, to read the object, and close when done
 		Callback ObjSentCB      // callback fired when sending is done OR when the stream terminates (see term.reason)
 		CmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
-		// private
-		prc *atomic.Int64 // if present, ref-counts num sent objects to call SendCallback only once
-	}
-	MsgHdr struct {
-		RecvHandler string
-		KVS         cmn.SimpleKVs
+		prc      *atomic.Int64  // private; if present, ref-counts to call ObjSentCB only once
 	}
 	Msg struct {
-		Hdr  MsgHdr
-		Body []byte
+		Flags       int64
+		RecvHandler string
+		KVS         cmn.SimpleKVs
+		Body        []byte
 	}
 
 	// object-sent callback that has the following signature can optionally be defined on a:
@@ -133,44 +130,38 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 //   (with its refcounting and reader-closing). This holds true in all cases including
 //   network errors that may cause sudden and instant termination of the underlying
 //   stream(s).
-func (s *Stream) Send(obj Obj) (err error) {
-	var (
-		hdr     = &obj.Hdr
-		verbose = bool(glog.FastV(4, glog.SmoduleTransport))
-	)
-	if err = s.startSend(hdr, verbose); err != nil {
+func (s *Stream) Send(obj *Obj) (err error) {
+	verbose := bool(glog.FastV(4, glog.SmoduleTransport))
+	if err = s.startSend(obj, verbose); err != nil {
 		return
 	}
 	if obj.Reader == nil {
-		debug.Assert(hdr.IsHeaderOnly())
+		debug.Assert(obj.IsHeaderOnly())
 		obj.Reader = nopRC
-	} else if debug.Enabled && hdr.IsHeaderOnly() {
+	} else if debug.Enabled && obj.IsHeaderOnly() {
 		b, _ := ioutil.ReadAll(obj.Reader)
 		debug.Assert(len(b) == 0)
 	}
 	s.workCh <- obj
 	if verbose {
-		glog.Infof("%s: send %s[sq=%d]", s, hdr, len(s.workCh))
+		glog.Infof("%s: send %s[sq=%d]", s, obj, len(s.workCh))
 	}
 	return
 }
 
-func (s *Stream) SendMsg(msg Msg) (err error) {
-	var (
-		hdr     = &msg.Hdr
-		verbose = bool(glog.FastV(4, glog.SmoduleTransport))
-	)
-	if err = s.startSend(hdr, verbose); err != nil {
+func (s *Stream) SendMsg(msg *Msg) (err error) {
+	verbose := bool(glog.FastV(4, glog.SmoduleTransport))
+	if err = s.startSend(msg, verbose); err != nil {
 		return
 	}
 	s.workCh <- msg
 	if verbose {
-		glog.Infof("%s: sendmsg %s[sq=%d]", s, hdr, len(s.workCh))
+		glog.Infof("%s: sendmsg %s[sq=%d]", s, msg, len(s.workCh))
 	}
 	return
 }
 
 func (s *Stream) Fin() {
-	_ = s.Send(Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}})
+	_ = s.Send(&Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}})
 	s.wg.Wait()
 }

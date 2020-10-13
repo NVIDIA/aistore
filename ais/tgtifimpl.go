@@ -197,7 +197,7 @@ func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 	wg.Add(1)
 
 	hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
-	o := transport.Obj{Hdr: hdr, Callback: cb, CmplPtr: unsafe.Pointer(lom)}
+	o := &transport.Obj{Hdr: hdr, Callback: cb, CmplPtr: unsafe.Pointer(lom)}
 	if err := params.DM.Send(o, params.Reader, params.Tsi); err != nil {
 		if params.Locked {
 			lom.Unlock(false)
