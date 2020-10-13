@@ -4,7 +4,7 @@ echo "---------------------------------------------------"
 echo "aisnode $AIS_NODE_ROLE container startup at $(date)"
 echo "---------------------------------------------------"
 
-[[ -f /git-showbranch.out ]] && cat /git-showbranch.out 
+[[ -f /git-showbranch.out ]] && cat /git-showbranch.out
 
 cp -fv $AIS_CONF_FILE /etc/ais || exit 1
 cp -fv $STATSD_CONF_FILE /opt/statsd/statsd.conf || exit 1
@@ -79,7 +79,7 @@ fi
 # So target pods can start before any proxy pods - and, even if all proxies started before targets,
 # the proxies need some time to get their house in order. These times can also be stretched
 # by such things as container image download.
-# 
+#
 # Thus we require that all pods (except the initial primary proxy during initial cluster
 # deployment) wait here until they can both:
 #  - resolve and ping the proxy clusterIP service; this should always be possible since the
@@ -93,39 +93,7 @@ fi
 #
 total_wait=0
 if ! $is_primary; then
-    echo "Waiting for proxy clusterIP service ($CLUSTERIP_PROXY_SERVICE_HOSTNAME) to be resolvable and pingable"
-    ping_result="failure"
-    
-    #
-    # Note that a clusterIP service is pingable *once created*, irrespective of whether it is
-    # yet backed by any endpoints. So the following wait tends to be pretty short.
-    #
-    elapsed=0
-    while [[ $elapsed -lt 60 ]]; do
-        # Single success will end, otherwise wait at most 10s
-        ping -c 1 -w 10 $CLUSTERIP_PROXY_SERVICE_HOSTNAME
-        if [[ $? -eq 0 ]]; then
-            ping_result="success"
-            break
-        fi
-
-        if [[ $? -eq 1 ]]; then
-            # could resolve but not ping, nearly there! the -w timeout means we
-            # waited 10s during the ping.
-            echo "ping timeout after 10s, can resolve but not ping; retrying"
-            elapsed=$((elapsed + 10))
-        else
-            echo "ping timeout after 10s, cannot resolve or other failure; retry in 5s to a max of 60s"
-            sleep 5                     # code 2 means resolve failure, treat any others the same
-            elapsed=$((elapsed + 5))
-        fi
-
-        echo "Ping total wait time so far: $elapsed"
-    done
-    total_wait=$((total_wait + elapsed))
-
-    echo "Ping $ping_result; waited a total of around $elapsed seconds"
-    [[ $ping_result == "failure" ]] && exit 2
+    echo "Waiting for proxy clusterIP service ($CLUSTERIP_PROXY_SERVICE_HOSTNAME) to be accessible"
 
     #
     # Now that the proxy clusterIP has a DNS entry and is pingable, wait until we're able
@@ -138,14 +106,14 @@ if ! $is_primary; then
     d_url="http://${CLUSTERIP_PROXY_SERVICE_HOSTNAME}:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/daemon?what=smap"
     echo "Waiting for a 200 result on ${d_url}"
     elapsed=0
-    while [[ $elapsed -lt 60 ]]; do
+    while [[ $elapsed -lt 90 ]]; do
         d_code=$(curl -X GET -o /dev/null --silent -w "%{http_code}" $d_url)
         if [[ "$d_code" == "200" ]]; then
             echo "   ... success after ${elapsed}s"
             proxy_ok=true
             break
         else
-            echo "   ... failed (code=$d_code) at ${elapsed}s, trying for up to 60s"
+            echo "   ... failed (code=$d_code) at ${elapsed}s, trying for up to 90s"
             elapsed=$((elapsed + 1))
             sleep 1
         fi
@@ -160,7 +128,6 @@ fi
 [[ $total_wait -le 2 ]] && sleep 2
 
 ARGS="-config=/etc/ais/$(basename -- $AIS_CONF_FILE) -role=$AIS_NODE_ROLE -alsologtostderr=true -stderrthreshold=1"
-
 $is_primary && ARGS+=" -ntargets=$TARGETS"
 echo "aisnode args: $ARGS"
 
