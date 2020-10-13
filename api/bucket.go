@@ -355,19 +355,17 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		if pageNum == 1 {
 			page = bckList
 		} else {
-			// NOTE: Do not try to optimize this code by allocating the page
-			//  on the second iteration and reusing it - it will not work since
-			//  the Unmarshaler/Decoder will reuse the entry pointers what will
-			//  result in duplications and incorrect output.
+			// have to nullify (otherwise, Unmarshaler/Decoder itself will reuse
+			// the entries which'll result in duplications)
 			page.Entries = nil
 		}
 
-		// Retry with bigger timeout when deadline was exceeded.
+		// Retry with increasing timeout
 		for i := 0; i < 5; i++ {
 			if _, err = doHTTPRequestGetResp(reqParams, page); err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					client := *reqParams.BaseParams.Client
-					client.Timeout = 2 * client.Timeout // retry with increasing timeout
+					client.Timeout = 2 * client.Timeout
 					reqParams.BaseParams.Client = &client
 					continue
 				}
@@ -379,7 +377,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			return nil, err
 		}
 
-		// First iteration uses `bckList` directly so there is no need to append.
+		// The first iteration uses the `bckList` directly
 		if pageNum > 1 {
 			bckList.Entries = append(bckList.Entries, page.Entries...)
 			bckList.ContinuationToken = page.ContinuationToken
