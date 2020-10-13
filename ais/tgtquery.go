@@ -41,10 +41,10 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Query, cmn.Init); err != nil {
 		return
 	}
-
-	handle := r.Header.Get(cmn.HeaderHandle) // TODO: should it be from header or from body?
-	smap := t.owner.smap.get()
-	msg := &query.InitMsg{}
+	var (
+		handle = r.Header.Get(cmn.HeaderHandle) // TODO: should it be from header or from body?
+		msg    = &query.InitMsg{}
+	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
@@ -78,14 +78,8 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dsts := make([]string, smap.DefaultICSize())
-	for pid, psi := range smap.Pmap {
-		if psi.IsIC() {
-			dsts = append(dsts, pid)
-		}
-	}
 	xact.AddNotif(&xaction.NotifXact{
-		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: dsts, F: t.callerNotifyFin},
+		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 	})
 	go xact.Run()
 }

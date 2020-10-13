@@ -1572,7 +1572,7 @@ func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...
 	if id == "" {
 		id = cmn.GenUUID()
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}
-		msg := t.newAisMsg(&cmn.ActionMsg{Value: regMsg}, nil, nil)
+		msg := t.newAisMsg(&cmn.ActionMsg{Action: cmn.ActRegGlobalXaction, Value: regMsg}, nil, nil)
 		t.bcastToIC(msg, false /*wait*/)
 	}
 	t.rebManager.RunResilver(id, skipGlobMisplaced, notifs...)
