@@ -35,7 +35,10 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		if stats, exists := p.notifs.queryStats(msg.ID); exists {
 			var resp *downloader.DlStatusResp
 			stats.Range(func(_ string, status interface{}) bool {
-				dlStatus := status.(*downloader.DlStatusResp)
+				dlStatus, ok := status.(*downloader.DlStatusResp)
+				if !ok {
+					return false
+				}
 				resp = resp.Aggregate(*dlStatus)
 				return true
 			})
