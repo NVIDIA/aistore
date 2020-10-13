@@ -1173,6 +1173,59 @@ func TestListObjectsCache(t *testing.T) {
 	}
 }
 
+func TestListObjectsWithRebalance(t *testing.T) {
+	// TODO: This test doesn't work as list objects doesn't correctly handle
+	//  objects which are yet to be migrated.
+	t.Skip("list objects does not work correctly with rebalance")
+
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	var (
+		baseParams = tutils.BaseAPIParams()
+		wg         = &sync.WaitGroup{}
+		m          = ioContext{
+			t:        t,
+			num:      10000,
+			fileSize: 128,
+		}
+	)
+
+	m.init()
+	m.saveClusterState()
+	if m.originalTargetCount < 2 {
+		t.Fatalf("must have at least 2 target in the cluster")
+	}
+
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	target := m.unregisterTarget()
+
+	m.puts()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		m.reregisterTarget(target)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 15; i++ {
+			tutils.Logf("listing all objects, iter: %d\n", i)
+			bckList, err := api.ListObjects(baseParams, m.bck, nil, 0)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, len(bckList.Entries) == m.num, "entries mismatch (%d vs %d)", len(bckList.Entries), m.num)
+
+			time.Sleep(time.Second)
+		}
+	}()
+
+	wg.Wait()
+	m.assertClusterState()
+}
+
 func TestBucketSingleProp(t *testing.T) {
 	const (
 		dataSlices      = 1
