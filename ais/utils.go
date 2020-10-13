@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -219,12 +220,13 @@ func reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck) bool {
 		bprops.EC.ParitySlices != nprops.EC.ParitySlices
 }
 
-func withLocalRetry(cond func() bool) (ok bool) {
-	const retries = 3
-	sleep := cmn.GCO.Get().Timeout.CplaneOperation / 2
-	for i := 0; i < retries && !ok; i++ {
-		time.Sleep(sleep)
-		ok = cond()
+func withGosched(cond func() bool) (ok bool) {
+	if ok = cond(); !ok {
+		runtime.Gosched()
+		if ok = cond(); !ok {
+			runtime.Gosched()
+			ok = cond()
+		}
 	}
 	return
 }

@@ -89,7 +89,9 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 	}
 
 	if regToIC && xlru.ID().String() == id {
-		t.registerIC(xactRegMsg{UUID: id, Kind: cmn.ActLRU, Srcs: []string{t.si.ID()}})
+		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActLRU, Srcs: []string{t.si.ID()}}
+		msg := t.newAisMsg(&cmn.ActionMsg{Value: regMsg}, nil, nil)
+		t.bcastToIC(msg, false /*wait*/)
 	}
 
 	ini := lru.InitLRU{

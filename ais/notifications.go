@@ -202,7 +202,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uuid = notifMsg.UUID
-	if !withLocalRetry(func() bool { nl, exists = n.entry(uuid); return exists }) {
+	if !withGosched(func() bool { nl, exists = n.entry(uuid); return exists }) {
 		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown nl, %s", n.p.si, notifMsg)
 		return
 	}

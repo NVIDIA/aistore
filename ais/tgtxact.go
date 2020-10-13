@@ -176,20 +176,3 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 	}
 	return nil
 }
-
-func (t *targetrunner) registerIC(regMsg xactRegMsg) (err error) {
-	var (
-		smap   = t.owner.smap.get()
-		actMsg = cmn.ActionMsg{Action: cmn.ActRegGlobalXaction, Value: regMsg}
-		msg    = t.newAisMsg(&actMsg, smap, nil)
-	)
-
-	results := t.bcastToIC(msg)
-	for res := range results {
-		if res.err != nil {
-			glog.Error(res.err)
-			err = res.err
-		}
-	}
-	return
-}

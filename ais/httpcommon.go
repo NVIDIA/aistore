@@ -913,8 +913,12 @@ func (h *httprunner) unicastToNode(si *cluster.Snode, bargs *bcastArgs, wg *sync
 	if bargs.fv != nil {
 		cargs.v = bargs.fv()
 	}
-	ch <- h.call(cargs)
-	wg.Done()
+	if wg != nil {
+		ch <- h.call(cargs)
+		wg.Done()
+	} else {
+		_ = h.call(cargs)
+	}
 }
 
 // asynchronous variation of the `bcastToNodes` (above)
@@ -939,11 +943,9 @@ func (h *httprunner) bcastToNodesAsync(bargs *bcastArgs) {
 	}
 }
 
-func (h *httprunner) bcastToIC(msg *aisMsg) chan callResult {
+func (h *httprunner) bcastToIC(msg *aisMsg, wait bool) {
 	var (
 		smap  = h.owner.smap.get()
-		wg    = &sync.WaitGroup{}
-		ch    = make(chan callResult, smap.ICCount())
 		bargs = bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
@@ -953,22 +955,40 @@ func (h *httprunner) bcastToIC(msg *aisMsg) chan callResult {
 			network: cmn.NetworkIntraControl,
 			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 		}
+		ch  chan callResult
+		wg  *sync.WaitGroup
 		cnt int
 	)
+	if wait {
+		wg = &sync.WaitGroup{}
+		ch = make(chan callResult, smap.ICCount())
+	}
 	for pid, psi := range smap.Pmap {
 		if !psi.IsIC() || pid == h.si.ID() {
 			continue
 		}
-		wg.Add(1)
+		if wait {
+			wg.Add(1)
+		}
 		cnt++
 		go h.unicastToNode(psi, &bargs, wg, ch)
+	}
+	if !wait {
+		return
 	}
 	wg.Wait()
 	close(ch)
 	if cnt == 0 {
 		glog.Errorf("%s: node count is zero in broadcast-to-IC, %s", h.si, smap.StrIC(h.si))
 	}
-	return ch
+	if !debug.Enabled {
+		return
+	}
+	for res := range ch {
+		if res.err != nil {
+			glog.Error(res.err)
+		}
+	}
 }
 
 //////////////////////////////////

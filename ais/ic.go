@@ -80,7 +80,7 @@ begin:
 			ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 			return true
 		} else if retry {
-			withLocalRetry(func() bool {
+			withGosched(func() bool {
 				owner, exists = ic.p.notifs.getOwner(uuid)
 				return exists
 			})
@@ -197,7 +197,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
-	withLocalRetry(func() bool {
+	withGosched(func() bool {
 		nl, exists = ic.p.notifs.find(flt)
 		return exists
 	})
@@ -268,7 +268,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !smap.IsIC(ic.p.si) {
-		if !withLocalRetry(func() bool {
+		if !withGosched(func() bool {
 			smap = ic.p.owner.smap.get()
 			return smap.IsIC(ic.p.si)
 		}) {
@@ -302,7 +302,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		debug.Assert(len(regMsg.Srcs) != 0)
-		withLocalRetry(func() bool {
+		withGosched(func() bool {
 			if smap.Version < msg.SmapVersion || err != nil {
 				smap = ic.p.owner.smap.get()
 			}
@@ -340,16 +340,7 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAisMsg(&actMsg, smap, nil)
 	)
-
-	go func() {
-		results := ic.p.bcastToIC(msg)
-		for res := range results {
-			if res.err != nil {
-				glog.Error(res.err)
-				// TODO -- FIXME - handle error - should retry registering to failed IC members
-			}
-		}
-	}()
+	ic.p.bcastToIC(msg, false /*wait*/)
 }
 
 func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
