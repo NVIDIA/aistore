@@ -1637,7 +1637,7 @@ func TestECDestroyBucket(t *testing.T) {
 	// check if get requests are successful
 	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
 }
 
@@ -1747,7 +1747,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	tutils.Logln("DONE\nReading bucket list...")
 	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
 }
 
@@ -2110,7 +2110,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
 	oldBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects created, starting rebalance\n", len(oldBucketList.Entries))
 
 	// select a target that loses its mpath(simulate drive death),
@@ -2163,7 +2163,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	newBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	if len(oldBucketList.Entries) != len(newBucketList.Entries) {
 		for _, o := range oldBucketList.Entries {
 			found := false
@@ -2222,9 +2222,7 @@ func TestECBucketEncode(t *testing.T) {
 	}
 
 	reslist, err := api.ListObjects(baseParams, m.bck, nil, 0)
-	if err != nil {
-		t.Fatalf("list_objects %s failed, err = %v", m.bck, err)
-	}
+	tassert.CheckFatal(t, err)
 	tutils.Logf("Object count: %d\n", len(reslist.Entries))
 	if len(reslist.Entries) != m.num {
 		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck, len(reslist.Entries), m.num)
@@ -2399,9 +2397,9 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 
 	msg := &cmn.SelectMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	resRegOld, err := api.ListObjects(baseParams, bckReg, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
@@ -2413,11 +2411,11 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 
 	tutils.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects in %s after rebalance\n",
 		len(resECNew.Entries), bckEC)
 	resRegNew, err := api.ListObjects(baseParams, bckReg, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects in %s after rebalance\n",
 		len(resRegNew.Entries), bckReg)
 
@@ -2514,7 +2512,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 
 	msg := &cmn.SelectMsg{PageSize: pagesize, Props: cmn.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects in %s after rebalance\n", len(resEC.Entries), bck)
 	if len(resEC.Entries) != o.objCount {
 		t.Errorf("Expected %d objects after rebalance, found %d", o.objCount, len(resEC.Entries))
@@ -2617,7 +2615,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 
 	msg := &cmn.SelectMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("Created %d objects in %s. Starting rebalance\n", len(resECOld.Entries), bckEC)
 
 	tutils.Logf("Registering node %s\n", tgtLost.ID())
@@ -2658,7 +2656,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 
 	tutils.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects in %s after rebalance\n",
 		len(resECNew.Entries), bckEC)
 	if len(resECNew.Entries) != len(resECOld.Entries) {
@@ -2673,7 +2671,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 
 	tutils.Logln("Getting the number of objects after reading")
 	resECNew, err = api.ListObjects(baseParams, bckEC, msg, 0)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects in %s after reading\n",
 		len(resECNew.Entries), bckEC)
 	if len(resECNew.Entries) != len(resECOld.Entries) {
