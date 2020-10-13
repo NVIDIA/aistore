@@ -56,13 +56,16 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 
 	if isNew {
-		xact.AddNotif(&xaction.NotifXact{
-			NotifBase: nl.NotifBase{
-				When: cluster.UponTerm,
-				Dsts: []string{equalIC},
-				F:    t.callerNotifyFin,
-			},
-		})
+		if false {
+			// TODO -- FIXME - enable after fixing #922
+			xact.AddNotif(&xaction.NotifXact{
+				NotifBase: nl.NotifBase{
+					When: cluster.UponTerm,
+					Dsts: []string{equalIC},
+					F:    t.callerNotifyFin,
+				},
+			})
+		}
 
 		go xact.Run()
 	}
