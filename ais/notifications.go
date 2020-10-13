@@ -201,14 +201,14 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// NOTE: the sender is asynchronous - ignores the response -
+	//       which is why we consider `not-found`, `already-finished`,
+	//       and `unknown-notifier` benign non-error conditions
 	uuid = notifMsg.UUID
-	if !withGosched(func() bool { nl, exists = n.entry(uuid); return exists }) {
-		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: unknown nl, %s", n.p.si, notifMsg)
+	if !withRetry(func() bool { nl, exists = n.entry(uuid); return exists }) {
 		return
 	}
 	if nl.Finished() {
-		s := fmt.Sprintf("%s: %s already finished (%s)", n.p.si, nl, notifMsg)
-		n.p.invalmsghdlrsilent(w, r, s, http.StatusGone)
 		return
 	}
 
@@ -217,7 +217,6 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		tsi, ok = srcs[tid]
 	)
 	if !ok {
-		n.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: %s from unknown %s", n.p.si, notifMsg, tid)
 		return
 	}
 	//

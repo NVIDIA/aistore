@@ -80,7 +80,7 @@ begin:
 			ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 			return true
 		} else if retry {
-			withGosched(func() bool {
+			withRetry(func() bool {
 				owner, exists = ic.p.notifs.getOwner(uuid)
 				return exists
 			})
@@ -197,7 +197,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
-	withGosched(func() bool {
+	withRetry(func() bool {
 		nl, exists = ic.p.notifs.find(flt)
 		return exists
 	})
@@ -268,7 +268,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !smap.IsIC(ic.p.si) {
-		if !withGosched(func() bool {
+		if !withRetry(func() bool {
 			smap = ic.p.owner.smap.get()
 			return smap.IsIC(ic.p.si)
 		}) {
@@ -302,7 +302,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		debug.Assert(len(regMsg.Srcs) != 0)
-		withGosched(func() bool {
+		withRetry(func() bool {
 			if smap.Version < msg.SmapVersion || err != nil {
 				smap = ic.p.owner.smap.get()
 			}

@@ -251,41 +251,5 @@ var _ = Describe("Notifications xaction test", func() {
 			// `nl` should be marked finished
 			Expect(nl.Finished()).To(BeTrue())
 		})
-
-		// Error cases
-		Context("erroneous cases handler", func() {
-			It("should respond with error if xactionID not found", func() {
-				request := notifRequest(target1ID, xactID, cmn.Finished, nil)
-				checkRequest(n, request, http.StatusNotFound)
-			})
-
-			It("should respond with error if requested with invalid path", func() {
-				request := notifRequest(target1ID, "", "invalid-kind", nil)
-				checkRequest(n, request, http.StatusBadRequest)
-			})
-
-			It("should respond with error if requested if invalid data provided in body", func() {
-				request := notifRequest(target1ID, xactID, cmn.Finished, nil)
-				// set invalid body
-				request.Body = ioutil.NopCloser(bytes.NewBuffer([]byte{}))
-
-				respBody := checkRequest(n, request, http.StatusBadRequest)
-				Expect(string(respBody)).To(ContainSubstring("json-unmarshal"))
-			})
-
-			It("should responding with StatusGone for finished notifications", func() {
-				notifiers := getNodeMap(target1ID)
-				nl = xaction.NewXactNL(xactID, &smap.Smap, notifiers, cmn.ActECEncode)
-				n.add(nl)
-
-				// Send a Finished notification
-				request := notifRequest(target1ID, xactID, cmn.Finished, finishedXact(xactID))
-				checkRequest(n, request, http.StatusOK)
-
-				// Send a notification after finishing
-				request = notifRequest(target1ID, xactID, cmn.Progress, nil)
-				checkRequest(n, request, http.StatusGone)
-			})
-		})
 	})
 })
