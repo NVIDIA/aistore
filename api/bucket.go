@@ -318,15 +318,20 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 	if smsg == nil {
 		smsg = &cmn.SelectMsg{}
 	}
+
+	// NOTE: No need to preallocate bucket entries slice, we use msgpack so it will do it for us!
+
 	var (
-		ctx       *ProgressContext
-		q         = cmn.AddBckToQuery(url.Values{}, bck)
+		ctx *ProgressContext
+
 		path      = cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name)
 		hdr       = http.Header{cmn.HeaderAccept: []string{cmn.ContentMsgPack}}
+		q         = cmn.AddBckToQuery(url.Values{}, bck)
 		reqParams = ReqParams{BaseParams: baseParams, Path: path, Header: hdr, Query: q}
-		nextPage  = &cmn.BucketList{}
-		rem       = numObjects
-		listAll   = numObjects == 0
+
+		nextPage = &cmn.BucketList{}
+		toRead   = numObjects
+		listAll  = numObjects == 0
 	)
 	bckList = &cmn.BucketList{}
 	smsg.UUID = ""
@@ -339,9 +344,9 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 	// the entire bucket). Each iteration lists a page of objects and reduces the `rem`
 	// counter accordingly. When the latter gets below page size, we perform the final
 	// iteration for the reduced page.
-	for pageNum := 1; listAll || rem > 0; pageNum++ {
+	for pageNum := 1; listAll || toRead > 0; pageNum++ {
 		if !listAll {
-			smsg.PageSize = rem
+			smsg.PageSize = toRead
 		}
 		actMsg := cmn.ActionMsg{Action: cmn.ActListObjects, Value: smsg}
 		reqParams.Body = cmn.MustMarshal(actMsg)
@@ -350,9 +355,14 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 		if pageNum == 1 {
 			page = bckList
 		} else {
+			// NOTE: Do not try to optimize this code by allocating the page
+			//  on the second iteration and reusing it - it will not work since
+			//  the Unmarshaler/Decoder will reuse the entry pointers what will
+			//  result in duplications and incorrect output.
 			page.Entries = nil
 		}
 
+		// Retry with bigger timeout when deadline was exceeded.
 		for i := 0; i < 5; i++ {
 			if _, err = doHTTPRequestGetResp(reqParams, page); err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
@@ -369,6 +379,7 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			return nil, err
 		}
 
+		// First iteration uses `bckList` directly so there is no need to append.
 		if pageNum > 1 {
 			bckList.Entries = append(bckList.Entries, page.Entries...)
 			bckList.ContinuationToken = page.ContinuationToken
@@ -382,12 +393,12 @@ func ListObjects(baseParams BaseParams, bck cmn.Bck, smsg *cmn.SelectMsg, numObj
 			ctx.callback(ctx)
 		}
 
-		if page.ContinuationToken == "" { // listed all
+		if page.ContinuationToken == "" { // Listed all objects.
 			smsg.ContinuationToken = ""
 			break
 		}
 
-		rem = uint(cmn.Max(int(rem)-len(page.Entries), 0))
+		toRead = uint(cmn.Max(int(toRead)-len(page.Entries), 0))
 		cmn.Assert(page.UUID != "")
 		smsg.UUID = page.UUID
 		smsg.ContinuationToken = page.ContinuationToken
