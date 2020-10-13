@@ -314,6 +314,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [RESTful API](docs/http_api.md)
 - [File access](cmd/aisfs/README.md)
 - [Joining AIS cluster](docs/join_cluster.md)
+- [Removing a node from AIS cluster](docs/leave_cluster.md)
 - [AIS Buckets: definition, operations, properties](docs/bucket.md#bucket)
 - [Statistics, Collected Metrics, Visualization](docs/metrics.md)
 - [Performance: Tuning and Testing](docs/performance.md)
