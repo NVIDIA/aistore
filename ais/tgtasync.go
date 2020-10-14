@@ -70,16 +70,16 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		go xact.Run()
 	}
 
-	bckList, status, err := t.waitObjListResp(xact.(*objlist.Xact), msg)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), status)
+	resp := xact.(*objlist.Xact).Do(msg)
+	if resp.Err != nil {
+		t.invalmsghdlr(w, r, resp.Err.Error(), resp.Status)
 		return false
 	}
 
-	debug.Assert(status == http.StatusOK)
-	debug.Assert(bckList.UUID != "")
+	debug.Assert(resp.Status == http.StatusOK)
+	debug.Assert(resp.BckList.UUID != "")
 
-	return t.writeMsgPack(w, r, bckList, "list_objects")
+	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
 }
 
 func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
@@ -97,13 +97,6 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	}
 	ok = t.doAsync(w, r, actionMsg.Action, bck, &msg)
 	return
-}
-
-func (t *targetrunner) waitObjListResp(xact *objlist.Xact, msg *cmn.SelectMsg) (*cmn.BucketList, int, error) {
-	ch := make(chan *objlist.Resp) // unbuffered
-	xact.Do(msg, ch)
-	resp := <-ch
-	return resp.BckList, resp.Status, resp.Err
 }
 
 // asynchronous bucket request

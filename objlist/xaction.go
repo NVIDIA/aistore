@@ -39,19 +39,22 @@ type (
 	}
 	Xact struct {
 		xaction.XactDemandBase
-		ctx        context.Context
-		t          cluster.Target
-		bck        *cluster.Bck
-		workCh     chan *bckListReq      // incoming requests
+		ctx context.Context
+		t   cluster.Target
+		bck *cluster.Bck
+		msg *cmn.SelectMsg
+
+		workCh chan *bckListReq // incoming requests
+		stopCh *cmn.StopCh      // Informs about stopped xaction.
+
 		objCache   chan *cmn.BucketEntry // local cache filled when idle
 		lastPage   []*cmn.BucketEntry    // last sent page and a little more
-		msg        *cmn.SelectMsg
-		walkStopCh *cmn.StopCh    // to abort file walk
-		token      string         // the continuation token for the last sent page (for re-requests)
-		nextToken  string         // continuation token returned by Cloud to get the next page
-		walkWg     sync.WaitGroup // to wait until walk finishes
-		walkDone   bool           // true: done walking or Cloud returned all objects
-		fromRemote bool           // whether to request remote data (Cloud/Remote/Backend)
+		walkStopCh *cmn.StopCh           // to abort file walk
+		token      string                // the continuation token for the last sent page (for re-requests)
+		nextToken  string                // continuation token returned by Cloud to get the next page
+		walkWg     sync.WaitGroup        // to wait until walk finishes
+		walkDone   bool                  // true: done walking or Cloud returned all objects
+		fromRemote bool                  // whether to request remote data (Cloud/Remote/Backend)
 	}
 
 	bckListReq struct {
@@ -66,8 +69,7 @@ type (
 )
 
 const (
-	bckListReqSize = 32  // the size of xaction request queue
-	cacheSize      = 128 // the size of local cache filled in advance when idle
+	cacheSize = 128 // the size of local cache filled in advance when idle
 )
 
 var (
@@ -90,16 +92,19 @@ func (p *xactProvider) Start(bck cmn.Bck) error {
 func (*xactProvider) Kind() string        { return cmn.ActListObjects }
 func (p *xactProvider) Get() cluster.Xact { return p.xact }
 
-func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck,
-	smsg *cmn.SelectMsg, uuid string) *Xact {
+func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.SelectMsg, uuid string) *Xact {
 	idleTime := cmn.GCO.Get().Timeout.SendFile
 	xact := &Xact{
 		ctx:      ctx,
 		t:        t,
+		bck:      cluster.NewBckEmbed(bck),
 		msg:      smsg,
-		workCh:   make(chan *bckListReq, bckListReqSize),
+		workCh:   make(chan *bckListReq),
+		stopCh:   cmn.NewStopCh(),
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
+	cmn.Assert(xact.bck.Props != nil)
+
 	xact.XactDemandBase = *xaction.NewXactDemandBaseBckUUID(uuid, cmn.ActListObjects, bck, idleTime)
 	xact.InitIdle()
 	return xact
@@ -109,33 +114,29 @@ func (r *Xact) String() string {
 	return fmt.Sprintf("%s: %s", r.t.Snode(), &r.XactDemandBase)
 }
 
-func (r *Xact) Do(msg *cmn.SelectMsg, ch chan *Resp) {
-	if r.Finished() {
-		ch <- &Resp{Err: ErrGone}
-		close(ch)
-		return
+func (r *Xact) Do(msg *cmn.SelectMsg) *Resp {
+	// The guarantee here is that we either put something on the channel and our
+	// request will be processed (since the `workCh` is unbuffered) or we receive
+	// message that the xaction has been stopped.
+	req := &bckListReq{msg: msg, ch: make(chan *Resp)}
+	select {
+	case r.workCh <- req:
+		return <-req.ch
+	case <-r.stopCh.Listen():
+		close(req.ch)
+		return &Resp{Err: ErrGone}
 	}
-	req := &bckListReq{
-		msg: msg,
-		ch:  ch,
-	}
-	r.workCh <- req
 }
 
-// Starts fs.Walk beforehand if needed so that by the time we read the next page
-// local cache is populated.
-func (r *Xact) init() error {
-	r.bck = cluster.NewBckEmbed(r.Bck())
-	if err := r.bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
-		return err
-	}
+func (r *Xact) init() {
 	r.fromRemote = !r.bck.IsAIS() && !r.msg.IsFlagSet(cmn.SelectCached)
 	if r.fromRemote {
-		return nil
+		return
 	}
 
+	// Start fs.Walk beforehand if needed so that by the time we read
+	// the next page local cache is populated.
 	r.initTraverse()
-	return nil
 }
 
 func (r *Xact) initTraverse() {
@@ -151,11 +152,10 @@ func (r *Xact) initTraverse() {
 	go r.traverseBucket()
 }
 
-func (r *Xact) Run() (err error) {
+func (r *Xact) Run() error {
 	glog.Infoln(r.String())
-	if err := r.init(); err != nil {
-		return err
-	}
+
+	r.init()
 
 	for {
 		select {
@@ -167,14 +167,13 @@ func (r *Xact) Run() (err error) {
 			r.msg.ContinuationToken = req.msg.ContinuationToken
 			r.msg.PageSize = req.msg.PageSize
 			resp := r.dispatchRequest()
-			req.ch <- resp
-			close(req.ch)
+			req.setResp(resp)
 		case <-r.IdleTimer():
-			r.Stop(nil)
+			r.stop()
 			return nil
 		case <-r.ChanAbort():
-			r.Stop(nil)
-			return cmn.NewAbortedError(r.String())
+			r.stop()
+			return nil
 		}
 	}
 }
@@ -186,16 +185,11 @@ func (r *Xact) stopWalk() {
 	}
 }
 
-func (r *Xact) Stop(err error) {
+func (r *Xact) stop() {
 	r.XactDemandBase.Stop()
 	r.Finish()
-	close(r.workCh)
+	r.stopCh.Close()
 	r.stopWalk()
-	if err == nil {
-		glog.Infoln(r.String())
-	} else {
-		glog.Errorf("%s: stopped with err %v", r, err)
-	}
 }
 
 func (r *Xact) dispatchRequest() *Resp {
@@ -437,4 +431,9 @@ func (r *Xact) traverseBucket() {
 		}
 	}
 	close(r.objCache)
+}
+
+func (r *bckListReq) setResp(resp *Resp) {
+	r.ch <- resp
+	close(r.ch)
 }
