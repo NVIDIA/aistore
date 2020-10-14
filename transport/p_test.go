@@ -83,10 +83,10 @@ func Test_CompressedOne(t *testing.T) {
 		} else {
 			var reader io.ReadCloser
 			if num%3 == 0 {
-				hdr.ObjAttrs.Size = int64(random.Intn(100))
+				hdr.ObjAttrs.Size = int64(random.Intn(100) + 1)
 				reader = ioutil.NopCloser(&io.LimitedReader{R: random, N: hdr.ObjAttrs.Size}) // fully random to hinder compression
 			} else {
-				hdr.ObjAttrs.Size = int64(random.Intn(cmn.GiB))
+				hdr.ObjAttrs.Size = int64(random.Intn(cmn.GiB) + 1)
 				reader = &randReader{buf: buf, hdr: hdr, clone: true}
 			}
 			stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})

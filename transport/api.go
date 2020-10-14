@@ -7,7 +7,6 @@ package transport
 
 import (
 	"io"
-	"io/ioutil"
 	"time"
 	"unsafe"
 
@@ -70,7 +69,7 @@ type (
 	Msg struct {
 		Flags       int64
 		RecvHandler string
-		KVS         cmn.SimpleKVs
+		KVs         cmn.SimpleKVs
 		Body        []byte
 	}
 
@@ -137,10 +136,8 @@ func (s *Stream) Send(obj *Obj) (err error) {
 	}
 	if obj.Reader == nil {
 		debug.Assert(obj.IsHeaderOnly())
-		obj.Reader = nopRC
-	} else if debug.Enabled && obj.IsHeaderOnly() {
-		b, _ := ioutil.ReadAll(obj.Reader)
-		debug.Assert(len(b) == 0)
+	} else if obj.IsHeaderOnly() {
+		cmn.Assert(false) // expecting nil reader; TODO: debug
 	}
 	s.workCh <- obj
 	if verbose {

@@ -39,6 +39,13 @@ const (
 	active
 )
 
+// in-send states
+const (
+	inHdr = iota + 1
+	inData
+	inEOB
+)
+
 // termination: reasons
 const (
 	reasonUnknown = "unknown"
@@ -62,9 +69,8 @@ type (
 	}
 	sendoff struct {
 		obj Obj
-		// in progress
 		off int64
-		dod int64
+		ins int // in-send enum
 	}
 	cmpl struct { // send completions => SCQ
 		obj Obj
@@ -81,11 +87,9 @@ type (
 		s   *Stream
 		add bool
 	}
-	nopReadCloser struct{}
 )
 
 var (
-	nopRC   = &nopReadCloser{}      // read() and close() stubs
 	nextSID = *atomic.NewInt64(100) // unique session IDs starting from 101
 	sc      = &StreamCollector{}    // idle timer and house-keeping (slow path)
 	gc      *collector              // real stream collector
@@ -197,7 +201,7 @@ func (s *Stream) sendLoop(dryrun bool) {
 		s.wg.Wait()
 
 		// second, handle the last interrupted send
-		if s.inObj() {
+		if s.inSend() {
 			obj := &s.sendoff.obj
 			s.objDone(obj, s.term.err)
 		}
@@ -263,9 +267,9 @@ func (s *Stream) doRequest() (err error) {
 // as io.Reader
 func (s *Stream) Read(b []byte) (n int, err error) {
 	s.time.inSend.Store(true) // indication for Collector to delay cleanup
-	if s.inObj() {
+	if s.inSend() {
 		obj := &s.sendoff.obj
-		if s.sendoff.dod != 0 {
+		if s.sendoff.ins == inData {
 			if !obj.IsHeaderOnly() {
 				return s.sendData(b)
 			}
@@ -296,6 +300,7 @@ repeat:
 		}
 		l := s.insHeader(s.sendoff.obj.Hdr)
 		s.header = s.maxheader[:l]
+		s.sendoff.ins = inHdr
 		return s.sendHdr(b)
 	case <-s.stopCh.Listen():
 		num := s.stats.Num.Load()
@@ -315,7 +320,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 			num := s.stats.Num.Load()
 			glog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
 		}
-		s.sendoff.dod = s.sendoff.off
+		s.sendoff.ins = inData
 		s.sendoff.off = 0
 		if s.sendoff.obj.Hdr.IsLast() {
 			if glog.FastV(4, glog.SmoduleTransport) {
@@ -378,10 +383,10 @@ exit:
 
 	// next completion => SCQ
 	s.cmplCh <- cmpl{s.sendoff.obj, err}
-	s.sendoff = sendoff{}
+	s.sendoff = sendoff{ins: inEOB}
 }
 
-func (s *Stream) inObj() bool { return s.sendoff.obj.Reader != nil } // see also: eoObj()
+func (s *Stream) inSend() bool { return s.sendoff.ins == inHdr || s.sendoff.ins == inData }
 
 ////////////////////
 // Obj and ObjHdr //
@@ -515,13 +520,6 @@ func (stats *Stats) CompressionRatio() float64 {
 	return float64(bytesRead) / float64(bytesSent)
 }
 
-///////////////////
-// nopReadCloser //
-///////////////////
-
-func (r *nopReadCloser) Read([]byte) (n int, err error) { return }
-func (r *nopReadCloser) Close() error                   { return nil }
-
 ///////////////
 // lz4Stream //
 ///////////////
@@ -546,7 +544,7 @@ re:
 	if last {
 		lz4s.zw.Flush()
 		retry = 0
-	} else if lz4s.s.sendoff.obj.Reader == nil /*eoObj*/ || err != nil {
+	} else if lz4s.s.sendoff.ins == inEOB || err != nil {
 		lz4s.zw.Flush()
 		retry = 0
 	}

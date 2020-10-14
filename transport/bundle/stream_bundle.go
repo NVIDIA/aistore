@@ -143,6 +143,9 @@ func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cl
 	if obj.Callback == nil {
 		obj.Callback = sb.extra.Callback
 	}
+	if obj.IsHeaderOnly() {
+		roc = nil
+	}
 	if nodes == nil {
 		if obj.Callback != nil {
 			obj.SetPrc(len(streams))
