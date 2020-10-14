@@ -583,7 +583,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode 
 		gfnActive            = goi.t.gfn.local.active()
 		ecEnabled            = goi.lom.Bprops().EC.Enabled
 	)
-	tsi, err = cluster.HrwTarget(goi.lom.Uname(), &smap.Smap)
+	tsi, err = cluster.HrwTarget(goi.lom.Uname(), &smap.Smap, true /*include maintenance*/)
 	if err != nil {
 		return
 	}

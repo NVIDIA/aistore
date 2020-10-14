@@ -3452,30 +3452,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
-			return
-		}
-		opts.SkipRebalance = opts.SkipRebalance || si.IsProxy()
-		if err = p.markMaintenance(msg, si); err != nil {
+		if rebID, err = p.startMaintenance(si, msg, &opts); err != nil {
 			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
 			return
 		}
-		if !opts.SkipRebalance {
-			var cb nl.NotifCallback
-			if msg.Action == cmn.ActDecommission {
-				cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
-			}
-			rebID, err = p.finalizeMaintenance(msg, si, cb)
-			if err == nil {
-				w.Write([]byte(rebID.String()))
-			}
-		} else if msg.Action == cmn.ActDecommission {
-			err = p.removeNode(msg, si)
-		}
-		if err != nil {
-			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
-			return
-		}
+		w.Write([]byte(rebID.String()))
 	case cmn.ActStopMaintenance:
 		var (
 			opts cmn.ActValDecommision

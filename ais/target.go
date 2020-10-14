@@ -147,8 +147,14 @@ func (gfn *globalGFN) activateTimed() {
 	glog.Infoln(gfn.tag, "activated timed")
 
 	go func() {
+		const sleep = 5 * time.Second
 		for {
-			time.Sleep(timedInterval)
+			for tm := time.Duration(0); tm < timedInterval; tm += sleep {
+				time.Sleep(sleep)
+				if !gfn.timedLookup.Load() {
+					return
+				}
+			}
 
 			gfn.mtx.Lock()
 			// If we woke up after defined schedule we are safe to deactivate.
@@ -164,6 +170,17 @@ func (gfn *globalGFN) activateTimed() {
 			gfn.mtx.Unlock()
 		}
 	}()
+}
+
+// Deactivates timed GFN only if timed GFN has been activated only once before.
+func (gfn *globalGFN) abortTimed() {
+	gfn.mtx.Lock()
+	defer gfn.mtx.Unlock()
+	if gfn.refCount == 1 {
+		glog.Infoln(gfn.tag, "aborted timed")
+		gfn.timedLookup.Store(false)
+		gfn.refCount = 0
+	}
 }
 
 ///////////////////

@@ -19,7 +19,7 @@ func TestMaintenanceOnOff(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 
 	// Invalid target case
-	msg := &cmn.ActValDecommision{DaemonID: "fakeID"}
+	msg := &cmn.ActValDecommision{DaemonID: "fakeID", SkipRebalance: true}
 	_, err := api.Maintenance(baseParams, cmn.ActStartMaintenance, msg)
 	tassert.Fatalf(t, err != nil, "Maintenance for invalid daemon ID succeeded")
 
@@ -45,24 +45,19 @@ func TestMaintenanceRebalance(t *testing.T) {
 			fixedSize:       true,
 			bck:             bck,
 			numGetsEachFile: 1,
+			proxyURL:        proxyURL,
 		}
 		actVal     = &cmn.ActValDecommision{}
 		proxyURL   = tutils.RandomProxyURL(t)
-		smap       = tutils.GetClusterMap(t, proxyURL)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.Logf("targets: %d, proxies: %d\n", smap.CountTargets(), smap.CountProxies())
-
-	tutils.Logln("Preparing a bucket")
+	m.saveClusterState()
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
-	m.init()
 
-	tutils.Logln("Putting objects to the bucket")
 	m.puts()
-
-	tsi := tutils.ExtractTargetNodes(smap)[0]
+	tsi := tutils.ExtractTargetNodes(m.smap)[0]
 	tutils.Logf("Removing target %s\n", tsi)
 	restored := false
 	actVal.DaemonID = tsi.ID()
@@ -70,7 +65,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tassert.CheckError(t, err)
 	defer func() {
 		if !restored {
-			tutils.RestoreTarget(t, proxyURL, smap, tsi)
+			tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 		}
 	}()
 	tutils.Logf("Wait for rebalance %s\n", rebID)
@@ -81,18 +76,85 @@ func TestMaintenanceRebalance(t *testing.T) {
 	smap2, err2 := tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"to target removed from the cluster",
-		smap.Version, testing.Verbose(),
-		smap.CountProxies(),
-		smap.CountTargets()-1,
+		m.smap.Version, testing.Verbose(),
+		m.smap.CountProxies(),
+		m.smap.CountTargets()-1,
 	)
 	tassert.CheckFatal(t, err2)
-	smap = smap2
+	m.smap = smap2
 
 	m.gets()
 	m.ensureNoErrors()
 
 	tutils.Logf("Restoring target %s\n", tsi)
-	tutils.RestoreTarget(t, proxyURL, smap, tsi)
+	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
+	restored = true
+	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckError(t, err)
+}
+
+func TestMaintenanceGetWhileRebalance(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	var (
+		bck = cmn.Bck{Name: "maint-get-reb", Provider: cmn.ProviderAIS}
+		m   = &ioContext{
+			t:               t,
+			num:             5000,
+			fileSize:        1024,
+			fixedSize:       true,
+			bck:             bck,
+			numGetsEachFile: 1,
+			proxyURL:        proxyURL,
+		}
+		actVal     = &cmn.ActValDecommision{}
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
+	m.saveClusterState()
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	m.puts()
+	go m.getsUntilStop()
+	stopped := false
+
+	tsi := tutils.ExtractTargetNodes(m.smap)[0]
+	tutils.Logf("Removing target %s\n", tsi)
+	restored := false
+	actVal.DaemonID = tsi.ID()
+	rebID, err := api.Maintenance(baseParams, cmn.ActDecommission, actVal)
+	tassert.CheckError(t, err)
+	defer func() {
+		if !stopped {
+			m.stopGets()
+		}
+		if !restored {
+			tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
+		}
+	}()
+	tutils.Logf("Wait for rebalance %s\n", rebID)
+	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: time.Minute}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	smap2, err2 := tutils.WaitForPrimaryProxy(
+		proxyURL,
+		"target removed from the cluster",
+		m.smap.Version, testing.Verbose(),
+		m.smap.CountProxies(),
+		m.smap.CountTargets()-1,
+	)
+	tassert.CheckFatal(t, err2)
+	m.smap = smap2
+
+	m.stopGets()
+	stopped = true
+	m.ensureNoErrors()
+
+	tutils.Logf("Restoring target %s\n", tsi)
+	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 	restored = true
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
 	_, err = api.WaitForXaction(baseParams, args)

@@ -1163,7 +1163,8 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
-		smap: smap,
+		ignoreMaintenance: true,
+		smap:              smap,
 	})
 	for r := range res {
 		if r.err == nil {

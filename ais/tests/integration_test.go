@@ -1117,6 +1117,10 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	m.puts()
 	m.gets()
 	m.ensureNoErrors()
+
+	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckError(t, err)
 }
 
 func TestForwardCP(t *testing.T) {

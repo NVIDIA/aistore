@@ -37,14 +37,18 @@ func (e *NoNodesError) Error() string {
 }
 
 // Returns the target with highest HRW that is "available"(e.g, is not under maintenance).
-func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
+func HrwTarget(uname string, smap *Smap, inMaintenance ...bool) (si *Snode, err error) {
 	var (
-		max    uint64
-		digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)
+		max             uint64
+		digest          = xxhash.ChecksumString64S(uname, cmn.MLCG32)
+		skipMaintenance = true
 	)
+	if len(inMaintenance) != 0 {
+		skipMaintenance = !inMaintenance[0]
+	}
 	for _, tsi := range smap.Tmap {
 		// Assumes that sinfo.idDigest is initialized
-		if tsi.InMaintenance() {
+		if skipMaintenance && tsi.InMaintenance() {
 			continue
 		}
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)

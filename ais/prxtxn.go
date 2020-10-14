@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -608,24 +609,76 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	return
 }
 
+// maintenance: { begin -- enable GFN -- commit -- start rebalance }
+func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
+	c := p.prepTxnClient(msg, nil)
+
+	// 1. begin
+	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	for res := range results {
+		if res.err != nil {
+			// abort
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			err = res.err
+			return
+		}
+	}
+
+	// 2. Put node under maintenance
+	if err = p.markMaintenance(msg, si); err != nil {
+		c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
+		_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		return
+	}
+
+	// 3. Commit
+	config := cmn.GCO.Get()
+	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
+	for res := range results {
+		if res.err != nil {
+			glog.Error(res.err)
+			err = res.err
+			return
+		}
+	}
+
+	// 4. Start rebalance
+	if !opts.SkipRebalance {
+		var cb nl.NotifCallback
+		if msg.Action == cmn.ActDecommission {
+			cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
+		}
+		return p.finalizeMaintenance(msg, si, cb)
+	} else if msg.Action == cmn.ActDecommission {
+		err = p.removeNode(msg, si)
+	}
+	return
+}
+
 /////////////////////////////
 // rollback & misc helpers //
 /////////////////////////////
 
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnClientCtx {
-	c := &txnClientCtx{}
-	c.uuid = cmn.GenUUID()
-	c.smap = p.owner.smap.get()
+	c := &txnClientCtx{
+		uuid:    cmn.GenUUID(),
+		smap:    p.owner.smap.get(),
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+	}
 
 	c.msg = p.newAisMsg(msg, c.smap, nil, c.uuid)
 	body := cmn.MustMarshal(c.msg)
 
-	c.path = cmn.JoinWords(cmn.Version, cmn.Txn, bck.Name)
-	c.timeout = cmn.GCO.Get().Timeout.CplaneOperation
-
 	query := make(url.Values, 2)
-	query = cmn.AddBckToQuery(query, bck.Bck)
+	if bck == nil {
+		c.path = cmn.JoinWords(cmn.Version, cmn.Txn)
+	} else {
+		c.path = cmn.JoinWords(cmn.Version, cmn.Txn, bck.Name)
+		query = cmn.AddBckToQuery(query, bck.Bck)
+	}
 	query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 
 	c.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.JoinWords(c.path, cmn.ActBegin), Query: query, Body: body}

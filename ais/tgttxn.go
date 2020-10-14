@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -56,11 +57,22 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Txn)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Txn)
 	if err != nil {
 		return
 	}
-	bucket, phase := apiItems[0], apiItems[1]
+	var bucket, phase string
+	switch len(apiItems) {
+	case 1:
+		// Global transaction
+		phase = apiItems[0]
+	case 2:
+		// Bucket-based transaction
+		bucket, phase = apiItems[0], apiItems[1]
+	default:
+		cmn.InvalidHandlerWithMsg(w, r, "invalid /txn path")
+		return
+	}
 	// 2. gather all context
 	c, err := t.prepTxnServer(r, msg, bucket, phase)
 	if err != nil {
@@ -101,6 +113,10 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActECEncode:
 		if err = t.ecEncode(c); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
+	case cmn.ActStartMaintenance, cmn.ActDecommission:
+		if err = t.startMaintenance(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	default:
@@ -582,6 +598,36 @@ func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 	return
 }
 
+//////////////////////
+// startMaintenance //
+//////////////////////
+
+func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
+	switch c.phase {
+	case cmn.ActBegin:
+		g := registry.GetRebMarked()
+		if g.Xact != nil && !g.Xact.Finished() {
+			return errors.New("cannot start maintenance: rebalance is in progress")
+		}
+		filter := registry.XactFilter{Kind: cmn.ActRenameLB}
+		if entry := registry.Registry.GetRunning(filter); entry != nil {
+			return errors.New("cannot start maintenance: rename bucket is in progress")
+		}
+		filter = registry.XactFilter{Kind: cmn.ActCopyBucket}
+		if entry := registry.Registry.GetRunning(filter); entry != nil {
+			return errors.New("cannot start maintenance: copy bucket is in progress")
+		}
+		t.gfn.global.activateTimed()
+	case cmn.ActAbort:
+		t.gfn.global.abortTimed()
+	case cmn.ActCommit:
+		// do nothing
+	default:
+		cmn.Assert(false)
+	}
+	return nil
+}
+
 //////////
 // misc //
 //////////
@@ -596,8 +642,10 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 	c.callerName = r.Header.Get(cmn.HeaderCallerName)
 	c.callerID = r.Header.Get(cmn.HeaderCallerID)
 	c.phase = phase
-	if c.bck, err = newBckFromQuery(bucket, query); err != nil {
-		return c, err
+	if bucket != "" {
+		if c.bck, err = newBckFromQuery(bucket, query); err != nil {
+			return c, err
+		}
 	}
 	c.uuid = c.msg.UUID
 	if c.uuid == "" {
