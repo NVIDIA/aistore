@@ -532,7 +532,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		fallthrough // fallthrough
 	case cmn.ActDestroyLB:
-		if p.forwardCP(w, r, &msg, bucket, nil) {
+		if p.forwardCP(w, r, &msg, bucket) {
 			return
 		}
 		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessBckDELETE); err != nil {
@@ -771,7 +771,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	// only the primary can do metasync
 	xactDtor := xaction.XactsDtor[msg.Action]
 	if xactDtor.Metasync {
-		if p.forwardCP(w, r, msg, bucket, nil) {
+		if p.forwardCP(w, r, msg, bucket) {
 			return
 		}
 	}
@@ -1010,7 +1010,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		p.invalmsghdlrf(w, r, fmtUnsupProv, msg.Action, bck.Provider)
 		return
 	}
-	if p.forwardCP(w, r, msg, bucket, nil) {
+	if p.forwardCP(w, r, msg, bucket) {
 		return
 	}
 	bck.Provider = cmn.ProviderAIS
@@ -1064,7 +1064,7 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 	case cmn.ActRecoverBck:
 		p.recoverBuckets(w, r, msg)
 	case cmn.ActSyncLB:
-		if p.forwardCP(w, r, msg, "", nil) {
+		if p.forwardCP(w, r, msg, "") {
 			return
 		}
 		bmd := p.owner.bmd.get()
@@ -1381,7 +1381,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		p.bucketPropsToHdr(bck, w.Header())
 		return
 	}
-	if p.forwardCP(w, r, nil, "httpheadbck", nil) {
+	if p.forwardCP(w, r, nil, "httpheadbck") {
 		return
 	}
 	glog.Warningf("%s: Cloud bucket %s properties have changed, resynchronizing...", p.si, bck)
@@ -1428,7 +1428,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if p.forwardCP(w, r, msg, "httpbckpatch", nil) {
+	if p.forwardCP(w, r, msg, "httpbckpatch") {
 		return
 	}
 	msg = &cmn.ActionMsg{Value: &propsToUpdate}
@@ -1511,8 +1511,11 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 //============================
 // forward control plane request to the current primary proxy
 // return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
-func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, s string, body []byte) (forf bool) {
-	smap := p.owner.smap.get()
+func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, s string) (forf bool) {
+	var (
+		body []byte
+		smap = p.owner.smap.get()
+	)
 	if smap == nil || !smap.isValid() {
 		if msg != nil {
 			s = fmt.Sprintf(`%s must be starting up: cannot execute "%s:%s"`, p.si, msg.Action, s)
@@ -1525,14 +1528,9 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	if smap.isPrimary(p.si) {
 		return
 	}
-	if r.Method == http.MethodHead {
-		// We must **not** send any request body when doing HEAD request.
-		// Otherwise, the request can be rejected and terminated.
-		if len(body) > 0 {
-			glog.Error("forwarded HEAD request contained non-empty body")
-			body = nil
-		}
-	} else if body == nil && msg != nil {
+	// We must **not** send any request body when doing HEAD request.
+	// Otherwise, the request can be rejected and terminated.
+	if r.Method != http.MethodHead && msg != nil {
 		body = cmn.MustMarshal(msg)
 	}
 	primary := &p.rproxy.primary
@@ -1552,7 +1550,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	primary.Unlock()
 	if len(body) > 0 {
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-		r.ContentLength = int64(len(body)) // directly setting content-length
+		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
 	if msg != nil {
 		glog.Infof(`%s: forwarding "%s:%s" to the primary %s`, p.si, msg.Action, s, smap.Primary)
@@ -2440,7 +2438,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 	proxyid := apiItems[0]
 	s := "designate new primary proxy '" + proxyid + "'"
-	if p.forwardCP(w, r, nil, s, nil) {
+	if p.forwardCP(w, r, nil, s) {
 		return
 	}
 	smap := p.owner.smap.get()
@@ -2779,7 +2777,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p.forwardCP(w, r, nil, "httpclupost", nil) {
+	if p.forwardCP(w, r, nil, "httpclupost") {
 		return
 	}
 	switch apiItems[0] {
@@ -2818,23 +2816,19 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	isProxy := nsi.IsProxy()
+	var (
+		isProxy = nsi.IsProxy()
+		msg     = &cmn.ActionMsg{Action: cmn.ActRegTarget}
+	)
 	if isProxy {
+		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
+
 		s := r.URL.Query().Get(cmn.URLParamNonElectable)
 		if nonElectable, err = cmn.ParseBool(s); err != nil {
 			glog.Errorf("%s: failed to parse %s for non-electability: %v", p.si, s, err)
 		}
 	}
 
-	s := fmt.Sprintf("%s: %s %s", p.si, tag, nsi)
-	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
-	if isProxy {
-		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
-	}
-	body := cmn.MustMarshal(regReq)
-	if p.forwardCP(w, r, msg, s, body) {
-		return
-	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
 		p.invalmsghdlrf(w, r, "%s: failed to %s %s - invalid IPv4 %v", p.si, tag, nsi, nsi.PublicNet.NodeIPAddr)
 		return
@@ -3061,7 +3055,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if node.IsProxy() {
 		msg = &cmn.ActionMsg{Action: cmn.ActUnregProxy}
 	}
-	if p.forwardCP(w, r, msg, sid, nil) {
+	if p.forwardCP(w, r, msg, sid) {
 		return
 	}
 	ctx := &smapModifier{
@@ -3307,7 +3301,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg.Action != cmn.ActSendOwnershipTbl {
-		if p.forwardCP(w, r, msg, "", nil) {
+		if p.forwardCP(w, r, msg, "") {
 			return
 		}
 	}
@@ -3665,7 +3659,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		err          error
 		force, slowp bool
 	)
-	if p.forwardCP(w, r, msg, "recover-buckets", nil) {
+	if p.forwardCP(w, r, msg, "recover-buckets") {
 		return
 	}
 	var (

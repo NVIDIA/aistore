@@ -118,7 +118,7 @@ func (args *remBckAddArgs) _try() (bck *cluster.Bck, err error, errCode int) {
 		return
 	}
 	// forward maybe
-	if args.p.forwardCP(args.w, args.r, args.msg, "add-remote-bucket", nil) {
+	if args.p.forwardCP(args.w, args.r, args.msg, "add-remote-bucket") {
 		err = cmn.ErrForwarded
 		return
 	}
