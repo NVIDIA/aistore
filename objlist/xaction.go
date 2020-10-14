@@ -44,8 +44,9 @@ type (
 		bck *cluster.Bck
 		msg *cmn.SelectMsg
 
-		workCh chan *bckListReq // incoming requests
-		stopCh *cmn.StopCh      // Informs about stopped xaction.
+		workCh chan *cmn.SelectMsg // Incoming requests.
+		respCh chan *Resp          // Outgoing responses.
+		stopCh *cmn.StopCh         // Informs about stopped xaction.
 
 		objCache   chan *cmn.BucketEntry // local cache filled when idle
 		lastPage   []*cmn.BucketEntry    // last sent page and a little more
@@ -57,10 +58,6 @@ type (
 		fromRemote bool                  // whether to request remote data (Cloud/Remote/Backend)
 	}
 
-	bckListReq struct {
-		msg *cmn.SelectMsg
-		ch  chan *Resp
-	}
 	Resp struct {
 		BckList *cmn.BucketList
 		Status  int
@@ -99,7 +96,8 @@ func newXact(ctx context.Context, t cluster.Target, bck cmn.Bck, smsg *cmn.Selec
 		t:        t,
 		bck:      cluster.NewBckEmbed(bck),
 		msg:      smsg,
-		workCh:   make(chan *bckListReq),
+		workCh:   make(chan *cmn.SelectMsg),
+		respCh:   make(chan *Resp),
 		stopCh:   cmn.NewStopCh(),
 		lastPage: make([]*cmn.BucketEntry, 0, cacheSize),
 	}
@@ -118,12 +116,10 @@ func (r *Xact) Do(msg *cmn.SelectMsg) *Resp {
 	// The guarantee here is that we either put something on the channel and our
 	// request will be processed (since the `workCh` is unbuffered) or we receive
 	// message that the xaction has been stopped.
-	req := &bckListReq{msg: msg, ch: make(chan *Resp)}
 	select {
-	case r.workCh <- req:
-		return <-req.ch
+	case r.workCh <- msg:
+		return <-r.respCh
 	case <-r.stopCh.Listen():
-		close(req.ch)
 		return &Resp{Err: ErrGone}
 	}
 }
@@ -159,15 +155,14 @@ func (r *Xact) Run() error {
 
 	for {
 		select {
-		case req := <-r.workCh:
+		case msg := <-r.workCh:
 			// Copy only the values that can change between calls
-			debug.Assert(r.msg.UseCache == req.msg.UseCache)
-			debug.Assert(r.msg.Prefix == req.msg.Prefix)
-			debug.Assert(r.msg.Flags == req.msg.Flags)
-			r.msg.ContinuationToken = req.msg.ContinuationToken
-			r.msg.PageSize = req.msg.PageSize
-			resp := r.dispatchRequest()
-			req.setResp(resp)
+			debug.Assert(r.msg.UseCache == msg.UseCache)
+			debug.Assert(r.msg.Prefix == msg.Prefix)
+			debug.Assert(r.msg.Flags == msg.Flags)
+			r.msg.ContinuationToken = msg.ContinuationToken
+			r.msg.PageSize = msg.PageSize
+			r.respCh <- r.dispatchRequest()
 		case <-r.IdleTimer():
 			r.stop()
 			return nil
@@ -189,6 +184,8 @@ func (r *Xact) stop() {
 	r.XactDemandBase.Stop()
 	r.Finish()
 	r.stopCh.Close()
+	// NOTE: Not closing `r.workCh` as it potentially could result in "sending on closed channel" panic.
+	close(r.respCh)
 	r.stopWalk()
 }
 
@@ -431,9 +428,4 @@ func (r *Xact) traverseBucket() {
 		}
 	}
 	close(r.objCache)
-}
-
-func (r *bckListReq) setResp(resp *Resp) {
-	r.ch <- resp
-	close(r.ch)
 }
