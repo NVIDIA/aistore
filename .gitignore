@@ -5,7 +5,7 @@
 .*.swp
 tags
 FlameGraph/
-
+openapi-generator-cli.jar
 
 ## PYTHON ##
 

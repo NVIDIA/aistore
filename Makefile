@@ -67,7 +67,7 @@ term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)
 $(call make-lazy,cyan)
 $(call make-lazy,term-reset)
 
-.PHONY: all node cli cli-autocompletions aisfs authn aisloader xmeta
+.PHONY: all node cli cli-autocompletions aisfs authn aisloader xmeta client-bindings
 
 all: node cli aisfs authn aisloader ## Build all main binaries
 
@@ -121,6 +121,9 @@ docker-image-ais-demo-%: ## Build 'aisnode' docker demo image with (1-proxy, 1-t
 	@echo "*** Run the following to push the image to docker hub"
 	@echo "*** docker push aistore/latest-minimal-devel-"$*
 
+client-bindings:
+	$(SCRIPTS_DIR)/generate-python-api-client.sh
+
 #
 # local deployment (intended for developers)
 #
@@ -132,7 +135,7 @@ deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies
 #
 # cleanup local deployment (cached objects, logs, and executables)
 #
-.PHONY: kill clean
+.PHONY: kill clean clean-client-bindings
 
 # when profiling, make sure to let it flush accumulated stats
 # e.g., insert sleep prior to SIGKILL or remove it altogether
@@ -153,6 +156,8 @@ clean: ## Remove all AIS related files and binaries
 		rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
 	@echo "done."
 
+clean-client-bindings: ## Remove all generated client binding files
+	$(SCRIPTS_DIR)/clean-python-api-client.sh
 #
 # go modules
 #
@@ -287,4 +292,6 @@ help:
 		"BUCKET=tmp make ci" "Run style, lint, and spell checks, as well as all short tests" \
 		"MEM_PROFILE=/tmp/mem make deploy" "Deploy cluster with memory profiling enabled, write reports to /tmp/mem.<PID> (and make sure to stop gracefully)" \
 		"CPU_PROFILE=/tmp/cpu make deploy" "Build and deploy cluster instrumented for CPU profiling, write reports to /tmp/cpu.<PID>" \
-		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally"
+		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally" \
+		"make client-bindings" "Generate client bindings (ie. the python ais-client)"\
+		"make clean-client-bindings" "Clean up all generated client bindings"
