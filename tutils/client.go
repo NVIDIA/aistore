@@ -556,17 +556,6 @@ func SetClusterConfig(t *testing.T, nvs cmn.SimpleKVs) {
 	tassert.CheckFatal(t, err)
 }
 
-func GetXactionStatsByID(t *testing.T, id string) (stats api.NodesXactStat) {
-	var (
-		err        error
-		proxyURL   = GetPrimaryURL()
-		baseParams = BaseAPIParams(proxyURL)
-	)
-	stats, err = api.GetXactionStatsByID(baseParams, id)
-	tassert.CheckFatal(t, err)
-	return
-}
-
 func isErrAcceptable(err error) bool {
 	if err == nil {
 		return true
@@ -613,12 +602,12 @@ func WaitForXactionByID(id string, timeouts ...time.Duration) error {
 
 func CheckErrIsNotFound(t *testing.T, err error) {
 	if err == nil {
-		t.Errorf("expected error")
+		t.Fatalf("expected error")
 		return
 	}
 	httpErr, ok := err.(*cmn.HTTPError)
 	tassert.Fatalf(t, ok, "expected an error of type *cmn.HTTPError, but got: %T.", err)
-	tassert.Errorf(
+	tassert.Fatalf(
 		t, httpErr.Status == http.StatusNotFound,
 		"expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status,
 	)

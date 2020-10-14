@@ -483,6 +483,18 @@ func (m *ioContext) ensureNoErrors() {
 	}
 }
 
+func (m *ioContext) unregisterTarget() *cluster.Snode {
+	target := tutils.ExtractTargetNodes(m.smap)[0]
+	tutils.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
+	err := tutils.UnregisterNode(m.proxyURL, target.ID())
+	tassert.CheckFatal(m.t, err)
+	n := len(tutils.GetClusterMap(m.t, m.proxyURL).Tmap)
+	if n != m.originalTargetCount-1 {
+		m.t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+	}
+	return target
+}
+
 func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 	const (
 		timeout    = time.Second * 10
