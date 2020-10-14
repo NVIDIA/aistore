@@ -18,7 +18,7 @@ import (
 )
 
 type NotifListener interface {
-	Callback(nl NotifListener)
+	Callback(nl NotifListener, ts int64)
 	UnmarshalStats(rawMsg []byte) (interface{}, bool, bool, error)
 	Lock()
 	Unlock()
@@ -38,7 +38,6 @@ type NotifListener interface {
 	NodeStats() *NodeStats
 	QueryArgs() cmn.ReqArgs
 	AbortArgs() cmn.ReqArgs
-	SetEndTime(ts int64)
 	EndTime() int64
 	HasFinished(node *cluster.Snode) bool
 	MarkFinished(node *cluster.Snode)
@@ -137,15 +136,12 @@ func (nlb *NotifListenerBase) FinCount() int                   { return len(nlb.
 func (nlb *NotifListenerBase) AddedTime() int64                { return nlb.addedTime.Load() }
 
 // is called after all Notifiers will have notified OR on failure (err != nil)
-func (nlb *NotifListenerBase) Callback(nl NotifListener) {
-	if nlb.F != nil {
-		nlb.F(nl)
-	}
-}
-
-func (nlb *NotifListenerBase) SetEndTime(ts int64) {
+func (nlb *NotifListenerBase) Callback(nl NotifListener, ts int64) {
 	if nlb.FinTime.CAS(0, 1) {
 		nlb.FinTime.Store(ts)
+		if nlb.F != nil {
+			nlb.F(nl)
+		}
 	}
 }
 

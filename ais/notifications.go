@@ -107,15 +107,15 @@ func (n *notifs) add(nl nl.NotifListener) {
 	glog.Infoln("add " + nl.String())
 }
 
-func (n *notifs) del(nl nl.NotifListener, locked ...bool) {
+func (n *notifs) del(nl nl.NotifListener, locked bool) {
 	var ok bool
-	if len(locked) == 0 {
+	if !locked {
 		n.Lock()
 	}
 	if _, ok = n.m[nl.UUID()]; ok {
 		delete(n.m, nl.UUID())
 	}
-	if len(locked) == 0 {
+	if !locked {
 		n.Unlock()
 	}
 	if ok {
@@ -291,24 +291,14 @@ func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []
 // PRECONDITION: `nl` should be under lock.
 func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr error, aborted bool) (done bool) {
 	nl.MarkFinished(tsi)
-
 	if aborted {
 		nl.SetAborted()
 		if srcErr == nil {
 			detail := fmt.Sprintf("%s, node %s", nl, tsi)
 			srcErr = cmn.NewAbortedErrorDetails(nl.Kind(), detail)
 		}
-		config := cmn.GCO.Get()
-		args := &bcastArgs{
-			req:     nl.AbortArgs(),
-			network: cmn.NetworkIntraControl,
-			timeout: config.Timeout.MaxKeepalive,
-			nodes:   []cluster.NodeMap{nl.Notifiers()},
-		}
-		args.nodeCount = len(args.nodes[0])
-		args.skipNodes = nl.FinNotifiers().Clone() // TODO: optimize
-		n.p.bcastToNodesAsync(args)
 	}
+
 	if srcErr != nil {
 		nl.SetErr(srcErr)
 	}
@@ -319,9 +309,21 @@ func (n *notifs) done(nl nl.NotifListener) {
 	n.fmu.Lock()
 	n.fin[nl.UUID()] = nl
 	n.fmu.Unlock()
-	n.del(nl)
-	nl.SetEndTime(time.Now().UnixNano())
-	nl.Callback(nl)
+	n.del(nl, false)
+
+	if nl.Aborted() {
+		config := cmn.GCO.Get()
+		args := &bcastArgs{
+			req:     nl.AbortArgs(),
+			network: cmn.NetworkIntraControl,
+			timeout: config.Timeout.MaxKeepalive,
+			nodes:   []cluster.NodeMap{nl.Notifiers()},
+		}
+		args.nodeCount = len(args.nodes[0])
+		args.skipNodes = nl.FinNotifiers()
+		n.p.bcastToNodesAsync(args)
+	}
+	nl.Callback(nl, time.Now().UnixNano())
 }
 
 //
@@ -497,8 +499,7 @@ func (n *notifs) ListenSmapChanged() {
 	n.Unlock()
 
 	for uuid, nl := range remnl {
-		nl.SetEndTime(now)
-		nl.Callback(nl)
+		nl.Callback(nl, now)
 		// cleanup
 		delete(remnl, uuid)
 		delete(remid, uuid)
