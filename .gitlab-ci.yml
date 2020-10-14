@@ -77,6 +77,7 @@ lint:linux:
 test:short:
   stage: test-short
   <<: *default_ref_def
+  timeout: 15m
   script:
     - make aisfs cli aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
