@@ -1022,8 +1022,8 @@ func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v inte
 		err = mw.Flush()
 	}
 	if err != nil {
-		h.writeErrorStatus(w, r, tag, err)
-		return
+		h.handleWriteError(r, tag, err)
+		return false
 	}
 	return true
 }
@@ -1034,47 +1034,29 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, v interfa
 
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
 	if err := jsoniter.NewEncoder(w).Encode(v); err != nil {
-		h.writeErrorStatus(w, r, tag, err)
-		return
-	}
-	return true
-}
-
-// NOTE: must be the last error-generating-and-handling call in the http handler
-//       writes http body and header
-//       calls invalmsghdlr() on err
-func (h *httprunner) writeBytes(w http.ResponseWriter, r *http.Request, bytes []byte, tag string) (ok bool) {
-	if _, err := w.Write(bytes); err != nil {
-		h.writeErrorStatus(w, r, tag, err)
-		return
+		h.handleWriteError(r, tag, err)
+		return false
 	}
 	return true
 }
 
 func (h *httprunner) writeJSONBytes(w http.ResponseWriter, r *http.Request, bytes []byte, tag string) (ok bool) {
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentJSON)
-	return h.writeBytes(w, r, bytes, tag)
+	if _, err := w.Write(bytes); err != nil {
+		h.handleWriteError(r, tag, err)
+		return false
+	}
+	return true
 }
 
-func (h *httprunner) writeErrorStatus(w http.ResponseWriter, r *http.Request, tag string, err error) {
-	if isSyscallWriteError(err) {
-		// Apparently, cannot write to this w: broken-pipe and similar
-		glog.Errorf("isSyscallWriteError: %v", err)
-		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path
-		if _, file, line, ok2 := runtime.Caller(1); ok2 {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-		glog.Errorln(s)
-		h.statsT.AddErrorHTTP(r.Method, 1)
-		return
-	}
+func (h *httprunner) handleWriteError(r *http.Request, tag string, err error) {
 	msg := fmt.Sprintf("%s: failed to write bytes, err: %v", tag, err)
 	if _, file, line, ok := runtime.Caller(1); ok {
 		f := filepath.Base(file)
 		msg += fmt.Sprintf("(%s, #%d)", f, line)
 	}
-	h.invalmsghdlr(w, r, msg)
+	glog.Errorln(msg)
+	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
 func (h *httprunner) parseNCopies(value interface{}) (copies int64, err error) {

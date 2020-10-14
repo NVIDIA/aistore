@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -172,25 +171,9 @@ func getIPv4(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, err 
 	return ip, nil
 }
 
-// FIXME: usage
-// mentioned in the https://github.com/golang/go/issues/11745#issuecomment-123555313 thread
-// there must be a better way to handle this..
-func isSyscallWriteError(err error) bool {
-	switch e := err.(type) {
-	case *url.Error:
-		return isSyscallWriteError(e.Err)
-	case *net.OpError:
-		return e.Op == "write" && isSyscallWriteError(e.Err)
-	case *os.SyscallError:
-		return e.Syscall == "write"
-	default:
-		return false
-	}
-}
-
-/////////////////
-// Helpers     //
-/////////////////
+/////////////
+// HELPERS //
+/////////////
 
 func reMirror(bprops, nprops *cmn.BucketProps) bool {
 	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
