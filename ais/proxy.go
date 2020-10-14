@@ -1541,12 +1541,13 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		primary.url = smap.Primary.PublicNet.DirectURL
 		uparsed, err := url.Parse(smap.Primary.PublicNet.DirectURL)
 		cmn.AssertNoErr(err)
-		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
 		cfg := cmn.GCO.Get()
+		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
 		primary.rp.Transport = cmn.NewTransport(cmn.TransportArgs{
 			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
+		primary.rp.ErrorHandler = rpErrHandler
 	}
 	primary.Unlock()
 	if len(body) > 0 {
@@ -1576,12 +1577,13 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 	if ok {
 		rproxy = val.(*httputil.ReverseProxy)
 	} else {
-		rproxy = httputil.NewSingleHostReverseProxy(parsedURL)
 		cfg := cmn.GCO.Get()
+		rproxy = httputil.NewSingleHostReverseProxy(parsedURL)
 		rproxy.Transport = cmn.NewTransport(cmn.TransportArgs{
 			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
+		rproxy.ErrorHandler = rpErrHandler
 		p.rproxy.nodes.Store(nodeID, rproxy)
 	}
 

@@ -1686,3 +1686,9 @@ rret:
 	cmn.GCO.CommitUpdate(config)
 	return nil
 }
+
+// Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.
+func rpErrHandler(rw http.ResponseWriter, req *http.Request, err error) {
+	glog.Errorf("Reverse proxy error handler (req: %v) (err: %v)", req, err)
+	rw.WriteHeader(http.StatusBadGateway)
+}
