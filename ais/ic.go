@@ -216,7 +216,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	nl.RLock()
 	defer nl.RUnlock()
 
-	if err := nl.Err(); err != nil && !nl.Aborted() {
+	if err := nl.Err(true); err != nil && !nl.Aborted() {
 		ic.p.invalmsghdlr(w, r, err.Error())
 		return
 	}

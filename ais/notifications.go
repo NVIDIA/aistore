@@ -283,7 +283,7 @@ func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []
 	nl.Unlock()
 
 	if done {
-		nl.Callback(nl, nil, time.Now().UnixNano())
+		n.done(nl)
 	}
 	return
 }
@@ -312,14 +312,16 @@ func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr er
 	if srcErr != nil {
 		nl.SetErr(srcErr)
 	}
-	if nl.AllFinished() || aborted {
-		n.fmu.Lock()
-		n.fin[nl.UUID()] = nl
-		n.fmu.Unlock()
-		n.del(nl)
-		done = true
-	}
-	return
+	return nl.AllFinished() || aborted
+}
+
+func (n *notifs) done(nl nl.NotifListener) {
+	n.fmu.Lock()
+	n.fin[nl.UUID()] = nl
+	n.fmu.Unlock()
+	n.del(nl)
+	nl.SetEndTime(time.Now().UnixNano())
+	nl.Callback(nl)
 }
 
 //
@@ -409,7 +411,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 	}
 
 	if done {
-		nl.Callback(nl, nil, time.Now().UnixNano())
+		n.done(nl)
 	}
 }
 
@@ -481,7 +483,6 @@ func (n *notifs) ListenSmapChanged() {
 		nl.SetErr(err)
 		nl.SetAborted()
 		nl.Unlock()
-		nl.Callback(nl, err, now)
 	}
 	n.fmu.Lock()
 	for uuid, nl := range remnl {
@@ -490,13 +491,18 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	n.fmu.Unlock()
 	n.Lock()
-	for uuid, nl := range remnl {
+	for _, nl := range remnl {
 		n.del(nl, true /*locked*/)
+	}
+	n.Unlock()
+
+	for uuid, nl := range remnl {
+		nl.SetEndTime(now)
+		nl.Callback(nl)
 		// cleanup
 		delete(remnl, uuid)
 		delete(remid, uuid)
 	}
-	n.Unlock()
 }
 
 func (n *notifs) MarshalJSON() (data []byte, err error) {

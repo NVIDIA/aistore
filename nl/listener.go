@@ -18,7 +18,7 @@ import (
 )
 
 type NotifListener interface {
-	Callback(n NotifListener, err error, timestamp int64)
+	Callback(nl NotifListener)
 	UnmarshalStats(rawMsg []byte) (interface{}, bool, bool, error)
 	Lock()
 	Unlock()
@@ -29,7 +29,7 @@ type NotifListener interface {
 	Kind() string
 	Bcks() []cmn.Bck
 	SetErr(error)
-	Err() error
+	Err(locked bool) error
 	UUID() string
 	SetAborted()
 	Aborted() bool
@@ -38,6 +38,7 @@ type NotifListener interface {
 	NodeStats() *NodeStats
 	QueryArgs() cmn.ReqArgs
 	AbortArgs() cmn.ReqArgs
+	SetEndTime(ts int64)
 	EndTime() int64
 	HasFinished(node *cluster.Snode) bool
 	MarkFinished(node *cluster.Snode)
@@ -56,7 +57,7 @@ type NotifListener interface {
 }
 
 type (
-	NotifCallback func(n NotifListener, err error)
+	NotifCallback func(n NotifListener)
 
 	NodeStats struct {
 		sync.RWMutex
@@ -136,13 +137,15 @@ func (nlb *NotifListenerBase) FinCount() int                   { return len(nlb.
 func (nlb *NotifListenerBase) AddedTime() int64                { return nlb.addedTime.Load() }
 
 // is called after all Notifiers will have notified OR on failure (err != nil)
-func (nlb *NotifListenerBase) Callback(nl NotifListener, err error, timestamp int64) {
+func (nlb *NotifListenerBase) Callback(nl NotifListener) {
+	if nlb.F != nil {
+		nlb.F(nl)
+	}
+}
+
+func (nlb *NotifListenerBase) SetEndTime(ts int64) {
 	if nlb.FinTime.CAS(0, 1) {
-		nlb.FinTime.Store(timestamp)
-		// is optional
-		if nlb.F != nil {
-			nlb.F(nl, err) // invoke user-supplied callback and pass user-supplied NotifListener
-		}
+		nlb.FinTime.Store(ts)
 	}
 }
 
@@ -152,7 +155,11 @@ func (nlb *NotifListenerBase) SetErr(err error) {
 	}
 }
 
-func (nlb *NotifListenerBase) Err() error {
+func (nlb *NotifListenerBase) Err(locked bool) error {
+	if !locked {
+		nlb.RLock()
+		defer nlb.RUnlock()
+	}
 	if nlb.ErrMsg == "" {
 		return nil
 	}
@@ -206,7 +213,7 @@ func (nlb *NotifListenerBase) Status() *NotifStatus {
 		FinTime:  nlb.FinTime.Load(),
 		AbortedX: nlb.Aborted(),
 	}
-	if err := nlb.Err(); err != nil {
+	if err := nlb.Err(true); err != nil {
 		status.ErrMsg = err.Error()
 	}
 	return status

@@ -3232,9 +3232,9 @@ func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
 
 // Callback: remove the node from the cluster if rebalance finished successfully
 func (p *proxyrunner) removeAfterRebalance(
-	nl nl.NotifListener, err error, msg *cmn.ActionMsg,
+	nl nl.NotifListener, msg *cmn.ActionMsg,
 	si *cluster.Snode) {
-	if err != nil || nl.Aborted() {
+	if err := nl.Err(false); err != nil || nl.Aborted() {
 		glog.Errorf("Rebalance(%s) didn't finish successfully,  err: %v, aborted: %v", nl.UUID(), err, nl.Aborted())
 		return
 	}
@@ -3468,7 +3468,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		if !opts.SkipRebalance {
 			var cb nl.NotifCallback
 			if msg.Action == cmn.ActDecommission {
-				cb = func(nl nl.NotifListener, err error) { p.removeAfterRebalance(nl, err, msg, si) }
+				cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
 			}
 			rebID, err = p.finalizeMaintenance(msg, si, cb)
 			if err == nil {

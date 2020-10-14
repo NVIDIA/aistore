@@ -152,12 +152,12 @@ var _ = Describe("Notifications xaction test", func() {
 		})
 
 		It("should set error when source sends an error message", func() {
-			Expect(nl.Err()).To(BeNil())
+			Expect(nl.Err(false)).To(BeNil())
 			stats := finishedXact(xactID)
 			srcErr := errors.New("some error")
 			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), srcErr)
 			Expect(err).To(BeNil())
-			Expect(srcErr).To(BeEquivalentTo(nl.Err()))
+			Expect(srcErr).To(BeEquivalentTo(nl.Err(false)))
 			Expect(nl.FinNotifiers().Contains(target1ID)).To(BeTrue())
 		})
 
@@ -176,7 +176,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
 			Expect(err).To(BeNil())
 			Expect(nl.Aborted()).To(BeTrue())
-			Expect(nl.Err()).NotTo(BeNil())
+			Expect(nl.Err(false)).NotTo(BeNil())
 		})
 
 		It("should update local stats upon progress", func() {

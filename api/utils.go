@@ -55,11 +55,11 @@ func HTTPStatus(err error) int {
 	if err == nil {
 		return http.StatusOK
 	}
-	herr, ok := err.(*cmn.HTTPError)
-	if !ok {
-		return -1 // invalid
+
+	if herr, ok := err.(*cmn.HTTPError); ok && herr != nil {
+		return herr.Status
 	}
-	return herr.Status
+	return -1 // invalid
 }
 
 // DoHTTPRequest sends one HTTP request and decodes the `v` structure

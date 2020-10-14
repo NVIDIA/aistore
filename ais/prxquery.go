@@ -111,7 +111,7 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 		return
 	}
 	state := nl.(*query.NotifListenerQuery)
-	if err := state.Err(); err != nil {
+	if err := state.Err(false); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
