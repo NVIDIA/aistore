@@ -1030,10 +1030,11 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		}
 		if bck.HasBackendBck() {
 			// initialize backend
-			backend := cluster.NewBckEmbed(bck.Props.BackendBck)
+			backend := cluster.BackendBck(bck)
 			if err = backend.InitNoBackend(p.owner.bmd, p.si); err != nil {
 				if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
-					p.invalmsghdlrf(w, r, "cannot create %s: failing to initialize backend %s, err: %v",
+					p.invalmsghdlrf(w, r,
+						"cannot create %s: failing to initialize backend %s, err: %v",
 						bck, backend, err)
 					return
 				}
@@ -1369,7 +1370,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cloudProps, err, statusCode := p.headCloudBck(*bck.BackendBck(), nil)
+	cloudProps, err, statusCode := p.headCloudBck(*bck.RemoteBck(), nil)
 	if err != nil {
 		// TODO -- FIXME: decide what needs to be done when HEAD fails - changes to BMD
 		p.invalmsghdlr(w, r, err.Error(), statusCode)

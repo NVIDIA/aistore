@@ -191,7 +191,7 @@ func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 // an object beforehand and releasing the lease after
 func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (error, int) {
 	var (
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(lom.BckName())
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 		cond     = azblob.ModifiedAccessConditions{}
@@ -222,7 +222,7 @@ func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (error
 func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bucketProps cmn.SimpleKVs, err error, errCode int) {
 	var (
 		bckProps = make(cmn.SimpleKVs, 2)
-		cloudBck = bck.BackendBck()
+		cloudBck = bck.RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 	)
 	resp, err := cntURL.GetProperties(ctx, azblob.LeaseAccessConditions{})
@@ -243,7 +243,7 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 
 	var (
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = bck.BackendBck()
+		cloudBck = bck.RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		marker   = azblob.Marker{}
 		opts     = azblob.ListBlobsSegmentOptions{
@@ -301,7 +301,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	objMeta = make(cmn.SimpleKVs)
 	var (
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
@@ -355,7 +355,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	expectedCksm *cmn.Cksum, err error, errCode int) {
 	var (
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
@@ -405,7 +405,7 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	var (
 		leaseID  string
 		h        = cmn.CloudHelpers.Azure
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlockBlobURL(lom.ObjName)
 		cond     = azblob.ModifiedAccessConditions{}

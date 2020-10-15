@@ -146,7 +146,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	var (
 		query    *storage.Query
 		h        = cmn.CloudHelpers.Google
-		cloudBck = bck.BackendBck()
+		cloudBck = bck.RemoteBck()
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("list_objects %s", cloudBck.Name)
@@ -204,7 +204,7 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	if err != nil {
 		return
 	}
-	cloudBck := bck.BackendBck()
+	cloudBck := bck.RemoteBck()
 	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(gctx)
 	if err != nil {
 		err, errCode = gcpp.gcpErrorToAISError(err, cloudBck)
@@ -268,7 +268,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	}
 	var (
 		h        = cmn.CloudHelpers.Google
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 	)
 	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(gctx)
 	if err != nil {
@@ -306,7 +306,7 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	}
 	var (
 		h        = cmn.CloudHelpers.Google
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
 	attrs, err := o.Attrs(gctx)
@@ -378,7 +378,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 
 	var (
 		h        = cmn.CloudHelpers.Google
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 		md       = make(cmn.SimpleKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 		wc       = gcpObj.NewWriter(gctx)
@@ -421,7 +421,7 @@ func (gcpp *gcpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err e
 		return
 	}
 	var (
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
 

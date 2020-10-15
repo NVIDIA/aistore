@@ -150,7 +150,7 @@ func parallelPutGetStress(t *testing.T) {
 			errCh       = make(chan opRes, errChanSize)
 			cksumType   = bck.Props.Cksum.Type
 		)
-		if bck.IsCloud() && bck.BackendBck().Provider == cmn.ProviderGoogle {
+		if bck.IsCloud() && bck.RemoteBck().Provider == cmn.ProviderGoogle {
 			t.Skip("Stress test is unavailable for GCP")
 		}
 		initRWStress(t, bck.Bck, cksumType)
@@ -170,7 +170,7 @@ func multiOpStress(opNames ...string) func(t *testing.T) {
 				errCh       = make(chan opRes, errChanSize)
 				cksumType   = bck.Props.Cksum.Type
 			)
-			if bck.IsCloud() && bck.BackendBck().Provider == cmn.ProviderGoogle {
+			if bck.IsCloud() && bck.RemoteBck().Provider == cmn.ProviderGoogle {
 				t.Skip("Stress test is unavailable for GCP")
 			}
 			var wg sync.WaitGroup

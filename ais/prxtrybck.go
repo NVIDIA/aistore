@@ -124,8 +124,8 @@ func (args *remBckAddArgs) _try() (bck *cluster.Bck, err error, errCode int) {
 	}
 	// from this point on it's the primary - lookup via random target and try bucket add to BMD
 	bck = args.queryBck
-	if bck.Props != nil && bck.HasBackendBck() {
-		bck = cluster.NewBckEmbed(bck.Props.BackendBck)
+	if bck.HasBackendBck() {
+		bck = cluster.BackendBck(bck)
 	}
 	if cloudProps, err, errCode = args._lookup(bck); err != nil {
 		bck = nil

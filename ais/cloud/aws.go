@@ -109,7 +109,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
 	var (
 		svc      *s3.S3
 		h        = cmn.CloudHelpers.Amazon
-		cloudBck = bck.BackendBck()
+		cloudBck = bck.RemoteBck()
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("list_objects %s", cloudBck.Name)
@@ -239,7 +239,7 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 	var (
 		svc       *s3.S3
 		region    string
-		cloudBck  = bck.BackendBck()
+		cloudBck  = bck.RemoteBck()
 		hasRegion bool
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -311,7 +311,7 @@ func (awsp *awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta c
 	var (
 		svc      *s3.S3
 		h        = cmn.CloudHelpers.Amazon
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[head_object]")
 	if err != nil {
@@ -378,7 +378,7 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 		svc      *s3.S3
 		cksum    *cmn.Cksum
 		h        = cmn.CloudHelpers.Amazon
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 	)
 
 	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[get_object]")
@@ -430,7 +430,7 @@ func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM
 		uploadOutput          *s3manager.UploadOutput
 		h                     = cmn.CloudHelpers.Amazon
 		cksumType, cksumValue = lom.Cksum().Get()
-		cloudBck              = lom.Bck().BackendBck()
+		cloudBck              = lom.Bck().RemoteBck()
 		md                    = make(map[string]*string, 2)
 	)
 
@@ -469,7 +469,7 @@ func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM
 func (awsp *awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (err error, errCode int) {
 	var (
 		svc      *s3.S3
-		cloudBck = lom.Bck().BackendBck()
+		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[delete_object]")
 	if err != nil {

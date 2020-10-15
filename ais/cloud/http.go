@@ -91,7 +91,7 @@ func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (stri
 }
 
 func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
-	// TODO: we should use `bck.BackendBck()`.
+	// TODO: we should use `bck.RemoteBck()`.
 
 	origURL, err := getOriginalURL(ctx, bck, "")
 	if err != nil {
@@ -129,7 +129,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
 	var (
 		h   = cmn.CloudHelpers.HTTP
-		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().BackendBck()`
+		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
 	)
 
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
@@ -187,7 +187,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (rea
 	expectedCksm *cmn.Cksum, err error, errCode int) {
 	var (
 		h   = cmn.CloudHelpers.HTTP
-		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().BackendBck()`
+		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
 	)
 
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)

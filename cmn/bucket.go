@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // Cloud Provider enum
@@ -294,6 +296,13 @@ func (b *Bck) HasBackendBck() bool {
 }
 
 func (b *Bck) BackendBck() *Bck {
+	if b.HasBackendBck() {
+		return &b.Props.BackendBck
+	}
+	return nil
+}
+
+func (b *Bck) RemoteBck() *Bck {
 	if !b.IsRemote() {
 		return nil
 	}
@@ -315,9 +324,9 @@ func (b Bck) IsCloud() bool { // is 3rd party Cloud
 	if b.Provider == ProviderHTTP {
 		return false
 	}
-	if b.HasBackendBck() {
-		backend := b.Props.BackendBck
-		return backend.IsCloud()
+	if bck := b.BackendBck(); bck != nil {
+		debug.Assert(bck.IsCloud()) // currently, backend is always Cloud
+		return bck.IsCloud()
 	}
 	return b.Provider != ProviderAIS && IsValidProvider(b.Provider)
 }

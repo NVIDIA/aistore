@@ -62,6 +62,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 }
 
 func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }
+func BackendBck(bck *Bck) *Bck     { return &Bck{Bck: bck.Props.BackendBck} }
 
 func parseUname(uname string) (b Bck, objName string) {
 	var prev, itemIdx int
@@ -129,7 +130,7 @@ func (b *Bck) String() string {
 	if bid == 0 {
 		return b.Bck.String()
 	}
-	if b.Props != nil && b.HasBackendBck() {
+	if b.HasBackendBck() {
 		s = ", backend=" + b.Props.BackendBck.String()
 	}
 	return fmt.Sprintf("%s(%#x%s)", b.Bck.String(), bid, s)

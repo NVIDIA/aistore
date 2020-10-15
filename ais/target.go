@@ -879,7 +879,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 					"bucket %s: cannot override %s-downloaded object", bck, srcProvider)
 				return
 			}
-			if b := bck.BackendBck(); b != nil && b.Provider != srcProvider {
+			if b := bck.RemoteBck(); b != nil && b.Provider != srcProvider {
 				t.invalmsghdlrf(w, r,
 					"bucket %s: cannot override %s-downloaded object", b, srcProvider)
 				return
