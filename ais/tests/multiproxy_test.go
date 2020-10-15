@@ -956,9 +956,10 @@ func restore(cmd restoreCmd, asPrimary bool, tag string) error {
 		ncmd.Env = env
 	}
 
-	err := ncmd.Start()
-	ncmd.Process.Release()
-	return err
+	if err := ncmd.Start(); err != nil {
+		return err
+	}
+	return ncmd.Process.Release()
 }
 
 // getPID uses 'lsof' to find the pid of the ais process listening on a port
