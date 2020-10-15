@@ -128,8 +128,8 @@ func (file *FileInode) Write(r cmn.ReadOpenCloser, handle string, size int64) (s
 }
 
 // REQUIRES_LOCK(file)
-func (file *FileInode) Flush(handle string) error {
-	err := file.object.Flush(handle)
+func (file *FileInode) Flush(handle string, cksum *cmn.Cksum) error {
+	err := file.object.Flush(handle, cksum)
 	if err != nil {
 		return err
 	}

@@ -24,20 +24,22 @@ type (
 	}
 
 	bucketAPI struct {
-		name      string
+		bck       cmn.Bck
 		apiParams api.BaseParams
 	}
 )
 
-func NewBucket(name string, apiParams api.BaseParams) Bucket {
-	return &bucketAPI{
-		name:      name,
-		apiParams: apiParams,
+func NewBucket(name string, apiParams api.BaseParams) (bck Bucket, err error) {
+	b := cmn.Bck{Name: name}
+	b.Props, err = api.HeadBucket(apiParams, b)
+	if err != nil {
+		return &bucketAPI{bck: b, apiParams: apiParams}, err
 	}
+	return &bucketAPI{bck: b, apiParams: apiParams}, nil
 }
 
-func (bck *bucketAPI) Name() string              { return bck.name }
-func (bck *bucketAPI) Bck() cmn.Bck              { return cmn.Bck{Name: bck.name} }
+func (bck *bucketAPI) Name() string              { return bck.bck.Name }
+func (bck *bucketAPI) Bck() cmn.Bck              { return bck.bck }
 func (bck *bucketAPI) APIParams() api.BaseParams { return bck.apiParams }
 
 func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err error) {

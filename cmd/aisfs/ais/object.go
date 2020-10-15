@@ -35,6 +35,8 @@ func NewObject(objName string, bucket Bucket, sizes ...int64) *Object {
 	}
 }
 
+func (obj *Object) Bck() cmn.Bck { return obj.bck }
+
 func (obj *Object) Put(r cmn.ReadOpenCloser) (err error) {
 	putArgs := api.PutObjectArgs{
 		BaseParams: obj.apiParams,
@@ -79,12 +81,13 @@ func (obj *Object) Append(r cmn.ReadOpenCloser, prevHandle string, size int64) (
 	return handle, nil
 }
 
-func (obj *Object) Flush(handle string) (err error) {
+func (obj *Object) Flush(handle string, cksum *cmn.Cksum) (err error) {
 	flushArgs := api.FlushArgs{
 		BaseParams: obj.apiParams,
 		Bck:        obj.bck,
 		Object:     obj.Name,
 		Handle:     handle,
+		Cksum:      cksum,
 	}
 	if err = api.FlushObject(flushArgs); err != nil {
 		return newObjectIOError(err, "Flush", obj.Name)

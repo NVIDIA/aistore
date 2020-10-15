@@ -28,7 +28,7 @@ var _ = Describe("Cache", func() {
 		)
 
 		BeforeEach(func() {
-			bck = ais.NewBucket("empty", api.BaseParams{
+			bck, _ = ais.NewBucket("empty", api.BaseParams{
 				Client: http.DefaultClient,
 				URL:    "",
 			})

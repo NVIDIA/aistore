@@ -28,7 +28,8 @@ type (
 	}
 
 	writeBuffer struct {
-		sgl *memsys.SGL
+		sgl   *memsys.SGL
+		cksum *cmn.CksumHash
 	}
 )
 
@@ -74,14 +75,28 @@ func (b *blockBuffer) ReadAt(p []byte, offset int64) (n int, err error) {
 	return reader.Read(p)
 }
 
-func newWriteBuffer() *writeBuffer {
+func newWriteBuffer(cksumType string) *writeBuffer {
 	return &writeBuffer{
-		sgl: glMem2.NewSGL(maxBlockSize, maxBlockSize),
+		sgl:   glMem2.NewSGL(maxBlockSize, maxBlockSize),
+		cksum: cmn.NewCksumHash(cksumType),
 	}
 }
 
-func (b *writeBuffer) reader() cmn.ReadOpenCloser  { return memsys.NewReader(b.sgl) }
-func (b *writeBuffer) size() int64                 { return b.sgl.Size() }
-func (b *writeBuffer) reset()                      { b.sgl.Reset() }
-func (b *writeBuffer) write(p []byte) (int, error) { return b.sgl.Write(p) }
-func (b *writeBuffer) free()                       { b.sgl.Free() }
+func (b *writeBuffer) reader() cmn.ReadOpenCloser { return memsys.NewReader(b.sgl) }
+func (b *writeBuffer) size() int64                { return b.sgl.Size() }
+func (b *writeBuffer) reset()                     { b.sgl.Reset() }
+func (b *writeBuffer) free() {
+	b.sgl.Free()
+	b.cksum = nil
+}
+
+func (b *writeBuffer) write(p []byte) (int, error) {
+	_, err := b.cksum.H.Write(p)
+	cmn.AssertNoErr(err)
+	return b.sgl.Write(p)
+}
+
+func (b *writeBuffer) checksum() *cmn.Cksum {
+	b.cksum.Finalize()
+	return b.cksum.Clone()
+}

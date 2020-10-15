@@ -9,6 +9,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/jacobsa/fuse/fuseops"
 )
@@ -141,7 +142,8 @@ func (fh *fileHandle) readChunk(dst []byte, offset int64) (n int, err error) {
 
 func (fh *fileHandle) _writeChunk(data []byte, maxWriteBufSize int64, force bool) (err error) {
 	if fh.writeBuffer == nil {
-		fh.writeBuffer = newWriteBuffer()
+		cksumType := fh.file.object.Bck().Props.Cksum.Type
+		fh.writeBuffer = newWriteBuffer(cksumType)
 	}
 
 	// Buffer the writes to make sure we don't send an append request for small data chunks.
@@ -180,7 +182,7 @@ func (fh *fileHandle) writeChunk(data []byte, offset uint64, maxWriteBufSize int
 // READING AND WRITING //
 /////////////////////////
 
-func (fh *fileHandle) flush() (err error) {
+func (fh *fileHandle) flush() error {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 
@@ -188,12 +190,18 @@ func (fh *fileHandle) flush() (err error) {
 		return nil
 	}
 
+	var (
+		err   error
+		cksum *cmn.Cksum
+	)
+
 	if fh.writeBuffer != nil && fh.writeBuffer.size() > 0 {
 		err = fh._writeChunk(nil, 0, true /*force*/)
+		cksum = fh.writeBuffer.checksum()
 	}
 
 	if err == nil {
-		err = fh.file.Flush(fh.appendHandle)
+		err = fh.file.Flush(fh.appendHandle, cksum)
 		if err == nil {
 			fh.file.Lock()
 			fh.file.SetSize(fh.wsize)
@@ -206,5 +214,5 @@ func (fh *fileHandle) flush() (err error) {
 	fh.appendHandle = ""
 	fh.writeBuffer.free()
 	fh.writeBuffer = nil
-	return
+	return err
 }

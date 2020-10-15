@@ -80,6 +80,9 @@ type (
 		// Config
 		cfg *ServerConfig
 
+		// Bucket
+		bck ais.Bucket
+
 		// HTTP client
 		httpClient *http.Client
 
@@ -141,17 +144,22 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 		errLog: errLog,
 	}
 
-	// Create a bucket.
+	// Initialize a bucket.
 	apiParams := aisfs.aisAPIParams()
-	bucket := ais.NewBucket(cfg.BucketName, apiParams)
+	bucket, err := ais.NewBucket(cfg.BucketName, apiParams)
+	if err != nil {
+		return nil, err
+	}
+	aisfs.bck = bucket
 
 	// Create the root inode.
 	aisfs.root = NewDirectoryInode(
 		fuseops.RootInodeID,
 		aisfs.dirAttrs(aisfs.modeBits.Directory),
 		rootPath,
-		nil, /* parent */
-		bucket).(*DirectoryInode)
+		nil, /*parent*/
+		aisfs.bck,
+	).(*DirectoryInode)
 
 	aisfs.root.IncLookupCount()
 	aisfs.inodeTable[fuseops.RootInodeID] = aisfs.root
@@ -269,8 +277,7 @@ func (fs *aisfs) createFileInode(inodeID fuseops.InodeID, parent *DirectoryInode
 func (fs *aisfs) createDirectoryInode(inodeID fuseops.InodeID, parent *DirectoryInode, entryName string, mode os.FileMode) Inode {
 	attrs := fs.dirAttrs(mode)
 	fspath := path.Join(parent.Path(), entryName) + separator
-	bucket := ais.NewBucket(fs.cfg.BucketName, fs.aisAPIParams())
-	inode := NewDirectoryInode(inodeID, attrs, fspath, parent, bucket)
+	inode := NewDirectoryInode(inodeID, attrs, fspath, parent, fs.bck)
 	fs.inodeTable[inodeID] = inode
 	return inode
 }
