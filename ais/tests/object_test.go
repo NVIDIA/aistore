@@ -426,6 +426,16 @@ func TestOperationsWithRanges(t *testing.T) {
 					baseParams = tutils.BaseAPIParams(proxyURL)
 				)
 
+				// NOTE: list-object returns incorrect object count when rebalance is running.
+				// Ensure no rebalance is running before starting the tests.
+				xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+				if _, err := api.WaitForXaction(baseParams, xactArgs); err != nil {
+					// `http.StatusNotFound` implies rebalance is not running.
+					if hErr, ok := err.(*cmn.HTTPError); !ok || hErr.Status != http.StatusNotFound {
+						tassert.CheckFatal(t, err)
+					}
+				}
+
 				for idx, test := range tests {
 					tutils.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
 
