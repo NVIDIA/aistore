@@ -35,7 +35,7 @@ func NewIntraDataClient() *http.Client {
 	})
 }
 
-func (s *Stream) do(body io.Reader) (err error) {
+func (s *streamBase) do(streamer streamer, body io.Reader) (err error) {
 	// init request
 	var (
 		request  *http.Request
@@ -44,7 +44,7 @@ func (s *Stream) do(body io.Reader) (err error) {
 	if request, err = http.NewRequest(http.MethodPut, s.toURL, body); err != nil {
 		return
 	}
-	if s.compressed() {
+	if streamer.compressed() {
 		request.Header.Set(cmn.HeaderCompress, cmn.LZ4Compression)
 	}
 	request.Header.Set(cmn.HeaderSessID, strconv.FormatInt(s.sessID, 10))
@@ -59,9 +59,8 @@ func (s *Stream) do(body io.Reader) (err error) {
 	// handle response & cleanup
 	io.Copy(ioutil.Discard, response.Body)
 	response.Body.Close()
-	if s.compressed() {
-		s.lz4s.sgl.Reset()
-		s.lz4s.zw.Reset(nil)
+	if streamer.compressed() {
+		streamer.resetCompression()
 	}
 	return
 }

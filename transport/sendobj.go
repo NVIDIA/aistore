@@ -6,7 +6,6 @@
 package transport
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/pierrec/lz4/v3"
 )
 
@@ -54,12 +52,8 @@ const (
 	reasonStopped = "stopped"
 )
 
-// private types
+// private struct types: object stream
 type (
-	streamable interface {
-		obj() *Obj
-		msg() *Msg
-	}
 	lz4Stream struct {
 		s             *Stream
 		zw            *lz4.Writer // orig reader => zw
@@ -76,17 +70,6 @@ type (
 		obj Obj
 		err error
 	}
-	collector struct {
-		streams map[string]*Stream
-		heap    []*Stream
-		ticker  *time.Ticker
-		stopCh  *cmn.StopCh
-		ctrlCh  chan ctrl
-	}
-	ctrl struct { // add/del channel to/from collector
-		s   *Stream
-		add bool
-	}
 )
 
 var (
@@ -98,28 +81,12 @@ var (
 // interface guard
 var (
 	_ streamable = &Obj{}
-	_ streamable = &Msg{}
+	_ streamer   = &Stream{}
 )
 
-/////////////////////////////
-// Stream: private methods //
-/////////////////////////////
-
-func (s *Stream) startSend(streamable fmt.Stringer, verbose bool) (err error) {
-	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
-	if s.Terminated() {
-		err = fmt.Errorf("%s terminated(%s, %v), dropping %s", s, *s.term.reason, s.term.err, streamable)
-		glog.Error(err)
-		return
-	}
-	if s.sessST.CAS(inactive, active) {
-		s.postCh <- struct{}{}
-		if verbose {
-			glog.Infof("%s: inactive => active", s)
-		}
-	}
-	return
-}
+///////////////////
+// object stream //
+///////////////////
 
 func (s *Stream) terminate() {
 	s.term.mu.Lock()
@@ -169,65 +136,46 @@ func (s *Stream) initCompression(extra *Extra) {
 
 func (s *Stream) compressed() bool { return s.lz4s.s == s }
 
-func (s *Stream) sendLoop(dryrun bool) {
-	for {
-		if s.sessST.Load() == active {
-			if dryrun {
-				s.dryrun()
-			} else if err := s.doRequest(); err != nil {
-				*s.term.reason = reasonError
-				s.term.err = err
-				break
-			}
-		}
-		if !s.isNextReq() {
-			break
-		}
-	}
-
-	s.terminate()
-	s.wg.Done()
-
-	// handle termination that is caused by anything other than Fin()
-	if *s.term.reason != endOfStream {
-		if *s.term.reason == reasonStopped {
-			if glog.FastV(4, glog.SmoduleTransport) {
-				glog.Infof("%s: stopped", s)
-			}
-		} else {
-			glog.Errorf("%s: terminating (%s, %v)", s, *s.term.reason, s.term.err)
-		}
-		// first, wait for the SCQ/cmplCh to empty
-		s.wg.Wait()
-
-		// second, handle the last interrupted send
-		if s.inSend() {
-			obj := &s.sendoff.obj
-			s.objDone(obj, s.term.err)
-		}
-		// finally, handle pending SQ
-		for streamable := range s.workCh {
-			obj := streamable.obj() // TODO -- FIXME
-			s.objDone(obj, s.term.err)
-		}
-	}
+func (s *Stream) resetCompression() {
+	s.lz4s.sgl.Reset()
+	s.lz4s.zw.Reset(nil)
 }
 
 func (s *Stream) cmplLoop() {
 	for {
 		cmpl, ok := <-s.cmplCh
 		obj := &cmpl.obj
-		if !ok || obj.Hdr.IsLast() {
+		if !ok || obj.IsLast() {
 			break
 		}
-		s.objDone(&cmpl.obj, cmpl.err)
+		s.doCmpl(&cmpl.obj, cmpl.err)
 	}
 	s.wg.Done()
 }
 
+// handle the last interrupted transmission and pending SQ/SCQ
+func (s *Stream) abortPending(err error, completions bool) {
+	if s.inSend() {
+		s.doCmpl(&s.sendoff.obj, err)
+	}
+	for obj := range s.workCh {
+		s.doCmpl(obj, err)
+	}
+	if completions {
+		for cmpl := range s.cmplCh {
+			if !cmpl.obj.IsLast() {
+				s.doCmpl(&cmpl.obj, cmpl.err)
+			}
+		}
+	}
+}
+
 // refcount, invoke Sendcallback, and *always* close the reader
-func (s *Stream) objDone(obj *Obj, err error) {
-	var rc int64
+func (s *Stream) doCmpl(streamable streamable, err error) {
+	var (
+		rc  int64
+		obj = streamable.obj()
+	)
 	if obj.prc != nil {
 		rc = obj.prc.Dec()
 		debug.Assert(rc >= 0)
@@ -261,7 +209,7 @@ func (s *Stream) doRequest() (err error) {
 		s.lz4s.zw.Header.BlockMaxSize = s.lz4s.blockMaxSize
 		body = &s.lz4s
 	}
-	return s.do(body)
+	return s.do(s, body)
 }
 
 // as io.Reader
@@ -285,20 +233,20 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 	}
 repeat:
 	select {
-	case streamable, ok := <-s.workCh: // next object OR idle tick
+	case obj, ok := <-s.workCh: // next object OR idle tick
 		if !ok {
 			err = fmt.Errorf("%s closed prior to stopping", s)
 			debug.Infof("%v", err)
 			return
 		}
-		s.sendoff.obj = *streamable.obj() // TODO -- FIXME
+		s.sendoff.obj = *obj
 		if s.sendoff.obj.IsIdleTick() {
 			if len(s.workCh) > 0 {
 				goto repeat
 			}
 			return s.deactivate()
 		}
-		l := s.insHeader(s.sendoff.obj.Hdr)
+		l := s.insObjHeader(&s.sendoff.obj.Hdr)
 		s.header = s.maxheader[:l]
 		s.sendoff.ins = inHdr
 		return s.sendHdr(b)
@@ -322,7 +270,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 		}
 		s.sendoff.ins = inData
 		s.sendoff.off = 0
-		if s.sendoff.obj.Hdr.IsLast() {
+		if s.sendoff.obj.IsLast() {
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: sent last", s)
 			}
@@ -357,7 +305,7 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 }
 
 // end-of-object updates stats, reset idle timeout, and post completion
-// NOTE: reader.Close() is done by the completion handling code objDone
+// NOTE: reader.Close() is done by the completion handling code doCmpl
 func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
 	size := obj.Hdr.ObjAttrs.Size
@@ -426,69 +374,6 @@ func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName strin
 	hdr.ObjAttrs.Version = meta.Version()
 }
 
-////////////////////
-// Msg and MsgHdr //
-////////////////////
-
-func (msg Msg) obj() *Obj           { return nil }
-func (msg Msg) msg() *Msg           { return &msg }
-func (msg *Msg) IsLast() bool       { return msg.Flags == lastMarker }
-func (msg *Msg) IsIdleTick() bool   { return msg.Flags == tickMarker }
-func (msg *Msg) IsHeaderOnly() bool { return true }
-
-func (msg *Msg) String() string { return "smsg-" + msg.RecvHandler }
-
-//////////////////////////
-// header serialization //
-//////////////////////////
-
-func (s *Stream) insHeader(hdr ObjHdr) (l int) {
-	l = cmn.SizeofI64 * 2
-	l = insString(l, s.maxheader, hdr.Bck.Name)
-	l = insString(l, s.maxheader, hdr.ObjName)
-	l = insString(l, s.maxheader, hdr.Bck.Provider)
-	l = insString(l, s.maxheader, hdr.Bck.Ns.Name)
-	l = insString(l, s.maxheader, hdr.Bck.Ns.UUID)
-	l = insByte(l, s.maxheader, hdr.Opaque)
-	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
-	hlen := l - cmn.SizeofI64*2
-	insInt64(0, s.maxheader, int64(hlen))
-	checksum := xoshiro256.Hash(uint64(hlen))
-	insUint64(cmn.SizeofI64, s.maxheader, checksum)
-	return
-}
-
-func insString(off int, to []byte, str string) int {
-	return insByte(off, to, []byte(str))
-}
-
-func insByte(off int, to, b []byte) int {
-	l := len(b)
-	binary.BigEndian.PutUint64(to[off:], uint64(l))
-	off += cmn.SizeofI64
-	n := copy(to[off:], b)
-	cmn.Assert(n == l)
-	return off + l
-}
-
-func insInt64(off int, to []byte, i int64) int {
-	return insUint64(off, to, uint64(i))
-}
-
-func insUint64(off int, to []byte, i uint64) int {
-	binary.BigEndian.PutUint64(to[off:], i)
-	return off + cmn.SizeofI64
-}
-
-func insAttrs(off int, to []byte, attr ObjectAttrs) int {
-	off = insInt64(off, to, attr.Size)
-	off = insInt64(off, to, attr.Atime)
-	off = insString(off, to, attr.CksumType)
-	off = insString(off, to, attr.CksumValue)
-	off = insString(off, to, attr.Version)
-	return off
-}
-
 /////////////
 // dry-run //
 /////////////
@@ -527,7 +412,7 @@ func (stats *Stats) CompressionRatio() float64 {
 func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	var (
 		sendoff = &lz4s.s.sendoff
-		last    = sendoff.obj.Hdr.IsLast()
+		last    = sendoff.obj.IsLast()
 		retry   = 64 // insist on returning n > 0 (note that lz4 compresses /blocks/)
 	)
 	if lz4s.sgl.Len() > 0 {

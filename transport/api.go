@@ -17,11 +17,16 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+///////////////////
+// object stream //
+///////////////////
+
 type (
+	// object stream
 	Stream struct {
-		workCh   chan streamable // aka SQ: next object to stream
-		cmplCh   chan cmpl       // aka SCQ; note that SQ and SCQ together form a FIFO
-		callback ObjSentCB       // to free SGLs, close files, etc.
+		workCh   chan *Obj // aka SQ: next object to stream
+		cmplCh   chan cmpl // aka SCQ; note that SQ and SCQ together form a FIFO
+		callback ObjSentCB // to free SGLs, close files, etc.
 		sendoff  sendoff
 		lz4s     lz4Stream
 		streamBase
@@ -66,12 +71,6 @@ type (
 		CmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
 		prc      *atomic.Int64  // private; if present, ref-counts to call ObjSentCB only once
 	}
-	Msg struct {
-		Flags       int64
-		RecvHandler string
-		KVs         cmn.SimpleKVs
-		Body        []byte
-	}
 
 	// object-sent callback that has the following signature can optionally be defined on a:
 	// a) per-stream basis (via NewStream constructor - see Extra struct above)
@@ -81,10 +80,27 @@ type (
 	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
 	ObjSentCB func(ObjHdr, io.ReadCloser, unsafe.Pointer, error)
 
+	// message stream
+	MsgStream struct {
+		workCh chan *Msg // ditto
+		msgoff msgoff
+		streamBase
+	}
+	Msg struct {
+		Flags       int64
+		RecvHandler string
+		Body        []byte
+	}
+
+	// stream collector
 	StreamCollector struct {
 		cmn.Named
 	}
 )
+
+///////////////////
+// object stream //
+///////////////////
 
 func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 	s = &Stream{streamBase: *newStreamBase(client, toURL, extra)}
@@ -99,12 +115,12 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 	// burst size: the number of objects the caller is permitted to post for sending
 	// without experiencing any sort of back-pressure
 	burst := burst()
-	s.workCh = make(chan streamable, burst) // Send Qeueue or SQ
-	s.cmplCh = make(chan cmpl, burst)       // Send Completion Queue or SCQ
+	s.workCh = make(chan *Obj, burst) // Send Qeueue or SQ
+	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue or SCQ
 
 	s.wg.Add(2)
-	go s.sendLoop(dryrun()) // handle SQ
-	go s.cmplLoop()         // handle SCQ
+	go s.sendLoop(s, dryrun()) // handle SQ
+	go s.cmplLoop()            // handle SCQ
 
 	gc.ctrlCh <- ctrl{s, true /* collect */}
 	return
@@ -120,12 +136,12 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 //   when the header's Dsize field is set to zero), the reader is not required and the
 //   corresponding argument in Send() can be set to nil.
 // * object reader is always closed by the code that handles send completions.
-//   In the case when SendCallback is provided (i.e., non-nil), the closing is done
-//   right after calling this callback - see objDone below for details.
-// * Optional reference counting is also done by (and in) the objDone, so that the
-//   SendCallback gets called if and only when the refcount (if provided i.e., non-nil)
+//   In the case when ObjSentCB is provided (i.e., non-nil), the closing is done
+//   right after calling this callback - see doCmpl below for details.
+// * Optional reference counting is also done by (and in) the doCmpl, so that the
+//   ObjSentCB gets called if and only when the refcount (if provided i.e., non-nil)
 //   reaches zero.
-// * For every transmission of every object there's always an objDone() completion
+// * For every transmission of every object there's always an doCmpl() completion
 //   (with its refcounting and reader-closing). This holds true in all cases including
 //   network errors that may cause sudden and instant termination of the underlying
 //   stream(s).
@@ -146,19 +162,39 @@ func (s *Stream) Send(obj *Obj) (err error) {
 	return
 }
 
-func (s *Stream) SendMsg(msg *Msg) (err error) {
+func (s *Stream) Fin() {
+	_ = s.Send(&Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}})
+	s.wg.Wait()
+}
+
+////////////////////
+// message stream //
+////////////////////
+
+func NewMsgStream(client Client, toURL string) (s *MsgStream) {
+	s = &MsgStream{streamBase: *newStreamBase(client, toURL, nil)}
+
+	// burst size: the number of objects the caller is permitted to post for sending
+	// without experiencing any sort of back-pressure
+	burst := burst()
+	s.workCh = make(chan *Msg, burst) // Send Qeueue or SQ
+
+	s.wg.Add(1)
+	go s.sendLoop(s, dryrun())
+
+	// TODO -- FIXME: collect
+	return
+}
+
+// nolint:interfacer // TODO -- FIXME
+func (s *MsgStream) Send(msg *Msg) (err error) {
 	verbose := bool(glog.FastV(4, glog.SmoduleTransport))
 	if err = s.startSend(msg, verbose); err != nil {
 		return
 	}
 	s.workCh <- msg
 	if verbose {
-		glog.Infof("%s: sendmsg %s[sq=%d]", s, msg, len(s.workCh))
+		glog.Infof("%s: send %s[sq=%d]", s, msg, len(s.workCh))
 	}
 	return
-}
-
-func (s *Stream) Fin() {
-	_ = s.Send(&Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: lastMarker}}})
-	s.wg.Wait()
 }

@@ -6,6 +6,7 @@
 package transport
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net/url"
@@ -18,10 +19,26 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/xoshiro256"
 )
 
 type (
+	streamable interface {
+		obj() *Obj
+		msg() *Msg
+	}
+	streamer interface {
+		compressed() bool
+		dryrun()
+		terminate()
+		doRequest() error
+		inSend() bool
+		doCmpl(streamable, error)
+		abortPending(error, bool)
+		resetCompression()
+	}
 	streamBase struct {
+		streamer
 		client Client // http client this send-stream will use
 
 		// user-defined & queryable
@@ -53,6 +70,10 @@ type (
 	}
 )
 
+////////////////
+// streamBase //
+////////////////
+
 func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	u, err := url.Parse(toURL)
 	if err != nil {
@@ -80,6 +101,22 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	s.sessST.Store(inactive)                  // NOTE: initiate HTTP session upon arrival of the first object
 
 	s.term.reason = new(string)
+	return
+}
+
+func (s *streamBase) startSend(streamable fmt.Stringer, verbose bool) (err error) {
+	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
+	if s.Terminated() {
+		err = fmt.Errorf("%s terminated(%s, %v), dropping %s", s, *s.term.reason, s.term.err, streamable)
+		glog.Error(err)
+		return
+	}
+	if s.sessST.CAS(inactive, active) {
+		s.postCh <- struct{}{}
+		if verbose {
+			glog.Infof("%s: inactive => active", s)
+		}
+	}
 	return
 }
 
@@ -112,10 +149,6 @@ func (s *streamBase) GetStats() (stats Stats) {
 	stats.CompressedSize.Store(s.stats.CompressedSize.Load())
 	return
 }
-
-//
-// private
-//
 
 func (s *streamBase) isNextReq() (next bool) {
 	for {
@@ -150,9 +183,108 @@ func (s *streamBase) deactivate() (n int, err error) {
 	return
 }
 
-//
-// misc helpers
-//
+func (s *streamBase) sendLoop(streamer streamer, dryrun bool) {
+	for {
+		if s.sessST.Load() == active {
+			if dryrun {
+				streamer.dryrun()
+			} else if err := streamer.doRequest(); err != nil {
+				*s.term.reason = reasonError
+				s.term.err = err
+				break
+			}
+		}
+		if !s.isNextReq() {
+			break
+		}
+	}
+
+	streamer.terminate()
+	s.wg.Done()
+
+	// handle termination caused by anything other than Fin()
+	if *s.term.reason != endOfStream {
+		if *s.term.reason == reasonStopped {
+			if glog.FastV(4, glog.SmoduleTransport) {
+				glog.Infof("%s: stopped", s)
+			}
+		} else {
+			glog.Errorf("%s: terminating (%s, %v)", s, *s.term.reason, s.term.err)
+		}
+		// wait for the SCQ/cmplCh to empty
+		s.wg.Wait()
+
+		// cleanup
+		streamer.abortPending(s.term.err, false /*completions*/)
+	}
+}
+
+//////////////////////////
+// header serialization //
+//////////////////////////
+
+func (s *streamBase) insObjHeader(hdr *ObjHdr) (l int) {
+	l = cmn.SizeofI64 * 2
+	l = insString(l, s.maxheader, hdr.Bck.Name)
+	l = insString(l, s.maxheader, hdr.ObjName)
+	l = insString(l, s.maxheader, hdr.Bck.Provider)
+	l = insString(l, s.maxheader, hdr.Bck.Ns.Name)
+	l = insString(l, s.maxheader, hdr.Bck.Ns.UUID)
+	l = insByte(l, s.maxheader, hdr.Opaque)
+	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
+	hlen := l - cmn.SizeofI64*2
+	insInt64(0, s.maxheader, int64(hlen))
+	checksum := xoshiro256.Hash(uint64(hlen))
+	insUint64(cmn.SizeofI64, s.maxheader, checksum)
+	return
+}
+
+func (s *streamBase) insMsgHeader(msg *Msg) (l int) {
+	l = cmn.SizeofI64 * 2
+	l = insInt64(l, s.maxheader, msg.Flags)
+	l = insString(l, s.maxheader, msg.RecvHandler)
+	l = insByte(l, s.maxheader, msg.Body)
+	hlen := l - cmn.SizeofI64*2
+	insInt64(0, s.maxheader, int64(hlen))
+	checksum := xoshiro256.Hash(uint64(hlen))
+	insUint64(cmn.SizeofI64, s.maxheader, checksum)
+	return
+}
+
+func insString(off int, to []byte, str string) int {
+	return insByte(off, to, []byte(str))
+}
+
+func insByte(off int, to, b []byte) int {
+	l := len(b)
+	binary.BigEndian.PutUint64(to[off:], uint64(l))
+	off += cmn.SizeofI64
+	n := copy(to[off:], b)
+	cmn.Assert(n == l)
+	return off + l
+}
+
+func insInt64(off int, to []byte, i int64) int {
+	return insUint64(off, to, uint64(i))
+}
+
+func insUint64(off int, to []byte, i uint64) int {
+	binary.BigEndian.PutUint64(to[off:], i)
+	return off + cmn.SizeofI64
+}
+
+func insAttrs(off int, to []byte, attr ObjectAttrs) int {
+	off = insInt64(off, to, attr.Size)
+	off = insInt64(off, to, attr.Atime)
+	off = insString(off, to, attr.CksumType)
+	off = insString(off, to, attr.CksumValue)
+	off = insString(off, to, attr.Version)
+	return off
+}
+
+//////////////////
+// misc helpers //
+//////////////////
 
 func burst() (burst int) {
 	burst = burstNum

@@ -14,6 +14,20 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+type (
+	ctrl struct { // add/del channel to/from collector
+		s   *Stream
+		add bool
+	}
+	collector struct {
+		streams map[string]*Stream
+		heap    []*Stream
+		ticker  *time.Ticker
+		stopCh  *cmn.StopCh
+		ctrlCh  chan ctrl
+	}
+)
+
 // Stream Collector - a singleton that:
 // 1. controls part of the stream lifecycle:
 //    - activation (followed by connection establishment and HTTP PUT), and
@@ -140,15 +154,7 @@ func (gc *collector) do() {
 				if s.term.err == nil {
 					s.term.err = errors.New(reasonUnknown)
 				}
-				for streamable := range s.workCh {
-					obj := streamable.obj() // TODO -- FIXME
-					s.objDone(obj, s.term.err)
-				}
-				for cmpl := range s.cmplCh {
-					if !cmpl.obj.Hdr.IsLast() {
-						s.objDone(&cmpl.obj, cmpl.err)
-					}
-				}
+				s.abortPending(s.term.err, true /*completions*/)
 			}
 		} else if s.sessST.Load() == active {
 			gc.update(s, s.time.ticks-1)
@@ -163,7 +169,7 @@ func (gc *collector) do() {
 			continue
 		}
 		if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
-			s.workCh <- Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
+			s.workCh <- &Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: active => inactive", s)
 			}
@@ -180,7 +186,7 @@ func (gc *collector) drain(s *Stream) {
 		select {
 		case streamable := <-s.workCh:
 			obj := streamable.obj() // TODO -- FIXME
-			s.objDone(obj, s.term.err)
+			s.doCmpl(obj, s.term.err)
 		default:
 			return
 		}
