@@ -163,6 +163,7 @@ var _ = Describe("Notifications xaction test", func() {
 
 		It("should finish when all the Notifiers finished", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
+			n.add(nl)
 			stats := finishedXact(xactID)
 			n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
 			err := n.handleFinished(nl, targets[target2ID], cmn.MustMarshal(stats), nil)
@@ -250,6 +251,26 @@ var _ = Describe("Notifications xaction test", func() {
 
 			// `nl` should be marked finished
 			Expect(nl.Finished()).To(BeTrue())
+		})
+
+		It("should accept finished notifications after a target aborts", func() {
+			stats := finishedXact(xactID)
+			abortStats := abortedXact(xactID)
+			n.add(nl)
+
+			// First target aborts an xaction
+			request := notifRequest(target1ID, xactID, cmn.Finished, abortStats)
+			checkRequest(n, request, http.StatusOK)
+
+			// `nl` should be marked finished when an xaction aborts
+			Expect(nl.Finished()).To(BeTrue())
+			Expect(nl.FinCount()).To(BeEquivalentTo(1))
+
+			// Second target sends finished stats
+			request = notifRequest(target2ID, xactID, cmn.Finished, stats)
+			checkRequest(n, request, http.StatusOK)
+			Expect(nl.Finished()).To(BeTrue())
+			Expect(nl.FinCount()).To(BeEquivalentTo(2))
 		})
 	})
 })

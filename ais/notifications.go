@@ -107,8 +107,7 @@ func (n *notifs) add(nl nl.NotifListener) {
 	glog.Infoln("add " + nl.String())
 }
 
-func (n *notifs) del(nl nl.NotifListener, locked bool) {
-	var ok bool
+func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
 	if !locked {
 		n.Lock()
 	}
@@ -121,6 +120,7 @@ func (n *notifs) del(nl nl.NotifListener, locked bool) {
 	if ok {
 		glog.Infoln("del " + nl.String())
 	}
+	return
 }
 
 func (n *notifs) entry(uuid string) (nl.NotifListener, bool) {
@@ -206,9 +206,6 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	//       and `unknown-notifier` benign non-error conditions
 	uuid = notifMsg.UUID
 	if !withRetry(func() bool { nl, exists = n.entry(uuid); return exists }) {
-		return
-	}
-	if nl.Finished() {
 		return
 	}
 
@@ -306,13 +303,19 @@ func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr er
 }
 
 func (n *notifs) done(nl nl.NotifListener) {
+	if !n.del(nl, false) {
+		// `nl` already removed from active map
+		return
+	}
 	n.fmu.Lock()
 	n.fin[nl.UUID()] = nl
 	n.fmu.Unlock()
-	n.del(nl, false)
 
 	if nl.Aborted() {
 		config := cmn.GCO.Get()
+		// NOTE: we accept finished notifications even after
+		// `nl` is aborted. Handle locks carefully.
+		nl.RLock()
 		args := &bcastArgs{
 			req:     nl.AbortArgs(),
 			network: cmn.NetworkIntraControl,
@@ -320,7 +323,8 @@ func (n *notifs) done(nl nl.NotifListener) {
 			nodes:   []cluster.NodeMap{nl.Notifiers()},
 		}
 		args.nodeCount = len(args.nodes[0])
-		args.skipNodes = nl.FinNotifiers()
+		args.skipNodes = nl.FinNotifiers().Clone() // TODO: optimize
+		nl.RUnlock()
 		n.p.bcastToNodesAsync(args)
 	}
 	nl.Callback(nl, time.Now().UnixNano())
