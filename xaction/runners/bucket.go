@@ -34,10 +34,10 @@ type (
 
 	bckRename struct {
 		xaction.XactBase
-		t         cluster.Target
-		bckFrom   *cluster.Bck
-		bckTo     *cluster.Bck
-		rebStatsF func() ([]cluster.XactStats, error)
+		t       cluster.Target
+		bckFrom *cluster.Bck
+		bckTo   *cluster.Bck
+		rebID   xaction.RebID
 	}
 )
 
@@ -51,15 +51,7 @@ func (*BckRenameProvider) New(args registry.XactArgs) registry.BucketEntry {
 }
 
 func (p *BckRenameProvider) Start(bck cmn.Bck) error {
-	f := func() ([]cluster.XactStats, error) {
-		onlyRunning := false
-		return registry.Registry.GetStats(registry.XactFilter{
-			ID:          p.args.RebID.String(),
-			Kind:        cmn.ActRebalance,
-			OnlyRunning: &onlyRunning,
-		})
-	}
-	p.xact = newBckRename(p.uuid, p.Kind(), bck, p.t, p.args.BckFrom, p.args.BckTo, f)
+	p.xact = newBckRename(p.uuid, p.Kind(), bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
 func (*BckRenameProvider) Kind() string        { return cmn.ActRenameLB }
@@ -86,13 +78,13 @@ func (p *BckRenameProvider) PreRenewHook(previousEntry registry.BucketEntry) (ke
 func (p *BckRenameProvider) PostRenewHook(_ registry.BucketEntry) {}
 
 func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
-	bckFrom, bckTo *cluster.Bck, rebF func() ([]cluster.XactStats, error)) *bckRename {
+	bckFrom, bckTo *cluster.Bck, rebID xaction.RebID) *bckRename {
 	return &bckRename{
-		XactBase:  *xaction.NewXactBaseBck(uuid, kind, bck),
-		t:         t,
-		bckFrom:   bckFrom,
-		bckTo:     bckTo,
-		rebStatsF: rebF,
+		XactBase: *xaction.NewXactBaseBck(uuid, kind, bck),
+		t:        t,
+		bckFrom:  bckFrom,
+		bckTo:    bckTo,
+		rebID:    rebID,
 	}
 }
 
@@ -101,12 +93,15 @@ func (r *bckRename) String() string        { return fmt.Sprintf("%s <= %s", r.Xa
 
 func (r *bckRename) Run() error {
 	glog.Infoln(r.String())
-
 	// FIXME: smart wait for resilver. For now assuming that rebalance takes longer than resilver.
-	var finished bool
+	var (
+		onlyRunning, finished bool
+
+		flt = registry.XactFilter{ID: r.rebID.String(), Kind: cmn.ActRebalance, OnlyRunning: &onlyRunning}
+	)
 	for !finished {
 		time.Sleep(10 * time.Second)
-		rebStats, err := r.rebStatsF()
+		rebStats, err := registry.Registry.GetStats(flt)
 		cmn.AssertNoErr(err)
 		for _, stat := range rebStats {
 			finished = finished || stat.Finished()
