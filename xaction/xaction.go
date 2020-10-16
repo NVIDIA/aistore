@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 )
 
@@ -151,6 +152,10 @@ func (xact *XactBase) EndTime() time.Time {
 	return time.Time{}
 }
 
+// upon completion, all xactions:
+// - atomically set end-time
+// - optionally, notify listener(s)
+// - optionally, refresh local capacity stats, etc.
 func (xact *XactBase) _setEndTime(errs ...error) {
 	xact.eutime.Store(time.Now().UnixNano())
 
@@ -165,6 +170,13 @@ func (xact *XactBase) _setEndTime(errs ...error) {
 
 	if xact.Kind() != cmn.ActListObjects {
 		glog.Infoln(xact.String())
+	}
+
+	xactDtor := XactsDtor[xact.kind]
+	if xactDtor.RefreshCap {
+		if cs, _ := fs.RefreshCapStatus(nil, nil); cs.Err != nil {
+			glog.Error(cs.Err)
+		}
 	}
 }
 

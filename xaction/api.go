@@ -20,10 +20,11 @@ const (
 
 type (
 	XactDescriptor struct {
-		Type      string // XactTypeGlobal, etc. - enum above
-		Startable bool   // determines if this xaction can be started via API
-		Metasync  bool   // true: changes and metasyncs cluster-wide meta
-		Owned     bool   // true: JTX-owned
+		Type       string // XactTypeGlobal, etc. - enum above
+		Startable  bool   // determines if this xaction can be started via API
+		Metasync   bool   // true: changes and metasyncs cluster-wide meta
+		Owned      bool   // true: JTX-owned
+		RefreshCap bool   // true: refresh capacity stats upon completion
 	}
 
 	XactReqMsg struct {
@@ -57,8 +58,9 @@ var (
 	_ cluster.XactStats = &BaseXactStats{}
 )
 
-// XactsDtor is a static kind => [xaction-descriptor] table documenting
-// properties of a given xaction kind: `Startable`, `Owned`, etc.
+// XactsDtor is a static Kind=>[Xaction Descriptor] map that contains
+// static properties of a given xaction type (aka `kind`), such as:
+// `Startable`, `Owned`, etc.
 var XactsDtor = map[string]XactDescriptor{
 	// bucket-less (aka "global") xactions with scope = (target | cluster)
 	cmn.ActLRU:       {Type: XactTypeGlobal, Startable: true},
@@ -71,17 +73,17 @@ var XactsDtor = map[string]XactDescriptor{
 	cmn.ActECGet:         {Type: XactTypeBck, Startable: false},
 	cmn.ActECPut:         {Type: XactTypeBck, Startable: false},
 	cmn.ActECRespond:     {Type: XactTypeBck, Startable: false},
-	cmn.ActMakeNCopies:   {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false},
+	cmn.ActMakeNCopies:   {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true},
 	cmn.ActPutCopies:     {Type: XactTypeBck, Startable: false},
 	cmn.ActRenameLB:      {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
-	cmn.ActCopyBucket:    {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
-	cmn.ActETLBucket:     {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
-	cmn.ActECEncode:      {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false},
+	cmn.ActCopyBucket:    {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, RefreshCap: true},
+	cmn.ActETLBucket:     {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, RefreshCap: true},
+	cmn.ActECEncode:      {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true},
 	cmn.ActEvictObjects:  {Type: XactTypeBck, Startable: false},
 	cmn.ActDelete:        {Type: XactTypeBck, Startable: false},
 	cmn.ActLoadLomCache:  {Type: XactTypeBck, Startable: false},
 	cmn.ActPrefetch:      {Type: XactTypeBck, Startable: true},
-	cmn.ActPromote:       {Type: XactTypeBck, Startable: false},
+	cmn.ActPromote:       {Type: XactTypeBck, Startable: false, RefreshCap: true},
 	cmn.ActQueryObjects:  {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
 	cmn.ActListObjects:   {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
 	cmn.ActSummaryBucket: {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true},
