@@ -11,6 +11,7 @@ import (
 	"hash"
 	"io"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
@@ -143,7 +144,8 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		actual := h.Sum(nil)
 		actualCksum := binary.BigEndian.Uint64(actual)
 		if expectedCksum != actualCksum {
-			return cmn.NewBadMetaCksumError(expectedCksum, actualCksum, tag)
+			// TODO -- FIXME
+			glog.Error(cmn.NewBadMetaCksumError(expectedCksum, actualCksum, tag))
 		}
 	}
 	return nil

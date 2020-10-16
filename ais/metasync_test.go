@@ -425,7 +425,7 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 			clone.Version++
 			return nil
 		},
-		post: func(_ *smapModifier, clone *smapX) {
+		final: func(_ *smapModifier, clone *smapX) {
 			msg := primary.newAisMsgStr("", clone, nil)
 			syncer.sync(revsPair{clone, msg})
 		},
@@ -437,7 +437,7 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 			clone.Version++
 			return nil
 		},
-		post: func(_ *smapModifier, clone *smapX) {
+		final: func(_ *smapModifier, clone *smapX) {
 			msg := primary.newAisMsgStr("", clone, nil)
 			syncer.sync(revsPair{clone, msg}).Wait()
 		},
@@ -522,7 +522,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 			clone.Version++
 			return nil
 		},
-		post: func(_ *smapModifier, clone *smapX) {
+		final: func(_ *smapModifier, clone *smapX) {
 			msg := primary.newAisMsgStr("", clone, nil)
 			syncer.sync(revsPair{clone, msg})
 		},

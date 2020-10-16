@@ -59,9 +59,13 @@ type (
 		running   atomic.Bool
 	}
 	smapModifier struct {
-		pre    func(ctx *smapModifier, clone *smapX) error
-		post   func(ctx *smapModifier, clone *smapX)
-		smap   *smapX
+		pre   func(ctx *smapModifier, clone *smapX) error
+		post  func(ctx *smapModifier, clone *smapX)
+		final func(ctx *smapModifier, clone *smapX)
+
+		smap *smapX
+		rmd  *rebMD
+
 		msg    *cmn.ActionMsg
 		nsi    *cluster.Snode
 		nid    string
@@ -494,12 +498,12 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 	return nil
 }
 
-func (r *smapOwner) modify(ctx *smapModifier) error {
+func (r *smapOwner) modify(ctx *smapModifier) (err error) {
 	r.Lock()
-	defer r.Unlock()
 	clone := r.get().clone()
-	if err := ctx.pre(ctx, clone); err != nil {
-		return err
+	if err = ctx.pre(ctx, clone); err != nil {
+		r.Unlock()
+		return
 	}
 	if err := r.persist(clone); err != nil {
 		glog.Errorf("failed to persist %s: %v", clone, err)
@@ -507,6 +511,11 @@ func (r *smapOwner) modify(ctx *smapModifier) error {
 	r.put(clone)
 	if ctx.post != nil {
 		ctx.post(ctx, clone)
+	}
+	r.Unlock()
+
+	if ctx.final != nil {
+		ctx.final(ctx, clone)
 	}
 	return nil
 }

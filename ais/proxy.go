@@ -2386,9 +2386,9 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 	ctx := &smapModifier{
-		pre:  p._becomePre,
-		post: p._becomePost,
-		sid:  proxyIDToRemove,
+		pre:   p._becomePre,
+		final: p._becomeFinal,
+		sid:   proxyIDToRemove,
 	}
 	err := p.owner.smap.modify(ctx)
 	cmn.AssertNoErr(err)
@@ -2407,28 +2407,29 @@ func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPresent(p.si) {
 		cmn.Assertf(false, "%s must always be present in the %s", p.si, clone.pp())
 	}
-	// FIXME: may be premature at this point
+
 	if ctx.sid != "" {
+		// decision is made: going ahead to remove
 		glog.Infof("%s: removing failed primary %s", p.si, ctx.sid)
 		clone.delProxy(ctx.sid)
 	}
 
 	clone.Primary = p.si
 	clone.Version += 100
-	psi := clone.GetProxy(ctx.sid)
-	if psi != nil && psi.IsIC() {
-		clone.clearNodeFlags(ctx.sid, cluster.SnodeIC)
-	}
 	p._staffIC(clone)
 	return nil
 }
 
-func (p *proxyrunner) _becomePost(ctx *smapModifier, clone *smapX) {
-	bmd := p.owner.bmd.get()
-	rmd := p.owner.rmd.get()
+func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
+	var (
+		bmd   = p.owner.bmd.get()
+		rmd   = p.owner.rmd.get()
+		msg   = p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
+		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
+	)
+
 	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
-	msg := p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
-	_ = p.metasyncer.sync(revsPair{clone, msg}, revsPair{bmd, msg}, revsPair{rmd, msg})
+	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
 }
 
@@ -2937,6 +2938,7 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 	ctx := &smapModifier{
 		pre:   p._updPre,
 		post:  p._updPost,
+		final: p._updFinal,
 		nsi:   nsi,
 		msg:   msg,
 		flags: flags,
@@ -2965,13 +2967,6 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 }
 
 func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
-	var (
-		tokens = p.authn.revokedTokenList()
-		bmd    = p.owner.bmd.get()
-		aisMsg = p.newAisMsg(ctx.msg, clone, bmd)
-		pairs  = []revsPair{{clone, aisMsg}, {bmd, aisMsg}}
-		nl     nl.NotifListener
-	)
 	if ctx.nsi.IsTarget() {
 		// Trigger rebalance (in case target with given ID already exists
 		// we must trigger the rebalance and assume it is a new target
@@ -2981,24 +2976,36 @@ func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
 				clone.TargetIDs = []string{ctx.nsi.ID()}
 				clone.inc()
 			})
-			pairs = append(pairs, revsPair{rmdClone, aisMsg})
-			nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(),
-				&clone.Smap, clone.Tmap, cmn.ActRebalance)
-			nl.SetOwner(equalIC)
+			ctx.rmd = rmdClone
 		}
-	} else {
+	}
+}
+
+func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
+	var (
+		tokens = p.authn.revokedTokenList()
+		bmd    = p.owner.bmd.get()
+		aisMsg = p.newAisMsg(ctx.msg, clone, bmd)
+		pairs  = []revsPair{{clone, aisMsg}, {bmd, aisMsg}}
+	)
+
+	if ctx.rmd != nil && ctx.nsi.IsTarget() {
+		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
+		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
+			&clone.Smap, clone.Tmap, cmn.ActRebalance)
+		nl.SetOwner(equalIC)
+		p.ic.registerEqual(regIC{smap: clone, nl: nl})
+	} else if ctx.nsi.IsProxy() {
 		// Send RMD to proxies to make sure that they have
 		// the latest one - newly joined can become primary in a second.
 		rmd := p.owner.rmd.get()
 		pairs = append(pairs, revsPair{rmd, aisMsg})
 	}
+
 	if len(tokens.Tokens) > 0 {
 		pairs = append(pairs, revsPair{tokens, aisMsg})
 	}
 	_ = p.metasyncer.sync(pairs...)
-	if nl != nil {
-		p.ic.registerEqual(regIC{smap: clone, nl: nl})
-	}
 	p.syncNewICOwners(ctx.smap, clone)
 }
 
@@ -3060,10 +3067,11 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := &smapModifier{
-		pre:  p._unregNodePre,
-		post: p._unregNodePost,
-		msg:  msg,
-		sid:  sid,
+		pre:   p._unregNodePre,
+		post:  p._unregNodePost,
+		final: p._unregNodeFinal,
+		msg:   msg,
+		sid:   sid,
 	}
 	err = p.owner.smap.modify(ctx)
 	if err != nil {
@@ -3078,24 +3086,29 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) (err error)
 }
 
 func (p *proxyrunner) _unregNodePost(ctx *smapModifier, clone *smapX) {
-	var (
-		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
-		pairs  = []revsPair{{clone, aisMsg}}
-		nl     nl.NotifListener
-	)
 	if p.requiresRebalance(ctx.smap, clone) {
 		rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
 			clone.inc()
 		})
-		pairs = append(pairs, revsPair{rmdClone, aisMsg})
-		nl = xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &clone.Smap,
-			clone.Tmap, cmn.ActRebalance)
+		ctx.rmd = rmdClone
+	}
+}
+
+func (p *proxyrunner) _unregNodeFinal(ctx *smapModifier, clone *smapX) {
+	var (
+		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
+		pairs  = []revsPair{{clone, aisMsg}}
+	)
+
+	if ctx.rmd != nil {
+		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
+			&clone.Smap, clone.Tmap, cmn.ActRebalance)
 		nl.SetOwner(equalIC)
-	}
-	_ = p.metasyncer.sync(pairs...)
-	if nl != nil {
 		p.ic.registerEqual(regIC{smap: clone, nl: nl})
+		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
+
+	_ = p.metasyncer.sync(pairs...)
 }
 
 func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err error) {
@@ -3176,10 +3189,10 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, si *cluster.Snode) (err error) {
 	ctx := &smapModifier{
-		pre:  p._remnPre,
-		post: p._syncPost,
-		sid:  si.ID(),
-		msg:  msg,
+		pre:   p._remnPre,
+		final: p._syncFinal,
+		sid:   si.ID(),
+		msg:   msg,
 	}
 	err = p.owner.smap.modify(ctx)
 	return
@@ -3190,7 +3203,7 @@ func (p *proxyrunner) _remnPre(ctx *smapModifier, clone *smapX) (err error) {
 	return
 }
 
-func (p *proxyrunner) _syncPost(ctx *smapModifier, clone *smapX) {
+func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
 		pairs  = []revsPair{{clone, aisMsg}}
@@ -3211,7 +3224,7 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 	}
 	ctx := &smapModifier{
 		pre:   p._markMaint,
-		post:  p._syncPost,
+		final: p._syncFinal,
 		sid:   si.ID(),
 		flags: flags,
 		msg:   msg,
@@ -3279,10 +3292,10 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDeco
 		}
 	}
 	ctx := &smapModifier{
-		pre:  p._cancelMaint,
-		sid:  opts.DaemonID,
-		post: p._syncPost,
-		msg:  msg, flags: cluster.SnodeMaintenanceMask,
+		pre:   p._cancelMaint,
+		sid:   opts.DaemonID,
+		final: p._syncFinal,
+		msg:   msg, flags: cluster.SnodeMaintenanceMask,
 	}
 	return p.owner.smap.modify(ctx)
 }
