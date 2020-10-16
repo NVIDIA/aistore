@@ -90,17 +90,17 @@ func (r *rmdOwner) load() {
 
 func (r *rmdOwner) put(rmd *rebMD) { r.rmd.Store(unsafe.Pointer(rmd)) }
 func (r *rmdOwner) get() *rebMD    { return (*rebMD)(r.rmd.Load()) }
-func (r *rmdOwner) modify(pre func(clone *rebMD), post ...func(clone *rebMD)) *rebMD {
+func (r *rmdOwner) modify(ctx *rmdModifier) *rebMD {
 	r.Lock()
-	defer r.Unlock()
 	clone := r.get().clone()
 	clone.TargetIDs = nil
 	clone.Resilver = false
-	pre(clone)
+	ctx.pre(ctx, clone)
 	r.persist(clone)
 	r.put(clone)
-	if len(post) > 0 {
-		post[0](clone)
+	r.Unlock()
+	if ctx.final != nil {
+		ctx.final(ctx, clone)
 	}
 	return clone
 }

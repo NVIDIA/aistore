@@ -400,35 +400,35 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	})
 	wg.Wait()
 
-	_ = p.owner.rmd.modify(
-		func(clone *rebMD) {
+	ctx := &rmdModifier{
+		pre: func(_ *rmdModifier, clone *rebMD) {
 			clone.inc()
 			clone.Resilver = true
 		},
-		func(clone *rebMD) {
-			c.msg.RMDVersion = clone.version()
+	}
 
-			// 5. IC
-			nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(),
-				msg.Action, bckFrom.Bck, bckTo.Bck)
-			nl.SetOwner(equalIC)
-			p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
+	rmd := p.owner.rmd.modify(ctx)
+	c.msg.RMDVersion = rmd.version()
 
-			// 6. commit
-			xactID = c.uuid
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-			c.req.Body = cmn.MustMarshal(c.msg)
+	// 5. IC
+	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(),
+		c.msg.Action, bckFrom.Bck, bckTo.Bck)
+	nl.SetOwner(equalIC)
+	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	// 6. commit
+	xactID = c.uuid
+	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
+	c.req.Body = cmn.MustMarshal(c.msg)
 
-			// 7. start rebalance and resilver
-			wg = p.metasyncer.sync(revsPair{clone, c.msg})
-			nl = xaction.NewXactNL(xaction.RebID(clone.Version).String(), &c.smap.Smap,
-				c.smap.Tmap.Clone(), cmn.ActRebalance)
-			nl.SetOwner(equalIC)
-			p.ic.registerEqual(regIC{smap: c.smap, nl: nl})
-		},
-	)
+	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+
+	// 7. start rebalance and resilver
+	wg = p.metasyncer.sync(revsPair{rmd, c.msg})
+	nl = xaction.NewXactNL(xaction.RebID(rmd.Version).String(), &c.smap.Smap,
+		c.smap.Tmap.Clone(), cmn.ActRebalance)
+	nl.SetOwner(equalIC)
+	p.ic.registerEqual(regIC{smap: c.smap, nl: nl})
 	wg.Wait()
 	return
 }

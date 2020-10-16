@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -73,6 +74,16 @@ type (
 		flags  cluster.SnodeFlags
 		status int
 		exists bool
+	}
+
+	rmdModifier struct {
+		pre   func(ctx *rmdModifier, clone *rebMD)
+		final func(ctx *rmdModifier, clone *rebMD)
+
+		smap  *smapX
+		msg   *cmn.ActionMsg
+		rebCB func(nl nl.NotifListener)
+		wait  bool
 	}
 )
 

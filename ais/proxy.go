@@ -2972,10 +2972,13 @@ func (p *proxyrunner) _updPost(ctx *smapModifier, clone *smapX) {
 		// we must trigger the rebalance and assume it is a new target
 		// with the same ID).
 		if ctx.exists || p.requiresRebalance(ctx.smap, clone) {
-			rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
-				clone.TargetIDs = []string{ctx.nsi.ID()}
-				clone.inc()
-			})
+			rmdCtx := &rmdModifier{
+				pre: func(_ *rmdModifier, clone *rebMD) {
+					clone.TargetIDs = []string{ctx.nsi.ID()}
+					clone.inc()
+				},
+			}
+			rmdClone := p.owner.rmd.modify(rmdCtx)
 			ctx.rmd = rmdClone
 		}
 	}
@@ -3087,9 +3090,12 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) (err error)
 
 func (p *proxyrunner) _unregNodePost(ctx *smapModifier, clone *smapX) {
 	if p.requiresRebalance(ctx.smap, clone) {
-		rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
-			clone.inc()
-		})
+		rmdCtx := &rmdModifier{
+			pre: func(_ *rmdModifier, clone *rebMD) {
+				clone.inc()
+			},
+		}
+		rmdClone := p.owner.rmd.modify(rmdCtx)
 		ctx.rmd = rmdClone
 	}
 }
@@ -3262,20 +3268,19 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
 	if err = p.canStartRebalance(true /*skip config*/); err != nil {
 		return
 	}
-	smap := p.owner.smap.get()
-	rmdClone := p.owner.rmd.modify(func(clone *rebMD) { clone.inc() })
-	rebMsg := &cmn.ActionMsg{Action: cmn.ActRebalance}
-	aisMsg := p.newAisMsg(rebMsg, nil, nil)
-	wg := p.metasyncer.sync(revsPair{smap, aisMsg}, revsPair{rmdClone, aisMsg})
-
-	rebID = xaction.RebID(rmdClone.Version)
-	rebnl := xaction.NewXactNL(rebID.String(), &smap.Smap, smap.Tmap.Clone(), cmn.ActRebalance)
-	rebnl.SetOwner(equalIC)
-	if len(cb) != 0 {
-		rebnl.F = cb[0]
+	rmdCtx := &rmdModifier{
+		pre: func(_ *rmdModifier, clone *rebMD) {
+			clone.inc()
+		},
+		final: p._syncRMDFinal,
+		smap:  p.owner.smap.get(),
+		wait:  true,
 	}
-	p.ic.registerEqual(regIC{smap: smap, nl: rebnl})
-	wg.Wait()
+	if len(cb) != 0 {
+		rmdCtx.rebCB = cb[0]
+	}
+	rmdClone := p.owner.rmd.modify(rmdCtx)
+	rebID = xaction.RebID(rmdClone.version())
 	return
 }
 
@@ -3358,23 +3363,19 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if msg.Action == cmn.ActXactStart && xactMsg.Kind == cmn.ActRebalance {
-			smap := p.owner.smap.get()
 			if err := p.canStartRebalance(true /*skip config*/); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
-			rmdClone := p.owner.rmd.modify(func(clone *rebMD) {
-				clone.inc()
-			})
-			msg := &cmn.ActionMsg{Action: cmn.ActRebalance}
-
-			_ = p.metasyncer.sync(revsPair{rmdClone, p.newAisMsg(msg, nil, nil)})
-
-			nl := xaction.NewXactNL(xaction.RebID(rmdClone.Version).String(), &smap.Smap,
-				smap.Tmap.Clone(), cmn.ActRebalance)
-			nl.SetOwner(equalIC)
-			p.ic.registerEqual(regIC{smap: smap, nl: nl})
-
+			rmdCtx := &rmdModifier{
+				pre: func(_ *rmdModifier, clone *rebMD) {
+					clone.inc()
+				},
+				final: p._syncRMDFinal,
+				msg:   &cmn.ActionMsg{Action: cmn.ActRebalance},
+				smap:  p.owner.smap.get(),
+			}
+			rmdClone := p.owner.rmd.modify(rmdCtx)
 			w.Write([]byte(xaction.RebID(rmdClone.version()).String()))
 			return
 		}
@@ -3509,6 +3510,20 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+	}
+}
+
+func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
+	wg := p.metasyncer.sync(revsPair{clone, p.newAisMsg(ctx.msg, nil, nil)})
+	nl := xaction.NewXactNL(xaction.RebID(clone.Version).String(), &ctx.smap.Smap,
+		ctx.smap.Tmap.Clone(), cmn.ActRebalance)
+	nl.SetOwner(equalIC)
+	if ctx.rebCB != nil {
+		nl.F = ctx.rebCB
+	}
+	p.ic.registerEqual(regIC{smap: ctx.smap, nl: nl})
+	if ctx.wait {
+		wg.Wait()
 	}
 }
 
