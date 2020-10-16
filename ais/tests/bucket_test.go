@@ -2007,7 +2007,7 @@ func TestCopyBucket(t *testing.T) {
 						tassert.CheckFatal(t, err)
 						for _, e := range entries.Entries {
 							if err := api.DeleteObject(baseParams, dstm.bck, e.Name); err != nil {
-								tutils.Logf("failed to delete object %s/%s", dstm.bck, e.Name)
+								tutils.Logf("failed to delete object %s/%s\n", dstm.bck, e.Name)
 							}
 						}
 					}
