@@ -96,6 +96,7 @@ type (
 		Smap *smapX         `json:"smap"`
 		BMD  *bucketMD      `json:"bmd"`
 		SI   *cluster.Snode `json:"si"`
+		Reb  bool           `json:"reb"`
 	}
 
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
@@ -1452,6 +1453,8 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 	if h.si.IsTarget() && !keepalive {
 		regReq.BMD = h.owner.bmd.get()
 		regReq.Smap = h.owner.smap.get()
+		glob := xreg.GetRebMarked()
+		regReq.Reb = glob.Interrupted
 	}
 	info := cmn.MustMarshal(regReq)
 	path := cmn.JoinWords(cmn.Version, cmn.Cluster)

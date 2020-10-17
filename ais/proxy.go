@@ -2856,6 +2856,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	p.owner.smap.Lock()
 	smap, err, code, update := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, userRegister, flags)
+	if !isProxy && p.NodeStarted() {
+		// Short for `rebalance.Store(rebalance.Load() || regReq.Reb)`
+		p.owner.rmd.rebalance.CAS(false, regReq.Reb)
+	}
 	p.owner.smap.Unlock()
 
 	if err != nil {
@@ -2870,7 +2874,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if !isProxy && selfRegister {
 		glog.Infof("%s: %s %s (%s)...", p.si, tag, nsi, regReq.Smap)
 		bmd := p.owner.bmd.get()
-		meta := &nodeRegMeta{smap, bmd, p.si}
+		meta := &nodeRegMeta{smap, bmd, p.si, false}
 		p.writeJSON(w, r, meta, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
 	go p.updateAndDistribute(nsi, msg, flags)
@@ -2906,7 +2910,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 			}
 			// send the joining node the current BMD and Smap as well
 			bmd := p.owner.bmd.get()
-			meta := &nodeRegMeta{smap, bmd, p.si}
+			meta := &nodeRegMeta{smap, bmd, p.si, false}
 			body := cmn.MustMarshal(meta)
 			path := cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.UserRegister)
 			args := callArgs{
@@ -3846,7 +3850,7 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 		if bmd.Version == 0 {
 			continue
 		}
-		mlist[bmd.UUID] = append(mlist[bmd.UUID], nodeRegMeta{nil, bmd, si})
+		mlist[bmd.UUID] = append(mlist[bmd.UUID], nodeRegMeta{nil, bmd, si, false})
 
 		if rbmd, ok := maxor[bmd.UUID]; !ok {
 			maxor[bmd.UUID] = bmd

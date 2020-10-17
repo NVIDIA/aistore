@@ -44,7 +44,8 @@ type (
 	// it keeps the Version of the latest rebalance.
 	rmdOwner struct {
 		sync.Mutex
-		rmd atomic.Pointer
+		rmd       atomic.Pointer
+		rebalance atomic.Bool // at primary startup it determine whether to start rebalance right after the cluster is up
 	}
 )
 

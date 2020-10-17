@@ -7,6 +7,7 @@ package ais
 import (
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -295,7 +296,22 @@ func (p *proxyrunner) _startupBMDPre(ctx *bmdModifier, clone *bucketMD) (bool, e
 
 func (p *proxyrunner) _startupBMDFinal(ctx *bmdModifier, clone *bucketMD) {
 	msg := p.newAisMsg(ctx.msg, ctx.smap, clone)
-	wg := p.metasyncer.sync(revsPair{ctx.smap, msg}, revsPair{clone, msg})
+	// CAS returns `true` if it has swapped, so it a one-liner for:
+	// doRebalance=rebalance.Load(); rebalance.Store(false)
+	doRebalance := p.owner.rmd.rebalance.CAS(true, false)
+	var wg *sync.WaitGroup
+	if doRebalance && cmn.GCO.Get().Rebalance.Enabled {
+		glog.Infof("rebalance did not finish, restarting...")
+		msg.Action = cmn.ActRebalance
+		ctx := &rmdModifier{
+			smap: ctx.smap,
+			pre:  func(ctx *rmdModifier, clone *rebMD) { clone.inc() },
+		}
+		rmd := p.owner.rmd.modify(ctx)
+		wg = p.metasyncer.sync(revsPair{ctx.smap, msg}, revsPair{clone, msg}, revsPair{rmd, msg})
+	} else {
+		wg = p.metasyncer.sync(revsPair{ctx.smap, msg}, revsPair{clone, msg})
+	}
 	glog.Infof("%s: metasync %s, %s", p.si, ctx.smap.StringEx(), clone.StringEx())
 	wg.Wait()
 }
