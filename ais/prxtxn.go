@@ -414,7 +414,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(),
 		c.msg.Action, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
-	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
+	// Rely on metasync for `registerEqual`.
+	p.notifs.add(nl)
 
 	// 6. commit
 	xactID = c.uuid

@@ -2997,7 +2997,8 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
 			&clone.Smap, clone.Tmap, cmn.ActRebalance)
 		nl.SetOwner(equalIC)
-		p.ic.registerEqual(regIC{smap: clone, nl: nl})
+		// Rely on metasync for `registerEqual`.
+		p.notifs.add(nl)
 	} else if ctx.nsi.IsProxy() {
 		// Send RMD to proxies to make sure that they have
 		// the latest one - newly joined can become primary in a second.
@@ -3110,7 +3111,8 @@ func (p *proxyrunner) _unregNodeFinal(ctx *smapModifier, clone *smapX) {
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
 			&clone.Smap, clone.Tmap, cmn.ActRebalance)
 		nl.SetOwner(equalIC)
-		p.ic.registerEqual(regIC{smap: clone, nl: nl})
+		// Rely on metasync for `registerEqual`.
+		p.notifs.add(nl)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
 
@@ -3522,7 +3524,8 @@ func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 	if ctx.rebCB != nil {
 		nl.F = ctx.rebCB
 	}
-	p.ic.registerEqual(regIC{smap: ctx.smap, nl: nl})
+	// Rely on metasync for `registerEqual`.
+	p.notifs.add(nl)
 	if ctx.wait {
 		wg.Wait()
 	}
@@ -3603,6 +3606,15 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	}
 	p.owner.rmd.put(newRMD)
 	p.owner.rmd.Unlock()
+
+	// Register `nl` for rebalance is metasynced.
+	smap := p.owner.smap.get()
+	if smap.IsIC(p.si) {
+		nl := xaction.NewXactNL(xaction.RebID(newRMD.Version).String(), &smap.Smap,
+			smap.Tmap.Clone(), cmn.ActRebalance)
+		nl.SetOwner(equalIC)
+		p.notifs.add(nl)
+	}
 	return
 }
 
