@@ -489,7 +489,7 @@ func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objC
 }
 
 func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+	msg := &cmn.SelectMsg{Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	return len(reslist.Entries)
@@ -597,7 +597,7 @@ func TestECChange(t *testing.T) {
 	var (
 		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
-			Name:     TestBucketName + "-ec-change",
+			Name:     testBucketName + "-ec-change",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -880,7 +880,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 func TestECRestoreObjAndSlice(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-obj-n-slice",
+			Name:     testBucketName + "-obj-n-slice",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
@@ -962,7 +962,7 @@ func TestECChecksum(t *testing.T) {
 	var (
 		proxyURL = tutils.RandomProxyURL()
 		bck      = cmn.Bck{
-			Name:     TestBucketName + "-ec-cksum",
+			Name:     testBucketName + "-ec-cksum",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -1025,7 +1025,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-ec-props",
+			Name:     testBucketName + "-ec-props",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
@@ -1114,7 +1114,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-ec-load",
+			Name:     testBucketName + "-ec-load",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
@@ -1211,7 +1211,7 @@ func TestECStress(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-ec-stress",
+			Name:     testBucketName + "-ec-stress",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
@@ -1238,7 +1238,7 @@ func TestECStress(t *testing.T) {
 
 			doECPutsAndCheck(t, baseParams, bck, o)
 
-			msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+			msg := &cmn.SelectMsg{Props: "size,status"}
 			reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, len(reslist.Entries) == o.objCount,
@@ -1253,11 +1253,11 @@ func TestECStressManyBuckets(t *testing.T) {
 
 	var (
 		bck1 = cmn.Bck{
-			Name:     TestBucketName + "1",
+			Name:     testBucketName + "1",
 			Provider: cmn.ProviderAIS,
 		}
 		bck2 = cmn.Bck{
-			Name:     TestBucketName + "2",
+			Name:     testBucketName + "2",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
@@ -1299,12 +1299,12 @@ func TestECStressManyBuckets(t *testing.T) {
 	}()
 	wg.Wait()
 
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+	msg := &cmn.SelectMsg{Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck1, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(reslist.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1, len(reslist.Entries), o1.objCount)
 
-	msg = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+	msg = &cmn.SelectMsg{Props: "size,status"}
 	reslist, err = api.ListObjects(baseParams, bck2, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(reslist.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2, len(reslist.Entries), o2.objCount)
@@ -1326,7 +1326,7 @@ func TestECExtraStress(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-extrastress",
+			Name:     testBucketName + "-extrastress",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
@@ -1431,7 +1431,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	delta := time.Since(started)
 	t.Logf("Total test time %v\n", delta)
 
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status"}
+	msg := &cmn.SelectMsg{Props: "size,status"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
@@ -1452,7 +1452,7 @@ func TestECXattrs(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-attrs",
+			Name:     testBucketName + "-attrs",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
@@ -1540,7 +1540,7 @@ func TestECXattrs(t *testing.T) {
 		}
 	}
 
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
+	msg := &cmn.SelectMsg{Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -1566,7 +1566,7 @@ func TestECDestroyBucket(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-DESTROY",
+			Name:     testBucketName + "-DESTROY",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
@@ -1635,7 +1635,7 @@ func TestECDestroyBucket(t *testing.T) {
 	doECPutsAndCheck(t, baseParams, bck, o)
 
 	// check if get requests are successful
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
+	msg := &cmn.SelectMsg{Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
@@ -1656,7 +1656,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-slice-emergency",
+			Name:     testBucketName + "-slice-emergency",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
@@ -1745,7 +1745,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	// 4. Check that ListObjects returns correct number of items
 	tutils.Logln("DONE\nReading bucket list...")
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
+	msg := &cmn.SelectMsg{Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
@@ -1756,7 +1756,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-replica-emergency",
+			Name:     testBucketName + "-replica-emergency",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
@@ -1900,7 +1900,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-mpath-emergency",
+			Name:     testBucketName + "-mpath-emergency",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()
@@ -1990,7 +1990,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	// 4. Check that ListObjects returns correct number of items
 	tutils.Logf("DONE\nReading bucket list...\n")
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: "size,status,version"}
+	msg := &cmn.SelectMsg{Props: "size,status,version"}
 	reslist, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(reslist.Entries) != o.objCount {
@@ -2061,7 +2061,7 @@ func TestECRebalance(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-ec-rebalance",
+			Name:     testBucketName + "-ec-rebalance",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
@@ -2309,11 +2309,11 @@ func TestECAndRegularRebalance(t *testing.T) {
 
 	var (
 		bckReg = cmn.Bck{
-			Name:     TestBucketName + "-REG",
+			Name:     testBucketName + "-REG",
 			Provider: cmn.ProviderAIS,
 		}
 		bckEC = cmn.Bck{
-			Name:     TestBucketName + "-EC",
+			Name:     testBucketName + "-EC",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
@@ -2446,7 +2446,7 @@ func TestECResilver(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName + "-ec-resilver",
+			Name:     testBucketName + "-ec-resilver",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL()
@@ -2510,7 +2510,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tutils.Logf("Wait for resilver to complete...\n")
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: cmn.GetPropsSize}
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects in %s after rebalance\n", len(resEC.Entries), bck)
@@ -2545,7 +2545,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 	}
 	var (
 		bckEC = cmn.Bck{
-			Name:     TestBucketName + "-EC",
+			Name:     testBucketName + "-EC",
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL()

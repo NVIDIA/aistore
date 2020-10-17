@@ -320,7 +320,7 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 		go tutils.Del(proxyURL, bck, objName, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
-	tassert.SelectErr(t, errCh, "delete", abortonerr)
+	tassert.SelectErr(t, errCh, "delete", true)
 	close(errCh)
 }
 

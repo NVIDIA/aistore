@@ -46,7 +46,7 @@ func TestQueryBck(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bck)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	putObjects := tutils.PutRR(t, baseParams, cmn.KiB, cmn.ChecksumNone, bck, "", numObjects, fnlen)
+	putObjects := tutils.PutRR(t, baseParams, cmn.KiB, cmn.ChecksumNone, bck, "", numObjects)
 	sort.Strings(putObjects)
 	for _, obj := range putObjects {
 		queryObjectNames.Add(obj)

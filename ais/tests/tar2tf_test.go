@@ -50,7 +50,7 @@ func TestETLTar2TFS3(t *testing.T) {
 		tfRecordPath = filepath.Join("data", tfRecordFile)
 		proxyURL     = tutils.RandomProxyURL()
 		bck          = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -114,7 +114,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 		tarPath    = filepath.Join("data", tarObjName)
 		proxyURL   = tutils.RandomProxyURL()
 		bck        = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		baseParams     = tutils.BaseAPIParams(proxyURL)

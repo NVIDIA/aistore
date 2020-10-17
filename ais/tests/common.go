@@ -45,18 +45,8 @@ var (
 	numops                 int
 	numfiles               int
 	numworkers             int
-	match                  = ".*"
-	pagesize               uint
-	fnlen                  int
-	prefix                 string
-	abortonerr             = false
 	prefetchRange          = "{0..200}"
-	skipdel                bool
-	baseseed               = int64(1062984096)
 	multiProxyTestDuration time.Duration
-	clichecksum            string
-	cycles                 int
-	prefixFileNumber       int
 
 	cliBck cmn.Bck
 )
@@ -626,12 +616,9 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 	}
 }
 
-func numberOfFilesWithPrefix(fileNames []string, namePrefix, commonDir string) int {
+func numberOfFilesWithPrefix(fileNames []string, namePrefix string) int {
 	numFiles := 0
 	for _, fileName := range fileNames {
-		if commonDir != "" {
-			fileName = fmt.Sprintf("%s/%s", commonDir, fileName)
-		}
 		if strings.HasPrefix(fileName, namePrefix) {
 			numFiles++
 		}
@@ -647,13 +634,13 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	// Create specific files to test corner cases.
 	var (
 		extraNames = []string{"dir/obj01", "dir/obj02", "dir/obj03", "dir1/dir2/obj04", "dir1/dir2/obj05"}
-		fileNames  = make([]string, 0, prefixFileNumber)
+		fileNames  = make([]string, 0, numfiles)
 		wg         = &sync.WaitGroup{}
 		errCh      = make(chan error, numfiles+len(extraNames))
 	)
 
-	for i := 0; i < prefixFileNumber; i++ {
-		fileName := tutils.GenRandomString(fnlen)
+	for i := 0; i < numfiles; i++ {
+		fileName := tutils.GenRandomString(20)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
@@ -691,32 +678,6 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	return fileNames
 }
 
-func prefixLookupOne(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
-	tutils.Logf("Looking up for files than names start with %s\n", prefix)
-	var (
-		numFiles   = 0
-		msg        = &cmn.SelectMsg{Prefix: prefix}
-		baseParams = tutils.BaseAPIParams(proxyURL)
-	)
-	objList, err := api.ListObjects(baseParams, bck, msg, 0)
-	if err != nil {
-		t.Errorf("List files with prefix failed, err = %v", err)
-		return
-	}
-
-	for _, entry := range objList.Entries {
-		tutils.Logf("Found object: %s\n", entry.Name)
-		numFiles++
-	}
-
-	realNumFiles := numberOfFilesWithPrefix(fileNames, prefix, prefixDir)
-	if realNumFiles == numFiles {
-		tutils.Logf("Total files with prefix found: %v\n", numFiles)
-	} else {
-		t.Errorf("Expected number of files with prefix %q is %v but found %v files", prefix, realNumFiles, numFiles)
-	}
-}
-
 func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
 	tutils.Logf("Looking up for files in alphabetic order\n")
 
@@ -735,7 +696,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 		}
 
 		numFiles := len(objList.Entries)
-		realNumFiles := numberOfFilesWithPrefix(fileNames, key, prefix)
+		realNumFiles := numberOfFilesWithPrefix(fileNames, key)
 
 		if numFiles == realNumFiles {
 			if numFiles != 0 {
@@ -787,12 +748,8 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck) {
 }
 
 func prefixLookup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
-	if prefix == "" {
-		prefixLookupDefault(t, proxyURL, bck, fileNames)
-		prefixLookupCornerCases(t, proxyURL, bck)
-	} else {
-		prefixLookupOne(t, proxyURL, bck, fileNames)
-	}
+	prefixLookupDefault(t, proxyURL, bck, fileNames)
+	prefixLookupCornerCases(t, proxyURL, bck)
 }
 
 func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {

@@ -46,7 +46,7 @@ func createAndFillBucket(b *testing.B, objCnt uint) cmn.Bck {
 		go func() {
 			defer wg.Done()
 			objDir := tutils.RandomObjDir(10, 5)
-			tutils.PutRR(b, baseParams, 128, cmn.ChecksumXXHash, bck, objDir, objCntPerWorker, 20)
+			tutils.PutRR(b, baseParams, 128, cmn.ChecksumXXHash, bck, objDir, objCntPerWorker)
 		}()
 	}
 	wg.Wait()

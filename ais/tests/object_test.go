@@ -163,7 +163,7 @@ func TestAppendObject(t *testing.T) {
 				proxyURL   = tutils.RandomProxyURL(t)
 				baseParams = tutils.BaseAPIParams(proxyURL)
 				bck        = cmn.Bck{
-					Name:     TestBucketName,
+					Name:     testBucketName,
 					Provider: cmn.ProviderAIS,
 				}
 				objName = "test/obj1"
@@ -314,21 +314,17 @@ func Test_matchdelete(t *testing.T) {
 		}
 
 		// list the bucket
-		msg := &cmn.SelectMsg{PageSize: pagesize}
 		baseParams := tutils.BaseAPIParams(proxyURL)
-		reslist, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+		reslist, err := api.ListObjects(baseParams, bck.Bck, nil, 0)
 		if err != nil {
 			t.Error(err)
 			return
 		}
 
-		re, err := regexp.Compile(match)
-		if err != nil {
-			t.Errorf("Invalid match expression %s, err = %v", match, err)
-			return
-		}
-
-		var num int
+		var (
+			num int
+			re  = regexp.MustCompile(".*")
+		)
 		for _, entry := range reslist.Entries {
 			name := entry.Name
 			if !re.MatchString(name) {
@@ -676,7 +672,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 		fileName   = "mytestobj1.txt"
 		dataLocal  = []byte("im local")
 		dataCloud  = []byte("I'm from the cloud!")
-		msg        = &cmn.SelectMsg{PageSize: pagesize, Props: "size,status", Prefix: "my"}
+		msg        = &cmn.SelectMsg{Props: "size,status", Prefix: "my"}
 		found      = false
 	)
 
@@ -895,7 +891,7 @@ func TestHeadBucket(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -979,19 +975,14 @@ func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.
 	}
 }
 
-func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexmatch string,
+func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch string,
 	keynameChans []chan string, outputChan chan string) int {
-	msg := &cmn.SelectMsg{PageSize: pagesize}
-	reslist := testListObjects(t, proxyURL, bck, msg, 0)
+	reslist := testListObjects(t, proxyURL, bck, nil, 0)
 	if reslist == nil {
 		return 0
 	}
 
-	re, err := regexp.Compile(regexmatch)
-	if err != nil {
-		t.Errorf("Invalid match expression %s, err = %v", match, err)
-		return 0
-	}
+	re := regexp.MustCompile(regexMatch)
 
 	num := 0
 	numchans := len(keynameChans)
@@ -1045,7 +1036,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		baseParams  = tutils.BaseAPIParams(proxyURL)
 		bmdMock     = cluster.NewBaseBownerMock(
 			cluster.NewBck(
-				TestBucketName, cmn.ProviderAIS, cmn.NsGlobal,
+				testBucketName, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
 			),
 		)
@@ -1262,7 +1253,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bmdMock    = cluster.NewBaseBownerMock(
 			cluster.NewBck(
-				TestBucketName, cmn.ProviderAIS, cmn.NsGlobal,
+				testBucketName, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
 			),
 		)
@@ -1552,8 +1543,9 @@ func verifyInvalidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, fileNa
 
 func Test_checksum(t *testing.T) {
 	var (
-		start, curr time.Time
-		duration    time.Duration
+		start, curr   time.Time
+		duration      time.Duration
+		propsToUpdate cmn.BucketPropsToUpdate
 
 		numPuts = 5
 		bck     = cliBck
@@ -1618,61 +1610,31 @@ func Test_checksum(t *testing.T) {
 	tutils.Logf("GET %s without any checksum validation: %v\n", cmn.B2S(totalSize, 0), duration)
 	tassert.SelectErr(t, errCh, "get", false)
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
-	switch clichecksum {
-	case "all":
-		propsToUpdate := cmn.BucketPropsToUpdate{
-			Cksum: &cmn.CksumConfToUpdate{
-				Type:            api.String(cmn.ChecksumXXHash),
-				ValidateColdGet: api.Bool(true),
-			},
-		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
-		tassert.CheckFatal(t, err)
-		if t.Failed() {
-			goto cleanup
-		}
-	case cmn.ChecksumXXHash:
-		propsToUpdate := cmn.BucketPropsToUpdate{
-			Cksum: &cmn.CksumConfToUpdate{
-				Type: api.String(cmn.ChecksumXXHash),
-			},
-		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
-		tassert.CheckFatal(t, err)
-		if t.Failed() {
-			goto cleanup
-		}
-	case ColdMD5str:
-		propsToUpdate := cmn.BucketPropsToUpdate{
-			Cksum: &cmn.CksumConfToUpdate{
-				ValidateColdGet: api.Bool(true),
-			},
-		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
-		tassert.CheckFatal(t, err)
-		if t.Failed() {
-			goto cleanup
-		}
-	case cmn.ChecksumNone:
-		// do nothing
-		tutils.Logf("Checksum validation has been disabled \n")
-		goto cleanup
-	default:
-		tutils.Logf("Checksum is either not set or invalid\n")
+
+	propsToUpdate = cmn.BucketPropsToUpdate{
+		Cksum: &cmn.CksumConfToUpdate{
+			Type:            api.String(cmn.ChecksumXXHash),
+			ValidateColdGet: api.Bool(true),
+		},
+	}
+	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	tassert.CheckFatal(t, err)
+	if t.Failed() {
 		goto cleanup
 	}
+
 	start = time.Now()
 	getFromObjList(proxyURL, bck, errCh, filesList, true)
 	curr = time.Now()
 	duration = curr.Sub(start)
-	tutils.Logf("GET %s and validate checksum (%s): %v\n", cmn.B2S(totalSize, 0), clichecksum, duration)
+	tutils.Logf("GET %s and validate checksum: %v\n", cmn.B2S(totalSize, 0), duration)
 	tassert.SelectErr(t, errCh, "get", false)
 cleanup:
 	deleteFromFileList(proxyURL, bck, errCh, filesList)
 	tassert.SelectErr(t, errCh, "delete", false)
 	close(errCh)
 	// restore old config
-	propsToUpdate := cmn.BucketPropsToUpdate{
+	propsToUpdate = cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
 			Type:            api.String(p.Cksum.Type),
 			ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),

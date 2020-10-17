@@ -84,7 +84,7 @@ func TestMultiProxy(t *testing.T) {
 
 	for _, test := range voteTests {
 		t.Run(test.name, test.method)
-		if t.Failed() && abortonerr {
+		if t.Failed() {
 			t.FailNow()
 		}
 	}
@@ -632,7 +632,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
 		}
-		fname := tutils.GenRandomString(fnlen)
+		fname := tutils.GenRandomString(20)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -666,7 +666,7 @@ func putGetDelWorker(proxyURL string, stopCh <-chan struct{}, proxyURLCh <-chan 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	bck := cmn.Bck{
-		Name:     TestBucketName,
+		Name:     testBucketName,
 		Provider: cmn.ProviderAIS,
 	}
 	cksumType := cmn.DefaultAISBckProps().Cksum.Type
@@ -702,7 +702,7 @@ loop:
 			continue
 		}
 
-		fname := tutils.GenRandomString(fnlen)
+		fname := tutils.GenRandomString(20)
 		objName := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -791,7 +791,7 @@ func proxyStress(t *testing.T) {
 		stopChs     = make([]chan struct{}, numworkers+1)
 		proxyURLChs = make([]chan string, numworkers)
 		bck         = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL = tutils.RandomProxyURL(t)
@@ -1489,12 +1489,12 @@ func icSyncOwnershipTable(t *testing.T) {
 		primary    = smap.Primary
 
 		src = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 
 		dstBck = cmn.Bck{
-			Name:     TestBucketName + "_new",
+			Name:     testBucketName + "_new",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -1548,12 +1548,12 @@ func icSinglePrimaryRevamp(t *testing.T) {
 		origProxyCount = smap.CountProxies()
 
 		src = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 
 		dstBck = cmn.Bck{
-			Name:     TestBucketName + "_new",
+			Name:     testBucketName + "_new",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -1635,7 +1635,7 @@ func icStressCachedXactions(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 
@@ -1728,7 +1728,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 		wg.Add(1)
 		go func(idx int) {
 			dstBck := cmn.Bck{
-				Name:     fmt.Sprintf("%s_dst_par_%d", TestBucketName, idx),
+				Name:     fmt.Sprintf("%s_dst_par_%d", testBucketName, idx),
 				Provider: cmn.ProviderAIS,
 			}
 			xactID, err := api.CopyBucket(baseParams, srcBck, dstBck)

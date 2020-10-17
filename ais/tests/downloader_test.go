@@ -231,7 +231,7 @@ func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version 
 func TestDownloadSingle(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL      = tutils.RandomProxyURL(t)
@@ -296,7 +296,7 @@ func TestDownloadSingle(t *testing.T) {
 func TestDownloadRange(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -330,7 +330,7 @@ func TestDownloadRange(t *testing.T) {
 func TestDownloadMultiRange(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -363,7 +363,7 @@ func TestDownloadMultiRange(t *testing.T) {
 func TestDownloadMultiMap(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		m = map[string]string{
@@ -391,7 +391,7 @@ func TestDownloadMultiMap(t *testing.T) {
 func TestDownloadMultiList(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		l = []string{
@@ -420,7 +420,7 @@ func TestDownloadMultiList(t *testing.T) {
 func TestDownloadTimeout(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		objName    = "object"
@@ -598,7 +598,7 @@ func TestDownloadCloud(t *testing.T) {
 func TestDownloadStatus(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		baseParams = tutils.BaseAPIParams()
@@ -654,7 +654,7 @@ func TestDownloadStatusError(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		files = map[string]string{
@@ -705,7 +705,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		objNameFirst  = "object-first"
@@ -745,7 +745,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		objNameFirst  = "linkFirst"
@@ -784,7 +784,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 
@@ -838,7 +838,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		objsCnt = 100

@@ -157,10 +157,10 @@ func PutObjRR(baseParams api.BaseParams, bck cmn.Bck, objName string, objSize in
 }
 
 func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType string,
-	bck cmn.Bck, dir string, objCount, fnlen int) []string {
+	bck cmn.Bck, dir string, objCount int) []string {
 	objNames := make([]string, objCount)
 	for i := 0; i < objCount; i++ {
-		fname := GenRandomString(fnlen)
+		fname := GenRandomString(20)
 		objName := filepath.Join(dir, fname)
 		objNames[i] = objName
 		// FIXME: Separate RandReader per object created inside PutObjRR to workaround

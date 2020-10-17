@@ -115,7 +115,7 @@ func TestDefaultBucketProps(t *testing.T) {
 		baseParams   = tutils.BaseAPIParams(proxyURL)
 		globalConfig = tutils.GetClusterConfig(t)
 		bck          = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -147,7 +147,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -226,7 +226,7 @@ func TestResetBucketProps(t *testing.T) {
 		globalConfig = tutils.GetClusterConfig(t)
 		baseParams   = tutils.BaseAPIParams(proxyURL)
 		bck          = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -281,7 +281,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 
@@ -874,7 +874,7 @@ func TestListObjects(t *testing.T) {
 						if wid == workerCount-1 { // last worker puts leftovers
 							objectsToPut += objectCount % workerCount
 						}
-						objNames := tutils.PutRR(t, baseParams, objectSize, p.Cksum.Type, bck, objDir, objectsToPut, fnlen)
+						objNames := tutils.PutRR(t, baseParams, objectSize, p.Cksum.Type, bck, objDir, objectsToPut)
 						for _, objName := range objNames {
 							objs.Store(objName, objEntry{
 								name: objName,
@@ -1020,7 +1020,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				}
 			} else {
 				bck = cmn.Bck{
-					Name:     TestBucketName,
+					Name:     testBucketName,
 					Provider: provider,
 				}
 				tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -1542,8 +1542,7 @@ func TestCloudMirror(t *testing.T) {
 	})
 
 	// list
-	msg := &cmn.SelectMsg{Prefix: prefix}
-	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	objectList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objectList.Entries) == m.num, "insufficient number of objects in the Cloud bucket %s, required %d", m.bck, m.num)
 
@@ -1618,7 +1617,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
-			Name:     TestBucketName + "_new",
+			Name:     testBucketName + "_new",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -1676,7 +1675,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 		dstBck     = cmn.Bck{
-			Name:     TestBucketName + "_new",
+			Name:     testBucketName + "_new",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -1791,11 +1790,11 @@ func TestRenameBucketTwice(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
-			Name:     TestBucketName + "_new1",
+			Name:     testBucketName + "_new1",
 			Provider: cmn.ProviderAIS,
 		}
 		dstBck2 = cmn.Bck{
-			Name:     TestBucketName + "_new2",
+			Name:     testBucketName + "_new2",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -2155,7 +2154,7 @@ func TestCopyBucketSimple(t *testing.T) {
 
 func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{
-		Name:     TestBucketName + "_new1",
+		Name:     testBucketName + "_new1",
 		Provider: cmn.ProviderAIS,
 	}
 
@@ -2255,11 +2254,11 @@ func TestRenameAndCopyBucket(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
-			Name:     TestBucketName + "_new1",
+			Name:     testBucketName + "_new1",
 			Provider: cmn.ProviderAIS,
 		}
 		dstBck2 = cmn.Bck{
-			Name:     TestBucketName + "_new2",
+			Name:     testBucketName + "_new2",
 			Provider: cmn.ProviderAIS,
 		}
 	)
@@ -2339,11 +2338,11 @@ func TestCopyAndRenameBucket(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 		dstBck1    = cmn.Bck{
-			Name:     TestBucketName + "_new1",
+			Name:     testBucketName + "_new1",
 			Provider: cmn.ProviderAIS,
 		}
 		dstBck2 = cmn.Bck{
-			Name:     TestBucketName + "_new2",
+			Name:     testBucketName + "_new2",
 			Provider: cmn.ProviderAIS,
 		}
 	)

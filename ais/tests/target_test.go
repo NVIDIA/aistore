@@ -24,7 +24,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		proxyURL     = tutils.RandomProxyURL()
 		smap         = tutils.GetClusterMap(t, proxyURL)
 		bck          = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 	)

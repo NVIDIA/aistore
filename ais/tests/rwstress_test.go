@@ -19,12 +19,12 @@ import (
 
 //
 // Example run:
-//     go test -v -run=rwstress -args -numfiles=10 -cycles=10 -numops=5
+//     go test -v -run=rwstress -numfiles=10 -numops=5
 //
 
 const (
 	rwdir    = "rwstress"
-	fileSize = 1024 * 32 // file size
+	fileSize = 32 * cmn.KiB
 )
 
 type opRes struct {
@@ -36,7 +36,7 @@ type opRes struct {
 func generateRandomNames(fileCount int) {
 	fileNames = make([]string, fileCount)
 	for i := 0; i < fileCount; i++ {
-		fileNames[i] = tutils.GenRandomString(fnlen)
+		fileNames[i] = tutils.GenRandomString(20)
 	}
 }
 
@@ -201,15 +201,15 @@ func rwstress(t *testing.T) {
 }
 
 func TestRWStressShort(t *testing.T) {
-	numFiles = 25
 	numLoops = 8
+	numFiles = 25
 	rwstress(t)
 }
 
 func TestRWStress(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	numLoops = cycles
+	numLoops = 15
 	numFiles = numfiles
 	rwstress(t)
 }

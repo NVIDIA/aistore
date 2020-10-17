@@ -41,10 +41,8 @@ type regressionTestData struct {
 }
 
 const (
-	rootDir = "/tmp/ais"
-
-	ListRangeStr   = "__listrange"
-	TestBucketName = "TESTAISBUCKET"
+	rootDir        = "/tmp/ais"
+	testBucketName = "TESTAISBUCKET"
 )
 
 var (
@@ -71,7 +69,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		errCh      = make(chan error, num)
 		targets    = make(map[string]struct{})
 		bck        = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -91,7 +89,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	close(filenameCh)
 	close(errCh)
 
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: cmn.GetTargetURL}
+	msg := &cmn.SelectMsg{Props: cmn.GetTargetURL}
 	bl, err := api.ListObjects(baseParams, bck, msg, num)
 	tassert.CheckFatal(t, err)
 
@@ -181,7 +179,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}()
 
-	listObjectsMsg := &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize, Props: cmn.GetTargetURL}
+	listObjectsMsg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetTargetURL}
 	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
@@ -240,7 +238,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		filenameCh = make(chan string, num)
 		errCh      = make(chan error, 100)
 		bck        = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -277,7 +275,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 func TestRegressionBuckets(t *testing.T) {
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL  = tutils.RandomProxyURL(t)
@@ -293,7 +291,7 @@ func TestRenameBucket(t *testing.T) {
 
 	var (
 		bck = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -364,11 +362,11 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 			wg.Add(1)
 			go func(fn string) {
 				defer wg.Done()
-				tutils.Del(proxyURL, bck, path.Join(subdir, fn), nil, errCh, true /* silent */)
+				tutils.Del(proxyURL, bck, path.Join(subdir, fn), nil, errCh, true /*silent*/)
 			}(fname)
 		}
 		wg.Wait()
-		tassert.SelectErr(t, errCh, "delete", abortonerr)
+		tassert.SelectErr(t, errCh, "delete", true)
 		close(errCh)
 	}
 	getRandomFiles(proxyURL, bck, numPuts, subdir+"/", t, errCh)
@@ -473,10 +471,10 @@ func TestRenameObjects(t *testing.T) {
 
 func TestObjectPrefix(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		proxyURL := tutils.RandomProxyURL(t)
-
-		prefixFileNumber = numfiles
-		fileNames := prefixCreateFiles(t, proxyURL, bck.Bck, bck.Props.Cksum.Type)
+		var (
+			proxyURL  = tutils.RandomProxyURL(t)
+			fileNames = prefixCreateFiles(t, proxyURL, bck.Bck, bck.Props.Cksum.Type)
+		)
 		prefixLookup(t, proxyURL, bck.Bck, fileNames)
 		prefixCleanup(t, proxyURL, bck.Bck, fileNames)
 	})
@@ -777,7 +775,7 @@ func TestPrefetchList(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	// 1. Get keys to prefetch
-	n := int64(getMatchingKeys(t, proxyURL, bck, match, []chan string{toprefetch}, nil))
+	n := int64(getMatchingKeys(t, proxyURL, bck, ".*", []chan string{toprefetch}, nil))
 	close(toprefetch) // to exit for-range
 	files := make([]string, 0)
 	for i := range toprefetch {
@@ -821,7 +819,7 @@ func TestDeleteList(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			err        error
-			prefix     = ListRangeStr + "/tstf-"
+			prefix     = "__listrange/tstf-"
 			wg         = &sync.WaitGroup{}
 			errCh      = make(chan error, numfiles)
 			files      = make([]string, 0, numfiles)
@@ -856,7 +854,7 @@ func TestDeleteList(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that all the files have been deleted
-		msg := &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize}
+		msg := &cmn.SelectMsg{Prefix: prefix}
 		bktlst, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
@@ -885,7 +883,7 @@ func TestPrefetchRange(t *testing.T) {
 	}
 
 	// 2. Discover the number of items we expect to be prefetched
-	msg := &cmn.SelectMsg{Prefix: prefetchPrefix, PageSize: pagesize}
+	msg := &cmn.SelectMsg{Prefix: prefetchPrefix}
 	objsToFilter := testListObjects(t, proxyURL, bck, msg, 0)
 	files := make([]string, 0)
 	if objsToFilter != nil {
@@ -936,7 +934,7 @@ func TestDeleteRange(t *testing.T) {
 			quarter        = numfiles / 4
 			third          = numfiles / 3
 			smallrangesize = third - quarter + 1
-			prefix         = fmt.Sprintf("%s/tstf-", ListRangeStr)
+			prefix         = "__listrange/tstf-"
 			smallrange     = fmt.Sprintf("%s{%04d..%04d}", prefix, quarter, third)
 			bigrange       = fmt.Sprintf("%s{0000..%04d}", prefix, numfiles)
 			wg             = &sync.WaitGroup{}
@@ -969,7 +967,7 @@ func TestDeleteRange(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that the correct files have been deleted
-		msg := &cmn.SelectMsg{Prefix: prefix, PageSize: pagesize}
+		msg := &cmn.SelectMsg{Prefix: prefix}
 		bktlst, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != numfiles-smallrangesize {
@@ -1021,12 +1019,12 @@ func TestStressDeleteRange(t *testing.T) {
 		errCh         = make(chan error, numFiles)
 		proxyURL      = tutils.RandomProxyURL(t)
 		tenth         = numFiles / 10
-		objNamePrefix = fmt.Sprintf("%s/tstf-", ListRangeStr)
+		objNamePrefix = "__listrange/tstf-"
 		partialRange  = fmt.Sprintf("%s{%d..%d}", objNamePrefix, 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
 		fullRange     = fmt.Sprintf("%s{0..%d}", objNamePrefix, numFiles)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		bck           = cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
 		cksumType = cmn.DefaultAISBckProps().Cksum.Type
@@ -1077,7 +1075,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
-	msg := &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: pagesize}
+	msg := &cmn.SelectMsg{Prefix: objNamePrefix}
 	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bckList.Entries) != expectedRemaining {
@@ -1108,7 +1106,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// 5. Check to see that all files have been deleted
-	msg = &cmn.SelectMsg{Prefix: objNamePrefix, PageSize: pagesize}
+	msg = &cmn.SelectMsg{Prefix: objNamePrefix}
 	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bckList.Entries) != 0 {

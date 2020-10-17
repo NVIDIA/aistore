@@ -34,7 +34,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tutils.PutRR(t, baseParams, fileSize, cksumType, bck, dir, numobjects, fnlen)
+			tutils.PutRR(t, baseParams, fileSize, cksumType, bck, dir, numobjects)
 		}()
 	}
 	wg.Wait()

@@ -47,11 +47,11 @@ type checkerMD struct {
 func newCheckerMD(t *testing.T) *checkerMD {
 	md := &checkerMD{
 		t:        t,
-		seed:     baseseed + 300,
+		seed:     300,
 		numObjs:  100,
 		proxyURL: tutils.RandomProxyURL(),
 		bck: cmn.Bck{
-			Name:     TestBucketName,
+			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		},
 		fileSize: 64 * cmn.KiB,
