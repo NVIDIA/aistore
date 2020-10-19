@@ -9,7 +9,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 type (
@@ -26,7 +26,7 @@ type (
 	}
 )
 
-func (*llcProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (*llcProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &llcProvider{t: args.T}
 }
 
@@ -39,9 +39,9 @@ func (p *llcProvider) Start(bck cmn.Bck) error {
 func (*llcProvider) Kind() string        { return cmn.ActLoadLomCache }
 func (p *llcProvider) Get() cluster.Xact { return p.xact }
 
-// NOTE: Not using registry.BaseBckEntry because it would return `false, nil`.
-func (p *llcProvider) PreRenewHook(_ registry.BucketEntry) (bool, error) { return true, nil }
-func (p *llcProvider) PostRenewHook(_ registry.BucketEntry)              {}
+// NOTE: Not using xreg.BaseBckEntry because it would return `false, nil`.
+func (p *llcProvider) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return true, nil }
+func (p *llcProvider) PostRenewHook(_ xreg.BucketEntry)              {}
 
 func newXactLLC(t cluster.Target, bck cmn.Bck) *xactLLC {
 	return &xactLLC{xactBckBase: *newXactBckBase("", cmn.ActLoadLomCache, bck, t)}

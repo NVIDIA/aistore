@@ -31,7 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -311,7 +311,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		tstats := getstorstatsrunner()
 
 		var rebStats *stats.RebalanceTargetStats
-		if entry := registry.Registry.GetLatest(registry.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
+		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
 			if xact := entry.Get(); xact != nil {
 				var ok bool
 				rebStats, ok = xact.Stats().(*stats.RebalanceTargetStats)
@@ -419,7 +419,7 @@ func (t *targetrunner) handleUnregisterReq() {
 	dsort.Managers.AbortAll(errors.New("target was removed from the cluster"))
 
 	// Stop all xactions
-	registry.Registry.AbortAll()
+	xreg.AbortAll()
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
@@ -643,11 +643,11 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 			}
 			present = true
 			if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-				registry.Registry.DoAbort(cmn.ActPutCopies, nbck)
+				xreg.DoAbort(cmn.ActPutCopies, nbck)
 				// NOTE: cmn.ActMakeNCopies takes care of itself
 			}
 			if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-				registry.Registry.DoAbort(cmn.ActECEncode, nbck)
+				xreg.DoAbort(cmn.ActECEncode, nbck)
 			}
 			return true
 		})
@@ -670,7 +670,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 
 	// evict LOM cache
 	if len(bcksToDelete) > 0 {
-		registry.Registry.AbortAllBuckets(bcksToDelete...)
+		xreg.AbortAllBuckets(bcksToDelete...)
 		go func(bcks ...*cluster.Bck) {
 			for _, b := range bcks {
 				cluster.EvictLomCache(b)

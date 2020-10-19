@@ -1,8 +1,8 @@
-// Package registry provides core functionality for the AIStore extended actions registry.
+// Package registry provides core functionality for the AIStore extended actions xreg.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package registry
+package xreg
 
 import (
 	"github.com/NVIDIA/aistore/cluster"
@@ -22,7 +22,7 @@ func (b *BaseGlobalEntry) PostRenewHook(_ GlobalEntry) {}
 
 type (
 	GlobalEntry interface {
-		baseEntry
+		BaseEntry
 		// pre-renew: returns true iff the current active one exists and is either
 		// - ok to keep running as is, or
 		// - has been renew(ed) and is still ok
@@ -42,7 +42,9 @@ type (
 	}
 )
 
-func (r *registry) RegisterGlobalXact(entry GlobalEntryProvider) {
+func RegisterGlobalXact(entry GlobalEntryProvider) { defaultReg.registerGlobalXact(entry) }
+
+func (r *registry) registerGlobalXact(entry GlobalEntryProvider) {
 	cmn.Assert(xaction.XactsDtor[entry.Kind()].Type == xaction.XactTypeGlobal)
 
 	// It is expected that registrations happen at the init time. Therefore, it
@@ -51,7 +53,11 @@ func (r *registry) RegisterGlobalXact(entry GlobalEntryProvider) {
 	r.globalXacts[entry.Kind()] = entry
 }
 
-func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) cluster.Xact {
+func RenewRebalance(id int64, statsRunner *stats.Trunner) cluster.Xact {
+	return defaultReg.renewRebalance(id, statsRunner)
+}
+
+func (r *registry) renewRebalance(id int64, statsRunner *stats.Trunner) cluster.Xact {
 	e := r.globalXacts[cmn.ActRebalance].New(XactArgs{Custom: &RebalanceArgs{
 		ID:          xaction.RebID(id),
 		StatsRunner: statsRunner,
@@ -63,14 +69,18 @@ func (r *registry) RenewRebalance(id int64, statsRunner *stats.Trunner) cluster.
 	return res.entry.Get()
 }
 
-func (r *registry) RenewResilver(id string) cluster.Xact {
+func RenewResilver(id string) cluster.Xact { return defaultReg.renewResilver(id) }
+
+func (r *registry) renewResilver(id string) cluster.Xact {
 	e := r.globalXacts[cmn.ActResilver].New(XactArgs{UUID: id})
 	res := r.renewGlobalXaction(e)
 	cmn.Assert(res.isNew) // resilver must be always preempted
 	return res.entry.Get()
 }
 
-func (r *registry) RenewElection() cluster.Xact {
+func RenewElection() cluster.Xact { return defaultReg.renewElection() }
+
+func (r *registry) renewElection() cluster.Xact {
 	e := r.globalXacts[cmn.ActElection].New(XactArgs{})
 	res := r.renewGlobalXaction(e)
 	if !res.isNew { // previous election is still running
@@ -79,7 +89,9 @@ func (r *registry) RenewElection() cluster.Xact {
 	return res.entry.Get()
 }
 
-func (r *registry) RenewLRU(id string) cluster.Xact {
+func RenewLRU(id string) cluster.Xact { return defaultReg.renewLRU(id) }
+
+func (r *registry) renewLRU(id string) cluster.Xact {
 	e := r.globalXacts[cmn.ActLRU].New(XactArgs{UUID: id})
 	res := r.renewGlobalXaction(e)
 	if !res.isNew { // Previous LRU is still running.
@@ -89,7 +101,11 @@ func (r *registry) RenewLRU(id string) cluster.Xact {
 	return res.entry.Get()
 }
 
-func (r *registry) RenewDownloader(t cluster.Target, statsT stats.Tracker) (cluster.Xact, error) {
+func RenewDownloader(t cluster.Target, statsT stats.Tracker) (cluster.Xact, error) {
+	return defaultReg.renewDownloader(t, statsT)
+}
+
+func (r *registry) renewDownloader(t cluster.Target, statsT stats.Tracker) (cluster.Xact, error) {
 	e := r.globalXacts[cmn.ActDownload].New(XactArgs{
 		T:      t,
 		Custom: statsT,

@@ -31,7 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 //
@@ -83,7 +83,7 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 		id = cmn.GenUUID()
 	}
 
-	xlru := registry.Registry.RenewLRU(id)
+	xlru := xreg.RenewLRU(id)
 	if xlru == nil {
 		return
 	}

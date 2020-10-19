@@ -20,8 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction/registry"
-	"github.com/NVIDIA/aistore/xaction/runners"
+	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xaction/xrun"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 )
@@ -177,14 +177,14 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 		}
 
 		// Check current xaction
-		entry := registry.Registry.GetRunning(registry.XactFilter{Kind: cmn.ActRebalance})
+		entry := xreg.GetRunning(xreg.XactFilter{Kind: cmn.ActRebalance})
 		if entry == nil {
 			if canRun {
 				return
 			}
 			glog.Warningf("%s: waiting for ???...", logHdr)
 		} else {
-			otherXreb := entry.Get().(*runners.Rebalance) // running or previous
+			otherXreb := entry.Get().(*xrun.Rebalance) // running or previous
 			if canRun {
 				return
 			}
@@ -204,7 +204,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif cluster.Notif) bool {
 		glog.Infof("rebalance (v%d) in %s state", md.id, stages[rebStageInit])
 	}
 
-	xact := registry.Registry.RenewRebalance(md.id, reb.statRunner)
+	xact := xreg.RenewRebalance(md.id, reb.statRunner)
 	if xact == nil {
 		return false
 	}
@@ -215,7 +215,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif cluster.Notif) bool {
 		reb.cleanupEC()
 	}
 
-	reb.setXact(xact.(*runners.Rebalance))
+	reb.setXact(xact.(*xrun.Rebalance))
 	defer reb.xact().MarkDone()
 
 	// 3. init streams and data structures
@@ -228,7 +228,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif cluster.Notif) bool {
 	}
 
 	// 4. create persistent mark
-	err := fs.PutMarker(registry.GetMarkerName(cmn.ActRebalance))
+	err := fs.PutMarker(xreg.GetMarkerName(cmn.ActRebalance))
 	if err != nil {
 		glog.Errorf("Failed to create marker: %v", err)
 	}
@@ -440,7 +440,7 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
-		if err := fs.RemoveMarker(registry.GetMarkerName(cmn.ActRebalance)); err != nil {
+		if err := fs.RemoveMarker(xreg.GetMarkerName(cmn.ActRebalance)); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.logHdr(md), err)
 		}
 	}

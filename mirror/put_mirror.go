@@ -15,12 +15,12 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 type (
 	putMirrorProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *XactPut
 
 		t    cluster.Target
@@ -47,7 +47,7 @@ type (
 	}
 )
 
-func (*putMirrorProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (*putMirrorProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &putMirrorProvider{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}
 }
 

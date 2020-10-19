@@ -15,8 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xaction/registry"
-	"github.com/NVIDIA/aistore/xaction/runners"
+	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xaction/xrun"
 )
 
 type (
@@ -37,11 +37,11 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...clu
 		return
 	}
 
-	if err := fs.PutMarker(registry.GetMarkerName(cmn.ActResilver)); err != nil {
+	if err := fs.PutMarker(xreg.GetMarkerName(cmn.ActResilver)); err != nil {
 		glog.Errorln("failed to create resilver marker", err)
 	}
 
-	xreb := registry.Registry.RenewResilver(id).(*runners.Resilver)
+	xreb := xreg.RenewResilver(id).(*xrun.Resilver)
 	defer xreb.MarkDone()
 
 	if len(notifs) != 0 {
@@ -66,7 +66,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...clu
 	wg.Wait()
 
 	if !xreb.Aborted() {
-		if err := fs.RemoveMarker(registry.GetMarkerName(cmn.ActResilver)); err != nil {
+		if err := fs.RemoveMarker(xreg.GetMarkerName(cmn.ActResilver)); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode(), err)
 		}
 	}

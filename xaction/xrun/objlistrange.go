@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package runners
+package xrun
 
 import (
 	"errors"
@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/objwalk"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 func isLocalObject(smap *cluster.Smap, b cmn.Bck, objName, sid string) (bool, error) {
@@ -46,12 +46,12 @@ func parseTemplate(template string) (cmn.ParsedTemplate, error) {
 // Evict/Delete/Prefect
 //
 
-func (r *evictDelete) objDelete(args *registry.DeletePrefetchArgs, lom *cluster.LOM) (err error) {
+func (r *evictDelete) objDelete(args *xreg.DeletePrefetchArgs, lom *cluster.LOM) (err error) {
 	err, _ = r.t.DeleteObject(args.Ctx, lom, args.Evict)
 	return
 }
 
-func (r *evictDelete) doObjEvictDelete(args *registry.DeletePrefetchArgs, objName string) error {
+func (r *evictDelete) doObjEvictDelete(args *xreg.DeletePrefetchArgs, objName string) error {
 	lom := &cluster.LOM{T: r.t, ObjName: objName}
 	err := lom.Init(r.Bck())
 	if err != nil {
@@ -74,15 +74,15 @@ func (r *evictDelete) doObjEvictDelete(args *registry.DeletePrefetchArgs, objNam
 	return nil
 }
 
-func (r *evictDelete) listOperation(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
+func (r *evictDelete) listOperation(args *xreg.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
 	return r.iterateList(args, listMsg, r.doObjEvictDelete)
 }
 
-func (r *evictDelete) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
+func (r *evictDelete) iterateBucketRange(args *xreg.DeletePrefetchArgs) error {
 	return r.iterateRange(args, r.doObjEvictDelete)
 }
 
-func (r *prefetch) prefetchMissing(args *registry.DeletePrefetchArgs, objName string) error {
+func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string) error {
 	var coldGet bool
 	lom := &cluster.LOM{T: r.t, ObjName: objName}
 	err := lom.Init(r.Bck())
@@ -123,11 +123,11 @@ func (r *prefetch) prefetchMissing(args *registry.DeletePrefetchArgs, objName st
 	return nil
 }
 
-func (r *prefetch) listOperation(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
+func (r *prefetch) listOperation(args *xreg.DeletePrefetchArgs, listMsg *cmn.ListMsg) error {
 	return r.iterateList(args, listMsg, r.prefetchMissing)
 }
 
-func (r *prefetch) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
+func (r *prefetch) iterateBucketRange(args *xreg.DeletePrefetchArgs) error {
 	return r.iterateRange(args, r.prefetchMissing)
 }
 
@@ -135,7 +135,7 @@ func (r *prefetch) iterateBucketRange(args *registry.DeletePrefetchArgs) error {
 // Common methods
 //
 
-func (r *listRangeBase) iterateRange(args *registry.DeletePrefetchArgs, cb objCallback) error {
+func (r *listRangeBase) iterateRange(args *xreg.DeletePrefetchArgs, cb objCallback) error {
 	cmn.Assert(args.RangeMsg != nil)
 	pt, err := parseTemplate(args.RangeMsg.Template)
 	if err != nil {
@@ -149,7 +149,7 @@ func (r *listRangeBase) iterateRange(args *registry.DeletePrefetchArgs, cb objCa
 	return r.iteratePrefix(args, smap, pt.Prefix, cb)
 }
 
-func (r *listRangeBase) iterateTemplate(args *registry.DeletePrefetchArgs, smap *cluster.Smap, pt *cmn.ParsedTemplate, cb objCallback) error {
+func (r *listRangeBase) iterateTemplate(args *xreg.DeletePrefetchArgs, smap *cluster.Smap, pt *cmn.ParsedTemplate, cb objCallback) error {
 	var (
 		getNext = pt.Iter()
 		sid     = r.t.Snode().ID()
@@ -172,7 +172,7 @@ func (r *listRangeBase) iterateTemplate(args *registry.DeletePrefetchArgs, smap 
 	return nil
 }
 
-func (r *listRangeBase) iteratePrefix(args *registry.DeletePrefetchArgs, smap *cluster.Smap, prefix string, cb objCallback) error {
+func (r *listRangeBase) iteratePrefix(args *xreg.DeletePrefetchArgs, smap *cluster.Smap, prefix string, cb objCallback) error {
 	var (
 		objList *cmn.BucketList
 		sid     = r.t.Snode().ID()
@@ -228,7 +228,7 @@ func (r *listRangeBase) iteratePrefix(args *registry.DeletePrefetchArgs, smap *c
 	return nil
 }
 
-func (r *listRangeBase) iterateList(args *registry.DeletePrefetchArgs, listMsg *cmn.ListMsg, cb objCallback) error {
+func (r *listRangeBase) iterateList(args *xreg.DeletePrefetchArgs, listMsg *cmn.ListMsg, cb objCallback) error {
 	var (
 		smap = r.t.Sowner().Get()
 		sid  = r.t.Snode().ID()

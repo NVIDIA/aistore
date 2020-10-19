@@ -1,8 +1,8 @@
-// Package registry provides core functionality for the AIStore extended actions registry.
+// Package registry provides core functionality for the AIStore extended actions xreg.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package registry_test
+package xreg_test
 
 import (
 	"sync"
@@ -13,27 +13,27 @@ import (
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
-	"github.com/NVIDIA/aistore/xaction/runners"
+	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xaction/xrun"
 )
 
 // Smoke tests for xactions
 func TestXactionRenewLRU(t *testing.T) {
 	var (
-		num      = 10
-		xactions = registry.NewRegistry()
-		xactCh   = make(chan cluster.Xact, num)
-		wg       = &sync.WaitGroup{}
+		num    = 10
+		xactCh = make(chan cluster.Xact, num)
+		wg     = &sync.WaitGroup{}
 	)
+	xreg.Reset()
 
-	xactions.RegisterGlobalXact(&lru.XactProvider{})
-	defer xactions.AbortAll()
+	xreg.RegisterGlobalXact(&lru.XactProvider{})
+	defer xreg.AbortAll()
 	cmn.InitShortID(0)
 
 	wg.Add(num)
 	for i := 0; i < num; i++ {
 		go func() {
-			xactCh <- xactions.RenewLRU("")
+			xactCh <- xreg.RenewLRU("")
 			wg.Done()
 		}()
 	}
@@ -52,8 +52,7 @@ func TestXactionRenewLRU(t *testing.T) {
 
 func TestXactionRenewPrefetch(t *testing.T) {
 	var (
-		xactions = registry.NewRegistry()
-		evArgs   = &registry.DeletePrefetchArgs{}
+		evArgs = &xreg.DeletePrefetchArgs{}
 
 		bmd = cluster.NewBaseBownerMock()
 		bck = cluster.NewBck(
@@ -62,10 +61,11 @@ func TestXactionRenewPrefetch(t *testing.T) {
 		)
 		tMock = cluster.NewTargetMock(bmd)
 	)
+	xreg.Reset()
 	bmd.Add(bck)
 
-	xactions.RegisterBucketXact(&runners.PrefetchProvider{})
-	defer xactions.AbortAll()
+	xreg.RegisterBucketXact(&xrun.PrefetchProvider{})
+	defer xreg.AbortAll()
 
 	ch := make(chan cluster.Xact, 10)
 	wg := &sync.WaitGroup{}
@@ -73,7 +73,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			ch <- xactions.RenewPrefetch(tMock, bck, evArgs)
+			ch <- xreg.RenewPrefetch(tMock, bck, evArgs)
 		}()
 	}
 
@@ -92,25 +92,24 @@ func TestXactionRenewPrefetch(t *testing.T) {
 
 func TestXactionAbortAll(t *testing.T) {
 	var (
-		xactions = registry.NewRegistry()
-
 		bmd     = cluster.NewBaseBownerMock()
 		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		tMock   = cluster.NewTargetMock(bmd)
 	)
+	xreg.Reset()
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xactions.RegisterGlobalXact(&lru.XactProvider{})
-	xactions.RegisterBucketXact(&runners.BckRenameProvider{})
+	xreg.RegisterGlobalXact(&lru.XactProvider{})
+	xreg.RegisterBucketXact(&xrun.BckRenameProvider{})
 
-	xactGlob := xactions.RenewLRU("")
+	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck, err := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
-	xactions.AbortAll()
+	xreg.AbortAll()
 
 	tassert.Errorf(t, xactGlob != nil && xactGlob.Aborted(),
 		"AbortAllGlobal: expected global xaction to be aborted")
@@ -120,28 +119,27 @@ func TestXactionAbortAll(t *testing.T) {
 
 func TestXactionAbortAllGlobal(t *testing.T) {
 	var (
-		xactions = registry.NewRegistry()
-
 		bmd     = cluster.NewBaseBownerMock()
 		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
 		tMock   = cluster.NewTargetMock(bmd)
 	)
+	xreg.Reset()
 
-	defer xactions.AbortAll()
+	defer xreg.AbortAll()
 
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xactions.RegisterGlobalXact(&lru.XactProvider{})
-	xactions.RegisterBucketXact(&runners.BckRenameProvider{})
+	xreg.RegisterGlobalXact(&lru.XactProvider{})
+	xreg.RegisterBucketXact(&xrun.BckRenameProvider{})
 
-	xactGlob := xactions.RenewLRU("")
+	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck, err := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
-	xactions.AbortAll(xaction.XactTypeGlobal)
+	xreg.AbortAll(xaction.XactTypeGlobal)
 
 	tassert.Errorf(t, xactGlob != nil && xactGlob.Aborted(),
 		"AbortAllGlobal: expected global xaction to be aborted")
@@ -151,27 +149,27 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 
 func TestXactionAbortBuckets(t *testing.T) {
 	var (
-		xactions = registry.NewRegistry()
-		bmd      = cluster.NewBaseBownerMock()
-		bckFrom  = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-		bckTo    = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
-		tMock    = cluster.NewTargetMock(bmd)
+		bmd     = cluster.NewBaseBownerMock()
+		bckFrom = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		bckTo   = cluster.NewBck("test", cmn.ProviderAIS, cmn.NsGlobal)
+		tMock   = cluster.NewTargetMock(bmd)
 	)
+	xreg.Reset()
 
-	defer xactions.AbortAll()
+	defer xreg.AbortAll()
 
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
 
-	xactions.RegisterGlobalXact(&lru.XactProvider{})
-	xactions.RegisterBucketXact(&runners.BckRenameProvider{})
+	xreg.RegisterGlobalXact(&lru.XactProvider{})
+	xreg.RegisterBucketXact(&xrun.BckRenameProvider{})
 
-	xactGlob := xactions.RenewLRU("")
+	xactGlob := xreg.RenewLRU("")
 	tassert.Errorf(t, xactGlob != nil, "Xaction must be created")
-	xactBck, err := xactions.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
+	xactBck, err := xreg.RenewBckRename(tMock, bckFrom, bckTo, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck != nil, "Xaction must be created")
 
-	xactions.AbortAllBuckets(bckFrom)
+	xreg.AbortAllBuckets(bckFrom)
 
 	tassert.Errorf(t, xactGlob != nil && !xactGlob.Aborted(),
 		"AbortAllGlobal: expected global xaction to be running")
@@ -188,29 +186,29 @@ func TestXactionQueryFinished(t *testing.T) {
 		expectedStatsLen int
 	}
 	var (
-		xactions = registry.NewRegistry()
-		bmd      = cluster.NewBaseBownerMock()
-		bck1     = cluster.NewBck("test1", cmn.ProviderAIS, cmn.NsGlobal)
-		bck2     = cluster.NewBck("test2", cmn.ProviderAIS, cmn.NsGlobal)
-		tMock    = cluster.NewTargetMock(bmd)
+		bmd   = cluster.NewBaseBownerMock()
+		bck1  = cluster.NewBck("test1", cmn.ProviderAIS, cmn.NsGlobal)
+		bck2  = cluster.NewBck("test2", cmn.ProviderAIS, cmn.NsGlobal)
+		tMock = cluster.NewTargetMock(bmd)
 	)
+	xreg.Reset()
 
-	defer xactions.AbortAll()
+	defer xreg.AbortAll()
 
 	bmd.Add(bck1)
 	bmd.Add(bck2)
 
-	xactions.RegisterBucketXact(&runners.PrefetchProvider{})
-	xactions.RegisterBucketXact(&runners.BckRenameProvider{})
+	xreg.RegisterBucketXact(&xrun.PrefetchProvider{})
+	xreg.RegisterBucketXact(&xrun.BckRenameProvider{})
 
-	xactBck1, err := xactions.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
+	xactBck1, err := xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
-	xactBck2, err := xactions.RenewBckRename(tMock, bck2, bck2, "uuid", 123, "phase")
+	xactBck2, err := xreg.RenewBckRename(tMock, bck2, bck2, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
 	xactBck1.Finish()
-	xactBck1, err = xactions.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
+	xactBck1, err = xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
-	xactBck3 := xactions.RenewPrefetch(tMock, bck1, &registry.DeletePrefetchArgs{})
+	xactBck3 := xreg.RenewPrefetch(tMock, bck1, &xreg.DeletePrefetchArgs{})
 	tassert.Errorf(t, xactBck3 != nil, "Xaction must be created %v", err)
 
 	scenarioName := func(tc testConfig) string {
@@ -235,7 +233,7 @@ func TestXactionQueryFinished(t *testing.T) {
 
 	f := func(t *testing.T, tc testConfig) {
 		t.Run(scenarioName(tc), func(t *testing.T) {
-			query := registry.XactFilter{}
+			query := xreg.XactFilter{}
 			if !tc.bckNil {
 				query.Bck = bck1
 			}
@@ -243,7 +241,7 @@ func TestXactionQueryFinished(t *testing.T) {
 				query.Kind = xactBck1.Kind()
 			}
 			query.OnlyRunning = &tc.showActive
-			stats, err := xactions.GetStats(query)
+			stats, err := xreg.GetStats(query)
 			tassert.Errorf(t, err == nil, "Error fetching Xact Stats %v for query %v", err, query)
 			tassert.Errorf(t, len(stats) == tc.expectedStatsLen, "Length of result: %d != %d", len(stats), tc.expectedStatsLen)
 		})

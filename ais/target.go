@@ -35,7 +35,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -295,7 +295,7 @@ func (t *targetrunner) Run() error {
 	t.initRecvHandlers()
 	ec.Init(t)
 
-	marked := registry.GetResilverMarked()
+	marked := xreg.GetResilverMarked()
 	if marked.Interrupted {
 		go func() {
 			glog.Infoln("resuming resilver...")
@@ -390,7 +390,7 @@ func (t *targetrunner) initRecvHandlers() {
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.GetRunName(), err)
-	registry.Registry.AbortAll()
+	xreg.AbortAll()
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
 	}
@@ -537,7 +537,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
 		)
-		args := &registry.DeletePrefetchArgs{
+		args := &xreg.DeletePrefetchArgs{
 			Ctx:   context.Background(),
 			UUID:  msg.UUID,
 			Evict: msg.Action == cmn.ActEvictObjects,
@@ -550,7 +550,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
 			return
 		}
-		xact, err := registry.Registry.RenewEvictDelete(t, bck, args)
+		xact, err := xreg.RenewEvictDelete(t, bck, args)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -630,7 +630,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			err      error
 			rangeMsg = &cmn.RangeMsg{}
 			listMsg  = &cmn.ListMsg{}
-			args     = &registry.DeletePrefetchArgs{Ctx: context.Background()}
+			args     = &xreg.DeletePrefetchArgs{Ctx: context.Background()}
 		)
 		if err = cmn.MorphMarshal(msg.Value, &rangeMsg); err == nil {
 			args.RangeMsg = rangeMsg
@@ -641,7 +641,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		args.UUID = msg.UUID
-		xact := registry.Registry.RenewPrefetch(t, bck, args)
+		xact := xreg.RenewPrefetch(t, bck, args)
 		go xact.Run()
 	case cmn.ActListObjects:
 		// list the bucket and return
@@ -1366,7 +1366,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		return
 	}
 	for i := 0; i < retries; i++ {
-		xputlrep := registry.Registry.RenewPutMirror(lom)
+		xputlrep := xreg.RenewPutMirror(lom)
 		if xputlrep == nil {
 			return
 		}
@@ -1539,7 +1539,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		if promoteArgs.Verbose {
 			glog.Infof("%s: promote %+v", t.si, promoteArgs)
 		}
-		xact, err := registry.Registry.RenewDirPromote(t, bck, srcFQN, &promoteArgs)
+		xact, err := xreg.RenewDirPromote(t, bck, srcFQN, &promoteArgs)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -1596,5 +1596,5 @@ func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...
 }
 
 func (t *targetrunner) AbortAllXacts(tys ...string) {
-	registry.Registry.AbortAll(tys...)
+	xreg.AbortAll(tys...)
 }

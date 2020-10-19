@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -193,12 +193,12 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 
 		// do the work in xaction
-		xact, err := registry.Registry.RenewBckMakeNCopies(t, c.bck, c.uuid, int(copies))
+		xact, err := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, int(copies))
 		if err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 
-		registry.Registry.DoAbort(cmn.ActPutCopies, c.bck)
+		xreg.DoAbort(cmn.ActPutCopies, c.bck)
 
 		c.addNotif(xact) // notify upon completion
 		go xact.Run()
@@ -270,18 +270,18 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		if reMirror(txnSetBprops.bprops, txnSetBprops.nprops) {
 			n := int(txnSetBprops.nprops.Mirror.Copies)
-			xact, err := registry.Registry.RenewBckMakeNCopies(t, c.bck, c.uuid, n)
+			xact, err := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, n)
 			if err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
-			registry.Registry.DoAbort(cmn.ActPutCopies, c.bck)
+			xreg.DoAbort(cmn.ActPutCopies, c.bck)
 
 			c.addNotif(xact) // notify upon completion
 			go xact.Run()
 		}
 		if reEC(txnSetBprops.bprops, txnSetBprops.nprops, c.bck) {
-			registry.Registry.DoAbort(cmn.ActECEncode, c.bck)
-			xact, err := registry.Registry.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
+			xreg.DoAbort(cmn.ActECEncode, c.bck)
+			xact, err := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 			if err != nil {
 				return err
 			}
@@ -367,7 +367,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if err = t.transactions.wait(txn, c.timeout); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		xact, err := registry.Registry.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, cmn.ActCommit)
+		xact, err := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, cmn.ActCommit)
 		if err != nil {
 			return err // must not happen at commit time
 		}
@@ -503,7 +503,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		} else {
 			t.transactions.find(c.uuid, cmn.ActCommit)
 		}
-		xact, err := registry.Registry.RenewTransferBck(t, txnCp.bckFrom, txnCp.bckTo, c.uuid, c.msg.Action, cmn.ActCommit,
+		xact, err := xreg.RenewTransferBck(t, txnCp.bckFrom, txnCp.bckTo, c.uuid, c.msg.Action, cmn.ActCommit,
 			txnCp.dm, txnCp.dp, txnCp.metaMsg)
 		if err != nil {
 			return err
@@ -571,13 +571,13 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
 		}
 		nlp.Unlock() // TODO -- FIXME: introduce txn, unlock when done
-		if _, err := registry.Registry.RenewECEncode(t, c.bck, c.uuid, cmn.ActBegin); err != nil {
+		if _, err := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActBegin); err != nil {
 			return err
 		}
 	case cmn.ActAbort:
 		// do nothing
 	case cmn.ActCommit:
-		xact, err := registry.Registry.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
+		xact, err := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err)
 			return err
@@ -605,16 +605,16 @@ func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
-		g := registry.GetRebMarked()
+		g := xreg.GetRebMarked()
 		if g.Xact != nil && !g.Xact.Finished() {
 			return errors.New("cannot start maintenance: rebalance is in progress")
 		}
-		filter := registry.XactFilter{Kind: cmn.ActRenameLB}
-		if entry := registry.Registry.GetRunning(filter); entry != nil {
+		filter := xreg.XactFilter{Kind: cmn.ActRenameLB}
+		if entry := xreg.GetRunning(filter); entry != nil {
 			return errors.New("cannot start maintenance: rename bucket is in progress")
 		}
-		filter = registry.XactFilter{Kind: cmn.ActCopyBucket}
-		if entry := registry.Registry.GetRunning(filter); entry != nil {
+		filter = xreg.XactFilter{Kind: cmn.ActCopyBucket}
+		if entry := xreg.GetRunning(filter); entry != nil {
 			return errors.New("cannot start maintenance: copy bucket is in progress")
 		}
 		t.gfn.global.activateTimed()
@@ -664,7 +664,7 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 // TODO: #791 "limited coexistence" - extend and unify
 func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
 	const fmterr = "%s: [%s] is currently running, cannot run %q (bucket %s) concurrently"
-	g, l := registry.GetRebMarked(), registry.GetResilverMarked()
+	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
 	if g.Xact != nil {
 		err = fmt.Errorf(fmterr, t.si, g.Xact, action, bck)
 	} else if l.Xact != nil {

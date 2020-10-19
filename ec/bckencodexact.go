@@ -14,13 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 type (
-	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	// Implements `xreg.BucketEntryProvider` and `xreg.BucketEntry` interface.
 	xactBckEncodeProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *XactBckEncode
 
 		t     cluster.Target
@@ -49,7 +49,7 @@ type (
 	}
 )
 
-func (*xactBckEncodeProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (*xactBckEncodeProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &xactBckEncodeProvider{
 		t:     args.T,
 		uuid:  args.UUID,
@@ -64,7 +64,7 @@ func (p *xactBckEncodeProvider) Start(bck cmn.Bck) error {
 }
 func (*xactBckEncodeProvider) Kind() string        { return cmn.ActECEncode }
 func (p *xactBckEncodeProvider) Get() cluster.Xact { return p.xact }
-func (p *xactBckEncodeProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep bool, err error) {
+func (p *xactBckEncodeProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	// TODO: add more checks?
 	prev := previousEntry.(*xactBckEncodeProvider)
 	if prev.phase == cmn.ActBegin && p.phase == cmn.ActCommit {

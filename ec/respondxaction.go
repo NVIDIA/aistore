@@ -17,16 +17,16 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 type (
 	// FIXME: Does `XactRespond` needs to be a `XactDemand`?
 	//  - it doesn't use `incPending()`
 
-	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	// Implements `xreg.BucketEntryProvider` and `xreg.BucketEntry` interface.
 	xactRespondProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *XactRespond
 	}
 
@@ -37,7 +37,7 @@ type (
 	}
 )
 
-func (p *xactRespondProvider) New(_ registry.XactArgs) registry.BucketEntry {
+func (p *xactRespondProvider) New(_ xreg.XactArgs) xreg.BucketEntry {
 	return &xactRespondProvider{}
 }
 

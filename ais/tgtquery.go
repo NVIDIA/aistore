@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 // There are 3 methods exposed by targets:
@@ -69,7 +69,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		smsg.Flags = cmn.SelectCached
 	}
 
-	xact, isNew, err := registry.Registry.RenewQuery(ctx, t, q, smsg)
+	xact, isNew, err := xreg.RenewQuery(ctx, t, q, smsg)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return

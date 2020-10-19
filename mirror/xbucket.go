@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 type (
@@ -51,12 +51,12 @@ type (
 )
 
 func init() {
-	registry.Registry.RegisterBucketXact(&transferBckProvider{kind: cmn.ActCopyBucket})
-	registry.Registry.RegisterBucketXact(&transferBckProvider{kind: cmn.ActETLBucket})
-	registry.Registry.RegisterBucketXact(&dirPromoteProvider{})
-	registry.Registry.RegisterBucketXact(&mncProvider{})
-	registry.Registry.RegisterBucketXact(&llcProvider{})
-	registry.Registry.RegisterBucketXact(&putMirrorProvider{})
+	xreg.RegisterBucketXact(&transferBckProvider{kind: cmn.ActCopyBucket})
+	xreg.RegisterBucketXact(&transferBckProvider{kind: cmn.ActETLBucket})
+	xreg.RegisterBucketXact(&dirPromoteProvider{})
+	xreg.RegisterBucketXact(&mncProvider{})
+	xreg.RegisterBucketXact(&llcProvider{})
+	xreg.RegisterBucketXact(&putMirrorProvider{})
 }
 
 func newXactBckBase(id, kind string, bck cmn.Bck, t cluster.Target) *xactBckBase {

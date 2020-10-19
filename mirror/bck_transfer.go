@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport/bundle"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 // XactTransferBck transfers a bucket locally within the same cluster. If xact.dp is empty, transfer bck is just copy
@@ -27,7 +27,7 @@ type (
 		uuid  string
 		kind  string
 		phase string
-		args  *registry.TransferBckArgs
+		args  *xreg.TransferBckArgs
 	}
 	XactTransferBck struct {
 		xactBckBase
@@ -45,13 +45,13 @@ type (
 	}
 )
 
-func (e *transferBckProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (e *transferBckProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &transferBckProvider{
 		t:     args.T,
 		uuid:  args.UUID,
 		kind:  e.kind,
 		phase: args.Phase,
-		args:  args.Custom.(*registry.TransferBckArgs),
+		args:  args.Custom.(*xreg.TransferBckArgs),
 	}
 }
 
@@ -63,7 +63,7 @@ func (e *transferBckProvider) Start(_ cmn.Bck) error {
 }
 func (e *transferBckProvider) Kind() string      { return e.kind }
 func (e *transferBckProvider) Get() cluster.Xact { return e.xact }
-func (e *transferBckProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep bool, err error) {
+func (e *transferBckProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	prev := previousEntry.(*transferBckProvider)
 	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)
 	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && bckEq {
@@ -75,7 +75,7 @@ func (e *transferBckProvider) PreRenewHook(previousEntry registry.BucketEntry) (
 		prev.xact, prev.args.BckFrom, prev.args.BckTo, prev.phase, e.phase, e.args.BckFrom, e.args.BckTo)
 	return
 }
-func (e *transferBckProvider) PostRenewHook(_ registry.BucketEntry) {}
+func (e *transferBckProvider) PostRenewHook(_ xreg.BucketEntry) {}
 
 //
 // public methods

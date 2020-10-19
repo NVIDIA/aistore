@@ -24,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -237,10 +237,10 @@ func Init(t cluster.Target) {
 	fs.CSM.RegisterContentType(SliceType, &SliceSpec{})
 	fs.CSM.RegisterContentType(MetaType, &MetaSpec{})
 
-	registry.Registry.RegisterBucketXact(&xactGetProvider{})
-	registry.Registry.RegisterBucketXact(&xactPutProvider{})
-	registry.Registry.RegisterBucketXact(&xactRespondProvider{})
-	registry.Registry.RegisterBucketXact(&xactBckEncodeProvider{})
+	xreg.RegisterBucketXact(&xactGetProvider{})
+	xreg.RegisterBucketXact(&xactPutProvider{})
+	xreg.RegisterBucketXact(&xactRespondProvider{})
+	xreg.RegisterBucketXact(&xactBckEncodeProvider{})
 
 	if err := initManager(t); err != nil {
 		glog.Fatal(err)

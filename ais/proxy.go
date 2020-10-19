@@ -34,7 +34,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -250,7 +250,7 @@ func (p *proxyrunner) Stop(err error) {
 		isPrimary = smap.isPrimary(p.si)
 	}
 	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.GetRunName(), p.si, isPrimary, err)
-	registry.Registry.AbortAll()
+	xreg.AbortAll()
 
 	if isPrimary {
 		p.metasyncer.stopping.Store(true)
@@ -580,7 +580,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
 		var (
-			xact   = registry.Registry.GetXactRunning(cmn.ActElection)
+			xact   = xreg.GetXactRunning(cmn.ActElection)
 			msg    = p.si.String() + ": is primary, cannot be on the receiving side of metasync"
 			detail string
 		)

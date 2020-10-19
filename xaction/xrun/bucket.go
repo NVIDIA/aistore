@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package runners
+package xrun
 
 import (
 	"fmt"
@@ -12,14 +12,18 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 func init() {
-	registry.Registry.RegisterBucketXact(&BckRenameProvider{})
-	registry.Registry.RegisterBucketXact(&evictDeleteProvider{kind: cmn.ActEvictObjects})
-	registry.Registry.RegisterBucketXact(&evictDeleteProvider{kind: cmn.ActDelete})
-	registry.Registry.RegisterBucketXact(&PrefetchProvider{})
+	xreg.RegisterGlobalXact(&electionProvider{})
+	xreg.RegisterGlobalXact(&resilverProvider{})
+	xreg.RegisterGlobalXact(&rebalanceProvider{})
+
+	xreg.RegisterBucketXact(&BckRenameProvider{})
+	xreg.RegisterBucketXact(&evictDeleteProvider{kind: cmn.ActEvictObjects})
+	xreg.RegisterBucketXact(&evictDeleteProvider{kind: cmn.ActDelete})
+	xreg.RegisterBucketXact(&PrefetchProvider{})
 }
 
 type (
@@ -29,7 +33,7 @@ type (
 		t     cluster.Target
 		uuid  string
 		phase string
-		args  *registry.BckRenameArgs
+		args  *xreg.BckRenameArgs
 	}
 
 	bckRename struct {
@@ -41,12 +45,12 @@ type (
 	}
 )
 
-func (*BckRenameProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (*BckRenameProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &BckRenameProvider{
 		t:     args.T,
 		uuid:  args.UUID,
 		phase: args.Phase,
-		args:  args.Custom.(*registry.BckRenameArgs),
+		args:  args.Custom.(*xreg.BckRenameArgs),
 	}
 }
 
@@ -56,7 +60,7 @@ func (p *BckRenameProvider) Start(bck cmn.Bck) error {
 }
 func (*BckRenameProvider) Kind() string        { return cmn.ActRenameLB }
 func (p *BckRenameProvider) Get() cluster.Xact { return p.xact }
-func (p *BckRenameProvider) PreRenewHook(previousEntry registry.BucketEntry) (keep bool, err error) {
+func (p *BckRenameProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	if p.phase == cmn.ActBegin {
 		if !previousEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress", p.Kind(), p.args.BckFrom, p.args.BckTo)
@@ -75,7 +79,7 @@ func (p *BckRenameProvider) PreRenewHook(previousEntry registry.BucketEntry) (ke
 		p.Kind(), prev.args.BckFrom, prev.args.BckTo, prev.phase, p.phase, p.args.BckFrom)
 	return
 }
-func (p *BckRenameProvider) PostRenewHook(_ registry.BucketEntry) {}
+func (p *BckRenameProvider) PostRenewHook(_ xreg.BucketEntry) {}
 
 func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
 	bckFrom, bckTo *cluster.Bck, rebID xaction.RebID) *bckRename {
@@ -97,11 +101,11 @@ func (r *bckRename) Run() error {
 	var (
 		onlyRunning, finished bool
 
-		flt = registry.XactFilter{ID: r.rebID.String(), Kind: cmn.ActRebalance, OnlyRunning: &onlyRunning}
+		flt = xreg.XactFilter{ID: r.rebID.String(), Kind: cmn.ActRebalance, OnlyRunning: &onlyRunning}
 	)
 	for !finished {
 		time.Sleep(10 * time.Second)
-		rebStats, err := registry.Registry.GetStats(flt)
+		rebStats, err := xreg.GetStats(flt)
 		cmn.AssertNoErr(err)
 		for _, stat := range rebStats {
 			finished = finished || stat.Finished()
@@ -121,27 +125,27 @@ type (
 	listRangeBase struct {
 		xaction.XactBase
 		t    cluster.Target
-		args *registry.DeletePrefetchArgs
+		args *xreg.DeletePrefetchArgs
 	}
 	evictDeleteProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *evictDelete
 
 		t    cluster.Target
 		kind string
-		args *registry.DeletePrefetchArgs
+		args *xreg.DeletePrefetchArgs
 	}
 	evictDelete struct {
 		listRangeBase
 	}
-	objCallback = func(args *registry.DeletePrefetchArgs, objName string) error
+	objCallback = func(args *xreg.DeletePrefetchArgs, objName string) error
 )
 
-func (p *evictDeleteProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (p *evictDeleteProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &evictDeleteProvider{
 		t:    args.T,
 		kind: p.kind,
-		args: args.Custom.(*registry.DeletePrefetchArgs),
+		args: args.Custom.(*xreg.DeletePrefetchArgs),
 	}
 }
 
@@ -152,7 +156,7 @@ func (p *evictDeleteProvider) Start(bck cmn.Bck) error {
 func (p *evictDeleteProvider) Kind() string      { return p.kind }
 func (p *evictDeleteProvider) Get() cluster.Xact { return p.xact }
 
-func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, args *registry.DeletePrefetchArgs) *evictDelete {
+func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, args *xreg.DeletePrefetchArgs) *evictDelete {
 	return &evictDelete{
 		listRangeBase: listRangeBase{
 			XactBase: *xaction.NewXactBaseBck(uuid, kind, bck),
@@ -181,21 +185,21 @@ func (r *evictDelete) Run() error {
 
 type (
 	PrefetchProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *prefetch
 
 		t    cluster.Target
-		args *registry.DeletePrefetchArgs
+		args *xreg.DeletePrefetchArgs
 	}
 	prefetch struct {
 		listRangeBase
 	}
 )
 
-func (*PrefetchProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (*PrefetchProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &PrefetchProvider{
 		t:    args.T,
-		args: args.Custom.(*registry.DeletePrefetchArgs),
+		args: args.Custom.(*xreg.DeletePrefetchArgs),
 	}
 }
 
@@ -206,7 +210,7 @@ func (p *PrefetchProvider) Start(bck cmn.Bck) error {
 func (*PrefetchProvider) Kind() string        { return cmn.ActPrefetch }
 func (p *PrefetchProvider) Get() cluster.Xact { return p.xact }
 
-func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, args *registry.DeletePrefetchArgs) *prefetch {
+func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, args *xreg.DeletePrefetchArgs) *prefetch {
 	return &prefetch{
 		listRangeBase: listRangeBase{
 			XactBase: *xaction.NewXactBaseBck(uuid, kind, bck),

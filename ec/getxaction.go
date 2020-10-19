@@ -16,13 +16,13 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 type (
-	// Implements `registry.BucketEntry` and `registry.BucketEntryProvider` interface.
+	// Implements `xreg.BucketEntry` and `xreg.BucketEntryProvider` interface.
 	xactGetProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *XactGet
 	}
 
@@ -38,7 +38,7 @@ type (
 	bgProcess = func(req *Request, toDisk bool, cb func(error))
 )
 
-func (*xactGetProvider) New(_ registry.XactArgs) registry.BucketEntry { return &xactGetProvider{} }
+func (*xactGetProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactGetProvider{} }
 func (p *xactGetProvider) Start(bck cmn.Bck) error {
 	var (
 		xec      = ECM.NewGetXact(bck)

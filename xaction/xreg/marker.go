@@ -1,8 +1,8 @@
-// Package registry provides core functionality for the AIStore extended actions registry.
+// Package registry provides core functionality for the AIStore extended actions xreg.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package registry
+package xreg
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
@@ -16,13 +16,13 @@ const (
 )
 
 func GetRebMarked() (out xaction.XactMarked) {
-	out.Xact = Registry.GetXactRunning(cmn.ActRebalance)
+	out.Xact = defaultReg.GetXactRunning(cmn.ActRebalance)
 	out.Interrupted = fs.MarkerExists(GetMarkerName(cmn.ActRebalance)) && out.Xact == nil
 	return
 }
 
 func GetResilverMarked() (out xaction.XactMarked) {
-	out.Xact = Registry.GetXactRunning(cmn.ActResilver)
+	out.Xact = defaultReg.GetXactRunning(cmn.ActResilver)
 	out.Interrupted = fs.MarkerExists(GetMarkerName(cmn.ActResilver)) && out.Xact == nil
 	return
 }

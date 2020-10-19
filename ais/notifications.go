@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/query"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -57,7 +57,7 @@ type (
 		Finished []*notifListenMsg `json:"finished"`
 	}
 
-	nlFilter registry.XactFilter
+	nlFilter xreg.XactFilter
 
 	//
 	// notification messages

@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/objlist"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
@@ -44,11 +44,11 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 	cmn.Assert(msg.PageSize != 0)
 
-	xact, isNew, err := registry.Registry.RenewObjList(t, bck, msg.UUID, msg)
+	xact, isNew, err := xreg.RenewObjList(t, bck, msg.UUID, msg)
 	// Double check that xaction has not gone before starting page read.
 	// Restart xaction if needed.
 	if err == objlist.ErrGone {
-		xact, isNew, err = registry.Registry.RenewObjList(t, bck, msg.UUID, msg)
+		xact, isNew, err = xreg.RenewObjList(t, bck, msg.UUID, msg)
 	}
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -119,7 +119,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 
 		switch action {
 		case cmn.ActSummaryBucket:
-			_, err = registry.Registry.RenewBckSummary(ctx, t, bck, msg)
+			err = xreg.RenewBckSummary(ctx, t, bck, msg)
 		default:
 			t.invalmsghdlrf(w, r, "invalid action: %s", action)
 			return false
@@ -134,7 +134,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		return true
 	}
 
-	xact := registry.Registry.GetXact(msg.UUID)
+	xact := xreg.GetXact(msg.UUID)
 	// task never started
 	if xact == nil {
 		s := fmt.Sprintf("Task %s not found", msg.UUID)

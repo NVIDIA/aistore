@@ -14,13 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 type (
-	// Implements `registry.BucketEntryProvider` and `registry.BucketEntry` interface.
+	// Implements `xreg.BucketEntryProvider` and `xreg.BucketEntry` interface.
 	xactPutProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *XactPut
 	}
 
@@ -34,7 +34,7 @@ type (
 	}
 )
 
-func (*xactPutProvider) New(_ registry.XactArgs) registry.BucketEntry { return &xactPutProvider{} }
+func (*xactPutProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactPutProvider{} }
 func (p *xactPutProvider) Start(bck cmn.Bck) error {
 	var (
 		xec      = ECM.NewPutXact(bck)

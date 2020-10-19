@@ -23,8 +23,8 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
-	"github.com/NVIDIA/aistore/xaction/registry"
-	"github.com/NVIDIA/aistore/xaction/runners"
+	"github.com/NVIDIA/aistore/xaction/xreg"
+	"github.com/NVIDIA/aistore/xaction/xrun"
 )
 
 const (
@@ -53,7 +53,7 @@ type (
 	syncCallback func(tsi *cluster.Snode, md *rebArgs) (ok bool)
 	joggerBase   struct {
 		m    *Manager
-		xreb *runners.RebBase
+		xreb *xrun.RebBase
 		wg   *sync.WaitGroup
 	}
 
@@ -156,8 +156,8 @@ func (reb *Manager) registerRecv() {
 func (reb *Manager) RebID() int64           { return reb.rebID.Load() }
 func (reb *Manager) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 
-func (reb *Manager) xact() *runners.Rebalance                  { return (*runners.Rebalance)(reb.xreb.Load()) }
-func (reb *Manager) setXact(xact *runners.Rebalance)           { reb.xreb.Store(unsafe.Pointer(xact)) }
+func (reb *Manager) xact() *xrun.Rebalance                     { return (*xrun.Rebalance)(reb.xreb.Load()) }
+func (reb *Manager) setXact(xact *xrun.Rebalance)              { reb.xreb.Store(unsafe.Pointer(xact)) }
 func (reb *Manager) lomAcks() *[cmn.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
 func (reb *Manager) addLomAck(lom *cluster.LOM) {
 	_, idx := lom.Hkey()
@@ -233,7 +233,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 		glog.Error(err)
 		return
 	}
-	marked := registry.GetRebMarked()
+	marked := xreg.GetRebMarked()
 	if marked.Interrupted || marked.Xact == nil {
 		return
 	}

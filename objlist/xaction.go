@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/objwalk/walkinfo"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 // Xaction is on-demand one to avoid creating a new xaction per page even
@@ -29,7 +29,7 @@ import (
 // Xaction is created once per bucket list request (per UUID)
 type (
 	xactProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *Xact
 
 		ctx  context.Context
@@ -75,10 +75,10 @@ var (
 )
 
 func init() {
-	registry.Registry.RegisterBucketXact(&xactProvider{})
+	xreg.RegisterBucketXact(&xactProvider{})
 }
 
-func (*xactProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (*xactProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &xactProvider{ctx: args.Ctx, t: args.T, uuid: args.UUID, msg: args.Custom.(*cmn.SelectMsg)}
 }
 

@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 // =============================== Summary ====================================
@@ -213,18 +213,18 @@ func (pr *progressReader) Close() error {
 // ============================= Downloader ====================================
 
 func init() {
-	registry.Registry.RegisterGlobalXact(&downloaderProvider{})
+	xreg.RegisterGlobalXact(&downloaderProvider{})
 }
 
 type downloaderProvider struct {
-	registry.BaseGlobalEntry
+	xreg.BaseGlobalEntry
 	xact *Downloader
 
 	t      cluster.Target
 	statsT stats.Tracker
 }
 
-func (*downloaderProvider) New(args registry.XactArgs) registry.GlobalEntry {
+func (*downloaderProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
 	return &downloaderProvider{t: args.T, statsT: args.Custom.(stats.Tracker)}
 }
 

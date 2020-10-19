@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 const (
@@ -139,7 +139,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 		glog.Infoln("Already in primary state")
 		return
 	}
-	xele := registry.Registry.RenewElection()
+	xele := xreg.RenewElection()
 	if xele == nil {
 		return
 	}

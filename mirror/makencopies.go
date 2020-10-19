@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 
 type (
 	mncProvider struct {
-		registry.BaseBckEntry
+		xreg.BaseBckEntry
 		xact *xactMNC
 
 		t      cluster.Target
@@ -48,7 +48,7 @@ type (
 	}
 )
 
-func (*mncProvider) New(args registry.XactArgs) registry.BucketEntry {
+func (*mncProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &mncProvider{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}
 }
 

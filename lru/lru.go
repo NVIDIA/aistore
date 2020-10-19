@@ -23,7 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 // The LRU module implements a well-known least-recently-used cache replacement policy.
@@ -99,7 +99,7 @@ type (
 	}
 
 	XactProvider struct {
-		registry.BaseGlobalEntry
+		xreg.BaseGlobalEntry
 		xact *Xaction
 
 		id string
@@ -113,10 +113,10 @@ type (
 )
 
 func init() {
-	registry.Registry.RegisterGlobalXact(&XactProvider{})
+	xreg.RegisterGlobalXact(&XactProvider{})
 }
 
-func (*XactProvider) New(args registry.XactArgs) registry.GlobalEntry {
+func (*XactProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
 	return &XactProvider{id: args.UUID}
 }
 
@@ -125,7 +125,7 @@ func (p *XactProvider) Start(_ cmn.Bck) error {
 		XactDemandBase: *xaction.NewXactDemandBase(p.id, cmn.ActLRU, xactIdleTime),
 		Renewed:        make(chan struct{}, 10),
 		OkRemoveMisplaced: func() bool {
-			g, l := registry.GetRebMarked(), registry.GetResilverMarked()
+			g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
 			return !g.Interrupted && !l.Interrupted && g.Xact == nil && l.Xact == nil
 		},
 	}

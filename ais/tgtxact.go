@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
-	"github.com/NVIDIA/aistore/xaction/registry"
+	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
 // TODO: uplift via higher-level query and similar (#668)
@@ -50,7 +50,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		xactQuery := registry.XactFilter{
+		xactQuery := xreg.XactFilter{
 			ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRunning: xactMsg.OnlyRunning,
 		}
 		t.queryMatchingXact(w, r, what, xactQuery)
@@ -78,10 +78,10 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case cmn.ActXactStop:
 			if xactMsg.ID != "" {
-				registry.Registry.DoAbortByID(xactMsg.ID)
+				xreg.DoAbortByID(xactMsg.ID)
 				return
 			}
-			registry.Registry.DoAbort(xactMsg.Kind, bck)
+			xreg.DoAbort(xactMsg.Kind, bck)
 			return
 		default:
 			t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
@@ -96,7 +96,7 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	xact := registry.Registry.GetXact(uuid)
+	xact := xreg.GetXact(uuid)
 	if xact != nil {
 		t.writeJSON(w, r, xact.Stats(), what)
 		return
@@ -106,12 +106,12 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 }
 
 func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string,
-	xactQuery registry.XactFilter) {
+	xactQuery xreg.XactFilter) {
 	if what != cmn.QueryXactStats {
 		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
 		return
 	}
-	stats, err := registry.Registry.GetStats(xactQuery)
+	stats, err := xreg.GetStats(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what)
 		return
@@ -150,11 +150,11 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		if bck == nil {
 			return fmt.Errorf(erfmn, xactMsg.Kind)
 		}
-		args := &registry.DeletePrefetchArgs{
+		args := &xreg.DeletePrefetchArgs{
 			Ctx:      context.Background(),
 			RangeMsg: &cmn.RangeMsg{},
 		}
-		xact := registry.Registry.RenewPrefetch(t, bck, args)
+		xact := xreg.RenewPrefetch(t, bck, args)
 		xact.AddNotif(&xaction.NotifXact{
 			NotifBase: nl.NotifBase{
 				When: cluster.UponTerm,
