@@ -38,6 +38,9 @@ type (
 	bgProcess = func(req *Request, toDisk bool, cb func(error))
 )
 
+// interface guard
+var _ xaction.XactDemand = &XactGet{}
+
 func (*xactGetProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactGetProvider{} }
 func (p *xactGetProvider) Start(bck cmn.Bck) error {
 	var (

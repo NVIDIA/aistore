@@ -168,6 +168,9 @@ type (
 	}
 )
 
+// interface guard
+var _ xaction.XactDemand = &Downloader{}
+
 func clientForURL(u string) *http.Client {
 	if cmn.IsHTTPS(u) {
 		return httpsClient

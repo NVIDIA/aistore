@@ -684,6 +684,7 @@ func (c *txnServerCtx) addNotif(xact cluster.Xact) {
 	}
 	xact.AddNotif(&xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: dsts, F: c.t.callerNotifyFin},
+		Xact:      xact,
 	})
 }
 

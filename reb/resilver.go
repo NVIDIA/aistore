@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	"github.com/NVIDIA/aistore/xaction/xrun"
 )
@@ -28,7 +29,7 @@ type (
 	}
 )
 
-func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...cluster.Notif) {
+func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
 	cmn.Assert(id != "")
 
 	availablePaths, _ := fs.Get()
@@ -45,6 +46,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...clu
 	defer xreb.MarkDone()
 
 	if len(notifs) != 0 {
+		notifs[0].Xact = xreb
 		xreb.AddNotif(notifs[0])
 	}
 

@@ -45,6 +45,9 @@ type (
 	}
 )
 
+// interface guard
+var _ cluster.Xact = &bckRename{}
+
 func (*BckRenameProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &BckRenameProvider{
 		t:     args.T,
@@ -141,6 +144,9 @@ type (
 	objCallback = func(args *xreg.DeletePrefetchArgs, objName string) error
 )
 
+// interface guard
+var _ cluster.Xact = &evictDelete{}
+
 func (p *evictDeleteProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &evictDeleteProvider{
 		t:    args.T,
@@ -195,6 +201,9 @@ type (
 		listRangeBase
 	}
 )
+
+// interface guard
+var _ cluster.Xact = &prefetch{}
 
 func (*PrefetchProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &PrefetchProvider{

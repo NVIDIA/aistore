@@ -64,6 +64,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 					Dsts: []string{equalIC},
 					F:    t.callerNotifyFin,
 				},
+				Xact: xact,
 			})
 		}
 

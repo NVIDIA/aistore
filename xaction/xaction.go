@@ -48,7 +48,6 @@ type (
 )
 
 var (
-	_ cluster.Xact   = &XactBase{}
 	_ cluster.XactID = XactBaseID("")
 	_ cluster.XactID = RebID(0)
 )
@@ -95,7 +94,6 @@ func NewXactBaseBck(id, kind string, bck cmn.Bck) *XactBase {
 // XactBase - partially implements Xact interface
 //
 
-func (xact *XactBase) Run() error                 { cmn.Assert(false); return nil }
 func (xact *XactBase) ID() cluster.XactID         { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bck() cmn.Bck               { return xact.bck }
@@ -192,7 +190,7 @@ func (xact *XactBase) AddNotif(n cluster.Notif) {
 	cmn.Assert(xact.notif == nil) // currently, "add" means "set"
 	xact.notif, ok = n.(*NotifXact)
 	cmn.Assert(ok)
-	xact.notif.Xact = xact
+	cmn.Assert(xact.notif.Xact != nil)
 	cmn.Assert(xact.notif.F != nil)
 	if n.Upon(cluster.UponProgress) {
 		cmn.Assert(xact.notif.P != nil)
@@ -228,8 +226,6 @@ func (xact *XactBase) ObjectsInc() int64          { return xact.objects.Inc() }
 func (xact *XactBase) ObjectsAdd(cnt int64) int64 { return xact.objects.Add(cnt) }
 func (xact *XactBase) BytesCount() int64          { return xact.bytes.Load() }
 func (xact *XactBase) BytesAdd(size int64) int64  { return xact.bytes.Add(size) }
-
-func (xact *XactBase) IsMountpathXact() bool { cmn.Assert(false); return true } // must implement
 
 func (xact *XactBase) Stats() cluster.XactStats {
 	return &BaseXactStats{

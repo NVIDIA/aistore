@@ -26,6 +26,9 @@ type (
 	}
 )
 
+// interface guard
+var _ cluster.Xact = &xactLLC{}
+
 func (*llcProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &llcProvider{t: args.T}
 }

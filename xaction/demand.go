@@ -48,8 +48,6 @@ type (
 	}
 )
 
-var _ XactDemand = &XactDemandBase{}
-
 ////////////////////
 // XactDemandBase //
 ////////////////////

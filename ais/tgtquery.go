@@ -80,6 +80,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 
 	xact.AddNotif(&xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+		Xact:      xact,
 	})
 	go xact.Run()
 }

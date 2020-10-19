@@ -562,6 +562,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},
+			Xact: xact,
 		})
 		go xact.Run()
 	default:
@@ -1585,7 +1586,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	getfshealthchecker().OnErr(filepath)
 }
 
-func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...cluster.Notif) {
+func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {
 	if id == "" {
 		id = cmn.GenUUID()
 		regMsg := xactRegMsg{UUID: id, Kind: cmn.ActResilver, Srcs: []string{t.si.ID()}}

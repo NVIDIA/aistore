@@ -106,6 +106,7 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 
 	xlru.AddNotif(&xaction.NotifXact{
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+		Xact:      xlru,
 	})
 	lru.Run(&ini) // blocking
 

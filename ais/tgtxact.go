@@ -161,6 +161,7 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
 			},
+			Xact: xact,
 		})
 		go xact.Run()
 	// 3. cannot start

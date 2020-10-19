@@ -49,8 +49,16 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ cluster.Xact = &Rebalance{}
+	_ cluster.Xact = &Resilver{}
+	_ cluster.Xact = &Election{}
+)
+
 func (xact *RebBase) MarkDone()      { xact.wg.Done() }
 func (xact *RebBase) WaitForFinish() { xact.wg.Wait() }
+func (xact *RebBase) Run() error     { cmn.Assert(false); return nil }
 
 func (xact *RebBase) String() string {
 	s := xact.XactBase.String()
@@ -186,3 +194,4 @@ func (p *electionProvider) PreRenewHook(_ xreg.GlobalEntry) bool { return true }
 func (p *electionProvider) PostRenewHook(_ xreg.GlobalEntry)     {}
 
 func (e *Election) IsMountpathXact() bool { return false }
+func (e *Election) Run() error            { cmn.Assert(false); return nil }

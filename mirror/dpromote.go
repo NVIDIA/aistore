@@ -34,6 +34,9 @@ type (
 	}
 )
 
+// interface guard
+var _ cluster.Xact = &XactDirPromote{}
+
 func (*dirPromoteProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	c := args.Custom.(*xreg.DirPromoteArgs)
 	return &dirPromoteProvider{t: args.T, dir: c.Dir, params: c.Params}

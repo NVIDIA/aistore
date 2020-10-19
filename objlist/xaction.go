@@ -74,6 +74,9 @@ var (
 	ErrGone    = errors.New("gone")
 )
 
+// interface guard
+var _ cluster.Xact = &Xact{}
+
 func init() {
 	xreg.RegisterBucketXact(&xactProvider{})
 }

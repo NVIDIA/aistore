@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	"github.com/NVIDIA/aistore/xaction/xrun"
 	jsoniter "github.com/json-iterator/go"
@@ -53,7 +54,7 @@ type (
 // 4. Global rebalance performs checks such as `stage > rebStageTraverse` or
 //    `stage < rebStageWaitAck`. Since all EC stages are between
 //    `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
-func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif cluster.Notif) {
+func (reb *Manager) RunRebalance(smap *cluster.Smap, id int64, notif *xaction.NotifXact) {
 	md := &rebArgs{
 		id:     id,
 		smap:   smap,
@@ -198,7 +199,7 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 	}
 }
 
-func (reb *Manager) rebInit(md *rebArgs, notif cluster.Notif) bool {
+func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	reb.stages.stage.Store(rebStageInit)
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("rebalance (v%d) in %s state", md.id, stages[rebStageInit])
@@ -208,6 +209,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif cluster.Notif) bool {
 	if xact == nil {
 		return false
 	}
+	notif.Xact = xact
 	xact.AddNotif(notif)
 
 	// get EC rebalancer ready

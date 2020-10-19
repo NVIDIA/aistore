@@ -112,6 +112,9 @@ type (
 	}
 )
 
+// interface guard
+var _ xaction.XactDemand = &Xaction{}
+
 func init() {
 	xreg.RegisterGlobalXact(&XactProvider{})
 }
@@ -229,7 +232,7 @@ repeat:
 /////////////
 // Xaction //
 /////////////
-
+func (r *Xaction) Run() error            { cmn.Assert(false); return nil }
 func (r *Xaction) IsMountpathXact() bool { return true }
 func (r *Xaction) Renew()                { r.Renewed <- struct{}{} }
 
