@@ -74,8 +74,6 @@ func (e *bckSummaryTaskEntry) Get() cluster.Xact { return e.xact }
 // bckSummaryTask
 //
 
-func (t *bckSummaryTask) IsMountpathXact() bool { return true }
-
 func (t *bckSummaryTask) Run() error {
 	var (
 		buckets []*cluster.Bck

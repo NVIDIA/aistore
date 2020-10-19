@@ -220,8 +220,6 @@ func (r *Xact) dispatchRequest() *Resp {
 	}
 }
 
-func (r *Xact) IsMountpathXact() bool { return true }
-
 func (r *Xact) walkCallback(lom *cluster.LOM) {
 	r.ObjectsInc()
 	r.BytesAdd(lom.Size())

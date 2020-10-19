@@ -67,7 +67,6 @@ func newXactBckBase(id, kind string, bck cmn.Bck, t cluster.Target) *xactBckBase
 // as XactBck interface
 //
 func (r *xactBckBase) Run() error                   { cmn.Assert(false); return nil }
-func (r *xactBckBase) IsMountpathXact() bool        { return true }
 func (r *xactBckBase) DoneCh() chan struct{}        { return r.doneCh }
 func (r *xactBckBase) Target() cluster.Target       { return r.t }
 func (r *xactBckBase) Mpathers() map[string]mpather { return r.mpathers }

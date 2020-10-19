@@ -31,7 +31,6 @@ type (
 		Aborted() bool
 		AbortedAfter(time.Duration) bool
 		ChanAbort() <-chan struct{}
-		IsMountpathXact() bool
 		Result() (interface{}, error)
 		Stats() XactStats
 

@@ -143,7 +143,7 @@ func xactionCmds() cli.Commands {
 			Usage:  fmt.Sprintf("start %s", xact),
 			Action: startXactionHandler,
 		}
-		if xaction.IsXactTypeBck(xact) {
+		if xaction.IsTypeBck(xact) {
 			cmd.ArgsUsage = bucketArgument
 			cmd.BashComplete = bucketCompletions()
 		}
@@ -154,7 +154,7 @@ func xactionCmds() cli.Commands {
 
 func startXactionHandler(c *cli.Context) (err error) {
 	xactKind := c.Command.Name
-	if xaction.IsXactTypeBck(xactKind) && c.NArg() == 0 {
+	if xaction.IsTypeBck(xactKind) && c.NArg() == 0 {
 		return missingArgumentsError(c, bucketArgument)
 	}
 

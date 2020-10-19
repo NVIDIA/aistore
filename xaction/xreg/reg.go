@@ -45,11 +45,11 @@ type (
 	abortArgs struct {
 		// run on `bcks` buckets
 		bcks []*cluster.Bck
-		// mathcing `ty`
+		// one of { XactTypeGlobal, XactTypeBck, XactTypeTask } enum
 		ty string
-		// all mountpath xactions - see cmn.IsMountpathXact()
+		// mountpath xactions - see xaction.XactsDtor
 		mountpaths bool
-		// all or all matching `ty`, if defined
+		// all or matching `ty` above, if defined
 		all bool
 	}
 	// Represents result of renewing given xaction.
@@ -221,7 +221,7 @@ func (r *registry) getStats(flt XactFilter) ([]cluster.XactStats, error) {
 	}
 	if flt.Bck != nil || flt.Kind != "" {
 		// Error checks
-		if flt.Kind != "" && !xaction.IsValidXaction(flt.Kind) {
+		if flt.Kind != "" && !xaction.IsValid(flt.Kind) {
 			return nil, cmn.NewXactionNotFoundError(flt.Kind)
 		}
 		if flt.Bck != nil && !flt.Bck.HasProvider() {
@@ -268,7 +268,7 @@ func (e *registryEntries) findUnlocked(flt XactFilter) BaseEntry {
 			}
 		}
 	} else {
-		cmn.AssertMsg(flt.Kind == "" || xaction.IsValidXaction(flt.Kind), flt.Kind)
+		cmn.AssertMsg(flt.Kind == "" || xaction.IsValid(flt.Kind), flt.Kind)
 		finishedCnt := 0
 		for _, entry := range e.active {
 			if entry.Get().Finished() {
@@ -366,7 +366,7 @@ func (r *registry) abort(args abortArgs) {
 
 		abort := false
 		if args.mountpaths {
-			if xact.IsMountpathXact() {
+			if xaction.IsMountpath(xact.Kind()) {
 				abort = true
 			}
 		} else if len(args.bcks) > 0 {

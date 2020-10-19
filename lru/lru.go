@@ -232,9 +232,8 @@ repeat:
 /////////////
 // Xaction //
 /////////////
-func (r *Xaction) Run() error            { cmn.Assert(false); return nil }
-func (r *Xaction) IsMountpathXact() bool { return true }
-func (r *Xaction) Renew()                { r.Renewed <- struct{}{} }
+func (r *Xaction) Run() error { cmn.Assert(false); return nil }
+func (r *Xaction) Renew()     { r.Renewed <- struct{}{} }
 
 //////////
 // lruJ //

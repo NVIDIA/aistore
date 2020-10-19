@@ -90,7 +90,6 @@ func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode
 
 func (r *XactBckEncode) done()                  { r.doneCh <- struct{}{} }
 func (r *XactBckEncode) target() cluster.Target { return r.t }
-func (r *XactBckEncode) IsMountpathXact() bool  { return true }
 
 func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }
 func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {

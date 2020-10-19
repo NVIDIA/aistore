@@ -63,8 +63,6 @@ func (r *ObjectsListingXact) stop() {
 	r.timer.Stop()
 }
 
-func (r *ObjectsListingXact) IsMountpathXact() bool { return false } // TODO -- FIXME
-
 func (r *ObjectsListingXact) Run() error {
 	defer func() {
 		r.fetchingDone = true

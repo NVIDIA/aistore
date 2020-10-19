@@ -95,8 +95,7 @@ func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
 	}
 }
 
-func (r *bckRename) IsMountpathXact() bool { return true }
-func (r *bckRename) String() string        { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
+func (r *bckRename) String() string { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
 func (r *bckRename) Run() error {
 	glog.Infoln(r.String())
@@ -172,8 +171,6 @@ func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, args *xreg
 	}
 }
 
-func (r *evictDelete) IsMountpathXact() bool { return false }
-
 func (r *evictDelete) Run() error {
 	var err error
 	if r.args.RangeMsg != nil {
@@ -228,8 +225,6 @@ func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, args *xreg.De
 		},
 	}
 }
-
-func (r *prefetch) IsMountpathXact() bool { return false }
 
 func (r *prefetch) Run() error {
 	var err error

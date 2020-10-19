@@ -244,7 +244,6 @@ func (d *Downloader) Name() string {
 	i := strconv.FormatInt(instance.Load(), 10)
 	return "downloader" + i
 }
-func (d *Downloader) IsMountpathXact() bool { return true }
 
 func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	downloader := &Downloader{

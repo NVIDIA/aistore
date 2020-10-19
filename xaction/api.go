@@ -25,6 +25,7 @@ type (
 		Metasync   bool   // true: changes and metasyncs cluster-wide meta
 		Owned      bool   // true: JTX-owned
 		RefreshCap bool   // true: refresh capacity stats upon completion
+		Mountpath  bool   // true: mountpath-traversing (jogger-based) xaction
 	}
 
 	XactReqMsg struct {
@@ -63,34 +64,35 @@ var (
 // `Startable`, `Owned`, etc.
 var XactsDtor = map[string]XactDescriptor{
 	// bucket-less (aka "global") xactions with scope = (target | cluster)
-	cmn.ActLRU:       {Type: XactTypeGlobal, Startable: true},
+	cmn.ActLRU:       {Type: XactTypeGlobal, Startable: true, Mountpath: true},
 	cmn.ActElection:  {Type: XactTypeGlobal, Startable: false},
-	cmn.ActResilver:  {Type: XactTypeGlobal, Startable: true},
-	cmn.ActRebalance: {Type: XactTypeGlobal, Startable: true, Metasync: true, Owned: false},
-	cmn.ActDownload:  {Type: XactTypeGlobal, Startable: false},
+	cmn.ActResilver:  {Type: XactTypeGlobal, Startable: true, Mountpath: true},
+	cmn.ActRebalance: {Type: XactTypeGlobal, Startable: true, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActDownload:  {Type: XactTypeGlobal, Startable: false, Mountpath: true},
 
 	// xactions that run on a given bucket or buckets
 	cmn.ActECGet:         {Type: XactTypeBck, Startable: false},
 	cmn.ActECPut:         {Type: XactTypeBck, Startable: false},
 	cmn.ActECRespond:     {Type: XactTypeBck, Startable: false},
-	cmn.ActMakeNCopies:   {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true},
+	cmn.ActMakeNCopies:   {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
 	cmn.ActPutCopies:     {Type: XactTypeBck, Startable: false},
-	cmn.ActRenameLB:      {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false},
-	cmn.ActCopyBucket:    {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, RefreshCap: true},
-	cmn.ActETLBucket:     {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, RefreshCap: true},
-	cmn.ActECEncode:      {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true},
-	cmn.ActEvictObjects:  {Type: XactTypeBck, Startable: false},
-	cmn.ActDelete:        {Type: XactTypeBck, Startable: false},
-	cmn.ActLoadLomCache:  {Type: XactTypeBck, Startable: false},
+	cmn.ActRenameLB:      {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActCopyBucket:    {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActETLBucket:     {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActECEncode:      {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActEvictObjects:  {Type: XactTypeBck, Startable: false, Mountpath: true},
+	cmn.ActDelete:        {Type: XactTypeBck, Startable: false, Mountpath: true},
+	cmn.ActLoadLomCache:  {Type: XactTypeBck, Startable: false, Mountpath: true},
 	cmn.ActPrefetch:      {Type: XactTypeBck, Startable: true},
 	cmn.ActPromote:       {Type: XactTypeBck, Startable: false, RefreshCap: true},
 	cmn.ActQueryObjects:  {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
 	cmn.ActListObjects:   {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
-	cmn.ActSummaryBucket: {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true},
+	cmn.ActSummaryBucket: {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true, Mountpath: true},
 }
 
-func IsValidXaction(kind string) bool { _, ok := XactsDtor[kind]; return ok }
-func IsXactTypeBck(kind string) bool  { return XactsDtor[kind].Type == XactTypeBck }
+func IsValid(kind string) bool     { _, ok := XactsDtor[kind]; return ok }
+func IsTypeBck(kind string) bool   { return XactsDtor[kind].Type == XactTypeBck }
+func IsMountpath(kind string) bool { return XactsDtor[kind].Mountpath }
 
 ///////////////////
 // BaseXactStats //

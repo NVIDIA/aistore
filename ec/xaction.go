@@ -140,8 +140,6 @@ func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *intraReq {
 	return req
 }
 
-func (r *xactECBase) IsMountpathXact() bool { return true }
-
 func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs, fqn string) (reader cmn.ReadOpenCloser, err error) {
 	attrs.Version = md.ObjVersion
 	attrs.CksumType = md.CksumType

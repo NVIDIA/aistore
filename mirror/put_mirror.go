@@ -106,8 +106,6 @@ func RunXactPut(lom *cluster.LOM, slab *memsys.Slab) (r *XactPut, err error) {
 	return
 }
 
-func (r *XactPut) IsMountpathXact() bool { return true }
-
 func (r *XactPut) Run() error {
 	glog.Infoln(r.String())
 	for {

@@ -80,7 +80,9 @@ func makeXactRebBase(id cluster.XactID, kind string) RebBase {
 	}
 }
 
-// Rebalance
+///////////////
+// Rebalance //
+///////////////
 
 func (p *rebalanceProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
 	return &rebalanceProvider{args: args.Custom.(*xreg.RebalanceArgs)}
@@ -120,8 +122,6 @@ func NewRebalance(id cluster.XactID, kind string, statsRunner *stats.Trunner, ge
 	}
 }
 
-func (xact *Rebalance) IsMountpathXact() bool { return false }
-
 func (xact *Rebalance) String() string {
 	return fmt.Sprintf("%s, %s", xact.RebBase.String(), xact.ID())
 }
@@ -147,7 +147,9 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 	return &rebStats
 }
 
-// Resilver
+//////////////
+// Resilver //
+//////////////
 
 func (*resilverProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
 	return &resilverProvider{id: args.UUID}
@@ -172,13 +174,13 @@ func NewResilver(uuid, kind string) *Resilver {
 	}
 }
 
-func (xact *Resilver) IsMountpathXact() bool { return true }
-
 func (xact *Resilver) String() string {
 	return xact.RebBase.String()
 }
 
-// Election
+//////////////
+// Election //
+//////////////
 
 func (*electionProvider) New(_ xreg.XactArgs) xreg.GlobalEntry { return &electionProvider{} }
 
@@ -192,6 +194,4 @@ func (*electionProvider) Kind() string                           { return cmn.Ac
 func (p *electionProvider) Get() cluster.Xact                    { return p.xact }
 func (p *electionProvider) PreRenewHook(_ xreg.GlobalEntry) bool { return true }
 func (p *electionProvider) PostRenewHook(_ xreg.GlobalEntry)     {}
-
-func (e *Election) IsMountpathXact() bool { return false }
-func (e *Election) Run() error            { cmn.Assert(false); return nil }
+func (e *Election) Run() error                                   { cmn.Assert(false); return nil }

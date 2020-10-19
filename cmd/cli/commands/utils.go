@@ -639,7 +639,7 @@ ret:
 func parseXactionFromArgs(c *cli.Context) (xactID, xactKind string, bck cmn.Bck, err error) {
 	xactKind = c.Args().Get(0)
 	bckName := c.Args().Get(1)
-	if !xaction.IsValidXaction(xactKind) {
+	if !xaction.IsValid(xactKind) {
 		xactID = xactKind
 		xactKind = ""
 	} else {
