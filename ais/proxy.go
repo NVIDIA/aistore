@@ -3274,6 +3274,7 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
 		},
 		final: p._syncRMDFinal,
 		smap:  p.owner.smap.get(),
+		msg:   msg,
 		wait:  true,
 	}
 	if len(cb) != 0 {
