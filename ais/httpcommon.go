@@ -70,7 +70,6 @@ type (
 		timeout           time.Duration      // timeout
 		fv                func() interface{} // optional; returns value to be unmarshalled (see `callArgs.v`)
 		nodes             []cluster.NodeMap  // broadcast destinations
-		skipNodes         cmn.StringSet      // destination IDs to skip
 		smap              *smapX             // Smap to use
 		to                int                // enumerated alternative to nodes (above)
 		nodeCount         int                // greater or equal destination count
@@ -886,7 +885,7 @@ func (h *httprunner) bcastToNodes(bargs *bcastArgs) chan callResult {
 	)
 	for _, nodeMap := range bargs.nodes {
 		for sid, si := range nodeMap {
-			if sid == h.si.ID() || bargs.skipNodes.Contains(sid) {
+			if sid == h.si.ID() {
 				continue
 			}
 			if !bargs.ignoreMaintenance && si.InMaintenance() {
@@ -927,7 +926,7 @@ func (h *httprunner) bcastToNodesAsync(bargs *bcastArgs) {
 	var cnt int
 	for _, nodeMap := range bargs.nodes {
 		for sid, si := range nodeMap {
-			if sid == h.si.ID() || bargs.skipNodes.Contains(sid) {
+			if sid == h.si.ID() {
 				continue
 			}
 			cnt++

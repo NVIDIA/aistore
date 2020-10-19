@@ -311,7 +311,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 	n.fin[nl.UUID()] = nl
 	n.fmu.Unlock()
 
-	if nl.Aborted() {
+	if nl.Aborted() && !nl.AllFinished() {
 		config := cmn.GCO.Get()
 		// NOTE: we accept finished notifications even after
 		// `nl` is aborted. Handle locks carefully.
@@ -320,10 +320,9 @@ func (n *notifs) done(nl nl.NotifListener) {
 			req:     nl.AbortArgs(),
 			network: cmn.NetworkIntraControl,
 			timeout: config.Timeout.MaxKeepalive,
-			nodes:   []cluster.NodeMap{nl.Notifiers()},
+			nodes:   []cluster.NodeMap{nl.ActiveNotifiers().Clone()}, // TODO: optimize - avoid creating a new NodeMap
 		}
 		args.nodeCount = len(args.nodes[0])
-		args.skipNodes = nl.FinNotifiers().Clone() // TODO: optimize
 		nl.RUnlock()
 		n.p.bcastToNodesAsync(args)
 	}
@@ -370,7 +369,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 	)
 
 	nl.RLock()
-	uptoDateNodes, syncRequired := nl.NodesUptoDate(dur...)
+	nodesTardy, syncRequired := nl.NodesTardy(dur...)
 	nl.RUnlock()
 	if !syncRequired {
 		return
@@ -383,9 +382,8 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 
 	// nodes to fetch stats from
 	args.req = nl.QueryArgs()
-	args.nodes = []cluster.NodeMap{nl.Notifiers()}
-	args.skipNodes = uptoDateNodes
-	args.nodeCount = len(args.nodes[0]) - len(args.skipNodes)
+	args.nodes = []cluster.NodeMap{nodesTardy}
+	args.nodeCount = len(args.nodes[0])
 	debug.Assert(args.nodeCount > 0) // Ensure that there is at least one node to fetch.
 
 	results := n.p.bcastToNodes(args)

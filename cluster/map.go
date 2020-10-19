@@ -403,6 +403,11 @@ func (m NodeMap) Nodes() []*Snode {
 	return snodes
 }
 
+func (m NodeMap) Contains(daeID string) (exists bool) {
+	_, exists = m[daeID]
+	return
+}
+
 func mapsEq(a, b NodeMap) bool {
 	if len(a) != len(b) {
 		return false

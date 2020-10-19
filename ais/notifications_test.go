@@ -147,7 +147,7 @@ var _ = Describe("Notifications xaction test", func() {
 			stats := finishedXact(xactID)
 			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), nil)
 			Expect(err).To(BeNil())
-			Expect(nl.FinNotifiers().Contains(target1ID)).To(BeTrue())
+			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
 			Expect(nl.Finished()).To(BeFalse())
 		})
 
@@ -158,7 +158,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err := n.handleFinished(nl, targets[target1ID], cmn.MustMarshal(stats), srcErr)
 			Expect(err).To(BeNil())
 			Expect(srcErr).To(BeEquivalentTo(nl.Err(false)))
-			Expect(nl.FinNotifiers().Contains(target1ID)).To(BeTrue())
+			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
 		})
 
 		It("should finish when all the Notifiers finished", func() {
