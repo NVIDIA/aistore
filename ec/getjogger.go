@@ -612,28 +612,21 @@ func getNextNonEmptySlice(slices []*slice, start int) (*slice, int) {
 	return slices[i], i + 1
 }
 
-// upload missing slices to targets that do not have any slice at the moment
-// of reconstruction:
-// * req - original request
-// * meta - rebuilt object's metadata
-// * slices - object slices reconstructed by `restoreMainObj`
-// * idToNode - a map of targets that already contain a slice (SliceID <-> target)
-func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) {
+func (c *getJogger) emptyTargets(req *Request, meta *Metadata, idToNode map[int]string) ([]string, error) {
 	sliceCnt := meta.Data + meta.Parity
 	nodeToID := make(map[string]int, len(idToNode))
 	// transpose SliceID <-> DaemonID map for faster lookup
 	for k, v := range idToNode {
 		nodeToID[v] = k
 	}
-
 	// generate the list of targets that should have a slice and find out
 	// the targets without any one
 	targets, err := cluster.HrwTargetList(req.LOM.Uname(), c.parent.smap.Get(), sliceCnt+1)
 	if err != nil {
 		glog.Warning(err)
-		return
+		return nil, err
 	}
-	emptyNodes := make([]string, 0, len(targets))
+	empty := make([]string, 0, len(targets))
 	for _, t := range targets {
 		if t.ID() == c.parent.si.ID() {
 			continue
@@ -641,29 +634,60 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 		if _, ok := nodeToID[t.ID()]; ok {
 			continue
 		}
-		emptyNodes = append(emptyNodes, t.ID())
+		empty = append(empty, t.ID())
 	}
 	if glog.V(4) {
-		glog.Infof("Empty nodes for %s/%s are %#v", req.LOM.Bck(), req.LOM.ObjName, emptyNodes)
+		glog.Infof("Empty nodes for %s/%s are %#v", req.LOM.Bck(), req.LOM.ObjName, empty)
+	}
+	return empty, nil
+}
+
+// upload missing slices to targets (that must have them):
+// * req - original request
+// * meta - rebuilt object's metadata
+// * slices - object slices reconstructed by `restoreMainObj`
+// * idToNode - a map of targets that already contain a slice (SliceID <-> target)
+func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) {
+	emptyNodes, err := c.emptyTargets(req, meta, idToNode)
+	if err != nil {
+		return
 	}
 
+	var (
+		sliceID int
+		sl      *slice
+	)
 	// send reconstructed slices one by one to targets that are "empty".
-	// Do not wait until the data transfer is completed
-	idx := 0
-	for _, tgt := range emptyNodes {
-		// get next non-empty slice
-		sl, nextIdx := getNextNonEmptySlice(slices, idx)
+	// Do not wait until the data transfer is complete
+	for sl, sliceID = getNextNonEmptySlice(slices, sliceID); sl != nil && len(emptyNodes) != 0; {
+		tid := emptyNodes[0]
+		emptyNodes = emptyNodes[1:]
 
-		if glog.V(4) {
-			glog.Infof("For %s found %s/%s slice %d (%d)",
-				tgt, req.LOM.Bck(), req.LOM.ObjName, idx, len(slices))
+		// clone the object's metadata and set the correct SliceID before sending
+		sliceMeta := meta.Clone()
+		sliceMeta.SliceID = sliceID
+		if sl.cksum != nil {
+			sliceMeta.CksumType, sliceMeta.CksumValue = sl.cksum.Get()
 		}
 
-		if sl == nil {
-			// The number of empty nodes is larger than non-empty slices
-			// There's nothing to be done for next nodes, safe to break out of the loop
-			glog.Errorf("%s: the number of restored slices is smaller than the number of \"empty\" target nodes", req.LOM)
-			break
+		var reader cmn.ReadOpenCloser
+		if sl.workFQN != "" {
+			reader, _ = cmn.NewFileHandle(sl.workFQN)
+		} else {
+			s, ok := sl.obj.(*memsys.SGL)
+			cmn.Assert(ok)
+			reader = memsys.NewReader(s)
+		}
+		dataSrc := &dataSource{
+			reader:   reader,
+			size:     sl.n,
+			metadata: sliceMeta,
+			isSlice:  true,
+			reqType:  reqPut,
+		}
+
+		if glog.V(4) {
+			glog.Infof("Sending slice %d %s/%s to %s", sliceMeta.SliceID, req.LOM.Bck(), req.LOM.ObjName, tid)
 		}
 
 		// every slice's SGL must be freed upon transfer completion
@@ -672,56 +696,17 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 				if err != nil {
 					glog.Errorf("%s failed to send %s/%s to %v: %v", c.parent.t.Snode(), req.LOM.Bck(), req.LOM.ObjName, daemonID, err)
 				}
-				if s != nil {
-					s.free()
-				}
+				s.free()
 			}
-		}(tgt, sl)
-
-		// clone the object's metadata and set the correct SliceID before sending
-		sliceMeta := *meta
-		sliceMeta.SliceID = idx + 1
-		var reader cmn.ReadOpenCloser
-		if sl.workFQN != "" {
-			reader, _ = cmn.NewFileHandle(sl.workFQN)
-		} else {
-			if s, ok := sl.obj.(*memsys.SGL); ok {
-				reader = memsys.NewReader(s)
-			} else {
-				glog.Errorf("Invalid reader type of %s: %T", req.LOM.ObjName, sl.obj)
-				continue
-			}
-		}
-		dataSrc := &dataSource{
-			reader:   reader,
-			size:     sl.n,
-			metadata: &sliceMeta,
-			isSlice:  true,
-			reqType:  reqPut,
-		}
-
-		if glog.V(4) {
-			glog.Infof("Sending slice %d %s/%s to %s", sliceMeta.SliceID+1, req.LOM.Bck(), req.LOM.ObjName, tgt)
-		}
-		if sl.cksum != nil {
-			sliceMeta.CksumType, sliceMeta.CksumValue = sl.cksum.Get()
-		}
-		if err := c.parent.writeRemote([]string{tgt}, req.LOM, dataSrc, cb); err != nil {
+		}(tid, sl)
+		if err := c.parent.writeRemote([]string{tid}, req.LOM, dataSrc, cb); err != nil {
 			glog.Errorf("%s failed to send slice %d of %s/%s to %s",
-				c.parent.t.Snode(), idx+1, req.LOM.Bck(), req.LOM.ObjName, tgt)
+				c.parent.t.Snode(), sliceID, req.LOM.Bck(), req.LOM.ObjName, tid)
 		}
-
-		idx = nextIdx
 	}
 
-	sl, idx := getNextNonEmptySlice(slices, idx)
-	if sl != nil {
-		glog.Errorf("%s number of restored slices is greater than number of empty targets", c.parent.t.Snode())
-	}
-	for sl != nil {
-		// Free allocated memory of additional slices
+	for sl, sliceID = getNextNonEmptySlice(slices, sliceID); sl != nil; sl, sliceID = getNextNonEmptySlice(slices, sliceID) {
 		sl.free()
-		sl, idx = getNextNonEmptySlice(slices, idx)
 	}
 }
 

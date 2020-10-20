@@ -1027,6 +1027,11 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 	// FIXME: after EC versioning is implemented
 	ctCnt := int16(0)
 	for _, ct := range cts {
+		if int(ct.SliceID) >= ctReq {
+			// Data/parity got lower, so it is an old slice. Skip it.
+			glog.Infof("Skip old slice %d of %s", ct.SliceID, obj.objName)
+			continue
+		}
 		obj.locCT[ct.DaemonID] = ct
 		if ct.DaemonID == localDaemon {
 			obj.hasCT = true
@@ -1658,7 +1663,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 	// keep it for a while to be sure it does not happen
 	cmn.AssertMsg(meta.Size == obj.objSize, obj.uid)
 
-	ecMD := *meta // clone
+	ecMD := meta.Clone()
 	for i, rd := range readers {
 		if rd != nil {
 			continue
@@ -1690,7 +1695,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 		srcReaders[i] = memsys.NewReader(obj.rebuildSGLs[i])
 	}
 	src := io.MultiReader(srcReaders...)
-	objMD := ecMD // copy
+	objMD := ecMD.Clone()
 	objMD.SliceID = 0
 
 	if err := reb.restoreObject(obj, objMD, src); err != nil {
@@ -1720,8 +1725,10 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 		si := freeTargets[0]
 		freeTargets = freeTargets[1:]
 
-		sliceMD := ecMD // copy
+		sliceMD := ecMD.Clone()
 		sliceMD.SliceID = sliceID
+		sliceMD.CksumType = cksum.Type()
+		sliceMD.CksumValue = cksum.Value()
 		sl := &rebCT{
 			Bck:          obj.bck,
 			ObjName:      obj.objName,
@@ -1730,13 +1737,13 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 			SliceID:      int16(sliceID),
 			DataSlices:   int16(ecMD.Data),
 			ParitySlices: int16(ecMD.Parity),
-			meta:         &sliceMD,
+			meta:         sliceMD,
 		}
 
 		// TODO: mark this retransmition as non-vital and just add it to LOG
 		// if we do not receive ACK back
-		dest := &retransmitCT{sliceID: int16(i + 1)}
-		if err := reb.sendFromReader(reader, sl, i+1, cksum, si, dest); err != nil {
+		dest := &retransmitCT{sliceID: int16(sliceID)}
+		if err := reb.sendFromReader(reader, sl, sliceID, cksum, si, dest); err != nil {
 			return fmt.Errorf("failed to send slice %d of %s to %s: %v", i, obj.uid, si, err)
 		}
 	}
@@ -1744,13 +1751,13 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 	return nil
 }
 
-func (reb *Manager) restoreObject(obj *rebObject, objMD ec.Metadata, src io.Reader) (err error) {
+func (reb *Manager) restoreObject(obj *rebObject, objMD *ec.Metadata, src io.Reader) (err error) {
 	lom := &cluster.LOM{T: reb.t, ObjName: obj.objName}
 	if err := lom.Init(obj.bck); err != nil {
 		return err
 	}
 	lom.SetSize(obj.objSize)
-	metaBuf := cmn.MustMarshal(&objMD)
+	metaBuf := cmn.MustMarshal(objMD)
 	return ec.WriteReplicaAndMeta(reb.t, lom, src, metaBuf, lom.Bprops().Cksum.Type, "")
 }
 

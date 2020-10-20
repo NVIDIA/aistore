@@ -47,6 +47,12 @@ func LoadMetadata(fqn string) (*Metadata, error) {
 	return md, nil
 }
 
+func (md *Metadata) Clone() *Metadata {
+	clone := &Metadata{}
+	cmn.CopyStruct(clone, md)
+	return clone
+}
+
 func (md *Metadata) Marshal() []byte {
 	return cmn.MustMarshal(md)
 }
