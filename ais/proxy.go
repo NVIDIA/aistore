@@ -2104,7 +2104,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSysInfo:
 		p.writeJSON(w, r, sys.FetchSysInfo(), what)
 	case cmn.GetWhatSmap:
-		const max = 5
+		const max = 16
 		var (
 			smap  = p.owner.smap.get()
 			sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
