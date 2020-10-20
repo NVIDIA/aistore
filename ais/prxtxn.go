@@ -414,8 +414,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(),
 		c.msg.Action, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
-	// Rely on metasync for `registerEqual`.
-	p.notifs.add(nl)
+	p.ic.registerEqual(regIC{smap: c.smap, nl: nl, query: c.req.Query})
 
 	// 6. commit
 	xactID = c.uuid
@@ -429,7 +428,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	nl = xaction.NewXactNL(xaction.RebID(rmd.Version).String(), &c.smap.Smap,
 		c.smap.Tmap.Clone(), cmn.ActRebalance)
 	nl.SetOwner(equalIC)
-	p.ic.registerEqual(regIC{smap: c.smap, nl: nl})
+	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
+	p.notifs.add(nl)
 	wg.Wait()
 	return
 }

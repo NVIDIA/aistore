@@ -2997,7 +2997,7 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
 			&clone.Smap, clone.Tmap, cmn.ActRebalance)
 		nl.SetOwner(equalIC)
-		// Rely on metasync for `registerEqual`.
+		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		p.notifs.add(nl)
 	} else if ctx.nsi.IsProxy() {
 		// Send RMD to proxies to make sure that they have
@@ -3111,7 +3111,7 @@ func (p *proxyrunner) _unregNodeFinal(ctx *smapModifier, clone *smapX) {
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
 			&clone.Smap, clone.Tmap, cmn.ActRebalance)
 		nl.SetOwner(equalIC)
-		// Rely on metasync for `registerEqual`.
+		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		p.notifs.add(nl)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
@@ -3524,7 +3524,7 @@ func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 	if ctx.rebCB != nil {
 		nl.F = ctx.rebCB
 	}
-	// Rely on metasync for `registerEqual`.
+	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	p.notifs.add(nl)
 	if ctx.wait {
 		wg.Wait()
