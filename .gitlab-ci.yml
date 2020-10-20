@@ -10,7 +10,7 @@ variables:
   MODE: debug # run tests with debug asserts
   NUM_TARGET: 5
   NUM_PROXY: 5
-  FS_CNT: 3
+  FS_CNT: 4
 
 
 # Templates
