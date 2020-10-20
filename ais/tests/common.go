@@ -26,27 +26,17 @@ import (
 const rebalanceObjectDistributionTestCoef = 0.3
 
 const (
-	prefixDir               = "filter"
-	ColdValidStr            = "coldmd5"
-	ChksumValidStr          = "chksum"
-	ColdMD5str              = "coldmd5"
-	EvictCBStr              = "evictCB"
-	ChecksumWarmValidateStr = "checksumWarmValidate"
-	RangeGetStr             = "rangeGet"
-	DeleteStr               = "delete"
-	SmokeStr                = "smoke"
-	largeFileSize           = 4 * cmn.MiB
-	copyBucketTimeout       = 3 * time.Minute
-	rebalanceTimeout        = 5 * time.Minute
-	rebalanceStartTimeout   = 10 * time.Second
+	prefixDir             = "filter"
+	largeFileSize         = 4 * cmn.MiB
+	copyBucketTimeout     = 3 * time.Minute
+	rebalanceTimeout      = 5 * time.Minute
+	rebalanceStartTimeout = 10 * time.Second
+	multiProxyTestTimeout = 3 * time.Minute
 )
 
 var (
-	numops                 int
-	numfiles               int
-	numworkers             int
-	prefetchRange          = "{0..200}"
-	multiProxyTestDuration time.Duration
+	numfiles   int
+	numworkers int
 
 	cliBck cmn.Bck
 )
@@ -165,17 +155,20 @@ func (m *ioContext) puts(dontFail ...bool) int {
 		return m.num
 	}
 
-	filenameCh := make(chan string, m.num)
-	errCh := make(chan error, m.num)
+	var (
+		objPrefix  = "some_prefix"
+		filenameCh = make(chan string, m.num)
+		errCh      = make(chan error, m.num)
+		baseParams = tutils.BaseAPIParams(m.proxyURL)
+	)
 
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(m.t, err)
 
 	if !m.silent {
 		tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
 	}
-	tutils.PutRandObjs(m.proxyURL, m.bck, SmokeStr, m.fileSize, m.num, errCh, filenameCh, p.Cksum.Type, m.fixedSize)
+	tutils.PutRandObjs(m.proxyURL, m.bck, objPrefix, m.fileSize, m.num, errCh, filenameCh, p.Cksum.Type, m.fixedSize)
 	if len(dontFail) == 0 {
 		tassert.SelectErr(m.t, errCh, "put", false)
 	}
@@ -183,7 +176,7 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	close(errCh)
 	m.objNames = m.objNames[:0]
 	for f := range filenameCh {
-		m.objNames = append(m.objNames, path.Join(SmokeStr, f))
+		m.objNames = append(m.objNames, path.Join(objPrefix, f))
 	}
 	return len(errCh)
 }

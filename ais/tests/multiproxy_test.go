@@ -819,17 +819,15 @@ func proxyStress(t *testing.T) {
 	wg.Add(1)
 	go primaryKiller(t, proxyURL, stopChs[numworkers], proxyURLChs, errChs[numworkers], &wg)
 
-	timer := time.After(multiProxyTestDuration)
+	timer := time.After(multiProxyTestTimeout)
 loop:
 	for {
 		for _, ch := range errChs {
 			select {
 			case <-timer:
 				break loop
-
 			case <-ch:
-				// read errors, throw away, this is needed to unblock the workers
-
+				// Read errors, throw away, this is needed to unblock the workers.
 			default:
 			}
 		}

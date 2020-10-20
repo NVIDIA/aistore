@@ -27,7 +27,8 @@ func TestSmoke(t *testing.T) {
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
-			fp       = make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
+			cnt      = len(objSizes) * len(ratios) * 40 * numworkers
+			fp       = make(chan string, cnt)
 			proxyURL = tutils.GetPrimaryURL()
 		)
 		if bck.IsCloud() && bck.RemoteBck().Provider == cmn.ProviderGoogle {
@@ -46,7 +47,7 @@ func TestSmoke(t *testing.T) {
 
 		// Clean up all the files from the test
 		wg := &sync.WaitGroup{}
-		errCh := make(chan error, len(objSizes)*len(ratios)*numops*numworkers)
+		errCh := make(chan error, cnt)
 		for file := range fp {
 			wg.Add(1)
 			go tutils.Del(proxyURL, bck.Bck, "smoke/"+file, wg, errCh, true)
@@ -62,10 +63,11 @@ func TestSmoke(t *testing.T) {
 
 func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio float32, cksumType string, filesPutCh chan string) {
 	var (
-		nGet  = int(float32(numworkers) * ratio)
-		nPut  = numworkers - nGet
-		errCh = make(chan error, 100)
-		wg    = &sync.WaitGroup{}
+		objPrefix = cmn.RandString(4)
+		nGet      = int(float32(numworkers) * ratio)
+		nPut      = numworkers - nGet
+		errCh     = make(chan error, 100)
+		wg        = &sync.WaitGroup{}
 	)
 
 	for i := 0; i < numworkers; i++ {
@@ -73,14 +75,14 @@ func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio f
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				tutils.PutRandObjs(proxyURL, bck, SmokeStr, uint64(objSize), numops, errCh, filesPutCh, cksumType)
+				tutils.PutRandObjs(proxyURL, bck, objPrefix, uint64(objSize), 40, errCh, filesPutCh, cksumType)
 			}()
 			nPut--
 		} else {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				getRandomFiles(proxyURL, bck, numops, SmokeStr+"/", t, errCh)
+				getRandomFiles(proxyURL, bck, 40, objPrefix+"/", t, errCh)
 			}()
 			nGet--
 		}

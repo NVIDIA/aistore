@@ -75,7 +75,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		cksumType  = cmn.DefaultAISBckProps().Cksum.Type
-		subdir     = SmokeStr + "_" + cmn.GenTie()
+		subdir     = cmn.RandString(10)
 	)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountTargets() == 1 {
@@ -244,7 +244,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		cksumType  = cmn.DefaultAISBckProps().Cksum.Type
-		subdir     = SmokeStr + "_" + cmn.GenTie()
+		subdir     = cmn.RandString(10)
 	)
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
@@ -333,7 +333,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		errCh      = make(chan error, numPuts)
 		bck        = rtd.bck
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		subdir     = SmokeStr + "_" + cmn.GenTie()
+		subdir     = cmn.RandString(10)
 	)
 
 	tutils.PutRandObjs(proxyURL, rtd.bck, subdir, filesize, numPuts, errCh, filesPutCh, cksumType)
@@ -870,17 +870,16 @@ func TestPrefetchRange(t *testing.T) {
 		proxyURL           = tutils.RandomProxyURL(t)
 		baseParams         = tutils.BaseAPIParams(proxyURL)
 		prefetchPrefix     = "regressionList/obj"
+		prefetchRange      = "{0..200}"
 		bck                = cliBck
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	// 1. Parse arguments
-	if prefetchRange != "" {
-		pt, err := cmn.ParseBashTemplate(prefetchRange)
-		tassert.CheckFatal(t, err)
-		rangeMin, rangeMax = pt.Ranges[0].Start, pt.Ranges[0].End
-	}
+	pt, err := cmn.ParseBashTemplate(prefetchRange)
+	tassert.CheckFatal(t, err)
+	rangeMin, rangeMax = pt.Ranges[0].Start, pt.Ranges[0].End
 
 	// 2. Discover the number of items we expect to be prefetched
 	msg := &cmn.SelectMsg{Prefix: prefetchPrefix}

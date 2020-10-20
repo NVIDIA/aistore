@@ -228,10 +228,12 @@ func TestAppendObject(t *testing.T) {
 
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
-	const fileSize = 512 * cmn.KiB
+	const (
+		fileSize  = 512 * cmn.KiB
+		objPrefix = "delete"
+	)
 
 	proxyURL := tutils.RandomProxyURL(t)
-
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			errCh      = make(chan error, numfiles)
@@ -239,7 +241,7 @@ func Test_putdelete(t *testing.T) {
 			cksumType  = bck.Props.Cksum.Type
 		)
 
-		tutils.PutRandObjs(proxyURL, bck.Bck, DeleteStr, fileSize, numfiles, errCh, filesPutCh, cksumType)
+		tutils.PutRandObjs(proxyURL, bck.Bck, objPrefix, fileSize, numfiles, errCh, filesPutCh, cksumType)
 		close(filesPutCh)
 		tassert.SelectErr(t, errCh, "put", true)
 
@@ -260,7 +262,7 @@ func Test_putdelete(t *testing.T) {
 
 		num := 0
 		for name := range filesPutCh {
-			nameChans[num%numworkers] <- filepath.Join(DeleteStr, name)
+			nameChans[num%numworkers] <- filepath.Join(objPrefix, name)
 			num++
 		}
 
@@ -519,6 +521,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		bckCloud  = cliBck
 		fileName1 = "mytestobj1.txt"
 		fileName2 = "mytestobj2.txt"
+		objRange  = "mytestobj{1..2}.txt"
 		dataLocal = []byte("im local")
 		dataCloud = []byte("I'm from the cloud!")
 		files     = []string{fileName1, fileName2}
@@ -565,7 +568,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("PrefetchRange\n")
-	prefetchRangeID, err := api.PrefetchRange(baseParams, bckCloud, "r"+prefetchRange)
+	prefetchRangeID, err := api.PrefetchRange(baseParams, bckCloud, objRange)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: prefetchRangeID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
@@ -579,7 +582,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("EvictRange\n")
-	evictRangeID, err := api.EvictRange(baseParams, bckCloud, prefetchRange)
+	evictRangeID, err := api.EvictRange(baseParams, bckCloud, objRange)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: evictRangeID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
@@ -804,7 +807,9 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 
 func Test_coldgetmd5(t *testing.T) {
 	var (
-		numPuts       = 5
+		numPuts   = 5
+		objPrefix = "coldgetmd5"
+
 		filesPutCh    = make(chan string, numPuts)
 		filesList     = make([]string, 0, 100)
 		errCh         = make(chan error, 100)
@@ -822,11 +827,11 @@ func Test_coldgetmd5(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	cksumType := p.Cksum.Type
 
-	tutils.PutRandObjs(proxyURL, bck, ColdValidStr, largeFileSize, numPuts, errCh, filesPutCh, cksumType)
-	tassert.SelectErr(t, errCh, "put", false)
+	tutils.PutRandObjs(proxyURL, bck, objPrefix, largeFileSize, numPuts, errCh, filesPutCh, cksumType)
+	tassert.SelectErr(t, errCh, "put", true)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
-		filesList = append(filesList, filepath.Join(ColdValidStr, fname))
+		filesList = append(filesList, filepath.Join(objPrefix, fname))
 	}
 	tutils.EvictObjects(t, proxyURL, bck, filesList)
 	// Disable Cold Get Validation
@@ -1024,17 +1029,19 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.Select
 // (targets are co-located with where this test is running from, because
 // it searches a local oldFileIfo system)
 func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
-	const fileSize = 1024
+	const (
+		fileSize  = 1024
+		numFiles  = 3
+		objPrefix = "cksum_cb"
+	)
+
 	var (
-		numFiles    = 3
-		errCh       = make(chan error, numFiles*5)
-		fileNameCh  = make(chan string, numfiles)
-		fileName    string
-		oldFileInfo os.FileInfo
-		filesList   = make([]string, 0, numFiles)
-		proxyURL    = tutils.RandomProxyURL(t)
-		baseParams  = tutils.BaseAPIParams(proxyURL)
-		bmdMock     = cluster.NewBaseBownerMock(
+		errCh      = make(chan error, numFiles*5)
+		fileNameCh = make(chan string, numfiles)
+		objNames   = make([]string, 0, numFiles)
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bmdMock    = cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				testBucketName, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
@@ -1055,14 +1062,14 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	cksumType := p.Cksum.Type
 
 	tutils.Logf("Creating %d objects\n", numFiles)
-	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, cksumType)
+	tutils.PutRandObjs(proxyURL, bck, objPrefix, fileSize, numFiles, errCh, fileNameCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 
-	fileName = <-fileNameCh
-	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
+	objName := filepath.Join(objPrefix, <-fileNameCh)
+	objNames = append(objNames, objName)
 
 	// GET
-	_, err = api.GetObjectWithValidation(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
+	_, err = api.GetObjectWithValidation(baseParams, bck, objName)
 	if err != nil {
 		t.Errorf("GET(cloud bucket). Error: [%v]", err)
 	}
@@ -1077,32 +1084,31 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	objName := filepath.Join(ChecksumWarmValidateStr, fileName)
 	fqn := findObjOnDisk(bck, objName)
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
-	oldFileInfo, _ = os.Stat(fqn)
+	oldFileInfo, _ := os.Stat(fqn)
 
 	// Test when the contents of the file are changed
-	tutils.Logf("Changing contents of the file [%s]: %s\n", fileName, fqn)
+	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0o644)
 	tassert.CheckFatal(t, err)
-	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
+	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
 	// Test when the xxHash of the file is changed
-	fileName = <-fileNameCh
-	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
+	objName = filepath.Join(objPrefix, <-fileNameCh)
+	objNames = append(objNames, objName)
 	fqn = findObjOnDisk(bck, objName)
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
 
-	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
+	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
 	tassert.CheckError(t, err)
-	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
+	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
 	// Test for no checksum algo
-	fileName = <-fileNameCh
-	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
+	objName = filepath.Join(objPrefix, <-fileNameCh)
+	objNames = append(objNames, objName)
 	fqn = findObjOnDisk(bck, objName)
 
 	if p.Cksum.Type != cmn.ChecksumNone {
@@ -1115,11 +1121,11 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
+	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
 
-	_, err = api.GetObject(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
+	_, err = api.GetObject(baseParams, bck, objName)
 	tassert.Errorf(t, err == nil, "A GET on an object when checksum algo is none should pass. Error: %v", err)
 
 	// Restore old config
@@ -1133,9 +1139,9 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	wg := &sync.WaitGroup{}
-	for _, fn := range filesList {
+	for _, objName := range objNames {
 		wg.Add(1)
-		go tutils.Del(proxyURL, bck, fn, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bck, objName, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	tassert.SelectErr(t, errCh, "delete", false)
@@ -1144,10 +1150,12 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 }
 
 func Test_evictCloudBucket(t *testing.T) {
-	var (
-		err error
+	const (
+		numPuts   = 5
+		objPrefix = "evictcb"
+	)
 
-		numPuts    = 5
+	var (
 		filesPutCh = make(chan string, numPuts)
 		filesList  = make([]string, 0, 100)
 		errCh      = make(chan error, 100)
@@ -1176,11 +1184,11 @@ func Test_evictCloudBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	cksumType := p.Cksum.Type
 
-	tutils.PutRandObjs(proxyURL, bck, EvictCBStr, largeFileSize, numPuts, errCh, filesPutCh, cksumType)
+	tutils.PutRandObjs(proxyURL, bck, objPrefix, largeFileSize, numPuts, errCh, filesPutCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
-		filesList = append(filesList, filepath.Join(EvictCBStr, fname))
+		filesList = append(filesList, filepath.Join(objPrefix, fname))
 	}
 	getFromObjList(proxyURL, bck, errCh, filesList, false)
 	for _, fname := range filesList {
@@ -1215,17 +1223,17 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 }
 
-func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, fileName, fqn string,
+func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, objName, fqn string,
 	oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cliBck
 	)
-	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(ChecksumWarmValidateStr, fileName))
-	if err != nil {
-		t.Errorf("Unable to GET file. Error: %v", err)
-	}
+
+	_, err := api.GetObjectWithValidation(baseParams, bck, objName)
+	tassert.CheckError(t, err)
+
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	newFileInfo, _ := os.Stat(fqn)
 	if newFileInfo.Size() != oldFileInfo.Size() {
@@ -1241,7 +1249,11 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, file
 // (targets are co-located with where this test is running from, because
 // it searches a local file system)
 func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
-	const fileSize = 1024
+	const (
+		fileSize  = 1024
+		objPrefix = "cksum_lb"
+	)
+
 	var (
 		fqn string
 		err error
@@ -1272,7 +1284,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 	conf := cmn.DefaultAISBckProps().Cksum
 
-	tutils.PutRandObjs(proxyURL, bck, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, conf.Type)
+	tutils.PutRandObjs(proxyURL, bck, objPrefix, fileSize, numFiles, errCh, fileNameCh, conf.Type)
 	tassert.SelectErr(t, errCh, "put", false)
 
 	if !conf.ValidateWarmGet {
@@ -1285,24 +1297,24 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	// Test changing the file content
-	objName := filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
+	// Test changing the file content.
+	objName := filepath.Join(objPrefix, <-fileNameCh)
 	fqn = findObjOnDisk(bck, objName)
 	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0o644)
 	tassert.CheckFatal(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
 
-	// Test changing the file xattr
-	objName = filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
+	// Test changing the file xattr.
+	objName = filepath.Join(objPrefix, <-fileNameCh)
 	fqn = findObjOnDisk(bck, objName)
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
 
-	// Test for none checksum algo
-	objName = filepath.Join(ChecksumWarmValidateStr, <-fileNameCh)
+	// Test for none checksum algorithm.
+	objName = filepath.Join(objPrefix, <-fileNameCh)
 	fqn = findObjOnDisk(bck, objName)
 
 	if conf.Type != cmn.ChecksumNone {
@@ -1346,13 +1358,13 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 
 func TestRangeRead(t *testing.T) {
 	const (
-		numFiles = 1
-		fileSize = 5271
+		numFiles  = 1
+		fileSize  = 5271
+		objPrefix = "range_get"
 	)
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
-			fileName   string
 			fileNameCh = make(chan string, numFiles)
 			errCh      = make(chan error, numFiles)
 			proxyURL   = tutils.RandomProxyURL(t)
@@ -1360,13 +1372,15 @@ func TestRangeRead(t *testing.T) {
 			cksumProps = bck.CksumConf()
 		)
 
-		tutils.PutRandObjs(proxyURL, bck.Bck, RangeGetStr, fileSize, numFiles,
+		tutils.PutRandObjs(proxyURL, bck.Bck, objPrefix, fileSize, numFiles,
 			errCh, fileNameCh, cksumProps.Type, true)
-		tassert.SelectErr(t, errCh, "put", false)
+		tassert.SelectErr(t, errCh, "put", true)
+
+		objName := filepath.Join(objPrefix, <-fileNameCh)
 
 		defer func() {
 			tutils.Logln("Cleaning up...")
-			err := api.DeleteObject(baseParams, bck.Bck, filepath.Join(RangeGetStr, fileName))
+			err := api.DeleteObject(baseParams, bck.Bck, objName)
 			tassert.CheckError(t, err)
 			propsToUpdate := cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
@@ -1379,7 +1393,6 @@ func TestRangeRead(t *testing.T) {
 			tassert.CheckFatal(t, err)
 		}()
 
-		fileName = <-fileNameCh
 		tutils.Logln("Testing valid cases.")
 		// Validate entire object checksum is being returned
 		if cksumProps.EnableReadRange {
@@ -1391,7 +1404,7 @@ func TestRangeRead(t *testing.T) {
 			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, fileName, true, RangeGetStr)
+		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, objName, true)
 
 		// Validate only range checksum is being returned
 		if !cksumProps.EnableReadRange {
@@ -1403,57 +1416,57 @@ func TestRangeRead(t *testing.T) {
 			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, fileName, false, RangeGetStr)
+		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, objName, false)
 
 		tutils.Logln("Testing valid cases (query).")
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=-1", 1)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=0-", fileSize)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=10-", fileSize-10)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, fmt.Sprintf("bytes=-%d", fileSize), fileSize)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, fileName, fmt.Sprintf("bytes=-%d", fileSize+2), fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1", 1)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0-", fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10-", fileSize-10)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", fileSize), fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", fileSize+2), fileSize)
 
 		tutils.Logln("Testing invalid cases (query).")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "potatoes=0-1")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, fmt.Sprintf("bytes=%d-", fileSize+1))
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, fmt.Sprintf("bytes=%d-%d", fileSize+1, fileSize+2))
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=0--1")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=1-0")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=-1-0")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=-1-2")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=10--1")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, fileName, "bytes=1-2,4-6")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "potatoes=0-1")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-", fileSize+1))
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-%d", fileSize+1, fileSize+2))
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0--1")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=1-0")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1-0")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1-2")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10--1")
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=1-2,4-6")
 	})
 }
 
-func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string, fileSize uint64, fileName string,
-	checkEntireObjCkSum bool, checkDir string) {
+func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string, fileSize uint64, objName string,
+	checkEntireObjCksum bool) {
 	// Read the entire file range by range
 	// Read in ranges of 500 to test covered, partially covered and completely
 	// uncovered ranges
 	byteRange := int64(500)
 	iterations := int64(fileSize) / byteRange
 	for i := int64(0); i < iterations; i += byteRange {
-		verifyValidRanges(t, proxyURL, bck, cksumType, fileName, i, byteRange, byteRange, checkEntireObjCkSum, checkDir)
+		verifyValidRanges(t, proxyURL, bck, cksumType, objName, i, byteRange, byteRange, checkEntireObjCksum)
 	}
 
-	verifyValidRanges(t, proxyURL, bck, cksumType, fileName, byteRange*iterations, byteRange,
-		int64(fileSize)%byteRange, checkEntireObjCkSum, checkDir)
+	verifyValidRanges(t, proxyURL, bck, cksumType, objName, byteRange*iterations, byteRange,
+		int64(fileSize)%byteRange, checkEntireObjCksum)
 }
 
-func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, fileName string,
-	offset, length, expectedLength int64, checkEntireObjCksum bool, checkDir string) {
+func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, objName string,
+	offset, length, expectedLength int64, checkEntireObjCksum bool) {
 	var (
 		w          = bytes.NewBuffer(nil)
 		hdr        = cmn.RangeHdr(offset, length)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		fqn        = findObjOnDisk(bck, filepath.Join(checkDir, fileName))
+		fqn        = findObjOnDisk(bck, objName)
 		options    = api.GetObjectInput{Writer: w, Header: hdr}
 	)
-	n, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(RangeGetStr, fileName), options)
+	n, err := api.GetObjectWithValidation(baseParams, bck, objName, options)
 	if err != nil {
 		if !checkEntireObjCksum {
-			t.Errorf("Failed to get object %s/%s! Error: %v", bck, fileName, err)
+			t.Errorf("Failed to get object %s/%s! Error: %v", bck, objName, err)
 		} else {
 			if ckErr, ok := err.(cmn.InvalidCksumError); ok {
 				file, err := os.Open(fqn)
@@ -1504,13 +1517,13 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, fi
 	}
 }
 
-func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, fileName, rangeQuery string, expectedLength int64) {
+func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName, rangeQuery string, expectedLength int64) {
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		hdr        = http.Header{cmn.HeaderRange: {rangeQuery}}
 		options    = api.GetObjectInput{Header: hdr}
 	)
-	resp, n, err := api.GetObjectWithResp(baseParams, bck, filepath.Join(RangeGetStr, fileName), options) // nolint:bodyclose // it's closed inside
+	resp, n, err := api.GetObjectWithResp(baseParams, bck, objName, options) // nolint:bodyclose // it's closed inside
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(
 		t, resp.ContentLength == expectedLength,
@@ -1531,13 +1544,13 @@ func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, fileName
 	tassert.Errorf(t, contentRange != "", "%q header should be set", cmn.HeaderContentRange)
 }
 
-func verifyInvalidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, fileName, rangeQuery string) {
+func verifyInvalidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName, rangeQuery string) {
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		hdr        = http.Header{cmn.HeaderRange: {rangeQuery}}
 		options    = api.GetObjectInput{Header: hdr}
 	)
-	_, err := api.GetObjectWithValidation(baseParams, bck, filepath.Join(RangeGetStr, fileName), options)
+	_, err := api.GetObjectWithValidation(baseParams, bck, objName, options)
 	tassert.Errorf(t, err != nil, "must fail for %q combination", rangeQuery)
 }
 
@@ -1547,8 +1560,9 @@ func Test_checksum(t *testing.T) {
 		duration      time.Duration
 		propsToUpdate cmn.BucketPropsToUpdate
 
-		numPuts = 5
-		bck     = cliBck
+		numPuts   = 5
+		objPrefix = cmn.RandString(5)
+		bck       = cliBck
 
 		filesPutCh = make(chan string, numPuts)
 		filesList  = make([]string, 0, numPuts)
@@ -1564,13 +1578,11 @@ func Test_checksum(t *testing.T) {
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
-	tutils.PutRandObjs(proxyURL, bck, ChksumValidStr, largeFileSize, numPuts, errCh, filesPutCh, p.Cksum.Type)
-	tassert.SelectErr(t, errCh, "put", false)
+	tutils.PutRandObjs(proxyURL, bck, objPrefix, largeFileSize, numPuts, errCh, filesPutCh, p.Cksum.Type)
+	tassert.SelectErr(t, errCh, "put", true)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
-		if fname != "" {
-			filesList = append(filesList, filepath.Join(ChksumValidStr, fname))
-		}
+		filesList = append(filesList, filepath.Join(objPrefix, fname))
 	}
 	// Delete it from cache.
 	tutils.EvictObjects(t, proxyURL, bck, filesList)

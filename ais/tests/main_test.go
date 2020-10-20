@@ -97,8 +97,6 @@ func waitForCluster() error {
 func TestMain(m *testing.M) {
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
-	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
-	flag.IntVar(&numops, "numops", 40, "Number of PUT/GET per worker")
 
 	flag.Parse()
 

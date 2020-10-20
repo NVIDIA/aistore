@@ -57,7 +57,7 @@ func parallelOpLoop(bck cmn.Bck, cksumType string,
 	errCh chan opRes, opFunc func(string, string, cmn.Bck) opRes) {
 	var (
 		fileCount = len(fileNames)
-		wg        = cmn.NewLimitedWaitGroup(numops + 1)
+		wg        = cmn.NewLimitedWaitGroup(40)
 	)
 	for i := 0; i < numLoops; i++ {
 		for idx := 0; idx < fileCount; idx++ {
