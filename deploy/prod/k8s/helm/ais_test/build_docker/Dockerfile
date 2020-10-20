@@ -1,6 +1,6 @@
 FROM ubuntu:xenial
 
-ENV GOLANG_VERSION 1.13
+ENV GOLANG_VERSION 1.15
 
 ENV PATH   /usr/local/go/bin:$PATH
 ENV HOME   /root/
@@ -9,7 +9,7 @@ ENV GOBIN  $GOPATH/bin
 ENV AISSRC $GOPATH/src/github.com/NVIDIA/aistore/ais
 
 RUN apt-get update && apt-get install -y \
-        curl \ 
+        curl \
         jq
 
 RUN mkdir -p "${GOPATH}/bin" && chmod -R 777 "$GOPATH"

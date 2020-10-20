@@ -27,7 +27,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
   pip install awscli
 
 # Setting ENV variables
-ENV GOLANG_VERSION 1.13
+ENV GOLANG_VERSION 1.15
 
 # Reassign arguments to environment variables so run.sh can use them
 ENV GOPATH /go

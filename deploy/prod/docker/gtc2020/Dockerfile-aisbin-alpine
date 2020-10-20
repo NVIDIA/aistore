@@ -4,7 +4,7 @@
 # from their Dockerfiles. This unlinks GTC Dockerfiles from
 # our ais repo. Run from root of ais clone.
 
-FROM golang:1.13-alpine
+FROM golang:1.15-alpine
 
 RUN apk upgrade --no-cache && \
   apk add --no-cache --virtual .build-deps \

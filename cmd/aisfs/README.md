@@ -65,7 +65,7 @@ When the space required to cache the entire directory hierarchy and file names i
 * Linux
 * `fuse.ko` FUSE kernel module
 * `fusermount` mount CLI utility
-* [Go 1.13](https://golang.org/dl/) or later
+* [Go 1.15](https://golang.org/dl/) or later
 * Running [AIStore](../../README.md) cluster
 
 Depending on your Linux distribution, you may or may not already have `fuse.ko`

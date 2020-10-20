@@ -60,7 +60,7 @@ Deployment [options](deploy) are practically unlimited and include a spectrum wi
 > It is expected, though, that within a given cluster all AIS target machines are identical, hardware-wise.
 
 * [Linux](#Linux) (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+) or [MacOS](#MacOS)
-* [Go 1.13 or later](https://golang.org/dl/)
+* [Go 1.15 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 

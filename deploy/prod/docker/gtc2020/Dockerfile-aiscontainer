@@ -17,7 +17,7 @@
 
 ARG AISBIN_IMAGE=gmaltby/ais-binaries:alpine-test
 FROM $AISBIN_IMAGE AS aisbin
-FROM golang:1.13-alpine
+FROM golang:1.15-alpine
 
 USER root
 RUN apk upgrade --no-cache && \

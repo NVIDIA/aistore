@@ -215,7 +215,6 @@ func TestMain(m *testing.M) {
 	}))
 	baseParams = tutils.BaseAPIParams(srv.URL)
 
-	exitCode := m.Run()
+	m.Run()
 	srv.Close()
-	os.Exit(exitCode)
 }

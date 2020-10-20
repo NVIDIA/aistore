@@ -107,8 +107,6 @@ type (
 		uncache   bool // uncache the source
 		finalize  bool // copies and EC (as in poi.finalize())
 	}
-
-	writerOnly struct{ io.Writer }
 )
 
 ////////////////
@@ -294,7 +292,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	if file, err = poi.lom.CreateFile(poi.workFQN); err != nil {
 		return
 	}
-	writer = file
+	writer = cmn.WriterOnly{Writer: file} // Hiding `ReadFrom` for `*os.File` introduced in Go1.15.
 	if poi.size == 0 {
 		buf, slab = poi.t.gmm.Alloc()
 	} else {
@@ -815,7 +813,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	if r == nil {
 		reader = file
 		if goi.chunked {
-			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
+			// Explicitly hiding `ReadFrom` implemented for `http.ResponseWriter`
+			// so the `sendfile` syscall won't be used.
+			w = cmn.WriterOnly{Writer: goi.w}
 			buf, slab = goi.t.gmm.Alloc(goi.lom.Size())
 		}
 	} else {
@@ -832,8 +832,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 			reader = io.NewSectionReader(file, r.Start, r.Length)
 		}
 	}
-	written, err = io.CopyBuffer(w, reader, buf)
 
+	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
 		if cmn.IsErrConnectionReset(err) {
 			return

@@ -31,11 +31,11 @@ func GenUUID() (uuid string) {
 	var h, t string
 	uuid = sid.MustGenerate()
 	if !isAlpha(uuid[0]) {
-		h = string('A' + rand.Int()%26)
+		h = string(rune('A' + rand.Int()%26))
 	}
 	c := uuid[len(uuid)-1]
 	if c == '-' || c == '_' {
-		t = string('a' + rand.Int()%26)
+		t = string(rune('a' + rand.Int()%26))
 	}
 	return h + uuid + t
 }

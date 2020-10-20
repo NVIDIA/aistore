@@ -68,6 +68,11 @@ type (
 	}
 	nopOpener   struct{ io.ReadCloser }
 	WriterMulti struct{ writers []io.Writer }
+
+	// WriterOnly is helper struct to hide `io.ReaderFrom` implementation which
+	// can use some heuristics to improve performance but can result in not
+	// using `buffer` provided in `io.CopyBuffer`. See: https://golang.org/doc/go1.15#os.
+	WriterOnly struct{ io.Writer }
 )
 
 var (
@@ -365,8 +370,8 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string,
 	}
 	var (
 		written   int64
-		file, erc           = CreateFile(fqn)
-		writer    io.Writer = file
+		file, erc = CreateFile(fqn)
+		writer    = WriterOnly{file} // Hiding `ReadFrom` for `*os.File` introduced in Go1.15.
 	)
 	if erc != nil {
 		return nil, erc

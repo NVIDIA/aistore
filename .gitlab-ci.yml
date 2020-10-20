@@ -1,4 +1,4 @@
-image: aistore/ci:1.13
+image: aistore/ci:1.15
 
 stages:
   - build

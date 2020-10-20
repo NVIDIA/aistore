@@ -113,5 +113,5 @@ func TestMain(m *testing.M) {
 	}
 
 	rand.Seed(time.Now().UnixNano())
-	os.Exit(m.Run())
+	m.Run()
 }

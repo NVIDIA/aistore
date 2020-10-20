@@ -18,7 +18,7 @@ RUN apt-get -qqy update && \
     wget \
   ;
 
-RUN wget --quiet https://dl.google.com/go/go1.13.8.linux-amd64.tar.gz -O go.tgz && \
+RUN wget --quiet https://dl.google.com/go/go1.15.linux-amd64.tar.gz -O go.tgz && \
     tar --directory=/usr/local/ -xf go.tgz && \
     rm -f go.tgz
 

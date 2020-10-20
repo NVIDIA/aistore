@@ -82,7 +82,7 @@ func TestMain(m *testing.M) {
 	t.owner.bmd.put(bmd)
 	fs.CreateBuckets("test", bck.Bck)
 
-	os.Exit(m.Run())
+	m.Run()
 }
 
 func BenchmarkObjPut(b *testing.B) {
@@ -229,7 +229,6 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			// load lom
 			if err := lom.Load(); err != nil {
 				b.Fatal(err)
 			}

@@ -1,6 +1,6 @@
 module github.com/NVIDIA/aistore
 
-go 1.13
+go 1.15
 
 // NOTE: Remember to update `deploy/test/ci` image if the dependencies are updated.
 
