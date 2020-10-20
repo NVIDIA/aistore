@@ -223,7 +223,7 @@ func (s *slice) release() {
 
 var (
 	mm        *memsys.MMSA // memory manager and slab/SGL allocator
-	XactCount atomic.Int32 // the number of currently active EC xactions
+	xactCount atomic.Int32 // the number of currently active EC xactions
 
 	ErrorECDisabled          = errors.New("EC is disabled for bucket")
 	ErrorNoMetafile          = errors.New("no metafile")

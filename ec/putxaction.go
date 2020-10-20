@@ -57,7 +57,7 @@ func (p *xactPutProvider) Get() cluster.Xact { return p.xact }
 //
 
 func NewPutXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactPut {
-	XactCount.Inc()
+	xactCount.Inc()
 	availablePaths, disabledPaths := fs.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	smap, si := t.Sowner(), t.Snode()
@@ -173,7 +173,7 @@ func (r *XactPut) abortECRequestWhenDisabled(req *Request) {
 func (r *XactPut) Stop(error) { r.Abort() }
 
 func (r *XactPut) stop() {
-	XactCount.Dec()
+	xactCount.Dec()
 	r.XactDemandBase.Stop()
 	for _, jog := range r.putJoggers {
 		jog.stop()

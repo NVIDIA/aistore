@@ -59,7 +59,7 @@ func (*xactRespondProvider) Kind() string        { return cmn.ActECRespond }
 func (p *xactRespondProvider) Get() cluster.Xact { return p.xact }
 
 func NewRespondXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactRespond {
-	XactCount.Inc()
+	xactCount.Inc()
 	smap, si := t.Sowner(), t.Snode()
 	runner := &XactRespond{
 		xactECBase: newXactECBase(t, smap, si, bck, reqBundle, respBundle),
@@ -219,7 +219,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 func (r *XactRespond) Stop(error) { r.Abort() }
 
 func (r *XactRespond) stop() {
-	XactCount.Dec()
+	xactCount.Dec()
 	r.XactDemandBase.Stop()
 	r.Finish()
 }

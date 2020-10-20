@@ -122,11 +122,11 @@ func (mgr *Manager) initECBundles() {
 }
 
 func (mgr *Manager) closeECBundles() {
-	// XactCount is the number of currently active xaction. It increases
+	// xactCount is the number of currently active xaction. It increases
 	// on every xaction(ECPut,ECGet,ECRespond ones) creation, and decreases
 	// when an xaction is stopping(on abort or after some idle time(by default
 	// 3*timeout.Sendfile = 15 minutes).
-	if XactCount.Load() > 0 {
+	if xactCount.Load() > 0 {
 		return
 	}
 	if !mgr.bundleEnabled.CAS(true, false) {
