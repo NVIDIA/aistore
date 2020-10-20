@@ -7,7 +7,6 @@ package ais
 import (
 	"net/url"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -273,27 +272,32 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	}
 	p.owner.smap.Unlock()
 
-	var (
-		wg  *sync.WaitGroup
-		bmd *bucketMD
-	)
-	_ = p.owner.bmd.modify(func(clone *bucketMD) (bool, error) {
-		if clone.Version == 0 {
-			clone.Version = 1 // init BMD
-			clone.UUID = smap.UUID
-		}
-		return true, nil
-	}, func(clone *bucketMD) {
-		msg := p.newAisMsgStr(metaction2, smap, clone)
-		wg = p.metasyncer.sync(revsPair{smap, msg}, revsPair{clone, msg})
-		bmd = clone
-	})
-
 	// 6: started up as primary
-	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), bmd.StringEx())
-	wg.Wait()
+	ctx := &bmdModifier{
+		pre:   p._startupBMDPre,
+		final: p._startupBMDFinal,
+		smap:  smap,
+		msg:   &cmn.ActionMsg{Value: metaction2},
+	}
+	p.owner.bmd.modify(ctx)
 	glog.Infof("%s: primary & cluster startup complete", p.si)
+
 	p.markClusterStarted()
+}
+
+func (p *proxyrunner) _startupBMDPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
+	if clone.Version == 0 {
+		clone.Version = 1 // init BMD
+		clone.UUID = ctx.smap.UUID
+	}
+	return true, nil
+}
+
+func (p *proxyrunner) _startupBMDFinal(ctx *bmdModifier, clone *bucketMD) {
+	msg := p.newAisMsg(ctx.msg, ctx.smap, clone)
+	wg := p.metasyncer.sync(revsPair{ctx.smap, msg}, revsPair{clone, msg})
+	glog.Infof("%s: metasync %s, %s", p.si, ctx.smap.StringEx(), clone.StringEx())
+	wg.Wait()
 }
 
 func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {

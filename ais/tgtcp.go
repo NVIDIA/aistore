@@ -563,7 +563,6 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller str
 	}
 
 	err = t._recvBMD(newBMD, msg, tag, caller)
-
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s: unexpected commit-after, %s, err: %v", t.si, newBMD, errDone)
 		glog.Error(err)

@@ -1387,28 +1387,35 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	glog.Warningf("%s: Cloud bucket %s properties have changed, resynchronizing...", p.si, bck)
 
-	err = p.owner.bmd.modify(func(clone *bucketMD) (bool, error) {
-		bprops, present := clone.Get(bck)
-		if !present {
-			return false, cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
-		}
-		nprops = cmn.MergeCloudBckProps(bprops, cloudProps)
-		if nprops.Equal(bprops) {
-			glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, bck)
-			return false, nil
-		}
-		clone.set(bck, nprops)
-		return true, nil
-	}, func(clone *bucketMD) {
-		msg := p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActResyncBprops}, nil, clone)
-		_ = p.metasyncer.sync(revsPair{clone, msg})
-	})
+	ctx := &bmdModifier{
+		pre:        p._bckHeadPre,
+		final:      p._syncBMDFinal,
+		msg:        &cmn.ActionMsg{Action: cmn.ActResyncBprops},
+		bck:        bck,
+		cloudProps: cloudProps,
+	}
+
+	_, err = p.owner.bmd.modify(ctx)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
 
 	p.bucketPropsToHdr(bck, w.Header())
+}
+
+func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
+	bprops, present := clone.Get(ctx.bck)
+	if !present {
+		return false, cmn.NewErrorBucketDoesNotExist(ctx.bck.Bck, p.si.String())
+	}
+	nprops := cmn.MergeCloudBckProps(bprops, ctx.cloudProps)
+	if nprops.Equal(bprops) {
+		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, ctx.bck)
+		return false, nil
+	}
+	clone.set(ctx.bck, nprops)
+	return true, nil
 }
 
 // PATCH /v1/buckets/bucket-name
@@ -2065,23 +2072,28 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
-	bck := cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal)
-	_ = p.owner.bmd.modify(func(clone *bucketMD) (bool, error) {
-		props, present := clone.Get(bck)
-		if !present {
-			// Already removed via the the very first target calling here.
-			return false, nil
-		}
-		if props.Renamed == "" {
-			glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, renamedBucket, *props)
-			return false, nil
-		}
-		clone.del(bck)
-		return true, nil
-	}, func(clone *bucketMD) {
-		msg := p.newAisMsgStr(cmn.ActRenameLB, nil, clone)
-		_ = p.metasyncer.sync(revsPair{clone, msg})
-	})
+	ctx := &bmdModifier{
+		pre:   p._pendingRnPre,
+		final: p._syncBMDFinal,
+		msg:   &cmn.ActionMsg{Value: cmn.ActRenameLB},
+		bck:   cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal),
+	}
+
+	p.owner.bmd.modify(ctx)
+}
+
+func (p *proxyrunner) _pendingRnPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
+	props, present := clone.Get(ctx.bck)
+	if !present {
+		// Already removed via the the very first target calling here.
+		return false, nil
+	}
+	if props.Renamed == "" {
+		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, ctx.bck.Name, *ctx.bck.Props)
+		return false, nil
+	}
+	clone.del(ctx.bck)
+	return true, nil
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
@@ -3616,6 +3628,14 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 		p.notifs.add(nl)
 	}
 	return
+}
+
+func (p *proxyrunner) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
+	msg := p.newAisMsg(ctx.msg, ctx.smap, clone, ctx.txnID)
+	wg := p.metasyncer.sync(revsPair{clone, msg})
+	if ctx.wait {
+		wg.Wait()
+	}
 }
 
 func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (err error) {

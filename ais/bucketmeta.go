@@ -6,6 +6,7 @@ package ais
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -57,7 +58,7 @@ type (
 		init()
 		get() (bmd *bucketMD)
 		put(bmd *bucketMD)
-		modify(pre func(clone *bucketMD) (bool, error), post ...func(clone *bucketMD)) error
+		modify(*bmdModifier) (*bucketMD, error)
 	}
 	bmdOwnerBase struct {
 		sync.Mutex
@@ -68,6 +69,19 @@ type (
 		fpath string
 	}
 	bmdOwnerTgt struct{ bmdOwnerBase }
+
+	bmdModifier struct {
+		pre   func(*bmdModifier, *bucketMD) (bool, error)
+		final func(*bmdModifier, *bucketMD)
+
+		smap          *smapX
+		msg           *cmn.ActionMsg
+		txnID         string // transaction UUID
+		bck           *cluster.Bck
+		propsToUpdate *cmn.BucketPropsToUpdate
+		cloudProps    http.Header
+		wait          bool
+	}
 )
 
 // interface guard
@@ -220,20 +234,21 @@ func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
 	}
 }
 
-func (bo *bmdOwnerPrx) modify(pre func(clone *bucketMD) (bool, error), post ...func(clone *bucketMD)) error {
+func (bo *bmdOwnerPrx) modify(ctx *bmdModifier) (clone *bucketMD, err error) {
 	bo.Lock()
-	defer bo.Unlock()
-	clone := bo.get().clone()
-	if cont, err := pre(clone); err != nil {
-		return err
-	} else if !cont {
-		return nil
+	var cont bool
+	clone = bo.get().clone()
+	if cont, err = ctx.pre(ctx, clone); err != nil || !cont {
+		bo.Unlock()
+		return
 	}
+
 	bo.put(clone)
-	if len(post) == 1 {
-		post[0](clone)
+	bo.Unlock()
+	if ctx.final != nil {
+		ctx.final(ctx, clone)
 	}
-	return nil
+	return
 }
 
 /////////////////
@@ -340,8 +355,8 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	}
 }
 
-func (bo *bmdOwnerTgt) modify(_ func(clone *bucketMD) (bool, error), _ ...func(clone *bucketMD)) error {
+func (bo *bmdOwnerTgt) modify(_ *bmdModifier) (*bucketMD, error) {
 	// Method should not be used on targets.
 	cmn.Assert(false)
-	return nil
+	return nil, nil
 }
