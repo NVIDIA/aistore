@@ -10,6 +10,6 @@ type (
 	RMD struct {
 		TargetIDs []string `json:"target_ids,omitempty"`
 		Version   int64    `json:"version"`
-		Resilver  bool     `json:"resilver,omitempty"`
+		Resilver  string   `json:"resilver,omitempty"`
 	}
 )

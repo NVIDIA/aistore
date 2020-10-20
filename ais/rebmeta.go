@@ -94,7 +94,7 @@ func (r *rmdOwner) modify(ctx *rmdModifier) *rebMD {
 	r.Lock()
 	clone := r.get().clone()
 	clone.TargetIDs = nil
-	clone.Resilver = false
+	clone.Resilver = ""
 	ctx.pre(ctx, clone)
 	r.persist(clone)
 	r.put(clone)

@@ -744,12 +744,12 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 	}
 
 	glog.Infof(
-		"%s: rebalance (version: %d; new_targets: %v; resilver: %t)",
+		"%s: rebalance (version: %d; new_targets: %v; resilver: %v)",
 		t.si, newRMD.version(), newRMD.TargetIDs, newRMD.Resilver,
 	)
 	go t.rebManager.RunRebalance(smap, newRMD.Version, notif)
-	if newRMD.Resilver {
-		go t.runResilver("", true /*skipGlobMisplaced*/)
+	if newRMD.Resilver != "" {
+		go t.runResilver(newRMD.Resilver, true /*skipGlobMisplaced*/)
 	}
 	return
 }

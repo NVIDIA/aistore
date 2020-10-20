@@ -422,7 +422,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	ctx := &rmdModifier{
 		pre: func(_ *rmdModifier, clone *rebMD) {
 			clone.inc()
-			clone.Resilver = true
+			clone.Resilver = cmn.GenUUID()
 		},
 	}
 
@@ -444,11 +444,21 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	// 6. start rebalance and resilver
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
+
+	// Register rebalance `nl`
 	nl = xaction.NewXactNL(xaction.RebID(rmd.Version).String(), &c.smap.Smap,
 		c.smap.Tmap.Clone(), cmn.ActRebalance)
 	nl.SetOwner(equalIC)
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	p.notifs.add(nl)
+
+	// Register resilver `nl`
+	nl = xaction.NewXactNL(rmd.Resilver, &c.smap.Smap,
+		c.smap.Tmap.Clone(), cmn.ActResilver)
+	nl.SetOwner(equalIC)
+	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
+	p.notifs.add(nl)
+
 	wg.Wait()
 	return
 }

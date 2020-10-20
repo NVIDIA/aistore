@@ -3626,6 +3626,13 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 			smap.Tmap.Clone(), cmn.ActRebalance)
 		nl.SetOwner(equalIC)
 		p.notifs.add(nl)
+
+		if newRMD.Resilver != "" {
+			nl = xaction.NewXactNL(newRMD.Resilver, &smap.Smap,
+				smap.Tmap.Clone(), cmn.ActResilver)
+			nl.SetOwner(equalIC)
+			p.notifs.add(nl)
+		}
 	}
 	return
 }
