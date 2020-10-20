@@ -2073,7 +2073,7 @@ func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 			return false, nil
 		}
 		if props.Renamed == "" {
-			glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, renamedBucket, *bck.Props)
+			glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, renamedBucket, *props)
 			return false, nil
 		}
 		clone.del(bck)
