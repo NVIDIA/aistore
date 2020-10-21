@@ -492,17 +492,15 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		filesRecv     int64
 		bytesSent     int64
 		bytesRecv     int64
+
+		m = ioContext{
+			t:   t,
+			num: 10000,
+		}
 	)
 
-	m := ioContext{
-		t:   t,
-		num: 10000,
-	}
 	m.saveClusterState()
-
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have at least 2 targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(2)
 	targetsToUnregister := m.originalTargetCount - 1
 
 	// Step 0: Collect rebalance stats

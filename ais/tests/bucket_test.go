@@ -1190,11 +1190,8 @@ func TestListObjectsWithRebalance(t *testing.T) {
 		}
 	)
 
-	m.init()
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("must have at least 2 target in the cluster")
-	}
+	m.expectTargets(2)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -1241,9 +1238,7 @@ func TestBucketSingleProp(t *testing.T) {
 	)
 
 	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("must have at least 3 target in the cluster")
-	}
+	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -1622,11 +1617,8 @@ func TestRenameEmptyBucket(t *testing.T) {
 		}
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
 
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
@@ -1680,12 +1672,9 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 		}
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
 	m.proxyURL = tutils.RandomProxyURL(t)
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
 
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
@@ -1739,13 +1728,9 @@ func TestRenameAlreadyExistingBucket(t *testing.T) {
 		}
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
 
-	// Create bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1799,12 +1784,9 @@ func TestRenameBucketTwice(t *testing.T) {
 		}
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
 	m.proxyURL = tutils.RandomProxyURL(t)
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
 
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
@@ -1960,8 +1942,8 @@ func TestCopyBucket(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: dstms[0].bck})
 			}
 
-			// Initialize ioContext
 			srcm.saveClusterState()
+			srcm.expectTargets(1)
 
 			for _, dstm := range dstms {
 				dstm.init()
@@ -1972,9 +1954,6 @@ func TestCopyBucket(t *testing.T) {
 				}
 			}
 
-			if srcm.originalTargetCount < 1 {
-				t.Fatalf("Must have 1 or more targets in the cluster, have only %d", srcm.originalTargetCount)
-			}
 			if bckTest.IsAIS() {
 				tutils.CreateFreshBucket(t, srcm.proxyURL, srcm.bck)
 				defer tutils.DestroyBucket(t, srcm.proxyURL, srcm.bck)
@@ -2263,11 +2242,8 @@ func TestRenameAndCopyBucket(t *testing.T) {
 		}
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
 
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
@@ -2347,11 +2323,8 @@ func TestCopyAndRenameBucket(t *testing.T) {
 		}
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
 
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
@@ -2797,9 +2770,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			cacheSize := m.num / 2 // determines number of objects which should be cached
 
 			m.saveClusterState()
-			if m.originalTargetCount < 2 {
-				t.Fatalf("must have at least 2 target in the cluster")
-			}
+			m.expectTargets(2)
 
 			expectedFiles := m.num
 			if bckTest.IsAIS() {

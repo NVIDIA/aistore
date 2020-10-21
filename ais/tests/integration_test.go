@@ -39,9 +39,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}
 
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(2)
 
 	// Step 1.
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
@@ -89,12 +87,8 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}
 
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-	if m.originalProxyCount < 3 {
-		t.Fatalf("Must have 3 or more proxies/gateways in the cluster, have only %d", m.originalProxyCount)
-	}
+	m.expectTargets(2)
+	m.expectProxies(3)
 
 	// Step 1.
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
@@ -167,9 +161,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	)
 
 	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(3)
 
 	// Step 1
 	// Select a random target
@@ -219,9 +211,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	}
 
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(2)
 
 	target := m.unregisterTarget()
 
@@ -247,14 +237,11 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		num: 10000,
 	}
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(3)
+
 	targets := tutils.ExtractTargetNodes(m.smap)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -308,130 +295,114 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 func TestAckRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	md := ioContext{
+	m := ioContext{
 		t:             t,
 		num:           30000,
 		getErrIsFatal: true,
 	}
 
-	md.saveClusterState()
-	if md.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", md.originalTargetCount)
-	}
-	target := tutils.ExtractTargetNodes(md.smap)[0]
+	m.saveClusterState()
+	m.expectTargets(3)
 
-	// Create ais bucket
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
-	defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	// Unregister a target
-	tutils.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
-	err := tutils.UnregisterNode(md.proxyURL, target.ID())
-	tassert.CheckFatal(t, err)
-	n := len(tutils.GetClusterMap(t, md.proxyURL).Tmap)
-	if n != md.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-1, n)
-	}
+	target := m.unregisterTarget()
 
-	// Start putting files into bucket
-	md.puts()
+	// Start putting files into bucket.
+	m.puts()
 
-	tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
-	err = tutils.RegisterNode(md.proxyURL, target, md.smap)
-	tassert.CheckFatal(t, err)
+	m.reregisterTarget(target)
 
-	// wait for everything to finish
-	baseParams := tutils.BaseAPIParams(md.proxyURL)
+	// Wait for everything to finish.
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	md.gets()
+	m.gets()
 
-	md.ensureNoErrors()
-	md.assertClusterState()
+	m.ensureNoErrors()
+	m.assertClusterState()
 }
 
 func TestStressRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	md := &ioContext{
+	m := &ioContext{
 		t: t,
 	}
 
-	md.saveClusterState()
-	if md.originalTargetCount < 4 {
-		t.Fatalf("Must have 4 or more targets in the cluster, have only %d", md.originalTargetCount)
-	}
+	m.saveClusterState()
+	m.expectTargets(4)
 
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
-	defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	max := 3
-	for i := 1; i <= max; i++ {
+	for i := 1; i <= 3; i++ {
 		tutils.Logf("Iteration #%d ======\n", i)
-		testStressRebalance(t, md.bck)
+		testStressRebalance(t, m.bck)
 	}
 }
 
 func testStressRebalance(t *testing.T, bck cmn.Bck) {
-	md := &ioContext{
+	m := &ioContext{
 		t:             t,
 		bck:           bck,
 		num:           50000,
 		getErrIsFatal: true,
 	}
 
-	md.saveClusterState()
+	m.saveClusterState()
 
-	tgts := tutils.ExtractTargetNodes(md.smap)
+	tgts := tutils.ExtractTargetNodes(m.smap)
 	i1 := rand.Intn(len(tgts))
 	i2 := (i1 + 1) % len(tgts)
 	target1, target2 := tgts[i1], tgts[i2]
 
-	// Unregister a target
+	// Unregister targets.
 	tutils.Logf("Unregister targets: %s and %s\n", target1.URL(cmn.NetworkPublic), target2.URL(cmn.NetworkPublic))
-	err := tutils.UnregisterNode(md.proxyURL, target1.ID())
+	err := tutils.UnregisterNode(m.proxyURL, target1.ID())
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
-	err = tutils.UnregisterNode(md.proxyURL, target2.ID())
+	err = tutils.UnregisterNode(m.proxyURL, target2.ID())
 	tassert.CheckFatal(t, err)
-	n := tutils.GetClusterMap(t, md.proxyURL).CountTargets()
-	if n != md.originalTargetCount-2 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-2, n)
+	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
+	if n != m.originalTargetCount-2 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-2, n)
 	}
 
 	// Start putting objects into bucket
-	md.puts()
+	m.puts()
 
 	// Get objects and register targets in parallel
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		md.gets()
+		m.gets()
 	}()
 
 	// and join 2 targets in parallel
 	time.Sleep(time.Second)
 	tutils.Logf("Register 1st target %s\n", target1.URL(cmn.NetworkPublic))
-	err = tutils.RegisterNode(md.proxyURL, target1, md.smap)
+	err = tutils.RegisterNode(m.proxyURL, target1, m.smap)
 	tassert.CheckFatal(t, err)
 
 	// random sleep between the first and the second join
 	time.Sleep(time.Duration(rand.Intn(3)+1) * time.Second)
 
 	tutils.Logf("Register 2nd target %s\n", target2.URL(cmn.NetworkPublic))
-	err = tutils.RegisterNode(md.proxyURL, target2, md.smap)
+	err = tutils.RegisterNode(m.proxyURL, target2, m.smap)
 	tassert.CheckFatal(t, err)
 
 	// wait for the rebalance to finish
-	baseParams := tutils.BaseAPIParams(md.proxyURL)
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	// wait for the reads to run out
 	wg.Wait()
 
-	md.ensureNoErrors()
-	md.assertClusterState()
+	m.ensureNoErrors()
+	m.assertClusterState()
 }
 
 func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
@@ -442,14 +413,11 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		num: 10000,
 	}
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(3)
+
 	targets := tutils.ExtractTargetNodes(m.smap)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -513,27 +481,15 @@ func TestPutDuringRebalance(t *testing.T) {
 		num: 10000,
 	}
 
-	// Init. ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-	target := tutils.ExtractTargetNodes(m.smap)[0]
+	m.expectTargets(3)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	// Unregister a target
-	tutils.Logf("Unregister target %s\n", target.URL(cmn.NetworkPublic))
-	err := tutils.UnregisterNode(m.proxyURL, target.ID())
-	tassert.CheckFatal(t, err)
-	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
-	if n != m.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
-	}
+	target := m.unregisterTarget()
 
-	// Start putting files and register target in parallel
+	// Start putting files and register target in parallel.
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -541,18 +497,17 @@ func TestPutDuringRebalance(t *testing.T) {
 		m.puts()
 	}()
 
-	// sleep some time to wait for PUT operations to begin
+	// Sleep some time to wait for PUT operations to begin.
 	time.Sleep(3 * time.Second)
-	tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
-	err = tutils.RegisterNode(m.proxyURL, target, m.smap)
-	tassert.CheckFatal(t, err)
 
-	// Wait for everything to finish
+	m.reregisterTarget(target)
+
+	// Wait for everything to finish.
 	wg.Wait()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	// main check - try to read all objects
+	// Main check - try to read all objects.
 	m.gets()
 
 	m.checkObjectDistribution(t)
@@ -573,18 +528,14 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		killTarget     *cluster.Snode
 	)
 
-	// Init. ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have at least 2 target in the cluster")
-	}
+	m.expectTargets(2)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	// select a random target to disable one of its mountpaths,
-	// and another random target to unregister
+	// Select a random target to disable one of its mountpaths,
+	// and another random target to unregister.
 	for _, target := range m.smap.Tmap {
 		if selectedTarget == nil {
 			selectedTarget = target
@@ -679,13 +630,9 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	// Init. ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have at least 1 target in the cluster")
-	}
+	m.expectTargets(1)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -741,55 +688,41 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 func TestGetDuringRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
-	md := ioContext{
+	m := ioContext{
 		t:   t,
 		num: 30000,
 	}
 
-	md.saveClusterState()
+	m.saveClusterState()
+	m.expectTargets(3)
 
-	if md.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", md.originalTargetCount)
-	}
-	target := tutils.ExtractTargetNodes(md.smap)[0]
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	// Create ais bucket
-	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
-	defer tutils.DestroyBucket(t, md.proxyURL, md.bck)
+	target := m.unregisterTarget()
 
-	// Unregister a target
-	err := tutils.UnregisterNode(md.proxyURL, target.ID())
-	tassert.CheckFatal(t, err)
-	n := tutils.GetClusterMap(t, md.proxyURL).CountTargets()
-	if n != md.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-1, n)
-	}
+	m.puts()
 
-	// PUT
-	md.puts()
-
-	// Start getting objects and register target in parallel
+	// Start getting objects and register target in parallel.
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		md.gets()
+		m.gets()
 	}()
 
-	tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
-	err = tutils.RegisterNode(md.proxyURL, target, md.smap)
-	tassert.CheckFatal(t, err)
+	m.reregisterTarget(target)
 
-	// wait for everything to finish
-	baseParams := tutils.BaseAPIParams(md.proxyURL)
+	// Wait for everything to finish.
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	wg.Wait()
 
-	// Get objects once again to check if they are still accessible after rebalance
-	md.gets()
+	// Get objects once again to check if they are still accessible after rebalance.
+	m.gets()
 
-	md.ensureNoErrors()
-	md.assertClusterState()
+	m.ensureNoErrors()
+	m.assertClusterState()
 }
 
 func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
@@ -804,12 +737,9 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		t: t,
 	}
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-	tutils.Logf("Num targets %d\n", m.originalTargetCount)
+	m.expectTargets(3)
+
 	targets := tutils.ExtractTargetNodes(m.smap)
 
 	// Unregister targets
@@ -864,11 +794,9 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(2)
+
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	// Remove all mountpaths for one target
 	oldMountpaths, err := api.GetMountpaths(baseParams, target)
@@ -926,9 +854,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	)
 
 	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
@@ -987,14 +913,11 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
+
 	targets := tutils.ExtractTargetNodes(m.smap)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 
 	defer func() {
@@ -1062,9 +985,8 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	)
 
 	m.saveClusterState()
-	if m.originalTargetCount < 1 {
-		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(1)
+
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	// Remove all mountpaths for one target
 	oldMountpaths, err := api.GetMountpaths(baseParams, target)
@@ -1133,9 +1055,7 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 1.
 	m.saveClusterState()
-	if m.originalProxyCount < 2 {
-		t.Fatalf("Must have 2 or more proxies in the cluster, have only %d", m.originalProxyCount)
-	}
+	m.expectProxies(2)
 
 	// Step 2.
 	origID, origURL := m.smap.Primary.ID(), m.smap.Primary.PublicNet.DirectURL
@@ -1181,9 +1101,7 @@ func TestAtimeRebalance(t *testing.T) {
 	}
 
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(2)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -1383,27 +1301,15 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 		numGetsEachFile: 5,
 	}
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(2)
 
-	// Unregister target 0
-	targets := tutils.ExtractTargetNodes(m.smap)
-	err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
-	tassert.CheckFatal(t, err)
-	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
-	if n != m.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
-	}
+	target := m.unregisterTarget()
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	// Reregister target 0
-	m.reregisterTarget(targets[0])
+	m.reregisterTarget(target)
 
 	m.puts()
 	m.gets()
@@ -1429,9 +1335,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(2)
 
 	targets := tutils.ExtractTargetNodes(m.smap)
 
@@ -1476,9 +1380,7 @@ func TestRenewRebalance(t *testing.T) {
 	)
 
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(2)
 
 	// Step 1: Unregister a target
 	target := m.unregisterTarget()
@@ -1538,9 +1440,11 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 4,
 		}
+		baseParams = tutils.BaseAPIParams(m.proxyURL)
 	)
+
 	m.saveClusterState()
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	m.expectTargets(1)
 
 	// Select one target at random
 	target := tutils.ExtractTargetNodes(m.smap)[0]

@@ -7,7 +7,6 @@ package integration
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -621,9 +620,7 @@ func TestDistributedSort(t *testing.T) {
 
 			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
@@ -668,9 +665,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 
 			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			df.init()
 
@@ -716,9 +711,7 @@ func TestDistributedSortWithEmptyBucket(t *testing.T) {
 
 			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -761,11 +754,8 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			// Create ais buckets
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
@@ -805,11 +795,8 @@ func TestDistributedSortParallel(t *testing.T) {
 				dSortsCount = 5
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -841,13 +828,9 @@ func TestDistributedSortChain(t *testing.T) {
 				dSortsCount = 5
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -876,13 +859,9 @@ func TestDistributedSortShuffle(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -920,13 +899,9 @@ func TestDistributedSortWithDisk(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -970,13 +945,9 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1012,13 +983,9 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 		}
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(3)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1078,13 +1045,9 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 		}
 	)
 
-	// Initialize ioContext
 	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
+	m.expectTargets(3)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1148,13 +1111,9 @@ func TestDistributedSortZip(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1195,13 +1154,9 @@ func TestDistributedSortWithCompression(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1266,13 +1221,9 @@ func TestDistributedSortWithContent(t *testing.T) {
 						}
 					)
 
-					// Initialize ioContext
 					m.saveClusterState()
-					if m.originalTargetCount < 3 {
-						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-					}
+					m.expectTargets(3)
 
-					// Create ais bucket
 					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 					defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1327,13 +1278,9 @@ func TestDistributedSortAbort(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1374,13 +1321,9 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1422,19 +1365,14 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					tarballCnt:       2000,
 					fileInTarballCnt: 500,
 				}
+				target *cluster.Snode
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
-			targets := tutils.ExtractTargetNodes(m.smap)
-			idx := rand.Intn(len(targets))
+			m.expectTargets(3)
 
 			df.init()
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1444,9 +1382,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			df.start()
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
-				tutils.Logln("killing target...")
-				err := tutils.UnregisterNode(m.proxyURL, targets[idx].ID())
-				tassert.CheckFatal(t, err)
+				target = m.unregisterTarget()
 			})
 
 			tutils.Logln("waiting for distributed sort to finish up...")
@@ -1469,7 +1405,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 				}
 			}
 
-			m.reregisterTarget(targets[idx])
+			m.reregisterTarget(target)
 			time.Sleep(time.Second)
 		},
 	)
@@ -1500,11 +1436,8 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						mountpaths = make(map[*cluster.Snode]string)
 					)
 
-					// Initialize ioContext
 					m.saveClusterState()
-					if m.originalTargetCount < 3 {
-						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-					}
+					m.expectTargets(3)
 
 					// Initialize `df.baseParams`
 					df.init()
@@ -1597,20 +1530,13 @@ func TestDistributedSortAddTarget(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
-			targets := tutils.ExtractTargetNodes(m.smap)
+			m.expectTargets(3)
 
 			df.init()
 
-			tutils.Logln("killing target...")
-			err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
-			tassert.CheckFatal(t, err)
+			target := m.unregisterTarget()
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1620,9 +1546,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			df.start()
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, dsort.ExtractionPhase, func() {
-				// Reregister target 0
-				m.reregisterTarget(targets[0])
-				tutils.Logln("reregistering complete")
+				m.reregisterTarget(target)
 			})
 
 			tutils.Logln("waiting for distributed sort to finish up...")
@@ -1659,13 +1583,9 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1708,13 +1628,9 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1762,13 +1678,9 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			// is 80% so dSort should never go above this number in memory usage.
 			df.tarballCnt = int(float64(mem.ActualFree/uint64(df.fileInTarballSize)/uint64(df.fileInTarballCnt)) * 1.4)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -1813,11 +1725,8 @@ func TestDistributedSortMissingShards(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -1875,11 +1784,8 @@ func TestDistributedSortDuplications(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -1939,22 +1845,18 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					"input-%d-pref",
 					"smth-%d",
 				}
-				proxyURL = tutils.RandomProxyURL()
+				proxyURL   = tutils.RandomProxyURL()
+				baseParams = tutils.BaseAPIParams(proxyURL)
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
-			baseParams := tutils.BaseAPIParams(proxyURL)
+			m.expectTargets(3)
 
 			// Set URL for order file (points to the object in cluster)
 			df.orderFileURL = fmt.Sprintf("%s/%s/%s/%s/%s", proxyURL, cmn.Version, cmn.Objects, m.bck.Name, orderFileName)
 
 			df.init()
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -2032,13 +1934,9 @@ func TestDistributedSortDryRun(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -2076,13 +1974,9 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 				}
 			)
 
-			// Initialize ioContext
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
-			// Create ais bucket
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
@@ -2124,9 +2018,7 @@ func TestDistributedSortWithLongerExt(t *testing.T) {
 			)
 
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -2169,9 +2061,7 @@ func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
 			)
 
 			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			m.expectTargets(3)
 
 			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 			defer tutils.DestroyBucket(t, m.proxyURL, m.bck)

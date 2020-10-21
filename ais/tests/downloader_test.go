@@ -606,10 +606,7 @@ func TestDownloadStatus(t *testing.T) {
 	)
 
 	m.saveClusterState()
-	if m.originalTargetCount < 2 {
-		t.Errorf("At least 2 targets are required.")
-		return
-	}
+	m.expectTargets(2)
 
 	var (
 		shortFileName = "shortFile"
@@ -623,7 +620,6 @@ func TestDownloadStatus(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, bck)
 

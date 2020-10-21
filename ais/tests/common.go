@@ -126,6 +126,18 @@ func (m *ioContext) assertClusterState() {
 	}
 }
 
+func (m *ioContext) expectTargets(n int) {
+	if m.originalTargetCount < n {
+		m.t.Fatalf("Must have %d or more targets in the cluster, have only %d", n, m.originalTargetCount)
+	}
+}
+
+func (m *ioContext) expectProxies(n int) {
+	if m.originalProxyCount < n {
+		m.t.Fatalf("Must have %d or more proxies in the cluster, have only %d", n, m.originalProxyCount)
+	}
+}
+
 func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	var (
 		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
