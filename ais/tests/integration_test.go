@@ -1440,7 +1440,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 4,
 		}
-		baseParams = tutils.BaseAPIParams(m.proxyURL)
+		baseParams = tutils.BaseAPIParams()
 	)
 
 	m.saveClusterState()
