@@ -5,7 +5,6 @@
 package cmn
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -251,15 +250,12 @@ func (b Bck) Equal(other Bck) bool {
 }
 
 func ValidateBckName(bucket string) (err error) {
-	const nameErr = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
-	if bucket == "" {
-		return errors.New("bucket name is empty")
-	}
-	if !bucketReg.MatchString(bucket) {
-		return fmt.Errorf("bucket name %s is invalid: %s", bucket, nameErr)
+	const nameHelp = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+	if bucket == "" || bucket == "." || !bucketReg.MatchString(bucket) {
+		return fmt.Errorf("bucket name %q is invalid: %v", bucket, nameHelp)
 	}
 	if strings.Contains(bucket, "..") {
-		return fmt.Errorf("bucket name %s cannot contain '..'", bucket)
+		return fmt.Errorf("bucket name %q cannot contain '..'", bucket)
 	}
 	return
 }

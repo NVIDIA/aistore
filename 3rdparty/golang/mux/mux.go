@@ -183,7 +183,7 @@ func (mux *ServeMux) shouldRedirectRLocked(host, path string) bool {
 // Handler returns a ``page not found'' handler and an empty pattern.
 func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 	// CONNECT requests are not canonicalized.
-	if r.Method == "CONNECT" {
+	if r.Method == http.MethodConnect {
 		// If r.URL.Path is /tree and its handler is not registered,
 		// the /tree -> /tree/ redirect applies to CONNECT requests
 		// but the path canonicalization does not.
@@ -192,6 +192,18 @@ func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 		}
 
 		return mux.handler(r.Host, r.URL.Path)
+	}
+
+	// first, lockless (optimistic) match
+	if r.Method != http.MethodPut {
+		path := r.URL.Path
+		if len(path) > 5 && path[0] == '/' && path[1] == '/' {
+			path = r.URL.Path[1:]
+		}
+		h, pattern = mux.match(path)
+		if h != nil {
+			return
+		}
 	}
 
 	// All other requests have any port stripped and path cleaned

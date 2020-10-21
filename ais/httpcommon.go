@@ -123,7 +123,8 @@ type (
 	// http server and http runner (common for proxy and target)
 	netServer struct {
 		s             *http.Server
-		mux           *mux.ServeMux
+		muxers        cmn.HTTPMuxers
+		transportMux  *mux.ServeMux
 		sndRcvBufSize int
 	}
 	httprunner struct {
@@ -173,6 +174,11 @@ type (
 
 var errNoBMD = errors.New("no bucket metadata")
 
+var allHTTPverbs = []string{
+	http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
+	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
+}
+
 func (e *errTgtBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errBmdUUIDSplit) Error() string     { return e.detail }
 func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
@@ -210,7 +216,7 @@ func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
 // initiate all HTTPS requests with CONNECT method instead of GET/PUT etc.
 func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodConnect {
-		server.mux.ServeHTTP(w, r)
+		server.muxers.ServeHTTP(w, r)
 		return
 	}
 
@@ -259,9 +265,9 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 
 	// Optimization: use "slow" HTTP handler only if the cluster works in Cloud
 	// reverse proxy mode. Without the optimization every HTTP request would
-	// waste time by getting and reading global configuration, string
+	// spend time on getting and parsing global configuration, string
 	// comparison and branching
-	var httpHandler http.Handler = server.mux
+	var httpHandler http.Handler = server.muxers
 	server.s = &http.Server{
 		Addr:     addr,
 		Handler:  httpHandler,
@@ -359,23 +365,29 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 }
 
 func (h *httprunner) registerPublicNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
-	h.publicServer.mux.HandleFunc(path, handler)
-	if !strings.HasSuffix(path, "/") {
-		h.publicServer.mux.HandleFunc(path+"/", handler)
+	for _, v := range allHTTPverbs {
+		h.publicServer.muxers[v].HandleFunc(path, handler)
+		if !strings.HasSuffix(path, "/") {
+			h.publicServer.muxers[v].HandleFunc(path+"/", handler)
+		}
 	}
 }
 
 func (h *httprunner) registerIntraControlNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
-	h.intraControlServer.mux.HandleFunc(path, handler)
-	if !strings.HasSuffix(path, "/") {
-		h.intraControlServer.mux.HandleFunc(path+"/", handler)
+	for _, v := range allHTTPverbs {
+		h.intraControlServer.muxers[v].HandleFunc(path, handler)
+		if !strings.HasSuffix(path, "/") {
+			h.intraControlServer.muxers[v].HandleFunc(path+"/", handler)
+		}
 	}
 }
 
 func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
-	h.intraDataServer.mux.HandleFunc(path, handler)
-	if !strings.HasSuffix(path, "/") {
-		h.intraDataServer.mux.HandleFunc(path+"/", handler)
+	for _, v := range allHTTPverbs {
+		h.intraDataServer.muxers[v].HandleFunc(path, handler)
+		if !strings.HasSuffix(path, "/") {
+			h.intraDataServer.muxers[v].HandleFunc(path+"/", handler)
+		}
 	}
 }
 
@@ -398,21 +410,27 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	if h.si.IsProxy() {
 		bufsize = 0
 	}
+	muxers := newMuxers()
 	h.publicServer = &netServer{
-		mux:           mux.NewServeMux(),
+		muxers:        muxers,
+		transportMux:  muxers[http.MethodPut],
 		sndRcvBufSize: bufsize,
 	}
 	h.intraControlServer = h.publicServer // by default intra control net is the same as public
 	if config.Net.UseIntraControl {
+		muxers = newMuxers()
 		h.intraControlServer = &netServer{
-			mux:           mux.NewServeMux(),
+			muxers:        muxers,
+			transportMux:  muxers[http.MethodPut],
 			sndRcvBufSize: 0,
 		}
 	}
 	h.intraDataServer = h.publicServer // by default intra data net is the same as public
 	if config.Net.UseIntraData {
+		muxers = newMuxers()
 		h.intraDataServer = &netServer{
-			mux:           mux.NewServeMux(),
+			muxers:        muxers,
+			transportMux:  muxers[http.MethodPut],
 			sndRcvBufSize: bufsize,
 		}
 	}
@@ -420,6 +438,14 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	h.owner.smap = newSmapOwner()
 	h.owner.rmd = newRMDOwner()
 	h.owner.rmd.load()
+}
+
+func newMuxers() cmn.HTTPMuxers {
+	m := make(cmn.HTTPMuxers, len(allHTTPverbs))
+	for _, v := range allHTTPverbs {
+		m[v] = mux.NewServeMux()
+	}
+	return m
 }
 
 // initSI initializes this cluster.Snode

@@ -145,6 +145,10 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, 
 
 // [METHOD] /v1/download
 func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	if err := p.checkPermissions(r.Header, nil, cmn.AccessDOWNLOAD); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return

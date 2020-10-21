@@ -18,6 +18,10 @@ import (
 // Objects are returned in sorted order.
 
 func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		p.httpqueryget(w, r)

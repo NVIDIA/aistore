@@ -209,6 +209,10 @@ func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/etl
 func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	switch {
 	case r.Method == http.MethodPost:
 		apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.ETL)

@@ -284,12 +284,12 @@ func (t *targetrunner) Run() error {
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
-	transport.SetMux(cmn.NetworkPublic, t.publicServer.mux)
+	transport.SetMux(cmn.NetworkPublic, t.publicServer.transportMux)
 	if config.Net.UseIntraControl {
-		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.mux)
+		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.transportMux)
 	}
 	if config.Net.UseIntraData {
-		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.mux)
+		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.transportMux)
 	}
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
 	t.initRecvHandlers()

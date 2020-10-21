@@ -128,23 +128,30 @@ func (p *proxyrunner) Run() error {
 
 	//
 	// REST API: register proxy handlers and start listening
-	// NOTE: additional handlers are registered upon startup (see markClusterStarted)
 	//
 	networkHandlers := []networkHandler{
 		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
+		// pubnet handlers: cluster must be started
+		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Query, h: p.queryHandler, net: []string{cmn.NetworkPublic}},
 		{r: cmn.ETL, h: p.etlHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Sort, h: p.dsortHandler, net: []string{cmn.NetworkPublic}},
+
 		{r: cmn.IC, h: p.ic.handler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Sort, h: p.dsortHandler, net: []string{cmn.NetworkPublic}},
 
 		{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
 		{r: cmn.Notifs, h: p.notifs.handler, net: []string{cmn.NetworkIntraControl}},
+
+		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
 
 		{r: "/", h: p.httpCloudHandler, net: []string{cmn.NetworkPublic}},
 	}
@@ -161,20 +168,6 @@ func (p *proxyrunner) Run() error {
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, nil, p.statsT)
 	return p.httprunner.run()
-}
-
-// enable handlers that must be accessible only upon cluster-startup-done
-func (p *proxyrunner) markClusterStarted() {
-	netH := []networkHandler{
-		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Query, h: p.queryHandler, net: []string{cmn.NetworkPublic}},
-
-		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
-	}
-	p.registerNetworkHandlers(netH)
-	p.httprunner.markClusterStarted()
 }
 
 func (p *proxyrunner) sendKeepalive(timeout time.Duration) (status int, err error) {
@@ -285,6 +278,10 @@ func (p *proxyrunner) Stop(err error) {
 
 // verb /v1/buckets/
 func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		p.httpbckget(w, r)
@@ -321,11 +318,6 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	if p.owner.smap.get().CountTargets() < 1 {
-		p.invalmsghdlr(w, r, "No registered targets yet")
-		return
-	}
-
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
@@ -2541,6 +2533,10 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/dsort
 func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	// TODO: separate permissions for dsort? xactions?
 	if err := p.checkPermissions(r.Header, nil, cmn.AccessADMIN); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)

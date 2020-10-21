@@ -21,16 +21,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	jsoniter "github.com/json-iterator/go"
-)
-
-var (
-	// It is used to Marshal/Unmarshal API json messages and is initialized in init function.
-	jsonAPI jsoniter.API
-
-	// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
-	// all of the byte-range-spec values is greater than the content size.
-	ErrNoOverlap = errors.New("invalid range: failed to overlap")
 )
 
 const (
@@ -95,6 +87,17 @@ type (
 		AtimeUnix() int64
 		CustomMD() SimpleKVs
 	}
+
+	HTTPMuxers map[string]*mux.ServeMux // by http.Method
+)
+
+var (
+	// It is used to Marshal/Unmarshal API json messages and is initialized in init function.
+	jsonAPI jsoniter.API
+
+	// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
+	// all of the byte-range-spec values is greater than the content size.
+	ErrNoOverlap = errors.New("invalid range: failed to overlap")
 )
 
 // Eg: Bad Request: Bucket abc does not appear to be local or does not exist:
@@ -522,4 +525,19 @@ func ToHTTPHdr(meta ObjHeaderMetaProvider, hdrs ...http.Header) (hdr http.Header
 		hdr.Add(HeaderObjCustomMD, strings.Join([]string{k, v}, "="))
 	}
 	return hdr
+}
+
+////////////////
+// HTTPMuxers //
+////////////////
+
+// interface guard
+var (
+	_ http.Handler = HTTPMuxers{}
+)
+
+// ServeHTTP dispatches the request to the handler whose
+// pattern most closely matches the request URL.
+func (m HTTPMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m[r.Method].ServeHTTP(w, r)
 }

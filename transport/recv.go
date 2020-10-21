@@ -77,14 +77,14 @@ const (
 //
 
 var (
-	muxers   map[string]*mux.ServeMux // "mux" stands for HTTP request multiplexer
+	muxers   cmn.HTTPMuxers
 	handlers map[string]map[string]*handler
 	mu       *sync.Mutex
 )
 
 func init() {
 	mu = &sync.Mutex{}
-	muxers = make(map[string]*mux.ServeMux)
+	muxers = make(cmn.HTTPMuxers, 16)
 	handlers = make(map[string]map[string]*handler)
 }
 
