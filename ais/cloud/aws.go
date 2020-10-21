@@ -120,16 +120,16 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
 		glog.Warning(err)
 	}
 
-	params := &s3.ListObjectsInput{Bucket: aws.String(cloudBck.Name)}
+	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
 	if msg.Prefix != "" {
 		params.Prefix = aws.String(msg.Prefix)
 	}
 	if msg.ContinuationToken != "" {
-		params.Marker = aws.String(msg.ContinuationToken)
+		params.ContinuationToken = aws.String(msg.ContinuationToken)
 	}
 	params.MaxKeys = aws.Int64(int64(msg.PageSize))
 
-	resp, err := svc.ListObjects(params)
+	resp, err := svc.ListObjectsV2(params)
 	if err != nil {
 		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
 		return
@@ -137,14 +137,14 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
 
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, len(resp.Contents))}
 	for _, key := range resp.Contents {
-		entry := &cmn.BucketEntry{}
-		entry.Name = *(key.Key)
+		entry := &cmn.BucketEntry{Name: *key.Key}
 		if msg.WantProp(cmn.GetPropsSize) {
-			entry.Size = *(key.Size)
+			entry.Size = *key.Size
 		}
 		if msg.WantProp(cmn.GetPropsChecksum) {
-			omd5, _ := strconv.Unquote(*key.ETag)
-			entry.Checksum = omd5
+			if v, ok := h.EncodeCksum(key.ETag); ok {
+				entry.Checksum = v
+			}
 		}
 
 		bckList.Entries = append(bckList.Entries, entry)
@@ -154,29 +154,29 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
 	}
 
 	if *resp.IsTruncated {
-		// For AWS, resp.NextMarker is only set when a query has a delimiter.
-		// Without a delimiter, NextMarker should be the last returned key.
-		bckList.ContinuationToken = bckList.Entries[len(bckList.Entries)-1].Name
+		bckList.ContinuationToken = *resp.NextContinuationToken
 	}
 
 	if len(bckList.Entries) == 0 {
 		return
 	}
 
-	// if version is requested, read versions page by page and stop
-	// when there is nothing to read or the version page marker is
-	// greater than object page marker
-	// Page is limited with 500+ items, so reading them is slow
+	// If version is requested, read versions page by page and stop when there
+	// is nothing to read or the version page marker is greater than object page marker.
+	// Page is limited with 500+ items, so reading them is slow.
 	if msg.WantProp(cmn.GetPropsVersion) {
-		versions := make(map[string]string, len(bckList.Entries))
-		keyMarker := msg.ContinuationToken
+		var (
+			versions   = make(map[string]string, len(bckList.Entries))
+			keyMarker  = bckList.Entries[0].Name
+			lastMarker = bckList.Entries[len(bckList.Entries)-1].Name
+		)
 
 		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
 		if msg.Prefix != "" {
 			verParams.Prefix = aws.String(msg.Prefix)
 		}
 
-		for {
+		for keyMarker <= lastMarker {
 			if keyMarker != "" {
 				verParams.KeyMarker = aws.String(keyMarker)
 			}
@@ -200,9 +200,6 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
 			}
 
 			keyMarker = *verResp.NextKeyMarker
-			if bckList.ContinuationToken != "" && keyMarker > bckList.ContinuationToken {
-				break
-			}
 		}
 
 		for _, entry := range bckList.Entries {
