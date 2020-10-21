@@ -74,13 +74,19 @@ type (
 		pre   func(*bmdModifier, *bucketMD) (bool, error)
 		final func(*bmdModifier, *bucketMD)
 
-		smap          *smapX
-		msg           *cmn.ActionMsg
-		txnID         string // transaction UUID
-		bck           *cluster.Bck
-		propsToUpdate *cmn.BucketPropsToUpdate
+		smap  *smapX
+		msg   *cmn.ActionMsg
+		txnID string // transaction UUID
+		bck   *cluster.Bck
+
+		propsToUpdate *cmn.BucketPropsToUpdate // update existing props
+		revertProps   *cmn.BucketPropsToUpdate // props to revert
+		setProps      *cmn.BucketProps         // new props to set
 		cloudProps    http.Header
-		wait          bool
+
+		wait         bool
+		needReMirror bool
+		needReEC     bool
 	}
 )
 

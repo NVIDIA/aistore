@@ -88,15 +88,13 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
-		pre: func(_ *bmdModifier, clone *bucketMD) (bool, error) {
-			added := clone.add(bck, bucketProps) // TODO: Bucket could be added during begin.
-			cmn.Assert(added)
-			return true, nil
-		},
-		final: p._syncBMDFinal,
-		wait:  true,
-		msg:   &c.msg.ActionMsg,
-		txnID: c.uuid,
+		pre:      p._createBMDPre,
+		final:    p._syncBMDFinal,
+		wait:     true,
+		msg:      &c.msg.ActionMsg,
+		txnID:    c.uuid,
+		bck:      bck,
+		setProps: bucketProps,
 	}
 	bmd, _ = p.owner.bmd.modify(ctx)
 	c.msg.BMDVersion = bmd.version()
@@ -114,6 +112,12 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		}
 	}
 	return nil
+}
+
+func (p *proxyrunner) _createBMDPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
+	added := clone.add(ctx.bck, ctx.setProps) // TODO: Bucket could be added during begin.
+	cmn.Assert(added)
+	return true, nil
 }
 
 // destroy AIS bucket or evict Cloud bucket
@@ -184,24 +188,15 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 			Copies:  &copies,
 		},
 	}
-	var (
-		present bool
-		bprops  *cmn.BucketProps
-	)
+
 	ctx := &bmdModifier{
-		pre: func(ctx *bmdModifier, clone *bucketMD) (bool, error) {
-			bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
-			cmn.Assert(present)
-			nprops := bprops.Clone()
-			nprops.Apply(*ctx.propsToUpdate)
-			clone.set(bck, nprops)
-			return true, nil
-		},
+		pre:           p._mirrorBMDPre,
 		final:         p._syncBMDFinal,
 		wait:          true,
 		msg:           &c.msg.ActionMsg,
 		txnID:         c.uuid,
 		propsToUpdate: updateProps,
+		bck:           bck,
 	}
 	bmd, _ = p.owner.bmd.modify(ctx)
 	c.msg.BMDVersion = bmd.version()
@@ -217,13 +212,28 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
-			p.undoUpdateCopies(msg, bck, bprops.Mirror.Copies, bprops.Mirror.Enabled)
+			p.undoUpdateCopies(msg, bck, ctx.revertProps)
 			err = res.err
 			return
 		}
 	}
 	xactID = c.uuid
 	return
+}
+
+func (p *proxyrunner) _mirrorBMDPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
+	bprops, present := clone.Get(ctx.bck) // TODO: Bucket could be deleted during begin.
+	cmn.Assert(present)
+	nprops := bprops.Clone()
+	nprops.Apply(*ctx.propsToUpdate)
+	ctx.revertProps = &cmn.BucketPropsToUpdate{
+		Mirror: &cmn.MirrorConfToUpdate{
+			Copies:  &bprops.Mirror.Copies,
+			Enabled: &bprops.Mirror.Enabled,
+		},
+	}
+	clone.set(ctx.bck, nprops)
+	return true, nil
 }
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }
@@ -301,50 +311,26 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	}
 
 	// 3. update BMD locally & metasync updated BMD
-	var (
-		bmd          *bucketMD
-		needReMirror bool
-		needReEC     bool
-	)
-
 	ctx := &bmdModifier{
-		pre: func(_ *bmdModifier, clone *bucketMD) (bool, error) {
-			bprops, present = clone.Get(bck) // TODO: Bucket could be deleted during begin.
-			cmn.Assert(present)
-
-			if msg.Action == cmn.ActSetBprops {
-				bck.Props = bprops
-				nprops, err = p.makeNprops(bck, propsToUpdate)
-				if err != nil {
-					return false, err
-				}
-
-				// BackendBck (if present) should be already locally available (see cmn.ActSetBprops).
-				if err := p.checkBackendBck(nprops); err != nil {
-					return false, err
-				}
-			}
-
-			needReMirror = reMirror(bprops, nprops)
-			needReEC = reEC(bprops, nprops, bck)
-			clone.set(bck, nprops)
-			return true, nil
-		},
-		final: p._syncBMDFinal,
-		wait:  true,
-		msg:   msg,
-		txnID: c.uuid,
+		pre:           p._setPropsPre,
+		final:         p._syncBMDFinal,
+		wait:          true,
+		msg:           msg,
+		txnID:         c.uuid,
+		setProps:      nprops,
+		propsToUpdate: &propsToUpdate,
+		bck:           bck,
 	}
-	bmd, err = p.owner.bmd.modify(ctx)
+	bmd, err := p.owner.bmd.modify(ctx)
 	if err != nil {
 		return "", err
 	}
 	c.msg.BMDVersion = bmd.version()
 
 	// 4. if remirror|re-EC|TBD-storage-svc
-	if needReMirror || needReEC {
+	if ctx.needReMirror || ctx.needReEC {
 		action := cmn.ActMakeNCopies
-		if needReEC {
+		if ctx.needReEC {
 			action = cmn.ActECEncode
 		}
 		nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), action, bck.Bck)
@@ -357,6 +343,29 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	return
+}
+
+func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (_ bool, err error) {
+	bprops, present := clone.Get(ctx.bck) // TODO: Bucket could be deleted during begin.
+	cmn.Assert(present)
+
+	if ctx.msg.Action == cmn.ActSetBprops {
+		ctx.bck.Props = bprops
+		ctx.setProps, err = p.makeNprops(ctx.bck, *ctx.propsToUpdate)
+		if err != nil {
+			return false, err
+		}
+
+		// BackendBck (if present) should be already locally available (see cmn.ActSetBprops).
+		if err := p.checkBackendBck(ctx.setProps); err != nil {
+			return false, err
+		}
+	}
+
+	ctx.needReMirror = reMirror(bprops, ctx.setProps)
+	ctx.needReEC = reEC(bprops, ctx.setProps, ctx.bck)
+	clone.set(ctx.bck, ctx.setProps)
+	return true, nil
 }
 
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
@@ -600,7 +609,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
-		pre:           p._ecBMDPre,
+		pre:           p._updatePropsBMDPre,
 		final:         p._syncBMDFinal,
 		bck:           bck,
 		wait:          true,
@@ -632,9 +641,11 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	return
 }
 
-func (p *proxyrunner) _ecBMDPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
+func (p *proxyrunner) _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
 	bprops, present := clone.Get(ctx.bck) // TODO: Bucket could be deleted during begin.
-	cmn.Assert(present)
+	if !present {
+		return false, nil
+	}
 	nprops := bprops.Clone()
 	nprops.Apply(*ctx.propsToUpdate)
 	clone.set(ctx.bck, nprops)
@@ -720,35 +731,22 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 // rollback create-bucket
 func (p *proxyrunner) undoCreateBucket(msg *cmn.ActionMsg, bck *cluster.Bck) {
 	ctx := &bmdModifier{
-		pre: func(_ *bmdModifier, clone *bucketMD) (bool, error) {
-			if !clone.del(bck) {
-				return false, nil
-			}
-			p.owner.bmd.put(clone)
-			return true, nil
-		},
+		pre:   p._destroyBMDPre,
 		final: p._syncBMDFinal,
 		msg:   msg,
+		bck:   bck,
 	}
 	p.owner.bmd.modify(ctx)
 }
 
 // rollback make-n-copies
-func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, copies int64, enabled bool) {
+func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, propsToUpdate *cmn.BucketPropsToUpdate) {
 	ctx := &bmdModifier{
-		pre: func(_ *bmdModifier, clone *bucketMD) (bool, error) {
-			nprops, present := clone.Get(bck)
-			if !present {
-				return false, nil
-			}
-			bprops := nprops.Clone()
-			bprops.Mirror.Enabled = enabled
-			bprops.Mirror.Copies = copies
-			clone.set(bck, bprops)
-			return true, nil
-		},
-		final: p._syncBMDFinal,
-		msg:   msg,
+		pre:           p._updatePropsBMDPre,
+		final:         p._syncBMDFinal,
+		msg:           msg,
+		propsToUpdate: propsToUpdate,
+		bck:           bck,
 	}
 	p.owner.bmd.modify(ctx)
 }
