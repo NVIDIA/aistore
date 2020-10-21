@@ -38,6 +38,10 @@ func CCSign() Options {
 	return Options{Compression: true, Checksum: true, Signature: true, Indent: false}
 }
 
+func CksumSign() Options {
+	return Options{Checksum: true, Signature: true}
+}
+
 //////////////////
 // main methods //
 //////////////////

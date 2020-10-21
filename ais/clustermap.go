@@ -517,7 +517,7 @@ func (r *smapOwner) modify(ctx *smapModifier) (err error) {
 		return
 	}
 	if err := r.persist(clone); err != nil {
-		glog.Errorf("failed to persist %s: %v", clone, err)
+		glog.Errorf("Failed to persist %s: %v", clone, err)
 	}
 	r.put(clone)
 	if ctx.post != nil {

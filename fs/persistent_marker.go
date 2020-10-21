@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
 func MarkerExists(marker string) bool {
@@ -26,20 +27,71 @@ func MarkerExists(marker string) bool {
 }
 
 func PutMarker(marker string) error {
-	var mpath *MountpathInfo
-	availableMpaths, _ := Get()
-	// get random mountpath
-	for _, mp := range availableMpaths {
-		mpath = mp
-		break
+	cnt, available := PersistOnMpaths(marker, nil, 1)
+	if cnt == 0 {
+		return fmt.Errorf("failed to persist marker %q (available mountPaths: %d)", marker, available)
 	}
-	if mpath == nil {
-		return fmt.Errorf("could not create %q marker: %s", marker, cmn.NoMountpaths)
+	return nil
+}
+
+// PersistOnMpaths persists `what` on every mountpath under "mountpath.Path/path" filename.
+// It does it on maximum `atMost` mountPaths. If `atMost == 0`, it does it on every mountpath.
+// Returns how many times it successfully stored a file.
+func PersistOnMpaths(path string, what interface{}, atMost int, opts ...jsp.Options) (cnt, availCnt int) {
+	var (
+		options            = jsp.CksumSign()
+		availableMpaths, _ = Get()
+	)
+
+	if atMost == 0 {
+		atMost = len(availableMpaths)
+	}
+	if len(opts) > 0 {
+		options = opts[0]
 	}
 
-	path := filepath.Join(mpath.Path, marker)
-	_, err := cmn.CreateFile(path)
+	for _, mountPath := range availableMpaths {
+		if err := PersistOnSingleMpath(mountPath, path, what, options); err != nil {
+			glog.Errorf("Failed to persist %q on %q, err: %v", path, mountPath, err)
+		} else {
+			cnt++
+		}
+
+		if cnt == atMost {
+			break
+		}
+	}
+
+	return
+}
+
+func PersistOnSingleMpath(mpath *MountpathInfo, path string, what interface{}, options jsp.Options) (err error) {
+	fpath := filepath.Join(mpath.Path, path)
+	if what == nil {
+		_, err = cmn.CreateFile(fpath)
+	} else {
+		err = jsp.Save(fpath, what, options)
+	}
 	return err
+}
+
+func FindPersisted(path, oldSuffix string) (curr, prev MPI) {
+	avail, _ := Get()
+	curr, prev = make(MPI, len(avail)), make(MPI, len(avail))
+	for mpath, mpathInfo := range avail {
+		fpath := filepath.Join(mpath, path)
+		if err := Access(fpath); err == nil {
+			curr[mpath] = mpathInfo
+		}
+		if oldSuffix == "" {
+			continue
+		}
+		fpath += oldSuffix
+		if err := Access(fpath); err == nil {
+			prev[mpath] = mpathInfo
+		}
+	}
+	return
 }
 
 func RemoveMarker(marker string) error {
