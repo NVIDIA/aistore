@@ -7,6 +7,7 @@ package integration
 import (
 	"fmt"
 	"math/rand"
+	"path"
 	"sync"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ var (
 
 func TestSmoke(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
+	const objPrefix = "smoke"
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			cnt      = len(objSizes) * len(ratios) * 40 * numworkers
@@ -38,7 +39,7 @@ func TestSmoke(t *testing.T) {
 			for _, r := range ratios {
 				s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", cmn.B2S(fs, 0), r*100)
 				t.Run(s, func(t *testing.T) {
-					oneSmoke(t, proxyURL, bck.Bck, fs, r, bck.Props.Cksum.Type, fp)
+					oneSmoke(t, proxyURL, bck.Bck, objPrefix, fs, r, bck.Props.Cksum.Type, fp)
 				})
 			}
 		}
@@ -50,7 +51,7 @@ func TestSmoke(t *testing.T) {
 		errCh := make(chan error, cnt)
 		for file := range fp {
 			wg.Add(1)
-			go tutils.Del(proxyURL, bck.Bck, "smoke/"+file, wg, errCh, true)
+			go tutils.Del(proxyURL, bck.Bck, path.Join(objPrefix, file), wg, errCh, true)
 		}
 		wg.Wait()
 		select {
@@ -61,13 +62,12 @@ func TestSmoke(t *testing.T) {
 	})
 }
 
-func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objSize int64, ratio float32, cksumType string, filesPutCh chan string) {
+func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objPrefix string, objSize int64, ratio float32, cksumType string, filesPutCh chan string) {
 	var (
-		objPrefix = cmn.RandString(4)
-		nGet      = int(float32(numworkers) * ratio)
-		nPut      = numworkers - nGet
-		errCh     = make(chan error, 100)
-		wg        = &sync.WaitGroup{}
+		nGet  = int(float32(numworkers) * ratio)
+		nPut  = numworkers - nGet
+		errCh = make(chan error, 100)
+		wg    = &sync.WaitGroup{}
 	)
 
 	for i := 0; i < numworkers; i++ {
