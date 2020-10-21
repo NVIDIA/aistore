@@ -63,7 +63,7 @@ func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, cop
 		Bck:      bck,
 		T:        t,
 		CTs:      []string{fs.ObjectType},
-		Callback: xact.jogCallback,
+		VisitObj: xact.visitObj,
 		Slab:     slab,
 		DoLoad:   mpather.Load, // Required to fetch `NumCopies()` and skip copies.
 		Throttle: true,
@@ -83,7 +83,7 @@ func (r *xactMNC) Run() (err error) {
 	return
 }
 
-func (r *xactMNC) jogCallback(lom *cluster.LOM, buf []byte) (err error) {
+func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	var size int64
 	if n := lom.NumCopies(); n == r.copies {
 		return nil

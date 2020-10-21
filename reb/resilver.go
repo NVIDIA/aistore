@@ -7,13 +7,13 @@ package reb
 import (
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -21,11 +21,8 @@ import (
 )
 
 type (
-	resilverJogger struct {
-		joggerBase
-		slab              *memsys.Slab
-		buf               []byte
-		skipGlobMisplaced bool
+	joggerCtx struct {
+		xact cluster.Xact
 	}
 )
 
@@ -39,81 +36,52 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	}
 
 	if err := fs.PutMarker(xreg.GetMarkerName(cmn.ActResilver)); err != nil {
-		glog.Errorln("failed to create resilver marker", err)
+		glog.Errorln("Failed to create resilver marker", err)
 	}
 
-	xreb := xreg.RenewResilver(id).(*xrun.Resilver)
-	defer xreb.MarkDone()
+	xact := xreg.RenewResilver(id).(*xrun.Resilver)
+	defer xact.MarkDone()
 
 	if len(notifs) != 0 {
-		notifs[0].Xact = xreb
-		xreb.AddNotif(notifs[0])
+		notifs[0].Xact = xact
+		xact.AddNotif(notifs[0])
 	}
 
-	glog.Infoln(xreb.String())
+	glog.Infoln(xact.String())
 
-	slab, err := reb.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	slab, err := reb.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 
-	wg := &sync.WaitGroup{}
-	for _, mpathInfo := range availablePaths {
-		jogger := &resilverJogger{
-			joggerBase:        joggerBase{m: reb, xreb: &xreb.RebBase, wg: wg},
-			slab:              slab,
-			skipGlobMisplaced: skipGlobMisplaced,
-		}
-		wg.Add(1)
-		go jogger.jog(mpathInfo)
-	}
-	wg.Wait()
+	jctx := &joggerCtx{xact: xact}
+	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+		T:                     reb.t,
+		CTs:                   []string{fs.ObjectType, ec.SliceType},
+		VisitObj:              jctx.visitObj,
+		VisitCT:               jctx.visitCT,
+		Slab:                  slab,
+		SkipGloballyMisplaced: skipGlobMisplaced,
+	})
+	jg.Run()
 
-	if !xreb.Aborted() {
+	// Wait for abort or joggers to finish.
+	select {
+	case <-xact.ChanAbort():
+		err := jg.Stop()
+		glog.Errorf("Resilver failed with err: %v", err)
+	case <-jg.ListenFinished():
 		if err := fs.RemoveMarker(xreg.GetMarkerName(cmn.ActResilver)); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode(), err)
 		}
 	}
+
 	reb.t.GFN(cluster.GFNLocal).Deactivate()
-	xreb.Finish()
-}
-
-//
-// resilverJogger
-//
-
-func (rj *resilverJogger) jog(mpathInfo *fs.MountpathInfo) {
-	// the jogger is running in separate goroutine, so use defer to be
-	// sure that `Done` is called even if the jogger crashes to avoid hang up
-	rj.buf = rj.slab.Alloc()
-	defer func() {
-		rj.slab.Free(rj.buf)
-		rj.wg.Done()
-	}()
-
-	opts := &fs.Options{
-		Mpath:    mpathInfo,
-		CTs:      []string{fs.ObjectType, ec.SliceType},
-		Callback: rj.walk,
-		Sorted:   false,
-	}
-	rj.m.t.Bowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
-		opts.ErrCallback = nil
-		opts.Bck = bck.Bck
-		if err := fs.Walk(opts); err != nil {
-			if rj.xreb.Aborted() {
-				glog.Infof("aborting traversal")
-			} else {
-				glog.Errorf("%s: failed to traverse err: %v", rj.m.t.Snode(), err)
-			}
-			return true
-		}
-		return rj.xreb.Aborted()
-	})
+	xact.Finish()
 }
 
 // Copies a slice and its metafile (if exists) to the current mpath. At the
 // end does proper cleanup: removes ether source files(on success), or
 // destination files(on copy failure)
-func (rj *resilverJogger) moveSlice(fqn string, ct *cluster.CT) {
+func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
 	uname := ct.Bck().MakeUname(ct.ObjName())
 	destMpath, _, err := cluster.HrwMpath(uname)
 	if err != nil {
@@ -125,7 +93,7 @@ func (rj *resilverJogger) moveSlice(fqn string, ct *cluster.CT) {
 	}
 
 	destFQN := destMpath.MakePathFQN(ct.Bck().Bck, ec.SliceType, ct.ObjName())
-	srcMetaFQN, destMetaFQN, err := rj.moveECMeta(ct, ct.ParsedFQN().MpathInfo, destMpath)
+	srcMetaFQN, destMetaFQN, err := rj.moveECMeta(ct, ct.ParsedFQN().MpathInfo, destMpath, buf)
 	if err != nil {
 		return
 	}
@@ -134,26 +102,25 @@ func (rj *resilverJogger) moveSlice(fqn string, ct *cluster.CT) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("resilver moving %q -> %q", fqn, destFQN)
+		glog.Infof("resilver moving %q -> %q", ct.FQN(), destFQN)
 	}
-	if _, _, err = cmn.CopyFile(fqn, destFQN, rj.buf, cmn.ChecksumNone); err != nil {
-		glog.Errorf("failed to copy %q -> %q: %v. Rolling back", fqn, destFQN, err)
+	if _, _, err = cmn.CopyFile(ct.FQN(), destFQN, buf, cmn.ChecksumNone); err != nil {
+		glog.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
 		if err = os.Remove(destMetaFQN); err != nil {
 			glog.Warningf("failed to cleanup metafile copy %q: %v", destMetaFQN, err)
 		}
 	}
 	errMeta := os.Remove(srcMetaFQN)
-	errSlice := os.Remove(fqn)
+	errSlice := os.Remove(ct.FQN())
 	if errMeta != nil || errSlice != nil {
-		glog.Warningf("failed to cleanup %q: %v, %v", fqn, errSlice, errMeta)
+		glog.Warningf("failed to cleanup %q: %v, %v", ct.FQN(), errSlice, errMeta)
 	}
 }
 
 // Copies EC metafile to correct mpath. It returns FQNs of the source and
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
-func (rj *resilverJogger) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo) (
-	string, string, error) {
+func (rj *joggerCtx) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byte) (string, string, error) {
 	src := srcMpath.MakePathFQN(ct.Bck().Bck, ec.MetaType, ct.ObjName())
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
@@ -162,7 +129,7 @@ func (rj *resilverJogger) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Moun
 		return "", "", nil
 	}
 	dst := dstMpath.MakePathFQN(ct.Bck().Bck, ec.MetaType, ct.ObjName())
-	_, _, err := cmn.CopyFile(src, dst, rj.buf, cmn.ChecksumNone)
+	_, _, err := cmn.CopyFile(src, dst, buf, cmn.ChecksumNone)
 	if err == nil {
 		return src, dst, err
 	}
@@ -175,17 +142,13 @@ func (rj *resilverJogger) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Moun
 // Copies an object and its metafile (if exists) to the resilver mpath. At the
 // end does proper cleanup: removes ether source files(on success), or
 // destination files(on copy failure)
-func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
+func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 	var (
-		t                        = rj.m.t
-		lom                      = &cluster.LOM{T: t, FQN: fqn}
-		metaOldPath, metaNewPath string
-		err                      error
+		metaOldPath string
+		metaNewPath string
+		err         error
 	)
-	if err = lom.Init(cmn.Bck{}); err != nil {
-		return
-	}
-	// skip those that are _not_ locally misplaced
+	// Skip those that are _not_ locally misplaced.
 	if lom.IsHRW() {
 		return
 	}
@@ -198,20 +161,21 @@ func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 			glog.Warningf("%s: %v", lom, err)
 			return
 		}
-		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.ParsedFQN.MpathInfo, newMpath.MpathInfo)
+		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
+		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.ParsedFQN.MpathInfo, newMpath.MpathInfo, buf)
 		if err != nil {
 			glog.Warningf("%s: failed to move metafile %q -> %q: %v",
 				lom, lom.ParsedFQN.MpathInfo.Path, newMpath.MpathInfo.Path, err)
 			return
 		}
 	}
-	params := cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: rj.buf}
-	copied, _, err := t.CopyObject(lom, params, true /*localOnly*/)
+	params := cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}
+	copied, _, err := lom.T.CopyObject(lom, params, true /*localOnly*/)
 	if err != nil || !copied {
 		if err != nil {
 			glog.Errorf("%s: %v", lom, err)
 		}
-		// EC: cleanup new copy of the metafile
+		// EC: Cleanup new copy of the metafile.
 		if metaNewPath != "" {
 			if err = os.Remove(metaNewPath); err != nil {
 				glog.Warningf("%s: nested (%s: %v)", lom, metaNewPath, err)
@@ -219,57 +183,31 @@ func (rj *resilverJogger) moveObject(fqn string, ct *cluster.CT) {
 		}
 		return
 	}
-	// EC: remove the original metafile
+	// EC: Remove the original metafile.
 	if metaOldPath != "" {
 		if err := os.Remove(metaOldPath); err != nil {
 			glog.Warningf("%s: failed to cleanup old metafile %q: %v", lom, metaOldPath, err)
 		}
 	}
-	rj.xreb.BytesAdd(lom.Size())
-	rj.xreb.ObjectsInc()
-	// NOTE: rely on LRU to remove "misplaced"
+
+	rj.xact.BytesAdd(lom.Size())
+	rj.xact.ObjectsInc()
+
+	// NOTE: Rely on LRU to remove "misplaced".
 }
 
-func (rj *resilverJogger) walk(fqn string, de fs.DirEntry) (err error) {
-	t := rj.m.t
-	if rj.xreb.Aborted() {
-		return cmn.NewAbortedErrorDetails("traversal", rj.xreb.String())
-	}
-	if de.IsDir() {
-		return nil
-	}
+func (rj *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (err error) {
+	rj.moveObject(lom, buf)
+	return nil
+}
 
-	ct, err := cluster.NewCTFromFQN(fqn, t.Bowner())
-	if err != nil {
-		if cmn.IsErrBucketLevel(err) {
-			return err
-		}
-		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Warningf("CT for %q: %v", fqn, err)
-		}
-		return nil
+func (rj *joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
+	cmn.Assert(ct.ContentType() == ec.SliceType)
+	if !ct.Bprops().EC.Enabled {
+		// Since `%ec` directory is inside a bucket, it is safe to skip
+		// the entire `%ec` directory when EC is disabled for the bucket.
+		return filepath.SkipDir
 	}
-	// optionally, skip those that must be globally rebalanced
-	if rj.skipGlobMisplaced {
-		uname := ct.Bck().MakeUname(ct.ObjName())
-		tsi, err := cluster.HrwTarget(uname, t.Sowner().Get())
-		if err != nil {
-			return err
-		}
-		if tsi.ID() != t.Snode().ID() {
-			return nil
-		}
-	}
-	if ct.ContentType() == ec.SliceType {
-		if !ct.Bprops().EC.Enabled {
-			// Since %ec directory is inside a bucket, it is safe to skip
-			// the entire %ec directory when EC is disabled for the bucket
-			return filepath.SkipDir
-		}
-		rj.moveSlice(fqn, ct)
-		return nil
-	}
-	cmn.Assert(ct.ContentType() == fs.ObjectType)
-	rj.moveObject(fqn, ct)
+	rj.moveSlice(ct, buf)
 	return nil
 }

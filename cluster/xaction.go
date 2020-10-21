@@ -39,6 +39,9 @@ type (
 		Finish(errs ...error)
 		Abort()
 		AddNotif(n Notif)
+
+		BytesAdd(cnt int64) int64
+		ObjectsInc() int64
 		ObjectsAdd(cnt int64) int64
 	}
 

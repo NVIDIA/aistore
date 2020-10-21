@@ -41,7 +41,7 @@ func newXactBckBase(id, kind string, opts *mpather.JoggerGroupOpts) *xactBckBase
 		XactBase: *xaction.NewXactBaseBck(id, kind, opts.Bck),
 		t:        opts.T,
 	}
-	if opts.Callback != nil {
+	if opts.VisitObj != nil {
 		base.joggers = mpather.NewJoggerGroup(opts)
 	}
 	return base

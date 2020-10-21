@@ -90,7 +90,7 @@ func (r *XactBckEncode) Run() (err error) {
 		T:        r.t,
 		Bck:      r.bck,
 		CTs:      []string{fs.ObjectType},
-		Callback: r.bckEncode,
+		VisitObj: r.bckEncode,
 		DoLoad:   mpather.Load,
 	})
 	jg.Run()

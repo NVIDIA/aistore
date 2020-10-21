@@ -39,12 +39,14 @@ type (
 		T        cluster.Target
 		Bck      cmn.Bck
 		CTs      []string
-		Callback func(lom *cluster.LOM, buf []byte) error
+		VisitObj func(lom *cluster.LOM, buf []byte) error
+		VisitCT  func(ct *cluster.CT, buf []byte) error
 		Slab     *memsys.Slab
 
-		DoLoad      LoadType // Loads the LOM and if specified takes requested lock.
-		IncludeCopy bool     // Traverses LOMs that are copies.
-		Throttle    bool     // Determines if the jogger should throttle itself.
+		DoLoad                LoadType // Loads the LOM and if specified takes requested lock.
+		IncludeCopy           bool     // Traverses LOMs that are copies.
+		SkipGloballyMisplaced bool     // Skips content types that are globally misplaced.
+		Throttle              bool     // Determines if the jogger should throttle itself.
 
 		// Additional function which should be set by JoggerGroup and called
 		// by each of the jogger if they finish.
@@ -78,9 +80,7 @@ type (
 )
 
 func NewJoggerGroup(opts *JoggerGroupOpts) *JoggerGroup {
-	cmn.Assert(opts.Bck.HasProvider())
 	cmn.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
-	cmn.Assert(len(opts.CTs) == 1 && opts.CTs[0] == fs.ObjectType)
 
 	var (
 		mpaths, _ = fs.Get()
@@ -144,9 +144,27 @@ func (j *jogger) run() error {
 		defer j.opts.Slab.Free(j.buf)
 	}
 
+	var (
+		aborted bool
+		err     error
+	)
+
+	// In case the bucket is not specified, walk in bucket-by-bucket fashion.
+	if j.opts.Bck.IsEmpty() {
+		j.opts.T.Bowner().Get().Range(nil, nil, func(bck *cluster.Bck) bool {
+			aborted, err = j.runBck(bck.Bck)
+			return err != nil || aborted
+		})
+		return err
+	}
+	_, err = j.runBck(j.opts.Bck)
+	return err
+}
+
+func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
 	opts := &fs.Options{
 		Mpath:    j.mpathInfo,
-		Bck:      j.opts.Bck,
+		Bck:      bck,
 		CTs:      j.opts.CTs,
 		Callback: j.jog,
 		Sorted:   false,
@@ -154,11 +172,11 @@ func (j *jogger) run() error {
 	if err := fs.Walk(opts); err != nil {
 		if errors.As(err, &cmn.AbortedError{}) {
 			glog.Infof("%s stopping traversal: %v", j, err)
-		} else {
-			return err
+			return true, nil
 		}
+		return false, err
 	}
-	return nil
+	return false, nil
 }
 
 func (j *jogger) jog(fqn string, de fs.DirEntry) error {
@@ -170,13 +188,35 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		return err
 	}
 
-	lom := &cluster.LOM{T: j.opts.T, FQN: fqn}
-	if err := lom.Init(j.opts.Bck, j.config); err != nil {
+	ct, err := cluster.NewCTFromFQN(fqn, j.opts.T.Bowner())
+	if err != nil {
 		return err
 	}
 
-	if err := j.callback(lom); err != nil {
-		return err
+	if j.opts.SkipGloballyMisplaced {
+		uname := ct.Bck().MakeUname(ct.ObjName())
+		tsi, err := cluster.HrwTarget(uname, j.opts.T.Sowner().Get()) // TODO: should we get smap once?
+		if err != nil {
+			return err
+		}
+		if tsi.ID() != j.opts.T.Snode().ID() {
+			return nil
+		}
+	}
+
+	switch ct.ContentType() {
+	case fs.ObjectType:
+		lom := &cluster.LOM{T: j.opts.T, FQN: fqn}
+		if err := lom.Init(j.opts.Bck, j.config); err != nil {
+			return err
+		}
+		if err := j.visitObj(lom); err != nil {
+			return err
+		}
+	default:
+		if err := j.visitCT(ct); err != nil {
+			return err
+		}
 	}
 
 	if j.opts.Throttle {
@@ -190,7 +230,7 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 	return nil
 }
 
-func (j *jogger) callback(lom *cluster.LOM) error {
+func (j *jogger) visitObj(lom *cluster.LOM) error {
 	if j.opts.DoLoad > noLoad {
 		if j.opts.DoLoad == LoadRLock {
 			lom.Lock(false)
@@ -206,8 +246,10 @@ func (j *jogger) callback(lom *cluster.LOM) error {
 			return nil
 		}
 	}
-	return j.opts.Callback(lom, j.buf)
+	return j.opts.VisitObj(lom, j.buf)
 }
+
+func (j *jogger) visitCT(ct *cluster.CT) error { return j.opts.VisitCT(ct, j.buf) }
 
 func (j *jogger) checkStopped() error {
 	select {

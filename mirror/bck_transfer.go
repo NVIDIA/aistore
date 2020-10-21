@@ -94,7 +94,7 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 		Bck:      bckFrom.Bck,
 		T:        t,
 		CTs:      []string{fs.ObjectType},
-		Callback: xact.copyObject,
+		VisitObj: xact.copyObject,
 		Slab:     slab,
 		Throttle: true,
 	})

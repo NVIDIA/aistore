@@ -36,7 +36,7 @@ func TestJoggerGroup(t *testing.T) {
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		Callback: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *cluster.LOM, buf []byte) error {
 			tassert.Errorf(t, lom.Size() == 0, "expected LOM to not be loaded")
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counter.Inc()
@@ -73,7 +73,7 @@ func TestJoggerGroupLoad(t *testing.T) {
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		Callback: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *cluster.LOM, buf []byte) error {
 			tassert.Errorf(t, lom.Size() == desc.ObjectSize, "incorrect object size (lom probably not loaded)")
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counter.Inc()
@@ -111,7 +111,7 @@ func TestJoggerGroupError(t *testing.T) {
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		Callback: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *cluster.LOM, buf []byte) error {
 			counter.Inc()
 			return fmt.Errorf("upsss")
 		},

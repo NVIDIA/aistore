@@ -48,7 +48,7 @@ func newXactLLC(t cluster.Target, bck cmn.Bck) *xactLLC {
 		T:        t,
 		Bck:      bck,
 		CTs:      []string{fs.ObjectType},
-		Callback: func(_ *cluster.LOM, _ []byte) error { return nil },
+		VisitObj: func(_ *cluster.LOM, _ []byte) error { return nil },
 		DoLoad:   mpather.Load,
 	})}
 }
