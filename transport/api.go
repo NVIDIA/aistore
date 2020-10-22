@@ -98,6 +98,16 @@ type (
 	}
 )
 
+func ObjURLPath(trname string) string { return _urlPath(cmn.ObjStream, trname) }
+func MsgURLPath(trname string) string { return _urlPath(cmn.MsgStream, trname) }
+
+func _urlPath(endp, trname string) string {
+	if trname == "" {
+		return cmn.JoinWords(cmn.Version, endp)
+	}
+	return cmn.JoinWords(cmn.Version, endp, trname)
+}
+
 ///////////////////
 // object stream //
 ///////////////////

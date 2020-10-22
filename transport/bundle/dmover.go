@@ -106,11 +106,11 @@ func (dm *DataMover) SetXact(xact cluster.Xact) { dm.xact = xact }
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() (err error) {
-	if _, err = transport.Register(dm.data.net, dm.data.trname, dm.wrapRecvData); err != nil {
+	if err = transport.Register(dm.data.trname, dm.wrapRecvData); err != nil {
 		return
 	}
 	if dm.useACKs() {
-		_, err = transport.Register(dm.ack.net, dm.ack.trname, dm.wrapRecvACK)
+		err = transport.Register(dm.ack.trname, dm.wrapRecvACK)
 	}
 	return
 }
@@ -158,11 +158,11 @@ func (dm *DataMover) Close(err error) {
 func (dm *DataMover) UnregRecv() {
 	_ = dm.waitQuiesce()
 
-	if err := transport.Unregister(dm.data.net, dm.data.trname); err != nil {
+	if err := transport.Unregister(dm.data.trname); err != nil {
 		glog.Error(err)
 	}
 	if dm.useACKs() {
-		if err := transport.Unregister(dm.ack.net, dm.ack.trname); err != nil {
+		if err := transport.Unregister(dm.ack.trname); err != nil {
 			glog.Error(err)
 		}
 	}

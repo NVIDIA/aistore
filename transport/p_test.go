@@ -40,11 +40,10 @@ func receive10G(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader
 
 func Test_CompressedOne(t *testing.T) {
 	var (
-		network = "np"
-		trname  = "cmpr"
-		mux     = mux.NewServeMux()
+		trname = "cmpr-one"
+		mux    = mux.NewServeMux()
 	)
-	transport.SetMux(network, mux)
+	transport.SetMux(mux)
 
 	config := cmn.GCO.BeginUpdate()
 	config.Compression.BlockMaxSize = 256 * cmn.KiB
@@ -56,11 +55,11 @@ func Test_CompressedOne(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	path, err := transport.Register(network, trname, receive10G, memsys.DefaultPageMM() /* optionally, specify memsys*/)
+	err := transport.Register(trname, receive10G, memsys.DefaultPageMM() /* optionally, specify memsys*/)
 	tassert.CheckFatal(t, err)
 
 	httpclient := transport.NewIntraDataClient()
-	url := ts.URL + path
+	url := ts.URL + transport.ObjURLPath(trname)
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "2")
 	tassert.CheckFatal(t, err)
 	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
@@ -107,7 +106,7 @@ func Test_CompressedOne(t *testing.T) {
 	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
 		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.CompressionRatio())
 
-	printNetworkStats(t, network)
+	printNetworkStats(t)
 }
 
 func Test_DryRun(t *testing.T) {
@@ -143,7 +142,6 @@ func Test_CompletionCount(t *testing.T) {
 	var (
 		numSent                   int64
 		numCompleted, numReceived atomic.Int64
-		network                   = "n2"
 		mux                       = mux.NewServeMux()
 	)
 
@@ -157,17 +155,18 @@ func Test_CompletionCount(t *testing.T) {
 		numCompleted.Inc()
 	}
 
-	transport.SetMux(network, mux)
+	transport.SetMux(mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	path, err := transport.Register(network, "cmpl-cnt", receive)
+	trname := "cmpl-cnt"
+	err := transport.Register(trname, receive)
 	if err != nil {
 		t.Fatal(err)
 	}
 	httpclient := transport.NewIntraDataClient()
-	url := ts.URL + path
+	url := ts.URL + transport.ObjURLPath(trname)
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "256")
 	tassert.CheckFatal(t, err)
 	defer os.Unsetenv("AIS_STREAM_BURST_NUM")

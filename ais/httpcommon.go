@@ -124,7 +124,6 @@ type (
 	netServer struct {
 		s             *http.Server
 		muxers        cmn.HTTPMuxers
-		transportMux  *mux.ServeMux
 		sndRcvBufSize int
 	}
 	httprunner struct {
@@ -413,7 +412,6 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	muxers := newMuxers()
 	h.publicServer = &netServer{
 		muxers:        muxers,
-		transportMux:  muxers[http.MethodPut],
 		sndRcvBufSize: bufsize,
 	}
 	h.intraControlServer = h.publicServer // by default intra control net is the same as public
@@ -421,7 +419,6 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 		muxers = newMuxers()
 		h.intraControlServer = &netServer{
 			muxers:        muxers,
-			transportMux:  muxers[http.MethodPut],
 			sndRcvBufSize: 0,
 		}
 	}
@@ -430,7 +427,6 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 		muxers = newMuxers()
 		h.intraDataServer = &netServer{
 			muxers:        muxers,
-			transportMux:  muxers[http.MethodPut],
 			sndRcvBufSize: bufsize,
 		}
 	}

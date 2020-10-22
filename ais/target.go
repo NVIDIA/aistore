@@ -281,18 +281,11 @@ func (t *targetrunner) Run() error {
 	// transactions
 	t.transactions.init(t)
 
-	//
-	// REST API: register storage target's handler(s) and start listening
-	//
-	transport.SetMux(cmn.NetworkPublic, t.publicServer.transportMux)
-	if config.Net.UseIntraControl {
-		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.transportMux)
-	}
-	if config.Net.UseIntraData {
-		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.transportMux)
-	}
 	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
+
+	// register storage target's handler(s) and start listening
 	t.initRecvHandlers()
+
 	ec.Init(t)
 
 	marked := xreg.GetResilverMarked()
@@ -363,7 +356,10 @@ func (t *targetrunner) initRecvHandlers() {
 		{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
 		{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
-
+		{
+			r: cmn.ObjStream, h: transport.RxObjStream,
+			net: []string{cmn.NetworkPublic, cmn.NetworkIntraData, cmn.NetworkIntraControl},
+		},
 		{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
 
 		{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
@@ -379,6 +375,7 @@ func (t *targetrunner) initRecvHandlers() {
 		{r: cmn.Query, h: t.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 
 		{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
+
 		{
 			r: "/", h: cmn.InvalidHandler,
 			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData},

@@ -81,7 +81,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		numCompleted atomic.Int64
 		MMSA         = tutils.MMSA
 		network      = cmn.NetworkIntraData
-		trname       = "bundle"
+		trname       = "bundle" + nvs["block"]
 		tss          = make([]*httptest.Server, 0, 32)
 	)
 	mux := mux.NewServeMux()
@@ -99,7 +99,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	}()
 	smap.Version = 1
 
-	transport.SetMux(network, mux)
+	transport.SetMux(mux)
 
 	slab, _ := MMSA.GetSlab(32 * cmn.KiB)
 	rbuf := slab.Alloc()
@@ -113,7 +113,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		numCompleted.Inc()
 	}
 
-	_, err := transport.Register(network, trname, receive) // DirectURL = /v1/transport/10G
+	err := transport.Register(trname, receive) // DirectURL = /v1/transport/10G
 	tassert.CheckFatal(t, err)
 
 	var (

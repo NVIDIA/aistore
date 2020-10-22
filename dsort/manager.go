@@ -259,7 +259,7 @@ func (m *Manager) initStreams() error {
 			MMSA:        mm,
 		},
 	}
-	if _, err := transport.Register(respNetwork, trname, m.makeRecvShardFunc()); err != nil {
+	if err := transport.Register(trname, m.makeRecvShardFunc()); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -269,17 +269,9 @@ func (m *Manager) initStreams() error {
 }
 
 func (m *Manager) cleanupStreams() error {
-	cfg := cmn.GCO.Get()
-	// Responses to the other targets are objects that is why we want to use
-	// intraData network.
-	respNetwork := cmn.NetworkIntraData
-	if !cfg.Net.UseIntraData {
-		respNetwork = cmn.NetworkPublic
-	}
-
 	if m.streams.shards != nil {
 		trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
-		if err := transport.Unregister(respNetwork, trname); err != nil {
+		if err := transport.Unregister(trname); err != nil {
 			return errors.WithStack(err)
 		}
 	}

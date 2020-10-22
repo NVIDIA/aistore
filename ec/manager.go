@@ -70,10 +70,10 @@ func initManager(t cluster.Target) error {
 	}
 
 	var err error
-	if _, err = transport.Register(ECM.netReq, ReqStreamName, ECM.recvRequest); err != nil {
+	if err = transport.Register(ReqStreamName, ECM.recvRequest); err != nil {
 		return fmt.Errorf("failed to register recvRequest: %v", err)
 	}
-	if _, err = transport.Register(ECM.netResp, RespStreamName, ECM.recvResponse); err != nil {
+	if err = transport.Register(RespStreamName, ECM.recvResponse); err != nil {
 		return fmt.Errorf("failed to register respResponse: %v", err)
 	}
 	return nil

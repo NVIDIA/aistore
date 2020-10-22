@@ -195,21 +195,19 @@ func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 	}
 
 	// first, lockless (optimistic) match
-	if r.Method != http.MethodPut {
-		path := r.URL.Path
-		if len(path) > 5 && path[0] == '/' && path[1] == '/' {
-			path = r.URL.Path[1:]
-		}
-		h, pattern = mux.match(path)
-		if h != nil {
-			return
-		}
+	path := r.URL.Path
+	if len(path) > 5 && path[0] == '/' && path[1] == '/' {
+		path = r.URL.Path[1:]
+	}
+	h, pattern = mux.match(path)
+	if h != nil {
+		return
 	}
 
 	// All other requests have any port stripped and path cleaned
 	// before passing to mux.handler.
 	host := stripHostPort(r.Host)
-	path := cleanPath(r.URL.Path)
+	path = cleanPath(r.URL.Path)
 
 	// If the given path is /tree and its handler is not registered,
 	// redirect for /tree/.

@@ -77,102 +77,57 @@ const (
 //
 
 var (
-	muxers   cmn.HTTPMuxers
-	handlers map[string]map[string]*handler
-	mu       *sync.Mutex
+	mu       *sync.RWMutex
+	handlers map[string]*handler // by trname
 )
 
 func init() {
-	mu = &sync.Mutex{}
-	muxers = make(cmn.HTTPMuxers, 16)
-	handlers = make(map[string]map[string]*handler)
+	mu = &sync.RWMutex{}
+	handlers = make(map[string]*handler, 16)
 }
 
 //
 // API
 //
 
-func SetMux(network string, x *mux.ServeMux) {
-	if !cmn.NetworkIsKnown(network) {
-		glog.Warningf("Unknown network %s, expecting one of: %v", network, cmn.KnownNetworks)
-	}
-	mu.Lock()
-	muxers[network] = x
-	handlers[network] = make(map[string]*handler)
-	mu.Unlock()
+func SetMux(mux *mux.ServeMux) {
+	path := ObjURLPath("")
+	mux.HandleFunc(path, RxObjStream)
+	mux.HandleFunc(path+"/", RxObjStream)
 }
 
-// examples resulting URL.Path: /v1/transport/replication, /v1/transport/rebalance, etc.
-//
-// NOTE:
-//
-// HTTP request multiplexer matches the URL of each incoming request against a list of registered
-// paths and calls the handler for the path that most closely matches the URL.
-// That is why registering a new endpoint with a given network (and its per-network multiplexer)
-// should not be done concurrently with traffic that utilizes this same network.
-//
-// The limitation is rooted in the fact that, when registering, we insert an entry into the
-// http.ServeMux private map of its URL paths.
-// This map is protected by a private mutex and is read-accessed to route HTTP requests.
-//
-func Register(network, trname string, callback Receive, mems ...*memsys.MMSA) (upath string, err error) {
+func Register(trname string, callback Receive, mems ...*memsys.MMSA) error {
 	var mem *memsys.MMSA
-	mu.Lock()
-	mux, ok := muxers[network]
-	if !ok {
-		err = fmt.Errorf("failed to register path /%s: network %s is unknown", trname, network)
-		mu.Unlock()
-		return
-	}
 	if len(mems) > 0 {
 		mem = mems[0]
 	}
-	h := &handler{trname: trname, callback: callback, hkName: path.Join(network, trname, "oldSessions"), mem: mem}
-	upath = cmn.JoinWords(cmn.Version, cmn.Transport, trname)
-	mux.HandleFunc(upath, h.receive)
-	if _, ok = handlers[network][trname]; ok {
-		glog.Errorf("Warning: re-registering transport handler %q", trname)
+	h := &handler{trname: trname, callback: callback, hkName: ObjURLPath(trname), mem: mem}
+	mu.Lock()
+	if _, ok := handlers[trname]; ok {
+		mu.Unlock()
+		return fmt.Errorf("duplicate trname %q: re-registering is not permitted", trname)
 	}
-	handlers[network][trname] = h
+	handlers[trname] = h
 	mu.Unlock()
-
 	hk.Reg(h.hkName, h.cleanupOldSessions)
-	return
+	return nil
 }
 
-func Unregister(network, trname string) (err error) {
+func Unregister(trname string) (err error) {
 	mu.Lock()
-	mux, ok := muxers[network]
-	if !ok {
-		err = fmt.Errorf("failed to unregister transport endpoint %s: network %s is unknown", trname, network)
-		mu.Unlock()
-		return
+	if h, ok := handlers[trname]; ok {
+		delete(handlers, trname)
+		hk.Unreg(h.hkName)
+	} else {
+		err = fmt.Errorf("cannot unregister: transport endpoint %s is unknown", trname)
 	}
-	var h *handler
-	if h, ok = handlers[network][trname]; !ok {
-		err = fmt.Errorf("cannot unregister: transport endpoint %s is unknown, network %s", trname, network)
-		mu.Unlock()
-		return
-	}
-	delete(handlers[network], trname)
-
-	upath := cmn.JoinWords(cmn.Version, cmn.Transport, trname)
-	mux.Unhandle(upath)
 	mu.Unlock()
-
-	hk.Unreg(h.hkName)
 	return
 }
 
-func GetNetworkStats(network string) (netstats map[string]EndpointStats, err error) {
-	mu.Lock()
-	handlers, ok := handlers[network]
-	if !ok {
-		err = fmt.Errorf("network %s has no handlers", network)
-		mu.Unlock()
-		return
-	}
+func GetStats() (netstats map[string]EndpointStats, err error) {
 	netstats = make(map[string]EndpointStats)
+	mu.Lock()
 	for trname, h := range handlers {
 		eps := make(EndpointStats)
 		f := func(key, value interface{}) bool {
@@ -192,26 +147,22 @@ func GetNetworkStats(network string) (netstats map[string]EndpointStats, err err
 	return
 }
 
-//
-// internal methods -- handler
-//
-
-func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid http method %s", r.Method))
-		return
-	}
-	trname := path.Base(r.URL.Path)
-	if trname != h.trname {
-		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid transport handler name %s - expecting %s", trname, h.trname))
-		return
-	}
+func RxObjStream(w http.ResponseWriter, r *http.Request) {
 	var (
 		reader    io.Reader = r.Body
 		lz4Reader *lz4.Reader
 		fbuf      *fixedBuffer
+		trname    = path.Base(r.URL.Path)
 		verbose   = bool(glog.FastV(4, glog.SmoduleTransport))
 	)
+	mu.RLock()
+	h, ok := handlers[trname]
+	if !ok {
+		mu.RUnlock()
+		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("transport endpoint %s is unknown", trname))
+		return
+	}
+	mu.RUnlock()
 	// compression
 	if compressionType := r.Header.Get(cmn.HeaderCompress); compressionType != "" {
 		cmn.Assert(compressionType == cmn.LZ4Compression)

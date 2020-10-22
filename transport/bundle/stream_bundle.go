@@ -300,7 +300,7 @@ func (sb *Streams) Resync() {
 		if id == sb.lsnode.ID() {
 			continue
 		}
-		toURL := si.URL(sb.network) + cmn.JoinWords(cmn.Version, cmn.Transport, sb.trname) // NOTE: destination URL
+		toURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname) // direct destination URL
 		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
 		for k := 0; k < sb.multiplier; k++ {
 			var (

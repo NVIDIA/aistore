@@ -154,7 +154,7 @@ func (ds *dsorterGeneral) start() error {
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 	}
-	if _, err := transport.Register(reqNetwork, trname, ds.makeRecvRequestFunc()); err != nil {
+	if err := transport.Register(trname, ds.makeRecvRequestFunc()); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -170,7 +170,7 @@ func (ds *dsorterGeneral) start() error {
 			MMSA:        mm,
 		},
 	}
-	if _, err := transport.Register(respNetwork, trname, ds.makeRecvResponseFunc()); err != nil {
+	if err := transport.Register(trname, ds.makeRecvResponseFunc()); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -182,28 +182,18 @@ func (ds *dsorterGeneral) start() error {
 }
 
 func (ds *dsorterGeneral) cleanupStreams() error {
-	config := cmn.GCO.Get()
-	reqNetwork := cmn.NetworkIntraControl
-	if !config.Net.UseIntraControl {
-		reqNetwork = cmn.NetworkPublic
-	}
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
-	respNetwork := cmn.NetworkIntraData
-	if !config.Net.UseIntraData {
-		respNetwork = cmn.NetworkPublic
-	}
-
 	if ds.streams.request != nil {
 		trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unregister(reqNetwork, trname); err != nil {
+		if err := transport.Unregister(trname); err != nil {
 			return errors.WithStack(err)
 		}
 	}
 
 	if ds.streams.response != nil {
 		trname := fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unregister(respNetwork, trname); err != nil {
+		if err := transport.Unregister(trname); err != nil {
 			return errors.WithStack(err)
 		}
 	}

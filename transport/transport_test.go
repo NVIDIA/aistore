@@ -189,19 +189,18 @@ func Example_mux() {
 	}
 	mux := mux.NewServeMux()
 
-	transport.SetMux("n1", mux)
+	transport.SetMux(mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
-
-	path, err := transport.Register("n1", "dummy-rx", receive)
+	trname := "dummy-rx"
+	err := transport.Register(trname, receive)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	httpclient := transport.NewIntraDataClient()
-	url := ts.URL + path
-	stream := transport.NewStream(httpclient, url, nil)
+	stream := transport.NewStream(httpclient, ts.URL+transport.ObjURLPath(trname), nil)
 
 	sendText(stream, text1, text2)
 	sendText(stream, text3, text4)
@@ -218,7 +217,7 @@ func Example_mux() {
 func Test_OneStream(t *testing.T) {
 	mux := mux.NewServeMux()
 
-	transport.SetMux("n1", mux)
+	transport.SetMux(mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
@@ -228,7 +227,7 @@ func Test_OneStream(t *testing.T) {
 	} else {
 		streamWriteUntil(t, 55, nil, ts, nil, nil, false)
 	}
-	printNetworkStats(t, "n1")
+	printNetworkStats(t)
 }
 
 func Test_MultiStream(t *testing.T) {
@@ -236,7 +235,7 @@ func Test_MultiStream(t *testing.T) {
 
 	tutils.Logf("Duration %v\n", duration)
 	mux := mux.NewServeMux()
-	transport.SetMux("n1", mux)
+	transport.SetMux(mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
@@ -249,11 +248,11 @@ func Test_MultiStream(t *testing.T) {
 		go streamWriteUntil(t, i, wg, ts, netstats, lock, false)
 	}
 	wg.Wait()
-	compareNetworkStats(t, "n1", netstats)
+	compareNetworkStats(t, netstats)
 }
 
-func printNetworkStats(t *testing.T, network string) {
-	netstats, err := transport.GetNetworkStats(network)
+func printNetworkStats(t *testing.T) {
+	netstats, err := transport.GetStats()
 	tassert.CheckFatal(t, err)
 	for trname, eps := range netstats {
 		for uid, stats := range eps { // EndpointStats by session ID
@@ -264,8 +263,8 @@ func printNetworkStats(t *testing.T, network string) {
 	}
 }
 
-func compareNetworkStats(t *testing.T, network string, netstats1 map[string]transport.EndpointStats) {
-	netstats2, err := transport.GetNetworkStats(network)
+func compareNetworkStats(t *testing.T, netstats1 map[string]transport.EndpointStats) {
+	netstats2, err := transport.GetStats()
 	tassert.CheckFatal(t, err)
 	for trname, eps2 := range netstats2 {
 		eps1, ok := netstats1[trname]
@@ -292,16 +291,16 @@ func Test_MultipleNetworks(t *testing.T) {
 
 	streams := make([]*transport.Stream, 0, 10)
 	for idx := 0; idx < 10; idx++ {
-		network := fmt.Sprintf("network-%d", idx)
 		mux := mux.NewServeMux()
-		transport.SetMux(network, mux)
+		transport.SetMux(mux)
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
-		path, err := transport.Register(network, "endpoint", recvFunc)
+		trname := "endpoint" + strconv.Itoa(idx)
+		err := transport.Register(trname, recvFunc)
 		tassert.CheckFatal(t, err)
 
 		httpclient := transport.NewIntraDataClient()
-		url := ts.URL + path
+		url := ts.URL + transport.ObjURLPath(trname)
 		streams = append(streams, transport.NewStream(httpclient, url, nil))
 	}
 
@@ -332,18 +331,19 @@ func Test_OnSendCallback(t *testing.T) {
 		objectCnt = 1000
 	}
 
-	transport.SetMux("n1", mux)
+	transport.SetMux(mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	totalRecv, recvFunc := makeRecvFunc(t)
-	path, err := transport.Register("n1", "callback", recvFunc)
+	trname := "callback"
+	err := transport.Register(trname, recvFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
 	httpclient := transport.NewIntraDataClient()
-	url := ts.URL + path
+	url := ts.URL + transport.ObjURLPath(trname)
 	stream := transport.NewStream(httpclient, url, nil)
 
 	var (
@@ -398,7 +398,7 @@ func Test_ObjAttrs(t *testing.T) {
 	}
 
 	mux := mux.NewServeMux()
-	transport.SetMux("n1", mux)
+	transport.SetMux(mux)
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -417,12 +417,13 @@ func Test_ObjAttrs(t *testing.T) {
 
 		receivedCount.Inc()
 	}
-	path, err := transport.Register("n1", "callback", recvFunc)
+	trname := "objattrs"
+	err := transport.Register(trname, recvFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
 	httpclient := transport.NewIntraDataClient()
-	url := ts.URL + path
+	url := ts.URL + transport.ObjURLPath(trname)
 	stream := transport.NewStream(httpclient, url, nil)
 
 	random := newRand(mono.NanoTime())
@@ -464,7 +465,8 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		defer wg.Done()
 	}
 	totalRecv, recvFunc := makeRecvFunc(t)
-	path, err := transport.Register("n1", fmt.Sprintf("rand-rx-%d", ii), recvFunc)
+	trname := fmt.Sprintf("rand-rx-%d", ii)
+	err := transport.Register(trname, recvFunc)
 	tassert.CheckFatal(t, err)
 
 	if compress {
@@ -477,7 +479,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 
 	httpclient := transport.NewIntraDataClient()
-	url := ts.URL + path
+	url := ts.URL + transport.ObjURLPath(trname)
 	var extra *transport.Extra
 	if compress {
 		extra = &transport.Extra{Compression: cmn.CompressAlways}
