@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"math/rand"
+	"reflect"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -24,13 +25,15 @@ type testStruct struct {
 	ST struct {
 		I64 int64 `json:"int64"`
 	}
+	M map[string]string
 }
 
 func (ts *testStruct) equal(other testStruct) bool {
 	return ts.I == other.I &&
 		ts.S == other.S &&
 		string(ts.B) == string(other.B) &&
-		ts.ST.I64 == other.ST.I64
+		ts.ST.I64 == other.ST.I64 &&
+		reflect.DeepEqual(ts.M, other.M)
 }
 
 func makeRandStruct() (ts testStruct) {
@@ -42,6 +45,12 @@ func makeRandStruct() (ts testStruct) {
 		ts.B = []byte(cmn.RandString(rand.Intn(200)))
 	}
 	ts.ST.I64 = rand.Int63()
+	if rand.Intn(2) == 0 {
+		ts.M = make(map[string]string)
+		for i := 0; i < rand.Intn(100)+1; i++ {
+			ts.M[cmn.RandString(10)] = cmn.RandString(20)
+		}
+	}
 	return
 }
 
@@ -50,6 +59,10 @@ func makeStaticStruct() (ts testStruct) {
 	ts.S = cmn.RandString(100)
 	ts.B = []byte(cmn.RandString(200))
 	ts.ST.I64 = rand.Int63()
+	ts.M = make(map[string]string, 10)
+	for i := 0; i < 10; i++ {
+		ts.M[cmn.RandString(10)] = cmn.RandString(20)
+	}
 	return
 }
 
@@ -69,7 +82,7 @@ func TestDecodeAndEncode(t *testing.T) {
 		{name: "ccs", v: makeRandStruct(), opts: jsp.CCSign()},
 		{
 			name: "special_char",
-			v:    testStruct{I: 10, S: "abc\ncd", B: []byte{'a', 'b', '\n', 'c', 'd'}},
+			v:    testStruct{I: 10, S: "abc\ncd]}{", B: []byte{'a', 'b', '\n', 'c', 'd', ']', '}'}},
 			opts: jsp.Options{Checksum: true},
 		},
 	}

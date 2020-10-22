@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
@@ -144,8 +146,16 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		actual := h.Sum(nil)
 		actualCksum := binary.BigEndian.Uint64(actual)
 		if expectedCksum != actualCksum {
-			// TODO -- FIXME
-			glog.Error(cmn.NewBadMetaCksumError(expectedCksum, actualCksum, tag))
+			// FIXME: Remove this debug code once we figure out where the cksum errors are coming from.
+			if debug.Enabled {
+				b, _ := ioutil.ReadAll(decoder.Buffered())
+				rest, _ := ioutil.ReadAll(r)
+				glog.Fatalf(
+					"Invalid checksum [tag: %s, buffered: %s, more: %t, rest: %s, decoded: %#v]",
+					tag, string(b), decoder.More(), v, string(rest),
+				)
+			}
+			return cmn.NewBadMetaCksumError(expectedCksum, actualCksum, tag)
 		}
 	}
 	return nil
