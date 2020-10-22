@@ -500,12 +500,9 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 		return nil
 	}
 	size := cmn.MinI64(obj.objSize, cmn.MiB)
-	mmsa := reb.t.MMSA()
-	ct.sgl = mmsa.NewSGL(size)
+	ct.sgl = reb.t.MMSA().NewSGL(size)
 	ct.meta = req.md
-	buf, slab := mmsa.Alloc(size)
-	n, err := io.CopyBuffer(ct.sgl, reader, buf)
-	slab.Free(buf)
+	n, err := io.Copy(ct.sgl, reader) // No need for `io.CopyBuffer` since SGL implements `io.ReaderFrom`.
 	if err != nil {
 		return fmt.Errorf("failed to read slice %d for %s/%s: %v", sliceID, hdr.Bck, hdr.ObjName, err)
 	}

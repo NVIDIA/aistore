@@ -1232,7 +1232,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 		defer cleanUp()
 		if coi.DryRun {
 			written, err := io.Copy(ioutil.Discard, params.Reader)
-			params.Reader.Close()
+			cmn.Close(params.Reader)
 			return err == nil, written, err
 		}
 	}

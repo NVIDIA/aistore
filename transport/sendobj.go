@@ -379,14 +379,16 @@ func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName strin
 /////////////
 
 func (s *Stream) dryrun() {
-	buf := make([]byte, memsys.DefaultBufSize)
-	scloser := ioutil.NopCloser(s)
-	it := iterator{trname: s.trname, body: scloser, headerBuf: make([]byte, maxHeaderSize)}
+	var (
+		body = ioutil.NopCloser(s)
+		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
+	)
 	for {
 		objReader, _, err := it.next()
 		if objReader != nil {
-			written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
-			cmn.Assert(written == objReader.hdr.ObjAttrs.Size)
+			// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
+			err := cmn.DrainReader(objReader)
+			cmn.AssertNoErr(err)
 			continue
 		}
 		if err != nil {

@@ -1203,10 +1203,8 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems
 		return
 	}
 
-	buf, slab := t.gmm.Alloc(finfo.Size())
 	w.Header().Set("Content-Length", strconv.FormatInt(finfo.Size(), 10))
-	_, err = io.CopyBuffer(w, file, buf)
-	slab.Free(buf)
+	_, err = io.Copy(w, file) // No need for `io.CopyBuffer` as `sendfile` syscall will be used.
 	cmn.Close(file)
 	if err != nil {
 		glog.Errorf("Failed to send slice %s/%s: %v", bck, objName, err)

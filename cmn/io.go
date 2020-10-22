@@ -108,6 +108,7 @@ func (r *nopReader) Read(b []byte) (int, error) {
 
 // DrainReader reads and discards all the data from a reader.
 func DrainReader(r io.Reader) error {
+	// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
 	_, err := io.Copy(ioutil.Discard, r)
 	return err
 }

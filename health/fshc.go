@@ -134,27 +134,13 @@ func (f *FSHC) runMpathTest(mpath, filepath string) {
 }
 
 // reads the entire file content
-func (f *FSHC) tryReadFile(fqn string, sgl *memsys.SGL) error {
-	stat, err := os.Stat(fqn)
-	if err != nil {
-		return err
-	}
+func (f *FSHC) tryReadFile(fqn string) error {
 	file, err := os.Open(fqn)
 	if err != nil {
 		return err
 	}
 	defer cmn.Close(file)
-
-	slab := sgl.Slab()
-	buf := slab.Alloc()
-	defer slab.Free(buf)
-
-	written, err := io.CopyBuffer(ioutil.Discard, file, buf)
-	if err == nil && written < stat.Size() {
-		return io.ErrShortWrite
-	}
-
-	return err
+	return cmn.DrainReader(file)
 }
 
 // checks if a given mpath is disabled. d.Path is always cleaned, that is
@@ -172,7 +158,7 @@ func (f *FSHC) isMpathDisabled(mpath string) bool {
 }
 
 // creates a random file in a random directory inside a mountpath
-func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) error {
+func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 	// Do not test a mountpath if it is already disabled. To avoid a race
 	// when a lot of PUTs fails and each of them calls FSHC, FSHC disables
 	// the mountpath on the first run, so all other tryWriteFile are redundant
@@ -199,32 +185,17 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) err
 		return err
 	}
 
-	slab := sgl.Slab()
-	buf := slab.Alloc()
 	defer func() {
-		slab.Free(buf)
 		if err := tmpFile.Close(); err != nil {
 			glog.Errorf("Failed to close temporary file %s: %v", tmpFile.Name(), err)
 		}
 	}()
 
-	_, _ = rand.Read(buf)
-	bytesLeft := fileSize
-	bufSize := len(buf)
-	for bytesLeft > 0 {
-		if bytesLeft > bufSize {
-			_, err = tmpFile.Write(buf)
-		} else {
-			_, err = tmpFile.Write(buf[:bytesLeft])
-		}
-		if err != nil {
-			glog.Errorf("Failed to write to file %s: %v", tmpFile.Name(), err)
-			return err
-		}
-
-		bytesLeft -= bufSize
+	rnd := rand.New(rand.NewSource(0))
+	if _, err = io.CopyN(tmpFile, rnd, fileSize); err != nil {
+		glog.Errorf("Failed to write to file %s: %v", tmpFile.Name(), err)
+		return err
 	}
-
 	return nil
 }
 
@@ -245,17 +216,14 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 		return 0, 0, false
 	}
 
-	sgl := f.mm.NewSGL(0)
-	defer sgl.Free()
-
 	totalReads, totalWrites := 0, 0
 
 	// 1. Read the file that causes the error, if it is defined
 	if filePath != "" {
 		if stat, err := os.Stat(filePath); err == nil && !stat.IsDir() {
 			totalReads++
-			err := f.tryReadFile(filePath, sgl)
-			if err != nil {
+
+			if err := f.tryReadFile(filePath); err != nil {
 				glog.Errorf("Checking file %s result: %#v, mountpath: %d", filePath, err, readFails)
 				if cmn.IsIOError(err) {
 					readFails++
@@ -285,8 +253,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 			glog.Infof("Reading random file [%s]", fqn)
 		}
 
-		err = f.tryReadFile(fqn, sgl)
-		if err != nil {
+		if err = f.tryReadFile(fqn); err != nil {
 			glog.Errorf("Failed to read random file %s: %v", fqn, err)
 			if cmn.IsIOError(err) {
 				readFails++
@@ -299,7 +266,7 @@ func (f *FSHC) testMountpath(filePath, mountpath string,
 	// 3. Try to create a few random files inside the mountpath
 	for totalWrites < maxTestFiles {
 		totalWrites++
-		err := f.tryWriteFile(mountpath, fileSize, sgl)
+		err := f.tryWriteFile(mountpath, int64(fileSize))
 		if err != nil {
 			glog.Errorf("Failed to create file in %s: %#v", mountpath, err)
 		}

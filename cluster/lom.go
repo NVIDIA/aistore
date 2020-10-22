@@ -635,10 +635,9 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err er
 	if file, err = os.Open(lom.FQN); err != nil {
 		return
 	}
-	buf, slab := lom.T.MMSA().Alloc(lom.Size())
-	_, cksum, err = cmn.CopyAndChecksum(ioutil.Discard, file, buf, cksumType)
+	// No need to allocate `buf` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
+	_, cksum, err = cmn.CopyAndChecksum(ioutil.Discard, file, nil, cksumType)
 	cmn.Close(file)
-	slab.Free(buf)
 	if err != nil {
 		return nil, err
 	}

@@ -302,7 +302,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			}
 
 			var n int64
-			switch obj.StoreType {
+			switch storeType {
 			case extract.OffsetStoreType:
 				f, err := os.Open(fullContentPath) // TODO: it should be open always
 				if err != nil {
@@ -317,12 +317,16 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					return written, errors.WithMessage(err, "(offset) copy local content failed")
 				}
 			case extract.SGLStoreType:
+				cmn.Assert(buf == nil)
+
 				v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
 				cmn.AssertMsg(ok, fullContentPath)
 				ds.m.recManager.RecordContents().Delete(fullContentPath)
 				sgl := v.(*memsys.SGL)
 				defer sgl.Free()
-				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {
+
+				// No need for `io.CopyBuffer` since SGL implements `io.WriterTo`.
+				if n, err = io.Copy(w, sgl); err != nil {
 					return written, errors.WithMessage(err, "(sgl) copy local content failed")
 				}
 			case extract.DiskStoreType:

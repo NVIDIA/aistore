@@ -9,7 +9,6 @@ package transport
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 
@@ -36,7 +35,6 @@ func NewIntraDataClient() *http.Client {
 }
 
 func (s *streamBase) do(streamer streamer, body io.Reader) (err error) {
-	// init request
 	var (
 		request  *http.Request
 		response *http.Response
@@ -49,15 +47,12 @@ func (s *streamBase) do(streamer streamer, body io.Reader) (err error) {
 	}
 	request.Header.Set(cmn.HeaderSessID, strconv.FormatInt(s.sessID, 10))
 
-	// do
 	response, err = s.client.Do(request)
 	if err != nil {
 		glog.Errorf("%s: Error [%v]", s, err)
 		return
 	}
-
-	// handle response & cleanup
-	io.Copy(ioutil.Discard, response.Body)
+	cmn.DrainReader(response.Body)
 	response.Body.Close()
 	if streamer.compressed() {
 		streamer.resetCompression()

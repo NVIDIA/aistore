@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -105,7 +104,7 @@ func benchNestedLevel(b *testing.B) {
 		fqn := benchCtx.fileNames[j]
 		file, err := os.Open(fqn)
 		cmn.AssertNoErr(err)
-		_, err = io.Copy(ioutil.Discard, file)
+		err = cmn.DrainReader(file)
 		cmn.AssertNoErr(err)
 		_ = file.Close()
 	}
