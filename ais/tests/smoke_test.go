@@ -28,7 +28,7 @@ func TestSmoke(t *testing.T) {
 	const objPrefix = "smoke"
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
-			cnt      = len(objSizes) * len(ratios) * 40 * numworkers
+			cnt      = len(objSizes) * len(ratios) * 40 * workerCnt
 			fp       = make(chan string, cnt)
 			proxyURL = tutils.GetPrimaryURL()
 		)
@@ -64,13 +64,13 @@ func TestSmoke(t *testing.T) {
 
 func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objPrefix string, objSize int64, ratio float32, cksumType string, filesPutCh chan string) {
 	var (
-		nGet  = int(float32(numworkers) * ratio)
-		nPut  = numworkers - nGet
+		nGet  = int(float32(workerCnt) * ratio)
+		nPut  = workerCnt - nGet
 		errCh = make(chan error, 100)
 		wg    = &sync.WaitGroup{}
 	)
 
-	for i := 0; i < numworkers; i++ {
+	for i := 0; i < workerCnt; i++ {
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			wg.Add(1)
 			go func() {

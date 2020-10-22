@@ -787,9 +787,9 @@ loop:
 func proxyStress(t *testing.T) {
 	var (
 		wg          sync.WaitGroup
-		errChs      = make([]chan error, numworkers+1)
-		stopChs     = make([]chan struct{}, numworkers+1)
-		proxyURLChs = make([]chan string, numworkers)
+		errChs      = make([]chan error, workerCnt+1)
+		stopChs     = make([]chan struct{}, workerCnt+1)
+		proxyURLChs = make([]chan string, workerCnt)
 		bck         = cmn.Bck{
 			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
@@ -801,7 +801,7 @@ func proxyStress(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	// start all workers
-	for i := 0; i < numworkers; i++ {
+	for i := 0; i < workerCnt; i++ {
 		errChs[i] = make(chan error, defaultChanSize)
 		stopChs[i] = make(chan struct{}, defaultChanSize)
 		proxyURLChs[i] = make(chan string, defaultChanSize)
@@ -814,10 +814,10 @@ func proxyStress(t *testing.T) {
 		time.Sleep(time.Duration(n+1) * time.Millisecond)
 	}
 
-	errChs[numworkers] = make(chan error, defaultChanSize)
-	stopChs[numworkers] = make(chan struct{}, defaultChanSize)
+	errChs[workerCnt] = make(chan error, defaultChanSize)
+	stopChs[workerCnt] = make(chan struct{}, defaultChanSize)
 	wg.Add(1)
-	go primaryKiller(t, proxyURL, stopChs[numworkers], proxyURLChs, errChs[numworkers], &wg)
+	go primaryKiller(t, proxyURL, stopChs[workerCnt], proxyURLChs, errChs[workerCnt], &wg)
 
 	timer := time.After(multiProxyTestTimeout)
 loop:

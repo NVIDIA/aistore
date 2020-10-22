@@ -32,13 +32,13 @@ const (
 	rebalanceTimeout      = 5 * time.Minute
 	rebalanceStartTimeout = 10 * time.Second
 	multiProxyTestTimeout = 3 * time.Minute
+
+	workerCnt = 10
 )
 
 var (
-	numfiles   int
-	numworkers int
-
-	cliBck cmn.Bck
+	numfiles int
+	cliBck   cmn.Bck
 )
 
 // nolint:maligned // no performance critical code
@@ -61,10 +61,6 @@ type ioContext struct {
 	numGetsEachFile     int
 	getErrIsFatal       bool
 	silent              bool
-
-	// internal
-	wg   *sync.WaitGroup
-	sema *cmn.DynSemaphore
 }
 
 func (m *ioContext) saveClusterState() {
@@ -90,8 +86,6 @@ func (m *ioContext) init() {
 	if m.otherTasksToTrigger > 0 {
 		m.controlCh = make(chan struct{}, m.otherTasksToTrigger)
 	}
-	m.wg = &sync.WaitGroup{}
-	m.sema = cmn.NewDynSemaphore(numworkers)
 	if m.bck.Name == "" {
 		m.bck.Name = tutils.GenRandomString(15)
 	}
@@ -352,12 +346,6 @@ func (m *ioContext) del(cnt ...int) {
 }
 
 func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int) {
-	m.sema.Acquire()
-	defer func() {
-		m.sema.Release()
-		m.wg.Done()
-	}()
-
 	objName := m.objNames[idx%len(m.objNames)]
 	_, err := api.GetObject(baseParams, m.bck, objName)
 	if err != nil {
@@ -389,6 +377,7 @@ func (m *ioContext) gets() {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		totalGets  = m.num * m.numGetsEachFile
+		wg         = cmn.NewLimitedWaitGroup(50)
 	)
 
 	if !m.silent {
@@ -399,26 +388,33 @@ func (m *ioContext) gets() {
 		}
 	}
 
-	m.wg.Add(totalGets)
 	for i := 0; i < totalGets; i++ {
-		go m.get(baseParams, i, totalGets)
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			m.get(baseParams, idx, totalGets)
+		}(i)
 	}
-	m.wg.Wait()
+	wg.Wait()
 }
 
 func (m *ioContext) getsUntilStop() {
 	var (
 		idx        = 0
 		baseParams = tutils.BaseAPIParams()
+		wg         = cmn.NewLimitedWaitGroup(40)
 	)
 	for {
 		select {
 		case <-m.stopCh:
-			m.wg.Wait()
+			wg.Wait()
 			return
 		default:
-			m.wg.Add(1)
-			go m.get(baseParams, idx, 0)
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				m.get(baseParams, idx, 0)
+			}(idx)
 			idx++
 			if idx%5000 == 0 {
 				time.Sleep(500 * time.Millisecond) // prevents generating too many GET requests

@@ -246,8 +246,8 @@ func Test_putdelete(t *testing.T) {
 		tassert.SelectErr(t, errCh, "put", true)
 
 		// Declare one channel per worker to pass the keyname
-		nameChans := make([]chan string, numworkers)
-		for i := 0; i < numworkers; i++ {
+		nameChans := make([]chan string, workerCnt)
+		for i := 0; i < workerCnt; i++ {
 			// Allow a bunch of messages at a time to be written asynchronously to a channel
 			nameChans[i] = make(chan string, 100)
 		}
@@ -255,19 +255,19 @@ func Test_putdelete(t *testing.T) {
 		// Start the worker pools
 		wg := &sync.WaitGroup{}
 		// Get the workers started
-		for i := 0; i < numworkers; i++ {
+		for i := 0; i < workerCnt; i++ {
 			wg.Add(1)
 			go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
 		}
 
 		num := 0
 		for name := range filesPutCh {
-			nameChans[num%numworkers] <- filepath.Join(objPrefix, name)
+			nameChans[num%workerCnt] <- filepath.Join(objPrefix, name)
 			num++
 		}
 
 		// Close the channels after the reading is done
-		for i := 0; i < numworkers; i++ {
+		for i := 0; i < workerCnt; i++ {
 			close(nameChans[i])
 		}
 
@@ -301,8 +301,8 @@ func Test_matchdelete(t *testing.T) {
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		// Declare one channel per worker to pass the keyname
-		keynameChans := make([]chan string, numworkers)
-		for i := 0; i < numworkers; i++ {
+		keynameChans := make([]chan string, workerCnt)
+		for i := 0; i < workerCnt; i++ {
 			// Allow a bunch of messages at a time to be written asynchronously to a channel
 			keynameChans[i] = make(chan string, 100)
 		}
@@ -310,7 +310,7 @@ func Test_matchdelete(t *testing.T) {
 		errCh := make(chan error, 100)
 		wg := &sync.WaitGroup{}
 		// Get the workers started
-		for i := 0; i < numworkers; i++ {
+		for i := 0; i < workerCnt; i++ {
 			wg.Add(1)
 			go deleteFiles(proxyURL, bck.Bck, keynameChans[i], wg, errCh)
 		}
@@ -332,14 +332,14 @@ func Test_matchdelete(t *testing.T) {
 			if !re.MatchString(name) {
 				continue
 			}
-			keynameChans[num%numworkers] <- name
+			keynameChans[num%workerCnt] <- name
 			num++
 			if num >= numfiles {
 				break
 			}
 		}
 		// Close the channels after the reading is done
-		for i := 0; i < numworkers; i++ {
+		for i := 0; i < workerCnt; i++ {
 			close(keynameChans[i])
 		}
 		wg.Wait()
@@ -480,26 +480,26 @@ func TestOperationsWithRanges(t *testing.T) {
 
 				tutils.Logf("Cleaning up remaining objects...\n")
 				// channel per worker to pass the keyname
-				nameChans := make([]chan string, numworkers)
-				for i := 0; i < numworkers; i++ {
+				nameChans := make([]chan string, workerCnt)
+				for i := 0; i < workerCnt; i++ {
 					// Allow a bunch of messages at a time to be written asynchronously to a channel
 					nameChans[i] = make(chan string, 100)
 				}
 				// Start the worker pools
 				wg := &sync.WaitGroup{}
 				// Get the workers started
-				for i := 0; i < numworkers; i++ {
+				for i := 0; i < workerCnt; i++ {
 					wg.Add(1)
 					go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
 				}
 				num := 0
 				for _, entry := range bckList.Entries {
-					nameChans[num%numworkers] <- entry.Name
+					nameChans[num%workerCnt] <- entry.Name
 					num++
 				}
 
 				// Close the channels after the reading is done
-				for i := 0; i < numworkers; i++ {
+				for i := 0; i < workerCnt; i++ {
 					close(nameChans[i])
 				}
 
