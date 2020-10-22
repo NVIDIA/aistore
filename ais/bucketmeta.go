@@ -71,13 +71,13 @@ type (
 	bmdOwnerTgt struct{ bmdOwnerBase }
 
 	bmdModifier struct {
-		pre   func(*bmdModifier, *bucketMD) (bool, error)
+		pre   func(*bmdModifier, *bucketMD) error
 		final func(*bmdModifier, *bucketMD)
 
 		smap  *smapX
 		msg   *cmn.ActionMsg
 		txnID string // transaction UUID
-		bck   *cluster.Bck
+		bcks  []*cluster.Bck
 
 		propsToUpdate *cmn.BucketPropsToUpdate // update existing props
 		revertProps   *cmn.BucketPropsToUpdate // props to revert
@@ -87,6 +87,7 @@ type (
 		wait         bool
 		needReMirror bool
 		needReEC     bool
+		terminate    bool
 	}
 )
 
@@ -242,9 +243,8 @@ func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
 
 func (bo *bmdOwnerPrx) modify(ctx *bmdModifier) (clone *bucketMD, err error) {
 	bo.Lock()
-	var cont bool
 	clone = bo.get().clone()
-	if cont, err = ctx.pre(ctx, clone); err != nil || !cont {
+	if err = ctx.pre(ctx, clone); err != nil || ctx.terminate {
 		bo.Unlock()
 		return
 	}

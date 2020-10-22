@@ -1377,7 +1377,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		pre:        p._bckHeadPre,
 		final:      p._syncBMDFinal,
 		msg:        &cmn.ActionMsg{Action: cmn.ActResyncBprops},
-		bck:        bck,
+		bcks:       []*cluster.Bck{bck},
 		cloudProps: cloudProps,
 	}
 
@@ -1390,18 +1390,22 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	p.bucketPropsToHdr(bck, w.Header())
 }
 
-func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
-	bprops, present := clone.Get(ctx.bck)
+func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
+	var (
+		bck             = ctx.bcks[0]
+		bprops, present = clone.Get(bck)
+	)
 	if !present {
-		return false, cmn.NewErrorBucketDoesNotExist(ctx.bck.Bck, p.si.String())
+		return cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
 	}
 	nprops := cmn.MergeCloudBckProps(bprops, ctx.cloudProps)
 	if nprops.Equal(bprops) {
-		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, ctx.bck)
-		return false, nil
+		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, bck)
+		ctx.terminate = true
+		return nil
 	}
-	clone.set(ctx.bck, nprops)
-	return true, nil
+	clone.set(bck, nprops)
+	return nil
 }
 
 // PATCH /v1/buckets/bucket-name
@@ -2062,24 +2066,29 @@ func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 		pre:   p._pendingRnPre,
 		final: p._syncBMDFinal,
 		msg:   &cmn.ActionMsg{Value: cmn.ActRenameLB},
-		bck:   cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal),
+		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal)},
 	}
 
 	p.owner.bmd.modify(ctx)
 }
 
-func (p *proxyrunner) _pendingRnPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
-	props, present := clone.Get(ctx.bck)
+func (p *proxyrunner) _pendingRnPre(ctx *bmdModifier, clone *bucketMD) error {
+	var (
+		bck            = ctx.bcks[0]
+		props, present = clone.Get(bck)
+	)
 	if !present {
+		ctx.terminate = true
 		// Already removed via the the very first target calling here.
-		return false, nil
+		return nil
 	}
 	if props.Renamed == "" {
-		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, ctx.bck.Name, *ctx.bck.Props)
-		return false, nil
+		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si, bck.Name, *bck.Props)
+		ctx.terminate = true
+		return nil
 	}
-	clone.del(ctx.bck)
-	return true, nil
+	clone.del(bck)
+	return nil
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {

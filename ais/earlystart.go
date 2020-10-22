@@ -286,12 +286,12 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.markClusterStarted()
 }
 
-func (p *proxyrunner) _startupBMDPre(ctx *bmdModifier, clone *bucketMD) (bool, error) {
+func (p *proxyrunner) _startupBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	if clone.Version == 0 {
 		clone.Version = 1 // init BMD
 		clone.UUID = ctx.smap.UUID
 	}
-	return true, nil
+	return nil
 }
 
 func (p *proxyrunner) _startupBMDFinal(ctx *bmdModifier, clone *bucketMD) {
