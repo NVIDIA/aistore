@@ -505,8 +505,7 @@ func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
 	return &hash.Cksum, nil
 }
 
-func Close(closer io.Closer) error {
+func Close(closer io.Closer) {
 	err := closer.Close()
 	debug.AssertNoErr(err)
-	return err
 }
