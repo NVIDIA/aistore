@@ -609,13 +609,9 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 		if g.Xact != nil && !g.Xact.Finished() {
 			return errors.New("cannot start maintenance: rebalance is in progress")
 		}
-		filter := xreg.XactFilter{Kind: cmn.ActRenameLB}
-		if entry := xreg.GetRunning(filter); entry != nil {
-			return errors.New("cannot start maintenance: rename bucket is in progress")
-		}
-		filter = xreg.XactFilter{Kind: cmn.ActCopyBucket}
-		if entry := xreg.GetRunning(filter); entry != nil {
-			return errors.New("cannot start maintenance: copy bucket is in progress")
+
+		if cause := xreg.CheckBucketsBusy(); cause != nil {
+			return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
 		}
 		t.gfn.global.activateTimed()
 	case cmn.ActAbort:

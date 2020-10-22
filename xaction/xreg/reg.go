@@ -146,6 +146,18 @@ func (r *registry) getLatest(flt XactFilter) BaseEntry {
 	return entry
 }
 
+func CheckBucketsBusy() (cause BaseEntry) {
+	// These xactions have cluster-wide consequences: in general moving objects between targets.
+	busyXacts := []string{cmn.ActRenameLB, cmn.ActCopyBucket, cmn.ActETLBucket}
+	for _, kind := range busyXacts {
+		if entry := GetRunning(XactFilter{Kind: kind}); entry != nil {
+			return cause
+		}
+	}
+
+	return nil
+}
+
 // AbortAllBuckets aborts all xactions that run with any of the provided bcks.
 // It not only stops the "bucket xactions" but possibly "task xactions" which
 // are running on given bucket.
