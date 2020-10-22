@@ -3488,7 +3488,9 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
 			return
 		}
-		w.Write([]byte(rebID.String()))
+		if rebID != 0 {
+			w.Write([]byte(rebID.String()))
+		}
 	case cmn.ActStopMaintenance:
 		var (
 			opts cmn.ActValDecommision
