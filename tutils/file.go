@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -44,10 +45,14 @@ type (
 		Empty   bool   // Determines if there is a file somewhere in the directories.
 	}
 
+	ContentTypeDesc struct {
+		Type       string
+		ContentCnt int
+	}
+
 	ObjectsDesc struct {
-		CTs           []string // Content types which are interesting for the test.
-		MountpathsCnt int      // Number of mountpaths to be created.
-		ObjectsCnt    int      // Total number of objects on all mountpaths.
+		CTs           []ContentTypeDesc // Content types which are interesting for the test.
+		MountpathsCnt int               // Number of mountpaths to be created.
 		ObjectSize    int64
 	}
 
@@ -55,7 +60,7 @@ type (
 		Dir  string
 		T    cluster.Target
 		Bck  cmn.Bck
-		FQNs []string
+		FQNs map[string][]string // ContentType => FQN
 	}
 )
 
@@ -229,7 +234,7 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
 	var (
 		buf  = make([]byte, desc.ObjectSize)
-		fqns = make([]string, 0, desc.ObjectsCnt)
+		fqns = make(map[string][]string, len(desc.CTs))
 
 		bck = cmn.Bck{
 			Name:     cmn.RandString(10),
@@ -247,6 +252,8 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
 
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.RegisterContentType(ec.SliceType, &ec.SliceSpec{})
+	_ = fs.CSM.RegisterContentType(ec.MetaType, &ec.MetaSpec{})
 
 	cluster.InitTarget()
 
@@ -265,14 +272,12 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
 		tassert.CheckFatal(t, errs[0])
 	}
 
-	for _, contentType := range []string{fs.WorkfileType, fs.ObjectType} {
-		for i := 0; i < desc.ObjectsCnt; i++ {
-			fqn, _, err := cluster.HrwFQN(cluster.NewBckEmbed(bck), contentType, cmn.RandString(15))
+	for _, ct := range desc.CTs {
+		for i := 0; i < ct.ContentCnt; i++ {
+			fqn, _, err := cluster.HrwFQN(cluster.NewBckEmbed(bck), ct.Type, cmn.RandString(15))
 			tassert.CheckFatal(t, err)
 
-			if cmn.StringInSlice(contentType, desc.CTs) {
-				fqns = append(fqns, fqn)
-			}
+			fqns[ct.Type] = append(fqns[ct.Type], fqn)
 
 			f, err := cmn.CreateFile(fqn)
 			tassert.CheckFatal(t, err)
@@ -281,7 +286,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
 			f.Close()
 			tassert.CheckFatal(t, err)
 
-			switch contentType {
+			switch ct.Type {
 			case fs.ObjectType:
 				lom := &cluster.LOM{T: tMock, FQN: fqn}
 				err = lom.Init(cmn.Bck{})
@@ -290,7 +295,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
 				lom.SetSize(desc.ObjectSize)
 				err = lom.Persist()
 				tassert.CheckFatal(t, err)
-			case fs.WorkfileType:
+			case fs.WorkfileType, ec.SliceType, ec.MetaType:
 				break
 			default:
 				cmn.AssertMsg(false, "non-implemented type")

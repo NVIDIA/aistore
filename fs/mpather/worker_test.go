@@ -21,9 +21,10 @@ import (
 func TestWorkerGroup(t *testing.T) {
 	var (
 		desc = tutils.ObjectsDesc{
-			CTs:           []string{fs.ObjectType},
+			CTs: []tutils.ContentTypeDesc{
+				{Type: fs.ObjectType, ContentCnt: 100},
+			},
 			MountpathsCnt: 10,
-			ObjectsCnt:    100,
 			ObjectSize:    cmn.KiB,
 		}
 		out     = tutils.PrepareObjects(t, desc)
@@ -41,7 +42,7 @@ func TestWorkerGroup(t *testing.T) {
 
 	wg.Run()
 
-	for _, fqn := range out.FQNs {
+	for _, fqn := range out.FQNs[fs.ObjectType] {
 		lom := &cluster.LOM{T: out.T, FQN: fqn}
 		err := lom.Init(out.Bck)
 		tassert.CheckError(t, err)
@@ -53,7 +54,7 @@ func TestWorkerGroup(t *testing.T) {
 	time.Sleep(time.Second)
 
 	tassert.Errorf(
-		t, int(counter.Load()) == desc.ObjectsCnt,
-		"invalid number of objects visited (%d vs %d)", counter.Load(), desc.ObjectsCnt,
+		t, int(counter.Load()) == len(out.FQNs[fs.ObjectType]),
+		"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjectType]),
 	)
 }
