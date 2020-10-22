@@ -1604,7 +1604,7 @@ func TestBucketReadOnly(t *testing.T) {
 	}
 }
 
-func TestRenameEmptyBucket(t *testing.T) {
+func TestRenameBucketEmpty(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
@@ -1657,7 +1657,7 @@ func TestRenameEmptyBucket(t *testing.T) {
 	}
 }
 
-func TestRenameNonEmptyBucket(t *testing.T) {
+func TestRenameBucketNonEmpty(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
@@ -1716,7 +1716,7 @@ func TestRenameNonEmptyBucket(t *testing.T) {
 	}
 }
 
-func TestRenameAlreadyExistingBucket(t *testing.T) {
+func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 	var (
 		m = ioContext{
 			t: t,
@@ -1837,6 +1837,39 @@ func TestRenameBucketTwice(t *testing.T) {
 	}
 	if bcks.Contains(cmn.QueryBcks(dstBck2)) {
 		t.Error("second (failed) destination bucket not found in buckets list")
+	}
+}
+
+func TestRenameBucketNonExistentSrc(t *testing.T) {
+	var (
+		m = ioContext{
+			t: t,
+		}
+		baseParams = tutils.BaseAPIParams()
+		dstBck     = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
+		srcBcks = []cmn.Bck{
+			{
+				Name:     cmn.RandString(10),
+				Provider: cmn.ProviderAIS,
+			},
+			{
+				Name:     cmn.RandString(10),
+				Provider: cmn.ProviderAmazon,
+			},
+		}
+	)
+
+	m.saveClusterState()
+	m.expectTargets(1)
+
+	for _, srcBck := range srcBcks {
+		_, err := api.RenameBucket(baseParams, srcBck, dstBck)
+		tutils.CheckErrIsNotFound(t, err)
+		_, err = api.HeadBucket(baseParams, dstBck)
+		tutils.CheckErrIsNotFound(t, err)
 	}
 }
 

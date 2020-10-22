@@ -768,12 +768,6 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		}
 	}
 	if err = bck.Init(p.owner.bmd, p.si); err != nil {
-		_, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist)
-		if ok && msg.Action == cmn.ActRenameLB {
-			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "cannot %q: ais bucket %q does not exist",
-				msg.Action, bucket)
-			return
-		}
 		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg}
 		if bck, err = args.try(); err != nil {
 			return
@@ -789,7 +783,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		if !bck.IsAIS() {
-			p.invalmsghdlrf(w, r, fmtUnsupProv, msg.Action, bck.Provider)
+			p.invalmsghdlrf(w, r, "cannot rename bucket %q, it is not a local bucket", bck)
 			return
 		}
 		if err = bck.Allow(cmn.AccessBckRENAME); err != nil {
