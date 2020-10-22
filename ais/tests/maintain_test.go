@@ -67,6 +67,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 		if !restored {
 			tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 		}
+		tutils.ClearMaintenance(baseParams, tsi)
 	}()
 	tutils.Logf("Wait for rebalance %s\n", rebID)
 	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: time.Minute}
@@ -90,6 +91,8 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 	restored = true
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
+	err = api.WaitForXactionToStart(baseParams, args)
+	tassert.CheckFatal(t, err)
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckError(t, err)
 }
@@ -125,7 +128,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	restored := false
 	actVal.DaemonID = tsi.ID()
 	rebID, err := api.Maintenance(baseParams, cmn.ActDecommission, actVal)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 	defer func() {
 		if !stopped {
 			m.stopGets()
@@ -133,6 +136,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 		if !restored {
 			tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 		}
+		tutils.ClearMaintenance(baseParams, tsi)
 	}()
 	tutils.Logf("Wait for rebalance %s\n", rebID)
 	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: time.Minute}
@@ -157,6 +161,8 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 	restored = true
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
+	err = api.WaitForXactionToStart(baseParams, args)
+	tassert.CheckFatal(t, err)
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckError(t, err)
 }

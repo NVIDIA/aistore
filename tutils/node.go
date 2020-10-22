@@ -63,6 +63,12 @@ func RestoreTarget(t *testing.T, proxyURL string, smap *cluster.Smap, target *cl
 	return smap
 }
 
+func ClearMaintenance(baseParams api.BaseParams, tsi *cluster.Snode) {
+	val := &cmn.ActValDecommision{DaemonID: tsi.ID(), SkipRebalance: true}
+	// it can fail if the node is not under maintenance but it is OK
+	_, _ = api.Maintenance(baseParams, cmn.ActStopMaintenance, val)
+}
+
 func ExtractTargetNodes(smap *cluster.Smap) cluster.Nodes {
 	targets := make(cluster.Nodes, 0, smap.CountTargets())
 	for _, target := range smap.Tmap {
