@@ -28,12 +28,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-//==============================
-//
-// constants
-//
-//==============================
-
 const (
 	logsMaxSizeCheckTime      = 48 * time.Minute       // periodically check the logs for max accumulated size
 	startupSleep              = 300 * time.Millisecond // periodically poll ClusterStarted()
@@ -54,10 +48,7 @@ const (
 	numGorExtreme = 1000
 )
 
-var (
-	kinds      = []string{KindCounter, KindLatency, KindThroughput, KindSpecial}
-	goMaxProcs int
-)
+var kinds = []string{KindCounter, KindLatency, KindThroughput, KindSpecial}
 
 // CoreStats stats
 const (
@@ -438,17 +429,17 @@ func (r *statsRunner) runcommon(logger statslogger) error {
 		config   = cmn.GCO.Get()
 		deadline = startupDeadlineMultiplier * config.Timeout.Startup
 	)
-dummy:
+waitStartup:
 	for {
 		select {
 		case <-r.workCh:
-			// drain workCh until the daemon (proxy or target) starts up
+			// Drain workCh until the daemon (proxy or target) starts up.
 		case <-r.stopCh:
 			ticker.Stop()
 			return nil
 		case <-ticker.C:
 			if r.daemon.ClusterStarted() {
-				break dummy
+				break waitStartup
 			}
 			j += startupSleep
 			if j > deadline {
@@ -464,13 +455,14 @@ dummy:
 	}
 	ticker.Stop()
 
-	// for real now
+	goMaxProcs := runtime.GOMAXPROCS(0)
 	glog.Infof("Starting %s", r.GetRunName())
-	goMaxProcs = runtime.GOMAXPROCS(0)
 	hk.Reg(r.GetRunName()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
+
 	r.ticker = time.NewTicker(config.Periodic.StatsTime)
-	startTime, checkNumGorHigh := time.Now(), time.Time{}
 	r.startedUp.Store(true)
+
+	startTime, checkNumGorHigh := time.Now(), time.Time{}
 	for {
 		select {
 		case nv, ok := <-r.workCh:
@@ -482,14 +474,14 @@ dummy:
 			logger.log(uptime)
 			if ngr := runtime.NumGoroutine(); ngr > goMaxProcs*numGorHigh {
 				if ngr >= goMaxProcs*numGorExtreme {
-					glog.Errorf("extremely high number of goroutines: %d", ngr)
+					glog.Errorf("Extremely high number of goroutines: %d", ngr)
 				}
 				now := time.Now()
 				if checkNumGorHigh.IsZero() {
 					checkNumGorHigh = now
 				} else if now.Sub(checkNumGorHigh) > numGorHighCheckTime {
 					if ngr < goMaxProcs*numGorExtreme {
-						glog.Warningf("high number of goroutines: %d", ngr)
+						glog.Warningf("High number of goroutines: %d", ngr)
 					}
 					checkNumGorHigh = time.Time{}
 				}
