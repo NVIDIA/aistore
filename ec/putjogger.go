@@ -529,6 +529,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		var (
 			reader cmn.ReadOpenCloser
 			err    error
+			rc     io.ReadCloser
 		)
 		if slices[i].reader != nil {
 			reader = slices[i].reader
@@ -538,7 +539,10 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			case *memsys.Reader:
 				_, err = r.Seek(0, io.SeekStart)
 			case *cmn.FileSectionHandle:
-				_, err = r.Open()
+				rc, err = r.Open()
+				if err == nil {
+					reader = rc.(cmn.ReadOpenCloser)
+				}
 			default:
 				cmn.Assertf(false, "unsupported reader type: %v", reader)
 			}

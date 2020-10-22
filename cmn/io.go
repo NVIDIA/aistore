@@ -51,7 +51,10 @@ type (
 	// FileSectionHandle is a slice of already opened file with optional padding
 	// that implements ReadOpenCloser interface
 	FileSectionHandle struct {
+		r         io.ReaderAt
 		s         *io.SectionReader
+		offset    int64 // slice start
+		size      int64 // slice length
 		padding   int64 // padding size
 		padOffset int64 // offset inside padding when reading a file
 	}
@@ -219,19 +222,12 @@ func (r *CallbackRC) Read(p []byte) (n int, err error) {
 
 func NewFileSectionHandle(r io.ReaderAt, offset, size, padding int64) (*FileSectionHandle, error) {
 	sec := io.NewSectionReader(r, offset, size)
-	return &FileSectionHandle{sec, padding, 0}, nil
+	return &FileSectionHandle{r, sec, offset, size, padding, 0}, nil
 }
 
 func (f *FileSectionHandle) Open() (io.ReadCloser, error) {
-	_, err := f.s.Seek(0, io.SeekStart)
-	f.padOffset = 0
-	return f, err
-}
-
-func (f *FileSectionHandle) Reset() error {
-	_, err := f.s.Seek(0, io.SeekStart)
-	f.padOffset = 0
-	return err
+	sec := io.NewSectionReader(f.r, f.offset, f.size)
+	return &FileSectionHandle{f.r, sec, f.offset, f.size, f.padding, 0}, nil
 }
 
 // Reads a file slice. When the slice finishes but the buffer is not filled yet,
