@@ -19,6 +19,10 @@ import (
 // and other AIS packages handle.
 
 type (
+	SignalError struct {
+		signal syscall.Signal
+	}
+
 	nodeBckPair struct {
 		node string
 		bck  Bck
@@ -138,6 +142,12 @@ func IsUnreachable(err error, status int) bool {
 ////////////////////////////
 // structured error types //
 ////////////////////////////
+
+func NewSignalError(s syscall.Signal) *SignalError { return &SignalError{signal: s} }
+func (e *SignalError) Error() string               { return fmt.Sprintf("Signal %d", e.signal) }
+
+// https://tldp.org/LDP/abs/html/exitcodes.html
+func (e *SignalError) ExitCode() int { return 128 + int(e.signal) }
 
 func NewErrorBucketAlreadyExists(bck Bck, node string) *ErrorBucketAlreadyExists {
 	return &ErrorBucketAlreadyExists{node: node, bck: bck}

@@ -28,7 +28,6 @@ import (
 // runners
 const (
 	xstreamc         = "stream-collector"
-	xsignal          = "signal"
 	xproxystats      = "proxystats"
 	xstorstats       = "storstats"
 	xproxykeepalive  = "proxykeepalive"
@@ -78,20 +77,12 @@ type (
 	}
 )
 
-//====================
-//
 // globals
-//
-//====================
 var (
 	daemon = daemonCtx{}
 )
 
-//====================
-//
 // rungroup
-//
-//====================
 func (g *rungroup) add(r cmn.Runner, name string) {
 	r.SetRunName(name)
 	g.runarr = append(g.runarr, r)
@@ -194,7 +185,8 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	jsp.MustLoadConfig(daemon.cli.confPath)
 
 	// even more config changes, e.g:
-	// -config=/etc/ais.json -role=target -persist=true -config_custom="client.timeout=13s, proxy.primary_url=https://localhost:10080"
+	// -config=/etc/ais.json -role=target -persist=true -config_custom="client.timeout=13s,
+	// proxy.primary_url=https://localhost:10080"
 	if daemon.cli.confCustom != "" {
 		var (
 			nvmap = make(cmn.SimpleKVs, 10)
@@ -241,8 +233,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	// Initialize filesystem/mountpaths manager.
 	fs.Init()
 
-	// NOTE: Proxy and, respectively, target terminations are executed in
-	//  the same exact order as the initializations below
+	// NOTE: daemon terminations get executed in the same exact order as initializations below
 	daemon.rg = &rungroup{
 		runarr: make([]cmn.Runner, 0, 8),
 		runmap: make(map[string]cmn.Runner, 8),
@@ -254,7 +245,6 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	} else {
 		rmain = initTarget()
 	}
-	daemon.rg.add(&sigrunner{}, xsignal)
 	return
 }
 
@@ -343,16 +333,14 @@ func Run(version, build string) int {
 		glog.Infoln("Terminated OK")
 		return 0
 	}
-	if e, ok := err.(*signalError); ok {
-		glog.Infof("Terminated OK (via signal: %s)\n", e.signal.String())
-		exitCode := 128 + int(e.signal) // see: https://tldp.org/LDP/abs/html/exitcodes.html
-		return exitCode
+	if e, ok := err.(*cmn.SignalError); ok {
+		glog.Infof("Terminated OK (via signal: %v)\n", e)
+		return e.ExitCode()
 	}
 	if errors.Is(err, cmn.ErrStartupTimeout) {
-		// NOTE:
-		// stats and keepalive runners wait for the ClusterStarted() - i.e., for primary
-		// to reach the corresponding stage. There must be an external "restarter" (e.g. K8s)
-		// to restart the daemon if the primary gets killed or panics prior (to reaching that state)
+		// NOTE: stats and keepalive runners wait for the ClusterStarted() - i.e., for the primary
+		//       to reach the corresponding stage. There must be an external "restarter" (e.g. K8s)
+		//       to restart the daemon if the primary gets killed or panics prior (to reaching that state)
 		glog.Errorln("Timed-out while starting up")
 	}
 	glog.Errorf("Terminated with err: %s", err)

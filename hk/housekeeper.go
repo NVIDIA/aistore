@@ -8,6 +8,9 @@ package hk
 import (
 	"container/heap"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -41,6 +44,7 @@ type (
 	housekeeper struct {
 		cmn.Named
 		stopCh  *cmn.StopCh
+		sigCh   chan os.Signal
 		actions *timedActions
 		timer   *time.Timer
 		workCh  chan request
@@ -55,6 +59,7 @@ func init() {
 	DefaultHK = &housekeeper{
 		workCh:  make(chan request, 16),
 		stopCh:  cmn.NewStopCh(),
+		sigCh:   make(chan os.Signal, 1),
 		actions: &timedActions{},
 	}
 	heap.Init(DefaultHK.actions)
@@ -94,6 +99,12 @@ func Unreg(name string) {
 }
 
 func (hk *housekeeper) Run() (err error) {
+	signal.Notify(hk.sigCh,
+		syscall.SIGHUP,  // kill -SIGHUP XXXX
+		syscall.SIGINT,  // kill -SIGINT XXXX or Ctrl+c
+		syscall.SIGTERM, // kill -SIGTERM XXXX
+		syscall.SIGQUIT, // kill -SIGQUIT XXXX
+	)
 	hk.timer = time.NewTimer(time.Hour)
 	defer hk.timer.Stop()
 
@@ -136,8 +147,14 @@ func (hk *housekeeper) Run() (err error) {
 				debug.Assertf(foundIdx != -1, "cleanup func %q does not exist", req.name)
 				heap.Remove(hk.actions, foundIdx)
 			}
-
 			hk.updateTimer()
+		case s, ok := <-hk.sigCh:
+			if ok {
+				signal.Stop(hk.sigCh)
+				err := cmn.NewSignalError(s.(syscall.Signal))
+				hk.Stop(err)
+				return err
+			}
 		}
 	}
 }
