@@ -145,8 +145,8 @@ func (r *XactPut) Run() (err error) {
 
 			r.setEcRequestsDisabled()
 
-			// drain pending bucket's EC requests, return them with an error
-			// note: loop can't be replaced with channel range, as the channel is never closed
+			// Drain pending bucket's EC requests, return them with an error.
+			// NOTE: loop can't be replaced with channel range, as the channel is never closed.
 			for {
 				select {
 				case req := <-r.ecCh:

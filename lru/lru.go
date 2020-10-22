@@ -246,7 +246,7 @@ func (j *lruJ) stop() { j.stopCh <- struct{}{} }
 
 func (j *lruJ) jog(providers []string) (err error) {
 	glog.Infof("%s: freeing-up %s", j, cmn.B2S(j.totalSize, 2))
-	for _, provider := range providers { // for each provider (note: ordering is random)
+	for _, provider := range providers { // for each provider (NOTE: ordering is random)
 		var (
 			bcks []cmn.Bck
 			opts = fs.Options{

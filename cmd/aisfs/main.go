@@ -223,7 +223,7 @@ func appMain(c *cli.Context) (err error) {
 		return runDaemon(mountPath, c.App.ErrWriter)
 	}
 
-	// Note: The rest of the function should be viewed from two perspectives:
+	// NOTE: The rest of the function should be viewed from two perspectives:
 	// 1) Current process will execute it if --wait flag was given by the user.
 	// 2) Daemon process will execute it if --wait flag was not given by the user.
 	blocked := true

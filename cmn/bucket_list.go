@@ -15,7 +15,7 @@ package cmn
 //      to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
 // 3:   CheckExists (for cloud bucket it shows if the object in local cache)
 type BucketEntry struct {
-	Name      string `json:"name" msg:"n"`                            // name of the object - note: does not include the bucket name
+	Name      string `json:"name" msg:"n"`                            // name of the object - NOTE: Does not include the bucket name.
 	Size      int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
 	Checksum  string `json:"checksum,omitempty" msg:"cs,omitempty"`   // checksum
 	Atime     string `json:"atime,omitempty" msg:"a,omitempty"`       // formatted as per SelectMsg.TimeFormat

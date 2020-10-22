@@ -19,7 +19,7 @@ type MemStat struct {
 // where the app is running: on hardware or inside any container.
 // Returns and error if memory stats cannot be read. If the function fails to
 // read container's stats, it returns host OS stats
-// Note: Swap stats is always host OS ones
+// NOTE: Swap stats is always host OS ones.
 func Mem() (MemStat, error) {
 	if !Containerized() {
 		return HostMem()

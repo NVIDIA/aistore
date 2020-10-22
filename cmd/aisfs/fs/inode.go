@@ -70,7 +70,7 @@ func (in *baseInode) ID() fuseops.InodeID {
 // Path returns a path that maps to an inode.
 // The file system does not support hard links,
 // so there is only one path for each inode.
-// Note: Path does not start with a separator.
+// NOTE: Path does not start with a separator.
 func (in *baseInode) Path() string {
 	return in.path
 }

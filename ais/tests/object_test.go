@@ -1029,9 +1029,9 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.Select
 // 1.	PUT file
 // 2.	Change contents of the file or change XXHash
 // 3.	GET file.
-// Note: The following test can only work when running on a local setup
+// NOTE: The following test can only work when running on a local setup
 // (targets are co-located with where this test is running from, because
-// it searches a local oldFileIfo system)
+// it searches a local oldFileIfo system).
 func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	const (
 		fileSize  = 1024

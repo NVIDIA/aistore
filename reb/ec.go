@@ -35,7 +35,7 @@ import (
 // a goal for the next MRs.
 
 // High level overview of how EC rebalance works.
-// Note: really it is not only rebalance, it also repairs damaged objects
+// NOTE: really it is not only rebalance, it also repairs damaged objects
 // 01. When rebalance starts, it checks if EC is enabled. If not, it starts
 //     regular rebalance.
 // 02. First stage is to build global namespace of existing data (rebStageTraverse)

@@ -466,7 +466,7 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 // retrying connection-refused errors and falls back to the retry-pending "route"
 func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
-		ch       = make(chan transportData, 2) // note: use 2 to avoid unbuffered channel, http handler can return
+		ch       = make(chan transportData, 2) // NOTE: Use 2 to avoid unbuffered channel, http handler can return.
 		id       = "p"
 		addrInfo = &net.TCPAddr{
 			IP:   net.ParseIP("127.0.0.1"),

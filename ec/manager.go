@@ -348,7 +348,7 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 		return cs.Err
 	}
 	targetCnt := mgr.targetCnt.Load()
-	// note: restore replica object is done with GFN, safe to always abort
+	// NOTE: Restore replica object is done with GFN, safe to always abort.
 	if required := lom.Bprops().EC.RequiredRestoreTargets(); int(targetCnt) < required {
 		glog.Warningf("not enough targets to restore the object; actual: %v, required: %v", targetCnt, required)
 		return ErrorInsufficientTargets

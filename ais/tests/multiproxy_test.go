@@ -93,7 +93,7 @@ func TestMultiProxy(t *testing.T) {
 }
 
 // clusterHealthCheck verifies the cluster has the same servers after tests
-// note: add verify primary if primary is reset
+// NOTE: Add verify primary if primary is reset.
 func clusterHealthCheck(t *testing.T, smapBefore *cluster.Smap) {
 	proxyURL := tutils.RandomProxyURL(t)
 	smapAfter := tutils.GetClusterMap(t, proxyURL)
@@ -124,7 +124,7 @@ func clusterHealthCheck(t *testing.T, smapBefore *cluster.Smap) {
 			t.Fatalf("Failed to find proxy %s", b.ID())
 		}
 
-		// note: can't compare Primary field unless primary is always reset to the original one
+		// NOTE: Can't compare Primary field unless primary is always reset to the original one.
 		if !a.Equals(b) {
 			t.Fatalf("Proxy %s changed, before = %+v, after = %+v", b.ID(), b, a)
 		}
@@ -425,9 +425,9 @@ func crashAndFastRestore(t *testing.T) {
 
 	tutils.Logf("The %s is currently restarting\n", oldPrimaryID)
 
-	// Note: using (version - 1) because the primary will restart with its old version,
+	// NOTE: using (version - 1) because the primary will restart with its old version,
 	//       there will be no version change for this restore, so force beginning version to 1 less
-	//       than the original version in order to use WaitForPrimaryProxy
+	//       than the original version in order to use WaitForPrimaryProxy.
 	smap = tutils.WaitNodeRestored(t, proxyURL, "to restore", oldPrimaryID,
 		smap.Version-1, testing.Verbose())
 

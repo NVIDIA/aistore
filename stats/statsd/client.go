@@ -141,7 +141,7 @@ func (c Client) Close() error {
 }
 
 // Send sends metrics to StatsD server
-// Note: Sending error is ignored
+// NOTE: Sending error is ignored
 // aggCnt - if stats were aggregated - number of stats which were aggregated, 1 otherwise
 // 1/ratio - how many samples are aggregated into single metric
 // see: https://github.com/statsd/statsd/blob/master/docs/metric_types.md#sampling

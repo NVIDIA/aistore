@@ -11,8 +11,7 @@ import (
 )
 
 // Basic recipe with a target going down.
-// Note: that it does not restore the target at the end and expects
-// the recipe framework for doing so.
+// NOTE: It does not restore the target at the end and expects the recipe framework to do so.
 func recBasicTargetDown(rctx *soakprim.RecipeContext) {
 	conds := &soakprim.PreConds{
 		NumTargets: 3,

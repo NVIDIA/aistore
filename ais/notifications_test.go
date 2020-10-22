@@ -24,7 +24,7 @@ import (
 )
 
 var _ = Describe("Notifications xaction test", func() {
-	// Note: constants and functions declared inside 'Describe' to avoid cluttering of `ais` namespace
+	// NOTE: constants and functions declared inside 'Describe' to avoid cluttering of `ais` namespace.
 	const (
 		target1ID = "target1"
 		target2ID = "target2"

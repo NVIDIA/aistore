@@ -93,7 +93,7 @@ import (
 // Status updates are either reported in terms of size or size and percentage.
 // When downloading an object from a server, we attempt to obtain the object size
 // using the "Content-Length" field returned in the Header.
-// Note: not all servers respond with a "Content-Length" request header.
+// NOTE: Not all servers respond with a "Content-Length" request header.
 // For these cases, a progress percentage is not returned, just the current
 // downloaded size (in bytes).
 //

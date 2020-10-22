@@ -258,9 +258,9 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	close(filenameCh)
 	close(errCh)
 
-	// Test corrupting the file contents
-	// Note: The following tests can only work when running on a local setup(targets are co-located with
-	//       where this test is running from, because it searches a local file system)
+	// Test corrupting the file contents.
+	// NOTE: The following tests can only work when running on a local setup.
+	//  The test assumes that it is run on the same machine as targets are (the test searches a local file system).
 	objName := <-filenameCh
 	fqn := findObjOnDisk(bck, objName)
 	tutils.Logf("Corrupting file data[%s]: %s\n", objName, fqn)
@@ -344,7 +344,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	}
 	tassert.SelectErr(t, errCh, "put", true)
 	if rtd.rename {
-		// Note: Rename bucket fails when rebalance or resilver is running.
+		// NOTE: Rename bucket fails when rebalance or resilver is running.
 		// Ensure rebalance or resilver isn't running before performing a rename
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)

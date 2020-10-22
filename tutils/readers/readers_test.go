@@ -100,7 +100,7 @@ func testReaderBasic(t *testing.T, r readers.Reader, size int64) {
 	}
 }
 
-// Note: These are testcases that fail when running on SGReader.
+// NOTE: These are testcases that fail when running on SGReader.
 func testReaderAdv(t *testing.T, r readers.Reader, size int64) {
 	buf := make([]byte, size)
 	_, err := r.Seek(0, io.SeekStart)
