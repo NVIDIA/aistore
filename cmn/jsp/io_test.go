@@ -7,6 +7,7 @@ package jsp_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"reflect"
@@ -110,6 +111,30 @@ func TestDecodeAndEncode(t *testing.T) {
 				"structs are not equal, (got: %+v, expected: %+v)", v, test.v,
 			)
 		})
+	}
+}
+
+func TestDecodeAndEncodeFuzz(t *testing.T) {
+	b := memsys.DefaultPageMM().NewSGL(cmn.MiB)
+	defer b.Free()
+
+	for i := 0; i < 10000; i++ {
+		var (
+			x, v string
+			opts = jsp.Options{Signature: true, Checksum: true}
+		)
+
+		x = cmn.RandString(i)
+
+		err := jsp.Encode(b, x, opts)
+		tassert.CheckFatal(t, err)
+
+		err = jsp.Decode(b, &v, opts, fmt.Sprintf("%d", i))
+		tassert.CheckFatal(t, err)
+
+		tassert.Fatalf(t, x == v, "strings are not equal, (got: %+v, expected: %+v)", x, v)
+
+		b.Reset()
 	}
 }
 

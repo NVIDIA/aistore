@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -143,18 +142,18 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		return err
 	}
 	if opts.Checksum {
+		// We have already parsed `v` but there is still the possibility that `\n` remains
+		// not read. Therefore, we read it to include it into the final checksum.
+		b, err := ioutil.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		// To be sure that this is exactly the case...
+		debug.Assert(len(b) == 0 || (len(b) == 1 && b[0] == '\n'), b)
+
 		actual := h.Sum(nil)
 		actualCksum := binary.BigEndian.Uint64(actual)
 		if expectedCksum != actualCksum {
-			// FIXME: Remove this debug code once we figure out where the cksum errors are coming from.
-			if debug.Enabled {
-				b, _ := ioutil.ReadAll(decoder.Buffered())
-				rest, _ := ioutil.ReadAll(r)
-				glog.Fatalf(
-					"Invalid checksum [tag: %s, buffered: %s, more: %t, rest: %s, decoded: %#v]",
-					tag, string(b), decoder.More(), v, string(rest),
-				)
-			}
 			return cmn.NewBadMetaCksumError(expectedCksum, actualCksum, tag)
 		}
 	}
