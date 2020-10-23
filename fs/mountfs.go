@@ -26,17 +26,7 @@ import (
 
 const (
 	uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
-)
 
-// mountpath lifecycle-change enum
-const (
-	AddMpath     = "add-mp"
-	RemoveMpath  = "remove-mp"
-	EnableMpath  = "enable-mp"
-	DisableMpath = "disable-mp"
-)
-
-const (
 	TrashDir = "$trash"
 )
 
