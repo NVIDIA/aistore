@@ -35,8 +35,8 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		return
 	}
 
-	if err := fs.PutMarker(xreg.GetMarkerName(cmn.ActResilver)); err != nil {
-		glog.Errorln("Failed to create resilver marker", err)
+	if err := fs.PersistMarker(fs.ResilverMarker); err != nil {
+		glog.Errorf("Failed to create resilver marker, err: %v", err)
 	}
 
 	xact := xreg.RenewResilver(id).(*xrun.Resilver)
@@ -69,9 +69,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		err := jg.Stop()
 		glog.Errorf("Resilver failed with err: %v", err)
 	case <-jg.ListenFinished():
-		if err := fs.RemoveMarker(xreg.GetMarkerName(cmn.ActResilver)); err != nil {
-			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.t.Snode(), err)
-		}
+		fs.RemoveMarker(fs.ResilverMarker)
 	}
 
 	reb.t.GFN(cluster.GFNLocal).Deactivate()
@@ -102,18 +100,18 @@ func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("resilver moving %q -> %q", ct.FQN(), destFQN)
+		glog.Infof("Resilver moving %q -> %q", ct.FQN(), destFQN)
 	}
 	if _, _, err = cmn.CopyFile(ct.FQN(), destFQN, buf, cmn.ChecksumNone); err != nil {
-		glog.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
+		glog.Errorf("Failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
 		if err = os.Remove(destMetaFQN); err != nil {
-			glog.Warningf("failed to cleanup metafile copy %q: %v", destMetaFQN, err)
+			glog.Warningf("Failed to cleanup metafile copy %q: %v", destMetaFQN, err)
 		}
 	}
 	errMeta := os.Remove(srcMetaFQN)
 	errSlice := os.Remove(ct.FQN())
 	if errMeta != nil || errSlice != nil {
-		glog.Warningf("failed to cleanup %q: %v, %v", ct.FQN(), errSlice, errMeta)
+		glog.Warningf("Failed to cleanup %q: %v, %v", ct.FQN(), errSlice, errMeta)
 	}
 }
 

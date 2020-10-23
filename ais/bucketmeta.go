@@ -40,10 +40,9 @@ import (
 //
 
 const (
-	bmdFname    = ".ais.bmd" // BMD basename
-	bmdFext     = ".prev"    // suffix: previous version
-	bmdTermName = "BMD"      // display name
-	bmdCopies   = 2          // local copies
+	bmdFext     = ".prev" // suffix: previous version
+	bmdTermName = "BMD"   // display name
+	bmdCopies   = 2       // local copies
 )
 
 type (
@@ -221,7 +220,7 @@ func (bo *bmdOwnerBase) _put(bmd *bucketMD) {
 /////////////////
 
 func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
-	return &bmdOwnerPrx{fpath: filepath.Join(config.Confdir, bmdFname)}
+	return &bmdOwnerPrx{fpath: filepath.Join(config.Confdir, fs.BmdPersistedFileName)}
 }
 
 func (bo *bmdOwnerPrx) init() {
@@ -266,14 +265,14 @@ func newBMDOwnerTgt() *bmdOwnerTgt {
 }
 
 func (bo *bmdOwnerTgt) find() (curr, prev fs.MPI) {
-	return fs.FindPersisted(bmdFname, bmdFext)
+	return fs.FindPersisted(fs.BmdPersistedFileName), fs.FindPersisted(fs.BmdPersistedFileName + bmdFext)
 }
 
 func (bo *bmdOwnerTgt) init() {
 	load := func(mpi fs.MPI, suffix bool) (bmd *bucketMD) {
 		bmd = newBucketMD()
 		for mpath := range mpi {
-			fpath := filepath.Join(mpath, bmdFname)
+			fpath := filepath.Join(mpath, fs.BmdPersistedFileName)
 			if suffix {
 				fpath += bmdFext
 			}
@@ -316,7 +315,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 
 	// Persisted BMDs becoming PersistedOld BMDs
 	for mpath := range persisted {
-		from := filepath.Join(mpath, bmdFname)
+		from := filepath.Join(mpath, fs.BmdPersistedFileName)
 		to := from + bmdFext
 		if err := os.Rename(from, to); err != nil {
 			glog.Errorf("failed to rename %s prev version, err: %v", bmdTermName, err)
@@ -327,7 +326,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	}
 
 	// Fresh BMD becoming Persisted BMDs
-	persistedOn, availMpaths := fs.PersistOnMpaths(bmdFname, bmd, bmdCopies, jsp.CCSign())
+	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, bmd, bmdCopies, jsp.CCSign())
 	if persistedOn == 0 {
 		glog.Errorf("failed to store any %s on %d mpaths", bmdTermName, availMpaths)
 		return
@@ -335,7 +334,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 
 	// Remove PersistedOld BMDs.
 	for mpath := range persistedOld {
-		fpath := filepath.Join(mpath, bmdFname) + bmdFext
+		fpath := filepath.Join(mpath, fs.BmdPersistedFileName) + bmdFext
 		if err := os.Remove(fpath); err != nil {
 			glog.Errorf("failed to remove %s prev version, err: %v", bmdTermName, err)
 		}

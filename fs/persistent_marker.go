@@ -5,7 +5,6 @@
 package fs
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,23 +14,38 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
+const (
+	NodeRestartedMarker = ".ais.noderestarted"
+	RebalanceMarker     = ".ais.rebalance_marker"
+	ResilverMarker      = ".ais.resilver_marker"
+
+	BmdPersistedFileName = ".ais.bmd"
+)
+
 func MarkerExists(marker string) bool {
-	availableMpaths, _ := Get()
-	for _, mp := range availableMpaths {
-		path := filepath.Join(mp.Path, marker)
-		if err := Access(path); err == nil {
-			return true
-		}
-	}
-	return false
+	return len(FindPersisted(marker)) > 0
 }
 
-func PutMarker(marker string) error {
+func PersistMarker(marker string) error {
 	cnt, available := PersistOnMpaths(marker, nil, 1)
 	if cnt == 0 {
 		return fmt.Errorf("failed to persist marker %q (available mountPaths: %d)", marker, available)
 	}
 	return nil
+}
+
+func RemoveMarker(marker string) {
+	markerMpaths := FindPersisted(marker)
+	if len(markerMpaths) == 0 {
+		glog.Errorf("Marker %q not found on any mpath", marker)
+		return
+	}
+
+	for _, mp := range markerMpaths {
+		if err := os.Remove(filepath.Join(mp.Path, marker)); err != nil {
+			glog.Errorf("failed to cleanup %q marker from %q: %v", marker, mp.Path, err)
+		}
+	}
 }
 
 // PersistOnMpaths persists `what` on every mountpath under "mountpath.Path/path" filename.
@@ -51,7 +65,7 @@ func PersistOnMpaths(path string, what interface{}, atMost int, opts ...jsp.Opti
 	}
 
 	for _, mountPath := range availableMpaths {
-		if err := PersistOnSingleMpath(mountPath, path, what, options); err != nil {
+		if err := persistOnSingleMpath(mountPath, path, what, options); err != nil {
 			glog.Errorf("Failed to persist %q on %q, err: %v", path, mountPath, err)
 		} else {
 			cnt++
@@ -65,7 +79,7 @@ func PersistOnMpaths(path string, what interface{}, atMost int, opts ...jsp.Opti
 	return
 }
 
-func PersistOnSingleMpath(mpath *MountpathInfo, path string, what interface{}, options jsp.Options) (err error) {
+func persistOnSingleMpath(mpath *MountpathInfo, path string, what interface{}, options jsp.Options) (err error) {
 	fpath := filepath.Join(mpath.Path, path)
 	if what == nil {
 		_, err = cmn.CreateFile(fpath)
@@ -75,43 +89,16 @@ func PersistOnSingleMpath(mpath *MountpathInfo, path string, what interface{}, o
 	return err
 }
 
-func FindPersisted(path, oldSuffix string) (curr, prev MPI) {
-	avail, _ := Get()
-	curr, prev = make(MPI, len(avail)), make(MPI, len(avail))
+func FindPersisted(path string) MPI {
+	var (
+		avail, _ = Get()
+		mpaths   = make(MPI, len(avail))
+	)
 	for mpath, mpathInfo := range avail {
 		fpath := filepath.Join(mpath, path)
 		if err := Access(fpath); err == nil {
-			curr[mpath] = mpathInfo
-		}
-		if oldSuffix == "" {
-			continue
-		}
-		fpath += oldSuffix
-		if err := Access(fpath); err == nil {
-			prev[mpath] = mpathInfo
+			mpaths[mpath] = mpathInfo
 		}
 	}
-	return
-}
-
-func RemoveMarker(marker string) error {
-	var (
-		err     error
-		deleted bool
-
-		availableMpaths, _ = Get()
-	)
-	for _, mp := range availableMpaths {
-		path := filepath.Join(mp.Path, marker)
-		if errRm := os.Remove(path); errRm != nil && !os.IsNotExist(errRm) {
-			glog.Errorf("failed to cleanup %q marker from %s: %v", marker, mp.Path, err)
-			err = errRm
-		} else if errRm == nil {
-			deleted = true
-		}
-	}
-	if err == nil && !deleted {
-		err = errors.New("marker not found on any mpath")
-	}
-	return err
+	return mpaths
 }

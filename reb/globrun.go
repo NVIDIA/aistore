@@ -230,7 +230,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	}
 
 	// 4. create persistent mark
-	err := fs.PutMarker(xreg.GetMarkerName(cmn.ActRebalance))
+	err := fs.PersistMarker(fs.RebalanceMarker)
 	if err != nil {
 		glog.Errorf("Failed to create marker: %v", err)
 	}
@@ -438,13 +438,15 @@ func (reb *Manager) waitEvent(md *rebArgs, cb func(md *rebArgs) bool, maxWait ..
 }
 
 func (reb *Manager) rebFini(md *rebArgs, err error) {
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(md))
+	}
+
 	// 10.5. keep at it... (can't close the streams as long as)
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
-		if err := fs.RemoveMarker(xreg.GetMarkerName(cmn.ActRebalance)); err != nil {
-			glog.Errorf("%s: failed to remove in-progress mark, err: %v", reb.logHdr(md), err)
-		}
+		fs.RemoveMarker(fs.RebalanceMarker)
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()

@@ -44,8 +44,6 @@ const (
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
 	dbName           = "ais.db"
-
-	nodeRestartedMarker = ".noderestarted"
 )
 
 const (
@@ -395,10 +393,10 @@ func (t *targetrunner) Stop(err error) {
 }
 
 func (t *targetrunner) checkRestarted() {
-	if fs.MarkerExists(nodeRestartedMarker) {
+	if fs.MarkerExists(fs.NodeRestartedMarker) {
 		t.statsT.Add(stats.RestartCount, 1)
-	} else {
-		fs.PutMarker(nodeRestartedMarker)
+	} else if err := fs.PersistMarker(fs.NodeRestartedMarker); err != nil {
+		glog.Error(err)
 	}
 }
 

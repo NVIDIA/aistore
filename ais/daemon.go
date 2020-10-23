@@ -327,7 +327,7 @@ func Run(version, build string) int {
 
 	// NOTE: This must be done *after* `rg.run()` so we don't remove
 	//  marker on panic (which can happen in `rg.run()`).
-	defer fs.RemoveMarker(nodeRestartedMarker)
+	defer fs.RemoveMarker(fs.NodeRestartedMarker)
 
 	if err == nil {
 		glog.Infoln("Terminated OK")

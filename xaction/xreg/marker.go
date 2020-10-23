@@ -10,31 +10,14 @@ import (
 	"github.com/NVIDIA/aistore/xaction"
 )
 
-const (
-	rebalanceMarker = ".rebalance_marker"
-	resilverMarker  = ".resilver_marker"
-)
-
 func GetRebMarked() (out xaction.XactMarked) {
 	out.Xact = defaultReg.GetXactRunning(cmn.ActRebalance)
-	out.Interrupted = fs.MarkerExists(GetMarkerName(cmn.ActRebalance)) && out.Xact == nil
+	out.Interrupted = fs.MarkerExists(fs.RebalanceMarker) && out.Xact == nil
 	return
 }
 
 func GetResilverMarked() (out xaction.XactMarked) {
 	out.Xact = defaultReg.GetXactRunning(cmn.ActResilver)
-	out.Interrupted = fs.MarkerExists(GetMarkerName(cmn.ActResilver)) && out.Xact == nil
-	return
-}
-
-func GetMarkerName(kind string) (marker string) {
-	switch kind {
-	case cmn.ActResilver:
-		marker = resilverMarker
-	case cmn.ActRebalance:
-		marker = rebalanceMarker
-	default:
-		cmn.Assert(false)
-	}
+	out.Interrupted = fs.MarkerExists(fs.ResilverMarker) && out.Xact == nil
 	return
 }
