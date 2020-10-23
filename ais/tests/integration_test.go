@@ -47,6 +47,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	// Step 2.
 	target := m.unregisterTarget()
+	defer tutils.WaitForRebalanceToComplete(t, baseParams)
 
 	// Step 3.
 	m.puts()
@@ -96,6 +97,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	// Step 2.
 	target := m.unregisterTarget()
+	defer tutils.WaitForRebalanceToComplete(t, baseParams, time.Minute)
 
 	// Step 3.
 	_, newPrimaryURL, err := chooseNextProxy(m.smap)
@@ -267,7 +269,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tutils.Logf("Register target %s\n", targets[0].ID())
-		err = tutils.RegisterNode(m.proxyURL, targets[0], m.smap)
+		err = tutils.JoinCluster(m.proxyURL, targets[0], m.smap)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -360,15 +362,20 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// Unregister targets.
 	tutils.Logf("Unregister targets: %s and %s\n", target1.URL(cmn.NetworkPublic), target2.URL(cmn.NetworkPublic))
-	err := tutils.UnregisterNode(m.proxyURL, target1.ID())
+	err := tutils.RemoveNodeFromSmap(m.proxyURL, target1.ID())
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
-	err = tutils.UnregisterNode(m.proxyURL, target2.ID())
+	err = tutils.RemoveNodeFromSmap(m.proxyURL, target2.ID())
 	tassert.CheckFatal(t, err)
-	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
-	if n != m.originalTargetCount-2 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-2, n)
-	}
+
+	_, err = tutils.WaitForPrimaryProxy(
+		m.proxyURL,
+		"to targets are removed",
+		m.smap.Version, testing.Verbose(),
+		m.originalProxyCount,
+		m.originalTargetCount-2,
+	)
+	tassert.CheckFatal(m.t, err)
 
 	// Start putting objects into bucket
 	m.puts()
@@ -384,15 +391,24 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	// and join 2 targets in parallel
 	time.Sleep(time.Second)
 	tutils.Logf("Register 1st target %s\n", target1.URL(cmn.NetworkPublic))
-	err = tutils.RegisterNode(m.proxyURL, target1, m.smap)
+	err = tutils.JoinCluster(m.proxyURL, target1, m.smap)
 	tassert.CheckFatal(t, err)
 
 	// random sleep between the first and the second join
 	time.Sleep(time.Duration(rand.Intn(3)+1) * time.Second)
 
 	tutils.Logf("Register 2nd target %s\n", target2.URL(cmn.NetworkPublic))
-	err = tutils.RegisterNode(m.proxyURL, target2, m.smap)
+	err = tutils.JoinCluster(m.proxyURL, target2, m.smap)
 	tassert.CheckFatal(t, err)
+
+	_, err = tutils.WaitForPrimaryProxy(
+		m.proxyURL,
+		"to targets are registered",
+		m.smap.Version, testing.Verbose(),
+		m.originalProxyCount,
+		m.originalTargetCount,
+	)
+	tassert.CheckFatal(m.t, err)
 
 	// wait for the rebalance to finish
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
@@ -427,10 +443,14 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	err := tutils.UnregisterNode(m.proxyURL, target0.ID())
 	tassert.CheckFatal(t, err)
 
-	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
-	if n != m.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
-	}
+	_, err = tutils.WaitForPrimaryProxy(
+		m.proxyURL,
+		"to target is removed",
+		m.smap.Version, testing.Verbose(),
+		m.originalProxyCount,
+		m.originalTargetCount-1,
+	)
+	tassert.CheckFatal(m.t, err)
 
 	// Put some files
 	m.puts()
@@ -441,7 +461,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tutils.Logf("Register target %s\n", target0.URL(cmn.NetworkPublic))
-		err = tutils.RegisterNode(m.proxyURL, target0, m.smap)
+		err = tutils.JoinCluster(m.proxyURL, target0, m.smap)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -449,7 +469,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tutils.Logf("Unregister target %s\n", target1.URL(cmn.NetworkPublic))
-		err = tutils.UnregisterNode(m.proxyURL, target1.ID())
+		err = tutils.RemoveNodeFromSmap(m.proxyURL, target1.ID())
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -460,8 +480,16 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	sleep := time.Duration(rand.Intn(5))*time.Second + time.Millisecond
 	time.Sleep(sleep)
 	tutils.Logf("Register target %s\n", target1.URL(cmn.NetworkPublic))
-	err = tutils.RegisterNode(m.proxyURL, target1, m.smap)
+	err = tutils.JoinCluster(m.proxyURL, target1, m.smap)
 	tassert.CheckFatal(t, err)
+	_, err = tutils.WaitForPrimaryProxy(
+		m.proxyURL,
+		"to targets are registered",
+		m.smap.Version, testing.Verbose(),
+		m.originalProxyCount,
+		m.originalTargetCount,
+	)
+	tassert.CheckFatal(m.t, err)
 
 	tutils.Logf("Wait for rebalance...\n")
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
@@ -584,7 +612,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	time.Sleep(time.Second * 4)
 
 	// register a new target
-	err = tutils.RegisterNode(m.proxyURL, killTarget, m.smap)
+	err = tutils.JoinCluster(m.proxyURL, killTarget, m.smap)
 	tassert.CheckFatal(t, err)
 
 	// enable mountpath
@@ -663,7 +691,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.getsUntilStop()
 	}()
 
 	for _, mp := range mpaths {
@@ -672,8 +700,10 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		err = api.EnableMountpath(baseParams, target, mp)
 		tassert.CheckFatal(t, err)
 	}
+	m.stopGets()
 
 	wg.Wait()
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	mpListAfter, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
@@ -761,7 +791,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		go func(number int) {
 			defer wg.Done()
 
-			err := tutils.RegisterNode(m.proxyURL, targets[number], m.smap)
+			err := tutils.JoinCluster(m.proxyURL, targets[number], m.smap)
 			tassert.CheckError(t, err)
 		}(i)
 	}

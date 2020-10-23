@@ -150,12 +150,20 @@ func removeNodeHandler(c *cli.Context) (err error) {
 	}
 	var id, action string
 	mode := parseStrFlag(c, maintenanceModeFlag)
-	if action, err = maintenanceModeToAction(c, mode); err != nil {
-		return err
-	}
 	skipRebalance := flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 	actValue := &cmn.ActValDecommision{DaemonID: sid, SkipRebalance: skipRebalance}
-	id, err = api.Maintenance(defaultAPIParams, action, actValue)
+
+	switch mode {
+	case maintenanceModeStart:
+		id, err = api.StartMaintenance(defaultAPIParams, actValue)
+	case maintenanceModeStop:
+		id, err = api.StopMaintenance(defaultAPIParams, actValue)
+	case maintenanceModeDecommission:
+		id, err = api.Decommission(defaultAPIParams, actValue)
+	default:
+		err = incorrectUsageMsg(c, "invalid mode %q: must be one of %s, %s, and %s",
+			mode, maintenanceModeStart, maintenanceModeStop, maintenanceModeDecommission)
+	}
 	if err != nil {
 		return err
 	}

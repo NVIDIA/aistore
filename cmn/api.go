@@ -38,6 +38,7 @@ type (
 	ActValDecommision struct {
 		DaemonID      string `json:"sid"`
 		SkipRebalance bool   `json:"skip_rebalance"`
+		Force         bool   `json:"force"` // Remove a node even if preconditions fail(e.g, rebalance is running)
 	}
 
 	// TODO: `UUID` should be merged into `ContinuationToken`.

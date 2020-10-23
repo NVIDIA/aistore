@@ -387,7 +387,7 @@ func targetRejoin(t *testing.T) {
 	cmd, err := kill(node)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to synchronize on 'target crashed'",
-		smap.Version, testing.Verbose())
+		smap.Version, testing.Verbose(), smap.CountProxies(), smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Tmap[id]; ok {
@@ -398,7 +398,7 @@ func targetRejoin(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to synchronize on 'target rejoined'",
-		smap.Version, testing.Verbose())
+		smap.Version, testing.Verbose(), smap.CountProxies(), smap.CountTargets()+1)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Tmap[id]; !ok {

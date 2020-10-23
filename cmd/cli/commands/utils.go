@@ -66,12 +66,6 @@ var (
 	defaultAPIParams  api.BaseParams
 	authParams        api.BaseParams
 	mu                sync.Mutex
-
-	maintenanceModes = map[string]string{
-		maintenanceModeStart:        cmn.ActStartMaintenance,
-		maintenanceModeStop:         cmn.ActStopMaintenance,
-		maintenanceModeDecommission: cmn.ActDecommission,
-	}
 )
 
 type (
@@ -1015,12 +1009,4 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	bck.Provider = cmn.ProviderHTTP
 	bck.Name = cmn.OrigURLBck2Name(strURL)
 	return
-}
-
-func maintenanceModeToAction(c *cli.Context, mode string) (string, error) {
-	if action, ok := maintenanceModes[mode]; ok {
-		return action, nil
-	}
-	return "", incorrectUsageMsg(c, "'mode' is one of %s, %s, and %s",
-		maintenanceModeStart, maintenanceModeStop, maintenanceModeDecommission)
 }

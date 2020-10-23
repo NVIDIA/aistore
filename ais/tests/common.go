@@ -476,10 +476,14 @@ func (m *ioContext) unregisterTarget() *cluster.Snode {
 	tutils.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
 	err := tutils.UnregisterNode(m.proxyURL, target.ID())
 	tassert.CheckFatal(m.t, err)
-	n := len(tutils.GetClusterMap(m.t, m.proxyURL).Tmap)
-	if n != m.originalTargetCount-1 {
-		m.t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
-	}
+	m.smap, err = tutils.WaitForPrimaryProxy(
+		m.proxyURL,
+		"target removed from the cluster",
+		m.smap.Version, testing.Verbose(),
+		m.smap.CountProxies(),
+		m.smap.CountTargets()-1,
+	)
+	tassert.CheckFatal(m.t, err)
 	return target
 }
 
@@ -493,7 +497,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 	// T1
 	tutils.Logf("Registering target %s...\n", target.ID())
 	smap := tutils.GetClusterMap(m.t, m.proxyURL)
-	err := tutils.RegisterNode(m.proxyURL, target, smap)
+	err := tutils.JoinCluster(m.proxyURL, target, smap)
 	tassert.CheckFatal(m.t, err)
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	for i := 0; i < iterations; i++ {

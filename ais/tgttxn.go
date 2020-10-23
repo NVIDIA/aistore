@@ -605,13 +605,19 @@ func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err erro
 func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
-		g := xreg.GetRebMarked()
-		if g.Xact != nil && !g.Xact.Finished() {
-			return errors.New("cannot start maintenance: rebalance is in progress")
+		var opts cmn.ActValDecommision
+		if err := cmn.MorphMarshal(c.msg.Value, &opts); err != nil {
+			return err
 		}
+		if !opts.Force {
+			g := xreg.GetRebMarked()
+			if g.Xact != nil && !g.Xact.Finished() {
+				return errors.New("cannot start maintenance: rebalance is in progress")
+			}
 
-		if cause := xreg.CheckBucketsBusy(); cause != nil {
-			return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
+			if cause := xreg.CheckBucketsBusy(); cause != nil {
+				return fmt.Errorf("cannot start maintenance: (xaction: %q) is in progress", cause.Get())
+			}
 		}
 		t.gfn.global.activateTimed()
 	case cmn.ActAbort:

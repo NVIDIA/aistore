@@ -383,8 +383,6 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, objList, suffix)
 	// Checking detection on object GET
 	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList, suffix)
-
-	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
 }
 
 func TestFSCheckerEnablingMpath(t *testing.T) {
@@ -437,6 +435,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 			t.Errorf("Expected status %d, got %d, %v", http.StatusNotFound, status, err)
 		}
 	}
+	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
 
 func TestFSCheckerTargetDisable(t *testing.T) {
@@ -481,6 +480,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	_, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
+	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
 
 func TestFSAddMPathRestartNode(t *testing.T) {

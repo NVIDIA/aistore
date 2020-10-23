@@ -17,9 +17,9 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-func RegisterNode(proxyURL string, node *cluster.Snode, smap *cluster.Smap) error {
+func JoinCluster(proxyURL string, node *cluster.Snode, smap *cluster.Smap) error {
 	baseParams := BaseAPIParams(proxyURL)
-	if err := api.RegisterNode(baseParams, node); err != nil {
+	if err := api.JoinCluster(baseParams, node); err != nil {
 		return err
 	}
 
@@ -50,7 +50,7 @@ func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.S
 
 func RestoreTarget(t *testing.T, proxyURL string, smap *cluster.Smap, target *cluster.Snode) *cluster.Smap {
 	Logf("Reregistering target %s...\n", target)
-	err := RegisterNode(proxyURL, target, smap)
+	err := JoinCluster(proxyURL, target, smap)
 	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
 		proxyURL,
@@ -66,7 +66,7 @@ func RestoreTarget(t *testing.T, proxyURL string, smap *cluster.Smap, target *cl
 func ClearMaintenance(baseParams api.BaseParams, tsi *cluster.Snode) {
 	val := &cmn.ActValDecommision{DaemonID: tsi.ID(), SkipRebalance: true}
 	// it can fail if the node is not under maintenance but it is OK
-	_, _ = api.Maintenance(baseParams, cmn.ActStopMaintenance, val)
+	_, _ = api.StopMaintenance(baseParams, val)
 }
 
 func ExtractTargetNodes(smap *cluster.Smap) cluster.Nodes {

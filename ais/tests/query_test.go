@@ -241,7 +241,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 	)
 	tassert.CheckError(t, err)
 	defer func() {
-		tutils.RegisterNode(proxyURL, target, smap)
+		tutils.JoinCluster(proxyURL, target, smap)
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 

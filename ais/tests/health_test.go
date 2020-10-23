@@ -19,11 +19,11 @@ func unregisteredNodeHealth(t *testing.T, si *cluster.Snode) {
 	err := api.Health(tutils.BaseAPIParams(si.PublicNet.DirectURL))
 	tassert.CheckError(t, err)
 
-	err = tutils.UnregisterNode(proxyURL, si.DaemonID)
+	err = tutils.UnregisterNode(proxyURL, si.DaemonID, true /*force*/)
 	tassert.CheckFatal(t, err)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	defer func() {
-		err = tutils.RegisterNode(proxyURL, si, smap)
+		err = tutils.JoinCluster(proxyURL, si, smap)
 		time.Sleep(3 * time.Second)
 		tassert.CheckFatal(t, err)
 	}()
@@ -48,6 +48,7 @@ func TestUnregisteredProxyHealth(t *testing.T) {
 	proxy, err := smap.GetRandProxy(true /*excludePrimary*/)
 	tassert.CheckError(t, err)
 	unregisteredNodeHealth(t, proxy)
+	defer tutils.WaitForRebalanceToComplete(t, baseParams)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, proxyCnt == smap.CountProxies(), "expected number of proxies to be the same after the test")

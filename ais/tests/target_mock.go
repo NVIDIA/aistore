@@ -61,7 +61,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	}
 
 	<-stopch
-	err = tutils.UnregisterNode(proxyURL, tutils.MockDaemonID)
+	err = tutils.RemoveNodeFromSmap(proxyURL, tutils.MockDaemonID)
 	tassert.CheckFatal(t, err)
 	s.Shutdown(context.Background())
 }

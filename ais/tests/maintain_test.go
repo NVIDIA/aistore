@@ -20,17 +20,17 @@ func TestMaintenanceOnOff(t *testing.T) {
 
 	// Invalid target case
 	msg := &cmn.ActValDecommision{DaemonID: "fakeID", SkipRebalance: true}
-	_, err := api.Maintenance(baseParams, cmn.ActStartMaintenance, msg)
+	_, err := api.StartMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Maintenance for invalid daemon ID succeeded")
 
 	mntTarget := tutils.ExtractTargetNodes(smap)[0]
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	msg.DaemonID = mntTarget.ID()
-	_, err = api.Maintenance(baseParams, cmn.ActStartMaintenance, msg)
+	_, err = api.StartMaintenance(baseParams, msg)
 	tassert.CheckError(t, err)
-	_, err = api.Maintenance(baseParams, cmn.ActStopMaintenance, msg)
+	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.CheckError(t, err)
-	_, err = api.Maintenance(baseParams, cmn.ActStopMaintenance, msg)
+	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
 }
 
@@ -61,7 +61,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tutils.Logf("Removing target %s\n", tsi)
 	restored := false
 	actVal.DaemonID = tsi.ID()
-	rebID, err := api.Maintenance(baseParams, cmn.ActDecommission, actVal)
+	rebID, err := api.Decommission(baseParams, actVal)
 	tassert.CheckError(t, err)
 	defer func() {
 		if !restored {
@@ -127,7 +127,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tutils.Logf("Removing target %s\n", tsi)
 	restored := false
 	actVal.DaemonID = tsi.ID()
-	rebID, err := api.Maintenance(baseParams, cmn.ActDecommission, actVal)
+	rebID, err := api.Decommission(baseParams, actVal)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		if !stopped {

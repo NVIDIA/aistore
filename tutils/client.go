@@ -176,13 +176,26 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 	tassert.CheckFatal(t, err)
 }
 
-func UnregisterNode(proxyURL, sid string) error {
+// Quick node removal: it does not start and wait for rebalance to complete
+// before removing the node. Because node removal uses transactions, this
+// function cannot be used for MOCK nodes as they do not implement required
+// HTTP handlers. To unregister a mock, use `RemoveNodeFromSmap` instead.
+func UnregisterNode(proxyURL, sid string, force ...bool) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
-	if err := api.UnregisterNode(baseParams, sid); err != nil {
+	forced := false
+	if len(force) != 0 {
+		forced = force[0]
+	}
+	val := &cmn.ActValDecommision{
+		DaemonID:      sid,
+		SkipRebalance: true,
+		Force:         forced,
+	}
+	if _, err := api.Decommission(baseParams, val); err != nil {
 		return err
 	}
 
@@ -192,6 +205,16 @@ func UnregisterNode(proxyURL, sid string) error {
 		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{node.ID()})
 	}
 	return nil
+}
+
+// Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies
+func RemoveNodeFromSmap(proxyURL, sid string) error {
+	baseParams := BaseAPIParams(proxyURL)
+	baseParams.Method = http.MethodDelete
+	return api.DoHTTPRequest(api.ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.Daemon, sid),
+	})
 }
 
 func WaitForObjectToBeDowloaded(baseParams api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {
@@ -450,16 +473,13 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 // the function ends with fatal.
 func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeouts ...time.Duration) {
 	var (
-		timeout time.Duration
+		timeout = 2 * time.Minute
 		wg      = &sync.WaitGroup{}
 		errCh   = make(chan error, 2)
 	)
 
-	// TODO: remove sleep
-	// Kind of hack.. Making sure that rebalance starts. We cannot use
-	// `api.WaitForXactionToStart` because we are not sure if a local and/or global
-	// rebalance will be started for all the cases where we use this function.
-	time.Sleep(15 * time.Second)
+	err := WaitForRebalanceToStart(baseParams)
+	tassert.CheckFatal(t, err)
 
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
@@ -468,7 +488,7 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: timeout}
+		xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Latest: true, Timeout: timeout}
 		if _, err := api.WaitForXaction(baseParams, xactArgs); err != nil {
 			if hErr, ok := err.(*cmn.HTTPError); ok {
 				if hErr.Status == http.StatusNotFound {
@@ -496,6 +516,46 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 	close(errCh)
 	for err := range errCh {
 		t.Fatal(err)
+	}
+}
+
+// WaitForRebalanceToStart waits until Rebalance or Resilver starts
+func WaitForRebalanceToStart(baseParams api.BaseParams) error {
+	const (
+		startTimeout      = 15 * time.Second
+		xactRetryInterval = time.Second
+	)
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, startTimeout)
+	defer cancel()
+
+	args := api.XactReqArgs{Timeout: startTimeout}
+	// Remember that the function has found a finished xaction in case of
+	// it was called too late. Return `nil` for this case.
+	foundFinished := false
+	for {
+		for _, act := range []string{cmn.ActRebalance, cmn.ActResilver} {
+			args.Kind = act
+			status, err := api.GetXactionStatus(baseParams, args)
+			if err == nil {
+				if !status.Finished() {
+					return nil
+				}
+				foundFinished = true
+			}
+		}
+
+		time.Sleep(xactRetryInterval)
+		select {
+		case <-ctx.Done():
+			if foundFinished {
+				return nil
+			}
+			return ctx.Err()
+		default:
+			break
+		}
 	}
 }
 

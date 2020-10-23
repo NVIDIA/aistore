@@ -86,22 +86,13 @@ func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.CloudInfoAIS, err error) {
 	return
 }
 
-// RegisterNode registers an existing node to the cluster map.
-func RegisterNode(baseParams BaseParams, nodeInfo *cluster.Snode) error {
+// JoinCluster add a node to a cluster.
+func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) error {
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.UserRegister),
 		Body:       cmn.MustMarshal(nodeInfo),
-	})
-}
-
-// UnregisterNode unregisters an existing node from the cluster map.
-func UnregisterNode(baseParams BaseParams, unregisterSID string) error {
-	baseParams.Method = http.MethodDelete
-	return DoHTTPRequest(ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID),
 	})
 }
 
@@ -157,9 +148,37 @@ func DetachRemoteAIS(baseParams BaseParams, alias string) error {
 
 // Maintenance API
 //
-func Maintenance(baseParams BaseParams, action string, actValue *cmn.ActValDecommision) (id string, err error) {
+func StartMaintenance(baseParams BaseParams, actValue *cmn.ActValDecommision) (id string, err error) {
 	msg := cmn.ActionMsg{
-		Action: action,
+		Action: cmn.ActStartMaintenance,
+		Value:  actValue,
+	}
+	baseParams.Method = http.MethodPut
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
+		Body:       cmn.MustMarshal(msg),
+	}, &id)
+	return id, err
+}
+
+func Decommission(baseParams BaseParams, actValue *cmn.ActValDecommision) (id string, err error) {
+	msg := cmn.ActionMsg{
+		Action: cmn.ActDecommission,
+		Value:  actValue,
+	}
+	baseParams.Method = http.MethodPut
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
+		Body:       cmn.MustMarshal(msg),
+	}, &id)
+	return id, err
+}
+
+func StopMaintenance(baseParams BaseParams, actValue *cmn.ActValDecommision) (id string, err error) {
+	msg := cmn.ActionMsg{
+		Action: cmn.ActStopMaintenance,
 		Value:  actValue,
 	}
 	baseParams.Method = http.MethodPut

@@ -2364,8 +2364,9 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	smap := tutils.GetClusterMap(t, proxyURL)
 	defer func() {
 		if !registered {
-			err = tutils.RegisterNode(proxyURL, tgtLost, smap)
+			err = tutils.JoinCluster(proxyURL, tgtLost, smap)
 			tassert.CheckError(t, err)
+			tutils.WaitForRebalanceToComplete(t, baseParams)
 		}
 	}()
 
@@ -2404,7 +2405,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
 	tutils.Logf("Registering node %s\n", tgtLost)
-	err = tutils.RegisterNode(proxyURL, tgtLost, smap)
+	err = tutils.JoinCluster(proxyURL, tgtLost, smap)
 	tassert.CheckFatal(t, err)
 	registered = true
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
@@ -2569,6 +2570,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 			o.dataCnt = test.data
 			newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
 			defer tutils.DestroyBucket(t, proxyURL, bckEC)
+			defer tutils.WaitForRebalanceToComplete(t, baseParams)
 			ecAndRegularUnregisterWhileRebalancing(t, o, smap, bckEC)
 		})
 	}
@@ -2586,13 +2588,14 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	tgtGone := tgtList[1]
 
 	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
-	err := tutils.UnregisterNode(proxyURL, tgtLost.ID())
+	err := tutils.RemoveNodeFromSmap(proxyURL, tgtLost.ID())
 	tassert.CheckFatal(t, err)
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to remove target",
+		smap.Version, testing.Verbose(), smap.CountProxies(), smap.CountTargets()-1)
 	registered := false
-	smap = tutils.GetClusterMap(t, proxyURL)
 	defer func() {
 		if !registered {
-			err = tutils.RegisterNode(proxyURL, tgtLost, smap)
+			err = tutils.JoinCluster(proxyURL, tgtLost, smap)
 			tassert.CheckError(t, err)
 		}
 	}()
@@ -2619,7 +2622,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	tutils.Logf("Created %d objects in %s. Starting rebalance\n", len(resECOld.Entries), bckEC)
 
 	tutils.Logf("Registering node %s\n", tgtLost.ID())
-	err = tutils.RegisterNode(proxyURL, tgtLost, smap)
+	err = tutils.JoinCluster(proxyURL, tgtLost, smap)
 	tassert.CheckFatal(t, err)
 	registered = true
 
@@ -2646,10 +2649,10 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	}()
 
 	tutils.Logf("Unregistering %s...\n", tgtGone.ID())
-	err = tutils.UnregisterNode(proxyURL, tgtGone.ID())
+	err = tutils.RemoveNodeFromSmap(proxyURL, tgtGone.ID())
 	tassert.CheckFatal(t, err)
 	smap = tutils.GetClusterMap(t, proxyURL)
-	defer tutils.RegisterNode(proxyURL, tgtGone, smap)
+	defer tutils.JoinCluster(proxyURL, tgtGone, smap)
 
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	stopCh.Close()
@@ -2669,6 +2672,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 		tassert.CheckError(t, err)
 	}
 
+	tutils.WaitForRebalanceToComplete(t, baseParams)
 	tutils.Logln("Getting the number of objects after reading")
 	resECNew, err = api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckFatal(t, err)
