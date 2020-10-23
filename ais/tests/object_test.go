@@ -229,6 +229,7 @@ func TestAppendObject(t *testing.T) {
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
 	const (
+		objCnt    = 100
 		fileSize  = 512 * cmn.KiB
 		objPrefix = "delete"
 	)
@@ -236,12 +237,12 @@ func Test_putdelete(t *testing.T) {
 	proxyURL := tutils.RandomProxyURL(t)
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
-			errCh      = make(chan error, numfiles)
-			filesPutCh = make(chan string, numfiles)
+			errCh      = make(chan error, objCnt)
+			filesPutCh = make(chan string, objCnt)
 			cksumType  = bck.Props.Cksum.Type
 		)
 
-		tutils.PutRandObjs(proxyURL, bck.Bck, objPrefix, fileSize, numfiles, errCh, filesPutCh, cksumType)
+		tutils.PutRandObjs(proxyURL, bck.Bck, objPrefix, fileSize, objCnt, errCh, filesPutCh, cksumType)
 		close(filesPutCh)
 		tassert.SelectErr(t, errCh, "put", true)
 
@@ -297,14 +298,17 @@ func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg,
 
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
-	proxyURL := tutils.RandomProxyURL(t)
+	var (
+		objCnt   = 100
+		proxyURL = tutils.RandomProxyURL(t)
+	)
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		// Declare one channel per worker to pass the keyname
 		keynameChans := make([]chan string, workerCnt)
 		for i := 0; i < workerCnt; i++ {
 			// Allow a bunch of messages at a time to be written asynchronously to a channel
-			keynameChans[i] = make(chan string, 100)
+			keynameChans[i] = make(chan string, objCnt)
 		}
 		// Start the worker pools
 		errCh := make(chan error, 100)
@@ -334,7 +338,7 @@ func Test_matchdelete(t *testing.T) {
 			}
 			keynameChans[num%workerCnt] <- name
 			num++
-			if num >= numfiles {
+			if num >= objCnt {
 				break
 			}
 		}
@@ -352,10 +356,9 @@ func Test_matchdelete(t *testing.T) {
 }
 
 func TestOperationsWithRanges(t *testing.T) {
-	tassert.Fatalf(t, numfiles > 0 && numfiles%10 == 0, "numfiles must be a positive multiple of 10")
-
 	const (
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
+		objCnt       = 100   // NOTE: Must by positive multiple of 10.
 		objSize      = 16 * cmn.KiB
 	)
 	proxyURL := tutils.RandomProxyURL(t)
@@ -368,13 +371,13 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 
 				var (
-					errCh     = make(chan error, numfiles*5)
-					objsPutCh = make(chan string, numfiles)
-					objList   = make([]string, 0, numfiles)
+					errCh     = make(chan error, objCnt*5)
+					objsPutCh = make(chan string, objCnt)
+					objList   = make([]string, 0, objCnt)
 					cksumType = bck.Props.Cksum.Type
 				)
 
-				for i := 0; i < numfiles/2; i++ {
+				for i := 0; i < objCnt/2; i++ {
 					fname := fmt.Sprintf("a-%04d", i)
 					objList = append(objList, fname)
 					fname = fmt.Sprintf("b-%04d", i)
@@ -399,28 +402,28 @@ func TestOperationsWithRanges(t *testing.T) {
 					},
 					{
 						"Trying to delete/evict objects out of range",
-						commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", numfiles+10, numfiles+110),
+						commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", objCnt+10, objCnt+110),
 						0,
 					},
 					{
-						fmt.Sprintf("Deleting/Evicting %d objects with prefix 'a-'", numfiles/10),
-						commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (numfiles-numfiles/5)/2, numfiles/2),
-						numfiles / 10,
+						fmt.Sprintf("Deleting/Evicting %d objects with prefix 'a-'", objCnt/10),
+						commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (objCnt-objCnt/5)/2, objCnt/2),
+						objCnt / 10,
 					},
 					{
-						fmt.Sprintf("Deleting/Evicting %d objects (short range)", numfiles/5),
-						commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, numfiles/5),
-						numfiles / 5,
+						fmt.Sprintf("Deleting/Evicting %d objects (short range)", objCnt/5),
+						commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, objCnt/5),
+						objCnt / 5,
 					},
 					{
 						"Deleting/Evicting objects with empty range",
 						commonPrefix + "/b-",
-						numfiles/2 - numfiles/5,
+						objCnt/2 - objCnt/5,
 					},
 				}
 
 				var (
-					totalFiles = numfiles
+					totalFiles = objCnt
 					baseParams = tutils.BaseAPIParams(proxyURL)
 				)
 
@@ -981,7 +984,7 @@ func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.
 }
 
 func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch string,
-	keynameChans []chan string, outputChan chan string) int {
+	objCnt int, keynameCh chan string) int {
 	reslist := testListObjects(t, proxyURL, bck, nil, 0)
 	if reslist == nil {
 		return 0
@@ -990,18 +993,14 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch stri
 	re := regexp.MustCompile(regexMatch)
 
 	num := 0
-	numchans := len(keynameChans)
 	for _, entry := range reslist.Entries {
 		name := entry.Name
 		if !re.MatchString(name) {
 			continue
 		}
-		keynameChans[num%numchans] <- name
-		if outputChan != nil {
-			outputChan <- name
-		}
+		keynameCh <- name
 		num++
-		if num >= numfiles {
+		if num >= objCnt {
 			break
 		}
 	}
@@ -1041,7 +1040,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 	var (
 		errCh      = make(chan error, numFiles*5)
-		fileNameCh = make(chan string, numfiles)
+		fileNameCh = make(chan string, numFiles)
 		objNames   = make([]string, 0, numFiles)
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)

@@ -36,10 +36,7 @@ const (
 	workerCnt = 10
 )
 
-var (
-	numfiles int
-	cliBck   cmn.Bck
-)
+var cliBck cmn.Bck
 
 // nolint:maligned // no performance critical code
 type ioContext struct {
@@ -629,18 +626,19 @@ func numberOfFilesWithPrefix(fileNames []string, namePrefix string) int {
 
 func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string) []string {
 	const (
+		objCnt   = 100
 		fileSize = cmn.KiB
 	)
 
 	// Create specific files to test corner cases.
 	var (
 		extraNames = []string{"dir/obj01", "dir/obj02", "dir/obj03", "dir1/dir2/obj04", "dir1/dir2/obj05"}
-		fileNames  = make([]string, 0, numfiles)
+		fileNames  = make([]string, 0, objCnt)
 		wg         = &sync.WaitGroup{}
-		errCh      = make(chan error, numfiles+len(extraNames))
+		errCh      = make(chan error, objCnt+len(extraNames))
 	)
 
-	for i := 0; i < numfiles; i++ {
+	for i := 0; i < objCnt; i++ {
 		fileName := tutils.GenRandomString(20)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
@@ -756,7 +754,7 @@ func prefixLookup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string
 func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
 	var (
 		wg    = cmn.NewLimitedWaitGroup(40)
-		errCh = make(chan error, numfiles)
+		errCh = make(chan error, len(fileNames))
 	)
 
 	for _, fileName := range fileNames {

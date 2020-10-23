@@ -140,15 +140,6 @@ For example, the following will download objects from your (presumably) S3 bucke
 $ BUCKET=aws://myS3bucket go test ./tests -v -run=download
 ```
 
-Here's a minor variation of the above:
-
-```console
-$ BUCKET=aws://myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
-```
-
-This command runs a test that matches the specified string ("download").
-The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match `a\d+` regex.
-
 ### HTTPS
 
 In the end, all examples above run a bunch of local web servers that listen for plain HTTP requests. Following are quick steps for developers to engage HTTPS:

@@ -995,7 +995,7 @@ func TestListObjectsPrefix(t *testing.T) {
 			var (
 				bck        cmn.Bck
 				errCh      = make(chan error, numFiles*5)
-				filesPutCh = make(chan string, numfiles)
+				filesPutCh = make(chan string, numFiles)
 				cksumType  string
 				customPage = true
 			)

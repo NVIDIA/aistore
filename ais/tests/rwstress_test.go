@@ -17,11 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/tutils/readers"
 )
 
-//
-// Example run:
-//     go test -v -run=rwstress -numfiles=10 -numops=5
-//
-
 const (
 	rwdir    = "rwstress"
 	fileSize = 32 * cmn.KiB
@@ -210,6 +205,6 @@ func TestRWStress(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	numLoops = 15
-	numFiles = numfiles
+	numFiles = 100
 	rwstress(t)
 }

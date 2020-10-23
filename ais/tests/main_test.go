@@ -98,8 +98,6 @@ func waitForCluster() error {
 }
 
 func TestMain(m *testing.M) {
-	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
-
 	flag.Parse()
 
 	var err error

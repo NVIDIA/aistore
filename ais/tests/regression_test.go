@@ -764,7 +764,8 @@ func TestLRU(t *testing.T) {
 func TestPrefetchList(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
-		toprefetch = make(chan string, numfiles)
+		objCnt     = 100
+		objNamesCh = make(chan string, objCnt)
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cliBck
@@ -773,10 +774,10 @@ func TestPrefetchList(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	// 1. Get keys to prefetch
-	n := int64(getMatchingKeys(t, proxyURL, bck, ".*", []chan string{toprefetch}, nil))
-	close(toprefetch) // to exit for-range
+	n := int64(getMatchingKeys(t, proxyURL, bck, ".*", objCnt, objNamesCh))
+	close(objNamesCh) // to exit for-range
 	files := make([]string, 0)
-	for i := range toprefetch {
+	for i := range objNamesCh {
 		files = append(files, i)
 	}
 
@@ -819,14 +820,15 @@ func TestDeleteList(t *testing.T) {
 			err        error
 			prefix     = "__listrange/tstf-"
 			wg         = &sync.WaitGroup{}
-			errCh      = make(chan error, numfiles)
-			files      = make([]string, 0, numfiles)
+			objCnt     = 100
+			errCh      = make(chan error, objCnt)
+			files      = make([]string, 0, objCnt)
 			proxyURL   = tutils.RandomProxyURL(t)
 			baseParams = tutils.BaseAPIParams(proxyURL)
 		)
 
 		// 1. Put files to delete
-		for i := 0; i < numfiles; i++ {
+		for i := 0; i < objCnt; i++ {
 			r, err := readers.NewRandReader(fileSize, bck.Props.Cksum.Type)
 			tassert.CheckFatal(t, err)
 
@@ -928,20 +930,21 @@ func TestDeleteRange(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
 			err            error
-			quarter        = numfiles / 4
-			third          = numfiles / 3
+			objCnt         = 100
+			quarter        = objCnt / 4
+			third          = objCnt / 3
 			smallrangesize = third - quarter + 1
 			prefix         = "__listrange/tstf-"
 			smallrange     = fmt.Sprintf("%s{%04d..%04d}", prefix, quarter, third)
-			bigrange       = fmt.Sprintf("%s{0000..%04d}", prefix, numfiles)
+			bigrange       = fmt.Sprintf("%s{0000..%04d}", prefix, objCnt)
 			wg             = &sync.WaitGroup{}
-			errCh          = make(chan error, numfiles)
+			errCh          = make(chan error, objCnt)
 			proxyURL       = tutils.RandomProxyURL(t)
 			baseParams     = tutils.BaseAPIParams(proxyURL)
 		)
 
 		// 1. Put files to delete
-		for i := 0; i < numfiles; i++ {
+		for i := 0; i < objCnt; i++ {
 			r, err := readers.NewRandReader(fileSize, bck.Props.Cksum.Type)
 			tassert.CheckFatal(t, err)
 
@@ -967,14 +970,14 @@ func TestDeleteRange(t *testing.T) {
 		msg := &cmn.SelectMsg{Prefix: prefix}
 		bktlst, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 		tassert.CheckFatal(t, err)
-		if len(bktlst.Entries) != numfiles-smallrangesize {
-			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
+		if len(bktlst.Entries) != objCnt-smallrangesize {
+			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), objCnt-smallrangesize)
 		}
 		filemap := make(map[string]*cmn.BucketEntry)
 		for _, entry := range bktlst.Entries {
 			filemap[entry.Name] = entry
 		}
-		for i := 0; i < numfiles; i++ {
+		for i := 0; i < objCnt; i++ {
 			keyname := fmt.Sprintf("%s%04d", prefix, i)
 			_, ok := filemap[keyname]
 			if ok && i >= quarter && i <= third {
