@@ -966,18 +966,6 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	newRMD, msgRMD, err := t.extractRMD(payload)
-	if err != nil {
-		errs = append(errs, err)
-	} else if newRMD != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("new %s from %s", newRMD.String(), caller)
-		}
-		if err := t.receiveRMD(newRMD, msgRMD, caller); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
 	newBMD, msgBMD, err := t.extractBMD(payload)
 	if err != nil {
 		errs = append(errs, err)
@@ -986,6 +974,18 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
 		}
 		if err := t.receiveBMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	newRMD, msgRMD, err := t.extractRMD(payload)
+	if err != nil {
+		errs = append(errs, err)
+	} else if newRMD != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("new %s from %s", newRMD.String(), caller)
+		}
+		if err := t.receiveRMD(newRMD, msgRMD, caller); err != nil {
 			errs = append(errs, err)
 		}
 	}
