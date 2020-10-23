@@ -65,8 +65,8 @@ var _ = Describe("Notifications xaction test", func() {
 		testNotifs = func() *notifs {
 			n := &notifs{
 				p:   mockProxyRunner(pDaemonID),
-				fin: make(map[string]nl.NotifListener, 2),
-				m:   make(map[string]nl.NotifListener, 2),
+				nls: newListeners(),
+				fin: newListeners(),
 			}
 			smap := &smapX{Smap: cluster.Smap{Version: 1}}
 			n.p.httprunner.owner.smap = newSmapOwner()

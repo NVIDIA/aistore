@@ -43,12 +43,15 @@ const (
 )
 
 type (
-	notifs struct {
+	listeners struct {
 		sync.RWMutex
+		m map[string]nl.NotifListener // [UUID => NotifListener]
+	}
+
+	notifs struct {
 		p       *proxyrunner
-		m       map[string]nl.NotifListener // running  [UUID => NotifListener]
-		fin     map[string]nl.NotifListener // finished [UUID => NotifListener]
-		fmu     sync.RWMutex
+		nls     *listeners // running
+		fin     *listeners // finished
 		smapVer int64
 	}
 	// TODO: simplify using alternate encoding formats (e.g. GOB)
@@ -79,88 +82,29 @@ var (
 	_ cluster.Slistener = &notifs{}
 )
 
-////////////
-// notifs //
-////////////
+///////////////
+// listeners //
+///////////////
 
-func (n *notifs) init(p *proxyrunner) {
-	n.p = p
-	n.m = make(map[string]nl.NotifListener, 64)
-	n.fin = make(map[string]nl.NotifListener, 64)
-	hk.Reg(notifsName+".gc", n.housekeep, notifsHousekeepT)
-	n.p.Sowner().Listeners().Reg(n)
+func newListeners() *listeners {
+	return &listeners{m: make(map[string]nl.NotifListener, 64)}
 }
 
-func (n *notifs) String() string { return notifsName }
-
-// start listening
-func (n *notifs) add(nl nl.NotifListener) {
-	cmn.Assert(nl.UUID() != "")
-	n.Lock()
-	if _, ok := n.m[nl.UUID()]; ok {
-		n.Unlock()
-		return
-	}
-	n.m[nl.UUID()] = nl
-	nl.SetAddedTime()
-	n.Unlock()
-	glog.Infoln("add " + nl.String())
-}
-
-func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
-	if !locked {
-		n.Lock()
-	}
-	if _, ok = n.m[nl.UUID()]; ok {
-		delete(n.m, nl.UUID())
-	}
-	if !locked {
-		n.Unlock()
-	}
-	if ok {
-		glog.Infoln("del " + nl.String())
-	}
+func (l *listeners) entry(uuid string) (entry nl.NotifListener, exists bool) {
+	l.RLock()
+	entry, exists = l.m[uuid]
+	l.RUnlock()
 	return
 }
 
-func (n *notifs) entry(uuid string) (nl.NotifListener, bool) {
-	n.RLock()
-	entry, exists := n.m[uuid]
-	n.RUnlock()
-	if exists {
-		return entry, true
-	}
-	n.fmu.RLock()
-	entry, exists = n.fin[uuid]
-	n.fmu.RUnlock()
-	if exists {
-		return entry, true
-	}
-	return nil, false
-}
-
-func (n *notifs) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
-	if flt.ID != "" {
-		return n.entry(flt.ID)
-	}
-	n.RLock()
-	nl, exists = _findNL(n.m, flt)
-	n.RUnlock()
-	if exists || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
-		return
-	}
-	n.fmu.RLock()
-	nl, exists = _findNL(n.fin, flt)
-	n.fmu.RUnlock()
-	return
-}
-
-// PRECONDITION: Lock for `nls` must be held.
 // returns a listener that matches the filter condition.
 // for finished xaction listeners, returns latest listener (i.e. having highest finish time)
-func _findNL(nls map[string]nl.NotifListener, flt nlFilter) (nl nl.NotifListener, exists bool) {
+func (l *listeners) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
+	l.RLock()
+	defer l.RUnlock()
+
 	var ftime int64
-	for _, listener := range nls {
+	for _, listener := range l.m {
 		if listener.EndTime() < ftime {
 			continue
 		}
@@ -172,6 +116,86 @@ func _findNL(nls map[string]nl.NotifListener, flt nlFilter) (nl nl.NotifListener
 			return
 		}
 	}
+	return
+}
+
+func (l *listeners) merge(msgs []*notifListenMsg) {
+	l.Lock()
+	defer l.Unlock()
+
+	for _, m := range msgs {
+		if _, ok := l.m[m.nl.UUID()]; !ok {
+			l.m[m.nl.UUID()] = m.nl
+			m.nl.SetAddedTime()
+		}
+	}
+}
+
+////////////
+// notifs //
+////////////
+
+func (n *notifs) init(p *proxyrunner) {
+	n.p = p
+	n.nls = newListeners()
+	n.fin = newListeners()
+	hk.Reg(notifsName+".gc", n.housekeep, notifsHousekeepT)
+	n.p.Sowner().Listeners().Reg(n)
+}
+
+func (n *notifs) String() string { return notifsName }
+
+// start listening
+func (n *notifs) add(nl nl.NotifListener) {
+	cmn.Assert(nl.UUID() != "")
+	n.nls.Lock()
+	if _, ok := n.nls.m[nl.UUID()]; ok {
+		n.nls.Unlock()
+		return
+	}
+	n.nls.m[nl.UUID()] = nl
+	nl.SetAddedTime()
+	n.nls.Unlock()
+	glog.Infoln("add " + nl.String())
+}
+
+func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
+	if !locked {
+		n.nls.Lock()
+	}
+	if _, ok = n.nls.m[nl.UUID()]; ok {
+		delete(n.nls.m, nl.UUID())
+	}
+	if !locked {
+		n.nls.Unlock()
+	}
+	if ok {
+		glog.Infoln("del " + nl.String())
+	}
+	return
+}
+
+func (n *notifs) entry(uuid string) (nl.NotifListener, bool) {
+	entry, exists := n.nls.entry(uuid)
+	if exists {
+		return entry, true
+	}
+	entry, exists = n.fin.entry(uuid)
+	if exists {
+		return entry, true
+	}
+	return nil, false
+}
+
+func (n *notifs) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
+	if flt.ID != "" {
+		return n.entry(flt.ID)
+	}
+	nl, exists = n.nls.find(flt)
+	if exists || (flt.OnlyRunning != nil && *flt.OnlyRunning) {
+		return
+	}
+	nl, exists = n.fin.find(flt)
 	return
 }
 
@@ -307,9 +331,9 @@ func (n *notifs) done(nl nl.NotifListener) {
 		// `nl` already removed from active map
 		return
 	}
-	n.fmu.Lock()
-	n.fin[nl.UUID()] = nl
-	n.fmu.Unlock()
+	n.fin.Lock()
+	n.fin.m[nl.UUID()] = nl
+	n.fin.Unlock()
 
 	if nl.Aborted() && !nl.AllFinished() {
 		config := cmn.GCO.Get()
@@ -335,23 +359,23 @@ func (n *notifs) done(nl nl.NotifListener) {
 
 func (n *notifs) housekeep() time.Duration {
 	now := time.Now().UnixNano()
-	n.fmu.Lock()
-	for uuid, nl := range n.fin {
+	n.fin.Lock()
+	for uuid, nl := range n.fin.m {
 		if time.Duration(now-nl.EndTime()) > notifsRemoveMult*notifsHousekeepT {
-			delete(n.fin, uuid)
+			delete(n.fin.m, uuid)
 		}
 	}
-	n.fmu.Unlock()
+	n.fin.Unlock()
 
-	if len(n.m) == 0 {
+	if len(n.nls.m) == 0 {
 		return notifsHousekeepT
 	}
-	n.RLock()
-	tempn := make(map[string]nl.NotifListener, len(n.m))
-	for uuid, nl := range n.m {
+	n.nls.RLock()
+	tempn := make(map[string]nl.NotifListener, len(n.nls.m))
+	for uuid, nl := range n.nls.m {
 		tempn[uuid] = nl
 	}
-	n.RUnlock()
+	n.nls.RUnlock()
 	for _, nl := range tempn {
 		n.syncStats(nl, notifsHousekeepT)
 	}
@@ -450,7 +474,7 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	n.smapVer = smap.Version
 
-	if len(n.m) == 0 {
+	if len(n.nls.m) == 0 {
 		return
 	}
 
@@ -458,8 +482,8 @@ func (n *notifs) ListenSmapChanged() {
 		remnl = make(map[string]nl.NotifListener)
 		remid = make(cmn.SimpleKVs)
 	)
-	n.RLock()
-	for uuid, nl := range n.m {
+	n.nls.RLock()
+	for uuid, nl := range n.nls.m {
 		nl.RLock()
 		srcs := nl.Notifiers()
 		for id, si := range srcs {
@@ -474,7 +498,7 @@ func (n *notifs) ListenSmapChanged() {
 		}
 		nl.RUnlock()
 	}
-	n.RUnlock()
+	n.nls.RUnlock()
 	if len(remnl) == 0 {
 		return
 	}
@@ -488,17 +512,17 @@ func (n *notifs) ListenSmapChanged() {
 		nl.SetAborted()
 		nl.Unlock()
 	}
-	n.fmu.Lock()
+	n.fin.Lock()
 	for uuid, nl := range remnl {
 		cmn.Assert(nl.UUID() == uuid)
-		n.fin[uuid] = nl
+		n.fin.m[uuid] = nl
 	}
-	n.fmu.Unlock()
-	n.Lock()
+	n.fin.Unlock()
+	n.nls.Lock()
 	for _, nl := range remnl {
 		n.del(nl, true /*locked*/)
 	}
-	n.Unlock()
+	n.nls.Unlock()
 
 	for uuid, nl := range remnl {
 		nl.Callback(nl, now)
@@ -510,19 +534,19 @@ func (n *notifs) ListenSmapChanged() {
 
 func (n *notifs) MarshalJSON() (data []byte, err error) {
 	t := jsonNotifs{}
-	n.RLock()
-	n.fmu.RLock()
+	n.nls.RLock()
+	n.fin.RLock()
 	defer func() {
-		n.fmu.RUnlock()
-		n.RUnlock()
+		n.fin.RUnlock()
+		n.nls.RUnlock()
 	}()
-	t.Running = make([]*notifListenMsg, 0, len(n.m))
-	t.Finished = make([]*notifListenMsg, 0, len(n.fin))
-	for _, nl := range n.m {
+	t.Running = make([]*notifListenMsg, 0, len(n.nls.m))
+	t.Finished = make([]*notifListenMsg, 0, len(n.fin.m))
+	for _, nl := range n.nls.m {
 		t.Running = append(t.Running, newNLMsg(nl))
 	}
 
-	for _, nl := range n.fin {
+	for _, nl := range n.fin.m {
 		t.Finished = append(t.Finished, newNLMsg(nl))
 	}
 	return jsoniter.Marshal(t)
@@ -535,27 +559,13 @@ func (n *notifs) UnmarshalJSON(data []byte) (err error) {
 		return
 	}
 	if len(t.Running) > 0 {
-		n.Lock()
-		_mergeNLs(n.m, t.Running)
-		n.Unlock()
+		n.nls.merge(t.Running)
 	}
 
 	if len(t.Finished) > 0 {
-		n.fmu.Lock()
-		_mergeNLs(n.fin, t.Finished)
-		n.fmu.Unlock()
+		n.fin.merge(t.Finished)
 	}
 	return
-}
-
-// PRECONDITION: Lock for `nls` must be held
-func _mergeNLs(nls map[string]nl.NotifListener, msgs []*notifListenMsg) {
-	for _, m := range msgs {
-		if _, ok := nls[m.nl.UUID()]; !ok {
-			nls[m.nl.UUID()] = m.nl
-			m.nl.SetAddedTime()
-		}
-	}
 }
 
 func newNLMsg(nl nl.NotifListener) *notifListenMsg {
