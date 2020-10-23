@@ -66,24 +66,23 @@ func initManager(t cluster.Target) error {
 	}
 
 	if ECM.bmd.IsECUsed() {
-		ECM.initECBundles()
-	}
-
-	var err error
-	if err = transport.Register(ReqStreamName, ECM.recvRequest); err != nil {
-		return fmt.Errorf("failed to register recvRequest: %v", err)
-	}
-	if err = transport.Register(RespStreamName, ECM.recvResponse); err != nil {
-		return fmt.Errorf("failed to register respResponse: %v", err)
+		return ECM.initECBundles()
 	}
 	return nil
 }
 
-func (mgr *Manager) initECBundles() {
+func (mgr *Manager) initECBundles() error {
 	if !mgr.bundleEnabled.CAS(false, true) {
-		return
+		return nil
 	}
 	cmn.AssertMsg(mgr.reqBundle == nil && mgr.respBundle == nil, "EC Bundles have been already initialized")
+
+	if err := transport.Register(ReqStreamName, ECM.recvRequest); err != nil {
+		return fmt.Errorf("failed to register recvRequest: %v", err)
+	}
+	if err := transport.Register(RespStreamName, ECM.recvResponse); err != nil {
+		return fmt.Errorf("failed to register respResponse: %v", err)
+	}
 
 	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
@@ -119,6 +118,7 @@ func (mgr *Manager) initECBundles() {
 	mgr.smap = sowner.Get()
 	mgr.targetCnt.Store(int32(mgr.smap.CountTargets()))
 	sowner.Listeners().Reg(mgr)
+	return nil
 }
 
 func (mgr *Manager) closeECBundles() {
@@ -137,6 +137,8 @@ func (mgr *Manager) closeECBundles() {
 	mgr.reqBundle = nil
 	mgr.respBundle.Close(false)
 	mgr.respBundle = nil
+	transport.Unregister(ReqStreamName)
+	transport.Unregister(RespStreamName)
 }
 
 func (mgr *Manager) NewGetXact(bck cmn.Bck) *XactGet {
@@ -381,22 +383,21 @@ func (mgr *Manager) enableBck(bck *cluster.Bck) {
 	mgr.RestoreBckPutXact(bck).EnableRequests()
 }
 
-func (mgr *Manager) BucketsMDChanged() {
+func (mgr *Manager) BucketsMDChanged() error {
 	mgr.Lock()
 	newBckMD := mgr.t.Bowner().Get()
 	oldBckMD := mgr.bmd
 	if newBckMD.Version <= mgr.bmd.Version {
 		mgr.Unlock()
-		return
+		return nil
 	}
 	mgr.bmd = newBckMD
 	mgr.Unlock()
 
 	if newBckMD.IsECUsed() && !oldBckMD.IsECUsed() {
-		// init EC streams if they were not initialized at startup;
-		// no need to close when the last EC bucket is disabled -
-		// streams timeout (when idle) and auto-close.
-		mgr.initECBundles()
+		if err := mgr.initECBundles(); err != nil {
+			return err
+		}
 	} else if !newBckMD.IsECUsed() && oldBckMD.IsECUsed() {
 		mgr.closeECBundles()
 	}
@@ -412,6 +413,7 @@ func (mgr *Manager) BucketsMDChanged() {
 		})
 		return false
 	})
+	return nil
 }
 
 func (mgr *Manager) ListenSmapChanged() {

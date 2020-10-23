@@ -678,7 +678,9 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	}
 	if tag != bucketMDRegister {
 		// ecmanager will get updated BMD upon its init()
-		ec.ECM.BucketsMDChanged()
+		if err := ec.ECM.BucketsMDChanged(); err != nil {
+			glog.Errorf("Failed to initialize EC manager: %v", err)
+		}
 	}
 
 	// refresh used/avail capacity and run LRU if need be (in part, to remove $trash)
