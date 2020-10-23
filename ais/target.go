@@ -1509,6 +1509,10 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 
 	finfo, err := os.Stat(srcFQN)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// Nothing to promote, return immediately.
+			return
+		}
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

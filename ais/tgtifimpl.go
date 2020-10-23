@@ -387,13 +387,18 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		)
 		coi.BckTo = lom.Bck()
 		_, _, err = coi.putRemote(lom, sendParams)
+		if err == nil && !params.KeepOrig {
+			os.Remove(params.SrcFQN)
+		}
 		return
 	}
 
 	// local
 	err = lom.Load(false)
 	if err == nil && !params.Overwrite {
-		err = fmt.Errorf("%s already exists", lom)
+		// TODO: handle the case where the object does not exist but there are
+		// two or more targets racing to override the same object with their local promotions
+		glog.Errorf("%s already exists", lom)
 		return
 	}
 	if params.Verbose {

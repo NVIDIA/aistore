@@ -1955,6 +1955,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	query := cmn.AddBckToQuery(nil, bck.Bck)
 	results := p.callTargets(http.MethodPost, cmn.JoinWords(cmn.Version, cmn.Objects, bucket),
 		cmn.MustMarshal(msg), query)
+
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlrf(w, r, "%s failed, err: %s", msg.Action, res.err)

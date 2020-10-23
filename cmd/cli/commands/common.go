@@ -313,8 +313,8 @@ var (
 	cachedFlag    = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}
 	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
-	overwriteFlag = cli.BoolFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
-	keepOrigFlag  = cli.BoolFlag{Name: "keep", Usage: "keep original file", Required: true}
+	overwriteFlag = cli.BoolTFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
+	keepOrigFlag  = cli.BoolTFlag{Name: "keep", Usage: "keep original file"}
 	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 	chunkSizeFlag = cli.StringFlag{

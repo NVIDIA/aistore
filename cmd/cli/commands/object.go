@@ -146,7 +146,7 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 		Target:     target,
 		FQN:        fqn,
 		Recurs:     flagIsSet(c, recursiveFlag),
-		Overwrite:  flagIsSet(c, overwriteFlag),
+		Overwrite:  c.Bool(overwriteFlag.GetName()),
 		KeepOrig:   c.Bool(keepOrigFlag.GetName()),
 		Verbose:    flagIsSet(c, verboseFlag),
 	}

@@ -381,8 +381,10 @@ Colocation in the context means that the files in question are already located *
 | `--verbose` or `-v` | `bool` | Verbose printout | `false` |
 | `--target` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
 | `--recursive` or `-r` | `bool` | Promote nested directories | `false` |
-| `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `false` |
-| `--keep` | `bool` | Keep original files | `n/a` |
+| `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `true` |
+| `--keep` | `bool` | Keep original files | `true` |
+
+**Note:** `--keep` flag defaults to `true` and we retain the origin file to ensure safety. 
 
 ### Object names
 
