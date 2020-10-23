@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -161,6 +162,8 @@ func (nlb *NotifListenerBase) Err(locked bool) error {
 	if !locked {
 		nlb.RLock()
 		defer nlb.RUnlock()
+	} else {
+		debug.AssertRWMutex(&nlb.RWMutex, debug.MtxLocked|debug.MtxRLocked)
 	}
 	if nlb.ErrMsg == "" {
 		return nil
@@ -172,6 +175,8 @@ func (nlb *NotifListenerBase) Err(locked bool) error {
 }
 
 func (nlb *NotifListenerBase) SetStats(daeID string, stats interface{}) {
+	debug.AssertRWMutex(&nlb.RWMutex, debug.MtxLocked)
+
 	_, ok := nlb.Srcs[daeID]
 	cmn.Assert(ok)
 	nlb.Stats.Store(daeID, stats)
@@ -211,6 +216,8 @@ func (nlb *NotifListenerBase) NodesTardy(durs ...time.Duration) (nodes cluster.N
 }
 
 func (nlb *NotifListenerBase) Status() *NotifStatus {
+	debug.AssertRWMutex(&nlb.RWMutex, debug.MtxRLocked)
+
 	status := &NotifStatus{
 		UUID:     nlb.UUID(),
 		FinTime:  nlb.FinTime.Load(),

@@ -2883,6 +2883,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 // NOTE: under lock
 func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 	tag string, keepalive, userRegister bool, flags cluster.SnodeFlags) (smap *smapX, err error, code int, update bool) {
+	debug.AssertMutexLocked(&p.owner.smap.Mutex)
+
 	code = http.StatusBadRequest
 	smap = p.owner.smap.get()
 

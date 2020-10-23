@@ -9,13 +9,18 @@ package debug
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
 const (
+	MtxLocked = 1 << (iota + 1)
+	MtxRLocked
+
 	Enabled = true
 )
 
@@ -109,3 +114,31 @@ func AssertNoErr(err error) {
 }
 
 func Assertf(cond bool, f string, a ...interface{}) { AssertMsg(cond, fmt.Sprintf(f, a...)) }
+
+func AssertMutexLocked(m *sync.Mutex) {
+	state := reflect.ValueOf(m).Elem().FieldByName("state")
+	if state.Int()&1 == 1 {
+		return
+	}
+	AssertMsg(false, "Mutex not locked")
+}
+
+func rwMtxLocked(m *sync.RWMutex) bool {
+	state := reflect.ValueOf(m).Elem().FieldByName("w").FieldByName("state")
+	return state.Int()&1 == 1
+}
+
+func rwMtxRLocked(m *sync.RWMutex) bool {
+	return reflect.ValueOf(m).Elem().FieldByName("readerCount").Int() > 0
+}
+
+func AssertRWMutex(m *sync.RWMutex, flag int) {
+	var res bool
+	if flag&MtxLocked != 0 {
+		res = res || rwMtxLocked(m)
+	}
+	if flag&MtxRLocked != 0 {
+		res = res || rwMtxRLocked(m)
+	}
+	AssertMsg(res, "RWMutex not (R)Locked")
+}

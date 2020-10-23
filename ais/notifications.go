@@ -113,6 +113,8 @@ func (l *listeners) add(nl nl.NotifListener, locked bool) (exists bool) {
 func (l *listeners) del(nl nl.NotifListener, locked bool) (ok bool) {
 	if !locked {
 		l.Lock()
+	} else {
+		debug.AssertRWMutex(&l.RWMutex, debug.MtxLocked)
 	}
 	if _, ok = l.m[nl.UUID()]; ok {
 		delete(l.m, nl.UUID())

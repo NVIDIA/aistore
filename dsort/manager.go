@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/dsort/filetype"
@@ -158,8 +159,10 @@ func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *clus
 
 // init initializes all necessary fields.
 //
-// NOTE: should be done under lock.
+// PRECONDITION: `m.mu` must be locked.
 func (m *Manager) init(rs *ParsedRequestSpec) error {
+	debug.AssertMutexLocked(&m.mu)
+
 	// smap, nameLocker setup
 	m.ctx = ctx
 	m.smap = m.ctx.smapOwner.Get()
@@ -557,8 +560,10 @@ func (m *Manager) waitForFinish() {
 // sort was aborted this means someone is waiting. Therefore the function is
 // waking up everyone who is waiting.
 //
-// NOTE: Should be used under lock.
+// PRECONDITION: `m.mu` must be locked.
 func (m *Manager) setInProgressTo(inProgress bool) {
+	debug.AssertMutexLocked(&m.mu)
+
 	// If marking as finished and job was aborted to need to free everyone
 	// who is waiting.
 	m.state.inProgress.Store(inProgress)
@@ -571,8 +576,10 @@ func (m *Manager) setInProgressTo(inProgress bool) {
 // yet finished. We need to inform current phase about abort (closing channel)
 // and mark that we will wait until it is finished.
 //
-// NOTE: Should be used under lock.
+// PRECONDITION: `m.mu` must be locked.
 func (m *Manager) setAbortedTo(aborted bool) {
+	debug.AssertMutexLocked(&m.mu)
+
 	if aborted {
 		// If not finished and not yet aborted we should mark that we will wait.
 		if m.inProgress() && !m.aborted() {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/hk"
 )
@@ -359,8 +360,10 @@ func (ci *cacheInterval) prepend(objs *cacheInterval) {
 	*ci = *objs
 }
 
-// PRECONDITION: `c.mtx` must be rlocked.
+// PRECONDITION: `c.mtx` must be at least rlocked.
 func (c *queryCache) findInterval(token string) *cacheInterval {
+	debug.AssertRWMutex(&c.mtx, debug.MtxLocked|debug.MtxRLocked)
+
 	// TODO: finding intervals should be faster than just walking.
 	for _, interval := range c.intervals {
 		if interval.contains(token) {
@@ -372,6 +375,8 @@ func (c *queryCache) findInterval(token string) *cacheInterval {
 
 // PRECONDITION: `c.mtx` must be locked.
 func (c *queryCache) merge(start, end, cur *cacheInterval) {
+	debug.AssertRWMutex(&c.mtx, debug.MtxLocked)
+
 	if start == nil && end == nil {
 		c.intervals = append(c.intervals, cur)
 	} else if start != nil && end == nil {
@@ -394,6 +399,8 @@ func (c *queryCache) merge(start, end, cur *cacheInterval) {
 
 // PRECONDITION: `c.mtx` must be locked.
 func (c *queryCache) removeInterval(ci *cacheInterval) {
+	debug.AssertRWMutex(&c.mtx, debug.MtxLocked)
+
 	// TODO: this should be faster
 	for idx := range c.intervals {
 		if c.intervals[idx] == ci {
