@@ -274,22 +274,6 @@ func initTarget() cmn.Runner {
 	_ = t.smm.Init(true /*panicOnErr*/)
 	t.gmm.Sibling, t.smm.Sibling = t.smm, t.gmm
 
-	t.initSI(cmn.Target)
-	t.initHostIP()
-	daemon.rg.add(t, cmn.Target)
-
-	ts := &stats.Trunner{T: t} // iostat below
-	startedUp := ts.Init(t)
-	daemon.rg.add(ts, xstorstats)
-
-	daemon.rg.add(newTargetKeepaliveRunner(t, ts, startedUp), xtargetkeepalive)
-
-	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
-
-	// Stream Collector - a singleton object with responsibilities that include:
-	sc := transport.Init()
-	daemon.rg.add(sc, xstreamc)
-
 	// fs.Mountpaths must be inited prior to all runners that utilize them
 	// for mountpath definition, see fs/mountfs.go
 	config := cmn.GCO.Get()
@@ -306,6 +290,22 @@ func initTarget() cmn.Runner {
 			cmn.ExitLogf("%s", err)
 		}
 	}
+
+	t.initSI(cmn.Target)
+	t.initHostIP()
+	daemon.rg.add(t, cmn.Target)
+
+	ts := &stats.Trunner{T: t} // iostat below
+	startedUp := ts.Init(t)
+	daemon.rg.add(ts, xstorstats)
+
+	daemon.rg.add(newTargetKeepaliveRunner(t, ts, startedUp), xtargetkeepalive)
+
+	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
+
+	// Stream Collector - a singleton object with responsibilities that include:
+	sc := transport.Init()
+	daemon.rg.add(sc, xstreamc)
 
 	fshc := health.NewFSHC(t, t.gmm, fs.CSM)
 	daemon.rg.add(fshc, xfshc)

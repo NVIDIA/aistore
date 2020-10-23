@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -20,6 +21,7 @@ const (
 	ResilverMarker      = ".ais.resilver_marker"
 
 	BmdPersistedFileName = ".ais.bmd"
+	VmdPersistedFileName = ".ais.vmd"
 )
 
 func MarkerExists(marker string) bool {
@@ -75,7 +77,37 @@ func PersistOnMpaths(path string, what interface{}, atMost int, opts ...jsp.Opti
 		}
 	}
 
+	if debug.Enabled {
+		expected := cmn.Min(atMost, len(availableMpaths))
+		cmn.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead", path, expected, cnt)
+	}
+
 	return
+}
+
+func MovePersisted(oldPath, newPath string) (cnt int) {
+	oldMpaths := FindPersisted(oldPath)
+	for mpath := range oldMpaths {
+		oldFpath := filepath.Join(mpath, oldPath)
+		newFpath := filepath.Join(mpath, newPath)
+
+		if err := os.Rename(oldFpath, newFpath); err != nil {
+			glog.Errorf("failed to rename %q => %q, err: %v", oldFpath, newFpath, err)
+			continue
+		}
+		cnt++
+	}
+
+	return
+}
+
+func RemovePersisted(path string) {
+	mpaths := FindPersisted(path)
+	for mpath := range mpaths {
+		if err := os.Remove(filepath.Join(mpath, path)); err != nil {
+			glog.Error(err)
+		}
+	}
 }
 
 func persistOnSingleMpath(mpath *MountpathInfo, path string, what interface{}, options jsp.Options) (err error) {

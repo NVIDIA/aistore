@@ -32,9 +32,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/xreg"
-	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -510,24 +510,44 @@ func (h *httprunner) initSI(daemonType string) {
 		Port: config.Net.L4.PortIntraData,
 	}
 
-	daemonID := os.Getenv("AIS_DAEMON_ID")
-	if daemonID == "" {
-		cs := xxhash.ChecksumString32S(publicAddr.String(), cmn.MLCG32)
-		if config.TestingEnv() {
-			daemonID = strconv.Itoa(int(cs & 0xfffff))
-			if daemonType == cmn.Target {
-				daemonID = daemonID + "t" + config.Net.L4.PortStr
-			} else {
-				cmn.Assert(daemonType == cmn.Proxy)
-				daemonID = daemonID + "p" + config.Net.L4.PortStr
-			}
-		} else {
-			daemonID = strconv.Itoa(int(cs & 0xffffffff))
-		}
-	}
-
+	daemonID := initDaemonID(daemonType)
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
 	cmn.InitShortID(h.si.Digest())
+}
+
+func initDaemonID(daemonType string) string {
+	var (
+		config   = cmn.GCO.Get()
+		daemonID = os.Getenv("AIS_DAEMON_ID")
+	)
+
+	if daemonID != "" {
+		glog.Infof("daemonID = %q taken from env (%s)", daemonID, daemonType)
+		return daemonID
+	}
+	if vmd := fs.ReadVMD(); vmd != nil {
+		glog.Infof("daemonID = %q taken from vmd (%s)", vmd.DaemonID, daemonType)
+		return vmd.DaemonID
+	}
+
+	if config.TestingEnv() {
+		daemonID = cmn.RandStringStrong(4)
+		if daemonType == cmn.Target {
+			daemonID = daemonID + "t" + config.Net.L4.PortStr
+		} else {
+			cmn.Assert(daemonType == cmn.Proxy)
+			daemonID = daemonID + "p" + config.Net.L4.PortStr
+		}
+	} else {
+		daemonID = cmn.RandStringStrong(8)
+	}
+	if err := fs.CreateVMD(daemonID).Persist(); err != nil {
+		glog.Error(err)
+	}
+
+	cmn.Assert(daemonID != "")
+	glog.Infof("daemonID = %q randomly generated (%s)", daemonID, daemonType)
+	return daemonID
 }
 
 func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bool, tag string) {

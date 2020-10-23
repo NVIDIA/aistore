@@ -40,9 +40,10 @@ import (
 //
 
 const (
-	bmdFext     = ".prev" // suffix: previous version
-	bmdTermName = "BMD"   // display name
-	bmdCopies   = 2       // local copies
+	bmdPrevious = fs.BmdPersistedFileName + ".prev" // previous version
+	bmdToRemove = fs.BmdPersistedFileName + ".rmv"  // to be removed
+	bmdTermName = "BMD"                             // display name
+	bmdCopies   = 2                                 // local copies
 )
 
 type (
@@ -265,24 +266,23 @@ func newBMDOwnerTgt() *bmdOwnerTgt {
 }
 
 func (bo *bmdOwnerTgt) find() (curr, prev fs.MPI) {
-	return fs.FindPersisted(fs.BmdPersistedFileName), fs.FindPersisted(fs.BmdPersistedFileName + bmdFext)
+	return fs.FindPersisted(fs.BmdPersistedFileName), fs.FindPersisted(bmdPrevious)
 }
 
 func (bo *bmdOwnerTgt) init() {
-	load := func(mpi fs.MPI, suffix bool) (bmd *bucketMD) {
+	load := func(mpi fs.MPI, prevVersion bool) (bmd *bucketMD) {
 		bmd = newBucketMD()
 		for mpath := range mpi {
 			fpath := filepath.Join(mpath, fs.BmdPersistedFileName)
-			if suffix {
-				fpath += bmdFext
+			if prevVersion {
+				fpath = filepath.Join(mpath, bmdPrevious)
 			}
 			err := jsp.Load(fpath, bmd, jsp.CCSign())
 			if err == nil {
 				break
 			}
-			if !os.IsNotExist(err) {
-				glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, err)
-			}
+			// Should never be NotExist error as mpi should include only mpaths with relevant bmds stored.
+			glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, err)
 		}
 		return
 	}
@@ -310,35 +310,23 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	// - Fresh - `bmd` - the most recent BMD
 	// - Persisted - BMDs which are currently persisted on disks
 	// - PersistedOld - BMDs which are one version older than CurrentlyPersisted
-	persisted, persistedOld := bo.find()
 	bo._put(bmd)
 
-	// Persisted BMDs becoming PersistedOld BMDs
-	for mpath := range persisted {
-		from := filepath.Join(mpath, fs.BmdPersistedFileName)
-		to := from + bmdFext
-		if err := os.Rename(from, to); err != nil {
-			glog.Errorf("failed to rename %s prev version, err: %v", bmdTermName, err)
-		}
-
-		// Do not treat "new" PersistedOld as "old" PersistedOld
-		delete(persistedOld, mpath)
+	_ = fs.MovePersisted(bmdPrevious, bmdToRemove)
+	if cnt := fs.MovePersisted(fs.BmdPersistedFileName, bmdPrevious); cnt == 0 {
+		glog.Errorf("Failed to save any %q into %q", fs.BmdPersistedFileName, bmdPrevious)
 	}
 
 	// Fresh BMD becoming Persisted BMDs
 	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, bmd, bmdCopies, jsp.CCSign())
 	if persistedOn == 0 {
 		glog.Errorf("failed to store any %s on %d mpaths", bmdTermName, availMpaths)
+		// TODO: recover persisted from `bmdPrevious` and `bmdToRemove`?
 		return
 	}
 
-	// Remove PersistedOld BMDs.
-	for mpath := range persistedOld {
-		fpath := filepath.Join(mpath, fs.BmdPersistedFileName) + bmdFext
-		if err := os.Remove(fpath); err != nil {
-			glog.Errorf("failed to remove %s prev version, err: %v", bmdTermName, err)
-		}
-	}
+	// Finally, remove very old bmds from disks.
+	fs.RemovePersisted(bmdToRemove)
 }
 
 func (bo *bmdOwnerTgt) modify(_ *bmdModifier) (*bucketMD, error) {
