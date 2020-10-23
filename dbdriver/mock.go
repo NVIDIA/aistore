@@ -7,12 +7,14 @@ package dbdriver
 import (
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
 
 type DBMock struct {
+	mtx    sync.RWMutex
 	values map[string]string
 }
 
@@ -46,12 +48,16 @@ func (bd *DBMock) Get(collection, key string, object interface{}) error {
 }
 
 func (bd *DBMock) SetString(collection, key, data string) error {
+	bd.mtx.Lock()
+	defer bd.mtx.Unlock()
 	name := bd.makePath(collection, key)
 	bd.values[name] = data
 	return nil
 }
 
 func (bd *DBMock) GetString(collection, key string) (string, error) {
+	bd.mtx.RLock()
+	defer bd.mtx.RUnlock()
 	name := bd.makePath(collection, key)
 	value, ok := bd.values[name]
 	if !ok {
@@ -61,6 +67,8 @@ func (bd *DBMock) GetString(collection, key string) (string, error) {
 }
 
 func (bd *DBMock) Delete(collection, key string) error {
+	bd.mtx.Lock()
+	defer bd.mtx.Unlock()
 	name := bd.makePath(collection, key)
 	_, ok := bd.values[name]
 	if !ok {
@@ -75,6 +83,8 @@ func (bd *DBMock) List(collection, pattern string) ([]string, error) {
 		keys   = make([]string, 0)
 		filter string
 	)
+	bd.mtx.RLock()
+	defer bd.mtx.RUnlock()
 	filter = bd.makePath(collection, pattern)
 	for k := range bd.values {
 		if strings.HasPrefix(k, filter) {
@@ -90,6 +100,8 @@ func (bd *DBMock) List(collection, pattern string) ([]string, error) {
 
 func (bd *DBMock) DeleteCollection(collection string) error {
 	keys, err := bd.List(collection, "")
+	bd.mtx.Lock()
+	defer bd.mtx.Unlock()
 	if err != nil || len(keys) == 0 {
 		return err
 	}
@@ -104,6 +116,8 @@ func (bd *DBMock) GetAll(collection, pattern string) (map[string]string, error) 
 		values = make(map[string]string)
 		filter string
 	)
+	bd.mtx.RLock()
+	defer bd.mtx.RUnlock()
 	filter = bd.makePath(collection, pattern)
 	for k, v := range bd.values {
 		if strings.HasPrefix(k, filter) {
