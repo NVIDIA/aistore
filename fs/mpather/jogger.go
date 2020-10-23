@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
@@ -263,7 +262,7 @@ func (j *jogger) checkStopped() error {
 }
 
 func (j *jogger) throttle() {
-	curUtil := fs.GetMpathUtil(j.mpathInfo.Path, mono.NanoTime())
+	curUtil := fs.GetMpathUtil(j.mpathInfo.Path)
 	if curUtil >= j.config.Disk.DiskUtilHighWM {
 		time.Sleep(cmn.ThrottleMin)
 	}

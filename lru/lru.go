@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -490,13 +489,12 @@ func (j *lruJ) postRemove(prev int64, lom *cluster.LOM) (capCheck int64, err err
 }
 
 func (j *lruJ) _throttle(usedPct int64) (err error) {
-	nowTs := mono.NanoTime()
-	if j.mpathInfo.IsIdle(j.config, nowTs) {
+	if j.mpathInfo.IsIdle(j.config) {
 		return
 	}
 	// throttle self
 	ratioCapacity := cmn.Ratio(j.config.LRU.HighWM, j.config.LRU.LowWM, usedPct)
-	curr := fs.GetMpathUtil(j.mpathInfo.Path, nowTs)
+	curr := fs.GetMpathUtil(j.mpathInfo.Path)
 	ratioUtilization := cmn.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
 	if ratioUtilization > ratioCapacity {
 		if usedPct < (j.config.LRU.LowWM+j.config.LRU.HighWM)/2 {

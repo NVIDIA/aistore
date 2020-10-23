@@ -30,9 +30,10 @@ const (
 	TrashDir = "$trash"
 )
 
-// global singleton
+// globals
 var (
-	mfs *MountedFS
+	mfs      *MountedFS
+	mpathsRR sync.Map
 )
 
 // Terminology:
@@ -176,11 +177,8 @@ Retry:
 	return nil
 }
 
-func (mi *MountpathInfo) IsIdle(config *cmn.Config, nowTs int64) bool {
-	if config == nil {
-		config = cmn.GCO.Get()
-	}
-	curr := mfs.ios.GetMpathUtil(mi.Path, nowTs)
+func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
+	curr := mfs.ios.GetMpathUtil(mi.Path)
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
 }
 
@@ -351,70 +349,43 @@ func SetMountpaths(fsPaths []string) error {
 }
 
 func LoadBalanceGET(objFQN, objMpath string, copies MPI) (fqn string) {
-	var (
-		nowTs                = mono.NanoTime()
-		mpathUtils, mpathRRs = mfs.ios.GetAllMpathUtils(nowTs)
-		objUtil, ok          = mpathUtils[objMpath]
-		rr, _                = mpathRRs[objMpath] // GET round-robin counter (zeros out every iostats refresh i-val)
-		util                 = objUtil
-		r                    = rr
-	)
 	fqn = objFQN
-	if !ok {
-		// Only assert when `mpathUtils` is non-empty. If it's empty it means
-		// that `fs2disks` returned empty response so there is no way to get utils.
-		debug.AssertMsg(len(mpathUtils) == 0, objMpath)
-		return
-	}
+	var (
+		mpathUtils = GetAllMpathUtils()
+		minUtil    = mpathUtils.Util(objMpath)
+		v, _       = mpathsRR.LoadOrStore(objMpath, atomic.NewInt32(0))
+		minCounter = v.(*atomic.Int32)
+	)
 	for copyFQN, copyMPI := range copies {
+		if copyFQN == objFQN {
+			continue
+		}
 		var (
-			u        int64
-			c, rrcnt int32
+			mpathUtil    = mpathUtils.Util(copyMPI.Path)
+			v, _         = mpathsRR.LoadOrStore(copyMPI.Path, atomic.NewInt32(0))
+			mpathCounter = v.(*atomic.Int32)
 		)
-		if u, ok = mpathUtils[copyMPI.Path]; !ok {
+		if mpathUtil < minUtil && mpathCounter.Load() <= minCounter.Load() {
+			fqn, minUtil, minCounter = copyFQN, mpathUtil, mpathCounter
 			continue
 		}
-		if r, ok = mpathRRs[copyMPI.Path]; !ok {
-			if u < util {
-				fqn, util, rr = copyFQN, u, r
-			}
-			continue
-		}
-		c = r.Load()
-		if rr != nil {
-			rrcnt = rr.Load()
-		}
-		if u < util && c <= rrcnt { // the obvious choice
-			fqn, util, rr = copyFQN, u, r
-			continue
-		}
-		if u+int64(c)*uQuantum < util+int64(rrcnt)*uQuantum { // heuristics - make uQuantum configurable?
-			fqn, util, rr = copyFQN, u, r
+		// NOTE: `uQuantum` heuristics
+		if mpathUtil+int64(mpathCounter.Load())*uQuantum < minUtil+int64(minCounter.Load())*uQuantum {
+			fqn, minUtil, minCounter = copyFQN, mpathUtil, mpathCounter
 		}
 	}
-	// NOTE: the counter could've been already inc-ed
-	//       could keep track of the second best and use CAS to recerve-inc and compare
-	//       can wait though
-	if rr != nil {
-		rr.Inc()
-	}
+	// NOTE: The counter could've been already incremented - ignoring for now
+	minCounter.Inc()
 	return
 }
 
-// ios delegators
-func GetMpathUtil(mpath string, nowTs int64) int64 {
-	return mfs.ios.GetMpathUtil(mpath, nowTs)
-}
+//////////////////////////////
+// `ios` package delegators //
+//////////////////////////////
 
-func GetAllMpathUtils(nowTs int64) (utils map[string]int64) {
-	utils, _ = mfs.ios.GetAllMpathUtils(nowTs)
-	return
-}
-
-func LogAppend(lines []string) []string {
-	return mfs.ios.LogAppend(lines)
-}
-
+func GetAllMpathUtils() (utils *ios.MpathsUtils) { return mfs.ios.GetAllMpathUtils() }
+func GetMpathUtil(mpath string) int64            { return mfs.ios.GetMpathUtil(mpath) }
+func LogAppend(lines []string) []string          { return mfs.ios.LogAppend(lines) }
 func GetSelectedDiskStats() (m map[string]*ios.SelectedDiskStats) {
 	return mfs.ios.GetSelectedDiskStats()
 }

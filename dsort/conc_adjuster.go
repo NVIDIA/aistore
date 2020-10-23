@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -141,14 +140,13 @@ func (ca *concAdjuster) run() {
 	for {
 		select {
 		case <-ticker.C:
-			utils := fs.GetAllMpathUtils(mono.NanoTime())
-			config := cmn.GCO.Get()
+			var (
+				config = cmn.GCO.Get()
+				utils  = fs.GetAllMpathUtils()
+			)
 			ca.mu.RLock()
 			for mpath, adjuster := range ca.adjusters {
-				util, ok := utils[mpath]
-				if !ok {
-					continue
-				}
+				util := utils.Util(mpath)
 
 				adjuster.lastUtils = append(adjuster.lastUtils, util)
 				if len(adjuster.lastUtils) > lastInfoCnt {

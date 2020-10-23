@@ -5,29 +5,21 @@
  */
 package ios
 
-import (
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
-)
-
 // interface guard
 var _ IOStater = &IOStaterMock{}
 
 type (
 	IOStaterMock struct {
-		Utils map[string]int64
+		Utils MpathsUtils
 	}
 )
 
 func NewIOStaterMock() *IOStaterMock {
-	return &IOStaterMock{
-		Utils: make(map[string]int64, 10),
-	}
+	return &IOStaterMock{}
 }
 
-func (m *IOStaterMock) GetMpathUtil(mpath string, nowTs int64) int64 { return m.Utils[mpath] }
-func (m *IOStaterMock) GetAllMpathUtils(nowTs int64) (map[string]int64, map[string]*atomic.Int32) {
-	return m.Utils, nil
-}
+func (m *IOStaterMock) GetAllMpathUtils() *MpathsUtils                      { return &m.Utils }
+func (m *IOStaterMock) GetMpathUtil(mpath string) int64                     { return m.Utils.Util(mpath) }
 func (m *IOStaterMock) AddMpath(mpath, fs string)                           {}
 func (m *IOStaterMock) RemoveMpath(mpath string)                            {}
 func (m *IOStaterMock) LogAppend(l []string) []string                       { return l }

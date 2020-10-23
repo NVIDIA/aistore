@@ -10,7 +10,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -100,7 +99,7 @@ func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 		copiesMpath cmn.StringSet
 
 		minUtil    = int64(101)
-		mpathUtils = fs.GetAllMpathUtils(mono.NanoTime())
+		mpathUtils = fs.GetAllMpathUtils()
 		mpaths, _  = fs.Get()
 	)
 
@@ -120,12 +119,8 @@ func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 				continue
 			}
 		}
-		if curUtil, ok := mpathUtils[mpath]; ok && curUtil < minUtil {
+		if curUtil := mpathUtils.Util(mpath); curUtil < minUtil {
 			minUtil = curUtil
-			out = mpathInfo
-		} else if !ok && out == nil {
-			// Since we cannot relay on the fact that `mpathUtils` has all mountpaths
-			// (because it might not refresh it now) we randomly pick a mountpath.
 			out = mpathInfo
 		}
 	}
