@@ -37,7 +37,6 @@ func PersistMarker(marker string) error {
 func RemoveMarker(marker string) {
 	markerMpaths := FindPersisted(marker)
 	if len(markerMpaths) == 0 {
-		glog.Errorf("Marker %q not found on any mpath", marker)
 		return
 	}
 
