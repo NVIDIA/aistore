@@ -97,6 +97,32 @@ func (l *listeners) entry(uuid string) (entry nl.NotifListener, exists bool) {
 	return
 }
 
+func (l *listeners) add(nl nl.NotifListener, locked bool) (exists bool) {
+	if !locked {
+		l.Lock()
+	}
+	if _, exists = l.m[nl.UUID()]; !exists {
+		l.m[nl.UUID()] = nl
+	}
+	if !locked {
+		l.Unlock()
+	}
+	return
+}
+
+func (l *listeners) del(nl nl.NotifListener, locked bool) (ok bool) {
+	if !locked {
+		l.Lock()
+	}
+	if _, ok = l.m[nl.UUID()]; ok {
+		delete(l.m, nl.UUID())
+	}
+	if !locked {
+		l.Unlock()
+	}
+	return
+}
+
 // returns a listener that matches the filter condition.
 // for finished xaction listeners, returns latest listener (i.e. having highest finish time)
 func (l *listeners) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
@@ -148,27 +174,15 @@ func (n *notifs) String() string { return notifsName }
 // start listening
 func (n *notifs) add(nl nl.NotifListener) {
 	cmn.Assert(nl.UUID() != "")
-	n.nls.Lock()
-	if _, ok := n.nls.m[nl.UUID()]; ok {
-		n.nls.Unlock()
+	if exists := n.nls.add(nl, false /*locked*/); exists {
 		return
 	}
-	n.nls.m[nl.UUID()] = nl
 	nl.SetAddedTime()
-	n.nls.Unlock()
 	glog.Infoln("add " + nl.String())
 }
 
 func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
-	if !locked {
-		n.nls.Lock()
-	}
-	if _, ok = n.nls.m[nl.UUID()]; ok {
-		delete(n.nls.m, nl.UUID())
-	}
-	if !locked {
-		n.nls.Unlock()
-	}
+	ok = n.nls.del(nl, locked /*locked*/)
 	if ok {
 		glog.Infoln("del " + nl.String())
 	}
@@ -327,13 +341,11 @@ func (n *notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr er
 }
 
 func (n *notifs) done(nl nl.NotifListener) {
-	if !n.del(nl, false) {
+	if !n.del(nl, false /*locked*/) {
 		// `nl` already removed from active map
 		return
 	}
-	n.fin.Lock()
-	n.fin.m[nl.UUID()] = nl
-	n.fin.Unlock()
+	n.fin.add(nl, false /*locked*/)
 
 	if nl.Aborted() && !nl.AllFinished() {
 		config := cmn.GCO.Get()
@@ -360,9 +372,9 @@ func (n *notifs) done(nl nl.NotifListener) {
 func (n *notifs) housekeep() time.Duration {
 	now := time.Now().UnixNano()
 	n.fin.Lock()
-	for uuid, nl := range n.fin.m {
+	for _, nl := range n.fin.m {
 		if time.Duration(now-nl.EndTime()) > notifsRemoveMult*notifsHousekeepT {
-			delete(n.fin.m, uuid)
+			n.fin.del(nl, true /*locked*/)
 		}
 	}
 	n.fin.Unlock()
@@ -515,7 +527,7 @@ func (n *notifs) ListenSmapChanged() {
 	n.fin.Lock()
 	for uuid, nl := range remnl {
 		cmn.Assert(nl.UUID() == uuid)
-		n.fin.m[uuid] = nl
+		n.fin.add(nl, true /*locked*/)
 	}
 	n.fin.Unlock()
 	n.nls.Lock()
