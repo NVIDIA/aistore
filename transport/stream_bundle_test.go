@@ -17,7 +17,6 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -84,11 +83,9 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		trname       = "bundle" + nvs["block"]
 		tss          = make([]*httptest.Server, 0, 32)
 	)
-	mux := mux.NewServeMux()
-
 	smap.Tmap = make(cluster.NodeMap, 100)
 	for i := 0; i < 10; i++ {
-		ts := httptest.NewServer(mux)
+		ts := httptest.NewServer(tmux)
 		tss = append(tss, ts)
 		addTarget(&smap, ts, i)
 	}
@@ -98,8 +95,6 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		}
 	}()
 	smap.Version = 1
-
-	transport.SetMux(mux)
 
 	slab, _ := MMSA.GetSlab(32 * cmn.KiB)
 	rbuf := slab.Alloc()
@@ -113,8 +108,9 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		numCompleted.Inc()
 	}
 
-	err := transport.Register(trname, receive) // DirectURL = /v1/transport/10G
+	err := transport.HandleObjStream(trname, receive) // DirectURL = /v1/transport/10G
 	tassert.CheckFatal(t, err)
+	defer transport.Unhandle(trname)
 
 	var (
 		httpclient     = transport.NewIntraDataClient()

@@ -77,10 +77,10 @@ func (mgr *Manager) initECBundles() error {
 	}
 	cmn.AssertMsg(mgr.reqBundle == nil && mgr.respBundle == nil, "EC Bundles have been already initialized")
 
-	if err := transport.Register(ReqStreamName, ECM.recvRequest); err != nil {
+	if err := transport.HandleObjStream(ReqStreamName, ECM.recvRequest); err != nil {
 		return fmt.Errorf("failed to register recvRequest: %v", err)
 	}
-	if err := transport.Register(RespStreamName, ECM.recvResponse); err != nil {
+	if err := transport.HandleObjStream(RespStreamName, ECM.recvResponse); err != nil {
 		return fmt.Errorf("failed to register respResponse: %v", err)
 	}
 
@@ -137,8 +137,8 @@ func (mgr *Manager) closeECBundles() {
 	mgr.reqBundle = nil
 	mgr.respBundle.Close(false)
 	mgr.respBundle = nil
-	transport.Unregister(ReqStreamName)
-	transport.Unregister(RespStreamName)
+	transport.Unhandle(ReqStreamName)
+	transport.Unhandle(RespStreamName)
 }
 
 func (mgr *Manager) NewGetXact(bck cmn.Bck) *XactGet {

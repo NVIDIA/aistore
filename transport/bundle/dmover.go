@@ -25,14 +25,14 @@ type (
 		t    cluster.Target
 		data struct {
 			trname  string
-			recv    transport.Receive
+			recv    transport.ReceiveObj
 			net     string
 			streams *Streams
 			client  transport.Client
 		}
 		ack struct {
 			trname  string
-			recv    transport.Receive
+			recv    transport.ReceiveObj
 			net     string
 			streams *Streams
 			client  transport.Client
@@ -46,7 +46,7 @@ type (
 	}
 	// additional (and optional) params for new data mover
 	Extra struct {
-		RecvAck     transport.Receive
+		RecvAck     transport.ReceiveObj
 		Compression string
 		Multiplier  int
 	}
@@ -57,7 +57,7 @@ var (
 	_ cluster.DataMover = &DataMover{}
 )
 
-func NewDataMover(t cluster.Target, trname string, recvCB transport.Receive, extra Extra) (*DataMover, error) {
+func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, extra Extra) (*DataMover, error) {
 	var (
 		config = cmn.GCO.Get()
 		dm     = &DataMover{t: t, mem: t.MMSA()}
@@ -106,11 +106,11 @@ func (dm *DataMover) SetXact(xact cluster.Xact) { dm.xact = xact }
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() (err error) {
-	if err = transport.Register(dm.data.trname, dm.wrapRecvData); err != nil {
+	if err = transport.HandleObjStream(dm.data.trname, dm.wrapRecvData); err != nil {
 		return
 	}
 	if dm.useACKs() {
-		err = transport.Register(dm.ack.trname, dm.wrapRecvACK)
+		err = transport.HandleObjStream(dm.ack.trname, dm.wrapRecvACK)
 	}
 	return
 }
@@ -158,11 +158,11 @@ func (dm *DataMover) Close(err error) {
 func (dm *DataMover) UnregRecv() {
 	_ = dm.waitQuiesce()
 
-	if err := transport.Unregister(dm.data.trname); err != nil {
+	if err := transport.Unhandle(dm.data.trname); err != nil {
 		glog.Error(err)
 	}
 	if dm.useACKs() {
-		if err := transport.Unregister(dm.ack.trname); err != nil {
+		if err := transport.Unhandle(dm.ack.trname); err != nil {
 			glog.Error(err)
 		}
 	}

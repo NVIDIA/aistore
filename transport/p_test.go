@@ -18,7 +18,6 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
@@ -39,12 +38,7 @@ func receive10G(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader
 }
 
 func Test_CompressedOne(t *testing.T) {
-	var (
-		trname = "cmpr-one"
-		mux    = mux.NewServeMux()
-	)
-	transport.SetMux(mux)
-
+	trname := "cmpr-one"
 	config := cmn.GCO.BeginUpdate()
 	config.Compression.BlockMaxSize = 256 * cmn.KiB
 	cmn.GCO.CommitUpdate(config)
@@ -52,11 +46,12 @@ func Test_CompressedOne(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	ts := httptest.NewServer(mux)
+	ts := httptest.NewServer(tmux)
 	defer ts.Close()
 
-	err := transport.Register(trname, receive10G, memsys.DefaultPageMM() /* optionally, specify memsys*/)
+	err := transport.HandleObjStream(trname, receive10G, memsys.DefaultPageMM() /* optionally, specify memsys*/)
 	tassert.CheckFatal(t, err)
+	defer transport.Unhandle(trname)
 
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
@@ -142,7 +137,6 @@ func Test_CompletionCount(t *testing.T) {
 	var (
 		numSent                   int64
 		numCompleted, numReceived atomic.Int64
-		mux                       = mux.NewServeMux()
 	)
 
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
@@ -155,16 +149,13 @@ func Test_CompletionCount(t *testing.T) {
 		numCompleted.Inc()
 	}
 
-	transport.SetMux(mux)
-
-	ts := httptest.NewServer(mux)
+	ts := httptest.NewServer(tmux)
 	defer ts.Close()
 
 	trname := "cmpl-cnt"
-	err := transport.Register(trname, receive)
-	if err != nil {
-		t.Fatal(err)
-	}
+	err := transport.HandleObjStream(trname, receive)
+	tassert.CheckFatal(t, err)
+	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "256")

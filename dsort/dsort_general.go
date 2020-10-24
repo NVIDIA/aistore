@@ -154,7 +154,7 @@ func (ds *dsorterGeneral) start() error {
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 	}
-	if err := transport.Register(trname, ds.makeRecvRequestFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, ds.makeRecvRequestFunc()); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -170,7 +170,7 @@ func (ds *dsorterGeneral) start() error {
 			MMSA:        mm,
 		},
 	}
-	if err := transport.Register(trname, ds.makeRecvResponseFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, ds.makeRecvResponseFunc()); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -186,14 +186,14 @@ func (ds *dsorterGeneral) cleanupStreams() error {
 	// intraData network.
 	if ds.streams.request != nil {
 		trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unregister(trname); err != nil {
+		if err := transport.Unhandle(trname); err != nil {
 			return errors.WithStack(err)
 		}
 	}
 
 	if ds.streams.response != nil {
 		trname := fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unregister(trname); err != nil {
+		if err := transport.Unhandle(trname); err != nil {
 			return errors.WithStack(err)
 		}
 	}
@@ -474,7 +474,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 	}
 }
 
-func (ds *dsorterGeneral) makeRecvRequestFunc() transport.Receive {
+func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 	errHandler := func(err error, hdr transport.ObjHdr, node *cluster.Snode) {
 		hdr.Opaque = []byte(err.Error())
 		hdr.ObjAttrs.Size = 0
@@ -604,7 +604,7 @@ func (ds *dsorterGeneral) postExtraction() {
 	ds.mw.stopWatchingReserved()
 }
 
-func (ds *dsorterGeneral) makeRecvResponseFunc() transport.Receive {
+func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		if err != nil {

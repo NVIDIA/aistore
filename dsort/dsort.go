@@ -54,7 +54,7 @@ type (
 
 		loadContent() extract.LoadContentFunc
 
-		makeRecvRequestFunc() transport.Receive
+		makeRecvRequestFunc() transport.ReceiveObj
 
 		preShardExtraction(expectedUncompressedSize uint64) (toDisk bool)
 		postShardExtraction(expectedUncompressedSize uint64)

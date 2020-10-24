@@ -226,7 +226,7 @@ func (ds *dsorterMem) start() error {
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 	}
-	if err := transport.Register(trname, ds.makeRecvRequestFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, ds.makeRecvRequestFunc()); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -242,7 +242,7 @@ func (ds *dsorterMem) start() error {
 			MMSA:        mm,
 		},
 	}
-	if err := transport.Register(trname, ds.makeRecvResponseFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, ds.makeRecvResponseFunc()); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -254,14 +254,14 @@ func (ds *dsorterMem) start() error {
 func (ds *dsorterMem) cleanupStreams() error {
 	if ds.streams.builder != nil {
 		trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unregister(trname); err != nil {
+		if err := transport.Unhandle(trname); err != nil {
 			return errors.WithStack(err)
 		}
 	}
 
 	if ds.streams.records != nil {
 		trname := fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unregister(trname); err != nil {
+		if err := transport.Unhandle(trname); err != nil {
 			return errors.WithStack(err)
 		}
 	}
@@ -559,7 +559,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 
 func (ds *dsorterMem) postExtraction() {}
 
-func (ds *dsorterMem) makeRecvRequestFunc() transport.Receive {
+func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		if err != nil {
 			ds.m.abort(err)
@@ -583,7 +583,7 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.Receive {
 	}
 }
 
-func (ds *dsorterMem) makeRecvResponseFunc() transport.Receive {
+func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		if err != nil {

@@ -28,6 +28,11 @@ type (
 	}
 )
 
+var (
+	sc = &StreamCollector{} // idle timer and house-keeping (slow path)
+	gc *collector           // real stream collector
+)
+
 // Stream Collector - a singleton that:
 // 1. controls part of the stream lifecycle:
 //    - activation (followed by connection establishment and HTTP PUT), and

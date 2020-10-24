@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
@@ -27,14 +26,7 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
-//
-// API types
-//
-type (
-	Receive func(w http.ResponseWriter, hdr ObjHdr, object io.Reader, err error)
-)
-
-// internal types
+// private types
 type (
 	iterator struct {
 		trname    string
@@ -50,7 +42,8 @@ type (
 	}
 	handler struct {
 		trname      string
-		callback    Receive
+		rxObj       ReceiveObj
+		rxMsg       ReceiveMsg
 		sessions    sync.Map // map[uint64]*Stats
 		oldSessions sync.Map // map[uint64]time.Time
 		hkName      string   // house-keeping name
@@ -86,67 +79,7 @@ func init() {
 	handlers = make(map[string]*handler, 16)
 }
 
-//
-// API
-//
-
-func SetMux(mux *mux.ServeMux) {
-	path := ObjURLPath("")
-	mux.HandleFunc(path, RxObjStream)
-	mux.HandleFunc(path+"/", RxObjStream)
-}
-
-func Register(trname string, callback Receive, mems ...*memsys.MMSA) error {
-	var mem *memsys.MMSA
-	if len(mems) > 0 {
-		mem = mems[0]
-	}
-	h := &handler{trname: trname, callback: callback, hkName: ObjURLPath(trname), mem: mem}
-	mu.Lock()
-	if _, ok := handlers[trname]; ok {
-		mu.Unlock()
-		return fmt.Errorf("duplicate trname %q: re-registering is not permitted", trname)
-	}
-	handlers[trname] = h
-	mu.Unlock()
-	hk.Reg(h.hkName, h.cleanupOldSessions)
-	return nil
-}
-
-func Unregister(trname string) (err error) {
-	mu.Lock()
-	if h, ok := handlers[trname]; ok {
-		delete(handlers, trname)
-		hk.Unreg(h.hkName)
-	} else {
-		err = fmt.Errorf("cannot unregister: transport endpoint %s is unknown", trname)
-	}
-	mu.Unlock()
-	return
-}
-
-func GetStats() (netstats map[string]EndpointStats, err error) {
-	netstats = make(map[string]EndpointStats)
-	mu.Lock()
-	for trname, h := range handlers {
-		eps := make(EndpointStats)
-		f := func(key, value interface{}) bool {
-			out := &Stats{}
-			uid := key.(uint64)
-			in := value.(*Stats)
-			out.Num.Store(in.Num.Load())
-			out.Offset.Store(in.Offset.Load())
-			out.Size.Store(in.Size.Load())
-			eps[uid] = out
-			return true
-		}
-		h.sessions.Range(f)
-		netstats[trname] = eps
-	}
-	mu.Unlock()
-	return
-}
-
+// main Rx objects
 func RxObjStream(w http.ResponseWriter, r *http.Request) {
 	var (
 		reader    io.Reader = r.Body
@@ -190,7 +123,9 @@ func RxObjStream(w http.ResponseWriter, r *http.Request) {
 	// Rx loop
 	it := &iterator{trname: trname, body: reader, fbuf: fbuf, headerBuf: make([]byte, maxHeaderSize)}
 	for {
-		objReader, hl64, err := it.next()
+		objReader, msg, hl64, err := it.next()
+		_ = msg // TODO -- FIXME
+
 		if hl64 != 0 {
 			_ = stats.Offset.Add(hl64)
 		}
@@ -199,7 +134,7 @@ func RxObjStream(w http.ResponseWriter, r *http.Request) {
 			if er == io.EOF {
 				er = nil
 			}
-			h.callback(w, objReader.hdr, objReader, er)
+			h.rxObj(w, objReader.hdr, objReader, er)
 			hdr := &objReader.hdr
 			if hdr.ObjAttrs.Size == objReader.off {
 				var (
@@ -221,7 +156,7 @@ func RxObjStream(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			h.oldSessions.Store(uid, time.Now())
 			if err != io.EOF {
-				h.callback(w, ObjHdr{}, nil, err)
+				h.rxObj(w, ObjHdr{}, nil, err)
 				cmn.InvalidHandlerDetailed(w, r, err.Error())
 			}
 			if lz4Reader != nil {
@@ -233,6 +168,22 @@ func RxObjStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+/////////////
+// handler //
+/////////////
+
+func (h *handler) handle() error {
+	mu.Lock()
+	if _, ok := handlers[h.trname]; ok {
+		mu.Unlock()
+		return fmt.Errorf("duplicate trname %q: re-registering is not permitted", h.trname)
+	}
+	handlers[h.trname] = h
+	mu.Unlock()
+	hk.Reg(h.hkName, h.cleanupOldSessions)
+	return nil
 }
 
 func (h *handler) cleanupOldSessions() time.Duration {
@@ -250,9 +201,9 @@ func (h *handler) cleanupOldSessions() time.Duration {
 	return cleanupInterval
 }
 
-//
-// iterator
-//
+//////////////
+// iterator //
+//////////////
 
 func (it *iterator) Read(p []byte) (n int, err error) {
 	if it.fbuf == nil {
@@ -275,26 +226,26 @@ read:
 	return
 }
 
-func (it *iterator) next() (obj *objReader, hl64 int64, err error) {
-	var (
-		n   int
-		hdr ObjHdr
-	)
+func (it *iterator) next() (obj *objReader, msg Msg, hl64 int64, err error) {
+	var n int
 	n, err = it.Read(it.headerBuf[:cmn.SizeofI64*2])
 	if n < cmn.SizeofI64*2 {
-		cmn.Assert(err != nil) // expecting an error for failing to receive 16 bytes
+		cmn.Assert(err != nil) // TODO -- FIXME: expecting an error for failing to receive 16 bytes
 		if err != io.EOF {
 			glog.Errorf("%s: %v", it.trname, err)
 		}
 		return
 	}
 	// extract and validate hlen
-	_, hl64 = extInt64(0, it.headerBuf)
+	_, hl64ex := extUint64(0, it.headerBuf)
+	isObj := hl64ex&msgMask == 0
+	hl64 = int64(hl64ex & ^msgMask)
 	hlen := int(hl64)
 	if hlen > len(it.headerBuf) {
 		err = fmt.Errorf("%s: sbrk #1: header length %d", it.trname, hlen)
 		return
 	}
+	// validate checksum
 	_, checksum := extUint64(0, it.headerBuf[cmn.SizeofI64:])
 	chc := xoshiro256.Hash(uint64(hl64))
 	if checksum != chc {
@@ -303,25 +254,32 @@ func (it *iterator) next() (obj *objReader, hl64 int64, err error) {
 	}
 	debug.Assert(hlen < len(it.headerBuf))
 	hl64 += int64(cmn.SizeofI64) * 2 // to account for hlen and its checksum
+	// read the body
 	n, err = it.Read(it.headerBuf[:hlen])
 	if n == 0 {
 		return
 	}
 	debug.Assertf(n == hlen, "%d != %d", n, hlen)
-	// buf => obj header
-	hdr = ExtHeader(it.headerBuf, hlen)
-	if hdr.IsLast() {
-		err = io.EOF
-		return
-	}
 
-	obj = &objReader{body: it.body, fbuf: it.fbuf, hdr: hdr}
+	if isObj {
+		hdr := ExtObjHeader(it.headerBuf, hlen)
+		if hdr.IsLast() {
+			err = io.EOF
+			return
+		}
+		obj = &objReader{body: it.body, fbuf: it.fbuf, hdr: hdr}
+	} else {
+		msg = ExtMsg(it.headerBuf, hlen)
+		if msg.IsLast() {
+			err = io.EOF
+		}
+	}
 	return
 }
 
-//
-// objReader
-//
+///////////////
+// objReader //
+///////////////
 
 func (obj *objReader) Read(b []byte) (n int, err error) {
 	rem := obj.hdr.ObjAttrs.Size - obj.off
@@ -356,11 +314,10 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	return
 }
 
-//
-// fixedBuffer - a fixed-size reusable buffer and io.Reader
-//
+/////////////////
+// fixedBuffer //
+/////////////////
 
-// TODO -- FIXME: move to memsys
 func newFixedBuffer(mem *memsys.MMSA) (bb *fixedBuffer) {
 	if mem == nil {
 		mem = memsys.DefaultPageMM()
@@ -381,10 +338,11 @@ func (bb *fixedBuffer) Reset()        { bb.roff, bb.woff = 0, 0 }
 func (bb *fixedBuffer) Written(n int) { bb.woff += n }
 func (bb *fixedBuffer) Free()         { bb.slab.Free(bb.buf) }
 
-//
-// helpers
-//
-func ExtHeader(body []byte, hlen int) (hdr ObjHdr) {
+/////////////////////////////
+// header de-serialization //
+/////////////////////////////
+
+func ExtObjHeader(body []byte, hlen int) (hdr ObjHdr) {
 	var off int
 	off, hdr.Bck.Name = extString(0, body)
 	off, hdr.ObjName = extString(off, body)
@@ -393,6 +351,15 @@ func ExtHeader(body []byte, hlen int) (hdr ObjHdr) {
 	off, hdr.Bck.Ns.UUID = extString(off, body)
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
+	debug.Assertf(off == hlen, "off %d, hlen %d", off, hlen)
+	return
+}
+
+func ExtMsg(body []byte, hlen int) (msg Msg) {
+	var off int
+	off, msg.Flags = extInt64(0, body)
+	off, msg.RecvHandler = extString(off, body)
+	off, msg.Body = extByte(off, body)
 	debug.Assertf(off == hlen, "off %d, hlen %d", off, hlen)
 	return
 }
@@ -429,8 +396,9 @@ func extAttrs(off int, from []byte) (n int, attr ObjectAttrs) {
 }
 
 //
-// sessID => unique ID
+// session ID <=> unique ID
 //
+
 func uniqueID(r *http.Request, sessID int64) uint64 {
 	x := xxhash.ChecksumString64S(r.RemoteAddr, cmn.MLCG32)
 	return (x&math.MaxUint32)<<32 | uint64(sessID)

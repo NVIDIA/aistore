@@ -14,7 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// message stream & private types
 type (
+	MsgStream struct {
+		workCh chan *Msg // ditto
+		msgoff msgoff
+		streamBase
+	}
 	msgoff struct {
 		msg Msg
 		off int64
@@ -75,7 +81,7 @@ repeat:
 			}
 			return s.deactivate()
 		}
-		l := s.insMsgHeader(&s.msgoff.msg)
+		l := s.insMsg(&s.msgoff.msg)
 		s.header = s.maxheader[:l]
 		s.msgoff.ins = inHdr
 		return s.sendHdr(b)

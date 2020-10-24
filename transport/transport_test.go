@@ -50,18 +50,19 @@ import (
 )
 
 const (
-	text1 = `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
+	lorem = `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
 labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.`
-	text2 = `Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+	duis = `Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
 Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.`
-	text3 = `Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est
+	et = `Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est
 eligendi optio, cumque nihil impedit, quo minus id, quod maxime placeat, facere possimus, omnis voluptas assumenda est, omnis dolor repellendus.`
-	text4 = `Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet,
+	temporibus = `Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet,
 ut et voluptates repudiandae sint et molestiae non-recusandae.`
-	text = text1 + text2 + text3 + text4
+	text = lorem + duis + et + temporibus
 )
 
 var (
+	tmux     *mux.ServeMux
 	MMSA     *memsys.MMSA
 	duration time.Duration // test duration
 )
@@ -82,6 +83,11 @@ func TestMain(t *testing.M) {
 	sc.SetRunName("stream-collector")
 	go sc.Run()
 
+	tmux = mux.NewServeMux()
+	path := transport.ObjURLPath("")
+	tmux.HandleFunc(path, transport.RxObjStream)
+	tmux.HandleFunc(path+"/", transport.RxObjStream)
+
 	os.Exit(t.Run())
 }
 
@@ -101,7 +107,7 @@ func Example_headers() {
 		for {
 			hlen = int(binary.BigEndian.Uint64(body[off:]))
 			off += 16 // hlen and hlen-checksum
-			hdr = transport.ExtHeader(body[off:], hlen)
+			hdr = transport.ExtObjHeader(body[off:], hlen)
 			if !hdr.IsLast() {
 				fmt.Printf("%+v (%d)\n", hdr, hlen)
 				off += hlen + int(hdr.ObjAttrs.Size)
@@ -117,7 +123,7 @@ func Example_headers() {
 	httpclient := transport.NewIntraDataClient()
 	stream := transport.NewStream(httpclient, ts.URL, nil)
 
-	sendText(stream, text1, text2)
+	sendText(stream, lorem, duis)
 	stream.Fin()
 
 	// Output:
@@ -175,7 +181,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	wg.Wait()
 }
 
-func Example_mux() {
+func Example_obj() {
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		object, err := ioutil.ReadAll(objReader)
@@ -187,23 +193,18 @@ func Example_mux() {
 		}
 		fmt.Printf("%s...\n", string(object[:16]))
 	}
-	mux := mux.NewServeMux()
-
-	transport.SetMux(mux)
-
-	ts := httptest.NewServer(mux)
+	ts := httptest.NewServer(tmux)
 	defer ts.Close()
-	trname := "dummy-rx"
-	err := transport.Register(trname, receive)
+	trname := "dummy-obj"
+	err := transport.HandleObjStream(trname, receive)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	httpclient := transport.NewIntraDataClient()
 	stream := transport.NewStream(httpclient, ts.URL+transport.ObjURLPath(trname), nil)
-
-	sendText(stream, text1, text2)
-	sendText(stream, text3, text4)
+	sendText(stream, lorem, duis)
+	sendText(stream, et, temporibus)
 	stream.Fin()
 
 	// Output:
@@ -213,13 +214,37 @@ func Example_mux() {
 	// Temporibus autem...
 }
 
+func Example_msg() {
+	receive := func(w http.ResponseWriter, msg transport.Msg, err error) {
+		fmt.Printf("%s...\n", string(msg.Body[:16]))
+	}
+
+	if true { // TODO -- FIXME
+		return
+	}
+	ts := httptest.NewServer(tmux)
+	defer ts.Close()
+
+	trname := "dummy-msg"
+	err := transport.HandleMsgStream(trname, receive)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	httpclient := transport.NewIntraDataClient()
+	url := ts.URL + transport.MsgURLPath(trname)
+	stream := transport.NewMsgStream(httpclient, url)
+
+	stream.Send(&transport.Msg{Body: []byte(lorem)})
+	stream.Send(&transport.Msg{Body: []byte(duis)})
+	stream.Send(&transport.Msg{Body: []byte(et)})
+	stream.Send(&transport.Msg{Body: []byte(temporibus)})
+	stream.Fin()
+}
+
 // test random streaming
 func Test_OneStream(t *testing.T) {
-	mux := mux.NewServeMux()
-
-	transport.SetMux(mux)
-
-	ts := httptest.NewServer(mux)
+	ts := httptest.NewServer(tmux)
 	defer ts.Close()
 
 	if mono.NanoTime()%2 == 1 {
@@ -234,10 +259,7 @@ func Test_MultiStream(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	tutils.Logf("Duration %v\n", duration)
-	mux := mux.NewServeMux()
-	transport.SetMux(mux)
-
-	ts := httptest.NewServer(mux)
+	ts := httptest.NewServer(tmux)
 	defer ts.Close()
 
 	wg := &sync.WaitGroup{}
@@ -270,7 +292,8 @@ func compareNetworkStats(t *testing.T, netstats1 map[string]transport.EndpointSt
 		eps1, ok := netstats1[trname]
 		for uid, stats2 := range eps2 { // EndpointStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
-			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID, stats2.Offset.Load(), stats2.Num.Load())
+			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID,
+				stats2.Offset.Load(), stats2.Num.Load())
 			if ok {
 				stats1, ok := eps1[sessID]
 				if ok {
@@ -291,13 +314,12 @@ func Test_MultipleNetworks(t *testing.T) {
 
 	streams := make([]*transport.Stream, 0, 10)
 	for idx := 0; idx < 10; idx++ {
-		mux := mux.NewServeMux()
-		transport.SetMux(mux)
-		ts := httptest.NewServer(mux)
+		ts := httptest.NewServer(tmux)
 		defer ts.Close()
 		trname := "endpoint" + strconv.Itoa(idx)
-		err := transport.Register(trname, recvFunc)
+		err := transport.HandleObjStream(trname, recvFunc)
 		tassert.CheckFatal(t, err)
+		defer transport.Unhandle(trname)
 
 		httpclient := transport.NewIntraDataClient()
 		url := ts.URL + transport.ObjURLPath(trname)
@@ -322,26 +344,19 @@ func Test_MultipleNetworks(t *testing.T) {
 }
 
 func Test_OnSendCallback(t *testing.T) {
-	var (
-		objectCnt = 10000
-		mux       = mux.NewServeMux()
-	)
-
+	objectCnt := 10000
 	if testing.Short() {
 		objectCnt = 1000
 	}
 
-	transport.SetMux(mux)
-
-	ts := httptest.NewServer(mux)
+	ts := httptest.NewServer(tmux)
 	defer ts.Close()
 
 	totalRecv, recvFunc := makeRecvFunc(t)
 	trname := "callback"
-	err := transport.Register(trname, recvFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
+	err := transport.HandleObjStream(trname, recvFunc)
+	tassert.CheckFatal(t, err)
+	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
 	stream := transport.NewStream(httpclient, url, nil)
@@ -397,9 +412,7 @@ func Test_ObjAttrs(t *testing.T) {
 		},
 	}
 
-	mux := mux.NewServeMux()
-	transport.SetMux(mux)
-	ts := httptest.NewServer(mux)
+	ts := httptest.NewServer(tmux)
 	defer ts.Close()
 
 	var receivedCount atomic.Int64
@@ -418,10 +431,9 @@ func Test_ObjAttrs(t *testing.T) {
 		receivedCount.Inc()
 	}
 	trname := "objattrs"
-	err := transport.Register(trname, recvFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
+	err := transport.HandleObjStream(trname, recvFunc)
+	tassert.CheckFatal(t, err)
+	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
 	stream := transport.NewStream(httpclient, url, nil)
@@ -466,8 +478,9 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 	totalRecv, recvFunc := makeRecvFunc(t)
 	trname := fmt.Sprintf("rand-rx-%d", ii)
-	err := transport.Register(trname, recvFunc)
+	err := transport.HandleObjStream(trname, recvFunc)
 	tassert.CheckFatal(t, err)
+	defer transport.Unhandle(trname)
 
 	if compress {
 		config := cmn.GCO.BeginUpdate()
@@ -527,7 +540,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 }
 
-func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
+func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)

@@ -145,7 +145,7 @@ func (reb *Manager) registerRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if err := transport.Register(rebPushTrname, reb.recvPush); err != nil {
+	if err := transport.HandleObjStream(rebPushTrname, reb.recvPush); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	// serialization: one at a time

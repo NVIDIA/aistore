@@ -9,9 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	"runtime"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -21,39 +19,16 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
-// transport defaults
-const (
-	maxHeaderSize  = 1024
-	lastMarker     = math.MaxInt64
-	tickMarker     = math.MaxInt64 ^ 0xa5a5a5a5
-	tickUnit       = time.Second
-	defaultIdleOut = time.Second * 2
-	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
-)
-
-// stream TCP/HTTP session: inactive <=> active transitions
-const (
-	inactive = iota
-	active
-)
-
-// in-send states
-const (
-	inHdr = iota + 1
-	inData
-	inEOB
-)
-
-// termination: reasons
-const (
-	reasonUnknown = "unknown"
-	reasonError   = "error"
-	endOfStream   = "end-of-stream"
-	reasonStopped = "stopped"
-)
-
-// private struct types: object stream
+// object stream & private types
 type (
+	Stream struct {
+		workCh   chan *Obj // aka SQ: next object to stream
+		cmplCh   chan cmpl // aka SCQ; note that SQ and SCQ together form a FIFO
+		callback ObjSentCB // to free SGLs, close files, etc.
+		sendoff  sendoff
+		lz4s     lz4Stream
+		streamBase
+	}
 	lz4Stream struct {
 		s             *Stream
 		zw            *lz4.Writer // orig reader => zw
@@ -70,12 +45,6 @@ type (
 		obj Obj
 		err error
 	}
-)
-
-var (
-	nextSID = *atomic.NewInt64(100) // unique session IDs starting from 101
-	sc      = &StreamCollector{}    // idle timer and house-keeping (slow path)
-	gc      *collector              // real stream collector
 )
 
 // interface guard
@@ -384,7 +353,9 @@ func (s *Stream) dryrun() {
 		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
 	)
 	for {
-		objReader, _, err := it.next()
+		objReader, msg, _, err := it.next()
+		_ = msg // TODO -- FIXME
+
 		if objReader != nil {
 			// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
 			err := cmn.DrainReader(objReader)

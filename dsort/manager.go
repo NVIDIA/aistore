@@ -259,7 +259,7 @@ func (m *Manager) initStreams() error {
 			MMSA:        mm,
 		},
 	}
-	if err := transport.Register(trname, m.makeRecvShardFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, m.makeRecvShardFunc()); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -271,7 +271,7 @@ func (m *Manager) initStreams() error {
 func (m *Manager) cleanupStreams() error {
 	if m.streams.shards != nil {
 		trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
-		if err := transport.Unregister(trname); err != nil {
+		if err := transport.Unhandle(trname); err != nil {
 			return errors.WithStack(err)
 		}
 	}
@@ -611,7 +611,7 @@ func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x unsafe.
 	}
 }
 
-func (m *Manager) makeRecvShardFunc() transport.Receive {
+func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
 		if err != nil {
 			m.abort(err)

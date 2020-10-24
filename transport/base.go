@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"path"
@@ -20,6 +21,42 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xoshiro256"
+)
+
+// transport defaults
+const (
+	maxHeaderSize  = 1024
+	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
+	defaultIdleOut = time.Second * 2
+	tickUnit       = time.Second
+)
+
+// internal flags and markers
+const (
+	lastMarker = math.MaxInt64              // end of stream (send & receive)
+	tickMarker = math.MaxInt64 ^ 0xa5a5a5a5 // idle tick (send side only)
+	msgMask    = uint64(1 << 63)            // messages vs objects demux (send & receive)
+)
+
+// stream TCP/HTTP session: inactive <=> active transitions
+const (
+	inactive = iota
+	active
+)
+
+// in-send states
+const (
+	inHdr = iota + 1
+	inData
+	inEOB
+)
+
+// termination: reasons
+const (
+	reasonUnknown = "unknown"
+	reasonError   = "error"
+	endOfStream   = "end-of-stream"
+	reasonStopped = "stopped"
 )
 
 type (
@@ -69,6 +106,8 @@ type (
 		}
 	}
 )
+
+var nextSID = *atomic.NewInt64(100) // unique session IDs starting from 101
 
 ////////////////
 // streamBase //
@@ -232,21 +271,21 @@ func (s *streamBase) insObjHeader(hdr *ObjHdr) (l int) {
 	l = insString(l, s.maxheader, hdr.Bck.Ns.UUID)
 	l = insByte(l, s.maxheader, hdr.Opaque)
 	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
-	hlen := l - cmn.SizeofI64*2
-	insInt64(0, s.maxheader, int64(hlen))
-	checksum := xoshiro256.Hash(uint64(hlen))
+	hlen := uint64(l - cmn.SizeofI64*2)
+	insUint64(0, s.maxheader, hlen)
+	checksum := xoshiro256.Hash(hlen)
 	insUint64(cmn.SizeofI64, s.maxheader, checksum)
 	return
 }
 
-func (s *streamBase) insMsgHeader(msg *Msg) (l int) {
+func (s *streamBase) insMsg(msg *Msg) (l int) {
 	l = cmn.SizeofI64 * 2
 	l = insInt64(l, s.maxheader, msg.Flags)
 	l = insString(l, s.maxheader, msg.RecvHandler)
 	l = insByte(l, s.maxheader, msg.Body)
-	hlen := l - cmn.SizeofI64*2
-	insInt64(0, s.maxheader, int64(hlen))
-	checksum := xoshiro256.Hash(uint64(hlen))
+	hlen := uint64(l - cmn.SizeofI64*2)
+	insUint64(0, s.maxheader, hlen|msgMask) // mask
+	checksum := xoshiro256.Hash(hlen)
 	insUint64(cmn.SizeofI64, s.maxheader, checksum)
 	return
 }

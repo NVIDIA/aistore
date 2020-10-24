@@ -6,7 +6,9 @@
 package transport
 
 import (
+	"fmt"
 	"io"
+	"net/http"
 	"time"
 	"unsafe"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -22,15 +25,6 @@ import (
 ///////////////////
 
 type (
-	// object stream
-	Stream struct {
-		workCh   chan *Obj // aka SQ: next object to stream
-		cmplCh   chan cmpl // aka SCQ; note that SQ and SCQ together form a FIFO
-		callback ObjSentCB // to free SGLs, close files, etc.
-		sendoff  sendoff
-		lz4s     lz4Stream
-		streamBase
-	}
 	// advanced usage: additional stream control
 	Extra struct {
 		IdleTimeout time.Duration // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
@@ -80,12 +74,6 @@ type (
 	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
 	ObjSentCB func(ObjHdr, io.ReadCloser, unsafe.Pointer, error)
 
-	// message stream
-	MsgStream struct {
-		workCh chan *Msg // ditto
-		msgoff msgoff
-		streamBase
-	}
 	Msg struct {
 		Flags       int64
 		RecvHandler string
@@ -96,17 +84,11 @@ type (
 	StreamCollector struct {
 		cmn.Named
 	}
+
+	// Rx callbacks
+	ReceiveObj func(w http.ResponseWriter, hdr ObjHdr, object io.Reader, err error)
+	ReceiveMsg func(w http.ResponseWriter, msg Msg, err error)
 )
-
-func ObjURLPath(trname string) string { return _urlPath(cmn.ObjStream, trname) }
-func MsgURLPath(trname string) string { return _urlPath(cmn.MsgStream, trname) }
-
-func _urlPath(endp, trname string) string {
-	if trname == "" {
-		return cmn.JoinWords(cmn.Version, endp)
-	}
-	return cmn.JoinWords(cmn.Version, endp, trname)
-}
 
 ///////////////////
 // object stream //
@@ -205,5 +187,76 @@ func (s *MsgStream) Send(msg *Msg) (err error) {
 	if verbose {
 		glog.Infof("%s: send %s[sq=%d]", s, msg, len(s.workCh))
 	}
+	return
+}
+
+func (s *MsgStream) Fin() {
+	_ = s.Send(&Msg{Flags: lastMarker})
+	s.wg.Wait()
+}
+
+//////////////////////
+// receive-side API //
+//////////////////////
+
+func HandleObjStream(trname string, rxObj ReceiveObj, mems ...*memsys.MMSA) error {
+	var mem *memsys.MMSA
+	if len(mems) > 0 {
+		mem = mems[0]
+	}
+	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname), mem: mem}
+	return h.handle()
+}
+
+func HandleMsgStream(trname string, rxMsg ReceiveMsg) error {
+	h := &handler{trname: trname, rxMsg: rxMsg, hkName: MsgURLPath(trname)}
+	return h.handle()
+}
+
+func Unhandle(trname string) (err error) {
+	mu.Lock()
+	if h, ok := handlers[trname]; ok {
+		delete(handlers, trname)
+		hk.Unreg(h.hkName)
+	} else {
+		err = fmt.Errorf("transport endpoint %s is unknown", trname)
+	}
+	mu.Unlock()
+	return
+}
+
+////////////////////
+// stats and misc //
+////////////////////
+
+func ObjURLPath(trname string) string { return _urlPath(cmn.ObjStream, trname) }
+func MsgURLPath(trname string) string { return _urlPath(cmn.MsgStream, trname) }
+
+func _urlPath(endp, trname string) string {
+	if trname == "" {
+		return cmn.JoinWords(cmn.Version, endp)
+	}
+	return cmn.JoinWords(cmn.Version, endp, trname)
+}
+
+func GetStats() (netstats map[string]EndpointStats, err error) {
+	netstats = make(map[string]EndpointStats)
+	mu.Lock()
+	for trname, h := range handlers {
+		eps := make(EndpointStats)
+		f := func(key, value interface{}) bool {
+			out := &Stats{}
+			uid := key.(uint64)
+			in := value.(*Stats)
+			out.Num.Store(in.Num.Load())
+			out.Offset.Store(in.Offset.Load())
+			out.Size.Store(in.Size.Load())
+			eps[uid] = out
+			return true
+		}
+		h.sessions.Range(f)
+		netstats[trname] = eps
+	}
+	mu.Unlock()
 	return
 }
