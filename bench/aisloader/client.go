@@ -157,7 +157,7 @@ func newTraceCtx() *traceCtx {
 
 // PUT with HTTP trace
 func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum,
-	reader cmn.ReadOpenCloser) (httpLatencies, error) { // nolint:interfacer // we use `reader.Open` method
+	reader cmn.ReadOpenCloser) (httpLatencies, error) {
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   proxyURL,

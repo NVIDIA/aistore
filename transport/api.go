@@ -196,7 +196,6 @@ func NewMsgStream(client Client, toURL string) (s *MsgStream) {
 	return
 }
 
-// nolint:interfacer // TODO -- FIXME
 func (s *MsgStream) Send(msg *Msg) (err error) {
 	verbose := bool(glog.FastV(4, glog.SmoduleTransport))
 	if err = s.startSend(msg, verbose); err != nil {

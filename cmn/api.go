@@ -260,7 +260,6 @@ func (msg *SelectMsg) IsFlagSet(flags uint64) bool {
 	return msg.Flags&flags == flags
 }
 
-// nolint:interfacer // the bucket is expected
 func (msg *SelectMsg) ListObjectsCacheID(bck Bck) string {
 	return fmt.Sprintf("%s/%s", bck.String(), msg.Prefix)
 }
