@@ -151,7 +151,7 @@ func DivCeil(a, b int64) int64 {
 
 func DivRound(a, b int64) int64 { return (a + b/2) / b }
 
-// CailAlign returns smallest number bigger or equal to val, which is divisible by align
+// CeilAlign returns smallest number bigger or equal to val, which is divisible by align
 func CeilAlign(val, align uint) uint {
 	mod := val % align
 	if mod != 0 {

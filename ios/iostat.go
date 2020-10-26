@@ -311,12 +311,15 @@ func (ctx *IostatContext) refreshIostatCache() *ioStatCache {
 		}
 		// deltas
 		var (
-			ioms       = stat.IOMs() - statsCache.diskIOms[disk]
+			ioMs       = stat.IOMs() - statsCache.diskIOms[disk]
 			readBytes  = stat.ReadBytes() - statsCache.diskRBytes[disk]
 			writeBytes = stat.WriteBytes() - statsCache.diskWBytes[disk]
 		)
 		if elapsedMillis > 0 {
-			ncache.diskUtil[disk] = cmn.DivRound(ioms*100, elapsedMillis)
+			// NOTE: On macOS computation of `diskUtil` is not accurate and can
+			//  sometimes exceed 100% which may cause some further inaccuracies.
+			//  That is why we need to clamp the value.
+			ncache.diskUtil[disk] = cmn.MinI64(100, cmn.DivRound(ioMs*100, elapsedMillis))
 		} else {
 			ncache.diskUtil[disk] = statsCache.diskUtil[disk]
 		}
