@@ -278,7 +278,9 @@ func (m *Manager) cleanupStreams() error {
 
 	for _, streamBundle := range []*bundle.Streams{m.streams.shards} {
 		if streamBundle != nil {
-			streamBundle.Close(false)
+			// NOTE: We don't want stream to send a message at this point as the
+			//  receiver might have closed its corresponding stream.
+			streamBundle.Close(false /*gracefully*/)
 		}
 	}
 
@@ -294,7 +296,7 @@ func (m *Manager) cleanup() {
 	m.lock()
 	if m.state.cleaned != noCleanedState {
 		m.unlock()
-		return // do not clean if already scheduled
+		return // Do not clean if already scheduled.
 	}
 
 	m.dsorter.cleanup()
@@ -336,9 +338,10 @@ func (m *Manager) finalCleanup() {
 	for m.state.cleaned != initiallyCleanedState {
 		if m.state.cleaned == finallyCleanedState {
 			m.unlock()
-			return // do not clean if already cleaned
+			return // Do not clean if already cleaned.
 		} else if m.state.cleaned == noCleanedState {
-			m.state.cleanWait.Wait() // wait for wake up from `cleanup` or other `finalCleanup` method
+			// Wait for wake up from `cleanup` or other `finalCleanup` method.
+			m.state.cleanWait.Wait()
 		}
 	}
 
@@ -363,9 +366,10 @@ func (m *Manager) finalCleanup() {
 
 	m.finishedAck.m = nil
 
-	// Update clean state
+	// Update clean state.
 	m.state.cleaned = finallyCleanedState
-	m.state.cleanWait.Signal() // if there is another `finalCleanup` waiting it should be woken up to check the state and exit
+	// If there is another `finalCleanup` waiting it should be woken up to check the state and exit.
+	m.state.cleanWait.Signal()
 	m.unlock()
 
 	m.mg.persist(m.ManagerUUID)

@@ -268,7 +268,9 @@ func (ds *dsorterMem) cleanupStreams() error {
 
 	for _, streamBundle := range []*bundle.Streams{ds.streams.builder, ds.streams.records} {
 		if streamBundle != nil {
-			streamBundle.Close(!ds.m.aborted())
+			// NOTE: We don't want stream to send a message at this point as the
+			//  receiver might have closed its corresponding stream.
+			streamBundle.Close(false /*gracefully*/)
 		}
 	}
 	return nil
