@@ -6,6 +6,7 @@ package ais
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"path/filepath"
 	"strconv"
@@ -41,7 +42,10 @@ import (
 //
 //=====================================================================
 
-const smapFname = ".ais.smap" // Smap basename
+const (
+	smapFname    = ".ais.smap" // Smap basename
+	proxyIDFname = ".ais.proxy_id"
+)
 
 type (
 	smapX struct {
@@ -600,4 +604,21 @@ func (sls *smapLis) notify(ver int64) {
 	if sls.running.Load() {
 		sls.postCh <- ver
 	}
+}
+
+/////////
+// ... //
+/////////
+
+func writeProxyDID(config *cmn.Config, id string) error {
+	return ioutil.WriteFile(filepath.Join(config.Confdir, proxyIDFname), []byte(id), 0o644)
+}
+
+func readProxyDID(config *cmn.Config) (id string, err error) {
+	var b []byte
+	b, err = ioutil.ReadFile(filepath.Join(config.Confdir, proxyIDFname))
+	if err == nil {
+		id = string(b)
+	}
+	return
 }

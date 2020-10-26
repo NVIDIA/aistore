@@ -510,26 +510,29 @@ func (h *httprunner) initSI(daemonType string) {
 		Port: config.Net.L4.PortIntraData,
 	}
 
-	daemonID := initDaemonID(daemonType)
+	daemonID := initDaemonID(daemonType, config)
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
 	cmn.InitShortID(h.si.Digest())
 }
 
-func initDaemonID(daemonType string) string {
-	var (
-		config   = cmn.GCO.Get()
-		daemonID = os.Getenv("AIS_DAEMON_ID")
-	)
-
+func initDaemonID(daemonType string, config *cmn.Config) string {
+	daemonID := os.Getenv("AIS_DAEMON_ID")
+	// 1. assign
 	if daemonID != "" {
-		glog.Infof("daemonID = %q taken from env (%s)", daemonID, daemonType)
+		glog.Infof("%s[%q] from env", daemonType, daemonID)
 		return daemonID
 	}
-	if vmd := fs.ReadVMD(); vmd != nil {
-		glog.Infof("daemonID = %q taken from vmd (%s)", vmd.DaemonID, daemonType)
-		return vmd.DaemonID
+	if daemonType == cmn.Target {
+		if vmd := fs.ReadVMD(); vmd != nil {
+			glog.Infof("%s[%q] from VMD", daemonType, daemonID)
+			return vmd.DaemonID
+		}
+	} else if id, err := readProxyDID(config); id != "" {
+		return id
+	} else if err != nil && !os.IsNotExist(err) {
+		glog.Error(err)
 	}
-
+	// 2. generate
 	if config.TestingEnv() {
 		daemonID = cmn.RandStringStrong(4)
 		if daemonType == cmn.Target {
@@ -541,8 +544,13 @@ func initDaemonID(daemonType string) string {
 	} else {
 		daemonID = cmn.RandStringStrong(8)
 	}
-	if err := fs.CreateVMD(daemonID).Persist(); err != nil {
-		glog.Error(err)
+	// 3. persist
+	if daemonType == cmn.Target {
+		if err := fs.CreateVMD(daemonID).Persist(); err != nil {
+			glog.Fatalf("FATAL: %v", err)
+		}
+	} else if err := writeProxyDID(config, daemonID); err != nil {
+		glog.Fatalf("FATAL: %v", err)
 	}
 
 	cmn.Assert(daemonID != "")

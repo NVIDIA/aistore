@@ -305,6 +305,7 @@ func (bo *bmdOwnerTgt) init() {
 	bo._put(bmd)
 }
 
+// TODO -- FIXME: refactor as a single PASS, minimize syscalls
 func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	// NOTE: at this point we have 3 types of BMDs:
 	// - Fresh - `bmd` - the most recent BMD
@@ -313,9 +314,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	bo._put(bmd)
 
 	_ = fs.MovePersisted(bmdPrevious, bmdToRemove)
-	if cnt := fs.MovePersisted(fs.BmdPersistedFileName, bmdPrevious); cnt == 0 {
-		glog.Errorf("Failed to save any %q into %q", fs.BmdPersistedFileName, bmdPrevious)
-	}
+	_ = fs.MovePersisted(fs.BmdPersistedFileName, bmdPrevious)
 
 	// Fresh BMD becoming Persisted BMDs
 	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, bmd, bmdCopies, jsp.CCSign())
