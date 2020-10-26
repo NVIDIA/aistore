@@ -220,38 +220,6 @@ func init() {
 	}.Froze()
 }
 
-func RandString(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = LetterBytes[rand.Int63()%int64(len(LetterBytes))]
-	}
-	return string(b)
-}
-
-func RandStringWithSrc(src *rand.Rand, n int) string {
-	const (
-		letterIdxBits = 6                    // 6 bits to represent a letter index
-		letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-		letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-	)
-
-	b := make([]byte, n)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(LetterBytes) {
-			b[i] = LetterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-
-	return string(b)
-}
-
 func NewSimpleKVs(entries ...SimpleKVsEntry) SimpleKVs {
 	kvs := make(SimpleKVs, len(entries))
 	for _, entry := range entries {
