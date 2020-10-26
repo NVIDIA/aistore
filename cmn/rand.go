@@ -12,6 +12,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
+const letterRunes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 type cryptoRandSource struct{}
 
 var strongRandSource rand.Source = &cryptoRandSource{}
@@ -29,7 +31,7 @@ func (*cryptoRandSource) Seed(int64) {}
 func RandString(n int) string {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = LetterBytes[rand.Int63()%int64(len(LetterBytes))]
+		b[i] = letterRunes[rand.Int63()%int64(len(letterRunes))]
 	}
 	return string(b)
 }
@@ -47,8 +49,8 @@ func RandStringWithSrc(src rand.Source, n int) string {
 		if remain == 0 {
 			cache, remain = src.Int63(), letterIdxMax
 		}
-		if idx := int(cache & letterIdxMask); idx < len(LetterBytes) {
-			b[i] = LetterBytes[idx]
+		if idx := int(cache & letterIdxMask); idx < len(letterRunes) {
+			b[i] = letterRunes[idx]
 			i--
 		}
 		cache >>= letterIdxBits

@@ -84,7 +84,7 @@ func (m *ioContext) init() {
 		m.controlCh = make(chan struct{}, m.otherTasksToTrigger)
 	}
 	if m.bck.Name == "" {
-		m.bck.Name = tutils.GenRandomString(15)
+		m.bck.Name = cmn.RandString(15)
 	}
 	if m.bck.Provider == "" {
 		m.bck.Provider = cmn.ProviderAIS
@@ -639,7 +639,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	)
 
 	for i := 0; i < objCnt; i++ {
-		fileName := tutils.GenRandomString(20)
+		fileName := cmn.RandString(20)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// NOTE: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader.

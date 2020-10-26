@@ -60,7 +60,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 		proxyURL := tutils.GetPrimaryURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck = cmn.Bck{
-			Name:     tutils.GenRandomString(10),
+			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
 		fuseDir, err = ioutil.TempDir("/tmp", "")

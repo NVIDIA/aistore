@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -18,21 +19,13 @@ const (
 	objNameLength      = 5
 )
 
-var (
-	// predefined buckets
-	buckets = []string{
-		"test", "imagenet", "cifar", "secret", "something-t1-d1345",
-	}
-
-	letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-)
+// Predefined buckets.
+var buckets = []string{
+	"test", "imagenet", "cifar", "secret", "something-t1-d1345",
+}
 
 func randObjName(n int) []byte {
-	obj := buckets[rand.Intn(len(buckets))] + "/"
-	for i := 0; i < n; i++ {
-		obj += string(letterRunes[rand.Intn(len(letterRunes))])
-	}
-	return []byte(obj)
+	return []byte(buckets[rand.Intn(len(buckets))] + "/" + cmn.RandString(n))
 }
 
 func genKeys(keysNum int) [][]byte {

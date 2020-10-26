@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/xaction"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -133,7 +132,7 @@ func createAndAddMountpath(path string) {
 }
 
 func getRandomFileName(fileCounter int) string {
-	return fmt.Sprintf("%v-%v.txt", tutils.GenRandomString(13), fileCounter)
+	return fmt.Sprintf("%v-%v.txt", cmn.RandString(13), fileCounter)
 }
 
 func saveRandomFile(t cluster.Target, filename string, size int64) {

@@ -654,7 +654,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     tutils.GenRandomString(15),
+						Name:     cmn.RandString(15),
 						Provider: cmn.ProviderAIS,
 					},
 					tarballCnt:       1000,
@@ -745,7 +745,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     tutils.GenRandomString(15),
+						Name:     cmn.RandString(15),
 						Provider: cmn.ProviderAIS,
 					},
 					tarballCnt:       1000,
@@ -1831,7 +1831,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 					m:           m,
 					dsorterType: dsorterType,
 					outputBck: cmn.Bck{
-						Name:     tutils.GenRandomString(15),
+						Name:     cmn.RandString(15),
 						Provider: cmn.ProviderAIS,
 					},
 					tarballCnt:       100,

@@ -316,7 +316,7 @@ func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, n
 		objList  = make([]string, 0, numPuts)
 	)
 	for i := 0; i < numPuts; i++ {
-		fname := GenRandomString(fNameLen)
+		fname := cmn.RandString(fNameLen)
 		objList = append(objList, fname)
 	}
 	PutObjsFromList(proxyURL, bck, objPath, objSize, objList, errCh, objsPutCh, cksumType, fixedSize...)

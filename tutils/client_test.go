@@ -42,7 +42,7 @@ func TestPutSG(t *testing.T) {
 }
 
 func putFile(size int64, cksumType string) error {
-	fn := "ais-client-test-" + tutils.GenRandomString(32)
+	fn := "ais-client-test-" + cmn.RandString(32)
 	dir := "/tmp"
 	r, err := readers.NewFileReader(dir, fn, size, cksumType)
 	if err != nil {

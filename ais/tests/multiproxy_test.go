@@ -632,7 +632,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
 		}
-		fname := tutils.GenRandomString(20)
+		fname := cmn.RandString(20)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,
@@ -702,7 +702,7 @@ loop:
 			continue
 		}
 
-		fname := tutils.GenRandomString(20)
+		fname := cmn.RandString(20)
 		objName := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		putArgs := api.PutObjectArgs{
 			BaseParams: baseParams,

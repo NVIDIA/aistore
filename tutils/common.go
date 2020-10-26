@@ -7,7 +7,6 @@ package tutils
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -55,17 +54,6 @@ func LogfCond(cond bool, f string, a ...interface{}) {
 	}
 }
 
-// Generates strong random string or fallbacks to weak if error occurred
-// during generation.
-func GenRandomString(fnLen int) string {
-	bytes := make([]byte, fnLen)
-	rand.Read(bytes)
-	for i, b := range bytes {
-		bytes[i] = cmn.LetterBytes[b%byte(len(cmn.LetterBytes))]
-	}
-	return string(bytes)
-}
-
 // Generates an object name that hashes to a different target than `baseName`.
 func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bck, smap *cluster.Smap) string {
 	// Init digests - HrwTarget() requires it
@@ -87,7 +75,7 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bc
 func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (string, error) {
 	for i := 0; i < 100; i++ {
 		bck := cmn.Bck{
-			Name:     prefix + GenRandomString(8),
+			Name:     prefix + cmn.RandString(8),
 			Provider: cmn.ProviderAIS,
 		}
 		_, err := api.HeadBucket(baseParams, bck)
@@ -160,7 +148,7 @@ func PutRR(tb testing.TB, baseParams api.BaseParams, objSize int64, cksumType st
 	bck cmn.Bck, dir string, objCount int) []string {
 	objNames := make([]string, objCount)
 	for i := 0; i < objCount; i++ {
-		fname := GenRandomString(20)
+		fname := cmn.RandString(20)
 		objName := filepath.Join(dir, fname)
 		objNames[i] = objName
 		// FIXME: Separate RandReader per object created inside PutObjRR to workaround

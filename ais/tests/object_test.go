@@ -1274,7 +1274,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		)
 		tMock = cluster.NewTargetMock(bmdMock)
 		bck   = cmn.Bck{
-			Name:     tutils.GenRandomString(15),
+			Name:     cmn.RandString(15),
 			Provider: cmn.ProviderAIS,
 		}
 	)

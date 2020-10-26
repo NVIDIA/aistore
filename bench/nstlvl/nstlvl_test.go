@@ -145,10 +145,5 @@ func (bctx *benchContext) removeFiles() {
 }
 
 func (bctx *benchContext) randNestName() string {
-	var bytes [fileNameLen]byte
-	bctx.rnd.Read(bytes[:])
-	for i, b := range bytes {
-		bytes[i] = cmn.LetterBytes[b%byte(len(cmn.LetterBytes))]
-	}
-	return string(bytes[:])
+	return cmn.RandString(fileNameLen)
 }

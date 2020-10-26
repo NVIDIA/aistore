@@ -81,7 +81,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		outs []string
 
 		lastResult = ""
-		bucket     = GenRandomString(10)
+		bucket     = cmn.RandString(10)
 		space      = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
 		targetID   = randomTarget()
 

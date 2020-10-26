@@ -148,7 +148,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		prefix     = tutils.GenRandomString(32)
+		prefix     = cmn.RandString(32)
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})

@@ -31,7 +31,7 @@ type opRes struct {
 func generateRandomNames(fileCount int) {
 	fileNames = make([]string, fileCount)
 	for i := 0; i < fileCount; i++ {
-		fileNames[i] = tutils.GenRandomString(20)
+		fileNames[i] = cmn.RandString(20)
 	}
 }
 

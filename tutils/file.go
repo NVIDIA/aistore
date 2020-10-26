@@ -164,7 +164,7 @@ func GetFileInfosFromZipBuffer(buffer bytes.Buffer) ([]os.FileInfo, error) {
 func RandomObjDir(dirLen, maxDepth int) (dir string) {
 	depth := rand.Intn(maxDepth)
 	for i := 0; i < depth; i++ {
-		dir = filepath.Join(dir, GenRandomString(dirLen))
+		dir = filepath.Join(dir, cmn.RandString(dirLen))
 	}
 	return
 }

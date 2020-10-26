@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -191,7 +190,7 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 		}
 	}()
 
-	rnd := rand.New(rand.NewSource(0))
+	rnd := cmn.NowRand()
 	if _, err = io.CopyN(tmpFile, rnd, fileSize); err != nil {
 		glog.Errorf("Failed to write to file %s: %v", tmpFile.Name(), err)
 		return err
