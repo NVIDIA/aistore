@@ -542,7 +542,7 @@ func initDaemonID(daemonType string, config *cmn.Config) string {
 			daemonID = daemonID + "p" + config.Net.L4.PortStr
 		}
 	} else {
-		daemonID = cmn.RandStringStrong(8)
+		daemonID = cmn.GenDaemonID()
 	}
 	// 3. persist
 	if daemonType == cmn.Target {

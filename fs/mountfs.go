@@ -27,7 +27,8 @@ import (
 const (
 	uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
 
-	TrashDir = "$trash"
+	TrashDir     = "$trash"
+	mpathIDXAttr = "user.ais.mpath_id"
 )
 
 // globals
@@ -45,9 +46,11 @@ var (
 
 type (
 	MountpathInfo struct {
-		Path       string // Cleaned OrigPath
-		OrigPath   string // As entered by the user, must be used for logging / returning errors
-		Fsid       syscall.Fsid
+		ID       string // Unique ID associated with the mpath
+		Path     string // Cleaned OrigPath
+		OrigPath string // As entered by the user, must be used for logging / returning errors
+		Fsid     syscall.Fsid
+
 		FileSystem string
 		PathDigest uint64
 
@@ -108,6 +111,7 @@ type (
 
 func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *MountpathInfo {
 	mi := &MountpathInfo{
+		ID:         cmn.GenMpathID(),
 		Path:       cleanPath,
 		OrigPath:   origPath,
 		Fsid:       fsid,
@@ -425,7 +429,6 @@ func Add(mpath string) error {
 	}
 
 	mp := newMountpath(cleanMpath, mpath, statfs.Fsid, fs)
-
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
@@ -440,6 +443,9 @@ func Add(mpath string) error {
 	}
 
 	mfs.ios.AddMpath(mp.Path, mp.FileSystem)
+	if err := SetXattr(mp.Path, mpathIDXAttr, []byte(mp.ID)); err != nil {
+		return err
+	}
 
 	availablePaths[mp.Path] = mp
 	mfs.fsIDs[mp.Fsid] = cleanMpath
@@ -478,6 +484,9 @@ func Remove(mpath string) error {
 		return err
 	}
 
+	// Clear mpathID xattr if set
+	RemoveXattr(mpath, mpathIDXAttr)
+
 	availablePaths, disabledPaths := mountpathsCopy()
 	if mp, exists = availablePaths[cleanMpath]; !exists {
 		if mp, exists = disabledPaths[cleanMpath]; !exists {
@@ -494,6 +503,7 @@ func Remove(mpath string) error {
 	mfs.ios.RemoveMpath(cleanMpath)
 	delete(mfs.fsIDs, mp.Fsid)
 
+	go ClearMDOnMpath(mp) // clear AIS metadata
 	go mp.evictLomCache()
 
 	if l := len(availablePaths); l == 0 {
@@ -556,6 +566,8 @@ func Disable(mpath string) (disabled bool, err error) {
 			glog.Infof("disabled mountpath %s (%d remain(s) active)", mpathInfo, l)
 		}
 		go mpathInfo.evictLomCache()
+		go ClearMDOnMpath(mpathInfo) // clear AIS metadata
+
 		return true, nil
 	}
 	if _, ok := disabledPaths[cleanMpath]; ok {

@@ -39,6 +39,11 @@ func SetXattr(fqn, attrName string, data []byte) (err error) {
 	return unix.Setxattr(fqn, attrName, data, 0)
 }
 
+// RemoveXattr removes xattr
+func RemoveXattr(fqn, attrName string) (err error) {
+	return unix.Removexattr(fqn, attrName)
+}
+
 func CopyXattr(srcFQN, dstFQN, attrName string) error {
 	b, err := GetXattr(srcFQN, attrName)
 	if err != nil {

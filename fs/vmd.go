@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
-	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -24,22 +23,22 @@ const (
 
 type (
 	fsDeviceMD struct {
-		Device    syscall.Fsid `json:"device_id"`
-		MountPath string       `json:"mpath"`
-		FsType    string       `json:"fs_type"`
+		MpathID   string `json:"mpath_id"`
+		MountPath string `json:"mpath"`
+		FsType    string `json:"fs_type"`
 	}
 
 	// Short for VolumeMetaData.
 	VMD struct {
-		Disks    []*fsDeviceMD `json:"disks"`
+		Devices  []*fsDeviceMD `json:"devices"`
 		DaemonID string        `json:"daemon_id"`
-		Version  uint          `json:"version"`
+		Version  uint          `json:"version"` // formatting version for backward compatibility
 	}
 )
 
 func newVMD(expectedSize int) *VMD {
 	return &VMD{
-		Disks:   make([]*fsDeviceMD, expectedSize),
+		Devices: make([]*fsDeviceMD, expectedSize),
 		Version: vmdInitialVersion,
 	}
 }
@@ -53,8 +52,8 @@ func CreateVMD(daemonID string) *VMD {
 	vmd.DaemonID = daemonID
 
 	for _, mPath := range available {
-		vmd.Disks = append(vmd.Disks, &fsDeviceMD{
-			Device:    mPath.Fsid,
+		vmd.Devices = append(vmd.Devices, &fsDeviceMD{
+			MpathID:   mPath.ID,
 			MountPath: mPath.Path,
 			FsType:    mPath.FileSystem,
 		})

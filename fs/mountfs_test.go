@@ -286,19 +286,29 @@ func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
 
 func TestAddAndDisableMultipleMountpath(t *testing.T) {
 	fs.Init()
-	err := fs.Add("/tmp")
+	fs.DisableFsIDCheck()
+
+	mp1, mp2 := "/tmp/mp1", "/tmp/mp2"
+	cmn.CreateDir(mp1)
+	cmn.CreateDir(mp2)
+	defer func() {
+		os.Remove(mp2)
+		os.Remove(mp1)
+	}()
+
+	err := fs.Add(mp1)
 	if err != nil {
 		t.Error("adding existing mountpath failed")
 	}
 
-	err = fs.Add("/dev/null") // /dev/null has different fsid
+	err = fs.Add(mp2) // fsid check disabled
 	if err != nil {
-		t.Error("adding existing mountpath failed")
+		t.Fatalf("adding existing mountpath failed %v", err)
 	}
 
 	assertMountpathCount(t, 2, 0)
 
-	disabled, err := fs.Disable("/tmp")
+	disabled, err := fs.Disable(mp1)
 	tassert.CheckFatal(t, err)
 	if !disabled {
 		t.Error("disabling was not successful")

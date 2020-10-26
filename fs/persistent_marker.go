@@ -24,6 +24,9 @@ const (
 	VmdPersistedFileName = ".ais.vmd"
 )
 
+// List of AIS metadata files stored
+var mdFiles = []string{NodeRestartedMarker, RebalanceMarker, ResilverMarker, BmdPersistedFileName, VmdPersistedFileName}
+
 func MarkerExists(marker string) bool {
 	return len(FindPersisted(marker)) > 0
 }
@@ -83,6 +86,13 @@ func PersistOnMpaths(path string, what interface{}, atMost int, opts ...jsp.Opti
 	}
 
 	return
+}
+
+func ClearMDOnMpath(mpath *MountpathInfo) {
+	for _, path := range mdFiles {
+		fpath := filepath.Join(mpath.Path, path)
+		os.Remove(fpath)
+	}
 }
 
 func MovePersisted(oldPath, newPath string) (cnt int) {
