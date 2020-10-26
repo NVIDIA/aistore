@@ -714,8 +714,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 
 	// loopback if disk IO is disabled
 	if daemon.dryRun.disk {
-		rd := newDryReader(daemon.dryRun.size)
-		if _, err = io.Copy(goi.w, rd); err != nil {
+		if err = cmn.FloodWriter(goi.w, daemon.dryRun.size); err != nil {
 			err = fmt.Errorf("dry-run: failed to send random response, err: %v", err)
 			errCode = http.StatusInternalServerError
 			goi.t.statsT.Add(stats.ErrGetCount, 1)

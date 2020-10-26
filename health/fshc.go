@@ -190,8 +190,7 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 		}
 	}()
 
-	rnd := cmn.NowRand()
-	if _, err = io.CopyN(tmpFile, rnd, fileSize); err != nil {
+	if err = cmn.FloodWriter(tmpFile, fileSize); err != nil {
 		glog.Errorf("Failed to write to file %s: %v", tmpFile.Name(), err)
 		return err
 	}

@@ -109,13 +109,6 @@ func (r *nopReader) Read(b []byte) (int, error) {
 	return toRead, nil
 }
 
-// DrainReader reads and discards all the data from a reader.
-func DrainReader(r io.Reader) error {
-	// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
-	_, err := io.Copy(ioutil.Discard, r)
-	return err
-}
-
 ////////////////
 // ByteHandle //
 ////////////////
@@ -500,6 +493,19 @@ func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
 		return nil, err
 	}
 	return &hash.Cksum, nil
+}
+
+// DrainReader reads and discards all the data from a reader.
+func DrainReader(r io.Reader) error {
+	// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
+	_, err := io.Copy(ioutil.Discard, r)
+	return err
+}
+
+// FloodWriter writes `n` random bytes to provided writer.
+func FloodWriter(w io.Writer, n int64) error {
+	_, err := io.CopyN(w, NowRand(), n)
+	return err
 }
 
 func Close(closer io.Closer) {
