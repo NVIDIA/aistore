@@ -531,22 +531,16 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 
 		switch req.RecordObj.StoreType {
 		case extract.OffsetStoreType:
-			f, err := cmn.NewFileHandle(fullContentPath)
-			if err != nil {
-				errHandler(err, respHdr, fromNode)
-				return
-			}
 			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			r, err := cmn.NewFileSectionHandle(f, req.RecordObj.Offset-req.RecordObj.MetadataSize,
+			r, err := cmn.NewFileSectionHandle(fullContentPath, req.RecordObj.Offset-req.RecordObj.MetadataSize,
 				respHdr.ObjAttrs.Size, 0)
 			if err != nil {
-				cmn.Close(f)
 				errHandler(err, respHdr, fromNode)
 				return
 			}
 			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
-				cmn.Close(f)
+				cmn.Close(r)
 				ds.m.abort(err)
 			}
 		case extract.SGLStoreType:

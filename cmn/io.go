@@ -48,15 +48,21 @@ type (
 		*os.File
 		fqn string
 	}
-	// FileSectionHandle is a slice of already opened file with optional padding
-	// that implements ReadOpenCloser interface
-	FileSectionHandle struct {
+	// SectionHandle is a section of reader with optional padding that implements
+	// ReadOpenCloser interface.
+	SectionHandle struct {
 		r         io.ReaderAt
 		s         *io.SectionReader
 		offset    int64 // slice start
 		size      int64 // slice length
 		padding   int64 // padding size
 		padOffset int64 // offset inside padding when reading a file
+	}
+	// FileSectionHandle opens a file and reads a section of it with optional
+	// padding. It implements the ReadOpenCloser interface.
+	FileSectionHandle struct {
+		fh  *FileHandle
+		sec *SectionHandle
 	}
 	// ByteHandle is a byte buffer(made from []byte) that implements
 	// ReadOpenCloser interface
@@ -82,6 +88,7 @@ var (
 	_ io.Reader      = &nopReader{}
 	_ ReadOpenCloser = &FileHandle{}
 	_ ReadSizer      = &SizedReader{}
+	_ ReadOpenCloser = &SectionHandle{}
 	_ ReadOpenCloser = &FileSectionHandle{}
 	_ ReadOpenCloser = &nopOpener{}
 	_ ReadOpenCloser = &ByteHandle{}
@@ -209,23 +216,22 @@ func (r *CallbackRC) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-///////////////////////
-// FileSectionHandle //
-///////////////////////
+///////////////////
+// SectionHandle //
+///////////////////
 
-func NewFileSectionHandle(r io.ReaderAt, offset, size, padding int64) (*FileSectionHandle, error) {
+func NewSectionHandle(r io.ReaderAt, offset, size, padding int64) *SectionHandle {
 	sec := io.NewSectionReader(r, offset, size)
-	return &FileSectionHandle{r, sec, offset, size, padding, 0}, nil
+	return &SectionHandle{r, sec, offset, size, padding, 0}
 }
 
-func (f *FileSectionHandle) Open() (io.ReadCloser, error) {
-	sec := io.NewSectionReader(f.r, f.offset, f.size)
-	return &FileSectionHandle{f.r, sec, f.offset, f.size, f.padding, 0}, nil
+func (f *SectionHandle) Open() (io.ReadCloser, error) {
+	return NewSectionHandle(f.r, f.offset, f.size, f.padding), nil
 }
 
-// Reads a file slice. When the slice finishes but the buffer is not filled yet,
-// act as if it reads a few more bytes from somewhere
-func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {
+// Reads a reader section. When the slice finishes but the buffer is not filled
+// yet, act as if it reads a few more bytes from somewhere.
+func (f *SectionHandle) Read(buf []byte) (n int, err error) {
 	var fromPad int64
 
 	// if it is still reading a file from disk - just continue reading
@@ -260,7 +266,29 @@ func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {
 	return n, io.EOF
 }
 
-func (f *FileSectionHandle) Close() error { return nil }
+func (f *SectionHandle) Close() error { return nil }
+
+///////////////////////
+// FileSectionHandle //
+///////////////////////
+
+// NewFileSectionHandle opens file which is expected at `fqn` and defines
+// a SectionHandle on it to only read a specified section.
+func NewFileSectionHandle(fqn string, offset, size, padding int64) (*FileSectionHandle, error) {
+	fh, err := NewFileHandle(fqn)
+	if err != nil {
+		return nil, err
+	}
+	sec := NewSectionHandle(fh, offset, size, padding)
+	return &FileSectionHandle{fh: fh, sec: sec}, nil
+}
+
+func (f *FileSectionHandle) Open() (io.ReadCloser, error) {
+	return NewFileSectionHandle(f.fh.fqn, f.sec.offset, f.sec.size, f.sec.padding)
+}
+
+func (f *FileSectionHandle) Read(buf []byte) (int, error) { return f.sec.Read(buf) }
+func (f *FileSectionHandle) Close() error                 { return f.fh.Close() }
 
 /////////////////
 // WriterMulti //

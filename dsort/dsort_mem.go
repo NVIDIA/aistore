@@ -497,6 +497,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		defer ds.m.decrementRef(1)
 	}
 
+	// NOTE: `send` handles closing `r`.
 	send := func(r cmn.ReadOpenCloser) (err error) {
 		if local {
 			err = ds.creationPhase.connector.connectReader(rec.MakeUniqueName(obj), r, hdr.ObjAttrs.Size)
@@ -507,9 +508,12 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 				ds.m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
 				ds.m.Metrics.Creation.Unlock()
 			}
+			cmn.Close(r)
 		} else {
 			o := &transport.Obj{Hdr: hdr, Callback: ds.m.sentCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
-			err = ds.streams.records.Send(o, r, toNode)
+			if err = ds.streams.records.Send(o, r, toNode); err != nil {
+				cmn.Close(r)
+			}
 		}
 		return
 	}
@@ -523,18 +527,12 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 
 	switch obj.StoreType {
 	case extract.OffsetStoreType:
-		f, err := cmn.NewFileHandle(fullContentPath)
-		if err != nil {
-			return err
-		}
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
-		r, err := cmn.NewFileSectionHandle(f, obj.Offset-obj.MetadataSize, hdr.ObjAttrs.Size, 0)
+		r, err := cmn.NewFileSectionHandle(fullContentPath, obj.Offset-obj.MetadataSize, hdr.ObjAttrs.Size, 0)
 		if err != nil {
-			cmn.Close(f)
 			return err
 		}
 		if err := send(r); err != nil {
-			cmn.Close(f)
 			return err
 		}
 	case extract.DiskStoreType:
@@ -549,7 +547,6 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		}
 		hdr.ObjAttrs.Size = fi.Size()
 		if err := send(f); err != nil {
-			cmn.Close(f)
 			return err
 		}
 	default:

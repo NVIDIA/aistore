@@ -362,17 +362,13 @@ func initializeSlices(lom *cluster.LOM, dataSlices, paritySlices int) (*encodeCt
 		var (
 			reader     cmn.ReadOpenCloser
 			cksmReader cmn.ReadOpenCloser
-			err        error
 		)
 		if sizeLeft < ctx.sliceSize {
-			reader, err = cmn.NewFileSectionHandle(ctx.fh, int64(i)*ctx.sliceSize, sizeLeft, padSize)
-			cksmReader, _ = cmn.NewFileSectionHandle(ctx.fh, int64(i)*ctx.sliceSize, sizeLeft, padSize)
+			reader = cmn.NewSectionHandle(ctx.fh, int64(i)*ctx.sliceSize, sizeLeft, padSize)
+			cksmReader = cmn.NewSectionHandle(ctx.fh, int64(i)*ctx.sliceSize, sizeLeft, padSize)
 		} else {
-			reader, err = cmn.NewFileSectionHandle(ctx.fh, int64(i)*ctx.sliceSize, ctx.sliceSize, 0)
-			cksmReader, _ = cmn.NewFileSectionHandle(ctx.fh, int64(i)*ctx.sliceSize, ctx.sliceSize, 0)
-		}
-		if err != nil {
-			return ctx, err
+			reader = cmn.NewSectionHandle(ctx.fh, int64(i)*ctx.sliceSize, ctx.sliceSize, 0)
+			cksmReader = cmn.NewSectionHandle(ctx.fh, int64(i)*ctx.sliceSize, ctx.sliceSize, 0)
 		}
 		ctx.slices[i] = &slice{obj: ctx.fh, reader: reader}
 		ctx.readers[i] = reader
@@ -538,7 +534,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 				_, err = r.Seek(0, io.SeekStart)
 			case *memsys.Reader:
 				_, err = r.Seek(0, io.SeekStart)
-			case *cmn.FileSectionHandle:
+			case *cmn.SectionHandle:
 				rc, err = r.Open()
 				if err == nil {
 					reader = rc.(cmn.ReadOpenCloser)
