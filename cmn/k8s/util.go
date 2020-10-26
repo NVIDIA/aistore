@@ -7,6 +7,7 @@ package k8s
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -53,4 +54,8 @@ func Detect() error {
 		return fmt.Errorf("operation requires Kubernetes deployment")
 	}
 	return nil
+}
+
+func CleanName(name string) string {
+	return strings.ReplaceAll(strings.ToLower(name), "_", "-")
 }

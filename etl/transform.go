@@ -195,7 +195,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	originalPodName = pod.GetName()
 
 	// Override the name (add target's daemon ID and node ID to its name).
-	pod.SetName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + k8s.NodeName)
+	pod.SetName(k8s.CleanName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + k8s.NodeName))
 	errCtx.PodName = pod.GetName()
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string, 1)

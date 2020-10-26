@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl/runtime"
 )
 
@@ -20,7 +21,7 @@ func Build(t cluster.Target, msg BuildMsg) error {
 	var (
 		// We clean up the `msg.ID` as K8s doesn't allow `_` and uppercase
 		// letters in the names.
-		name    = "etl-" + strings.ReplaceAll(strings.ToLower(msg.ID), "_", "-")
+		name    = k8s.CleanName("etl-" + msg.ID)
 		podSpec = r.PodSpec()
 	)
 
