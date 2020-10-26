@@ -15,18 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-func assertMountpathCount(t *testing.T, availableCount, disabledCount int) {
-	availableMountpaths, disabledMountpaths := fs.Get()
-	if len(availableMountpaths) != availableCount ||
-		len(disabledMountpaths) != disabledCount {
-		t.Errorf(
-			"wrong mountpaths: %d/%d, %d/%d",
-			len(availableMountpaths), availableCount,
-			len(disabledMountpaths), disabledCount,
-		)
-	}
-}
-
 func TestAddNonExistingMountpath(t *testing.T) {
 	fs.Init()
 	err := fs.Add("/nonexistingpath")
@@ -34,7 +22,7 @@ func TestAddNonExistingMountpath(t *testing.T) {
 		t.Error("adding non-existing mountpath succeeded")
 	}
 
-	assertMountpathCount(t, 0, 0)
+	tutils.AssertMountpathCount(t, 0, 0)
 }
 
 func TestAddValidMountpaths(t *testing.T) {
@@ -52,14 +40,14 @@ func TestAddValidMountpaths(t *testing.T) {
 			t.Errorf("adding valid mountpath %q failed", mpath)
 		}
 	}
-	assertMountpathCount(t, 3, 0)
+	tutils.AssertMountpathCount(t, 3, 0)
 
 	for _, mpath := range mpaths {
 		if err := fs.Remove(mpath); err != nil {
 			t.Errorf("removing valid mountpath %q failed", mpath)
 		}
 	}
-	assertMountpathCount(t, 0, 0)
+	tutils.AssertMountpathCount(t, 0, 0)
 }
 
 func TestAddExistingMountpath(t *testing.T) {
@@ -69,7 +57,7 @@ func TestAddExistingMountpath(t *testing.T) {
 		t.Error("adding existing mountpath failed")
 	}
 
-	assertMountpathCount(t, 1, 0)
+	tutils.AssertMountpathCount(t, 1, 0)
 }
 
 func TestAddIncorrectMountpath(t *testing.T) {
@@ -79,7 +67,7 @@ func TestAddIncorrectMountpath(t *testing.T) {
 		t.Error("expected adding incorrect mountpath to fail")
 	}
 
-	assertMountpathCount(t, 0, 0)
+	tutils.AssertMountpathCount(t, 0, 0)
 }
 
 func TestAddAlreadyAddedMountpath(t *testing.T) {
@@ -89,14 +77,14 @@ func TestAddAlreadyAddedMountpath(t *testing.T) {
 		t.Error("adding existing mountpath failed")
 	}
 
-	assertMountpathCount(t, 1, 0)
+	tutils.AssertMountpathCount(t, 1, 0)
 
 	err = fs.Add("/tmp")
 	if err == nil {
 		t.Error("adding already added mountpath succeeded")
 	}
 
-	assertMountpathCount(t, 1, 0)
+	tutils.AssertMountpathCount(t, 1, 0)
 }
 
 func TestRemoveNonExistingMountpath(t *testing.T) {
@@ -106,7 +94,7 @@ func TestRemoveNonExistingMountpath(t *testing.T) {
 		t.Error("removing non-existing mountpath succeeded")
 	}
 
-	assertMountpathCount(t, 0, 0)
+	tutils.AssertMountpathCount(t, 0, 0)
 }
 
 func TestRemoveExistingMountpath(t *testing.T) {
@@ -121,7 +109,7 @@ func TestRemoveExistingMountpath(t *testing.T) {
 		t.Error("removing existing mountpath failed")
 	}
 
-	assertMountpathCount(t, 0, 0)
+	tutils.AssertMountpathCount(t, 0, 0)
 }
 
 func TestRemoveDisabledMountpath(t *testing.T) {
@@ -132,14 +120,14 @@ func TestRemoveDisabledMountpath(t *testing.T) {
 	}
 
 	fs.Disable("/tmp")
-	assertMountpathCount(t, 0, 1)
+	tutils.AssertMountpathCount(t, 0, 1)
 
 	err = fs.Remove("/tmp")
 	if err != nil {
 		t.Error("removing existing mountpath failed")
 	}
 
-	assertMountpathCount(t, 0, 0)
+	tutils.AssertMountpathCount(t, 0, 0)
 }
 
 func TestDisableNonExistingMountpath(t *testing.T) {
@@ -150,7 +138,7 @@ func TestDisableNonExistingMountpath(t *testing.T) {
 		t.Error("disabling non existing mountpath should not be successful")
 	}
 
-	assertMountpathCount(t, 0, 0)
+	tutils.AssertMountpathCount(t, 0, 0)
 }
 
 func TestDisableExistingMountpath(t *testing.T) {
@@ -166,7 +154,7 @@ func TestDisableExistingMountpath(t *testing.T) {
 		t.Error("disabling was not successful")
 	}
 
-	assertMountpathCount(t, 0, 1)
+	tutils.AssertMountpathCount(t, 0, 1)
 }
 
 func TestDisableAlreadyDisabledMountpath(t *testing.T) {
@@ -188,7 +176,7 @@ func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 		t.Error("already disabled mountpath should not be disabled again")
 	}
 
-	assertMountpathCount(t, 0, 1)
+	tutils.AssertMountpathCount(t, 0, 1)
 }
 
 func TestEnableNonExistingMountpath(t *testing.T) {
@@ -198,7 +186,7 @@ func TestEnableNonExistingMountpath(t *testing.T) {
 		t.Error("enabling nonexisting mountpath should not end with error")
 	}
 
-	assertMountpathCount(t, 0, 0)
+	tutils.AssertMountpathCount(t, 0, 0)
 }
 
 func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
@@ -214,7 +202,7 @@ func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 		t.Error("already enabled mountpath should not be enabled again")
 	}
 
-	assertMountpathCount(t, 1, 0)
+	tutils.AssertMountpathCount(t, 1, 0)
 }
 
 func TestEnableExistingAndDisabledMountpath(t *testing.T) {
@@ -236,7 +224,7 @@ func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 		t.Error("enabling was not successful")
 	}
 
-	assertMountpathCount(t, 1, 0)
+	tutils.AssertMountpathCount(t, 1, 0)
 }
 
 func TestEnableAlreadyEnabledMountpath(t *testing.T) {
@@ -252,7 +240,7 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 		t.Error("disabling was not successful")
 	}
 
-	assertMountpathCount(t, 0, 1)
+	tutils.AssertMountpathCount(t, 0, 1)
 
 	enabled, err := fs.Enable("/tmp")
 	tassert.CheckFatal(t, err)
@@ -266,7 +254,7 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 		t.Error("enabling already enabled mountpath should not be successful")
 	}
 
-	assertMountpathCount(t, 1, 0)
+	tutils.AssertMountpathCount(t, 1, 0)
 }
 
 func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
@@ -281,7 +269,7 @@ func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
 		t.Error("adding path with same FSID was successful")
 	}
 
-	assertMountpathCount(t, 1, 0)
+	tutils.AssertMountpathCount(t, 1, 0)
 }
 
 func TestAddAndDisableMultipleMountpath(t *testing.T) {
@@ -306,7 +294,7 @@ func TestAddAndDisableMultipleMountpath(t *testing.T) {
 		t.Fatalf("adding existing mountpath failed %v", err)
 	}
 
-	assertMountpathCount(t, 2, 0)
+	tutils.AssertMountpathCount(t, 2, 0)
 
 	disabled, err := fs.Disable(mp1)
 	tassert.CheckFatal(t, err)
@@ -314,7 +302,7 @@ func TestAddAndDisableMultipleMountpath(t *testing.T) {
 		t.Error("disabling was not successful")
 	}
 
-	assertMountpathCount(t, 1, 1)
+	tutils.AssertMountpathCount(t, 1, 1)
 }
 
 func TestMoveToTrash(t *testing.T) {

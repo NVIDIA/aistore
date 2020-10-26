@@ -38,7 +38,7 @@ type (
 
 func newVMD(expectedSize int) *VMD {
 	return &VMD{
-		Devices: make([]*fsDeviceMD, expectedSize),
+		Devices: make([]*fsDeviceMD, 0, expectedSize),
 		Version: vmdInitialVersion,
 	}
 }

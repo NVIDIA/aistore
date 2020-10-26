@@ -231,7 +231,7 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 	return topDirName, fileNames
 }
 
-func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
+func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	var (
 		buf  = make([]byte, desc.ObjectSize)
 		fqns = make(map[string][]string, len(desc.CTs))
@@ -255,8 +255,6 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
 	_ = fs.CSM.RegisterContentType(ec.SliceType, &ec.SliceSpec{})
 	_ = fs.CSM.RegisterContentType(ec.MetaType, &ec.MetaSpec{})
 
-	cluster.InitTarget()
-
 	dir, err := ioutil.TempDir("/tmp", "")
 	tassert.CheckFatal(t, err)
 
@@ -266,6 +264,12 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
 		err = fs.Add(mpath)
 		tassert.CheckFatal(t, err)
 	}
+
+	if len(desc.CTs) == 0 {
+		return nil
+	}
+
+	cluster.InitTarget()
 
 	errs := fs.CreateBuckets("testing", bck)
 	if len(errs) > 0 {
@@ -303,11 +307,40 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) ObjectsOut {
 		}
 	}
 
-	return ObjectsOut{
+	return &ObjectsOut{
 		Dir:  dir,
 		T:    tMock,
 		Bck:  bck,
 		FQNs: fqns,
+	}
+}
+
+func PrepareMountPaths(t *testing.T, cnt int) fs.MPI {
+	PrepareObjects(t, ObjectsDesc{
+		MountpathsCnt: cnt,
+	})
+
+	AssertMountpathCount(t, cnt, 0)
+	available, _ := fs.Get()
+	return available
+}
+
+func RemoveMountPaths(t *testing.T, mpaths fs.MPI) {
+	for _, mpath := range mpaths {
+		tassert.CheckError(t, fs.Remove(mpath.Path))
+		tassert.CheckError(t, os.RemoveAll(mpath.Path))
+	}
+}
+
+func AssertMountpathCount(t *testing.T, availableCount, disabledCount int) {
+	availableMountpaths, disabledMountpaths := fs.Get()
+	if len(availableMountpaths) != availableCount ||
+		len(disabledMountpaths) != disabledCount {
+		t.Errorf(
+			"wrong mountpaths: %d/%d, %d/%d",
+			len(availableMountpaths), availableCount,
+			len(disabledMountpaths), disabledCount,
+		)
 	}
 }
 
