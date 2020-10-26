@@ -41,6 +41,7 @@ linters:
     #
     # Following linters are not really helpful:
     # - exhaustive
+    # - interfacer
     # - nlreturn
     # - testpackage
 
