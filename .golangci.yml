@@ -22,6 +22,8 @@ linters:
     - misspell
     - nolintlint
     - prealloc
+    - rowserrcheck
+    - sqlclosecheck
     - staticcheck
     - typecheck
     - unconvert
@@ -33,6 +35,8 @@ linters:
     # See: https://golangci-lint.run/usage/linters/
     #
     # Following linters produce false positives (enable only when needed):
+    # - goconst
+    # - godot
     # - goerr113
     # - gosec
     # - nestif
@@ -43,7 +47,10 @@ linters:
     # - exhaustive
     # - interfacer
     # - nlreturn
+    # - noctx
     # - testpackage
+    # - tparallel
+    # - wrapcheck
 
 linters-settings:
   govet:
