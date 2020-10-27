@@ -75,9 +75,8 @@ type (
 	ObjSentCB func(ObjHdr, io.ReadCloser, unsafe.Pointer, error)
 
 	Msg struct {
-		Flags       int64
-		RecvHandler string
-		Body        []byte
+		Flags int64
+		Body  []byte
 	}
 
 	// stream collector
@@ -103,12 +102,9 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 			s.initCompression(extra)
 		}
 	}
-
-	// burst size: the number of objects the caller is permitted to post for sending
-	// without experiencing any sort of back-pressure
-	burst := burst()
-	s.workCh = make(chan *Obj, burst) // Send Qeueue or SQ
-	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue or SCQ
+	burst := burst()                  // num objects the caller can post without blocking
+	s.workCh = make(chan *Obj, burst) // Send Qeueue (SQ)
+	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue (SCQ)
 
 	s.wg.Add(2)
 	go s.sendLoop(s, dryrun()) // handle SQ
@@ -138,14 +134,13 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 //   network errors that may cause sudden and instant termination of the underlying
 //   stream(s).
 func (s *Stream) Send(obj *Obj) (err error) {
-	verbose := bool(glog.FastV(4, glog.SmoduleTransport))
-	if err = s.startSend(obj, verbose); err != nil {
+	if err = s.startSend(obj); err != nil {
 		return
 	}
 	if obj.Reader == nil {
 		debug.Assert(obj.IsHeaderOnly())
 	} else if obj.IsHeaderOnly() {
-		cmn.Assert(false) // expecting nil reader; TODO: debug
+		debug.AssertMsg(false, obj.String()) // expecting nil reader
 	}
 	s.workCh <- obj
 	if verbose {
@@ -165,10 +160,7 @@ func (s *Stream) Fin() {
 
 func NewMsgStream(client Client, toURL string) (s *MsgStream) {
 	s = &MsgStream{streamBase: *newStreamBase(client, toURL, nil)}
-
-	// burst size: the number of objects the caller is permitted to post for sending
-	// without experiencing any sort of back-pressure
-	burst := burst()
+	burst := burst()                  // num messages the caller can post without blocking
 	s.workCh = make(chan *Msg, burst) // Send Qeueue or SQ
 
 	s.wg.Add(1)
@@ -179,8 +171,7 @@ func NewMsgStream(client Client, toURL string) (s *MsgStream) {
 }
 
 func (s *MsgStream) Send(msg *Msg) (err error) {
-	verbose := bool(glog.FastV(4, glog.SmoduleTransport))
-	if err = s.startSend(msg, verbose); err != nil {
+	if err = s.startSend(msg); err != nil {
 		return
 	}
 	s.workCh <- msg

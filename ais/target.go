@@ -355,7 +355,7 @@ func (t *targetrunner) initRecvHandlers() {
 		{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
 		{
-			r: cmn.ObjStream, h: transport.RxObjStream,
+			r: cmn.ObjStream, h: transport.RxAnyStream,
 			net: []string{cmn.NetworkPublic, cmn.NetworkIntraData, cmn.NetworkIntraControl},
 		},
 		{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},

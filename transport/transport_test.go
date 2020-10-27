@@ -62,7 +62,8 @@ ut et voluptates repudiandae sint et molestiae non-recusandae.`
 )
 
 var (
-	tmux     *mux.ServeMux
+	objmux   *mux.ServeMux
+	msgmux   *mux.ServeMux
 	MMSA     *memsys.MMSA
 	duration time.Duration // test duration
 )
@@ -83,10 +84,15 @@ func TestMain(t *testing.M) {
 	sc.SetRunName("stream-collector")
 	go sc.Run()
 
-	tmux = mux.NewServeMux()
+	objmux = mux.NewServeMux()
 	path := transport.ObjURLPath("")
-	tmux.HandleFunc(path, transport.RxObjStream)
-	tmux.HandleFunc(path+"/", transport.RxObjStream)
+	objmux.HandleFunc(path, transport.RxAnyStream)
+	objmux.HandleFunc(path+"/", transport.RxAnyStream)
+
+	msgmux = mux.NewServeMux()
+	path = transport.MsgURLPath("")
+	msgmux.HandleFunc(path, transport.RxAnyStream)
+	msgmux.HandleFunc(path+"/", transport.RxAnyStream)
 
 	os.Exit(t.Run())
 }
@@ -193,7 +199,7 @@ func Example_obj() {
 		}
 		fmt.Printf("%s...\n", string(object[:16]))
 	}
-	ts := httptest.NewServer(tmux)
+	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 	trname := "dummy-obj"
 	err := transport.HandleObjStream(trname, receive)
@@ -219,10 +225,7 @@ func Example_msg() {
 		fmt.Printf("%s...\n", string(msg.Body[:16]))
 	}
 
-	if true { // TODO -- FIXME
-		return
-	}
-	ts := httptest.NewServer(tmux)
+	ts := httptest.NewServer(msgmux)
 	defer ts.Close()
 
 	trname := "dummy-msg"
@@ -239,12 +242,21 @@ func Example_msg() {
 	stream.Send(&transport.Msg{Body: []byte(duis)})
 	stream.Send(&transport.Msg{Body: []byte(et)})
 	stream.Send(&transport.Msg{Body: []byte(temporibus)})
-	stream.Fin()
+
+	// TODO -- FIXME: Fin() instead of these two
+	time.Sleep(time.Second)
+	stream.Stop()
+
+	// Output:
+	// Lorem ipsum dolo...
+	// Duis aute irure ...
+	// Et harum quidem ...
+	// Temporibus autem...
 }
 
 // test random streaming
 func Test_OneStream(t *testing.T) {
-	ts := httptest.NewServer(tmux)
+	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
 	if mono.NanoTime()%2 == 1 {
@@ -259,7 +271,7 @@ func Test_MultiStream(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	tutils.Logf("Duration %v\n", duration)
-	ts := httptest.NewServer(tmux)
+	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
 	wg := &sync.WaitGroup{}
@@ -314,7 +326,7 @@ func Test_MultipleNetworks(t *testing.T) {
 
 	streams := make([]*transport.Stream, 0, 10)
 	for idx := 0; idx < 10; idx++ {
-		ts := httptest.NewServer(tmux)
+		ts := httptest.NewServer(objmux)
 		defer ts.Close()
 		trname := "endpoint" + strconv.Itoa(idx)
 		err := transport.HandleObjStream(trname, recvFunc)
@@ -349,7 +361,7 @@ func Test_OnSendCallback(t *testing.T) {
 		objectCnt = 1000
 	}
 
-	ts := httptest.NewServer(tmux)
+	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
 	totalRecv, recvFunc := makeRecvFunc(t)
@@ -412,7 +424,7 @@ func Test_ObjAttrs(t *testing.T) {
 		},
 	}
 
-	ts := httptest.NewServer(tmux)
+	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
 	var receivedCount atomic.Int64

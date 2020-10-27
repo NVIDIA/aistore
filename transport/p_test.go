@@ -46,7 +46,7 @@ func Test_CompressedOne(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	ts := httptest.NewServer(tmux)
+	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
 	err := transport.HandleObjStream(trname, receive10G, memsys.DefaultPageMM() /* optionally, specify memsys*/)
@@ -149,7 +149,7 @@ func Test_CompletionCount(t *testing.T) {
 		numCompleted.Inc()
 	}
 
-	ts := httptest.NewServer(tmux)
+	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
 	trname := "cmpl-cnt"

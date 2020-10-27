@@ -72,21 +72,22 @@ const (
 var (
 	mu       *sync.RWMutex
 	handlers map[string]*handler // by trname
+	verbose  bool
 )
 
 func init() {
 	mu = &sync.RWMutex{}
 	handlers = make(map[string]*handler, 16)
+	verbose = bool(glog.FastV(4, glog.SmoduleTransport))
 }
 
 // main Rx objects
-func RxObjStream(w http.ResponseWriter, r *http.Request) {
+func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	var (
 		reader    io.Reader = r.Body
 		lz4Reader *lz4.Reader
 		fbuf      *fixedBuffer
 		trname    = path.Base(r.URL.Path)
-		verbose   = bool(glog.FastV(4, glog.SmoduleTransport))
 	)
 	mu.RLock()
 	h, ok := handlers[trname]
@@ -123,36 +124,50 @@ func RxObjStream(w http.ResponseWriter, r *http.Request) {
 	// Rx loop
 	it := &iterator{trname: trname, body: reader, fbuf: fbuf, headerBuf: make([]byte, maxHeaderSize)}
 	for {
-		objReader, msg, hl64, err := it.next()
-		_ = msg // TODO -- FIXME
-
-		if hl64 != 0 {
-			_ = stats.Offset.Add(hl64)
+		var (
+			obj *objReader
+			msg Msg
+		)
+		hlen, isObj, err := it.nextProtoHdr()
+		if err != nil {
+			goto rerr
 		}
-		if objReader != nil {
+		_ = stats.Offset.Add(int64(hlen + cmn.SizeofI64*2)) // to account for proto header
+		if isObj {
+			obj, err = it.nextObj(hlen)
 			er := err
 			if er == io.EOF {
 				er = nil
 			}
-			h.rxObj(w, objReader.hdr, objReader, er)
-			hdr := &objReader.hdr
-			if hdr.ObjAttrs.Size == objReader.off {
-				var (
-					num = stats.Num.Inc()
-					siz = stats.Size.Add(hdr.ObjAttrs.Size)
-					off = stats.Offset.Add(hdr.ObjAttrs.Size)
-				)
-				if verbose {
-					xxh, _ := UID2SessID(uid)
-					glog.Infof("%s[%d:%d]: off=%d, size=%d(%d), num=%d - %s/%s",
-						trname, xxh, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Bck, hdr.ObjName)
+			if obj != nil {
+				h.rxObj(w, obj.hdr, obj, er)
+				hdr := &obj.hdr
+				if hdr.ObjAttrs.Size == obj.off {
+					var (
+						num = stats.Num.Inc()
+						_   = stats.Size.Add(hdr.ObjAttrs.Size)
+						off = stats.Offset.Add(hdr.ObjAttrs.Size)
+					)
+					if verbose {
+						xxh, _ := UID2SessID(uid)
+						glog.Infof("%s[%d:%d] %s, num %d, off %d", trname, xxh, sessID, obj, num, off)
+					}
+					continue
 				}
-				continue
+				xxh, _ := UID2SessID(uid)
+				num := stats.Num.Load()
+				err = fmt.Errorf("%s[%d:%d]: %v, num %d, off %d != %s",
+					trname, xxh, sessID, err, num, obj.off, obj)
 			}
-			xxh, _ := UID2SessID(uid)
-			err = fmt.Errorf("%s[%d:%d]: sbrk #3: err %v, off %d != %d size, num=%d, %s/%s",
-				trname, xxh, sessID, err, objReader.off, hdr.ObjAttrs.Size, stats.Num.Load(), hdr.Bck, hdr.ObjName)
+		} else {
+			msg, err = it.nextMsg(hlen)
+			er := err
+			if er == io.EOF {
+				er = nil
+			}
+			h.rxMsg(w, msg, er)
 		}
+	rerr:
 		if err != nil {
 			h.oldSessions.Store(uid, time.Now())
 			if err != io.EOF {
@@ -226,53 +241,66 @@ read:
 	return
 }
 
-func (it *iterator) next() (obj *objReader, msg Msg, hl64 int64, err error) {
+// nextProtoHdr receives and handles 16 bytes of the protocol header (not to confuse with transport.Obj.Hdr)
+// returns hlen, which is header length - for transport.Obj, and message length - for transport.Msg
+func (it *iterator) nextProtoHdr() (hlen int, isObj bool, err error) {
 	var n int
 	n, err = it.Read(it.headerBuf[:cmn.SizeofI64*2])
 	if n < cmn.SizeofI64*2 {
-		cmn.Assert(err != nil) // TODO -- FIXME: expecting an error for failing to receive 16 bytes
-		if err != io.EOF {
-			glog.Errorf("%s: %v", it.trname, err)
+		if err == nil {
+			err = fmt.Errorf("sbrk %s: failed to receive proto hdr (n=%d)", it.trname, n)
 		}
 		return
 	}
 	// extract and validate hlen
 	_, hl64ex := extUint64(0, it.headerBuf)
-	isObj := hl64ex&msgMask == 0
-	hl64 = int64(hl64ex & ^msgMask)
-	hlen := int(hl64)
+	isObj = hl64ex&msgMask == 0
+	hl64 := int64(hl64ex & ^msgMask)
+	hlen = int(hl64)
 	if hlen > len(it.headerBuf) {
-		err = fmt.Errorf("%s: sbrk #1: header length %d", it.trname, hlen)
+		err = fmt.Errorf("sbrk %s: hlen %d exceeds buf %d", it.trname, hlen, len(it.headerBuf))
 		return
 	}
 	// validate checksum
 	_, checksum := extUint64(0, it.headerBuf[cmn.SizeofI64:])
 	chc := xoshiro256.Hash(uint64(hl64))
 	if checksum != chc {
-		err = fmt.Errorf("%s: sbrk #2: header length %d checksum %x != %x", it.trname, hlen, checksum, chc)
+		err = fmt.Errorf("sbrk %s: bad checksum %x != %x (hlen=%d)", it.trname, checksum, chc, hlen)
+	}
+	return
+}
+
+func (it *iterator) nextObj(hlen int) (obj *objReader, err error) {
+	var n int
+	n, err = it.Read(it.headerBuf[:hlen])
+	if n < hlen {
+		if err == nil {
+			err = fmt.Errorf("sbrk %s: failed to receive obj hdr (%d < %d)", it.trname, n, hlen)
+		}
 		return
 	}
-	debug.Assert(hlen < len(it.headerBuf))
-	hl64 += int64(cmn.SizeofI64) * 2 // to account for hlen and its checksum
-	// read the body
+	hdr := ExtObjHeader(it.headerBuf, hlen)
+	if hdr.IsLast() {
+		err = io.EOF
+		return
+	}
+	obj = &objReader{body: it.body, fbuf: it.fbuf, hdr: hdr}
+	return
+}
+
+func (it *iterator) nextMsg(hlen int) (msg Msg, err error) {
+	var n int
 	n, err = it.Read(it.headerBuf[:hlen])
-	if n == 0 {
+	if n < hlen {
+		if err == nil {
+			err = fmt.Errorf("sbrk %s: failed to receive msg (%d < %d)", it.trname, n, hlen)
+		}
 		return
 	}
 	debug.Assertf(n == hlen, "%d != %d", n, hlen)
-
-	if isObj {
-		hdr := ExtObjHeader(it.headerBuf, hlen)
-		if hdr.IsLast() {
-			err = io.EOF
-			return
-		}
-		obj = &objReader{body: it.body, fbuf: it.fbuf, hdr: hdr}
-	} else {
-		msg = ExtMsg(it.headerBuf, hlen)
-		if msg.IsLast() {
-			err = io.EOF
-		}
+	msg = ExtMsg(it.headerBuf, hlen)
+	if msg.IsLast() {
+		err = io.EOF
 	}
 	return
 }
@@ -314,6 +342,10 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	return
 }
 
+func (obj *objReader) String() string {
+	return fmt.Sprintf("%s/%s(size=%d)", obj.hdr.Bck, obj.hdr.ObjName, obj.hdr.ObjAttrs.Size)
+}
+
 /////////////////
 // fixedBuffer //
 /////////////////
@@ -338,9 +370,9 @@ func (bb *fixedBuffer) Reset()        { bb.roff, bb.woff = 0, 0 }
 func (bb *fixedBuffer) Written(n int) { bb.woff += n }
 func (bb *fixedBuffer) Free()         { bb.slab.Free(bb.buf) }
 
-/////////////////////////////
-// header de-serialization //
-/////////////////////////////
+/////////////////////////////////////////
+// obj-header/message de-serialization //
+/////////////////////////////////////////
 
 func ExtObjHeader(body []byte, hlen int) (hdr ObjHdr) {
 	var off int
@@ -358,7 +390,6 @@ func ExtObjHeader(body []byte, hlen int) (hdr ObjHdr) {
 func ExtMsg(body []byte, hlen int) (msg Msg) {
 	var off int
 	off, msg.Flags = extInt64(0, body)
-	off, msg.RecvHandler = extString(off, body)
 	off, msg.Body = extByte(off, body)
 	debug.Assertf(off == hlen, "off %d, hlen %d", off, hlen)
 	return

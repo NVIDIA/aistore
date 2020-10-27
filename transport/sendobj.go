@@ -230,20 +230,20 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	if s.sendoff.off >= int64(len(s.header)) {
 		cmn.Assert(s.sendoff.off == int64(len(s.header)))
 		s.stats.Offset.Add(s.sendoff.off)
-		if glog.FastV(4, glog.SmoduleTransport) {
+		if verbose {
 			num := s.stats.Num.Load()
 			glog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
 		}
 		s.sendoff.ins = inData
 		s.sendoff.off = 0
 		if s.sendoff.obj.IsLast() {
-			if glog.FastV(4, glog.SmoduleTransport) {
+			if verbose {
 				glog.Infof("%s: sent last", s)
 			}
 			err = io.EOF
 			s.lastCh.Close()
 		}
-	} else if glog.FastV(4, glog.SmoduleTransport) {
+	} else if verbose {
 		glog.Infof("%s: split header: copied %d < %d hlen", s, s.sendoff.off, len(s.header))
 	}
 	return
@@ -287,7 +287,7 @@ func (s *Stream) eoObj(err error) {
 	s.stats.Size.Add(size)
 	s.Numcur++
 	s.stats.Num.Inc()
-	if glog.FastV(4, glog.SmoduleTransport) {
+	if verbose {
 		glog.Infof("%s: sent %s (%d/%d)", s, obj, s.Numcur, s.stats.Num.Load())
 	}
 exit:
@@ -301,6 +301,28 @@ exit:
 }
 
 func (s *Stream) inSend() bool { return s.sendoff.ins == inHdr || s.sendoff.ins == inData }
+
+func (s *Stream) dryrun() {
+	var (
+		body = ioutil.NopCloser(s)
+		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
+	)
+	for {
+		hlen, isObj, err := it.nextProtoHdr()
+		cmn.AssertNoErr(err)
+		cmn.Assert(isObj)
+		obj, err := it.nextObj(hlen)
+		if obj != nil {
+			// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
+			err := cmn.DrainReader(obj)
+			cmn.AssertNoErr(err)
+			continue
+		}
+		if err != nil {
+			break
+		}
+	}
+}
 
 func (s *Stream) errCmpl(err error) {
 	if s.inSend() {
@@ -341,31 +363,6 @@ func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName strin
 		hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = meta.Cksum().Get()
 	}
 	hdr.ObjAttrs.Version = meta.Version()
-}
-
-/////////////
-// dry-run //
-/////////////
-
-func (s *Stream) dryrun() {
-	var (
-		body = ioutil.NopCloser(s)
-		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
-	)
-	for {
-		objReader, msg, _, err := it.next()
-		_ = msg // TODO -- FIXME
-
-		if objReader != nil {
-			// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
-			err := cmn.DrainReader(objReader)
-			cmn.AssertNoErr(err)
-			continue
-		}
-		if err != nil {
-			break
-		}
-	}
 }
 
 ///////////

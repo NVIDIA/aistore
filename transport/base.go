@@ -144,7 +144,7 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	return
 }
 
-func (s *streamBase) startSend(streamable fmt.Stringer, verbose bool) (err error) {
+func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), dropping %s", s, *s.term.reason, s.term.err, streamable)
@@ -194,7 +194,7 @@ func (s *streamBase) isNextReq() (next bool) {
 	for {
 		select {
 		case <-s.lastCh.Listen():
-			if glog.FastV(4, glog.SmoduleTransport) {
+			if verbose {
 				glog.Infof("%s: end-of-stream", s)
 			}
 			*s.term.reason = endOfStream
@@ -206,7 +206,7 @@ func (s *streamBase) isNextReq() (next bool) {
 		case <-s.postCh:
 			s.sessST.Store(active)
 			next = true // initiate new HTTP/TCP session
-			if glog.FastV(4, glog.SmoduleTransport) {
+			if verbose {
 				glog.Infof("%s: active <- posted", s)
 			}
 			return
@@ -216,7 +216,7 @@ func (s *streamBase) isNextReq() (next bool) {
 
 func (s *streamBase) deactivate() (n int, err error) {
 	err = io.EOF
-	if glog.FastV(4, glog.SmoduleTransport) {
+	if verbose {
 		num := s.stats.Num.Load()
 		glog.Infof("%s: connection teardown (%d/%d)", s, s.Numcur, num)
 	}
@@ -246,7 +246,7 @@ func (s *streamBase) sendLoop(streamer streamer, dryrun bool) {
 	// handle termination caused by anything other than Fin()
 	if *s.term.reason != endOfStream {
 		if *s.term.reason == reasonStopped {
-			if glog.FastV(4, glog.SmoduleTransport) {
+			if verbose {
 				glog.Infof("%s: stopped", s)
 			}
 		} else {
@@ -283,7 +283,6 @@ func (s *streamBase) insObjHeader(hdr *ObjHdr) (l int) {
 func (s *streamBase) insMsg(msg *Msg) (l int) {
 	l = cmn.SizeofI64 * 2
 	l = insInt64(l, s.maxheader, msg.Flags)
-	l = insString(l, s.maxheader, msg.RecvHandler)
 	l = insByte(l, s.maxheader, msg.Body)
 	hlen := uint64(l - cmn.SizeofI64*2)
 	insUint64(0, s.maxheader, hlen|msgMask) // mask

@@ -85,7 +85,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	)
 	smap.Tmap = make(cluster.NodeMap, 100)
 	for i := 0; i < 10; i++ {
-		ts := httptest.NewServer(tmux)
+		ts := httptest.NewServer(objmux)
 		tss = append(tss, ts)
 		addTarget(&smap, ts, i)
 	}

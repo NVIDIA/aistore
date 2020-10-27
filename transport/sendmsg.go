@@ -8,6 +8,7 @@ package transport
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -46,7 +47,6 @@ func (s *MsgStream) terminate() {
 	// TODO -- FIXME: un-collect
 }
 
-func (s *MsgStream) dryrun()                      { cmn.Assert(false) }
 func (s *MsgStream) abortPending(_ error, _ bool) {}
 func (s *MsgStream) errCmpl(err error)            {} // TODO -- FIXME
 func (s *MsgStream) doCmpl(_ streamable, _ error) {}
@@ -65,7 +65,7 @@ func (s *MsgStream) Read(b []byte) (n int, err error) {
 			err = io.EOF
 			return
 		}
-		return s.sendHdr(b)
+		return s.send(b)
 	}
 repeat:
 	select {
@@ -85,7 +85,7 @@ repeat:
 		l := s.insMsg(&s.msgoff.msg)
 		s.header = s.maxheader[:l]
 		s.msgoff.ins = inHdr
-		return s.sendHdr(b)
+		return s.send(b)
 	case <-s.stopCh.Listen():
 		num := s.stats.Num.Load()
 		glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
@@ -94,29 +94,47 @@ repeat:
 	}
 }
 
-func (s *MsgStream) sendHdr(b []byte) (n int, err error) {
+func (s *MsgStream) send(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.msgoff.off:])
 	s.msgoff.off += int64(n)
 	if s.msgoff.off >= int64(len(s.header)) {
 		cmn.Assert(s.msgoff.off == int64(len(s.header)))
 		s.stats.Offset.Add(s.msgoff.off)
-		if glog.FastV(4, glog.SmoduleTransport) {
+		if verbose {
 			num := s.stats.Num.Load()
 			glog.Infof("%s: hlen=%d (%d/%d)", s, s.msgoff.off, s.Numcur, num)
 		}
 		s.msgoff.ins = inEOB
 		s.msgoff.off = 0
 		if s.msgoff.msg.IsLast() {
-			if glog.FastV(4, glog.SmoduleTransport) {
+			if verbose {
 				glog.Infof("%s: sent last", s)
 			}
 			err = io.EOF
 			s.lastCh.Close()
 		}
-	} else if glog.FastV(4, glog.SmoduleTransport) {
+	} else if verbose {
 		glog.Infof("%s: split header: copied %d < %d hlen", s, s.msgoff.off, len(s.header))
 	}
 	return
+}
+
+func (s *MsgStream) inSend() bool { return s.msgoff.ins == inHdr }
+
+func (s *MsgStream) dryrun() {
+	var (
+		body = ioutil.NopCloser(s)
+		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
+	)
+	for {
+		hlen, isObj, err := it.nextProtoHdr()
+		cmn.AssertNoErr(err)
+		cmn.Assert(!isObj)
+		_, _ = it.nextMsg(hlen)
+		if err != nil {
+			break
+		}
+	}
 }
 
 ////////////////////
@@ -129,4 +147,13 @@ func (msg *Msg) IsLast() bool       { return msg.Flags == lastMarker }
 func (msg *Msg) IsIdleTick() bool   { return msg.Flags == tickMarker }
 func (msg *Msg) IsHeaderOnly() bool { return true }
 
-func (msg *Msg) String() string { return "smsg-" + msg.RecvHandler }
+func (msg *Msg) String() string {
+	if msg.IsLast() {
+		return "smsg-last"
+	}
+	if msg.IsIdleTick() {
+		return "smsg-tick"
+	}
+	l := cmn.Min(len(msg.Body), 16)
+	return fmt.Sprintf("smsg-[%s](len=%d)", msg.Body[:l], l)
+}
