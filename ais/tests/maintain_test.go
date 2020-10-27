@@ -5,11 +5,16 @@
 package integration
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -32,6 +37,60 @@ func TestMaintenanceOnOff(t *testing.T) {
 	tassert.CheckError(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
+}
+
+// TODO: Run only with long tests when the test is stable.
+func TestMaintenanceMD(t *testing.T) {
+	// NOTE: This function requires local deployment as it checks local file system for VMDs.
+	if k8s.Detect() == nil {
+		t.Skip("skipping in kubernetes")
+	}
+	if containers.DockerRunning() {
+		t.Skip("skipping in docker")
+	}
+
+	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+
+		dcmTarget = tutils.ExtractTargetNodes(smap)[0]
+
+		allTgtsMpaths = tutils.GetTargetsMountpaths(t, smap, baseParams)
+	)
+
+	msg := &cmn.ActValDecommision{DaemonID: dcmTarget.ID(), SkipRebalance: true}
+	_, err := api.Decommission(baseParams, msg)
+	tassert.CheckError(t, err)
+	newSmap, err := tutils.WaitForNewSmap(t, proxyURL, smap.Version)
+	tassert.CheckFatal(t, err)
+
+	vmdTargets := countVMDTargets(allTgtsMpaths)
+	tassert.Errorf(t, vmdTargets == smap.CountTargets()-1, "expected VMD to be found on %d targets, got %d.",
+		smap.CountTargets()-1, vmdTargets)
+
+	tassert.CheckFatal(t, tutils.JoinCluster(proxyURL, dcmTarget, newSmap))
+	tassert.CheckFatal(t, err)
+	tutils.WaitForRebalanceToComplete(t, baseParams)
+
+	// NOTE: Target will have the same DaemonID as it keeps it in the memory.
+	tassert.Errorf(t, newSmap.GetTarget(dcmTarget.DaemonID) != nil, "decommissioned target should have the same daemonID")
+	vmdTargets = countVMDTargets(allTgtsMpaths)
+	tassert.Errorf(t, vmdTargets == smap.CountTargets(),
+		"expected VMD to be found on all %d targets after joining cluster, got %d",
+		smap.CountTargets(), vmdTargets)
+}
+
+func countVMDTargets(tsMpaths map[string][]string) (total int) {
+	for _, mpaths := range tsMpaths {
+		for _, mpath := range mpaths {
+			if _, err := os.Stat(filepath.Join(mpath, fs.VmdPersistedFileName)); err == nil {
+				total++
+				break
+			}
+		}
+	}
+	return
 }
 
 func TestMaintenanceRebalance(t *testing.T) {

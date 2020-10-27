@@ -623,7 +623,14 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 	case cmn.ActAbort:
 		t.gfn.global.abortTimed()
 	case cmn.ActCommit:
-		// do nothing
+		var opts cmn.ActValDecommision
+		if err := cmn.MorphMarshal(c.msg.Value, &opts); err != nil {
+			return err
+		}
+		if c.msg.Action == cmn.ActDecommission && opts.DaemonID == t.si.ID() {
+			fs.ClearMDOnAllMpaths()
+			fs.RemoveMpathsIDs()
+		}
 	default:
 		cmn.Assert(false)
 	}

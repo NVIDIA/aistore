@@ -129,6 +129,27 @@ func ClearMDOnMpath(mpath *MountpathInfo) {
 	}
 }
 
+func ClearMDOnAllMpaths() {
+	available, _ := Get()
+	for _, mpath := range available {
+		ClearMDOnMpath(mpath)
+	}
+}
+
+func RemoveMpathsIDs() {
+	available, disabled := Get()
+	for _, mpath := range available {
+		if err := RemoveXattr(mpath.Path, daemonIDXattr); err != nil {
+			glog.Warning(err)
+		}
+	}
+	for _, mpath := range disabled {
+		if err := RemoveXattr(mpath.Path, daemonIDXattr); err != nil {
+			glog.Warning(err)
+		}
+	}
+}
+
 func FindPersisted(path string) MPI {
 	var (
 		avail, _ = Get()

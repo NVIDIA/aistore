@@ -79,9 +79,6 @@ func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error
 		return
 	}
 
-	if err := fs.CreateVMD(t.si.ID()).Persist(); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
 	return
 }
 
@@ -90,6 +87,10 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	err = jsoniter.Unmarshal(body, &regMeta)
 	if err != nil {
 		return fmt.Errorf("unexpected: %s failed to unmarshal reg-meta, err: %v", t.si, err)
+	}
+
+	if err := fs.CreateVMD(t.si.ID()).Persist(); err != nil {
+		cmn.ExitLogf("%v", err)
 	}
 
 	// There's a window of time between:
@@ -104,6 +105,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	if err = t.receiveBMD(regMeta.BMD, msg, bucketMDRegister, caller); err != nil {
 		glog.Infof("%s: %s", t.si, t.owner.bmd.get())
 	}
+
 	// Smap
 	if err := t.owner.smap.synchronize(regMeta.Smap, true /* lesserIsErr */); err != nil {
 		glog.Errorf("%s: sync Smap err %v", t.si, err)

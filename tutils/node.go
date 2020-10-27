@@ -240,6 +240,12 @@ func WaitNodeRestored(t *testing.T, proxyURL, reason, nodeID string, origVersion
 	return smap
 }
 
+func WaitForNewSmap(t *testing.T, proxyURL string, prevVersion int64) (newSmap *cluster.Smap, err error) {
+	newSmap = GetClusterMap(t, proxyURL)
+	err = WaitMapVersionSync(time.Now().Add(time.Minute), newSmap, prevVersion, []string{})
+	return
+}
+
 func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore []string) error {
 	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore []string) (string, string, bool) {
 		for _, d := range smap.Pmap {
@@ -269,7 +275,7 @@ func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64
 
 		if err == nil && daemonSmap.Version > prevVersion {
 			idsToIgnore = append(idsToIgnore, sid)
-			smap = daemonSmap // update smap for newer version
+			*smap = *daemonSmap // update smap for newer version
 			continue
 		}
 
@@ -285,4 +291,15 @@ func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64
 		time.Sleep(time.Second)
 	}
 	return nil
+}
+
+func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[string][]string {
+	mpathsByTarget := make(map[string][]string, smap.CountTargets())
+	for _, target := range smap.Tmap {
+		mpl, err := api.GetMountpaths(params, target)
+		tassert.CheckError(t, err)
+		mpathsByTarget[target.DaemonID] = mpl.Available
+	}
+
+	return mpathsByTarget
 }
