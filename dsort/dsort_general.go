@@ -532,8 +532,8 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 		switch req.RecordObj.StoreType {
 		case extract.OffsetStoreType:
 			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			r, err := cmn.NewFileSectionHandle(fullContentPath, req.RecordObj.Offset-req.RecordObj.MetadataSize,
-				respHdr.ObjAttrs.Size, 0)
+			offset := req.RecordObj.Offset - req.RecordObj.MetadataSize
+			r, err := cmn.NewFileSectionHandle(fullContentPath, offset, respHdr.ObjAttrs.Size)
 			if err != nil {
 				errHandler(err, respHdr, fromNode)
 				return

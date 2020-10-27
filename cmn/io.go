@@ -274,17 +274,17 @@ func (f *SectionHandle) Close() error { return nil }
 
 // NewFileSectionHandle opens file which is expected at `fqn` and defines
 // a SectionHandle on it to only read a specified section.
-func NewFileSectionHandle(fqn string, offset, size, padding int64) (*FileSectionHandle, error) {
+func NewFileSectionHandle(fqn string, offset, size int64) (*FileSectionHandle, error) {
 	fh, err := NewFileHandle(fqn)
 	if err != nil {
 		return nil, err
 	}
-	sec := NewSectionHandle(fh, offset, size, padding)
+	sec := NewSectionHandle(fh, offset, size, 0)
 	return &FileSectionHandle{fh: fh, sec: sec}, nil
 }
 
 func (f *FileSectionHandle) Open() (io.ReadCloser, error) {
-	return NewFileSectionHandle(f.fh.fqn, f.sec.offset, f.sec.size, f.sec.padding)
+	return NewFileSectionHandle(f.fh.fqn, f.sec.offset, f.sec.size)
 }
 
 func (f *FileSectionHandle) Read(buf []byte) (int, error) { return f.sec.Read(buf) }

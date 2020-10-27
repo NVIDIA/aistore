@@ -203,8 +203,10 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		toDisk := m.dsorter.preShardExtraction(expectedUncompressedSize)
 
 		beforeExtraction := mono.NanoTime()
+
 		reader := io.NewSectionReader(f, 0, lom.Size())
 		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom, reader, m.recManager, toDisk)
+		cmn.Close(f)
 
 		dur := mono.Since(beforeExtraction)
 
@@ -217,10 +219,8 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 
 		m.dsorter.postShardExtraction(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
 		if err != nil {
-			cmn.Close(f)
 			return errors.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
 		}
-		cmn.Close(f)
 
 		metrics.Lock()
 		metrics.ExtractedRecordCnt += int64(extractedCount)
@@ -408,13 +408,13 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		lom.Lock(false)
 		defer lom.Unlock(false)
 
+		if lom.Size() <= 0 {
+			goto exit
+		}
+
 		file, err := cmn.NewFileHandle(lom.FQN)
 		if err != nil {
 			return err
-		}
-
-		if lom.Size() <= 0 {
-			goto exit
 		}
 
 		cksumType, cksumValue := lom.Cksum().Get()
@@ -428,7 +428,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			},
 		}
 
-		// Make send synchronous
+		// Make send synchronous.
 		streamWg := &sync.WaitGroup{}
 		errCh := make(chan error, 1)
 		cb := func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
@@ -438,6 +438,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		streamWg.Add(1)
 		err = m.streams.shards.Send(&transport.Obj{Hdr: hdr, Callback: cb}, file, si)
 		if err != nil {
+			cmn.Close(file)
 			return err
 		}
 		streamWg.Wait()

@@ -528,13 +528,11 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	switch obj.StoreType {
 	case extract.OffsetStoreType:
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
-		r, err := cmn.NewFileSectionHandle(fullContentPath, obj.Offset-obj.MetadataSize, hdr.ObjAttrs.Size, 0)
+		r, err := cmn.NewFileSectionHandle(fullContentPath, obj.Offset-obj.MetadataSize, hdr.ObjAttrs.Size)
 		if err != nil {
 			return err
 		}
-		if err := send(r); err != nil {
-			return err
-		}
+		return send(r)
 	case extract.DiskStoreType:
 		f, err := cmn.NewFileHandle(fullContentPath)
 		if err != nil {
@@ -546,14 +544,11 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 			return err
 		}
 		hdr.ObjAttrs.Size = fi.Size()
-		if err := send(f); err != nil {
-			return err
-		}
+		return send(f)
 	default:
 		cmn.Assert(false)
+		return nil
 	}
-
-	return nil
 }
 
 func (ds *dsorterMem) postExtraction() {}
