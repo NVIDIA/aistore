@@ -124,9 +124,6 @@ func (s *Stream) cmplLoop() {
 
 // handle the last interrupted transmission and pending SQ/SCQ
 func (s *Stream) abortPending(err error, completions bool) {
-	if s.inSend() {
-		s.doCmpl(&s.sendoff.obj, err)
-	}
 	for obj := range s.workCh {
 		s.doCmpl(obj, err)
 	}
@@ -304,6 +301,12 @@ exit:
 }
 
 func (s *Stream) inSend() bool { return s.sendoff.ins == inHdr || s.sendoff.ins == inData }
+
+func (s *Stream) errCmpl(err error) {
+	if s.inSend() {
+		s.cmplCh <- cmpl{s.sendoff.obj, err}
+	}
+}
 
 ////////////////////
 // Obj and ObjHdr //

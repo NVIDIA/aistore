@@ -72,6 +72,7 @@ type (
 		inSend() bool
 		doCmpl(streamable, error)
 		abortPending(error, bool)
+		errCmpl(error)
 		resetCompression()
 	}
 	streamBase struct {
@@ -230,6 +231,7 @@ func (s *streamBase) sendLoop(streamer streamer, dryrun bool) {
 			} else if err := streamer.doRequest(); err != nil {
 				*s.term.reason = reasonError
 				s.term.err = err
+				streamer.errCmpl(err)
 				break
 			}
 		}

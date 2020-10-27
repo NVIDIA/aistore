@@ -48,6 +48,7 @@ func (s *MsgStream) terminate() {
 
 func (s *MsgStream) dryrun()                      { cmn.Assert(false) }
 func (s *MsgStream) abortPending(_ error, _ bool) {}
+func (s *MsgStream) errCmpl(err error)            {} // TODO -- FIXME
 func (s *MsgStream) doCmpl(_ streamable, _ error) {}
 func (s *MsgStream) compressed() bool             { return false }
 
