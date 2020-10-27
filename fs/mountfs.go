@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/OneOfOne/xxhash"
@@ -197,6 +198,16 @@ func (mi *MountpathInfo) CreateMissingBckDirs(bck cmn.Bck) (err error) {
 		}
 	}
 	return
+}
+
+func (mi *MountpathInfo) StoreMD(path string, what interface{}, options jsp.Options) error {
+	fpath := filepath.Join(mi.Path, path)
+	if what == nil {
+		file, err := cmn.CreateFile(fpath)
+		file.Close()
+		return err
+	}
+	return jsp.Save(fpath, what, options)
 }
 
 // make-path methods

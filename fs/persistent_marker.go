@@ -21,41 +21,42 @@ const (
 	ResilverMarker      = ".ais.resilver_marker"
 
 	BmdPersistedFileName = ".ais.bmd"
+	BmdPersistedPrevious = BmdPersistedFileName + ".prev" // previous version
+
 	VmdPersistedFileName = ".ais.vmd"
 )
 
 // List of AIS metadata files stored
-var mdFiles = []string{NodeRestartedMarker, RebalanceMarker, ResilverMarker, BmdPersistedFileName, VmdPersistedFileName}
+var mdFiles = []string{
+	NodeRestartedMarker,
+
+	RebalanceMarker,
+	ResilverMarker,
+
+	BmdPersistedFileName,
+	BmdPersistedPrevious,
+
+	VmdPersistedFileName,
+}
 
 func MarkerExists(marker string) bool {
 	return len(FindPersisted(marker)) > 0
 }
 
 func PersistMarker(marker string) error {
-	cnt, available := PersistOnMpaths(marker, nil, 1)
+	cnt, available := PersistOnMpaths(marker, "", nil, 1)
 	if cnt == 0 {
 		return fmt.Errorf("failed to persist marker %q (available mountPaths: %d)", marker, available)
 	}
 	return nil
 }
 
-func RemoveMarker(marker string) {
-	markerMpaths := FindPersisted(marker)
-	if len(markerMpaths) == 0 {
-		return
-	}
-
-	for _, mp := range markerMpaths {
-		if err := os.Remove(filepath.Join(mp.Path, marker)); err != nil {
-			glog.Errorf("failed to cleanup %q marker from %q: %v", marker, mp.Path, err)
-		}
-	}
-}
-
-// PersistOnMpaths persists `what` on every mountpath under "mountpath.Path/path" filename.
+// PersistOnMpaths persists `what` on mountpaths under "mountpath.Path/path" filename.
 // It does it on maximum `atMost` mountPaths. If `atMost == 0`, it does it on every mountpath.
-// Returns how many times it successfully stored a file.
-func PersistOnMpaths(path string, what interface{}, atMost int, opts ...jsp.Options) (cnt, availCnt int) {
+// If `backupPath != ""`, it removes files from `backupPath` and moves files from `path` to `backupPath`.
+// Returns how many times it has successfully stored a file.
+func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts ...jsp.Options) (cnt,
+	availCnt int) {
 	var (
 		options            = jsp.CksumSign()
 		availableMpaths, _ = Get()
@@ -68,15 +69,28 @@ func PersistOnMpaths(path string, what interface{}, atMost int, opts ...jsp.Opti
 		options = opts[0]
 	}
 
-	for _, mountPath := range availableMpaths {
-		if err := persistOnSingleMpath(mountPath, path, what, options); err != nil {
-			glog.Errorf("Failed to persist %q on %q, err: %v", path, mountPath, err)
-		} else {
-			cnt++
+	for _, mpath := range availableMpaths {
+		moved := false
+
+		// 1. (Optional) Move currently stored in `path` to `backupPath`.
+		if backupPath != "" {
+			moved = movePersistedFile(filepath.Join(mpath.Path, path), filepath.Join(mpath.Path, backupPath))
 		}
 
-		if cnt == atMost {
-			break
+		// 2. Persist `what` on `path`.
+		if cnt < atMost {
+			if err := mpath.StoreMD(path, what, options); err != nil {
+				glog.Errorf("Failed to persist %q on %q, err: %v", path, mpath, err)
+			} else {
+				cnt++
+			}
+		}
+
+		// 3. (Optional) Clean up very old versions of persisted data - only if they were not updated.
+		if backupPath != "" && !moved {
+			if err := os.Remove(filepath.Join(mpath.Path, backupPath)); err != nil && !os.IsNotExist(err) {
+				glog.Error(err)
+			}
 		}
 	}
 
@@ -88,6 +102,14 @@ func PersistOnMpaths(path string, what interface{}, atMost int, opts ...jsp.Opti
 	return
 }
 
+func movePersistedFile(from, to string) bool {
+	err := os.Rename(from, to)
+	if err != nil && !os.IsNotExist(err) {
+		glog.Error(err)
+	}
+	return err == nil
+}
+
 func ClearMDOnMpath(mpath *MountpathInfo) {
 	for _, path := range mdFiles {
 		fpath := filepath.Join(mpath.Path, path)
@@ -95,39 +117,13 @@ func ClearMDOnMpath(mpath *MountpathInfo) {
 	}
 }
 
-func MovePersisted(oldPath, newPath string) (cnt int) {
-	oldMpaths := FindPersisted(oldPath)
-	for mpath := range oldMpaths {
-		oldFpath := filepath.Join(mpath, oldPath)
-		newFpath := filepath.Join(mpath, newPath)
-
-		if err := os.Rename(oldFpath, newFpath); err != nil {
-			glog.Errorf("failed to rename %q => %q, err: %v", oldFpath, newFpath, err)
-			continue
-		}
-		cnt++
-	}
-
-	return
-}
-
 func RemovePersisted(path string) {
-	mpaths := FindPersisted(path)
-	for mpath := range mpaths {
-		if err := os.Remove(filepath.Join(mpath, path)); err != nil {
-			glog.Error(err)
+	mpaths, _ := Get()
+	for _, mpath := range mpaths {
+		if err := os.Remove(filepath.Join(mpath.Path, path)); err != nil && !os.IsNotExist(err) {
+			glog.Errorf("Failed to cleanup %q from %q, err: %v", path, mpath.Path, err)
 		}
 	}
-}
-
-func persistOnSingleMpath(mpath *MountpathInfo, path string, what interface{}, options jsp.Options) (err error) {
-	fpath := filepath.Join(mpath.Path, path)
-	if what == nil {
-		_, err = cmn.CreateFile(fpath)
-	} else {
-		err = jsp.Save(fpath, what, options)
-	}
-	return err
 }
 
 func FindPersisted(path string) MPI {

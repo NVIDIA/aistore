@@ -446,7 +446,7 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 	maxWait := md.config.Rebalance.Quiesce
 	aborted := reb.waitQuiesce(md, maxWait, reb.nodesQuiescent)
 	if !aborted {
-		fs.RemoveMarker(fs.RebalanceMarker)
+		fs.RemovePersisted(fs.RebalanceMarker)
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()

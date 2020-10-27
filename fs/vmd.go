@@ -17,8 +17,6 @@ import (
 const (
 	vmdInitialVersion = 1
 	vmdCopies         = 3
-
-	vmdPersistedFileNameOld = VmdPersistedFileName + ".old"
 )
 
 type (
@@ -63,6 +61,7 @@ func CreateVMD(daemonID string) *VMD {
 
 func ReadVMD() *VMD {
 	var (
+		// NOTE: Not performance critical code, but number of syscalls could be reduced.
 		mpaths       = FindPersisted(VmdPersistedFileName)
 		available, _ = Get()
 
@@ -71,10 +70,6 @@ func ReadVMD() *VMD {
 	if len(mpaths) == 0 {
 		glog.Infof("VMD not found on any of %d mountpaths", len(available))
 		return nil
-	}
-
-	if len(mpaths) != len(available) {
-		glog.Warningf("Some mountpaths are missing VMD (found %d/%d)", len(mpaths), len(available))
 	}
 
 	// NOTE: iterating only over mpaths which have VmdPersistedFileName.
@@ -105,14 +100,11 @@ func ReadVMD() *VMD {
 }
 
 func (vmd VMD) Persist() error {
-	MovePersisted(VmdPersistedFileName, vmdPersistedFileNameOld)
-
 	// Checksum, compress and sign, as a VMD might be quite large.
-	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, vmd, vmdCopies, jsp.CCSign()); cnt == 0 {
+	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign()); cnt == 0 {
 		return fmt.Errorf("failed to persist vmd on any of mountpaths (%d)", availMpaths)
 	}
 
-	RemovePersisted(vmdPersistedFileNameOld)
 	return nil
 }
 

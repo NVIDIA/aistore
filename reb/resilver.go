@@ -69,7 +69,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 		err := jg.Stop()
 		glog.Errorf("Resilver failed with err: %v", err)
 	case <-jg.ListenFinished():
-		fs.RemoveMarker(fs.ResilverMarker)
+		fs.RemovePersisted(fs.ResilverMarker)
 	}
 
 	reb.t.GFN(cluster.GFNLocal).Deactivate()
