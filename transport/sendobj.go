@@ -139,7 +139,7 @@ func (s *Stream) abortPending(err error, completions bool) {
 	}
 }
 
-// refcount, invoke Sendcallback, and *always* close the reader
+// refcount, invoke callback, and *always* close the reader
 func (s *Stream) doCmpl(streamable streamable, err error) {
 	var (
 		rc  int64
@@ -323,10 +323,7 @@ func (obj *Obj) String() string {
 }
 
 func (obj *Obj) SetPrc(n int) {
-	// when there's a `sent` callback and more than one destination
-	if n > 1 {
-		obj.prc = atomic.NewInt64(int64(n))
-	}
+	obj.prc = atomic.NewInt64(int64(n))
 }
 
 func (hdr *ObjHdr) IsLast() bool { return hdr.ObjAttrs.Size == lastMarker }

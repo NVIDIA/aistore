@@ -147,9 +147,8 @@ func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cl
 		roc = nil
 	}
 	if nodes == nil {
-		if obj.Callback != nil {
-			obj.SetPrc(len(streams))
-		}
+		obj.SetPrc(len(streams))
+
 		// Reader-reopening logic: since the streams in a bundle are mutually independent
 		// and asynchronous, reader.Open() (aka reopen) is skipped for the 1st replica
 		// that we put on the wire and is done for the 2nd, 3rd, etc. replicas.
@@ -169,9 +168,8 @@ func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cl
 				return
 			}
 		}
-		if obj.Callback != nil {
-			obj.SetPrc(len(nodes))
-		}
+		obj.SetPrc(len(nodes))
+
 		// second, do send. Same comment wrt reopening.
 		for _, di := range nodes {
 			robin := streams[di.ID()]
