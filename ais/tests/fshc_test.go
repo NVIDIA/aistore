@@ -482,3 +482,60 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	_, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 }
+
+func TestFSAddMPathRestartNode(t *testing.T) {
+	t.Skip("enable after targets load mount paths from VMD on startup")
+	var (
+		target *cluster.Snode
+
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams()
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		proxyCnt   = smap.CountProxies()
+		targetCnt  = smap.CountTargets()
+		tmpMpath   = "/tmp/testmp"
+	)
+
+	if targetCnt < 2 {
+		t.Skip("The number of targets must be at least 2")
+	}
+
+	for _, tinfo := range smap.Tmap {
+		target = tinfo
+		break
+	}
+	oldMpaths, err := api.GetMountpaths(baseParams, target)
+	tassert.CheckFatal(t, err)
+	numMpaths := len(oldMpaths.Available)
+	tassert.Fatalf(t, numMpaths != 0, "target %s doesn't have available mountpaths", target)
+
+	cmn.CreateDir(tmpMpath)
+	defer os.Remove(tmpMpath)
+
+	tutils.Logf("Adding a mount path to target: %s\n", target)
+	err = api.AddMountpath(baseParams, target, tmpMpath)
+	tassert.CheckFatal(t, err)
+	defer api.RemoveMountpath(baseParams, target.ID(), tmpMpath)
+
+	newMpaths, err := api.GetMountpaths(baseParams, target)
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatalf(t, numMpaths+1 == len(newMpaths.Available),
+		"should add new mount path - available %d!=%d", numMpaths+1, len(newMpaths.Available))
+
+	// Kill and restore target
+	tcmd, err := kill(target)
+	tassert.CheckFatal(t, err)
+	restore(tcmd, false, "target")
+
+	smap = tutils.WaitNodeRestored(t, smap.Primary.URL(cmn.NetworkPublic), "to restore", target.ID(), smap.Version, testing.Verbose(), proxyCnt, targetCnt)
+	if _, ok := smap.Tmap[target.ID()]; !ok {
+		t.Fatalf("Removed target didn't rejoin")
+	}
+
+	// Check if the node has newly added mount path
+	newMpaths, err = api.GetMountpaths(baseParams, target)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, numMpaths+1 == len(newMpaths.Available),
+		"should include newly added mount path after restore - available %d!=%d", numMpaths+1, len(newMpaths.Available))
+}
