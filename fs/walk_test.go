@@ -143,7 +143,6 @@ func TestWalkBckSkipDir(t *testing.T) {
 
 		err = fs.Add(mpath)
 		tassert.CheckFatal(t, err)
-
 		mpaths[mpath] = &mpathMeta{total: 0, done: false}
 	}
 

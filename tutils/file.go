@@ -332,6 +332,11 @@ func RemoveMountPaths(t *testing.T, mpaths fs.MPI) {
 	}
 }
 
+func AddMpath(t *testing.T, path string) {
+	err := fs.Add(path)
+	tassert.Errorf(t, err == nil, "Adding a mountpath %q failed, err %v", path, err)
+}
+
 func AssertMountpathCount(t *testing.T, availableCount, disabledCount int) {
 	availableMountpaths, disabledMountpaths := fs.Get()
 	if len(availableMountpaths) != availableCount ||

@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestParseFQN(t *testing.T) {
@@ -242,10 +243,7 @@ func TestParseFQN(t *testing.T) {
 					defer os.RemoveAll(mpath)
 				}
 				err := fs.Add(mpath)
-				if err != nil {
-					t.Errorf("error in add mountpath: %v", err)
-					return
-				}
+				tassert.CheckFatal(t, err)
 			}
 			fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 			fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
@@ -336,10 +334,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 				defer os.RemoveAll(tt.mpath)
 			}
 			err := fs.Add(tt.mpath)
-			if err != nil {
-				t.Errorf("error in add mountpath: %v", err)
-				return
-			}
+			tassert.CheckFatal(t, err)
 
 			fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 			fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
