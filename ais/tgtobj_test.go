@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	testMountpath = "/tmp"
+	testMountpath = "/tmp/ais-test-mpath" // mpath is created and deleted during the test
 	testBucket    = "bck"
 )
 
@@ -54,6 +54,8 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	// file system
+	cmn.CreateDir(testMountpath)
+	defer os.RemoveAll(testMountpath)
 	fs.Init()
 	fs.DisableFsIDCheck()
 	fs.Add(testMountpath)

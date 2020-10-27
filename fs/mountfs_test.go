@@ -30,7 +30,6 @@ func TestAddValidMountpaths(t *testing.T) {
 
 	for _, mpath := range mpaths {
 		if _, err := os.Stat(mpath); os.IsNotExist(err) {
-			cmn.CreateDir(mpath)
 			defer os.RemoveAll(mpath)
 		}
 
@@ -47,8 +46,9 @@ func TestAddValidMountpaths(t *testing.T) {
 
 func TestAddExistingMountpath(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
-
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	os.RemoveAll(mpath)
 	tutils.AssertMountpathCount(t, 1, 0)
 }
 
@@ -64,10 +64,14 @@ func TestAddIncorrectMountpath(t *testing.T) {
 func TestAddAlreadyAddedMountpath(t *testing.T) {
 	fs.Init()
 
-	tutils.AddMpath(t, "/tmp")
+	mpath := "/tmp/abc"
+	cmn.CreateDir(mpath)
+	defer os.RemoveAll(mpath)
+
+	tutils.AddMpath(t, mpath)
 	tutils.AssertMountpathCount(t, 1, 0)
 
-	err := fs.Add("/tmp")
+	err := fs.Add(mpath)
 	tassert.Errorf(t, err != nil, "adding already added mountpath succeeded")
 
 	tutils.AssertMountpathCount(t, 1, 0)
@@ -84,9 +88,11 @@ func TestRemoveNonExistingMountpath(t *testing.T) {
 
 func TestRemoveExistingMountpath(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	defer os.RemoveAll(mpath)
 
-	err := fs.Remove("/tmp")
+	err := fs.Remove(mpath)
 	tassert.CheckError(t, err)
 
 	tutils.AssertMountpathCount(t, 0, 0)
@@ -94,12 +100,14 @@ func TestRemoveExistingMountpath(t *testing.T) {
 
 func TestRemoveDisabledMountpath(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	defer os.RemoveAll(mpath)
 
-	fs.Disable("/tmp")
+	fs.Disable(mpath)
 	tutils.AssertMountpathCount(t, 0, 1)
 
-	err := fs.Remove("/tmp")
+	err := fs.Remove(mpath)
 	tassert.CheckError(t, err)
 
 	tutils.AssertMountpathCount(t, 0, 0)
@@ -116,9 +124,11 @@ func TestDisableNonExistingMountpath(t *testing.T) {
 
 func TestDisableExistingMountpath(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	defer os.RemoveAll(mpath)
 
-	disabled, err := fs.Disable("/tmp")
+	disabled, err := fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, disabled, "disabling was not successful")
 
@@ -127,13 +137,15 @@ func TestDisableExistingMountpath(t *testing.T) {
 
 func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	defer os.RemoveAll(mpath)
 
-	disabled, err := fs.Disable("/tmp")
+	disabled, err := fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, disabled, "disabling was not successful")
 
-	disabled, err = fs.Disable("/tmp")
+	disabled, err = fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !disabled, "already disabled mountpath should not be disabled again")
 
@@ -150,9 +162,10 @@ func TestEnableNonExistingMountpath(t *testing.T) {
 
 func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
-
-	enabled, err := fs.Enable("/tmp")
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	defer os.RemoveAll(mpath)
+	enabled, err := fs.Enable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !enabled, "already enabled mountpath should not be enabled again")
 
@@ -161,13 +174,15 @@ func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 
 func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	defer os.RemoveAll(mpath)
 
-	disabled, err := fs.Disable("/tmp")
+	disabled, err := fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, disabled, "disabling was not successful")
 
-	enabled, err := fs.Enable("/tmp")
+	enabled, err := fs.Enable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, enabled, "enabling was not successful")
 
@@ -176,19 +191,21 @@ func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 
 func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	defer os.RemoveAll(mpath)
 
-	disabled, err := fs.Disable("/tmp")
+	disabled, err := fs.Disable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, disabled, "disabling was not successful")
 
 	tutils.AssertMountpathCount(t, 0, 1)
 
-	enabled, err := fs.Enable("/tmp")
+	enabled, err := fs.Enable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, enabled, "enabling was not successful")
 
-	enabled, err = fs.Enable("/tmp")
+	enabled, err = fs.Enable(mpath)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !enabled, "enabling already enabled mountpath should not be successful")
 
@@ -197,7 +214,9 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 
 func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
 	fs.Init()
-	tutils.AddMpath(t, "/tmp")
+	mpath := "/tmp/abc"
+	tutils.AddMpath(t, mpath)
+	defer os.RemoveAll(mpath)
 
 	err := fs.Add("/")
 	tassert.Errorf(t, err != nil, "expected adding path with same FSID to be unsuccessful")
@@ -210,15 +229,12 @@ func TestAddAndDisableMultipleMountpath(t *testing.T) {
 	fs.DisableFsIDCheck()
 
 	mp1, mp2 := "/tmp/mp1", "/tmp/mp2"
-	cmn.CreateDir(mp1)
-	cmn.CreateDir(mp2)
+	tutils.AddMpath(t, mp1)
+	tutils.AddMpath(t, mp2)
 	defer func() {
 		os.Remove(mp2)
 		os.Remove(mp1)
 	}()
-
-	tutils.AddMpath(t, mp1)
-	tutils.AddMpath(t, mp2)
 
 	tutils.AssertMountpathCount(t, 2, 0)
 
