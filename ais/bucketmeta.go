@@ -266,16 +266,23 @@ func newBMDOwnerTgt() *bmdOwnerTgt {
 func (bo *bmdOwnerTgt) init() {
 	var (
 		available, _ = fs.Get()
-		bmd          = loadBMD(available, fs.BmdPersistedFileName)
+		bmd          *bucketMD
 	)
-	if bmd == nil {
-		glog.Errorf("attempting to load older %s version...", bmdTermName)
-		bmd = loadBMD(available, fs.BmdPersistedPrevious)
+
+	if bmd = loadBMD(available, fs.BmdPersistedFileName); bmd != nil {
+		glog.Infof("BMD loaded from %q", fs.BmdPersistedFileName)
+		goto finalize
 	}
-	if bmd == nil {
-		glog.Infof("instantiating empty %s", bmdTermName)
-		bmd = newBucketMD()
+
+	if bmd = loadBMD(available, fs.BmdPersistedPrevious); bmd != nil {
+		glog.Infof("BMD loaded from %q", fs.BmdPersistedPrevious)
+		goto finalize
 	}
+
+	bmd = newBucketMD()
+	glog.Info("BMD freshly created")
+
+finalize:
 	bo._put(bmd)
 }
 
