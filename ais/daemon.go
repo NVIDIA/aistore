@@ -58,9 +58,9 @@ type (
 		role        string // proxy | target
 		confPath    string // path to config
 		confCustom  string // "key1=value1,key2=value2" formatted string to override selected entries in config
-		transient   bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
-		skipStartup bool   // determines if the proxy should skip waiting for targets
 		ntargets    int    // expected number of targets in a starting-up cluster (proxy only)
+		skipStartup bool   // determines if the proxy should skip waiting for targets
+		transient   bool   // false: make cmn.ConfigCLI settings permanent, true: leave them transient
 	}
 
 	// daemon instance: proxy or storage target

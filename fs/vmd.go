@@ -28,15 +28,15 @@ type (
 
 	// Short for VolumeMetaData.
 	VMD struct {
-		Devices  []*fsDeviceMD `json:"devices"`
-		DaemonID string        `json:"daemon_id"`
-		Version  uint          `json:"version"` // formatting version for backward compatibility
+		Devices  map[string]*fsDeviceMD `json:"devices"` // MpathID => MD
+		DaemonID string                 `json:"daemon_id"`
+		Version  uint                   `json:"version"` // formatting version for backward compatibility
 	}
 )
 
 func newVMD(expectedSize int) *VMD {
 	return &VMD{
-		Devices: make([]*fsDeviceMD, 0, expectedSize),
+		Devices: make(map[string]*fsDeviceMD, expectedSize),
 		Version: vmdInitialVersion,
 	}
 }
@@ -50,11 +50,11 @@ func CreateVMD(daemonID string) *VMD {
 	vmd.DaemonID = daemonID
 
 	for _, mPath := range available {
-		vmd.Devices = append(vmd.Devices, &fsDeviceMD{
+		vmd.Devices[mPath.ID] = &fsDeviceMD{
 			MpathID:   mPath.ID,
 			MountPath: mPath.Path,
 			FsType:    mPath.FileSystem,
-		})
+		}
 	}
 	return vmd
 }
