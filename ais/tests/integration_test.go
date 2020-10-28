@@ -205,6 +205,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 	m.ensureNoErrors()
 	m.assertClusterState()
+	tutils.WaitForRebalanceToComplete(m.t, tutils.BaseAPIParams(m.proxyURL))
 }
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
@@ -229,6 +230,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	// Register target (bring cluster to normal state)
 	m.reregisterTarget(target)
 	m.assertClusterState()
+	tutils.WaitForRebalanceToComplete(m.t, tutils.BaseAPIParams(m.proxyURL))
 }
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
@@ -1069,10 +1071,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	m.puts()
 	m.gets()
 	m.ensureNoErrors()
-
-	args := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
-	_, err = api.WaitForXaction(baseParams, args)
-	tassert.CheckError(t, err)
+	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
 
 func TestForwardCP(t *testing.T) {
@@ -1346,6 +1345,8 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	m.ensureNoErrors()
 	m.assertClusterState()
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
 
 // 1. Unregister target

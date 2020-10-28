@@ -212,7 +212,7 @@ func TestRProxyInvalidURL(t *testing.T) {
 		api.DestroyBucket(baseParams, hbo.Bck)
 
 		res, err := client.Get(test.url)
-		tassert.CheckError(t, err)
+		tassert.CheckFatal(t, err)
 		res.Body.Close()
 		tassert.Errorf(t, res.StatusCode == test.statusCode, "%q: expected status %d - got %d", test.url, test.statusCode, res.StatusCode)
 

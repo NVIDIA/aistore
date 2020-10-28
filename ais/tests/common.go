@@ -471,10 +471,14 @@ func (m *ioContext) ensureNoErrors() {
 	}
 }
 
-func (m *ioContext) unregisterTarget() *cluster.Snode {
+func (m *ioContext) unregisterTarget(forceUnreg ...bool) *cluster.Snode {
+	var force bool
+	if len(forceUnreg) != 0 {
+		force = forceUnreg[0]
+	}
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	tutils.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
-	err := tutils.UnregisterNode(m.proxyURL, target.ID())
+	err := tutils.UnregisterNode(m.proxyURL, target.ID(), force)
 	tassert.CheckFatal(m.t, err)
 	m.smap, err = tutils.WaitForPrimaryProxy(
 		m.proxyURL,
