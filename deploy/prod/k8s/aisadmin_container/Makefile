@@ -5,7 +5,7 @@
 #
 
 IMAGE_TAG=.must_set_in_environment
-IMAGE_REPO=aistore/aisadmin
+IMAGE_REPO=aistore/admin
 
 all: build push
 
