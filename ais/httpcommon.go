@@ -16,7 +16,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"runtime"
 	rdebug "runtime/debug"
@@ -32,7 +31,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -513,49 +511,6 @@ func (h *httprunner) initSI(daemonType string) {
 	daemonID := initDaemonID(daemonType, config)
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
 	cmn.InitShortID(h.si.Digest())
-}
-
-func initDaemonID(daemonType string, config *cmn.Config) string {
-	daemonID := os.Getenv("AIS_DAEMON_ID")
-	// 1. assign
-	if daemonID != "" {
-		glog.Infof("%s[%q] from env", daemonType, daemonID)
-		return daemonID
-	}
-	if daemonType == cmn.Target {
-		if vmd := fs.ReadVMD(); vmd != nil {
-			glog.Infof("%s[%q] from VMD", daemonType, daemonID)
-			return vmd.DaemonID
-		}
-	} else if id, err := readProxyDID(config); id != "" {
-		return id
-	} else if err != nil && !os.IsNotExist(err) {
-		glog.Error(err)
-	}
-	// 2. generate
-	if config.TestingEnv() {
-		daemonID = cmn.RandStringStrong(4)
-		if daemonType == cmn.Target {
-			daemonID = daemonID + "t" + config.Net.L4.PortStr
-		} else {
-			cmn.Assert(daemonType == cmn.Proxy)
-			daemonID = daemonID + "p" + config.Net.L4.PortStr
-		}
-	} else {
-		daemonID = cmn.GenDaemonID()
-	}
-	// 3. persist
-	if daemonType == cmn.Target {
-		if err := fs.CreateVMD(daemonID).Persist(); err != nil {
-			glog.Fatalf("FATAL: %v", err)
-		}
-	} else if err := writeProxyDID(config, daemonID); err != nil {
-		glog.Fatalf("FATAL: %v", err)
-	}
-
-	cmn.Assert(daemonID != "")
-	glog.Infof("daemonID = %q randomly generated (%s)", daemonID, daemonType)
-	return daemonID
 }
 
 func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bool, tag string) {
