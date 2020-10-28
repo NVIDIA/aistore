@@ -10,7 +10,7 @@ package memsys_test
 //
 // go test -v -run=SGLS -verbose=true -logtostderr=true
 //
-// For more examples, see other tests in this directory
+// For more examples, see the README in this directory
 //
 
 import (

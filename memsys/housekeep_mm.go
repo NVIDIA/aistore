@@ -35,7 +35,7 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 				x := s.cleanup()
 				if x > 0 {
 					freed += x
-					if glog.FastV(4, glog.SmoduleMemsys) {
+					if verbose {
 						glog.Infof("%s: idle for %v - cleanup", s.tag, idle)
 					}
 				}
@@ -152,7 +152,7 @@ func (r *MMSA) getNextInterval(free, total uint64, swapping bool) time.Duration 
 			changed = true
 		}
 	}
-	if changed && bool(glog.FastV(4, glog.SmoduleMemsys)) {
+	if changed && verbose {
 		glog.Infof("%s: timer %v, free %s", r.Name, r.duration, cmn.B2S(int64(free), 1))
 	}
 	return r.duration
@@ -210,7 +210,7 @@ func (r *MMSA) freeIdle(duration time.Duration) (freed int64) {
 			x := s.cleanup()
 			if x > 0 {
 				freed += x
-				if glog.FastV(4, glog.SmoduleMemsys) {
+				if verbose {
 					glog.Infof("%s: idle for %v - cleanup", s.tag, idle)
 				}
 			}
@@ -218,7 +218,7 @@ func (r *MMSA) freeIdle(duration time.Duration) (freed int64) {
 			x := s.reduce(minDepth, true /* idle */, false /* force */)
 			if x > 0 {
 				freed += x
-				if glog.FastV(4, glog.SmoduleMemsys) {
+				if verbose {
 					glog.Infof("%s: idle for %v - reduced %s", s.tag, idle, cmn.B2S(x, 1))
 				}
 			}

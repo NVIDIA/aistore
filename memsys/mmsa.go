@@ -131,7 +131,7 @@ const (
 	loadAvg       = 10                    // "idle" load average to deallocate Slabs when below
 	sizeToGC      = cmn.GiB * 2           // see heuristics ("Heu")
 	minMemFree    = cmn.GiB + cmn.MiB*256 // default minimum memory - see extended comment above
-	memCheckAbove = 90 * time.Second      // default memory checking frequency when above low watermark (see lowwm, setTimer())
+	memCheckAbove = 90 * time.Second      // default memory checking frequency when above low watermark
 	freeIdleMin   = memCheckAbove         // time to reduce an idle slab to a minimum depth (see mindepth)
 	freeIdleZero  = freeIdleMin * 2       // ... to zero
 )
@@ -142,6 +142,8 @@ const (
 )
 
 const SwappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
+
+// memory pressure
 const (
 	MemPressureLow = iota
 	MemPressureModerate
@@ -150,17 +152,6 @@ const (
 	OOM
 )
 
-var memPressureText = map[int]string{
-	MemPressureLow:      "low",
-	MemPressureModerate: "moderate",
-	MemPressureHigh:     "high",
-	MemPressureExtreme:  "extreme",
-	OOM:                 "OOM",
-}
-
-//
-// API types
-//
 type (
 	Slab struct {
 		m            *MMSA // parent
@@ -189,8 +180,8 @@ type (
 		rings         []*Slab
 		sorted        []*Slab
 		slabStats     *slabStats    // private counters and idle timestamp
-		statsSnapshot *Stats        // is a limited "snapshot" of slabStats; preallocated to reuse when house-keeping
-		toGC          atomic.Int64  // accumulates over time and triggers GC upon reaching the spec-ed limit
+		statsSnapshot *Stats        // pre-allocated limited "snapshot" of slabStats
+		toGC          atomic.Int64  // accumulates over time and triggers GC upon reaching spec-ed limit
 		minDepth      atomic.Int64  // minimum ring depth aka length
 		swap          atomic.Uint64 // actual swap size
 		slabIncStep   int64
@@ -219,12 +210,28 @@ type (
 )
 
 var (
-	gmm              = &MMSA{Name: gmmName, MinPctFree: 50}              // page-based MMSA for usage by packages *outside* ais
-	smm              = &MMSA{Name: smmName, MinPctFree: 50, Small: true} // memory manager for *small-size* allocations
-	gmmOnce, smmOnce sync.Once                                           // ensures singleton-ness
+	gmm              *MMSA     // page-based MMSA for usage by packages *other than* `ais`
+	smm              *MMSA     // memory manager for *small-size* allocations
+	gmmOnce, smmOnce sync.Once // ensures singleton-ness
+
+	memPressureText = map[int]string{
+		MemPressureLow:      "low",
+		MemPressureModerate: "moderate",
+		MemPressureHigh:     "high",
+		MemPressureExtreme:  "extreme",
+		OOM:                 "OOM",
+	}
+
+	verbose bool
 )
 
-// Global MMSA for usage by external clients and tools
+func init() {
+	gmm = &MMSA{Name: gmmName, MinPctFree: 50}
+	smm = &MMSA{Name: smmName, MinPctFree: 50, Small: true}
+	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
+}
+
+// default page-based memory-manager-slab-allocator (MMSA) for packages other than `ais`
 func DefaultPageMM() *MMSA {
 	gmmOnce.Do(func() {
 		gmm.Init(true)
@@ -236,6 +243,7 @@ func DefaultPageMM() *MMSA {
 	return gmm
 }
 
+// default small-size MMSA
 func DefaultSmallMM() *MMSA {
 	smmOnce.Do(func() {
 		smm.Init(true)
@@ -287,7 +295,8 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 	// 3. validate actual
 	required, actual := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree < r.MinFree {
-		err = fmt.Errorf("insufficient free memory %s, minimum required %s (see %s for guidance)", actual, required, readme)
+		err = fmt.Errorf("insufficient free memory %s, minimum required %s (see %s for guidance)",
+			actual, required, readme)
 		if panicOnErr {
 			panic(err)
 		}
@@ -366,7 +375,9 @@ func (r *MMSA) Terminate() {
 }
 
 // allocate SGL
-func (r *MMSA) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ...int64 /* slab buffer size */) *SGL {
+// - immediateSize: size to preallocate
+// - sbufSize: slab buffer size (optional)
+func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	var (
 		slab *Slab
 		n    int64
@@ -628,8 +639,8 @@ func (s *Slab) _allocSlow() (buf []byte) {
 }
 
 func (s *Slab) grow(cnt int) {
-	if glog.FastV(4, glog.SmoduleMemsys) {
-		debug.Infof("%s: grow by %d => %d", s.tag, cnt, len(s.put)+cnt)
+	if verbose {
+		glog.Infof("%s: grow by %d => %d", s.tag, cnt, len(s.put)+cnt)
 	}
 	for ; cnt > 0; cnt-- {
 		buf := make([]byte, s.Size())
@@ -649,8 +660,8 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if glog.FastV(4, glog.SmoduleMemsys) {
-			debug.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt)
+		if verbose {
+			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isIdle, lput, lput-cnt)
 		}
 
 		for ; cnt > 0; cnt-- {
@@ -673,8 +684,8 @@ func (s *Slab) reduce(todepth int, isIdle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if glog.FastV(4, glog.SmoduleMemsys) {
-			debug.Infof("%s(f=%t, i=%t): reduce lget %d => %d", s.tag, force, isIdle, lget, lget-cnt)
+		if verbose {
+			glog.Infof("%s(f=%t, i=%t): reduce lget %d => %d", s.tag, force, isIdle, lget, lget-cnt)
 		}
 		for ; cnt > 0; cnt-- {
 			s.get[s.pos] = nil
