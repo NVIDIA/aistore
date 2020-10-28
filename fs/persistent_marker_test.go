@@ -127,8 +127,93 @@ func testRemovePersisted(t *testing.T, mpaths fs.MPI) {
 	)
 
 	_, _ = fs.PersistOnMpaths(name, "", value, mpathsCnt/2)
-	fs.RemovePersisted(name)
+	for mpath := range mpaths {
+		os.RemoveAll(filepath.Join(mpath, name))
+	}
 	found := fs.FindPersisted(name)
 
 	tassert.Errorf(t, len(found) == 0, "expected all %q to be removed, found %d", name, len(found))
+}
+
+type markerEntry struct {
+	marker string
+	exists bool
+}
+
+func checkMarkersExist(t *testing.T, xs ...markerEntry) {
+	for _, x := range xs {
+		exists := fs.MarkerExists(x.marker)
+		tassert.Fatalf(t, exists == x.exists, "%q marker (%t vs %t)", x.marker, exists, x.exists)
+	}
+}
+
+func TestMarkers(t *testing.T) {
+	const mpathsCnt = 5
+	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
+	defer tutils.RemoveMountPaths(t, mpaths)
+
+	checkMarkersExist(t,
+		markerEntry{marker: fs.RebalanceMarker, exists: false},
+		markerEntry{marker: fs.ResilverMarker, exists: false},
+	)
+
+	err := fs.PersistMarker(fs.RebalanceMarker)
+	tassert.CheckFatal(t, err)
+
+	checkMarkersExist(t,
+		markerEntry{marker: fs.RebalanceMarker, exists: true},
+		markerEntry{marker: fs.ResilverMarker, exists: false},
+	)
+
+	err = fs.PersistMarker(fs.ResilverMarker)
+	tassert.CheckFatal(t, err)
+
+	checkMarkersExist(t,
+		markerEntry{marker: fs.RebalanceMarker, exists: true},
+		markerEntry{marker: fs.ResilverMarker, exists: true},
+	)
+
+	fs.RemoveMarker(fs.RebalanceMarker)
+
+	checkMarkersExist(t,
+		markerEntry{marker: fs.RebalanceMarker, exists: false},
+		markerEntry{marker: fs.ResilverMarker, exists: true},
+	)
+
+	fs.RemoveMarker(fs.ResilverMarker)
+
+	checkMarkersExist(t,
+		markerEntry{marker: fs.RebalanceMarker, exists: false},
+		markerEntry{marker: fs.ResilverMarker, exists: false},
+	)
+}
+
+func TestMarkersClear(t *testing.T) {
+	const mpathsCnt = 5
+	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
+	defer tutils.RemoveMountPaths(t, mpaths)
+
+	checkMarkersExist(t,
+		markerEntry{marker: fs.RebalanceMarker, exists: false},
+		markerEntry{marker: fs.ResilverMarker, exists: false},
+	)
+
+	err := fs.PersistMarker(fs.RebalanceMarker)
+	tassert.CheckFatal(t, err)
+	err = fs.PersistMarker(fs.ResilverMarker)
+	tassert.CheckFatal(t, err)
+
+	checkMarkersExist(t,
+		markerEntry{marker: fs.RebalanceMarker, exists: true},
+		markerEntry{marker: fs.ResilverMarker, exists: true},
+	)
+
+	for _, mpath := range mpaths {
+		fs.ClearMDOnMpath(mpath)
+	}
+
+	checkMarkersExist(t,
+		markerEntry{marker: fs.RebalanceMarker, exists: false},
+		markerEntry{marker: fs.ResilverMarker, exists: false},
+	)
 }

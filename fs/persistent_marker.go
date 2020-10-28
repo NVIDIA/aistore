@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	NodeRestartedMarker = ".ais.noderestarted"
-	RebalanceMarker     = ".ais.rebalance_marker"
-	ResilverMarker      = ".ais.resilver_marker"
+	NodeRestartedMarker = "node_restarted"
+	RebalanceMarker     = "rebalance"
+	ResilverMarker      = "resilver"
+	markersDirName      = ".ais.markers"
 
 	BmdPersistedFileName = ".ais.bmd"
 	BmdPersistedPrevious = BmdPersistedFileName + ".prev" // previous version
@@ -28,10 +29,7 @@ const (
 
 // List of AIS metadata files stored
 var mdFiles = []string{
-	NodeRestartedMarker,
-
-	RebalanceMarker,
-	ResilverMarker,
+	markersDirName,
 
 	BmdPersistedFileName,
 	BmdPersistedPrevious,
@@ -40,15 +38,29 @@ var mdFiles = []string{
 }
 
 func MarkerExists(marker string) bool {
-	return len(FindPersisted(marker)) > 0
+	markerPath := filepath.Join(markersDirName, marker)
+	return len(FindPersisted(markerPath)) > 0
 }
 
 func PersistMarker(marker string) error {
-	cnt, available := PersistOnMpaths(marker, "", nil, 1)
+	markerPath := filepath.Join(markersDirName, marker)
+	cnt, available := PersistOnMpaths(markerPath, "", nil, 1)
 	if cnt == 0 {
 		return fmt.Errorf("failed to persist marker %q (available mountPaths: %d)", marker, available)
 	}
 	return nil
+}
+
+func RemoveMarker(marker string) {
+	var (
+		mpaths, _  = Get()
+		markerPath = filepath.Join(markersDirName, marker)
+	)
+	for _, mpath := range mpaths {
+		if err := cmn.RemoveFile(filepath.Join(mpath.Path, markerPath)); err != nil {
+			glog.Errorf("Failed to cleanup %q from %q, err: %v", markerPath, mpath.Path, err)
+		}
+	}
 }
 
 // PersistOnMpaths persists `what` on mountpaths under "mountpath.Path/path" filename.
@@ -88,7 +100,7 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 
 		// 3. (Optional) Clean up very old versions of persisted data - only if they were not updated.
 		if backupPath != "" && !moved {
-			if err := os.Remove(filepath.Join(mpath.Path, backupPath)); err != nil && !os.IsNotExist(err) {
+			if err := cmn.RemoveFile(filepath.Join(mpath.Path, backupPath)); err != nil {
 				glog.Error(err)
 			}
 		}
@@ -113,16 +125,7 @@ func movePersistedFile(from, to string) bool {
 func ClearMDOnMpath(mpath *MountpathInfo) {
 	for _, path := range mdFiles {
 		fpath := filepath.Join(mpath.Path, path)
-		os.Remove(fpath)
-	}
-}
-
-func RemovePersisted(path string) {
-	mpaths, _ := Get()
-	for _, mpath := range mpaths {
-		if err := os.Remove(filepath.Join(mpath.Path, path)); err != nil && !os.IsNotExist(err) {
-			glog.Errorf("Failed to cleanup %q from %q, err: %v", path, mpath.Path, err)
-		}
+		os.RemoveAll(fpath)
 	}
 }
 
