@@ -7,18 +7,14 @@ package transport_test
 
 // How to run:
 //
-// 1) run all tests while redirecting errors to standard error:
+// 1) run all tests while redirecting glog to STDERR:
 // go test -v -logtostderr=true
 //
-// 2) run a given test (name matching "Multi") with debug enabled:
-// AIS_DEBUG=transport=1 go test -v -run=Multi
+// 2) run tests matching "Multi" with debug enabled and glog level=1 (non-verbose):
+// AIS_DEBUG=transport=1 go test -v -run=Multi -tags=debug
 //
-// 3) same, with no debug and for 2 minutes instead of (the default) 30s
-// go test -v -run=Multi -duration 2m
-//
-// 4) same as above non-verbose
-// go test -run=Multi -duration 2m
-//
+// 3) run tests matching "Multi" with debug enabled, glog level=4 (super-verbose) and glog redirect:
+// AIS_DEBUG=transport=4 go test -v -run=Multi -tags=debug -logtostderr=true
 
 import (
 	"encoding/binary"

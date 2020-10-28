@@ -31,7 +31,7 @@ To test with net/http, run:
 $ go test -v -tags=nethttp
 ```
 
-or, the same, with logs redirected to stdout:
+or, the same, with logs redirected to STDERR:
 
 ```console
 $ go test -v -logtostderr=true -tags=nethttp
@@ -235,25 +235,32 @@ Finally, there are two important facts to remember:
 
 ## Testing
 
-* To run all tests while redirecting log to STDERR:
+* **Run all tests while redirecting glog to STDERR**:
 
 ```console
 $ go test -v -logtostderr=true
 ```
 
-* To run a test with a name matching "Multi", verbose logging and enabled assertions:
+* **Run tests matching "Multi" with debug-enabled assertions and glog level=1 (non-verbose)**:
 
 ```console
-$ AIS_DEBUG=transport=1 go test -v -run=Multi
+$ AIS_DEBUG=transport=1 go test -v -run=Multi -tags=debug
 ```
 
-Use `nethttp` build tag to run with net/http, e.g.:
+* **Same as above, with super-verbose glog**:
+
+```console
+$ AIS_DEBUG=transport=4 go test -v -run=Multi -tags=debug -logtostderr=true
+```
+
+
+* **Use `nethttp` build tag to run with net/http, e.g.**:
 
 ```console
 $ go test -v -tags=nethttp
 ```
 
-The same with fasthttp (which is the current default):
+* **The same with fasthttp (the current default)**:
 
 ```console
 $ go test -v

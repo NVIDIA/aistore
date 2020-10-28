@@ -26,9 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-// e.g.:
-// # go test -v -run=Test_CompressedOne -logtostderr=true
-
 var cpbuf = make([]byte, 32*cmn.KiB)
 
 func receive10G(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {

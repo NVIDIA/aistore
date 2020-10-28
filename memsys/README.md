@@ -102,7 +102,7 @@ memory falls below watermark.
 
 ## Testing
 
-* **Run all tests while redirecting errors to STDERR**:
+* **Run all tests while redirecting glog to STDERR**:
 
 ```console
 $ go test -v -logtostderr=true
@@ -120,7 +120,7 @@ $ AIS_DEBUG=memsys=4 go test -v -logtostderr=true -duration 2m -tags=debug
 $ go test -v -logtostderr=true -run=Test_Sleep -duration=100s
 ```
 
-* **Run each test for 10 minutes with the permission to use up to 90% of total RAM (and errors => STDERR)**
+* **Run each test for 10 minutes with the permission to use up to 90% of total RAM (and glog => STDERR)**
 
 ```console
 $ AIS_MINMEM_PCT_TOTAL=10 AIS_DEBUG=memsys=1 go test -v -logtostderr=true -run=No -duration 10m -timeout=1h
