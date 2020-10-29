@@ -53,7 +53,7 @@ var _ = Describe("newConcAdjuster", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 
 		fs.Init(mios)
-		_ = fs.Add(testingConfigDir)
+		_, _ = fs.Add(testingConfigDir)
 
 		config := cmn.GCO.BeginUpdate()
 		config.Disk.IostatTimeShort = 10 * time.Millisecond

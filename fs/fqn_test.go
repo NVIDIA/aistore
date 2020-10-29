@@ -243,7 +243,7 @@ func TestParseFQN(t *testing.T) {
 					cmn.CreateDir(mpath)
 					defer os.RemoveAll(mpath)
 				}
-				err := fs.Add(mpath)
+				_, err := fs.Add(mpath)
 				tassert.CheckFatal(t, err)
 			}
 			fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
@@ -334,7 +334,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 				cmn.CreateDir(tt.mpath)
 				defer os.RemoveAll(tt.mpath)
 			}
-			err := fs.Add(tt.mpath)
+			_, err := fs.Add(tt.mpath)
 			tassert.CheckFatal(t, err)
 
 			fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})

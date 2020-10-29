@@ -54,7 +54,7 @@ func TestWalkBck(t *testing.T) {
 				err = cmn.CreateDir(mpath)
 				tassert.CheckFatal(t, err)
 
-				err = fs.Add(mpath)
+				_, err = fs.Add(mpath)
 				tassert.CheckFatal(t, err)
 
 				mpaths = append(mpaths, mpath)
@@ -141,7 +141,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		err = cmn.CreateDir(mpath)
 		tassert.CheckFatal(t, err)
 
-		err = fs.Add(mpath)
+		_, err = fs.Add(mpath)
 		tassert.CheckFatal(t, err)
 		mpaths[mpath] = &mpathMeta{total: 0, done: false}
 	}

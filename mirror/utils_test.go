@@ -36,8 +36,8 @@ var _ = Describe("Mirror", func() {
 
 	fs.Init()
 	fs.DisableFsIDCheck()
-	_ = fs.Add(mpath)
-	_ = fs.Add(mpath2)
+	_, _ = fs.Add(mpath)
+	_, _ = fs.Add(mpath2)
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 

@@ -74,7 +74,14 @@ func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error
 	if len(res.bytes) == 0 {
 		return
 	}
-	err = t.applyRegMeta(res.bytes, "")
+
+	if err = t.applyRegMeta(res.bytes, ""); err != nil {
+		return
+	}
+
+	if err := fs.CreateVMD(t.si.ID()).Persist(); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
 	return
 }
 
@@ -784,7 +791,7 @@ func (t *targetrunner) testCachepathMounts() {
 			cmn.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
 		}
 
-		err := fs.Add(mpath)
+		_, err := fs.Add(mpath)
 		cmn.AssertNoErr(err)
 	}
 }

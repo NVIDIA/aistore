@@ -56,7 +56,7 @@ func initProxyDaemonID(config *cmn.Config, publicAddr *net.TCPAddr) (daemonID st
 
 persist:
 	if err := writeProxyDID(config, daemonID); err != nil {
-		glog.Fatal(err)
+		cmn.ExitLogf("%v", err)
 	}
 
 	return daemonID
@@ -97,7 +97,7 @@ func initTargetDaemonID(config *cmn.Config, publicAddr *net.TCPAddr) (daemonID s
 
 persist:
 	if err := fs.CreateVMD(daemonID).Persist(); err != nil {
-		glog.Fatal(err)
+		cmn.ExitLogf("%v", err)
 	}
 
 	return daemonID

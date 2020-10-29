@@ -84,7 +84,7 @@ func ReadVMD() (err error, mainVMD *VMD) {
 
 		if mainVMD != nil {
 			if !mainVMD.cksum.Equal(vmd.cksum) {
-				glog.Fatalf("VMD is different (%q): %v vs %v", fpath, mainVMD, vmd)
+				cmn.ExitLogf("VMD is different (%q): %v vs %v", fpath, mainVMD, vmd)
 			}
 			continue
 		}

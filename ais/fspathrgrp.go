@@ -6,6 +6,7 @@ package ais
 
 import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -30,74 +31,96 @@ func (g *fsprungroup) init(t *targetrunner) {
 // enableMountpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
-	gfnActive := g.t.gfn.local.Activate()
-	if enabled, err = fs.Enable(mpath); err != nil || !enabled {
+	var (
+		gfnActive    = g.t.gfn.local.Activate()
+		enabledMpath *fs.MountpathInfo
+	)
+	if enabledMpath, err = fs.Enable(mpath); err != nil || enabledMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
-		return
+		return false, err
 	}
 
-	g.addMpathEvent(enableMpathAct, mpath)
-	return
+	g.addMpathEvent(enableMpathAct, enabledMpath)
+	return true, nil
 }
 
 // disableMountpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) {
-	gfnActive := g.t.gfn.local.Activate()
-	if disabled, err = fs.Disable(mpath); err != nil || !disabled {
+	var (
+		gfnActive     = g.t.gfn.local.Activate()
+		disabledMpath *fs.MountpathInfo
+	)
+	if disabledMpath, err = fs.Disable(mpath); err != nil || disabledMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
-		return disabled, err
+		return false, err
 	}
 
-	g.delMpathEvent(disableMpathAct)
+	g.delMpathEvent(disableMpathAct, disabledMpath)
 	return true, nil
 }
 
 // addMountpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
 func (g *fsprungroup) addMountpath(mpath string) (err error) {
-	gfnActive := g.t.gfn.local.Activate()
-	if err = fs.Add(mpath); err != nil {
+	var (
+		gfnActive  = g.t.gfn.local.Activate()
+		addedMpath *fs.MountpathInfo
+	)
+	if addedMpath, err = fs.Add(mpath); err != nil || addedMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
 		return
 	}
 
-	g.addMpathEvent(addMpathAct, mpath)
+	g.addMpathEvent(addMpathAct, addedMpath)
 	return
 }
 
 // removeMountpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
 func (g *fsprungroup) removeMountpath(mpath string) (err error) {
-	gfnActive := g.t.gfn.local.Activate()
-	if err = fs.Remove(mpath); err != nil {
+	var (
+		gfnActive    = g.t.gfn.local.Activate()
+		removedMpath *fs.MountpathInfo
+	)
+	if removedMpath, err = fs.Remove(mpath); err != nil || removedMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}
 		return
 	}
 
-	g.delMpathEvent(removeMpathAct)
+	g.delMpathEvent(removeMpathAct, removedMpath)
 	return
 }
 
-func (g *fsprungroup) addMpathEvent(action, mpath string) {
+func (g *fsprungroup) addMpathEvent(action string, mpath *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 	go func() {
 		g.t.runResilver("", false /*skipGlobMisplaced*/)
 		xreg.RenewMakeNCopies(g.t, "add-mp")
 	}()
-	g.checkEnable(action, mpath)
+
+	g.t.owner.bmd.persist()
+	if err := fs.CreateVMD(g.t.si.ID()).Persist(); err != nil {
+		cmn.ExitLogf("%v", err.Error())
+	}
+
+	g.checkEnable(action, mpath.Path)
 }
 
-func (g *fsprungroup) delMpathEvent(action string) {
+func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
+
+	go mpath.EvictLomCache()
+	fs.ClearMDOnMpath(mpath) // clear AIS metadata
+
 	if g.checkZeroMountpaths(action) {
 		return
 	}

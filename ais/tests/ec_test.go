@@ -2290,7 +2290,7 @@ func init() {
 	fs.Init()
 	fs.DisableFsIDCheck()
 	for _, mpath := range mpaths {
-		_ = fs.Add(mpath)
+		_, _ = fs.Add(mpath)
 	}
 
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})

@@ -56,6 +56,7 @@ type (
 		init()
 		get() (bmd *bucketMD)
 		put(bmd *bucketMD)
+		persist()
 		modify(*bmdModifier) (*bucketMD, error)
 	}
 	bmdOwnerBase struct {
@@ -228,8 +229,11 @@ func (bo *bmdOwnerPrx) init() {
 
 func (bo *bmdOwnerPrx) put(bmd *bucketMD) {
 	bo._put(bmd)
-	err := jsp.Save(bo.fpath, bmd, jsp.CCSign())
-	if err != nil {
+	bo.persist()
+}
+
+func (bo *bmdOwnerPrx) persist() {
+	if err := jsp.Save(bo.fpath, bo.get(), jsp.CCSign()); err != nil {
 		glog.Errorf("failed to write %s as %s, err: %v", bmdTermName, bo.fpath, err)
 	}
 }
@@ -283,13 +287,13 @@ finalize:
 
 func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	bo._put(bmd)
+	bo.persist()
+}
 
-	// Fresh BMD becoming Persisted BMDs
-	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, jsp.CCSign())
+func (bo *bmdOwnerTgt) persist() {
+	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bo.get(), bmdCopies, jsp.CCSign())
 	if persistedOn == 0 {
-		glog.Errorf("failed to store any %s on %d mpaths", bmdTermName, availMpaths)
-		// TODO: recover persisted from `BmdPersistedPrevious`?
-		return
+		glog.Errorf("Failed to store any %s on %d mpaths", bmdTermName, availMpaths)
 	}
 }
 
