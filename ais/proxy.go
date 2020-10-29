@@ -78,16 +78,10 @@ type (
 	}
 )
 
-func (rp *reverseProxy) init() {
-	cfg := cmn.GCO.Get()
-	rp.cloud = &httputil.ReverseProxy{
-		Director: func(r *http.Request) {},
-		Transport: cmn.NewTransport(cmn.TransportArgs{
-			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
-			SkipVerify: cfg.Net.HTTP.SkipVerify,
-		}),
-	}
-}
+// interface guard
+var (
+	_ cmn.Runner = &proxyrunner{}
+)
 
 func (p *proxyrunner) initClusterCIDR() {
 	if nodeCIDR := os.Getenv("AIS_CLUSTER_CIDR"); nodeCIDR != "" {
@@ -3832,6 +3826,21 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 	}
 	statusCode = res.status
 	return
+}
+
+//////////////////
+// reverseProxy //
+//////////////////
+
+func (rp *reverseProxy) init() {
+	cfg := cmn.GCO.Get()
+	rp.cloud = &httputil.ReverseProxy{
+		Director: func(r *http.Request) {},
+		Transport: cmn.NewTransport(cmn.TransportArgs{
+			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
+			SkipVerify: cfg.Net.HTTP.SkipVerify,
+		}),
+	}
 }
 
 ////////////////

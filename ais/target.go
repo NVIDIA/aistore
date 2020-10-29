@@ -93,6 +93,11 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ cmn.Runner = &targetrunner{}
+)
+
 //////////////
 // base gfn //
 //////////////

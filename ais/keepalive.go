@@ -99,6 +99,12 @@ type KeepaliveTracker interface {
 	TimedOut(id string) bool
 }
 
+// interface guard
+var (
+	_ cmn.Runner = &targetKeepaliveRunner{}
+	_ cmn.Runner = &proxyKeepaliveRunner{}
+)
+
 func newTargetKeepaliveRunner(t *targetrunner, statsT stats.Tracker, startedUp *atomic.Bool) *targetKeepaliveRunner {
 	config := cmn.GCO.Get()
 

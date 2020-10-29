@@ -40,6 +40,11 @@ var (
 // 2. provides each stream with its own idle timer (with timeout measured in ticks - see tickUnit)
 // 3. deactivates idle streams
 
+// interface guard
+var (
+	_ cmn.Runner = &StreamCollector{}
+)
+
 func Init() *StreamCollector {
 	cmn.Assert(gc == nil)
 

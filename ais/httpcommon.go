@@ -1695,7 +1695,11 @@ rret:
 }
 
 // Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.
-func rpErrHandler(rw http.ResponseWriter, req *http.Request, err error) {
-	glog.Errorf("Reverse proxy error handler (req: %v) (err: %v)", req, err)
-	rw.WriteHeader(http.StatusBadGateway)
+func rpErrHandler(w http.ResponseWriter, r *http.Request, err error) {
+	msg := fmt.Sprintf("Reverse proxy err %v, req: %s %s", err, r.Method, r.URL.Path)
+	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
+		msg += " (from " + caller + ")"
+	}
+	glog.Errorln(msg)
+	w.WriteHeader(http.StatusBadGateway)
 }

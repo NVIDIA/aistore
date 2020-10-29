@@ -54,6 +54,11 @@ type (
 
 var DefaultHK *housekeeper
 
+// interface guard
+var (
+	_ cmn.Runner = &housekeeper{}
+)
+
 func init() {
 	DefaultHK = &housekeeper{
 		workCh:  make(chan request, 16),
