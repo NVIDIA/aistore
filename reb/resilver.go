@@ -66,8 +66,11 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	// Wait for abort or joggers to finish.
 	select {
 	case <-xact.ChanAbort():
-		err := jg.Stop()
-		glog.Errorf("Resilver failed with err: %v", err)
+		if err := jg.Stop(); err != nil {
+			glog.Errorf("Resilver (id=%q) aborted, stopped with err: %v", id, err)
+		} else {
+			glog.Infof("Resilver (id=%q) aborted", id)
+		}
 	case <-jg.ListenFinished():
 		fs.RemoveMarker(fs.ResilverMarker)
 	}
