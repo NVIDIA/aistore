@@ -34,6 +34,7 @@ type (
 /////////////
 
 func (r *Prunner) Run() error                  { return r.runcommon(r) }
+func (r *Prunner) CoreStats() *CoreStats       { return r.Core }
 func (r *Prunner) Get(name string) (val int64) { return r.Core.get(name) }
 
 // All stats that proxy currently has are CoreStats which are registered at startup
@@ -44,13 +45,14 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.ctracker = make(copyTracker, 24)
 	r.Core.initStatsD(p.Snode())
 
+	r.statsRunner.name = "proxystats"
 	r.statsRunner.daemon = p
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan NamedVal64, 256)
 
 	// subscribe to config changes
-	cmn.GCO.Reg(r.GetRunName(), r)
+	cmn.GCO.Reg(r.name, r)
 	return &r.statsRunner.startedUp
 }
 

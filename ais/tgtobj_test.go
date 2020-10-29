@@ -69,7 +69,7 @@ func TestMain(m *testing.M) {
 		smm: memsys.DefaultSmallMM(),
 	}
 	t.initSI(cmn.Target)
-	t.init(nil, cmn.GCO.Get())
+	t.init(cmn.GCO.Get())
 	t.statsT = stats.NewTrackerMock()
 	t.owner.bmd = newBMDOwnerTgt()
 	cluster.InitTarget()

@@ -205,7 +205,7 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 		glog.Infof("rebalance (v%d) in %s state", md.id, stages[rebStageInit])
 	}
 
-	xact := xreg.RenewRebalance(md.id, reb.statRunner)
+	xact := xreg.RenewRebalance(md.id, reb.statTracker)
 	if xact == nil {
 		return false
 	}
@@ -564,7 +564,7 @@ func (rj *rebalanceJogger) objSentCallback(hdr transport.ObjHdr, r io.ReadCloser
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode(), hdr.Bck, hdr.ObjName, err)
 		return
 	}
-	rj.m.statRunner.AddMany(
+	rj.m.statTracker.AddMany(
 		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
 		stats.NamedVal64{Name: stats.RebTxSize, Value: hdr.ObjAttrs.Size})
 }

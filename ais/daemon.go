@@ -25,18 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-// runners
-const (
-	xstreamc         = "stream-collector"
-	xproxystats      = "proxystats"
-	xstorstats       = "storstats"
-	xproxykeepalive  = "proxykeepalive"
-	xtargetkeepalive = "targetkeepalive"
-	xmetasyncer      = "metasyncer"
-	xfshc            = "fshc"
-	xhk              = "housekeeper"
-)
-
 // not to confuse with default ones, see memsys/mmsa.go
 const (
 	gmmName = ".ais.mm"
@@ -71,9 +59,8 @@ type (
 	}
 
 	rungroup struct {
-		runarr []cmn.Runner
-		runmap map[string]cmn.Runner // redundant, named
-		errCh  chan error
+		rs    map[string]cmn.Runner
+		errCh chan error
 	}
 )
 
@@ -82,21 +69,22 @@ var (
 	daemon = daemonCtx{}
 )
 
-// rungroup
-func (g *rungroup) add(r cmn.Runner, name string) {
-	r.SetRunName(name)
-	g.runarr = append(g.runarr, r)
-	g.runmap[name] = r
+func (g *rungroup) add(r cmn.Runner) {
+	cmn.Assert(r.Name() != "")
+	_, exists := g.rs[r.Name()]
+	cmn.Assert(!exists)
+
+	g.rs[r.Name()] = r
 }
 
-func (g *rungroup) run(rmain cmn.Runner) error {
+func (g *rungroup) run(mainRunner cmn.Runner) error {
 	var rdone cmn.Runner
-	g.errCh = make(chan error, len(g.runarr))
-	for _, r := range g.runarr {
+	g.errCh = make(chan error, len(g.rs))
+	for _, r := range g.rs {
 		go func(r cmn.Runner) {
 			err := r.Run()
 			if err != nil {
-				glog.Warningf("runner [%s] exited with err [%v]", r.GetRunName(), err)
+				glog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
 			}
 			rdone = r
 			g.errCh <- err
@@ -105,16 +93,16 @@ func (g *rungroup) run(rmain cmn.Runner) error {
 
 	// Stop all runners, target (or proxy) first.
 	err := <-g.errCh
-	if rdone != rmain {
-		rmain.Stop(err)
+	if rdone.Name() != mainRunner.Name() {
+		mainRunner.Stop(err)
 	}
-	for _, r := range g.runarr {
-		if r != rmain {
+	for _, r := range g.rs {
+		if r.Name() != mainRunner.Name() {
 			r.Stop(err)
 		}
 	}
 	// Wait for all terminations.
-	for i := 0; i < len(g.runarr)-1; i++ {
+	for i := 0; i < len(g.rs)-1; i++ {
 		<-g.errCh
 	}
 	return err
@@ -233,13 +221,10 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	// Initialize filesystem/mountpaths manager.
 	fs.Init()
 
-	// NOTE: daemon terminations get executed in the same exact order as initializations below
-	daemon.rg = &rungroup{
-		runarr: make([]cmn.Runner, 0, 8),
-		runmap: make(map[string]cmn.Runner, 8),
-	}
+	// NOTE: Daemon terminations get executed in the same exact order as initializations below.
+	daemon.rg = &rungroup{rs: make(map[string]cmn.Runner, 8)}
 
-	daemon.rg.add(hk.DefaultHK, xhk)
+	daemon.rg.add(hk.DefaultHK)
 	if daemon.cli.role == cmn.Proxy {
 		rmain = initProxy()
 	} else {
@@ -253,14 +238,20 @@ func initProxy() cmn.Runner {
 	_ = p.gmm.Init(true /*panicOnErr*/)
 	p.initSI(cmn.Proxy)
 	p.initClusterCIDR()
-	daemon.rg.add(p, cmn.Proxy)
+	daemon.rg.add(p)
 
 	ps := &stats.Prunner{}
 	startedUp := ps.Init(p)
-	daemon.rg.add(ps, xproxystats)
+	daemon.rg.add(ps)
+	p.statsT = ps
 
-	daemon.rg.add(newProxyKeepaliveRunner(p, ps, startedUp), xproxykeepalive)
-	daemon.rg.add(newMetasyncer(p), xmetasyncer)
+	k := newProxyKeepaliveRunner(p, ps, startedUp)
+	daemon.rg.add(k)
+	p.keepalive = k
+
+	m := newMetasyncer(p)
+	daemon.rg.add(m)
+	p.metasyncer = m
 	return p
 }
 
@@ -293,22 +284,26 @@ func initTarget() cmn.Runner {
 
 	t.initSI(cmn.Target)
 	t.initHostIP()
-	daemon.rg.add(t, cmn.Target)
+	daemon.rg.add(t)
 
 	ts := &stats.Trunner{T: t} // iostat below
 	startedUp := ts.Init(t)
-	daemon.rg.add(ts, xstorstats)
+	daemon.rg.add(ts)
+	t.statsT = ts
 
-	daemon.rg.add(newTargetKeepaliveRunner(t, ts, startedUp), xtargetkeepalive)
+	k := newTargetKeepaliveRunner(t, ts, startedUp)
+	daemon.rg.add(k)
+	t.keepalive = k
 
 	t.fsprg.init(t) // subgroup of the daemon.rg rungroup
 
 	// Stream Collector - a singleton object with responsibilities that include:
 	sc := transport.Init()
-	daemon.rg.add(sc, xstreamc)
+	daemon.rg.add(sc)
 
 	fshc := health.NewFSHC(t, t.gmm, fs.CSM)
-	daemon.rg.add(fshc, xfshc)
+	daemon.rg.add(fshc)
+	t.fshc = fshc
 
 	housekeep, initialInterval := cluster.LomCacheHousekeep(t.gmm, t)
 	hk.Reg("lom-cache", housekeep, initialInterval)
@@ -345,51 +340,4 @@ func Run(version, build string) int {
 	}
 	glog.Errorf("Terminated with err: %s", err)
 	return 1
-}
-
-//==================
-//
-// global helpers
-//
-//==================
-func getproxystatsrunner() *stats.Prunner {
-	r := daemon.rg.runmap[xproxystats]
-	rr, ok := r.(*stats.Prunner)
-	cmn.Assert(ok)
-	return rr
-}
-
-func getproxykeepalive() *proxyKeepaliveRunner {
-	r := daemon.rg.runmap[xproxykeepalive]
-	rr, ok := r.(*proxyKeepaliveRunner)
-	cmn.Assert(ok)
-	return rr
-}
-
-func gettargetkeepalive() *targetKeepaliveRunner {
-	r := daemon.rg.runmap[xtargetkeepalive]
-	rr, ok := r.(*targetKeepaliveRunner)
-	cmn.Assert(ok)
-	return rr
-}
-
-func getstorstatsrunner() *stats.Trunner {
-	r := daemon.rg.runmap[xstorstats]
-	rr, ok := r.(*stats.Trunner)
-	cmn.Assert(ok)
-	return rr
-}
-
-func getmetasyncer() *metasyncer {
-	r := daemon.rg.runmap[xmetasyncer]
-	rr, ok := r.(*metasyncer)
-	cmn.Assert(ok)
-	return rr
-}
-
-func getfshealthchecker() *health.FSHC {
-	r := daemon.rg.runmap[xfshc]
-	rr, ok := r.(*health.FSHC)
-	cmn.Assert(ok)
-	return rr
 }

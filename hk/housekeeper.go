@@ -42,7 +42,6 @@ type (
 	timedActions []timedAction
 
 	housekeeper struct {
-		cmn.Named
 		stopCh  *cmn.StopCh
 		sigCh   chan os.Signal
 		actions *timedActions
@@ -98,6 +97,7 @@ func Unreg(name string) {
 	}
 }
 
+func (hk *housekeeper) Name() string { return "housekeeper" }
 func (hk *housekeeper) Run() (err error) {
 	signal.Notify(hk.sigCh,
 		syscall.SIGHUP,  // kill -SIGHUP XXXX

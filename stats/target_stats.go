@@ -87,6 +87,7 @@ type (
 
 func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(name, kind) }
 func (r *Trunner) Run() error                  { return r.runcommon(r) }
+func (r *Trunner) CoreStats() *CoreStats       { return r.Core }
 func (r *Trunner) Get(name string) (val int64) { return r.Core.get(name) }
 
 func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
@@ -100,13 +101,14 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	config := cmn.GCO.Get()
 	r.Core.statsTime = config.Periodic.StatsTime
 
+	r.statsRunner.name = "targetstats"
 	r.statsRunner.daemon = t
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan NamedVal64, 256)
 
 	// subscribe to config changes
-	cmn.GCO.Reg(r.GetRunName(), r)
+	cmn.GCO.Reg(r.Name(), r)
 	return &r.statsRunner.startedUp
 }
 

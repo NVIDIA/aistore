@@ -137,7 +137,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 	// TODO: lom.SetCustomMD(cluster.AmazonMD5ObjMD, checksum)
 
 	if err, errCode := t.doPut(r, lom, started); err != nil {
-		t.fshc(err, lom.FQN)
+		t.fsErr(err, lom.FQN)
 		t.invalmsghdlr(w, r, err.Error(), errCode)
 		return
 	}

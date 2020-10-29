@@ -6,15 +6,8 @@ package cmn
 
 type (
 	Runner interface {
-		SetRunName(string)
-		GetRunName() string
+		Name() string
 		Run() error
 		Stop(error)
 	}
-	Named struct {
-		name string
-	}
 )
-
-func (r *Named) SetRunName(n string) { r.name = n }
-func (r *Named) GetRunName() string  { return r.name }

@@ -42,6 +42,7 @@ type keepaliver interface {
 	heardFrom(sid string, reset bool)
 	doKeepalive() (stopped bool)
 	isTimeToPing(sid string) bool
+	send(msg string)
 
 	cmn.ConfigListener
 }
@@ -57,7 +58,7 @@ type proxyKeepaliveRunner struct {
 }
 
 type keepalive struct {
-	cmn.Named
+	name                       string
 	k                          keepaliver
 	kt                         KeepaliveTracker
 	tt                         *timeoutTracker
@@ -102,6 +103,7 @@ func newTargetKeepaliveRunner(t *targetrunner, statsT stats.Tracker, startedUp *
 	config := cmn.GCO.Get()
 
 	tkr := &targetKeepaliveRunner{t: t}
+	tkr.keepalive.name = "targetkeepalive"
 	tkr.keepalive.k = tkr
 	tkr.statsT = statsT
 	tkr.keepalive.startedUp = startedUp
@@ -117,6 +119,7 @@ func newProxyKeepaliveRunner(p *proxyrunner, statsT stats.Tracker, startedUp *at
 	config := cmn.GCO.Get()
 
 	pkr := &proxyKeepaliveRunner{p: p}
+	pkr.keepalive.name = "proxykeepalive"
 	pkr.keepalive.k = pkr
 	pkr.statsT = statsT
 	pkr.keepalive.startedUp = startedUp
@@ -388,12 +391,14 @@ func (k *keepalive) waitStatsRunner() (stopped bool) {
 	}
 }
 
+func (k *keepalive) Name() string { return k.name }
+
 func (k *keepalive) Run() error {
 	if k.waitStatsRunner() {
 		// Stopped during waiting - must return.
 		return nil
 	}
-	glog.Infof("Starting %s", k.GetRunName())
+	glog.Infof("Starting %s", k.Name())
 	var (
 		ticker    = time.NewTicker(k.interval)
 		lastCheck int64
@@ -523,7 +528,7 @@ func (k *keepalive) isTimeToPing(sid string) bool {
 }
 
 func (k *keepalive) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", k.GetRunName(), err)
+	glog.Infof("Stopping %s, err: %v", k.Name(), err)
 	k.controlCh <- controlSignal{msg: kaStopMsg}
 	close(k.controlCh)
 }

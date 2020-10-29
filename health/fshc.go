@@ -36,7 +36,6 @@ type (
 		DisableMountpath(path, reason string) (disabled bool, err error)
 	}
 	FSHC struct {
-		cmn.Named
 		stopCh      chan struct{}
 		fileListCh  chan string
 		mm          *memsys.MMSA
@@ -59,9 +58,9 @@ func NewFSHC(dispatcher fspathDispatcher, mm *memsys.MMSA, ctxResolver *fs.Conte
 	}
 }
 
-// as a runner
+func (f *FSHC) Name() string { return "fshc" }
 func (f *FSHC) Run() error {
-	glog.Infof("Starting %s", f.GetRunName())
+	glog.Infof("Starting %s", f.Name())
 
 	for {
 		select {
@@ -80,7 +79,7 @@ func (f *FSHC) Run() error {
 }
 
 func (f *FSHC) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", f.GetRunName(), err)
+	glog.Infof("Stopping %s, err: %v", f.Name(), err)
 	f.stopCh <- struct{}{}
 }
 

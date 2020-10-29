@@ -284,7 +284,6 @@ func (tctx *testContext) teardown() {
 
 var _ = Describe("Distributed Sort", func() {
 	sc := transport.Init()
-	sc.SetRunName("stream-collector")
 	go sc.Run()
 
 	Describe("participateInRecordDistribution", func() {

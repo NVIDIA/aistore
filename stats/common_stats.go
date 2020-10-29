@@ -92,6 +92,8 @@ type (
 		Get(name string) int64
 		AddErrorHTTP(method string, val int64)
 		AddMany(namedVal64 ...NamedVal64)
+		CoreStats() *CoreStats
+		GetWhatStats() interface{}
 		RegisterAll()
 	}
 	NamedVal64 struct {
@@ -135,10 +137,10 @@ type (
 
 // interface guard
 var (
-	_ Tracker           = &statsRunner{}
-	_ Tracker           = &Prunner{}
-	_ Tracker           = &Trunner{}
-	_ cluster.XactStats = &RebalanceTargetStats{}
+	_ cmn.ConfigListener = &statsRunner{}
+	_ Tracker            = &Prunner{}
+	_ Tracker            = &Trunner{}
+	_ cluster.XactStats  = &RebalanceTargetStats{}
 )
 
 //
@@ -158,7 +160,7 @@ type (
 	}
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
-		cmn.Named
+		name      string
 		stopCh    chan struct{}
 		workCh    chan NamedVal64
 		ticker    *time.Ticker
@@ -414,11 +416,7 @@ func (tracker statsTracker) registerCommonStats() {
 // statsunner
 //
 
-// interface guard
-var (
-	_ Tracker            = &statsRunner{}
-	_ cmn.ConfigListener = &statsRunner{}
-)
+func (r *statsRunner) Name() string { return r.name }
 
 func (r *statsRunner) runcommon(logger statslogger) error {
 	var (
@@ -456,8 +454,8 @@ waitStartup:
 	ticker.Stop()
 
 	goMaxProcs := runtime.GOMAXPROCS(0)
-	glog.Infof("Starting %s", r.GetRunName())
-	hk.Reg(r.GetRunName()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
+	glog.Infof("Starting %s", r.Name())
+	hk.Reg(r.Name()+".gc.logs", r.recycleLogs, logsMaxSizeCheckTime)
 
 	r.ticker = time.NewTicker(config.Periodic.StatsTime)
 	r.startedUp.Store(true)
@@ -505,7 +503,7 @@ func (r *statsRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 }
 
 func (r *statsRunner) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.GetRunName(), err)
+	glog.Infof("Stopping %s, err: %v", r.Name(), err)
 	r.stopCh <- struct{}{}
 	close(r.stopCh)
 }

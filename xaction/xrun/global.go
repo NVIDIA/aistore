@@ -29,7 +29,7 @@ type (
 	}
 	Rebalance struct {
 		RebBase
-		statsRunner  *stats.Trunner // extended stats
+		statTracker  stats.Tracker // extended stats
 		getRebMarked getMarked
 	}
 
@@ -89,7 +89,7 @@ func (p *rebalanceProvider) New(args xreg.XactArgs) xreg.GlobalEntry {
 }
 
 func (p *rebalanceProvider) Start(_ cmn.Bck) error {
-	p.xact = NewRebalance(p.args.ID, p.Kind(), p.args.StatsRunner, xreg.GetRebMarked)
+	p.xact = NewRebalance(p.args.ID, p.Kind(), p.args.StatTracker, xreg.GetRebMarked)
 	return nil
 }
 func (*rebalanceProvider) Kind() string        { return cmn.ActRebalance }
@@ -114,10 +114,10 @@ func (p *rebalanceProvider) PostRenewHook(previousEntry xreg.GlobalEntry) {
 	xreb.WaitForFinish()
 }
 
-func NewRebalance(id cluster.XactID, kind string, statsRunner *stats.Trunner, getMarked getMarked) *Rebalance {
+func NewRebalance(id cluster.XactID, kind string, statTracker stats.Tracker, getMarked getMarked) *Rebalance {
 	return &Rebalance{
 		RebBase:      makeXactRebBase(id, kind),
-		statsRunner:  statsRunner,
+		statTracker:  statTracker,
 		getRebMarked: getMarked,
 	}
 }
@@ -131,7 +131,7 @@ func (xact *Rebalance) Stats() cluster.XactStats {
 	var (
 		baseStats   = xact.XactBase.Stats().(*xaction.BaseXactStats)
 		rebStats    = stats.RebalanceTargetStats{BaseXactStats: *baseStats}
-		statsRunner = xact.statsRunner
+		statsRunner = xact.statTracker
 	)
 	rebStats.Ext.RebTxCount = statsRunner.Get(stats.RebTxCount)
 	rebStats.Ext.RebTxSize = statsRunner.Get(stats.RebTxSize)

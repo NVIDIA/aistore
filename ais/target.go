@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/health"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
@@ -76,6 +77,7 @@ type (
 	targetrunner struct {
 		httprunner
 		cloud        clouds
+		fshc         *health.FSHC
 		authn        *authManager
 		fsprg        fsprungroup
 		rebManager   *reb.Manager
@@ -190,13 +192,12 @@ func (t *targetrunner) Run() error {
 	if err := t.si.Validate(); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	t.httprunner.init(getstorstatsrunner(), config)
+	t.httprunner.init(config)
 	t.owner.bmd = newBMDOwnerTgt()
 
 	cluster.Init()
 
 	t.statsT.RegisterAll()
-	t.httprunner.keepalive = gettargetkeepalive()
 
 	t.checkRestarted()
 
@@ -279,7 +280,7 @@ func (t *targetrunner) Run() error {
 	// transactions
 	t.transactions.init(t)
 
-	t.rebManager = reb.NewManager(t, config, getstorstatsrunner())
+	t.rebManager = reb.NewManager(t, config, t.statsT)
 
 	// register storage target's handler(s) and start listening
 	t.initRecvHandlers()
@@ -384,7 +385,7 @@ func (t *targetrunner) initRecvHandlers() {
 
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", t.GetRunName(), err)
+	glog.Infof("Stopping %s, err: %v", t.Name(), err)
 	xreg.AbortAll()
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
@@ -903,7 +904,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	appendTy := query.Get(cmn.URLParamAppendType)
 	if appendTy == "" {
 		if err, errCode := t.doPut(r, lom, started); err != nil {
-			t.fshc(err, lom.FQN)
+			t.fsErr(err, lom.FQN)
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 	} else {
@@ -1196,7 +1197,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems
 	}
 	file, err := os.Open(sliceFQN)
 	if err != nil {
-		t.fshc(err, sliceFQN)
+		t.fsErr(err, sliceFQN)
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1565,7 +1566,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 }
 
 // fshc wakes up FSHC and makes it to run filesystem check immediately if err != nil
-func (t *targetrunner) fshc(err error, filepath string) {
+func (t *targetrunner) fsErr(err error, filepath string) {
 	if !cmn.GCO.Get().FSHC.Enabled {
 		return
 	}
@@ -1580,7 +1581,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	keyName := mpathInfo.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsT.AddMany(stats.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
-	getfshealthchecker().OnErr(filepath)
+	t.fshc.OnErr(filepath)
 }
 
 func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...*xaction.NotifXact) {

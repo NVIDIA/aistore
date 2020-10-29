@@ -80,9 +80,7 @@ type (
 	}
 
 	// stream collector
-	StreamCollector struct {
-		cmn.Named
-	}
+	StreamCollector struct{}
 
 	// Rx callbacks
 	ReceiveObj func(w http.ResponseWriter, hdr ObjHdr, object io.Reader, err error)

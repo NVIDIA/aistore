@@ -40,7 +40,7 @@ import (
 
 var _ cluster.Target = &targetrunner{}
 
-func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
+func (t *targetrunner) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *targetrunner) MMSA() *memsys.MMSA          { return t.gmm }
 func (t *targetrunner) SmallMMSA() *memsys.MMSA     { return t.smm }
 func (t *targetrunner) DB() dbdriver.Driver         { return t.dbDriver }
@@ -334,13 +334,13 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 			lom.Unlock(true)
 			if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", err, workFQN, errRemove)
-				t.fshc(errRemove, workFQN)
+				t.fsErr(errRemove, workFQN)
 			}
 		}
 	}()
 	if err = cmn.Rename(workFQN, lom.FQN); err != nil {
 		err = fmt.Errorf("unexpected failure to rename %s => %s, err: %v", workFQN, lom.FQN, err)
-		t.fshc(err, lom.FQN)
+		t.fsErr(err, lom.FQN)
 		return
 	}
 	if err = lom.Persist(); err != nil {

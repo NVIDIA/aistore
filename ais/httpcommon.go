@@ -125,7 +125,7 @@ type (
 		sndRcvBufSize int
 	}
 	httprunner struct {
-		cmn.Named
+		name               string
 		publicServer       *netServer
 		intraControlServer *netServer
 		intraDataServer    *netServer
@@ -319,6 +319,7 @@ func (server *netServer) shutdown() {
 // httprunner //
 ////////////////
 
+func (h *httprunner) Name() string               { return h.name }
 func (h *httprunner) Snode() *cluster.Snode      { return h.si }
 func (h *httprunner) Bowner() cluster.Bowner     { return h.owner.bmd }
 func (h *httprunner) Sowner() cluster.Sowner     { return h.owner.smap }
@@ -388,8 +389,7 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 	}
 }
 
-func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
-	h.statsT = s
+func (h *httprunner) init(config *cmn.Config) {
 	h.httpclient = cmn.NewClient(cmn.TransportArgs{
 		Timeout:    config.Client.Timeout,
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
@@ -509,6 +509,7 @@ func (h *httprunner) initSI(daemonType string) {
 	}
 
 	daemonID := initDaemonID(daemonType, config, publicAddr)
+	h.name = daemonType
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
 	cmn.InitShortID(h.si.Digest())
 }
@@ -607,7 +608,7 @@ func (h *httprunner) run() error {
 // stop gracefully
 func (h *httprunner) stop(err error) {
 	config := cmn.GCO.Get()
-	glog.Infof("Stopping %s, err: %v", h.GetRunName(), err)
+	glog.Infof("Stopping %s, err: %v", h.Name(), err)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

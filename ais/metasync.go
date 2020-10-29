@@ -117,7 +117,6 @@ type (
 	msPayload map[string][]byte // tag => revs' body
 
 	metasyncer struct {
-		cmn.Named
 		p            *proxyrunner        // parent
 		nodesRevs    map[string]nodeRevs // sync-ed versions (cluster-wide, by DaemonID)
 		lastSynced   map[string]revs     // last/current sync-ed
@@ -155,8 +154,9 @@ func newMetasyncer(p *proxyrunner) (y *metasyncer) {
 	return
 }
 
+func (y *metasyncer) Name() string { return "metasyncer" }
 func (y *metasyncer) Run() error {
-	glog.Infof("Starting %s", y.GetRunName())
+	glog.Infof("Starting %s", y.Name())
 	for {
 		config := cmn.GCO.Get()
 		select {
@@ -199,7 +199,7 @@ func (y *metasyncer) Run() error {
 }
 
 func (y *metasyncer) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", y.GetRunName(), err)
+	glog.Infof("Stopping %s, err: %v", y.Name(), err)
 
 	y.stopCh <- struct{}{}
 	close(y.stopCh)

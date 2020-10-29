@@ -38,7 +38,7 @@ type (
 
 	RebalanceArgs struct {
 		ID          xaction.RebID
-		StatsRunner *stats.Trunner
+		StatTracker stats.Tracker
 	}
 )
 
@@ -53,14 +53,14 @@ func (r *registry) registerGlobalXact(entry GlobalEntryProvider) {
 	r.globalXacts[entry.Kind()] = entry
 }
 
-func RenewRebalance(id int64, statsRunner *stats.Trunner) cluster.Xact {
-	return defaultReg.renewRebalance(id, statsRunner)
+func RenewRebalance(id int64, statTracker stats.Tracker) cluster.Xact {
+	return defaultReg.renewRebalance(id, statTracker)
 }
 
-func (r *registry) renewRebalance(id int64, statsRunner *stats.Trunner) cluster.Xact {
+func (r *registry) renewRebalance(id int64, statTracker stats.Tracker) cluster.Xact {
 	e := r.globalXacts[cmn.ActRebalance].New(XactArgs{Custom: &RebalanceArgs{
 		ID:          xaction.RebID(id),
-		StatsRunner: statsRunner,
+		StatTracker: statTracker,
 	}})
 	res := r.renewGlobalXaction(e)
 	if !res.isNew { // previous global rebalance is still running

@@ -153,7 +153,7 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 			if err1 == nil {
 				err1 = err
 			}
-			poi.t.fshc(err1, poi.workFQN)
+			poi.t.fsErr(err1, poi.workFQN)
 			if err2 := cmn.RemoveFile(poi.workFQN); err2 != nil {
 				glog.Errorf("Nested error: %s => (remove %s => err: %v)", err1, poi.workFQN, err2)
 			}
@@ -748,7 +748,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 			errCode = http.StatusNotFound
 			retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
 		} else {
-			goi.t.fshc(err, fqn)
+			goi.t.fsErr(err, fqn)
 			err = fmt.Errorf("%s: err: %w", goi.lom, err)
 			errCode = http.StatusInternalServerError
 		}
@@ -837,7 +837,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 		if cmn.IsErrConnectionReset(err) {
 			return
 		}
-		goi.t.fshc(err, fqn)
+		goi.t.fsErr(err, fqn)
 		err = fmt.Errorf("failed to GET %s, err: %w", fqn, err)
 		errCode = http.StatusInternalServerError
 		goi.t.statsT.Add(stats.ErrGetCount, 1)

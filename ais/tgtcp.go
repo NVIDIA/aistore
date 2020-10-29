@@ -294,8 +294,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
 	case cmn.GetWhatStats:
-		rst := getstorstatsrunner()
-		ws := rst.GetWhatStats()
+		ws := t.statsT.GetWhatStats()
 		t.writeJSON(w, r, ws, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
@@ -315,7 +314,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		t.writeJSON(w, r, &mpList, httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
-		tstats := getstorstatsrunner()
+		tstats := t.statsT.(*stats.Trunner)
 
 		var rebStats *stats.RebalanceTargetStats
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
@@ -329,7 +328,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Snode:       t.httprunner.si,
 			SmapVersion: t.owner.smap.get().Version,
 			SysInfo:     sys.FetchSysInfo(),
-			Stats:       tstats.Core,
+			Stats:       tstats.CoreStats(),
 			Capacity:    tstats.MPCap,
 			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
 		}
@@ -363,7 +362,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if len(apiItems) > 0 {
 		switch apiItems[0] {
 		case cmn.UserRegister:
-			gettargetkeepalive().keepalive.send(kaRegisterMsg)
+			t.keepalive.send(kaRegisterMsg)
 			body, err := cmn.ReadBytes(r)
 			if err != nil {
 				t.invalmsghdlr(w, r, err.Error())
@@ -420,7 +419,7 @@ func (t *targetrunner) handleUnregisterReq() {
 	}
 
 	// Stop keepaliving
-	gettargetkeepalive().keepalive.send(kaUnregisterMsg)
+	t.keepalive.send(kaUnregisterMsg)
 
 	// Abort all dSort jobs
 	dsort.Managers.AbortAll(errors.New("target was removed from the cluster"))

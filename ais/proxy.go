@@ -101,13 +101,10 @@ func (p *proxyrunner) initClusterCIDR() {
 // start proxy runner
 func (p *proxyrunner) Run() error {
 	config := cmn.GCO.Get()
-	p.httprunner.init(getproxystatsrunner(), config)
+	p.httprunner.init(config)
 	p.owner.bmd = newBMDOwnerPrx(config)
 
-	p.httprunner.keepalive = getproxykeepalive()
-
 	p.owner.bmd.init() // initialize owner and load BMD
-	p.metasyncer = getmetasyncer()
 
 	cluster.Init()
 
@@ -242,7 +239,7 @@ func (p *proxyrunner) Stop(err error) {
 	if smap != nil { // in tests
 		isPrimary = smap.isPrimary(p.si)
 	}
-	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.GetRunName(), p.si, isPrimary, err)
+	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.Name(), p.si, isPrimary, err)
 	xreg.AbortAll()
 
 	if isPrimary {
@@ -2106,8 +2103,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatConfig, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
-		pst := getproxystatsrunner()
-		ws := pst.GetWhatStats()
+		ws := p.statsT.GetWhatStats()
 		p.writeJSON(w, r, ws, what)
 	case cmn.GetWhatSysInfo:
 		p.writeJSON(w, r, sys.FetchSysInfo(), what)
@@ -2136,12 +2132,11 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.writeJSON(w, r, smap, what)
 	case cmn.GetWhatDaemonStatus:
-		pst := getproxystatsrunner()
 		msg := &stats.DaemonStatus{
 			Snode:       p.httprunner.si,
 			SmapVersion: p.owner.smap.get().Version,
 			SysInfo:     sys.FetchSysInfo(),
-			Stats:       pst.Core,
+			Stats:       p.statsT.CoreStats(),
 		}
 		p.writeJSON(w, r, msg, what)
 	default:
@@ -2259,7 +2254,7 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Stop keepaliving
-		getproxykeepalive().keepalive.send(kaUnregisterMsg)
+		p.keepalive.send(kaUnregisterMsg)
 		return
 	default:
 		p.invalmsghdlrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
@@ -2720,8 +2715,7 @@ func (p *proxyrunner) queryClusterStats(w http.ResponseWriter, r *http.Request, 
 	}
 	out := &stats.ClusterStatsRaw{}
 	out.Target = targetStats
-	rr := getproxystatsrunner()
-	out.Proxy = rr.Core
+	out.Proxy = p.statsT.CoreStats()
 	_ = p.writeJSON(w, r, out, what)
 }
 

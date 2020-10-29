@@ -77,7 +77,6 @@ func TestMain(t *testing.M) {
 	MMSA = memsys.DefaultPageMM()
 
 	sc := transport.Init()
-	sc.SetRunName("stream-collector")
 	go sc.Run()
 
 	objmux = mux.NewServeMux()

@@ -58,14 +58,14 @@ type (
 	}
 
 	Manager struct {
-		t          cluster.Target
-		dm         *bundle.DataMover
-		pushes     *bundle.Streams // broadcast notifications
-		statRunner *stats.Trunner
-		filterGFN  *filter.Filter
-		smap       atomic.Pointer // new smap which will be soon live
-		lomacks    [cmn.MultiSyncMapCount]*lomAcks
-		awaiting   struct {
+		t           cluster.Target
+		dm          *bundle.DataMover
+		pushes      *bundle.Streams // broadcast notifications
+		statTracker stats.Tracker
+		filterGFN   *filter.Filter
+		smap        atomic.Pointer // new smap which will be soon live
+		lomacks     [cmn.MultiSyncMapCount]*lomAcks
+		awaiting    struct {
 			mu      sync.Mutex
 			targets cluster.NodeMap // targets for which we are waiting for
 			ts      int64           // last time we have recomputed
@@ -111,18 +111,18 @@ var stages = map[uint32]string{
 // rebalance manager: init, receive, common //
 //////////////////////////////////////////////
 
-func NewManager(t cluster.Target, config *cmn.Config, strunner *stats.Trunner) *Manager {
+func NewManager(t cluster.Target, config *cmn.Config, st stats.Tracker) *Manager {
 	ecClient := cmn.NewClient(cmn.TransportArgs{
 		Timeout:    config.Client.Timeout,
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
 	reb := &Manager{
-		t:          t,
-		filterGFN:  filter.NewDefaultFilter(),
-		statRunner: strunner,
-		stages:     newNodeStages(),
-		ecClient:   ecClient,
+		t:           t,
+		filterGFN:   filter.NewDefaultFilter(),
+		statTracker: st,
+		stages:      newNodeStages(),
+		ecClient:    ecClient,
 	}
 	rebcfg := &config.Rebalance
 	dmExtra := bundle.Extra{
@@ -186,7 +186,7 @@ func (reb *Manager) rebIDMismatchMsg(remoteID int64) string {
 
 func (reb *Manager) getStats() (s *stats.ExtRebalanceStats) {
 	s = &stats.ExtRebalanceStats{}
-	statsRunner := reb.statRunner
+	statsRunner := reb.statTracker
 	s.RebTxCount = statsRunner.Get(stats.RebTxCount)
 	s.RebTxSize = statsRunner.Get(stats.RebTxSize)
 	s.RebRxCount = statsRunner.Get(stats.RebRxCount)
@@ -267,7 +267,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: from %s %s", reb.t.Snode(), tsid, lom)
 	}
-	reb.statRunner.AddMany(
+	reb.statTracker.AddMany(
 		stats.NamedVal64{Name: stats.RebRxCount, Value: 1},
 		stats.NamedVal64{Name: stats.RebRxSize, Value: hdr.ObjAttrs.Size},
 	)
