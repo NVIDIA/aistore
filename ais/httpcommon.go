@@ -527,9 +527,8 @@ func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bo
 // - the latter for, possibly, legitimate reasons (K8s, etc.)
 func (h *httprunner) checkPresenceNetChange(smap *smapX) error {
 	var (
-		jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
-		snode      *cluster.Snode
-		changed    bool
+		snode   *cluster.Snode
+		changed bool
 	)
 	if h.si.IsTarget() {
 		snode = smap.GetTarget(h.si.ID())
@@ -556,8 +555,8 @@ func (h *httprunner) checkPresenceNetChange(smap *smapX) error {
 	if h.si.PublicNet != snode.PublicNet ||
 		h.si.IntraControlNet != snode.IntraControlNet ||
 		h.si.IntraDataNet != snode.IntraDataNet {
-		prev, _ := jsonCompat.MarshalIndent(snode, "", " ")
-		curr, _ := jsonCompat.MarshalIndent(h.si, "", " ")
+		prev, _ := cmn.JSONSortAPI.MarshalIndent(snode, "", " ")
+		curr, _ := cmn.JSONSortAPI.MarshalIndent(h.si, "", " ")
 		glog.Errorf("Warning: %s detected a change in network config:\n%scurrently:\n%s\n- proceeding anyway...",
 			h.si, string(prev), string(curr))
 	}

@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 )
 
 type (
@@ -69,10 +68,9 @@ func (r *Prunner) GetWhatStats() interface{} {
 
 // statslogger interface impl
 func (r *Prunner) log(uptime time.Duration) {
-	jsonCompat := jsoniter.ConfigCompatibleWithStandardLibrary
 	r.Core.UpdateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", PostCount, Uptime}); !idle {
-		b, _ := jsonCompat.Marshal(r.ctracker)
+		b := cmn.MustSortMarshal(r.ctracker)
 		glog.Infoln(string(b))
 	}
 }

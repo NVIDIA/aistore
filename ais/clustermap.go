@@ -193,14 +193,9 @@ func (m *smapX) addIC(psi *cluster.Snode) {
 	}
 }
 
-func (m *smapX) tag() string    { return revsSmapTag }
-func (m *smapX) version() int64 { return m.Version }
-func (m *smapX) marshal() (b []byte) {
-	jsonCompat := jsoniter.ConfigCompatibleWithStandardLibrary
-	b, err := jsonCompat.Marshal(m) // jsoniter + sorting
-	cmn.AssertNoErr(err)
-	return b
-}
+func (m *smapX) tag() string         { return revsSmapTag }
+func (m *smapX) version() int64      { return m.Version }
+func (m *smapX) marshal() (b []byte) { return cmn.MustSortMarshal(m) }
 
 func (m *smapX) isValid() bool {
 	if m == nil {

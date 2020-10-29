@@ -64,6 +64,14 @@ const (
 	QuantityBytes   = "bytes"
 )
 
+var (
+	// JSONSortAPI is jsoniter API used to Marshal/Unmarshal structs ensuring same order of Keys
+	JSONSortAPI jsoniter.API
+
+	// It is used to Marshal/Unmarshal API json messages and is initialized in init function.
+	jsonAPI jsoniter.API
+)
+
 var EnvVars = struct {
 	Endpoint string
 
@@ -214,6 +222,11 @@ func init() {
 		// Need to be sure that we have exactly the same struct as user requested.
 		DisallowUnknownFields: true,
 		SortMapKeys:           true,
+	}.Froze()
+
+	JSONSortAPI = jsoniter.Config{
+		EscapeHTML:  true,
+		SortMapKeys: true,
 	}.Froze()
 }
 
@@ -553,4 +566,12 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 		}
 	}
 	return m
+}
+
+// MustSortMarshal marshals v while ensuring sorted order of map keys and
+// panics if error occurs.
+func MustSortMarshal(v interface{}) []byte {
+	b, err := JSONSortAPI.Marshal(v)
+	AssertNoErr(err)
+	return b
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // Naming Convention:
@@ -178,13 +177,12 @@ func (r *Trunner) GetWhatStats() interface{} {
 }
 
 func (r *Trunner) log(uptime time.Duration) {
-	jsonCompat := jsoniter.ConfigCompatibleWithStandardLibrary
 	r.lines = r.lines[:0]
 
 	// copy stats, reset latencies
 	r.Core.UpdateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
-		b, _ := jsonCompat.Marshal(r.ctracker)
+		b := cmn.MustSortMarshal(r.ctracker)
 		r.lines = append(r.lines, string(b))
 	}
 

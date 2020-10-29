@@ -91,14 +91,9 @@ type (
 	HTTPMuxers map[string]*mux.ServeMux // by http.Method
 )
 
-var (
-	// It is used to Marshal/Unmarshal API json messages and is initialized in init function.
-	jsonAPI jsoniter.API
-
-	// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
-	// all of the byte-range-spec values is greater than the content size.
-	ErrNoOverlap = errors.New("invalid range: failed to overlap")
-)
+// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
+// all of the byte-range-spec values is greater than the content size.
+var ErrNoOverlap = errors.New("invalid range: failed to overlap")
 
 // Eg: Bad Request: Bucket abc does not appear to be local or does not exist:
 //   DELETE /v1/buckets/abc from 127.0.0.1:54064| ([httpcommon.go, #840] <- [proxy.go, #484] <- [proxy.go, #264])

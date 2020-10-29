@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // NOTE: to access bucket metadata and related structures, external
@@ -194,14 +193,9 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 //
 // Implementation of revs interface
 //
-func (m *bucketMD) tag() string    { return revsBMDTag }
-func (m *bucketMD) version() int64 { return m.Version }
-func (m *bucketMD) marshal() []byte {
-	jsonCompat := jsoniter.ConfigCompatibleWithStandardLibrary
-	b, err := jsonCompat.Marshal(m) // jsoniter + sorting
-	cmn.AssertNoErr(err)
-	return b
-}
+func (m *bucketMD) tag() string     { return revsBMDTag }
+func (m *bucketMD) version() int64  { return m.Version }
+func (m *bucketMD) marshal() []byte { return cmn.MustSortMarshal(m) }
 
 //////////////////
 // bmdOwnerBase //
