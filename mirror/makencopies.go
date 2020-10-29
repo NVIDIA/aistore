@@ -114,7 +114,7 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 }
 
 func ValidateNCopies(prefix string, copies int) error {
-	if _, err := cmn.CheckI64Range(int64(copies), 1, MaxNCopies); err != nil {
+	if _, err := checkI64Range(int64(copies), 1, MaxNCopies); err != nil {
 		return fmt.Errorf("number of copies (%d) %s", copies, err.Error())
 	}
 	availablePaths, _ := fs.Get()

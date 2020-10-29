@@ -134,34 +134,6 @@ type (
 	SizeJSON     int64
 )
 
-func (d DurationJSON) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(d.String()) }
-func (d *DurationJSON) UnmarshalJSON(b []byte) error {
-	var v interface{}
-	if err := jsoniter.Unmarshal(b, &v); err != nil {
-		return err
-	}
-	switch value := v.(type) {
-	case float64:
-		*d = DurationJSON(time.Duration(value))
-		return nil
-	case string:
-		tmp, err := time.ParseDuration(value)
-		if err != nil {
-			return err
-		}
-		*d = DurationJSON(tmp)
-		return nil
-	default:
-		return errors.New("invalid duration")
-	}
-}
-func (d DurationJSON) String() string { return time.Duration(d).String() }
-func (d DurationJSON) IsZero() bool   { return d == 0 }
-
-func (sj SizeJSON) MarshalJSON() ([]byte, error) {
-	return []byte(B2S(int64(sj), 2)), nil
-}
-
 var (
 	bucketReg *regexp.Regexp
 	nsReg     *regexp.Regexp
@@ -222,6 +194,10 @@ func init() {
 	}.Froze()
 }
 
+///////////////
+// SimpleKVs //
+///////////////
+
 func NewSimpleKVs(entries ...SimpleKVsEntry) SimpleKVs {
 	kvs := make(SimpleKVs, len(entries))
 	for _, entry := range entries {
@@ -263,17 +239,9 @@ func (kv SimpleKVs) Contains(key string) (ok bool) {
 	return
 }
 
-// only for +ve int values
-func MaxValEntryInt(kv map[string]int64) (key string, val int64) {
-	val = -1
-	for k, v := range kv {
-		if v > val {
-			key = k
-			val = v
-		}
-	}
-	return
-}
+///////////////
+// StringSet //
+///////////////
 
 func NewStringSet(keys ...string) (ss StringSet) {
 	ss = make(StringSet, len(keys))
@@ -358,28 +326,7 @@ func ExitLogf(f string, a ...interface{}) {
 	Exitf(f, a...)
 }
 
-// ParseBool converts string to bool (case-insensitive):
-//   y, yes, on -> true
-//   n, no, off, <empty value> -> false
-// strconv handles the following:
-//   1, true, t -> true
-//   0, false, f -> false
-func ParseBool(s string) (value bool, err error) {
-	if s == "" {
-		return
-	}
-	s = strings.ToLower(s)
-	switch s {
-	case "y", "yes", "on":
-		return true, nil
-	case "n", "no", "off":
-		return false, nil
-	}
-	return strconv.ParseBool(s)
-}
-
-func IsParseBool(s string) (yes bool) { yes, _ = ParseBool(s); return }
-
+// shallow copy
 func CopyStruct(dst, src interface{}) {
 	x := reflect.ValueOf(src)
 	Assert(x.Kind() == reflect.Ptr)
@@ -429,33 +376,6 @@ func FreeMemToOS(d ...time.Duration) {
 	debug.FreeOSMemory()
 }
 
-// ExpandPath replaces common abbreviations in file path (eg. `~` with absolute
-// path to the current user home directory) and cleans the path.
-func ExpandPath(path string) string {
-	if path == "" || path[0] != '~' {
-		return filepath.Clean(path)
-	}
-	if len(path) > 1 && path[1] != '/' {
-		return filepath.Clean(path)
-	}
-
-	currentUser, err := user.Current()
-	if err != nil {
-		return filepath.Clean(path)
-	}
-	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
-}
-
-func CheckI64Range(v, low, high int64) (int64, error) {
-	if v < low || v > high {
-		if low == high {
-			return low, fmt.Errorf("must be equal %d", low)
-		}
-		return low, fmt.Errorf("must be in [%d, %d] range", low, high)
-	}
-	return v, nil
-}
-
 //////////////////////////////
 // config: path, load, save //
 //////////////////////////////
@@ -479,9 +399,48 @@ func AppConfigPath(appName string) (configDir string) {
 	return
 }
 
+// ExpandPath replaces common abbreviations in file path (eg. `~` with absolute
+// path to the current user home directory) and cleans the path.
+func ExpandPath(path string) string {
+	if path == "" || path[0] != '~' {
+		return filepath.Clean(path)
+	}
+	if len(path) > 1 && path[1] != '/' {
+		return filepath.Clean(path)
+	}
+
+	currentUser, err := user.Current()
+	if err != nil {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
+}
+
 /////////////
 // PARSING //
 /////////////
+
+func IsParseBool(s string) (yes bool) { yes, _ = ParseBool(s); return }
+
+// ParseBool converts string to bool (case-insensitive):
+//   y, yes, on -> true
+//   n, no, off, <empty value> -> false
+// strconv handles the following:
+//   1, true, t -> true
+//   0, false, f -> false
+func ParseBool(s string) (value bool, err error) {
+	if s == "" {
+		return
+	}
+	s = strings.ToLower(s)
+	switch s {
+	case "y", "yes", "on":
+		return true, nil
+	case "n", "no", "off":
+		return false, nil
+	}
+	return strconv.ParseBool(s)
+}
 
 func ParseQuantity(quantity string) (ParsedQuantity, error) {
 	quantity = strings.ReplaceAll(quantity, " ", "")
@@ -558,4 +517,41 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 		}
 	}
 	return m
+}
+
+//////////////////
+// DurationJSON //
+//////////////////
+
+func (d DurationJSON) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(d.String()) }
+func (d DurationJSON) String() string               { return time.Duration(d).String() }
+func (d DurationJSON) IsZero() bool                 { return d == 0 }
+
+func (d *DurationJSON) UnmarshalJSON(b []byte) error {
+	var v interface{}
+	if err := jsoniter.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	switch value := v.(type) {
+	case float64:
+		*d = DurationJSON(time.Duration(value))
+		return nil
+	case string:
+		tmp, err := time.ParseDuration(value)
+		if err != nil {
+			return err
+		}
+		*d = DurationJSON(tmp)
+		return nil
+	default:
+		return errors.New("invalid duration")
+	}
+}
+
+//////////////
+// SizeJSON //
+//////////////
+
+func (sj SizeJSON) MarshalJSON() ([]byte, error) {
+	return []byte(B2S(int64(sj), 2)), nil
 }

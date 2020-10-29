@@ -13,6 +13,16 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+func checkI64Range(v, low, high int64) (int64, error) {
+	if v < low || v > high {
+		if low == high {
+			return low, fmt.Errorf("must be equal %d", low)
+		}
+		return low, fmt.Errorf("must be in [%d, %d] range", low, high)
+	}
+	return v, nil
+}
+
 func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
