@@ -107,11 +107,7 @@ func (g *fsprungroup) addMpathEvent(action string, mpath *fs.MountpathInfo) {
 		xreg.RenewMakeNCopies(g.t, "add-mp")
 	}()
 
-	g.t.owner.bmd.persist()
-	if err := fs.CreateVMD(g.t.si.ID()).Persist(); err != nil {
-		cmn.ExitLogf("%v", err.Error())
-	}
-
+	g._persistMD()
 	g.checkEnable(action, mpath.Path)
 }
 
@@ -120,6 +116,7 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 
 	go mpath.EvictLomCache()
 	mpath.ClearMDs()
+	g._persistMD()
 
 	if g.checkZeroMountpaths(action) {
 		return
@@ -129,6 +126,18 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 		g.t.runResilver("", false /*skipGlobMisplaced*/)
 		xreg.RenewMakeNCopies(g.t, "del-mp")
 	}()
+}
+
+func (g *fsprungroup) _persistMD() {
+	if !hasEnoughBMDCopies() {
+		g.t.owner.bmd.Lock()
+		g.t.owner.bmd.persist()
+		g.t.owner.bmd.Unlock()
+	}
+
+	if _, err := fs.CreateNewVMD(g.t.si.ID()); err != nil {
+		cmn.ExitLogf("%v", err.Error())
+	}
 }
 
 // Check for no mountpaths and unregister(disable) the target if detected.

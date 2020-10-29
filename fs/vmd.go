@@ -6,6 +6,7 @@ package fs
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -41,7 +42,10 @@ func newVMD(expectedSize int) *VMD {
 	}
 }
 
-func CreateVMD(daemonID string) *VMD {
+func CreateNewVMD(daemonID string) (*VMD, error) {
+	mfs.mu.Lock()
+	defer mfs.mu.Unlock()
+
 	var (
 		available, disabled = Get()
 		vmd                 = newVMD(len(available))
@@ -64,30 +68,35 @@ func CreateVMD(daemonID string) *VMD {
 			Enabled:   false,
 		}
 	}
-	return vmd
+	return vmd, vmd.persist()
 }
 
-func ReadVMD() (mainVMD *VMD, err error) {
-	available, _ := Get()
-	// NOTE: iterating only over mpaths which have VmdPersistedFileName.
+func ReadVMD() (*VMD, error) {
+	mfs.mu.RLock()
+	defer mfs.mu.RUnlock()
+	var (
+		available, _ = Get()
+		mainVMD      *VMD
+		err          error
+	)
 	for _, mpi := range available {
 		fpath := filepath.Join(mpi.Path, VmdPersistedFileName)
-		if err := Access(fpath); err != nil {
-			continue
-		}
 
 		vmd := newVMD(len(available))
 		vmd.cksum, err = jsp.Load(fpath, vmd, jsp.CCSign())
+		if err != nil && os.IsNotExist(err) {
+			continue
+		}
 		if err != nil {
 			err = fmt.Errorf("failed to read vmd (%q), err: %v", fpath, err)
 			glog.InfoDepth(1)
-			return
+			return nil, err
 		}
 
 		if err = vmd.Validate(); err != nil {
 			err = fmt.Errorf("failed to validate vmd (%q), err: %v", fpath, err)
 			glog.InfoDepth(1)
-			return
+			return nil, err
 		}
 
 		if mainVMD != nil {
@@ -103,15 +112,16 @@ func ReadVMD() (mainVMD *VMD, err error) {
 		glog.Infof("VMD not found on any of %d mountpaths", len(available))
 	}
 
-	return
+	return mainVMD, nil
 }
 
-func (vmd VMD) Persist() error {
+func (vmd VMD) persist() error {
 	// Checksum, compress and sign, as a VMD might be quite large.
-	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign()); cnt == 0 {
+	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign()); availMpaths == 0 {
+		glog.Errorf("failed to persist VMD no available mountpaths")
+	} else if cnt == 0 {
 		return fmt.Errorf("failed to persist vmd on any of mountpaths (%d)", availMpaths)
 	}
-
 	return nil
 }
 

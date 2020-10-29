@@ -288,8 +288,7 @@ func initTarget() cmn.Runner {
 		cmn.ExitLogf("%s", err)
 	}
 
-	vmd := fs.CreateVMD(t.si.ID())
-	if err := vmd.Persist(); err != nil {
+	if _, err := fs.CreateNewVMD(t.si.ID()); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 

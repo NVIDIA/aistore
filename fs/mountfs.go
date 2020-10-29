@@ -72,7 +72,7 @@ type (
 
 	// MountedFS holds all mountpaths for the target.
 	MountedFS struct {
-		mu sync.Mutex
+		mu sync.RWMutex
 		// fsIDs is set in which we store fsids of mountpaths. This allows for
 		// determining if there are any duplications of file system - we allow
 		// only one mountpath per file system.

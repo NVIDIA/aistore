@@ -22,15 +22,17 @@ func TestVMD(t *testing.T) {
 	mpaths := tutils.PrepareMountPaths(t, mpathsCnt)
 	defer tutils.RemoveMountPaths(t, mpaths)
 
-	t.Run("CreateVMD", func(t *testing.T) { testVMDCreate(t, mpaths, daemonID) })
+	t.Run("CreateNewVMD", func(t *testing.T) { testVMDCreate(t, mpaths, daemonID) })
 	t.Run("VMDPersist", func(t *testing.T) { testVMDPersist(t, daemonID) })
 }
 
 func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 	var (
-		vmd       = fs.CreateVMD(daemonID)
+		vmd, err  = fs.CreateNewVMD(daemonID)
 		mpathsCnt = len(mpaths)
 	)
+
+	tassert.Errorf(t, err == nil, "expected vmd to be created without error")
 	tassert.Errorf(t, vmd != nil, "expected vmd to be created")
 	tassert.Errorf(t, vmd.DaemonID == daemonID, "incorrect daemonID, expected %q, got %q", daemonID, vmd.DaemonID)
 	tassert.Errorf(t, len(vmd.Devices) == mpathsCnt, "expected %d devices found, got %d", mpathsCnt, len(vmd.Devices))
@@ -45,10 +47,10 @@ func testVMDCreate(t *testing.T, mpaths fs.MPI, daemonID string) {
 }
 
 func testVMDPersist(t *testing.T, daemonID string) {
-	vmd := fs.CreateVMD(daemonID)
+	vmd, err := fs.CreateNewVMD(daemonID)
+	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, vmd != nil, "expected vmd to be created")
 
-	tassert.CheckFatal(t, vmd.Persist())
 	newVMD, err := fs.ReadVMD()
 	tassert.Fatalf(t, err == nil, "expected no error while loading VMD")
 	tassert.Fatalf(t, newVMD != nil, "expected vmd to be not nil")

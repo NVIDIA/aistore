@@ -325,9 +325,6 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 		fpath = filepath.Join(mpath.Path, path)
 		err   error
 	)
-	if err := fs.Access(fpath); err != nil {
-		return
-	}
 
 	bmd = newBucketMD()
 	bmd.cksum, err = jsp.Load(fpath, bmd, jsp.CCSign())
@@ -339,4 +336,8 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 		glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, err)
 	}
 	return nil
+}
+
+func hasEnoughBMDCopies() bool {
+	return len(fs.FindPersisted(fs.BmdPersistedFileName)) >= bmdCopies
 }
