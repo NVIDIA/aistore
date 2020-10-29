@@ -526,45 +526,39 @@ func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bo
 	}
 }
 
-// is called at startup;
-// given loaded Smap, checks whether Snode is present and whether network info has changed
-// - the latter for, possibly, legitimate reasons (K8s, etc.)
-func (h *httprunner) checkPresenceNetChange(smap *smapX) error {
-	var (
-		snode   *cluster.Snode
-		changed bool
-	)
-	if h.si.IsTarget() {
-		snode = smap.GetTarget(h.si.ID())
-	} else {
-		cmn.Assert(h.si.IsProxy())
-		snode = smap.GetProxy(h.si.ID())
-	}
+// detectNodeChanges is called at startup. Given loaded Smap, checks whether
+// `h.si` is present and whether any information has changed.
+func (h *httprunner) detectNodeChanges(smap *smapX) error {
+	snode := smap.GetNode(h.si.ID())
 	if snode == nil {
-		return fmt.Errorf("%s: not present in the loaded Smap", h.si)
+		return fmt.Errorf("%s: not present in the loaded smap", h.si)
 	}
-	if h.si.PublicNet.NodeIPAddr != snode.PublicNet.NodeIPAddr {
-		glog.Errorf("Warning: %s: PUBLIC (user) IPv4 changed: previous %s, current %s", h.si,
-			snode.PublicNet.NodeIPAddr, h.si.PublicNet.NodeIPAddr)
-		changed = true
-	}
-	if h.si.IntraControlNet.NodeIPAddr != snode.IntraControlNet.NodeIPAddr {
-		glog.Errorf("Warning: %s: INTRA-CONTROL IPv4 changed: previous %s, current %s", h.si,
-			snode.IntraControlNet.NodeIPAddr, h.si.IntraControlNet.NodeIPAddr)
-		changed = true
-	}
-	if changed {
-		return nil
-	}
-	if h.si.PublicNet != snode.PublicNet ||
-		h.si.IntraControlNet != snode.IntraControlNet ||
-		h.si.IntraDataNet != snode.IntraDataNet {
+	if !snode.Equals(h.si) {
 		prev, _ := cmn.JSON.MarshalIndent(snode, "", " ")
 		curr, _ := cmn.JSON.MarshalIndent(h.si, "", " ")
-		glog.Errorf("Warning: %s detected a change in network config:\n%scurrently:\n%s\n- proceeding anyway...",
-			h.si, string(prev), string(curr))
+		return fmt.Errorf(
+			"%s: detected a change in snode configuration (prev: %s, curr: %s)",
+			h.si, string(prev), string(curr),
+		)
 	}
 	return nil
+}
+
+func (h *httprunner) tryLoadSmap() (*smapX, bool) {
+	var (
+		config      = cmn.GCO.Get()
+		smap        = newSmap()
+		loaded, err = h.owner.smap.load(smap, config)
+	)
+	if err != nil {
+		glog.Errorf("Failed to load smap (err: %v)", err)
+	} else if loaded {
+		if err := h.detectNodeChanges(smap); err != nil {
+			glog.Error(err)
+			loaded = false
+		}
+	}
+	return smap, loaded
 }
 
 func (h *httprunner) run() error {

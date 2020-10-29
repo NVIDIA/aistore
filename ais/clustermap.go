@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -436,12 +437,18 @@ func newSmapOwner() *smapOwner {
 	}
 }
 
-func (r *smapOwner) load(smap *smapX, config *cmn.Config) (err error) {
+func (r *smapOwner) load(smap *smapX, config *cmn.Config) (loaded bool, err error) {
 	_, err = jsp.Load(filepath.Join(config.Confdir, smapFname), smap, jsp.CCSign())
-	if err == nil && (smap.version() == 0 || !smap.isValid()) {
-		err = fmt.Errorf("unexpected: persistent Smap %s is invalid", smap)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
 	}
-	return
+	if smap.version() == 0 || !smap.isValid() {
+		return false, fmt.Errorf("unexpected: persistent Smap %s is invalid", smap)
+	}
+	return true, nil
 }
 
 func (r *smapOwner) Get() *cluster.Smap               { return &r.get().Smap }

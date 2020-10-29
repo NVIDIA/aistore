@@ -201,6 +201,7 @@ func (t *targetrunner) Run() error {
 	t.owner.bmd = newBMDOwnerTgt()
 
 	cluster.Init()
+	cluster.InitTarget()
 
 	t.statsT.RegisterAll()
 
@@ -217,28 +218,19 @@ func (t *targetrunner) Run() error {
 	dryRunInit()
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
-	// init meta-owners and load local instances
-	t.owner.bmd.init()               // BMD
-	smap, loaded := newSmap(), false // Smap
-	if err := t.owner.smap.load(smap, config); err == nil {
-		if errSmap := t.checkPresenceNetChange(smap); errSmap != nil {
-			glog.Errorf("%s - proceeding anyway...", errSmap)
-		} else {
-			loaded = true
-		}
-	} else if !os.IsNotExist(err) {
-		glog.Errorf("%s: failed to load Smap (corruption?), err: %v", t.si, err)
+	// Init meta-owners and load local instances
+	t.owner.bmd.init()
+
+	smap, loaded := t.tryLoadSmap()
+	if !loaded {
+		smap = newSmap() // Reinitialize smap as it might have been corrupted due to loading.
 	}
-	// insert self and always proceed starting up
+	// Insert self and always proceed starting up.
 	smap.Tmap[t.si.ID()] = t.si
-
-	cluster.InitTarget()
-
-	//
-	// join cluster
-	//
 	t.owner.smap.put(smap)
-	if err := t.withRetry(t.joinCluster, "join", true /* backoff */); err != nil {
+
+	// Try joining the cluster.
+	if err := t.withRetry(t.joinCluster, "join", true /*backoff*/); err != nil {
 		if loaded {
 			var (
 				smapMaxVer int64
@@ -302,10 +294,7 @@ func (t *targetrunner) Run() error {
 
 	dsort.InitManagers(driver)
 	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t.gmm, t, t.statsT)
-	if err := t.httprunner.run(); err != nil {
-		return err
-	}
-	return nil
+	return t.httprunner.run()
 }
 
 func (c clouds) init(t *targetrunner) {

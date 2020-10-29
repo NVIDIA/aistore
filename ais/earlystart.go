@@ -22,24 +22,17 @@ import (
 // 	- Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
 func (p *proxyrunner) bootstrap() {
 	var (
-		smap            *smapX
 		config          = cmn.GCO.Get()
 		pid, primaryURL string
-		primary, loaded bool
+		primary         bool
 	)
+
 	// 1: load a local copy and try to utilize it for discovery
-	smap = newSmap()
-	if err := p.owner.smap.load(smap, config); err == nil {
-		loaded = true
-		if err := p.checkPresenceNetChange(smap); err != nil {
-			glog.Error(err)
-			loaded = false
-		}
-	}
-	// 2. make the preliminary/primary decision
+	smap, loaded := p.tryLoadSmap()
 	if !loaded {
 		smap = nil
 	}
+	// 2. make the preliminary/primary decision
 	pid, primary = p.determineRole(smap)
 
 	// 3. primary?
