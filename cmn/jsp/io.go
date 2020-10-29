@@ -82,12 +82,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 		w = io.MultiWriter(h, w)
 	}
 
-	if opts.SortMapKeys {
-		encoder = cmn.JSONSortAPI.NewEncoder(w)
-	} else {
-		encoder = jsoniter.NewEncoder(w)
-	}
-
+	encoder = cmn.JSON.NewEncoder(w)
 	if opts.Indent {
 		encoder.SetIndent("", "  ")
 	}
@@ -146,8 +141,7 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (chec
 		h = xxhash.New64()
 		r = io.TeeReader(r, h)
 	}
-	decoder := jsoniter.NewDecoder(r)
-	if err = decoder.Decode(v); err != nil {
+	if err = cmn.JSON.NewDecoder(r).Decode(v); err != nil {
 		return
 	}
 	if opts.Checksum {

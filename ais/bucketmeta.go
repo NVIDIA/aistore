@@ -196,7 +196,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 //
 func (m *bucketMD) tag() string     { return revsBMDTag }
 func (m *bucketMD) version() int64  { return m.Version }
-func (m *bucketMD) marshal() []byte { return cmn.MustSortMarshal(m) }
+func (m *bucketMD) marshal() []byte { return cmn.MustMarshal(m) }
 
 //////////////////
 // bmdOwnerBase //
@@ -285,7 +285,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	bo._put(bmd)
 
 	// Fresh BMD becoming Persisted BMDs
-	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, jsp.CCSign(true))
+	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, jsp.CCSign())
 	if persistedOn == 0 {
 		glog.Errorf("failed to store any %s on %d mpaths", bmdTermName, availMpaths)
 		// TODO: recover persisted from `BmdPersistedPrevious`?

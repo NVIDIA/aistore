@@ -70,7 +70,7 @@ func (r *Prunner) GetWhatStats() interface{} {
 func (r *Prunner) log(uptime time.Duration) {
 	r.Core.UpdateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", PostCount, Uptime}); !idle {
-		b := cmn.MustSortMarshal(r.ctracker)
+		b := cmn.MustMarshal(r.ctracker)
 		glog.Infoln(string(b))
 	}
 }

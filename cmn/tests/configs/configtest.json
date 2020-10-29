@@ -74,7 +74,6 @@
     "type":                       "xxhash",
     "validate_cold_get":          true,
     "validate_warm_get":          false,
-    "validate_cluster_migration": false,
     "enable_read_range":          false
   },
   "versioning": {
@@ -110,8 +109,7 @@
   },
   "auth": {
     "secret":  "FAKESECRETKEY",
-    "enabled": false,
-    "cred_dir": "/fake/cred/dir"
+    "enabled": false
   },
   "keepalivetracker": {
     "proxy": {

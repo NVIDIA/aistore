@@ -65,34 +65,31 @@ const (
 )
 
 var (
-	// JSONSortAPI is jsoniter API used to Marshal/Unmarshal structs ensuring same order of Keys
-	JSONSortAPI jsoniter.API
+	// JSON is used to Marshal/Unmarshal API json messages and is initialized in init function.
+	JSON jsoniter.API
 
-	// It is used to Marshal/Unmarshal API json messages and is initialized in init function.
-	jsonAPI jsoniter.API
+	EnvVars = struct {
+		Endpoint string
+
+		IsPrimary string
+		PrimaryID string
+
+		SkipVerifyCrt string
+		UseHTTPS      string
+		NumTarget     string
+		NumProxy      string
+	}{
+		Endpoint:      "AIS_ENDPOINT",
+		IsPrimary:     "AIS_IS_PRIMARY",
+		PrimaryID:     "AIS_PRIMARY_ID",
+		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
+		UseHTTPS:      "AIS_USE_HTTPS",
+
+		// Env variables used for tests or CI
+		NumTarget: "NUM_TARGET",
+		NumProxy:  "NUM_PROXY",
+	}
 )
-
-var EnvVars = struct {
-	Endpoint string
-
-	IsPrimary string
-	PrimaryID string
-
-	SkipVerifyCrt string
-	UseHTTPS      string
-	NumTarget     string
-	NumProxy      string
-}{
-	Endpoint:      "AIS_ENDPOINT",
-	IsPrimary:     "AIS_IS_PRIMARY",
-	PrimaryID:     "AIS_PRIMARY_ID",
-	SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
-	UseHTTPS:      "AIS_USE_HTTPS",
-
-	// Env variables used for tests or CI
-	NumTarget: "NUM_TARGET",
-	NumProxy:  "NUM_PROXY",
-}
 
 type (
 	StringSet      map[string]struct{}
@@ -216,17 +213,12 @@ func init() {
 	GCO.c.Store(unsafe.Pointer(config))
 
 	// API related
-	jsonAPI = jsoniter.Config{
-		EscapeHTML:             true,
-		ValidateJsonRawMessage: true,
+	JSON = jsoniter.Config{
+		EscapeHTML:             false, // We don't send HTMLs.
+		ValidateJsonRawMessage: false, // RawMessages are validated by morphing.
 		// Need to be sure that we have exactly the same struct as user requested.
 		DisallowUnknownFields: true,
 		SortMapKeys:           true,
-	}.Froze()
-
-	JSONSortAPI = jsoniter.Config{
-		EscapeHTML:  true,
-		SortMapKeys: true,
 	}.Froze()
 }
 
@@ -566,12 +558,4 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 		}
 	}
 	return m
-}
-
-// MustSortMarshal marshals v while ensuring sorted order of map keys and
-// panics if error occurs.
-func MustSortMarshal(v interface{}) []byte {
-	b, err := JSONSortAPI.Marshal(v)
-	AssertNoErr(err)
-	return b
 }

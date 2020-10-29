@@ -30,17 +30,12 @@ type Options struct {
 	Checksum    bool // xxhash when [version == 1 || version == 2]
 	Signature   bool // when true, write 128bit prefix (of the layout shown above) at offset zero
 
-	Indent      bool // Determines if the JSON should be indented. Useful for CLI config.
-	SortMapKeys bool // Determines if the JSON keys should be sorted while encoding
+	Indent bool // Determines if the JSON should be indented. Useful for CLI config.
 }
 
 func Plain() Options { return Options{} }
-func CCSign(sorted ...bool) Options {
-	var sortKeys bool
-	if len(sorted) > 0 {
-		sortKeys = sorted[0]
-	}
-	return Options{Compression: true, Checksum: true, Signature: true, Indent: false, SortMapKeys: sortKeys}
+func CCSign() Options {
+	return Options{Compression: true, Checksum: true, Signature: true, Indent: false}
 }
 
 func CksumSign() Options {

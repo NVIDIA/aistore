@@ -325,7 +325,7 @@ func WriteJSON(w http.ResponseWriter, v interface{}) error {
 
 // MustMarshal marshals v and panics if error occurs.
 func MustMarshal(v interface{}) []byte {
-	b, err := jsonAPI.Marshal(v)
+	b, err := JSON.Marshal(v)
 	AssertNoErr(err)
 	return b
 }
@@ -335,7 +335,7 @@ func MorphMarshal(data, v interface{}) error {
 	// Therefore, the easiest way is to marshal the `data` again and unmarshal it
 	// with hope that every field will be set correctly.
 	b := MustMarshal(data)
-	return jsonAPI.Unmarshal(b, v)
+	return JSON.Unmarshal(b, v)
 }
 
 func (u *ReqArgs) URL() string {

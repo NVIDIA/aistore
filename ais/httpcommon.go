@@ -555,8 +555,8 @@ func (h *httprunner) checkPresenceNetChange(smap *smapX) error {
 	if h.si.PublicNet != snode.PublicNet ||
 		h.si.IntraControlNet != snode.IntraControlNet ||
 		h.si.IntraDataNet != snode.IntraDataNet {
-		prev, _ := cmn.JSONSortAPI.MarshalIndent(snode, "", " ")
-		curr, _ := cmn.JSONSortAPI.MarshalIndent(h.si, "", " ")
+		prev, _ := cmn.JSON.MarshalIndent(snode, "", " ")
+		curr, _ := cmn.JSON.MarshalIndent(h.si, "", " ")
 		glog.Errorf("Warning: %s detected a change in network config:\n%scurrently:\n%s\n- proceeding anyway...",
 			h.si, string(prev), string(curr))
 	}

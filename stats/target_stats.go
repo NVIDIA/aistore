@@ -182,7 +182,7 @@ func (r *Trunner) log(uptime time.Duration) {
 	// copy stats, reset latencies
 	r.Core.UpdateUptime(uptime)
 	if idle := r.Core.copyT(r.ctracker, []string{"kalive", Uptime}); !idle {
-		b := cmn.MustSortMarshal(r.ctracker)
+		b := cmn.MustMarshal(r.ctracker)
 		r.lines = append(r.lines, string(b))
 	}
 

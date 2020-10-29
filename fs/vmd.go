@@ -100,7 +100,7 @@ func ReadVMD() (err error, mainVMD *VMD) {
 
 func (vmd VMD) Persist() error {
 	// Checksum, compress and sign, as a VMD might be quite large.
-	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign(true)); cnt == 0 {
+	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign()); cnt == 0 {
 		return fmt.Errorf("failed to persist vmd on any of mountpaths (%d)", availMpaths)
 	}
 

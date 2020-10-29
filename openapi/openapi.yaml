@@ -1734,8 +1734,6 @@ components:
               type: boolean
             validate_warm_get:
               type: boolean
-            validate_cluster_migration:
-              type: boolean
             enable_read_range:
               type: boolean
         version:
