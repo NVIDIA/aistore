@@ -2595,11 +2595,16 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to remove target",
 		smap.Version, testing.Verbose(), smap.CountProxies(), smap.CountTargets()-1)
 	registered := false
+
+	// FIXME: There are multiple defers calling JoinCluster, and it's very unclear what will happen when.
+	// This is the first defer, so it will be called last. Hence, we wait for rebalance to complete here.
+	// See: https://blog.golang.org/defer-panic-and-recover
 	defer func() {
 		if !registered {
 			err = tutils.JoinCluster(proxyURL, tgtLost, smap)
 			tassert.CheckError(t, err)
 		}
+		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 
 	// fill EC bucket
@@ -2656,10 +2661,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForPrimaryProxy(proxyURL, "target removed", smap.Version, testing.Verbose())
 	smap = tutils.GetClusterMap(t, proxyURL)
-	defer func() {
-		tutils.JoinCluster(proxyURL, tgtGone, smap)
-		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
-	}()
+	defer tutils.JoinCluster(proxyURL, tgtGone, smap)
 
 	stopCh.Close()
 

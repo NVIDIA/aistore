@@ -24,8 +24,8 @@ func TestMaintenanceOnOff(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "Maintenance for invalid daemon ID succeeded")
 
 	mntTarget := tutils.ExtractTargetNodes(smap)[0]
-	baseParams := tutils.BaseAPIParams(proxyURL)
 	msg.DaemonID = mntTarget.ID()
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	_, err = api.StartMaintenance(baseParams, msg)
 	tassert.CheckError(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)

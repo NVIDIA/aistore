@@ -818,6 +818,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	}
 	wg.Wait()
 	m.assertClusterState()
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 }
 
 func TestAddAndRemoveMountpath(t *testing.T) {

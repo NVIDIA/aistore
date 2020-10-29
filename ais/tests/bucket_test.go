@@ -1221,6 +1221,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 
 	wg.Wait()
 	m.assertClusterState()
+	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
 
 func TestBucketSingleProp(t *testing.T) {
