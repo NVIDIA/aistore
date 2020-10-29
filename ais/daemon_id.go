@@ -6,12 +6,15 @@ package ais
 
 import (
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -19,12 +22,12 @@ const (
 	proxyIDFname = ".ais.proxy_id"
 )
 
-func initDaemonID(daemonType string, config *cmn.Config) (daemonID string) {
+func initDaemonID(daemonType string, config *cmn.Config, publicAddr *net.TCPAddr) (daemonID string) {
 	switch daemonType {
 	case cmn.Target:
-		daemonID = initTargetDaemonID(config)
+		daemonID = initTargetDaemonID(config, publicAddr)
 	case cmn.Proxy:
-		daemonID = initProxyDaemonID(config)
+		daemonID = initProxyDaemonID(config, publicAddr)
 	default:
 		cmn.Assertf(false, daemonType)
 	}
@@ -37,7 +40,7 @@ func initDaemonID(daemonType string, config *cmn.Config) (daemonID string) {
 /// Proxy ///
 /////////////
 
-func initProxyDaemonID(config *cmn.Config) (daemonID string) {
+func initProxyDaemonID(config *cmn.Config, publicAddr *net.TCPAddr) (daemonID string) {
 	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
 		glog.Infof("proxy[%q] daemonID from env", daemonID)
 		goto persist
@@ -48,7 +51,7 @@ func initProxyDaemonID(config *cmn.Config) (daemonID string) {
 		return
 	}
 
-	daemonID = generateDaemonID(cmn.Proxy, config)
+	daemonID = generateDaemonID(cmn.Proxy, config, publicAddr)
 	glog.Infof("proxy[%q] daemonID randomly generated", daemonID)
 
 persist:
@@ -76,7 +79,7 @@ func readProxyDaemonID(config *cmn.Config) string {
 /// Target ///
 //////////////
 
-func initTargetDaemonID(config *cmn.Config) (daemonID string) {
+func initTargetDaemonID(config *cmn.Config, publicAddr *net.TCPAddr) (daemonID string) {
 	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
 		glog.Infof("target[%q] daemonID from env", daemonID)
 		goto persist
@@ -87,7 +90,7 @@ func initTargetDaemonID(config *cmn.Config) (daemonID string) {
 		return vmd.DaemonID
 	}
 
-	daemonID = generateDaemonID(cmn.Target, config)
+	daemonID = generateDaemonID(cmn.Target, config, publicAddr)
 	glog.Infof("target[%q] daemonID randomly generated", daemonID)
 
 persist:
@@ -102,16 +105,18 @@ persist:
 /// common ///
 //////////////
 
-func generateDaemonID(daemonType string, config *cmn.Config) string {
+func generateDaemonID(daemonType string, config *cmn.Config, publicAddr *net.TCPAddr) string {
 	if !config.TestingEnv() {
 		return cmn.GenDaemonID()
 	}
 
+	cs := xxhash.ChecksumString32S(publicAddr.String(), cmn.MLCG32)
+	daemonID := strconv.Itoa(int(cs & 0xfffff))
 	switch daemonType {
 	case cmn.Target:
-		return cmn.RandStringStrong(4) + "t" + config.Net.L4.PortStr
+		return daemonID + "t" + config.Net.L4.PortStr
 	case cmn.Proxy:
-		return cmn.RandStringStrong(4) + "p" + config.Net.L4.PortStr
+		return daemonID + "p" + config.Net.L4.PortStr
 	}
 	cmn.Assertf(false, daemonType)
 	return ""
