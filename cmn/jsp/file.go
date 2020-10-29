@@ -30,12 +30,17 @@ type Options struct {
 	Checksum    bool // xxhash when [version == 1 || version == 2]
 	Signature   bool // when true, write 128bit prefix (of the layout shown above) at offset zero
 
-	Indent bool // Determines if the JSON should be indented. Useful for CLI config.
+	Indent      bool // Determines if the JSON should be indented. Useful for CLI config.
+	SortMapKeys bool // Determines if the JSON keys should be sorted while encoding
 }
 
 func Plain() Options { return Options{} }
-func CCSign() Options {
-	return Options{Compression: true, Checksum: true, Signature: true, Indent: false}
+func CCSign(sorted ...bool) Options {
+	var sortKeys bool
+	if len(sorted) > 0 {
+		sortKeys = sorted[0]
+	}
+	return Options{Compression: true, Checksum: true, Signature: true, Indent: false, SortMapKeys: sortKeys}
 }
 
 func CksumSign() Options {
@@ -71,12 +76,13 @@ func Save(path string, v interface{}, opts Options) (err error) {
 	return
 }
 
-func Load(path string, v interface{}, opts Options) error {
-	file, err := os.Open(path)
+func Load(path string, v interface{}, opts Options) (checksum *cmn.Cksum, err error) {
+	var file *os.File
+	file, err = os.Open(path)
 	if err != nil {
-		return err
+		return
 	}
-	err = Decode(file, v, opts, path)
+	checksum, err = Decode(file, v, opts, path)
 	if err != nil && errors.Is(err, &cmn.BadCksumError{}) {
 		if errRm := os.Remove(path); errRm == nil {
 			if flag.Parsed() {
@@ -85,7 +91,7 @@ func Load(path string, v interface{}, opts Options) error {
 		} else if flag.Parsed() {
 			glog.Errorf("bad checksum: failed to remove %s: %v", path, errRm)
 		}
-		return err
+		return
 	}
-	return err
+	return
 }

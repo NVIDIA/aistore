@@ -85,9 +85,11 @@ func initTargetDaemonID(config *cmn.Config, publicAddr *net.TCPAddr) (daemonID s
 		goto persist
 	}
 
-	if vmd := fs.ReadVMD(); vmd != nil {
+	if err, vmd := fs.ReadVMD(); vmd != nil {
 		glog.Infof("target[%q] daemonID from VMD", vmd.DaemonID)
 		return vmd.DaemonID
+	} else if err != nil {
+		cmn.ExitLogf("%v", err)
 	}
 
 	daemonID = generateDaemonID(cmn.Target, config, publicAddr)

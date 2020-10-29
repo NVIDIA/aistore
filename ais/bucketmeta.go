@@ -46,7 +46,8 @@ const (
 type (
 	bucketMD struct {
 		cluster.BMD
-		vstr string // itoa(Version), to have it handy for http redirects
+		vstr  string     // itoa(Version), to have it handy for http redirects
+		cksum *cmn.Cksum // BMD checksum
 	}
 	bmdOwner interface {
 		sync.Locker
@@ -218,7 +219,7 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 
 func (bo *bmdOwnerPrx) init() {
 	bmd := newBucketMD()
-	err := jsp.Load(bo.fpath, bmd, jsp.CCSign())
+	_, err := jsp.Load(bo.fpath, bmd, jsp.CCSign())
 	if err != nil && !os.IsNotExist(err) {
 		glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, bo.fpath, err)
 	}
@@ -284,7 +285,7 @@ func (bo *bmdOwnerTgt) put(bmd *bucketMD) {
 	bo._put(bmd)
 
 	// Fresh BMD becoming Persisted BMDs
-	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, jsp.CCSign())
+	persistedOn, availMpaths := fs.PersistOnMpaths(fs.BmdPersistedFileName, fs.BmdPersistedPrevious, bmd, bmdCopies, jsp.CCSign(true))
 	if persistedOn == 0 {
 		glog.Errorf("failed to store any %s on %d mpaths", bmdTermName, availMpaths)
 		// TODO: recover persisted from `BmdPersistedPrevious`?
@@ -298,20 +299,34 @@ func (bo *bmdOwnerTgt) modify(_ *bmdModifier) (*bucketMD, error) {
 	return nil, nil
 }
 
-func loadBMD(mpaths fs.MPI, path string) *bucketMD {
+func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 	for _, mpath := range mpaths {
-		if bmd := loadBMDFromMpath(mpath, path); bmd != nil {
-			return bmd
+		bmd := loadBMDFromMpath(mpath, path)
+		if bmd == nil {
+			continue
 		}
+		if mainBMD != nil {
+			if !mainBMD.cksum.Equal(bmd.cksum) {
+				glog.Fatalf("BMD is different (%q): %v vs %v", mpath, mainBMD, bmd)
+			}
+			continue
+		}
+		mainBMD = bmd
 	}
-	return nil
+	return
 }
 
 func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
-	bmd = newBucketMD()
+	var (
+		fpath = filepath.Join(mpath.Path, path)
+		err   error
+	)
+	if err := fs.Access(fpath); err != nil {
+		return
+	}
 
-	fpath := filepath.Join(mpath.Path, path)
-	err := jsp.Load(fpath, bmd, jsp.CCSign())
+	bmd = newBucketMD()
+	bmd.cksum, err = jsp.Load(fpath, bmd, jsp.CCSign())
 	if err == nil {
 		return bmd
 	}
@@ -319,6 +334,5 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 		// Should never be NotExist error as mpi should include only mpaths with relevant bmds stored.
 		glog.Errorf("failed to load %s from %s, err: %v", bmdTermName, fpath, err)
 	}
-
 	return nil
 }

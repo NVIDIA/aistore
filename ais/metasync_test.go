@@ -561,7 +561,7 @@ func TestMetaSyncData(t *testing.T) {
 			}
 
 			d := make(msPayload)
-			err := jsp.Decode(r.Body, &d, jsp.CCSign(), "")
+			_, err := jsp.Decode(r.Body, &d, jsp.CCSign(), "")
 			ch <- data{d, err}
 		}
 
@@ -826,7 +826,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		chProxy := make(chan msPayload, 10)
 		fProxy := func(w http.ResponseWriter, r *http.Request) {
 			d := make(msPayload)
-			err := jsp.Decode(r.Body, &d, jsp.CCSign(), "")
+			_, err := jsp.Decode(r.Body, &d, jsp.CCSign(), "")
 			cmn.AssertNoErr(err)
 			chProxy <- d
 		}

@@ -92,7 +92,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 							// load elsewhere and check
 							loaded := newBucketMD()
-							err = jsp.Load(testpath, loaded, opts)
+							_, err = jsp.Load(testpath, loaded, opts)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(loaded.UUID).To(BeEquivalentTo(clone.UUID))
 							Expect(loaded.Version).To(BeEquivalentTo(clone.Version))

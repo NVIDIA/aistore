@@ -83,7 +83,7 @@ func (r *rmdOwner) persist(rmd *rebMD) {
 }
 
 func (r *rmdOwner) load() {
-	err := jsp.Load(filepath.Join(cmn.GCO.Get().Confdir, rmdFname), &r.rmd, jsp.CCSign())
+	_, err := jsp.Load(filepath.Join(cmn.GCO.Get().Confdir, rmdFname), &r.rmd, jsp.CCSign())
 	if err != nil && !os.IsNotExist(err) {
 		glog.Errorf("failed to load rmd: %v", err)
 	}

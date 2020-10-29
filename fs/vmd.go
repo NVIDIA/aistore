@@ -7,7 +7,6 @@ package fs
 import (
 	"fmt"
 	"path/filepath"
-	"reflect"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -31,6 +30,7 @@ type (
 		Devices  map[string]*fsDeviceMD `json:"devices"` // MpathID => MD
 		DaemonID string                 `json:"daemon_id"`
 		Version  uint                   `json:"version"` // formatting version for backward compatibility
+		cksum    *cmn.Cksum             // checksum of VMD
 	}
 )
 
@@ -59,49 +59,48 @@ func CreateVMD(daemonID string) *VMD {
 	return vmd
 }
 
-func ReadVMD() *VMD {
-	var (
-		// NOTE: Not performance critical code, but number of syscalls could be reduced.
-		mpaths       = FindPersisted(VmdPersistedFileName)
-		available, _ = Get()
-
-		mainVMD *VMD
-	)
-	if len(mpaths) == 0 {
-		glog.Infof("VMD not found on any of %d mountpaths", len(available))
-		return nil
-	}
-
+func ReadVMD() (err error, mainVMD *VMD) {
+	available, _ := Get()
 	// NOTE: iterating only over mpaths which have VmdPersistedFileName.
-	for _, mpi := range mpaths {
+	for _, mpi := range available {
 		fpath := filepath.Join(mpi.Path, VmdPersistedFileName)
+		if err := Access(fpath); err != nil {
+			continue
+		}
 
 		vmd := newVMD(len(available))
-		if err := jsp.Load(fpath, vmd, jsp.CCSign()); err != nil {
-			glog.Fatalf("Failed to read vmd (%q), err: %v", fpath, err)
+		vmd.cksum, err = jsp.Load(fpath, vmd, jsp.CCSign())
+		if err != nil {
+			err = fmt.Errorf("failed to read vmd (%q), err: %v", fpath, err)
+			glog.InfoDepth(1)
+			return
 		}
-		if err := vmd.Validate(); err != nil {
-			glog.Fatalf("Failed to validate vmd (%q), err: %v", fpath, err)
+
+		if err = vmd.Validate(); err != nil {
+			err = fmt.Errorf("failed to validate vmd (%q), err: %v", fpath, err)
+			glog.InfoDepth(1)
+			return
 		}
 
 		if mainVMD != nil {
-			if !reflect.DeepEqual(mainVMD, vmd) {
+			if !mainVMD.cksum.Equal(vmd.cksum) {
 				glog.Fatalf("VMD is different (%q): %v vs %v", fpath, mainVMD, vmd)
 			}
 			continue
 		}
-
 		mainVMD = vmd
 	}
 
-	// At least one mpath with VMD and no errors loading/comparing/validating.
-	cmn.Assert(mainVMD != nil)
-	return mainVMD
+	if mainVMD == nil {
+		glog.Infof("VMD not found on any of %d mountpaths", len(available))
+	}
+
+	return
 }
 
 func (vmd VMD) Persist() error {
 	// Checksum, compress and sign, as a VMD might be quite large.
-	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign()); cnt == 0 {
+	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign(true)); cnt == 0 {
 		return fmt.Errorf("failed to persist vmd on any of mountpaths (%d)", availMpaths)
 	}
 
@@ -113,7 +112,7 @@ func (vmd VMD) Validate() error {
 	if vmd.Version != vmdInitialVersion {
 		return fmt.Errorf("invalid vmd version %q", vmd.Version)
 	}
-
+	cmn.Assert(vmd.cksum != nil)
 	cmn.Assert(vmd.DaemonID != "")
 	return nil
 }

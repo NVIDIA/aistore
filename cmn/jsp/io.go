@@ -7,6 +7,7 @@ package jsp
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
@@ -39,6 +40,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 		cksumOffset int64
 		h           hash.Hash
 		w           io.Writer = ws
+		encoder     *jsoniter.Encoder
 	)
 	if opts.Signature {
 		var prefix [prefLen]byte
@@ -80,7 +82,12 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 		w = io.MultiWriter(h, w)
 	}
 
-	encoder := jsoniter.NewEncoder(w)
+	if opts.SortMapKeys {
+		encoder = cmn.JSONSortAPI.NewEncoder(w)
+	} else {
+		encoder = jsoniter.NewEncoder(w)
+	}
+
 	if opts.Indent {
 		encoder.SetIndent("", "  ")
 	}
@@ -95,7 +102,7 @@ func Encode(ws cmn.WriterAt, v interface{}, opts Options) (err error) {
 	return
 }
 
-func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error {
+func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) (checksum *cmn.Cksum, err error) {
 	var (
 		r             io.Reader = reader
 		expectedCksum uint64
@@ -105,16 +112,18 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 	defer cmn.Close(reader)
 	if opts.Signature {
 		var prefix [prefLen]byte
-		if _, err := r.Read(prefix[:]); err != nil {
-			return err
+		if _, err = r.Read(prefix[:]); err != nil {
+			return
 		}
 		l := len(signature)
 		if signature != string(prefix[:l]) {
-			return fmt.Errorf("bad signature %q: %v", tag, string(prefix[:l]))
+			err = fmt.Errorf("bad signature %q: %v", tag, string(prefix[:l]))
+			return
 		}
 		version = prefix[l]
 		if version != v2 {
-			return fmt.Errorf("unsupported version %q: %x", tag, version)
+			err = fmt.Errorf("unsupported version %q: %x", tag, version)
+			return
 		}
 
 		packingInfo := binary.BigEndian.Uint64(prefix[cmn.SizeofI64:])
@@ -123,8 +132,8 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 	}
 	if opts.Checksum {
 		var cksum [sizeXXHash64]byte
-		if _, err := r.Read(cksum[:]); err != nil {
-			return err
+		if _, err = r.Read(cksum[:]); err != nil {
+			return
 		}
 		expectedCksum = binary.BigEndian.Uint64(cksum[:])
 	}
@@ -138,15 +147,15 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		r = io.TeeReader(r, h)
 	}
 	decoder := jsoniter.NewDecoder(r)
-	if err := decoder.Decode(v); err != nil {
-		return err
+	if err = decoder.Decode(v); err != nil {
+		return
 	}
 	if opts.Checksum {
 		// We have already parsed `v` but there is still the possibility that `\n` remains
 		// not read. Therefore, we read it to include it into the final checksum.
-		b, err := ioutil.ReadAll(r)
-		if err != nil {
-			return err
+		var b []byte
+		if b, err = ioutil.ReadAll(r); err != nil {
+			return
 		}
 		// To be sure that this is exactly the case...
 		debug.Assert(len(b) == 0 || (len(b) == 1 && b[0] == '\n'), b)
@@ -154,8 +163,10 @@ func Decode(reader io.ReadCloser, v interface{}, opts Options, tag string) error
 		actual := h.Sum(nil)
 		actualCksum := binary.BigEndian.Uint64(actual)
 		if expectedCksum != actualCksum {
-			return cmn.NewBadMetaCksumError(expectedCksum, actualCksum, tag)
+			err = cmn.NewBadMetaCksumError(expectedCksum, actualCksum, tag)
+			return
 		}
+		checksum = cmn.NewCksum(cmn.ChecksumXXHash, hex.EncodeToString(actual))
 	}
-	return nil
+	return
 }

@@ -29,7 +29,7 @@ func LoadConfig(confPath string) (err error) {
 	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
 
-	err = Load(confPath, &config, Options{})
+	_, err = Load(confPath, &config, Options{})
 	if err != nil {
 		return fmt.Errorf("failed to load config %q, err: %v", confPath, err)
 	}

@@ -128,7 +128,7 @@ func dumpMeta(v interface{}, opts jsp.Options) (err error) {
 			return
 		}
 	}
-	err = jsp.Load(flags.in, v, opts)
+	_, err = jsp.Load(flags.in, v, opts)
 	if err != nil {
 		return
 	}
@@ -158,7 +158,7 @@ func compressMeta(v interface{}, opts jsp.Options) error {
 	if flags.out == "" {
 		return errors.New("output filename (the -out option) must be defined")
 	}
-	if err := jsp.Load(flags.in, v, jsp.Plain()); err != nil {
+	if _, err := jsp.Load(flags.in, v, jsp.Plain()); err != nil {
 		return err
 	}
 	return jsp.Save(flags.out, v, opts)

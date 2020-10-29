@@ -27,7 +27,7 @@ func LoadAppConfig(appName, configFileName string, v interface{}) (err error) {
 	}
 
 	// Load config from file.
-	if err = Load(configFilePath, v, Options{Indent: true}); err != nil {
+	if _, err = Load(configFilePath, v, Options{Indent: true}); err != nil {
 		return fmt.Errorf("failed to load config file %q: %v", configFilePath, err)
 	}
 	return

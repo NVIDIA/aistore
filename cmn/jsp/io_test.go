@@ -98,7 +98,7 @@ func TestDecodeAndEncode(t *testing.T) {
 			err := jsp.Encode(b, test.v, test.opts)
 			tassert.CheckFatal(t, err)
 
-			err = jsp.Decode(b, &v, test.opts, "test")
+			_, err = jsp.Decode(b, &v, test.opts, "test")
 			tassert.CheckFatal(t, err)
 
 			// reflect.DeepEqual may not work here due to using `[]byte` in the struct.
@@ -129,7 +129,7 @@ func TestDecodeAndEncodeFuzz(t *testing.T) {
 		err := jsp.Encode(b, x, opts)
 		tassert.CheckFatal(t, err)
 
-		err = jsp.Decode(b, &v, opts, fmt.Sprintf("%d", i))
+		_, err = jsp.Decode(b, &v, opts, fmt.Sprintf("%d", i))
 		tassert.CheckFatal(t, err)
 
 		tassert.Fatalf(t, x == v, "strings are not equal, (got: %+v, expected: %+v)", x, v)
@@ -200,7 +200,7 @@ func BenchmarkDecode(b *testing.B) {
 					v testStruct
 					r = ioutil.NopCloser(bytes.NewReader(network))
 				)
-				err := jsp.Decode(r, &v, bench.opts, "benchmark")
+				_, err := jsp.Decode(r, &v, bench.opts, "benchmark")
 				tassert.CheckFatal(b, err)
 			}
 		})

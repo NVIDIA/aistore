@@ -59,7 +59,7 @@ func main() {
 	if glog.V(4) {
 		glog.Infof("Reading configuration from %s", configPath)
 	}
-	if err = jsp.Load(configPath, conf, jsp.Plain()); err != nil {
+	if _, err = jsp.Load(configPath, conf, jsp.Plain()); err != nil {
 		glog.Fatalf("Failed to load configuration: %v", err)
 	}
 	conf.path = configPath

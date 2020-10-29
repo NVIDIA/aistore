@@ -815,7 +815,7 @@ func (t *targetrunner) detectMpathChanges() {
 		newfs.Disabled[mpath] = struct{}{}
 	}
 
-	if err := jsp.Load(mpathconfigfqn, &oldfs, jsp.Plain()); err != nil {
+	if _, err := jsp.Load(mpathconfigfqn, &oldfs, jsp.Plain()); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
 		}
@@ -944,7 +944,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/metasync
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
-	if err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
+	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
 		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
 	}
@@ -1006,7 +1006,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 // POST /v1/metasync
 func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
-	if err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync post"); err != nil {
+	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync post"); err != nil {
 		cmn.InvalidHandlerDetailed(w, r, err.Error())
 		return
 	}
