@@ -50,7 +50,6 @@ func TestUnregisteredProxyHealth(t *testing.T) {
 	proxy, err := smap.GetRandProxy(true /*excludePrimary*/)
 	tassert.CheckError(t, err)
 	unregisteredNodeHealth(t, proxy)
-	defer tutils.WaitForRebalanceToComplete(t, baseParams)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, proxyCnt == smap.CountProxies(), "expected number of proxies to be the same after the test")
