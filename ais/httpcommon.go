@@ -679,6 +679,9 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 		client = h.httpclientGetPut
 	default:
 		var cancel context.CancelFunc
+		if args.timeout == 0 {
+			args.timeout = cmn.GCO.Get().Timeout.CplaneOperation
+		}
 		req, _, cancel, res.err = args.req.ReqWithTimeout(args.timeout)
 		if res.err != nil {
 			break
