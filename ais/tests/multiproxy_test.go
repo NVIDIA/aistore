@@ -110,7 +110,7 @@ func clusterHealthCheck(t *testing.T, smapBefore *cluster.Smap) {
 	for _, b := range smapBefore.Tmap {
 		a, ok := smapAfter.Tmap[b.ID()]
 		if !ok {
-			t.Fatalf("Failed to find target %s", b.ID())
+			t.Fatalf("Target %s changed its ID", b.ID())
 		}
 
 		if !a.Equals(b) {
@@ -121,7 +121,7 @@ func clusterHealthCheck(t *testing.T, smapBefore *cluster.Smap) {
 	for _, b := range smapBefore.Pmap {
 		a, ok := smapAfter.Pmap[b.ID()]
 		if !ok {
-			t.Fatalf("Failed to find proxy %s", b.ID())
+			t.Fatalf("Proxy %s changed its ID", b.ID())
 		}
 
 		// NOTE: Can't compare Primary field unless primary is always reset to the original one.

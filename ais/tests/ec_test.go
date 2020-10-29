@@ -2358,7 +2358,8 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tgtLost := tgtList[0]
 
 	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
-	err := tutils.UnregisterNode(proxyURL, tgtLost.ID())
+	args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
+	err := tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	registered := false
 	smap := tutils.GetClusterMap(t, proxyURL)
@@ -2588,7 +2589,8 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	tgtGone := tgtList[1]
 
 	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
-	err := tutils.RemoveNodeFromSmap(proxyURL, tgtLost.ID())
+	args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
+	err := tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to remove target",
 		smap.Version, testing.Verbose(), smap.CountProxies(), smap.CountTargets()-1)
@@ -2649,14 +2651,20 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	}()
 
 	tutils.Logf("Unregistering %s...\n", tgtGone.ID())
-	err = tutils.RemoveNodeFromSmap(proxyURL, tgtGone.ID())
+	args = &cmn.ActValDecommision{DaemonID: tgtGone.ID(), Force: true}
+	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
+	_, err = tutils.WaitForPrimaryProxy(proxyURL, "target removed", smap.Version, testing.Verbose())
 	smap = tutils.GetClusterMap(t, proxyURL)
-	defer tutils.JoinCluster(proxyURL, tgtGone, smap)
+	defer func() {
+		tutils.JoinCluster(proxyURL, tgtGone, smap)
+		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	}()
 
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	stopCh.Close()
 
+	tassert.CheckFatal(t, err)
+	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	tutils.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
 	tassert.CheckFatal(t, err)

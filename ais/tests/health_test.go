@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -19,7 +20,8 @@ func unregisteredNodeHealth(t *testing.T, si *cluster.Snode) {
 	err := api.Health(tutils.BaseAPIParams(si.PublicNet.DirectURL))
 	tassert.CheckError(t, err)
 
-	err = tutils.UnregisterNode(proxyURL, si.DaemonID, true /*force*/)
+	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, Force: true}
+	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	smap := tutils.GetClusterMap(t, proxyURL)
 	defer func() {

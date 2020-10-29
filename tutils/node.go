@@ -34,7 +34,8 @@ func JoinCluster(proxyURL string, node *cluster.Snode, smap *cluster.Smap) error
 func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
 	removeTarget := ExtractTargetNodes(smap)[0]
 	Logf("Removing target %s\n", removeTarget.ID())
-	err := UnregisterNode(proxyURL, removeTarget.ID())
+	args := &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
+	err := UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
 		proxyURL,

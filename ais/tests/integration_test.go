@@ -219,7 +219,8 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	target := m.unregisterTarget()
 
 	// Unregister same target again.
-	err := tutils.UnregisterNode(m.proxyURL, target.ID())
+	args := &cmn.ActValDecommision{DaemonID: target.ID(), SkipRebalance: true}
+	err := tutils.UnregisterNode(m.proxyURL, args)
 	tutils.CheckErrIsNotFound(t, err)
 
 	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
@@ -251,7 +252,8 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	// Unregister target 0
 	tutils.Logf("Unregister target %s\n", targets[0].ID())
-	err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
+	args := &cmn.ActValDecommision{DaemonID: targets[0].ID(), SkipRebalance: true}
+	err := tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(t, err)
 	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
@@ -279,7 +281,8 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tutils.Logf("Unregister target %s\n", targets[1].ID())
-		err = tutils.UnregisterNode(m.proxyURL, targets[1].ID())
+		args := &cmn.ActValDecommision{DaemonID: targets[1].ID(), SkipRebalance: true}
+		err = tutils.UnregisterNode(m.proxyURL, args)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -442,7 +445,8 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Unregister target
 	target0, target1 := targets[0], targets[1]
 	tutils.Logf("Unregister target %s\n", target0.URL(cmn.NetworkPublic))
-	err := tutils.UnregisterNode(m.proxyURL, target0.ID())
+	args := &cmn.ActValDecommision{DaemonID: target0.ID(), SkipRebalance: true}
+	err := tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForPrimaryProxy(
@@ -589,7 +593,8 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// Unregister another target
 	tutils.Logf("Unregister target %s\n", killTarget.URL(cmn.NetworkPublic))
-	err = tutils.UnregisterNode(m.proxyURL, killTarget.ID())
+	args := &cmn.ActValDecommision{DaemonID: killTarget.ID(), SkipRebalance: true}
+	err = tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(t, err)
 	smap, err := tutils.WaitForPrimaryProxy(
 		m.proxyURL,
@@ -731,7 +736,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	target := m.unregisterTarget()
+	target := m.unregisterTarget(true /*force*/)
 
 	m.puts()
 
@@ -776,16 +781,17 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 	// Unregister targets
 	for i := 0; i < unregisterTargetCount; i++ {
-		err := tutils.UnregisterNode(m.proxyURL, targets[i].ID())
+		args := &cmn.ActValDecommision{DaemonID: targets[i].ID(), Force: true}
+		err := tutils.UnregisterNode(m.proxyURL, args)
 		tassert.CheckError(t, err)
-		n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
-		if n != m.originalTargetCount-(i+1) {
-			t.Errorf("%d targets expected after unregister, actually %d targets",
-				m.originalTargetCount-(i+1), n)
-		}
-		tutils.Logf("Unregistered target %s: the cluster now has %d targets\n",
-			targets[i].URL(cmn.NetworkPublic), n)
 	}
+	tutils.WaitForPrimaryProxy(
+		m.proxyURL,
+		"to remove targets",
+		m.smap.Version, testing.Verbose(),
+		m.originalProxyCount,
+		m.originalTargetCount-unregisterTargetCount,
+	)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(unregisterTargetCount)
@@ -1114,6 +1120,7 @@ func TestForwardCP(t *testing.T) {
 	wg.Wait()
 
 	m.ensureNoErrors()
+	tutils.WaitForRebalanceToComplete(t, baseParams)
 
 	// Step 5. destroy ais bucket via original primary which is not primary at this point
 	tutils.DestroyBucket(t, origURL, m.bck)
@@ -1371,7 +1378,8 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	targets := tutils.ExtractTargetNodes(m.smap)
 
 	// Unregister target 0
-	err := tutils.UnregisterNode(m.proxyURL, targets[0].ID())
+	args := &cmn.ActValDecommision{DaemonID: targets[0].ID(), SkipRebalance: true}
+	err := tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(t, err)
 	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {

@@ -229,7 +229,8 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	err = tutils.UnregisterNode(proxyURL, target.DaemonID)
+	args := &cmn.ActValDecommision{DaemonID: target.ID(), SkipRebalance: true}
+	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckError(t, err)
 
 	smap, err = tutils.WaitForPrimaryProxy(

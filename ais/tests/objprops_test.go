@@ -240,7 +240,8 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	removeTarget := tutils.ExtractTargetNodes(smap)[0]
 
 	tutils.Logf("Removing a target: %s\n", removeTarget.ID())
-	err := tutils.UnregisterNode(proxyURL, removeTarget.ID())
+	args := &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
+	err := tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,

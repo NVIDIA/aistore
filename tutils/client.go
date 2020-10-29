@@ -180,28 +180,19 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 // before removing the node. Because node removal uses transactions, this
 // function cannot be used for MOCK nodes as they do not implement required
 // HTTP handlers. To unregister a mock, use `RemoveNodeFromSmap` instead.
-func UnregisterNode(proxyURL, sid string, force ...bool) error {
+func UnregisterNode(proxyURL string, args *cmn.ActValDecommision) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
-	forced := false
-	if len(force) != 0 {
-		forced = force[0]
-	}
-	val := &cmn.ActValDecommision{
-		DaemonID:      sid,
-		SkipRebalance: true,
-		Force:         forced,
-	}
-	if _, err := api.Decommission(baseParams, val); err != nil {
+	if _, err := api.Decommission(baseParams, args); err != nil {
 		return err
 	}
 
 	// If node does not exists in cluster we should not wait for map version
 	// sync because update will not be scheduled
-	if node := smap.GetNode(sid); node != nil {
+	if node := smap.GetNode(args.DaemonID); node != nil {
 		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{node.ID()})
 	}
 	return nil

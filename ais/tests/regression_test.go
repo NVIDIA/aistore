@@ -516,7 +516,8 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	targets := tutils.ExtractTargetNodes(m.smap)
 	for i := 0; i < targetsToUnregister; i++ {
 		tutils.Logf("Unregistering target %s\n", targets[i].ID())
-		err := tutils.UnregisterNode(m.proxyURL, targets[i].ID())
+		args := &cmn.ActValDecommision{DaemonID: targets[i].ID(), SkipRebalance: true}
+		err := tutils.UnregisterNode(m.proxyURL, args)
 		tassert.CheckFatal(t, err)
 	}
 
