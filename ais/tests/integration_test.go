@@ -1121,7 +1121,6 @@ func TestForwardCP(t *testing.T) {
 	wg.Wait()
 
 	m.ensureNoErrors()
-	tutils.WaitForRebalanceToComplete(t, baseParams)
 
 	// Step 5. destroy ais bucket via original primary which is not primary at this point
 	tutils.DestroyBucket(t, origURL, m.bck)
