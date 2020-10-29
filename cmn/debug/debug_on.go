@@ -129,7 +129,13 @@ func rwMtxLocked(m *sync.RWMutex) bool {
 }
 
 func rwMtxRLocked(m *sync.RWMutex) bool {
-	return reflect.ValueOf(m).Elem().FieldByName("readerCount").Int() > 0
+	const maxReaders = 1 << 30 // Taken from `sync/rwmutex.go`.
+	rc := reflect.ValueOf(m).Elem().FieldByName("readerCount").Int()
+	// NOTE: As it's generally true that `rc > 0` the problem arises when writer
+	//  tries to lock the mutex. The writer announces it by manipulating `rc`
+	//  (to be specific, decreases `rc` by `maxReaders`). Therefore, to check if
+	//  there are any readers still holding lock we need to check both cases.
+	return rc > 0 || (0 > rc && rc > -maxReaders)
 }
 
 func AssertRWMutex(m *sync.RWMutex, flag int) {
