@@ -122,21 +122,14 @@ func movePersistedFile(from, to string) bool {
 	return err == nil
 }
 
-func ClearMDOnMpath(mpath *MountpathInfo) {
-	for _, path := range mdFiles {
-		fpath := filepath.Join(mpath.Path, path)
-		os.RemoveAll(fpath)
-	}
-}
-
 func ClearMDOnAllMpaths() {
 	available, _ := Get()
 	for _, mpath := range available {
-		ClearMDOnMpath(mpath)
+		mpath.ClearMDs()
 	}
 }
 
-func RemoveMpathsIDs() {
+func RemoveDaemonIDs() {
 	available, disabled := Get()
 	for _, mpath := range available {
 		if err := RemoveXattr(mpath.Path, daemonIDXattr); err != nil {

@@ -629,7 +629,7 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 		}
 		if c.msg.Action == cmn.ActDecommission && opts.DaemonID == t.si.ID() {
 			fs.ClearMDOnAllMpaths()
-			fs.RemoveMpathsIDs()
+			fs.RemoveDaemonIDs()
 		}
 	default:
 		cmn.Assert(false)

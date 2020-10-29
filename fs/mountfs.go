@@ -208,6 +208,13 @@ func (mi *MountpathInfo) StoreMD(path string, what interface{}, options jsp.Opti
 	return jsp.Save(fpath, what, options)
 }
 
+func (mi *MountpathInfo) ClearMDs() {
+	for _, mdPath := range mdFiles {
+		fpath := filepath.Join(mi.Path, mdPath)
+		os.RemoveAll(fpath)
+	}
+}
+
 // make-path methods
 
 func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int) (buf []byte) {
@@ -497,7 +504,7 @@ func Remove(mpath string) (*MountpathInfo, error) {
 		return nil, err
 	}
 
-	// Clear mpathID xattr if set
+	// Clear daemonID xattr if set
 	RemoveXattr(mpath, daemonIDXattr)
 
 	availablePaths, disabledPaths := mountpathsCopy()

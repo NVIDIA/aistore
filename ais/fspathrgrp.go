@@ -119,7 +119,7 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 
 	go mpath.EvictLomCache()
-	fs.ClearMDOnMpath(mpath) // clear AIS metadata
+	mpath.ClearMDs()
 
 	if g.checkZeroMountpaths(action) {
 		return

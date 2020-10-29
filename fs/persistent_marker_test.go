@@ -209,7 +209,7 @@ func TestMarkersClear(t *testing.T) {
 	)
 
 	for _, mpath := range mpaths {
-		fs.ClearMDOnMpath(mpath)
+		mpath.ClearMDs()
 	}
 
 	checkMarkersExist(t,
