@@ -546,9 +546,9 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		var xactID string
 		if xactID, err = p.doListRange(http.MethodDelete, bucket, &msg, query); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
 		w.Write([]byte(xactID))
-
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
@@ -908,6 +908,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		var xactID string
 		if xactID, err = p.doListRange(http.MethodPost, bucket, msg, query); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
 		w.Write([]byte(xactID))
 	case cmn.ActListObjects:
