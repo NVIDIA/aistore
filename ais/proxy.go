@@ -1514,6 +1514,10 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		p.invalmsghdlr(w, r, s)
 		return true
 	}
+	if p.inPrimaryTransition.Load() {
+		p.invalmsghdlr(w, r, "primary is in transition, cannot process the request", http.StatusServiceUnavailable)
+		return
+	}
 	if smap.isPrimary(p.si) {
 		return
 	}
@@ -2452,7 +2456,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// (I) prepare phase
+	// (I.1) Prepare phase - inform other nodes.
 	urlPath := cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.Proxy, proxyid)
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
@@ -2465,16 +2469,18 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// (I.5) commit locally
-	ctx := &smapModifier{pre: func(_ *smapModifier, clone *smapX) error {
+	// (I.2) Prepare phase - local changes.
+	p.inPrimaryTransition.Store(true)
+	defer p.inPrimaryTransition.Store(false)
+
+	err = p.owner.smap.modify(&smapModifier{pre: func(_ *smapModifier, clone *smapX) error {
 		clone.Primary = psi
 		p.metasyncer.becomeNonPrimary()
 		return nil
-	}}
-	err = p.owner.smap.modify(ctx)
+	}})
 	debug.AssertNoErr(err)
 
-	// (II) commit phase
+	// (II) Commit phase.
 	q.Set(cmn.URLParamPrepare, "false")
 	results = p.callAll(http.MethodPut, urlPath, nil, q)
 
@@ -2761,12 +2767,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 	return targetResults
 }
 
-//////////////////////////////////////
-// commands:
-// - register|keepalive target|proxy
-// - start|stop xaction
-//////////////////////////////////////
-
+// Commands: register|keepalive target|proxy
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		regReq                                nodeRegMeta
@@ -2777,6 +2778,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster)
 	if err != nil {
 		return
+	}
+
+	if p.inPrimaryTransition.Load() {
+		if apiItems[0] == cmn.Keepalive {
+			// Ignore keepalive beat if the primary is in transition.
+			return
+		}
 	}
 
 	if p.forwardCP(w, r, nil, "httpclupost") {

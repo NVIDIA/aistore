@@ -146,6 +146,10 @@ type (
 				time atomic.Time // determines time when the node started up
 			}
 		}
+		// NOTE: For now, used only by the primary proxy which promotes other
+		//  proxy to become new primary.
+		// Determines if the primary transition is in progress.
+		inPrimaryTransition atomic.Bool
 	}
 
 	glogWriter struct{}
@@ -156,8 +160,7 @@ type (
 	errBmdUUIDSplit     struct{ detail string }
 	// ditto Smap
 	errSmapUUIDDiffer struct{ detail string }
-	// node not found
-	errNodeNotFound struct {
+	errNodeNotFound   struct {
 		msg  string
 		id   string
 		si   *cluster.Snode
