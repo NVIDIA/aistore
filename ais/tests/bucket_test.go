@@ -1012,7 +1012,7 @@ func TestListObjectsPrefix(t *testing.T) {
 
 				tutils.Logf("Cleaning up the cloud bucket %s\n", bck)
 				msg := &cmn.SelectMsg{Prefix: prefix}
-				bckList, err := listObjects(t, proxyURL, bck, msg, 0)
+				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
 				tassert.CheckFatal(t, err)
 				for _, entry := range bckList.Entries {
 					err := tutils.Del(proxyURL, bck, entry.Name, nil, nil, false /*silent*/)

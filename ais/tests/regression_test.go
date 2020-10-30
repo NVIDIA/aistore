@@ -884,7 +884,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 2. Discover the number of items we expect to be prefetched
 	msg := &cmn.SelectMsg{Prefix: prefetchPrefix}
-	objsToFilter := testListObjects(t, proxyURL, bck, msg, 0)
+	objsToFilter := testListObjects(t, proxyURL, bck, msg)
 	files := make([]string, 0)
 	if objsToFilter != nil {
 		for _, be := range objsToFilter.Entries {

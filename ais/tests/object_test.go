@@ -226,135 +226,6 @@ func TestAppendObject(t *testing.T) {
 	}
 }
 
-// PUT, then delete
-func Test_putdelete(t *testing.T) {
-	const (
-		objCnt    = 100
-		fileSize  = 512 * cmn.KiB
-		objPrefix = "delete"
-	)
-
-	proxyURL := tutils.RandomProxyURL(t)
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		var (
-			errCh      = make(chan error, objCnt)
-			filesPutCh = make(chan string, objCnt)
-			cksumType  = bck.Props.Cksum.Type
-		)
-
-		tutils.PutRandObjs(proxyURL, bck.Bck, objPrefix, fileSize, objCnt, errCh, filesPutCh, cksumType)
-		close(filesPutCh)
-		tassert.SelectErr(t, errCh, "put", true)
-
-		// Declare one channel per worker to pass the keyname
-		nameChans := make([]chan string, workerCnt)
-		for i := 0; i < workerCnt; i++ {
-			// Allow a bunch of messages at a time to be written asynchronously to a channel
-			nameChans[i] = make(chan string, 100)
-		}
-
-		// Start the worker pools
-		wg := &sync.WaitGroup{}
-		// Get the workers started
-		for i := 0; i < workerCnt; i++ {
-			wg.Add(1)
-			go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
-		}
-
-		num := 0
-		for name := range filesPutCh {
-			nameChans[num%workerCnt] <- filepath.Join(objPrefix, name)
-			num++
-		}
-
-		// Close the channels after the reading is done
-		for i := 0; i < workerCnt; i++ {
-			close(nameChans[i])
-		}
-
-		wg.Wait()
-		tassert.SelectErr(t, errCh, "delete", false)
-	})
-}
-
-func listObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, objLimit uint) (*cmn.BucketList, error) {
-	resList := testListObjects(t, proxyURL, bck, msg, objLimit)
-	if resList == nil {
-		return nil, fmt.Errorf("failed to list_objects %s", bck)
-	}
-	for _, m := range resList.Entries {
-		if len(m.Checksum) > 8 {
-			tutils.Logf("%s %d [%s] %s [%v - %s]\n",
-				m.Name, m.Size, m.Version, m.Checksum[:8]+"...", m.CheckExists, m.Atime)
-		} else {
-			tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum, m.CheckExists, m.Atime)
-		}
-	}
-
-	tutils.Logln("----------------")
-	tutils.Logf("Total objects listed: %v\n", len(resList.Entries))
-	return resList, nil
-}
-
-// delete existing objects that match the regex
-func Test_matchdelete(t *testing.T) {
-	var (
-		objCnt   = 100
-		proxyURL = tutils.RandomProxyURL(t)
-	)
-
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		// Declare one channel per worker to pass the keyname
-		keynameChans := make([]chan string, workerCnt)
-		for i := 0; i < workerCnt; i++ {
-			// Allow a bunch of messages at a time to be written asynchronously to a channel
-			keynameChans[i] = make(chan string, objCnt)
-		}
-		// Start the worker pools
-		errCh := make(chan error, 100)
-		wg := &sync.WaitGroup{}
-		// Get the workers started
-		for i := 0; i < workerCnt; i++ {
-			wg.Add(1)
-			go deleteFiles(proxyURL, bck.Bck, keynameChans[i], wg, errCh)
-		}
-
-		// list the bucket
-		baseParams := tutils.BaseAPIParams(proxyURL)
-		reslist, err := api.ListObjects(baseParams, bck.Bck, nil, 0)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-
-		var (
-			num int
-			re  = regexp.MustCompile(".*")
-		)
-		for _, entry := range reslist.Entries {
-			name := entry.Name
-			if !re.MatchString(name) {
-				continue
-			}
-			keynameChans[num%workerCnt] <- name
-			num++
-			if num >= objCnt {
-				break
-			}
-		}
-		// Close the channels after the reading is done
-		for i := 0; i < workerCnt; i++ {
-			close(keynameChans[i])
-		}
-		wg.Wait()
-		select {
-		case <-errCh:
-			t.Fail()
-		default:
-		}
-	})
-}
-
 func TestOperationsWithRanges(t *testing.T) {
 	const (
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
@@ -975,7 +846,7 @@ func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.
 
 func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch string,
 	objCnt int, keynameCh chan string) int {
-	reslist := testListObjects(t, proxyURL, bck, nil, 0)
+	reslist := testListObjects(t, proxyURL, bck, nil)
 	if reslist == nil {
 		return 0
 	}
@@ -998,7 +869,7 @@ func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch stri
 	return num
 }
 
-func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg, limit uint) *cmn.BucketList {
+func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.SelectMsg) *cmn.BucketList {
 	if msg == nil {
 		tutils.Logf("LIST objects %s []\n", bck)
 	} else {
@@ -1006,7 +877,7 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.Select
 			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(cmn.SelectCached), msg.ContinuationToken)
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	resList, err := api.ListObjects(baseParams, bck, msg, limit)
+	resList, err := api.ListObjects(baseParams, bck, msg, 0)
 	if err != nil {
 		t.Errorf("List objects %s failed, err = %v", bck, err)
 		return nil
