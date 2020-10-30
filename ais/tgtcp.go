@@ -776,7 +776,7 @@ func (t *targetrunner) ensureLatestSmap(msg *aisMsg, r *http.Request) {
 
 // create local directories to test multiple fspaths
 func (t *targetrunner) testCachepathMounts() {
-	config := cmn.GCO.Get()
+	config := cmn.GCO.BeginUpdate()
 	var instpath string
 	if config.TestFSP.Instance > 0 {
 		instpath = filepath.Join(config.TestFSP.Root, strconv.Itoa(config.TestFSP.Instance))
@@ -784,15 +784,15 @@ func (t *targetrunner) testCachepathMounts() {
 		// container, VM, etc.
 		instpath = config.TestFSP.Root
 	}
+	config.FSpaths.Paths = make(cmn.StringSet, config.TestFSP.Count)
 	for i := 0; i < config.TestFSP.Count; i++ {
 		mpath := filepath.Join(instpath, strconv.Itoa(i+1))
 		if err := cmn.CreateDir(mpath); err != nil {
 			cmn.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
 		}
-
-		_, err := fs.Add(mpath)
-		cmn.AssertNoErr(err)
+		config.FSpaths.Paths.Add(mpath)
 	}
+	cmn.GCO.CommitUpdate(config)
 }
 
 func (t *targetrunner) detectMpathChanges() {

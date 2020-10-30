@@ -416,7 +416,7 @@ type (
 		CallTimeout         time.Duration `json:"-"` // time to wait for other target
 	}
 	FSPathsConf struct {
-		Paths map[string]struct{} `json:"paths,omitempty"`
+		Paths StringSet `json:"paths,omitempty"`
 	}
 	// lz4 block and frame formats: http://fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
 	CompressionConf struct {

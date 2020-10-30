@@ -71,7 +71,3 @@ func NowRand() *rand.Rand {
 func GenDaemonID() string {
 	return RandStringStrong(8)
 }
-
-func GenMpathID() string {
-	return RandStringStrong(8)
-}

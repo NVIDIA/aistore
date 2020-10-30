@@ -23,6 +23,11 @@ const (
 )
 
 func initDaemonID(daemonType string, config *cmn.Config, publicAddr *net.TCPAddr) (daemonID string) {
+	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
+		glog.Infof("%s[%q] daemonID from env", daemonType, daemonID)
+		return
+	}
+
 	switch daemonType {
 	case cmn.Target:
 		daemonID = initTargetDaemonID(config, publicAddr)
@@ -41,11 +46,6 @@ func initDaemonID(daemonType string, config *cmn.Config, publicAddr *net.TCPAddr
 /////////////
 
 func initProxyDaemonID(config *cmn.Config, publicAddr *net.TCPAddr) (daemonID string) {
-	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
-		glog.Infof("proxy[%q] daemonID from env", daemonID)
-		goto persist
-	}
-
 	if daemonID = readProxyDaemonID(config); daemonID != "" {
 		glog.Infof("proxy[%q] from %q", daemonID, proxyIDFname)
 		return
@@ -53,12 +53,6 @@ func initProxyDaemonID(config *cmn.Config, publicAddr *net.TCPAddr) (daemonID st
 
 	daemonID = generateDaemonID(cmn.Proxy, config, publicAddr)
 	glog.Infof("proxy[%q] daemonID randomly generated", daemonID)
-
-persist:
-	if err := writeProxyDID(config, daemonID); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-
 	return daemonID
 }
 
@@ -80,26 +74,17 @@ func readProxyDaemonID(config *cmn.Config) string {
 //////////////
 
 func initTargetDaemonID(config *cmn.Config, publicAddr *net.TCPAddr) (daemonID string) {
-	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
-		glog.Infof("target[%q] daemonID from env", daemonID)
-		goto persist
+	var err error
+	if daemonID, err = fs.LoadDaemonID(config.FSpaths.Paths); err != nil {
+		cmn.ExitLogf("%v", err)
 	}
 
-	if err, vmd := fs.ReadVMD(); vmd != nil {
-		glog.Infof("target[%q] daemonID from VMD", vmd.DaemonID)
-		return vmd.DaemonID
-	} else if err != nil {
-		cmn.ExitLogf("%v", err)
+	if daemonID != "" {
+		return
 	}
 
 	daemonID = generateDaemonID(cmn.Target, config, publicAddr)
 	glog.Infof("target[%q] daemonID randomly generated", daemonID)
-
-persist:
-	if err := fs.CreateVMD(daemonID).Persist(); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-
 	return daemonID
 }
 

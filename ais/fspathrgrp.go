@@ -71,7 +71,7 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 		gfnActive  = g.t.gfn.local.Activate()
 		addedMpath *fs.MountpathInfo
 	)
-	if addedMpath, err = fs.Add(mpath); err != nil || addedMpath == nil {
+	if addedMpath, err = fs.Add(mpath, g.t.si.ID()); err != nil || addedMpath == nil {
 		if !gfnActive {
 			g.t.gfn.local.Deactivate()
 		}

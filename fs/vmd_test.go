@@ -49,7 +49,7 @@ func testVMDPersist(t *testing.T, daemonID string) {
 	tassert.Fatalf(t, vmd != nil, "expected vmd to be created")
 
 	tassert.CheckFatal(t, vmd.Persist())
-	err, newVMD := fs.ReadVMD()
+	newVMD, err := fs.ReadVMD()
 	tassert.Fatalf(t, err == nil, "expected no error while loading VMD")
 	tassert.Fatalf(t, newVMD != nil, "expected vmd to be not nil")
 	// TODO -- FIXME: Use checksum to compare

@@ -208,7 +208,7 @@ func (tctx *testContext) setup() {
 	fs.Init()
 	err := cmn.CreateDir(testDir)
 	Expect(err).NotTo(HaveOccurred())
-	_, err = fs.Add(testDir)
+	_, err = fs.Add(testDir, "daeID")
 	Expect(err).NotTo(HaveOccurred())
 
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})

@@ -63,7 +63,7 @@ var _ = Describe("LOM", func() {
 	fs.Init()
 	fs.DisableFsIDCheck()
 	for _, mpath := range mpaths {
-		_, _ = fs.Add(mpath)
+		_, _ = fs.Add(mpath, "daeID")
 	}
 
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
@@ -105,7 +105,7 @@ var _ = Describe("LOM", func() {
 		cmn.GCO.CommitUpdate(config)
 
 		for _, mpath := range mpaths {
-			_, _ = fs.Add(mpath)
+			_, _ = fs.Add(mpath, "daeID")
 		}
 	})
 

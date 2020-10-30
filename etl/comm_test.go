@@ -56,7 +56,7 @@ var _ = Describe("CommunicatorTest", func() {
 		Expect(err).NotTo(HaveOccurred())
 		fs.Init()
 		fs.DisableFsIDCheck()
-		_, err = fs.Add(mpath)
+		_, err = fs.Add(mpath, "daeID")
 		Expect(err).NotTo(HaveOccurred())
 
 		tMock = cluster.NewTargetMock(bmdMock)

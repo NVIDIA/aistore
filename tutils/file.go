@@ -261,7 +261,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	for i := 0; i < desc.MountpathsCnt; i++ {
 		mpath, err := ioutil.TempDir(dir, "")
 		tassert.CheckFatal(t, err)
-		_, err = fs.Add(mpath)
+		_, err = fs.Add(mpath, "daeID")
 		tassert.CheckFatal(t, err)
 	}
 
@@ -336,7 +336,7 @@ func RemoveMountPaths(t *testing.T, mpaths fs.MPI) {
 
 func AddMpath(t *testing.T, path string) {
 	cmn.CreateDir(path) // Create directory if not exists
-	_, err := fs.Add(path)
+	_, err := fs.Add(path, "daeID")
 	tassert.Errorf(t, err == nil, "Adding a mountpath %q failed, err %v", path, err)
 }
 

@@ -33,7 +33,7 @@ func testCheckerMountPaths() {
 	fs.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
-		fs.Add(name)
+		fs.Add(name, "daeID")
 	}
 
 	os.RemoveAll(fsCheckerTmpDir + "/3") // one folder is deleted

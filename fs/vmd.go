@@ -6,7 +6,9 @@ package fs
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -20,14 +22,14 @@ const (
 
 type (
 	fsDeviceMD struct {
-		MpathID   string `json:"mpath_id"`
 		MountPath string `json:"mpath"`
 		FsType    string `json:"fs_type"`
+		Enabled   bool   `json:"enabled"`
 	}
 
 	// Short for VolumeMetaData.
 	VMD struct {
-		Devices  map[string]*fsDeviceMD `json:"devices"` // MpathID => MD
+		Devices  map[string]*fsDeviceMD `json:"devices"` // Mpath => MD
 		DaemonID string                 `json:"daemon_id"`
 		Version  uint                   `json:"version"` // formatting version for backward compatibility
 		cksum    *cmn.Cksum             // checksum of VMD
@@ -43,23 +45,31 @@ func newVMD(expectedSize int) *VMD {
 
 func CreateVMD(daemonID string) *VMD {
 	var (
-		available, _ = Get()
-		vmd          = newVMD(len(available))
+		available, disabled = Get()
+		vmd                 = newVMD(len(available))
 	)
 
 	vmd.DaemonID = daemonID
 
 	for _, mPath := range available {
-		vmd.Devices[mPath.ID] = &fsDeviceMD{
-			MpathID:   mPath.ID,
+		vmd.Devices[mPath.Path] = &fsDeviceMD{
 			MountPath: mPath.Path,
 			FsType:    mPath.FileSystem,
+			Enabled:   true,
+		}
+	}
+
+	for _, mPath := range disabled {
+		vmd.Devices[mPath.Path] = &fsDeviceMD{
+			MountPath: mPath.Path,
+			FsType:    mPath.FileSystem,
+			Enabled:   false,
 		}
 	}
 	return vmd
 }
 
-func ReadVMD() (err error, mainVMD *VMD) {
+func ReadVMD() (mainVMD *VMD, err error) {
 	available, _ := Get()
 	// NOTE: iterating only over mpaths which have VmdPersistedFileName.
 	for _, mpi := range available {
@@ -115,4 +125,27 @@ func (vmd VMD) Validate() error {
 	cmn.Assert(vmd.cksum != nil)
 	cmn.Assert(vmd.DaemonID != "")
 	return nil
+}
+
+// LoadDaemonID loads the daemon ID present as xattr on given mount paths.
+func LoadDaemonID(mpaths cmn.StringSet) (mDaeID string, err error) {
+	for mp := range mpaths {
+		b, err := GetXattr(mp, daemonIDXattr)
+		if err != nil {
+			if os.IsNotExist(err) || err == syscall.ENODATA {
+				continue
+			}
+			return "", err
+		}
+		daeID := string(b)
+		if mDaeID != "" {
+			if daeID != "" && mDaeID != daeID {
+				err = fmt.Errorf("daemonID different (%q): %s vs %s", mp, mDaeID, daeID)
+				return "", err
+			}
+			continue
+		}
+		mDaeID = daeID
+	}
+	return
 }

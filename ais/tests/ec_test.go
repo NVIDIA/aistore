@@ -2273,14 +2273,6 @@ func init() {
 	if err != nil {
 		tutils.Logf("ERROR: %v", err)
 	}
-	mpaths := make([]string, 0, len(smap.Tmap)*5)
-	for _, target := range smap.Tmap {
-		mpathList, err := api.GetMountpaths(baseParams, target)
-		if err != nil {
-			tutils.Logf("ERROR: %v", err)
-		}
-		mpaths = append(mpaths, mpathList.Available...)
-	}
 
 	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
@@ -2289,8 +2281,15 @@ func init() {
 
 	fs.Init()
 	fs.DisableFsIDCheck()
-	for _, mpath := range mpaths {
-		_, _ = fs.Add(mpath)
+
+	for _, target := range smap.Tmap {
+		mpathList, err := api.GetMountpaths(baseParams, target)
+		if err != nil {
+			tutils.Logf("ERROR: %v", err)
+		}
+		for _, path := range mpathList.Available {
+			fs.Add(path, target.ID())
+		}
 	}
 
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})

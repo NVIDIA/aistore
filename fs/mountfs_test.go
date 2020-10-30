@@ -17,7 +17,7 @@ import (
 
 func TestAddNonExistingMountpath(t *testing.T) {
 	fs.Init()
-	_, err := fs.Add("/nonexistingpath")
+	_, err := fs.Add("/nonexistingpath", "")
 	tassert.Errorf(t, err != nil, "adding non-existing mountpath succeeded")
 
 	tutils.AssertMountpathCount(t, 0, 0)
@@ -56,7 +56,7 @@ func TestAddExistingMountpath(t *testing.T) {
 func TestAddIncorrectMountpath(t *testing.T) {
 	fs.Init()
 
-	_, err := fs.Add("tmp/not/absolute/path")
+	_, err := fs.Add("tmp/not/absolute/path", "")
 	tassert.Errorf(t, err != nil, "expected adding incorrect mountpath to fail")
 
 	tutils.AssertMountpathCount(t, 0, 0)
@@ -72,7 +72,7 @@ func TestAddAlreadyAddedMountpath(t *testing.T) {
 	tutils.AddMpath(t, mpath)
 	tutils.AssertMountpathCount(t, 1, 0)
 
-	_, err := fs.Add(mpath)
+	_, err := fs.Add(mpath, "daeID")
 	tassert.Errorf(t, err != nil, "adding already added mountpath succeeded")
 
 	tutils.AssertMountpathCount(t, 1, 0)
@@ -222,7 +222,7 @@ func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
 	tutils.AddMpath(t, mpath)
 	defer os.RemoveAll(mpath)
 
-	_, err := fs.Add("/")
+	_, err := fs.Add("/", "")
 	tassert.Errorf(t, err != nil, "expected adding path with same FSID to be unsuccessful")
 
 	tutils.AssertMountpathCount(t, 1, 0)

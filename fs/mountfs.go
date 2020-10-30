@@ -28,8 +28,8 @@ import (
 const (
 	uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
 
-	TrashDir     = "$trash"
-	mpathIDXAttr = "user.ais.mpath_id"
+	TrashDir      = "$trash"
+	daemonIDXattr = "user.ais.daemon_id"
 )
 
 // globals
@@ -47,7 +47,6 @@ var (
 
 type (
 	MountpathInfo struct {
-		ID       string // Unique ID associated with the mpath
 		Path     string // Cleaned OrigPath
 		OrigPath string // As entered by the user, must be used for logging / returning errors
 		Fsid     syscall.Fsid
@@ -112,7 +111,6 @@ type (
 
 func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *MountpathInfo {
 	mi := &MountpathInfo{
-		ID:         cmn.GenMpathID(),
 		Path:       cleanPath,
 		OrigPath:   origPath,
 		Fsid:       fsid,
@@ -348,14 +346,14 @@ func Init(iostater ...ios.IOStater) {
 }
 
 // SetMountpaths prepares, validates, and adds configured mountpaths.
-func SetMountpaths(fsPaths []string) error {
+func SetMountpaths(fsPaths []string, daeID string) error {
 	if len(fsPaths) == 0 {
 		// (usability) not to clutter the log with backtraces when starting up and validating config
 		return fmt.Errorf("FATAL: no fspaths - see README => Configuration and/or fspaths section in the config.sh")
 	}
 
 	for _, path := range fsPaths {
-		if _, err := Add(path); err != nil {
+		if _, err := Add(path, daeID); err != nil {
 			return err
 		}
 	}
@@ -421,7 +419,7 @@ func updatePaths(available, disabled MPI) {
 
 // Add adds new mountpath to the target's mountpaths.
 // FIXME: unify error messages for original and clean mountpath
-func Add(mpath string) (*MountpathInfo, error) {
+func Add(mpath, daeID string) (*MountpathInfo, error) {
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return nil, err
@@ -454,7 +452,7 @@ func Add(mpath string) (*MountpathInfo, error) {
 	}
 
 	mfs.ios.AddMpath(mp.Path, mp.FileSystem)
-	if err := SetXattr(mp.Path, mpathIDXAttr, []byte(mp.ID)); err != nil {
+	if err := SetDaemonIDXattr(mp.Path, daeID); err != nil {
 		return nil, err
 	}
 
@@ -462,6 +460,10 @@ func Add(mpath string) (*MountpathInfo, error) {
 	mfs.fsIDs[mp.Fsid] = cleanMpath
 	updatePaths(availablePaths, disabledPaths)
 	return mp, nil
+}
+
+func SetDaemonIDXattr(mpath, daeID string) error {
+	return SetXattr(mpath, daemonIDXattr, []byte(daeID))
 }
 
 // mountpathsCopy returns a shallow copy of current mountpaths
@@ -496,7 +498,7 @@ func Remove(mpath string) (*MountpathInfo, error) {
 	}
 
 	// Clear mpathID xattr if set
-	RemoveXattr(mpath, mpathIDXAttr)
+	RemoveXattr(mpath, daemonIDXattr)
 
 	availablePaths, disabledPaths := mountpathsCopy()
 	if mp, exists = availablePaths[cleanMpath]; !exists {

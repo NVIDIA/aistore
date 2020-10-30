@@ -125,7 +125,7 @@ func initConfig() {
 func createAndAddMountpath(path string) {
 	cmn.CreateDir(path)
 	fs.Init()
-	fs.Add(path)
+	fs.Add(path, "daeID")
 
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})

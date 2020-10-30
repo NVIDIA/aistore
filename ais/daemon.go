@@ -237,6 +237,12 @@ func initProxy() cmn.Runner {
 	p := &proxyrunner{gmm: &memsys.MMSA{Name: gmmName}}
 	_ = p.gmm.Init(true /*panicOnErr*/)
 	p.initSI(cmn.Proxy)
+
+	// Persist daemon ID on disk
+	if err := writeProxyDID(cmn.GCO.Get(), p.si.ID()); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+
 	p.initClusterCIDR()
 	daemon.rg.add(p)
 
@@ -272,17 +278,21 @@ func initTarget() cmn.Runner {
 		glog.Infof("Warning: configuring %d fspaths for testing", config.TestFSP.Count)
 		fs.DisableFsIDCheck()
 		t.testCachepathMounts()
-	} else {
-		fsPaths := make([]string, 0, len(config.FSpaths.Paths))
-		for path := range config.FSpaths.Paths {
-			fsPaths = append(fsPaths, path)
-		}
-		if err := fs.SetMountpaths(fsPaths); err != nil {
-			cmn.ExitLogf("%s", err)
-		}
 	}
 
 	t.initSI(cmn.Target)
+
+	config = cmn.GCO.Get()
+	fsPaths := config.FSpaths.Paths.Keys()
+	if err := fs.SetMountpaths(fsPaths, t.si.ID()); err != nil {
+		cmn.ExitLogf("%s", err)
+	}
+
+	vmd := fs.CreateVMD(t.si.ID())
+	if err := vmd.Persist(); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+
 	t.initHostIP()
 	daemon.rg.add(t)
 

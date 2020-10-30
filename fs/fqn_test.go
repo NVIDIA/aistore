@@ -243,7 +243,7 @@ func TestParseFQN(t *testing.T) {
 					cmn.CreateDir(mpath)
 					defer os.RemoveAll(mpath)
 				}
-				_, err := fs.Add(mpath)
+				_, err := fs.Add(mpath, "daeID")
 				tassert.CheckFatal(t, err)
 			}
 			fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
@@ -334,7 +334,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 				cmn.CreateDir(tt.mpath)
 				defer os.RemoveAll(tt.mpath)
 			}
-			_, err := fs.Add(tt.mpath)
+			_, err := fs.Add(tt.mpath, "daeID")
 			tassert.CheckFatal(t, err)
 
 			fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
@@ -378,7 +378,7 @@ func BenchmarkParseFQN(b *testing.B) {
 	fs.DisableFsIDCheck()
 	cmn.CreateDir(mpath)
 	defer os.RemoveAll(mpath)
-	fs.Add(mpath)
+	fs.Add(mpath, "daeID")
 	fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 
 	mpaths, _ := fs.Get()

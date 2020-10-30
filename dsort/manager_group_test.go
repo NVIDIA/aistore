@@ -37,7 +37,7 @@ var _ = Describe("ManagerGroup", func() {
 		mgrp = NewManagerGroup(db)
 
 		fs.Init()
-		fs.Add(testingConfigDir)
+		fs.Add(testingConfigDir, "daeID")
 	})
 
 	AfterEach(func() {

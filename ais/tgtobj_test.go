@@ -58,7 +58,6 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(testMountpath)
 	fs.Init()
 	fs.DisableFsIDCheck()
-	fs.Add(testMountpath)
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
@@ -69,6 +68,8 @@ func TestMain(m *testing.M) {
 		smm: memsys.DefaultSmallMM(),
 	}
 	t.initSI(cmn.Target)
+
+	fs.Add(testMountpath, t.si.ID())
 	t.init(cmn.GCO.Get())
 	t.statsT = stats.NewTrackerMock()
 	t.owner.bmd = newBMDOwnerTgt()
