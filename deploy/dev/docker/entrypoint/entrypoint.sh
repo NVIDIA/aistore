@@ -14,7 +14,7 @@ source /aisnode_config.sh
 exec node /statsd/stats.js ${STATSD_CONF_FILE} 2>&1 | tee -a ${AIS_LOG_DIR}/statsd.log &
 cd ${GOPATH}/src/github.com/NVIDIA/aistore
 make node
-AIS_DAEMON_ID=$(echo ${HOSTNAME}) ${GOBIN}/aisnode \
+${GOBIN}/aisnode \
     -config=${AIS_CONF_FILE} \
     -role=${AIS_NODE_ROLE} \
     -ntargets=${TARGET_CNT} \

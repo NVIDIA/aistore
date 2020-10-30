@@ -17,7 +17,7 @@ function start_node {
 
   source aisnode_config.sh
 
-  AIS_DAEMON_ID="$1-${HOSTNAME}" AIS_IS_PRIMARY="true" bin/aisnode \
+  AIS_IS_PRIMARY="true" bin/aisnode \
     -config=${AIS_CONF_FILE} \
     -role=$1 \
     -ntargets=1 \

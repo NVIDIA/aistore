@@ -21,8 +21,6 @@ spec:
        value: "proxy"
      - name: AIS_IS_PRIMARY
        value: "${AIS_IS_PRIMARY}"
-     - name: AIS_DAEMON_ID
-       value: "ais-${POD_NAME}"
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/

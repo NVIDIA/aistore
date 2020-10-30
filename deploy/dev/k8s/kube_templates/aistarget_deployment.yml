@@ -20,8 +20,6 @@ spec:
        valueFrom:
          fieldRef:
            fieldPath: spec.nodeName
-     - name: AIS_DAEMON_ID
-       value: "ais-${POD_NAME}"
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/

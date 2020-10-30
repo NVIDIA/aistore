@@ -46,7 +46,7 @@ function start_node {
   AIS_LOG_DIR=/var/log/aisnode/$1
   mkdir -p ${AIS_LOG_DIR}
 
-  AIS_DAEMON_ID="$1-${HOSTNAME}" AIS_IS_PRIMARY="true" ${GOBIN}/aisnode \
+  AIS_IS_PRIMARY="true" ${GOBIN}/aisnode \
     -config=${AIS_CONF_FILE} \
     -role=$1 \
     -ntargets=1

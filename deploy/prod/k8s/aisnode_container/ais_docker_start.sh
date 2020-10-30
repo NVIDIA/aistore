@@ -29,36 +29,14 @@ if [[ "${AIS_NODE_ROLE}" != "target" && -f /var/ais_env/env ]]; then
     export AIS_IS_PRIMARY=True
     is_primary=true
 else
-    #
     # This path is taken for:
     #  - all target pods
     #  - proxy pods during initial deployment starting up on a node that is not labeled
     #    as initial primary proxy
     #  - all proxy pods once initial k8s deployment is done
     # Caution - don't set AIS_IS_PRIMARY false here, it just looks for any non-NULL value
-    #
     is_primary=false
 fi
-
-#
-# An initcontainer runs to create a hash of the system uuid. If such a hash was found, we
-# use it as the base of the AIS_DAEMON_ID
-#
-# If no uuid was found, we'll fallback to AIS_HOST_IP - the node IP provided in the pod
-# environment.
-#
-# In both cases, we prefix the daemon id with the first letter of the AIS_NODE_ROLE - targets
-# and proxies can run on the same node, so this disambiguates their daemon ids. This
-# would fail if electable and non-electable proxies run on the same node - we could
-# pass more detail on the role type in the environment if required.
-#
-if [[ -f /var/ais_env/uuid_env ]]; then
-   UUID=$(cat /var/ais_env/uuid_env)
-   export AIS_DAEMON_ID="${AIS_NODE_ROLE::1}$UUID"
-else
-   export AIS_DAEMON_ID="${AIS_NODE_ROLE::1}$AIS_HOST_IP"
-fi
-echo "Our ais daemon id will be $AIS_DAEMON_ID"
 
 #
 # Informational
