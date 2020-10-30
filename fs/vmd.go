@@ -6,9 +6,7 @@ package fs
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -132,7 +130,7 @@ func LoadDaemonID(mpaths cmn.StringSet) (mDaeID string, err error) {
 	for mp := range mpaths {
 		b, err := GetXattr(mp, daemonIDXattr)
 		if err != nil {
-			if os.IsNotExist(err) || err == syscall.ENODATA {
+			if cmn.IsErrXattrNotFound(err) {
 				continue
 			}
 			return "", err

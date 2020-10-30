@@ -7,6 +7,7 @@ package cmn
 import (
 	"errors"
 	"io"
+	"os"
 	"syscall"
 )
 
@@ -39,4 +40,9 @@ func IsIOError(err error) bool {
 		}
 	}
 	return false
+}
+
+func IsErrXattrNotFound(err error) bool {
+	// NOTE: syscall.ENOATTR confirmed to be returned on Darwin, instead of syscall.ENODATA.
+	return os.IsNotExist(err) || err == syscall.ENOATTR
 }
