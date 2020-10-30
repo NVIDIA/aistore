@@ -1031,9 +1031,20 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	oldMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
+	disabled := make(cmn.StringSet)
+	defer func() {
+		for mpath := range disabled {
+			err := api.EnableMountpath(baseParams, target, mpath)
+			tassert.CheckError(t, err)
+		}
+		if len(disabled) != 0 {
+			tutils.WaitForRebalanceToComplete(t, baseParams)
+		}
+	}()
 	for _, mpath := range oldMountpaths.Available {
 		err := api.DisableMountpath(baseParams, target.ID(), mpath)
 		tassert.CheckFatal(t, err)
+		disabled.Add(mpath)
 	}
 
 	// Check if mountpaths were actually disabled
@@ -1056,6 +1067,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	for _, mpath := range oldMountpaths.Available {
 		err := api.EnableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
+		disabled.Delete(mpath)
 	}
 
 	// Check if mountpaths were actually enabled
