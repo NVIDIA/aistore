@@ -25,11 +25,11 @@ endif
 # Example usage: MEM_PROFILE=/tmp/mem make kill clean deploy <<< $'5\n5\n4\n0'
 # Note that MEM_PROFILE (memprofile) option requires graceful shutdown (see `kill:`)
 ifdef MEM_PROFILE
-	AIS_NODE_FLAGS += -memprofile=$(MEM_PROFILE)
+	export AIS_NODE_FLAGS += -memprofile=$(MEM_PROFILE)
 	BUILD_SRC = $(BUILD_DIR)/aisnodeprofile/main.go
 endif
 ifdef CPU_PROFILE
-	AIS_NODE_FLAGS += -cpuprofile=$(CPU_PROFILE)
+	export AIS_NODE_FLAGS += -cpuprofile=$(CPU_PROFILE)
 	BUILD_SRC = $(BUILD_DIR)/aisnodeprofile/main.go
 endif
 
