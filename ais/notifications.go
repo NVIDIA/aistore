@@ -349,19 +349,17 @@ func (n *notifs) done(nl nl.NotifListener) {
 	}
 	n.fin.add(nl, false /*locked*/)
 
-	if nl.Aborted() && !nl.AllFinished() {
+	if nl.Aborted() {
 		config := cmn.GCO.Get()
 		// NOTE: we accept finished notifications even after
 		// `nl` is aborted. Handle locks carefully.
-		nl.RLock()
 		args := &bcastArgs{
 			req:     nl.AbortArgs(),
 			network: cmn.NetworkIntraControl,
 			timeout: config.Timeout.MaxKeepalive,
-			nodes:   []cluster.NodeMap{nl.ActiveNotifiers().Clone()}, // TODO: optimize - avoid creating a new NodeMap
+			nodes:   []cluster.NodeMap{nl.Notifiers()},
 		}
 		args.nodeCount = len(args.nodes[0])
-		nl.RUnlock()
 		n.p.bcastToNodesAsync(args)
 	}
 	nl.Callback(nl, time.Now().UnixNano())

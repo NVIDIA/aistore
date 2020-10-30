@@ -202,6 +202,7 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 }
 
 func InvalidHandler(w http.ResponseWriter, r *http.Request) {
+	glog.Errorln("Invalid request: " + r.URL.Path)
 	InvalidHandlerWithMsg(w, r, "invalid request")
 }
 

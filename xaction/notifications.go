@@ -64,7 +64,7 @@ func (nxb *NotifXactListener) AbortArgs() cmn.ReqArgs {
 	}
 	args := cmn.ReqArgs{Method: http.MethodPut}
 	args.Body = cmn.MustMarshal(msg)
-	args.Path = cmn.JoinWords(cmn.Version, cmn.Cluster)
+	args.Path = cmn.JoinWords(cmn.Version, cmn.Xactions)
 	return args
 }
 

@@ -160,9 +160,5 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tutils.Logf("Restoring target %s\n", tsi)
 	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 	restored = true
-	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
-	err = api.WaitForXactionToStart(baseParams, args)
-	tassert.CheckFatal(t, err)
-	_, err = api.WaitForXaction(baseParams, args)
-	tassert.CheckError(t, err)
+	tutils.WaitForRebalanceToComplete(t, baseParams, time.Minute)
 }
