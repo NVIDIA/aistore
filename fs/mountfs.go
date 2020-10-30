@@ -762,20 +762,22 @@ func nextRefresh(config *cmn.Config) time.Duration {
 	return time.Duration(ratio)*(tmax-tmin)/100 + tmin
 }
 
-// NOTE: is called only and exclusively by `stats.Trunner` providing
-//       `config.Periodic.StatsTime` tick
+// NOTE: Is called only and exclusively by `stats.Trunner` providing
+//  `config.Periodic.StatsTime` tick.
 func CapPeriodic(mpcap MPCap) (cs CapStatus, err error, updated bool) {
 	config := cmn.GCO.Get()
+	mfs.cmu.RLock()
 	mfs.capTime.curr += int64(config.Periodic.StatsTime)
 	if mfs.capTime.curr < mfs.capTime.next {
+		mfs.cmu.RUnlock()
 		return
 	}
+	mfs.cmu.RUnlock()
 	cs, err = RefreshCapStatus(config, mpcap)
 	updated = true
 	return
 }
 
-// a slightly different view of the same
 func CapStatusAux() (fsInfo cmn.CapacityInfo) {
 	cs := GetCapStatus()
 	fsInfo.Used = cs.TotalUsed

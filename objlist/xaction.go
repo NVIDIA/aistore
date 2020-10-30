@@ -148,7 +148,8 @@ func (r *Xact) initTraverse() {
 	r.walkDone = false
 	r.walkStopCh = cmn.NewStopCh()
 	r.walkWg.Add(1)
-	go r.traverseBucket()
+
+	go r.traverseBucket(r.msg.Clone())
 }
 
 func (r *Xact) Run() error {
@@ -389,15 +390,15 @@ func (r *Xact) discardObsolete(token string) {
 	r.lastPage = r.lastPage[:l-j]
 }
 
-func (r *Xact) traverseBucket() {
-	wi := walkinfo.NewWalkInfo(r.walkCtx(), r.t, r.msg)
+func (r *Xact) traverseBucket(msg *cmn.SelectMsg) {
+	wi := walkinfo.NewWalkInfo(r.walkCtx(), r.t, msg)
 	defer r.walkWg.Done()
 	cb := func(fqn string, de fs.DirEntry) error {
 		entry, err := wi.Callback(fqn, de)
 		if err != nil || entry == nil {
 			return err
 		}
-		if entry.Name <= r.msg.StartAfter {
+		if entry.Name <= msg.StartAfter {
 			return nil
 		}
 		select {

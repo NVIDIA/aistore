@@ -265,6 +265,12 @@ func (msg *SelectMsg) ListObjectsCacheID(bck Bck) string {
 	return fmt.Sprintf("%s/%s", bck.String(), msg.Prefix)
 }
 
+func (msg *SelectMsg) Clone() *SelectMsg {
+	c := &SelectMsg{}
+	CopyStruct(c, msg)
+	return c
+}
+
 func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {
 	bs.ObjCount += bckSummary.ObjCount
 	bs.Size += bckSummary.Size
