@@ -320,7 +320,7 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 
-					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: 20 * time.Second}
+					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: 10 * time.Second}
 					_, err = api.WaitForXaction(baseParams, args)
 					tassert.CheckError(t, err)
 
