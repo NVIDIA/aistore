@@ -513,20 +513,29 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	}
 
 	// Step 1: Unregister multiple targets
+	removed := make(map[string]*cluster.Snode, m.smap.CountTargets()-1)
+	defer func() {
+		for _, tgt := range removed {
+			m.reregisterTarget(tgt)
+		}
+		if len(removed) != 0 {
+			tutils.WaitForRebalanceToComplete(t, baseParams)
+		}
+	}()
+
 	targets := tutils.ExtractTargetNodes(m.smap)
 	for i := 0; i < targetsToUnregister; i++ {
 		tutils.Logf("Unregistering target %s\n", targets[i].ID())
 		args := &cmn.ActValDecommision{DaemonID: targets[i].ID(), SkipRebalance: true}
 		err := tutils.UnregisterNode(m.proxyURL, args)
 		tassert.CheckFatal(t, err)
+		removed[targets[i].ID()] = targets[i]
 	}
 
-	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
-	if n != m.originalTargetCount-targetsToUnregister {
-		t.Fatalf("%d target(s) expected after unregister, actually %d target(s)",
-			m.originalTargetCount-targetsToUnregister, n)
-	}
-	tutils.Logf("The cluster now has %d target(s)\n", n)
+	smap, err := tutils.WaitForPrimaryProxy(proxyURL, "to remove targets",
+		m.smap.Version, testing.Verbose(), m.originalProxyCount, m.originalTargetCount-targetsToUnregister)
+	tassert.CheckFatal(t, err)
+	tutils.Logf("The cluster now has %d target(s)\n", smap.CountTargets())
 
 	// Step 2: PUT objects into a newly created bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
@@ -543,6 +552,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		go func(r int) {
 			defer wg.Done()
 			m.reregisterTarget(targets[r])
+			delete(removed, targets[r].ID())
 		}(i)
 		time.Sleep(5 * time.Second) // wait some time before reregistering next target
 	}
