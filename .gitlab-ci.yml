@@ -15,6 +15,15 @@ variables:
 
 # Templates
 
+.gather_logs_template: &gather_logs_def
+  after_script:
+    - mkdir $CI_PROJECT_DIR/logs
+    - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+  artifacts:
+    when: on_failure
+    paths: [ logs/ ]
+    expire_in: 1 days
+
 .default_only_template: &default_only_def
   only:
     - master
@@ -31,13 +40,7 @@ variables:
   stage: test-long
   only:
     - schedules
-  after_script:
-    - mkdir $CI_PROJECT_DIR/logs
-    - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
-  artifacts:
-    when: on_failure
-    paths: [logs/]
-    expire_in: 2 days
+  <<: *gather_logs_def
 
 .test_kube_template: &test_kube_def
   variables:
@@ -86,6 +89,7 @@ test:short:
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="test" make test-short
     - FLAGS="--duration=10s" make test-aisloader
+  <<: *gather_logs_def
 
 test:authn:
   stage: test-short
