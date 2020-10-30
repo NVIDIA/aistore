@@ -73,9 +73,9 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 		options            = jsp.CksumSign()
 		availableMpaths, _ = Get()
 	)
-
+	availCnt = len(availableMpaths)
 	if atMost == 0 {
-		atMost = len(availableMpaths)
+		atMost = availCnt
 	}
 	if len(opts) > 0 {
 		options = opts[0]
@@ -107,7 +107,7 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 	}
 
 	if debug.Enabled {
-		expected := cmn.Min(atMost, len(availableMpaths))
+		expected := cmn.Min(atMost, availCnt)
 		cmn.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead", path, expected, cnt)
 	}
 
