@@ -1406,11 +1406,9 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			}
 
 			m.reregisterTarget(target)
-			time.Sleep(time.Second)
+			tutils.WaitForRebalanceToComplete(t, df.baseParams)
 		},
 	)
-	baseParams := tutils.BaseAPIParams(tutils.RandomProxyURL())
-	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
 
 func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
@@ -1478,6 +1476,8 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 								tassert.CheckError(t, err)
 							}
 						}
+
+						tutils.WaitForRebalanceToComplete(t, df.baseParams)
 					}()
 
 					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
@@ -1511,8 +1511,6 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 			}
 		},
 	)
-	baseParams := tutils.BaseAPIParams(tutils.RandomProxyURL())
-	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
 
 func TestDistributedSortAddTarget(t *testing.T) {
@@ -1549,6 +1547,8 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			tutils.Logln("starting distributed sort...")
 			df.start()
 
+			defer tutils.WaitForRebalanceToComplete(t, df.baseParams)
+
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, dsort.ExtractionPhase, func() {
 				m.reregisterTarget(target)
 			})
@@ -1568,8 +1568,6 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			}
 		},
 	)
-	baseParams := tutils.BaseAPIParams(tutils.RandomProxyURL())
-	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
 
 func TestDistributedSortMetricsAfterFinish(t *testing.T) {
