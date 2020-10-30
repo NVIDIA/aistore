@@ -84,7 +84,6 @@ func TestETLTar2TFS3(t *testing.T) {
 
 	_, err = api.GetObjectS3(baseParams, bck, tarObjName+"%3fuuid="+uuid, api.GetObjectInput{Writer: outFileBuffer})
 	tassert.CheckFatal(t, err)
-	tassert.CheckFatal(t, err)
 
 	// Comparing actual vs expected
 	tfRecord, err := os.Open(tfRecordPath)

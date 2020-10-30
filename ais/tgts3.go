@@ -152,7 +152,7 @@ func (t *targetrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []
 	t.copyObjS3(w, r, items)
 }
 
-// GET s3/bckName/objName[!uuid]
+// GET s3/<bucket-name/<object-name>[?uuid=<etl-uuid>]
 func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		t.invalmsghdlr(w, r, "object name is undefined")

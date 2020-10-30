@@ -366,7 +366,7 @@ func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []s
 	p.copyObjS3(w, r, items)
 }
 
-// GET s3/bckName/objName[?uuid=<UUID for transformer>]
+// GET s3/<bucket-name/<object-name>[?uuid=<etl-uuid>]
 func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
