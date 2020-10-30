@@ -61,7 +61,7 @@ var (
 
 func init() {
 	DefaultHK = &housekeeper{
-		workCh:  make(chan request, 16),
+		workCh:  make(chan request, 512),
 		stopCh:  cmn.NewStopCh(),
 		sigCh:   make(chan os.Signal, 1),
 		actions: &timedActions{},

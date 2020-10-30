@@ -206,11 +206,12 @@ func Unhandle(trname string) (err error) {
 	mu.Lock()
 	if h, ok := handlers[trname]; ok {
 		delete(handlers, trname)
+		mu.Unlock()
 		hk.Unreg(h.hkName)
 	} else {
+		mu.Unlock()
 		err = fmt.Errorf("transport endpoint %s is unknown", trname)
 	}
-	mu.Unlock()
 	return
 }
 
