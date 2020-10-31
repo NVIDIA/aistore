@@ -62,11 +62,20 @@ func TestClient(t *testing.T) {
 	}
 	defer s.Close()
 
-	c, err := statsd.New(self, port, prefix)
+	c, err := statsd.New(self, port, prefix, true /* test-probe */)
 	if err != nil {
 		t.Fatal("Failed to create client", err)
 	}
 	defer c.Close()
+
+	// drain accumulated probes
+	buf := make([]byte, 256)
+	for i := 0; i < statsd.NumTestProbes; i++ {
+		_, _, err := s.ReadFromUDP(buf)
+		if err != nil {
+			t.Fatal("Failed to read probe", err)
+		}
+	}
 
 	c.Send("timer", 1,
 		statsd.Metric{
@@ -131,7 +140,7 @@ func BenchmarkSend(b *testing.B) {
 	stop := make(chan bool)
 	go server(s, stop)
 
-	c, err := statsd.New(self, port, prefix)
+	c, err := statsd.New(self, port, prefix, false)
 	if err != nil {
 		b.Fatal("Failed to create client", err)
 	}
@@ -159,7 +168,7 @@ func BenchmarkSendParallel(b *testing.B) {
 	stop := make(chan bool)
 	go server(s, stop)
 
-	c, err := statsd.New(self, port, prefix)
+	c, err := statsd.New(self, port, prefix, false)
 	if err != nil {
 		b.Fatal("Failed to create client", err)
 	}

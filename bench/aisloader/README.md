@@ -61,6 +61,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -stats-output | `string` | filename to log statistics (empty string translates as standard output (default) | `""` |
 | -statsdip | `string` | StatsD IP address or hostname | `localhost` |
 | -statsdport | `int` | StatsD UDP port | `8125` |
+| -statsdprobe | `bool` | Test-probe StatsD server prior to benchmarks | `true` |
 | -statsinterval | `int` | Interval in seconds to print performance counters; 0 - disabled | `10` |
 | -subdir | `string` | Virtual destination directory for all aisloader-generated objects | `""` |
 | -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |

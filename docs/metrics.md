@@ -15,9 +15,9 @@ AIStore generates a growing number of detailed performance metrics that can be v
 
 The StatsD/Grafana option imposes a certain easy-to-meet requirement on the AIStore deployment. Namely, it requires that StatsD daemon (aka service) is **deployed locally with each AIS target and with each AIS proxy**.
 
-At startup AIStore daemons, both targets and gateways, try to UDP-ping their respective local [StatsD](https://github.com/etsy/statsd) daemons on the UDP port `8125` (which is currently fixed).
+At startup AIStore daemons, both targets and gateways, try to UDP-ping their respective local [StatsD](https://github.com/etsy/statsd) daemons on the UDP port `8125` unless redefined via environment `AIS_STATSD_PORT`. You can disable StatsD reachability probing by setting another environment variable - `AIS_STATSD_PROBE` - to `false` or `no`.
 
-If StatsD daemon is *not* listening on the local 8125, the local AIS target (or proxy) will then run without StatsD, and the corresponding stats won't be captured and won't be visualized.
+If StatsD server is *not* listening on the local 8125, the local AIS target (or proxy) will then run without StatsD, and the corresponding stats won't be captured and won't be visualized.
 
 > For details on all StatsD-supported backends, please refer to [this document](https://github.com/etsy/statsd/blob/master/docs/backend.md).
 

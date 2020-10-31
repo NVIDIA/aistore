@@ -6,14 +6,15 @@
 package statsd
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // MetricType is the type of StatsD metric
@@ -110,9 +111,21 @@ type (
 	}
 )
 
+var (
+	smm    *memsys.MMSA
+	errcnt atomic.Int64
+	msize  int = memsys.DefaultSmallBufSize
+)
+
+// max counts: number of UDP probes at startup and number of errors at runtime
+const (
+	maxNumErrs    = 100
+	NumTestProbes = 4
+)
+
 // New returns a client after resolving server and self's address and dialed the server
 // Caller needs to call close
-func New(ip string, port int, prefix string) (Client, error) {
+func New(ip string, port int, prefix string, probe bool) (Client, error) {
 	server, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", ip, port))
 	if err != nil {
 		return Client{}, err
@@ -128,7 +141,42 @@ func New(ip string, port int, prefix string) (Client, error) {
 		return Client{}, err
 	}
 
-	return Client{conn, prefix, true}, nil
+	smm = memsys.DefaultSmallMM()
+	c := Client{conn, prefix, true /*opened*/}
+	if !probe {
+		return c, nil
+	}
+	if err := c.probeUDP(); err != nil {
+		glog.Warningf("Starting up without StatsD (err: %v)", err)
+		return Client{}, err
+	}
+	return c, nil
+}
+
+// NOTE: a single failed probe disables StatsD for the entire runtime
+func (c Client) probeUDP() (err error) {
+	var (
+		sgl     = smm.NewSGL(int64(msize))
+		m       = Metric{Type: Counter, Name: "counter", Value: 1}
+		failcnt int
+	)
+	defer sgl.Free()
+	for i := 1; i <= NumTestProbes; i++ {
+		sgl.Reset()
+		m.Value = i
+		c.appendMetric(m, sgl, "probe", 1)
+		bytes := sgl.Bytes()
+		cmn.Assert(msize > len(bytes))
+		if _, erw := c.conn.Write(bytes); erw != nil {
+			err = erw
+			failcnt++
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if failcnt <= 1 {
+		return nil
+	}
+	return
 }
 
 // Close closes the UDP connection
@@ -141,7 +189,7 @@ func (c Client) Close() error {
 }
 
 // Send sends metrics to StatsD server
-// NOTE: Sending error is ignored
+// bucket - StatsD "bucket" - not to confuse with storage
 // aggCnt - if stats were aggregated - number of stats which were aggregated, 1 otherwise
 // 1/ratio - how many samples are aggregated into single metric
 // see: https://github.com/statsd/statsd/blob/master/docs/metric_types.md#sampling
@@ -149,54 +197,58 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	if !c.opened {
 		return
 	}
-
 	if aggCnt == 0 {
-		// there was no data aggregated, don't send anything to StatsD
-		return
+		return // nothing aggregated
 	}
+	sgl := smm.NewSGL(int64(msize))
+	defer sgl.Free()
 
+	bucket = strings.ReplaceAll(bucket, ":", "_")
+	for _, m := range metrics {
+		c.appendMetric(m, sgl, bucket, aggCnt)
+	}
+	if sgl.Len() > 0 {
+		bytes := sgl.Bytes()
+		msize = cmn.Max(msize, len(bytes))
+		_, err := c.conn.Write(bytes)
+		if err != nil {
+			if cnt := errcnt.Inc(); cnt > maxNumErrs {
+				glog.Errorf("Sending to StatsD failed: %v (%d)", err, cnt)
+				c.conn.Close()
+				c.opened = false
+			}
+		}
+	}
+}
+
+func (c Client) appendMetric(m Metric, sgl *memsys.SGL, bucket string, aggCnt int64) {
 	var (
 		t, prefix string
-		packet    bytes.Buffer
+		err       error
 	)
-
-	// NOTE: ":" is not allowed since it will be treated as value eg. in case daemonID is in form NUMBER:NUMBER
-	bucket = strings.ReplaceAll(bucket, ":", "_")
-
-	for _, m := range metrics {
-		switch m.Type {
-		case Timer:
-			t = "ms"
-		case Counter:
-			t = "c"
-		case Gauge:
-			t = "g"
-		case PersistentCounter:
-			prefix = "+"
-			t = "g"
-		default:
-			cmn.Assertf(false, "unknown type %+v", m.Type)
-		}
-
-		if packet.Len() > 0 {
-			packet.WriteRune('\n')
-		}
-
-		var err error
-		if aggCnt != 1 {
-			_, err = fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s|@%f", c.prefix, bucket, m.Name, prefix, m.Value, t, float64(1)/float64(aggCnt))
-		} else {
-			_, err = fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
-		}
-		cmn.AssertNoErr(err)
+	switch m.Type {
+	case Timer:
+		t = "ms"
+	case Counter:
+		t = "c"
+	case Gauge:
+		t = "g"
+	case PersistentCounter:
+		prefix = "+"
+		t = "g"
+	default:
+		cmn.Assertf(false, "unknown type %+v", m.Type)
 	}
-
-	if packet.Len() > 0 {
-		_, err := c.conn.Write(packet.Bytes())
-		if err != nil && glog.V(5) {
-			glog.Infof("Sending to StatsD failed: %v", err)
-		}
+	if sgl.Len() > 0 {
+		sgl.Write([]byte{'\n'})
 	}
+	if aggCnt != 1 {
+		_, err = fmt.Fprintf(sgl, "%s.%s.%s:%s%v|%s|@%f",
+			c.prefix, bucket, m.Name, prefix, m.Value, t, float64(1)/float64(aggCnt))
+	} else {
+		_, err = fmt.Fprintf(sgl, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
+	}
+	cmn.AssertNoErr(err)
 }
 
 func NewStatsdMetrics(start time.Time) Metrics {

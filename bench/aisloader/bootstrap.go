@@ -127,6 +127,7 @@ type (
 		bProps cmn.BucketProps
 
 		statsdPort        int
+		statsdProbe       bool
 		statsShowInterval int
 		putPct            int // % of puts, rest are gets
 		numWorkers        int
@@ -266,7 +267,8 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
-	f.BoolVar(&p.statsdRequired, "check-statsd", false, "true: prior to benchmark make sure that StatsD is reachable")
+	f.BoolVar(&p.statsdRequired, "check-statsd", false, "true: StatsD is required and must be reachable")
+	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", true, "true: prior to benchmark make sure that StatsD is reachable")
 	f.IntVar(&p.batchSize, "batchsize", 100, "Batch size to list and delete")
 	f.StringVar(&p.bPropsStr, "bprops", "", "JSON string formatted as per the SetBucketProps API and containing bucket properties to apply")
 	f.Int64Var(&p.seed, "seed", 0, "Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")
@@ -725,8 +727,8 @@ func Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to get host name: %s", err.Error())
 	}
-
-	statsdC, err = statsd.New(runParams.statsdIP, runParams.statsdPort, fmt.Sprintf("aisloader.%s-%x", host, suffixID))
+	prefixC := fmt.Sprintf("aisloader.%s-%x", host, suffixID)
+	statsdC, err = statsd.New(runParams.statsdIP, runParams.statsdPort, prefixC, runParams.statsdProbe)
 	if err != nil {
 		fmt.Printf("%s", "Failed to connect to StatsD server")
 		if runParams.statsdRequired {

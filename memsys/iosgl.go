@@ -198,6 +198,15 @@ func (z *SGL) Free() {
 	z.woff = 0xDEADBEEF
 }
 
+func (z *SGL) Bytes() (b []byte) {
+	cmn.Assert(z.roff == 0) // NOTE: done for existing limited use case
+	if z.woff >= z.slab.Size() {
+		b, _ = z.ReadAll()
+		return
+	}
+	return z.sgl[0][:z.woff]
+}
+
 //
 // SGL Reader - implements io.ReadWriteCloser + io.Seeker
 // A given SGL can be simultaneously utilized by multiple Readers

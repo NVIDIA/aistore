@@ -330,17 +330,29 @@ func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 	}
 }
 
-//
-// StatsD client using 8125 (default) StatsD port - https://github.com/etsy/statsd
-//
-func (s *CoreStats) initStatsD(node *cluster.Snode) (err error) {
-	suffix := strings.ReplaceAll(node.ID(), ":", "_")
-	statsD, err := statsd.New("localhost", 8125, "ais"+node.Type()+"."+suffix)
-	s.statsdC = &statsD
-	if err != nil {
-		glog.Infof("Failed to connect to StatsD daemon: %v", err)
+// init StatsD client
+func (s *CoreStats) initStatsD(node *cluster.Snode) {
+	var (
+		suffix = strings.ReplaceAll(node.ID(), ":", "_")
+		port   = 8125 // StatsD default port, see https://github.com/etsy/stats
+		probe  = true // test-probe StatsD server at init time
+	)
+	if portStr := os.Getenv("AIS_STATSD_PORT"); portStr != "" {
+		if portNum, err := cmn.ParsePort(portStr); err != nil {
+			glog.Error(err)
+		} else {
+			port = portNum
+		}
 	}
-	return
+	if probeStr := os.Getenv("AIS_STATSD_PROBE"); probeStr != "" {
+		if probeBool, err := cmn.ParseBool(probeStr); err != nil {
+			glog.Error(err)
+		} else {
+			probe = probeBool
+		}
+	}
+	statsD, _ := statsd.New("localhost", port, "ais"+node.Type()+"."+suffix, probe)
+	s.statsdC = &statsD
 }
 
 //

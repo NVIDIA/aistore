@@ -226,154 +226,6 @@ func TestAppendObject(t *testing.T) {
 	}
 }
 
-func TestOperationsWithRanges(t *testing.T) {
-	const (
-		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
-		objCnt       = 100   // NOTE: Must by positive multiple of 10.
-		objSize      = 16 * cmn.KiB
-	)
-	proxyURL := tutils.RandomProxyURL(t)
-
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
-		for _, evict := range []bool{false, true} {
-			t.Run(fmt.Sprintf("evict=%t", evict), func(t *testing.T) {
-				if evict && bck.IsAIS() {
-					t.Skip("operation `evict` is not applicable to AIS buckets")
-				}
-
-				var (
-					errCh     = make(chan error, objCnt*5)
-					objsPutCh = make(chan string, objCnt)
-					objList   = make([]string, 0, objCnt)
-					cksumType = bck.Props.Cksum.Type
-				)
-
-				for i := 0; i < objCnt/2; i++ {
-					fname := fmt.Sprintf("a-%04d", i)
-					objList = append(objList, fname)
-					fname = fmt.Sprintf("b-%04d", i)
-					objList = append(objList, fname)
-				}
-				tutils.PutObjsFromList(proxyURL, bck.Bck, commonPrefix, objSize, objList, errCh, objsPutCh, cksumType)
-				tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
-				close(objsPutCh)
-
-				tests := []struct {
-					// title to print out while testing
-					name string
-					// a range of file IDs
-					rangeStr string
-					// total number of objects expected to be deleted/evicted
-					delta int
-				}{
-					{
-						"Trying to delete/evict objects with invalid prefix",
-						"file/a-{0..10}",
-						0,
-					},
-					{
-						"Trying to delete/evict objects out of range",
-						commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", objCnt+10, objCnt+110),
-						0,
-					},
-					{
-						fmt.Sprintf("Deleting/Evicting %d objects with prefix 'a-'", objCnt/10),
-						commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (objCnt-objCnt/5)/2, objCnt/2),
-						objCnt / 10,
-					},
-					{
-						fmt.Sprintf("Deleting/Evicting %d objects (short range)", objCnt/5),
-						commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, objCnt/5),
-						objCnt / 5,
-					},
-					{
-						"Deleting/Evicting objects with empty range",
-						commonPrefix + "/b-",
-						objCnt/2 - objCnt/5,
-					},
-				}
-
-				var (
-					totalFiles = objCnt
-					baseParams = tutils.BaseAPIParams(proxyURL)
-				)
-
-				for idx, test := range tests {
-					tutils.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
-
-					var (
-						err    error
-						xactID string
-						kind   string
-						msg    = &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-					)
-					if evict {
-						xactID, err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
-						msg.Flags = cmn.SelectCached
-						kind = cmn.ActEvictObjects
-					} else {
-						xactID, err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
-						kind = cmn.ActDelete
-					}
-					if err != nil {
-						t.Error(err)
-						continue
-					}
-
-					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: 10 * time.Second}
-					_, err = api.WaitForXaction(baseParams, args)
-					tassert.CheckError(t, err)
-
-					totalFiles -= test.delta
-					objList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
-					if err != nil {
-						t.Error(err)
-						continue
-					}
-					if len(objList.Entries) != totalFiles {
-						t.Errorf("Incorrect number of remaining objects: %d, should be %d", len(objList.Entries), totalFiles)
-						continue
-					}
-
-					tutils.Logf("  %d objects have been deleted/evicted\n", test.delta)
-				}
-
-				msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
-				bckList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
-				tassert.CheckFatal(t, err)
-
-				tutils.Logf("Cleaning up remaining objects...\n")
-				// channel per worker to pass the keyname
-				nameChans := make([]chan string, workerCnt)
-				for i := 0; i < workerCnt; i++ {
-					// Allow a bunch of messages at a time to be written asynchronously to a channel
-					nameChans[i] = make(chan string, 100)
-				}
-				// Start the worker pools
-				wg := &sync.WaitGroup{}
-				// Get the workers started
-				for i := 0; i < workerCnt; i++ {
-					wg.Add(1)
-					go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
-				}
-				num := 0
-				for _, entry := range bckList.Entries {
-					nameChans[num%workerCnt] <- entry.Name
-					num++
-				}
-
-				// Close the channels after the reading is done
-				for i := 0; i < workerCnt; i++ {
-					close(nameChans[i])
-				}
-
-				wg.Wait()
-				tassert.SelectErr(t, errCh, "delete", false)
-			})
-		}
-	})
-}
-
 func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
@@ -1662,4 +1514,152 @@ func TestPutObjectWithChecksum(t *testing.T) {
 			t.Errorf("Object %s does not exist despite correct checksum", fileName)
 		}
 	}
+}
+
+func TestOperationsWithRanges(t *testing.T) {
+	const (
+		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
+		objCnt       = 50    // NOTE: Must by positive multiple of 10.
+		objSize      = cmn.KiB
+	)
+	proxyURL := tutils.RandomProxyURL(t)
+
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		for _, evict := range []bool{false, true} {
+			t.Run(fmt.Sprintf("evict=%t", evict), func(t *testing.T) {
+				if evict && bck.IsAIS() {
+					t.Skip("operation `evict` is not applicable to AIS buckets")
+				}
+
+				var (
+					errCh     = make(chan error, objCnt*5)
+					objsPutCh = make(chan string, objCnt)
+					objList   = make([]string, 0, objCnt)
+					cksumType = bck.Props.Cksum.Type
+				)
+
+				for i := 0; i < objCnt/2; i++ {
+					fname := fmt.Sprintf("a-%04d", i)
+					objList = append(objList, fname)
+					fname = fmt.Sprintf("b-%04d", i)
+					objList = append(objList, fname)
+				}
+				tutils.PutObjsFromList(proxyURL, bck.Bck, commonPrefix, objSize, objList, errCh, objsPutCh, cksumType)
+				tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
+				close(objsPutCh)
+
+				tests := []struct {
+					// title to print out while testing
+					name string
+					// a range of file IDs
+					rangeStr string
+					// total number of objects expected to be deleted/evicted
+					delta int
+				}{
+					{
+						"Trying to delete/evict objects with invalid prefix",
+						"file/a-{0..10}",
+						0,
+					},
+					{
+						"Trying to delete/evict objects out of range",
+						commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", objCnt+10, objCnt+110),
+						0,
+					},
+					{
+						fmt.Sprintf("Deleting/Evicting %d objects with prefix 'a-'", objCnt/10),
+						commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (objCnt-objCnt/5)/2, objCnt/2),
+						objCnt / 10,
+					},
+					{
+						fmt.Sprintf("Deleting/Evicting %d objects (short range)", objCnt/5),
+						commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, objCnt/5),
+						objCnt / 5,
+					},
+					{
+						"Deleting/Evicting objects with empty range",
+						commonPrefix + "/b-",
+						objCnt/2 - objCnt/5,
+					},
+				}
+
+				var (
+					totalFiles = objCnt
+					baseParams = tutils.BaseAPIParams(proxyURL)
+				)
+
+				for idx, test := range tests {
+					tutils.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
+
+					var (
+						err    error
+						xactID string
+						kind   string
+						msg    = &cmn.SelectMsg{Prefix: commonPrefix + "/"}
+					)
+					if evict {
+						xactID, err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
+						msg.Flags = cmn.SelectCached
+						kind = cmn.ActEvictObjects
+					} else {
+						xactID, err = api.DeleteRange(baseParams, bck.Bck, test.rangeStr)
+						kind = cmn.ActDelete
+					}
+					if err != nil {
+						t.Error(err)
+						continue
+					}
+
+					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: 10 * time.Second}
+					_, err = api.WaitForXaction(baseParams, args)
+					tassert.CheckError(t, err)
+
+					totalFiles -= test.delta
+					objList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+					if err != nil {
+						t.Error(err)
+						continue
+					}
+					if len(objList.Entries) != totalFiles {
+						t.Errorf("Incorrect number of remaining objects: %d, should be %d", len(objList.Entries), totalFiles)
+						continue
+					}
+
+					tutils.Logf("  %d objects have been deleted/evicted\n", test.delta)
+				}
+
+				msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
+				bckList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
+				tassert.CheckFatal(t, err)
+
+				tutils.Logf("Cleaning up remaining objects...\n")
+				// channel per worker to pass the keyname
+				nameChans := make([]chan string, workerCnt)
+				for i := 0; i < workerCnt; i++ {
+					// Allow a bunch of messages at a time to be written asynchronously to a channel
+					nameChans[i] = make(chan string, 100)
+				}
+				// Start the worker pools
+				wg := &sync.WaitGroup{}
+				// Get the workers started
+				for i := 0; i < workerCnt; i++ {
+					wg.Add(1)
+					go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
+				}
+				num := 0
+				for _, entry := range bckList.Entries {
+					nameChans[num%workerCnt] <- entry.Name
+					num++
+				}
+
+				// Close the channels after the reading is done
+				for i := 0; i < workerCnt; i++ {
+					close(nameChans[i])
+				}
+
+				wg.Wait()
+				tassert.SelectErr(t, errCh, "delete", false)
+			})
+		}
+	})
 }
