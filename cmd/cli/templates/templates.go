@@ -42,7 +42,8 @@ const (
 		"Non-Electable:\n" +
 		"{{ range $key, $si := .Smap.Pmap }} " +
 		"{{ if (eq $si.NonElectable true) }} ProxyID: {{$key}}\n{{end}}" +
-		"PrimaryProxy: {{.Smap.Primary.ID}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
+		"PrimaryProxy: {{.Smap.Primary.ID}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n" +
+		"{{end}}"
 
 	// Proxy Info
 	ProxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t CPU USED %\t UPTIME\t STATUS\n"
