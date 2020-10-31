@@ -238,7 +238,7 @@ func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStat
 		if node.Flags.IsSet(cluster.SnodeMaintenance) {
 			obj.Status = "maintenance"
 		} else if node.Flags.IsSet(cluster.SnodeDecomission) {
-			obj.Status = "decomission"
+			obj.Status = "decommission"
 		}
 		mu.Lock()
 		daeMap[node.ID()] = obj

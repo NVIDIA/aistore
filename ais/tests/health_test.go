@@ -6,7 +6,6 @@ package integration
 
 import (
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -16,17 +15,29 @@ import (
 )
 
 // health should respond with 200 even is node is unregistered
-func unregisteredNodeHealth(t *testing.T, si *cluster.Snode) {
+func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	err := api.Health(tutils.BaseAPIParams(si.PublicNet.DirectURL))
 	tassert.CheckError(t, err)
 
+	smapOrig := tutils.GetClusterMap(t, proxyURL)
 	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, Force: true}
 	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
-	smap := tutils.GetClusterMap(t, proxyURL)
+	targetCount := smapOrig.CountTargets()
+	proxyCount := smapOrig.CountProxies()
+	if si.IsProxy() {
+		proxyCount--
+	} else {
+		targetCount--
+	}
+	smap, err := tutils.WaitForPrimaryProxy(proxyURL, "to proxy decommission",
+		smapOrig.Version, testing.Verbose(), proxyCount, targetCount)
+	tassert.CheckFatal(t, err)
 	defer func() {
 		err = tutils.JoinCluster(proxyURL, si, smap)
-		time.Sleep(3 * time.Second)
+		tassert.CheckFatal(t, err)
+		_, err = tutils.WaitForPrimaryProxy(proxyURL, "to proxy join",
+			smapOrig.Version, testing.Verbose(), smapOrig.CountProxies(), smapOrig.CountTargets())
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -49,7 +60,7 @@ func TestUnregisteredProxyHealth(t *testing.T) {
 	proxyCnt := smap.CountProxies()
 	proxy, err := smap.GetRandProxy(true /*excludePrimary*/)
 	tassert.CheckError(t, err)
-	unregisteredNodeHealth(t, proxy)
+	unregisteredNodeHealth(t, proxyURL, proxy)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, proxyCnt == smap.CountProxies(), "expected number of proxies to be the same after the test")
@@ -76,7 +87,7 @@ func TestUnregisteredTargetHealth(t *testing.T) {
 	targetsCnt := smap.CountTargets()
 	proxy, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	unregisteredNodeHealth(t, proxy)
+	unregisteredNodeHealth(t, proxyURL, proxy)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, targetsCnt == smap.CountTargets(), "expected number of targets to be the same after the test")
