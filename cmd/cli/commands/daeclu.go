@@ -300,7 +300,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		fmt.Fprintln(tw, "DaemonID\tRebID\tObjRcv\tSizeRcv\tObjSent\tSizeSent\tStartTime\tEndTime\tAborted")
 		fmt.Fprintln(tw, strings.Repeat("======\t", 9 /* num of columns */))
 		for _, daemonID := range sortedIDs {
-			st := rebStats[daemonID][0]
+			st := rebStats.GetNodeLastStartedXactStat(daemonID)
 			extRebStats := &stats.ExtRebalanceStats{}
 			if err := cmn.MorphMarshal(st.Ext, &extRebStats); err != nil {
 				continue
