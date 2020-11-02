@@ -2451,9 +2451,15 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		p.invalmsghdlrf(w, r, "new primary proxy %s not present in the %s", proxyid, smap.pp())
 		return
 	}
+
 	if proxyid == p.si.ID() {
 		cmn.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
 		glog.Warningf("Request to set primary = %s = self: nothing to do", proxyid)
+		return
+	}
+
+	if psi.InMaintenance() {
+		p.invalmsghdlrf(w, r, "cannot set new primary, node %q under maintenance", psi)
 		return
 	}
 
@@ -3179,6 +3185,7 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 		clone.delTarget(sid)
 		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
 	}
+
 	p._staffIC(clone)
 
 	if !p.NodeStarted() {
@@ -3481,6 +3488,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		if si.InMaintenance() {
 			p.invalmsghdlrf(w, r, "Node %q already in maintenance state", opts.DaemonID)
+			return
+		}
+
+		if p.si.Equals(si) {
+			p.invalmsghdlrf(w, r, "Node %q is primary, cannot perform %s", opts.DaemonID, msg.Action)
 			return
 		}
 

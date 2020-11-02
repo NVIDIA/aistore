@@ -257,6 +257,10 @@ func (m *Smap) GetTarget(sid string) *Snode {
 	return tsi
 }
 
+func (m *Smap) IsPrimary(si *Snode) bool {
+	return m.Primary.Equals(si)
+}
+
 func (m *Smap) NewTmap(tids []string) (tmap NodeMap, err error) {
 	for _, tid := range tids {
 		if m.GetTarget(tid) == nil {

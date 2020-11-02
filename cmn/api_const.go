@@ -77,9 +77,9 @@ const (
 	ActAttach         = "attach"
 	ActDetach         = "detach"
 	// Node maintenance
-	ActStartMaintenance = "startmaitenance" // put into maintenance state
-	ActStopMaintenance  = "stopmaintenance" // cancel maintenance state
-	ActDecommission     = "decommission"    // start rebalance and remove node from Smap when it finishes
+	ActStartMaintenance = "startmaintenance" // put into maintenance state
+	ActStopMaintenance  = "stopmaintenance"  // cancel maintenance state
+	ActDecommission     = "decommission"     // start rebalance and remove node from Smap when it finishes
 	// IC
 	ActSendOwnershipTbl  = "ic-send-ownership-tbl"
 	ActListenToNotif     = "watch-xaction"

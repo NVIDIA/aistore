@@ -148,11 +148,16 @@ func removeNodeHandler(c *cli.Context) (err error) {
 	if node == nil {
 		return fmt.Errorf("node %q does not exist", sid)
 	}
+
 	var id, action string
 	mode := parseStrFlag(c, maintenanceModeFlag)
+
+	if smap.IsPrimary(node) {
+		return fmt.Errorf("node %q is primary, cannot perform %s", sid, mode)
+	}
+
 	skipRebalance := flagIsSet(c, noRebalanceFlag) || node.IsProxy()
 	actValue := &cmn.ActValDecommision{DaemonID: sid, SkipRebalance: skipRebalance}
-
 	switch mode {
 	case maintenanceModeStart:
 		id, err = api.StartMaintenance(defaultAPIParams, actValue)

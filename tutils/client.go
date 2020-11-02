@@ -183,16 +183,22 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 func UnregisterNode(proxyURL string, args *cmn.ActValDecommision) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
+	node := smap.GetNode(args.DaemonID)
 	if err != nil {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
+
+	if node != nil && smap.IsPrimary(node) {
+		return fmt.Errorf("unregistering primary proxy is not allowed")
+	}
+
 	if _, err := api.Decommission(baseParams, args); err != nil {
 		return err
 	}
 
 	// If node does not exists in cluster we should not wait for map version
 	// sync because update will not be scheduled
-	if node := smap.GetNode(args.DaemonID); node != nil {
+	if node != nil {
 		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{node.ID()})
 	}
 	return nil

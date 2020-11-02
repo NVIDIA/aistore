@@ -1099,6 +1099,12 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 			skipped++
 			continue
 		}
+
+		if snode.InMaintenance() {
+			skipped++
+			continue
+		}
+
 		cs := xxhash.ChecksumString64S(snode.ID(), cmn.MLCG32)
 		if cs > max {
 			max = cs
