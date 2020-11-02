@@ -1612,7 +1612,7 @@ func TestOperationsWithRanges(t *testing.T) {
 
 					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: 10 * time.Second}
 					_, err = api.WaitForXaction(baseParams, args)
-					tassert.CheckError(t, err)
+					tassert.CheckFatal(t, err)
 
 					totalFiles -= test.delta
 					objList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)

@@ -231,7 +231,12 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	args := &cmn.ActValDecommision{DaemonID: target.ID(), SkipRebalance: true}
 	err = tutils.UnregisterNode(proxyURL, args)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
+
+	defer func() {
+		tutils.JoinCluster(proxyURL, target, smap)
+		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	}()
 
 	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
@@ -240,11 +245,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 		smap.CountProxies(),
 		smap.CountTargets()-1,
 	)
-	tassert.CheckError(t, err)
-	defer func() {
-		tutils.JoinCluster(proxyURL, target, smap)
-		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
-	}()
+	tassert.CheckFatal(t, err)
 
 	_, err = api.QueryWorkerTarget(baseParams, handle, 1)
 	tassert.Errorf(t, err != nil, "expected error to occur when target went down")
