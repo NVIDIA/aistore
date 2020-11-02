@@ -7,9 +7,35 @@ Slabs.
 Multiple MMSA instances may coexist in the system, each having its own
 constraints and managing its own Slabs and SGLs.
 
-MMSA includes a "house-keeping" part to monitor system resources, 
+MMSA includes a "house-keeping" part to monitor system resources,
 adjust Slab sizes based on their respective usages, and incrementally
 deallocate idle Slabs. To that end, MMSA utilizes `housekeep` (project and runner).
+
+## GODEBUG=madvdontneed=1
+
+There are two fundamentally different ways to build `aisnode` executable:
+
+1. with `GODEBUG=madvdontneed=1`
+2. and without.
+
+Building with `GODEBUG=madvdontneed=1` may have a profound effect on the memory-freeing
+behavior by the Go runtime. Here's how the original decision is explained in the Go 1.12 release notes:
+
+* https://golang.org/doc/go1.12#runtime
+
+Notice, though, that lazy reclaiming of the freed memory pages does not prevent Linux kernel
+from killing a process upon OOM - which is unfortunate considering that it is the kernel
+in the first place that controls when and how to drive the reclaiming.
+
+Hence, the ultimate tradeoff: OOM (and premature death) versus page faults (and the overhead).
+
+There much more on the topic at:
+
+* https://golang.org/src/runtime/mem_linux.go (and look for `madvise` syscall)
+* https://github.com/golang/go/issues/22439
+* https://github.com/golang/go/issues/28466
+* https://github.com/golang/go/issues/33376
+...
 
 ## Construction
 

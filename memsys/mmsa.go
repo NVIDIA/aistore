@@ -21,7 +21,10 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
-// ================= Memory Manager Slab Allocator =============================
+// Important: see README.md for the NOTE on `GODEBUG=madvdontneed=1`
+// and the associated OOM vs page-faults tradeoff.
+
+// ============== Memory Manager Slab Allocator (MMSA) ===========================
 //
 // MMSA is, simultaneously, a Slab and SGL allocator, and a memory manager
 // responsible to optimize memory usage between different (more vs less) utilized
@@ -62,18 +65,6 @@ import (
 // includes Alloc() and Free() methods. In addition, each allocated SGL internally
 // utilizes one of the existing enumerated slabs to "grow" (that is, allocate more
 // buffers from the slab) on demand. For details, look for "grow" in the iosgl.go.
-//
-// Near `go build` or `go install` one can find `GODEBUG=madvdontneed=1`. This
-// is to revert behavior which was changed in 1.12: https://golang.org/doc/go1.12#runtime
-// More specifically Go maintainers decided to use new `MADV_FREE` flag which
-// may prevent memory being freed to kernel in case Go's runtime decide to run
-// GC. But this doesn't stop kernel to kill the process in case of OOM - it is
-// quite grotesque, kernel decides not to get pages from the process and at the
-// same time it may kill it for not returning pages... Since memory is critical
-// in couple of operations we need to make sure that we it is returned to the
-// kernel so `aisnode` will not blow up and this is why `madvdontneed` is
-// needed. More: https://golang.org/src/runtime/mem_linux.go (func sysUnused,
-// lines 100-120).
 //
 // ========================== end of TOO ========================================
 

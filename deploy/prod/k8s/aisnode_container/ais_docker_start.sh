@@ -109,8 +109,11 @@ ARGS="-config=/etc/ais/$(basename -- $AIS_CONF_FILE) -role=$AIS_NODE_ROLE -alsol
 $is_primary && ARGS+=" -ntargets=$TARGETS"
 echo "aisnode args: $ARGS"
 
+# See https://golang.org/doc/go1.12#runtime
 # See https://github.com/golang/go/issues/28466
-export GODEBUG="madvdontneed=1"
+# uncomment this line to force Go runtime to release freed memory to the system:
+# (effectively, reverting the behavior to Go 1.11)
+# export GODEBUG="madvdontneed=1"
 
 while :
 do

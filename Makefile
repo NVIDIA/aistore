@@ -81,7 +81,7 @@ ifneq ($(findstring log_path,$(GORACE)),log_path)
 endif
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
-	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
+	@GORACE=$(GORACE) \
 		go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@echo "done."
 

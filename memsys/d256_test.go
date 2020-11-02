@@ -17,15 +17,11 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// HOW TO RUN:
+// 1. Run with all defaults:
+// $ go test -bench=. -benchmem ./d256_test.go
 //
-// $ GODEBUG=madvdontneed=1 go test -v -bench=. -benchmem ./d256_test.go
-//
-// or, to run a single selected benchmark for 30s:
-//
+// 2. Use GODEBUG=madvdontneed=1 and run a given benchmark for 10s:
 // $ GODEBUG=madvdontneed=1 go test -bench=BenchmarkLargeAllocMax -benchtime=30s -benchmem ./d256_test.go
-//
-// NOTE: running these benchmarks for less than 40s will likely generate non-reproducible (unstable) results
 
 const (
 	largeobj = cmn.MiB * 8
