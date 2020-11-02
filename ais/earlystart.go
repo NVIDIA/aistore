@@ -258,8 +258,6 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			smap = clone
 			p.owner.smap.put(smap)
 		}
-		p.si = clone.GetNode(p.si.ID())
-		clone.Primary = p.si
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
 		cmn.ExitLogf("FATAL: %s (primary), err: %v", p.si, err)
