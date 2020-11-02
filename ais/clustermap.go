@@ -307,12 +307,13 @@ func (m *smapX) clone() *smapX {
 
 func (m *smapX) deepCopy(dst *smapX) {
 	cmn.CopyStruct(dst, m)
+	dst.Primary = m.Primary.Clone()
 	dst.init(m.CountTargets(), m.CountProxies())
 	for id, v := range m.Tmap {
-		dst.Tmap[id] = v
+		dst.Tmap[id] = v.Clone()
 	}
 	for id, v := range m.Pmap {
-		dst.Pmap[id] = v
+		dst.Pmap[id] = v.Clone()
 	}
 }
 
@@ -397,14 +398,11 @@ func (m *smapX) pp() string {
 }
 
 func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cluster.SnodeFlags) {
-	// Assigning directly to si.Flags results in CoW violation
-	var copySI cluster.Snode
-	cmn.CopyStruct(&copySI, si)
-	copySI.Flags = newFlags
+	si.Flags = newFlags
 	if si.IsTarget() {
-		m.Tmap[si.ID()] = &copySI
+		m.Tmap[si.ID()] = si
 	} else {
-		m.Pmap[si.ID()] = &copySI
+		m.Pmap[si.ID()] = si
 	}
 	m.Version++
 }

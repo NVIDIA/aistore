@@ -306,8 +306,7 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.B
 		return nil, err, errCode
 	}
 
-	remoteMsg := &cmn.SelectMsg{}
-	cmn.CopyStruct(remoteMsg, msg)
+	remoteMsg := msg.Clone()
 	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, m.MaxPageSize())
 
 	// TODO: Currently we cannot remember the `UUID` from remote cluster and

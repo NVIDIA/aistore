@@ -180,6 +180,12 @@ func (d *Snode) Validate() error {
 	return nil
 }
 
+func (d *Snode) Clone() *Snode {
+	var dst Snode
+	cmn.CopyStruct(&dst, d)
+	return &dst
+}
+
 func (d *Snode) isDuplicateURL(n *Snode) bool {
 	var (
 		du = []string{d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL}
