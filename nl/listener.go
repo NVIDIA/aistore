@@ -195,17 +195,17 @@ func (nlb *NotifListenerBase) LastUpdated(si *cluster.Snode) int64 {
 
 func (nlb *NotifListenerBase) NodesTardy(durs ...time.Duration) (nodes cluster.NodeMap, tardy bool) {
 	dur := cmn.GCO.Get().Periodic.NotifTime
-	nodes = make(cluster.NodeMap, len(nlb.ActiveNotifiers()))
-
 	if len(durs) > 0 {
 		dur = durs[0]
 	} else if nlb.ProgressInterval() != 0 {
 		dur = nlb.ProgressInterval()
 	}
 
+	nodes = make(cluster.NodeMap, len(nlb.ActiveNotifiers()))
+	now := mono.NanoTime()
 	for _, si := range nlb.ActiveNotifiers() {
 		ts := nlb.LastUpdated(si)
-		diff := mono.Since(ts)
+		diff := time.Duration(now - ts)
 		if _, ok := nlb.Stats.Load(si.ID()); ok && diff < dur {
 			continue
 		}

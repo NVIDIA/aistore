@@ -373,6 +373,9 @@ outer:
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
 		if cmn.IsErrConnectionRefused(r.err) || cmn.StringInSlice(r.si.ID(), newTargetIDs) {
+			if refused == nil {
+				refused = make(cluster.NodeMap, 2)
+			}
 			refused.Add(r.si)
 		} else {
 			failedCnt++
@@ -473,6 +476,9 @@ func (y *metasyncer) pending() (pending cluster.NodeMap, smap *smapX) {
 				if inSync {
 					continue
 				}
+			}
+			if pending == nil {
+				pending = make(cluster.NodeMap, 2)
 			}
 			pending.Add(si)
 		}

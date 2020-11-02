@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -125,7 +126,7 @@ func (d *Snode) SetName() {
 	if d.IsProxy() {
 		d.name = "p[" + d.DaemonID + "]"
 	} else {
-		cmn.Assert(d.IsTarget())
+		debug.Assert(d.IsTarget())
 		d.name = "t[" + d.DaemonID + "]"
 	}
 }
@@ -390,12 +391,7 @@ func (m *Smap) DefaultICSize() int { return icGroupSize }
 // NodeMap //
 /////////////
 
-func (m *NodeMap) Add(snode *Snode) {
-	if *m == nil {
-		*m = make(NodeMap)
-	}
-	(*m)[snode.DaemonID] = snode
-}
+func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaemonID] = snode }
 
 func (m NodeMap) Clone() (clone NodeMap) {
 	clone = make(NodeMap, len(m))

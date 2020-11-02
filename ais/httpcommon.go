@@ -790,28 +790,31 @@ func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 }
 
 // TODO: optimize avoid allocating a new NodeMap
-func (h *httprunner) notifDst(notif cluster.Notif) cluster.NodeMap {
+func (h *httprunner) notifDst(notif cluster.Notif) (nodes cluster.NodeMap) {
 	var (
-		smap  = h.owner.smap.get()
-		nodes = make(cluster.NodeMap)
+		smap = h.owner.smap.get()
+		dsts = notif.Subscribers()
 	)
-	for _, dst := range notif.Subscribers() {
-		if dst == equalIC {
-			for pid, psi := range smap.Pmap {
-				if psi.IsIC() && pid != h.si.ID() {
-					nodes.Add(psi)
-				}
+	if len(dsts) == 1 && dsts[0] == equalIC {
+		nodes = make(cluster.NodeMap, smap.DefaultICSize())
+		for pid, psi := range smap.Pmap {
+			if psi.IsIC() && pid != h.si.ID() {
+				nodes.Add(psi)
 			}
-			debug.Assert(len(notif.Subscribers()) == 1)
-			break
-		} else if si := smap.GetNode(dst); si != nil {
+		}
+		return
+	}
+	nodes = make(cluster.NodeMap, len(dsts))
+	for _, dst := range dsts {
+		debug.Assert(dst != equalIC)
+		if si := smap.GetNode(dst); si != nil {
 			nodes.Add(si)
 		} else {
 			err := &errNodeNotFound{"failed to notify", dst, h.si, smap}
 			glog.Error(err)
 		}
 	}
-	return nodes
+	return
 }
 
 ///////////////
