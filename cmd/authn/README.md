@@ -39,7 +39,7 @@ A workflow for the case when a token is revoked manually and only one cluster is
 
 <img src="images/token_revoke.png" alt="Revoke token workflow">
 
-AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as HTTP server listening on port 52001. If you enable HTTPS access make sure that the configuration file options `server_cert` and `server_key` point to the correct SSL certificate and key.
+AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as HTTP server listening on port 52001. If you enable HTTPS access make sure that the configuration file options `server_crt` and `server_key` point to the correct SSL certificate and key.
 
 
 ## Getting started

@@ -34,7 +34,7 @@ type (
 	httpConfig struct {
 		Port        int    `json:"port"`
 		UseHTTPS    bool   `json:"use_https"`
-		Certificate string `json:"server_cert"`
+		Certificate string `json:"server_crt"`
 		Key         string `json:"server_key"`
 	}
 	authConfig struct {
