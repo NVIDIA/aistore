@@ -511,7 +511,7 @@ func (h *httprunner) initSI(daemonType string) {
 		Port: config.Net.L4.PortIntraData,
 	}
 
-	daemonID := initDaemonID(daemonType, config, publicAddr)
+	daemonID := initDaemonID(daemonType, config)
 	h.name = daemonType
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
 	cmn.InitShortID(h.si.Digest())

@@ -879,6 +879,10 @@ func restore(cmd restoreCmd, asPrimary bool, tag string) error {
 		}
 	}
 
+	if !cmn.AnyHasPrefixInSlice("-daemon_id", cmd.args) {
+		cmd.args = append(cmd.args, "-daemon_id="+cmd.node.ID())
+	}
+
 	tutils.Logf("Restoring %s: %s %+v\n", tag, cmd.cmd, cmd.args)
 
 	ncmd := exec.Command(cmd.cmd, cmd.args...)

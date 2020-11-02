@@ -45,6 +45,7 @@ type (
 	cliFlags struct {
 		role        string // proxy | target
 		confPath    string // path to config
+		daemonID    string // daemon ID to assign
 		confCustom  string // "key1=value1,key2=value2" formatted string to override selected entries in config
 		ntargets    int    // expected number of targets in a starting-up cluster (proxy only)
 		skipStartup bool   // determines if the proxy should skip waiting for targets
@@ -111,6 +112,7 @@ func (g *rungroup) run(mainRunner cmn.Runner) error {
 func init() {
 	// role aka `DaemonType`
 	flag.StringVar(&daemon.cli.role, "role", "", "role of this AIS daemon: proxy | target")
+	flag.StringVar(&daemon.cli.daemonID, "daemon_id", "", "unique ID to be assigned to the AIS daemon")
 
 	// config itself and its command line overrides
 	flag.StringVar(&daemon.cli.confPath, "config", "",
