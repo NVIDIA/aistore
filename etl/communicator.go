@@ -172,6 +172,8 @@ func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck,
 			return fmt.Errorf("invalid Content-Length %q", contentLength)
 		}
 		w.Header().Set(cmn.HeaderContentLength, contentLength)
+	} else {
+		size = memsys.DefaultBufSize // TODO -- FIXME: track the average
 	}
 	buf, slab := pc.mem.Alloc(size)
 	_, err = io.CopyBuffer(w, resp.Body, buf)

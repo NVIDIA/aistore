@@ -366,7 +366,9 @@ func (r *MMSA) Terminate() {
 }
 
 // allocate SGL
-// - immediateSize: size to preallocate
+// - immediateSize: known size, OR minimum expected size, OR size to preallocate
+//   immediateSize == 0 translates as DefaultBufSize - for page MMSA,
+//   and DefaultSmallBufSize - for small-size MMSA
 // - sbufSize: slab buffer size (optional)
 func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 	var (
@@ -416,6 +418,8 @@ func (r *MMSA) MemPressure() int {
 
 func MemPressureText(v int) string { return memPressureText[v] }
 
+// gets Slab for a given fixed buffer size that must be within expected range of sizes
+// - the range supported by _this_ MMSA (compare w/ SelectMemAndSlab())
 func (r *MMSA) GetSlab(bufSize int64) (s *Slab, err error) {
 	a, b := bufSize/r.slabIncStep, bufSize%r.slabIncStep
 	if b != 0 {
@@ -430,6 +434,7 @@ func (r *MMSA) GetSlab(bufSize int64) (s *Slab, err error) {
 	return
 }
 
+// uses SelectMemAndSlab to select both MMSA (page or small) and its Slab
 func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
 	var size int64
 	if len(sizes) == 0 {
@@ -440,28 +445,9 @@ func (r *MMSA) Alloc(sizes ...int64) (buf []byte, slab *Slab) {
 		}
 	} else {
 		size = sizes[0]
-		if size > r.maxSlabSize && r.Small && r.Sibling != nil {
-			return r.Sibling.Alloc(size)
-		}
-		if size < r.slabIncStep && !r.Small && r.Sibling != nil {
-			return r.Sibling.Alloc(size)
-		}
 	}
-	slab = r._selectSlab(size)
+	_, slab = r.SelectMemAndSlab(size)
 	buf = slab.Alloc()
-	return
-}
-
-// used by the above and the below
-func (r *MMSA) _selectSlab(size int64) (slab *Slab) {
-	if size >= r.maxSlabSize {
-		slab = r.rings[len(r.rings)-1]
-	} else if size <= r.slabIncStep {
-		slab = r.rings[0]
-	} else {
-		i := (size + r.slabIncStep - 1) / r.slabIncStep
-		slab = r.rings[i-1]
-	}
 	return
 }
 
@@ -478,6 +464,32 @@ func (r *MMSA) Free(buf []byte) {
 		slab := r._selectSlab(size)
 		slab.Free(buf)
 	}
+}
+
+// Given a known, expected or minimum size to allocate, selects MMSA (page or small, if initialized)
+// and its Slab
+func (r *MMSA) SelectMemAndSlab(size int64) (mmsa *MMSA, slab *Slab) {
+	cmn.Assert(size > 0)
+	if size > r.maxSlabSize && r.Small && r.Sibling != nil {
+		return r.Sibling, r.Sibling._selectSlab(size)
+	}
+	if size < r.slabIncStep && !r.Small && r.Sibling != nil {
+		return r.Sibling, r.Sibling._selectSlab(size)
+	}
+	mmsa, slab = r, r._selectSlab(size)
+	return
+}
+
+func (r *MMSA) _selectSlab(size int64) (slab *Slab) {
+	if size >= r.maxSlabSize {
+		slab = r.rings[len(r.rings)-1]
+	} else if size <= r.slabIncStep {
+		slab = r.rings[0]
+	} else {
+		i := (size + r.slabIncStep - 1) / r.slabIncStep
+		slab = r.rings[i-1]
+	}
+	return
 }
 
 func (r *MMSA) Append(buf []byte, bytes string) (nbuf []byte) {

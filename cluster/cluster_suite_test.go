@@ -8,11 +8,13 @@ package cluster_test
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/cluster"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 func TestCluster(t *testing.T) {
 	RegisterFailHandler(Fail)
+	cluster.InitTarget()
 	RunSpecs(t, "Cluster Suite")
 }

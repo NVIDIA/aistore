@@ -29,7 +29,7 @@ in the first place that controls when and how to drive the reclaiming.
 
 Hence, the ultimate tradeoff: OOM (and premature death) versus page faults (and the overhead).
 
-There much more on the topic at:
+There's much more on the topic at:
 
 * https://golang.org/src/runtime/mem_linux.go (and look for `madvise` syscall)
 * https://github.com/golang/go/issues/22439
