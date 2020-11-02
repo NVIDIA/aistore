@@ -273,7 +273,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tutils.Logf("Register target %s\n", targets[0].ID())
-		err = tutils.JoinCluster(m.proxyURL, targets[0], m.smap)
+		err = tutils.JoinCluster(m.proxyURL, targets[0])
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -396,14 +396,14 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	// and join 2 targets in parallel
 	time.Sleep(time.Second)
 	tutils.Logf("Register 1st target %s\n", target1.URL(cmn.NetworkPublic))
-	err = tutils.JoinCluster(m.proxyURL, target1, m.smap)
+	err = tutils.JoinCluster(m.proxyURL, target1)
 	tassert.CheckFatal(t, err)
 
 	// random sleep between the first and the second join
 	time.Sleep(time.Duration(rand.Intn(3)+1) * time.Second)
 
 	tutils.Logf("Register 2nd target %s\n", target2.URL(cmn.NetworkPublic))
-	err = tutils.JoinCluster(m.proxyURL, target2, m.smap)
+	err = tutils.JoinCluster(m.proxyURL, target2)
 	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForPrimaryProxy(
@@ -467,7 +467,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tutils.Logf("Register target %s\n", target0.URL(cmn.NetworkPublic))
-		err = tutils.JoinCluster(m.proxyURL, target0, m.smap)
+		err = tutils.JoinCluster(m.proxyURL, target0)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -486,7 +486,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	sleep := time.Duration(rand.Intn(5))*time.Second + time.Millisecond
 	time.Sleep(sleep)
 	tutils.Logf("Register target %s\n", target1.URL(cmn.NetworkPublic))
-	err = tutils.JoinCluster(m.proxyURL, target1, m.smap)
+	err = tutils.JoinCluster(m.proxyURL, target1)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForPrimaryProxy(
 		m.proxyURL,
@@ -619,7 +619,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	time.Sleep(time.Second * 4)
 
 	// register a new target
-	err = tutils.JoinCluster(m.proxyURL, killTarget, m.smap)
+	err = tutils.JoinCluster(m.proxyURL, killTarget)
 	tassert.CheckFatal(t, err)
 
 	// enable mountpath
@@ -799,7 +799,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		go func(number int) {
 			defer wg.Done()
 
-			err := tutils.JoinCluster(m.proxyURL, targets[number], m.smap)
+			err := tutils.JoinCluster(m.proxyURL, targets[number])
 			tassert.CheckError(t, err)
 		}(i)
 	}

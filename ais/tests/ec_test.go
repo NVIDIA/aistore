@@ -2361,10 +2361,9 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	err := tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	registered := false
-	smap := tutils.GetClusterMap(t, proxyURL)
 	defer func() {
 		if !registered {
-			err = tutils.JoinCluster(proxyURL, tgtLost, smap)
+			err = tutils.JoinCluster(proxyURL, tgtLost)
 			tassert.CheckError(t, err)
 			tutils.WaitForRebalanceToComplete(t, baseParams)
 		}
@@ -2405,7 +2404,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
 	tutils.Logf("Registering node %s\n", tgtLost)
-	err = tutils.JoinCluster(proxyURL, tgtLost, smap)
+	err = tutils.JoinCluster(proxyURL, tgtLost)
 	tassert.CheckFatal(t, err)
 	registered = true
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
@@ -2600,7 +2599,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	// See: https://blog.golang.org/defer-panic-and-recover
 	defer func() {
 		if !registered {
-			err = tutils.JoinCluster(proxyURL, tgtLost, smap)
+			err = tutils.JoinCluster(proxyURL, tgtLost)
 			tassert.CheckError(t, err)
 		}
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
@@ -2628,7 +2627,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	tutils.Logf("Created %d objects in %s. Starting rebalance\n", len(resECOld.Entries), bckEC)
 
 	tutils.Logf("Registering node %s\n", tgtLost.ID())
-	err = tutils.JoinCluster(proxyURL, tgtLost, smap)
+	err = tutils.JoinCluster(proxyURL, tgtLost)
 	tassert.CheckFatal(t, err)
 	registered = true
 
@@ -2659,8 +2658,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForPrimaryProxy(proxyURL, "target removed", smap.Version, testing.Verbose())
-	smap = tutils.GetClusterMap(t, proxyURL)
-	defer tutils.JoinCluster(proxyURL, tgtGone, smap)
+	defer tutils.JoinCluster(proxyURL, tgtGone)
 
 	stopCh.Close()
 

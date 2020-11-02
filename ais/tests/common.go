@@ -505,10 +505,10 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 
 	// T1
 	tutils.Logf("Registering target %s...\n", target.ID())
-	smap := tutils.GetClusterMap(m.t, m.proxyURL)
-	err := tutils.JoinCluster(m.proxyURL, target, smap)
+	err := tutils.JoinCluster(m.proxyURL, target)
 	tassert.CheckFatal(m.t, err)
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
+	smap := tutils.GetClusterMap(m.t, m.proxyURL)
 	for i := 0; i < iterations; i++ {
 		time.Sleep(interval)
 		if _, ok := smap.Tmap[target.ID()]; !ok {

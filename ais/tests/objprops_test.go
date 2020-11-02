@@ -258,7 +258,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled, cksumType)
 
 	tutils.Logf("Reregistering target...\n")
-	err = tutils.JoinCluster(proxyURL, removeTarget, smap)
+	err = tutils.JoinCluster(proxyURL, removeTarget)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForPrimaryProxy(
 		proxyURL,

@@ -234,11 +234,11 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		tutils.JoinCluster(proxyURL, target, smap)
+		tutils.JoinCluster(proxyURL, target)
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 
-	smap, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"target is gone",
 		smap.Version, testing.Verbose(),

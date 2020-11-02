@@ -17,8 +17,12 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-func JoinCluster(proxyURL string, node *cluster.Snode, smap *cluster.Smap) error {
+func JoinCluster(proxyURL string, node *cluster.Snode) error {
 	baseParams := BaseAPIParams(proxyURL)
+	smap, err := api.GetClusterMap(baseParams)
+	if err != nil {
+		return err
+	}
 	if err := api.JoinCluster(baseParams, node); err != nil {
 		return err
 	}
@@ -31,6 +35,7 @@ func JoinCluster(proxyURL string, node *cluster.Snode, smap *cluster.Smap) error
 	return nil
 }
 
+// TODO: There is duplication between `UnregisterNode` and `RemoveTarget` - when to use which?
 func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
 	removeTarget := ExtractTargetNodes(smap)[0]
 	Logf("Removing target %s\n", removeTarget.ID())
@@ -49,9 +54,10 @@ func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.S
 	return smap, removeTarget
 }
 
+// TODO: There is duplication between `JoinCluster` and `RestoreTarget` - when to use which?
 func RestoreTarget(t *testing.T, proxyURL string, smap *cluster.Smap, target *cluster.Snode) *cluster.Smap {
 	Logf("Reregistering target %s...\n", target)
-	err := JoinCluster(proxyURL, target, smap)
+	err := JoinCluster(proxyURL, target)
 	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
 		proxyURL,

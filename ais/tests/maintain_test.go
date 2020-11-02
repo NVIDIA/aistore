@@ -62,19 +62,20 @@ func TestMaintenanceMD(t *testing.T) {
 	msg := &cmn.ActValDecommision{DaemonID: dcmTarget.ID(), SkipRebalance: true}
 	_, err := api.Decommission(baseParams, msg)
 	tassert.CheckError(t, err)
-	newSmap, err := tutils.WaitForNewSmap(t, proxyURL, smap.Version)
+	_, err = tutils.WaitForNewSmap(t, proxyURL, smap.Version)
 	tassert.CheckFatal(t, err)
 
 	vmdTargets := countVMDTargets(allTgtsMpaths)
 	tassert.Errorf(t, vmdTargets == smap.CountTargets()-1, "expected VMD to be found on %d targets, got %d.",
 		smap.CountTargets()-1, vmdTargets)
 
-	tassert.CheckFatal(t, tutils.JoinCluster(proxyURL, dcmTarget, newSmap))
+	err = tutils.JoinCluster(proxyURL, dcmTarget)
 	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceToComplete(t, baseParams)
 
 	// NOTE: Target will have the same DaemonID as it keeps it in the memory.
-	tassert.Errorf(t, newSmap.GetTarget(dcmTarget.DaemonID) != nil, "decommissioned target should have the same daemonID")
+	smap = tutils.GetClusterMap(t, proxyURL)
+	tassert.Errorf(t, smap.GetTarget(dcmTarget.DaemonID) != nil, "decommissioned target should have the same daemonID")
 	vmdTargets = countVMDTargets(allTgtsMpaths)
 	tassert.Errorf(t, vmdTargets == smap.CountTargets(),
 		"expected VMD to be found on all %d targets after joining cluster, got %d",
@@ -133,20 +134,19 @@ func TestMaintenanceRebalance(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	smap2, err2 := tutils.WaitForPrimaryProxy(
+	smap, err := tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"to target removed from the cluster",
 		m.smap.Version, testing.Verbose(),
 		m.smap.CountProxies(),
 		m.smap.CountTargets()-1,
 	)
-	tassert.CheckFatal(t, err2)
-	m.smap = smap2
+	tassert.CheckFatal(t, err)
+	m.smap = smap
 
 	m.gets()
 	m.ensureNoErrors()
 
-	tutils.Logf("Restoring target %s\n", tsi)
 	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 	restored = true
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
@@ -202,21 +202,20 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	smap2, err2 := tutils.WaitForPrimaryProxy(
+	smap, err := tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"target removed from the cluster",
 		m.smap.Version, testing.Verbose(),
 		m.smap.CountProxies(),
 		m.smap.CountTargets()-1,
 	)
-	tassert.CheckFatal(t, err2)
-	m.smap = smap2
+	tassert.CheckFatal(t, err)
+	m.smap = smap
 
 	m.stopGets()
 	stopped = true
 	m.ensureNoErrors()
 
-	tutils.Logf("Restoring target %s\n", tsi)
 	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
 	restored = true
 	tutils.WaitForRebalanceToComplete(t, baseParams, time.Minute)

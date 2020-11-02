@@ -194,7 +194,7 @@ func (rctx *RecipeContext) RestoreTarget(conds *PostConds, delay time.Duration) 
 		for k, v := range rctx.origTargets {
 			_, ok := smap.Tmap[k]
 			if !ok {
-				err := tutils.JoinCluster(primaryURL, v, smap)
+				err := tutils.JoinCluster(primaryURL, v)
 				rctx.targetMutex.Unlock()
 				cmn.AssertNoErr(err)
 				return
