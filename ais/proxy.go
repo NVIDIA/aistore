@@ -1539,7 +1539,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
-		primary.rp.ErrorHandler = rpErrHandler
+		primary.rp.ErrorHandler = p.rpErrHandler
 	}
 	primary.Unlock()
 	if len(body) > 0 {
@@ -1575,7 +1575,7 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
-		rproxy.ErrorHandler = rpErrHandler
+		rproxy.ErrorHandler = p.rpErrHandler
 		p.rproxy.nodes.Store(nodeID, rproxy)
 	}
 
