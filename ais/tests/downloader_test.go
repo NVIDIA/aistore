@@ -861,6 +861,9 @@ func TestDownloadMpathEvents(t *testing.T) {
 	// Abort just in case something goes wrong.
 	defer abortDownload(t, id1)
 
+	tutils.Logln("Wait a while for downloaders to pick the job as they start in goroutine")
+	time.Sleep(3 * time.Second)
+
 	smap := tutils.GetClusterMap(t, proxyURL)
 	removeTarget := tutils.ExtractTargetNodes(smap)[0]
 
