@@ -60,17 +60,12 @@ const (
 )
 
 type (
-	streamable interface {
-		obj() *Obj
-		msg() *Msg
-	}
 	streamer interface {
 		compressed() bool
 		dryrun()
 		terminate()
 		doRequest() error
 		inSend() bool
-		doCmpl(streamable, error)
 		abortPending(error, bool)
 		errCmpl(error)
 		resetCompression()

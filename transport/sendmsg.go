@@ -31,8 +31,7 @@ type (
 
 // interface guard
 var (
-	_ streamable = &Msg{}
-	_ streamer   = &MsgStream{}
+	_ streamer = &MsgStream{}
 )
 
 func (s *MsgStream) terminate() {
@@ -49,7 +48,6 @@ func (s *MsgStream) terminate() {
 
 func (s *MsgStream) abortPending(_ error, _ bool) {}
 func (s *MsgStream) errCmpl(err error)            {} // TODO -- FIXME
-func (s *MsgStream) doCmpl(_ streamable, _ error) {}
 func (s *MsgStream) compressed() bool             { return false }
 func (s *MsgStream) resetCompression()            { cmn.Assert(false) }
 
@@ -169,8 +167,6 @@ func (s *MsgStream) idleTick() {
 // Msg and MsgHdr //
 ////////////////////
 
-func (msg Msg) obj() *Obj           { return nil }
-func (msg Msg) msg() *Msg           { return &msg }
 func (msg *Msg) IsLast() bool       { return msg.Flags == lastMarker }
 func (msg *Msg) IsIdleTick() bool   { return msg.Flags == tickMarker }
 func (msg *Msg) IsHeaderOnly() bool { return true }

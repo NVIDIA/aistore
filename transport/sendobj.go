@@ -49,8 +49,7 @@ type (
 
 // interface guard
 var (
-	_ streamable = &Obj{}
-	_ streamer   = &Stream{}
+	_ streamer = &Stream{}
 )
 
 ///////////////////
@@ -137,11 +136,8 @@ func (s *Stream) abortPending(err error, completions bool) {
 }
 
 // refcount, invoke callback, and *always* close the reader
-func (s *Stream) doCmpl(streamable streamable, err error) {
-	var (
-		rc  int64
-		obj = streamable.obj()
-	)
+func (s *Stream) doCmpl(obj *Obj, err error) {
+	var rc int64
 	if obj.prc != nil {
 		rc = obj.prc.Dec()
 		debug.Assert(rc >= 0)
@@ -364,8 +360,6 @@ func (s *Stream) idleTick() {
 // Obj and ObjHdr //
 ////////////////////
 
-func (obj Obj) obj() *Obj           { return &obj }
-func (obj Obj) msg() *Msg           { return nil }
 func (obj *Obj) IsLast() bool       { return obj.Hdr.IsLast() }
 func (obj *Obj) IsIdleTick() bool   { return obj.Hdr.ObjAttrs.Size == tickMarker }
 func (obj *Obj) IsHeaderOnly() bool { return obj.Hdr.ObjAttrs.Size == 0 || obj.Hdr.IsLast() }

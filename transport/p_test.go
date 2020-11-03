@@ -26,11 +26,9 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
-var cpbuf = make([]byte, 32*cmn.KiB)
-
 func receive10G(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 	cmn.AssertNoErr(err)
-	written, _ := io.CopyBuffer(ioutil.Discard, objReader, cpbuf)
+	written, _ := io.Copy(ioutil.Discard, objReader)
 	cmn.Assert(written == hdr.ObjAttrs.Size)
 }
 
@@ -107,21 +105,38 @@ func Test_DryRun(t *testing.T) {
 	err := os.Setenv("AIS_STREAM_DRY_RUN", "true")
 	defer os.Unsetenv("AIS_STREAM_DRY_RUN")
 	tassert.CheckFatal(t, err)
+
 	stream := transport.NewObjStream(nil, "dummy/null", nil)
 
 	random := newRand(mono.NanoTime())
-	slab, _ := MMSA.GetSlab(cmn.KiB * 32)
+	sgl := MMSA.NewSGL(cmn.MiB)
+	defer sgl.Free()
+	buf, slab := MMSA.Alloc(cmn.KiB * 128)
+	defer slab.Free(buf)
+	for sgl.Len() < cmn.MiB {
+		random.Read(buf)
+		sgl.Write(buf)
+	}
+
 	size, num, prevsize := int64(0), 0, int64(0)
 	hdr := genStaticHeader()
+	total := int64(cmn.TiB)
+	if testing.Short() {
+		total = cmn.TiB / 4
+	}
 
-	for size < cmn.TiB/4 {
-		reader := newRandReader(random, hdr, slab)
-		stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
-		num++
-		size += hdr.ObjAttrs.Size
-		if size-prevsize >= cmn.GiB*100 {
-			prevsize = size
-			tutils.Logf("[dry]: %d GiB\n", size/cmn.GiB)
+	for size < total {
+		hdr.ObjAttrs.Size = cmn.KiB * 128
+		for i := int64(0); i < cmn.MiB/hdr.ObjAttrs.Size; i++ {
+			reader := memsys.NewReader(sgl)
+			reader.Seek(i*hdr.ObjAttrs.Size, io.SeekStart)
+			stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
+			num++
+			size += hdr.ObjAttrs.Size
+			if size-prevsize >= cmn.GiB*100 {
+				prevsize = size
+				tutils.Logf("[dry]: %d GiB\n", size/cmn.GiB)
+			}
 		}
 	}
 	stream.Fin()
@@ -138,7 +153,7 @@ func Test_CompletionCount(t *testing.T) {
 
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
-		written, _ := io.CopyBuffer(ioutil.Discard, objReader, cpbuf)
+		written, _ := io.Copy(ioutil.Discard, objReader)
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
 	}

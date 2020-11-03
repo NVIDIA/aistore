@@ -517,9 +517,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
-		slab, _ := MMSA.GetSlab(32 * cmn.KiB)
-		buf := slab.Alloc()
-		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
+		written, err := io.Copy(ioutil.Discard, objReader)
 		if err != io.EOF {
 			tassert.CheckFatal(t, err)
 		}
@@ -527,7 +525,6 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		*totalReceived += written
-		slab.Free(buf)
 	}
 }
 
