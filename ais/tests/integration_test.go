@@ -111,7 +111,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		primaryCrashElectRestart(t)
+		killRestorePrimary(t, m.proxyURL, false, nil)
 	}()
 
 	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
