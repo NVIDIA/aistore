@@ -28,10 +28,10 @@ type (
 	}
 
 	request struct {
-		registering     bool
 		name            string
 		f               CleanupFunc
 		initialInterval time.Duration
+		registering     bool
 	}
 
 	timedAction struct {

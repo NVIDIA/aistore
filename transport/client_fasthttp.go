@@ -50,13 +50,13 @@ func NewIntraDataClient() Client {
 	}
 }
 
-func (s *streamBase) do(streamer streamer, body io.Reader) (err error) {
+func (s *streamBase) do(body io.Reader) (err error) {
 	// init request & response
 	req, resp := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
 	req.Header.SetMethod(http.MethodPut)
 	req.SetRequestURI(s.toURL)
 	req.SetBodyStream(body, -1)
-	if streamer.compressed() {
+	if s.streamer.compressed() {
 		req.Header.Set(cmn.HeaderCompress, cmn.LZ4Compression)
 	}
 	req.Header.Set(cmn.HeaderSessID, strconv.FormatInt(s.sessID, 10))
@@ -70,8 +70,8 @@ func (s *streamBase) do(streamer streamer, body io.Reader) (err error) {
 	resp.BodyWriteTo(ioutil.Discard)
 	fasthttp.ReleaseRequest(req)
 	fasthttp.ReleaseResponse(resp)
-	if streamer.compressed() {
-		streamer.resetCompression()
+	if s.streamer.compressed() {
+		s.streamer.resetCompression()
 	}
 	return
 }

@@ -74,10 +74,14 @@ type (
 		abortPending(error, bool)
 		errCmpl(error)
 		resetCompression()
+		// gc
+		closeSCQ()
+		drain()
+		idleTick()
 	}
 	streamBase struct {
-		streamer
-		client Client // http client this send-stream will use
+		streamer streamer
+		client   Client // http client this send-stream will use
 
 		// user-defined & queryable
 		toURL, trname   string       // http endpoint
@@ -223,15 +227,15 @@ func (s *streamBase) deactivate() (n int, err error) {
 	return
 }
 
-func (s *streamBase) sendLoop(streamer streamer, dryrun bool) {
+func (s *streamBase) sendLoop(dryrun bool) {
 	for {
 		if s.sessST.Load() == active {
 			if dryrun {
-				streamer.dryrun()
-			} else if err := streamer.doRequest(); err != nil {
+				s.streamer.dryrun()
+			} else if err := s.streamer.doRequest(); err != nil {
 				*s.term.reason = reasonError
 				s.term.err = err
-				streamer.errCmpl(err)
+				s.streamer.errCmpl(err)
 				break
 			}
 		}
@@ -240,7 +244,7 @@ func (s *streamBase) sendLoop(streamer streamer, dryrun bool) {
 		}
 	}
 
-	streamer.terminate()
+	s.streamer.terminate()
 	s.wg.Done()
 
 	// handle termination caused by anything other than Fin()
@@ -256,7 +260,7 @@ func (s *streamBase) sendLoop(streamer streamer, dryrun bool) {
 		s.wg.Wait()
 
 		// cleanup
-		streamer.abortPending(s.term.err, false /*completions*/)
+		s.streamer.abortPending(s.term.err, false /*completions*/)
 	}
 }
 

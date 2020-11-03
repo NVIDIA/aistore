@@ -55,7 +55,7 @@ func Test_CompressedOne(t *testing.T) {
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "2")
 	tassert.CheckFatal(t, err)
 	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
-	stream := transport.NewStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
+	stream := transport.NewObjStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
 
 	slab, _ := MMSA.GetSlab(memsys.MaxPageSlabSize)
 	random := newRand(mono.NanoTime())
@@ -107,7 +107,7 @@ func Test_DryRun(t *testing.T) {
 	err := os.Setenv("AIS_STREAM_DRY_RUN", "true")
 	defer os.Unsetenv("AIS_STREAM_DRY_RUN")
 	tassert.CheckFatal(t, err)
-	stream := transport.NewStream(nil, "dummy/null", nil)
+	stream := transport.NewObjStream(nil, "dummy/null", nil)
 
 	random := newRand(mono.NanoTime())
 	slab, _ := MMSA.GetSlab(cmn.KiB * 32)
@@ -158,7 +158,7 @@ func Test_CompletionCount(t *testing.T) {
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "256")
 	tassert.CheckFatal(t, err)
 	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
-	stream := transport.NewStream(httpclient, url, nil) // provide for sizeable queue at any point
+	stream := transport.NewObjStream(httpclient, url, nil) // provide for sizeable queue at any point
 	random := newRand(mono.NanoTime())
 	rem := int64(0)
 	for idx := 0; idx < 10000; idx++ {

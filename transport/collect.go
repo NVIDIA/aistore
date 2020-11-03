@@ -16,12 +16,12 @@ import (
 
 type (
 	ctrl struct { // add/del channel to/from collector
-		s   *Stream
+		s   *streamBase
 		add bool
 	}
 	collector struct {
-		streams map[string]*Stream
-		heap    []*Stream
+		streams map[string]*streamBase
+		heap    []*streamBase
 		ticker  *time.Ticker
 		stopCh  *cmn.StopCh
 		ctrlCh  chan ctrl
@@ -52,8 +52,8 @@ func Init() *StreamCollector {
 	gc = &collector{
 		stopCh:  cmn.NewStopCh(),
 		ctrlCh:  make(chan ctrl, 64),
-		streams: make(map[string]*Stream, 64),
-		heap:    make([]*Stream, 0, 64), // min-heap sorted by stream.time.ticks
+		streams: make(map[string]*streamBase, 64),
+		heap:    make([]*streamBase, 0, 64), // min-heap sorted by stream.time.ticks
 	}
 	heap.Init(gc)
 
@@ -107,7 +107,7 @@ func (gc *collector) stop() {
 	gc.stopCh.Close()
 }
 
-func (gc *collector) remove(s *Stream) {
+func (gc *collector) remove(s *streamBase) {
 	gc.ctrlCh <- ctrl{s, false} // remove and close workCh
 }
 
@@ -128,13 +128,13 @@ func (gc *collector) Swap(i, j int) {
 
 func (gc *collector) Push(x interface{}) {
 	l := len(gc.heap)
-	s := x.(*Stream)
+	s := x.(*streamBase)
 	s.time.index = l
 	gc.heap = append(gc.heap, s)
 	heap.Fix(gc, s.time.index) // reorder the newly added stream right away
 }
 
-func (gc *collector) update(s *Stream, ticks int) {
+func (gc *collector) update(s *streamBase, ticks int) {
 	s.time.ticks = ticks
 	cmn.Assert(s.time.ticks >= 0)
 	heap.Fix(gc, s.time.index)
@@ -153,7 +153,7 @@ func (gc *collector) do() {
 	for lid, s := range gc.streams {
 		if s.Terminated() {
 			if s.time.inSend.Swap(false) {
-				gc.drain(s)
+				s.streamer.drain()
 				s.time.ticks = 1
 				continue
 			}
@@ -161,12 +161,11 @@ func (gc *collector) do() {
 			s.time.ticks--
 			if s.time.ticks <= 0 {
 				delete(gc.streams, lid)
-				close(s.workCh) // delayed close
-				close(s.cmplCh) // ditto
+				s.streamer.closeSCQ()
 				if s.term.err == nil {
 					s.term.err = errors.New(reasonUnknown)
 				}
-				s.abortPending(s.term.err, true /*completions*/)
+				s.streamer.abortPending(s.term.err, true /*completions*/)
 			}
 		} else if s.sessST.Load() == active {
 			gc.update(s, s.time.ticks-1)
@@ -180,27 +179,9 @@ func (gc *collector) do() {
 		if s.time.inSend.Swap(false) {
 			continue
 		}
-		if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
-			s.workCh <- &Obj{Hdr: ObjHdr{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
-			if verbose {
-				glog.Infof("%s: active => inactive", s)
-			}
-		}
+		s.streamer.idleTick()
 	}
 	// at this point the following must be true for each i = range gc.heap:
 	// 1. heap[i].index == i
 	// 2. heap[i+1].ticks >= heap[i].ticks
-}
-
-// drain terminated stream
-func (gc *collector) drain(s *Stream) {
-	for {
-		select {
-		case streamable := <-s.workCh:
-			obj := streamable.obj() // TODO -- FIXME
-			s.doCmpl(obj, s.term.err)
-		default:
-			return
-		}
-	}
 }

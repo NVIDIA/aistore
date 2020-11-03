@@ -303,7 +303,7 @@ func (sb *Streams) Resync() {
 		for k := 0; k < sb.multiplier; k++ {
 			var (
 				s  string
-				ns = transport.NewStream(sb.client, toURL, &sb.extra)
+				ns = transport.NewObjStream(sb.client, toURL, &sb.extra)
 			)
 			if sb.multiplier > 1 {
 				s = fmt.Sprintf("(%d)", k)

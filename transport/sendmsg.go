@@ -24,7 +24,7 @@ type (
 	}
 	msgoff struct {
 		msg Msg
-		off int64
+		off int
 		ins int // in-send enum
 	}
 )
@@ -44,28 +44,29 @@ func (s *MsgStream) terminate() {
 
 	s.term.mu.Unlock()
 
-	// TODO -- FIXME: un-collect
+	gc.remove(&s.streamBase)
 }
 
 func (s *MsgStream) abortPending(_ error, _ bool) {}
 func (s *MsgStream) errCmpl(err error)            {} // TODO -- FIXME
 func (s *MsgStream) doCmpl(_ streamable, _ error) {}
 func (s *MsgStream) compressed() bool             { return false }
+func (s *MsgStream) resetCompression()            { cmn.Assert(false) }
 
-func (s *MsgStream) doRequest() (err error) {
+func (s *MsgStream) doRequest() error {
 	s.Numcur, s.Sizecur = 0, 0
-	return s.do(s, io.Reader(s))
+	return s.do(s)
 }
 
 func (s *MsgStream) Read(b []byte) (n int, err error) {
 	s.time.inSend.Store(true) // indication for Collector to delay cleanup
 	if s.inSend() {
 		msg := &s.msgoff.msg
+		n, err = s.send(b)
 		if msg.IsLast() {
 			err = io.EOF
-			return
 		}
-		return s.send(b)
+		return
 	}
 repeat:
 	select {
@@ -90,16 +91,16 @@ repeat:
 		num := s.stats.Num.Load()
 		glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
 		err = io.EOF
-		return
 	}
+	return
 }
 
 func (s *MsgStream) send(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.msgoff.off:])
-	s.msgoff.off += int64(n)
-	if s.msgoff.off >= int64(len(s.header)) {
-		cmn.Assert(s.msgoff.off == int64(len(s.header)))
-		s.stats.Offset.Add(s.msgoff.off)
+	s.msgoff.off += n
+	if s.msgoff.off >= len(s.header) {
+		cmn.Assert(s.msgoff.off == len(s.header))
+		s.stats.Offset.Add(int64(s.msgoff.off))
 		if verbose {
 			num := s.stats.Num.Load()
 			glog.Infof("%s: hlen=%d (%d/%d)", s, s.msgoff.off, s.Numcur, num)
@@ -113,8 +114,6 @@ func (s *MsgStream) send(b []byte) (n int, err error) {
 			err = io.EOF
 			s.lastCh.Close()
 		}
-	} else if verbose {
-		glog.Infof("%s: split header: copied %d < %d hlen", s, s.msgoff.off, len(s.header))
 	}
 	return
 }
@@ -128,11 +127,40 @@ func (s *MsgStream) dryrun() {
 	)
 	for {
 		hlen, isObj, err := it.nextProtoHdr()
+		if err == io.EOF {
+			break
+		}
 		cmn.AssertNoErr(err)
 		cmn.Assert(!isObj)
 		_, _ = it.nextMsg(hlen)
 		if err != nil {
 			break
+		}
+	}
+}
+
+// gc: drain terminated stream
+func (s *MsgStream) drain() {
+	for {
+		select {
+		case <-s.workCh:
+		default:
+			return
+		}
+	}
+}
+
+// gc: close SQ
+func (s *MsgStream) closeSCQ() {
+	close(s.workCh)
+}
+
+// gc: post idle tick if idle
+func (s *MsgStream) idleTick() {
+	if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
+		s.workCh <- &Msg{Flags: tickMarker}
+		if verbose {
+			glog.Infof("%s: active => inactive", s)
 		}
 	}
 }

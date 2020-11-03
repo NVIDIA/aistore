@@ -91,9 +91,9 @@ type (
 // object stream //
 ///////////////////
 
-func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
+func NewObjStream(client Client, toURL string, extra *Extra) (s *Stream) {
 	s = &Stream{streamBase: *newStreamBase(client, toURL, extra)}
-
+	s.streamBase.streamer = s
 	if extra != nil {
 		s.callback = extra.Callback
 		if extra.Compressed() {
@@ -105,10 +105,10 @@ func NewStream(client Client, toURL string, extra *Extra) (s *Stream) {
 	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue (SCQ)
 
 	s.wg.Add(2)
-	go s.sendLoop(s, dryrun()) // handle SQ
-	go s.cmplLoop()            // handle SCQ
+	go s.sendLoop(dryrun()) // handle SQ
+	go s.cmplLoop()         // handle SCQ
 
-	gc.ctrlCh <- ctrl{s, true /* collect */}
+	gc.ctrlCh <- ctrl{&s.streamBase, true /* collect */}
 	return
 }
 
@@ -158,13 +158,15 @@ func (s *Stream) Fin() {
 
 func NewMsgStream(client Client, toURL string) (s *MsgStream) {
 	s = &MsgStream{streamBase: *newStreamBase(client, toURL, nil)}
+	s.streamBase.streamer = s
+
 	burst := burst()                  // num messages the caller can post without blocking
 	s.workCh = make(chan *Msg, burst) // Send Qeueue or SQ
 
 	s.wg.Add(1)
-	go s.sendLoop(s, dryrun())
+	go s.sendLoop(dryrun())
 
-	// TODO -- FIXME: collect
+	gc.ctrlCh <- ctrl{&s.streamBase, true /* collect */}
 	return
 }
 
