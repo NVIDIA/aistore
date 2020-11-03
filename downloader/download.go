@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -112,8 +113,6 @@ const (
 	actAbort  = "ABORT"
 	actStatus = "STATUS"
 	actList   = "LIST"
-
-	jobsChSize = 1000
 )
 
 var (
@@ -285,10 +284,15 @@ func (d *Downloader) Download(dJob DlJob) (resp interface{}, err error, statusCo
 	dlStore.setJob(dJob.ID(), dJob)
 
 	select {
-	case d.dispatcher.dispatchDownloadCh <- dJob:
+	case d.dispatcher.downloadCh <- dJob:
 		return nil, nil, http.StatusOK
 	default:
-		return "downloader job queue is full", nil, http.StatusTooManyRequests
+		select {
+		case d.dispatcher.downloadCh <- dJob:
+			return nil, nil, http.StatusOK
+		case <-time.After(cmn.GCO.Get().Timeout.CplaneOperation):
+			return "downloader job queue is full", nil, http.StatusTooManyRequests
+		}
 	}
 }
 
@@ -296,30 +300,20 @@ func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCod
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
-		action:     actAbort,
-		id:         id,
-		responseCh: make(chan *response, 1),
+		action: actAbort,
+		id:     id,
 	}
-	d.dispatcher.adminCh <- req
-
-	// await the response
-	r := <-req.responseCh
-	return r.resp, r.err, r.statusCode
+	return d.dispatcher.dispatchAdminReq(req)
 }
 
 func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
-		action:     actRemove,
-		id:         id,
-		responseCh: make(chan *response, 1),
+		action: actRemove,
+		id:     id,
 	}
-	d.dispatcher.adminCh <- req
-
-	// await the response
-	r := <-req.responseCh
-	return r.resp, r.err, r.statusCode
+	return d.dispatcher.dispatchAdminReq(req)
 }
 
 func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, err error, statusCode int) {
@@ -328,29 +322,19 @@ func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, er
 	req := &request{
 		action:     actStatus,
 		id:         id,
-		responseCh: make(chan *response, 1),
 		onlyActive: onlyActive,
 	}
-	d.dispatcher.adminCh <- req
-
-	// await the response
-	r := <-req.responseCh
-	return r.resp, r.err, r.statusCode
+	return d.dispatcher.dispatchAdminReq(req)
 }
 
 func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
-		action:     actList,
-		regex:      regex,
-		responseCh: make(chan *response, 1),
+		action: actList,
+		regex:  regex,
 	}
-	d.dispatcher.adminCh <- req
-
-	// await the response
-	r := <-req.responseCh
-	return r.resp, r.err, r.statusCode
+	return d.dispatcher.dispatchAdminReq(req)
 }
 
 func (d *Downloader) checkJob(req *request) (*downloadJobInfo, error) {

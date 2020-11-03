@@ -155,7 +155,7 @@ func (j *baseDlJob) AddNotif(n cluster.Notif, job DlJob) {
 }
 
 func (j *baseDlJob) ActiveStats() (*DlStatusResp, error) {
-	resp, err, _ := j.dlXact.JobStatus(j.ID(), true)
+	resp, err, _ := j.dlXact.JobStatus(j.ID(), true /*onlyActive*/)
 	if err != nil {
 		return nil, err
 	}

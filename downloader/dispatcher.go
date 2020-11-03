@@ -27,14 +27,14 @@ type (
 	dispatcher struct {
 		parent *Downloader
 
-		joggers  map[string]*jogger     // mpath -> jogger
+		joggers map[string]*jogger // mpath -> jogger
+
+		mtx      sync.RWMutex           // Protects map defined below.
 		abortJob map[string]*cmn.StopCh // jobID -> abort job chan
 
-		adminCh            chan *request
-		dispatchDownloadCh chan DlJob
+		downloadCh chan DlJob
 
 		stopCh *cmn.StopCh
-		sync.RWMutex
 	}
 )
 
@@ -44,11 +44,10 @@ func newDispatcher(parent *Downloader) *dispatcher {
 		parent:  parent,
 		joggers: make(map[string]*jogger, 8),
 
-		dispatchDownloadCh: make(chan DlJob, jobsChSize),
+		downloadCh: make(chan DlJob),
 
 		stopCh:   cmn.NewStopCh(),
-		abortJob: make(map[string]*cmn.StopCh, jobsChSize),
-		adminCh:  make(chan *request),
+		abortJob: make(map[string]*cmn.StopCh, 100),
 	}
 }
 
@@ -74,28 +73,15 @@ Loop:
 		case <-d.parent.ChanAbort():
 			glog.Infof("%s has been aborted. Exiting...", d.parent.Name())
 			break Loop
-		case req := <-d.adminCh:
-			switch req.action {
-			case actStatus:
-				d.dispatchStatus(req)
-			case actAbort:
-				d.dispatchAbort(req)
-			case actRemove:
-				d.dispatchRemove(req)
-			case actList:
-				d.dispatchList(req)
-			default:
-				cmn.Assertf(false, "%v; %v", req, req.action)
-			}
 		case <-ctx.Done():
 			break Loop
-		case job := <-d.dispatchDownloadCh:
+		case job := <-d.downloadCh:
 			// Start dispatching each job in new goroutine to make sure that
 			// all joggers are busy downloading the tasks (jobs with limits
 			// may not saturate the full downloader throughput).
-			d.Lock()
+			d.mtx.Lock()
 			d.abortJob[job.ID()] = cmn.NewStopCh()
-			d.Unlock()
+			d.mtx.Unlock()
 
 			sema.Acquire()
 			group.Go(func() error {
@@ -136,12 +122,12 @@ func (d *dispatcher) addJogger(mpath string) {
 }
 
 func (d *dispatcher) cleanUpAborted(jobID string) {
-	d.Lock()
+	d.mtx.Lock()
 	if ch, exists := d.abortJob[jobID]; exists {
 		ch.Close()
 		delete(d.abortJob, jobID)
 	}
-	d.Unlock()
+	d.mtx.Unlock()
 }
 
 /*
@@ -323,8 +309,8 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 }
 
 func (d *dispatcher) jobAbortedCh(jobID string) *cmn.StopCh {
-	d.RLock()
-	defer d.RUnlock()
+	d.mtx.RLock()
+	defer d.mtx.RUnlock()
 	if abCh, ok := d.abortJob[jobID]; ok {
 		return abCh
 	}
@@ -395,7 +381,25 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (err
 	}
 }
 
-func (d *dispatcher) dispatchRemove(req *request) {
+func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, err error, statusCode int) {
+	req.responseCh = make(chan *response, 1)
+	switch req.action {
+	case actStatus:
+		d.handleStatus(req)
+	case actAbort:
+		d.handleAbort(req)
+	case actRemove:
+		d.handleRemove(req)
+	case actList:
+		d.handleList(req)
+	default:
+		cmn.Assertf(false, "%v; %v", req, req.action)
+	}
+	r := <-req.responseCh
+	return r.resp, r.err, r.statusCode
+}
+
+func (d *dispatcher) handleRemove(req *request) {
 	jInfo, err := d.parent.checkJob(req)
 	if err != nil {
 		return
@@ -412,7 +416,7 @@ func (d *dispatcher) dispatchRemove(req *request) {
 	req.writeResp(nil)
 }
 
-func (d *dispatcher) dispatchAbort(req *request) {
+func (d *dispatcher) handleAbort(req *request) {
 	_, err := d.parent.checkJob(req)
 	if err != nil {
 		return
@@ -428,7 +432,7 @@ func (d *dispatcher) dispatchAbort(req *request) {
 	req.writeResp(nil)
 }
 
-func (d *dispatcher) dispatchStatus(req *request) {
+func (d *dispatcher) handleStatus(req *request) {
 	var (
 		finishedTasks []TaskDlInfo
 		dlErrors      []TaskErrInfo
@@ -463,7 +467,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 	})
 }
 
-func (d *dispatcher) dispatchList(req *request) {
+func (d *dispatcher) handleList(req *request) {
 	records := dlStore.getList(req.regex)
 	respMap := make(map[string]DlJobInfo)
 	for _, r := range records {
@@ -474,7 +478,6 @@ func (d *dispatcher) dispatchList(req *request) {
 }
 
 func (d *dispatcher) activeTasks(reqID string) []TaskDlInfo {
-	d.RLock()
 	currentTasks := make([]TaskDlInfo, 0, len(d.joggers))
 	for _, j := range d.joggers {
 		task := j.getTask()
@@ -482,7 +485,6 @@ func (d *dispatcher) activeTasks(reqID string) []TaskDlInfo {
 			currentTasks = append(currentTasks, task.ToTaskDlInfo())
 		}
 	}
-	d.RUnlock()
 
 	sort.Sort(TaskInfoByName(currentTasks))
 	return currentTasks
@@ -491,8 +493,6 @@ func (d *dispatcher) activeTasks(reqID string) []TaskDlInfo {
 // pending returns `true` if any joggers has pending tasks for a given `reqID`,
 // `false` otherwise.
 func (d *dispatcher) pending(reqID string) bool {
-	d.RLock()
-	defer d.RUnlock()
 	for _, j := range d.joggers {
 		if j.pending(reqID) {
 			return true
