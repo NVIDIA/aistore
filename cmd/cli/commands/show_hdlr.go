@@ -84,6 +84,7 @@ var (
 		},
 		subcmdShowRebalance: {
 			refreshFlag,
+			allXactionsFlag,
 		},
 		subcmdShowBckProps: {
 			jsonFlag,

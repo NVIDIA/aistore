@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
@@ -267,6 +268,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
+	const numCols = 9
 
 	// run until rebalance is completed
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance}
@@ -298,27 +300,22 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		sort.Strings(sortedIDs)
 
 		fmt.Fprintln(tw, "DaemonID\tRebID\tObjRcv\tSizeRcv\tObjSent\tSizeSent\tStartTime\tEndTime\tAborted")
-		fmt.Fprintln(tw, strings.Repeat("======\t", 9 /* num of columns */))
+		fmt.Fprintln(tw, strings.Repeat("======\t", numCols /* num of columns */))
 		for _, daemonID := range sortedIDs {
-			st := rebStats.GetNodeLastStartedXactStat(daemonID)
-			extRebStats := &stats.ExtRebalanceStats{}
-			if err := cmn.MorphMarshal(st.Ext, &extRebStats); err != nil {
+			if flagIsSet(c, allXactionsFlag) {
+				stats := rebStats[daemonID]
+				sort.Slice(stats, func(i, j int) bool {
+					di, dj := stats[i], stats[j]
+					return dj.ID() < di.ID()
+				})
+				for _, st := range stats {
+					displayRebStats(tw, daemonID, st)
+				}
+				fmt.Fprintln(tw, strings.Repeat("\t", numCols /* num of columns */))
 				continue
 			}
-
-			endTime := "<not completed>"
-			if !st.EndTimeX.IsZero() {
-				endTime = st.EndTimeX.Format("01-02 15:04:05")
-			}
-			startTime := st.StartTimeX.Format("01-02 15:04:05")
-
-			fmt.Fprintf(tw,
-				"%s\t%d\t%d\t%s\t%d\t%s\t%s\t%s\t%t\n",
-				daemonID, extRebStats.RebID,
-				extRebStats.RebRxCount, cmn.B2S(extRebStats.RebRxSize, 2),
-				extRebStats.RebTxCount, cmn.B2S(extRebStats.RebTxSize, 2),
-				startTime, endTime, st.AbortedX,
-			)
+			st := rebStats.GetNodeLastStartedXactStat(daemonID)
+			displayRebStats(tw, daemonID, st)
 		}
 		tw.Flush()
 
@@ -335,4 +332,25 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	}
 
 	return nil
+}
+
+func displayRebStats(tw *tabwriter.Writer, daeID string, st *xaction.BaseXactStatsExt) {
+	extRebStats := &stats.ExtRebalanceStats{}
+	if err := cmn.MorphMarshal(st.Ext, &extRebStats); err != nil {
+		return
+	}
+
+	endTime := "-"
+	if !st.EndTimeX.IsZero() {
+		endTime = st.EndTimeX.Format("01-02 15:04:05")
+	}
+	startTime := st.StartTimeX.Format("01-02 15:04:05")
+
+	fmt.Fprintf(tw,
+		"%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%t\n",
+		daeID, st.ID(),
+		extRebStats.RebRxCount, cmn.B2S(extRebStats.RebRxSize, 2),
+		extRebStats.RebTxCount, cmn.B2S(extRebStats.RebTxSize, 2),
+		startTime, endTime, st.AbortedX,
+	)
 }
