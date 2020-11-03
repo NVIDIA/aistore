@@ -62,7 +62,8 @@ func TestMaintenanceMD(t *testing.T) {
 	msg := &cmn.ActValDecommision{DaemonID: dcmTarget.ID(), SkipRebalance: true}
 	_, err := api.Decommission(baseParams, msg)
 	tassert.CheckError(t, err)
-	_, err = tutils.WaitForNewSmap(t, proxyURL, smap.Version)
+	_, err = tutils.WaitForClusterState(proxyURL, "target decomission", smap.Version, smap.CountProxies(),
+		smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 
 	vmdTargets := countVMDTargets(allTgtsMpaths)
@@ -125,7 +126,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tassert.CheckError(t, err)
 	defer func() {
 		if !restored {
-			tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
+			tutils.RestoreTarget(t, proxyURL, tsi)
 		}
 		tutils.ClearMaintenance(baseParams, tsi)
 	}()
@@ -134,10 +135,10 @@ func TestMaintenanceRebalance(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	smap, err := tutils.WaitForPrimaryProxy(
+	smap, err := tutils.WaitForClusterState(
 		proxyURL,
 		"to target removed from the cluster",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.smap.CountProxies(),
 		m.smap.CountTargets()-1,
 	)
@@ -147,7 +148,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	m.gets()
 	m.ensureNoErrors()
 
-	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
+	tutils.RestoreTarget(t, proxyURL, tsi)
 	restored = true
 	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
 	err = api.WaitForXactionToStart(baseParams, args)
@@ -193,7 +194,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 			m.stopGets()
 		}
 		if !restored {
-			tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
+			tutils.RestoreTarget(t, proxyURL, tsi)
 		}
 		tutils.ClearMaintenance(baseParams, tsi)
 	}()
@@ -202,10 +203,10 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	smap, err := tutils.WaitForPrimaryProxy(
+	smap, err := tutils.WaitForClusterState(
 		proxyURL,
 		"target removed from the cluster",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.smap.CountProxies(),
 		m.smap.CountTargets()-1,
 	)
@@ -216,7 +217,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	stopped = true
 	m.ensureNoErrors()
 
-	tutils.RestoreTarget(t, proxyURL, m.smap, tsi)
+	tutils.RestoreTarget(t, proxyURL, tsi)
 	restored = true
 	tutils.WaitForRebalanceToComplete(t, baseParams, time.Minute)
 }

@@ -238,10 +238,10 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 
-	_, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForClusterState(
 		proxyURL,
 		"target is gone",
-		smap.Version, testing.Verbose(),
+		smap.Version,
 		smap.CountProxies(),
 		smap.CountTargets()-1,
 	)

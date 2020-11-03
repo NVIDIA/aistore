@@ -30,14 +30,13 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	} else {
 		targetCount--
 	}
-	_, err = tutils.WaitForPrimaryProxy(proxyURL, "to proxy decommission",
-		smapOrig.Version, testing.Verbose(), proxyCount, targetCount)
+	_, err = tutils.WaitForClusterState(proxyURL, "to proxy decommission", smapOrig.Version, proxyCount, targetCount)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		err = tutils.JoinCluster(proxyURL, si)
 		tassert.CheckFatal(t, err)
-		_, err = tutils.WaitForPrimaryProxy(proxyURL, "to proxy join",
-			smapOrig.Version, testing.Verbose(), smapOrig.CountProxies(), smapOrig.CountTargets())
+		_, err = tutils.WaitForClusterState(proxyURL, "to proxy join", smapOrig.Version, smapOrig.CountProxies(),
+			smapOrig.CountTargets())
 		tassert.CheckFatal(t, err)
 	}()
 

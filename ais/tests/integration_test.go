@@ -178,8 +178,8 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	proxyURL := tutils.RandomProxyURL(t)
-	m.smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to update smap", m.smap.Version,
-		testing.Verbose(), m.originalProxyCount, m.originalTargetCount-1)
+	m.smap, err = tutils.WaitForClusterState(proxyURL, "to update smap", m.smap.Version, m.originalProxyCount,
+		m.originalTargetCount-1)
 	tassert.CheckError(t, err)
 
 	// Step 2
@@ -373,10 +373,10 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	err = tutils.RemoveNodeFromSmap(m.proxyURL, target2.ID())
 	tassert.CheckFatal(t, err)
 
-	_, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
 		"to targets are removed",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount-2,
 	)
@@ -406,10 +406,10 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	err = tutils.JoinCluster(m.proxyURL, target2)
 	tassert.CheckFatal(t, err)
 
-	_, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
 		"to targets are registered",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
@@ -449,10 +449,10 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	err := tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(t, err)
 
-	_, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
 		"to target is removed",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount-1,
 	)
@@ -488,10 +488,10 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tutils.Logf("Register target %s\n", target1.URL(cmn.NetworkPublic))
 	err = tutils.JoinCluster(m.proxyURL, target1)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
 		"to targets are registered",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
@@ -596,10 +596,10 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	args := &cmn.ActValDecommision{DaemonID: killTarget.ID(), SkipRebalance: true}
 	err = tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(t, err)
-	smap, err := tutils.WaitForPrimaryProxy(
+	smap, err := tutils.WaitForClusterState(
 		m.proxyURL,
 		"target is gone",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount-1,
 	)
@@ -630,10 +630,10 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	wg.Wait()
 
 	// make sure that the cluster has all targets enabled
-	_, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
 		"to join target back",
-		smap.Version, testing.Verbose(),
+		smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
@@ -785,10 +785,10 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		err := tutils.UnregisterNode(m.proxyURL, args)
 		tassert.CheckError(t, err)
 	}
-	tutils.WaitForPrimaryProxy(
+	tutils.WaitForClusterState(
 		m.proxyURL,
 		"to remove targets",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount-unregisterTargetCount,
 	)
@@ -1175,10 +1175,10 @@ func TestAtimeRebalance(t *testing.T) {
 	m.reregisterTarget(target)
 
 	// make sure that the cluster has all targets enabled
-	_, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
 		"to join target back",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)

@@ -532,8 +532,8 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		removed[targets[i].ID()] = targets[i]
 	}
 
-	smap, err := tutils.WaitForPrimaryProxy(proxyURL, "to remove targets",
-		m.smap.Version, testing.Verbose(), m.originalProxyCount, m.originalTargetCount-targetsToUnregister)
+	smap, err := tutils.WaitForClusterState(proxyURL, "to remove targets",
+		m.smap.Version, m.originalProxyCount, m.originalTargetCount-targetsToUnregister)
 	tassert.CheckFatal(t, err)
 	tutils.Logf("The cluster now has %d target(s)\n", smap.CountTargets())
 

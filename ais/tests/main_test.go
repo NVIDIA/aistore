@@ -66,11 +66,7 @@ func waitForCluster() error {
 	}
 
 	tutils.Logln("Waiting for clustermap init...")
-	var cntNodes []int
-	if proxyCnt != 0 || targetCnt != 0 {
-		cntNodes = []int{proxyCnt, targetCnt}
-	}
-	_, err = tutils.WaitForPrimaryProxy(tutils.GetPrimaryURL(), "startup", -1, true, cntNodes...)
+	_, err = tutils.WaitForClusterState(tutils.GetPrimaryURL(), "startup", -1, proxyCnt, targetCnt)
 	if err != nil {
 		return fmt.Errorf("error waiting for cluster startup, err: %v", err)
 	}

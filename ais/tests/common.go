@@ -96,10 +96,10 @@ func (m *ioContext) init() {
 }
 
 func (m *ioContext) assertClusterState() {
-	smap, err := tutils.WaitForPrimaryProxy(
+	smap, err := tutils.WaitForClusterState(
 		m.proxyURL,
 		"to check cluster state",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
@@ -485,10 +485,10 @@ func (m *ioContext) unregisterTarget(forceUnreg ...bool) *cluster.Snode {
 	}
 	err := tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(m.t, err)
-	m.smap, err = tutils.WaitForPrimaryProxy(
+	m.smap, err = tutils.WaitForClusterState(
 		m.proxyURL,
 		"target removed from the cluster",
-		m.smap.Version, testing.Verbose(),
+		m.smap.Version,
 		m.smap.CountProxies(),
 		m.smap.CountTargets()-1,
 	)

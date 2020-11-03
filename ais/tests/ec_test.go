@@ -1729,14 +1729,9 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	}
 
 	// 2. Kill a random target
-	var (
-		removedTarget *cluster.Snode
-		smap          = o.smap
-	)
-	smap, removedTarget = tutils.RemoveTarget(t, proxyURL, smap)
-
+	_, removedTarget := tutils.RemoveTarget(t, proxyURL, o.smap)
 	defer func() {
-		smap = tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
+		tutils.RestoreTarget(t, proxyURL, removedTarget)
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 
@@ -1818,10 +1813,8 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	}
 
 	defer func() {
-		// Restore targets
-		smap = tutils.GetClusterMap(t, proxyURL)
 		for _, target := range removedTargets {
-			smap = tutils.RestoreTarget(t, proxyURL, smap, target)
+			tutils.RestoreTarget(t, proxyURL, target)
 		}
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
@@ -2153,13 +2146,9 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	moveAllFiles(t, swapPathObj2, swapPathObj1)
 
 	// Kill a random target
-	var (
-		removedTarget *cluster.Snode
-		smap          = o.smap
-	)
-	smap, removedTarget = tutils.RemoveTarget(t, proxyURL, smap)
+	_, removedTarget := tutils.RemoveTarget(t, proxyURL, o.smap)
 	// Initiate rebalance
-	tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
+	tutils.RestoreTarget(t, proxyURL, removedTarget)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	newBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
@@ -2550,7 +2539,6 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		smap       = tutils.GetClusterMap(t, proxyURL)
 		o          = ecOptions{
 			minTargets:  5,
 			objCount:    300,
@@ -2570,15 +2558,19 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 			newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
 			defer tutils.DestroyBucket(t, proxyURL, bckEC)
 			defer tutils.WaitForRebalanceToComplete(t, baseParams)
-			ecAndRegularUnregisterWhileRebalancing(t, o, smap, bckEC)
+			ecAndRegularUnregisterWhileRebalancing(t, o, bckEC)
+
+			// Make sure that the next test gets accurate (without any intermediate modifications) smap.
+			o.smap = tutils.GetClusterMap(t, proxyURL)
 		})
 	}
 }
 
-func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cluster.Smap, bckEC cmn.Bck) {
+func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cmn.Bck) {
 	var (
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		smap       = o.smap
 	)
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
@@ -2590,8 +2582,8 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	err := tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to remove target",
-		smap.Version, testing.Verbose(), smap.CountProxies(), smap.CountTargets()-1)
+	_, err = tutils.WaitForClusterState(proxyURL, "to remove target", smap.Version, smap.CountProxies(),
+		smap.CountTargets()-1)
 	registered := false
 
 	// FIXME: There are multiple defers calling JoinCluster, and it's very unclear what will happen when.
@@ -2657,7 +2649,6 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, smap *cl
 	args = &cmn.ActValDecommision{DaemonID: tgtGone.ID(), Force: true}
 	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForPrimaryProxy(proxyURL, "target removed", smap.Version, testing.Verbose())
 	defer tutils.JoinCluster(proxyURL, tgtGone)
 
 	stopCh.Close()

@@ -469,7 +469,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
+	smap, err = tutils.WaitForClusterState(proxyURL, "all mpath disabled", smap.Version, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Restoring target %s mountpaths\n", target.ID())
@@ -478,7 +478,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	_, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
+	_, err = tutils.WaitForClusterState(proxyURL, "all mpath enabled", smap.Version, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceToComplete(t, baseParams)
 }
@@ -528,7 +528,8 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	restore(tcmd, false, "target")
 
-	smap = tutils.WaitNodeRestored(t, smap.Primary.URL(cmn.NetworkPublic), "to restore", target.ID(), smap.Version, testing.Verbose(), proxyCnt, targetCnt)
+	smap = tutils.WaitNodeRestored(t, smap.Primary.URL(cmn.NetworkPublic), "to restore", target.ID(), smap.Version,
+		proxyCnt, targetCnt)
 	if _, ok := smap.Tmap[target.ID()]; !ok {
 		t.Fatalf("Removed target didn't rejoin")
 	}

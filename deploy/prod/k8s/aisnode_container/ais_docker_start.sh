@@ -19,7 +19,7 @@ mkdir /var/log/aismisc
 
 #
 # If /var/ais_env/env exists then the initContainer that runs only on
-# prody pods has determined:
+# proxy pods has determined:
 #  - that we're in initial cluster deployment (proxy clusterIP can't return an smap)
 #  - that the current node is labeled as initial primary proxy
 # We'll pass a hint on to the aisnode instance that it is likely the (initial) primary.
