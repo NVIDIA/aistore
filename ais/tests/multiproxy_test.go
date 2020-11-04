@@ -453,47 +453,27 @@ func joinWhileVoteInProgress(t *testing.T) {
 	if containers.DockerRunning() {
 		t.Skip("Skipping because mocking is not supported for docker cluster")
 	}
-
-	proxyURL := tutils.RandomProxyURL(t)
-	smap := tutils.GetClusterMap(t, proxyURL)
-	tutils.Logf("targets: %d, proxies: %d\n", smap.CountTargets(), smap.CountProxies())
-
-	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
-	oldTargetCnt := smap.CountTargets()
-	oldProxyCnt := smap.CountProxies()
-	tassert.CheckFatal(t, err)
-
-	stopch := make(chan struct{})
-	errCh := make(chan error, 10)
-	mocktgt := &voteRetryMockTarget{
-		voteInProgress: true,
-		errCh:          errCh,
-	}
+	var (
+		proxyURL     = tutils.RandomProxyURL(t)
+		smap         = tutils.GetClusterMap(t, proxyURL)
+		oldTargetCnt = smap.CountTargets()
+		oldProxyCnt  = smap.CountProxies()
+		stopch       = make(chan struct{})
+		errCh        = make(chan error, 10)
+		mocktgt      = &voteRetryMockTarget{
+			voteInProgress: true,
+			errCh:          errCh,
+		}
+	)
+	tutils.Logf("targets: %d, proxies: %d\n", oldTargetCnt, oldProxyCnt)
 
 	go runMockTarget(t, proxyURL, mocktgt, stopch, smap)
 
-	smap, err = tutils.WaitForClusterState(proxyURL, "to synchronize on 'new mock target'",
-		smap.Version, 0, oldTargetCnt+1)
+	_, err := tutils.WaitForClusterState(proxyURL, "to synchronize on 'new mock target'",
+		smap.Version, oldProxyCnt, oldTargetCnt+1)
 	tassert.CheckFatal(t, err)
 
-	oldPrimaryID := smap.Primary.ID()
-	cmd, err := kill(smap.Primary)
-	tassert.CheckFatal(t, err)
-
-	_, err = tutils.WaitForClusterState(newPrimaryURL, "to designate new primary", smap.Version, oldProxyCnt-1,
-		oldTargetCnt+1)
-	tassert.CheckFatal(t, err)
-
-	err = restore(cmd, true, "proxy (prev primary)")
-	tassert.CheckFatal(t, err)
-
-	// check if the previous primary proxy has not yet rejoined the cluster
-	// it should be waiting for the mock target to return voteInProgress=false
-	time.Sleep(5 * time.Second)
-	smap = tutils.GetClusterMap(t, newPrimaryURL)
-	if smap.Primary.ID() != newPrimaryID {
-		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.Primary.ID(), newPrimaryID)
-	}
+	smap = killRestorePrimary(t, proxyURL, false, nil)
 	//
 	// FIXME: election is in progress if and only when xaction(cmn.ActElection) is running -
 	//        simulating the scenario via mocktgt.voteInProgress = true is incorrect
@@ -508,14 +488,6 @@ func joinWhileVoteInProgress(t *testing.T) {
 	//
 	// end of FIXME
 
-	if smap.Primary.ID() != newPrimaryID {
-		t.Fatalf("Wrong primary proxy: %s, expectinge: %s", smap.Primary.ID(), newPrimaryID)
-	}
-
-	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
-		t.Fatalf("Previous primary proxy did not rejoin the cluster")
-	}
-
 	// time to kill the mock target, job well done
 	var v struct{}
 	stopch <- v
@@ -527,7 +499,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	default:
 	}
 
-	_, err = tutils.WaitForClusterState(newPrimaryURL, "to kill mock target", smap.Version, 0, 0)
+	_, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetworkPublic), "to kill mock target", smap.Version, oldProxyCnt, oldTargetCnt)
 	tassert.CheckFatal(t, err)
 }
 
@@ -553,9 +525,6 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tutils.Logf("targets: %d, proxies: %d\n", smap.CountTargets(), smap.CountProxies())
 
-	oldVer := smap.Version
-	oldProxyCnt := smap.CountProxies()
-
 	smap.Version++
 	jsonMap, err := jsoniter.Marshal(smap)
 	tassert.CheckFatal(t, err)
@@ -576,29 +545,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		tassert.CheckFatal(t, err)
 		n--
 	}
-
-	nextProxyID, nextProxyURL, err := chooseNextProxy(smap)
-	tassert.CheckFatal(t, err)
-
-	killedID := smap.Primary.ID()
-	cmd, err := kill(smap.Primary)
-	tassert.CheckFatal(t, err)
-
-	smap, err = tutils.WaitForClusterState(nextProxyURL, "to designate new primary", oldVer, oldProxyCnt-1, 0)
-	tassert.CheckFatal(t, err)
-
-	if smap.Primary == nil {
-		t.Fatalf("Nil Primary in retrieved Smap")
-	}
-
-	if smap.Primary.ID() != nextProxyID {
-		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.Primary.ID(), nextProxyID)
-	}
-
-	err = restore(cmd, false, "proxy (prev primary)")
-	tassert.CheckFatal(t, err)
-
-	tutils.WaitNodeRestored(t, nextProxyURL, "to restore", killedID, smap.Version, 0, 0)
+	killRestorePrimary(t, proxyURL, false, nil)
 }
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
@@ -764,30 +711,14 @@ loop:
 		default:
 		}
 
-		smap := tutils.GetClusterMap(t, proxyURL)
-		_, nextProxyURL, err := chooseNextProxy(smap)
-		currentPrimaryID := smap.Primary.ID()
-		tassert.CheckFatal(t, err)
-
-		cmd, err := kill(smap.Primary)
-		tassert.CheckFatal(t, err)
-
-		// let the workers go to the dying primary for a little while longer to generate errored requests
-		time.Sleep(time.Second)
-
-		smap, err = tutils.WaitForClusterState(nextProxyURL, "to kill primary", smap.Version, smap.CountProxies()-1,
-			smap.CountTargets())
-		tassert.CheckFatal(t, err)
-
-		for _, ch := range proxyurlchs {
-			ch <- nextProxyURL
+		postKill := func(smap *cluster.Smap, newPrimary, _ *cluster.Snode) {
+			// let the workers go to the dying primary for a little while longer to generate errored requests
+			time.Sleep(time.Second)
+			for _, ch := range proxyurlchs {
+				ch <- newPrimary.URL(cmn.NetworkPublic)
+			}
 		}
-
-		err = restore(cmd, false, "proxy (prev primary)")
-		tassert.CheckFatal(t, err)
-
-		tutils.WaitNodeRestored(t, nextProxyURL, "to synchronize on 'primary restored'",
-			currentPrimaryID, smap.Version, smap.CountProxies()+1, smap.CountTargets())
+		killRestorePrimary(t, proxyURL, false, postKill)
 	}
 }
 
