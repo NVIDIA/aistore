@@ -203,7 +203,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	c.msg.BMDVersion = bmd.version()
 
 	// 4. IC
-	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), msg.Action, bck.Bck)
+	nl := xaction.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -337,7 +337,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 		if ctx.needReEC {
 			action = cmn.ActECEncode
 		}
-		nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), action, bck.Bck)
+		nl := xaction.NewXactNL(c.uuid, action, &c.smap.Smap, nil, bck.Bck)
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 		xactID = c.uuid
@@ -436,8 +436,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	c.msg.RMDVersion = rmd.version()
 
 	// 4. IC
-	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(),
-		c.msg.Action, bckFrom.Bck, bckTo.Bck)
+	nl := xaction.NewXactNL(c.uuid, c.msg.Action,
+		&c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: c.smap, nl: nl, query: c.req.Query})
 
@@ -452,15 +452,14 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
 
 	// Register rebalance `nl`
-	nl = xaction.NewXactNL(xaction.RebID(rmd.Version).String(), &c.smap.Smap,
-		c.smap.Tmap.Clone(), cmn.ActRebalance)
+	nl = xaction.NewXactNL(xaction.RebID(rmd.Version).String(),
+		cmn.ActRebalance, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	p.notifs.add(nl)
 
 	// Register resilver `nl`
-	nl = xaction.NewXactNL(rmd.Resilver, &c.smap.Smap,
-		c.smap.Tmap.Clone(), cmn.ActResilver)
+	nl = xaction.NewXactNL(rmd.Resilver, cmn.ActResilver, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	p.notifs.add(nl)
@@ -532,7 +531,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	}
 
 	// 4. IC
-	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), msg.Action, bckFrom.Bck, bckTo.Bck)
+	nl := xaction.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bckFrom.Bck, bckTo.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -646,7 +645,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	c.msg.BMDVersion = bmd.version()
 
 	// 5. IC
-	nl := xaction.NewXactNL(c.uuid, &c.smap.Smap, c.smap.Tmap.Clone(), msg.Action, bck.Bck)
+	nl := xaction.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bck.Bck)
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 

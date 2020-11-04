@@ -99,7 +99,7 @@ type (
 	}
 )
 
-func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string, progressInterval time.Duration,
+func NewNLB(uuid string, action string, smap *cluster.Smap, srcs cluster.NodeMap, progressInterval time.Duration,
 	bck ...cmn.Bck) *NotifListenerBase {
 	cmn.Assert(len(srcs) != 0)
 	nlb := &NotifListenerBase{
@@ -112,7 +112,7 @@ func NewNLB(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string
 	nlb.Common.Action = action
 	nlb.Common.SmapVersion = smap.Version
 	nlb.Common.Bck = bck
-	nlb.ActiveSrcs = srcs.Clone()
+	nlb.ActiveSrcs = srcs.ActiveMap()
 	return nlb
 }
 

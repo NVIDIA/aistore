@@ -35,13 +35,13 @@ func NewQueryListener(uuid string, smap *cluster.Smap, msg *InitMsg) (*NotifList
 	}
 
 	// Ensure same order on all nodes
-	targets := smap.Tmap.Nodes()
+	targets := smap.Tmap.ActiveNodes()
 	sort.SliceStable(targets, func(i, j int) bool {
 		return targets[i].DaemonID < targets[j].DaemonID
 	})
 	nl := &NotifListenerQuery{
-		NotifXactListener: *xaction.NewXactNL(uuid, smap, smap.Tmap.Clone(),
-			cmn.ActQueryObjects, msg.QueryMsg.From.Bck),
+		NotifXactListener: *xaction.NewXactNL(uuid,
+			cmn.ActQueryObjects, smap, nil, msg.QueryMsg.From.Bck),
 		WorkersCnt: msg.WorkersCnt,
 		Targets:    targets,
 	}

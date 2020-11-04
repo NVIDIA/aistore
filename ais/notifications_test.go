@@ -138,7 +138,7 @@ var _ = Describe("Notifications xaction test", func() {
 
 	BeforeEach(func() {
 		n = testNotifs()
-		nl = xaction.NewXactNL(xactID, &smap.Smap, targets, cmn.ActECEncode)
+		nl = xaction.NewXactNL(xactID, cmn.ActECEncode, &smap.Smap, targets)
 	})
 
 	Describe("handleMsg", func() {
@@ -214,7 +214,7 @@ var _ = Describe("Notifications xaction test", func() {
 	Describe("ListenSmapChanged", func() {
 		It("should mark xaction Aborted when node not in smap", func() {
 			notifiers := getNodeMap(target1ID, target2ID)
-			nl = xaction.NewXactNL(xactID, &smap.Smap, notifiers, cmn.ActECEncode)
+			nl = xaction.NewXactNL(xactID, cmn.ActECEncode, &smap.Smap, notifiers)
 			n = testNotifs()
 			n.add(nl)
 

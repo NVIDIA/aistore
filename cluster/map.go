@@ -393,18 +393,24 @@ func (m *Smap) DefaultICSize() int { return icGroupSize }
 
 func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaemonID] = snode }
 
-func (m NodeMap) Clone() (clone NodeMap) {
+func (m NodeMap) ActiveMap() (clone NodeMap) {
 	clone = make(NodeMap, len(m))
 	for id, node := range m {
+		if node.InMaintenance() {
+			continue
+		}
 		clone[id] = node
 	}
 	return
 }
 
-func (m NodeMap) Nodes() []*Snode {
+func (m NodeMap) ActiveNodes() []*Snode {
 	snodes := make([]*Snode, 0, len(m))
-	for _, t := range m {
-		snodes = append(snodes, t)
+	for _, node := range m {
+		if node.InMaintenance() {
+			continue
+		}
+		snodes = append(snodes, node)
 	}
 	return snodes
 }

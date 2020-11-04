@@ -1099,13 +1099,16 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		var nl nl.NotifListener
 		smsg.UUID = cmn.GenUUID()
 		if locationIsAIS || smsg.NeedLocalMD() {
-			nl = xaction.NewXactNL(smsg.UUID, &smap.Smap, smap.Tmap.Clone(),
-				cmn.ActListObjects, bck.Bck)
+			nl = xaction.NewXactNL(smsg.UUID,
+				cmn.ActListObjects, &smap.Smap, nil, bck.Bck)
 		} else {
 			// random target to execute `list-objects` on a Cloud bucket
 			for sid, si := range smap.Tmap {
-				nl = xaction.NewXactNL(smsg.UUID, &smap.Smap, cluster.NodeMap{sid: si},
-					cmn.ActListObjects, bck.Bck)
+				if si.InMaintenance() {
+					continue
+				}
+				nl = xaction.NewXactNL(smsg.UUID, cmn.ActListObjects,
+					&smap.Smap, cluster.NodeMap{sid: si}, bck.Bck)
 				break
 			}
 		}
@@ -1978,7 +1981,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		timeout = cmn.DefaultTimeout
 	}
 
-	nlb := xaction.NewXactNL(aisMsg.UUID, &smap.Smap, smap.Tmap.Clone(), aisMsg.Action)
+	nlb := xaction.NewXactNL(aisMsg.UUID, aisMsg.Action, &smap.Smap, nil)
 	nlb.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
 	results = p.bcastToGroup(bcastArgs{
@@ -3016,7 +3019,7 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 	if ctx.rmd != nil && ctx.nsi.IsTarget() {
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
-			&clone.Smap, clone.Tmap, cmn.ActRebalance)
+			cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		p.notifs.add(nl)
@@ -3130,7 +3133,7 @@ func (p *proxyrunner) _unregNodeFinal(ctx *smapModifier, clone *smapX) {
 
 	if ctx.rmd != nil {
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
-			&clone.Smap, clone.Tmap, cmn.ActRebalance)
+			cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 		p.notifs.add(nl)
@@ -3420,7 +3423,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Action == cmn.ActXactStart {
 			smap := p.owner.smap.get()
-			nl := xaction.NewXactNL(xactMsg.ID, &smap.Smap, smap.Tmap.Clone(), xactMsg.Kind)
+			nl := xaction.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
 			p.ic.registerEqual(regIC{smap: smap, nl: nl})
 			w.Write([]byte(xactMsg.ID))
 		}
@@ -3547,8 +3550,8 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 	wg := p.metasyncer.sync(revsPair{clone, p.newAisMsg(ctx.msg, nil, nil)})
-	nl := xaction.NewXactNL(xaction.RebID(clone.Version).String(), &ctx.smap.Smap,
-		ctx.smap.Tmap.Clone(), cmn.ActRebalance)
+	nl := xaction.NewXactNL(xaction.RebID(clone.Version).String(),
+		cmn.ActRebalance, &ctx.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	if ctx.rebCB != nil {
 		nl.F = ctx.rebCB
@@ -3639,14 +3642,13 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	// Register `nl` for rebalance is metasynced.
 	smap := p.owner.smap.get()
 	if smap.IsIC(p.si) {
-		nl := xaction.NewXactNL(xaction.RebID(newRMD.Version).String(), &smap.Smap,
-			smap.Tmap.Clone(), cmn.ActRebalance)
+		nl := xaction.NewXactNL(xaction.RebID(newRMD.Version).String(),
+			cmn.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
 		p.notifs.add(nl)
 
 		if newRMD.Resilver != "" {
-			nl = xaction.NewXactNL(newRMD.Resilver, &smap.Smap,
-				smap.Tmap.Clone(), cmn.ActResilver)
+			nl = xaction.NewXactNL(newRMD.Resilver, cmn.ActResilver, &smap.Smap, nil)
 			nl.SetOwner(equalIC)
 			p.notifs.add(nl)
 		}

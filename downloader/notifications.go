@@ -30,10 +30,10 @@ var (
 	_ cluster.Notif    = &NotifDownload{} // interface guard
 )
 
-func NewDownloadNL(uuid string, smap *cluster.Smap, srcs cluster.NodeMap, action string,
+func NewDownloadNL(uuid string, action string, smap *cluster.Smap,
 	progressInterval time.Duration, bck ...cmn.Bck) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
-		NotifListenerBase: *nl.NewNLB(uuid, smap, srcs, action, progressInterval, bck...),
+		NotifListenerBase: *nl.NewNLB(uuid, action, smap, smap.Tmap.ActiveMap(), progressInterval, bck...),
 	}
 }
 
