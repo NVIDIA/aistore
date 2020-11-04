@@ -225,6 +225,7 @@ test:kube-aisloader:
   script:
     - make aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
+    - sleep 10 # Give some time for the cluster to stabilize.
     - status=0
     - BUCKET="test" FLAGS="--duration=2m --etl" make test-aisloader || status=$?
     - make kill
