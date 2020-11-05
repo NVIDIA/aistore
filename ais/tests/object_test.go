@@ -1518,7 +1518,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 
 func TestOperationsWithRanges(t *testing.T) {
 	const (
-		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
+		commonPrefix = "tst" // Object full name: <bucket>/<commonPrefix>/<a-####|b-####>
 		objCnt       = 50    // NOTE: Must by positive multiple of 10.
 		objSize      = cmn.KiB
 	)
@@ -1539,21 +1539,21 @@ func TestOperationsWithRanges(t *testing.T) {
 				)
 
 				for i := 0; i < objCnt/2; i++ {
-					fname := fmt.Sprintf("a-%04d", i)
-					objList = append(objList, fname)
-					fname = fmt.Sprintf("b-%04d", i)
-					objList = append(objList, fname)
+					objList = append(objList,
+						fmt.Sprintf("a-%04d", i),
+						fmt.Sprintf("b-%04d", i),
+					)
 				}
 				tutils.PutObjsFromList(proxyURL, bck.Bck, commonPrefix, objSize, objList, errCh, objsPutCh, cksumType)
-				tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
+				tassert.SelectErr(t, errCh, "put", true /*errIsFatal*/)
 				close(objsPutCh)
 
 				tests := []struct {
-					// title to print out while testing
+					// Title to print out while testing.
 					name string
-					// a range of file IDs
+					// A range of objects.
 					rangeStr string
-					// total number of objects expected to be deleted/evicted
+					// Total number of objects expected to be deleted/evicted.
 					delta int
 				}{
 					{
@@ -1584,9 +1584,14 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 
 				var (
-					totalFiles = objCnt
-					baseParams = tutils.BaseAPIParams(proxyURL)
+					totalFiles  = objCnt
+					baseParams  = tutils.BaseAPIParams(proxyURL)
+					waitTimeout = 10 * time.Second
 				)
+
+				if bck.IsCloud() {
+					waitTimeout = 40 * time.Second
+				}
 
 				for idx, test := range tests {
 					tutils.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
@@ -1610,7 +1615,7 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 
-					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: 10 * time.Second}
+					args := api.XactReqArgs{ID: xactID, Kind: kind, Timeout: waitTimeout}
 					_, err = api.WaitForXaction(baseParams, args)
 					tassert.CheckFatal(t, err)
 
