@@ -20,6 +20,9 @@ import (
 // XactTransferBck transfers a bucket locally within the same cluster. If xact.dp is empty, transfer bck is just copy
 // bck. If xact.dp is not empty, transfer bck applies specified transformation to each object.
 
+// Try to balance between downsides of synchronous coping and too many goroutines and concurrent fs access.
+const transferBckParallelCnt = 8
+
 type (
 	transferBckProvider struct {
 		xact *XactTransferBck
@@ -90,6 +93,7 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 		dp:      dp,
 		meta:    meta,
 	}
+
 	xact.xactBckBase = *newXactBckBase(id, kind, &mpather.JoggerGroupOpts{
 		Bck:      bckFrom.Bck,
 		T:        t,
@@ -97,7 +101,9 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 		VisitObj: xact.copyObject,
 		Slab:     slab,
 		Throttle: true,
+		Parallel: transferBckParallelCnt,
 	})
+
 	return xact
 }
 
@@ -136,7 +142,7 @@ func (r *XactTransferBck) copyObject(lom *cluster.LOM, buf []byte) error {
 		}
 	)
 
-	// TODO: if dry-run show to-be-copied objects
+	// TODO: If dry-run show to-be-copied objects.
 	copied, size, err := r.Target().CopyObject(lom, params, false /*localOnly*/)
 	if err != nil {
 		if cmn.IsErrOOS(err) {

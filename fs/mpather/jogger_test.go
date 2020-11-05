@@ -5,10 +5,13 @@
 package mpather_test
 
 import (
+	"bytes"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
@@ -18,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 func TestJoggerGroup(t *testing.T) {
@@ -57,6 +61,68 @@ func TestJoggerGroup(t *testing.T) {
 
 	err := jg.Stop()
 	tassert.CheckFatal(t, err)
+}
+
+func TestJoggerGroupParallel(t *testing.T) {
+	var (
+		parallelOptions = []int{2, 8, 24}
+		objectsCnt      = 1000
+		mpathsCnt       = 3
+
+		desc = tutils.ObjectsDesc{
+			CTs: []tutils.ContentTypeDesc{
+				{Type: fs.ObjectType, ContentCnt: objectsCnt},
+			},
+			MountpathsCnt: mpathsCnt,
+			ObjectSize:    cmn.KiB,
+		}
+		out     = tutils.PrepareObjects(t, desc)
+		counter *atomic.Int32
+	)
+	defer os.RemoveAll(out.Dir)
+
+	slab, err := tutils.MMSA.GetSlab(memsys.PageSize)
+	tassert.CheckFatal(t, err)
+
+	baseJgOpts := &mpather.JoggerGroupOpts{
+		T:    out.T,
+		Bck:  out.Bck,
+		CTs:  []string{fs.ObjectType},
+		Slab: slab,
+		VisitObj: func(lom *cluster.LOM, buf []byte) error {
+			tassert.Errorf(t, lom.Size() == 0, "expected LOM to not be loaded")
+			b := bytes.NewBuffer(buf[:0])
+			_, err = b.WriteString(lom.FQN)
+			tassert.CheckFatal(t, err)
+
+			if rand.Intn(objectsCnt/mpathsCnt)%20 == 0 {
+				// Sometimes sleep a while, to check if in this time some other goroutine does not populate the buffer.
+				time.Sleep(10 * time.Millisecond)
+			}
+			fqn := b.String()
+			// Checks that there are no concurrent writes on the same buffer.
+			tassert.Errorf(t, fqn == lom.FQN, "expected the correct FQN %q to be read, got %q", fqn, b.String())
+			counter.Inc()
+			return nil
+		},
+	}
+
+	for _, baseJgOpts.Parallel = range parallelOptions {
+		t.Run(fmt.Sprintf("TestJoggerGroupParallel/%d", baseJgOpts.Parallel), func(t *testing.T) {
+			counter = atomic.NewInt32(0)
+			jg := mpather.NewJoggerGroup(baseJgOpts)
+			jg.Run()
+			<-jg.ListenFinished()
+
+			tassert.Errorf(
+				t, int(counter.Load()) == len(out.FQNs[fs.ObjectType]),
+				"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjectType]),
+			)
+
+			err := jg.Stop()
+			tassert.CheckFatal(t, err)
+		})
+	}
 }
 
 func TestJoggerGroupLoad(t *testing.T) {
@@ -130,6 +196,60 @@ func TestJoggerGroupError(t *testing.T) {
 		t, int(counter.Load()) <= desc.MountpathsCnt,
 		"joggers should not visit more than #mountpaths objects",
 	)
+
+	err := jg.Stop()
+	tassert.Errorf(t, err != nil && strings.Contains(err.Error(), "upss"), "expected an error")
+}
+
+// This test checks if single LOM error will cause all joggers to stop.
+func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
+	var (
+		totalObjCnt = 5000
+		mpathsCnt   = 4
+		failAt      = int32(totalObjCnt/mpathsCnt) / 5 // Fail more or less at 20% of objects jogged.
+		desc        = tutils.ObjectsDesc{
+			CTs: []tutils.ContentTypeDesc{
+				{Type: fs.ObjectType, ContentCnt: totalObjCnt},
+			},
+			MountpathsCnt: mpathsCnt,
+			ObjectSize:    cmn.KiB,
+		}
+		out = tutils.PrepareObjects(t, desc)
+
+		mpaths, _   = fs.Get()
+		counters    = make(map[string]*atomic.Int32, len(mpaths))
+		failOnMpath *fs.MountpathInfo
+	)
+	defer os.RemoveAll(out.Dir)
+
+	for _, failOnMpath = range mpaths {
+		counters[failOnMpath.Path] = atomic.NewInt32(0)
+	}
+
+	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+		T:   out.T,
+		Bck: out.Bck,
+		CTs: []string{fs.ObjectType},
+		VisitObj: func(lom *cluster.LOM, buf []byte) error {
+			cnt := counters[lom.ParsedFQN.MpathInfo.Path].Inc()
+
+			// Fail only once, on one mpath.
+			if lom.ParsedFQN.MpathInfo.Path == failOnMpath.Path && cnt == failAt {
+				return fmt.Errorf("upsss")
+			}
+			return nil
+		},
+	})
+
+	jg.Run()
+	<-jg.ListenFinished()
+
+	for mpath, counter := range counters {
+		expectedMax := totalObjCnt / mpathsCnt / 2
+		// Expected to visit at most 50% of mpath objects, when error happened at 20% of objects of some mpath.
+		tassert.Errorf(t, int(counter.Load()) <= expectedMax, "joggers on mpath %q expected to visit at most %d, visited %d",
+			mpath, expectedMax, counter.Load())
+	}
 
 	err := jg.Stop()
 	tassert.Errorf(t, err != nil && strings.Contains(err.Error(), "upss"), "expected an error")

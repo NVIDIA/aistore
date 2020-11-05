@@ -46,6 +46,7 @@ type (
 		IncludeCopy           bool     // Traverses LOMs that are copies.
 		SkipGloballyMisplaced bool     // Skips content types that are globally misplaced.
 		Throttle              bool     // Determines if the jogger should throttle itself.
+		Parallel              int      // How many parallel calls each jogger should execute.
 
 		// Additional function which should be set by JoggerGroup and called
 		// by each of the jogger if they finish.
@@ -66,15 +67,22 @@ type (
 	// jogger is being run on each mountpath and executes fs.Walk which call
 	// provided callback.
 	jogger struct {
-		buf []byte
+		bufs [][]byte
 
 		ctx       context.Context
 		opts      *JoggerGroupOpts
 		mpathInfo *fs.MountpathInfo
 		config    *cmn.Config
 		stopCh    *cmn.StopCh
+		syncGroup *joggerSyncGroup
 
 		num int64
+	}
+
+	joggerSyncGroup struct {
+		sema   chan int // Positional number of a buffer to use by a goroutine.
+		group  *errgroup.Group
+		cancel context.CancelFunc
 	}
 )
 
@@ -124,12 +132,31 @@ func (jg *JoggerGroup) markFinished() {
 }
 
 func newJogger(ctx context.Context, opts *JoggerGroupOpts, mpathInfo *fs.MountpathInfo) *jogger {
+	var syncGroup *joggerSyncGroup
+	if opts.Parallel > 1 {
+		var (
+			group  *errgroup.Group
+			cancel context.CancelFunc
+		)
+		ctx, cancel = context.WithCancel(ctx)
+		group, ctx = errgroup.WithContext(ctx)
+		syncGroup = &joggerSyncGroup{
+			sema:   make(chan int, opts.Parallel),
+			group:  group,
+			cancel: cancel,
+		}
+		for i := 0; i < opts.Parallel; i++ {
+			syncGroup.sema <- i
+		}
+	}
+
 	return &jogger{
 		ctx:       ctx,
 		opts:      opts,
 		mpathInfo: mpathInfo,
 		config:    cmn.GCO.Get(),
 		stopCh:    cmn.NewStopCh(),
+		syncGroup: syncGroup,
 	}
 }
 
@@ -139,8 +166,20 @@ func (j *jogger) run() error {
 	glog.Infof("%s started", j)
 
 	if j.opts.Slab != nil {
-		j.buf = j.opts.Slab.Alloc()
-		defer j.opts.Slab.Free(j.buf)
+		if j.opts.Parallel <= 1 {
+			j.bufs = [][]byte{j.opts.Slab.Alloc()}
+		} else {
+			j.bufs = make([][]byte, j.opts.Parallel)
+			for i := 0; i < j.opts.Parallel; i++ {
+				j.bufs[i] = j.opts.Slab.Alloc()
+			}
+		}
+
+		defer func() {
+			for _, buf := range j.bufs {
+				j.opts.Slab.Free(buf)
+			}
+		}()
 	}
 
 	var (
@@ -168,7 +207,19 @@ func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
 		Callback: j.jog,
 		Sorted:   false,
 	}
-	if err := fs.Walk(opts); err != nil {
+
+	err = fs.Walk(opts)
+	if j.syncGroup != nil {
+		// If callbacks are executed in goroutines, fs.Walk can stop before the callbacks return.
+		// We have to wait for them and check if there was any error.
+		if err == nil {
+			err = j.syncGroup.waitForAsyncTasks()
+		} else {
+			j.syncGroup.abortAsyncTasks()
+		}
+	}
+
+	if err != nil {
 		if errors.As(err, &cmn.AbortedError{}) {
 			glog.Infof("%s stopping traversal: %v", j, err)
 			return true, nil
@@ -179,6 +230,8 @@ func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
 }
 
 func (j *jogger) jog(fqn string, de fs.DirEntry) error {
+	var bufPosition int
+
 	if de.IsDir() {
 		return nil
 	}
@@ -187,6 +240,39 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		return err
 	}
 
+	if j.syncGroup == nil {
+		if err := j.visitFQN(fqn, j.getBuf(0)); err != nil {
+			return err
+		}
+	} else {
+		select {
+		case bufPosition = <-j.syncGroup.sema:
+			break
+		case <-j.ctx.Done():
+			return j.ctx.Err()
+		}
+
+		j.syncGroup.group.Go(func() error {
+			defer func() {
+				// NOTE: There is no need to select j.ctx.Done() as put to this chanel is immediate.
+				j.syncGroup.sema <- bufPosition
+			}()
+			return j.visitFQN(fqn, j.getBuf(bufPosition))
+		})
+	}
+
+	if j.opts.Throttle {
+		j.num++
+		if (j.num % throttleNumObjects) == 0 {
+			j.throttle()
+		} else {
+			runtime.Gosched()
+		}
+	}
+	return nil
+}
+
+func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	ct, err := cluster.NewCTFromFQN(fqn, j.opts.T.Bowner())
 	if err != nil {
 		return err
@@ -209,27 +295,18 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		if err := lom.Init(j.opts.Bck, j.config); err != nil {
 			return err
 		}
-		if err := j.visitObj(lom); err != nil {
+		if err := j.visitObj(lom, buf); err != nil {
 			return err
 		}
 	default:
-		if err := j.visitCT(ct); err != nil {
+		if err := j.visitCT(ct, buf); err != nil {
 			return err
-		}
-	}
-
-	if j.opts.Throttle {
-		j.num++
-		if (j.num % throttleNumObjects) == 0 {
-			j.throttle()
-		} else {
-			runtime.Gosched()
 		}
 	}
 	return nil
 }
 
-func (j *jogger) visitObj(lom *cluster.LOM) error {
+func (j *jogger) visitObj(lom *cluster.LOM, buf []byte) error {
 	if j.opts.DoLoad > noLoad {
 		if j.opts.DoLoad == LoadRLock {
 			lom.Lock(false)
@@ -245,20 +322,36 @@ func (j *jogger) visitObj(lom *cluster.LOM) error {
 			return nil
 		}
 	}
-	return j.opts.VisitObj(lom, j.buf)
+	return j.opts.VisitObj(lom, buf)
 }
 
-func (j *jogger) visitCT(ct *cluster.CT) error { return j.opts.VisitCT(ct, j.buf) }
+func (j *jogger) visitCT(ct *cluster.CT, buf []byte) error { return j.opts.VisitCT(ct, buf) }
+
+func (j *jogger) getBuf(position int) []byte {
+	if j.bufs == nil {
+		return nil
+	}
+	return j.bufs[position]
+}
 
 func (j *jogger) checkStopped() error {
 	select {
 	case <-j.ctx.Done(): // Some other worker has exited with error and canceled context.
-		return nil
+		return j.ctx.Err()
 	case <-j.stopCh.Listen(): // Worker has been aborted.
 		return cmn.NewAbortedError(j.String())
 	default:
 		return nil
 	}
+}
+
+func (sg *joggerSyncGroup) waitForAsyncTasks() error {
+	return sg.group.Wait()
+}
+
+func (sg *joggerSyncGroup) abortAsyncTasks() error {
+	sg.cancel()
+	return sg.waitForAsyncTasks()
 }
 
 func (j *jogger) throttle() {

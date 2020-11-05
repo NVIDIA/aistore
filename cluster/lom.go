@@ -389,6 +389,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	if srcCksum != nil {
 		cksumType = srcCksum.Type()
 	}
+
 	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, cksumType)
 	if err != nil {
 		return
