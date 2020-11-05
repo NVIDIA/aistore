@@ -314,6 +314,7 @@ func (s *Stream) dryrun() {
 			// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
 			err := cmn.DrainReader(obj)
 			cmn.AssertNoErr(err)
+			FreeRecv(obj)
 			continue
 		}
 		if err != nil {

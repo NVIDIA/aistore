@@ -560,7 +560,10 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 			return
 		}
 
-		defer cmn.DrainReader(object) // drain to prevent unnecessary stream errors
+		defer func() {
+			cmn.DrainReader(object) // drain to prevent unnecessary stream errors
+			transport.FreeRecv(object)
+		}()
 
 		unpacker := cmn.NewUnpacker(hdr.Opaque)
 		req := buildingShardInfo{}
@@ -585,7 +588,10 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 			return
 		}
 
-		defer cmn.DrainReader(object) // drain to prevent unnecessary stream errors
+		defer func() {
+			cmn.DrainReader(object) // drain to prevent unnecessary stream errors
+			transport.FreeRecv(object)
+		}()
 
 		req := RemoteResponse{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {

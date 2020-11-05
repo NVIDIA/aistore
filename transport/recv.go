@@ -31,13 +31,11 @@ type (
 	iterator struct {
 		trname    string
 		body      io.Reader
-		fbuf      *fixedBuffer // when extraBuffering == true
 		headerBuf []byte
 	}
 	objReader struct {
 		body io.Reader
 		off  int64
-		fbuf *fixedBuffer // ditto
 		hdr  ObjHdr
 	}
 	handler struct {
@@ -49,25 +47,9 @@ type (
 		hkName      string   // house-keeping name
 		mem         *memsys.MMSA
 	}
-	fixedBuffer struct {
-		slab *memsys.Slab
-		buf  []byte
-		roff int
-		woff int
-	}
 )
 
-const (
-	cleanupInterval = time.Minute * 10
-
-	// compressed streams perf tunables
-	slabBufferSize = memsys.DefaultBufSize
-	extraBuffering = false
-)
-
-//
-// globals
-//
+const cleanupInterval = time.Minute * 10
 
 var (
 	mu       *sync.RWMutex
@@ -86,7 +68,6 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	var (
 		reader    io.Reader = r.Body
 		lz4Reader *lz4.Reader
-		fbuf      *fixedBuffer
 		trname    = path.Base(r.URL.Path)
 	)
 	mu.RLock()
@@ -102,9 +83,6 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		cmn.Assert(compressionType == cmn.LZ4Compression)
 		lz4Reader = lz4.NewReader(r.Body)
 		reader = lz4Reader
-		if extraBuffering {
-			fbuf = newFixedBuffer(h.mem)
-		}
 	}
 	// session
 	sessID, err := strconv.ParseInt(r.Header.Get(cmn.HeaderSessID), 10, 64)
@@ -122,7 +100,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	stats := statsif.(*Stats)
 
 	// Rx loop
-	it := &iterator{trname: trname, body: reader, fbuf: fbuf, headerBuf: make([]byte, maxHeaderSize)}
+	it := &iterator{trname: trname, body: reader, headerBuf: make([]byte, maxHeaderSize)}
 	for {
 		var (
 			obj *objReader
@@ -176,9 +154,6 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		if lz4Reader != nil {
 			lz4Reader.Reset(nil)
 		}
-		if fbuf != nil {
-			fbuf.Free()
-		}
 		return
 	}
 }
@@ -225,26 +200,7 @@ func (h *handler) cleanupOldSessions() time.Duration {
 // iterator //
 //////////////
 
-func (it *iterator) Read(p []byte) (n int, err error) {
-	if it.fbuf == nil {
-		return it.body.Read(p)
-	}
-	if it.fbuf.Len() != 0 {
-		goto read
-	}
-nextchunk:
-	it.fbuf.Reset()
-	n, err = it.body.Read(it.fbuf.Bytes())
-	it.fbuf.Written(n)
-read:
-	n, _ = it.fbuf.Read(p)
-	if err == nil && n < len(p) {
-		debug.Assert(it.fbuf.Len() == 0)
-		p = p[n:]
-		goto nextchunk
-	}
-	return
-}
+func (it *iterator) Read(p []byte) (n int, err error) { return it.body.Read(p) }
 
 // nextProtoHdr receives and handles 16 bytes of the protocol header (not to confuse with transport.Obj.Hdr)
 // returns hlen, which is header length - for transport.Obj, and message length - for transport.Msg
@@ -289,7 +245,11 @@ func (it *iterator) nextObj(hlen int) (obj *objReader, err error) {
 		err = io.EOF
 		return
 	}
-	obj = &objReader{body: it.body, fbuf: it.fbuf, hdr: hdr}
+	if obj = allocRecv(); obj != nil {
+		*obj = objReader{body: it.body, hdr: hdr}
+	} else {
+		obj = &objReader{body: it.body, hdr: hdr}
+	}
 	return
 }
 
@@ -319,17 +279,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	if rem < int64(len(b)) {
 		b = b[:int(rem)]
 	}
-	if obj.fbuf != nil && obj.fbuf.Len() > 0 {
-		n, _ = obj.fbuf.Read(b)
-		if n < len(b) {
-			b = b[n:]
-			nr, er := obj.body.Read(b)
-			n += nr
-			err = er
-		}
-	} else {
-		n, err = obj.body.Read(b)
-	}
+	n, err = obj.body.Read(b)
 	obj.off += int64(n)
 	switch err {
 	case nil:
@@ -350,30 +300,6 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 func (obj *objReader) String() string {
 	return fmt.Sprintf("%s/%s(size=%d)", obj.hdr.Bck, obj.hdr.ObjName, obj.hdr.ObjAttrs.Size)
 }
-
-/////////////////
-// fixedBuffer //
-/////////////////
-
-func newFixedBuffer(mem *memsys.MMSA) (bb *fixedBuffer) {
-	if mem == nil {
-		mem = memsys.DefaultPageMM()
-	}
-	buf, slab := mem.Alloc(slabBufferSize)
-	return &fixedBuffer{slab: slab, buf: buf}
-}
-
-func (bb *fixedBuffer) Read(p []byte) (n int, err error) {
-	n = copy(p, bb.buf[bb.roff:bb.woff])
-	bb.roff += n
-	return
-}
-
-func (bb *fixedBuffer) Bytes() []byte { return bb.buf }
-func (bb *fixedBuffer) Len() int      { return bb.woff - bb.roff }
-func (bb *fixedBuffer) Reset()        { bb.roff, bb.woff = 0, 0 }
-func (bb *fixedBuffer) Written(n int) { bb.woff += n }
-func (bb *fixedBuffer) Free()         { bb.slab.Free(bb.buf) }
 
 /////////////////////////////////////////
 // obj-header/message de-serialization //
