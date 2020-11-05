@@ -34,7 +34,8 @@ type (
 	}
 )
 
-var _ sort.Interface = &alphaByKey{}
+// interface guard
+var _ sort.Interface = (*alphaByKey)(nil)
 
 func (s *alphaByKey) Less(i, j int) bool {
 	var (

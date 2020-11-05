@@ -137,10 +137,10 @@ type (
 
 // interface guard
 var (
-	_ cmn.ConfigListener = &statsRunner{}
-	_ Tracker            = &Prunner{}
-	_ Tracker            = &Trunner{}
-	_ cluster.XactStats  = &RebalanceTargetStats{}
+	_ cmn.ConfigListener = (*statsRunner)(nil)
+	_ Tracker            = (*Prunner)(nil)
+	_ Tracker            = (*Trunner)(nil)
+	_ cluster.XactStats  = (*RebalanceTargetStats)(nil)
 )
 
 //
@@ -190,9 +190,10 @@ type (
 // CoreStats //
 ///////////////
 
+// interface guard
 var (
-	_ json.Marshaler   = &CoreStats{}
-	_ json.Unmarshaler = &CoreStats{}
+	_ json.Marshaler   = (*CoreStats)(nil)
+	_ json.Unmarshaler = (*CoreStats)(nil)
 )
 
 func (s *CoreStats) init(size int) {
@@ -359,9 +360,10 @@ func (s *CoreStats) initStatsD(node *cluster.Snode) {
 // statsValue
 //
 
+// interface guard
 var (
-	_ json.Marshaler   = &statsValue{}
-	_ json.Unmarshaler = &statsValue{}
+	_ json.Marshaler   = (*statsValue)(nil)
+	_ json.Unmarshaler = (*statsValue)(nil)
 )
 
 func (v *statsValue) MarshalJSON() (b []byte, err error) {
@@ -376,9 +378,10 @@ func (v *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b
 // copyValue
 //
 
+// interface guard
 var (
-	_ json.Marshaler   = &copyValue{}
-	_ json.Unmarshaler = &copyValue{}
+	_ json.Marshaler   = (*copyValue)(nil)
+	_ json.Unmarshaler = (*copyValue)(nil)
 )
 
 func (v *copyValue) MarshalJSON() (b []byte, err error) { return jsoniter.Marshal(v.Value) }

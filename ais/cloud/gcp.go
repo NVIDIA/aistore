@@ -43,7 +43,8 @@ type (
 	}
 )
 
-var _ cluster.CloudProvider = &gcpProvider{}
+// interface guard
+var _ cluster.CloudProvider = (*gcpProvider)(nil)
 
 func readCredFile() (projectID string) {
 	credFile, err := os.Open(os.Getenv(credPathEnvVar))

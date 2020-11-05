@@ -34,7 +34,8 @@ type (
 	}
 )
 
-var _ Driver = &BuntDriver{}
+// interface guard
+var _ Driver = (*BuntDriver)(nil)
 
 func NewBuntDB(path string) (*BuntDriver, error) {
 	driver, err := buntdb.Open(path)

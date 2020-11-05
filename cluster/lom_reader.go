@@ -23,7 +23,7 @@ type (
 )
 
 // interface guard
-var _ LomReaderProvider = &LomReader{}
+var _ LomReaderProvider = (*LomReader)(nil)
 
 func (r *LomReader) Reader(lom *LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, func(), error) {
 	var lomLoadErr, err error

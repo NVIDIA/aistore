@@ -20,7 +20,8 @@ type (
 	}
 )
 
-var _ cluster.CloudProvider = &dummyCloudProvider{}
+// interface guard
+var _ cluster.CloudProvider = (*dummyCloudProvider)(nil)
 
 func NewDummyCloud(t cluster.Target) (cluster.CloudProvider, error) {
 	return &dummyCloudProvider{t: t}, nil

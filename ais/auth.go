@@ -46,9 +46,7 @@ type (
 )
 
 // interface guard
-var (
-	_ revs = &TokenList{}
-)
+var _ revs = (*TokenList)(nil)
 
 // Decrypts JWT token and returns all encrypted information.
 // Used by proxy and by AuthN.

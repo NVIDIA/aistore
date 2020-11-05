@@ -86,7 +86,7 @@ type (
 /////////////
 
 // interface guard
-var _ cmn.Runner = &Trunner{}
+var _ cmn.Runner = (*Trunner)(nil)
 
 func (r *Trunner) Register(name, kind string)  { r.Core.Tracker.register(name, kind) }
 func (r *Trunner) Run() error                  { return r.runcommon(r) }

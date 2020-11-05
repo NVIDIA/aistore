@@ -33,9 +33,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cmn.NLP = &NameLockPair{}
-)
+var _ cmn.NLP = (*NameLockPair)(nil)
 
 var bckLocker nameLocker
 

@@ -84,14 +84,15 @@ type (
 	WriterOnly struct{ io.Writer }
 )
 
+// interface guard
 var (
-	_ io.Reader      = &nopReader{}
-	_ ReadOpenCloser = &FileHandle{}
-	_ ReadSizer      = &SizedReader{}
-	_ ReadOpenCloser = &SectionHandle{}
-	_ ReadOpenCloser = &FileSectionHandle{}
-	_ ReadOpenCloser = &nopOpener{}
-	_ ReadOpenCloser = &ByteHandle{}
+	_ io.Reader      = (*nopReader)(nil)
+	_ ReadOpenCloser = (*FileHandle)(nil)
+	_ ReadSizer      = (*SizedReader)(nil)
+	_ ReadOpenCloser = (*SectionHandle)(nil)
+	_ ReadOpenCloser = (*FileSectionHandle)(nil)
+	_ ReadOpenCloser = (*nopOpener)(nil)
+	_ ReadOpenCloser = (*ByteHandle)(nil)
 )
 
 ///////////////

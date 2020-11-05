@@ -53,11 +53,13 @@ const (
 var (
 	ctx dsortContext
 	mm  *memsys.MMSA
+)
 
-	// interface guard
-	_ cluster.Slistener = &Manager{}
-	_ cmn.Packer        = &buildingShardInfo{}
-	_ cmn.Unpacker      = &buildingShardInfo{}
+// interface guard
+var (
+	_ cluster.Slistener = (*Manager)(nil)
+	_ cmn.Packer        = (*buildingShardInfo)(nil)
+	_ cmn.Unpacker      = (*buildingShardInfo)(nil)
 )
 
 type (

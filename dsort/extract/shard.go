@@ -8,10 +8,10 @@ import "encoding/json"
 
 //go:generate msgp -tests=false -marshal=false
 
+// interface guard
 var (
-	// interface guard
-	_ json.Marshaler   = &Shard{}
-	_ json.Unmarshaler = &Shard{}
+	_ json.Marshaler   = (*Shard)(nil)
+	_ json.Unmarshaler = (*Shard)(nil)
 )
 
 type (

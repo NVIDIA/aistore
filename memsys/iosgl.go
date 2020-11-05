@@ -13,14 +13,15 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// interface guard
 var (
-	_ cmn.WriterAt       = &SGL{}
-	_ io.ReaderFrom      = &SGL{}
-	_ io.WriterTo        = &SGL{}
-	_ cmn.ReadOpenCloser = &SGL{}
-	_ cmn.ReadOpenCloser = &Reader{}
-	_ cmn.ReadOpenCloser = &SliceReader{}
-	_ io.Seeker          = &SliceReader{}
+	_ cmn.WriterAt       = (*SGL)(nil)
+	_ io.ReaderFrom      = (*SGL)(nil)
+	_ io.WriterTo        = (*SGL)(nil)
+	_ cmn.ReadOpenCloser = (*SGL)(nil)
+	_ cmn.ReadOpenCloser = (*Reader)(nil)
+	_ cmn.ReadOpenCloser = (*SliceReader)(nil)
+	_ io.Seeker          = (*SliceReader)(nil)
 )
 
 type (

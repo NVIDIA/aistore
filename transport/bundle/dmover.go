@@ -53,9 +53,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cluster.DataMover = &DataMover{}
-)
+var _ cluster.DataMover = (*DataMover)(nil)
 
 func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, extra Extra) (*DataMover, error) {
 	var (

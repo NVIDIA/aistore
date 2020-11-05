@@ -10,7 +10,8 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 )
 
-var _ ExtractCreator = &nopExtractCreator{}
+// interface guard
+var _ ExtractCreator = (*nopExtractCreator)(nil)
 
 type nopExtractCreator struct {
 	internal ExtractCreator

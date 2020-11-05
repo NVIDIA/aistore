@@ -32,10 +32,10 @@ const (
 	globalManagerUUID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 )
 
+// interface guard
 var (
-	// Used as a compile-time check for correct interface implementation.
-	_ extract.ExtractCreator = &extractCreatorMock{}
-	_ cluster.SmapListeners  = &testSmapListeners{}
+	_ extract.ExtractCreator = (*extractCreatorMock)(nil)
+	_ cluster.SmapListeners  = (*testSmapListeners)(nil)
 )
 
 //

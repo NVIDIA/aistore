@@ -81,7 +81,8 @@ type (
 	}
 )
 
-var _ dsorter = &dsorterMem{}
+// interface guard
+var _ dsorter = (*dsorterMem)(nil)
 
 func newRWConnection(r io.Reader, w io.Writer) *rwConnection {
 	cmn.Assert(r != nil || w != nil)

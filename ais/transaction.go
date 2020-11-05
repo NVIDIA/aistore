@@ -105,7 +105,12 @@ type (
 
 // interface guard
 var (
-	_ txn = &txnBckBase{}
+	_ txn = (*txnBckBase)(nil)
+	_ txn = (*txnCreateBucket)(nil)
+	_ txn = (*txnMakeNCopies)(nil)
+	_ txn = (*txnSetBucketProps)(nil)
+	_ txn = (*txnRenameBucket)(nil)
+	_ txn = (*txnTransferBucket)(nil)
 )
 
 //////////////////
@@ -402,10 +407,6 @@ func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args .
 // txnCreateBucket //
 /////////////////////
 
-var _ txn = &txnCreateBucket{}
-
-// c-tor
-// NOTE: errNill another kind of nil - here and elsewhere
 func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
 	txn = &txnCreateBucket{*newTxnBckBase("crb", *c.bck)}
 	txn.fillFromCtx(c)
@@ -416,9 +417,6 @@ func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
 // txnMakeNCopies //
 ////////////////////
 
-var _ txn = &txnMakeNCopies{}
-
-// c-tor
 func newTxnMakeNCopies(c *txnServerCtx, curCopies, newCopies int64) (txn *txnMakeNCopies) {
 	txn = &txnMakeNCopies{
 		*newTxnBckBase("mnc", *c.bck),
@@ -438,9 +436,6 @@ func (txn *txnMakeNCopies) String() string {
 // txnSetBucketProps //
 ///////////////////////
 
-var _ txn = &txnSetBucketProps{}
-
-// c-tor
 func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSetBucketProps) {
 	cmn.Assert(c.bck.Props != nil)
 	bprops := c.bck.Props.Clone()
@@ -457,9 +452,6 @@ func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSet
 // txnRenameBucket //
 /////////////////////
 
-var _ txn = &txnRenameBucket{}
-
-// c-tor
 func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnRenameBucket) {
 	txn = &txnRenameBucket{
 		*newTxnBckBase("rnb", *bckFrom),
@@ -473,9 +465,7 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnR
 ///////////////////////
 // txnTransferBucket //
 ///////////////////////
-var _ txn = &txnTransferBucket{}
 
-// c-tor
 func newTxnTransferBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bundle.DataMover,
 	dp cluster.LomReaderProvider, metaMsg *cmn.Bck2BckMsg) (txn *txnTransferBucket) {
 	txn = &txnTransferBucket{

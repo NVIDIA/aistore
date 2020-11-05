@@ -78,7 +78,8 @@ type (
 	}
 )
 
-var _ dsorter = &dsorterGeneral{}
+// interface guard
+var _ dsorter = (*dsorterGeneral)(nil)
 
 func newDSorterGeneral(m *Manager) (*dsorterGeneral, error) {
 	// Memory watcher

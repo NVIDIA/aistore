@@ -90,9 +90,9 @@ type (
 
 // interface guard
 var (
-	_ revs                  = &smapX{}
-	_ cluster.Sowner        = &smapOwner{}
-	_ cluster.SmapListeners = &smapLis{}
+	_ revs                  = (*smapX)(nil)
+	_ cluster.Sowner        = (*smapOwner)(nil)
+	_ cluster.SmapListeners = (*smapLis)(nil)
 )
 
 //

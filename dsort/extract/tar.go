@@ -25,7 +25,7 @@ var (
 	padBuf [tarBlockSize]byte
 
 	// interface guard
-	_ ExtractCreator = &tarExtractCreator{}
+	_ ExtractCreator = (*tarExtractCreator)(nil)
 )
 
 type (

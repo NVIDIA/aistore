@@ -27,15 +27,15 @@ const (
 	kaNumRetries = 3
 )
 
+// interface guard
 var (
-	// compile-time interface checks
-	_ cmn.ConfigListener = &targetKeepaliveRunner{}
-	_ cmn.ConfigListener = &proxyKeepaliveRunner{}
-	_ keepaliver         = &targetKeepaliveRunner{}
-	_ keepaliver         = &proxyKeepaliveRunner{}
-
-	minKeepaliveTime = float64(time.Second.Nanoseconds())
+	_ cmn.ConfigListener = (*targetKeepaliveRunner)(nil)
+	_ cmn.ConfigListener = (*proxyKeepaliveRunner)(nil)
+	_ keepaliver         = (*targetKeepaliveRunner)(nil)
+	_ keepaliver         = (*proxyKeepaliveRunner)(nil)
 )
+
+var minKeepaliveTime = float64(time.Second.Nanoseconds())
 
 type keepaliver interface {
 	onerr(err error, status int)
@@ -101,8 +101,8 @@ type KeepaliveTracker interface {
 
 // interface guard
 var (
-	_ cmn.Runner = &targetKeepaliveRunner{}
-	_ cmn.Runner = &proxyKeepaliveRunner{}
+	_ cmn.Runner = (*targetKeepaliveRunner)(nil)
+	_ cmn.Runner = (*proxyKeepaliveRunner)(nil)
 )
 
 func newTargetKeepaliveRunner(t *targetrunner, statsT stats.Tracker, startedUp *atomic.Bool) *targetKeepaliveRunner {
@@ -548,9 +548,10 @@ func (k *keepalive) send(msg string) {
 // trackers
 //
 
+// interface guard
 var (
-	_ KeepaliveTracker = &HeartBeatTracker{}
-	_ KeepaliveTracker = &AverageTracker{}
+	_ KeepaliveTracker = (*HeartBeatTracker)(nil)
+	_ KeepaliveTracker = (*AverageTracker)(nil)
 )
 
 // HeartBeatTracker tracks the timestamp of the last time a message is received from a server.

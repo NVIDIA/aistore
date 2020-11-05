@@ -6,7 +6,8 @@ package cluster
 
 import "github.com/NVIDIA/aistore/cmn"
 
-var _ Bowner = &BownerMock{}
+// interface guard
+var _ Bowner = (*BownerMock)(nil)
 
 type BownerMock struct {
 	BMD

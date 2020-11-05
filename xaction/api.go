@@ -55,9 +55,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cluster.XactStats = &BaseXactStats{}
-)
+var _ cluster.XactStats = (*BaseXactStats)(nil)
 
 // XactsDtor is a static Kind=>[Xaction Descriptor] map that contains
 // static properties of a given xaction type (aka `kind`), such as:

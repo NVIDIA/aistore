@@ -22,10 +22,11 @@ const (
 	downloadBatchSize = 10_000
 )
 
+// interface guard
 var (
-	_ DlJob = &sliceDlJob{}
-	_ DlJob = &cloudBucketDlJob{}
-	_ DlJob = &rangeDlJob{}
+	_ DlJob = (*sliceDlJob)(nil)
+	_ DlJob = (*cloudBucketDlJob)(nil)
+	_ DlJob = (*rangeDlJob)(nil)
 )
 
 var errAISBckReq = errors.New("regular download requires ais bucket")

@@ -46,7 +46,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = &XactPut{}
+var _ cluster.Xact = (*XactPut)(nil)
 
 func (*putMirrorProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &putMirrorProvider{t: args.T, uuid: args.UUID, lom: args.Custom.(*cluster.LOM)}

@@ -78,9 +78,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cluster.Slistener = &notifs{}
-)
+var _ cluster.Slistener = (*notifs)(nil)
 
 ///////////////
 // listeners //

@@ -79,9 +79,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cmn.Runner = &proxyrunner{}
-)
+var _ cmn.Runner = (*proxyrunner)(nil)
 
 func (p *proxyrunner) initClusterCIDR() {
 	if nodeCIDR := os.Getenv("AIS_CLUSTER_CIDR"); nodeCIDR != "" {

@@ -75,7 +75,7 @@ var (
 )
 
 // interface guard
-var _ cluster.Xact = &Xact{}
+var _ cluster.Xact = (*Xact)(nil)
 
 func init() {
 	xreg.RegisterBucketXact(&xactProvider{})

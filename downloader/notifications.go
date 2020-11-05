@@ -25,9 +25,10 @@ type (
 	}
 )
 
+// interface guard
 var (
-	_ nl.NotifListener = &NotifDownloadListerner{}
-	_ cluster.Notif    = &NotifDownload{} // interface guard
+	_ nl.NotifListener = (*NotifDownloadListerner)(nil)
+	_ cluster.Notif    = (*NotifDownload)(nil)
 )
 
 func NewDownloadNL(uuid string, action string, smap *cluster.Smap,

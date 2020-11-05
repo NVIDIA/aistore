@@ -65,9 +65,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cluster.Slistener = &Streams{}
-)
+var _ cluster.Slistener = (*Streams)(nil)
 
 //
 // API

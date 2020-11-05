@@ -16,7 +16,7 @@ import (
 )
 
 // interface guard
-var _ ExtractCreator = &zipExtractCreator{}
+var _ ExtractCreator = (*zipExtractCreator)(nil)
 
 type (
 	zipExtractCreator struct {

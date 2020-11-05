@@ -55,9 +55,7 @@ type (
 var DefaultHK *housekeeper
 
 // interface guard
-var (
-	_ cmn.Runner = &housekeeper{}
-)
+var _ cmn.Runner = (*housekeeper)(nil)
 
 func init() {
 	DefaultHK = &housekeeper{

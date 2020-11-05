@@ -130,9 +130,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cmn.Runner = &metasyncer{}
-)
+var _ cmn.Runner = (*metasyncer)(nil)
 
 var jspMetasyncOpts = jsp.Options{Signature: true, Checksum: true}
 

@@ -41,7 +41,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = &XactTransferBck{}
+var _ cluster.Xact = (*XactTransferBck)(nil)
 
 func (e *transferBckProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &transferBckProvider{

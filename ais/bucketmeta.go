@@ -92,10 +92,10 @@ type (
 
 // interface guard
 var (
-	_ revs           = &bucketMD{}
-	_ cluster.Bowner = &bmdOwnerBase{}
-	_ bmdOwner       = &bmdOwnerPrx{}
-	_ bmdOwner       = &bmdOwnerTgt{}
+	_ revs           = (*bucketMD)(nil)
+	_ cluster.Bowner = (*bmdOwnerBase)(nil)
+	_ bmdOwner       = (*bmdOwnerPrx)(nil)
+	_ bmdOwner       = (*bmdOwnerTgt)(nil)
 )
 
 // c-tor

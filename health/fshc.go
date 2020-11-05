@@ -50,7 +50,7 @@ type (
 
 // interface guard
 var (
-	_ cmn.Runner = &FSHC{}
+	_ cmn.Runner = (*FSHC)(nil)
 )
 
 func NewFSHC(dispatcher fspathDispatcher, mm *memsys.MMSA, ctxResolver *fs.ContentSpecMgr) *FSHC {

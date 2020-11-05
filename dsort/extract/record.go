@@ -19,10 +19,10 @@ import (
 //
 //go:generate msgp -tests=false -marshal=false
 
+// interface guard
 var (
-	// interface guard
-	_ json.Marshaler   = &Records{}
-	_ json.Unmarshaler = &Records{}
+	_ json.Marshaler   = (*Records)(nil)
+	_ json.Unmarshaler = (*Records)(nil)
 )
 
 const (

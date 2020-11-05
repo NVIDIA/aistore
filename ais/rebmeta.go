@@ -50,7 +50,7 @@ type (
 )
 
 // interface guard
-var _ revs = &rebMD{}
+var _ revs = (*rebMD)(nil)
 
 func (r *rebMD) tag() string     { return revsRMDTag }
 func (r *rebMD) version() int64  { return r.Version }

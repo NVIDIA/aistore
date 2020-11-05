@@ -25,8 +25,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.LomReaderProvider = &OfflineDataProvider{}
-	_ cmn.ObjHeaderMetaProvider = &objMeta{}
+	_ cluster.LomReaderProvider = (*OfflineDataProvider)(nil)
+	_ cmn.ObjHeaderMetaProvider = (*objMeta)(nil)
 )
 
 func (om *objMeta) Size() int64          { return om.size }

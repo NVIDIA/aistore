@@ -94,9 +94,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cmn.Runner = &targetrunner{}
-)
+var _ cmn.Runner = (*targetrunner)(nil)
 
 //////////////
 // base gfn //

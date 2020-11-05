@@ -18,7 +18,7 @@ import (
 )
 
 // interface guard
-var _ ExtractCreator = &targzExtractCreator{}
+var _ ExtractCreator = (*targzExtractCreator)(nil)
 
 type targzExtractCreator struct {
 	t cluster.Target

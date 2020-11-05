@@ -10,7 +10,7 @@ type (
 )
 
 // interface guard
-var _ Tracker = &TrackerMock{}
+var _ Tracker = (*TrackerMock)(nil)
 
 func NewTrackerMock() Tracker {
 	return &TrackerMock{}

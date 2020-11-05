@@ -18,7 +18,8 @@ type DBMock struct {
 	values map[string]string
 }
 
-var _ Driver = &DBMock{}
+// interface guard
+var _ Driver = (*DBMock)(nil)
 
 func NewDBMock() Driver {
 	return &DBMock{

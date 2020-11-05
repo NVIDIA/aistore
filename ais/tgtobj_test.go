@@ -30,7 +30,7 @@ var (
 	t *targetrunner
 
 	// interface guard
-	_ http.ResponseWriter = &discardRW{}
+	_ http.ResponseWriter = (*discardRW)(nil)
 )
 
 type (

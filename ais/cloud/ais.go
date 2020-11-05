@@ -41,7 +41,8 @@ type (
 	}
 )
 
-var _ cluster.CloudProvider = &AisCloudProvider{}
+// interface guard
+var _ cluster.CloudProvider = (*AisCloudProvider)(nil)
 
 // TODO - FIXME: review/refactor try{}
 // TODO: house-keep refreshing remote Smap

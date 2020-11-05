@@ -40,7 +40,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = &xactMNC{}
+var _ cluster.Xact = (*xactMNC)(nil)
 
 func (*mncProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &mncProvider{t: args.T, uuid: args.UUID, copies: args.Custom.(int)}

@@ -38,7 +38,8 @@ import (
 // implements cluster.Target interfaces
 //
 
-var _ cluster.Target = &targetrunner{}
+// interface guard
+var _ cluster.Target = (*targetrunner)(nil)
 
 func (t *targetrunner) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *targetrunner) MMSA() *memsys.MMSA          { return t.gmm }

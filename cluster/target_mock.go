@@ -16,7 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-var _ Target = &TargetMock{}
+// interface guard
+var _ Target = (*TargetMock)(nil)
 
 // TargetMock implements Target interface with mocked return values.
 type TargetMock struct {

@@ -25,9 +25,10 @@ type (
 	}
 )
 
+// interface guard
 var (
-	_ cluster.Notif    = &NotifXact{}
-	_ nl.NotifListener = &NotifXactListener{}
+	_ cluster.Notif    = (*NotifXact)(nil)
+	_ nl.NotifListener = (*NotifXactListener)(nil)
 )
 
 func NewXactNL(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, bck ...cmn.Bck) *NotifXactListener {

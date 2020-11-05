@@ -41,7 +41,8 @@ type (
 	}
 )
 
-var _ cluster.CloudProvider = &awsProvider{}
+// interface guard
+var _ cluster.CloudProvider = (*awsProvider)(nil)
 
 func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvider{t: t}, nil }
 
