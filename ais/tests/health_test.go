@@ -20,7 +20,7 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	tassert.CheckError(t, err)
 
 	smapOrig := tutils.GetClusterMap(t, proxyURL)
-	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, Force: true}
+	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, SkipRebalance: true, Force: true}
 	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	targetCount := smapOrig.CountTargets()
@@ -30,12 +30,12 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	} else {
 		targetCount--
 	}
-	_, err = tutils.WaitForClusterState(proxyURL, "to proxy decommission", smapOrig.Version, proxyCount, targetCount)
+	_, err = tutils.WaitForClusterState(proxyURL, "to decommission node", smapOrig.Version, proxyCount, targetCount)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		err = tutils.JoinCluster(proxyURL, si)
 		tassert.CheckFatal(t, err)
-		_, err = tutils.WaitForClusterState(proxyURL, "to proxy join", smapOrig.Version, smapOrig.CountProxies(),
+		_, err = tutils.WaitForClusterState(proxyURL, "to node join", smapOrig.Version, smapOrig.CountProxies(),
 			smapOrig.CountTargets())
 		tassert.CheckFatal(t, err)
 	}()
@@ -84,9 +84,9 @@ func TestUnregisteredTargetHealth(t *testing.T) {
 	)
 
 	targetsCnt := smap.CountTargets()
-	proxy, err := smap.GetRandTarget()
+	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	unregisteredNodeHealth(t, proxyURL, proxy)
+	unregisteredNodeHealth(t, proxyURL, target)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, targetsCnt == smap.CountTargets(), "expected number of targets to be the same after the test")
