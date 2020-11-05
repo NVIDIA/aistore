@@ -218,9 +218,6 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	// limited amount of memory and CPU.
 	sys.UpdateMaxProcs()
 
-	// Initialize filesystem/mountpaths manager.
-	fs.Init()
-
 	// NOTE: Daemon terminations get executed in the same exact order as initializations below.
 	daemon.rg = &rungroup{rs: make(map[string]cmn.Runner, 8)}
 
@@ -273,6 +270,9 @@ func newTarget() *targetrunner {
 }
 
 func initTarget() cmn.Runner {
+	// Initialize filesystem/mountpaths manager.
+	fs.Init()
+
 	t := newTarget()
 	_ = t.gmm.Init(true /*panicOnErr*/)
 	_ = t.smm.Init(true /*panicOnErr*/)
