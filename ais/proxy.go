@@ -41,7 +41,6 @@ import (
 const (
 	whatRenamedLB = "renamedlb"
 	ciePrefix     = "cluster integrity error: cie#"
-	githubHome    = "https://github.com/NVIDIA/aistore"
 	listBuckets   = "listBuckets"
 )
 
@@ -3917,5 +3916,5 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 
 func ciError(num int) string {
 	const s = "[%s%d - for details, see %s/blob/master/docs/troubleshooting.md]"
-	return fmt.Sprintf(s, ciePrefix, num, githubHome)
+	return fmt.Sprintf(s, ciePrefix, num, cmn.GithubHome)
 }

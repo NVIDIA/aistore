@@ -30,6 +30,16 @@ const (
 
 	TrashDir      = "$trash"
 	daemonIDXattr = "user.ais.daemon_id"
+
+	siePrefix = "storage integrity error: sie#"
+)
+
+const (
+	siMpathIDMismatch = (1 + iota) * 10
+	siTargetIDMismatch
+	siMetaMismatch
+	siMetaCorrupted
+	siMpathMissing
 )
 
 // globals
@@ -352,20 +362,72 @@ func Init(iostater ...ios.IOStater) {
 	}
 }
 
-// SetMountpaths prepares, validates, and adds configured mountpaths.
-func SetMountpaths(fsPaths []string, daeID string) error {
-	if len(fsPaths) == 0 {
+// InitMpaths prepares, validates, and adds configured mountpaths.
+func InitMpaths(daeID string) error {
+	var (
+		config      = cmn.GCO.Get()
+		configPaths = config.FSpaths.Paths
+		vmd, err    = LoadVMD(configPaths)
+		changed     bool
+	)
+
+	if len(configPaths) == 0 {
 		// (usability) not to clutter the log with backtraces when starting up and validating config
 		return fmt.Errorf("FATAL: no fspaths - see README => Configuration and/or fspaths section in the config.sh")
 	}
 
-	for _, path := range fsPaths {
+	if err != nil {
+		return err
+	}
+
+	if vmd == nil {
+		for path := range configPaths {
+			if _, err := Add(path, daeID); err != nil {
+				return err
+			}
+		}
+		_, err = CreateNewVMD(daeID)
+		return err
+	}
+
+	if vmd.DaemonID != daeID {
+		return fmt.Errorf("%s: VMD and target DaemonID don't match: %s vs %s", siError(siTargetIDMismatch), vmd.DaemonID, daeID)
+	}
+
+	// Validate VMD with config FS
+	for path := range configPaths {
+		// 1. Check if path is present in VMD paths.
+		if !vmd.HasPath(path) {
+			changed = true
+			glog.Errorf("%s: mount path (%q) not in VMD", siError(siMpathMissing), path)
+		}
+
+		// 2. Validate if mount paths have daemon ID set.
+		mpathDaeID, err := LoadDaemonIDXattr(path)
+		if err != nil {
+			return err
+		}
+		if mpathDaeID != daeID {
+			return fmt.Errorf("%s: target and mounpath DaemonID don't match: %s vs %s", siError(siTargetIDMismatch), daeID, mpathDaeID)
+		}
 		if _, err := Add(path, daeID); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	if len(vmd.Devices) > len(configPaths) {
+		for device := range vmd.Devices {
+			if !configPaths.Contains(device) {
+				changed = true
+				glog.Errorf("%s: mountpath %q in VMD but not in config", siError(siMpathMissing), device)
+			}
+		}
+	}
+
+	if changed {
+		_, err = CreateNewVMD(daeID)
+	}
+	return err
 }
 
 func LoadBalanceGET(objFQN, objMpath string, copies MPI) (fqn string) {
@@ -784,4 +846,13 @@ func CapStatusAux() (fsInfo cmn.CapacityInfo) {
 	fsInfo.Total = cs.TotalUsed + cs.TotalAvail
 	fsInfo.PctUsed = float64(cs.PctAvg)
 	return
+}
+
+////////////////
+// misc utils //
+////////////////
+
+func siError(num int) string {
+	const s = "[%s%d - for details, see %s/blob/master/docs/troubleshooting.md]"
+	return fmt.Sprintf(s, siePrefix, num, cmn.GithubHome)
 }

@@ -290,14 +290,7 @@ func initTarget() cmn.Runner {
 	}
 
 	t.initSI(cmn.Target)
-
-	config = cmn.GCO.Get()
-	fsPaths := config.FSpaths.Paths.Keys()
-	if err := fs.SetMountpaths(fsPaths, t.si.ID()); err != nil {
-		cmn.ExitLogf("%s", err)
-	}
-
-	if _, err := fs.CreateNewVMD(t.si.ID()); err != nil {
+	if err := fs.InitMpaths(t.si.ID()); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 

@@ -71,37 +71,34 @@ func CreateNewVMD(daemonID string) (*VMD, error) {
 	return vmd, vmd.persist()
 }
 
-func ReadVMD() (*VMD, error) {
-	mfs.mu.RLock()
-	defer mfs.mu.RUnlock()
-	var (
-		available, _ = Get()
-		mainVMD      *VMD
-		err          error
-	)
-	for _, mpi := range available {
-		fpath := filepath.Join(mpi.Path, VmdPersistedFileName)
-
-		vmd := newVMD(len(available))
+// LoadVMD loads VMD from given paths:
+// - Returns error in case of validation errors or failed to load existing VMD
+// - Returns nil if VMD not present on any path
+func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
+	for path := range mpaths {
+		fpath := filepath.Join(path, VmdPersistedFileName)
+		vmd := newVMD(len(mpaths))
 		vmd.cksum, err = jsp.Load(fpath, vmd, jsp.CCSign())
 		if err != nil && os.IsNotExist(err) {
 			continue
 		}
+
 		if err != nil {
-			err = fmt.Errorf("failed to read vmd (%q), err: %v", fpath, err)
+			err = fmt.Errorf("%s: failed to read VMD (%q), err: %v", siError(siMetaCorrupted), fpath, err)
 			glog.InfoDepth(1)
 			return nil, err
 		}
 
 		if err = vmd.Validate(); err != nil {
-			err = fmt.Errorf("failed to validate vmd (%q), err: %v", fpath, err)
+			err = fmt.Errorf("%s: failed to validate VMD (%q), err: %v", siError(siMetaCorrupted), fpath, err)
 			glog.InfoDepth(1)
 			return nil, err
 		}
 
 		if mainVMD != nil {
 			if !mainVMD.cksum.Equal(vmd.cksum) {
-				cmn.ExitLogf("VMD is different (%q): %v vs %v", fpath, mainVMD, vmd)
+				err = fmt.Errorf("%s: VMD is different (%q): %v vs %v", siError(siMetaMismatch), fpath, mainVMD, vmd)
+				return nil, err
 			}
 			continue
 		}
@@ -109,9 +106,8 @@ func ReadVMD() (*VMD, error) {
 	}
 
 	if mainVMD == nil {
-		glog.Infof("VMD not found on any of %d mountpaths", len(available))
+		glog.Infof("VMD not found on any of %d mountpaths", len(mpaths))
 	}
-
 	return mainVMD, nil
 }
 
@@ -120,7 +116,7 @@ func (vmd VMD) persist() error {
 	if cnt, availMpaths := PersistOnMpaths(VmdPersistedFileName, "", vmd, vmdCopies, jsp.CCSign()); availMpaths == 0 {
 		glog.Errorf("failed to persist VMD no available mountpaths")
 	} else if cnt == 0 {
-		return fmt.Errorf("failed to persist vmd on any of mountpaths (%d)", availMpaths)
+		return fmt.Errorf("failed to persist VMD on any of mountpaths (%d)", availMpaths)
 	}
 	return nil
 }
@@ -128,32 +124,48 @@ func (vmd VMD) persist() error {
 func (vmd VMD) Validate() error {
 	// TODO: Add versions handling.
 	if vmd.Version != vmdInitialVersion {
-		return fmt.Errorf("invalid vmd version %q", vmd.Version)
+		return fmt.Errorf("invalid VMD version %q", vmd.Version)
 	}
 	cmn.Assert(vmd.cksum != nil)
 	cmn.Assert(vmd.DaemonID != "")
 	return nil
 }
 
+func (vmd VMD) HasPath(path string) (exists bool) {
+	_, exists = vmd.Devices[path]
+	return
+}
+
 // LoadDaemonID loads the daemon ID present as xattr on given mount paths.
 func LoadDaemonID(mpaths cmn.StringSet) (mDaeID string, err error) {
 	for mp := range mpaths {
-		b, err := GetXattr(mp, daemonIDXattr)
+		daeID, err := LoadDaemonIDXattr(mp)
 		if err != nil {
-			if cmn.IsErrXattrNotFound(err) {
-				continue
-			}
 			return "", err
 		}
-		daeID := string(b)
+		if daeID == "" {
+			continue
+		}
 		if mDaeID != "" {
-			if daeID != "" && mDaeID != daeID {
-				err = fmt.Errorf("daemonID different (%q): %s vs %s", mp, mDaeID, daeID)
+			if mDaeID != daeID {
+				err = fmt.Errorf("%s: daemonID different (%q): %s vs %s", siError(siMpathIDMismatch), mp, mDaeID, daeID)
 				return "", err
 			}
 			continue
 		}
 		mDaeID = daeID
+	}
+	return
+}
+
+func LoadDaemonIDXattr(mpath string) (daeID string, err error) {
+	b, err := GetXattr(mpath, daemonIDXattr)
+	if err == nil {
+		daeID = string(b)
+		return
+	}
+	if cmn.IsErrXattrNotFound(err) {
+		err = nil
 	}
 	return
 }

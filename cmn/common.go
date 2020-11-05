@@ -58,7 +58,8 @@ const (
 	NoMountpaths = "no mountpaths"
 
 	// NOTE: Taken from cloud.google.com/go/storage/storage.go (userAgent).
-	GcsUA = "gcloud-golang-storage/20151204"
+	GcsUA      = "gcloud-golang-storage/20151204"
+	GithubHome = "https://github.com/NVIDIA/aistore"
 
 	QuantityPercent = "percent"
 	QuantityBytes   = "bytes"

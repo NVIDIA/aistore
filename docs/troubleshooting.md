@@ -63,3 +63,28 @@ In many cases, the entirety of a troubleshooting step boils down to cleaning up 
 | `cie#50` | Non-primary proxy or storage target: when receiving an updated cluster map that conflicts with the local copy. Primary proxy: when a joining node's Smap does not pass the validation. | In both cases, the node is not permitted to join (or is removed from) the cluster. |
 | `cie#60` | When a primary proxy (gateway) is starting up, it uses its own local Smap to query other nodes for cluster-wide metadata. | The error is specific to bucket metadata and is triggered when there are two or more versions that are mutually incompatible. |
 | `cie#70` | Same as above. | Same as above, except that there's a simple majority of nodes that have one of the BMD versions. |
+
+## Storage Integrity Error
+
+Another category of errors is the "Storage Integrity Error (sie)," associated with mountpaths attached to the storage targets. A typical `sie` error may look as follows:
+
+```
+storage integrity error: sie#30 ... :
+VMD is different ("/tmp/ais/7/3/.ais.vmd"): &{...} vs &{...}
+```
+
+Each AIStore target maintains a list of configured mountpaths ([more here](./overview.md)) and their properties. This metadata is maintained across mountpath-changing events (such as disk faults and new attachments). It is also persisted and replicated across available mountpaths.
+
+In addition, AIS target also stores its unique Node ID (aka `DaemonID`). This ID gets generated when the server joins an AIS cluster the first time and never changes during the server’s lifetime. The Node ID is recorded into each mountpath.
+ 
+A troubleshooting step to deal with `sie` is cleaning up persisted metadata (i.e. removing the `.ais.vmd` file), recorded Node ID on mountpaths (erasing `user.ais.daemon_id` xattr), and/or updating the node deployment config. The table below enumerates `sie` errors and provides some relevant context.
+
+**WARNING:** Caution while cleaning up the metadata on mountpaths. It could lead to loss or corruption of data.
+
+| Error | When | Description |
+|--- | --- | --- |
+| `sie#10` | When mountpaths in deployment config have different Node ID recorded on them | The error indicates that either one of the mountpaths belongs (or did belong) to a different target |
+| `sie#20` |  The target Node ID doesn't match persisted metadata | The Node ID assigned to the target node doesn't match Node ID recorded on a mountpath. Implies the mountpath has stale metadata and is/was part of a different target |
+| `sie#30` | The persisted metadata on the mountpaths doesn't match | There are at least two mountpaths disagree on the metadata |
+| `sie#40` | A mountpath has a corrupted metadata | At least one of the targets has a corrupted metadata file |
+| `sie#50` | A mountpath is present in the config file but missing in persisted metadata | The target has valid metadata persisted on mountpaths, but the mountpaths present in the metadata don't match those provided in the config |
