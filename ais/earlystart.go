@@ -170,8 +170,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 1: init Smap to accept reg-s
 	p.owner.smap.Lock()
-	smap.Pmap[p.si.ID()] = p.si
-	smap.Primary = p.si
+	si := p.si.Clone()
+	smap.Primary = si
+	smap.Pmap[p.si.ID()] = si
 	p.owner.smap.put(smap)
 	p.owner.smap.Unlock()
 

@@ -2396,14 +2396,6 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 	cmn.AssertNoErr(err)
 }
 
-// Must be called under Lock, preferably inside `smap.modify` `pre()` callback.
-// smapX.staffIC modifies only current node flags, and this function updates
-// all other places that can be affected.
-func (p *proxyrunner) _staffIC(clone *smapX) {
-	clone.staffIC()
-	p.si = clone.GetNode(p.si.ID())
-}
-
 func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
 	ctx.smap = p.owner.smap.get()
 	if !clone.isPresent(p.si) {
@@ -2416,9 +2408,9 @@ func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
 		clone.delProxy(ctx.sid)
 	}
 
-	clone.Primary = p.si
+	clone.Primary = clone.GetProxy(p.si.ID())
 	clone.Version += 100
-	p._staffIC(clone)
+	clone.staffIC()
 	return nil
 }
 
@@ -2446,8 +2438,8 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	smap := p.owner.smap.get()
-	psi, ok := smap.Pmap[proxyid]
-	if !ok {
+	psi := smap.GetProxy(proxyid)
+	if psi == nil {
 		p.invalmsghdlrf(w, r, "new primary proxy %s not present in the %s", proxyid, smap.pp())
 		return
 	}
@@ -2983,7 +2975,7 @@ func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
 		notifyPairs := revsPair{clone, aisMsg}
 		_ = p.metasyncer.notify(true, notifyPairs)
 	}
-	p._staffIC(clone)
+	clone.staffIC()
 	return nil
 }
 
@@ -3114,7 +3106,7 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) (err error)
 		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
 	}
 
-	p._staffIC(clone)
+	clone.staffIC()
 
 	if !p.NodeStarted() {
 		return
@@ -3244,14 +3236,14 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 
 func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
 	clone.setNodeFlags(ctx.sid, ctx.flags)
-	p._staffIC(clone)
+	clone.staffIC()
 	return nil
 }
 
 // Callback: remove the node from the cluster if rebalance finished successfully
 func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionMsg, si *cluster.Snode) {
 	if err := nl.Err(false); err != nil || nl.Aborted() {
-		glog.Errorf("Rebalance(%s) didn't finish successfully,  err: %v, aborted: %v", nl.UUID(), err, nl.Aborted())
+		glog.Errorf("Rebalance(%s) didn't finish successfully, err: %v, aborted: %v", nl.UUID(), err, nl.Aborted())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -3312,7 +3304,7 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDeco
 
 func (p *proxyrunner) _cancelMaint(ctx *smapModifier, clone *smapX) error {
 	clone.clearNodeFlags(ctx.sid, ctx.flags)
-	p._staffIC(clone)
+	clone.staffIC()
 	return nil
 }
 

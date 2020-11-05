@@ -308,7 +308,6 @@ func (m *smapX) clone() *smapX {
 
 func (m *smapX) deepCopy(dst *smapX) {
 	cmn.CopyStruct(dst, m)
-	dst.Primary = m.Primary.Clone()
 	dst.init(m.CountTargets(), m.CountProxies())
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v.Clone()
@@ -316,6 +315,7 @@ func (m *smapX) deepCopy(dst *smapX) {
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v.Clone()
 	}
+	dst.Primary = dst.GetProxy(m.Primary.ID())
 }
 
 func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
