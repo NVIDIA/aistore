@@ -198,7 +198,6 @@ func (t *targetrunner) Run() error {
 		cmn.ExitLogf("%v", err)
 	}
 	t.httprunner.init(config)
-	t.owner.bmd = newBMDOwnerTgt()
 
 	cluster.Init()
 	cluster.InitTarget()
@@ -216,7 +215,6 @@ func (t *targetrunner) Run() error {
 	}
 
 	dryRunInit()
-	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
 	// Init meta-owners and load local instances
 	t.owner.bmd.init()

@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils/readers"
 )
@@ -62,17 +61,12 @@ func TestMain(m *testing.M) {
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	// target
-	t = &targetrunner{
-		// memory
-		gmm: memsys.DefaultPageMM(),
-		smm: memsys.DefaultSmallMM(),
-	}
+	t = newTarget()
 	t.initSI(cmn.Target)
 
 	fs.Add(testMountpath, t.si.ID())
 	t.init(cmn.GCO.Get())
 	t.statsT = stats.NewTrackerMock()
-	t.owner.bmd = newBMDOwnerTgt()
 	cluster.InitTarget()
 
 	bck := cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal)

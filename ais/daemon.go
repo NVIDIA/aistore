@@ -261,12 +261,19 @@ func initProxy() cmn.Runner {
 	return p
 }
 
-func initTarget() cmn.Runner {
+func newTarget() *targetrunner {
 	t := &targetrunner{
 		gmm:   &memsys.MMSA{Name: gmmName},
 		smm:   &memsys.MMSA{Name: smmName, Small: true},
 		cloud: make(clouds, 8),
 	}
+	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
+	t.owner.bmd = newBMDOwnerTgt()
+	return t
+}
+
+func initTarget() cmn.Runner {
+	t := newTarget()
 	_ = t.gmm.Init(true /*panicOnErr*/)
 	_ = t.smm.Init(true /*panicOnErr*/)
 	t.gmm.Sibling, t.smm.Sibling = t.smm, t.gmm
