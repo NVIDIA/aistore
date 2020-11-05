@@ -487,7 +487,6 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 	}
 
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
-		defer transport.FreeRecv(object)
 		req := remoteRequest{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 			ds.m.abort(fmt.Errorf("received damaged request: %s", err))
