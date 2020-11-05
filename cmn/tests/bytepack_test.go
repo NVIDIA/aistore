@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 // A structure to test nested binary packing

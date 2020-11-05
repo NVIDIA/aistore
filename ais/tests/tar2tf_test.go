@@ -14,11 +14,11 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/devtools/tutils/readers"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tutils/tetl"
 	"github.com/NVIDIA/aistore/etl"
-	"github.com/NVIDIA/aistore/tutils"
-	"github.com/NVIDIA/aistore/tutils/readers"
-	"github.com/NVIDIA/aistore/tutils/tassert"
-	"github.com/NVIDIA/aistore/tutils/tetl"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 	jsoniter "github.com/json-iterator/go"
 )

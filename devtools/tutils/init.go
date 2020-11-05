@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/containers"
+	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -52,6 +53,8 @@ var (
 	AuthToken string
 
 	MMSA *memsys.MMSA
+
+	devtoolsCtx *devtools.Ctx
 )
 
 func init() {
@@ -66,6 +69,11 @@ func init() {
 
 	transportArgs.WriteBufferSize, transportArgs.ReadBufferSize = 65536, 65536
 	HTTPClientGetPut = cmn.NewClient(transportArgs)
+
+	devtoolsCtx = &devtools.Ctx{
+		Client: HTTPClient,
+		Log:    Logf,
+	}
 
 	initProxyURL()
 	initPmap()

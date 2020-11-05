@@ -11,9 +11,9 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/tutils"
-	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestPersist(t *testing.T) {

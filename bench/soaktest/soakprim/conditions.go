@@ -10,8 +10,8 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
 )
 
 type PreConds struct {
@@ -65,7 +65,7 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 
 		for _, bckName := range toDelete {
 			prefixedBckName := bckNamePrefix(bckName)
-			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), prefixedBckName)
+			api.DestroyBucket(soakcmn.BaseAPIParams(primaryURL), prefixedBckName)
 			report.Writef(report.SummaryLevel, "Pre: deleted extraneous bucket: %v\n", prefixedBckName)
 		}
 	}

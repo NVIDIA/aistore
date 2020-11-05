@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
 )
 
 const (
@@ -34,12 +33,12 @@ type regressionContext struct {
 
 // Regression runs a constant get request throughout the testing
 func cleanupRegression() {
-	bcks, err := api.ListBuckets(tutils.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	bcks, err := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
 	cmn.AssertNoErr(err)
 
 	for _, b := range bcks {
 		if strings.HasPrefix(b.Name, regBucketPrefix) && (!soakcmn.Params.LocalCleanup || b.Name == bck.Name) {
-			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bck)
+			api.DestroyBucket(soakcmn.BaseAPIParams(primaryURL), bck)
 		}
 	}
 }

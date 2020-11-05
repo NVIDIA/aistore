@@ -252,7 +252,36 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 	return reqArgs.Req()
 }
 
-// same as above with HTTP trace
+// getDiscard sends a GET request and discards returned data.
+func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
+	var hdrCksumValue, hdrCksumType string
+
+	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer cmn.Close(resp.Body)
+
+	if validate {
+		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
+		hdrCksumType = resp.Header.Get(cmn.HeaderObjCksumType)
+	}
+	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
+	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
+	if err != nil {
+		return 0, err
+	}
+	if validate && hdrCksumValue != cksumValue {
+		return 0, cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
+	}
+	return n, err
+}
+
+// Same as above, but with HTTP trace.
 func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool,
 	offset, length int64) (int64, httpLatencies, error) {
 	var hdrCksumValue, hdrCksumType string
@@ -300,35 +329,6 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 		TargetFirstResponse: timeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
 	}
 	return n, latencies, err
-}
-
-// getDiscard sends a GET request and discards returned data
-func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
-	var hdrCksumValue, hdrCksumType string
-
-	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
-	if err != nil {
-		return 0, err
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if validate {
-		hdrCksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
-		hdrCksumType = resp.Header.Get(cmn.HeaderObjCksumType)
-	}
-	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
-	n, cksumValue, err := readResponse(resp, ioutil.Discard, src, hdrCksumType)
-	if err != nil {
-		return 0, err
-	}
-	if validate && hdrCksumValue != cksumValue {
-		return 0, cmn.NewInvalidCksumError(hdrCksumValue, cksumValue)
-	}
-	return n, err
 }
 
 // getConfig sends a {what:config} request to the url and discard the message

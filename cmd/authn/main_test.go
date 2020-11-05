@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dbdriver"
-	"github.com/NVIDIA/aistore/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 // NOTE: when a fresh user manager is created, it initailized users DB and

@@ -7,14 +7,14 @@ package tutils
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 type nodesCnt int
@@ -27,21 +27,7 @@ func (n nodesCnt) satisfied(actual int) bool {
 }
 
 func JoinCluster(proxyURL string, node *cluster.Snode) error {
-	baseParams := BaseAPIParams(proxyURL)
-	smap, err := api.GetClusterMap(baseParams)
-	if err != nil {
-		return err
-	}
-	if err := api.JoinCluster(baseParams, node); err != nil {
-		return err
-	}
-
-	// If node is already in cluster we should not wait for map version
-	// sync because update will not be scheduled
-	if node := smap.GetNode(node.ID()); node == nil {
-		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{})
-	}
-	return nil
+	return devtools.JoinCluster(devtoolsCtx, proxyURL, node, registerTimeout)
 }
 
 // TODO: There is duplication between `UnregisterNode` and `RemoveTarget` - when to use which?
@@ -242,51 +228,7 @@ func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, 
 }
 
 func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore []string) error {
-	Logf("Waiting to sync smap version > v%d, ignoring %+v\n", prevVersion, idsToIgnore)
-	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore []string) (string, string, bool) {
-		for _, d := range smap.Pmap {
-			if !cmn.StringInSlice(d.ID(), idsToIgnore) {
-				return d.ID(), d.PublicNet.DirectURL, true
-			}
-		}
-		for _, d := range smap.Tmap {
-			if !cmn.StringInSlice(d.ID(), idsToIgnore) {
-				return d.ID(), d.PublicNet.DirectURL, true
-			}
-		}
-
-		return "", "", false
-	}
-
-	for {
-		sid, url, exists := checkAwaitingDaemon(smap, idsToIgnore)
-		if !exists {
-			break
-		}
-		baseParams := BaseAPIParams(url)
-		daemonSmap, err := api.GetClusterMap(baseParams)
-		if err != nil && !cmn.IsErrConnectionRefused(err) {
-			return err
-		}
-
-		if err == nil && daemonSmap.Version > prevVersion {
-			idsToIgnore = append(idsToIgnore, sid)
-			*smap = *daemonSmap // update smap for newer version
-			continue
-		}
-
-		if time.Now().After(timeout) {
-			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, url, smap.Version)
-		}
-
-		// TODO: `WaitMapVersionSync` is imported/used in `soaktest` which
-		//  prevents us from using `Logf` (`testing.Verbose` will panic
-		//  because `testing.Init` was not called). We should somehow detect
-		//  running this inside actual tests (`Test*`).
-		fmt.Fprintf(os.Stderr, "waiting for Smap > v%d at %s (currently v%d)\n", prevVersion, sid, daemonSmap.Version)
-		time.Sleep(time.Second)
-	}
-	return nil
+	return devtools.WaitMapVersionSync(devtoolsCtx, timeout, smap, prevVersion, idsToIgnore)
 }
 
 func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[string][]string {

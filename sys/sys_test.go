@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
 func checkSkipOS(t *testing.T, os ...string) {

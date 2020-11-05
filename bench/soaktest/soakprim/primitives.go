@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
 )
 
 type primTag struct {
@@ -57,7 +56,7 @@ func (rctx *RecipeContext) MakeBucket(bucketname string) {
 	tag := rctx.startPrim("MakeBucket")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.CreateBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname))
+		err := api.CreateBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketname))
 		cmn.AssertNoErr(err)
 	}()
 }
@@ -66,7 +65,7 @@ func (rctx *RecipeContext) SetBucketProps(bucketname string, props cmn.BucketPro
 	tag := rctx.startPrim("SetBucketProps")
 	go func() {
 		defer rctx.finishPrim(tag)
-		_, err := api.SetBucketProps(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), props)
+		_, err := api.SetBucketProps(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), props)
 		cmn.AssertNoErr(err)
 	}()
 }
@@ -143,7 +142,7 @@ func (rctx *RecipeContext) Rename(bucketName, newName string) {
 	tag := rctx.startPrim("Rename")
 	go func() {
 		defer rctx.finishPrim(tag)
-		_, err := api.RenameBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketName), bckNamePrefix(newName))
+		_, err := api.RenameBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketName), bckNamePrefix(newName))
 		cmn.AssertNoErr(err)
 	}()
 }
@@ -152,7 +151,7 @@ func (rctx *RecipeContext) Destroy(bucketName string) {
 	tag := rctx.startPrim("Destroy")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketName))
+		err := api.DestroyBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketName))
 		cmn.AssertNoErr(err)
 	}()
 }
@@ -170,7 +169,7 @@ func (rctx *RecipeContext) RemoveTarget(conds *PostConds, delay time.Duration) {
 		smap := fetchSmap("RestoreTarget")
 		for _, v := range smap.Tmap {
 			args := &cmn.ActValDecommision{DaemonID: v.ID(), SkipRebalance: true}
-			err := tutils.UnregisterNode(primaryURL, args)
+			err := soakcmn.UnregisterNode(primaryURL, args)
 			rctx.targetMutex.Unlock()
 			cmn.AssertNoErr(err)
 			return
@@ -194,7 +193,7 @@ func (rctx *RecipeContext) RestoreTarget(conds *PostConds, delay time.Duration) 
 		for k, v := range rctx.origTargets {
 			_, ok := smap.Tmap[k]
 			if !ok {
-				err := tutils.JoinCluster(primaryURL, v)
+				err := soakcmn.JoinCluster(primaryURL, v)
 				rctx.targetMutex.Unlock()
 				cmn.AssertNoErr(err)
 				return

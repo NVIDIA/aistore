@@ -10,8 +10,8 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/lru"
-	"github.com/NVIDIA/aistore/tutils/tassert"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	"github.com/NVIDIA/aistore/xaction/xrun"

@@ -23,9 +23,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
-	"github.com/NVIDIA/aistore/tutils"
-	"github.com/NVIDIA/aistore/tutils/readers"
-	"github.com/NVIDIA/aistore/tutils/tassert"
+	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/devtools/tutils/readers"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )

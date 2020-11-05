@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
 func TestRandomReaderPutStress(t *testing.T) {

@@ -58,9 +58,9 @@ import (
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/devtools/tutils/readers"
+	"github.com/NVIDIA/aistore/devtools/tutils/tetl"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	"github.com/NVIDIA/aistore/tutils/readers"
-	"github.com/NVIDIA/aistore/tutils/tetl"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )

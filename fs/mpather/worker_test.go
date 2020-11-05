@@ -12,10 +12,10 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
-	"github.com/NVIDIA/aistore/tutils"
-	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestWorkerGroup(t *testing.T) {

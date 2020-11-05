@@ -14,9 +14,9 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/tutils"
-	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func Example_msg() {

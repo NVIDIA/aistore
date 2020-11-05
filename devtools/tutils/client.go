@@ -20,9 +20,10 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools"
+	"github.com/NVIDIA/aistore/devtools/tutils/readers"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/tutils/readers"
-	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 const (
@@ -44,11 +45,15 @@ const (
 )
 
 func PingURL(url string) (err error) {
-	addr := strings.TrimPrefix(url, "http://")
+	var (
+		conn net.Conn
+		addr = strings.TrimPrefix(url, "http://")
+	)
+
 	if addr == url {
 		addr = strings.TrimPrefix(url, "https://")
 	}
-	conn, err := net.Dial("tcp", addr)
+	conn, err = net.Dial("tcp", addr)
 	if err == nil {
 		conn.Close()
 	}
@@ -176,32 +181,8 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 	tassert.CheckFatal(t, err)
 }
 
-// Quick node removal: it does not start and wait for rebalance to complete
-// before removing the node. Because node removal uses transactions, this
-// function cannot be used for MOCK nodes as they do not implement required
-// HTTP handlers. To unregister a mock, use `RemoveNodeFromSmap` instead.
 func UnregisterNode(proxyURL string, args *cmn.ActValDecommision) error {
-	baseParams := BaseAPIParams(proxyURL)
-	smap, err := api.GetClusterMap(baseParams)
-	node := smap.GetNode(args.DaemonID)
-	if err != nil {
-		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
-	}
-
-	if node != nil && smap.IsPrimary(node) {
-		return fmt.Errorf("unregistering primary proxy is not allowed")
-	}
-
-	if _, err := api.Decommission(baseParams, args); err != nil {
-		return err
-	}
-
-	// If node does not exists in cluster we should not wait for map version
-	// sync because update will not be scheduled
-	if node != nil {
-		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{node.ID()})
-	}
-	return nil
+	return devtools.UnregisterNode(devtoolsCtx, proxyURL, args, registerTimeout)
 }
 
 // Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies
@@ -418,10 +399,8 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 	} else {
 		u = RandomProxyURL()
 	}
-	return api.BaseParams{
-		Client: HTTPClient, // TODO -- FIXME: make use of HTTPClientGetPut as well
-		URL:    u,
-	}
+
+	return devtools.BaseAPIParams(devtoolsCtx, u)
 }
 
 // waitForBucket waits until all targets ack having ais bucket created or deleted

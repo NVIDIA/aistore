@@ -1,4 +1,4 @@
-// Package soakcmn provides constants and variables shared across soaktest
+// Package soakcmn provides constants, variables and functions shared across soaktest
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */

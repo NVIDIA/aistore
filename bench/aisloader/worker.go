@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/tutils/readers"
 )
 
 var mmsa *memsys.MMSA

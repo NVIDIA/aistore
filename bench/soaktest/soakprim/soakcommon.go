@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
 )
 
 const (
@@ -87,7 +86,7 @@ func CleanupSoak() {
 }
 
 func updateSysInfo() {
-	systemInfoStats, err := api.GetClusterSysInfo(tutils.BaseAPIParams(primaryURL))
+	systemInfoStats, err := api.GetClusterSysInfo(soakcmn.BaseAPIParams(primaryURL))
 	if err == nil {
 		report.WriteSystemInfoStats(&systemInfoStats)
 	} else {
@@ -111,7 +110,7 @@ func (rctx *RecipeContext) restoreTargets() {
 			if _, ok := smap.Tmap[k]; ok {
 				continue
 			}
-			if err := tutils.JoinCluster(primaryURL, v); err != nil {
+			if err := soakcmn.JoinCluster(primaryURL, v); err != nil {
 				report.Writef(report.SummaryLevel, "got error while re-registering %s: %v", v.ID(), err)
 			}
 			missingOne = true
@@ -141,7 +140,7 @@ func (rctx *RecipeContext) PreRecipe(recipeName string) {
 	bckNames := fetchBuckets("PreRecipe")
 	for _, bckName := range bckNames {
 		report.Writef(report.SummaryLevel, "found extraneous bucket: %v\n", bckNamePrefix(bckName))
-		api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
+		api.DestroyBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
 	}
 
 	smap := fetchSmap("PreRecipe")
@@ -190,7 +189,7 @@ func (rctx *RecipeContext) PostRecipe() error {
 func cleanupRecipeBuckets() {
 	bckNames := fetchBuckets("PostRecipe")
 	for _, bckName := range bckNames {
-		api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
+		api.DestroyBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
 	}
 }
 
@@ -199,10 +198,10 @@ func cleanupAllRecipeBuckets() {
 		return
 	}
 
-	bcks, _ := api.ListBuckets(tutils.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	bcks, _ := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
 	for _, bck := range bcks {
 		if strings.HasPrefix(bck.Name, soakPrefix) {
-			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bck)
+			api.DestroyBucket(soakcmn.BaseAPIParams(primaryURL), bck)
 		}
 	}
 }
@@ -223,7 +222,7 @@ func bckNameWithoutPrefix(bckName string) (res string) {
 
 // fetchBuckets returns a list of buckets in the proxy without the soakPrefix
 func fetchBuckets(tag string) []string {
-	bcks, err := api.ListBuckets(tutils.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
+	bcks, err := api.ListBuckets(soakcmn.BaseAPIParams(primaryURL), cmn.QueryBcks{Provider: cmn.ProviderAIS})
 	if err != nil {
 		cmn.AssertNoErr(fmt.Errorf("error fetching bucketnames for %v: %v", tag, err.Error()))
 	}
@@ -240,7 +239,7 @@ func fetchBuckets(tag string) []string {
 }
 
 func fetchSmap(tag string) *cluster.Smap {
-	smap, err := api.GetClusterMap(tutils.BaseAPIParams(primaryURL))
+	smap, err := api.GetClusterMap(soakcmn.BaseAPIParams(primaryURL))
 	if err != nil {
 		cmn.Assertf(false, "failed to fetch smap for %s: %v", tag, err)
 	}

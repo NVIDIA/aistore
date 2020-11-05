@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
 func setBucket() (bck cmn.Bck, err error) {

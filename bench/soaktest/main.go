@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
-	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/devtools"
 )
 
 const (
@@ -250,7 +250,7 @@ func main() {
 	} else if soakcmn.Params.Port == "" {
 		cmn.Exitf("IP specified without port")
 	}
-	if err := tutils.PingURL(soakcmn.Params.IP + ":" + soakcmn.Params.Port); err != nil {
+	if err := devtools.PingURL(soakcmn.Params.IP + ":" + soakcmn.Params.Port); err != nil {
 		cmn.Exitf("Cannot connect to %s:%s, reason: %s", soakcmn.Params.IP, soakcmn.Params.Port, err)
 	}
 	soakprim.SetPrimaryURL()
