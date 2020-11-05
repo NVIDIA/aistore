@@ -611,7 +611,6 @@ func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 
 		defer func() {
 			cmn.DrainReader(object) // drain to prevent unnecessary stream errors
-			transport.FreeRecv(object)
 		}()
 
 		writer := ds.pullStreamWriter(hdr.ObjName)

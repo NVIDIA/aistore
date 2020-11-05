@@ -563,7 +563,6 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 
 		defer func() {
 			cmn.DrainReader(object) // drain to prevent unnecessary stream errors
-			transport.FreeRecv(object)
 		}()
 
 		unpacker := cmn.NewUnpacker(hdr.Opaque)
@@ -591,7 +590,6 @@ func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 
 		defer func() {
 			cmn.DrainReader(object) // drain to prevent unnecessary stream errors
-			transport.FreeRecv(object)
 		}()
 
 		req := RemoteResponse{}
