@@ -32,9 +32,15 @@ func TestMaintenanceOnOff(t *testing.T) {
 	msg.DaemonID = mntTarget.ID()
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	_, err = api.StartMaintenance(baseParams, msg)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
+	smap, err = tutils.WaitForClusterState(proxyURL, "target in maintenance",
+		smap.Version, smap.CountProxies(), smap.CountTargets())
+	tassert.CheckFatal(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
+	_, err = tutils.WaitForClusterState(proxyURL, "target is back",
+		smap.Version, smap.CountProxies(), smap.CountTargets())
+	tassert.CheckFatal(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
 }
