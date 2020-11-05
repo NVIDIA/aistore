@@ -2805,6 +2805,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
+		// Clear flags as a new node can still have maintenance flag on etc.
+		regReq.SI.Flags = 0
 		tag = "user-register"
 		userRegister = true
 	case cmn.Keepalive:
