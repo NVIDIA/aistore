@@ -28,8 +28,8 @@ func (p *proxyrunner) bootstrap() {
 	)
 
 	// 1: load a local copy and try to utilize it for discovery
-	smap, loaded := p.tryLoadSmap()
-	if !loaded {
+	smap, reliable := p.tryLoadSmap()
+	if !reliable {
 		smap = nil
 	}
 	// 2. make the preliminary/primary decision
@@ -39,7 +39,7 @@ func (p *proxyrunner) bootstrap() {
 	if primary {
 		if pid != "" { // takes precedence over everything else
 			cmn.Assert(pid == p.si.ID())
-		} else if loaded {
+		} else if reliable {
 			var smapMaxVer int64
 			// double-check
 			if smapMaxVer, primaryURL = p.bcastHealth(smap); smapMaxVer > smap.version() {
@@ -61,7 +61,7 @@ func (p *proxyrunner) bootstrap() {
 	glog.Infof("%s: starting up as non-primary", p.si)
 	err := p.secondaryStartup(smap, primaryURL)
 	if err != nil {
-		if loaded {
+		if reliable {
 			maxVerSmap, _ := p.uncoverMeta(smap)
 			if maxVerSmap != nil && maxVerSmap.Primary != nil {
 				glog.Infof("%s: second attempt  - joining via %s...", p.si, maxVerSmap)

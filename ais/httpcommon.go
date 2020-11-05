@@ -544,7 +544,7 @@ func (h *httprunner) detectNodeChanges(smap *smapX) error {
 	return nil
 }
 
-func (h *httprunner) tryLoadSmap() (*smapX, bool) {
+func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 	var (
 		config      = cmn.GCO.Get()
 		smap        = newSmap()
@@ -552,13 +552,15 @@ func (h *httprunner) tryLoadSmap() (*smapX, bool) {
 	)
 	if err != nil {
 		glog.Errorf("Failed to load smap (err: %v)", err)
+		smap = newSmap() // Reinitialize smap as it might have been corrupted during loading.
 	} else if loaded {
+		reliable = true
 		if err := h.detectNodeChanges(smap); err != nil {
 			glog.Error(err)
-			loaded = false
+			reliable = false
 		}
 	}
-	return smap, loaded
+	return smap, reliable
 }
 
 func (h *httprunner) run() error {

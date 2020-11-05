@@ -219,17 +219,25 @@ func (t *targetrunner) Run() error {
 	// Init meta-owners and load local instances
 	t.owner.bmd.init()
 
-	smap, loaded := t.tryLoadSmap()
-	if !loaded {
-		smap = newSmap() // Reinitialize smap as it might have been corrupted due to loading.
+	var (
+		contactURLs    []string
+		smap, reliable = t.tryLoadSmap()
+	)
+	if !reliable {
+		// As we cannot fully rely on the loaded smap we can just gather the
+		// possible contact URLs to increase our join chances.
+		for _, proxy := range smap.Pmap {
+			contactURLs = append(contactURLs, proxy.URL(cmn.NetworkPublic))
+		}
+		smap = newSmap()
 	}
 	// Insert self and always proceed starting up.
 	smap.Tmap[t.si.ID()] = t.si
 	t.owner.smap.put(smap)
 
 	// Try joining the cluster.
-	if err := t.withRetry(t.joinCluster, "join", true /*backoff*/); err != nil {
-		if loaded {
+	if err := t.withRetry(t.joinCluster, "join", true /*backoff*/, contactURLs...); err != nil {
+		if reliable {
 			var (
 				smapMaxVer int64
 				primaryURL string
