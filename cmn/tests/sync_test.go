@@ -118,6 +118,27 @@ func TestTimeoutGroupStopAndTimeout(t *testing.T) {
 	}
 }
 
+func TestSemaphore(t *testing.T) {
+	sema := cmn.NewSemaphore(2)
+	sema.Acquire()
+	sema.Acquire()
+
+	select {
+	case <-sema.TryAcquire():
+		t.Error("unexpected acquire")
+	default:
+		break
+	}
+
+	sema.Release()
+
+	select {
+	case <-sema.TryAcquire():
+	default:
+		t.Error("expected acquire to happen")
+	}
+}
+
 func TestDynSemaphore(t *testing.T) {
 	limit := 10
 

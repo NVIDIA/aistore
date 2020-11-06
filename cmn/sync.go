@@ -41,6 +41,11 @@ type (
 		ch   chan struct{}
 	}
 
+	// Semaphore implements sempahore which is just a nice wrapper on `chan struct{}`.
+	Semaphore struct {
+		s chan struct{}
+	}
+
 	// DynSemaphore implements sempahore which can change its size during usage.
 	DynSemaphore struct {
 		size int
@@ -133,6 +138,17 @@ func (sc *StopCh) Close() {
 		close(sc.ch)
 	})
 }
+
+func NewSemaphore(n int) *Semaphore {
+	s := &Semaphore{s: make(chan struct{}, n)}
+	for i := 0; i < n; i++ {
+		s.s <- struct{}{}
+	}
+	return s
+}
+func (s *Semaphore) TryAcquire() <-chan struct{} { return s.s }
+func (s *Semaphore) Acquire()                    { <-s.TryAcquire() }
+func (s *Semaphore) Release()                    { s.s <- struct{}{} }
 
 func NewDynSemaphore(n int) *DynSemaphore {
 	sema := &DynSemaphore{

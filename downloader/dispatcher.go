@@ -55,7 +55,7 @@ func (d *dispatcher) run() (err error) {
 	var (
 		// Number of concurrent job dispatches - it basically limits the number
 		// of goroutines so they won't go out of hand.
-		sema       = cmn.NewDynSemaphore(5 * fs.NumAvail())
+		sema       = cmn.NewSemaphore(5 * fs.NumAvail())
 		group, ctx = errgroup.WithContext(context.Background())
 	)
 
@@ -83,14 +83,24 @@ Loop:
 			d.abortJob[job.ID()] = cmn.NewStopCh()
 			d.mtx.Unlock()
 
-			sema.Acquire()
-			group.Go(func() error {
-				defer sema.Release()
-				if !d.dispatchDownload(job) {
-					return cmn.NewAbortedError("dispatcher")
-				}
-				return nil
-			})
+			select {
+			case <-d.parent.IdleTimer():
+				glog.Infof("%s has timed out. Exiting...", d.parent.Name())
+				break Loop
+			case <-d.parent.ChanAbort():
+				glog.Infof("%s has been aborted. Exiting...", d.parent.Name())
+				break Loop
+			case <-ctx.Done():
+				break Loop
+			case <-sema.TryAcquire():
+				group.Go(func() error {
+					defer sema.Release()
+					if !d.dispatchDownload(job) {
+						return cmn.NewAbortedError("dispatcher")
+					}
+					return nil
+				})
+			}
 		}
 	}
 	d.stop()

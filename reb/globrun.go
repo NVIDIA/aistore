@@ -152,7 +152,7 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 	)
 	for {
 		select {
-		case <-reb.semaCh:
+		case <-reb.semaCh.TryAcquire():
 			canRun = true
 		default:
 			runtime.Gosched()
@@ -164,13 +164,13 @@ func (reb *Manager) serialize(md *rebArgs) (newerRMD, alreadyRunning bool) {
 			glog.Warningf("%s: seeing newer rebID g%d, not running", logHdr, reb.rebID.Load())
 			newerRMD = true
 			if canRun {
-				reb.semaCh <- struct{}{}
+				reb.semaCh.Release()
 			}
 			return
 		}
 		if reb.rebID.Load() == md.id {
 			if canRun {
-				reb.semaCh <- struct{}{}
+				reb.semaCh.Release()
 			}
 			glog.Warningf("%s: g%d is already running", logHdr, md.id)
 			alreadyRunning = true
@@ -476,7 +476,7 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("global reb (g%d) in state %s: finished", md.id, stages[rebStageDone])
 	}
-	reb.semaCh <- struct{}{}
+	reb.semaCh.Release()
 }
 
 func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {

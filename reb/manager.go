@@ -70,7 +70,7 @@ type (
 			targets cluster.NodeMap // targets for which we are waiting for
 			ts      int64           // last time we have recomputed
 		}
-		semaCh     chan struct{}
+		semaCh     *cmn.Semaphore
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
 		xreb       atomic.Pointer // *xaction.Rebalance
 		stages     *nodeStages
@@ -149,8 +149,7 @@ func (reb *Manager) registerRecv() {
 		cmn.ExitLogf("%v", err)
 	}
 	// serialization: one at a time
-	reb.semaCh = make(chan struct{}, 1)
-	reb.semaCh <- struct{}{}
+	reb.semaCh = cmn.NewSemaphore(1)
 }
 
 func (reb *Manager) RebID() int64           { return reb.rebID.Load() }
