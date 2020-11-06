@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -1400,58 +1399,54 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 // The added "discovery_url" is precisely intended to address this scenario.
 //
 // Here's how a node joins a AIStore cluster:
-// - first, there's the primary proxy/gateway referenced by the current cluster map (Smap)
+// - first, there's the primary proxy/gateway referenced by the current cluster map
 //   or - during the cluster deployment time - by the the configured "primary_url"
 //   (see /deploy/dev/local/aisnode_config.sh)
-//
 // - if that one fails, the new node goes ahead and tries the alternatives:
-// 	- config.Proxy.DiscoveryURL ("discovery_url")
-// 	- config.Proxy.OriginalURL ("original_url")
-// - but only if those are defined and different from the previously tried.
+//  * config.Proxy.PrimaryURL   ("primary_url")
+//  * config.Proxy.DiscoveryURL ("discovery_url")
+//  * config.Proxy.OriginalURL  ("original_url")
+// - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
 func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResult) {
 	var (
-		pool   = make([]string, 0, 4)
-		config = cmn.GCO.Get()
-		f      = func(url string) {
+		config       = cmn.GCO.Get()
+		candidates   = make([]string, 0, 4+len(primaryURLs))
+		addCandidate = func(url string) {
 			if url == "" {
 				return
 			}
-			for _, u := range pool {
-				if u == url {
-					return
-				}
-			}
-			pool = append(pool, url)
-		}
-		sleep = 125 * time.Millisecond
-	)
-	// make a pool of unique "join" URLs
-	for _, u := range primaryURLs {
-		f(u)
-	}
-	url, psi := h.getPrimaryURLAndSI()
-	f(url)
-	// NOTE: the url above is either config or the primary's IntraControlNet.DirectURL;
-	//       add its public URL as "more static" in various virtualized environments
-	if psi != nil {
-		f(psi.PublicNet.DirectURL)
-	}
-	f(config.Proxy.DiscoveryURL)
-	f(config.Proxy.OriginalURL)
-
-	// up to 2 attempts
-	for i := 0; i < 2; i++ {
-		for _, url := range pool {
-			res = h.registerToURL(url, nil, cmn.DefaultTimeout, query, false)
-			if res.err == nil {
-				glog.Infof("%s: joined cluster via %s", h.si, url)
+			if cmn.StringInSlice(url, candidates) {
 				return
 			}
-			extra := rand.Int63n(int64(sleep))
-			time.Sleep(sleep + time.Duration(extra))
+			candidates = append(candidates, url)
 		}
+	)
+	primaryURL, psi := h.getPrimaryURLAndSI()
+	addCandidate(primaryURL)
+	// NOTE: The url above is either config or the primary's IntraControlNet.DirectURL;
+	//  Add its public URL as "more static" in various virtualized environments.
+	if psi != nil {
+		addCandidate(psi.URL(cmn.NetworkPublic))
+	}
+	addCandidate(config.Proxy.PrimaryURL)
+	addCandidate(config.Proxy.DiscoveryURL)
+	addCandidate(config.Proxy.OriginalURL)
+	for _, u := range primaryURLs {
+		addCandidate(u)
+	}
+
+	for i := 0; i < 2; i++ {
+		for _, candidateURL := range candidates {
+			res = h.registerToURL(candidateURL, nil, cmn.DefaultTimeout, query, false)
+			if res.err == nil {
+				glog.Infof("%s: joined cluster via %s", h.si, candidateURL)
+				return
+			}
+		}
+
+		time.Sleep(10 * time.Second)
 	}
 	return
 }
@@ -1547,7 +1542,7 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 		url, psi = cmn.GCO.Get().Proxy.PrimaryURL, nil
 		return
 	}
-	url, psi = smap.Primary.IntraControlNet.DirectURL, smap.Primary
+	url, psi = smap.Primary.URL(cmn.NetworkIntraControl), smap.Primary
 	return
 }
 
