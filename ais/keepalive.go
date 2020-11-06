@@ -557,7 +557,7 @@ var (
 // HeartBeatTracker tracks the timestamp of the last time a message is received from a server.
 // Timeout: a message is not received within the interval.
 type HeartBeatTracker struct {
-	ch       chan struct{}
+	mtx      sync.RWMutex
 	last     map[string]int64
 	interval time.Duration // expected to hear from the server within the interval
 }
@@ -575,43 +575,31 @@ func newKeepaliveTracker(c cmn.KeepaliveTrackerConf) KeepaliveTracker {
 
 // newHeartBeatTracker returns a HeartBeatTracker.
 func newHeartBeatTracker(interval time.Duration) *HeartBeatTracker {
-	hb := &HeartBeatTracker{
+	return &HeartBeatTracker{
 		last:     make(map[string]int64),
-		ch:       make(chan struct{}, 1),
 		interval: interval,
 	}
-
-	hb.unlock()
-	return hb
-}
-
-func (hb *HeartBeatTracker) lock() {
-	<-hb.ch
-}
-
-func (hb *HeartBeatTracker) unlock() {
-	hb.ch <- struct{}{}
 }
 
 // HeardFrom is called to indicate a keepalive message (or equivalent) has been received from a server.
 func (hb *HeartBeatTracker) HeardFrom(id string, reset bool) {
-	hb.lock()
+	hb.mtx.Lock()
 	hb.last[id] = mono.NanoTime()
-	hb.unlock()
+	hb.mtx.Unlock()
 }
 
 // TimedOut returns true if it has determined that it has not heard from the server.
 func (hb *HeartBeatTracker) TimedOut(id string) bool {
-	hb.lock()
+	hb.mtx.RLock()
 	t, ok := hb.last[id]
-	hb.unlock()
+	hb.mtx.RUnlock()
 	return !ok || mono.Since(t) > hb.interval
 }
 
 // AverageTracker keeps track of the average latency of all messages.
 // Timeout: last received is more than the 'factor' of current average.
 type AverageTracker struct {
-	ch     chan struct{}
+	mtx    sync.RWMutex
 	rec    map[string]averageTrackerRecord
 	factor uint8
 }
@@ -628,32 +616,21 @@ func (rec *averageTrackerRecord) avg() int64 {
 
 // newAverageTracker returns an AverageTracker.
 func newAverageTracker(factor uint8) *AverageTracker {
-	a := &AverageTracker{
+	return &AverageTracker{
 		rec:    make(map[string]averageTrackerRecord),
-		ch:     make(chan struct{}, 1),
 		factor: factor,
 	}
-
-	a.unlock()
-	return a
-}
-
-func (a *AverageTracker) lock() {
-	<-a.ch
-}
-
-func (a *AverageTracker) unlock() {
-	a.ch <- struct{}{}
 }
 
 // HeardFrom is called to indicate a keepalive message (or equivalent) has been received from a server.
 func (a *AverageTracker) HeardFrom(id string, reset bool) {
-	a.lock()
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
 	var rec averageTrackerRecord
 	rec, ok := a.rec[id]
 	if reset || !ok {
 		a.rec[id] = averageTrackerRecord{count: 0, totalMS: 0, last: mono.NanoTime()}
-		a.unlock()
 		return
 	}
 
@@ -663,14 +640,13 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	rec.count++
 	rec.totalMS += delta / int64(time.Millisecond)
 	a.rec[id] = rec
-	a.unlock()
 }
 
 // TimedOut returns true if it has determined that is has not heard from the server.
 func (a *AverageTracker) TimedOut(id string) bool {
-	a.lock()
+	a.mtx.RLock()
 	rec, ok := a.rec[id]
-	a.unlock()
+	a.mtx.RUnlock()
 
 	if !ok {
 		return true
@@ -678,6 +654,5 @@ func (a *AverageTracker) TimedOut(id string) bool {
 	if rec.count == 0 {
 		return false
 	}
-
 	return int64(mono.Since(rec.last)/time.Millisecond) > int64(a.factor)*rec.avg()
 }
