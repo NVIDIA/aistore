@@ -16,21 +16,26 @@ import (
 // objReader pool (recv) //
 ///////////////////////////
 
-var recvPool sync.Pool
+var (
+	recvPool        sync.Pool
+	recvPoolEnabled bool // TODO -- FIXME: enable&remove
+)
 
 func allocRecv() (obj *objReader) {
-	if v := recvPool.Get(); v != nil {
-		obj = v.(*objReader)
+	if recvPoolEnabled {
+		if v := recvPool.Get(); v != nil {
+			obj = v.(*objReader)
+		}
 	}
 	return
 }
 
 func FreeRecv(reader io.Reader) {
-	if debug.Enabled {
+	if recvPoolEnabled {
 		obj := reader.(*objReader)
 		debug.Assert(obj != nil)
+		recvPool.Put(obj)
 	}
-	recvPool.Put(reader)
 }
 
 /////////////////////
