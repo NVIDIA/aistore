@@ -403,14 +403,19 @@ func (mgr *Manager) BucketsMDChanged() error {
 	}
 	provider := cmn.ProviderAIS
 	newBckMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
-		oldBckMD.Range(&provider, nil, func(obck *cluster.Bck) bool {
-			if !obck.Props.EC.Enabled && nbck.Props.EC.Enabled {
+		oprops, ok := oldBckMD.Get(nbck)
+		if !ok {
+			if nbck.Props.EC.Enabled {
 				mgr.enableBck(nbck)
-			} else if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-				mgr.disableBck(nbck)
 			}
 			return false
-		})
+		}
+		if !oprops.EC.Enabled && nbck.Props.EC.Enabled {
+			mgr.enableBck(nbck)
+		} else if oprops.EC.Enabled && !nbck.Props.EC.Enabled {
+			mgr.disableBck(nbck)
+		}
+
 		return false
 	})
 	return nil

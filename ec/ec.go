@@ -282,19 +282,22 @@ func freeObject(r interface{}) {
 	if r == nil {
 		return
 	}
-	if sgl, ok := r.(*memsys.SGL); ok {
-		if sgl != nil {
-			sgl.Free()
+	switch handle := r.(type) {
+	case *memsys.SGL:
+		if handle != nil {
+			handle.Free()
 		}
-		return
-	}
-	if f, ok := r.(*cmn.FileHandle); ok {
-		if f != nil {
-			cmn.Close(f)
+	case *cmn.FileHandle:
+		if handle != nil {
+			cmn.Close(handle)
 		}
-		return
+	case *os.File:
+		if handle != nil {
+			cmn.Close(handle)
+		}
+	default:
+		debug.Assertf(false, "invalid object type: %T", r)
 	}
-	cmn.Assertf(false, "invalid object type: %v", r)
 }
 
 // removes all temporary slices in case of erasure coding fails in the middle

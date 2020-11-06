@@ -253,6 +253,10 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
 	if len(nodes) == 0 {
 		return errors.New("destination list is empty")
 	}
+	if r.reqBundle == nil || r.respBundle == nil {
+		return fmt.Errorf("EC transport closed")
+	}
+
 	var (
 		err error
 		o   = transport.AllocSend()
