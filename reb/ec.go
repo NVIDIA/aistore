@@ -324,33 +324,34 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 			rebID:    reb.rebID.Load(),
 			md:       ct.meta,
 		}
-		hdr = transport.ObjHdr{
-			Bck:      ct.Bck,
-			ObjName:  ct.ObjName,
-			ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
-		}
+		o = transport.AllocSend()
 	)
+	o.Hdr = transport.ObjHdr{
+		Bck:      ct.Bck,
+		ObjName:  ct.ObjName,
+		ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
+	}
 	if lom != nil {
-		hdr.ObjAttrs.Atime = lom.AtimeUnix()
-		hdr.ObjAttrs.Version = lom.Version()
+		o.Hdr.ObjAttrs.Atime = lom.AtimeUnix()
+		o.Hdr.ObjAttrs.Version = lom.Version()
 		if cksum := lom.Cksum(); cksum != nil {
-			hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = cksum.Get()
+			o.Hdr.ObjAttrs.CksumType, o.Hdr.ObjAttrs.CksumValue = cksum.Get()
 		}
 	}
 	if ct.SliceID != 0 {
-		hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
+		o.Hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
 	}
 	reb.ec.onAir.Inc()
-	hdr.Opaque = req.NewPack(nil, rebMsgEC)
-
-	if err := reb.dm.Send(&transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, fh, target); err != nil {
+	o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
+	o.Callback = reb.transportECCB
+	if err := reb.dm.Send(o, fh, target); err != nil {
 		reb.ec.onAir.Dec()
 		cmn.Close(fh)
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
 	reb.statTracker.AddMany(
 		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
-		stats.NamedVal64{Name: stats.RebTxSize, Value: hdr.ObjAttrs.Size},
+		stats.NamedVal64{Name: stats.RebTxSize, Value: o.Hdr.ObjAttrs.Size},
 	)
 	return nil
 }
@@ -377,28 +378,30 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 			md:       &newMeta,
 		}
 		size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
-		hdr  = transport.ObjHdr{
-			Bck:      ct.Bck,
-			ObjName:  ct.ObjName,
-			ObjAttrs: transport.ObjectAttrs{Size: size},
-		}
+		o    = transport.AllocSend()
 	)
+	o.Hdr = transport.ObjHdr{
+		Bck:      ct.Bck,
+		ObjName:  ct.ObjName,
+		ObjAttrs: transport.ObjectAttrs{Size: size},
+	}
 	newMeta.SliceID = sliceID
-	hdr.Opaque = req.NewPack(nil, rebMsgEC)
+	o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
 	if cksum != nil {
-		hdr.ObjAttrs.CksumValue = cksum.Value()
-		hdr.ObjAttrs.CksumType = cksum.Type()
+		o.Hdr.ObjAttrs.CksumValue = cksum.Value()
+		o.Hdr.ObjAttrs.CksumType = cksum.Type()
 	}
 
 	rt.daemonID = target.ID()
-	rt.header = hdr
+	rt.header = o.Hdr
 	reb.ec.ackCTs.add(rt)
 
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("sending slice %d(%d)%s of %s/%s to %s", sliceID, size, cksum, ct.Bck.Name, ct.ObjName, target)
 	}
 	reb.ec.onAir.Inc()
-	if err := reb.dm.Send(&transport.Obj{Hdr: hdr, Callback: reb.transportECCB}, reader, target); err != nil {
+	o.Callback = reb.transportECCB
+	if err := reb.dm.Send(o, reader, target); err != nil {
 		reb.ec.onAir.Dec()
 		reb.ec.ackCTs.remove(rt)
 		return fmt.Errorf("failed to send slices to node %s: %v", target, err)
@@ -877,11 +880,12 @@ func (reb *Manager) exchange(md *rebArgs) error {
 		}
 		body   = cmn.MustMarshal(cts)
 		opaque = req.NewPack(nil, rebMsgEC)
-		hdr    = transport.ObjHdr{
-			ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
-			Opaque:   opaque,
-		}
+		o      = transport.AllocSend()
 	)
+	o.Hdr = transport.ObjHdr{
+		ObjAttrs: transport.ObjectAttrs{Size: int64(len(body))},
+		Opaque:   opaque,
+	}
 	for i := 0; i < retries; i++ {
 		failed = failed[:0]
 		for _, node := range sendTo {
@@ -889,7 +893,7 @@ func (reb *Manager) exchange(md *rebArgs) error {
 				return cmn.NewAbortedError("exchange")
 			}
 			rd := cmn.NewByteHandle(body)
-			if err := reb.dm.Send(&transport.Obj{Hdr: hdr}, rd, node); err != nil {
+			if err := reb.dm.Send(o, rd, node); err != nil {
 				glog.Errorf("Failed to send CTs to node %s: %v", node.ID(), err)
 				failed = append(failed, node)
 			}

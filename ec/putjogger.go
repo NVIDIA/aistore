@@ -231,15 +231,10 @@ func (c *putJogger) cleanup(req *Request) error {
 
 	mm := c.parent.t.SmallMMSA()
 	request := c.parent.newIntraReq(reqDel, nil).NewPack(mm)
-	hdr := transport.ObjHdr{
-		Bck:     req.LOM.Bck().Bck,
-		ObjName: req.LOM.ObjName,
-		Opaque:  request,
-		ObjAttrs: transport.ObjectAttrs{
-			Size: 0,
-		},
-	}
-	return c.parent.reqBundle.Send(&transport.Obj{Hdr: hdr, Callback: c.ctSendCallback}, nil)
+	o := transport.AllocSend()
+	o.Hdr = transport.ObjHdr{Bck: req.LOM.Bck().Bck, ObjName: req.LOM.ObjName, Opaque: request}
+	o.Callback = c.ctSendCallback
+	return c.parent.reqBundle.Send(o, nil)
 }
 
 // Sends object replicas to targets that must have replicas after the client

@@ -42,10 +42,11 @@ var sendPool sync.Pool
 func AllocSend() (obj *Obj) {
 	if v := sendPool.Get(); v != nil {
 		obj = v.(*Obj)
+		*obj = Obj{}
 	} else {
 		obj = &Obj{}
 	}
 	return
 }
 
-func FreeSend(obj *Obj) { sendPool.Put(obj) }
+func freeSend(obj *Obj) { sendPool.Put(obj) }

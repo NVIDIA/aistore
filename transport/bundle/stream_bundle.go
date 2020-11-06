@@ -216,7 +216,8 @@ func (sb *Streams) get() (bun bundle) {
 
 // one obj, one stream
 func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *robin, reopen bool) (err error) {
-	one := *obj
+	one := transport.AllocSend()
+	*one = *obj
 	one.Reader = roc // reduce to io.ReadCloser
 	if reopen && roc != nil {
 		var reader io.ReadCloser
@@ -227,11 +228,11 @@ func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *ro
 	}
 	if sb.multiplier <= 1 {
 		s0 := robin.stsdest[0]
-		return s0.Send(&one)
+		return s0.Send(one)
 	}
 	i := int(robin.i.Inc()) % len(robin.stsdest)
 	s := robin.stsdest[i]
-	return s.Send(&one)
+	return s.Send(one)
 }
 
 func (sb *Streams) apply(action int) {

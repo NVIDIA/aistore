@@ -182,9 +182,9 @@ func (t *targetrunner) sendTo(lom *cluster.LOM, params cluster.SendToParams) err
 func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 	cmn.Assert(params.HdrMeta != nil)
 	var (
-		wg  = &sync.WaitGroup{}
-		hdr = transport.ObjHdr{}
-		cb  = func(_ transport.ObjHdr, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
+		wg = &sync.WaitGroup{}
+		o  = transport.AllocSend()
+		cb = func(_ transport.ObjHdr, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
 			lom = (*cluster.LOM)(lomptr)
 			if params.Locked {
 				lom.Unlock(false)
@@ -198,8 +198,9 @@ func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 
 	wg.Add(1)
 
-	hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
-	o := &transport.Obj{Hdr: hdr, Callback: cb, CmplPtr: unsafe.Pointer(lom)}
+	o.Hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
+	o.Callback = cb
+	o.CmplPtr = unsafe.Pointer(lom)
 	if err := params.DM.Send(o, params.Reader, params.Tsi); err != nil {
 		if params.Locked {
 			lom.Unlock(false)

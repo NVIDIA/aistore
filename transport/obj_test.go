@@ -220,11 +220,7 @@ func Test_OneStream(t *testing.T) {
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
-	if mono.NanoTime()%2 == 1 {
-		streamWriteUntil(t, 99, nil, ts, nil, nil, true /*compress*/)
-	} else {
-		streamWriteUntil(t, 55, nil, ts, nil, nil, false)
-	}
+	streamWriteUntil(t, 55, nil, ts, nil, nil, false)
 	printNetworkStats(t)
 }
 
@@ -302,8 +298,8 @@ func Test_MultipleNetworks(t *testing.T) {
 	totalSend := int64(0)
 	for _, stream := range streams {
 		hdr, reader := makeRandReader()
-		stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 		totalSend += hdr.ObjAttrs.Size
+		stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 	}
 
 	for _, stream := range streams {
@@ -345,8 +341,8 @@ func Test_OnSendCallback(t *testing.T) {
 		posted[idx] = rr
 		mu.Unlock()
 		rrc := &randReaderCtx{t, rr, posted, &mu, idx}
-		stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, Callback: rrc.sentCallback})
 		totalSend += hdr.ObjAttrs.Size
+		stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, Callback: rrc.sentCallback})
 	}
 	stream.Fin()
 
@@ -520,13 +516,7 @@ func Test_DryRun(t *testing.T) {
 	defer os.Unsetenv("AIS_STREAM_DRY_RUN")
 	tassert.CheckFatal(t, err)
 
-	extra := &transport.Extra{
-		Callback: func(h transport.ObjHdr, t io.ReadCloser, o unsafe.Pointer, e error) {
-			obj := (*transport.Obj)(o)
-			transport.FreeSend(obj)
-		},
-	}
-	stream := transport.NewObjStream(nil, "dummy/null", extra)
+	stream := transport.NewObjStream(nil, "dummy/null", nil)
 
 	random := newRand(mono.NanoTime())
 	sgl := MMSA.NewSGL(cmn.MiB)
@@ -673,10 +663,11 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		runFor = 10 * time.Second
 	}
 	for time.Since(now) < runFor {
-		hdr, reader := makeRandReader()
-		stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
+		obj := transport.AllocSend()
+		obj.Hdr, obj.Reader = makeRandReader()
+		stream.Send(obj)
 		num++
-		size += hdr.ObjAttrs.Size
+		size += obj.Hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*4 {
 			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
 			prevsize = size
@@ -717,6 +708,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		*totalReceived += written
+		transport.FreeRecv(objReader)
 	}
 }
 

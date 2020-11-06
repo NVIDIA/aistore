@@ -675,20 +675,21 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.Snode().ID()}
 		mm     = rj.m.t.SmallMMSA()
 		opaque = ack.NewPack(mm)
-		hdr    = transport.ObjHdr{
-			Bck:     lom.Bck().Bck,
-			ObjName: lom.ObjName,
-			Opaque:  opaque,
-			ObjAttrs: transport.ObjectAttrs{
-				Size:       lom.Size(),
-				Atime:      lom.AtimeUnix(),
-				CksumType:  cksumType,
-				CksumValue: cksumValue,
-				Version:    lom.Version(),
-			},
-		}
-		o = &transport.Obj{Hdr: hdr, Callback: rj.objSentCallback, CmplPtr: unsafe.Pointer(lom)}
+		o      = transport.AllocSend()
 	)
+	o.Hdr = transport.ObjHdr{
+		Bck:     lom.Bck().Bck,
+		ObjName: lom.ObjName,
+		Opaque:  opaque,
+		ObjAttrs: transport.ObjectAttrs{
+			Size:       lom.Size(),
+			Atime:      lom.AtimeUnix(),
+			CksumType:  cksumType,
+			CksumValue: cksumValue,
+			Version:    lom.Version(),
+		},
+	}
+	o.Callback, o.CmplPtr = rj.objSentCallback, unsafe.Pointer(lom)
 
 	rj.m.inQueue.Inc()
 	if err = rj.m.dm.Send(o, file, tsi); err != nil {
