@@ -2053,6 +2053,8 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpdaeput(w, r)
 	case http.MethodDelete:
 		p.httpdaedelete(w, r)
+	case http.MethodPost:
+		p.httpdaepost(w, r)
 	default:
 		p.invalmsghdlrf(w, r, "invalid method %s for /daemon path", r.Method)
 	}
@@ -2258,6 +2260,30 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	default:
 		p.invalmsghdlrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
 		return
+	}
+}
+
+// register proxy
+func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
+	if err != nil {
+		return
+	}
+
+	if len(apiItems) == 0 || apiItems[0] != cmn.UserRegister {
+		p.invalmsghdlr(w, r, "unrecognized path in /daemon POST")
+		return
+	}
+
+	p.keepalive.send(kaRegisterMsg)
+	body, err := cmn.ReadBytes(r)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	caller := r.Header.Get(cmn.HeaderCallerName)
+	if err := p.applyRegMeta(body, caller); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 	}
 }
 
@@ -2849,8 +2875,16 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if nonElectable {
 		flags = cluster.SnodeNonElectable
 	}
+
+	if userRegister {
+		if errCode, err := p.userRegisterNode(nsi, tag); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), errCode)
+			return
+		}
+	}
+
 	p.owner.smap.Lock()
-	smap, update, code, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, userRegister, flags)
+	smap, update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, flags)
 	if !isProxy && p.NodeStarted() {
 		// Short for `rebalance.Store(rebalance.Load() || regReq.Reb)`
 		p.owner.rmd.rebalance.CAS(false, regReq.Reb)
@@ -2858,9 +2892,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.owner.smap.Unlock()
 
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), code)
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
+
 	if !update {
 		return
 	}
@@ -2875,14 +2910,52 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	go p.updateAndDistribute(nsi, msg, flags)
 }
 
+func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode int, err error) {
+	var (
+		smap = p.owner.smap.get()
+		bmd  = p.owner.bmd.get()
+		meta = &nodeRegMeta{smap, bmd, p.si, false}
+	)
+
+	//
+	// join(node) => cluster via API
+	//
+	if glog.FastV(3, glog.SmoduleAIS) {
+		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, smap.StringEx())
+	}
+
+	// send the joining node the current BMD and Smap as well
+	args := callArgs{
+		si: nsi,
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Path:   cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.UserRegister),
+			Body:   cmn.MustMarshal(meta),
+		},
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+	}
+
+	res := p.call(args)
+	if res.err == nil {
+		return
+	}
+
+	if cmn.IsErrConnectionRefused(res.err) {
+		err = fmt.Errorf("failed to reach %s at %s:%s",
+			nsi, nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
+	} else {
+		err = fmt.Errorf("%s: failed to %s %s: %v, %s",
+			p.si, tag, nsi, res.err, res.details)
+	}
+	errCode = res.status
+	return
+}
+
 // NOTE: under lock
 func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag string,
-	keepalive, userRegister bool, flags cluster.SnodeFlags) (smap *smapX, update bool, errCode int, err error) {
+	keepalive bool, flags cluster.SnodeFlags) (smap *smapX, update bool, err error) {
 	debug.AssertMutexLocked(&p.owner.smap.Mutex)
-
-	errCode = http.StatusBadRequest
 	smap = p.owner.smap.get()
-
 	if !smap.isPrimary(p.si) {
 		err = fmt.Errorf("%s is not the primary(%s, %s): cannot %s %s", p.si, smap.Primary, smap, tag, nsi)
 		return
@@ -2897,36 +2970,6 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 		osi := smap.GetTarget(nsi.ID())
 		if keepalive && !p.addOrUpdateNode(nsi, osi, keepalive) {
 			return
-		}
-		if userRegister {
-			//
-			// join(node) => cluster via API
-			//
-			if glog.FastV(3, glog.SmoduleAIS) {
-				glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, smap.StringEx())
-			}
-			// send the joining node the current BMD and Smap as well
-			bmd := p.owner.bmd.get()
-			meta := &nodeRegMeta{smap, bmd, p.si, false}
-			body := cmn.MustMarshal(meta)
-			path := cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.UserRegister)
-			args := callArgs{
-				si:      nsi,
-				req:     cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: body},
-				timeout: cmn.GCO.Get().Timeout.CplaneOperation,
-			}
-			res := p.call(args)
-			if res.err != nil {
-				if cmn.IsErrConnectionRefused(res.err) {
-					err = fmt.Errorf("failed to reach %s at %s:%s",
-						nsi, nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
-				} else {
-					err = fmt.Errorf("%s: failed to %s %s: %v, %s",
-						p.si, tag, nsi, res.err, res.details)
-				}
-				errCode = res.status
-				return
-			}
 		}
 	}
 	// check for cluster integrity errors (cie)
