@@ -54,4 +54,4 @@ func AllocSend() (obj *Obj) {
 	return
 }
 
-func freeSend(obj *Obj) { sendPool.Put(obj) }
+func FreeSend(obj *Obj) { sendPool.Put(obj) }

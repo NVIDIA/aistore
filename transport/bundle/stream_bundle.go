@@ -232,7 +232,10 @@ func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *ro
 	}
 	i := int(robin.i.Inc()) % len(robin.stsdest)
 	s := robin.stsdest[i]
-	return s.Send(one)
+	if err = s.Send(one); err != nil {
+		transport.FreeSend(one)
+	}
+	return
 }
 
 func (sb *Streams) apply(action int) {
