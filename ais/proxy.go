@@ -3091,27 +3091,44 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, sid) {
 		return
 	}
-	ctx := &smapModifier{
-		pre:   p._unregNodePre,
-		post:  p._unregNodePost,
-		final: p._unregNodeFinal,
-		msg:   msg,
-		sid:   sid,
-	}
-	err = p.owner.smap.modify(ctx)
+	errCode, err := p.unregNode(msg, node, false /*skipReb*/)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), ctx.status)
+		p.invalmsghdlr(w, r, err.Error(), errCode)
 	}
 }
 
 func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) (err error) {
 	ctx.smap = p.owner.smap.get()
-	ctx.status, err = p.unregisterNode(clone, ctx.sid)
+	sid := ctx.sid
+	node := clone.GetNode(sid)
+	if node == nil {
+		err = &errNodeNotFound{"failed to unregister", sid, p.si, clone}
+		ctx.status = http.StatusNotFound
+		return err
+	}
+	if node.IsProxy() {
+		clone.delProxy(sid)
+		glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
+	} else {
+		clone.delTarget(sid)
+		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
+	}
+
+	p._staffIC(clone)
+
+	if !p.NodeStarted() {
+		return
+	}
+
+	if isPrimary := clone.isPrimary(p.si); !isPrimary {
+		ctx.status = http.StatusInternalServerError
+		err = fmt.Errorf("%s: is not a primary", p.si)
+	}
 	return err
 }
 
 func (p *proxyrunner) _unregNodePost(ctx *smapModifier, clone *smapX) {
-	if p.requiresRebalance(ctx.smap, clone) {
+	if !ctx.skipReb && p.requiresRebalance(ctx.smap, clone) {
 		rmdCtx := &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) {
 				clone.inc()
@@ -3122,7 +3139,7 @@ func (p *proxyrunner) _unregNodePost(ctx *smapModifier, clone *smapX) {
 	}
 }
 
-func (p *proxyrunner) _unregNodeFinal(ctx *smapModifier, clone *smapX) {
+func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
 		pairs  = []revsPair{{clone, aisMsg}}
@@ -3140,11 +3157,30 @@ func (p *proxyrunner) _unregNodeFinal(ctx *smapModifier, clone *smapX) {
 	_ = p.metasyncer.sync(pairs...)
 }
 
-func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err error) {
+// '{"action": "shutdown"}' /v1/cluster => (proxy) =>
+// '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
+// '{"action": cmn.ActXactStart}' /v1/cluster
+// '{"action": cmn.ActXactStop}' /v1/cluster
+// '{"action": cmn.ActSendOwnershipTbl}' /v1/cluster
+// '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
+// '{"action": "setconfig"}' /v1/cluster => (proxy) =>
+func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
+	if err != nil {
+		return
+	}
+	if len(apiItems) == 0 {
+		p.cluputJSON(w, r)
+	} else {
+		p.cluputQuery(w, r, apiItems[0])
+	}
+}
+
+func (p *proxyrunner) unregNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	smap := p.owner.smap.get()
-	node := smap.GetNode(sid)
+	node := smap.GetNode(si.ID())
 	if node == nil {
-		err = &errNodeNotFound{"cannot unregister", sid, p.si, smap}
+		err = &errNodeNotFound{"cannot unregister", si.ID(), p.si, smap}
 		return http.StatusNotFound, err
 	}
 
@@ -3173,72 +3209,16 @@ func (p *proxyrunner) unregisterNode(clone *smapX, sid string) (status int, err 
 	}
 
 	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
-	node = clone.GetNode(sid)
-	if node == nil {
-		err = &errNodeNotFound{"failed to unregister", sid, p.si, clone}
-		return http.StatusNotFound, err
-	}
-	if node.IsProxy() {
-		clone.delProxy(sid)
-		glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
-	} else {
-		clone.delTarget(sid)
-		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
-	}
-
-	p._staffIC(clone)
-
-	if !p.NodeStarted() {
-		return
-	}
-
-	if isPrimary := clone.isPrimary(p.si); !isPrimary {
-		return http.StatusInternalServerError, fmt.Errorf("%s: is not a primary", p.si)
-	}
-	return
-}
-
-// '{"action": "shutdown"}' /v1/cluster => (proxy) =>
-// '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
-// '{"action": cmn.ActXactStart}' /v1/cluster
-// '{"action": cmn.ActXactStop}' /v1/cluster
-// '{"action": cmn.ActSendOwnershipTbl}' /v1/cluster
-// '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
-// '{"action": "setconfig"}' /v1/cluster => (proxy) =>
-func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
-	if err != nil {
-		return
-	}
-	if len(apiItems) == 0 {
-		p.cluputJSON(w, r)
-	} else {
-		p.cluputQuery(w, r, apiItems[0])
-	}
-}
-
-func (p *proxyrunner) removeNode(msg *cmn.ActionMsg, si *cluster.Snode) (err error) {
 	ctx := &smapModifier{
-		pre:   p._remnPre,
-		final: p._syncFinal,
-		sid:   si.ID(),
-		msg:   msg,
+		pre:     p._unregNodePre,
+		post:    p._unregNodePost,
+		final:   p._syncFinal,
+		msg:     msg,
+		sid:     si.ID(),
+		skipReb: skipReb,
 	}
 	err = p.owner.smap.modify(ctx)
-	return
-}
-
-func (p *proxyrunner) _remnPre(ctx *smapModifier, clone *smapX) (err error) {
-	_, err = p.unregisterNode(clone, ctx.sid)
-	return
-}
-
-func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
-	var (
-		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
-		pairs  = []revsPair{{clone, aisMsg}}
-	)
-	_ = p.metasyncer.sync(pairs...)
+	return ctx.status, err
 }
 
 // Put a node under maintenance
@@ -3269,9 +3249,7 @@ func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
 }
 
 // Callback: remove the node from the cluster if rebalance finished successfully
-func (p *proxyrunner) removeAfterRebalance(
-	nl nl.NotifListener, msg *cmn.ActionMsg,
-	si *cluster.Snode) {
+func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionMsg, si *cluster.Snode) {
 	if err := nl.Err(false); err != nil || nl.Aborted() {
 		glog.Errorf("Rebalance(%s) didn't finish successfully,  err: %v, aborted: %v", nl.UUID(), err, nl.Aborted())
 		return
@@ -3279,7 +3257,7 @@ func (p *proxyrunner) removeAfterRebalance(
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Rebalance(%s) finished. Removing node %s", nl.UUID(), si)
 	}
-	p.removeNode(msg, si)
+	p.unregNode(msg, si, true /*skipReb*/)
 }
 
 // Run rebalance and call a callback after the rebalance finishes

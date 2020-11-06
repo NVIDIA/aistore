@@ -723,7 +723,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 		}
 		return p.finalizeMaintenance(msg, si, cb)
 	} else if msg.Action == cmn.ActDecommission {
-		err = p.removeNode(msg, si)
+		_, err = p.unregNode(msg, si, true /*skipReb*/)
 	}
 	return
 }
