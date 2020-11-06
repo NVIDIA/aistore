@@ -289,7 +289,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 				continue
 			}
 
-			err, ok := d.blockingDispatchDownloadSingle(t)
+			ok, err := d.blockingDispatchDownloadSingle(t)
 			if err != nil {
 				glog.Errorf("Download job %q failed, couldn't download object %q, aborting; err: %s", job.ID(), obj.objName, err.Error())
 				dlStore.setAborted(job.ID())
@@ -340,20 +340,20 @@ func (d *dispatcher) checkAborted() bool {
 }
 
 // returns false if dispatcher encountered hard error, true otherwise
-func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (err error, ok bool) {
+func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok bool, err error) {
 	bck := cluster.NewBckEmbed(task.job.Bck())
 	if err := bck.Init(d.parent.t.Bowner(), d.parent.t.Snode()); err != nil {
-		return err, true
+		return true, err
 	}
 
 	mi, _, err := cluster.HrwMpath(bck.MakeUname(task.obj.objName))
 	if err != nil {
-		return err, false
+		return false, err
 	}
 	jogger, ok := d.joggers[mi.Path]
 	if !ok {
 		err := fmt.Errorf("no jogger for mpath %s exists", mi.Path)
-		return err, false
+		return false, err
 	}
 
 	// NOTE: Throttle job before making jogger busy - we don't want to clog the
@@ -363,7 +363,7 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (err
 	// Firstly, check if the job was aborted when we were sleeping.
 	if d.checkAbortedJob(task.job) {
 		task.job.throttler().release()
-		return nil, true
+		return true, nil
 	}
 
 	// Secondly, try to push the new task into queue.
@@ -371,17 +371,17 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (err
 	// FIXME: if this particular jogger is full, but others are available, dispatcher
 	//  will wait with dispatching all of the requests anyway
 	case jogger.putCh(task) <- task:
-		return nil, true
+		return true, nil
 	case <-d.jobAbortedCh(task.job.ID()).Listen():
 		task.job.throttler().release()
-		return nil, true
+		return true, nil
 	case <-d.stopCh.Listen():
 		task.job.throttler().release()
-		return nil, false
+		return false, nil
 	}
 }
 
-func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, err error, statusCode int) {
+func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCode int, err error) {
 	req.responseCh = make(chan *response, 1)
 	switch req.action {
 	case actStatus:
@@ -396,7 +396,7 @@ func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, err error
 		cmn.Assertf(false, "%v; %v", req, req.action)
 	}
 	r := <-req.responseCh
-	return r.resp, r.err, r.statusCode
+	return r.resp, r.statusCode, r.err
 }
 
 func (d *dispatcher) handleRemove(req *request) {

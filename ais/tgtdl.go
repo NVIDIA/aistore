@@ -93,7 +93,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				P:        t.callerNotifyProgress,
 			},
 		}, dlJob)
-		response, respErr, statusCode = downloaderXact.Download(dlJob)
+		response, statusCode, respErr = downloaderXact.Download(dlJob)
 	case http.MethodGet:
 		_, err := cmn.MatchRESTItems(r.URL.Path, 0, false, cmn.Version, cmn.Download)
 		debug.AssertNoErr(err)
@@ -108,7 +108,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Getting status of download: %v", payload)
 			}
-			response, respErr, statusCode = downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
+			response, statusCode, respErr = downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
 		} else {
 			var regex *regexp.Regexp
 			if payload.Regex != "" {
@@ -120,7 +120,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Listing downloads")
 			}
-			response, respErr, statusCode = downloaderXact.ListJobs(regex)
+			response, statusCode, respErr = downloaderXact.ListJobs(regex)
 		}
 	case http.MethodDelete:
 		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.Version, cmn.Download)
@@ -137,12 +137,12 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Aborting download: %v", payload)
 			}
-			response, respErr, statusCode = downloaderXact.AbortJob(payload.ID)
+			response, statusCode, respErr = downloaderXact.AbortJob(payload.ID)
 		case cmn.Remove:
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Removing download: %v", payload)
 			}
-			response, respErr, statusCode = downloaderXact.RemoveJob(payload.ID)
+			response, statusCode, respErr = downloaderXact.RemoveJob(payload.ID)
 		default:
 			cmn.AssertMsg(false,
 				fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).",

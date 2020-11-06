@@ -58,22 +58,22 @@ func (hp *httpProvider) client(u string) *http.Client {
 func (hp *httpProvider) Provider() string  { return cmn.ProviderHTTP }
 func (hp *httpProvider) MaxPageSize() uint { return 10000 }
 
-func (hp *httpProvider) ListBuckets(_ context.Context, _ cmn.QueryBcks) (_ cmn.BucketNames, _ error, _ int) {
+func (hp *httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
 	debug.Assert(false)
 	return
 }
 
-func (hp *httpProvider) ListObjects(_ context.Context, _ *cluster.Bck, _ *cmn.SelectMsg) (_ *cmn.BucketList, _ error, _ int) {
+func (hp *httpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	debug.Assert(false)
 	return
 }
 
-func (hp *httpProvider) PutObj(_ context.Context, _ io.Reader, _ *cluster.LOM) (string, error, int) {
-	return "", fmt.Errorf("%q provider doesn't support creating new objects", hp.Provider()), http.StatusBadRequest
+func (hp *httpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (string, int, error) {
+	return "", http.StatusBadRequest, fmt.Errorf("%q provider doesn't support creating new objects", hp.Provider())
 }
 
-func (hp *httpProvider) DeleteObj(_ context.Context, _ *cluster.LOM) (error, int) {
-	return fmt.Errorf("%q provider doesn't support deleting object", hp.Provider()), http.StatusBadRequest
+func (hp *httpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
+	return http.StatusBadRequest, fmt.Errorf("%q provider doesn't support deleting object", hp.Provider())
 }
 
 func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (string, error) {
@@ -91,12 +91,12 @@ func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (stri
 	return origURL, nil
 }
 
-func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
 	// TODO: we should use `bck.RemoteBck()`.
 
 	origURL, err := getOriginalURL(ctx, bck, "")
 	if err != nil {
-		return nil, err, http.StatusBadRequest
+		return nil, http.StatusBadRequest, err
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -106,18 +106,18 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	// Contact the original URL - as long as we can make connection we assume it's good.
 	resp, err := hp.client(origURL).Head(origURL)
 	if err != nil {
-		return nil, err, http.StatusBadRequest
+		return nil, http.StatusBadRequest, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("HEAD(%s) failed, status %d", origURL, resp.StatusCode)
-		return nil, err, resp.StatusCode
+		return nil, resp.StatusCode, err
 	}
 
 	// TODO: improve validation - check `content-type` header
 	if resp.Header.Get(cmn.HeaderETag) == "" {
 		err = fmt.Errorf("invalid resource - missing header %s", cmn.HeaderETag)
-		return nil, err, http.StatusBadRequest
+		return nil, http.StatusBadRequest, err
 	}
 
 	resp.Body.Close()
@@ -127,7 +127,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	return
 }
 
-func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	var (
 		h   = cmn.CloudHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -142,11 +142,11 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 
 	resp, err := hp.client(origURL).Head(origURL)
 	if err != nil {
-		return nil, err, http.StatusBadRequest
+		return nil, http.StatusBadRequest, err
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error occurred: %v", resp.StatusCode), resp.StatusCode
+		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 	objMeta = make(cmn.SimpleKVs, 2)
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderHTTP
@@ -163,10 +163,10 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	return
 }
 
-func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
-	reader, _, err, errCode := hp.GetObjReader(ctx, lom)
+func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (errCode int, err error) {
+	reader, _, errCode, err := hp.GetObjReader(ctx, lom)
 	if err != nil {
-		return err, errCode
+		return errCode, err
 	}
 	params := cluster.PutObjectParams{
 		Reader:       reader,
@@ -184,8 +184,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster
 	return
 }
 
-func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
-	expectedCksm *cmn.Cksum, err error, errCode int) {
+func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	var (
 		h   = cmn.CloudHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -200,10 +199,10 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (rea
 
 	resp, err := hp.client(origURL).Get(origURL) // nolint:bodyclose // is closed by the caller
 	if err != nil {
-		return nil, nil, err, http.StatusInternalServerError
+		return nil, nil, http.StatusInternalServerError, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("error occurred: %v", resp.StatusCode), resp.StatusCode
+		return nil, nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -220,5 +219,5 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (rea
 
 	lom.SetCustomMD(customMD)
 	setSize(ctx, resp.ContentLength)
-	return wrapReader(ctx, resp.Body), nil, nil, 0
+	return wrapReader(ctx, resp.Body), nil, 0, nil
 }

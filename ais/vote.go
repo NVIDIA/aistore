@@ -156,7 +156,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	// 1. ping current primary
 	for i := time.Duration(2); i >= 1 && err != nil; i-- {
 		timeout := config.Timeout.CplaneOperation / i
-		_, err, _ = p.Health(curPrimary, timeout, nil)
+		_, _, err = p.Health(curPrimary, timeout, nil)
 	}
 	if err == nil {
 		// move back to idle

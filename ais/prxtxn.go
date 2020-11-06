@@ -286,7 +286,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 					bck.Bck, bck.BackendBck())
 				return
 			}
-			cloudProps, err, _ := p.headCloudBck(bck.Bck, nil)
+			cloudProps, _, err := p.headCloudBck(bck.Bck, nil)
 			if err != nil {
 				return "", err
 			}
@@ -723,7 +723,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 		}
 		return p.finalizeMaintenance(msg, si, cb)
 	} else if msg.Action == cmn.ActDecommission {
-		_, err = p.unregNode(msg, si, true /*skipReb*/)
+		_, err = p.unregisterNode(msg, si, true /*skipReb*/)
 	}
 	return
 }

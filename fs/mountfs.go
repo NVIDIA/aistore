@@ -826,7 +826,7 @@ func nextRefresh(config *cmn.Config) time.Duration {
 
 // NOTE: Is called only and exclusively by `stats.Trunner` providing
 //  `config.Periodic.StatsTime` tick.
-func CapPeriodic(mpcap MPCap) (cs CapStatus, err error, updated bool) {
+func CapPeriodic(mpcap MPCap) (cs CapStatus, updated bool, err error) {
 	config := cmn.GCO.Get()
 	mfs.cmu.RLock()
 	mfs.capTime.curr += int64(config.Periodic.StatsTime)

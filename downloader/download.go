@@ -278,25 +278,25 @@ func (d *Downloader) stop(err error) {
 /*
  * Downloader's exposed methods
  */
-func (d *Downloader) Download(dJob DlJob) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) Download(dJob DlJob) (resp interface{}, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	dlStore.setJob(dJob.ID(), dJob)
 
 	select {
 	case d.dispatcher.downloadCh <- dJob:
-		return nil, nil, http.StatusOK
+		return nil, http.StatusOK, nil
 	default:
 		select {
 		case d.dispatcher.downloadCh <- dJob:
-			return nil, nil, http.StatusOK
+			return nil, http.StatusOK, nil
 		case <-time.After(cmn.GCO.Get().Timeout.CplaneOperation):
-			return "downloader job queue is full", nil, http.StatusTooManyRequests
+			return "downloader job queue is full", http.StatusTooManyRequests, nil
 		}
 	}
 }
 
-func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) AbortJob(id string) (resp interface{}, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
@@ -306,7 +306,7 @@ func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCod
 	return d.dispatcher.dispatchAdminReq(req)
 }
 
-func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) RemoveJob(id string) (resp interface{}, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
@@ -316,7 +316,7 @@ func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCo
 	return d.dispatcher.dispatchAdminReq(req)
 }
 
-func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{
@@ -327,7 +327,7 @@ func (d *Downloader) JobStatus(id string, onlyActive bool) (resp interface{}, er
 	return d.dispatcher.dispatchAdminReq(req)
 }
 
-func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, statusCode int, err error) {
 	d.IncPending()
 	defer d.DecPending()
 	req := &request{

@@ -123,7 +123,7 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 		w:       w,
 		ctx:     context.Background(),
 	}
-	err, _ := goi.getObject()
+	_, err := goi.getObject()
 	return err
 }
 
@@ -147,7 +147,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	}
 	var err error
 	if params.WithFinalize {
-		err, _ = poi.putObject()
+		_, err = poi.putObject()
 	} else {
 		err = poi.writeToFile()
 	}
@@ -278,7 +278,7 @@ func (t *targetrunner) _sendPUT(params cluster.SendToParams) error {
 
 func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
 	ctx := context.Background()
-	err, _ := t.DeleteObject(ctx, lom, true /*evict*/)
+	_, err := t.DeleteObject(ctx, lom, true /*evict*/)
 	return err
 }
 
@@ -316,17 +316,17 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize)
-func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch bool) (err error, errCode int) {
+func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch bool) (errCode int, err error) {
 	if prefetch {
 		if !lom.TryLock(true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
-			return cmn.ErrSkip, 0
+			return 0, cmn.ErrSkip
 		}
 	} else {
 		lom.Lock(true) // one cold-GET at a time
 	}
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
-	if err, errCode = t.Cloud(lom.Bck()).GetObj(ctx, workFQN, lom); err != nil {
+	if errCode, err = t.Cloud(lom.Bck()).GetObj(ctx, workFQN, lom); err != nil {
 		lom.Unlock(true)
 		glog.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return
@@ -457,7 +457,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	cmn.Assert(workFQN != "")
 	poi.workFQN = workFQN
 	lom.SetSize(written)
-	err, _ = poi.finalize()
+	_, err = poi.finalize()
 	if err == nil {
 		nlom = lom
 	}

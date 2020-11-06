@@ -124,7 +124,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	}
 }
 
-func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (err error, errCode int) {
+func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (errCode int, err error) {
 	query := r.URL.Query()
 	query.Set(cmn.URLParamUUID, id)
 
@@ -137,10 +137,10 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, 
 	}
 
 	if len(failures) > 0 {
-		return fmt.Errorf("following downloads failed: %v", failures), http.StatusBadRequest
+		return http.StatusBadRequest, fmt.Errorf("following downloads failed: %v", failures)
 	}
 
-	return nil, http.StatusOK
+	return http.StatusOK, nil
 }
 
 // [METHOD] /v1/download
@@ -251,7 +251,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	id := cmn.GenUUID()
 	smap := p.owner.smap.get()
 
-	if err, errCode := p.broadcastStartDownloadRequest(r, id, body); err != nil {
+	if errCode, err := p.broadcastStartDownloadRequest(r, id, body); err != nil {
 		p.invalmsghdlrstatusf(w, r, errCode, "Error starting download: %v.", err.Error())
 		return
 	}

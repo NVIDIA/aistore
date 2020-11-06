@@ -77,7 +77,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	msg := &cmn.SelectMsg{}
 	*msg = *w.msg
 
-	objList, err, _ := w.t.Cloud(w.bck).ListObjects(w.ctx, w.bck, msg)
+	objList, _, err := w.t.Cloud(w.bck).ListObjects(w.ctx, w.bck, msg)
 	if err != nil {
 		return nil, err
 	}

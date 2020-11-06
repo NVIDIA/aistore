@@ -76,7 +76,7 @@ func (args *remBckAddArgs) initAndTry(bucket string, origURLBck ...string) (bck 
 }
 
 func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
-	bck, err, errCode := args._try()
+	bck, errCode, err := args._try()
 	if err != nil && err != cmn.ErrForwarded {
 		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok && args.allowBckNotExist {
 			err = nil
@@ -91,7 +91,7 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 // methods that are internal to this source
 //
 
-func (args *remBckAddArgs) _try() (bck *cluster.Bck, err error, errCode int) {
+func (args *remBckAddArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	var cloudProps http.Header
 	if _, ok := args.err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
 		err = args.err
@@ -127,7 +127,7 @@ func (args *remBckAddArgs) _try() (bck *cluster.Bck, err error, errCode int) {
 	if bck.HasBackendBck() {
 		bck = cluster.BackendBck(bck)
 	}
-	if cloudProps, err, errCode = args._lookup(bck); err != nil {
+	if cloudProps, errCode, err = args._lookup(bck); err != nil {
 		bck = nil
 		return
 	}
@@ -150,7 +150,7 @@ func (args *remBckAddArgs) _try() (bck *cluster.Bck, err error, errCode int) {
 	return
 }
 
-func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, err error, statusCode int) {
+func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCode int, err error) {
 	q := url.Values{}
 	if bck.IsHTTP() {
 		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)

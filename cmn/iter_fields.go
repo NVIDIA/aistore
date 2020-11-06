@@ -113,7 +113,7 @@ func (f *field) SetValue(src interface{}, force ...bool) error {
 	return nil
 }
 
-func iterFields(prefix string, v interface{}, f func(uniqueTag string, field IterField) (error, bool), opts IterOpts) (dirty bool, err error, stop bool) {
+func iterFields(prefix string, v interface{}, f func(uniqueTag string, field IterField) (error, bool), opts IterOpts) (dirty, stop bool, err error) {
 	srcVal := reflect.ValueOf(v)
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
@@ -191,7 +191,7 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 			}
 
 			if err == nil && !stop {
-				dirtyField, err, stop = iterFields(p, srcValField.Interface(), f, opts)
+				dirtyField, stop, err = iterFields(p, srcValField.Interface(), f, opts)
 				if allocatedStruct && !dirtyField {
 					// If we initialized new struct but no field inside
 					// it was set we must set the value of the field to
@@ -209,7 +209,7 @@ func iterFields(prefix string, v interface{}, f func(uniqueTag string, field Ite
 		}
 
 		if err != nil {
-			return dirty, err, true
+			return dirty, true, err
 		}
 	}
 	return
@@ -230,7 +230,7 @@ func IterFields(v interface{}, f func(uniqueTag string, field IterField) (error,
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	_, err, _ := iterFields("", v, f, o)
+	_, _, err := iterFields("", v, f, o)
 	return err
 }
 

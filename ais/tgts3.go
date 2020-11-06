@@ -136,7 +136,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 
 	// TODO: lom.SetCustomMD(cluster.AmazonMD5ObjMD, checksum)
 
-	if err, errCode := t.doPut(r, lom, started); err != nil {
+	if errCode, err := t.doPut(r, lom, started); err != nil {
 		t.fsErr(err, lom.FQN)
 		t.invalmsghdlr(w, r, err.Error(), errCode)
 		return
@@ -203,7 +203,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize},
 	}
 	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
-	if err, errCode := goi.getObject(); err != nil {
+	if errCode, err := goi.getObject(); err != nil {
 		if cmn.IsErrConnectionReset(err) {
 			glog.Errorf("GET %s: %v", lom, err)
 		} else {
@@ -281,7 +281,7 @@ func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	err, errCode := t.DeleteObject(context.Background(), lom, false)
+	errCode, err := t.DeleteObject(context.Background(), lom, false)
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.invalmsghdlrsilent(w, r,

@@ -117,7 +117,7 @@ func BenchmarkObjPut(b *testing.B) {
 				os.Remove(lom.FQN)
 				b.StartTimer()
 
-				err, _ := poi.putObject()
+				_, err := poi.putObject()
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -165,7 +165,7 @@ func BenchmarkObjAppend(b *testing.B) {
 				os.Remove(lom.FQN)
 				b.StartTimer()
 
-				newHandle, err, _ := aoi.appendObject()
+				newHandle, _, err := aoi.appendObject()
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -221,7 +221,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				r:       r,
 				workFQN: path.Join(testMountpath, "objname.work"),
 			}
-			err, _ = poi.putObject()
+			_, err = poi.putObject()
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -245,7 +245,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				err, _ := goi.getObject()
+				_, err := goi.getObject()
 				if err != nil {
 					b.Fatal(err)
 				}

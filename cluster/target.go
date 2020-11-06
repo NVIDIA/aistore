@@ -41,15 +41,15 @@ const (
 type CloudProvider interface {
 	Provider() string
 	MaxPageSize() uint
-	GetObj(ctx context.Context, fqn string, lom *LOM) (err error, errCode int)
-	GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, err error, errCode int)
-	PutObj(ctx context.Context, r io.Reader, lom *LOM) (version string, err error, errCode int)
-	DeleteObj(ctx context.Context, lom *LOM) (error, int)
-	HeadObj(ctx context.Context, lom *LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
+	GetObj(ctx context.Context, workFQN string, lom *LOM) (errCode int, err error)
+	GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error)
+	PutObj(ctx context.Context, r io.Reader, lom *LOM) (version string, errCode int, err error)
+	DeleteObj(ctx context.Context, lom *LOM) (errCode int, err error)
+	HeadObj(ctx context.Context, lom *LOM) (objMeta cmn.SimpleKVs, errCode int, err error)
 
-	HeadBucket(ctx context.Context, bck *Bck) (bucketProps cmn.SimpleKVs, err error, errCode int)
-	ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
-	ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int)
+	HeadBucket(ctx context.Context, bck *Bck) (bckProps cmn.SimpleKVs, errCode int, err error)
+	ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error)
+	ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error)
 }
 
 // Callback called by EC PUT jogger after the object is processed and
@@ -113,15 +113,15 @@ type Target interface {
 
 	// Cloud related functions.
 	Cloud(*Bck) CloudProvider
-	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, err error, errCode int)
+	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, errCode int, err error)
 
 	// Object related functions.
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(lom *LOM, params PutObjectParams) error
 	EvictObject(lom *LOM) error
-	DeleteObject(ctx context.Context, lom *LOM, evict bool) (error, int)
+	DeleteObject(ctx context.Context, lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params CopyObjectParams, localOnly bool) (bool, int64, error)
-	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
+	GetCold(ctx context.Context, lom *LOM, prefetch bool) (errCode int, err error)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 
@@ -135,10 +135,8 @@ type Target interface {
 
 	// Other.
 	BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
-	RebalanceNamespace(si *Snode) ([]byte, int, error)
-	Health(si *Snode, timeout time.Duration, query url.Values) ([]byte, error, int)
-	// TODO: Remove when we are able to access registry directly in other packages (e.g. etl)
-	AbortAllXacts(tys ...string)
+	RebalanceNamespace(si *Snode) (body []byte, errCode int, err error)
+	Health(si *Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
 }
 
 type RebManager interface {

@@ -216,7 +216,7 @@ func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) error {
 	ctx = context.WithValue(ctx, cmn.CtxSetSize, cmn.SetSizeFunc(t.setTotalSize))
 
 	// Do final GET (prefetch) request.
-	err, _ := t.parent.t.GetCold(ctx, lom, true /*prefetch*/)
+	_, err := t.parent.t.GetCold(ctx, lom, true /*prefetch*/)
 	return err
 }
 

@@ -310,7 +310,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	var (
 		timeout        = time.Duration(pkr.timeoutStatsForDaemon(to.ID()).timeout)
 		t              = mono.NanoTime()
-		_, err, status = pkr.p.Health(to, timeout, nil)
+		_, status, err = pkr.p.Health(to, timeout, nil)
 	)
 	delta = mono.Since(t)
 	pkr.updateTimeoutForDaemon(to.ID(), delta)
@@ -339,7 +339,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode) (ok, stopped bool) {
 		select {
 		case <-ticker.C:
 			t := mono.NanoTime()
-			_, err, status := pkr.p.Health(si, timeout, nil)
+			_, status, err := pkr.p.Health(si, timeout, nil)
 			timeout = pkr.updateTimeoutForDaemon(si.ID(), mono.Since(t))
 			if err == nil {
 				return true, false

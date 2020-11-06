@@ -47,7 +47,7 @@ func parseTemplate(template string) (cmn.ParsedTemplate, error) {
 //
 
 func (r *evictDelete) objDelete(args *xreg.DeletePrefetchArgs, lom *cluster.LOM) (err error) {
-	err, _ = r.t.DeleteObject(args.Ctx, lom, args.Evict)
+	_, err = r.t.DeleteObject(args.Ctx, lom, args.Evict)
 	return
 }
 
@@ -102,14 +102,14 @@ func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string
 		return nil
 	}
 	if !coldGet && lom.Version() != "" && lom.VersionConf().ValidateWarmGet {
-		if coldGet, err, _ = r.t.CheckCloudVersion(args.Ctx, lom); err != nil {
+		if coldGet, _, err = r.t.CheckCloudVersion(args.Ctx, lom); err != nil {
 			return err
 		}
 	}
 	if !coldGet {
 		return nil
 	}
-	if err, _ = r.t.GetCold(args.Ctx, lom, true); err != nil {
+	if _, err = r.t.GetCold(args.Ctx, lom, true); err != nil {
 		if !errors.Is(err, cmn.ErrSkip) {
 			return err
 		}
@@ -190,7 +190,7 @@ func (r *listRangeBase) iteratePrefix(args *xreg.DeletePrefetchArgs, smap *clust
 			walk := objwalk.NewWalk(args.Ctx, r.t, bck, msg)
 			objList, err = walk.DefaultLocalObjPage(msg)
 		} else {
-			objList, err, _ = r.t.Cloud(bck).ListObjects(args.Ctx, bck, msg)
+			objList, _, err = r.t.Cloud(bck).ListObjects(args.Ctx, bck, msg)
 		}
 		if err != nil {
 			return err

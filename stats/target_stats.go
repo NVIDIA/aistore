@@ -192,7 +192,7 @@ func (r *Trunner) log(uptime time.Duration) {
 	}
 
 	// 2. capacity
-	cs, _, updated := fs.CapPeriodic(r.MPCap)
+	cs, updated, _ := fs.CapPeriodic(r.MPCap)
 	if updated {
 		if cs.Err != nil {
 			go r.T.RunLRU("" /*uuid*/, false)

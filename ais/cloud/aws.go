@@ -58,7 +58,7 @@ func createSession() *session.Session {
 
 // newS3Client creates new S3 client that can be used to make requests. It is
 // guaranteed that the client is initialized even in case of errors.
-func (awsp *awsProvider) newS3Client(conf sessConf, tag string) (svc *s3.S3, err error, regIsSet bool) {
+func (awsp *awsProvider) newS3Client(conf sessConf, tag string) (svc *s3.S3, regIsSet bool, err error) {
 	var (
 		sess    = createSession()
 		awsConf = &aws.Config{}
@@ -82,16 +82,16 @@ func (awsp *awsProvider) newS3Client(conf sessConf, tag string) (svc *s3.S3, err
 	return
 }
 
-func (awsp *awsProvider) awsErrorToAISError(awsError error, bck *cmn.Bck) (error, int) {
+func (awsp *awsProvider) awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		node := awsp.t.Snode().Name()
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return cmn.NewErrorRemoteBucketDoesNotExist(*bck, node), reqErr.StatusCode()
+			return reqErr.StatusCode(), cmn.NewErrorRemoteBucketDoesNotExist(*bck, node)
 		}
-		return awsError, reqErr.StatusCode()
+		return reqErr.StatusCode(), awsError
 	}
 
-	return awsError, http.StatusInternalServerError
+	return http.StatusInternalServerError, awsError
 }
 
 func (awsp *awsProvider) Provider() string { return cmn.ProviderAmazon }
@@ -103,8 +103,7 @@ func (awsp *awsProvider) MaxPageSize() uint { return 1000 }
 // LIST OBJECTS //
 //////////////////
 
-func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
-	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
 
 	var (
@@ -116,7 +115,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
 		glog.Infof("list_objects %s", cloudBck.Name)
 	}
 
-	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[list_objects]")
+	svc, _, err = awsp.newS3Client(sessConf{bck: cloudBck}, "[list_objects]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -132,7 +131,7 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
 
 	resp, err := svc.ListObjectsV2(params)
 	if err != nil {
-		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
+		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -184,8 +183,8 @@ func (awsp *awsProvider) ListObjects(_ context.Context, bck *cluster.Bck,
 
 			verResp, err := svc.ListObjectVersions(verParams)
 			if err != nil {
-				err, errCode := awsp.awsErrorToAISError(err, cloudBck)
-				return nil, err, errCode
+				errCode, err := awsp.awsErrorToAISError(err, cloudBck)
+				return nil, errCode, err
 			}
 
 			for _, vers := range verResp.Versions {
@@ -233,7 +232,7 @@ func (awsp *awsProvider) getBucketLocation(svc *s3.S3, bckName string) (region s
 	return
 }
 
-func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
 	var (
 		svc       *s3.S3
 		region    string
@@ -246,10 +245,10 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 
 	// Since it's possible that the cloud bucket may not yet exist in the BMD,
 	// we must get the region manually and recreate S3 client.
-	svc, _, hasRegion = awsp.newS3Client(sessConf{bck: cloudBck}, "")
+	svc, hasRegion, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "")
 	if !hasRegion {
 		if region, err = awsp.getBucketLocation(svc, cloudBck.Name); err != nil {
-			err, errCode = awsp.awsErrorToAISError(err, cloudBck)
+			errCode, err = awsp.awsErrorToAISError(err, cloudBck)
 			return
 		}
 
@@ -263,7 +262,7 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 	inputVersion := &s3.GetBucketVersioningInput{Bucket: aws.String(cloudBck.Name)}
 	result, err := svc.GetBucketVersioning(inputVersion)
 	if err != nil {
-		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
+		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -280,11 +279,11 @@ func (awsp *awsProvider) HeadBucket(_ context.Context, bck *cluster.Bck) (bckPro
 // BUCKET NAMES //
 //////////////////
 
-func (awsp *awsProvider) ListBuckets(_ context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
+func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
 	svc, _, _ := awsp.newS3Client(sessConf{}, "")
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		err, errCode = awsp.awsErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAmazon})
+		errCode, err = awsp.awsErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAmazon})
 		return
 	}
 
@@ -305,13 +304,13 @@ func (awsp *awsProvider) ListBuckets(_ context.Context, _ cmn.QueryBcks) (bucket
 // HEAD OBJECT //
 ////////////////
 
-func (awsp *awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.CloudHelpers.Amazon
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[head_object]")
+	svc, _, err = awsp.newS3Client(sessConf{bck: cloudBck}, "[head_object]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -321,7 +320,7 @@ func (awsp *awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta c
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
+		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 	objMeta = make(cmn.SimpleKVs, 3)
@@ -344,10 +343,10 @@ func (awsp *awsProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta c
 // GET OBJECT //
 ////////////////
 
-func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
-	r, cksumToCheck, err, errCode := awsp.GetObjReader(ctx, lom)
+func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (errCode int, err error) {
+	r, cksumToCheck, errCode, err := awsp.GetObjReader(ctx, lom)
 	if err != nil {
-		return err, errCode
+		return errCode, err
 	}
 	params := cluster.PutObjectParams{
 		Reader:       r,
@@ -370,8 +369,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluste
 // GetObjReader //
 /////////////////
 
-func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
-	expectedCksm *cmn.Cksum, err error, errCode int) {
+func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		cksum    *cmn.Cksum
@@ -379,7 +377,7 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 		cloudBck = lom.Bck().RemoteBck()
 	)
 
-	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[get_object]")
+	svc, _, err = awsp.newS3Client(sessConf{bck: cloudBck}, "[get_object]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -389,7 +387,7 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
+		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -415,14 +413,14 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	lom.SetCksum(cksum)
 	lom.SetCustomMD(customMD)
 	setSize(ctx, *obj.ContentLength)
-	return wrapReader(ctx, obj.Body), expectedCksm, nil, 0
+	return wrapReader(ctx, obj.Body), expectedCksm, 0, nil
 }
 
 ////////////////
 // PUT OBJECT //
 ////////////////
 
-func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
 	var (
 		svc                   *s3.S3
 		uploadOutput          *s3manager.UploadOutput
@@ -432,7 +430,7 @@ func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM
 		md                    = make(map[string]*string, 2)
 	)
 
-	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[put_object]")
+	svc, _, err = awsp.newS3Client(sessConf{bck: cloudBck}, "[put_object]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -448,7 +446,7 @@ func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM
 		Metadata: md,
 	})
 	if err != nil {
-		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
+		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 	if v, ok := h.EncodeVersion(uploadOutput.VersionID); ok {
@@ -464,12 +462,12 @@ func (awsp *awsProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM
 // DELETE OBJECT //
 ///////////////////
 
-func (awsp *awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (err error, errCode int) {
+func (awsp *awsProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	var (
 		svc      *s3.S3
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	svc, err, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "[delete_object]")
+	svc, _, err = awsp.newS3Client(sessConf{bck: cloudBck}, "[delete_object]")
 	if err != nil {
 		glog.Warning(err)
 	}
@@ -479,7 +477,7 @@ func (awsp *awsProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (err err
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		err, errCode = awsp.awsErrorToAISError(err, cloudBck)
+		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

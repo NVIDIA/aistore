@@ -113,7 +113,7 @@ type (
 // PUT OBJECT //
 ////////////////
 
-func (poi *putObjInfo) putObject() (err error, errCode int) {
+func (poi *putObjInfo) putObject() (errCode int, err error) {
 	lom := poi.lom
 	// optimize out if the checksums do match
 	if poi.cksumToCheck != nil {
@@ -122,16 +122,16 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToCheck)
 			}
 			cmn.DrainReader(poi.r)
-			return nil, 0
+			return 0, nil
 		}
 	}
 
 	if !daemon.dryRun.disk {
 		if err := poi.writeToFile(); err != nil {
-			return err, http.StatusInternalServerError
+			return http.StatusInternalServerError, err
 		}
-		if err, errCode := poi.finalize(); err != nil {
-			return err, errCode
+		if errCode, err := poi.finalize(); err != nil {
+			return errCode, err
 		}
 	}
 	if !poi.migrated && !poi.cold {
@@ -144,11 +144,11 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 			glog.Infof("PUT %s: %s", lom, delta)
 		}
 	}
-	return nil, 0
+	return 0, nil
 }
 
-func (poi *putObjInfo) finalize() (err error, errCode int) {
-	if err, errCode = poi.tryFinalize(); err != nil {
+func (poi *putObjInfo) finalize() (errCode int, err error) {
+	if errCode, err = poi.tryFinalize(); err != nil {
 		if err1 := fs.Access(poi.workFQN); err1 == nil || !os.IsNotExist(err1) {
 			if err1 == nil {
 				err1 = err
@@ -173,7 +173,7 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 }
 
 // poi.workFQN => LOM
-func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
+func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	var (
 		lom = poi.lom
 		bck = lom.Bck()
@@ -181,9 +181,9 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	if bck.IsRemote() && !poi.migrated {
 		var version string
 		if bck.IsCloud() || bck.IsHTTP() {
-			version, err, errCode = poi.putCloud()
+			version, errCode, err = poi.putCloud()
 		} else {
-			version, err, errCode = poi.putRemoteAIS()
+			version, errCode, err = poi.putRemoteAIS()
 		}
 		if err != nil {
 			glog.Errorf("%s: PUT failed, err: %v", lom, err)
@@ -214,7 +214,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		}
 	}
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
-		return fmt.Errorf("rename failed => %s: %w", lom, err), 0
+		return 0, fmt.Errorf("rename failed => %s: %w", lom, err)
 	}
 	if lom.HasCopies() {
 		if err = lom.DelAllCopies(); err != nil {
@@ -228,7 +228,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	return
 }
 
-func (poi *putObjInfo) putCloud() (ver string, err error, errCode int) {
+func (poi *putObjInfo) putCloud() (version string, errCode int, err error) {
 	var (
 		lom = poi.lom
 		bck = lom.Bck()
@@ -244,16 +244,16 @@ func (poi *putObjInfo) putCloud() (ver string, err error, errCode int) {
 		cluster.SourceObjMD: cloud.Provider(),
 	}
 
-	ver, err, errCode = cloud.PutObj(poi.ctx, file, lom)
-	if ver != "" {
-		customMD[cluster.VersionObjMD] = ver
+	version, errCode, err = cloud.PutObj(poi.ctx, file, lom)
+	if version != "" {
+		customMD[cluster.VersionObjMD] = version
 	}
 	lom.SetCustomMD(customMD)
 	cmn.Close(file)
 	return
 }
 
-func (poi *putObjInfo) putRemoteAIS() (ver string, err error, errCode int) {
+func (poi *putObjInfo) putRemoteAIS() (version string, errCode int, err error) {
 	var (
 		lom = poi.lom
 		bck = lom.Bck()
@@ -264,7 +264,7 @@ func (poi *putObjInfo) putRemoteAIS() (ver string, err error, errCode int) {
 		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
 		return
 	}
-	ver, err, errCode = poi.t.Cloud(bck).PutObj(poi.ctx, fh, lom)
+	version, errCode, err = poi.t.Cloud(bck).PutObj(poi.ctx, fh, lom)
 	return
 }
 
@@ -386,7 +386,7 @@ write:
 // GET OBJECT //
 ////////////////
 
-func (goi *getObjInfo) getObject() (err error, errCode int) {
+func (goi *getObjInfo) getObject() (errCode int, err error) {
 	var (
 		cs                                            fs.CapStatus
 		doubleCheck, retry, retried, coldGet, capRead bool
@@ -403,21 +403,21 @@ do:
 		coldGet = cmn.IsObjNotExist(err)
 		if !coldGet {
 			goi.lom.Unlock(false)
-			return err, http.StatusInternalServerError
+			return http.StatusInternalServerError, err
 		}
 		capRead = true // set flag to avoid calling later
 		cs = fs.GetCapStatus()
 		if cs.OOS {
 			// immediate return for no space left to restore object
 			goi.lom.Unlock(false)
-			return cs.Err, http.StatusInternalServerError
+			return http.StatusInternalServerError, cs.Err
 		}
 	}
 
 	if coldGet && goi.lom.Bck().IsAIS() {
 		// try lookup and restore
 		goi.lom.Unlock(false)
-		doubleCheck, err, errCode = goi.tryRestoreObject()
+		doubleCheck, errCode, err = goi.tryRestoreObject()
 		if doubleCheck && err != nil {
 			lom2 := &cluster.LOM{T: goi.t, ObjName: goi.lom.ObjName}
 			er2 := lom2.Init(goi.lom.Bck().Bck)
@@ -439,7 +439,7 @@ do:
 	if !coldGet && goi.lom.Bck().IsRemote() {
 		if goi.lom.Version() != "" && goi.lom.VersionConf().ValidateWarmGet {
 			goi.lom.Unlock(false)
-			if coldGet, err, errCode = goi.t.CheckCloudVersion(goi.ctx, goi.lom); err != nil {
+			if coldGet, errCode, err = goi.t.CheckCloudVersion(goi.ctx, goi.lom); err != nil {
 				goi.lom.Uncache()
 				return
 			}
@@ -449,7 +449,7 @@ do:
 
 	// checksum validation, if requested
 	if !coldGet && goi.lom.CksumConf().ValidateWarmGet {
-		err, errCode, coldGet = goi.tryRecoverObject()
+		coldGet, errCode, err = goi.tryRecoverObject()
 		if err != nil {
 			if !coldGet {
 				goi.lom.Unlock(false)
@@ -469,18 +469,18 @@ do:
 		}
 		if cs.OOS {
 			// no space left to prefetch object
-			return cs.Err, http.StatusBadRequest
+			return http.StatusBadRequest, cs.Err
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		if err, errCode := goi.t.GetCold(goi.ctx, goi.lom, false /*prefetch*/); err != nil {
-			return err, errCode
+		if errCode, err := goi.t.GetCold(goi.ctx, goi.lom, false /*prefetch*/); err != nil {
+			return errCode, err
 		}
 		goi.t.putMirror(goi.lom)
 	}
 
 	// 4. get locally and stream back
 get:
-	retry, err, errCode = goi.finalize(coldGet)
+	retry, errCode, err = goi.finalize(coldGet)
 	if retry && !retried {
 		glog.Warningf("GET %s: uncaching and retrying...", goi.lom)
 		retried = true
@@ -493,7 +493,7 @@ get:
 }
 
 // validate checksum; if corrupted try to recover from other replicas or EC slices
-func (goi *getObjInfo) tryRecoverObject() (err error, code int, coldGet bool) {
+func (goi *getObjInfo) tryRecoverObject() (coldGet bool, code int, err error) {
 	var (
 		lom     = goi.lom
 		retried bool
@@ -550,7 +550,7 @@ retry:
 		retried = true
 		goi.lom.Unlock(false)
 		cmn.RemoveFile(lom.FQN)
-		_, err, code = goi.tryRestoreObject()
+		_, code, err = goi.tryRestoreObject()
 		goi.lom.Lock(false)
 		if err == nil {
 			glog.Warningf("%s: recovered corrupted %s from EC slices", goi.t.si, lom)
@@ -571,7 +571,7 @@ retry:
 // 2) other FSes or targets when resilvering (rebalancing) is running (aka GFN)
 // 3) other targets if the bucket erasure coded
 // 4) Cloud
-func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, err error, errCode int) {
+func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, errCode int, err error) {
 	var (
 		tsi, gfnNode         *cluster.Snode
 		smap                 = goi.t.owner.smap.get()
@@ -682,7 +682,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		migrated: true,
 		workFQN:  workFQN,
 	}
-	if err, _ := poi.putObject(); err != nil {
+	if _, err := poi.putObject(); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -690,7 +690,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	return
 }
 
-func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode int) {
+func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {
 	var (
 		file    *os.File
 		sgl     *memsys.SGL
@@ -769,14 +769,14 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 			if err == cmn.ErrNoOverlap {
 				hdr.Set(cmn.HeaderContentRange, fmt.Sprintf("%s*/%d", cmn.HeaderContentRangeValPrefix, size))
 			}
-			return false, err, http.StatusRequestedRangeNotSatisfiable
+			return false, http.StatusRequestedRangeNotSatisfiable, err
 		}
 
 		if len(ranges) > 0 {
 			if len(ranges) > 1 {
 				err = fmt.Errorf("multi-range is not supported")
 				errCode = http.StatusRequestedRangeNotSatisfiable
-				return false, err, errCode
+				return false, errCode, err
 			}
 			r = &ranges[0]
 
@@ -877,7 +877,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 // APPEND OBJECT //
 ///////////////////
 
-func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode int) {
+func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err error) {
 	filePath := aoi.hi.filePath
 	switch aoi.op {
 	case cmn.AppendOp:
@@ -944,7 +944,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, err error, errCode i
 			Verbose:   false,
 		}
 		if _, err := aoi.t.PromoteFile(params); err != nil {
-			return "", err, 0
+			return "", 0, err
 		}
 	default:
 		cmn.AssertMsg(false, aoi.op)
@@ -1179,7 +1179,7 @@ func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo st
 		return false, 0, err
 	}
 
-	if _, err, _ = coi.t.Cloud(coi.BckTo).PutObj(context.Background(), reader, dstLOM); err != nil {
+	if _, _, err = coi.t.Cloud(coi.BckTo).PutObj(context.Background(), reader, dstLOM); err != nil {
 		return false, 0, err
 	}
 	return true, objMeta.Size(), nil

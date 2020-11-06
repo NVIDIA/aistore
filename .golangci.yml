@@ -100,9 +100,6 @@ issues:
 
   # additional exclude rules
   exclude-rules:
-    - linters: golint
-      text: "error should be the last type when returning multiple items" # ignores 'return body, err, errCode'
-
     - linters: errcheck
       text: "Error return value of" # ignores 'error return value of ... is unchecked'
 

@@ -156,7 +156,7 @@ func (j *baseDlJob) AddNotif(n cluster.Notif, job DlJob) {
 }
 
 func (j *baseDlJob) ActiveStats() (*DlStatusResp, error) {
-	resp, err, _ := j.dlXact.JobStatus(j.ID(), true /*onlyActive*/)
+	resp, _, err := j.dlXact.JobStatus(j.ID(), true /*onlyActive*/)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func (j *cloudBucketDlJob) getNextObjs() error {
 			ContinuationToken: j.continuationToken,
 			PageSize:          cloud.MaxPageSize(),
 		}
-		bckList, err, _ := cloud.ListObjects(j.ctx, j.bck, msg)
+		bckList, _, err := cloud.ListObjects(j.ctx, j.bck, msg)
 		if err != nil {
 			return err
 		}

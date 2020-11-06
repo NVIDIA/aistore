@@ -1151,7 +1151,7 @@ func (h *httprunner) invalmsghdlrf(w http.ResponseWriter, r *http.Request, forma
 // health client //
 ///////////////////
 
-func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) ([]byte, error, int) {
+func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) ([]byte, int, error) {
 	var (
 		path = cmn.JoinWords(cmn.Version, cmn.Health)
 		url  = si.URL(cmn.NetworkIntraControl)
@@ -1162,7 +1162,7 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 		}
 	)
 	res := h.call(args)
-	return res.bytes, res.err, res.status
+	return res.bytes, res.status, res.err
 }
 
 // uses provided Smap and an extended version of the Health(clusterInfo) internal API
@@ -1189,7 +1189,7 @@ func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64, primaryURL stri
 				url string
 			)
 			defer wg.Done()
-			body, err, _ := h.Health(si, timeout, query)
+			body, _, err := h.Health(si, timeout, query)
 			if err != nil {
 				return
 			}
@@ -1558,7 +1558,7 @@ func (h *httprunner) pollClusterStarted(timeout time.Duration) {
 		if !smap.isValid() {
 			continue
 		}
-		if _, err, _ := h.Health(smap.Primary, timeout, nil); err == nil {
+		if _, _, err := h.Health(smap.Primary, timeout, nil); err == nil {
 			break
 		}
 	}

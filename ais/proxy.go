@@ -1348,7 +1348,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cloudProps, err, statusCode := p.headCloudBck(*bck.RemoteBck(), nil)
+	cloudProps, statusCode, err := p.headCloudBck(*bck.RemoteBck(), nil)
 	if err != nil {
 		// TODO -- FIXME: decide what needs to be done when HEAD fails - changes to BMD
 		p.invalmsghdlr(w, r, err.Error(), statusCode)
@@ -2858,7 +2858,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		flags = cluster.SnodeNonElectable
 	}
 	p.owner.smap.Lock()
-	smap, err, code, update := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, userRegister, flags)
+	smap, update, code, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, userRegister, flags)
 	if !isProxy && p.NodeStarted() {
 		// Short for `rebalance.Store(rebalance.Load() || regReq.Reb)`
 		p.owner.rmd.rebalance.CAS(false, regReq.Reb)
@@ -2884,11 +2884,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 }
 
 // NOTE: under lock
-func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
-	tag string, keepalive, userRegister bool, flags cluster.SnodeFlags) (smap *smapX, err error, code int, update bool) {
+func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag string,
+	keepalive, userRegister bool, flags cluster.SnodeFlags) (smap *smapX, update bool, errCode int, err error) {
 	debug.AssertMutexLocked(&p.owner.smap.Mutex)
 
-	code = http.StatusBadRequest
+	errCode = http.StatusBadRequest
 	smap = p.owner.smap.get()
 
 	if !smap.isPrimary(p.si) {
@@ -2932,7 +2932,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX,
 					err = fmt.Errorf("%s: failed to %s %s: %v, %s",
 						p.si, tag, nsi, res.err, res.details)
 				}
-				code = res.status
+				errCode = res.status
 				return
 			}
 		}
@@ -3091,7 +3091,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, sid) {
 		return
 	}
-	errCode, err := p.unregNode(msg, node, false /*skipReb*/)
+	errCode, err := p.unregisterNode(msg, node, false /*skipReb*/)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), errCode)
 	}
@@ -3176,7 +3176,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) unregNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
+func (p *proxyrunner) unregisterNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	smap := p.owner.smap.get()
 	node := smap.GetNode(si.ID())
 	if node == nil {
@@ -3257,7 +3257,9 @@ func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionM
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Rebalance(%s) finished. Removing node %s", nl.UUID(), si)
 	}
-	p.unregNode(msg, si, true /*skipReb*/)
+	if _, err := p.unregisterNode(msg, si, true /*skipReb*/); err != nil {
+		glog.Errorf("Failed to remove node (%s) after rebalance, err: %v", si, err)
+	}
 }
 
 // Run rebalance and call a callback after the rebalance finishes
@@ -3800,7 +3802,7 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 	return false
 }
 
-func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Header, err error, statusCode int) {
+func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
 	var (
 		tsi   *cluster.Snode
 		pname = p.si.String()

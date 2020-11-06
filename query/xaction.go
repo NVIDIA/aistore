@@ -175,7 +175,7 @@ func (r *ObjectsListingXact) startFromBck() {
 		}
 
 		for {
-			bckList, err, _ := r.t.Cloud(bck).ListObjects(r.ctx, bck, r.msg)
+			bckList, _, err := r.t.Cloud(bck).ListObjects(r.ctx, bck, r.msg)
 			if err != nil {
 				// TODO: should we do `r.putResult(&Result{err: err})`?
 				return

@@ -174,7 +174,7 @@ func (reb *Manager) pingTarget(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		logHdr = reb.logHdr(md)
 	)
 	for i := 0; i < 4; i++ {
-		_, err, code := reb.t.Health(tsi, md.config.Timeout.MaxKeepalive, nil)
+		_, code, err := reb.t.Health(tsi, md.config.Timeout.MaxKeepalive, nil)
 		if err == nil {
 			if i > 0 {
 				glog.Infof("%s: %s is online", logHdr, tsi)
@@ -291,13 +291,13 @@ func (reb *Manager) checkGlobStatus(tsi *cluster.Snode, desiredStage uint32, md 
 		logHdr     = reb.logHdr(md)
 		query      = url.Values{cmn.URLParamRebStatus: []string{"true"}}
 	)
-	body, err, code := reb.t.Health(tsi, cmn.DefaultTimeout, query)
+	body, code, err := reb.t.Health(tsi, cmn.DefaultTimeout, query)
 	if err != nil {
 		if reb.xact().AbortedAfter(sleepRetry) {
 			glog.Infof("%s: abort", logHdr)
 			return
 		}
-		body, err, code = reb.t.Health(tsi, cmn.DefaultTimeout, query) // retry once
+		body, code, err = reb.t.Health(tsi, cmn.DefaultTimeout, query) // retry once
 	}
 	if err != nil {
 		glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi, err, code)

@@ -707,7 +707,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// + cloud
-	bucketProps, err, code = t.Cloud(bck).HeadBucket(ctx, bck)
+	bucketProps, code, err = t.Cloud(bck).HeadBucket(ctx, bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
@@ -826,7 +826,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		originalURL := query.Get(cmn.URLParamOrigURL)
 		goi.ctx = context.WithValue(goi.ctx, cmn.CtxOriginalURL, originalURL)
 	}
-	if err, errCode := goi.getObject(); err != nil {
+	if errCode, err := goi.getObject(); err != nil {
 		if cmn.IsErrConnectionReset(err) {
 			glog.Errorf("GET %s: %v", lom, err)
 		} else {
@@ -901,12 +901,12 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	lom.SetAtimeUnix(started.UnixNano())
 	appendTy := query.Get(cmn.URLParamAppendType)
 	if appendTy == "" {
-		if err, errCode := t.doPut(r, lom, started); err != nil {
+		if errCode, err := t.doPut(r, lom, started); err != nil {
 			t.fsErr(err, lom.FQN)
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
 	} else {
-		if handle, err, errCode := t.doAppend(r, lom, started); err != nil {
+		if handle, errCode, err := t.doAppend(r, lom, started); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), errCode)
 		} else {
 			w.Header().Set(cmn.HeaderAppendHandle, handle)
@@ -945,7 +945,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	err, errCode := t.DeleteObject(context.Background(), lom, evict)
+	errCode, err := t.DeleteObject(context.Background(), lom, evict)
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.invalmsghdlrsilent(w, r,
@@ -1081,7 +1081,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		}
 		lom.ToHTTPHdr(hdr)
 	} else {
-		objMeta, err, errCode := t.Cloud(lom.Bck()).HeadObj(context.Background(), lom)
+		objMeta, errCode, err := t.Cloud(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: HEAD request failed, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
@@ -1214,9 +1214,9 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems
 
 // checkCloudVersion returns (vchanged=) true if object versions differ between Cloud and local cache;
 // should be called only if the local copy exists
-func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
+func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, errCode int, err error) {
 	var objMeta cmn.SimpleKVs
-	objMeta, err, errCode = t.Cloud(lom.Bck()).HeadObj(ctx, lom)
+	objMeta, errCode, err = t.Cloud(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return
@@ -1239,7 +1239,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 	)
 
 	if query.Provider != "" {
-		bucketNames, err, code = t._listBcks(query, config)
+		bucketNames, code, err = t._listBcks(query, config)
 		if err != nil {
 			t.invalmsghdlrstatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
 			return
@@ -1248,7 +1248,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 		for provider := range cmn.Providers {
 			var buckets cmn.BucketNames
 			query.Provider = provider
-			buckets, err, code = t._listBcks(query, config)
+			buckets, code, err = t._listBcks(query, config)
 			if err != nil {
 				t.invalmsghdlrstatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
 				return
@@ -1260,11 +1260,11 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 	t.writeJSON(w, r, bucketNames, listBuckets)
 }
 
-func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, err error, c int) {
+func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, errCode int, err error) {
 	// 3rd party cloud or remote ais
 	if _, ok := cfg.Cloud.Providers[query.Provider]; ok || query.IsRemoteAIS() {
 		bck := cluster.NewBck("", query.Provider, query.Ns)
-		names, err, c = t.Cloud(bck).ListBuckets(context.Background(), query)
+		names, errCode, err = t.Cloud(bck).ListBuckets(context.Background(), query)
 		sort.Sort(names)
 	} else { // BMD
 		names = t.selectBMDBuckets(t.owner.bmd.get(), query)
@@ -1272,7 +1272,7 @@ func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cm
 	return
 }
 
-func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (newHandle string, err error, errCode int) {
+func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.Time) (newHandle string, errCode int, err error) {
 	var (
 		cksumValue    = r.Header.Get(cmn.HeaderObjCksumVal)
 		cksumType     = r.Header.Get(cmn.HeaderObjCksumType)
@@ -1283,7 +1283,7 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 
 	hi, err := parseAppendHandle(handle)
 	if err != nil {
-		return "", err, http.StatusBadRequest
+		return "", http.StatusBadRequest, err
 	}
 
 	aoi := &appendObjInfo{
@@ -1311,7 +1311,7 @@ func (t *targetrunner) doAppend(r *http.Request, lom *cluster.LOM, started time.
 // Cloud bucket:
 //  - returned version ID is the version
 // In both cases, new checksum is also generated and stored along with the new version.
-func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (err error, errCode int) {
+func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (errCode int, err error) {
 	var (
 		header     = r.Header
 		cksumType  = header.Get(cmn.HeaderObjCksumType)
@@ -1331,7 +1331,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	if recvType != "" {
 		n, err := strconv.Atoi(recvType)
 		if err != nil {
-			return err, http.StatusBadRequest
+			return http.StatusBadRequest, err
 		}
 		poi.migrated = cluster.RecvType(n) == cluster.Migrated
 	}
@@ -1374,7 +1374,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	}
 }
 
-func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict bool) (error, int) {
+func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict bool) (int, error) {
 	var (
 		cloudErr     error
 		cloudErrCode int
@@ -1388,13 +1388,13 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsObjNotExist(err) {
-		return err, 0
+		return 0, err
 	} else if !delFromCloud && cmn.IsObjNotExist(err) {
-		return err, http.StatusNotFound
+		return http.StatusNotFound, err
 	}
 
 	if delFromCloud {
-		if err, errCode := t.Cloud(lom.Bck()).DeleteObj(ctx, lom); err != nil {
+		if errCode, err := t.Cloud(lom.Bck()).DeleteObj(ctx, lom); err != nil {
 			cloudErr = err
 			cloudErrCode = errCode
 			t.statsT.Add(stats.DeleteCount, 1)
@@ -1407,7 +1407,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 				if cloudErr != nil {
 					glog.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
 				}
-				return errRet, 0
+				return 0, errRet
 			}
 		}
 		if evict {
@@ -1419,9 +1419,9 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 		}
 	}
 	if cloudErr != nil {
-		return cloudErr, cloudErrCode
+		return cloudErrCode, cloudErr
 	}
-	return errRet, 0
+	return 0, errRet
 }
 
 ///////////////////
@@ -1590,8 +1590,4 @@ func (t *targetrunner) runResilver(id string, skipGlobMisplaced bool, notifs ...
 		t.bcastToIC(msg, false /*wait*/)
 	}
 	t.rebManager.RunResilver(id, skipGlobMisplaced, notifs...)
-}
-
-func (t *targetrunner) AbortAllXacts(tys ...string) {
-	xreg.AbortAll(tys...)
 }

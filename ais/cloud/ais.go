@@ -298,13 +298,12 @@ func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	return remAis, nil
 }
 
-func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.Bck,
-	msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
+func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		return nil, err, errCode
+		return nil, errCode, err
 	}
 
 	remoteMsg := msg.Clone()
@@ -328,16 +327,16 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.B
 		// embedded into `ContinuationToken`).
 		bckList.UUID = msg.UUID
 	}
-	err, errCode = extractErrCode(err)
-	return bckList, err, errCode
+	errCode, err = extractErrCode(err)
+	return bckList, errCode, err
 }
 
-func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, err error, errCode int) {
+func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
 	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		return nil, err, errCode
+		return nil, errCode, err
 	}
 	err = m.try(remoteBck.Bck, func(bck cmn.Bck) error {
 		p, err := api.HeadBucket(aisCluster.bp, bck)
@@ -351,8 +350,8 @@ func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bc
 		})
 		return nil
 	})
-	err, errCode = extractErrCode(err)
-	return bckProps, err, errCode
+	errCode, err = extractErrCode(err)
+	return bckProps, errCode, err
 }
 
 func (m *AisCloudProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (buckets cmn.BucketNames, err error) {
@@ -378,7 +377,7 @@ func (m *AisCloudProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) 
 	return
 }
 
-func (m *AisCloudProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, err error, errCode int) {
+func (m *AisCloudProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
 	if !query.Ns.IsAnyRemote() {
 		buckets, err = m.listBucketsCluster(query.Ns.UUID, query)
 	} else {
@@ -390,15 +389,15 @@ func (m *AisCloudProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks)
 			}
 		}
 	}
-	err, errCode = extractErrCode(err)
+	errCode, err = extractErrCode(err)
 	return
 }
 
-func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		return nil, err, errCode
+		return nil, errCode, err
 	}
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
 		p, err := api.HeadObject(aisCluster.bp, bck, lom.ObjName)
@@ -408,15 +407,15 @@ func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMe
 		})
 		return err
 	})
-	err, errCode = extractErrCode(err)
-	return objMeta, err, errCode
+	errCode, err = extractErrCode(err)
+	return objMeta, errCode, err
 }
 
-func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		return err, errCode
+		return errCode, err
 	}
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
 		r, err := api.GetObjectReader(aisCluster.bp, bck, lom.ObjName)
@@ -435,25 +434,24 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 	return extractErrCode(err)
 }
 
-func (m *AisCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser,
-	expectedCksm *cmn.Cksum, err error, errCode int) {
+func (m *AisCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		return nil, nil, err, errCode
+		return nil, nil, errCode, err
 	}
 
-	r, err := api.GetObjectReader(aisCluster.bp, remoteBck, lom.ObjName)
-	err, errCode = extractErrCode(err)
-	return r, nil, err, errCode
+	r, err = api.GetObjectReader(aisCluster.bp, remoteBck, lom.ObjName)
+	errCode, err = extractErrCode(err)
+	return r, nil, errCode, err
 }
 
-func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		return "", err, errCode
+		return "", errCode, err
 	}
 	fh, ok := r.(*cmn.FileHandle) // `PutObject` closes file handle.
 	cmn.Assert(ok)                // HTTP redirect requires Open().
@@ -468,15 +466,15 @@ func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 		}
 		return api.PutObject(args)
 	})
-	err, errCode = extractErrCode(err)
-	return lom.Version(), err, errCode
+	errCode, err = extractErrCode(err)
+	return lom.Version(), errCode, err
 }
 
-func (m *AisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+func (m *AisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		return err, errCode
+		return errCode, err
 	}
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
 		return api.DeleteObject(aisCluster.bp, bck, lom.ObjName)
@@ -496,13 +494,13 @@ func (m *AisCloudProvider) try(remoteBck cmn.Bck, f func(bck cmn.Bck) error) (er
 	return
 }
 
-func extractErrCode(e error) (error, int) {
+func extractErrCode(e error) (int, error) {
 	if e == nil {
-		return nil, http.StatusOK
+		return http.StatusOK, nil
 	}
 	httpErr := &cmn.HTTPError{}
 	if errors.As(e, &httpErr) {
-		return httpErr, httpErr.Status
+		return httpErr.Status, httpErr
 	}
-	return e, http.StatusInternalServerError
+	return http.StatusInternalServerError, e
 }
