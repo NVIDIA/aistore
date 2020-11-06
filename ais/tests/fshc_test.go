@@ -540,3 +540,74 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 	tassert.Fatalf(t, numMpaths+1 == len(newMpaths.Available),
 		"should include newly added mount path after restore - available %d!=%d", numMpaths+1, len(newMpaths.Available))
 }
+
+func TestFSDisableMpathRestart(t *testing.T) {
+	var (
+		target *cluster.Snode
+
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams()
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		proxyCnt   = smap.CountProxies()
+		targetCnt  = smap.CountTargets()
+		enabled    bool
+	)
+
+	if targetCnt < 2 {
+		t.Skip("The number of targets must be at least 2")
+	}
+
+	for _, tinfo := range smap.Tmap {
+		target = tinfo
+		break
+	}
+	oldMpaths, err := api.GetMountpaths(baseParams, target)
+	tassert.CheckFatal(t, err)
+	numMpaths := len(oldMpaths.Available)
+	tassert.Fatalf(t, numMpaths != 0, "target %s doesn't have available mountpaths", target)
+
+	// 1. Disable mountpaths temporarily
+	mpath := oldMpaths.Available[0]
+	tutils.Logf("Disable mountpath on target %s\n", target.ID())
+	err = api.DisableMountpath(baseParams, target.ID(), mpath)
+	tassert.CheckFatal(t, err)
+	defer func() {
+		if !enabled {
+			api.EnableMountpath(baseParams, target, mpath)
+			tutils.WaitForRebalanceToComplete(t, baseParams)
+		}
+	}()
+
+	// Kill and restore target
+	tutils.Logf("Killing target %s\n", target)
+	tcmd, err := kill(target)
+	tassert.CheckFatal(t, err)
+	smap, err = tutils.WaitForClusterState(proxyURL, "remove target", smap.Version, proxyCnt, targetCnt-1)
+	tassert.CheckFatal(t, err)
+
+	restore(tcmd, false, "target")
+	smap = tutils.WaitNodeRestored(t, smap.Primary.URL(cmn.NetworkPublic), "to restore", target.ID(), smap.Version,
+		proxyCnt, targetCnt)
+	if _, ok := smap.Tmap[target.ID()]; !ok {
+		t.Fatalf("Removed target didn't rejoin")
+	}
+
+	// Check if the the mountpath is disabled after restart
+	newMpaths, err := api.GetMountpaths(baseParams, target)
+	tassert.CheckError(t, err)
+	tassert.Errorf(t, numMpaths-1 == len(newMpaths.Available),
+		"should not have disabled path after restore - available %d!=%d", numMpaths-1, len(newMpaths.Available))
+	tassert.Errorf(t, len(newMpaths.Disabled) == 1 && newMpaths.Disabled[0] == mpath, "should have disabled mountpath: %s not in %v", mpath, newMpaths.Disabled)
+
+	// Re-enable the mountpath should work
+	err = api.EnableMountpath(baseParams, target, mpath)
+	tassert.CheckFatal(t, err)
+	enabled = true
+	tutils.WaitForRebalanceToComplete(t, baseParams)
+
+	newMpaths, err = api.GetMountpaths(baseParams, target)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, numMpaths == len(newMpaths.Available),
+		"should restore all mountpaths - available %d!=%d", numMpaths, len(newMpaths.Available))
+	tassert.Errorf(t, len(newMpaths.Disabled) == 0, "should not have disabled mountpaths: has %v", newMpaths.Disabled)
+}

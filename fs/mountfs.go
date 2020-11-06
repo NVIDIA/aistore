@@ -416,7 +416,8 @@ func InitMpaths(daeID string) error {
 	// Validate VMD with config FS
 	for path := range configPaths {
 		// 1. Check if path is present in VMD paths.
-		if !vmd.HasPath(path) {
+		device, exists := vmd.Devices[path]
+		if !exists {
 			changed = true
 			glog.Errorf("%s: mount path (%q) not in VMD", siError(siMpathMissing), path)
 		}
@@ -426,10 +427,11 @@ func InitMpaths(daeID string) error {
 		if err != nil {
 			return err
 		}
-		if mpathDaeID != daeID {
-			return fmt.Errorf("%s: target and mounpath DaemonID don't match: %s vs %s", siError(siTargetIDMismatch), daeID, mpathDaeID)
+		if mpathDaeID != "" && mpathDaeID != daeID {
+			return fmt.Errorf("%s: target and mountpath DaemonID don't match: %s vs %s", siError(siTargetIDMismatch), daeID, mpathDaeID)
 		}
-		if _, err := Add(path, daeID); err != nil {
+		enabled := device == nil || device.Enabled
+		if _, err := add(path, daeID, enabled); err != nil {
 			return err
 		}
 	}
@@ -508,6 +510,11 @@ func updatePaths(available, disabled MPI) {
 // Add adds new mountpath to the target's mountpaths.
 // FIXME: unify error messages for original and clean mountpath
 func Add(mpath, daeID string) (*MountpathInfo, error) {
+	return add(mpath, daeID, true)
+}
+
+// helper for adding an enabled/disabled mountpath to mfs
+func add(mpath, daeID string, enabled bool) (*MountpathInfo, error) {
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return nil, err
@@ -539,12 +546,16 @@ func Add(mpath, daeID string) (*MountpathInfo, error) {
 			mpath, mp.Fsid, existingPath)
 	}
 
-	mfs.ios.AddMpath(mp.Path, mp.FileSystem)
-	if err := SetDaemonIDXattr(mp.Path, daeID); err != nil {
-		return nil, err
+	if enabled {
+		mfs.ios.AddMpath(mp.Path, mp.FileSystem)
+		if err := SetDaemonIDXattr(mp.Path, daeID); err != nil {
+			return nil, err
+		}
+		availablePaths[mp.Path] = mp
+	} else {
+		disabledPaths[mp.Path] = mp
 	}
 
-	availablePaths[mp.Path] = mp
 	mfs.fsIDs[mp.Fsid] = cleanMpath
 	updatePaths(availablePaths, disabledPaths)
 	return mp, nil
