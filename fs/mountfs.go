@@ -219,7 +219,7 @@ func (mi *MountpathInfo) StoreMD(path string, what interface{}, options jsp.Opti
 }
 
 func (mi *MountpathInfo) ClearMDs() {
-	for _, mdPath := range mdFiles {
+	for _, mdPath := range mdFilesDirs {
 		fpath := filepath.Join(mi.Path, mdPath)
 		os.RemoveAll(fpath)
 	}

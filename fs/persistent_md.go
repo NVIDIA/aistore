@@ -27,8 +27,8 @@ const (
 	VmdPersistedFileName = ".ais.vmd"
 )
 
-// List of AIS metadata files stored
-var mdFiles = []string{
+// List of AIS metadata files and directories (basenames only)
+var mdFilesDirs = []string{
 	markersDirName,
 
 	BmdPersistedFileName,
