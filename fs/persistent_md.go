@@ -6,7 +6,6 @@ package fs
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -86,7 +85,9 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 
 		// 1. (Optional) Move currently stored in `path` to `backupPath`.
 		if backupPath != "" {
-			moved = movePersistedFile(filepath.Join(mpath.Path, path), filepath.Join(mpath.Path, backupPath))
+			moved = mpath.MoveMD(path, backupPath)
+		} else if err := mpath.Remove(path); err != nil {
+			glog.Error(err)
 		}
 
 		// 2. Persist `what` on `path`.
@@ -100,7 +101,7 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 
 		// 3. (Optional) Clean up very old versions of persisted data - only if they were not updated.
 		if backupPath != "" && !moved {
-			if err := cmn.RemoveFile(filepath.Join(mpath.Path, backupPath)); err != nil {
+			if err := mpath.Remove(backupPath); err != nil {
 				glog.Error(err)
 			}
 		}
@@ -112,14 +113,6 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 	}
 
 	return
-}
-
-func movePersistedFile(from, to string) bool {
-	err := os.Rename(from, to)
-	if err != nil && !os.IsNotExist(err) {
-		glog.Error(err)
-	}
-	return err == nil
 }
 
 func ClearMDOnAllMpaths() {

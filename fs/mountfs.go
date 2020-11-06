@@ -220,9 +220,28 @@ func (mi *MountpathInfo) StoreMD(path string, what interface{}, options jsp.Opti
 
 func (mi *MountpathInfo) ClearMDs() {
 	for _, mdPath := range mdFilesDirs {
-		fpath := filepath.Join(mi.Path, mdPath)
-		os.RemoveAll(fpath)
+		mi.Remove(mdPath)
 	}
+}
+
+func (mi *MountpathInfo) Remove(path string) error {
+	fpath := filepath.Join(mi.Path, path)
+	if err := os.RemoveAll(fpath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func (mi *MountpathInfo) MoveMD(from, to string) bool {
+	var (
+		fromPath = filepath.Join(mi.Path, from)
+		toPath   = filepath.Join(mi.Path, to)
+	)
+	err := os.Rename(fromPath, toPath)
+	if err != nil && !os.IsNotExist(err) {
+		glog.Error(err)
+	}
+	return err == nil
 }
 
 // make-path methods
