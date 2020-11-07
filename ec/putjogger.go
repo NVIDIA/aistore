@@ -577,7 +577,11 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		}
 	}
 
+	// Send as many as possible to be able to restore the object later.
 	for i := 0; i < totalCnt; i++ {
+		if i >= len(targets)-1 {
+			break
+		}
 		wg.Add(1)
 		go copySlice(i)
 	}

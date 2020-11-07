@@ -361,6 +361,7 @@ func (txn *txnBckBase) abort() {
 		cmn.Assert(ok)
 		nlp.Unlock()
 	}
+	txn.nlps = txn.nlps[:0]
 }
 
 // NOTE: not keeping locks for the duration; see also: txnTransferBucket

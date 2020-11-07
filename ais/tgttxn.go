@@ -119,6 +119,10 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.startMaintenance(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
+	case cmn.ActDestroyLB, cmn.ActEvictCB:
+		if err = t.destroyBucket(c); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
 	default:
 		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
@@ -631,6 +635,32 @@ func (t *targetrunner) startMaintenance(c *txnServerCtx) error {
 			fs.ClearMDOnAllMpaths()
 			fs.RemoveDaemonIDs()
 		}
+	default:
+		cmn.Assert(false)
+	}
+	return nil
+}
+
+//////////////////////////////////////////////
+// destroy local bucket / evict cloud buket //
+//////////////////////////////////////////////
+
+func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
+	switch c.phase {
+	case cmn.ActBegin:
+		nlp := c.bck.GetNameLockPair()
+		if !nlp.TryLock() {
+			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
+		}
+		txn := newTxnBckBase("dlb", *c.bck)
+		txn.fillFromCtx(c)
+		if err := t.transactions.begin(txn); err != nil {
+			nlp.Unlock()
+			return err
+		}
+		txn.nlps = []cmn.NLP{nlp}
+	case cmn.ActAbort, cmn.ActCommit:
+		t.transactions.find(c.uuid, c.phase)
 	default:
 		cmn.Assert(false)
 	}

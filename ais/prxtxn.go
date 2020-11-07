@@ -124,28 +124,6 @@ func (p *proxyrunner) _createBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
-// destroy AIS bucket or evict Cloud bucket
-func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
-	nlp := bck.GetNameLockPair()
-
-	// TODO: try-lock
-	nlp.Lock()
-	defer nlp.Unlock()
-
-	ctx := &bmdModifier{
-		pre:   p._destroyBMDPre,
-		final: p._syncBMDFinal,
-		msg:   msg,
-		wait:  true,
-		bcks:  []*cluster.Bck{bck},
-	}
-	_, err := p.owner.bmd.modify(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (p *proxyrunner) _destroyBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	bck := ctx.bcks[0]
 	if _, present := clone.Get(bck); !present {
@@ -743,6 +721,58 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 	} else if msg.Action == cmn.ActDecommission {
 		_, err = p.unregisterNode(msg, si, true /*skipReb*/)
 	}
+	return
+}
+
+// destroy bucket: { begin -- commit }
+func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (err error) {
+	nlp := bck.GetNameLockPair()
+	nlp.Lock()
+	defer nlp.Unlock()
+
+	actMsg := &cmn.ActionMsg{}
+	*actMsg = *msg
+	c := p.prepTxnClient(actMsg, bck)
+
+	// 1. begin
+	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	for res := range results {
+		if res.err != nil {
+			// abort
+			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
+			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			err = res.err
+			return
+		}
+	}
+
+	// 2. Distribute new BMD
+	ctx := &bmdModifier{
+		pre:   p._destroyBMDPre,
+		final: p._syncBMDFinal,
+		msg:   msg,
+		wait:  true,
+		bcks:  []*cluster.Bck{bck},
+	}
+	_, err = p.owner.bmd.modify(ctx)
+	if err != nil {
+		c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
+		_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		return
+	}
+
+	// 3. Commit
+	config := cmn.GCO.Get()
+	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
+	for res := range results {
+		if res.err != nil {
+			glog.Error(res.err)
+			err = res.err
+			return
+		}
+	}
+
 	return
 }
 
