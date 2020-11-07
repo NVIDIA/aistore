@@ -57,10 +57,11 @@ type (
 	}
 
 	ObjectsOut struct {
-		Dir  string
-		T    cluster.Target
-		Bck  cmn.Bck
-		FQNs map[string][]string // ContentType => FQN
+		Dir             string
+		T               cluster.Target
+		Bck             cmn.Bck
+		FQNs            map[string][]string // ContentType => FQN
+		MpathObjectsCnt map[string]int      // mpath -> # objects on the mpath
 	}
 )
 
@@ -233,8 +234,9 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 
 func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	var (
-		buf  = make([]byte, desc.ObjectSize)
-		fqns = make(map[string][]string, len(desc.CTs))
+		buf       = make([]byte, desc.ObjectSize)
+		fqns      = make(map[string][]string, len(desc.CTs))
+		mpathCnts = make(map[string]int, desc.MountpathsCnt)
 
 		bck = cmn.Bck{
 			Name:     cmn.RandString(10),
@@ -261,8 +263,9 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	for i := 0; i < desc.MountpathsCnt; i++ {
 		mpath, err := ioutil.TempDir(dir, "")
 		tassert.CheckFatal(t, err)
-		_, err = fs.Add(mpath, "daeID")
+		mp, err := fs.Add(mpath, "daeID")
 		tassert.CheckFatal(t, err)
+		mpathCnts[mp.Path] = 0
 	}
 
 	if len(desc.CTs) == 0 {
@@ -290,6 +293,10 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 			f.Close()
 			tassert.CheckFatal(t, err)
 
+			parsedFQN, err := fs.ParseFQN(fqn)
+			tassert.CheckFatal(t, err)
+			mpathCnts[parsedFQN.MpathInfo.Path]++
+
 			switch ct.Type {
 			case fs.ObjectType:
 				lom := &cluster.LOM{T: tMock, FQN: fqn}
@@ -308,10 +315,11 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	}
 
 	return &ObjectsOut{
-		Dir:  dir,
-		T:    tMock,
-		Bck:  bck,
-		FQNs: fqns,
+		Dir:             dir,
+		T:               tMock,
+		Bck:             bck,
+		FQNs:            fqns,
+		MpathObjectsCnt: mpathCnts,
 	}
 }
 

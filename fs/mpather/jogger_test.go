@@ -185,7 +185,7 @@ func TestJoggerGroupError(t *testing.T) {
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
 			counter.Inc()
-			return fmt.Errorf("upsss")
+			return fmt.Errorf("oops")
 		},
 	})
 
@@ -198,7 +198,7 @@ func TestJoggerGroupError(t *testing.T) {
 	)
 
 	err := jg.Stop()
-	tassert.Errorf(t, err != nil && strings.Contains(err.Error(), "upss"), "expected an error")
+	tassert.Errorf(t, err != nil && strings.Contains(err.Error(), "oops"), "expected an error")
 }
 
 // This test checks if single LOM error will cause all joggers to stop.
@@ -219,6 +219,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		mpaths, _   = fs.Get()
 		counters    = make(map[string]*atomic.Int32, len(mpaths))
 		failOnMpath *fs.MountpathInfo
+		failed      atomic.Bool
 	)
 	defer os.RemoveAll(out.Dir)
 
@@ -234,8 +235,9 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 			cnt := counters[lom.ParsedFQN.MpathInfo.Path].Inc()
 
 			// Fail only once, on one mpath.
-			if lom.ParsedFQN.MpathInfo.Path == failOnMpath.Path && cnt == failAt {
-				return fmt.Errorf("upsss")
+			if cnt == failAt && failed.CAS(false, true) {
+				failOnMpath = lom.ParsedFQN.MpathInfo
+				return fmt.Errorf("oops")
 			}
 			return nil
 		},
@@ -245,14 +247,17 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 	<-jg.ListenFinished()
 
 	for mpath, counter := range counters {
-		expectedMax := totalObjCnt / mpathsCnt / 2
-		// Expected to visit at most 50% of mpath objects, when error happened at 20% of objects of some mpath.
-		tassert.Errorf(t, int(counter.Load()) <= expectedMax, "joggers on mpath %q expected to visit at most %d, visited %d",
-			mpath, expectedMax, counter.Load())
+		// Expected at least one object to be skipped at each mountpath, when error occurred at 20% of objects jogged.
+		visitCount := counter.Load()
+		if mpath == failOnMpath.Path {
+			tassert.Fatalf(t, visitCount == failAt, "jogger on fail mpath %q expected to visit %d: visited %d", mpath, failAt, visitCount)
+		}
+		tassert.Errorf(t, int(visitCount) <= out.MpathObjectsCnt[mpath], "jogger on mpath %q expected to visit at most %d, visited %d",
+			mpath, out.MpathObjectsCnt[mpath], counter.Load())
 	}
 
 	err := jg.Stop()
-	tassert.Errorf(t, err != nil && strings.Contains(err.Error(), "upss"), "expected an error")
+	tassert.Errorf(t, err != nil && strings.Contains(err.Error(), "oops"), "expected an error")
 }
 
 func TestJoggerGroupMultiContentTypes(t *testing.T) {
