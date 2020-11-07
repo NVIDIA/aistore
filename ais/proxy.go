@@ -3160,7 +3160,7 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) (err error)
 	return err
 }
 
-func (p *proxyrunner) _unregNodePost(ctx *smapModifier, clone *smapX) {
+func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
 	if !ctx.skipReb && p.requiresRebalance(ctx.smap, clone) {
 		rmdCtx := &rmdModifier{
 			pre: func(_ *rmdModifier, clone *rebMD) {
@@ -3244,7 +3244,7 @@ func (p *proxyrunner) unregisterNode(msg *cmn.ActionMsg, si *cluster.Snode, skip
 	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
-		post:    p._unregNodePost,
+		post:    p._perfRebPost,
 		final:   p._syncFinal,
 		msg:     msg,
 		sid:     si.ID(),
@@ -3323,24 +3323,21 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
 }
 
 // Stops rebalance if needed, do cleanup, and get a node back to the cluster.
-func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDecommision) error {
-	if !opts.SkipRebalance {
-		xactMsg := &xaction.XactReqMsg{Kind: cmn.ActRebalance}
-		body := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActXactStop, Value: xactMsg})
-		results := p.callTargets(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Xactions), body)
-		for res := range results {
-			if res.err != nil {
-				return res.err
-			}
-		}
-	}
+func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
 	ctx := &smapModifier{
-		pre:   p._cancelMaint,
-		sid:   opts.DaemonID,
-		final: p._syncFinal,
-		msg:   msg, flags: cluster.SnodeMaintenanceMask,
+		pre:     p._cancelMaint,
+		post:    p._perfRebPost,
+		final:   p._syncFinal,
+		sid:     opts.DaemonID,
+		skipReb: opts.SkipRebalance,
+		msg:     msg,
+		flags:   cluster.SnodeMaintenanceMask,
 	}
-	return p.owner.smap.modify(ctx)
+	err = p.owner.smap.modify(ctx)
+	if ctx.rmd != nil {
+		rebID = xaction.RebID(ctx.rmd.Version)
+	}
+	return
 }
 
 func (p *proxyrunner) _cancelMaint(ctx *smapModifier, clone *smapX) error {
@@ -3535,23 +3532,13 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := p.cancelMaintenance(msg, &opts); err != nil {
+		rebID, err := p.cancelMaintenance(msg, &opts)
+		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-
-		if si.IsTarget() && !opts.SkipRebalance {
-			rebID, err := p.finalizeMaintenance(msg, si)
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
+		if rebID != 0 {
 			w.Write([]byte(rebID.String()))
-		} else {
-			smap := p.owner.smap.get()
-			rebMsg := &cmn.ActionMsg{Action: msg.Action}
-			aisMsg := p.newAisMsg(rebMsg, nil, nil)
-			_ = p.metasyncer.sync(revsPair{smap, aisMsg})
 		}
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)

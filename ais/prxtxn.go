@@ -686,8 +686,15 @@ func (p *proxyrunner) _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) erro
 
 // maintenance: { begin -- enable GFN -- commit -- start rebalance }
 func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
-	c := p.prepTxnClient(msg, nil)
+	if si.IsProxy() {
+		p.markMaintenance(msg, si)
+		if msg.Action == cmn.ActDecommission {
+			_, err = p.unregisterNode(msg, si, true /*skipReb*/)
+		}
+		return
+	}
 
+	c := p.prepTxnClient(msg, nil)
 	// 1. begin
 	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
@@ -708,10 +715,15 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 	}
 
 	// 3. Commit
-	config := cmn.GCO.Get()
-	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
-	for res := range results {
+	// NOTE: Call only the target being decommissioned, on all other targets commit phase is a null operation.
+	if msg.Action == cmn.ActDecommission {
+		config := cmn.GCO.Get()
+		c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
+		res := p.call(callArgs{
+			si:      si,
+			req:     c.req,
+			timeout: config.Timeout.CplaneOperation,
+		})
 		if res.err != nil {
 			glog.Error(res.err)
 			err = res.err
