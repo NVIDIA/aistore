@@ -101,7 +101,11 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 4. commit
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive // making exception for this critical op
+
+	// txn timeout - making an exception for this critical op
+	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
+	c.timeout += c.timeout / 2
+
 	c.req.Query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {

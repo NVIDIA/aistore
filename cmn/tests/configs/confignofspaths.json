@@ -30,7 +30,7 @@
     "retry_sync_time":   "2s"
   },
   "timeout": {
-    "max_keepalive":        "4s",
+    "max_keepalive":        "5s",
     "cplane_operation":     "2s",
     "send_file_time":       "5m",
     "startup_time":         "1m",
