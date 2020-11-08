@@ -233,7 +233,7 @@ func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *ro
 	s := robin.stsdest[i]
 	if err = s.Send(one); err != nil {
 		if reopen {
-			roc.Close()
+			one.Reader.Close()
 		}
 		transport.FreeSend(one)
 	}
