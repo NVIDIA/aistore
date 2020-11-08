@@ -226,13 +226,15 @@ func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *ro
 		}
 		one.Reader = reader
 	}
-	if sb.multiplier <= 1 {
-		s0 := robin.stsdest[0]
-		return s0.Send(one)
+	i := 0
+	if sb.multiplier > 1 {
+		i = int(robin.i.Inc()) % len(robin.stsdest)
 	}
-	i := int(robin.i.Inc()) % len(robin.stsdest)
 	s := robin.stsdest[i]
 	if err = s.Send(one); err != nil {
+		if reopen {
+			roc.Close()
+		}
 		transport.FreeSend(one)
 	}
 	return

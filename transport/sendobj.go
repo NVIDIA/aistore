@@ -152,7 +152,9 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 	}
 	FreeSend(obj)
 	if obj.Reader != nil {
-		cmn.Close(obj.Reader) // NOTE: always closing
+		// NOTE: always closing but MAY close an already closed if failed _within_
+		// the process of sending to mult. dest. (see transport/bundle/stream_bundle.go).
+		_ = obj.Reader.Close()
 	}
 }
 
