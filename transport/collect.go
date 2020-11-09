@@ -29,21 +29,18 @@ type (
 )
 
 var (
-	sc = &StreamCollector{} // idle timer and house-keeping (slow path)
-	gc *collector           // real stream collector
+	sc *StreamCollector // idle timer and house-keeping (slow path)
+	gc *collector       // real stream collector
 )
-
-// Stream Collector - a singleton that:
-// 1. controls part of the stream lifecycle:
-//    - activation (followed by connection establishment and HTTP PUT), and
-//    - deactivation (teardown)
-// 2. provides each stream with its own idle timer (with timeout measured in ticks - see tickUnit)
-// 3. deactivates idle streams
 
 // interface guard
-var (
-	_ cmn.Runner = &StreamCollector{}
-)
+var _ cmn.Runner = (*StreamCollector)(nil)
+
+// Stream Collector:
+// 1. controls stream activation (followed by connection establishment and HTTP PUT), and
+//    deactivation (teardown)
+// 2. provides each stream with its own idle timer (with timeout measured in ticks - see tickUnit)
+// 3. deactivates idle streams
 
 func Init() *StreamCollector {
 	cmn.Assert(gc == nil)
@@ -57,6 +54,7 @@ func Init() *StreamCollector {
 	}
 	heap.Init(gc)
 
+	sc = &StreamCollector{}
 	return sc
 }
 
@@ -161,7 +159,7 @@ func (gc *collector) do() {
 			s.time.ticks--
 			if s.time.ticks <= 0 {
 				delete(gc.streams, lid)
-				s.streamer.closeSCQ()
+				s.streamer.closeAndFree()
 				if s.term.err == nil {
 					s.term.err = errors.New(reasonUnknown)
 				}

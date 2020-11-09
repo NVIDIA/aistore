@@ -20,12 +20,13 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
 )
 
 // transport defaults
 const (
-	maxHeaderSize  = 1024
+	maxHeaderSize  = memsys.PageSize
 	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
 	defaultIdleOut = time.Second * 2
 	tickUnit       = time.Second
@@ -70,7 +71,7 @@ type (
 		errCmpl(error)
 		resetCompression()
 		// gc
-		closeSCQ()
+		closeAndFree()
 		drain()
 		idleTick()
 	}
@@ -96,6 +97,7 @@ type (
 			index   int           // heap stuff
 		}
 		wg        sync.WaitGroup
+		slab      *memsys.Slab
 		maxheader []byte // max header buffer
 		header    []byte // object header - slice of the maxheader with bucket/objName, etc. fields
 		term      struct {
@@ -106,8 +108,6 @@ type (
 		}
 	}
 )
-
-var nextSID = *atomic.NewInt64(100) // unique session IDs starting from 101
 
 ////////////////
 // streamBase //
@@ -136,8 +136,14 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	s.lastCh = cmn.NewStopCh()
 	s.stopCh = cmn.NewStopCh()
 	s.postCh = make(chan struct{}, 1)
-	s.maxheader = make([]byte, maxHeaderSize) // NOTE: must be large enough to accommodate all max-size Header
-	s.sessST.Store(inactive)                  // NOTE: initiate HTTP session upon arrival of the first object
+
+	mem := memsys.DefaultPageMM()
+	if extra != nil && extra.MMSA != nil {
+		mem = extra.MMSA
+	}
+
+	s.maxheader, s.slab = mem.Alloc(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
+	s.sessST.Store(inactive)                       // NOTE: initiate HTTP session upon the first arrival
 
 	s.term.reason = new(string)
 	return

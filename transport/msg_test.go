@@ -10,12 +10,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
+	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -52,30 +56,48 @@ func Example_msg() {
 }
 
 func Test_MsgDryRun(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
 	err := os.Setenv("AIS_STREAM_DRY_RUN", "true")
 	defer os.Unsetenv("AIS_STREAM_DRY_RUN")
 	tassert.CheckFatal(t, err)
-	stream := transport.NewMsgStream(nil, "dry-msg")
 
+	// fill in common shared read-only bug
 	random := newRand(mono.NanoTime())
-	size, num, prevsize := int64(0), 0, int64(0)
+	buf, slab := MMSA.Alloc(cmn.MiB)
+	defer slab.Free(buf)
+	random.Read(buf)
 
-	for size < cmn.GiB {
-		msg := &transport.Msg{Body: make([]byte, random.Intn(256)+1)}
-		_, err = random.Read(msg.Body)
-		tassert.CheckFatal(t, err)
-		stream.Send(msg)
-		num++
-		size += int64(len(msg.Body))
-		if size-prevsize >= cmn.MiB*100 {
-			prevsize = size
-			tutils.Logf("[dry]: %d MiB\n", size/cmn.MiB)
-		}
+	wg := &sync.WaitGroup{}
+	num := atomic.NewInt64(0)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			myrand := newRand(int64(idx * idx))
+			tsize, prevsize, off := int64(0), int64(0), 0
+			total := int64(cmn.GiB * 4)
+			if testing.Short() {
+				total = cmn.GiB
+			}
+			stream := transport.NewMsgStream(nil, "dry-msg"+strconv.Itoa(idx))
+			for tsize < total {
+				msize := myrand.Intn(memsys.PageSize - 64) // <= s.maxheader, zero-length OK
+				if off+msize > len(buf) {
+					off = 0
+				}
+				msg := &transport.Msg{Body: buf[off : off+msize]}
+				off += msize
+				err = stream.Send(msg)
+				tassert.CheckFatal(t, err)
+				num.Inc()
+				tsize += int64(msize)
+				if tsize-prevsize > total/2 {
+					prevsize = tsize
+					tutils.Logf("%s: %s\n", stream, cmn.B2S(tsize, 0))
+				}
+			}
+			stream.Fin()
+		}(i)
 	}
-	stream.Fin()
-	stats := stream.GetStats()
-
-	fmt.Printf("[dry]: offset=%d, num=%d(%d)\n", stats.Offset.Load(), stats.Num.Load(), num)
+	wg.Wait()
+	tutils.Logf("total messages: %d\n", num.Load())
 }

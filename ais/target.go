@@ -307,7 +307,7 @@ func (t *targetrunner) Run() error {
 	}
 
 	dsort.InitManagers(driver)
-	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t.gmm, t, t.statsT)
+	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t, t.statsT)
 
 	err = t.httprunner.run()
 	// NOTE: This must be done *after* `t.httprunner.run()` so we don't remove marker on panic.

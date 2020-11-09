@@ -132,6 +132,7 @@ func NewObjStream(client Client, toURL string, extra *Extra) (s *Stream) {
 //   network errors that may cause sudden and instant termination of the underlying
 //   stream(s).
 func (s *Stream) Send(obj *Obj) (err error) {
+	debug.Assert(len(obj.Hdr.Opaque) < len(s.maxheader)-int(unsafe.Sizeof(Obj{})))
 	if err = s.startSend(obj); err != nil {
 		return
 	}
@@ -171,6 +172,7 @@ func NewMsgStream(client Client, toURL string) (s *MsgStream) {
 }
 
 func (s *MsgStream) Send(msg *Msg) (err error) {
+	debug.Assert(len(msg.Body) < len(s.maxheader)-int(unsafe.Sizeof(Msg{})))
 	if err = s.startSend(msg); err != nil {
 		return
 	}

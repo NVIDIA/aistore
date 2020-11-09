@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -52,14 +53,16 @@ type (
 const cleanupInterval = time.Minute * 10
 
 var (
-	mu       *sync.RWMutex
+	nextSID  atomic.Int64        // next unique session ID
 	handlers map[string]*handler // by trname
+	mu       *sync.RWMutex       // ptotect handlers
 	verbose  bool
 )
 
 func init() {
-	mu = &sync.RWMutex{}
+	nextSID.Store(100)
 	handlers = make(map[string]*handler, 16)
+	mu = &sync.RWMutex{}
 	verbose = bool(glog.FastV(4, glog.SmoduleTransport))
 }
 

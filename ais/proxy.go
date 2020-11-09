@@ -154,7 +154,7 @@ func (p *proxyrunner) Run() error {
 		glog.Infof("%s: [intra data net] listening on: %s", p.si, p.si.IntraDataNet.DirectURL)
 	}
 
-	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, nil, p.statsT)
+	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, p.statsT)
 	return p.httprunner.run()
 }
 

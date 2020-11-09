@@ -140,19 +140,17 @@ type (
 	}
 )
 
-func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *cluster.Snode, mmsa *memsys.MMSA,
-	t cluster.Target, stats stats.Tracker) {
+func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *cluster.Snode, t cluster.Target,
+	stats stats.Tracker) {
 	ctx.smapOwner = smapOwner
 	ctx.bmdOwner = bmdOwner
 	ctx.node = snode
 	ctx.t = t
 	ctx.stats = stats
-	// TODO: try to introduce and benchmark a separate MMSA instance, e.g.:
-	//       mm = &memsys.MMSA{Name: cmn.DSortName + ".MMSA", TimeIval: time.Minute * 10, ...}
 	cmn.Assert(mm == nil)
-	mm = mmsa
 
 	if t != nil {
+		mm = t.MMSA()
 		err := fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
 		cmn.AssertNoErr(err)
 		err = fs.CSM.RegisterContentType(filetype.DSortWorkfileType, &filetype.DSortFile{})

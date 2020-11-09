@@ -30,9 +30,7 @@ type (
 )
 
 // interface guard
-var (
-	_ streamer = &MsgStream{}
-)
+var _ streamer = (*MsgStream)(nil)
 
 func (s *MsgStream) terminate() {
 	s.term.mu.Lock()
@@ -148,9 +146,11 @@ func (s *MsgStream) drain() {
 	}
 }
 
-// gc: close SQ
-func (s *MsgStream) closeSCQ() {
+// gc:
+func (s *MsgStream) closeAndFree() {
 	close(s.workCh)
+
+	s.slab.Free(s.maxheader)
 }
 
 // gc: post idle tick if idle

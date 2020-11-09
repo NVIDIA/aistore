@@ -48,9 +48,7 @@ type (
 )
 
 // interface guard
-var (
-	_ streamer = &Stream{}
-)
+var _ streamer = (*Stream)(nil)
 
 ///////////////////
 // object stream //
@@ -91,7 +89,6 @@ func (s *Stream) initCompression(extra *Extra) {
 	mem := extra.MMSA
 	if mem == nil {
 		mem = memsys.DefaultPageMM()
-		glog.Warningln("Using global memory manager for streaming inline compression")
 	}
 	if s.lz4s.blockMaxSize >= memsys.MaxPageSlabSize {
 		s.lz4s.sgl = mem.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
@@ -344,10 +341,12 @@ func (s *Stream) drain() {
 	}
 }
 
-// gc: close SQ and SCQ
-func (s *Stream) closeSCQ() {
+// gc:
+func (s *Stream) closeAndFree() {
 	close(s.workCh)
 	close(s.cmplCh)
+
+	s.slab.Free(s.maxheader)
 }
 
 // gc: post idle tick if idle
