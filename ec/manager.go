@@ -36,8 +36,8 @@ type Manager struct {
 	bundleEnabled atomic.Bool // to disable and enable on the fly
 	netReq        string      // network used to send object request
 	netResp       string      // network used to send/receive slices
-	reqBundle     *bundle.Streams
-	respBundle    *bundle.Streams
+	reqBundle     atomic.Pointer
+	respBundle    atomic.Pointer
 }
 
 var ECM *Manager
@@ -71,11 +71,18 @@ func initManager(t cluster.Target) error {
 	return nil
 }
 
+func (mgr *Manager) req() *bundle.Streams {
+	return (*bundle.Streams)(mgr.reqBundle.Load())
+}
+
+func (mgr *Manager) resp() *bundle.Streams {
+	return (*bundle.Streams)(mgr.respBundle.Load())
+}
+
 func (mgr *Manager) initECBundles() error {
 	if !mgr.bundleEnabled.CAS(false, true) {
 		return nil
 	}
-	cmn.AssertMsg(mgr.reqBundle == nil && mgr.respBundle == nil, "EC Bundles have been already initialized")
 
 	if err := transport.HandleObjStream(ReqStreamName, ECM.recvRequest); err != nil {
 		return fmt.Errorf("failed to register recvRequest: %v", err)
@@ -112,8 +119,8 @@ func (mgr *Manager) initECBundles() error {
 	}
 
 	sowner := mgr.t.Sowner()
-	mgr.reqBundle = bundle.NewStreams(sowner, mgr.t.Snode(), client, reqSbArgs)
-	mgr.respBundle = bundle.NewStreams(sowner, mgr.t.Snode(), client, respSbArgs)
+	mgr.reqBundle.Store(unsafe.Pointer(bundle.NewStreams(sowner, mgr.t.Snode(), client, reqSbArgs)))
+	mgr.respBundle.Store(unsafe.Pointer(bundle.NewStreams(sowner, mgr.t.Snode(), client, respSbArgs)))
 
 	mgr.smap = sowner.Get()
 	mgr.targetCnt.Store(int32(mgr.smap.CountTargets()))
@@ -122,35 +129,26 @@ func (mgr *Manager) initECBundles() error {
 }
 
 func (mgr *Manager) closeECBundles() {
-	// xactCount is the number of currently active xaction. It increases
-	// on every xaction(ECPut,ECGet,ECRespond ones) creation, and decreases
-	// when an xaction is stopping(on abort or after some idle time(by default
-	// 3*timeout.Sendfile = 15 minutes).
-	if xactCount.Load() > 0 {
-		return
-	}
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
 	mgr.t.Sowner().Listeners().Unreg(mgr)
-	mgr.reqBundle.Close(false)
-	mgr.reqBundle = nil
-	mgr.respBundle.Close(false)
-	mgr.respBundle = nil
+	mgr.req().Close(false)
+	mgr.resp().Close(false)
 	transport.Unhandle(ReqStreamName)
 	transport.Unhandle(RespStreamName)
 }
 
 func (mgr *Manager) NewGetXact(bck cmn.Bck) *XactGet {
-	return NewGetXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
+	return NewGetXact(mgr.t, bck, mgr)
 }
 
 func (mgr *Manager) NewPutXact(bck cmn.Bck) *XactPut {
-	return NewPutXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
+	return NewPutXact(mgr.t, bck, mgr)
 }
 
 func (mgr *Manager) NewRespondXact(bck cmn.Bck) *XactRespond {
-	return NewRespondXact(mgr.t, bck, mgr.reqBundle, mgr.respBundle)
+	return NewRespondXact(mgr.t, bck, mgr)
 }
 
 func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) *XactGet {

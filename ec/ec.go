@@ -222,8 +222,7 @@ func (s *slice) release() {
 }
 
 var (
-	mm        *memsys.MMSA // memory manager and slab/SGL allocator
-	xactCount atomic.Int32 // the number of currently active EC xactions
+	mm *memsys.MMSA // memory manager and slab/SGL allocator
 
 	ErrorECDisabled          = errors.New("EC is disabled for bucket")
 	ErrorNoMetafile          = errors.New("no metafile")
@@ -289,7 +288,8 @@ func freeObject(r interface{}) {
 		}
 	case *cmn.FileHandle:
 		if handle != nil {
-			cmn.Close(handle)
+			// few slices share the same handle, on error all release everything
+			_ = handle.Close()
 		}
 	case *os.File:
 		if handle != nil {

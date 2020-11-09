@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -60,15 +59,14 @@ func (p *xactGetProvider) Get() cluster.Xact { return p.xact }
 // XactGet
 //
 
-func NewGetXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactGet {
-	xactCount.Inc()
+func NewGetXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactGet {
 	availablePaths, disabledPaths := fs.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	smap, si := t.Sowner(), t.Snode()
 
 	runner := &XactGet{
 		getJoggers:  make(map[string]*getJogger, totalPaths),
-		xactECBase:  newXactECBase(t, smap, si, bck, reqBundle, respBundle),
+		xactECBase:  newXactECBase(t, smap, si, bck, mgr),
 		xactReqBase: newXactReqECBase(),
 	}
 
@@ -211,7 +209,6 @@ func (r *XactGet) abortECRequestWhenDisabled(req *Request) {
 func (r *XactGet) Stop(error) { r.Abort() }
 
 func (r *XactGet) stop() {
-	xactCount.Dec()
 	r.XactDemandBase.Stop()
 	for _, jog := range r.getJoggers {
 		jog.stop()

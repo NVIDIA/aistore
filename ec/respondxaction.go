@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -58,11 +57,10 @@ func (p *xactRespondProvider) Start(bck cmn.Bck) error {
 func (*xactRespondProvider) Kind() string        { return cmn.ActECRespond }
 func (p *xactRespondProvider) Get() cluster.Xact { return p.xact }
 
-func NewRespondXact(t cluster.Target, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) *XactRespond {
-	xactCount.Inc()
+func NewRespondXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactRespond {
 	smap, si := t.Sowner(), t.Snode()
 	runner := &XactRespond{
-		xactECBase: newXactECBase(t, smap, si, bck, reqBundle, respBundle),
+		xactECBase: newXactECBase(t, smap, si, bck, mgr),
 	}
 
 	return runner
@@ -219,7 +217,6 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 func (r *XactRespond) Stop(error) { r.Abort() }
 
 func (r *XactRespond) stop() {
-	xactCount.Dec()
 	r.XactDemandBase.Stop()
 	r.Finish()
 }

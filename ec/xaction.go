@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 )
 
@@ -39,9 +38,7 @@ type (
 		bck   cmn.Bck        // which bucket xact belongs to
 
 		dOwner *dataOwner // data slice manager
-
-		reqBundle  *bundle.Streams // a stream bundle to send lightweight requests
-		respBundle *bundle.Streams // a stream bungle to transfer data between targets
+		mgr    *Manager   // EC manager
 	}
 
 	xactReqBase struct {
@@ -74,7 +71,7 @@ func newXactReqECBase() xactReqBase {
 }
 
 func newXactECBase(t cluster.Target, smap cluster.Sowner,
-	si *cluster.Snode, bck cmn.Bck, reqBundle, respBundle *bundle.Streams) xactECBase {
+	si *cluster.Snode, bck cmn.Bck, mgr *Manager) xactECBase {
 	return xactECBase{
 		t:     t,
 		smap:  smap,
@@ -87,8 +84,7 @@ func newXactECBase(t cluster.Target, smap cluster.Sowner,
 			slices: make(map[string]*slice, 10),
 		},
 
-		reqBundle:  reqBundle,
-		respBundle: respBundle,
+		mgr: mgr,
 	}
 }
 
@@ -253,9 +249,6 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
 	if len(nodes) == 0 {
 		return errors.New("destination list is empty")
 	}
-	if r.reqBundle == nil || r.respBundle == nil {
-		return fmt.Errorf("EC transport closed")
-	}
 
 	var (
 		err error
@@ -263,9 +256,9 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
 	)
 	o.Hdr, o.Callback = hdr, cb
 	if isRequest {
-		err = r.reqBundle.Send(o, reader, nodes...)
+		err = r.mgr.req().Send(o, reader, nodes...)
 	} else {
-		err = r.respBundle.Send(o, reader, nodes...)
+		err = r.mgr.resp().Send(o, reader, nodes...)
 	}
 	return err
 }

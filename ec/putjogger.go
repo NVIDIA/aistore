@@ -234,7 +234,7 @@ func (c *putJogger) cleanup(req *Request) error {
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{Bck: req.LOM.Bck().Bck, ObjName: req.LOM.ObjName, Opaque: request}
 	o.Callback = c.ctSendCallback
-	return c.parent.reqBundle.Send(o, nil)
+	return c.parent.mgr.req().Send(o, nil)
 }
 
 // Sends object replicas to targets that must have replicas after the client
