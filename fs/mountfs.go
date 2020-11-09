@@ -113,6 +113,12 @@ type (
 		Err        error
 		OOS        bool
 	}
+
+	// errors
+	StorageIntegrityError struct {
+		msg  string
+		code int
+	}
 )
 
 ///////////////////
@@ -255,7 +261,7 @@ func (mi *MountpathInfo) SetDaemonIDXattr(daeID string) error {
 		return nil
 	}
 	if mpathDaeID != "" && mpathDaeID != daeID {
-		return fmt.Errorf("%s: target and mountpath DaemonID don't match: %s vs %s", siError(siTargetIDMismatch), daeID, mpathDaeID)
+		return newMpathIDMismatchErr(daeID, mpathDaeID, mi.Path)
 	}
 	return SetXattr(mi.Path, daemonIDXattr, []byte(daeID))
 }
@@ -426,7 +432,7 @@ func InitMpaths(daeID string) error {
 	}
 
 	if vmd.DaemonID != daeID {
-		return fmt.Errorf("%s: VMD and target DaemonID don't match: %s vs %s", siError(siTargetIDMismatch), vmd.DaemonID, daeID)
+		return newVMDIDMismatchErr(vmd.DaemonID, daeID)
 	}
 
 	// Validate VMD with config FS
@@ -435,7 +441,7 @@ func InitMpaths(daeID string) error {
 		device, exists := vmd.Devices[path]
 		if !exists {
 			changed = true
-			glog.Errorf("%s: mount path (%q) not in VMD", siError(siMpathMissing), path)
+			glog.Error(newVMDMissingMpathErr(path))
 		}
 
 		enabled := device == nil || device.Enabled
@@ -448,7 +454,7 @@ func InitMpaths(daeID string) error {
 		for device := range vmd.Devices {
 			if !configPaths.Contains(device) {
 				changed = true
-				glog.Errorf("%s: mountpath %q in VMD but not in config", siError(siMpathMissing), device)
+				glog.Error(newConfigMissingMpathErr(device))
 			}
 		}
 	}
@@ -903,8 +909,61 @@ func CapStatusAux() (fsInfo cmn.CapacityInfo) {
 }
 
 ////////////////
-// misc utils //
+// errors     //
 ////////////////
+
+func (sie *StorageIntegrityError) Error() string {
+	return fmt.Sprintf("%s: %s", siError(sie.code), sie.msg)
+}
+
+func newMpathIDMismatchErr(mainDaeID, daeID, mpath string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMpathIDMismatch,
+		msg:  fmt.Sprintf("DaemonIDs different (%q): %s vs %s", mpath, mainDaeID, daeID),
+	}
+}
+
+func newVMDIDMismatchErr(vmdDaeID, daeID string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siTargetIDMismatch,
+		msg:  fmt.Sprintf("VMD and target DaemonID don't match: %s vs %s", vmdDaeID, daeID),
+	}
+}
+
+func newVMDMissingMpathErr(mpath string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMpathMissing,
+		msg:  fmt.Sprintf("mount path (%q) not in VMD", mpath),
+	}
+}
+
+func newConfigMissingMpathErr(mpath string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMpathMissing,
+		msg:  fmt.Sprintf("mountpath %q in VMD but not in config", mpath),
+	}
+}
+
+func newVMDLoadErr(mpath string, err error) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMetaCorrupted,
+		msg:  fmt.Sprintf("failed to read VMD (%q), err: %v", mpath, err),
+	}
+}
+
+func newVMDValidationErr(mpath string, err error) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMetaCorrupted,
+		msg:  fmt.Sprintf("failed to validate VMD (%q), err: %v", mpath, err),
+	}
+}
+
+func newVMDMismatchErr(mainVMD, otherVMD *VMD, mpath string) *StorageIntegrityError {
+	return &StorageIntegrityError{
+		code: siMetaMismatch,
+		msg:  fmt.Sprintf("VMD is different (%q): %v vs %v", mpath, mainVMD, otherVMD),
+	}
+}
 
 func siError(num int) string {
 	const s = "[%s%d - for details, see %s/blob/master/docs/troubleshooting.md]"

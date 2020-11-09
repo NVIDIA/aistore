@@ -84,20 +84,20 @@ func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
 		}
 
 		if err != nil {
-			err = fmt.Errorf("%s: failed to read VMD (%q), err: %v", siError(siMetaCorrupted), fpath, err)
+			err = newVMDLoadErr(path, err)
 			glog.InfoDepth(1)
 			return nil, err
 		}
 
 		if err = vmd.Validate(); err != nil {
-			err = fmt.Errorf("%s: failed to validate VMD (%q), err: %v", siError(siMetaCorrupted), fpath, err)
+			err = newVMDValidationErr(path, err)
 			glog.InfoDepth(1)
 			return nil, err
 		}
 
 		if mainVMD != nil {
 			if !mainVMD.cksum.Equal(vmd.cksum) {
-				err = fmt.Errorf("%s: VMD is different (%q): %v vs %v", siError(siMetaMismatch), fpath, mainVMD, vmd)
+				err = newVMDMismatchErr(mainVMD, vmd, path)
 				return nil, err
 			}
 			continue
@@ -148,8 +148,7 @@ func LoadDaemonID(mpaths cmn.StringSet) (mDaeID string, err error) {
 		}
 		if mDaeID != "" {
 			if mDaeID != daeID {
-				err = fmt.Errorf("%s: daemonID different (%q): %s vs %s", siError(siMpathIDMismatch), mp, mDaeID, daeID)
-				return "", err
+				return "", newMpathIDMismatchErr(mDaeID, daeID, mp)
 			}
 			continue
 		}
