@@ -172,13 +172,21 @@ func (n *notifs) init(p *proxyrunner) {
 func (n *notifs) String() string { return notifsName }
 
 // start listening
-func (n *notifs) add(nl nl.NotifListener) {
-	cmn.Assert(nl.UUID() != "")
+func (n *notifs) add(nl nl.NotifListener) (err error) {
+	if nl.UUID() == "" {
+		return fmt.Errorf("`nl` UUID shouldn't be empty")
+	}
+
+	if nl.ActiveCount() == 0 {
+		return fmt.Errorf("cannot add `nl` with no active notifiers")
+	}
+
 	if exists := n.nls.add(nl, false /*locked*/); exists {
 		return
 	}
 	nl.SetAddedTime()
 	glog.Infoln("add " + nl.String())
+	return
 }
 
 func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {

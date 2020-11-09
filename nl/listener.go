@@ -46,6 +46,7 @@ type NotifListener interface {
 	AddedTime() int64
 	AllFinished() bool
 	FinCount() int
+	ActiveCount() int
 	Finished() bool
 	String() string
 	GetOwner() string
@@ -101,7 +102,6 @@ type (
 
 func NewNLB(uuid string, action string, smap *cluster.Smap, srcs cluster.NodeMap, progressInterval time.Duration,
 	bck ...cmn.Bck) *NotifListenerBase {
-	cmn.Assert(len(srcs) != 0)
 	nlb := &NotifListenerBase{
 		Srcs:              srcs,
 		Stats:             NewNodeStats(len(srcs)),
@@ -136,6 +136,7 @@ func (nlb *NotifListenerBase) Bcks() []cmn.Bck                  { return nlb.Com
 func (nlb *NotifListenerBase) AddedTime() int64                 { return nlb.addedTime.Load() }
 func (nlb *NotifListenerBase) SetAddedTime()                    { nlb.addedTime.Store(mono.NanoTime()) }
 func (nlb *NotifListenerBase) FinCount() int                    { return len(nlb.Srcs) - len(nlb.ActiveSrcs) }
+func (nlb *NotifListenerBase) ActiveCount() int                 { return len(nlb.ActiveSrcs) }
 func (nlb *NotifListenerBase) MarkFinished(node *cluster.Snode) { delete(nlb.ActiveSrcs, node.ID()) }
 func (nlb *NotifListenerBase) AllFinished() bool                { return len(nlb.ActiveSrcs) == 0 }
 func (nlb *NotifListenerBase) HasFinished(node *cluster.Snode) bool {

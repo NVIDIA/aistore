@@ -3052,7 +3052,8 @@ func (p *proxyrunner) _updFinal(ctx *smapModifier, clone *smapX) {
 			cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
-		p.notifs.add(nl)
+		err := p.notifs.add(nl)
+		cmn.AssertNoErr(err)
 	} else if ctx.nsi.IsProxy() {
 		// Send RMD to proxies to make sure that they have
 		// the latest one - newly joined can become primary in a second.
@@ -3183,7 +3184,8 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 			cmn.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
 		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
-		p.notifs.add(nl)
+		err := p.notifs.add(nl)
+		cmn.AssertNoErr(err)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
 
@@ -3554,7 +3556,8 @@ func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 		nl.F = ctx.rebCB
 	}
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
-	p.notifs.add(nl)
+	err := p.notifs.add(nl)
+	cmn.AssertNoErr(err)
 	if ctx.wait {
 		wg.Wait()
 	}
@@ -3642,12 +3645,14 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 		nl := xaction.NewXactNL(xaction.RebID(newRMD.Version).String(),
 			cmn.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
-		p.notifs.add(nl)
+		err := p.notifs.add(nl)
+		cmn.AssertNoErr(err)
 
 		if newRMD.Resilver != "" {
 			nl = xaction.NewXactNL(newRMD.Resilver, cmn.ActResilver, &smap.Smap, nil)
 			nl.SetOwner(equalIC)
-			p.notifs.add(nl)
+			err := p.notifs.add(nl)
+			cmn.AssertNoErr(err)
 		}
 	}
 	return
@@ -3801,9 +3806,14 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 		return false
 	}
 
+	if cur.CountTargets() == 0 {
+		return false
+	}
+
 	if cur.CountActiveTargets() > prev.CountActiveTargets() {
 		return true
 	}
+
 	if cur.CountTargets() > prev.CountTargets() {
 		return true
 	}

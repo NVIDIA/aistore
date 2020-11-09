@@ -296,7 +296,10 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			ic.p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		ic.p.notifs.add(nlMsg.nl)
+		if err := ic.p.notifs.add(nlMsg.nl); err != nil {
+			ic.p.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	case cmn.ActRegGlobalXaction:
 		var (
 			regMsg = &xactRegMsg{}
@@ -324,7 +327,10 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		nl := xaction.NewXactNL(regMsg.UUID, regMsg.Kind, &smap.Smap, tmap)
-		ic.p.notifs.add(nl)
+		if err = ic.p.notifs.add(nl); err != nil {
+			ic.p.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	default:
 		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
 	}
@@ -335,7 +341,8 @@ func (ic *ic) registerEqual(a regIC) {
 		a.query.Add(cmn.URLParamNotifyMe, equalIC)
 	}
 	if a.smap.IsIC(ic.p.si) {
-		ic.p.notifs.add(a.nl)
+		err := ic.p.notifs.add(a.nl)
+		cmn.AssertNoErr(err)
 	}
 	if a.smap.ICCount() > 1 {
 		ic.bcastListenIC(a.nl, a.smap)
@@ -347,6 +354,7 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
 		actMsg = cmn.ActionMsg{Action: cmn.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAisMsg(&actMsg, smap, nil)
 	)
+	cmn.Assert(nl.ActiveCount() > 0)
 	ic.p.bcastToIC(msg, false /*wait*/)
 }
 

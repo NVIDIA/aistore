@@ -460,13 +460,15 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		cmn.ActRebalance, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
-	p.notifs.add(nl)
+	err = p.notifs.add(nl)
+	cmn.AssertNoErr(err)
 
 	// Register resilver `nl`
 	nl = xaction.NewXactNL(rmd.Resilver, cmn.ActResilver, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
-	p.notifs.add(nl)
+	err = p.notifs.add(nl)
+	cmn.AssertNoErr(err)
 
 	wg.Wait()
 	return
