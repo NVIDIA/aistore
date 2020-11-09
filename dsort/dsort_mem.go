@@ -516,9 +516,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 			cmn.Close(r)
 		} else {
 			o := &transport.Obj{Hdr: hdr, Callback: ds.m.sentCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
-			if err = ds.streams.records.Send(o, r, toNode); err != nil {
-				cmn.Close(r)
-			}
+			err = ds.streams.records.Send(o, r, toNode)
 		}
 		return
 	}

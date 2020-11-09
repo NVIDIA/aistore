@@ -121,9 +121,9 @@ func NewObjStream(client Client, toURL string, extra *Extra) (s *Stream) {
 // * header-only objects are supported; when there's no data to send (that is,
 //   when the header's Dsize field is set to zero), the reader is not required and the
 //   corresponding argument in Send() can be set to nil.
-// * object reader is always closed by the code that handles send completions.
-//   In the case when ObjSentCB is provided (i.e., non-nil), the closing is done
-//   right after calling this callback - see doCmpl below for details.
+// * object reader is *always* closed irrespectively of whether the Send() succeeds
+//   or fails. On success, if send-completion (ObjSentCB) callback is provided
+//   (i.e., non-nil), the closing is done by doCmpl().
 // * Optional reference counting is also done by (and in) the doCmpl, so that the
 //   ObjSentCB gets called if and only when the refcount (if provided i.e., non-nil)
 //   reaches zero.
@@ -134,6 +134,9 @@ func NewObjStream(client Client, toURL string, extra *Extra) (s *Stream) {
 func (s *Stream) Send(obj *Obj) (err error) {
 	debug.Assert(len(obj.Hdr.Opaque) < len(s.maxheader)-int(unsafe.Sizeof(Obj{})))
 	if err = s.startSend(obj); err != nil {
+		if obj.Reader != nil {
+			cmn.Close(obj.Reader) // NOTE: always closing
+		}
 		return
 	}
 	if obj.Reader == nil {

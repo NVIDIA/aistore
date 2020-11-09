@@ -346,7 +346,6 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 	o.Callback = reb.transportECCB
 	if err := reb.dm.Send(o, fh, target); err != nil {
 		reb.ec.onAir.Dec()
-		cmn.Close(fh)
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
 	reb.statTracker.AddMany(
@@ -852,15 +851,14 @@ func (reb *Manager) cleanupEC() {
 
 // send collected CTs to all targets with retry (to assemble the entire namespace)
 func (reb *Manager) exchange(md *rebArgs) error {
-	const (
-		retries = 3               // number of retries to send collected CT info
-		sleep   = 5 * time.Second // delay between retries
-	)
+	const retries = 3 // number of retries to send collected CT info
 	var (
 		rebID   = reb.rebID.Load()
 		sendTo  = make(cluster.Nodes, 0, len(md.smap.Tmap))
 		failed  = make(cluster.Nodes, 0, len(md.smap.Tmap))
 		emptyCT = make([]*rebCT, 0)
+		config  = cmn.GCO.Get()
+		sleep   = config.Timeout.MaxKeepalive // delay between retries
 	)
 	for _, node := range md.smap.Tmap {
 		if node.ID() == reb.t.Snode().ID() {

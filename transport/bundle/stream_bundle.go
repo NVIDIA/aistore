@@ -128,7 +128,8 @@ func (sb *Streams) Close(gracefully bool) {
 	}
 }
 
-// (nodes == nil): transmit via all established streams
+// when (nodes == nil) transmit via all established streams in a bundle
+// otherwise, restrict to the specified subset (nodes)
 func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
 	var (
 		streams = sb.get()
@@ -232,9 +233,6 @@ func (sb *Streams) sendOne(obj *transport.Obj, roc cmn.ReadOpenCloser, robin *ro
 	}
 	s := robin.stsdest[i]
 	if err = s.Send(one); err != nil {
-		if reopen {
-			one.Reader.Close()
-		}
 		transport.FreeSend(one)
 	}
 	return

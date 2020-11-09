@@ -546,7 +546,6 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			}
 			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
-				cmn.Close(r)
 				ds.m.abort(err)
 			}
 		case extract.SGLStoreType:
@@ -557,7 +556,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			respHdr.ObjAttrs.Size = sgl.Size()
 			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, sgl, fromNode); err != nil {
-				sgl.Free()
+				sgl.Free() // NOTE: sgl.Close() is a no-op
 				ds.m.abort(err)
 			}
 		case extract.DiskStoreType:
@@ -575,7 +574,6 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			respHdr.ObjAttrs.Size = fi.Size()
 			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, f, fromNode); err != nil {
-				cmn.Close(f)
 				ds.m.abort(err)
 			}
 		default:

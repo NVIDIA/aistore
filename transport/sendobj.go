@@ -132,7 +132,8 @@ func (s *Stream) abortPending(err error, completions bool) {
 	}
 }
 
-// refcount, invoke callback, and *always* close the reader
+// refcount to invoke the has-been-sent callback only once
+// and *always* close the reader (sic!)
 func (s *Stream) doCmpl(obj *Obj, err error) {
 	var rc int64
 	if obj.prc != nil {
@@ -149,9 +150,7 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 	}
 	FreeSend(obj)
 	if obj.Reader != nil {
-		// NOTE: always closing but MAY close an already closed if failed _within_
-		// the process of sending to mult. dest. (see transport/bundle/stream_bundle.go).
-		_ = obj.Reader.Close()
+		cmn.Close(obj.Reader) // NOTE: always closing
 	}
 }
 

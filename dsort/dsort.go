@@ -441,7 +441,6 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		streamWg.Add(1)
 		err = m.streams.shards.Send(&transport.Obj{Hdr: hdr, Callback: cb}, file, si)
 		if err != nil {
-			cmn.Close(file)
 			return err
 		}
 		streamWg.Wait()
