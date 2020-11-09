@@ -127,7 +127,7 @@ func setAvailableMountPaths(paths ...string) []string {
 			continue
 		}
 
-		Add(path, "")
+		Add(path, "daeID")
 	}
 
 	return oldPaths

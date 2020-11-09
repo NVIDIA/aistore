@@ -89,6 +89,10 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 		return fmt.Errorf("unexpected: %s failed to unmarshal reg-meta, err: %v", t.si, err)
 	}
 
+	if err = fs.SetDaemonIDXattrAllMpaths(t.si.ID()); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+
 	if _, err := fs.CreateNewVMD(t.si.ID()); err != nil {
 		cmn.ExitLogf("%v", err)
 	}

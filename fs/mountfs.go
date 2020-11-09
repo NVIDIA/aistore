@@ -244,6 +244,22 @@ func (mi *MountpathInfo) MoveMD(from, to string) bool {
 	return err == nil
 }
 
+func (mi *MountpathInfo) SetDaemonIDXattr(daeID string) error {
+	cmn.Assert(daeID != "")
+	// Validate if mountpath already has daemon ID set.
+	mpathDaeID, err := LoadDaemonIDXattr(mi.Path)
+	if err != nil {
+		return err
+	}
+	if mpathDaeID == daeID {
+		return nil
+	}
+	if mpathDaeID != "" && mpathDaeID != daeID {
+		return fmt.Errorf("%s: target and mountpath DaemonID don't match: %s vs %s", siError(siTargetIDMismatch), daeID, mpathDaeID)
+	}
+	return SetXattr(mi.Path, daemonIDXattr, []byte(daeID))
+}
+
 // make-path methods
 
 func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int) (buf []byte) {
@@ -422,14 +438,6 @@ func InitMpaths(daeID string) error {
 			glog.Errorf("%s: mount path (%q) not in VMD", siError(siMpathMissing), path)
 		}
 
-		// 2. Validate if mount paths have daemon ID set.
-		mpathDaeID, err := LoadDaemonIDXattr(path)
-		if err != nil {
-			return err
-		}
-		if mpathDaeID != "" && mpathDaeID != daeID {
-			return fmt.Errorf("%s: target and mountpath DaemonID don't match: %s vs %s", siError(siTargetIDMismatch), daeID, mpathDaeID)
-		}
 		enabled := device == nil || device.Enabled
 		if _, err := add(path, daeID, enabled); err != nil {
 			return err
@@ -548,7 +556,7 @@ func add(mpath, daeID string, enabled bool) (*MountpathInfo, error) {
 
 	if enabled {
 		mfs.ios.AddMpath(mp.Path, mp.FileSystem)
-		if err := SetDaemonIDXattr(mp.Path, daeID); err != nil {
+		if err := mp.SetDaemonIDXattr(daeID); err != nil {
 			return nil, err
 		}
 		availablePaths[mp.Path] = mp
@@ -561,8 +569,24 @@ func add(mpath, daeID string, enabled bool) (*MountpathInfo, error) {
 	return mp, nil
 }
 
-func SetDaemonIDXattr(mpath, daeID string) error {
-	return SetXattr(mpath, daemonIDXattr, []byte(daeID))
+func SetDaemonIDXattrAllMpaths(daeID string) (err error) {
+	available, disabled := Get()
+	for _, mPath := range available {
+		if err = mPath.SetDaemonIDXattr(daeID); err != nil {
+			return
+		}
+	}
+
+	for _, mPath := range disabled {
+		if err = mPath.SetDaemonIDXattr(daeID); err != nil {
+			if _, ok := err.(*os.SyscallError); ok {
+				glog.Error(err)
+				continue
+			}
+			return
+		}
+	}
+	return
 }
 
 // mountpathsCopy returns a shallow copy of current mountpaths
