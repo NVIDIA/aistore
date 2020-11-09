@@ -15,6 +15,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -50,8 +51,9 @@ type (
 		mw *memoryWatcher
 
 		streams struct {
-			request  *bundle.Streams
-			response *bundle.Streams
+			cleanupDone atomic.Bool
+			request     *bundle.Streams
+			response    *bundle.Streams
 		}
 
 		creationPhase struct {
@@ -182,20 +184,22 @@ func (ds *dsorterGeneral) start() error {
 	return ds.mw.watch()
 }
 
-func (ds *dsorterGeneral) cleanupStreams() error {
-	// Responses to the other targets are objects that is why we want to use
-	// intraData network.
+func (ds *dsorterGeneral) cleanupStreams() (err error) {
+	if !ds.streams.cleanupDone.CAS(false, true) {
+		return nil
+	}
+
 	if ds.streams.request != nil {
 		trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unhandle(trname); err != nil {
-			return errors.WithStack(err)
+		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
+			err = errors.WithStack(unhandleErr)
 		}
 	}
 
 	if ds.streams.response != nil {
 		trname := fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unhandle(trname); err != nil {
-			return errors.WithStack(err)
+		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
+			err = errors.WithStack(unhandleErr)
 		}
 	}
 
@@ -206,7 +210,8 @@ func (ds *dsorterGeneral) cleanupStreams() error {
 			streamBundle.Close(false /*gracefully*/)
 		}
 	}
-	return nil
+
+	return err
 }
 
 func (ds *dsorterGeneral) cleanup() {

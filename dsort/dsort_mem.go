@@ -14,6 +14,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -65,8 +66,9 @@ type (
 		m *Manager
 
 		streams struct {
-			builder *bundle.Streams // streams for sending information about building shards
-			records *bundle.Streams // streams for sending the record
+			cleanupDone atomic.Bool
+			builder     *bundle.Streams // streams for sending information about building shards
+			records     *bundle.Streams // streams for sending the record
 		}
 
 		creationPhase struct {
@@ -252,18 +254,22 @@ func (ds *dsorterMem) start() error {
 	return nil
 }
 
-func (ds *dsorterMem) cleanupStreams() error {
+func (ds *dsorterMem) cleanupStreams() (err error) {
+	if !ds.streams.cleanupDone.CAS(false, true) {
+		return nil
+	}
+
 	if ds.streams.builder != nil {
 		trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unhandle(trname); err != nil {
-			return errors.WithStack(err)
+		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
+			err = errors.WithStack(unhandleErr)
 		}
 	}
 
 	if ds.streams.records != nil {
 		trname := fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-		if err := transport.Unhandle(trname); err != nil {
-			return errors.WithStack(err)
+		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
+			err = errors.WithStack(unhandleErr)
 		}
 	}
 
@@ -274,19 +280,18 @@ func (ds *dsorterMem) cleanupStreams() error {
 			streamBundle.Close(false /*gracefully*/)
 		}
 	}
-	return nil
+
+	return err
 }
 
 func (ds *dsorterMem) cleanup() {}
 
 func (ds *dsorterMem) finalCleanup() error {
-	if err := ds.cleanupStreams(); err != nil {
-		return err
-	}
+	err := ds.cleanupStreams()
 	close(ds.creationPhase.requestedShards)
 	ds.creationPhase.connector.free()
 	ds.creationPhase.connector = nil
-	return nil
+	return err
 }
 
 func (ds *dsorterMem) postRecordDistribution() {}

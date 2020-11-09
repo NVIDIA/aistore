@@ -273,11 +273,11 @@ func (m *Manager) initStreams() error {
 	return nil
 }
 
-func (m *Manager) cleanupStreams() error {
+func (m *Manager) cleanupStreams() (err error) {
 	if m.streams.shards != nil {
 		trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
-		if err := transport.Unhandle(trname); err != nil {
-			return errors.WithStack(err)
+		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
+			err = errors.WithStack(unhandleErr)
 		}
 	}
 
@@ -289,7 +289,7 @@ func (m *Manager) cleanupStreams() error {
 		}
 	}
 
-	return nil
+	return err
 }
 
 // cleanup removes all memory allocated and removes all files created during sort run.
