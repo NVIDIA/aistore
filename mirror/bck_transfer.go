@@ -21,7 +21,7 @@ import (
 // bck. If xact.dp is not empty, transfer bck applies specified transformation to each object.
 
 // Try to balance between downsides of synchronous coping and too many goroutines and concurrent fs access.
-const transferBckParallelCnt = 8
+var etlBucketParallelCnt = 2
 
 type (
 	transferBckProvider struct {
@@ -94,6 +94,13 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 		meta:    meta,
 	}
 
+	parallel := 0
+	// NOTE: Do not compete for disk when doing copy bucket. However, ETL `copyObject` callback does a transformation,
+	// so more time is spend on computation.
+	if kind == cmn.ActETLBucket {
+		parallel = etlBucketParallelCnt
+	}
+
 	xact.xactBckBase = *newXactBckBase(id, kind, &mpather.JoggerGroupOpts{
 		Bck:      bckFrom.Bck,
 		T:        t,
@@ -101,7 +108,7 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 		VisitObj: xact.copyObject,
 		Slab:     slab,
 		Throttle: true,
-		Parallel: transferBckParallelCnt,
+		Parallel: parallel,
 	})
 
 	return xact
