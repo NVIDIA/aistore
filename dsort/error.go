@@ -11,7 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func newDsortAbortedError(managerUUID string) cmn.AbortedError {
+func newDSortAbortedError(managerUUID string) cmn.AbortedError {
 	return cmn.NewAbortedErrorDetails(cmn.DSortName, managerUUID)
 }
 

@@ -133,7 +133,8 @@ type (
 			m  map[string]struct{} // finished acks: daemonID -> ack
 		}
 
-		dsorter dsorter
+		dsorter        dsorter
+		dsorterStarted sync.WaitGroup
 
 		callTimeout time.Duration // Maximal time we will wait for other node to respond
 	}
@@ -402,8 +403,12 @@ func (m *Manager) abort(errs ...error) {
 	inProgress := m.inProgress()
 	m.unlock()
 
-	// If job has already finished we just free resources.
+	// If job has already finished we just free resources, otherwise we must wait
+	// for it to finish.
 	if inProgress {
+		// Wait for dsorter to initialize all the resources.
+		m.waitDSorterToStart()
+
 		m.dsorter.onAbort()
 		m.waitForFinish()
 	}
@@ -424,8 +429,12 @@ func (m *Manager) setDSorter() (err error) {
 	default:
 		cmn.Assertf(false, "dsorter type is invalid: %q", m.rs.DSorterType)
 	}
+	m.dsorterStarted.Add(1)
 	return
 }
+
+func (m *Manager) markDSorterStarted() { m.dsorterStarted.Done() }
+func (m *Manager) waitDSorterToStart() { m.dsorterStarted.Wait() }
 
 // setExtractCreator sets what type of file extraction and creation is used based on the RequestSpec.
 func (m *Manager) setExtractCreator() (err error) {
@@ -709,7 +718,7 @@ func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
 	case <-m.listenAborted():
 		cancel()
 		<-doneCh
-		return newDsortAbortedError(m.ManagerUUID)
+		return newDSortAbortedError(m.ManagerUUID)
 	case <-doneCh:
 		break
 	}

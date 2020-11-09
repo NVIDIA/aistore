@@ -448,10 +448,9 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 
 // startSortHandler is the handler called for the HTTP endpoint /v1/sort/start.
 // There are three major phases to this function:
-//
-// 1. extractLocalShards
-// 2. participateInRecordDistribution
-// 3. distributeShardRecords
+//  1. extractLocalShards
+//  2. participateInRecordDistribution
+//  3. distributeShardRecords
 func startSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return

@@ -77,13 +77,7 @@ func (m *Manager) start() (err error) {
 		m.decrementRef(0)
 	}()
 
-	if err := m.initStreams(); err != nil {
-		return err
-	}
-
-	glog.Infof("starting %s %s with dsorter: %q", cmn.DSortName, m.ManagerUUID, m.dsorter.name())
-
-	if err := m.dsorter.start(); err != nil {
+	if err := m.startDSorter(); err != nil {
 		return err
 	}
 
@@ -130,7 +124,7 @@ func (m *Manager) start() (err error) {
 	case <-m.startShardCreation:
 		break
 	case <-m.listenAborted():
-		return newDsortAbortedError(m.ManagerUUID)
+		return newDSortAbortedError(m.ManagerUUID)
 	}
 
 	// After each target participates in the cluster-wide record distribution,
@@ -141,6 +135,18 @@ func (m *Manager) start() (err error) {
 
 	glog.Infof("finished %s %s successfully", cmn.DSortName, m.ManagerUUID)
 	return nil
+}
+
+func (m *Manager) startDSorter() error {
+	defer m.markDSorterStarted()
+
+	if err := m.initStreams(); err != nil {
+		return err
+	}
+
+	glog.Infof("starting %s %s with dsorter: %q", cmn.DSortName, m.ManagerUUID, m.dsorter.name())
+
+	return m.dsorter.start()
 }
 
 func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() error {
@@ -177,7 +183,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		phaseInfo.adjuster.acquireSema(lom.ParsedFQN.MpathInfo)
 		if m.aborted() {
 			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
-			return cmn.NewAbortedErrorDetails(cmn.DSortName, m.ManagerUUID)
+			return newDSortAbortedError(m.ManagerUUID)
 		}
 		//
 		// FIXME: check capacity *prior* to starting
@@ -282,7 +288,7 @@ ExtractAllShards:
 		select {
 		case <-m.listenAborted():
 			group.Wait()
-			return newDsortAbortedError(m.ManagerUUID)
+			return newDSortAbortedError(m.ManagerUUID)
 		case <-ctx.Done():
 			break ExtractAllShards // context was canceled, therefore we have an error
 		default:
@@ -324,11 +330,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	lom.SetAtimeUnix(time.Now().UnixNano())
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
 
-	// Check if aborted
-	select {
-	case <-m.listenAborted():
-		return newDsortAbortedError(m.ManagerUUID)
-	default:
+	if m.aborted() {
+		return newDSortAbortedError(m.ManagerUUID)
 	}
 
 	if err := m.dsorter.preShardCreation(s.Name, lom.ParsedFQN.MpathInfo); err != nil {
@@ -383,7 +386,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			w.CloseWithError(err)
 		}
 	case <-m.listenAborted():
-		err = newDsortAbortedError(m.ManagerUUID)
+		err = newDSortAbortedError(m.ManagerUUID)
 		r.CloseWithError(err)
 		w.CloseWithError(err)
 	}
@@ -576,7 +579,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 			select {
 			case <-m.listenReceived():
 			case <-m.listenAborted():
-				err = newDsortAbortedError(m.ManagerUUID)
+				err = newDSortAbortedError(m.ManagerUUID)
 				return
 			}
 		}

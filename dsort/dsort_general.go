@@ -252,7 +252,7 @@ CreateAllShards:
 		select {
 		case <-ds.m.listenAborted():
 			_ = group.Wait()
-			return newDsortAbortedError(ds.m.ManagerUUID)
+			return newDSortAbortedError(ds.m.ManagerUUID)
 		case <-ctx.Done():
 			break CreateAllShards // context was canceled, therefore we have an error
 		default:
@@ -470,7 +470,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 		}
 
 		if ds.m.aborted() {
-			return 0, newDsortAbortedError(ds.m.ManagerUUID)
+			return 0, newDSortAbortedError(ds.m.ManagerUUID)
 		}
 
 		if rec.DaemonID != ds.m.ctx.node.DaemonID { // File source contents are located on a different target.
