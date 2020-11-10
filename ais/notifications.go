@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -49,10 +50,15 @@ type (
 	}
 
 	notifs struct {
-		p       *proxyrunner
-		nls     *listeners // running
-		fin     *listeners // finished
-		smapVer int64
+		p   *proxyrunner
+		nls *listeners // running
+		fin *listeners // finished
+
+		mu       sync.Mutex
+		added    []nl.NotifListener // reusable slice of `nl` to add to `nls`
+		removed  []nl.NotifListener // reusable slice of `nl` to remove from `nls`
+		finished []nl.NotifListener // reusable slice of `nl` to add to `fin`
+		smapVer  int64
 	}
 	// TODO: simplify using alternate encoding formats (e.g. GOB)
 	jsonNotifs struct {
@@ -78,7 +84,15 @@ type (
 )
 
 // interface guard
-var _ cluster.Slistener = (*notifs)(nil)
+var (
+	_ cluster.Slistener = (*notifs)(nil)
+
+	_ json.Marshaler   = (*notifs)(nil)
+	_ json.Unmarshaler = (*notifs)(nil)
+
+	_ json.Marshaler   = (*notifListenMsg)(nil)
+	_ json.Unmarshaler = (*notifListenMsg)(nil)
+)
 
 ///////////////
 // listeners //
@@ -123,6 +137,12 @@ func (l *listeners) del(nl nl.NotifListener, locked bool) (ok bool) {
 	return
 }
 
+// PRECONDITION: `l` should be under lock.
+func (l *listeners) exists(uuid string) (ok bool) {
+	_, ok = l.m[uuid]
+	return
+}
+
 // returns a listener that matches the filter condition.
 // for finished xaction listeners, returns latest listener (i.e. having highest finish time)
 func (l *listeners) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
@@ -145,18 +165,6 @@ func (l *listeners) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
 	return
 }
 
-func (l *listeners) merge(msgs []*notifListenMsg) {
-	l.Lock()
-	defer l.Unlock()
-
-	for _, m := range msgs {
-		if _, ok := l.m[m.nl.UUID()]; !ok {
-			l.m[m.nl.UUID()] = m.nl
-			m.nl.SetAddedTime()
-		}
-	}
-}
-
 ////////////
 // notifs //
 ////////////
@@ -165,6 +173,11 @@ func (n *notifs) init(p *proxyrunner) {
 	n.p = p
 	n.nls = newListeners()
 	n.fin = newListeners()
+
+	n.added = make([]nl.NotifListener, 16)
+	n.removed = make([]nl.NotifListener, 16)
+	n.finished = make([]nl.NotifListener, 16)
+
 	hk.Reg(notifsName+".gc", n.housekeep, notifsHousekeepT)
 	n.p.Sowner().Listeners().Reg(n)
 }
@@ -572,13 +585,61 @@ func (n *notifs) UnmarshalJSON(data []byte) (err error) {
 	if err = jsoniter.Unmarshal(data, &t); err != nil {
 		return
 	}
-	if len(t.Running) > 0 {
-		n.nls.merge(t.Running)
+	if len(t.Running) == 0 && len(t.Finished) == 0 {
+		return
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	// Populate added, removed and finished slices based on diff.
+	added, removed, finished := n.added[:0], n.removed[:0], n.finished[:0]
+	n.nls.RLock()
+	n.fin.RLock()
+	for _, m := range t.Running {
+		if n.fin.exists(m.nl.UUID()) || n.nls.exists(m.nl.UUID()) {
+			continue
+		}
+		added = append(added, m.nl)
 	}
 
-	if len(t.Finished) > 0 {
-		n.fin.merge(t.Finished)
+	for _, m := range t.Finished {
+		if n.fin.exists(m.nl.UUID()) {
+			continue
+		}
+		if n.nls.exists(m.nl.UUID()) {
+			removed = append(removed, m.nl)
+		}
+		finished = append(finished, m.nl)
 	}
+	n.fin.RUnlock()
+	n.nls.RUnlock()
+
+	if len(removed) == 0 && len(added) == 0 {
+		goto fin
+	}
+
+	// Add/Remove `nl` - `n.nls`.
+	n.nls.Lock()
+	for _, nl := range added {
+		n.nls.add(nl, true /*locked*/)
+	}
+	for _, nl := range removed {
+		n.nls.del(nl, true /*locked*/)
+		glog.Infoln("merge: del " + nl.String())
+	}
+	n.nls.Unlock()
+
+fin:
+	if len(finished) == 0 {
+		return
+	}
+
+	n.fin.Lock()
+	// Add `nl` to `n.fin`.
+	for _, nl := range finished {
+		n.fin.add(nl, true /*locked*/)
+	}
+	n.fin.Unlock()
 	return
 }
 
