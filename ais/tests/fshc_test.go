@@ -445,18 +445,15 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams()
 		smap       = tutils.GetClusterMap(t, proxyURL)
-		proxyCnt   = smap.CountProxies()
-		targetCnt  = smap.CountTargets()
+		proxyCnt   = smap.CountActiveProxies()
+		targetCnt  = smap.CountActiveTargets()
 	)
 
 	if targetCnt < 2 {
 		t.Skip("The number of targets must be at least 2")
 	}
 
-	for _, tinfo := range smap.Tmap {
-		target = tinfo
-		break
-	}
+	target, _ = smap.GetRandTarget()
 	oldMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	if len(oldMpaths.Available) == 0 {
@@ -492,7 +489,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountProxies()
-		targetCnt  = smap.CountTargets()
+		targetCnt  = smap.CountActiveTargets()
 		tmpMpath   = "/tmp/testmp"
 	)
 
@@ -500,10 +497,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 		t.Skip("The number of targets must be at least 2")
 	}
 
-	for _, tinfo := range smap.Tmap {
-		target = tinfo
-		break
-	}
+	target, _ = smap.GetRandTarget()
 	oldMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	numMpaths := len(oldMpaths.Available)
@@ -549,7 +543,7 @@ func TestFSDisableMpathRestart(t *testing.T) {
 		baseParams = tutils.BaseAPIParams()
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountProxies()
-		targetCnt  = smap.CountTargets()
+		targetCnt  = smap.CountActiveTargets()
 		enabled    bool
 	)
 

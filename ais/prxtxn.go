@@ -830,7 +830,7 @@ func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketProps
 		return
 	}
 
-	targetCnt := p.owner.smap.Get().CountTargets()
+	targetCnt := p.owner.smap.Get().CountActiveTargets()
 	err = nprops.Validate(targetCnt)
 	return
 }

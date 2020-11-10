@@ -241,6 +241,23 @@ func (m *Smap) StringEx() string {
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }
 func (m *Smap) CountProxies() int { return len(m.Pmap) }
+func (m *Smap) CountActiveTargets() (count int) {
+	for _, t := range m.Tmap {
+		if !t.InMaintenance() {
+			count++
+		}
+	}
+	return
+}
+
+func (m *Smap) CountActiveProxies() (count int) {
+	for _, t := range m.Pmap {
+		if !t.InMaintenance() {
+			count++
+		}
+	}
+	return
+}
 
 func (m *Smap) GetProxy(pid string) *Snode {
 	psi, ok := m.Pmap[pid]
@@ -283,19 +300,23 @@ func (m *Smap) GetNode(id string) *Snode {
 }
 
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
-	if m.CountTargets() == 0 {
-		err = &NoNodesError{cmn.Target, m, ""}
-		return
-	}
 	for _, tsi = range m.Tmap {
-		break
+		if tsi.InMaintenance() {
+			tsi = nil
+			continue
+		}
+		return tsi, nil
 	}
+	err = &NoNodesError{cmn.Target, m, ""}
 	return
 }
 
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	if excludePrimary {
 		for _, proxy := range m.Pmap {
+			if proxy.InMaintenance() {
+				continue
+			}
 			if m.Primary.DaemonID != proxy.DaemonID {
 				return proxy, nil
 			}
@@ -303,6 +324,9 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 		return nil, fmt.Errorf("internal error: couldn't find non primary proxy")
 	}
 	for _, psi := range m.Pmap {
+		if psi.InMaintenance() {
+			continue
+		}
 		return psi, nil
 	}
 	return nil, fmt.Errorf("cluster doesn't have enough proxies, expected at least 1")

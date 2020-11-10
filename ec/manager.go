@@ -60,7 +60,7 @@ func initManager(t cluster.Target) error {
 		netResp:   netResp,
 		t:         t,
 		smap:      smap,
-		targetCnt: *atomic.NewInt32(int32(smap.CountTargets())),
+		targetCnt: *atomic.NewInt32(int32(smap.CountActiveTargets())),
 		bmd:       t.Bowner().Get(),
 		xacts:     make(map[string]*BckXacts),
 	}
@@ -123,7 +123,7 @@ func (mgr *Manager) initECBundles() error {
 	mgr.respBundle.Store(unsafe.Pointer(bundle.NewStreams(sowner, mgr.t.Snode(), client, respSbArgs)))
 
 	mgr.smap = sowner.Get()
-	mgr.targetCnt.Store(int32(mgr.smap.CountTargets()))
+	mgr.targetCnt.Store(int32(mgr.smap.CountActiveTargets()))
 	sowner.Listeners().Reg(mgr)
 	return nil
 }
@@ -426,7 +426,7 @@ func (mgr *Manager) ListenSmapChanged() {
 	}
 
 	mgr.smap = mgr.t.Sowner().Get()
-	targetCnt := mgr.smap.CountTargets()
+	targetCnt := mgr.smap.CountActiveTargets()
 	mgr.targetCnt.Store(int32(targetCnt))
 
 	mgr.Lock()

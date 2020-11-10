@@ -65,7 +65,7 @@ type ecOptions struct {
 // parity slices to maximum possible for the cluster.
 func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	o.smap = tutils.GetClusterMap(t, proxyURL)
-	if o.smap.CountTargets() < o.minTargets {
+	if o.smap.CountActiveTargets() < o.minTargets {
 		t.Fatalf("insufficient number of targets, required at least %d targets", o.minTargets)
 	}
 	if o.concurrency > 0 {
@@ -74,7 +74,7 @@ func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	o.seed = time.Now().UnixNano()
 	o.rnd = rand.New(rand.NewSource(o.seed))
 	if o.dataCnt < 0 {
-		total := o.smap.CountTargets() - 2
+		total := o.smap.CountActiveTargets() - 2
 		o.parityCnt = total / 2
 		o.dataCnt = total - o.parityCnt
 	}
@@ -845,7 +845,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountTargets() <= test.parity+test.data {
+			if o.smap.CountActiveTargets() <= test.parity+test.data {
 				t.Skip("insufficient number of targets")
 			}
 			o.parityCnt = test.parity
@@ -897,7 +897,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountTargets() <= test.parity+test.data {
+			if o.smap.CountActiveTargets() <= test.parity+test.data {
 				t.Skip("insufficient number of targets")
 			}
 			o.parityCnt = test.parity
@@ -1227,7 +1227,7 @@ func TestECStress(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountTargets() <= test.data+test.parity {
+			if o.smap.CountActiveTargets() <= test.data+test.parity {
 				t.Skip("insufficient taregts")
 			}
 			o.parityCnt = test.parity
@@ -1341,7 +1341,7 @@ func TestECExtraStress(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountTargets() <= test.data+test.parity {
+			if o.smap.CountActiveTargets() <= test.data+test.parity {
 				t.Skip("insufficient taregts")
 			}
 			o.parityCnt = test.parity
@@ -1765,7 +1765,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		pattern:     "obj-rest-%04d",
 	}.init(t, proxyURL)
 
-	if o.smap.CountTargets() > 10 {
+	if o.smap.CountActiveTargets() > 10 {
 		// Reason: calculating main obj directory based on DeamonID
 		// see getOneObj, 'HACK' annotation
 		t.Skip("Test requires at most 10 targets")
@@ -1909,7 +1909,7 @@ func TestECEmergencyMpath(t *testing.T) {
 		pattern:     "obj-em-mpath-%04d",
 	}.init(t, proxyURL)
 
-	removeTarget := tutils.ExtractTargetNodes(o.smap)[0]
+	removeTarget, _ := o.smap.GetRandTarget()
 	mpathList, err := api.GetMountpaths(baseParams, removeTarget)
 	tassert.CheckFatal(t, err)
 	if len(mpathList.Available) < 2 {
@@ -2068,7 +2068,7 @@ func TestECRebalance(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountTargets() <= test.parity+test.data {
+			if o.smap.CountActiveTargets() <= test.parity+test.data {
 				t.Skip("insufficient number of targets")
 			}
 			o.parityCnt = test.parity
@@ -2108,7 +2108,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
-	tgtList := tutils.ExtractTargetNodes(o.smap)
+	tgtList := o.smap.Tmap.ActiveNodes()
 	tgtLost, tgtSwap := tgtList[0], tgtList[1]
 
 	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
@@ -2198,7 +2198,7 @@ func TestECBucketEncode(t *testing.T) {
 	m.saveClusterState()
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	if m.smap.CountTargets() < parityCnt+1 {
+	if m.smap.CountActiveTargets() < parityCnt+1 {
 		t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 	}
 
@@ -2316,7 +2316,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountTargets() <= test.parity+test.data+1 {
+			if o.smap.CountActiveTargets() <= test.parity+test.data+1 {
 				t.Skip("insufficient number of targets")
 			}
 			o.parityCnt = test.parity
@@ -2342,7 +2342,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
-	tgtList := tutils.ExtractTargetNodes(o.smap)
+	tgtList := o.smap.Tmap.ActiveNodes()
 	tgtLost := tgtList[0]
 
 	tutils.Logf("Unregistering %s...\n", tgtLost.ID())
@@ -2449,7 +2449,7 @@ func TestECResilver(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountTargets() <= test.parity+test.data {
+			if o.smap.CountActiveTargets() <= test.parity+test.data {
 				t.Skip("insufficient number of targets")
 			}
 			o.parityCnt = test.parity
@@ -2465,7 +2465,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	tgtList := tutils.ExtractTargetNodes(o.smap)
+	tgtList := o.smap.Tmap.ActiveNodes()
 	tgtLost := tgtList[0]
 	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
 	tassert.CheckFatal(t, err)
@@ -2550,7 +2550,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountTargets() <= test.parity+test.data+1 {
+			if o.smap.CountActiveTargets() <= test.parity+test.data+1 {
 				t.Skip("insufficient number of targets")
 			}
 			o.parityCnt = test.parity
@@ -2574,7 +2574,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	)
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
-	tgtList := tutils.ExtractTargetNodes(smap)
+	tgtList := smap.Tmap.ActiveNodes()
 	tgtLost := tgtList[0]
 	tgtGone := tgtList[1]
 
@@ -2582,8 +2582,8 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	args := &cmn.ActValDecommision{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	err := tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "to remove target", smap.Version, smap.CountProxies(),
-		smap.CountTargets()-1)
+	_, err = tutils.WaitForClusterState(proxyURL, "to remove target", smap.Version, smap.CountActiveProxies(),
+		smap.CountActiveTargets()-1)
 	registered := false
 
 	// FIXME: There are multiple defers calling JoinCluster, and it's very unclear what will happen when.

@@ -1448,7 +1448,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	m.saveClusterState()
 
 	{
-		targets := tutils.ExtractTargetNodes(m.smap)
+		targets := m.smap.Tmap.ActiveNodes()
 		baseParams := tutils.BaseAPIParams()
 		mpList, err := api.GetMountpaths(baseParams, targets[0])
 		tassert.CheckFatal(t, err)
@@ -1544,7 +1544,7 @@ func TestCloudMirror(t *testing.T) {
 
 	smap := tutils.GetClusterMap(t, baseParams.URL)
 	{
-		target := tutils.ExtractTargetNodes(smap)[0]
+		target, _ := smap.GetRandTarget()
 		mpList, err := api.GetMountpaths(baseParams, target)
 		tassert.CheckFatal(t, err)
 
@@ -2605,7 +2605,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			})
 			tassert.CheckFatal(t, err)
 		} else if eced {
-			if m.smap.CountTargets() < parityCnt+1 {
+			if m.smap.CountActiveTargets() < parityCnt+1 {
 				t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 			}
 			_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{

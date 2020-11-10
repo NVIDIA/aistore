@@ -599,7 +599,7 @@ func (goi *getObjInfo) tryRestoreObject() (doubleCheck bool, errCode int, err er
 	// we might be able to restore it if it was replicated. In this case even
 	// just one additional target might be sufficient. This won't succeed if
 	// an object was sliced, neither will ecmanager.RestoreObject(lom)
-	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountTargets()
+	enoughECRestoreTargets := goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountActiveTargets()
 
 	// cluster-wide lookup ("get from neighbor")
 	marked = xreg.GetRebMarked()

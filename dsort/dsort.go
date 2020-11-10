@@ -612,7 +612,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 		start           int
 		curShardSize    int64
 		shards          = make([]*extract.Shard, 0)
-		numLocalRecords = make(map[string]int, m.smap.CountTargets())
+		numLocalRecords = make(map[string]int, m.smap.CountActiveTargets())
 	)
 
 	if maxSize <= 0 {
@@ -760,13 +760,16 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		err    error
 
 		wg             = &sync.WaitGroup{}
-		shardsToTarget = make(map[*cluster.Snode][]*extract.Shard, m.smap.CountTargets())
-		sendOrder      = make(map[string]map[string]*extract.Shard, m.smap.CountTargets())
+		shardsToTarget = make(map[*cluster.Snode][]*extract.Shard, m.smap.CountActiveTargets())
+		sendOrder      = make(map[string]map[string]*extract.Shard, m.smap.CountActiveTargets())
 
-		errCh = make(chan error, m.smap.CountTargets())
+		errCh = make(chan error, m.smap.CountActiveTargets())
 	)
 
 	for _, d := range m.smap.Tmap {
+		if d.InMaintenance() {
+			continue
+		}
 		shardsToTarget[d] = nil
 		if m.dsorter.name() == DSorterMemType {
 			sendOrder[d.DaemonID] = make(map[string]*extract.Shard, 100)
@@ -922,6 +925,9 @@ func randomTargetOrder(salt uint64, tmap cluster.NodeMap) []*cluster.Snode {
 	targets := make(map[uint64]*cluster.Snode, len(tmap))
 	keys := make([]uint64, 0, len(tmap))
 	for i, d := range tmap {
+		if d.InMaintenance() {
+			continue
+		}
 		c := xxhash.ChecksumString64S(i, salt)
 		targets[c] = d
 		keys = append(keys, c)

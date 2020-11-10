@@ -28,18 +28,18 @@ func TestMaintenanceOnOff(t *testing.T) {
 	_, err := api.StartMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Maintenance for invalid daemon ID succeeded")
 
-	mntTarget := tutils.ExtractTargetNodes(smap)[0]
+	mntTarget, _ := smap.GetRandTarget()
 	msg.DaemonID = mntTarget.ID()
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	_, err = api.StartMaintenance(baseParams, msg)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForClusterState(proxyURL, "target in maintenance",
-		smap.Version, smap.CountProxies(), smap.CountTargets())
+		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()-1)
 	tassert.CheckFatal(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(proxyURL, "target is back",
-		smap.Version, smap.CountProxies(), smap.CountTargets())
+		smap.Version, smap.CountActiveProxies(), smap.CountTargets())
 	tassert.CheckFatal(t, err)
 	_, err = api.StopMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
@@ -60,15 +60,14 @@ func TestMaintenanceMD(t *testing.T) {
 		smap       = tutils.GetClusterMap(t, proxyURL)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
-		dcmTarget = tutils.ExtractTargetNodes(smap)[0]
-
+		dcmTarget, _  = smap.GetRandTarget()
 		allTgtsMpaths = tutils.GetTargetsMountpaths(t, smap, baseParams)
 	)
 
 	msg := &cmn.ActValDecommision{DaemonID: dcmTarget.ID(), SkipRebalance: true}
 	_, err := api.Decommission(baseParams, msg)
 	tassert.CheckError(t, err)
-	_, err = tutils.WaitForClusterState(proxyURL, "target decomission", smap.Version, smap.CountProxies(),
+	_, err = tutils.WaitForClusterState(proxyURL, "target decomission", smap.Version, smap.CountActiveProxies(),
 		smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 
@@ -124,7 +123,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	m.puts()
-	tsi := tutils.ExtractTargetNodes(m.smap)[0]
+	tsi, _ := m.smap.GetRandTarget()
 	tutils.Logf("Removing target %s\n", tsi)
 	restored := false
 	actVal.DaemonID = tsi.ID()
@@ -145,8 +144,8 @@ func TestMaintenanceRebalance(t *testing.T) {
 		proxyURL,
 		"to target removed from the cluster",
 		m.smap.Version,
-		m.smap.CountProxies(),
-		m.smap.CountTargets()-1,
+		m.smap.CountActiveProxies(),
+		m.smap.CountActiveTargets()-1,
 	)
 	tassert.CheckFatal(t, err)
 	m.smap = smap
@@ -189,7 +188,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	go m.getsUntilStop()
 	stopped := false
 
-	tsi := tutils.ExtractTargetNodes(m.smap)[0]
+	tsi, _ := m.smap.GetRandTarget()
 	tutils.Logf("Removing target %s\n", tsi)
 	restored := false
 	actVal.DaemonID = tsi.ID()

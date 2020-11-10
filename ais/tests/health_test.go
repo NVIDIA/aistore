@@ -23,8 +23,8 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	args := &cmn.ActValDecommision{DaemonID: si.DaemonID, SkipRebalance: true, Force: true}
 	err = tutils.UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
-	targetCount := smapOrig.CountTargets()
-	proxyCount := smapOrig.CountProxies()
+	targetCount := smapOrig.CountActiveTargets()
+	proxyCount := smapOrig.CountActiveProxies()
 	if si.IsProxy() {
 		proxyCount--
 	} else {
@@ -35,8 +35,8 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	defer func() {
 		err = tutils.JoinCluster(proxyURL, si)
 		tassert.CheckFatal(t, err)
-		_, err = tutils.WaitForClusterState(proxyURL, "to node join", smapOrig.Version, smapOrig.CountProxies(),
-			smapOrig.CountTargets())
+		_, err = tutils.WaitForClusterState(proxyURL, "to node join", smapOrig.Version, smapOrig.CountActiveProxies(),
+			smapOrig.CountActiveTargets())
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -56,13 +56,13 @@ func TestUnregisteredProxyHealth(t *testing.T) {
 		smap     = tutils.GetClusterMap(t, proxyURL)
 	)
 
-	proxyCnt := smap.CountProxies()
+	proxyCnt := smap.CountActiveProxies()
 	proxy, err := smap.GetRandProxy(true /*excludePrimary*/)
 	tassert.CheckError(t, err)
 	unregisteredNodeHealth(t, proxyURL, proxy)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
-	tassert.Fatalf(t, proxyCnt == smap.CountProxies(), "expected number of proxies to be the same after the test")
+	tassert.Fatalf(t, proxyCnt == smap.CountActiveProxies(), "expected number of proxies to be the same after the test")
 }
 
 func TestTargetHealth(t *testing.T) {
@@ -83,12 +83,12 @@ func TestUnregisteredTargetHealth(t *testing.T) {
 		smap     = tutils.GetClusterMap(t, proxyURL)
 	)
 
-	targetsCnt := smap.CountTargets()
+	targetsCnt := smap.CountActiveTargets()
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
 	unregisteredNodeHealth(t, proxyURL, target)
 
 	smap = tutils.GetClusterMap(t, proxyURL)
-	tassert.Fatalf(t, targetsCnt == smap.CountTargets(), "expected number of targets to be the same after the test")
+	tassert.Fatalf(t, targetsCnt == smap.CountActiveTargets(), "expected number of targets to be the same after the test")
 	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(proxyURL))
 }

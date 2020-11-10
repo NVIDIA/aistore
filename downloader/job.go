@@ -175,7 +175,7 @@ func newBaseDlJob(t cluster.Target, id string, bck *cluster.Bck, timeout, desc s
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
-		limits.BytesPerHour /= t.Sowner().Get().CountTargets()
+		limits.BytesPerHour /= t.Sowner().Get().CountActiveTargets()
 	}
 
 	td, _ := time.ParseDuration(timeout)

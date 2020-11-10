@@ -161,7 +161,7 @@ func (rctx *RecipeContext) PostRecipe() error {
 	rctx.restoreTargets()
 
 	smap := fetchSmap("PostRecipe")
-	if len(rctx.origTargets) != smap.CountTargets() {
+	if len(rctx.origTargets) != smap.CountActiveTargets() {
 		origTargStr := cmn.MustMarshal(rctx.origTargets)
 		newTargStr := cmn.MustMarshal(smap.Tmap)
 

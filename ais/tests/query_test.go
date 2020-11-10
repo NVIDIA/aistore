@@ -184,9 +184,9 @@ func TestQueryWorkersTargets(t *testing.T) {
 	}
 
 	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
-	handle, err := api.InitQuery(baseParams, "", bck, nil, uint(smap.CountTargets()))
+	handle, err := api.InitQuery(baseParams, "", bck, nil, uint(smap.CountActiveTargets()))
 	tassert.CheckFatal(t, err)
-	for i := 1; i <= smap.CountTargets(); i++ {
+	for i := 1; i <= smap.CountActiveTargets(); i++ {
 		daemonID, err := api.QueryWorkerTarget(baseParams, handle, uint(i))
 		tassert.CheckFatal(t, err)
 		tassert.Errorf(t, smapDaemonIDs.Contains(daemonID), "unexpected daemonID %s", daemonID)
@@ -221,7 +221,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 	}
 
 	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
-	handle, err := api.InitQuery(baseParams, "", bck, nil, uint(smap.CountTargets()))
+	handle, err := api.InitQuery(baseParams, "", bck, nil, uint(smap.CountActiveTargets()))
 	tassert.CheckFatal(t, err)
 
 	_, err = api.QueryWorkerTarget(baseParams, handle, 1)
@@ -242,8 +242,8 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 		proxyURL,
 		"target is gone",
 		smap.Version,
-		smap.CountProxies(),
-		smap.CountTargets()-1,
+		smap.CountActiveProxies(),
+		smap.CountActiveTargets()-1,
 	)
 	tassert.CheckFatal(t, err)
 
@@ -270,7 +270,7 @@ func TestQuerySingleWorkerNext(t *testing.T) {
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckError(t, err)
 
-	handle, err := api.InitQuery(baseParams, "", m.bck, nil, uint(smap.CountTargets()))
+	handle, err := api.InitQuery(baseParams, "", m.bck, nil, uint(smap.CountActiveTargets()))
 	tassert.CheckFatal(t, err)
 
 	si, err := smap.GetRandTarget()

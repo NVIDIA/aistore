@@ -78,7 +78,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		subdir     = cmn.RandString(10)
 	)
 	smap := tutils.GetClusterMap(t, proxyURL)
-	if smap.CountTargets() == 1 {
+	if smap.CountActiveTargets() == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -115,8 +115,8 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		}
 	}
 
-	if smap.CountTargets() != len(targets) { // The objects should have been distributed to all targets
-		t.Errorf("Expected %d different target URLs, actual: %d different target URLs", smap.CountTargets(), len(targets))
+	if smap.CountActiveTargets() != len(targets) { // The objects should have been distributed to all targets
+		t.Errorf("Expected %d different target URLs, actual: %d different target URLs", smap.CountActiveTargets(), len(targets))
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
@@ -154,7 +154,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 
 	smap := tutils.GetClusterMap(t, proxyURL)
-	if smap.CountTargets() == 1 {
+	if smap.CountActiveTargets() == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 	p, err := api.HeadBucket(baseParams, bck)
@@ -207,9 +207,9 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	}
 
 	// The objects should have been distributed to all targets
-	if smap.CountTargets() != len(targets) {
+	if smap.CountActiveTargets() != len(targets) {
 		t.Errorf("Expected %d different target URLs, actual: %d different target URLs",
-			smap.CountTargets(), len(targets))
+			smap.CountActiveTargets(), len(targets))
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
@@ -513,7 +513,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	}
 
 	// Step 1: Unregister multiple targets
-	removed := make(map[string]*cluster.Snode, m.smap.CountTargets()-1)
+	removed := make(map[string]*cluster.Snode, m.smap.CountActiveTargets()-1)
 	defer func() {
 		for _, tgt := range removed {
 			m.reregisterTarget(tgt)
@@ -523,7 +523,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		}
 	}()
 
-	targets := tutils.ExtractTargetNodes(m.smap)
+	targets := m.smap.Tmap.ActiveNodes()
 	for i := 0; i < targetsToUnregister; i++ {
 		tutils.Logf("Unregistering target %s\n", targets[i].ID())
 		args := &cmn.ActValDecommision{DaemonID: targets[i].ID(), SkipRebalance: true}
@@ -535,7 +535,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	smap, err := tutils.WaitForClusterState(proxyURL, "to remove targets",
 		m.smap.Version, m.originalProxyCount, m.originalTargetCount-targetsToUnregister)
 	tassert.CheckFatal(t, err)
-	tutils.Logf("The cluster now has %d target(s)\n", smap.CountTargets())
+	tutils.Logf("The cluster now has %d target(s)\n", smap.CountActiveTargets())
 
 	// Step 2: PUT objects into a newly created bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)

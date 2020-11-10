@@ -1076,7 +1076,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if smap.CountTargets() < 1 {
+	if smap.CountActiveTargets() < 1 {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
@@ -1100,14 +1100,9 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 				cmn.ActListObjects, &smap.Smap, nil, bck.Bck)
 		} else {
 			// random target to execute `list-objects` on a Cloud bucket
-			for sid, si := range smap.Tmap {
-				if si.InMaintenance() {
-					continue
-				}
-				nl = xaction.NewXactNL(smsg.UUID, cmn.ActListObjects,
-					&smap.Smap, cluster.NodeMap{sid: si}, bck.Bck)
-				break
-			}
+			si, _ := smap.GetRandTarget()
+			nl = xaction.NewXactNL(smsg.UUID, cmn.ActListObjects,
+				&smap.Smap, cluster.NodeMap{si.ID(): si}, bck.Bck)
 		}
 		nl.SetHrwOwner(&smap.Smap)
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
@@ -2626,25 +2621,28 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatRemoteAIS:
 		config := cmn.GCO.Get()
 		smap := p.owner.smap.get()
-		for _, si := range smap.Tmap {
-			args := callArgs{
-				si: si,
-				req: cmn.ReqArgs{
-					Method: r.Method,
-					Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
-					Query:  query,
-				},
-				timeout: config.Timeout.CplaneOperation,
-			}
-			res := p.call(args)
-			if res.err != nil {
-				p.invalmsghdlr(w, r, res.err.Error())
-				return
-			}
-			// TODO: figure out a way to switch to writeJSON
-			p.writeJSONBytes(w, r, res.bytes, what)
-			break
+		si, err := smap.GetRandTarget()
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
+
+		args := callArgs{
+			si: si,
+			req: cmn.ReqArgs{
+				Method: r.Method,
+				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
+				Query:  query,
+			},
+			timeout: config.Timeout.CplaneOperation,
+		}
+		res := p.call(args)
+		if res.err != nil {
+			p.invalmsghdlr(w, r, res.err.Error())
+			return
+		}
+		// TODO: figure out a way to switch to writeJSON
+		p.writeJSONBytes(w, r, res.bytes, what)
 	case cmn.GetWhatTargetIPs:
 		// Return comma-separated IPs of the targets.
 		// It can be used to easily fill the `--noproxy` parameter in cURL.
@@ -3814,6 +3812,10 @@ func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {
 func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 	if err := p.canStartRebalance(); err != nil {
 		return false
+	}
+
+	if cur.CountActiveTargets() > prev.CountActiveTargets() {
+		return true
 	}
 	if cur.CountTargets() > prev.CountTargets() {
 		return true

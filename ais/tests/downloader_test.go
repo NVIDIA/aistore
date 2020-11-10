@@ -865,7 +865,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
-	removeTarget := tutils.ExtractTargetNodes(smap)[0]
+	removeTarget, _ := smap.GetRandTarget()
 
 	mpathList, err := api.GetMountpaths(baseParams, removeTarget)
 	tassert.CheckFatal(t, err)
@@ -1203,16 +1203,16 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
-
+	targetCnt := smap.CountActiveTargets()
 	tassert.Errorf(
-		t, len(resp.CurrentTasks) > smap.CountTargets(),
+		t, len(resp.CurrentTasks) > targetCnt,
 		"number of tasks mismatch (expected at least: %d, got: %d)",
-		smap.CountTargets()+1, len(resp.CurrentTasks),
+		targetCnt, len(resp.CurrentTasks),
 	)
 	tassert.Errorf(
-		t, len(resp.CurrentTasks) <= 2*smap.CountTargets(),
+		t, len(resp.CurrentTasks) <= 2*targetCnt,
 		"number of tasks mismatch (expected as most: %d, got: %d)",
-		2*smap.CountTargets(), len(resp.CurrentTasks),
+		2*targetCnt, len(resp.CurrentTasks),
 	)
 }
 
@@ -1261,10 +1261,11 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Expect that number of tasks never exceeds the defined limit.
+		targetCnt := smap.CountActiveTargets()
 		tassert.Errorf(
-			t, len(resp1.CurrentTasks) <= smap.CountTargets(),
+			t, len(resp1.CurrentTasks) <= targetCnt,
 			"number of tasks mismatch (expected at most: %d, got: %d)",
-			smap.CountTargets(), len(resp1.CurrentTasks),
+			targetCnt, len(resp1.CurrentTasks),
 		)
 
 		// Expect that at some point the second job will be run concurrently.

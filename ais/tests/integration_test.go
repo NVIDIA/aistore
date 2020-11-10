@@ -167,12 +167,10 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 	// Step 1
 	// Select a random target
-	for _, v := range m.smap.Tmap {
-		targetURL = v.PublicNet.DirectURL
-		targetID = v.ID()
-		targetNode = v
-		break
-	}
+	targetNode, _ = m.smap.GetRandTarget()
+	targetURL = targetNode.PublicNet.DirectURL
+	targetID = targetNode.ID()
+
 	tutils.Logf("Killing target: %s - %s\n", targetURL, targetID)
 	tcmd, err := kill(targetNode)
 	tassert.CheckFatal(t, err)
@@ -223,7 +221,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	err := tutils.UnregisterNode(m.proxyURL, args)
 	tutils.CheckErrIsNotFound(t, err)
 
-	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
+	n := tutils.GetClusterMap(t, m.proxyURL).CountActiveTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -245,7 +243,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(3)
 
-	targets := tutils.ExtractTargetNodes(m.smap)
+	targets := m.smap.Tmap.ActiveNodes()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -255,7 +253,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	args := &cmn.ActValDecommision{DaemonID: targets[0].ID(), SkipRebalance: true}
 	err := tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(t, err)
-	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
+	n := tutils.GetClusterMap(t, m.proxyURL).CountActiveTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets",
 			m.originalTargetCount-1, n)
@@ -360,7 +358,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	m.saveClusterState()
 
-	tgts := tutils.ExtractTargetNodes(m.smap)
+	tgts := m.smap.Tmap.ActiveNodes()
 	i1 := rand.Intn(len(tgts))
 	i2 := (i1 + 1) % len(tgts)
 	target1, target2 := tgts[i1], tgts[i2]
@@ -437,7 +435,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(3)
 
-	targets := tutils.ExtractTargetNodes(m.smap)
+	targets := m.smap.Tmap.ActiveNodes()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
@@ -671,7 +669,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	target := tutils.ExtractTargetNodes(m.smap)[0]
+	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
@@ -777,7 +775,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(3)
 
-	targets := tutils.ExtractTargetNodes(m.smap)
+	targets := m.smap.Tmap.ActiveNodes()
 
 	// Unregister targets
 	for i := 0; i < unregisterTargetCount; i++ {
@@ -836,7 +834,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(2)
 
-	target := tutils.ExtractTargetNodes(m.smap)[0]
+	target, _ := m.smap.GetRandTarget()
 	// Remove all mountpaths for one target
 	oldMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
@@ -894,7 +892,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	m.saveClusterState()
 	m.expectTargets(1)
-	target := tutils.ExtractTargetNodes(m.smap)[0]
+	target, _ := m.smap.GetRandTarget()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 
@@ -955,7 +953,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(1)
 
-	targets := tutils.ExtractTargetNodes(m.smap)
+	targets := m.smap.Tmap.ActiveNodes()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 
@@ -1026,7 +1024,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(1)
 
-	target := tutils.ExtractTargetNodes(m.smap)[0]
+	target, _ := m.smap.GetRandTarget()
 	// Remove all mountpaths for one target
 	oldMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
@@ -1387,13 +1385,13 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(2)
 
-	targets := tutils.ExtractTargetNodes(m.smap)
+	targets := m.smap.Tmap.ActiveNodes()
 
 	// Unregister target 0
 	args := &cmn.ActValDecommision{DaemonID: targets[0].ID(), SkipRebalance: true}
 	err := tutils.UnregisterNode(m.proxyURL, args)
 	tassert.CheckFatal(t, err)
-	n := tutils.GetClusterMap(t, m.proxyURL).CountTargets()
+	n := tutils.GetClusterMap(t, m.proxyURL).CountActiveTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -1498,7 +1496,7 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	m.expectTargets(1)
 
 	// Select one target at random
-	target := tutils.ExtractTargetNodes(m.smap)[0]
+	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	if len(mpList.Available) < copies {
@@ -1558,7 +1556,7 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
 	// Select one target at random
-	target := tutils.ExtractTargetNodes(m.smap)[0]
+	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	mpathCount := len(mpList.Available)
 	tassert.CheckFatal(t, err)

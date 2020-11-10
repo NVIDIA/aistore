@@ -32,21 +32,26 @@ func JoinCluster(proxyURL string, node *cluster.Snode) error {
 
 // TODO: There is duplication between `UnregisterNode` and `RemoveTarget` - when to use which?
 func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
-	removeTarget := ExtractTargetNodes(smap)[0]
+	var (
+		removeTarget, _ = smap.GetRandTarget()
+		origTgtCnt      = smap.CountActiveTargets()
+		args            = &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
+	)
 	Logf("Removing target %s from smap %s\n", removeTarget.ID(), smap.StringEx())
-	args := &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
+
 	err := UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
 	newSmap, err := WaitForClusterState(
 		proxyURL,
 		"target is gone",
 		smap.Version,
-		smap.CountProxies(),
-		smap.CountTargets()-1,
+		smap.CountActiveProxies(),
+		origTgtCnt-1,
 	)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, newSmap.CountTargets() == smap.CountTargets()-1,
-		"new smap expected to have 1 target less: %d (v%d) vs %d (v%d)", newSmap.CountTargets(), smap.CountTargets(),
+	newTgtCnt := newSmap.CountActiveTargets()
+	tassert.Fatalf(t, newTgtCnt == origTgtCnt-1,
+		"new smap expected to have 1 target less: %d (v%d) vs %d (v%d)", newTgtCnt, origTgtCnt,
 		newSmap.Version, smap.Version)
 
 	return newSmap, removeTarget
@@ -63,8 +68,8 @@ func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (newSma
 		proxyURL,
 		"to join target back",
 		smap.Version,
-		smap.CountProxies(),
-		smap.CountTargets()+1,
+		smap.CountActiveProxies(),
+		smap.CountActiveTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
 	return newSmap
@@ -74,22 +79,6 @@ func ClearMaintenance(baseParams api.BaseParams, tsi *cluster.Snode) {
 	val := &cmn.ActValDecommision{DaemonID: tsi.ID(), SkipRebalance: true}
 	// it can fail if the node is not under maintenance but it is OK
 	_, _ = api.StopMaintenance(baseParams, val)
-}
-
-func ExtractTargetNodes(smap *cluster.Smap) cluster.Nodes {
-	targets := make(cluster.Nodes, 0, smap.CountTargets())
-	for _, target := range smap.Tmap {
-		targets = append(targets, target)
-	}
-	return targets
-}
-
-func ExtractProxyNodes(smap *cluster.Smap) cluster.Nodes {
-	proxies := make(cluster.Nodes, 0, smap.CountProxies())
-	for _, proxy := range smap.Pmap {
-		proxies = append(proxies, proxy)
-	}
-	return proxies
 }
 
 func RandomProxyURL(ts ...*testing.T) (url string) {
@@ -119,7 +108,7 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 }
 
 func _getRandomProxyURL(smap *cluster.Smap) string {
-	proxies := ExtractProxyNodes(smap)
+	proxies := smap.Pmap.ActiveNodes()
 	return proxies[rand.Intn(len(proxies))].URL(cmn.NetworkPublic)
 }
 
@@ -162,7 +151,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			goto next
 		}
 
-		satisfied = expTgt.satisfied(smap.CountTargets()) && expPrx.satisfied(smap.CountProxies()) && smap.Version > origVersion
+		satisfied = expTgt.satisfied(smap.CountActiveTargets()) && expPrx.satisfied(smap.CountActiveProxies()) && smap.Version > origVersion
 		if !satisfied {
 			d := time.Since(timeStart)
 			Logf("Still waiting at %s, current smap %s, elapsed (%s) at \n", proxyURL, smap.StringEx(),
@@ -191,7 +180,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			}
 
 			if syncedSmap.Version != smap.Version {
-				if !expTgt.satisfied(smap.CountTargets()) || !expPrx.satisfied(smap.CountProxies()) {
+				if !expTgt.satisfied(smap.CountActiveTargets()) || !expPrx.satisfied(smap.CountActiveProxies()) {
 					return nil, fmt.Errorf("smap changed after sync and does not satisfy the state, %s vs %s",
 						smap, syncedSmap)
 				}

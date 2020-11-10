@@ -105,8 +105,8 @@ func (m *ioContext) assertClusterState() {
 	)
 	tassert.CheckFatal(m.t, err)
 
-	proxyCount := smap.CountProxies()
-	targetCount := smap.CountTargets()
+	proxyCount := smap.CountActiveProxies()
+	targetCount := smap.CountActiveTargets()
 	if targetCount != m.originalTargetCount ||
 		proxyCount != m.originalProxyCount {
 		m.t.Errorf(
@@ -476,7 +476,7 @@ func (m *ioContext) unregisterTarget(forceUnreg ...bool) *cluster.Snode {
 	if len(forceUnreg) != 0 {
 		force = forceUnreg[0]
 	}
-	target := tutils.ExtractTargetNodes(m.smap)[0]
+	target, _ := m.smap.GetRandTarget()
 	tutils.Logf("Unregister target: %s\n", target.URL(cmn.NetworkPublic))
 	args := &cmn.ActValDecommision{
 		DaemonID:      target.ID(),
@@ -489,8 +489,8 @@ func (m *ioContext) unregisterTarget(forceUnreg ...bool) *cluster.Snode {
 		m.proxyURL,
 		"target removed from the cluster",
 		m.smap.Version,
-		m.smap.CountProxies(),
-		m.smap.CountTargets()-1,
+		m.smap.CountActiveProxies(),
+		m.smap.CountActiveTargets()-1,
 	)
 	tassert.CheckFatal(m.t, err)
 	return target

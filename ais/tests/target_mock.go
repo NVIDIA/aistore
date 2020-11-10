@@ -45,11 +45,8 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	mux.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Vote), mocktgt.votehdlr)
 	mux.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Health), mocktgt.healthdlr)
 
-	ip := ""
-	for _, v := range smap.Tmap {
-		ip = v.PublicNet.NodeIPAddr
-		break
-	}
+	target, _ := smap.GetRandTarget()
+	ip := target.PublicNet.NodeIPAddr
 
 	s := &http.Server{Addr: ip + ":" + mockTargetPort, Handler: mux}
 	go s.ListenAndServe()

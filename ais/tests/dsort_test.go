@@ -1445,7 +1445,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					// Initialize `df.baseParams`
 					df.init()
 
-					targets := tutils.ExtractTargetNodes(m.smap)
+					targets := m.smap.Tmap.ActiveNodes()
 					for idx, target := range targets {
 						if adding {
 							mpath := fmt.Sprintf("%s-%d", newMountpath, idx)

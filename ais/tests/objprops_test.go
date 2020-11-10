@@ -232,12 +232,12 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	propsCleanupObjects(t, proxyURL, bck, objects)
 
 	smap := tutils.GetClusterMap(t, proxyURL)
-	l := smap.CountTargets()
+	l := smap.CountActiveTargets()
 	if l < 2 {
 		t.Skipf("Only %d targets found, need at least 2", l)
 	}
 
-	removeTarget := tutils.ExtractTargetNodes(smap)[0]
+	removeTarget, _ := smap.GetRandTarget()
 
 	tutils.Logf("Removing a target: %s\n", removeTarget.ID())
 	args := &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
@@ -247,8 +247,8 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		proxyURL,
 		"target is gone",
 		smap.Version,
-		smap.CountProxies(),
-		smap.CountTargets()-1,
+		smap.CountActiveProxies(),
+		smap.CountActiveTargets()-1,
 	)
 	tassert.CheckError(t, err)
 
@@ -264,8 +264,8 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		proxyURL,
 		"to join target back",
 		smap.Version,
-		smap.CountProxies(),
-		smap.CountTargets()+1,
+		smap.CountActiveProxies(),
+		smap.CountActiveTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
