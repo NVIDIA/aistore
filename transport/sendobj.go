@@ -148,10 +148,10 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 			s.callback(obj.Hdr, obj.Reader, obj.CmplPtr, err)
 		}
 	}
-	FreeSend(obj)
 	if obj.Reader != nil {
 		cmn.Close(obj.Reader) // NOTE: always closing
 	}
+	FreeSend(obj)
 }
 
 func (s *Stream) doRequest() error {
