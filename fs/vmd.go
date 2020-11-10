@@ -85,13 +85,11 @@ func LoadVMD(mpaths cmn.StringSet) (mainVMD *VMD, err error) {
 
 		if err != nil {
 			err = newVMDLoadErr(path, err)
-			glog.InfoDepth(1)
 			return nil, err
 		}
 
 		if err = vmd.Validate(); err != nil {
 			err = newVMDValidationErr(path, err)
-			glog.InfoDepth(1)
 			return nil, err
 		}
 
