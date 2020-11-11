@@ -3327,7 +3327,7 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
 // Stops rebalance if needed, do cleanup, and get a node back to the cluster.
 func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
 	ctx := &smapModifier{
-		pre:     p._cancelMaint,
+		pre:     p._cancelMaintPre,
 		post:    p._perfRebPost,
 		final:   p._syncFinal,
 		sid:     opts.DaemonID,
@@ -3342,7 +3342,8 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDeco
 	return
 }
 
-func (p *proxyrunner) _cancelMaint(ctx *smapModifier, clone *smapX) error {
+func (p *proxyrunner) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
+	ctx.smap = p.owner.smap.get()
 	clone.clearNodeFlags(ctx.sid, ctx.flags)
 	clone.staffIC()
 	return nil
