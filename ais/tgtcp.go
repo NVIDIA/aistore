@@ -104,7 +104,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	// BMD
 	msg := t.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
 	if err = t.receiveBMD(regMeta.BMD, msg, bucketMDRegister, caller); err != nil {
-		if errors.As(err, &errDowngrade{}) {
+		if isErrDowngrade(err) {
 			err = nil
 		} else {
 			glog.Error(err)
@@ -112,14 +112,14 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	}
 
 	// Smap
-	if err = t.owner.smap.synchronize(t.si, regMeta.Smap, true /* lesserIsErr */); err != nil {
-		if errors.As(err, &errDowngrade{}) {
+	if err = t.owner.smap.synchronize(t.si, regMeta.Smap); err != nil {
+		if isErrDowngrade(err) {
 			err = nil
 		} else {
-			glog.Error(err)
+			glog.Errorf("%s: failed to synch %s: %v", t.si, regMeta.Smap, err)
 		}
 	} else {
-		glog.Infof("%s: sync %s", t.si, t.owner.smap.get())
+		glog.Infof("%s: synch %s", t.si, t.owner.smap.get())
 	}
 	return
 }
@@ -205,8 +205,8 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 		if cmn.ReadJSON(w, r, newsmap) != nil {
 			return
 		}
-		if err := t.owner.smap.synchronize(t.si, newsmap, true /* lesserIsErr */); err != nil {
-			t.invalmsghdlrf(w, r, "failed to sync Smap: %s", err)
+		if err := t.owner.smap.synchronize(t.si, newsmap); err != nil {
+			t.invalmsghdlrf(w, r, "failed to synch %s: %v", newsmap, err)
 		}
 		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
 	case cmn.Mountpaths:
@@ -719,7 +719,7 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (
 		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
 		return
 	}
-	if err = t.owner.smap.synchronize(t.si, newSmap, true /* lesserIsErr */); err != nil {
+	if err = t.owner.smap.synchronize(t.si, newSmap); err != nil {
 		return
 	}
 	node := newSmap.GetNode(t.si.ID())
@@ -906,7 +906,7 @@ func (t *targetrunner) smapVersionFixup(r *http.Request) {
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}
-	if err := t.receiveSmap(newSmap, msg, caller); err != nil {
+	if err := t.receiveSmap(newSmap, msg, caller); err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
 	}
 }
@@ -927,7 +927,7 @@ func (t *targetrunner) BMDVersionFixup(r *http.Request, bck cmn.Bck, sleep bool)
 	if r != nil {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	}
-	if err := t.receiveBMD(newBucketMD, msg, bucketMDFixup, caller); err != nil {
+	if err := t.receiveBMD(newBucketMD, msg, bucketMDFixup, caller); err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
 	}
 }
@@ -974,7 +974,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
 		}
-		if err := t.receiveSmap(newSmap, msgSmap, caller); err != nil {
+		if err := t.receiveSmap(newSmap, msgSmap, caller); err != nil && !isErrDowngrade(err) {
 			errs = append(errs, err)
 		}
 	}
@@ -986,7 +986,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
 		}
-		if err := t.receiveBMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil {
+		if err := t.receiveBMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil && !isErrDowngrade(err) {
 			errs = append(errs, err)
 		}
 	}

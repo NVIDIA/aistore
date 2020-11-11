@@ -171,17 +171,14 @@ type (
 	}
 )
 
-///////////////////
-// BMD uuid errs //
-///////////////////
-
-var errNoBMD = errors.New("no bucket metadata")
-
 var allHTTPverbs = []string{
 	http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
 	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
 }
 
+var errNoBMD = errors.New("no bucket metadata")
+
+// BMD uuid errs
 func (e *errTgtBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errBmdUUIDSplit) Error() string     { return e.detail }
 func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
@@ -190,6 +187,10 @@ func (e *errNodeNotFound) Error() string {
 	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
 }
 
+//////////////////
+// errDowngrade //
+//////////////////
+
 func newErrDowngrade(si *cluster.Snode, from, to string) errDowngrade {
 	return errDowngrade{si, from, to}
 }
@@ -197,6 +198,8 @@ func newErrDowngrade(si *cluster.Snode, from, to string) errDowngrade {
 func (e errDowngrade) Error() string {
 	return fmt.Sprintf("%s: attempt to downgrade %s to %s", e.si, e.from, e.to)
 }
+
+func isErrDowngrade(err error) bool { return errors.As(err, &errDowngrade{}) }
 
 ////////////////
 // glogWriter //
@@ -524,7 +527,14 @@ func (h *httprunner) initSI(daemonType string) {
 
 	daemonID := initDaemonID(daemonType, config)
 	h.name = daemonType
-	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
+	h.si = cluster.NewSnode(
+		daemonID,
+		config.Net.HTTP.Proto,
+		daemonType,
+		publicAddr,
+		intraControlAddr,
+		intraDataAddr,
+	)
 	cmn.InitShortID(h.si.Digest())
 }
 

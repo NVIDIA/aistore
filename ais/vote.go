@@ -90,30 +90,30 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	}
 	newsmap := &msg.Request.Smap
 	if !newsmap.isValid() {
-		p.invalmsghdlrf(w, r, "Invalid Smap in the Vote Request: %s", newsmap.pp())
+		p.invalmsghdlrf(w, r, "%s: invalid %s in the Vote Request", p.si, newsmap)
 		return
 	}
 	if !newsmap.isPresent(p.si) {
-		p.invalmsghdlrf(w, r, "Self %q not present in the Vote Request %s", p.si, newsmap.pp())
+		p.invalmsghdlrf(w, r, "%s: not present in the Vote Request, %s", p.si, newsmap)
 		return
 	}
 
-	if err := p.owner.smap.synchronize(p.si, newsmap, false /* lesserIsErr */); err != nil {
-		glog.Error(err)
+	// NOTE: not ignoring errDowngrade
+	if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
+		glog.Errorf("%s: failed to synch %s: %v", p.si, newsmap, err)
 	}
 
 	smap := p.owner.smap.get()
 	psi, err := cluster.HrwProxy(&smap.Smap, smap.Primary.ID())
 	if err != nil {
-		p.invalmsghdlrf(w, r, "Error preforming HRW: %s", err)
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	// only continue the election if this proxy is actually the next in line
 	if psi.ID() != p.si.ID() {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Warningf("This proxy is not next in line: %s. Received: %s",
-				p.si.ID(), psi.ID())
+			glog.Warningf("%s: not next in line: Received: %s", p.si, psi)
 		}
 		return
 	}
@@ -295,15 +295,15 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 		// Generate the next candidate
 		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.Primary.ID())
 		if err != nil {
-			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", err)
+			glog.Errorf("%s: failed to execute HRW selection upon primary failure %v", p.si, err)
 			return
 		}
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Trying %s as the primary candidate", nextPrimaryProxy.ID())
+			glog.Infof("%s: trying %s as the primary candidate", p.si, nextPrimaryProxy.ID())
 		}
 		if nextPrimaryProxy.ID() == p.si.ID() {
 			// If this proxy is the next primary proxy candidate, it starts the election directly.
-			glog.Infof("%s: Starting election (candidate = self)", p.si)
+			glog.Infof("%s: starting election (candidate = self)", p.si)
 			vr := &VoteRecord{
 				Candidate: nextPrimaryProxy.ID(),
 				Primary:   clone.Primary.ID(),
@@ -362,7 +362,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 	if !clone.isValid() {
 		return
 	}
-	glog.Infof("%s: primary %s failed\n", t.si, clone.Primary.NameEx())
+	glog.Infof("%s: primary %s has failed", t.si, clone.Primary.NameEx())
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be
 	// elected as the primary one.
@@ -370,16 +370,16 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 		// Generate the next candidate
 		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.Primary.ID())
 		if err != nil {
-			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", err)
+			glog.Errorf("%s: failed to execute HRW selection upon primary failure: %v", t.si, err)
 			return
 		}
 		if nextPrimaryProxy == nil {
 			// There is only one proxy, so we cannot select a next in line
-			glog.Warningf("primary proxy failed, but there are no candidates to fall back on.")
+			glog.Warningf("%s: primary proxy failed but there are no candidates", t.si)
 			return
 		}
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Trying %s as the primary candidate", nextPrimaryProxy.ID())
+			glog.Infof("%s: trying %s as the primary candidate", t.si, nextPrimaryProxy.ID())
 		}
 
 		// ask the current primary candidate to start election
@@ -419,34 +419,36 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 	candidate := msg.Record.Candidate
 	if candidate == "" {
-		h.invalmsghdlr(w, r, "Cannot request vote without Candidate field")
+		h.invalmsghdlrf(w, r, "%s: unexpected: empty candidate field [%v]", h.si, msg.Record)
 		return
 	}
 	smap := h.owner.smap.get()
 	if smap.Primary == nil {
-		h.invalmsghdlrf(w, r, "Cannot vote: current primary undefined, local %s", smap)
+		h.invalmsghdlrf(w, r, "%s: current primary undefined, %s", h.si, smap)
 		return
 	}
 	currPrimaryID := smap.Primary.ID()
 	if candidate == currPrimaryID {
-		h.invalmsghdlrf(w, r, "Candidate %s == the current primary %q", candidate, currPrimaryID)
+		h.invalmsghdlrf(w, r, "%s: candidate %q _is_ the current primary, %s", h.si, candidate, smap)
 		return
 	}
 	newsmap := &msg.Record.Smap
 	psi := newsmap.GetProxy(candidate)
 	if psi == nil {
-		h.invalmsghdlrf(w, r, "Candidate %q not present in the VoteRecord %s", candidate, newsmap.pp())
+		h.invalmsghdlrf(w, r, "%s: candidate %q not present in the VoteRecord %s",
+			h.si, candidate, newsmap)
 		return
 	}
 	if !newsmap.isPresent(h.si) {
-		h.invalmsghdlrf(w, r, "Self %q not present in the VoteRecord Smap %s", h.si, newsmap.pp())
+		h.invalmsghdlrf(w, r, "%s: not present in the VoteRecord %s", h.si, newsmap)
 		return
 	}
 
-	if err := h.owner.smap.synchronize(h.si, newsmap, false /* lesserIsErr */); err != nil {
-		glog.Errorf("Failed to synchronize VoteRecord %s, err %s - voting No", newsmap, err)
+	// NOTE: not ignoring errDowngrade
+	if err := h.owner.smap.synchronize(h.si, newsmap); err != nil {
+		glog.Errorf("%s: failed to synch %s, err %v - voting No", h.si, newsmap, err)
 		if _, err := w.Write([]byte(VoteNo)); err != nil {
-			glog.Errorf("Error writing a No vote: %v", err)
+			glog.Errorf("%s: failed to write a No vote: %v", h.si, err)
 		}
 		return
 	}
@@ -457,18 +459,18 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Proxy voted '%v' for %s", vote, psi)
+		glog.Infof("%s: voted '%v' for %s", h.si, vote, psi)
 	}
 
 	if vote {
 		_, err = w.Write([]byte(VoteYes))
 		if err != nil {
-			h.invalmsghdlrf(w, r, "Error writing yes vote: %v", err)
+			h.invalmsghdlrf(w, r, "%s: failed to write Yes vote: %v", h.si, err)
 		}
 	} else {
 		_, err = w.Write([]byte(VoteNo))
 		if err != nil {
-			h.invalmsghdlrf(w, r, "Error writing no vote: %v", err)
+			h.invalmsghdlrf(w, r, "%s: failed to write No vote: %v", h.si, err)
 		}
 	}
 }

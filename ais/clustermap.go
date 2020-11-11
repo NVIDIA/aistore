@@ -6,10 +6,8 @@ package ais
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"unsafe"
 
@@ -96,53 +94,15 @@ var (
 	_ cluster.SmapListeners = (*smapLis)(nil)
 )
 
-//
-// constructors
-//
+///////////
+// smapX //
+///////////
+
 func newSmap() (smap *smapX) {
 	smap = &smapX{}
 	smap.init(8, 8)
 	return
 }
-
-func newSnode(id, proto, daeType string, publicAddr, intraControlAddr,
-	intraDataAddr *net.TCPAddr) (snode *cluster.Snode) {
-	publicNet := cluster.NetInfo{
-		NodeIPAddr: publicAddr.IP.String(),
-		DaemonPort: strconv.Itoa(publicAddr.Port),
-		DirectURL:  proto + "://" + publicAddr.String(),
-	}
-	intraControlNet := publicNet
-	if len(intraControlAddr.IP) > 0 {
-		intraControlNet = cluster.NetInfo{
-			NodeIPAddr: intraControlAddr.IP.String(),
-			DaemonPort: strconv.Itoa(intraControlAddr.Port),
-			DirectURL:  proto + "://" + intraControlAddr.String(),
-		}
-	}
-	intraDataNet := publicNet
-	if len(intraDataAddr.IP) > 0 {
-		intraDataNet = cluster.NetInfo{
-			NodeIPAddr: intraDataAddr.IP.String(),
-			DaemonPort: strconv.Itoa(intraDataAddr.Port),
-			DirectURL:  proto + "://" + intraDataAddr.String(),
-		}
-	}
-	snode = &cluster.Snode{
-		DaemonID:        id,
-		DaemonType:      daeType,
-		PublicNet:       publicNet,
-		IntraControlNet: intraControlNet,
-		IntraDataNet:    intraDataNet,
-	}
-	snode.SetName()
-	snode.Digest()
-	return
-}
-
-///////////
-// smapX //
-///////////
 
 func (m *smapX) init(tsize, psize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
@@ -467,7 +427,7 @@ func (r *smapOwner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, lesserVersionIsErr bool) (err error) {
+func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 	if !newSmap.isValid() {
 		err = fmt.Errorf("%s: invalid %s", si, newSmap)
 		return
@@ -477,7 +437,8 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, lesserVersion
 	if smap != nil {
 		curVer, newVer := smap.Version, newSmap.version()
 		if newVer <= curVer {
-			if lesserVersionIsErr && newVer < curVer {
+			if newVer < curVer {
+				// NOTE: considered benign in most cases
 				err = newErrDowngrade(si, smap.String(), newSmap.String())
 			}
 			r.Unlock()

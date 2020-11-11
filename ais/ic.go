@@ -411,11 +411,13 @@ func (ic *ic) syncICBundle() error {
 
 	cmn.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
-	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, true /* lesserIsErr */); err != nil {
-		glog.Errorf("%s: sync Smap err %v", ic.p.si, err)
+	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap); err != nil {
+		if !isErrDowngrade(err) {
+			glog.Errorf("%s: failed to synch %s: %v", ic.p.si, bundle.Smap, err)
+		}
 	} else {
 		smap = ic.p.owner.smap.get()
-		glog.Infof("%s: sync %s", ic.p.si, ic.p.owner.smap.get())
+		glog.Infof("%s: synch %s", ic.p.si, smap)
 	}
 
 	if !smap.IsIC(ic.p.si) {

@@ -112,6 +112,40 @@ func (f SnodeFlags) IsAnySet(flags SnodeFlags) bool {
 // Snode //
 ///////////
 
+func NewSnode(id, proto, daeType string, publicAddr, intraControlAddr, intraDataAddr *net.TCPAddr) (snode *Snode) {
+	publicNet := NetInfo{
+		NodeIPAddr: publicAddr.IP.String(),
+		DaemonPort: strconv.Itoa(publicAddr.Port),
+		DirectURL:  proto + "://" + publicAddr.String(),
+	}
+	intraControlNet := publicNet
+	if len(intraControlAddr.IP) > 0 {
+		intraControlNet = NetInfo{
+			NodeIPAddr: intraControlAddr.IP.String(),
+			DaemonPort: strconv.Itoa(intraControlAddr.Port),
+			DirectURL:  proto + "://" + intraControlAddr.String(),
+		}
+	}
+	intraDataNet := publicNet
+	if len(intraDataAddr.IP) > 0 {
+		intraDataNet = NetInfo{
+			NodeIPAddr: intraDataAddr.IP.String(),
+			DaemonPort: strconv.Itoa(intraDataAddr.Port),
+			DirectURL:  proto + "://" + intraDataAddr.String(),
+		}
+	}
+	snode = &Snode{
+		DaemonID:        id,
+		DaemonType:      daeType,
+		PublicNet:       publicNet,
+		IntraControlNet: intraControlNet,
+		IntraDataNet:    intraDataNet,
+	}
+	snode.SetName()
+	snode.Digest()
+	return
+}
+
 func (d *Snode) Digest() uint64 {
 	if d.idDigest == 0 {
 		d.idDigest = xxhash.ChecksumString64S(d.ID(), cmn.MLCG32)

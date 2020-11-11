@@ -31,7 +31,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"retry_sync_time":   "2s"
 	},
 	"timeout": {
-		"max_keepalive":        "5s",
+		"max_keepalive":        "13s",
 		"cplane_operation":     "2s",
 		"send_file_time":       "5m",
 		"startup_time":         "1m",

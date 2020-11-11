@@ -195,14 +195,20 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 
 	// BMD
 	msg := p.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
-	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
-		glog.Infof("%s: %s", p.si, p.owner.bmd.get())
+	if err = p.receiveBMD(regMeta.BMD, caller); err != nil {
+		if !isErrDowngrade(err) {
+			glog.Errorf("%s: failed to synch(%q) %s: %v", p.si, msg.Action, regMeta.BMD, err)
+		}
+	} else {
+		glog.Infof("%s: synch %s", p.si, regMeta.BMD)
 	}
 	// Smap
-	if err := p.owner.smap.synchronize(p.si, regMeta.Smap, true /* lesserIsErr */); err != nil {
-		glog.Errorf("%s: sync Smap err %v", p.si, err)
+	if err = p.owner.smap.synchronize(p.si, regMeta.Smap); err != nil {
+		if !isErrDowngrade(err) {
+			glog.Errorf("%s: failed to synch %s: %v", p.si, regMeta.Smap, err)
+		}
 	} else {
-		glog.Infof("%s: sync %s", p.si, p.owner.smap.get())
+		glog.Infof("%s: synch %s", p.si, regMeta.Smap)
 	}
 	return
 }
@@ -586,11 +592,12 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		errs = append(errs, err)
 	} else if newSmap != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
+			glog.Infof("%s: new %s from %s", p.si, newSmap, caller)
 		}
-		err = p.owner.smap.synchronize(p.si, newSmap, true /* lesserIsErr */)
-		if err != nil {
-			errs = append(errs, err)
+		if err = p.owner.smap.synchronize(p.si, newSmap); err != nil {
+			if !isErrDowngrade(err) {
+				errs = append(errs, fmt.Errorf("failed to synch %s: %v", newSmap, err))
+			}
 			goto ExtractRMD
 		}
 		node := newSmap.GetNode(p.si.ID())
@@ -614,7 +621,7 @@ ExtractRMD:
 		errs = append(errs, err)
 	} else if newRMD != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("new %s from %s", newRMD.String(), caller)
+			glog.Infof("%s: new %s from %s", p.si, newRMD, caller)
 		}
 		if err = p.receiveRMD(newRMD, msgRMD); err != nil {
 			errs = append(errs, err)
@@ -626,9 +633,9 @@ ExtractRMD:
 		errs = append(errs, err)
 	} else if newBMD != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
+			glog.Infof("%s: new %s(%q) from %s", p.si, newBMD, msgBMD.Action, caller)
 		}
-		if err = p.receiveBMD(newBMD, msgBMD, caller); err != nil {
+		if err = p.receiveBMD(newBMD, caller); err != nil && !isErrDowngrade(err) {
 			errs = append(errs, err)
 		}
 	}
@@ -2163,8 +2170,8 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlrf(w, r, "not finding self %s in the %s", p.si, newsmap.pp())
 				return
 			}
-			if err := p.owner.smap.synchronize(p.si, newsmap, true /* lesserIsErr */); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
+			if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
+				p.invalmsghdlrf(w, r, "failed to synch %s: %v", newsmap, err)
 				return
 			}
 			glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)
@@ -3667,15 +3674,7 @@ func (p *proxyrunner) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
 	}
 }
 
-func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (err error) {
-	if glog.V(3) {
-		s := fmt.Sprintf("receive %s", newBMD.StringEx())
-		if msg.Action == "" {
-			glog.Infoln(s)
-		} else {
-			glog.Infof("%s, action %s", s, msg.Action)
-		}
-	}
+func (p *proxyrunner) receiveBMD(newBMD *bucketMD, caller string) (err error) {
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
 	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
@@ -3684,10 +3683,7 @@ func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (
 		glog.Errorf("%s (non-primary): %v - proceeding to override BMD", p.si, err)
 	} else if newBMD.version() <= bmd.version() {
 		p.owner.bmd.Unlock()
-		if newBMD.version() < bmd.version() {
-			err = newErrDowngrade(p.si, bmd.String(), newBMD.String())
-		}
-		return
+		return newErrDowngrade(p.si, bmd.String(), newBMD.String())
 	}
 	p.owner.bmd.put(newBMD)
 	p.owner.bmd.Unlock()

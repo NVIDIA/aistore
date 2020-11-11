@@ -37,7 +37,7 @@ func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.S
 		origTgtCnt      = smap.CountActiveTargets()
 		args            = &cmn.ActValDecommision{DaemonID: removeTarget.ID(), SkipRebalance: true}
 	)
-	Logf("Removing target %s from smap %s\n", removeTarget.ID(), smap.StringEx())
+	Logf("Removing target %s from %s\n", removeTarget.ID(), smap)
 
 	err := UnregisterNode(proxyURL, args)
 	tassert.CheckFatal(t, err)
@@ -61,7 +61,7 @@ func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.S
 func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (newSmap *cluster.Smap) {
 	smap := GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, smap.GetTarget(target.DaemonID) == nil, "unexpected target %s in smap", target.ID())
-	Logf("Reregistering target %s, current smap: %s\n", target, smap.StringEx())
+	Logf("Reregistering target %s, current Smap: %s\n", target, smap.StringEx())
 	err := JoinCluster(proxyURL, target)
 	tassert.CheckFatal(t, err)
 	newSmap, err = WaitForClusterState(
@@ -151,11 +151,12 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			goto next
 		}
 
-		satisfied = expTgt.satisfied(smap.CountActiveTargets()) && expPrx.satisfied(smap.CountActiveProxies()) && smap.Version > origVersion
+		satisfied = expTgt.satisfied(smap.CountActiveTargets()) &&
+			expPrx.satisfied(smap.CountActiveProxies()) &&
+			smap.Version > origVersion
 		if !satisfied {
 			d := time.Since(timeStart)
-			Logf("Still waiting at %s, current smap %s, elapsed (%s) at \n", proxyURL, smap.StringEx(),
-				d.Truncate(time.Second))
+			Logf("Still waiting at %s, current %s, elapsed (%s)\n", proxyURL, smap, d.Truncate(time.Second))
 		}
 
 		if smap.Version != lastVersion {
@@ -180,11 +181,12 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			}
 
 			if syncedSmap.Version != smap.Version {
-				if !expTgt.satisfied(smap.CountActiveTargets()) || !expPrx.satisfied(smap.CountActiveProxies()) {
-					return nil, fmt.Errorf("smap changed after sync and does not satisfy the state, %s vs %s",
+				if !expTgt.satisfied(smap.CountActiveTargets()) ||
+					!expPrx.satisfied(smap.CountActiveProxies()) {
+					return nil, fmt.Errorf("%s changed after sync (to %s) and does not satisfy the state",
 						smap, syncedSmap)
 				}
-				Logf("Smap changed after sync, but satisfies the state, %s vs %s", smap.StringEx(), syncedSmap.StringEx())
+				Logf("%s changed after sync (to %s) but satisfies the state\n", smap, syncedSmap)
 			}
 
 			return smap, nil

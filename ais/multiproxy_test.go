@@ -38,7 +38,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 		p       = &proxyrunner{}
 		tracker = stats.NewTrackerMock()
 	)
-	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = cluster.NewSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.httpclientGetPut = &http.Client{}
 	p.httpclient = &http.Client{}
 
@@ -271,9 +271,9 @@ func TestDiscoverServers(t *testing.T) {
 			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 			addrInfo := serverTCPAddr(ts.URL)
 			if s.isProxy {
-				discoverSmap.addProxy(newSnode(s.id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+				discoverSmap.addProxy(cluster.NewSnode(s.id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 			} else {
-				discoverSmap.addTarget(newSnode(s.id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+				discoverSmap.addTarget(cluster.NewSnode(s.id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 			}
 		}
 		smap, bucketmd := primary.uncoverMeta(discoverSmap)

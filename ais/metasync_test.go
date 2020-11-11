@@ -87,7 +87,7 @@ func newPrimary() *proxyrunner {
 	)
 
 	p.owner.smap = newSmapOwner()
-	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = cluster.NewSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 
 	smap.addProxy(p.si)
 	smap.Primary = p.si
@@ -117,7 +117,7 @@ func newPrimary() *proxyrunner {
 
 func newSecondary(name string) *proxyrunner {
 	p := &proxyrunner{}
-	p.si = newSnode(name, httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = cluster.NewSnode(name, httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.owner.smap = newSmapOwner()
 	p.owner.smap.put(newSmap())
 	p.httpclientGetPut = &http.Client{}
@@ -165,9 +165,9 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 	addrInfo := serverTCPAddr(ts.URL)
 	clone := primary.owner.smap.get().clone()
 	if s.isProxy {
-		clone.Pmap[id] = newSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+		clone.Pmap[id] = cluster.NewSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 	} else {
-		clone.Tmap[id] = newSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+		clone.Tmap[id] = cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 	}
 	clone.Version++
 	primary.owner.smap.put(clone)
@@ -477,7 +477,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	})
 
 	clone := primary.owner.smap.get().clone()
-	clone.Pmap[id] = newSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+	clone.Pmap[id] = cluster.NewSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 	clone.Version++
 	primary.owner.smap.put(clone)
 
@@ -570,9 +570,9 @@ func TestMetaSyncData(t *testing.T) {
 		addrInfo := serverTCPAddr(ts.URL)
 		clone := primary.owner.smap.get().clone()
 		if s.isProxy {
-			clone.Pmap[id] = newSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+			clone.Pmap[id] = cluster.NewSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 		} else {
-			clone.Tmap[id] = newSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+			clone.Tmap[id] = cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 		}
 		clone.Version++
 		primary.owner.smap.put(clone)
@@ -701,7 +701,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		id := "t"
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
-		clone.addTarget(newSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+		clone.addTarget(cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.owner.smap.put(clone)
 		msg := primary.newAisMsgStr("", clone, nil)
 		wg1 := syncer.sync(revsPair{clone, msg})
@@ -745,7 +745,7 @@ func TestMetaSyncMembership(t *testing.T) {
 
 		id := "t1111"
 		addrInfo := serverTCPAddr(s1.URL)
-		di := newSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+		di := cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
@@ -771,7 +771,7 @@ func TestMetaSyncMembership(t *testing.T) {
 
 		id := "t22222"
 		addrInfo := serverTCPAddr(s2.URL)
-		di := newSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+		di := cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
@@ -836,7 +836,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
-		clone.addProxy(newSnode("p1", httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+		clone.addProxy(cluster.NewSnode("p1", httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.owner.smap.put(clone)
 
 		proxy1 := newSecondary("p1")

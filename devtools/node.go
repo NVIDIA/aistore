@@ -60,7 +60,7 @@ func UnregisterNode(ctx *Ctx, proxyURL string, args *cmn.ActValDecommision, time
 }
 
 func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore []string) error {
-	ctx.Log("Waiting to sync smap version > v%d, ignoring %+v\n", prevVersion, idsToIgnore)
+	ctx.Log("Waiting to sync Smap version > v%d, ignoring %+v\n", prevVersion, idsToIgnore)
 	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore []string) (string, string, bool) {
 		for _, d := range smap.Pmap {
 			if !cmn.StringInSlice(d.ID(), idsToIgnore) {
