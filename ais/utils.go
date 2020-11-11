@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -68,15 +69,21 @@ func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
 		return
 	}
 
+	var (
+		testingEnv  = cmn.GCO.Get().TestingEnv()
+		k8sDetected = k8s.Detect() == nil
+	)
 	for _, addr := range addrs {
 		curr := &localIPv4Info{}
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				curr.ipv4 = ipnet.IP.String()
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			// Ignore loopback addresses in production env.
+			if ipnet.IP.IsLoopback() && (!testingEnv || k8sDetected) {
+				continue
 			}
-		}
-		if curr.ipv4 == "" {
-			continue
+			if ipnet.IP.To4() == nil {
+				continue
+			}
+			curr.ipv4 = ipnet.IP.String()
 		}
 
 		for _, intf := range iflist {

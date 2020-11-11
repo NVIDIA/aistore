@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -620,8 +621,19 @@ func (h *httprunner) run() error {
 		return <-errCh
 	}
 
-	// When only public net is configured listen on *:port
-	addr := ":" + h.si.PublicNet.DaemonPort
+	var (
+		addr        string
+		testingEnv  = config.TestingEnv()
+		k8sDetected = k8s.Detect() == nil
+	)
+	if testingEnv && !k8sDetected {
+		// On testing environment just listen on specified `ip:port`.
+		addr = h.si.PublicNet.NodeIPAddr + ":" + h.si.PublicNet.DaemonPort
+	} else {
+		// When configured or in production env, when only public net is configured,
+		// listen on `*:port`.
+		addr = ":" + h.si.PublicNet.DaemonPort
+	}
 	return h.publicServer.listenAndServe(addr, h.logger)
 }
 

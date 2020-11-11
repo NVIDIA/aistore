@@ -77,8 +77,9 @@ var (
 
 		SkipVerifyCrt string
 		UseHTTPS      string
-		NumTarget     string
-		NumProxy      string
+
+		NumTarget string
+		NumProxy  string
 	}{
 		Endpoint:      "AIS_ENDPOINT",
 		IsPrimary:     "AIS_IS_PRIMARY",
