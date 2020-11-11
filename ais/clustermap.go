@@ -471,22 +471,29 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 	return nil
 }
 
-func (r *smapOwner) modify(ctx *smapModifier) (err error) {
+func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
 	r.Lock()
-	clone := r.get().clone()
+	defer r.Unlock()
+	clone = r.get().clone()
 	if err = ctx.pre(ctx, clone); err != nil {
-		r.Unlock()
 		return
 	}
 	if err := r.persist(clone); err != nil {
-		glog.Errorf("Failed to persist %s: %v", clone, err)
+		err = fmt.Errorf("failed to persist %s: %v", clone, err)
+		return nil, err
 	}
 	r.put(clone)
 	if ctx.post != nil {
 		ctx.post(ctx, clone)
 	}
-	r.Unlock()
+	return
+}
 
+func (r *smapOwner) modify(ctx *smapModifier) (err error) {
+	clone, err := r._runPre(ctx)
+	if err != nil {
+		return err
+	}
 	if ctx.final != nil {
 		ctx.final(ctx, clone)
 	}

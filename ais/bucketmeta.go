@@ -238,16 +238,22 @@ func (bo *bmdOwnerPrx) persist() {
 	}
 }
 
-func (bo *bmdOwnerPrx) modify(ctx *bmdModifier) (clone *bucketMD, err error) {
+func (bo *bmdOwnerPrx) _runPre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	bo.Lock()
+	defer bo.Unlock()
 	clone = bo.get().clone()
 	if err = ctx.pre(ctx, clone); err != nil || ctx.terminate {
-		bo.Unlock()
 		return
 	}
-
 	bo.put(clone)
-	bo.Unlock()
+	return
+}
+
+func (bo *bmdOwnerPrx) modify(ctx *bmdModifier) (clone *bucketMD, err error) {
+	clone, err = bo._runPre(ctx)
+	if err != nil {
+		return
+	}
 	if ctx.final != nil {
 		ctx.final(ctx, clone)
 	}
