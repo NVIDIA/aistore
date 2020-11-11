@@ -241,6 +241,7 @@ func (m *Smap) StringEx() string {
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }
 func (m *Smap) CountProxies() int { return len(m.Pmap) }
+func (m *Smap) Count() int        { return len(m.Pmap) + len(m.Tmap) }
 func (m *Smap) CountActiveTargets() (count int) {
 	for _, t := range m.Tmap {
 		if !t.InMaintenance() {

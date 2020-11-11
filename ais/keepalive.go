@@ -195,7 +195,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	var (
 		smap       = pkr.p.owner.smap.get()
 		wg         = &sync.WaitGroup{}
-		daemonCnt  = smap.CountProxies() + smap.CountTargets()
+		daemonCnt  = smap.Count()
 		stoppedCh  = make(chan struct{}, daemonCnt)
 		toRemoveCh = make(chan string, daemonCnt)
 		latencyCh  = make(chan time.Duration, daemonCnt)

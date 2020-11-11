@@ -165,6 +165,10 @@ type (
 		si   *cluster.Snode
 		smap *smapX
 	}
+	errDowngrade struct {
+		si       *cluster.Snode
+		from, to string
+	}
 )
 
 ///////////////////
@@ -184,6 +188,14 @@ func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errSmapUUIDDiffer) Error() string   { return e.detail }
 func (e *errNodeNotFound) Error() string {
 	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
+}
+
+func newErrDowngrade(si *cluster.Snode, from, to string) errDowngrade {
+	return errDowngrade{si, from, to}
+}
+
+func (e errDowngrade) Error() string {
+	return fmt.Sprintf("%s: attempt to downgrade %s to %s", e.si, e.from, e.to)
 }
 
 ////////////////
@@ -1281,7 +1293,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	cmn.Assert(sameOrigin)
 	if newSmap.version() < curVer {
 		if !eq {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, smap.StringEx(), newSmap.StringEx())
+			err = newErrDowngrade(h.si, smap.StringEx(), newSmap.StringEx())
 			return
 		}
 		glog.Warningf("%s: %s and %s are otherwise identical", h.si, newSmap.StringEx(), smap.StringEx())
@@ -1311,7 +1323,7 @@ func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msg *aisMsg, 
 	rmd := h.owner.rmd.get()
 	if newRMD.version() <= rmd.version() {
 		if newRMD.version() < rmd.version() {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, rmd.String(), newRMD.String())
+			err = newErrDowngrade(h.si, rmd.String(), newRMD.String())
 		}
 		newRMD = nil
 	}
@@ -1339,7 +1351,7 @@ func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msg *aisMs
 	bmd := h.owner.bmd.get()
 	if newBMD.version() <= bmd.version() {
 		if newBMD.version() < bmd.version() {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", h.si, bmd.StringEx(), newBMD.StringEx())
+			err = newErrDowngrade(h.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		newBMD = nil
 	}

@@ -27,6 +27,8 @@ const (
 
 	revsTokenTag  = "token"
 	revsActionTag = "-action" // to make a pair (revs, action)
+
+	revsMaxTags = 4
 )
 
 const (
@@ -214,7 +216,7 @@ func (y *metasyncer) Stop(err error) {
 
 // notify only targets - see bcastTo below
 func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
-	cmn.Assert(y.isPrimary()) // caller must check before
+	cmn.Assert(y.isPrimary())
 	var (
 		failedCntAtomic = atomic.NewInt32(0)
 		req             = revsReq{pairs: []revsPair{pair}}
@@ -235,7 +237,7 @@ func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 }
 
 func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
-	cmn.Assert(y.isPrimary()) // caller must ensure
+	cmn.Assert(y.isPrimary()) // expecting caller to check
 	cmn.Assert(len(pairs) > 0)
 	req := revsReq{pairs: pairs}
 	req.wg = &sync.WaitGroup{}
@@ -302,7 +304,7 @@ outer:
 		case lversion == revs.version():
 			if newCnt == 0 {
 				glog.Warningf("%s: %s duplicated - already sync-ed or pending", y.p.si, s)
-				continue outer
+				// TODO -- FIXME: continue outer
 			}
 			glog.Infof("%s: %s duplicated - proceeding to sync %d new member(s)", y.p.si, s, newCnt)
 		case lversion > revs.version():
@@ -364,11 +366,11 @@ outer:
 	for r := range res {
 		if r.err == nil {
 			if revsReqType == revsReqSync {
-				y.syncDone(r.si.ID(), pairsToSend)
+				y.syncDone(r.si, pairsToSend)
 			}
 			continue
 		}
-		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
+		glog.Warningf("%s: failed to sync %s, err: %v(%d)", y.p.si, r.si, r.err, r.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
 		if cmn.IsErrConnectionRefused(r.err) || cmn.StringInSlice(r.si.ID(), newTargetIDs) {
 			if refused == nil {
@@ -395,21 +397,28 @@ outer:
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.owner.smap.get()
-	for id := range y.nodesRevs {
-		if !smap.containsID(id) {
-			delete(y.nodesRevs, id)
+	for sid := range y.nodesRevs {
+		si := smap.GetNode(sid)
+		if si == nil || si.InMaintenance() {
+			delete(y.nodesRevs, sid)
 		}
 	}
 	failedCnt += len(refused)
 	return
 }
 
-// keeping track of per-daemon versioning - FIXME TODO: extend to take care of aisMsg where pairs may be empty
-func (y *metasyncer) syncDone(sid string, pairs []revsPair) {
-	rvd, ok := y.nodesRevs[sid]
+// keeping track of per-daemon versioning - TODO: extend to take care of aisMsg where pairs may be empty
+func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
+	rvd, ok := y.nodesRevs[si.ID()]
+	if si.InMaintenance() {
+		if ok {
+			delete(y.nodesRevs, si.ID())
+		}
+		return
+	}
 	if !ok {
-		rvd = nodeRevs{versions: make(map[string]int64, len(pairs))}
-		y.nodesRevs[sid] = rvd
+		rvd = nodeRevs{versions: make(map[string]int64, revsMaxTags)}
+		y.nodesRevs[si.ID()] = rvd
 	}
 	for _, revsPair := range pairs {
 		revs := revsPair.revs
@@ -432,7 +441,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 	for r := range res {
 		if r.err == nil {
 			delete(refused, r.si.ID())
-			y.syncDone(r.si.ID(), pairs)
+			y.syncDone(r.si, pairs)
 			glog.Infof("%s: handle-refused: sync-ed %s", y.p.si, r.si)
 		} else {
 			glog.Warningf("%s: handle-refused: failing to sync %s, err: %v (%d)",
@@ -451,13 +460,13 @@ func (y *metasyncer) pending() (pending cluster.NodeMap, smap *smapX) {
 	}
 	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for _, si := range serverMap {
-			if si.DaemonID == y.p.si.DaemonID {
+			if si.ID() == y.p.si.ID() {
 				continue
 			}
-			rvd, ok := y.nodesRevs[si.DaemonID]
+			rvd, ok := y.nodesRevs[si.ID()]
 			if !ok {
-				y.nodesRevs[si.DaemonID] = nodeRevs{
-					versions: make(map[string]int64, 3),
+				y.nodesRevs[si.ID()] = nodeRevs{
+					versions: make(map[string]int64, revsMaxTags),
 				}
 			} else {
 				inSync := true
@@ -518,7 +527,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	res := y.p.bcastToNodes(&bargs)
 	for r := range res {
 		if r.err == nil {
-			y.syncDone(r.si.ID(), pairs)
+			y.syncDone(r.si, pairs)
 			glog.Infof("%s: handle-pending: sync-ed %s", y.p.si, r.si)
 		} else {
 			failedCnt++
@@ -555,12 +564,15 @@ func (y *metasyncer) lastVersion(tag string) int64 {
 }
 
 func (y *metasyncer) countNewMembers(smap *smapX) (count int) {
+	if len(y.nodesRevs) == 0 {
+		y.nodesRevs = make(map[string]nodeRevs, smap.Count())
+	}
 	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for _, si := range serverMap {
-			if si.DaemonID == y.p.si.DaemonID {
+			if si.ID() == y.p.si.ID() {
 				continue
 			}
-			if _, ok := y.nodesRevs[si.DaemonID]; !ok {
+			if _, ok := y.nodesRevs[si.ID()]; !ok {
 				count++
 			}
 		}

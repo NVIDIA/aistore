@@ -98,7 +98,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := p.owner.smap.synchronize(newsmap, false /* lesserIsErr */); err != nil {
+	if err := p.owner.smap.synchronize(p.si, newsmap, false /* lesserIsErr */); err != nil {
 		glog.Error(err)
 	}
 
@@ -443,7 +443,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.owner.smap.synchronize(newsmap, false /* lesserIsErr */); err != nil {
+	if err := h.owner.smap.synchronize(h.si, newsmap, false /* lesserIsErr */); err != nil {
 		glog.Errorf("Failed to synchronize VoteRecord %s, err %s - voting No", newsmap, err)
 		if _, err := w.Write([]byte(VoteNo)); err != nil {
 			glog.Errorf("Error writing a No vote: %v", err)

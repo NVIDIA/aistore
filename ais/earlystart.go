@@ -430,7 +430,7 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (maxVerSmap *smapX, maxVerBM
 		config      = cmn.GCO.Get()
 		now         = time.Now()
 		deadline    = now.Add(config.Timeout.Startup)
-		l           = bcastSmap.CountTargets() + bcastSmap.CountProxies()
+		l           = bcastSmap.Count()
 		bmds        = make(map[*cluster.Snode]*bucketMD, l)
 		smaps       = make(map[*cluster.Snode]*smapX, l)
 		done, slowp bool

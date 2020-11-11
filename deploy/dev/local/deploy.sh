@@ -179,6 +179,9 @@ if [[ $AUTH_ENABLED == "true" ]]; then
   run_cmd "${GOPATH}/bin/authn -config=${AUTHN_CONF_FILE}"
 fi
 
-sleep 0.1
-
+if [[ $MODE == "debug" ]]; then
+	sleep 1.5
+else
+	sleep 0.1
+fi
 echo "Done."

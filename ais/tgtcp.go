@@ -84,16 +84,13 @@ func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error
 
 func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	var regMeta nodeRegMeta
-	err = jsoniter.Unmarshal(body, &regMeta)
-	if err != nil {
+	if err = jsoniter.Unmarshal(body, &regMeta); err != nil {
 		return fmt.Errorf("unexpected: %s failed to unmarshal reg-meta, err: %v", t.si, err)
 	}
-
 	if err = fs.SetDaemonIDXattrAllMpaths(t.si.ID()); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-
-	if _, err := fs.CreateNewVMD(t.si.ID()); err != nil {
+	if _, err = fs.CreateNewVMD(t.si.ID()); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 
@@ -107,12 +104,20 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	// BMD
 	msg := t.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
 	if err = t.receiveBMD(regMeta.BMD, msg, bucketMDRegister, caller); err != nil {
-		glog.Infof("%s: %s", t.si, t.owner.bmd.get())
+		if errors.As(err, &errDowngrade{}) {
+			err = nil
+		} else {
+			glog.Error(err)
+		}
 	}
 
 	// Smap
-	if err := t.owner.smap.synchronize(regMeta.Smap, true /* lesserIsErr */); err != nil {
-		glog.Errorf("%s: sync Smap err %v", t.si, err)
+	if err = t.owner.smap.synchronize(t.si, regMeta.Smap, true /* lesserIsErr */); err != nil {
+		if errors.As(err, &errDowngrade{}) {
+			err = nil
+		} else {
+			glog.Error(err)
+		}
 	} else {
 		glog.Infof("%s: sync %s", t.si, t.owner.smap.get())
 	}
@@ -200,7 +205,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 		if cmn.ReadJSON(w, r, newsmap) != nil {
 			return
 		}
-		if err := t.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
+		if err := t.owner.smap.synchronize(t.si, newsmap, true /* lesserIsErr */); err != nil {
 			t.invalmsghdlrf(w, r, "failed to sync Smap: %s", err)
 		}
 		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
@@ -583,10 +588,7 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller str
 }
 
 func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {
-	const (
-		downgrade = "attempt to downgrade"
-		failed    = "failed to receive BMD"
-	)
+	const failed = "failed to receive BMD"
 	var (
 		curVer                  int64
 		call, act               string
@@ -616,8 +618,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	if newBMD.version() <= curVer {
 		t.owner.bmd.Unlock()
 		if newBMD.version() < curVer {
-			err = fmt.Errorf("%s: %s %s to %s", t.si, downgrade, bmd.StringEx(), newBMD.StringEx())
-			glog.Error(err)
+			err = newErrDowngrade(t.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		return
 	}
@@ -718,7 +719,7 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (
 		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
 		return
 	}
-	if err = t.owner.smap.synchronize(newSmap, true /* lesserIsErr */); err != nil {
+	if err = t.owner.smap.synchronize(t.si, newSmap, true /* lesserIsErr */); err != nil {
 		return
 	}
 	node := newSmap.GetNode(t.si.ID())
@@ -742,7 +743,7 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 
 	rmd := t.owner.rmd.get()
 	if newRMD.Version < rmd.Version {
-		return fmt.Errorf("attempt to downgrade local RMD v%d to v%d", rmd.Version, newRMD.Version)
+		return newErrDowngrade(t.si, rmd.String(), newRMD.String())
 	} else if newRMD.Version == rmd.Version {
 		return
 	}

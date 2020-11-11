@@ -411,7 +411,7 @@ func (ic *ic) syncICBundle() error {
 
 	cmn.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
-	if err := ic.p.owner.smap.synchronize(bundle.Smap, true /* lesserIsErr */); err != nil {
+	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, true /* lesserIsErr */); err != nil {
 		glog.Errorf("%s: sync Smap err %v", ic.p.si, err)
 	} else {
 		smap = ic.p.owner.smap.get()

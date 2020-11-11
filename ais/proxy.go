@@ -199,7 +199,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 		glog.Infof("%s: %s", p.si, p.owner.bmd.get())
 	}
 	// Smap
-	if err := p.owner.smap.synchronize(regMeta.Smap, true /* lesserIsErr */); err != nil {
+	if err := p.owner.smap.synchronize(p.si, regMeta.Smap, true /* lesserIsErr */); err != nil {
 		glog.Errorf("%s: sync Smap err %v", p.si, err)
 	} else {
 		glog.Infof("%s: sync %s", p.si, p.owner.smap.get())
@@ -588,7 +588,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
 		}
-		err = p.owner.smap.synchronize(newSmap, true /* lesserIsErr */)
+		err = p.owner.smap.synchronize(p.si, newSmap, true /* lesserIsErr */)
 		if err != nil {
 			errs = append(errs, err)
 			goto ExtractRMD
@@ -2163,7 +2163,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlrf(w, r, "not finding self %s in the %s", p.si, newsmap.pp())
 				return
 			}
-			if err := p.owner.smap.synchronize(newsmap, true /* lesserIsErr */); err != nil {
+			if err := p.owner.smap.synchronize(p.si, newsmap, true /* lesserIsErr */); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
@@ -3633,7 +3633,7 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	if newRMD.version() <= rmd.version() {
 		p.owner.rmd.Unlock()
 		if newRMD.version() < rmd.version() {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", p.si, rmd, newRMD)
+			err = newErrDowngrade(p.si, rmd.String(), newRMD.String())
 		}
 		return
 	}
@@ -3685,7 +3685,7 @@ func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (
 	} else if newBMD.version() <= bmd.version() {
 		p.owner.bmd.Unlock()
 		if newBMD.version() < bmd.version() {
-			err = fmt.Errorf("%s: attempt to downgrade %s to %s", p.si, bmd, newBMD)
+			err = newErrDowngrade(p.si, bmd.String(), newBMD.String())
 		}
 		return
 	}

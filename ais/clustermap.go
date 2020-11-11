@@ -467,9 +467,9 @@ func (r *smapOwner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapOwner) synchronize(newSmap *smapX, lesserVersionIsErr bool) (err error) {
+func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, lesserVersionIsErr bool) (err error) {
 	if !newSmap.isValid() {
-		err = fmt.Errorf("invalid smapX: %s", newSmap.pp())
+		err = fmt.Errorf("%s: invalid %s", si, newSmap)
 		return
 	}
 	r.Lock()
@@ -478,7 +478,7 @@ func (r *smapOwner) synchronize(newSmap *smapX, lesserVersionIsErr bool) (err er
 		curVer, newVer := smap.Version, newSmap.version()
 		if newVer <= curVer {
 			if lesserVersionIsErr && newVer < curVer {
-				err = fmt.Errorf("attempt to downgrade local smapX v%d to v%d", curVer, newVer)
+				err = newErrDowngrade(si, smap.String(), newSmap.String())
 			}
 			r.Unlock()
 			return
