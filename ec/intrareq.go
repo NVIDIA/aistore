@@ -45,6 +45,8 @@ type (
 		exists bool
 		// The sent data is slice or full replica
 		isSlice bool
+		// bucket ID
+		bid uint64
 	}
 )
 
@@ -57,10 +59,10 @@ var (
 func (r *intraReq) PackedSize() int {
 	if r.meta == nil {
 		// int8(type)+sender(string)+int8+int8+ptr_marker
-		return cmn.SizeofLen + len(r.sender) + 4
+		return cmn.SizeofLen + len(r.sender) + 4 + cmn.SizeofI64
 	}
 	// int8(type)+sender(string)+int8+int8+ptr_marker+sizeof(meta)
-	return cmn.SizeofLen + len(r.sender) + r.meta.PackedSize() + 4
+	return cmn.SizeofLen + len(r.sender) + r.meta.PackedSize() + 4 + cmn.SizeofI64
 }
 
 func (r *intraReq) Pack(packer *cmn.BytePack) {
@@ -68,6 +70,7 @@ func (r *intraReq) Pack(packer *cmn.BytePack) {
 	packer.WriteString(r.sender)
 	packer.WriteBool(r.exists)
 	packer.WriteBool(r.isSlice)
+	packer.WriteUint64(r.bid)
 	if r.meta == nil {
 		packer.WriteByte(0)
 	} else {
@@ -92,6 +95,9 @@ func (r *intraReq) Unpack(unpacker *cmn.ByteUnpack) error {
 		return err
 	}
 	if r.isSlice, err = unpacker.ReadBool(); err != nil {
+		return err
+	}
+	if r.bid, err = unpacker.ReadUint64(); err != nil {
 		return err
 	}
 	if i, err = unpacker.ReadByte(); err != nil {

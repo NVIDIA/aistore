@@ -230,7 +230,7 @@ func (c *putJogger) cleanup(req *Request) error {
 	}
 
 	mm := c.parent.t.SmallMMSA()
-	request := c.parent.newIntraReq(reqDel, nil).NewPack(mm)
+	request := c.parent.newIntraReq(reqDel, nil, req.LOM.Bck()).NewPack(mm)
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{Bck: req.LOM.Bck().Bck, ObjName: req.LOM.ObjName, Opaque: request}
 	o.Callback = c.ctSendCallback

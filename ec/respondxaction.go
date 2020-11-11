@@ -193,12 +193,20 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 		}
 		md := meta.Marshal()
 		if iReq.isSlice {
-			err = WriteSliceAndMeta(r.t, hdr, object, md)
+			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid}
+			err = WriteSliceAndMeta(r.t, hdr, args)
 		} else {
 			var lom *cluster.LOM
 			lom, err = LomFromHeader(r.t, hdr)
 			if err == nil {
-				err = WriteReplicaAndMeta(r.t, lom, object, md, hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
+				args := &WriteArgs{
+					Reader:     object,
+					MD:         md,
+					CksumType:  hdr.ObjAttrs.CksumType,
+					CksumValue: hdr.ObjAttrs.CksumValue,
+					BID:        iReq.bid,
+				}
+				err = WriteReplicaAndMeta(r.t, lom, args)
 			}
 		}
 		if err != nil {

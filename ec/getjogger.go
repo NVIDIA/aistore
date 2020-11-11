@@ -194,7 +194,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	// try read a replica from targets one by one until the replica is got
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bck(), req.LOM.ObjName)
-		iReqBuf := c.parent.newIntraReq(reqGet, meta).NewPack(mm)
+		iReqBuf := c.parent.newIntraReq(reqGet, meta, req.LOM.Bck()).NewPack(mm)
 
 		w := mm.NewSGL(cmn.KiB)
 		if _, err := c.parent.readRemote(req.LOM, node, uname, iReqBuf, w); err != nil {
@@ -220,9 +220,14 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		return errors.New("failed to read a replica from any target")
 	}
 
-	b := cmn.MustMarshal(meta)
 	req.LOM.SetSize(writer.Size())
-	if err := WriteReplicaAndMeta(c.parent.t, req.LOM, memsys.NewReader(writer), b, meta.CksumType, meta.CksumValue); err != nil {
+	args := &WriteArgs{
+		Reader:     memsys.NewReader(writer),
+		MD:         cmn.MustMarshal(meta),
+		CksumType:  meta.CksumType,
+		CksumValue: meta.CksumValue,
+	}
+	if err := WriteReplicaAndMeta(c.parent.t, req.LOM, args); err != nil {
 		writer.Free()
 		return err
 	}
@@ -252,7 +257,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 			glog.Errorf("Failed to create file: %v", err)
 			break
 		}
-		iReqBuf := c.parent.newIntraReq(reqGet, meta).NewPack(mm)
+		iReqBuf := c.parent.newIntraReq(reqGet, meta, req.LOM.Bck()).NewPack(mm)
 		lomClone := req.LOM.Clone(tmpFQN)
 		n, err = c.parent.readRemote(lomClone, node, uname, iReqBuf, w)
 		mm.Free(iReqBuf)
@@ -358,7 +363,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 		}
 	}
 
-	iReq := c.parent.newIntraReq(reqGet, meta)
+	iReq := c.parent.newIntraReq(reqGet, meta, req.LOM.Bck())
 	iReq.isSlice = true
 	mm := c.parent.t.SmallMMSA()
 	request := iReq.NewPack(mm)
@@ -588,8 +593,12 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	req.LOM.SetSize(meta.Size)
 	mainMeta := *meta
 	mainMeta.SliceID = 0
-	metaBuf := mainMeta.Marshal()
-	err = WriteReplicaAndMeta(c.parent.t, req.LOM, src, metaBuf, conf.Type, "")
+	args := &WriteArgs{
+		Reader:    src,
+		MD:        mainMeta.Marshal(),
+		CksumType: conf.Type,
+	}
+	err = WriteReplicaAndMeta(c.parent.t, req.LOM, args)
 	return restored, err
 }
 

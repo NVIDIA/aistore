@@ -154,6 +154,14 @@ type (
 	RequestsControlMsg struct {
 		Action string
 	}
+
+	WriteArgs struct {
+		MD         []byte    // CT's metafile content
+		Reader     io.Reader // CT content
+		BID        uint64    // bucket ID
+		CksumType  string    // object checksum type
+		CksumValue string    // object checksum value
+	}
 )
 
 type (
@@ -355,23 +363,43 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 	return t.PutObject(lom, params)
 }
 
+func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {
+	if bid == 0 {
+		return nil
+	}
+	newBck := cluster.NewBckEmbed(bck)
+	err := newBck.Init(t.Bowner(), t.Snode())
+	if err == nil && newBck.Props.BID != bid {
+		err = fmt.Errorf("bucket ID mismatch: local %d, sender %d", newBck.Props.BID, bid)
+	}
+	return err
+}
+
 // Saves slice and its metafile
-func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, data io.Reader, md []byte) error {
+func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) error {
 	ct, err := cluster.NewCTFromBO(hdr.Bck.Name, hdr.Bck.Provider, hdr.ObjName, t.Bowner(), SliceType)
 	if err != nil {
 		return err
 	}
 	tmpFQN := ct.Make(fs.WorkfileType)
-	if err := ct.Write(t, data, hdr.ObjAttrs.Size, tmpFQN); err != nil {
+	if err := ct.Write(t, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}
 	ctMeta := ct.Clone(MetaType)
-	err = ctMeta.Write(t, bytes.NewReader(md), -1)
+	err = ctMeta.Write(t, bytes.NewReader(args.MD), -1)
+	if err == nil {
+		err = validateBckBID(t, hdr.Bck, args.BID)
+	}
+
 	if err != nil {
-		if rmErr := os.Remove(ct.FQN()); rmErr != nil && !os.IsNotExist(rmErr) {
+		if rmErr := cmn.RemoveFile(ct.FQN()); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
 		}
+		if rmErr := cmn.RemoveFile(ctMeta.FQN()); rmErr != nil {
+			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
+		}
 	}
+
 	return err
 }
 
@@ -394,24 +422,32 @@ func LomFromHeader(t cluster.Target, hdr transport.ObjHdr) (*cluster.LOM, error)
 }
 
 // Saves replica and its metafile
-func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, data io.Reader, md []byte, cksumType, cksumValue string) error {
-	err := WriteObject(t, lom, data, lom.Size(), cksumType)
+func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) error {
+	err := WriteObject(t, lom, args.Reader, lom.Size(), args.CksumType)
 	if err != nil {
 		return err
 	}
-	if cksumType != cmn.ChecksumNone && cksumValue != "" {
-		cksumHdr := cmn.NewCksum(cksumType, cksumValue)
+	if args.CksumType != cmn.ChecksumNone && args.CksumValue != "" {
+		cksumHdr := cmn.NewCksum(args.CksumType, args.CksumValue)
 		if !lom.Cksum().Equal(cksumHdr) {
 			return fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/md %s",
 				lom.Bck().Bck, lom.ObjName, lom.Version(), cksumHdr, lom.Cksum())
 		}
 	}
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
-	err = ctMeta.Write(t, bytes.NewReader(md), -1)
+	err = ctMeta.Write(t, bytes.NewReader(args.MD), -1)
+	if err == nil {
+		err = validateBckBID(t, lom.Bck().Bck, args.BID)
+	}
+
 	if err != nil {
-		if rmErr := os.Remove(lom.FQN); rmErr != nil && !os.IsNotExist(rmErr) {
+		if rmErr := cmn.RemoveFile(lom.FQN); rmErr != nil {
 			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
 		}
+		if rmErr := cmn.RemoveFile(ctMeta.FQN()); rmErr != nil {
+			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
+		}
 	}
+
 	return err
 }

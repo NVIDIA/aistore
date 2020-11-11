@@ -123,12 +123,15 @@ func (r *xactReqBase) ecRequestsEnabled() bool {
 // daemon ID, and sets `Exists:true` that means "local object exists".
 // Later `Exists` can be changed to `false` if local file is unreadable or does
 // not exist
-func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *intraReq {
+func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata, bck *cluster.Bck) *intraReq {
 	req := &intraReq{
 		act:    act,
 		sender: r.si.ID(),
 		meta:   meta,
 		exists: true,
+	}
+	if bck != nil && bck.Props != nil {
+		req.bid = bck.Props.BID
 	}
 	if act == reqGet && meta != nil {
 		req.isSlice = !meta.IsCopy
@@ -191,7 +194,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 		reader   cmn.ReadOpenCloser
 		objAttrs transport.ObjectAttrs
 	)
-	ireq := r.newIntraReq(act, nil)
+	ireq := r.newIntraReq(act, nil, bck)
 	if md != nil && md.SliceID != 0 {
 		// slice request
 		reader, err = r.newSliceResponse(md, &objAttrs, fqn)
@@ -352,7 +355,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	if src.metadata != nil && src.metadata.ObjVersion == "" {
 		src.metadata.ObjVersion = lom.Version()
 	}
-	req := r.newIntraReq(src.reqType, src.metadata)
+	req := r.newIntraReq(src.reqType, src.metadata, lom.Bck())
 	req.isSlice = src.isSlice
 
 	mm := r.t.SmallMMSA()

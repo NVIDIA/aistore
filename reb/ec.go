@@ -442,12 +442,19 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Obj
 
 	md := req.md.Marshal()
 	if req.md.SliceID != 0 {
-		err = ec.WriteSliceAndMeta(reb.t, hdr, data, md)
+		args := &ec.WriteArgs{Reader: data, MD: md}
+		err = ec.WriteSliceAndMeta(reb.t, hdr, args)
 	} else {
 		var lom *cluster.LOM
 		lom, err = ec.LomFromHeader(reb.t, hdr)
 		if err == nil {
-			err = ec.WriteReplicaAndMeta(reb.t, lom, data, md, hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
+			args := &ec.WriteArgs{
+				Reader:     data,
+				MD:         md,
+				CksumType:  hdr.ObjAttrs.CksumType,
+				CksumValue: hdr.ObjAttrs.CksumValue,
+			}
+			err = ec.WriteReplicaAndMeta(reb.t, lom, args)
 		}
 	}
 	return err
@@ -1756,8 +1763,12 @@ func (reb *Manager) restoreObject(obj *rebObject, objMD *ec.Metadata, src io.Rea
 		return err
 	}
 	lom.SetSize(obj.objSize)
-	metaBuf := cmn.MustMarshal(objMD)
-	return ec.WriteReplicaAndMeta(reb.t, lom, src, metaBuf, lom.Bprops().Cksum.Type, "")
+	args := &ec.WriteArgs{
+		Reader:    src,
+		MD:        cmn.MustMarshal(objMD),
+		CksumType: lom.Bprops().Cksum.Type,
+	}
+	return ec.WriteReplicaAndMeta(reb.t, lom, args)
 }
 
 // Default target does not have object (but it can be on another target) and
