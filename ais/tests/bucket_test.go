@@ -1837,7 +1837,7 @@ func TestRenameBucketTwice(t *testing.T) {
 		t.Error("destination bucket not found in buckets list")
 	}
 	if bcks.Contains(cmn.QueryBcks(dstBck2)) {
-		t.Error("second (failed) destination bucket not found in buckets list")
+		t.Error("second (failed) destination bucket found in buckets list")
 	}
 }
 
