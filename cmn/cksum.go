@@ -55,10 +55,11 @@ var checksums = StringSet{
 	ChecksumSHA512: {},
 }
 
+// interface guard
 var (
-	_ hash.Hash                  = &noopHash{}
-	_ encoding.BinaryUnmarshaler = &noopHash{}
-	_ encoding.BinaryUnmarshaler = &noopHash{}
+	_ hash.Hash                  = (*noopHash)(nil)
+	_ encoding.BinaryUnmarshaler = (*noopHash)(nil)
+	_ encoding.BinaryUnmarshaler = (*noopHash)(nil)
 )
 
 /////////////
