@@ -46,7 +46,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = &bckRename{}
+var _ cluster.Xact = (*bckRename)(nil)
 
 func (*BckRenameProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &BckRenameProvider{
@@ -144,7 +144,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = &evictDelete{}
+var _ cluster.Xact = (*evictDelete)(nil)
 
 func (p *evictDeleteProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &evictDeleteProvider{
@@ -200,7 +200,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = &prefetch{}
+var _ cluster.Xact = (*prefetch)(nil)
 
 func (*PrefetchProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &PrefetchProvider{

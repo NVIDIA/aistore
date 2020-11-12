@@ -61,12 +61,12 @@ type (
 	}
 )
 
-var (
-	mmsa = memsys.DefaultPageMM()
+var mmsa = memsys.DefaultPageMM()
 
-	// interface guard
-	_ Reader = &randReader{}
-	_ Reader = &tarReader{}
+// interface guard
+var (
+	_ Reader = (*randReader)(nil)
+	_ Reader = (*tarReader)(nil)
 )
 
 // Read implements the Reader interface.
@@ -201,7 +201,8 @@ type fileReader struct {
 	cksum    *cmn.Cksum
 }
 
-var _ Reader = &fileReader{}
+// interface guard
+var _ Reader = (*fileReader)(nil)
 
 // Open implements the Reader interface.
 func (r *fileReader) Open() (io.ReadCloser, error) {
@@ -271,7 +272,8 @@ type sgReader struct {
 	cksum *cmn.Cksum
 }
 
-var _ Reader = &sgReader{}
+// interface guard
+var _ Reader = (*sgReader)(nil)
 
 // XXHash implements the Reader interface.
 func (r *sgReader) Cksum() *cmn.Cksum {

@@ -22,9 +22,10 @@ type (
 	}
 )
 
+// interface guard
 var (
-	_ flag.Value = &BoolExt{}
-	_ flag.Value = &DurationExt{}
+	_ flag.Value = (*BoolExt)(nil)
+	_ flag.Value = (*DurationExt)(nil)
 )
 
 func (b *BoolExt) Set(s string) (err error) {

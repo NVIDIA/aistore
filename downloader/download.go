@@ -168,7 +168,7 @@ type (
 )
 
 // interface guard
-var _ xaction.XactDemand = &Downloader{}
+var _ xaction.XactDemand = (*Downloader)(nil)
 
 func clientForURL(u string) *http.Client {
 	if cmn.IsHTTPS(u) {
@@ -198,7 +198,8 @@ func (req *request) writeResp(resp interface{}) {
 
 // ========================== progressReader ===================================
 
-var _ io.ReadCloser = &progressReader{}
+// interface guard
+var _ io.ReadCloser = (*progressReader)(nil)
 
 func (pr *progressReader) Read(p []byte) (n int, err error) {
 	n, err = pr.r.Read(p)

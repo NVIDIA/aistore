@@ -94,7 +94,8 @@ type (
 	}
 )
 
-var _ cluster.Slistener = &Aborter{}
+// interface guard
+var _ cluster.Slistener = (*Aborter)(nil)
 
 func newAborter(t cluster.Target, uuid string) *Aborter {
 	return &Aborter{

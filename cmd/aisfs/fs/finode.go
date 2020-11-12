@@ -13,8 +13,8 @@ import (
 	"github.com/jacobsa/fuse/fuseops"
 )
 
-// Ensure interface satisfaction.
-var _ Inode = &FileInode{}
+// interface guard
+var _ Inode = (*FileInode)(nil)
 
 type FileInode struct {
 	baseInode

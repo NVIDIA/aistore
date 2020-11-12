@@ -25,10 +25,10 @@ const (
 	entryDirTy  = entryType(fuseutil.DT_Directory)
 )
 
+// interface guard
 var (
-	// interface guard
-	_ nsEntry = &fileEntry{}
-	_ nsEntry = &dirEntry{}
+	_ nsEntry = (*fileEntry)(nil)
+	_ nsEntry = (*dirEntry)(nil)
 )
 
 type (

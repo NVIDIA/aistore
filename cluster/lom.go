@@ -72,9 +72,10 @@ type (
 var (
 	lomLocker nameLocker
 	maxLmeta  atomic.Int64
-
-	_ cmn.ObjHeaderMetaProvider = &LOM{}
 )
+
+// interface guard
+var _ cmn.ObjHeaderMetaProvider = (*LOM)(nil)
 
 func InitTarget() {
 	lomLocker = make(nameLocker, cmn.MultiSyncMapCount)

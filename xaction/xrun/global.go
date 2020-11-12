@@ -51,9 +51,9 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact = &Rebalance{}
-	_ cluster.Xact = &Resilver{}
-	_ cluster.Xact = &Election{}
+	_ cluster.Xact = (*Rebalance)(nil)
+	_ cluster.Xact = (*Resilver)(nil)
+	_ cluster.Xact = (*Election)(nil)
 )
 
 func (xact *RebBase) MarkDone()      { xact.wg.Done() }

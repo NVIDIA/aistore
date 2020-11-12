@@ -20,7 +20,8 @@ type (
 	}
 )
 
-var _ ais.Bucket = &bucketMock{}
+// interface guard
+var _ ais.Bucket = (*bucketMock)(nil)
 
 func newBucketMock() *bucketMock {
 	return &bucketMock{

@@ -50,10 +50,10 @@ type (
 	}
 )
 
+// interface guard
 var (
-	// interface guard
-	_ cmn.Unpacker = &intraReq{}
-	_ cmn.Packer   = &intraReq{}
+	_ cmn.Unpacker = (*intraReq)(nil)
+	_ cmn.Packer   = (*intraReq)(nil)
 )
 
 func (r *intraReq) PackedSize() int {

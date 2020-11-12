@@ -17,8 +17,8 @@ import (
 	"github.com/jacobsa/fuse/fuseutil"
 )
 
-// Ensure interface satisfaction.
-var _ Inode = &DirectoryInode{}
+// interface guard
+var _ Inode = (*DirectoryInode)(nil)
 
 type DirectoryInode struct {
 	baseInode

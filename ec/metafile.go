@@ -26,10 +26,10 @@ type Metadata struct {
 	IsCopy     bool   `json:"copy"`                      // object is replicated(true) or encoded(false)
 }
 
+// interface guard
 var (
-	// interface guard
-	_ cmn.Unpacker = &Metadata{}
-	_ cmn.Packer   = &Metadata{}
+	_ cmn.Unpacker = (*Metadata)(nil)
+	_ cmn.Packer   = (*Metadata)(nil)
 )
 
 // LoadMetadata loads and parses EC metadata from a file

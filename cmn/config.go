@@ -425,25 +425,24 @@ type (
 	}
 )
 
-var (
-	_ ConfigOwner = &globalConfigOwner{}
+// interface guard
+var _ ConfigOwner = (*globalConfigOwner)(nil)
 
-	clientFeatureList = []struct {
-		name  string
-		value FeatureFlags
-	}{
-		{name: "DirectAccess", value: FeatureDirectAccess},
-	}
-)
+var clientFeatureList = []struct {
+	name  string
+	value FeatureFlags
+}{
+	{name: "DirectAccess", value: FeatureDirectAccess},
+}
+
+///////////////////////
+// globalConfigOwner //
+///////////////////////
 
 // GCO stands for global config owner which is responsible for updating
 // and notifying listeners about any changes in the config. Config is loaded
 // at startup and then can be accessed/updated by other services.
 var GCO *globalConfigOwner
-
-///////////////////////
-// globalConfigOwner //
-///////////////////////
 
 func (gco *globalConfigOwner) Get() *Config {
 	return (*Config)(gco.c.Load())
@@ -534,40 +533,41 @@ func (gco *globalConfigOwner) Unreg(key string) {
 	gco.lmtx.Unlock()
 }
 
-// config validators
 var (
 	SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
 	supportedL4Protos  = []string{tcpProto}
+)
 
-	// NOTE: new validators must be run via Config.Validate() - see below
+// NOTE: new validators must be run via Config.Validate() - see below
+// interface guard
+var (
+	_ Validator = (*CloudConf)(nil)
+	_ Validator = (*CksumConf)(nil)
+	_ Validator = (*LRUConf)(nil)
+	_ Validator = (*MirrorConf)(nil)
+	_ Validator = (*ECConf)(nil)
+	_ Validator = (*VersionConf)(nil)
+	_ Validator = (*KeepaliveConf)(nil)
+	_ Validator = (*PeriodConf)(nil)
+	_ Validator = (*TimeoutConf)(nil)
+	_ Validator = (*ClientConf)(nil)
+	_ Validator = (*RebalanceConf)(nil)
+	_ Validator = (*NetConf)(nil)
+	_ Validator = (*DownloaderConf)(nil)
+	_ Validator = (*DSortConf)(nil)
+	_ Validator = (*FSPathsConf)(nil)
+	_ Validator = (*TestfspathConf)(nil)
+	_ Validator = (*CompressionConf)(nil)
 
-	_ Validator = &CloudConf{}
-	_ Validator = &CksumConf{}
-	_ Validator = &LRUConf{}
-	_ Validator = &MirrorConf{}
-	_ Validator = &ECConf{}
-	_ Validator = &VersionConf{}
-	_ Validator = &KeepaliveConf{}
-	_ Validator = &PeriodConf{}
-	_ Validator = &TimeoutConf{}
-	_ Validator = &ClientConf{}
-	_ Validator = &RebalanceConf{}
-	_ Validator = &NetConf{}
-	_ Validator = &DownloaderConf{}
-	_ Validator = &DSortConf{}
-	_ Validator = &FSPathsConf{}
-	_ Validator = &TestfspathConf{}
-	_ Validator = &CompressionConf{}
+	_ PropsValidator = (*CksumConf)(nil)
+	_ PropsValidator = (*LRUConf)(nil)
+	_ PropsValidator = (*MirrorConf)(nil)
+	_ PropsValidator = (*ECConf)(nil)
 
-	_ PropsValidator = &CksumConf{}
-	_ PropsValidator = &LRUConf{}
-	_ PropsValidator = &MirrorConf{}
-	_ PropsValidator = &ECConf{}
-
-	_ json.Marshaler   = &CloudConf{}
-	_ json.Unmarshaler = &CloudConf{}
-	_ json.Marshaler   = &FSPathsConf{}
-	_ json.Unmarshaler = &FSPathsConf{}
+	_ json.Marshaler   = (*CloudConf)(nil)
+	_ json.Unmarshaler = (*CloudConf)(nil)
+	_ json.Marshaler   = (*FSPathsConf)(nil)
+	_ json.Unmarshaler = (*FSPathsConf)(nil)
 )
 
 /////////////////////////////////

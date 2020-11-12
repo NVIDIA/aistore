@@ -119,7 +119,8 @@ func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.Err
 // No more changes required.
 // NOTE: for standard filepath.Walk option 'Sorted' is ignored
 
-var _ DirEntry = &godirwalk.Dirent{}
+// interface guard
+var _ DirEntry = (*godirwalk.Dirent)(nil)
 
 func (opts *Options) callback(fqn string, de *godirwalk.Dirent) error {
 	return opts.Callback(fqn, de)

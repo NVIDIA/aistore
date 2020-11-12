@@ -37,7 +37,7 @@ type (
 )
 
 // interface guard
-var _ xaction.XactDemand = &XactRespond{}
+var _ xaction.XactDemand = (*XactRespond)(nil)
 
 func (p *xactRespondProvider) New(_ xreg.XactArgs) xreg.BucketEntry {
 	return &xactRespondProvider{}

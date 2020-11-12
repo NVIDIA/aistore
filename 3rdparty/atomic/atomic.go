@@ -239,9 +239,10 @@ type Bool struct {
 	v      uint32
 }
 
+// interface guard
 var (
-	_ json.Marshaler   = &Bool{}
-	_ json.Unmarshaler = &Bool{}
+	_ json.Marshaler   = (*Bool)(nil)
+	_ json.Unmarshaler = (*Bool)(nil)
 )
 
 // NewBool creates a Bool.
@@ -373,9 +374,10 @@ type Time struct {
 	v      Int64
 }
 
+// interface guard
 var (
-	_ json.Marshaler   = &Time{}
-	_ json.Unmarshaler = &Time{}
+	_ json.Marshaler   = (*Time)(nil)
+	_ json.Unmarshaler = (*Time)(nil)
 )
 
 // NewTime creates a Time.

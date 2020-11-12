@@ -28,7 +28,8 @@ const (
 	ExtractToWriter
 )
 
-var _ RecordExtractor = &RecordManager{}
+// interface guard
+var _ RecordExtractor = (*RecordManager)(nil)
 
 type (
 	extractRecordArgs struct {

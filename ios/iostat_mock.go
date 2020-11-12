@@ -6,7 +6,7 @@
 package ios
 
 // interface guard
-var _ IOStater = &IOStaterMock{}
+var _ IOStater = (*IOStaterMock)(nil)
 
 type (
 	IOStaterMock struct {

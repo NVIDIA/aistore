@@ -13,9 +13,10 @@ type (
 	MetaSpec  struct{}
 )
 
+// interface guard
 var (
-	_ fs.ContentResolver = &SliceSpec{}
-	_ fs.ContentResolver = &MetaSpec{}
+	_ fs.ContentResolver = (*SliceSpec)(nil)
+	_ fs.ContentResolver = (*MetaSpec)(nil)
 )
 
 func (wf *SliceSpec) PermToMove() bool    { return true }

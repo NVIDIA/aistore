@@ -39,7 +39,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Xact = &XactBckEncode{}
+var _ cluster.Xact = (*XactBckEncode)(nil)
 
 func (*xactBckEncodeProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 	return &xactBckEncodeProvider{

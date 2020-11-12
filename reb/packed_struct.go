@@ -41,14 +41,14 @@ type (
 	}
 )
 
+// interface guard
 var (
-	// interface guard
-	_ cmn.Unpacker = &regularAck{}
-	_ cmn.Unpacker = &ecAck{}
-	_ cmn.Packer   = &regularAck{}
-	_ cmn.Packer   = &ecAck{}
-	_ cmn.Packer   = &pushReq{}
-	_ cmn.Unpacker = &pushReq{}
+	_ cmn.Unpacker = (*regularAck)(nil)
+	_ cmn.Unpacker = (*ecAck)(nil)
+	_ cmn.Packer   = (*regularAck)(nil)
+	_ cmn.Packer   = (*ecAck)(nil)
+	_ cmn.Packer   = (*pushReq)(nil)
+	_ cmn.Unpacker = (*pushReq)(nil)
 )
 
 func (rack *regularAck) Unpack(unpacker *cmn.ByteUnpack) (err error) {

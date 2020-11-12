@@ -34,7 +34,7 @@ type (
 )
 
 // interface guard
-var _ xaction.XactDemand = &XactPut{}
+var _ xaction.XactDemand = (*XactPut)(nil)
 
 func (*xactPutProvider) New(_ xreg.XactArgs) xreg.BucketEntry { return &xactPutProvider{} }
 func (p *xactPutProvider) Start(bck cmn.Bck) error {
@@ -255,7 +255,7 @@ type ExtECPutStats struct {
 }
 
 // interface guard
-var _ cluster.XactStats = &PutTargetStats{}
+var _ cluster.XactStats = (*PutTargetStats)(nil)
 
 func (r *XactPut) Stats() cluster.XactStats {
 	baseStats := r.XactBase.Stats().(*xaction.BaseXactStats)

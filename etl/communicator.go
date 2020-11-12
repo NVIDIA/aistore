@@ -78,9 +78,9 @@ type (
 
 // interface guard
 var (
-	_ Communicator = &pushComm{}
-	_ Communicator = &redirectComm{}
-	_ Communicator = &revProxyComm{}
+	_ Communicator = (*pushComm)(nil)
+	_ Communicator = (*redirectComm)(nil)
+	_ Communicator = (*revProxyComm)(nil)
 )
 
 //////////////

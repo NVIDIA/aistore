@@ -112,7 +112,7 @@ type (
 )
 
 // interface guard
-var _ xaction.XactDemand = &Xaction{}
+var _ xaction.XactDemand = (*Xaction)(nil)
 
 func init() {
 	xreg.RegisterGlobalXact(&XactProvider{})
