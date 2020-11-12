@@ -129,7 +129,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 	)
 
 	timeStart = time.Now()
-	smapChangeDeadline = timeStart.Add(proxyChangeLatency)
+	smapChangeDeadline = timeStart.Add(2 * proxyChangeLatency)
 	opDeadline = timeStart.Add(3 * proxyChangeLatency)
 
 	Logf("Waiting for cluster state = (p=%d, t=%d, version > v%d) %s\n", expPrx, expTgt, origVersion, reason)

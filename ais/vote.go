@@ -100,7 +100,8 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 
 	// NOTE: not ignoring errDowngrade
 	if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
-		glog.Errorf("%s: failed to synch %s: %v", p.si, newsmap, err)
+		p.invalmsghdlrf(w, r, "%s: failed to synch %s: %v", p.si, newsmap, err)
+		return
 	}
 
 	smap := p.owner.smap.get()
