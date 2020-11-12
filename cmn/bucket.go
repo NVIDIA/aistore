@@ -261,7 +261,17 @@ func ValidateBckName(bucket string) (err error) {
 }
 
 func (b Bck) Valid() bool {
-	return ValidateBckName(b.Name) == nil && IsValidProvider(b.Provider) && b.Ns.Validate() == nil
+	return b.Validate() == nil
+}
+
+func (b Bck) Validate() error {
+	if err := ValidateBckName(b.Name); err != nil {
+		return err
+	}
+	if !IsValidProvider(b.Provider) {
+		return NewErrorInvalidBucketProvider(b, "")
+	}
+	return b.Ns.Validate()
 }
 
 func (b Bck) String() string {

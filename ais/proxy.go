@@ -844,18 +844,16 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			internalMsg.Prefix = cpyBckMsg.Prefix
 		}
 
-		bckFrom, msgBckTo := bck, cluster.NewBckEmbed(internalMsg.BckTo)
-		msg.Value = internalMsg
+		// userBckTo is a bucket from a user - it means that it can be not initialized, missing provider, etc.
+		userBckTo := cluster.NewBckEmbed(internalMsg.BckTo)
 
-		if bckFrom.Equal(msgBckTo, false, true) {
+		if bck.Equal(userBckTo, false, true) {
 			p.invalmsghdlrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bucket)
 			return
 		}
 
-		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, msgBckTo)
-
-		bckToArgs := remBckAddArgs{p: p, w: w, r: r, queryBck: msgBckTo, allowBckNotExist: true}
-		if bckTo, err = bckToArgs.initAndTry(msgBckTo.Name); err != nil {
+		bckToArgs := remBckAddArgs{p: p, w: w, r: r, queryBck: userBckTo, allowBckNotExist: true}
+		if bckTo, err = bckToArgs.initAndTry(userBckTo.Name); err != nil {
 			return
 		}
 
@@ -871,11 +869,17 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			}
 		} else {
 			// It is a non existing ais bucket.
-			bckTo = msgBckTo
+			bckTo = userBckTo
 		}
 
+		// bckTo is initialized by proxy, should be send to targets instead of userBck.
+		internalMsg.BckTo = bckTo.Bck
+		msg.Value = internalMsg
+
+		glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
+
 		var xactID string
-		if xactID, err = p.bucketToBucketTxn(bckFrom, bckTo, msg, internalMsg.DryRun); err != nil {
+		if xactID, err = p.bucketToBucketTxn(bck, bckTo, msg, internalMsg.DryRun); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}

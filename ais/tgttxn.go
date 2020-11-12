@@ -461,6 +461,12 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 
 			nlpTo, nlpFrom *cluster.NameLockPair
 		)
+		if err := bckTo.Validate(); err != nil {
+			return err
+		}
+		if err := bckFrom.Validate(); err != nil {
+			return err
+		}
 		if err := t.validateTransferBckTxn(bckFrom, c.msg.Action); err != nil {
 			return err
 		}
