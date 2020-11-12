@@ -25,7 +25,11 @@ import (
 const (
 	// built-in label https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
 	nodeNameLabel = "kubernetes.io/hostname"
-	targetNode    = "target_node"
+
+	podNameLabel = "nvidia.com/ais-etl"
+	svcNameLabel = "nvidia.com/ais-etl-svc"
+	// ETL Pod's label describing which target ETL is associated with.
+	targetLabel = "nvidia.com/ais-etl-target"
 )
 
 // Definitions:
@@ -200,7 +204,9 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string, 1)
 	}
-	pod.Labels[targetNode] = k8s.NodeName
+
+	pod.Labels[targetLabel] = k8s.NodeName
+	pod.Labels[podNameLabel] = pod.GetName()
 
 	// Create service spec
 	svc = createServiceSpec(pod)
@@ -294,13 +300,18 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: pod.GetName(),
+			Labels: map[string]string{
+				svcNameLabel: pod.GetName(),
+				appLabel:     pod.Labels[appLabel],
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{Port: pod.Spec.Containers[0].Ports[0].ContainerPort},
 			},
 			Selector: map[string]string{
-				podLabel: pod.Labels[podLabel],
+				podNameLabel: pod.Labels[podNameLabel],
+				appLabel:     pod.Labels[appLabel],
 			},
 			Type: corev1.ServiceTypeNodePort,
 		},
@@ -420,7 +431,7 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) erro
 	reqAntiAffinities = []corev1.PodAffinityTerm{{
 		LabelSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
-				targetNode: k8s.NodeName,
+				targetLabel: k8s.NodeName,
 			},
 		},
 		TopologyKey: nodeNameLabel,
