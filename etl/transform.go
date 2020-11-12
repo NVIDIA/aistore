@@ -126,7 +126,7 @@ func (e *Aborter) ListenSmapChanged() {
 				TID:  e.t.Snode().DaemonID,
 				UUID: e.uuid,
 			}, "targets have changed, aborting..."))
-			// Stop will unregister e from smap listeners.
+			// Stop will unregister `e` from smap listeners.
 			if err := Stop(e.t, e.uuid); err != nil {
 				glog.Error(err.Error())
 			}
@@ -139,7 +139,7 @@ func (e *Aborter) ListenSmapChanged() {
 func Start(t cluster.Target, msg InitMsg, opts ...StartOpts) (err error) {
 	errCtx, podName, svcName, err := tryStart(t, msg, opts...)
 	if err != nil {
-		glog.Warning(cmn.NewETLError(errCtx, "Performinh cleanup after unsuccessful Start"))
+		glog.Warning(cmn.NewETLError(errCtx, "Performing cleanup after unsuccessful Start"))
 		if err := cleanupEntities(errCtx, podName, svcName); err != nil {
 			glog.Error(err)
 		}
@@ -354,6 +354,20 @@ func Stop(t cluster.Target, id string) error {
 	}
 
 	return nil
+}
+
+// StopAll deletes all running ETLs.
+func StopAll(t cluster.Target) {
+	// Skip if K8s isn't even available.
+	if k8s.Detect() != nil {
+		return
+	}
+
+	for _, e := range List() {
+		if err := Stop(t, e.ID); err != nil {
+			glog.Error(err)
+		}
+	}
 }
 
 func GetCommunicator(transformID string) (Communicator, error) {
