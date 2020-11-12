@@ -382,7 +382,6 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	var (
 		dstCksum  *cmn.CksumHash
-		workFQN   = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 		srcCksum  = lom.Cksum()
 		cksumType = cmn.ChecksumNone
 	)
@@ -390,16 +389,17 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		cksumType = srcCksum.Type()
 	}
 
-	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, cksumType)
-	if err != nil {
-		return
-	}
-
 	dst = lom.Clone(dstFQN)
 	if err = dst.Init(cmn.Bck{}, lom.Config()); err != nil {
 		return
 	}
 	dst.CopyMetadata(lom)
+
+	workFQN := fs.CSM.GenContentParsedFQN(dst.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, cksumType)
+	if err != nil {
+		return
+	}
 
 	if err = cmn.Rename(workFQN, dstFQN); err != nil {
 		if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
