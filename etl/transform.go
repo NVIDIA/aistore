@@ -283,13 +283,21 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 
 func checkETLConnection(socketAddr string) error {
 	var (
-		tfProbeSleep = cmn.GCO.Get().Timeout.MaxKeepalive
-		conn, err    = net.DialTimeout("tcp", socketAddr, tfProbeSleep)
+		tfProbeInterval = cmn.GCO.Get().Timeout.MaxKeepalive
+		tfProbeTimeout  = 10 * tfProbeInterval
 	)
+	err := wait.PollImmediate(tfProbeInterval, tfProbeTimeout, func() (ready bool, err error) {
+		conn, err := net.DialTimeout("tcp", socketAddr, tfProbeInterval)
+		if err != nil {
+			glog.Warningf("Failed trying to dial %q socket address, err: %v", socketAddr, err)
+			return false, nil
+		}
+		cmn.Close(conn)
+		return true, nil
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to wait for ETL Service/Pod to respond, err: %v", err)
 	}
-	cmn.AssertNoErr(conn.Close())
 	return nil
 }
 
