@@ -419,7 +419,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		}
 
 		cksumType, cksumValue := lom.Cksum().Get()
-		hdr := transport.ObjHdr{
+		o := transport.AllocSend()
+		o.Hdr = transport.ObjHdr{
 			Bck:     lom.Bck().Bck,
 			ObjName: shardName,
 			ObjAttrs: transport.ObjectAttrs{
@@ -432,12 +433,12 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		// Make send synchronous.
 		streamWg := &sync.WaitGroup{}
 		errCh := make(chan error, 1)
-		cb := func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+		o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
 			errCh <- err
 			streamWg.Done()
 		}
 		streamWg.Add(1)
-		err = m.streams.shards.Send(&transport.Obj{Hdr: hdr, Callback: cb}, file, si)
+		err = m.streams.shards.Send(o, file, si)
 		if err != nil {
 			return err
 		}

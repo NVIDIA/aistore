@@ -378,15 +378,12 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 				RecordObj: obj,
 			}
 			opaque := cmn.MustMarshal(req)
-			hdr := transport.ObjHdr{
-				Opaque: opaque,
-			}
-
+			o := transport.AllocSend()
+			o.Hdr = transport.ObjHdr{Opaque: opaque}
 			if ds.m.Metrics.extended {
 				beforeSend = mono.NanoTime()
 			}
-
-			cb := func(hdr transport.ObjHdr, r io.ReadCloser, _ unsafe.Pointer, err error) {
+			o.Callback = func(hdr transport.ObjHdr, r io.ReadCloser, _ unsafe.Pointer, err error) {
 				if err != nil {
 					cbErr = err
 				}
@@ -405,7 +402,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 			}
 
 			wg.Add(1)
-			if err := ds.streams.request.Send(&transport.Obj{Hdr: hdr, Callback: cb}, nil, toNode); err != nil {
+			if err := ds.streams.request.Send(o, nil, toNode); err != nil {
 				return 0, errors.WithStack(err)
 			}
 
@@ -483,10 +480,11 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 }
 
 func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
-	errHandler := func(err error, hdr transport.ObjHdr, node *cluster.Snode) {
-		hdr.Opaque = []byte(err.Error())
-		hdr.ObjAttrs.Size = 0
-		if err = ds.streams.response.Send(&transport.Obj{Hdr: hdr}, nil, node); err != nil {
+	errHandler := func(err error, node *cluster.Snode, o *transport.Obj) {
+		*o = transport.Obj{Hdr: o.Hdr}
+		o.Hdr.Opaque = []byte(err.Error())
+		o.Hdr.ObjAttrs.Size = 0
+		if err = ds.streams.response.Send(o, nil, node); err != nil {
 			ds.m.abort(err)
 		}
 	}
@@ -505,30 +503,31 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 		}
 
 		if err != nil {
-			errHandler(err, hdr, fromNode)
+			errHandler(err, fromNode, &transport.Obj{Hdr: hdr})
 			return
-		}
-
-		respHdr := transport.ObjHdr{
-			ObjName: req.Record.MakeUniqueName(req.RecordObj),
 		}
 
 		if ds.m.aborted() {
 			return
 		}
 
-		var beforeSend int64
+		var (
+			beforeSend int64
+			o          = transport.AllocSend() // NOTE: Send(o, ...) must be called
+		)
 		if ds.m.Metrics.extended {
 			beforeSend = mono.NanoTime()
 		}
+		o.Hdr = transport.ObjHdr{ObjName: req.Record.MakeUniqueName(req.RecordObj)}
+		o.Callback = ds.responseCallback
+		o.CmplPtr = unsafe.Pointer(&beforeSend)
 
 		fullContentPath := ds.m.recManager.FullContentPath(req.RecordObj)
 
 		if ds.m.rs.DryRun {
 			lr := cmn.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
 			r := cmn.NopOpener(ioutil.NopCloser(lr))
-			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
+			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
 				ds.m.abort(err)
 			}
@@ -537,14 +536,13 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 
 		switch req.RecordObj.StoreType {
 		case extract.OffsetStoreType:
-			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
+			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
 			offset := req.RecordObj.Offset - req.RecordObj.MetadataSize
-			r, err := cmn.NewFileSectionHandle(fullContentPath, offset, respHdr.ObjAttrs.Size)
+			r, err := cmn.NewFileSectionHandle(fullContentPath, offset, o.Hdr.ObjAttrs.Size)
 			if err != nil {
-				errHandler(err, respHdr, fromNode)
+				errHandler(err, fromNode, o)
 				return
 			}
-			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
 			if err := ds.streams.response.Send(o, r, fromNode); err != nil {
 				ds.m.abort(err)
 			}
@@ -553,8 +551,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 			cmn.AssertMsg(ok, fullContentPath)
 			ds.m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
-			respHdr.ObjAttrs.Size = sgl.Size()
-			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
+			o.Hdr.ObjAttrs.Size = sgl.Size()
 			if err := ds.streams.response.Send(o, sgl, fromNode); err != nil {
 				sgl.Free() // NOTE: sgl.Close() is a no-op
 				ds.m.abort(err)
@@ -562,17 +559,16 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 		case extract.DiskStoreType:
 			f, err := cmn.NewFileHandle(fullContentPath)
 			if err != nil {
-				errHandler(err, respHdr, fromNode)
+				errHandler(err, fromNode, o)
 				return
 			}
 			fi, err := f.Stat()
 			if err != nil {
 				cmn.Close(f)
-				errHandler(err, respHdr, fromNode)
+				errHandler(err, fromNode, o)
 				return
 			}
-			respHdr.ObjAttrs.Size = fi.Size()
-			o := &transport.Obj{Hdr: respHdr, Callback: ds.responseCallback, CmplPtr: unsafe.Pointer(&beforeSend)}
+			o.Hdr.ObjAttrs.Size = fi.Size()
 			if err := ds.streams.response.Send(o, f, fromNode); err != nil {
 				ds.m.abort(err)
 			}
