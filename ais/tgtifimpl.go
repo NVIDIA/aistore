@@ -128,19 +128,21 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 }
 
 // slight variation vs t.doPut() above
-func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
+func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) (string, error) {
+	debug.Assert(params.Tag != "")
+	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, params.Tag)
 	poi := &putObjInfo{
 		t:       t,
 		lom:     lom,
 		r:       params.Reader,
-		workFQN: params.WorkFQN,
+		workFQN: workFQN,
 		ctx:     context.Background(),
 		started: params.Started,
 		skipEC:  params.SkipEncode,
 	}
 	if params.RecvType == cluster.Migrated {
-		poi.cksumToCheck = params.Cksum
 		poi.migrated = true
+		poi.cksumToCheck = params.Cksum
 	} else if params.RecvType == cluster.ColdGet {
 		poi.cold = true
 		poi.cksumToCheck = params.Cksum
@@ -151,7 +153,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	} else {
 		err = poi.writeToFile()
 	}
-	return err
+	return workFQN, err
 }
 
 // Send params.Reader to a given target directly.
@@ -227,14 +229,14 @@ func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, o
 	lom.SetVersion(hdr.ObjAttrs.Version)
 
 	params := cluster.PutObjectParams{
+		Tag:          fs.WorkfilePut,
 		Reader:       ioutil.NopCloser(objReader),
-		WorkFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 		RecvType:     cluster.Migrated,
 		Cksum:        cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		Started:      time.Now(),
 		WithFinalize: true,
 	}
-	if err := t.PutObject(lom, params); err != nil {
+	if _, err := t.PutObject(lom, params); err != nil {
 		glog.Error(err)
 	}
 }
@@ -325,8 +327,8 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 	} else {
 		lom.Lock(true) // one cold-GET at a time
 	}
-	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
-	if errCode, err = t.Cloud(lom.Bck()).GetObj(ctx, workFQN, lom); err != nil {
+	var workFQN string
+	if workFQN, errCode, err = t.Cloud(lom.Bck()).GetObj(ctx, lom); err != nil {
 		lom.Unlock(true)
 		glog.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return

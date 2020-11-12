@@ -673,8 +673,8 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		glog.Errorf("GFN failure, URL %q, err: %v", reqArgs.URL(), err)
 		return
 	}
-	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 	lom.FromHTTPHdr(resp.Header)
+	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 	poi := &putObjInfo{
 		t:        goi.t,
 		lom:      lom,
@@ -1141,13 +1141,12 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	defer cleanUp()
 
 	params := cluster.PutObjectParams{
+		Tag:          "copy-dp",
 		Reader:       reader,
-		WorkFQN:      fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "cpy-dp"),
-		WithFinalize: true,
 		RecvType:     cluster.Migrated,
+		WithFinalize: true,
 	}
-
-	if err := coi.t.PutObject(dst, params); err != nil {
+	if _, err := coi.t.PutObject(dst, params); err != nil {
 		return false, 0, err
 	}
 	return true, dst.Size(), err

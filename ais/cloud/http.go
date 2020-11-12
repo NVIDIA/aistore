@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 type (
@@ -163,18 +164,18 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	return
 }
 
-func (hp *httpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (errCode int, err error) {
+func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
 	reader, _, errCode, err := hp.GetObjReader(ctx, lom)
 	if err != nil {
-		return errCode, err
+		return "", errCode, err
 	}
 	params := cluster.PutObjectParams{
+		Tag:          fs.WorkfileColdget,
 		Reader:       reader,
-		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		WithFinalize: false,
 	}
-	err = hp.t.PutObject(lom, params)
+	workFQN, err = hp.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

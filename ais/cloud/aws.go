@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
@@ -343,19 +344,19 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 // GET OBJECT //
 ////////////////
 
-func (awsp *awsProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (errCode int, err error) {
+func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
 	r, cksumToCheck, errCode, err := awsp.GetObjReader(ctx, lom)
 	if err != nil {
-		return errCode, err
+		return "", errCode, err
 	}
 	params := cluster.PutObjectParams{
+		Tag:          fs.WorkfileColdget,
 		Reader:       r,
-		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
 		WithFinalize: false,
 	}
-	err = awsp.t.PutObject(lom, params)
+	workFQN, err = awsp.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

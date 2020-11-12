@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 type (
@@ -330,19 +331,19 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	return
 }
 
-func (ap *azureProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (errCode int, err error) {
+func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
 	reader, cksumToCheck, errCode, err := ap.GetObjReader(ctx, lom)
 	if err != nil {
-		return errCode, err
+		return "", errCode, err
 	}
 	params := cluster.PutObjectParams{
+		Tag:          fs.WorkfileColdget,
 		Reader:       reader,
-		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
 		WithFinalize: false,
 	}
-	err = ap.t.PutObject(lom, params)
+	workFQN, err = ap.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

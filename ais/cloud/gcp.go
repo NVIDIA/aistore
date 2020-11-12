@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -344,19 +345,19 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 	return
 }
 
-func (gcpp *gcpProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (errCode int, err error) {
+func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
 	reader, cksumToCheck, errCode, err := gcpp.GetObjReader(ctx, lom)
 	if err != nil {
-		return errCode, err
+		return "", errCode, err
 	}
 	params := cluster.PutObjectParams{
+		Tag:          fs.WorkfileColdget,
 		Reader:       reader,
-		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Cksum:        cksumToCheck,
 		WithFinalize: false,
 	}
-	err = gcpp.t.PutObject(lom, params)
+	workFQN, err = gcpp.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

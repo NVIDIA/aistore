@@ -657,21 +657,19 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 			}
 			glog.Warningf("shard (%s) already exists, overriding", lom)
 		}
-		workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileRecvShard)
 		started := time.Now()
 		lom.SetAtimeUnix(started.UnixNano())
 		rc := ioutil.NopCloser(object)
 
 		params := cluster.PutObjectParams{
+			Tag:          filetype.WorkfileRecvShard,
 			Reader:       rc,
-			WorkFQN:      workFQN,
 			RecvType:     cluster.WarmGet,
 			Cksum:        nil,
 			Started:      started,
 			WithFinalize: true,
 		}
-		err = m.ctx.t.PutObject(lom, params)
-		if err != nil {
+		if _, err := m.ctx.t.PutObject(lom, params); err != nil {
 			m.abort(err)
 			return
 		}

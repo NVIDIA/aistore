@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -99,7 +98,6 @@ func (t *singleObjectTask) download() {
 }
 
 func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) error {
-	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 	ctx, cancel := context.WithTimeout(t.downloadCtx, timeout)
 	defer cancel()
 
@@ -133,14 +131,13 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 
 	lom.SetCustomMD(roi.md)
 	params := cluster.PutObjectParams{
+		Tag:          "dl",
 		Reader:       r,
-		WorkFQN:      workFQN,
 		RecvType:     cluster.ColdGet,
 		Started:      t.started.Load(),
 		WithFinalize: true,
 	}
-	err = t.parent.t.PutObject(lom, params)
-	if err != nil {
+	if _, err = t.parent.t.PutObject(lom, params); err != nil {
 		return err
 	}
 	if err := lom.Load(); err != nil {

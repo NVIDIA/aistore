@@ -251,14 +251,14 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	lom.SetVersion(hdr.ObjAttrs.Version)
 
 	params := cluster.PutObjectParams{
+		Tag:          fs.WorkfilePut,
 		Reader:       ioutil.NopCloser(objReader),
-		WorkFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 		RecvType:     cluster.Migrated,
 		Cksum:        cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		Started:      time.Now(),
 		WithFinalize: true,
 	}
-	if err := reb.t.PutObject(lom, params); err != nil {
+	if _, err := reb.t.PutObject(lom, params); err != nil {
 		glog.Error(err)
 		return
 	}

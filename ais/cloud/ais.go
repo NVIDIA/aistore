@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 const (
@@ -411,11 +412,11 @@ func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMe
 	return objMeta, errCode, err
 }
 
-func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *cluster.LOM) (errCode int, err error) {
+func (m *AisCloudProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
-		return errCode, err
+		return "", errCode, err
 	}
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
 		r, err := api.GetObjectReader(aisCluster.bp, bck, lom.ObjName)
@@ -424,14 +425,16 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, workFQN string, lom *clus
 		}
 
 		params := cluster.PutObjectParams{
+			Tag:          fs.WorkfileColdget,
 			Reader:       r,
 			RecvType:     cluster.ColdGet,
-			WorkFQN:      workFQN,
 			WithFinalize: false,
 		}
-		return m.t.PutObject(lom, params)
+		workFQN, err = m.t.PutObject(lom, params)
+		return err
 	})
-	return extractErrCode(err)
+	errCode, err = extractErrCode(err)
+	return
 }
 
 func (m *AisCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {

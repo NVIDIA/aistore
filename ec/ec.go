@@ -354,13 +354,14 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 		return err
 	}
 	params := cluster.PutObjectParams{
+		Tag:          "ec",
 		Reader:       readCloser,
-		WorkFQN:      fs.CSM.GenContentFQN(lom.FQN, fs.WorkfileType, "ec"),
 		SkipEncode:   true,
 		WithFinalize: true,
 		RecvType:     cluster.Migrated, // to avoid changing version
 	}
-	return t.PutObject(lom, params)
+	_, err := t.PutObject(lom, params)
+	return err
 }
 
 func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {

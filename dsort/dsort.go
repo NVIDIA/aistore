@@ -28,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort/extract"
-	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
@@ -328,7 +327,6 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
-	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
 
 	if m.aborted() {
 		return newDSortAbortedError(m.ManagerUUID)
@@ -356,14 +354,14 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		var err error
 		if !m.rs.DryRun {
 			params := cluster.PutObjectParams{
+				Tag:          "dsort",
 				Reader:       r,
-				WorkFQN:      workFQN,
 				RecvType:     cluster.WarmGet,
 				Cksum:        nil,
 				Started:      beforeCreation,
 				WithFinalize: true,
 			}
-			err = m.ctx.t.PutObject(lom, params)
+			_, err = m.ctx.t.PutObject(lom, params)
 			n = lom.Size()
 		} else {
 			n, err = io.Copy(ioutil.Discard, r)
