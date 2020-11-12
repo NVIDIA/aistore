@@ -45,6 +45,81 @@ func TestMaintenanceOnOff(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
 }
 
+func TestMaintenanceListObjects(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	var (
+		bck = cmn.Bck{Name: "maint-list", Provider: cmn.ProviderAIS}
+		m   = &ioContext{
+			t:         t,
+			num:       1500,
+			fileSize:  cmn.KiB,
+			fixedSize: true,
+			bck:       bck,
+			proxyURL:  proxyURL,
+		}
+		proxyURL    = tutils.RandomProxyURL(t)
+		baseParams  = tutils.BaseAPIParams(proxyURL)
+		origEntries = make(map[string]*cmn.BucketEntry, 1500)
+	)
+
+	m.saveClusterState()
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	m.puts()
+	// 1. Perform list-object and populate entries map
+	msg := &cmn.SelectMsg{}
+	msg.AddProps(cmn.GetPropsChecksum, cmn.GetPropsVersion, cmn.GetPropsCopies, cmn.GetPropsSize)
+	bckList, err := api.ListObjects(baseParams, bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
+	for _, entry := range bckList.Entries {
+		origEntries[entry.Name] = entry
+	}
+
+	// 2. Put a random target under maintenanace
+	tsi, _ := m.smap.GetRandTarget()
+	tutils.Logf("Put target maintenanace %s\n", tsi)
+	actVal := &cmn.ActValDecommision{DaemonID: tsi.ID(), SkipRebalance: false}
+	rebID, err := api.StartMaintenance(baseParams, actVal)
+	tassert.CheckFatal(t, err)
+
+	defer func() {
+		rebID, err = api.StopMaintenance(baseParams, actVal)
+		tassert.CheckFatal(t, err)
+		_, err = tutils.WaitForClusterState(proxyURL, "target is back",
+			m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountTargets())
+		args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
+		_, err = api.WaitForXaction(baseParams, args)
+		tassert.CheckFatal(t, err)
+	}()
+
+	m.smap, err = tutils.WaitForClusterState(proxyURL, "target in maintenance",
+		m.smap.Version, m.smap.CountActiveProxies(), m.smap.CountActiveTargets()-1)
+	tassert.CheckFatal(t, err)
+
+	// Wait for reb to complete
+	args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	// 3. Check if we can list all the objects
+	bckList, err = api.ListObjects(baseParams, bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(bckList.Entries) == m.num, "list-object should return %d objects - returned %d", m.num, len(bckList.Entries))
+	for _, entry := range bckList.Entries {
+		origEntry, ok := origEntries[entry.Name]
+		tassert.Fatalf(t, ok, "object %s missing in original entries", entry.Name)
+		if entry.Checksum != origEntry.Checksum ||
+			entry.Version != origEntry.Version ||
+			entry.Flags != origEntry.Flags ||
+			entry.Copies != origEntry.Copies {
+			t.Errorf("some fields of object %q, don't match: %#v v/s %#v ", entry.Name, entry, origEntry)
+		}
+	}
+}
+
 // TODO: Run only with long tests when the test is stable.
 func TestMaintenanceMD(t *testing.T) {
 	// NOTE: This function requires local deployment as it checks local file system for VMDs.

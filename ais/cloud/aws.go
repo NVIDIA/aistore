@@ -345,7 +345,7 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 ////////////////
 
 func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
-	r, cksumToCheck, errCode, err := awsp.GetObjReader(ctx, lom)
+	r, cksumToUse, errCode, err := awsp.GetObjReader(ctx, lom)
 	if err != nil {
 		return "", errCode, err
 	}
@@ -353,7 +353,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN 
 		Tag:          fs.WorkfileColdget,
 		Reader:       r,
 		RecvType:     cluster.ColdGet,
-		Cksum:        cksumToCheck,
+		Cksum:        cksumToUse,
 		WithFinalize: false,
 	}
 	workFQN, err = awsp.t.PutObject(lom, params)

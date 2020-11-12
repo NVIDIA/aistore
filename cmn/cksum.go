@@ -62,6 +62,8 @@ var (
 	_ encoding.BinaryUnmarshaler = (*noopHash)(nil)
 )
 
+var NoneCksum = NewCksum(ChecksumNone, "")
+
 /////////////
 // helpers //
 /////////////
@@ -138,6 +140,7 @@ func (ck *Cksum) Get() (string, string) { return ck.ty, ck.value }
 func (ck *Cksum) Type() string          { return ck.ty }
 func (ck *Cksum) Value() string         { return ck.value }
 func (ck *Cksum) Clone() *Cksum         { return &Cksum{ty: ck.ty, value: ck.value} }
+func (ck *Cksum) IsEmpty() bool         { return ck == nil || ck.ty == ChecksumNone }
 func (ck *Cksum) String() string {
 	if ck == nil {
 		return "checksum <nil>"

@@ -142,10 +142,10 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	}
 	if params.RecvType == cluster.Migrated {
 		poi.migrated = true
-		poi.cksumToCheck = params.Cksum
+		poi.cksumToUse = params.Cksum
 	} else if params.RecvType == cluster.ColdGet {
 		poi.cold = true
-		poi.cksumToCheck = params.Cksum
+		poi.cksumToUse = params.Cksum
 	}
 	var err error
 	if params.WithFinalize {

@@ -708,6 +708,10 @@ func (c *CksumConf) ValidateAsProps(args *ValidationArgs) (err error) {
 	return ValidateCksumType(c.Type)
 }
 
+func (c *CksumConf) ShouldValidate() bool {
+	return c.ValidateColdGet || c.ValidateObjMove || c.ValidateWarmGet
+}
+
 func (c *VersionConf) Validate(_ *Config) error {
 	if !c.Enabled && c.ValidateWarmGet {
 		return errors.New("versioning.validate_warm_get requires versioning to be enabled")

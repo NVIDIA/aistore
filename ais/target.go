@@ -1334,13 +1334,13 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	)
 	lom.FromHTTPHdr(header) // TODO: check that values parsed here are not coming from the user
 	poi := &putObjInfo{
-		started:      started,
-		t:            t,
-		lom:          lom,
-		r:            r.Body,
-		cksumToCheck: cmn.NewCksum(cksumType, cksumValue),
-		ctx:          context.Background(),
-		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
+		started:    started,
+		t:          t,
+		lom:        lom,
+		r:          r.Body,
+		cksumToUse: cmn.NewCksum(cksumType, cksumValue),
+		ctx:        context.Background(),
+		workFQN:    fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
 	if recvType != "" {
 		n, err := strconv.Atoi(recvType)

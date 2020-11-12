@@ -57,7 +57,7 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn
 	om := &objMeta{
 		size:    length,
 		version: lom.Version(),
-		cksum:   cmn.NewCksum(cmn.ChecksumNone, ""),
+		cksum:   cmn.NoneCksum,
 		atime:   lom.AtimeUnix(),
 	}
 	return cmn.NopOpener(body), om, func() {}, nil

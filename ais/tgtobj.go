@@ -40,9 +40,9 @@ type (
 		lom     *cluster.LOM
 		// Reader with the content of the object.
 		r io.ReadCloser
-		// Checksum which needs to be checked on receive. It is only checked
-		// on specific occasions: see `writeToFile` method.
-		cksumToCheck *cmn.Cksum
+		// If available (not `none`), can be validated and will be stored with the object
+		// see `writeToFile` method
+		cksumToUse *cmn.Cksum
 		// object size aka Content-Length
 		size int64
 		// Context used when putting the object which should be contained in
@@ -116,10 +116,10 @@ type (
 func (poi *putObjInfo) putObject() (errCode int, err error) {
 	lom := poi.lom
 	// optimize out if the checksums do match
-	if poi.cksumToCheck != nil {
-		if lom.Cksum().Equal(poi.cksumToCheck) {
+	if !poi.cksumToUse.IsEmpty() {
+		if lom.Cksum().Equal(poi.cksumToUse) {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToCheck)
+				glog.Infof("%s is valid %s: PUT is a no-op", lom, poi.cksumToUse)
 			}
 			cmn.DrainReader(poi.r)
 			return 0, nil
@@ -315,37 +315,27 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	}()
 	// checksums
 	if conf.Type == cmn.ChecksumNone {
+		poi.lom.SetCksum(cmn.NoneCksum)
 		goto write
 	}
-	if poi.cold {
-		// compute checksum and save it as part of the object metadata
-		cksums.store = cmn.NewCksumHash(conf.Type)
-		writers = append(writers, cksums.store.H)
-		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
-		if conf.ValidateColdGet && poi.cksumToCheck != nil && poi.cksumToCheck.Type() != cmn.ChecksumNone {
-			cksums.expct = poi.cksumToCheck
-			cksums.given = cmn.NewCksumHash(poi.cksumToCheck.Type())
-			writers = append(writers, cksums.given.H)
-		}
-	} else {
-		if !poi.migrated || conf.ValidateObjMove {
-			cksums.store = cmn.NewCksumHash(conf.Type)
-			writers = append(writers, cksums.store.H)
-			if poi.cksumToCheck != nil && poi.cksumToCheck.Type() != cmn.ChecksumNone {
-				cksums.expct = poi.cksumToCheck
-				cksums.given = cmn.NewCksumHash(poi.cksumToCheck.Type())
-				writers = append(writers, cksums.given.H)
-			}
-		} else {
-			// if migration validation is not configured we can just take
-			// the checksum that has arrived with the object (and compute it if not present)
-			poi.lom.SetCksum(poi.cksumToCheck)
-			if poi.cksumToCheck == nil || poi.cksumToCheck.Type() == cmn.ChecksumNone {
-				cksums.store = cmn.NewCksumHash(conf.Type)
-				writers = append(writers, cksums.store.H)
-			}
-		}
+	if poi.migrated && !conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
+		// if migration validation is not configured we can just take
+		// the checksum that has arrived with the object (and compute it if not present)
+		poi.lom.SetCksum(poi.cksumToUse)
+		goto write
 	}
+
+	// compute checksum and save it as part of the object metadata
+	cksums.store = cmn.NewCksumHash(conf.Type)
+	writers = append(writers, cksums.store.H)
+	if conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
+		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
+		// or if the object is migrated, and `conf.ValidateObjMove` we should check with existing checksum
+		cksums.expct = poi.cksumToUse
+		cksums.given = cmn.NewCksumHash(poi.cksumToUse.Type())
+		writers = append(writers, cksums.given.H)
+	}
+
 write:
 	if len(writers) == 0 {
 		written, err = io.CopyBuffer(writer, reader, buf)
@@ -373,9 +363,8 @@ write:
 	if cksums.store != nil {
 		cksums.store.Finalize()
 		poi.lom.SetCksum(&cksums.store.Cksum)
-	} else {
-		poi.lom.SetCksum(cmn.NewCksum(cmn.ChecksumNone, ""))
 	}
+
 	if err = file.Close(); err != nil {
 		return fmt.Errorf("failed to close received file %s, err: %w", poi.workFQN, err)
 	}
@@ -789,12 +778,10 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	cksumRange := cksumConf.Type != cmn.ChecksumNone && r != nil && cksumConf.EnableReadRange
 
 	if hdr != nil {
-		if goi.lom.Cksum() != nil && !cksumRange {
+		if !goi.lom.Cksum().IsEmpty() && !cksumRange {
 			cksumType, cksumValue := goi.lom.Cksum().Get()
-			if cksumType != cmn.ChecksumNone {
-				hdr.Set(cmn.HeaderObjCksumType, cksumType)
-				hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
-			}
+			hdr.Set(cmn.HeaderObjCksumType, cksumType)
+			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
 		}
 		if goi.lom.Version() != "" {
 			hdr.Set(cmn.HeaderObjVersion, goi.lom.Version())

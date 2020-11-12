@@ -332,7 +332,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 }
 
 func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
-	reader, cksumToCheck, errCode, err := ap.GetObjReader(ctx, lom)
+	reader, cksumToUse, errCode, err := ap.GetObjReader(ctx, lom)
 	if err != nil {
 		return "", errCode, err
 	}
@@ -340,7 +340,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN 
 		Tag:          fs.WorkfileColdget,
 		Reader:       reader,
 		RecvType:     cluster.ColdGet,
-		Cksum:        cksumToCheck,
+		Cksum:        cksumToUse,
 		WithFinalize: false,
 	}
 	workFQN, err = ap.t.PutObject(lom, params)
@@ -381,9 +381,9 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	}
 
 	var (
-		cksumToCheck *cmn.Cksum
-		retryOpts    = azblob.RetryReaderOptions{MaxRetryRequests: 3}
-		customMD     = cmn.SimpleKVs{
+		cksumToUse *cmn.Cksum
+		retryOpts  = azblob.RetryReaderOptions{MaxRetryRequests: 3}
+		customMD   = cmn.SimpleKVs{
 			cluster.SourceObjMD: cluster.SourceAzureObjMD,
 		}
 	)
@@ -393,13 +393,13 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	}
 	if v, ok := h.EncodeCksum(respProps.ContentMD5()); ok {
 		customMD[cluster.MD5ObjMD] = v
-		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, v)
+		cksumToUse = cmn.NewCksum(cmn.ChecksumMD5, v)
 	}
 
 	lom.SetCustomMD(customMD)
 	setSize(ctx, resp.ContentLength())
 
-	return wrapReader(ctx, resp.Body(retryOpts)), cksumToCheck, 0, nil
+	return wrapReader(ctx, resp.Body(retryOpts)), cksumToUse, 0, nil
 }
 
 func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {

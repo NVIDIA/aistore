@@ -346,7 +346,7 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 }
 
 func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
-	reader, cksumToCheck, errCode, err := gcpp.GetObjReader(ctx, lom)
+	reader, cksumToUse, errCode, err := gcpp.GetObjReader(ctx, lom)
 	if err != nil {
 		return "", errCode, err
 	}
@@ -354,7 +354,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN 
 		Tag:          fs.WorkfileColdget,
 		Reader:       reader,
 		RecvType:     cluster.ColdGet,
-		Cksum:        cksumToCheck,
+		Cksum:        cksumToUse,
 		WithFinalize: false,
 	}
 	workFQN, err = gcpp.t.PutObject(lom, params)

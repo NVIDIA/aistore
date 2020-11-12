@@ -155,8 +155,8 @@ func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
 }
 
 func (lom *LOM) FromHTTPHdr(hdr http.Header) {
-	// NOTE: We never set the `Cksum` from the header
-	//  (although we send it) - it should be computed.
+	// NOTE: not setting received checksum into the LOM
+	// to preserve its own local checksum
 
 	if versionEntry := hdr.Get(cmn.HeaderObjVersion); versionEntry != "" {
 		lom.SetVersion(versionEntry)
@@ -567,13 +567,13 @@ recomp:
 	if cksumType == cmn.ChecksumNone { // as far as do-no-checksum-checking bucket rules
 		return
 	}
-	if lom.md.cksum != nil && lom.md.cksum.Type() != cmn.ChecksumNone {
+	if !lom.md.cksum.IsEmpty() {
 		cksumType = lom.md.cksum.Type() // takes precedence on the other hand
 	}
 	if cksums.comp, err = lom.ComputeCksum(cksumType); err != nil {
 		return
 	}
-	if lom.md.cksum == nil || lom.md.cksum.Type() == cmn.ChecksumNone { // store computed
+	if lom.md.cksum.IsEmpty() { // store computed
 		lom.md.cksum = cksums.comp.Clone()
 		if err = lom.Persist(); err != nil {
 			lom.md.cksum = cksums.stor
