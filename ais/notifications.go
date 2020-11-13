@@ -505,15 +505,15 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	n.smapVer = smap.Version
 
+	n.nls.RLock()
 	if len(n.nls.m) == 0 {
+		n.nls.RUnlock()
 		return
 	}
-
 	var (
 		remnl = make(map[string]nl.NotifListener)
 		remid = make(cmn.SimpleKVs)
 	)
-	n.nls.RLock()
 	for uuid, nl := range n.nls.m {
 		nl.RLock()
 		for id := range nl.ActiveNotifiers() {
