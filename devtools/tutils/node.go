@@ -89,7 +89,7 @@ func ClearMaintenance(baseParams api.BaseParams, tsi *cluster.Snode) {
 func RandomProxyURL(ts ...*testing.T) (url string) {
 	var (
 		baseParams = BaseAPIParams(proxyURLReadOnly)
-		smap, err  = waitForStartup(baseParams, ts...)
+		smap, err  = waitForStartup(baseParams)
 		retries    = 3
 	)
 	if err == nil {
@@ -104,11 +104,15 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 			return ""
 		}
 		baseParams = BaseAPIParams(url)
-		if smap, err = waitForStartup(baseParams, ts...); err == nil {
+		if smap, err = waitForStartup(baseParams); err == nil {
 			return _getRandomProxyURL(smap)
 		}
 		retries--
 	}
+	if len(ts) > 0 {
+		tassert.CheckFatal(ts[0], err)
+	}
+
 	return ""
 }
 
@@ -295,7 +299,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 	if containers.DockerRunning() {
 		Logf("Restarting %s container %s\n", tag, cmd)
-		return containers.RestartContainer(cmd.Cmd)
+		return containers.RestartContainer(cmd.Node.ID())
 	}
 	if asPrimary && !cmn.StringInSlice("-skip_startup=true", cmd.Args) {
 		// 50-50 to apply flag or not (randomize to test different startup paths)
@@ -370,4 +374,75 @@ func getProcess(port string) (string, string, []string, error) {
 	}
 
 	return pid, fields[0], fields[1:], nil
+}
+
+func getRestoreCmd(si *cluster.Snode) RestoreCmd {
+	var (
+		err error
+		cmd = RestoreCmd{Node: si}
+	)
+	if containers.DockerRunning() {
+		return cmd
+	}
+	_, cmd.Cmd, cmd.Args, err = getProcess(si.PublicNet.DaemonPort)
+	cmn.AssertNoErr(err)
+	return cmd
+}
+
+// EnsureOrigClusterState verifies the cluster has the same nodes after tests
+// If a node is killed, it restores the node
+func EnsureOrigClusterState(t *testing.T) {
+	var (
+		proxyURL       = RandomProxyURL()
+		smap           = GetClusterMap(t, proxyURL)
+		afterProxyCnt  = smap.CountActiveProxies()
+		afterTargetCnt = smap.CountActiveTargets()
+		tgtCnt         int
+		proxyCnt       int
+		updated        bool
+	)
+	for _, cmd := range restoreNodes {
+		if cmd.Node.IsProxy() {
+			proxyCnt++
+		} else {
+			tgtCnt++
+		}
+		node := smap.GetNode(cmd.Node.ID())
+		tassert.Errorf(t, node != nil, "%s %s changed its ID", cmd.Node.Type(), cmd.Node.ID())
+		if node != nil {
+			tassert.Errorf(t, node.Equals(cmd.Node), "%s %s changed, before = %+v, after = %+v", cmd.Node.Type(), node.ID(), cmd.Node, node)
+		}
+
+		if containers.DockerRunning() {
+			if node == nil {
+				RestoreNode(cmd, false, cmd.Node.Type())
+				updated = true
+			}
+			continue
+		}
+
+		_, err := getPID(cmd.Node.PublicNet.DaemonPort)
+		if err != nil {
+			tassert.CheckError(t, err)
+			RestoreNode(cmd, false, cmd.Node.Type())
+			updated = true
+		}
+	}
+
+	tassert.Errorf(t, afterProxyCnt == proxyCnt, "Some proxys crashed: expected %d, found %d containers",
+		proxyCnt, afterProxyCnt)
+
+	tassert.Errorf(t, tgtCnt == afterTargetCnt, "Some targets crashed: expected %d, found %d containers",
+		tgtCnt, afterTargetCnt)
+
+	if !updated {
+		return
+	}
+
+	_, err := WaitForClusterState(proxyURL, "cluster stabilize", smap.Version, proxyCnt, tgtCnt)
+	tassert.CheckFatal(t, err)
+
+	if tgtCnt != afterTargetCnt {
+		WaitForRebalanceToComplete(t, BaseAPIParams(proxyURL))
+	}
 }

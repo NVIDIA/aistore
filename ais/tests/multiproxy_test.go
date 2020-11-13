@@ -73,80 +73,12 @@ func TestMultiProxy(t *testing.T) {
 		t.Fatal("Not enough targets to run proxy tests, must be at least 1")
 	}
 
+	defer tutils.EnsureOrigClusterState(t)
 	for _, test := range voteTests {
 		t.Run(test.name, test.method)
 		if t.Failed() {
 			t.FailNow()
 		}
-	}
-
-	clusterHealthCheck(t, smap)
-}
-
-// clusterHealthCheck verifies the cluster has the same servers after tests
-// NOTE: Add verify primary if primary is reset.
-func clusterHealthCheck(t *testing.T, smapBefore *cluster.Smap) {
-	var (
-		proxyURL     = tutils.RandomProxyURL(t)
-		smapAfter    = tutils.GetClusterMap(t, proxyURL)
-		tgtCntAfter  = smapAfter.CountActiveTargets()
-		tgtCntBefore = smapBefore.CountActiveTargets()
-		prxCntAfter  = smapAfter.CountActiveProxies()
-		prxCntBefore = smapBefore.CountActiveProxies()
-	)
-	if tgtCntAfter != tgtCntBefore {
-		t.Fatalf("Number of targets mismatch, before = %d, after = %d",
-			tgtCntBefore, tgtCntAfter)
-	}
-
-	if prxCntAfter != prxCntBefore {
-		t.Fatalf("Number of proxies mismatch, before = %d, after = %d",
-			prxCntBefore, prxCntAfter)
-	}
-
-	for _, b := range smapBefore.Tmap {
-		a, ok := smapAfter.Tmap[b.ID()]
-		if !ok {
-			t.Fatalf("Target %s changed its ID", b.ID())
-		}
-
-		if !a.Equals(b) {
-			t.Fatalf("Target %s changed, before = %+v, after = %+v", b.ID(), b, a)
-		}
-	}
-
-	for _, b := range smapBefore.Pmap {
-		a, ok := smapAfter.Pmap[b.ID()]
-		if !ok {
-			t.Fatalf("Proxy %s changed its ID", b.ID())
-		}
-
-		// NOTE: Can't compare Primary field unless primary is always reset to the original one.
-		if !a.Equals(b) {
-			t.Fatalf("Proxy %s changed, before = %+v, after = %+v", b.ID(), b, a)
-		}
-	}
-
-	if containers.DockerRunning() {
-		pCnt, tCnt := containers.ContainerCount()
-		if pCnt != prxCntAfter {
-			t.Fatalf("Some proxy containers crashed: expected %d, found %d containers",
-				prxCntAfter, pCnt)
-		}
-		if tCnt != tgtCntAfter {
-			t.Fatalf("Some target containers crashed: expected %d, found %d containers",
-				tgtCntAfter, tCnt)
-		}
-		return
-	}
-
-	// no proxy/target died (or not restored)
-	for _, b := range smapBefore.Tmap {
-		tutils.CheckNodeAlive(t, b)
-	}
-
-	for _, b := range smapBefore.Pmap {
-		tutils.CheckNodeAlive(t, b)
 	}
 }
 
@@ -1163,13 +1095,13 @@ func TestIC(t *testing.T) {
 		t.Fatal("Not enough proxies to run proxy tests, must be more than 3")
 	}
 
+	defer tutils.EnsureOrigClusterState(t)
 	for _, test := range icTests {
 		t.Run(test.name, test.method)
 		if t.Failed() {
 			t.FailNow()
 		}
 	}
-	clusterHealthCheck(t, smap)
 }
 
 func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tutils.RestoreCmd, *cluster.Smap) {

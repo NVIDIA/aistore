@@ -29,7 +29,6 @@ const (
 const (
 	proxyURL      = "http://localhost:8080"      // the url for the cluster's proxy (local)
 	dockerEnvFile = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
-
 )
 
 type (
@@ -42,8 +41,9 @@ type (
 )
 
 var (
-	proxyURLReadOnly string          // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
-	pmapReadOnly     cluster.NodeMap // initial proxy map - it is read-only variable
+	proxyURLReadOnly string                // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
+	pmapReadOnly     cluster.NodeMap       // initial proxy map - it is read-only variable
+	restoreNodes     map[string]RestoreCmd // initial proxy and target nodes => command to restore them
 
 	transportArgs = cmn.TransportArgs{
 		Timeout:          600 * time.Second,
@@ -86,6 +86,7 @@ func init() {
 
 	initProxyURL()
 	initPmap()
+	initNodeCmd()
 	initRemoteCluster()
 	initAuthToken()
 }
@@ -156,6 +157,20 @@ func initRemoteCluster() {
 			RemoteCluster.URL = clusterInfo.URL
 			break
 		}
+	}
+}
+
+func initNodeCmd() {
+	baseParams := BaseAPIParams(proxyURLReadOnly)
+	smap, err := waitForStartup(baseParams)
+	cmn.AssertNoErr(err)
+	restoreNodes = make(map[string]RestoreCmd, smap.CountProxies()+smap.CountTargets())
+	for _, node := range smap.Pmap {
+		restoreNodes[node.ID()] = getRestoreCmd(node)
+	}
+
+	for _, node := range smap.Tmap {
+		restoreNodes[node.ID()] = getRestoreCmd(node)
 	}
 }
 
