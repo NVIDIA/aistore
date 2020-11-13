@@ -28,8 +28,11 @@ type (
 		smap    *smapX
 		msg     *aisMsg
 		path    string
-		timeout time.Duration
-		req     cmn.ReqArgs
+		timeout struct {
+			netw time.Duration
+			host time.Duration
+		}
+		req cmn.ReqArgs
 	}
 )
 
@@ -74,8 +77,9 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 2. begin
 	var (
-		c       = p.prepTxnClient(msg, bck)
-		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		waitmsync = true // commit blocks behind metasync
+		c         = p.prepTxnClient(msg, bck, waitmsync)
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -90,7 +94,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	ctx := &bmdModifier{
 		pre:      p._createBMDPre,
 		final:    p._syncBMDFinal,
-		wait:     true,
+		wait:     waitmsync,
 		msg:      &c.msg.ActionMsg,
 		txnID:    c.uuid,
 		bcks:     []*cluster.Bck{bck},
@@ -103,10 +107,6 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 
 	// txn timeout - making an exception for this critical op
-	c.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
-	c.timeout += c.timeout / 2
-
-	c.req.Query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
 	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
 	for res := range results {
 		if res.err != nil {
@@ -150,8 +150,9 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 
 	// 2. begin
 	var (
-		c       = p.prepTxnClient(msg, bck)
-		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		waitmsync = true
+		c         = p.prepTxnClient(msg, bck, waitmsync)
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -175,7 +176,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	ctx := &bmdModifier{
 		pre:           p._mirrorBMDPre,
 		final:         p._syncBMDFinal,
-		wait:          true,
+		wait:          waitmsync,
 		msg:           &c.msg.ActionMsg,
 		txnID:         c.uuid,
 		propsToUpdate: updateProps,
@@ -283,8 +284,9 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	*nmsg = *msg
 	nmsg.Value = nprops
 	var (
-		c       = p.prepTxnClient(nmsg, bck)
-		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		waitmsync = true
+		c         = p.prepTxnClient(nmsg, bck, waitmsync)
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -300,7 +302,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	ctx := &bmdModifier{
 		pre:           p._setPropsPre,
 		final:         p._syncBMDFinal,
-		wait:          true,
+		wait:          waitmsync,
 		msg:           msg,
 		txnID:         c.uuid,
 		setProps:      nprops,
@@ -381,8 +383,9 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	// 2. begin
 	var (
-		c       = p.prepTxnClient(nmsg, bckFrom)
-		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		waitmsync = true
+		c         = p.prepTxnClient(nmsg, bckFrom, waitmsync)
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -401,7 +404,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		msg:   msg,
 		txnID: c.uuid,
 		bcks:  []*cluster.Bck{bckFrom, bckTo},
-		wait:  true,
+		wait:  waitmsync,
 	}
 
 	bmd, _ = p.owner.bmd.modify(bmdCtx)
@@ -484,8 +487,9 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 
 	// 2. begin
 	var (
-		c       = p.prepTxnClient(msg, bckFrom)
-		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		waitmsync = !dryRun
+		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -505,7 +509,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 			msg:   msg,
 			txnID: c.uuid,
 			bcks:  []*cluster.Bck{bckFrom, bckTo},
-			wait:  true,
+			wait:  waitmsync,
 		}
 		bmd, _ = p.owner.bmd.modify(ctx)
 		c.msg.BMDVersion = bmd.version()
@@ -566,7 +570,6 @@ func parseECConf(value interface{}) (*cmn.ECConfToUpdate, error) {
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
 		pname      = p.si.String()
-		c          = p.prepTxnClient(msg, bck)
 		nlp        = bck.GetNameLockPair()
 		unlockUpon bool
 	)
@@ -604,7 +607,11 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	}
 
 	// 2. begin
-	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	var (
+		waitmsync = true
+		c         = p.prepTxnClient(msg, bck, waitmsync)
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	)
 	for res := range results {
 		if res.err != nil {
 			// abort
@@ -620,7 +627,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		pre:           p._updatePropsBMDPre,
 		final:         p._syncBMDFinal,
 		bcks:          []*cluster.Bck{bck},
-		wait:          true,
+		wait:          waitmsync,
 		msg:           &c.msg.ActionMsg,
 		txnID:         c.uuid,
 		propsToUpdate: &cmn.BucketPropsToUpdate{EC: ecConf},
@@ -665,7 +672,8 @@ func (p *proxyrunner) _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) erro
 }
 
 // maintenance: { begin -- enable GFN -- commit -- start rebalance }
-func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
+func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
+	opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
 	if si.IsProxy() {
 		p.markMaintenance(msg, si)
 		if msg.Action == cmn.ActDecommission {
@@ -674,9 +682,11 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg, op
 		return
 	}
 
-	c := p.prepTxnClient(msg, nil)
 	// 1. begin
-	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	var (
+		c       = p.prepTxnClient(msg, nil, false /* waitmsync */)
+		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	)
 	for res := range results {
 		if res.err != nil {
 			// abort
@@ -732,10 +742,13 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (err e
 
 	actMsg := &cmn.ActionMsg{}
 	*actMsg = *msg
-	c := p.prepTxnClient(actMsg, bck)
 
 	// 1. begin
-	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	var (
+		waitmsync = true
+		c         = p.prepTxnClient(actMsg, bck, waitmsync)
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	)
 	for res := range results {
 		if res.err != nil {
 			// abort
@@ -751,7 +764,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (err e
 		pre:   p._destroyBMDPre,
 		final: p._syncBMDFinal,
 		msg:   msg,
-		wait:  true,
+		wait:  waitmsync,
 		bcks:  []*cluster.Bck{bck},
 	}
 	_, err = p.owner.bmd.modify(ctx)
@@ -781,13 +794,11 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (err e
 /////////////////////////////
 
 // txn client context
-func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnClientCtx {
+func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bool) *txnClientCtx {
 	c := &txnClientCtx{
-		uuid:    cmn.GenUUID(),
-		smap:    p.owner.smap.get(),
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		uuid: cmn.GenUUID(),
+		smap: p.owner.smap.get(),
 	}
-
 	c.msg = p.newAisMsg(msg, c.smap, nil, c.uuid)
 	body := cmn.MustMarshal(c.msg)
 
@@ -798,7 +809,13 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck) *txnCl
 		c.path = cmn.JoinWords(cmn.Version, cmn.Txn, bck.Name)
 		query = cmn.AddBckToQuery(query, bck.Bck)
 	}
-	query.Set(cmn.URLParamTxnTimeout, cmn.UnixNano2S(int64(c.timeout)))
+	config := cmn.GCO.Get()
+	if !waitmsync { // when commit does not block behind metasync
+		c.timeout.netw = config.Timeout.CplaneOperation
+		query.Set(cmn.URLParamNetwTimeout, cmn.UnixNano2S(int64(c.timeout.netw)))
+	}
+	c.timeout.host = config.Timeout.MaxHostBusy
+	query.Set(cmn.URLParamHostTimeout, cmn.UnixNano2S(int64(c.timeout.host)))
 
 	c.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.JoinWords(c.path, cmn.ActBegin), Query: query, Body: body}
 	return c

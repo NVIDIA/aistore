@@ -203,8 +203,9 @@ const (
 	URLParamTotalUncompressedSize     = "tunc"
 
 	// 2PC transactions - control plane
-	URLParamTxnTimeout   = "txntout"  // transaction timeout
-	URLParamWaitMetasync = "txnwsync" // wait for metasync (used only when there's an alternative)
+	URLParamNetwTimeout  = "xnt" // [begin, start-commit] timeout
+	URLParamHostTimeout  = "xht" // [begin, txn-done] timeout
+	URLParamWaitMetasync = "xwm" // true: wait for metasync (used only when there's an alternative)
 
 	// notification target's node ID (usually, the node that initiates the operation)
 	URLParamNotifyMe = "nft"

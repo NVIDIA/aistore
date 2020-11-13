@@ -17,9 +17,13 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
+// GC
 const (
-	txnsTimeoutGC = time.Hour
-	txnsNumKeep   = 16
+	gcTxnsInterval   = time.Hour
+	gcTxnsNumKeep    = 16
+	gcTxnsTimeotMult = 10
+
+	TxnTimeoutMult = 2
 )
 
 type (
@@ -27,7 +31,6 @@ type (
 		// accessors
 		uuid() string
 		started(phase string, tm ...time.Time) time.Time
-		timeout() time.Duration
 		String() string
 		isDone() (done bool, err error)
 		// triggers
@@ -51,7 +54,6 @@ type (
 	txnBase struct { // generic base
 		sync.RWMutex
 		uid   string
-		tout  time.Duration
 		phase struct {
 			begin  time.Time
 			commit time.Time
@@ -121,7 +123,7 @@ func (txns *transactions) init(t *targetrunner) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
 	txns.rendezvous = make(map[string]rndzvs, 8)
-	hk.Reg("cp.transactions.gc", txns.housekeep, txnsTimeoutGC)
+	hk.Reg("cp.transactions.gc", txns.housekeep, gcTxnsInterval)
 }
 
 func (txns *transactions) begin(txn txn) error {
@@ -189,10 +191,9 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 }
 
 // given txn, wait for its completion, handle timeout, and ultimately remove
-func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
+func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err error) {
+	const sleep = 100 * time.Millisecond
 	var (
-		sleep             = cmn.MinDuration(100*time.Millisecond, timeout/10)
-		timeoutCfg        = cmn.GCO.Get().Timeout
 		rsvpErr           error
 		done, found, rsvp bool
 	)
@@ -236,15 +237,13 @@ func (txns *transactions) wait(txn txn, timeout time.Duration) (err error) {
 		}
 		// two timeouts
 		if found {
-			if total > 2*timeout+timeoutCfg.MaxHostBusy {
-				err = errors.New("local timeout")
+			if timeoutHost != 0 && total > TxnTimeoutMult*timeoutHost {
+				err = errors.New("timed out waiting for txn to complete")
 				break
 			}
-		} else {
-			if total > timeout {
-				err = errors.New("network timeout")
-				break
-			}
+		} else if timeoutNetw != 0 && total > timeoutNetw {
+			err = errors.New("timed out waiting for commit message")
+			break
 		}
 	}
 	return
@@ -255,28 +254,32 @@ func (txns *transactions) housekeep() (d time.Duration) {
 	var (
 		errs    []string
 		orphans []txn
+		config  = cmn.GCO.Get()
 		now     = time.Now()
 	)
-	d = txnsTimeoutGC
+	d = gcTxnsInterval
 	txns.RLock()
 	l := len(txns.m)
-	if l > txnsNumKeep*10 && l > 16 {
-		d = txnsTimeoutGC / 10
+	if l > gcTxnsNumKeep*10 && l > 16 {
+		d = gcTxnsInterval / 10
 	}
 	for _, txn := range txns.m {
-		var (
-			elapsed = now.Sub(txn.started(cmn.ActBegin))
-			tout    = txn.timeout()
-		)
+		elapsed := now.Sub(txn.started(cmn.ActBegin))
 		if commitTimestamp := txn.started(cmn.ActCommit); !commitTimestamp.IsZero() {
 			elapsed = now.Sub(commitTimestamp)
-		}
-		if elapsed > 2*tout+10*time.Minute {
-			errs = append(errs, fmt.Sprintf("GC %s: timeout", txn))
-			orphans = append(orphans, txn)
-		} else if elapsed >= tout {
-			errs = append(errs,
-				fmt.Sprintf("GC %s: is taking longer than the specified timeout %v", txn, tout))
+			if elapsed > gcTxnsTimeotMult*config.Timeout.MaxHostBusy {
+				errs = append(errs, fmt.Sprintf("GC %s: [commit - done] timeout", txn))
+				orphans = append(orphans, txn)
+			} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxHostBusy {
+				errs = append(errs, fmt.Sprintf("GC %s: commit is taking too long...", txn))
+			}
+		} else {
+			if elapsed > TxnTimeoutMult*config.Timeout.MaxHostBusy {
+				errs = append(errs, fmt.Sprintf("GC %s: [begin - start-commit] timeout", txn))
+				orphans = append(orphans, txn)
+			} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxKeepalive {
+				errs = append(errs, fmt.Sprintf("GC %s: commit message is taking too long...", txn))
+			}
 		}
 	}
 	txns.RUnlock()
@@ -301,8 +304,8 @@ func (txns *transactions) housekeep() (d time.Duration) {
 // txnBase //
 /////////////
 
-func (txn *txnBase) uuid() string           { return txn.uid }
-func (txn *txnBase) timeout() time.Duration { return txn.tout }
+func (txn *txnBase) uuid() string { return txn.uid }
+
 func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
 	switch phase {
 	case cmn.ActBegin:
@@ -340,7 +343,6 @@ func (txn *txnBase) rsvp(err error) {
 func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 	txn.uid = c.uuid
 	txn.action = c.msg.Action
-	txn.tout = c.timeout
 	txn.smapVer = c.smapVer
 	txn.bmdVer = c.bmdVer
 	txn.callerName = c.callerName

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
@@ -33,8 +34,11 @@ const (
 // convenience structure to gather all (or most) of the relevant context in one place
 // (compare with txnClientCtx & prepTxnClient)
 type txnServerCtx struct {
-	uuid       string
-	timeout    time.Duration
+	uuid    string
+	timeout struct {
+		netw time.Duration
+		host time.Duration
+	}
 	phase      string
 	smapVer    int64
 	bmdVer     int64
@@ -147,7 +151,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		// wait for newBMD w/timeout
-		if err = t.transactions.wait(txn, c.timeout); err != nil {
+		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 	default:
@@ -192,7 +196,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		cmn.Assert(txnMnc.newCopies == copies)
 
 		// wait for newBMD w/timeout
-		if err = t.transactions.wait(txn, c.timeout); err != nil {
+		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 
@@ -269,7 +273,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		txnSetBprops := txn.(*txnSetBucketProps)
 		// wait for newBMD w/timeout
-		if err = t.transactions.wait(txn, c.timeout); err != nil {
+		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		if reMirror(txnSetBprops.bprops, txnSetBprops.nprops) {
@@ -368,7 +372,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		}
 		txnRenB := txn.(*txnRenameBucket)
 		// wait for newBMD w/timeout
-		if err = t.transactions.wait(txn, c.timeout); err != nil {
+		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
 		xact, err := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, cmn.ActCommit)
@@ -501,7 +505,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		}
 		txnCp := txn.(*txnTransferBucket)
 		if c.query.Get(cmn.URLParamWaitMetasync) != "" {
-			if err = t.transactions.wait(txn, c.timeout); err != nil {
+			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				return fmt.Errorf("%s %s: %v", t.si, txn, err)
 			}
 		} else {
@@ -690,7 +694,14 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 	if c.uuid == "" {
 		return c, nil
 	}
-	c.timeout, err = cmn.S2Duration(query.Get(cmn.URLParamTxnTimeout))
+	if tout := query.Get(cmn.URLParamNetwTimeout); tout != "" {
+		c.timeout.netw, err = cmn.S2Duration(tout)
+		debug.AssertNoErr(err)
+	}
+	if tout := query.Get(cmn.URLParamHostTimeout); tout != "" {
+		c.timeout.host, err = cmn.S2Duration(tout)
+		debug.AssertNoErr(err)
+	}
 	c.query = query // operation-specific values, if any
 
 	c.smapVer = t.owner.smap.get().version()
