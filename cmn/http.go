@@ -527,12 +527,14 @@ func ToHTTPHdr(meta ObjHeaderMetaProvider, hdrs ...http.Header) (hdr http.Header
 ////////////////
 
 // interface guard
-var (
-	_ http.Handler = HTTPMuxers{}
-)
+var _ http.Handler = HTTPMuxers{}
 
 // ServeHTTP dispatches the request to the handler whose
 // pattern most closely matches the request URL.
 func (m HTTPMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	m[r.Method].ServeHTTP(w, r)
+	if sm, ok := m[r.Method]; ok {
+		sm.ServeHTTP(w, r)
+		return
+	}
+	w.WriteHeader(http.StatusBadRequest)
 }
