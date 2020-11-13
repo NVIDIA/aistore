@@ -42,12 +42,73 @@ const (
 	httpAnotherObjectOutput = "aadc8b6f5720d5a493a36e1f07f71bffb588780c76498d68cd761793d2ca344e"
 )
 
-func TestCloudBucketObject(t *testing.T) {
-	const (
-		getOP = "GET"
-		putOP = "PUT"
+const (
+	getOP = "GET"
+	putOP = "PUT"
+)
+
+func TestObjectInvalidName(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams()
+		bck        = cmn.Bck{
+			Name:     cmn.RandString(10),
+			Provider: cmn.ProviderAIS,
+		}
 	)
 
+	tests := []struct {
+		op      string
+		objName string
+	}{
+		{op: putOP, objName: "."},
+		{op: putOP, objName: ".."},
+		{op: putOP, objName: "../smth.txt"},
+		{op: putOP, objName: "../."},
+		{op: putOP, objName: "../.."},
+		{op: putOP, objName: "///"},
+		{op: putOP, objName: ""},
+		{op: putOP, objName: "1\x00"},
+		{op: putOP, objName: "\n"},
+
+		{op: getOP, objName: ""},
+		{op: getOP, objName: ".."},
+		{op: getOP, objName: "///"},
+		{op: getOP, objName: "...../log/aisnode.INFO"},
+		{op: getOP, objName: "/...../log/aisnode.INFO"},
+		{op: getOP, objName: "/\\../\\../\\../\\../log/aisnode.INFO"},
+		{op: getOP, objName: "\\../\\../\\../\\../log/aisnode.INFO"},
+		{op: getOP, objName: "/../../../../log/aisnode.INFO"},
+		{op: getOP, objName: "/././../../../../log/aisnode.INFO"},
+	}
+
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	for _, test := range tests {
+		t.Run(test.op, func(t *testing.T) {
+			switch test.op {
+			case putOP:
+				reader, err := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
+				tassert.CheckFatal(t, err)
+				err = api.PutObject(api.PutObjectArgs{
+					BaseParams: baseParams,
+					Bck:        bck,
+					Object:     test.objName,
+					Reader:     reader,
+				})
+				tassert.Errorf(t, err != nil, "expected error to occur (object name: %q)", test.objName)
+			case getOP:
+				_, err := api.GetObjectWithValidation(baseParams, bck, test.objName)
+				tassert.Errorf(t, err != nil, "expected error to occur (object name: %q)", test.objName)
+			default:
+				panic(test.op)
+			}
+		})
+	}
+}
+
+func TestCloudBucketObject(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		bck        = cliBck
