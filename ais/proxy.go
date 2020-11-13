@@ -3306,9 +3306,13 @@ func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionM
 
 // Run rebalance and call a callback after the rebalance finishes
 func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
-	cb ...nl.NotifCallback) (rebID xaction.RebID, err error) {
+	cb nl.NotifCallback) (rebID xaction.RebID, err error) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("put %s under maintenance and rebalance: action %s", si, msg.Action)
+	}
+
+	if p.owner.smap.get().CountActiveTargets() == 0 {
+		return
 	}
 
 	if err = p.canStartRebalance(true /*skip config*/); err != nil {
@@ -3321,10 +3325,8 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
 		final: p._syncRMDFinal,
 		smap:  p.owner.smap.get(),
 		msg:   msg,
+		rebCB: cb,
 		wait:  true,
-	}
-	if len(cb) != 0 {
-		rmdCtx.rebCB = cb[0]
 	}
 	rmdClone := p.owner.rmd.modify(rmdCtx)
 	rebID = xaction.RebID(rmdClone.version())
@@ -3649,7 +3651,7 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 
 	// Register `nl` for rebalance is metasynced.
 	smap := p.owner.smap.get()
-	if smap.IsIC(p.si) {
+	if smap.IsIC(p.si) && smap.CountActiveTargets() > 0 {
 		nl := xaction.NewXactNL(xaction.RebID(newRMD.Version).String(),
 			cmn.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
@@ -3779,6 +3781,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 }
 
 func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {
+	const minTargetCnt = 2
 	var skipCfg bool
 	if len(skipConfigCheck) != 0 {
 		skipCfg = skipConfigCheck[0]
@@ -3795,6 +3798,10 @@ func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {
 			return fmt.Errorf("rebalance cannot be started before: %v", p.NodeStartedTime().Add(dontRun))
 		}
 	}
+	smap := p.owner.smap.get()
+	if smap.CountActiveTargets() < minTargetCnt {
+		return &errNotEnoughTargets{p.si, smap, minTargetCnt}
+	}
 	return nil
 }
 
@@ -3803,7 +3810,7 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 		return false
 	}
 
-	if cur.CountTargets() == 0 {
+	if cur.CountActiveTargets() == 0 {
 		return false
 	}
 

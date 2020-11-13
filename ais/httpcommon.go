@@ -166,6 +166,11 @@ type (
 		si   *cluster.Snode
 		smap *smapX
 	}
+	errNotEnoughTargets struct {
+		si       *cluster.Snode
+		smap     *smapX
+		required int // should at least contain
+	}
 	errDowngrade struct {
 		si       *cluster.Snode
 		from, to string
@@ -201,6 +206,14 @@ func (e errDowngrade) Error() string {
 }
 
 func isErrDowngrade(err error) bool { return errors.As(err, &errDowngrade{}) }
+
+/////////////////////////
+// errNotEnoughTargets //
+////////////////////////
+
+func (e *errNotEnoughTargets) Error() string {
+	return fmt.Sprintf("%s: not enough targets in %s: required: %d has: %d", e.si, e.smap, e.required, e.smap.CountActiveTargets())
+}
 
 ////////////////
 // glogWriter //

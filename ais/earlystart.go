@@ -7,7 +7,6 @@ package ais
 import (
 	"net/url"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -265,47 +264,37 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	}
 	p.owner.smap.Unlock()
 
-	// 6: started up as primary
-	ctx := &bmdModifier{
-		pre:   p._startupBMDPre,
-		final: p._startupBMDFinal,
-		smap:  smap,
-		msg:   &cmn.ActionMsg{Value: metaction2},
+	// 6. initialize BMD
+	bmd := p.owner.bmd.get().clone()
+	if bmd.Version == 0 {
+		bmd.Version = 1 // init BMD
+		bmd.UUID = smap.UUID
+		p.owner.bmd.put(bmd)
 	}
-	p.owner.bmd.modify(ctx)
-	glog.Infof("%s: primary & cluster startup complete", p.si)
 
-	p.markClusterStarted()
-}
+	// 7. metasync and startup as primary
+	var (
+		aisMsg = p.newAisMsg(&cmn.ActionMsg{Value: metaction2}, smap, bmd)
+		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}}
+	)
 
-func (p *proxyrunner) _startupBMDPre(ctx *bmdModifier, clone *bucketMD) error {
-	if clone.Version == 0 {
-		clone.Version = 1 // init BMD
-		clone.UUID = ctx.smap.UUID
-	}
-	return nil
-}
-
-func (p *proxyrunner) _startupBMDFinal(ctx *bmdModifier, clone *bucketMD) {
-	msg := p.newAisMsg(ctx.msg, ctx.smap, clone)
-	// CAS returns `true` if it has swapped, so it a one-liner for:
-	// doRebalance=rebalance.Load(); rebalance.Store(false)
-	doRebalance := p.owner.rmd.rebalance.CAS(true, false)
-	var wg *sync.WaitGroup
-	if doRebalance && cmn.GCO.Get().Rebalance.Enabled {
+	err := p.canStartRebalance()
+	if err == nil && p.owner.rmd.rebalance.CAS(true, false) {
 		glog.Infof("rebalance did not finish, restarting...")
-		msg.Action = cmn.ActRebalance
+		aisMsg.Action = cmn.ActRebalance
 		ctx := &rmdModifier{
-			smap: ctx.smap,
-			pre:  func(ctx *rmdModifier, clone *rebMD) { clone.inc() },
+			pre: func(ctx *rmdModifier, clone *rebMD) { clone.inc() },
 		}
 		rmd := p.owner.rmd.modify(ctx)
-		wg = p.metasyncer.sync(revsPair{ctx.smap, msg}, revsPair{clone, msg}, revsPair{rmd, msg})
-	} else {
-		wg = p.metasyncer.sync(revsPair{ctx.smap, msg}, revsPair{clone, msg})
+		pairs = append(pairs, revsPair{rmd, aisMsg})
 	}
-	glog.Infof("%s: metasync %s, %s", p.si, ctx.smap.StringEx(), clone.StringEx())
+
+	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
+	glog.Infof("%s: metasync %s, %s", p.si, smap.StringEx(), bmd.StringEx())
+
+	glog.Infof("%s: primary & cluster startup complete", p.si)
+	p.markClusterStarted()
 }
 
 func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {
