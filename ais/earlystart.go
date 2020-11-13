@@ -304,31 +304,19 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 	)
 
 	var (
-		deadlineTimer     = time.NewTimer(config.Timeout.Startup)
-		sleepTicker       = time.NewTicker(config.Timeout.MaxKeepalive)
-		checkClusterTimer = time.NewTimer(3 * config.Timeout.MaxKeepalive)
-		definedTargetCnt  = ntargets > 0
+		deadlineTime         = config.Timeout.Startup
+		checkClusterInterval = deadlineTime / quiescentIter
+		sleepDuration        = checkClusterInterval / 5
+
+		definedTargetCnt = ntargets > 0
+		doClusterCheck   = loadedSmap != nil && loadedSmap.CountTargets() != 0
 	)
 
-	defer func() {
-		deadlineTimer.Stop()
-		sleepTicker.Stop()
-		checkClusterTimer.Stop()
-	}()
-
-MainLoop:
-	for iter := 0; iter < quiescentIter; {
-		select {
-		case <-deadlineTimer.C:
-			break MainLoop
-		case <-sleepTicker.C:
-			iter++
-			break
-		case <-checkClusterTimer.C:
-			// Check whether the cluster has moved on (but check only once).
-			if loadedSmap == nil || loadedSmap.CountTargets() == 0 {
-				break
-			}
+	for wait, iter := time.Duration(0), 0; wait < deadlineTime && iter < quiescentIter; wait += sleepDuration {
+		time.Sleep(sleepDuration)
+		// Check the cluster Smap only once at max.
+		if doClusterCheck && wait >= checkClusterInterval {
+			doClusterCheck = false
 			if maxVerSmap := p.bcastMaxVerBestEffort(loadedSmap); maxVerSmap != nil {
 				return maxVerSmap
 			}
@@ -344,8 +332,11 @@ MainLoop:
 			// Reset the counter in case there are new targets or we wait for
 			// targets but we still don't have enough of them.
 			iter = 0
+		} else {
+			iter++
 		}
 	}
+
 	targetCnt := p.owner.smap.get().CountTargets()
 	if definedTargetCnt {
 		if targetCnt >= ntargets {
