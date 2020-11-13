@@ -104,9 +104,8 @@ func benchNestedLevel(b *testing.B) {
 		fqn := benchCtx.fileNames[j]
 		file, err := os.Open(fqn)
 		cmn.AssertNoErr(err)
-		err = cmn.DrainReader(file)
-		cmn.AssertNoErr(err)
-		_ = file.Close()
+		cmn.DrainReader(file)
+		cmn.Close(file)
 	}
 }
 

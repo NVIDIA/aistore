@@ -164,12 +164,6 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 }
 
 func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object io.Reader) {
-	drain := func() {
-		if err := cmn.DrainReader(object); err != nil {
-			glog.Warningf("Failed to drain reader %s/%s: %v", hdr.Bck, hdr.ObjName, err)
-		}
-	}
-
 	switch iReq.act {
 	case reqPut:
 		// a remote target sent a replica/slice while it was
@@ -182,7 +176,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 			meta = iReq.meta
 		)
 		if meta == nil {
-			drain()
+			cmn.DrainReader(object)
 			glog.Errorf("%s no metadata in request for %s/%s", r.t.Snode(), hdr.Bck, hdr.ObjName)
 			return
 		}
@@ -210,7 +204,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 			}
 		}
 		if err != nil {
-			drain()
+			cmn.DrainReader(object)
 			glog.Error(err)
 			return
 		}

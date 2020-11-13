@@ -525,10 +525,10 @@ func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
 }
 
 // DrainReader reads and discards all the data from a reader.
-func DrainReader(r io.Reader) error {
+func DrainReader(r io.Reader) {
 	// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
 	_, err := io.Copy(ioutil.Discard, r)
-	return err
+	debug.AssertNoErr(err)
 }
 
 // FloodWriter writes `n` random bytes to provided writer.

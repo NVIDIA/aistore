@@ -142,8 +142,11 @@ func (f *FSHC) tryReadFile(fqn string) error {
 	if err != nil {
 		return err
 	}
-	defer cmn.Close(file)
-	return cmn.DrainReader(file)
+	if _, err := io.Copy(ioutil.Discard, file); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 // checks if a given mpath is disabled. d.Path is always cleaned, that is

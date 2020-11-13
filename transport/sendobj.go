@@ -310,9 +310,7 @@ func (s *Stream) dryrun() {
 		cmn.Assert(isObj)
 		obj, err := it.nextObj(hlen)
 		if obj != nil {
-			// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
-			err := cmn.DrainReader(obj)
-			cmn.AssertNoErr(err)
+			cmn.DrainReader(obj)
 			FreeRecv(obj)
 			continue
 		}

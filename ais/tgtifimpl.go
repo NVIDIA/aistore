@@ -261,20 +261,16 @@ func (t *targetrunner) _sendPUT(params cluster.SendToParams) error {
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)
 	if err != nil {
-		errc := params.Reader.Close()
-		debug.AssertNoErr(errc)
-		err = fmt.Errorf("unexpected failure to create request, err: %w", err)
-		return err
+		cmn.Close(params.Reader)
+		return fmt.Errorf("unexpected failure to create request, err: %w", err)
 	}
 	defer cancel()
 	resp, err := t.httpclientGetPut.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to PUT to %s, err: %w", reqArgs.URL(), err)
 	}
-	if resp != nil && resp.Body != nil {
-		errc := resp.Body.Close()
-		debug.AssertNoErr(errc)
-	}
+	cmn.DrainReader(resp.Body)
+	resp.Body.Close()
 	return nil
 }
 
