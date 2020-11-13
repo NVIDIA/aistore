@@ -518,9 +518,9 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 		"should add new mount path - available %d!=%d", numMpaths+1, len(newMpaths.Available))
 
 	// Kill and restore target
-	tcmd, err := kill(target)
+	tcmd, err := tutils.KillNode(target)
 	tassert.CheckFatal(t, err)
-	restore(tcmd, false, "target")
+	tutils.RestoreNode(tcmd, false, "target")
 
 	smap = tutils.WaitNodeRestored(t, smap.Primary.URL(cmn.NetworkPublic), "to restore", target.ID(), smap.Version,
 		proxyCnt, targetCnt)
@@ -574,12 +574,12 @@ func TestFSDisableMpathRestart(t *testing.T) {
 
 	// Kill and restore target
 	tutils.Logf("Killing target %s\n", target)
-	tcmd, err := kill(target)
+	tcmd, err := tutils.KillNode(target)
 	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForClusterState(proxyURL, "remove target", smap.Version, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)
 
-	restore(tcmd, false, "target")
+	tutils.RestoreNode(tcmd, false, "target")
 	smap = tutils.WaitNodeRestored(t, smap.Primary.URL(cmn.NetworkPublic), "to restore", target.ID(), smap.Version,
 		proxyCnt, targetCnt)
 	if _, ok := smap.Tmap[target.ID()]; !ok {

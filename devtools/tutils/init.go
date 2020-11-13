@@ -32,6 +32,15 @@ const (
 
 )
 
+type (
+	// command used to restore a node
+	RestoreCmd struct {
+		Node *cluster.Snode
+		Cmd  string
+		Args []string
+	}
+)
+
 var (
 	proxyURLReadOnly string          // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
 	pmapReadOnly     cluster.NodeMap // initial proxy map - it is read-only variable

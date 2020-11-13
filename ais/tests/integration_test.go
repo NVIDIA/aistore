@@ -172,7 +172,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	targetID = targetNode.ID()
 
 	tutils.Logf("Killing target: %s - %s\n", targetURL, targetID)
-	tcmd, err := kill(targetNode)
+	tcmd, err := tutils.KillNode(targetNode)
 	tassert.CheckFatal(t, err)
 
 	proxyURL := tutils.RandomProxyURL(t)
@@ -193,7 +193,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(4 * time.Second)
-		restore(tcmd, false, "target")
+		tutils.RestoreNode(tcmd, false, "target")
 	}()
 	go func() {
 		defer wg.Done()

@@ -7,12 +7,17 @@ package tutils
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"os/exec"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
@@ -231,4 +236,138 @@ func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParam
 	}
 
 	return mpathsByTarget
+}
+
+func CheckNodeAlive(t testing.TB, node *cluster.Snode) {
+	_, err := getPID(node.PublicNet.DaemonPort)
+	tassert.CheckFatal(t, err)
+}
+
+func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
+	var (
+		daemonID = node.ID()
+		port     = node.PublicNet.DaemonPort
+		pid      string
+	)
+	cmd.Node = node
+	if containers.DockerRunning() {
+		Logf("Stopping container %s\n", daemonID)
+		err := containers.StopContainer(daemonID)
+		return cmd, err
+	}
+
+	pid, cmd.Cmd, cmd.Args, err = getProcess(port)
+	if err != nil {
+		return
+	}
+	_, err = exec.Command("kill", "-2", pid).CombinedOutput()
+	if err != nil {
+		return
+	}
+	// wait for the process to actually disappear
+	to := time.Now().Add(time.Second * 30)
+	for {
+		_, _, _, errpid := getProcess(port)
+		if errpid != nil {
+			break
+		}
+		if time.Now().After(to) {
+			err = fmt.Errorf("failed to kill -2 process pid=%s at port %s", pid, port)
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	exec.Command("kill", "-9", pid).CombinedOutput()
+	time.Sleep(time.Second)
+
+	if err != nil {
+		_, _, _, errpid := getProcess(port)
+		if errpid != nil {
+			err = nil
+		} else {
+			err = fmt.Errorf("failed to kill -9 process pid=%s at port %s", pid, port)
+		}
+	}
+	return
+}
+
+func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
+	if containers.DockerRunning() {
+		Logf("Restarting %s container %s\n", tag, cmd)
+		return containers.RestartContainer(cmd.Cmd)
+	}
+	if asPrimary && !cmn.StringInSlice("-skip_startup=true", cmd.Args) {
+		// 50-50 to apply flag or not (randomize to test different startup paths)
+		if rand.Intn(2) == 0 {
+			cmd.Args = append(cmd.Args, "-skip_startup=true")
+		}
+	}
+
+	if !cmn.AnyHasPrefixInSlice("-daemon_id", cmd.Args) {
+		cmd.Args = append(cmd.Args, "-daemon_id="+cmd.Node.ID())
+	}
+
+	Logf("Restoring %s: %s %+v\n", tag, cmd.Cmd, cmd.Args)
+
+	ncmd := exec.Command(cmd.Cmd, cmd.Args...)
+	// When using Ctrl-C on test, children (restored daemons) should not be
+	// killed as well.
+	// (see: https://groups.google.com/forum/#!topic/golang-nuts/shST-SDqIp4)
+	ncmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
+	if asPrimary {
+		// Sets the environment variable to start as primary proxy to true
+		env := os.Environ()
+		env = append(env, fmt.Sprintf("%s=true", cmn.EnvVars.IsPrimary))
+		ncmd.Env = env
+	}
+
+	if err := ncmd.Start(); err != nil {
+		return err
+	}
+	return ncmd.Process.Release()
+}
+
+// getPID uses 'lsof' to find the pid of the ais process listening on a port
+func getPID(port string) (string, error) {
+	output, err := exec.Command("lsof", []string{"-sTCP:LISTEN", "-i", ":" + port}...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("error executing LSOF command: %v", err)
+	}
+
+	// Skip lines before first appearance of "COMMAND"
+	lines := strings.Split(string(output), "\n")
+	i := 0
+	for ; ; i++ {
+		if strings.HasPrefix(lines[i], "COMMAND") {
+			break
+		}
+	}
+
+	// second colume is the pid
+	return strings.Fields(lines[i+1])[1], nil
+}
+
+// getProcess finds the ais process by 'lsof' using a port number, it finds the ais process's
+// original command line by 'ps', returns the command line for later to restart(restore) the process.
+func getProcess(port string) (string, string, []string, error) {
+	pid, err := getPID(port)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("error getting pid on port: %v", err)
+	}
+
+	output, err := exec.Command("ps", "-p", pid, "-o", "command").CombinedOutput()
+	if err != nil {
+		return "", "", nil, fmt.Errorf("error executing PS command: %v", err)
+	}
+
+	line := strings.Split(string(output), "\n")[1]
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return "", "", nil, fmt.Errorf("no returned fields")
+	}
+
+	return pid, fields[0], fields[1:], nil
 }
