@@ -2430,7 +2430,7 @@ func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
 		cmn.Assertf(false, "%s must always be present in the %s", p.si, clone.pp())
 	}
 
-	if ctx.sid != "" {
+	if ctx.sid != "" && clone.containsID(ctx.sid) {
 		// decision is made: going ahead to remove
 		glog.Infof("%s: removing failed primary %s", p.si, ctx.sid)
 		clone.delProxy(ctx.sid)
