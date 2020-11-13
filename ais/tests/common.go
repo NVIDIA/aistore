@@ -496,16 +496,17 @@ func (m *ioContext) unregisterTarget(forceUnreg ...bool) *cluster.Snode {
 	return target
 }
 
-func (m *ioContext) reregisterTarget(target *cluster.Snode) {
+func (m *ioContext) reregisterTarget(target *cluster.Snode) (rebID string) {
 	const (
 		timeout    = time.Second * 10
 		interval   = time.Millisecond * 10
 		iterations = int(timeout / interval)
 	)
 
+	var err error
 	// T1
 	tutils.Logf("Registering target %s...\n", target.ID())
-	err := tutils.JoinCluster(m.proxyURL, target)
+	rebID, err = tutils.JoinCluster(m.proxyURL, target)
 	tassert.CheckFatal(m.t, err)
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	smap := tutils.GetClusterMap(m.t, m.proxyURL)
@@ -535,6 +536,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 	}
 
 	m.t.Fatalf("failed to register target %s: not in the Smap or did not receive BMD", target.ID())
+	return
 }
 
 func (m *ioContext) setRandBucketProps() {

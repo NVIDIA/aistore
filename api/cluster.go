@@ -87,13 +87,14 @@ func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.CloudInfoAIS, err error) {
 }
 
 // JoinCluster add a node to a cluster.
-func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) error {
+func JoinCluster(baseParams BaseParams, nodeInfo *cluster.Snode) (rebID string, err error) {
 	baseParams.Method = http.MethodPost
-	return DoHTTPRequest(ReqParams{
+	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.UserRegister),
 		Body:       cmn.MustMarshal(nodeInfo),
-	})
+	}, &rebID)
+	return
 }
 
 // SetPrimaryProxy given a daemonID sets that corresponding proxy as the

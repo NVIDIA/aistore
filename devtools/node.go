@@ -13,22 +13,23 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Duration) error {
+func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Duration) (rebID string, err error) {
 	baseParams := BaseAPIParams(ctx, proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err := api.JoinCluster(baseParams, node); err != nil {
-		return err
+	if rebID, err = api.JoinCluster(baseParams, node); err != nil {
+		return
 	}
 
 	// If node is already in cluster we should not wait for map version
 	// sync because update will not be scheduled
 	if node := smap.GetNode(node.ID()); node == nil {
-		return WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, []string{})
+		err = WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, []string{})
+		return
 	}
-	return nil
+	return
 }
 
 // Quick node removal: it does not start and wait for rebalance to complete

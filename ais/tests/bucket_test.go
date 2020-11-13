@@ -1188,6 +1188,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 			num:      10000,
 			fileSize: 128,
 		}
+		rebID string
 	)
 
 	m.saveClusterState()
@@ -1203,7 +1204,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.reregisterTarget(target)
+		rebID = m.reregisterTarget(target)
 	}()
 
 	wg.Add(1)
@@ -1221,7 +1222,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 
 	wg.Wait()
 	m.assertClusterState()
-	tutils.WaitForRebalanceToComplete(t, baseParams)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID)
 }
 
 func TestBucketSingleProp(t *testing.T) {

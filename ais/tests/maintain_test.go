@@ -150,9 +150,11 @@ func TestMaintenanceMD(t *testing.T) {
 	tassert.Errorf(t, vmdTargets == smap.CountTargets()-1, "expected VMD to be found on %d targets, got %d.",
 		smap.CountTargets()-1, vmdTargets)
 
-	err = tutils.JoinCluster(proxyURL, dcmTarget)
+	rebID, err := tutils.JoinCluster(proxyURL, dcmTarget)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalanceToComplete(t, baseParams)
+	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckError(t, err)
 
 	// NOTE: Target will have the same DaemonID as it keeps it in the memory.
 	smap = tutils.GetClusterMap(t, proxyURL)
@@ -206,7 +208,8 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tassert.CheckError(t, err)
 	defer func() {
 		if !restored {
-			tutils.RestoreTarget(t, proxyURL, tsi)
+			rebID, _ = tutils.RestoreTarget(t, proxyURL, tsi)
+			tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
 		}
 		tutils.ClearMaintenance(baseParams, tsi)
 	}()
@@ -228,13 +231,9 @@ func TestMaintenanceRebalance(t *testing.T) {
 	m.gets()
 	m.ensureNoErrors()
 
-	tutils.RestoreTarget(t, proxyURL, tsi)
+	rebID, _ = tutils.RestoreTarget(t, proxyURL, tsi)
 	restored = true
-	args = api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: time.Minute}
-	err = api.WaitForXactionToStart(baseParams, args)
-	tassert.CheckFatal(t, err)
-	_, err = api.WaitForXaction(baseParams, args)
-	tassert.CheckError(t, err)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
 }
 
 func TestMaintenanceGetWhileRebalance(t *testing.T) {
@@ -274,7 +273,8 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 			m.stopGets()
 		}
 		if !restored {
-			tutils.RestoreTarget(t, proxyURL, tsi)
+			rebID, _ = tutils.RestoreTarget(t, proxyURL, tsi)
+			tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
 		}
 		tutils.ClearMaintenance(baseParams, tsi)
 	}()
@@ -297,7 +297,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	stopped = true
 	m.ensureNoErrors()
 
-	tutils.RestoreTarget(t, proxyURL, tsi)
+	rebID, _ = tutils.RestoreTarget(t, proxyURL, tsi)
 	restored = true
-	tutils.WaitForRebalanceToComplete(t, baseParams, time.Minute)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
 }

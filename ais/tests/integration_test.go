@@ -30,13 +30,15 @@ import (
 // 4. GET the objects while simultaneously registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
-
-	m := ioContext{
-		t:               t,
-		num:             50000,
-		numGetsEachFile: 3,
-		fileSize:        10 * cmn.KiB,
-	}
+	var (
+		m = ioContext{
+			t:               t,
+			num:             50000,
+			numGetsEachFile: 3,
+			fileSize:        10 * cmn.KiB,
+		}
+		rebID string
+	)
 
 	m.saveClusterState()
 	m.expectTargets(2)
@@ -47,7 +49,6 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	// Step 2.
 	target := m.unregisterTarget()
-	defer tutils.WaitForRebalanceToComplete(t, baseParams)
 
 	// Step 3.
 	m.puts()
@@ -65,12 +66,15 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	go func() {
 		// without defer, if reregister crashes Done is not called resulting in test hangs
 		defer wg.Done()
-		m.reregisterTarget(target)
+		rebID = m.reregisterTarget(target)
 	}()
 	wg.Wait()
 
 	m.ensureNoErrors()
 	m.assertClusterState()
+	if rebID != "" {
+		tutils.WaitForRebalanceByID(t, baseParams, rebID)
+	}
 }
 
 // All of the above PLUS proxy failover/failback sequence in parallel:
@@ -227,9 +231,9 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	}
 
 	// Register target (bring cluster to normal state)
-	m.reregisterTarget(target)
+	rebID := m.reregisterTarget(target)
 	m.assertClusterState()
-	tutils.WaitForRebalanceToComplete(m.t, tutils.BaseAPIParams(m.proxyURL))
+	tutils.WaitForRebalanceByID(m.t, tutils.BaseAPIParams(m.proxyURL), rebID)
 }
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
@@ -271,7 +275,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tutils.Logf("Register target %s\n", targets[0].ID())
-		err = tutils.JoinCluster(m.proxyURL, targets[0])
+		_, err = tutils.JoinCluster(m.proxyURL, targets[0])
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -288,11 +292,11 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	wg.Wait()
 
 	// Register target 1 to bring cluster to original state
-	m.reregisterTarget(targets[1])
+	rebID := m.reregisterTarget(targets[1])
 
 	// wait for rebalance to complete
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	m.assertClusterState()
 }
@@ -317,11 +321,11 @@ func TestAckRebalance(t *testing.T) {
 	// Start putting files into bucket.
 	m.puts()
 
-	m.reregisterTarget(target)
+	rebID := m.reregisterTarget(target)
 
 	// Wait for everything to finish.
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	m.gets()
 
@@ -394,14 +398,14 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	// and join 2 targets in parallel
 	time.Sleep(time.Second)
 	tutils.Logf("Register 1st target %s\n", target1.URL(cmn.NetworkPublic))
-	err = tutils.JoinCluster(m.proxyURL, target1)
+	_, err = tutils.JoinCluster(m.proxyURL, target1)
 	tassert.CheckFatal(t, err)
 
 	// random sleep between the first and the second join
 	time.Sleep(time.Duration(rand.Intn(3)+1) * time.Second)
 
 	tutils.Logf("Register 2nd target %s\n", target2.URL(cmn.NetworkPublic))
-	err = tutils.JoinCluster(m.proxyURL, target2)
+	rebID, err := tutils.JoinCluster(m.proxyURL, target2)
 	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForClusterState(
@@ -415,7 +419,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// wait for the rebalance to finish
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	// wait for the reads to run out
 	wg.Wait()
@@ -465,7 +469,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		tutils.Logf("Register target %s\n", target0.URL(cmn.NetworkPublic))
-		err = tutils.JoinCluster(m.proxyURL, target0)
+		_, err = tutils.JoinCluster(m.proxyURL, target0)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -484,7 +488,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	sleep := time.Duration(rand.Intn(5))*time.Second + time.Millisecond
 	time.Sleep(sleep)
 	tutils.Logf("Register target %s\n", target1.URL(cmn.NetworkPublic))
-	err = tutils.JoinCluster(m.proxyURL, target1)
+	rebID, err := tutils.JoinCluster(m.proxyURL, target1)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
@@ -497,7 +501,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	tutils.Logf("Wait for rebalance...\n")
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	m.gets()
 
@@ -532,12 +536,12 @@ func TestPutDuringRebalance(t *testing.T) {
 	// Sleep some time to wait for PUT operations to begin.
 	time.Sleep(3 * time.Second)
 
-	m.reregisterTarget(target)
+	rebID := m.reregisterTarget(target)
 
 	// Wait for everything to finish.
 	wg.Wait()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	// Main check - try to read all objects.
 	m.gets()
@@ -617,7 +621,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	time.Sleep(time.Second * 4)
 
 	// register a new target
-	err = tutils.JoinCluster(m.proxyURL, killTarget)
+	_, err = tutils.JoinCluster(m.proxyURL, killTarget)
 	tassert.CheckFatal(t, err)
 
 	// enable mountpath
@@ -746,11 +750,11 @@ func TestGetDuringRebalance(t *testing.T) {
 		m.gets()
 	}()
 
-	m.reregisterTarget(target)
+	rebID := m.reregisterTarget(target)
 
 	// Wait for everything to finish.
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 	wg.Wait()
 
 	// Get objects once again to check if they are still accessible after rebalance.
@@ -797,7 +801,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		go func(number int) {
 			defer wg.Done()
 
-			err := tutils.JoinCluster(m.proxyURL, targets[number])
+			_, err := tutils.JoinCluster(m.proxyURL, targets[number])
 			tassert.CheckError(t, err)
 		}(i)
 	}
@@ -1170,7 +1174,7 @@ func TestAtimeRebalance(t *testing.T) {
 		objNames[entry.Name] = entry.Atime
 	}
 
-	m.reregisterTarget(target)
+	rebID := m.reregisterTarget(target)
 
 	// make sure that the cluster has all targets enabled
 	_, err = tutils.WaitForClusterState(
@@ -1182,7 +1186,7 @@ func TestAtimeRebalance(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	msg = &cmn.SelectMsg{TimeFormat: time.StampNano}
 	msg.AddProps(cmn.GetPropsAtime, cmn.GetPropsStatus)
@@ -1355,7 +1359,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
-	m.reregisterTarget(target)
+	rebID := m.reregisterTarget(target)
 
 	m.puts()
 	m.gets()
@@ -1363,7 +1367,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.ensureNoErrors()
 	m.assertClusterState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID)
 }
 
 // 1. Unregister target
@@ -1403,11 +1407,11 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.puts()
 
 	// Reregister target 0
-	m.reregisterTarget(targets[0])
+	rebID := m.reregisterTarget(targets[0])
 
 	// Wait for rebalance and do gets
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.WaitForRebalanceToComplete(t, baseParams)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID)
 
 	m.gets()
 

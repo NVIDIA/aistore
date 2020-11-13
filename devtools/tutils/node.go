@@ -31,7 +31,7 @@ func (n nodesCnt) satisfied(actual int) bool {
 	return int(n) == actual
 }
 
-func JoinCluster(proxyURL string, node *cluster.Snode) error {
+func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 	return devtools.JoinCluster(devtoolsCtx, proxyURL, node, registerTimeout)
 }
 
@@ -63,11 +63,11 @@ func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.S
 }
 
 // TODO: There is duplication between `JoinCluster` and `RestoreTarget` - when to use which?
-func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (newSmap *cluster.Smap) {
+func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID string, newSmap *cluster.Smap) {
 	smap := GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, smap.GetTarget(target.DaemonID) == nil, "unexpected target %s in smap", target.ID())
 	Logf("Reregistering target %s, current Smap: %s\n", target, smap.StringEx())
-	err := JoinCluster(proxyURL, target)
+	rebID, err := JoinCluster(proxyURL, target)
 	tassert.CheckFatal(t, err)
 	newSmap, err = WaitForClusterState(
 		proxyURL,
@@ -77,7 +77,7 @@ func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (newSma
 		smap.CountActiveTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
-	return newSmap
+	return rebID, newSmap
 }
 
 func ClearMaintenance(baseParams api.BaseParams, tsi *cluster.Snode) {

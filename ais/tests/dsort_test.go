@@ -1408,8 +1408,8 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 				}
 			}
 
-			m.reregisterTarget(target)
-			tutils.WaitForRebalanceToComplete(t, df.baseParams)
+			rebID := m.reregisterTarget(target)
+			tutils.WaitForRebalanceByID(t, df.baseParams, rebID)
 		},
 	)
 }

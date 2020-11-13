@@ -1731,8 +1731,8 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	// 2. Kill a random target
 	_, removedTarget := tutils.RemoveTarget(t, proxyURL, o.smap)
 	defer func() {
-		tutils.RestoreTarget(t, proxyURL, removedTarget)
-		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+		rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
+		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 	}()
 
 	// 3. Read objects
@@ -1813,10 +1813,14 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	}
 
 	defer func() {
+		var rebID string
 		for _, target := range removedTargets {
-			tutils.RestoreTarget(t, proxyURL, target)
+			rebID, _ = tutils.RestoreTarget(t, proxyURL, target)
 		}
-		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+		if rebID == "" {
+			return
+		}
+		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 	}()
 
 	hasTarget := func(targets cluster.Nodes, target *cluster.Snode) bool {
@@ -2148,8 +2152,8 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	// Kill a random target
 	_, removedTarget := tutils.RemoveTarget(t, proxyURL, o.smap)
 	// Initiate rebalance
-	tutils.RestoreTarget(t, proxyURL, removedTarget)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	newBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
 	tassert.CheckFatal(t, err)
@@ -2352,9 +2356,9 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	registered := false
 	defer func() {
 		if !registered {
-			err = tutils.JoinCluster(proxyURL, tgtLost)
+			rebID, err := tutils.JoinCluster(proxyURL, tgtLost)
 			tassert.CheckError(t, err)
-			tutils.WaitForRebalanceToComplete(t, baseParams)
+			tutils.WaitForRebalanceByID(t, baseParams, rebID)
 		}
 	}()
 
@@ -2393,10 +2397,10 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
 	tutils.Logf("Registering node %s\n", tgtLost)
-	err = tutils.JoinCluster(proxyURL, tgtLost)
+	rebID, err := tutils.JoinCluster(proxyURL, tgtLost)
 	tassert.CheckFatal(t, err)
 	registered = true
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	tutils.Logln("Getting the number of objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, 0)
@@ -2591,7 +2595,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	// See: https://blog.golang.org/defer-panic-and-recover
 	defer func() {
 		if !registered {
-			err = tutils.JoinCluster(proxyURL, tgtLost)
+			_, err = tutils.JoinCluster(proxyURL, tgtLost)
 			tassert.CheckError(t, err)
 		}
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
@@ -2619,7 +2623,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tutils.Logf("Created %d objects in %s. Starting rebalance\n", len(resECOld.Entries), bckEC)
 
 	tutils.Logf("Registering node %s\n", tgtLost.ID())
-	err = tutils.JoinCluster(proxyURL, tgtLost)
+	_, err = tutils.JoinCluster(proxyURL, tgtLost)
 	tassert.CheckFatal(t, err)
 	registered = true
 

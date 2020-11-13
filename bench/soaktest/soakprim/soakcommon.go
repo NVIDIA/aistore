@@ -110,7 +110,7 @@ func (rctx *RecipeContext) restoreTargets() {
 			if _, ok := smap.Tmap[k]; ok {
 				continue
 			}
-			if err := soakcmn.JoinCluster(primaryURL, v); err != nil {
+			if _, err := soakcmn.JoinCluster(primaryURL, v); err != nil {
 				report.Writef(report.SummaryLevel, "got error while re-registering %s: %v", v.ID(), err)
 			}
 			missingOne = true

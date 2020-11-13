@@ -495,6 +495,16 @@ func WaitForRebalanceToComplete(t *testing.T, baseParams api.BaseParams, timeout
 	}
 }
 
+func WaitForRebalanceByID(t *testing.T, baseParams api.BaseParams, rebID string, timeouts ...time.Duration) {
+	timeout := 2 * time.Minute
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+	xactArgs := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Latest: true, Timeout: timeout}
+	_, err := api.WaitForXaction(baseParams, xactArgs)
+	tassert.CheckFatal(t, err)
+}
+
 // WaitForRebalanceToStart waits until Rebalance or Resilver starts
 func WaitForRebalanceToStart(baseParams api.BaseParams) error {
 	const (

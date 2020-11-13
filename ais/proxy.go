@@ -2912,6 +2912,14 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		meta := &nodeRegMeta{smap, bmd, p.si, false}
 		p.writeJSON(w, r, meta, path.Join(cmn.ActRegTarget, nsi.ID()) /* tag */)
 	}
+
+	// Return the rebalance ID when target is registered by user.
+	if !isProxy && userRegister {
+		rebID := p.updateAndDistribute(nsi, msg, flags)
+		w.Write([]byte(rebID))
+		return
+	}
+
 	go p.updateAndDistribute(nsi, msg, flags)
 }
 
@@ -2995,7 +3003,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 	return
 }
 
-func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, flags cluster.SnodeFlags) {
+func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg, flags cluster.SnodeFlags) (xactID string) {
 	ctx := &smapModifier{
 		pre:   p._updPre,
 		post:  p._updPost,
@@ -3009,6 +3017,10 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 		glog.Errorf("FATAL: %v", err)
 		return
 	}
+	if ctx.rmd != nil {
+		return xaction.RebID(ctx.rmd.Version).String()
+	}
+	return
 }
 
 func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {

@@ -258,7 +258,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	newobjs := propsUpdateObjects(t, proxyURL, bck, objects, msg, versionEnabled, cksumType)
 
 	tutils.Logf("Reregistering target...\n")
-	err = tutils.JoinCluster(proxyURL, removeTarget)
+	rebID, err := tutils.JoinCluster(proxyURL, removeTarget)
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(
 		proxyURL,
@@ -268,7 +268,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		smap.CountActiveTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
-	tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	tutils.Logf("Reading file versions...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)

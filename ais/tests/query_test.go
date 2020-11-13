@@ -234,8 +234,11 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		tutils.JoinCluster(proxyURL, target)
-		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+		rebID, err := tutils.JoinCluster(proxyURL, target)
+		tassert.CheckFatal(t, err)
+		args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+		_, err = api.WaitForXaction(baseParams, args)
+		tassert.CheckError(t, err)
 	}()
 
 	_, err = tutils.WaitForClusterState(

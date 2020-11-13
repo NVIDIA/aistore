@@ -33,11 +33,14 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
 	_, err = tutils.WaitForClusterState(proxyURL, "to decommission node", smapOrig.Version, proxyCount, targetCount)
 	tassert.CheckFatal(t, err)
 	defer func() {
-		err = tutils.JoinCluster(proxyURL, si)
+		rebID, err := tutils.JoinCluster(proxyURL, si)
 		tassert.CheckFatal(t, err)
 		_, err = tutils.WaitForClusterState(proxyURL, "to node join", smapOrig.Version, smapOrig.CountActiveProxies(),
 			smapOrig.CountActiveTargets())
 		tassert.CheckFatal(t, err)
+		if rebID != "" {
+			tutils.WaitForRebalanceByID(t, tutils.BaseAPIParams(proxyURL), rebID)
+		}
 	}()
 
 	err = api.Health(tutils.BaseAPIParams(si.PublicNet.DirectURL))
@@ -90,5 +93,4 @@ func TestUnregisteredTargetHealth(t *testing.T) {
 
 	smap = tutils.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, targetsCnt == smap.CountActiveTargets(), "expected number of targets to be the same after the test")
-	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(proxyURL))
 }

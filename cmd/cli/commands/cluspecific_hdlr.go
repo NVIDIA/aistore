@@ -85,7 +85,7 @@ func joinNodeHandler(c *cli.Context) (err error) {
 		IntraControlNet: netInfo,
 		IntraDataNet:    netInfo,
 	}
-	if err = api.JoinCluster(defaultAPIParams, nodeInfo); err != nil {
+	if _, err = api.JoinCluster(defaultAPIParams, nodeInfo); err != nil {
 		return
 	}
 

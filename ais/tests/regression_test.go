@@ -515,11 +515,12 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	// Step 1: Unregister multiple targets
 	removed := make(map[string]*cluster.Snode, m.smap.CountActiveTargets()-1)
 	defer func() {
+		var rebID string
 		for _, tgt := range removed {
-			m.reregisterTarget(tgt)
+			rebID = m.reregisterTarget(tgt)
 		}
-		if len(removed) != 0 {
-			tutils.WaitForRebalanceToComplete(t, baseParams)
+		if len(removed) != 0 && rebID != "" {
+			tutils.WaitForRebalanceByID(t, baseParams, rebID)
 		}
 	}()
 

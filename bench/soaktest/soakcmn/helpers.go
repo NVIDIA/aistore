@@ -49,7 +49,7 @@ func BaseAPIParams(primaryURL string) api.BaseParams {
 	return devtools.BaseAPIParams(devtoolsCtx, primaryURL)
 }
 
-func JoinCluster(proxyURL string, node *cluster.Snode) error {
+func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 	return devtools.JoinCluster(devtoolsCtx, proxyURL, node, registerTimeout)
 }
 
