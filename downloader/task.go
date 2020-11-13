@@ -132,13 +132,12 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 
 	lom.SetCustomMD(roi.md)
 	params := cluster.PutObjectParams{
-		Tag:          "dl",
-		Reader:       r,
-		RecvType:     cluster.ColdGet,
-		Started:      t.started.Load(),
-		WithFinalize: true,
+		Tag:      "dl",
+		Reader:   r,
+		RecvType: cluster.Downloaded,
+		Started:  t.started.Load(),
 	}
-	if _, err = t.parent.t.PutObject(lom, params); err != nil {
+	if err := t.parent.t.PutObject(lom, params); err != nil {
 		return true, err
 	}
 	return true, lom.Load()

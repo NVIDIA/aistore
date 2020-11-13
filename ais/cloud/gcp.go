@@ -345,19 +345,18 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 	return
 }
 
-func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
+func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	reader, cksumToUse, errCode, err := gcpp.GetObjReader(ctx, lom)
 	if err != nil {
-		return "", errCode, err
+		return errCode, err
 	}
 	params := cluster.PutObjectParams{
-		Tag:          fs.WorkfileColdget,
-		Reader:       reader,
-		RecvType:     cluster.ColdGet,
-		Cksum:        cksumToUse,
-		WithFinalize: false,
+		Tag:      fs.WorkfileColdget,
+		Reader:   reader,
+		RecvType: cluster.ColdGet,
+		Cksum:    cksumToUse,
 	}
-	workFQN, err = gcpp.t.PutObject(lom, params)
+	err = gcpp.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

@@ -943,6 +943,14 @@ func (lom *LOM) Lock(exclusive bool) {
 	nlc.Lock(lom.Uname(), exclusive)
 }
 
+func (lom *LOM) UpgradeLock() {
+	var (
+		_, idx = lom.Hkey()
+		nlc    = getLomLocker(idx)
+	)
+	nlc.UpgradeLock(lom.Uname())
+}
+
 func (lom *LOM) DowngradeLock() {
 	var (
 		_, idx = lom.Hkey()

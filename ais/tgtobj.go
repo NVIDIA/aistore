@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -51,11 +52,8 @@ type (
 		// FQN which is used only temporarily for receiving file. After
 		// successful receive is renamed to actual FQN.
 		workFQN string
-		// Determines if the object was already in cluster and is being PUT due to
-		// migration or replication of some sort.
-		migrated bool
-		// Determines if the recv is cold recv: either from another cluster or cloud.
-		cold bool
+		// Determines the receive type of the request.
+		recvType cluster.RecvType
 		// if true, poi won't erasure-encode an object when finalizing
 		skipEC bool
 	}
@@ -114,6 +112,8 @@ type (
 ////////////////
 
 func (poi *putObjInfo) putObject() (errCode int, err error) {
+	debug.Assert(cluster.RegularPut <= poi.recvType && poi.recvType <= cluster.Downloaded)
+
 	lom := poi.lom
 	// optimize out if the checksums do match
 	if !poi.cksumToUse.IsEmpty() {
@@ -134,7 +134,7 @@ func (poi *putObjInfo) putObject() (errCode int, err error) {
 			return errCode, err
 		}
 	}
-	if !poi.migrated && !poi.cold {
+	if poi.recvType == cluster.RegularPut {
 		delta := time.Since(poi.started)
 		poi.t.statsT.AddMany(
 			stats.NamedVal64{Name: stats.PutCount, Value: 1},
@@ -178,7 +178,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		lom = poi.lom
 		bck = lom.Bck()
 	)
-	if bck.IsRemote() && !poi.migrated {
+	if bck.IsRemote() && poi.recvType == cluster.RegularPut {
 		var version string
 		if bck.IsCloud() || bck.IsHTTP() {
 			version, errCode, err = poi.putCloud()
@@ -194,7 +194,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		}
 	}
 
-	// check if bucket was destroyed while PUT was in the progress.
+	// Check if bucket was destroyed while PUT was in the progress.
 	var (
 		bmd        = poi.t.owner.bmd.Get()
 		_, present = bmd.Get(bck)
@@ -205,10 +205,15 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		return
 	}
 
-	lom.Lock(true)
-	defer lom.Unlock(true)
+	if poi.recvType == cluster.ColdGet {
+		ok := lom.TryLock(true)
+		cmn.Assert(!ok) // On cold get we should always be protected by lock.
+	} else {
+		lom.Lock(true)
+		defer lom.Unlock(true)
+	}
 
-	if bck.IsAIS() && lom.VersionConf().Enabled && !poi.migrated {
+	if bck.IsAIS() && lom.VersionConf().Enabled && (poi.recvType == cluster.RegularPut || poi.recvType == cluster.Downloaded) {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}
@@ -318,7 +323,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		poi.lom.SetCksum(cmn.NoneCksum)
 		goto write
 	}
-	if poi.migrated && !conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
+	if poi.recvType == cluster.Migrated && !conf.ShouldValidate() && !poi.cksumToUse.IsEmpty() {
 		// if migration validation is not configured we can just take
 		// the checksum that has arrived with the object (and compute it if not present)
 		poi.lom.SetCksum(poi.cksumToUse)
@@ -451,7 +456,6 @@ do:
 
 	// 3. coldget
 	if coldGet {
-		goi.lom.Unlock(false) // `GetCold` will lock again and return with object locked
 		if !capRead {
 			capRead = true
 			cs = fs.GetCapStatus()
@@ -668,7 +672,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		t:        goi.t,
 		lom:      lom,
 		r:        resp.Body,
-		migrated: true,
+		recvType: cluster.Migrated,
 		workFQN:  workFQN,
 	}
 	if _, err := poi.putObject(); err != nil {
@@ -1122,12 +1126,11 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	defer cleanUp()
 
 	params := cluster.PutObjectParams{
-		Tag:          "copy-dp",
-		Reader:       reader,
-		RecvType:     cluster.Migrated,
-		WithFinalize: true,
+		Tag:      "copy-dp",
+		Reader:   reader,
+		RecvType: cluster.Migrated,
 	}
-	if _, err := coi.t.PutObject(dst, params); err != nil {
+	if err := coi.t.PutObject(dst, params); err != nil {
 		return false, 0, err
 	}
 	return true, dst.Size(), err

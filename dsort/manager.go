@@ -669,14 +669,12 @@ func (m *Manager) makeRecvShardFunc() transport.ReceiveObj {
 		rc := ioutil.NopCloser(object)
 
 		params := cluster.PutObjectParams{
-			Tag:          filetype.WorkfileRecvShard,
-			Reader:       rc,
-			RecvType:     cluster.WarmGet,
-			Cksum:        nil,
-			Started:      started,
-			WithFinalize: true,
+			Tag:     filetype.WorkfileRecvShard,
+			Reader:  rc,
+			Cksum:   nil,
+			Started: started,
 		}
-		if _, err := m.ctx.t.PutObject(lom, params); err != nil {
+		if err := m.ctx.t.PutObject(lom, params); err != nil {
 			m.abort(err)
 			return
 		}

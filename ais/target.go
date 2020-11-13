@@ -1313,7 +1313,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		if err != nil {
 			return http.StatusBadRequest, err
 		}
-		poi.migrated = cluster.RecvType(n) == cluster.Migrated
+		poi.recvType = cluster.RecvType(n)
 	}
 	sizeStr := header.Get("Content-Length")
 	if sizeStr != "" {
@@ -1326,18 +1326,14 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	const retries = 2
-	var (
-		err      error
-		mirrConf = lom.MirrorConf()
-		nmp      = fs.NumAvail()
-	)
-	if !mirrConf.Enabled {
+	if !lom.MirrorConf().Enabled {
 		return
 	}
-	if nmp < 2 {
-		glog.Errorf("%s: insufficient mountpaths (%d)", lom, nmp)
+	if mpathCnt := fs.NumAvail(); mpathCnt < 2 {
+		glog.Errorf("%s: insufficient mountpaths (%d)", lom, mpathCnt)
 		return
 	}
+	var err error
 	for i := 0; i < retries; i++ {
 		xputlrep := xreg.RenewPutMirror(t, lom)
 		if xputlrep == nil {

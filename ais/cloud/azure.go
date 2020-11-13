@@ -331,19 +331,18 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	return
 }
 
-func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
+func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	reader, cksumToUse, errCode, err := ap.GetObjReader(ctx, lom)
 	if err != nil {
-		return "", errCode, err
+		return errCode, err
 	}
 	params := cluster.PutObjectParams{
-		Tag:          fs.WorkfileColdget,
-		Reader:       reader,
-		RecvType:     cluster.ColdGet,
-		Cksum:        cksumToUse,
-		WithFinalize: false,
+		Tag:      fs.WorkfileColdget,
+		Reader:   reader,
+		RecvType: cluster.ColdGet,
+		Cksum:    cksumToUse,
 	}
-	workFQN, err = ap.t.PutObject(lom, params)
+	err = ap.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

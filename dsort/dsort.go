@@ -358,14 +358,12 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		var err error
 		if !m.rs.DryRun {
 			params := cluster.PutObjectParams{
-				Tag:          "dsort",
-				Reader:       r,
-				RecvType:     cluster.WarmGet,
-				Cksum:        nil,
-				Started:      beforeCreation,
-				WithFinalize: true,
+				Tag:     "dsort",
+				Reader:  r,
+				Cksum:   nil,
+				Started: beforeCreation,
 			}
-			_, err = m.ctx.t.PutObject(lom, params)
+			err = m.ctx.t.PutObject(lom, params)
 			n = lom.Size()
 		} else {
 			n, err = io.Copy(ioutil.Discard, r)

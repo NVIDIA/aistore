@@ -31,20 +31,20 @@ func NewTargetMock(bo Bowner) *TargetMock {
 	return t
 }
 
-func (*TargetMock) Snode() *Snode                                       { return nil }
-func (*TargetMock) ClusterStarted() bool                                { return true }
-func (*TargetMock) NodeStarted() bool                                   { return true }
-func (*TargetMock) DataClient() *http.Client                            { return http.DefaultClient }
-func (*TargetMock) NodeStartedTime() time.Time                          { return time.Now() }
-func (*TargetMock) RunLRU(_ string, _ bool, _ ...cmn.Bck)               {}
-func (t *TargetMock) Bowner() Bowner                                    { return t.BO }
-func (*TargetMock) Sowner() Sowner                                      { return nil }
-func (*TargetMock) FSHC(_ error, _ string)                              {}
-func (*TargetMock) MMSA() *memsys.MMSA                                  { return memsys.DefaultPageMM() }
-func (*TargetMock) SmallMMSA() *memsys.MMSA                             { return memsys.DefaultSmallMM() }
-func (*TargetMock) PutObject(_ *LOM, _ PutObjectParams) (string, error) { return "", nil }
-func (*TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error    { return nil }
-func (*TargetMock) EvictObject(_ *LOM) error                            { return nil }
+func (*TargetMock) Snode() *Snode                                    { return nil }
+func (*TargetMock) ClusterStarted() bool                             { return true }
+func (*TargetMock) NodeStarted() bool                                { return true }
+func (*TargetMock) DataClient() *http.Client                         { return http.DefaultClient }
+func (*TargetMock) NodeStartedTime() time.Time                       { return time.Now() }
+func (*TargetMock) RunLRU(_ string, _ bool, _ ...cmn.Bck)            {}
+func (t *TargetMock) Bowner() Bowner                                 { return t.BO }
+func (*TargetMock) Sowner() Sowner                                   { return nil }
+func (*TargetMock) FSHC(_ error, _ string)                           {}
+func (*TargetMock) MMSA() *memsys.MMSA                               { return memsys.DefaultPageMM() }
+func (*TargetMock) SmallMMSA() *memsys.MMSA                          { return memsys.DefaultSmallMM() }
+func (*TargetMock) PutObject(_ *LOM, _ PutObjectParams) error        { return nil }
+func (*TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error { return nil }
+func (*TargetMock) EvictObject(_ *LOM) error                         { return nil }
 func (*TargetMock) DeleteObject(ctx context.Context, lom *LOM, evict bool) (int, error) {
 	return 0, nil
 }

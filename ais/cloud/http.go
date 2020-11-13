@@ -164,18 +164,17 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	return
 }
 
-func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
+func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	reader, _, errCode, err := hp.GetObjReader(ctx, lom)
 	if err != nil {
-		return "", errCode, err
+		return errCode, err
 	}
 	params := cluster.PutObjectParams{
-		Tag:          fs.WorkfileColdget,
-		Reader:       reader,
-		RecvType:     cluster.ColdGet,
-		WithFinalize: false,
+		Tag:      fs.WorkfileColdget,
+		Reader:   reader,
+		RecvType: cluster.ColdGet,
 	}
-	workFQN, err = hp.t.PutObject(lom, params)
+	err = hp.t.PutObject(lom, params)
 	if err != nil {
 		return
 	}

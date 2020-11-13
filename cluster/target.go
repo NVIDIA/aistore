@@ -29,9 +29,10 @@ type (
 )
 
 const (
-	ColdGet RecvType = iota
-	WarmGet
+	RegularPut RecvType = iota
+	ColdGet
 	Migrated
+	Downloaded
 
 	// Error if lock is not available to be acquired immediately. Otherwise acquire, create an object, release the lock.
 	Prefetch GetColdType = iota
@@ -47,7 +48,8 @@ const (
 type CloudProvider interface {
 	Provider() string
 	MaxPageSize() uint
-	GetObj(ctx context.Context, lom *LOM) (workFQN string, errCode int, err error)
+	// GetObj fetches and finalizes the object from the cloud.
+	GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
 	GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cmn.Cksum, errCode int, err error)
 	PutObj(ctx context.Context, r io.Reader, lom *LOM) (version string, errCode int, err error)
 	DeleteObj(ctx context.Context, lom *LOM) (errCode int, err error)
@@ -73,13 +75,12 @@ type (
 		ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *Snode) error
 	}
 	PutObjectParams struct {
-		Tag          string // Used to distinguish between different PUT operation.
-		Reader       io.ReadCloser
-		RecvType     RecvType
-		Cksum        *cmn.Cksum // Checksum to check.
-		Started      time.Time
-		WithFinalize bool // Determines if we should also finalize the object.
-		SkipEncode   bool // Do not run EC encode after finalizing.
+		Tag        string // Used to distinguish between different PUT operation.
+		Reader     io.ReadCloser
+		RecvType   RecvType
+		Cksum      *cmn.Cksum // Checksum to check.
+		Started    time.Time
+		SkipEncode bool // Do not run EC encode after finalizing.
 	}
 	CopyObjectParams struct {
 		BckTo     *Bck
@@ -122,7 +123,7 @@ type Target interface {
 
 	// Object related functions.
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
-	PutObject(lom *LOM, params PutObjectParams) (workFQN string, err error)
+	PutObject(lom *LOM, params PutObjectParams) (err error)
 	EvictObject(lom *LOM) error
 	DeleteObject(ctx context.Context, lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params CopyObjectParams, localOnly bool) (bool, int64, error)

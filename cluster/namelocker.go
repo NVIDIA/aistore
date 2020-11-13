@@ -110,6 +110,34 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 	}
 }
 
+// NOTE: UpgradeLock() stays in the loop for as long as needed to acquire the exclusive lock.
+//
+// The implementation is intentionally simple as we currently don't need
+// cancellation (via context.Context), timeout, sync.Cond.
+func (nlc *nlc) UpgradeLock(uname string) {
+	if nlc.TryUpgradeLock(uname) {
+		return
+	}
+	sleep := initPollInterval
+	for {
+		time.Sleep(sleep)
+		if nlc.TryUpgradeLock(uname) {
+			if glog.FastV(4, glog.SmoduleCluster) {
+				glog.Infof("TryUpgradeLock %s - success", uname)
+			}
+			return
+		}
+		if glog.FastV(4, glog.SmoduleCluster) {
+			glog.Infof("TryUpgradeLock %s - retrying...", uname)
+		}
+
+		sleep *= 2
+		if sleep > maxPollInterval {
+			sleep = maxPollInterval
+		}
+	}
+}
+
 func (nlc *nlc) DowngradeLock(uname string) {
 	nlc.mu.Lock()
 	info, found := nlc.m[uname]

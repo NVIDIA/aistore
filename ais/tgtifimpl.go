@@ -128,32 +128,24 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 }
 
 // slight variation vs t.doPut() above
-func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) (string, error) {
+func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
 	debug.Assert(params.Tag != "")
 	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, params.Tag)
 	poi := &putObjInfo{
-		t:       t,
-		lom:     lom,
-		r:       params.Reader,
-		workFQN: workFQN,
-		ctx:     context.Background(),
-		started: params.Started,
-		skipEC:  params.SkipEncode,
+		t:        t,
+		lom:      lom,
+		r:        params.Reader,
+		workFQN:  workFQN,
+		ctx:      context.Background(),
+		started:  params.Started,
+		recvType: params.RecvType,
+		skipEC:   params.SkipEncode,
 	}
-	if params.RecvType == cluster.Migrated {
-		poi.migrated = true
-		poi.cksumToUse = params.Cksum
-	} else if params.RecvType == cluster.ColdGet {
-		poi.cold = true
+	if poi.recvType != cluster.RegularPut {
 		poi.cksumToUse = params.Cksum
 	}
-	var err error
-	if params.WithFinalize {
-		_, err = poi.putObject()
-	} else {
-		err = poi.writeToFile()
-	}
-	return workFQN, err
+	_, err := poi.putObject()
+	return err
 }
 
 // Send params.Reader to a given target directly.
@@ -232,14 +224,13 @@ func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, o
 	lom.SetVersion(hdr.ObjAttrs.Version)
 
 	params := cluster.PutObjectParams{
-		Tag:          fs.WorkfilePut,
-		Reader:       ioutil.NopCloser(objReader),
-		RecvType:     cluster.Migrated,
-		Cksum:        cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
-		Started:      time.Now(),
-		WithFinalize: true,
+		Tag:      fs.WorkfilePut,
+		Reader:   ioutil.NopCloser(objReader),
+		RecvType: cluster.Migrated,
+		Cksum:    cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Started:  time.Now(),
 	}
-	if _, err := t.PutObject(lom, params); err != nil {
+	if err := t.PutObject(lom, params); err != nil {
 		glog.Error(err)
 	}
 }
@@ -316,50 +307,39 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 	return copied, lom.Size(), err
 }
 
-// FIXME: recomputes checksum if called with a bad one (optimize)
+// FIXME: recomputes checksum if called with a bad one (optimize).
 func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster.GetColdType) (errCode int, err error) {
-	if ty == cluster.Prefetch {
+	switch ty {
+	case cluster.Prefetch:
 		if !lom.TryLock(true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
 			return 0, cmn.ErrSkip
 		}
-	} else {
-		lom.Lock(true) // one cold-GET at a time
+	case cluster.PrefetchWait:
+		lom.Lock(true /*exclusive*/)
+	case cluster.GetCold:
+		lom.UpgradeLock() // One cold-GET at a time.
+	default:
+		cmn.Assertf(false, "%v", ty)
 	}
-	var workFQN string
-	if workFQN, errCode, err = t.Cloud(lom.Bck()).GetObj(ctx, lom); err != nil {
+
+	if errCode, err = t.Cloud(lom.Bck()).GetObj(ctx, lom); err != nil {
 		lom.Unlock(true)
 		glog.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return
 	}
-	defer func() {
-		if err != nil {
-			lom.Unlock(true)
-			if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
-				glog.Errorf("Nested error %s => (remove %s => err: %v)", err, workFQN, errRemove)
-				t.fsErr(errRemove, workFQN)
-			}
-		}
-	}()
-	if err = cmn.Rename(workFQN, lom.FQN); err != nil {
-		err = fmt.Errorf("unexpected failure to rename %s => %s, err: %v", workFQN, lom.FQN, err)
-		t.fsErr(err, lom.FQN)
-		return
-	}
-	if err = lom.Persist(); err != nil {
-		return
-	}
-	lom.ReCache()
 
-	// NOTE: GET - downgrade and keep the lock, PREFETCH - unlock
-	if ty == cluster.Prefetch || ty == cluster.PrefetchWait {
+	switch ty {
+	case cluster.Prefetch, cluster.PrefetchWait:
 		lom.Unlock(true)
-	} else {
+	case cluster.GetCold:
 		t.statsT.AddMany(
 			stats.NamedVal64{Name: stats.GetColdCount, Value: 1},
 			stats.NamedVal64{Name: stats.GetColdSize, Value: lom.Size()},
 		)
 		lom.DowngradeLock()
+	default:
+		cmn.Assertf(false, "%v", ty)
 	}
 	return
 }

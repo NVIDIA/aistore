@@ -49,9 +49,9 @@ func (m *dummyCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (obj
 	return cmn.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck, node)
 }
 
-func (m *dummyCloudProvider) GetObj(ctx context.Context, lom *cluster.LOM) (workFQN string, errCode int, err error) {
+func (m *dummyCloudProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	bck, node := lom.Bck().Bck, m._dummyNode()
-	return "", http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(bck, node)
+	return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(bck, node)
 }
 
 func (m *dummyCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
