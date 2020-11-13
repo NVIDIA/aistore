@@ -180,7 +180,13 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 	)
 
 	if flagIsSet(c, cachedFlag) {
-		msg.Flags = cmn.SelectCached
+		msg.SetFlag(cmn.SelectCached)
+	}
+	if flagIsSet(c, allItemsFlag) {
+		// If `all` flag is set print status of the file so that the output is easier to understand -
+		// there might be multiple files with the same name listed (e.g EC replicas)
+		msg.AddProps(cmn.GetPropsStatus)
+		msg.SetFlag(cmn.SelectMisplaced)
 	}
 	props := strings.Split(parseStrFlag(c, objPropsFlag), ",")
 	if cmn.StringInSlice("all", props) {
@@ -188,11 +194,6 @@ func listObjects(c *cli.Context, bck cmn.Bck) error {
 	} else {
 		msg.AddProps(cmn.GetPropsName)
 		msg.AddProps(props...)
-		if flagIsSet(c, allItemsFlag) && !msg.WantProp(cmn.GetPropsStatus) {
-			// If `all` flag is set print status of the file so that the output is easier to understand -
-			// there might be multiple files with the same name listed (e.g EC replicas)
-			msg.AddProps(cmn.GetPropsStatus)
-		}
 	}
 
 	if flagIsSet(c, startAfterFlag) {
