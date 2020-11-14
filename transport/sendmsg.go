@@ -79,7 +79,7 @@ repeat:
 			}
 			return s.deactivate()
 		}
-		l := s.insMsg(&s.msgoff.msg)
+		l := insMsg(s.maxheader, &s.msgoff.msg)
 		s.header = s.maxheader[:l]
 		s.msgoff.ins = inHdr
 		return s.send(b)
@@ -150,7 +150,7 @@ func (s *MsgStream) drain() {
 func (s *MsgStream) closeAndFree() {
 	close(s.workCh)
 
-	s.slab.Free(s.maxheader)
+	s.mm.Free(s.maxheader)
 }
 
 // gc: post idle tick if idle

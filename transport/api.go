@@ -24,6 +24,11 @@ import (
 // object stream //
 ///////////////////
 
+const (
+	SizeUnknown = -1
+	MaxSizePDU  = cmn.MiB
+)
+
 type (
 	// advanced usage: additional stream control
 	Extra struct {
@@ -31,7 +36,8 @@ type (
 		Callback    ObjSentCB     // typical usage: to free SGLs, close files, etc.
 		Compression string        // see CompressAlways, etc. enum
 		MMSA        *memsys.MMSA  // compression-related buffering
-		Config      *cmn.Config
+		Config      *cmn.Config   // config
+		SizePDU     int32         // 0(zero): no PDUs; must be below MaxSizePDU; unknown size _requires_ PDUs
 	}
 	// stream stats
 	Stats struct {

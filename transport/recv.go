@@ -6,7 +6,6 @@
 package transport
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -22,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 	"github.com/pierrec/lz4/v3"
 )
@@ -119,11 +117,15 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 			if obj != nil {
 				h.rxObj(w, obj.hdr, obj, eofOK(err))
 				hdr := &obj.hdr
-				if hdr.ObjAttrs.Size == obj.off {
+				objSize := hdr.ObjAttrs.Size
+				if hdr.IsUnsized() && err == io.EOF {
+					objSize = obj.off
+				}
+				if objSize == obj.off {
 					var (
 						num = stats.Num.Inc()
-						_   = stats.Size.Add(hdr.ObjAttrs.Size)
-						off = stats.Offset.Add(hdr.ObjAttrs.Size)
+						_   = stats.Size.Add(objSize)
+						off = stats.Offset.Add(objSize)
 					)
 					if verbose {
 						xxh, _ := UID2SessID(uid)
@@ -217,20 +219,7 @@ func (it *iterator) nextProtoHdr() (hlen int, isObj bool, err error) {
 		return
 	}
 	// extract and validate hlen
-	_, hl64ex := extUint64(0, it.headerBuf)
-	isObj = hl64ex&msgMask == 0
-	hl64 := int64(hl64ex & ^msgMask)
-	hlen = int(hl64)
-	if hlen > len(it.headerBuf) {
-		err = fmt.Errorf("sbrk %s: hlen %d exceeds buf %d", it.trname, hlen, len(it.headerBuf))
-		return
-	}
-	// validate checksum
-	_, checksum := extUint64(0, it.headerBuf[cmn.SizeofI64:])
-	chc := xoshiro256.Hash(uint64(hl64))
-	if checksum != chc {
-		err = fmt.Errorf("sbrk %s: bad checksum %x != %x (hlen=%d)", it.trname, checksum, chc, hlen)
-	}
+	hlen, isObj, err = extProtoHdr(it.headerBuf, it.trname)
 	return
 }
 
@@ -278,7 +267,13 @@ func (it *iterator) nextMsg(hlen int) (msg Msg, err error) {
 ///////////////
 
 func (obj *objReader) Read(b []byte) (n int, err error) {
-	rem := obj.hdr.ObjAttrs.Size - obj.off
+	if obj.hdr.IsUnsized() {
+		n, err = obj.body.Read(b)
+		obj.off += int64(n)
+		return
+	}
+	objSize := obj.hdr.ObjAttrs.Size
+	rem := objSize - obj.off
 	if rem < int64(len(b)) {
 		b = b[:int(rem)]
 	}
@@ -286,13 +281,13 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	obj.off += int64(n)
 	switch err {
 	case nil:
-		if obj.off >= obj.hdr.ObjAttrs.Size {
+		if obj.off >= objSize {
 			err = io.EOF
-			debug.Assert(obj.off == obj.hdr.ObjAttrs.Size)
+			debug.Assert(obj.off == objSize)
 		}
 	case io.EOF:
-		if obj.off != obj.hdr.ObjAttrs.Size {
-			glog.Errorf("actual off: %d, expected: %d", obj.off, obj.hdr.ObjAttrs.Size)
+		if obj.off != objSize {
+			glog.Errorf("actual off: %d, expected: %d", obj.off, objSize)
 		}
 	default:
 		glog.Errorf("err %v\n", err) // canceled?
@@ -302,62 +297,6 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 
 func (obj *objReader) String() string {
 	return fmt.Sprintf("%s/%s(size=%d)", obj.hdr.Bck, obj.hdr.ObjName, obj.hdr.ObjAttrs.Size)
-}
-
-/////////////////////////////////////////
-// obj-header/message de-serialization //
-/////////////////////////////////////////
-
-func ExtObjHeader(body []byte, hlen int) (hdr ObjHdr) {
-	var off int
-	off, hdr.Bck.Name = extString(0, body)
-	off, hdr.ObjName = extString(off, body)
-	off, hdr.Bck.Provider = extString(off, body)
-	off, hdr.Bck.Ns.Name = extString(off, body)
-	off, hdr.Bck.Ns.UUID = extString(off, body)
-	off, hdr.Opaque = extByte(off, body)
-	off, hdr.ObjAttrs = extAttrs(off, body)
-	debug.Assertf(off == hlen, "off %d, hlen %d", off, hlen)
-	return
-}
-
-func ExtMsg(body []byte, hlen int) (msg Msg) {
-	var off int
-	off, msg.Flags = extInt64(0, body)
-	off, msg.Body = extByte(off, body)
-	debug.Assertf(off == hlen, "off %d, hlen %d", off, hlen)
-	return
-}
-
-func extString(off int, from []byte) (int, string) {
-	off, bt := extByte(off, from)
-	return off, string(bt)
-}
-
-func extByte(off int, from []byte) (int, []byte) {
-	l := int(binary.BigEndian.Uint64(from[off:]))
-	off += cmn.SizeofI64
-	return off + l, from[off : off+l]
-}
-
-func extInt64(off int, from []byte) (int, int64) {
-	off, val := extUint64(off, from)
-	return off, int64(val)
-}
-
-func extUint64(off int, from []byte) (int, uint64) {
-	size := binary.BigEndian.Uint64(from[off:])
-	off += cmn.SizeofI64
-	return off, size
-}
-
-func extAttrs(off int, from []byte) (n int, attr ObjectAttrs) {
-	off, attr.Size = extInt64(off, from)
-	off, attr.Atime = extInt64(off, from)
-	off, attr.CksumType = extString(off, from)
-	off, attr.CksumValue = extString(off, from)
-	off, attr.Version = extString(off, from)
-	return off, attr
 }
 
 //

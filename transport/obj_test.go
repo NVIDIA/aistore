@@ -296,8 +296,9 @@ func Test_MultipleNetworks(t *testing.T) {
 	}
 
 	totalSend := int64(0)
+	random := newRand(mono.NanoTime())
 	for _, stream := range streams {
-		hdr, reader := makeRandReader()
+		hdr, reader := makeRandReader(random)
 		totalSend += hdr.ObjAttrs.Size
 		stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 	}
@@ -335,8 +336,9 @@ func Test_OnSendCallback(t *testing.T) {
 		mu        sync.Mutex
 		posted    = make([]*randReader, objectCnt)
 	)
+	random := newRand(mono.NanoTime())
 	for idx := 0; idx < len(posted); idx++ {
-		hdr, rr := makeRandReader()
+		hdr, rr := makeRandReader(random)
 		mu.Lock()
 		posted[idx] = rr
 		mu.Unlock()
@@ -598,7 +600,7 @@ func Test_CompletionCount(t *testing.T) {
 			stream.Send(&transport.Obj{Hdr: hdr, Callback: callback})
 			rem = random.Int63() % 13
 		} else {
-			hdr, rr := makeRandReader()
+			hdr, rr := makeRandReader(random)
 			stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, Callback: callback})
 		}
 		numSent++
@@ -662,12 +664,18 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	if testing.Short() {
 		runFor = 10 * time.Second
 	}
+	var randReader *randReader
 	for time.Since(now) < runFor {
 		obj := transport.AllocSend()
-		obj.Hdr, obj.Reader = makeRandReader()
+		obj.Hdr, randReader = makeRandReader(random)
+		obj.Reader = randReader
 		stream.Send(obj)
 		num++
-		size += obj.Hdr.ObjAttrs.Size
+		if obj.IsUnsized() {
+			size += randReader.offEOF
+		} else {
+			size += obj.Hdr.ObjAttrs.Size
+		}
 		if size-prevsize >= cmn.GiB*4 {
 			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
 			prevsize = size
@@ -704,7 +712,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 		if err != io.EOF {
 			tassert.CheckFatal(t, err)
 		}
-		if written != hdr.ObjAttrs.Size {
+		if !hdr.IsUnsized() && written != hdr.ObjAttrs.Size {
 			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		*totalReceived += written
@@ -740,7 +748,7 @@ func genRandomHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 	case 0:
 		hdr.ObjAttrs.Size = (x & 0xffffff) + 1
 	case 1:
-		hdr.ObjAttrs.Size = (x & 0xfffff) + 1
+		hdr.ObjAttrs.Size = (x & 0xfffff) + 1 // TODO -- FIXME -- DEBUG transport.SizeUnknown
 	case 2:
 		hdr.ObjAttrs.Size = (x & 0xffff) + 1
 	default:
@@ -759,6 +767,7 @@ type randReader struct {
 	slab   *memsys.Slab
 	off    int64
 	random *rand.Rand
+	offEOF int64 // when size is unknown
 	clone  bool
 }
 
@@ -768,23 +777,32 @@ func newRandReader(random *rand.Rand, hdr transport.ObjHdr, slab *memsys.Slab) *
 	if err != nil {
 		panic("Failed read rand: " + err.Error())
 	}
-	return &randReader{buf: buf, hdr: hdr, slab: slab, random: random}
+	r := &randReader{buf: buf, hdr: hdr, slab: slab, random: random}
+	if hdr.IsUnsized() {
+		r.offEOF = int64(random.Int31())
+	}
+	return r
 }
 
-func makeRandReader() (transport.ObjHdr, *randReader) {
+func makeRandReader(random *rand.Rand) (transport.ObjHdr, *randReader) {
 	slab, err := MMSA.GetSlab(32 * cmn.KiB)
 	if err != nil {
 		panic("Failed getting slab: " + err.Error())
 	}
-	random := newRand(mono.NanoTime())
 	hdr := genRandomHeader(random)
 	reader := newRandReader(random, hdr, slab)
 	return hdr, reader
 }
 
 func (r *randReader) Read(p []byte) (n int, err error) {
-	for {
-		rem := r.hdr.ObjAttrs.Size - r.off
+	var objSize int64
+	if r.hdr.IsUnsized() {
+		objSize = r.offEOF
+	} else {
+		objSize = r.hdr.ObjAttrs.Size
+	}
+	for loff := 0; ; {
+		rem := objSize - r.off
 		if rem == 0 {
 			return n, io.EOF
 		}
@@ -792,11 +810,12 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 		if l64 == 0 {
 			return
 		}
-		nr := copy(p[n:n+int(l64)], r.buf)
-		if false && nr > 0 { // to fully randomize
-			r.random.Read(p[n : n+nr])
-		}
+		nr := copy(p[n:n+int(l64)], r.buf[loff:])
 		n += nr
+		loff += 16
+		if loff >= len(r.buf)-16 {
+			loff = 0
+		}
 		r.off += int64(nr)
 	}
 }

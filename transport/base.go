@@ -6,10 +6,8 @@
 package transport
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"net/url"
 	"os"
 	"path"
@@ -20,8 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xoshiro256"
 )
 
 // transport defaults
@@ -30,13 +28,6 @@ const (
 	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
 	defaultIdleOut = time.Second * 2
 	tickUnit       = time.Second
-)
-
-// internal flags and markers
-const (
-	lastMarker = math.MaxInt64              // end of stream (send & receive)
-	tickMarker = math.MaxInt64 ^ 0xa5a5a5a5 // idle tick (send side only)
-	msgMask    = uint64(1 << 63)            // messages vs objects demux (send & receive)
 )
 
 // stream TCP/HTTP session: inactive <=> active transitions
@@ -48,6 +39,7 @@ const (
 // in-send states
 const (
 	inHdr = iota + 1
+	inPDU
 	inData
 	inEOB
 )
@@ -97,7 +89,8 @@ type (
 			index   int           // heap stuff
 		}
 		wg        sync.WaitGroup
-		slab      *memsys.Slab
+		mm        *memsys.MMSA
+		pdu       *pdu   // PDU buffer
 		maxheader []byte // max header buffer
 		header    []byte // object header - slice of the maxheader with bucket/objName, etc. fields
 		term      struct {
@@ -115,10 +108,8 @@ type (
 
 func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	u, err := url.Parse(toURL)
-	if err != nil {
-		glog.Errorf("Failed to parse %s: %v", toURL, err)
-		return
-	}
+	cmn.AssertNoErr(err)
+
 	s = &streamBase{client: client, toURL: toURL}
 
 	s.time.idleOut = defaultIdleOut
@@ -137,13 +128,21 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 	s.stopCh = cmn.NewStopCh()
 	s.postCh = make(chan struct{}, 1)
 
-	mem := memsys.DefaultPageMM()
+	s.mm = memsys.DefaultPageMM()
 	if extra != nil && extra.MMSA != nil {
-		mem = extra.MMSA
+		s.mm = extra.MMSA
+	}
+	s.maxheader, _ = s.mm.Alloc(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
+	if extra != nil && extra.SizePDU > 0 {
+		if extra.SizePDU > MaxSizePDU {
+			debug.Assert(false)
+			extra.SizePDU = MaxSizePDU
+		}
+		buf, _ := s.mm.Alloc(int64(extra.SizePDU))
+		s.pdu = newPDU(buf)
 	}
 
-	s.maxheader, s.slab = mem.Alloc(maxHeaderSize) // NOTE: must be large enough to accommodate max-size
-	s.sessST.Store(inactive)                       // NOTE: initiate HTTP session upon the first arrival
+	s.sessST.Store(inactive) // NOTE: initiate HTTP session upon the first arrival
 
 	s.term.reason = new(string)
 	return
@@ -263,68 +262,6 @@ func (s *streamBase) sendLoop(dryrun bool) {
 		// cleanup
 		s.streamer.abortPending(s.term.err, false /*completions*/)
 	}
-}
-
-//////////////////////////
-// header serialization //
-//////////////////////////
-
-func (s *streamBase) insObjHeader(hdr *ObjHdr) (l int) {
-	l = cmn.SizeofI64 * 2
-	l = insString(l, s.maxheader, hdr.Bck.Name)
-	l = insString(l, s.maxheader, hdr.ObjName)
-	l = insString(l, s.maxheader, hdr.Bck.Provider)
-	l = insString(l, s.maxheader, hdr.Bck.Ns.Name)
-	l = insString(l, s.maxheader, hdr.Bck.Ns.UUID)
-	l = insByte(l, s.maxheader, hdr.Opaque)
-	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
-	hlen := uint64(l - cmn.SizeofI64*2)
-	insUint64(0, s.maxheader, hlen)
-	checksum := xoshiro256.Hash(hlen)
-	insUint64(cmn.SizeofI64, s.maxheader, checksum)
-	return
-}
-
-func (s *streamBase) insMsg(msg *Msg) (l int) {
-	l = cmn.SizeofI64 * 2
-	l = insInt64(l, s.maxheader, msg.Flags)
-	l = insByte(l, s.maxheader, msg.Body)
-	hlen := uint64(l - cmn.SizeofI64*2)
-	insUint64(0, s.maxheader, hlen|msgMask) // mask
-	checksum := xoshiro256.Hash(hlen)
-	insUint64(cmn.SizeofI64, s.maxheader, checksum)
-	return
-}
-
-func insString(off int, to []byte, str string) int {
-	return insByte(off, to, []byte(str))
-}
-
-func insByte(off int, to, b []byte) int {
-	l := len(b)
-	binary.BigEndian.PutUint64(to[off:], uint64(l))
-	off += cmn.SizeofI64
-	n := copy(to[off:], b)
-	cmn.Assert(n == l)
-	return off + l
-}
-
-func insInt64(off int, to []byte, i int64) int {
-	return insUint64(off, to, uint64(i))
-}
-
-func insUint64(off int, to []byte, i uint64) int {
-	binary.BigEndian.PutUint64(to[off:], i)
-	return off + cmn.SizeofI64
-}
-
-func insAttrs(off int, to []byte, attr ObjectAttrs) int {
-	off = insInt64(off, to, attr.Size)
-	off = insInt64(off, to, attr.Atime)
-	off = insString(off, to, attr.CksumType)
-	off = insString(off, to, attr.CksumValue)
-	off = insString(off, to, attr.Version)
-	return off
 }
 
 //////////////////

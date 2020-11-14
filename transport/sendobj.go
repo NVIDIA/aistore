@@ -100,6 +100,7 @@ func (s *Stream) initCompression(extra *Extra) {
 }
 
 func (s *Stream) compressed() bool { return s.lz4s.s == s }
+func (s *Stream) usePDU() bool     { return s.pdu != nil }
 
 func (s *Stream) resetCompression() {
 	s.lz4s.sgl.Reset()
@@ -174,22 +175,30 @@ func (s *Stream) doRequest() error {
 
 // as io.Reader
 func (s *Stream) Read(b []byte) (n int, err error) {
-	s.time.inSend.Store(true) // indication for Collector to delay cleanup
-	if s.inSend() {
+	s.time.inSend.Store(true) // for collector to delay cleanup
+	if !s.inSend() {          // true when transmitting s.sendoff.obj
+		goto repeat
+	}
+	switch s.sendoff.ins {
+	case inData:
 		obj := &s.sendoff.obj
-		if s.sendoff.ins == inData {
-			if !obj.IsHeaderOnly() {
-				return s.sendData(b)
-			}
-			if !obj.IsLast() {
-				s.eoObj(nil)
-			} else {
-				err = io.EOF
-				return
-			}
-		} else {
-			return s.sendHdr(b)
+		if !obj.IsHeaderOnly() {
+			return s.sendData(b)
 		}
+		if !obj.IsLast() {
+			s.eoObj(nil)
+		} else {
+			err = io.EOF
+			return
+		}
+	case inPDU:
+		if s.pdu.rem() > 0 {
+			return s.sendPDU(b)
+		}
+		s.pdu.next(&s.sendoff.obj)
+		return s.sendPDU(b)
+	case inHdr:
+		return s.sendHdr(b)
 	}
 repeat:
 	select {
@@ -206,7 +215,8 @@ repeat:
 			}
 			return s.deactivate()
 		}
-		l := s.insObjHeader(&s.sendoff.obj.Hdr)
+		cmn.Assert(!obj.IsUnsized() || s.usePDU()) // TODO: on the fly
+		l := insObjHeader(s.maxheader, &s.sendoff.obj.Hdr)
 		s.header = s.maxheader[:l]
 		s.sendoff.ins = inHdr
 		return s.sendHdr(b)
@@ -221,24 +231,28 @@ repeat:
 func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.sendoff.off:])
 	s.sendoff.off += int64(n)
-	if s.sendoff.off >= int64(len(s.header)) {
-		cmn.Assert(s.sendoff.off == int64(len(s.header)))
-		s.stats.Offset.Add(s.sendoff.off)
-		if verbose {
-			num := s.stats.Num.Load()
-			glog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
-		}
+	if s.sendoff.off < int64(len(s.header)) {
+		return
+	}
+	debug.Assert(s.sendoff.off == int64(len(s.header)))
+	s.stats.Offset.Add(s.sendoff.off)
+	if verbose {
+		num := s.stats.Num.Load()
+		glog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
+	}
+	obj := &s.sendoff.obj
+	if s.usePDU() && !obj.IsHeaderOnly() {
+		s.sendoff.ins = inPDU
+	} else {
 		s.sendoff.ins = inData
-		s.sendoff.off = 0
-		if s.sendoff.obj.IsLast() {
-			if verbose {
-				glog.Infof("%s: sent last", s)
-			}
-			err = io.EOF
-			s.lastCh.Close()
+	}
+	s.sendoff.off = 0
+	if obj.IsLast() {
+		if verbose {
+			glog.Infof("%s: sent last", s)
 		}
-	} else if verbose {
-		glog.Infof("%s: split header: copied %d < %d hlen", s, s.sendoff.off, len(s.header))
+		err = io.EOF
+		s.lastCh.Close()
 	}
 	return
 }
@@ -253,7 +267,7 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 	if err != nil {
 		if err == io.EOF {
 			if s.sendoff.off < objSize {
-				return n, fmt.Errorf("%s: read (%d) shorter than expected (%d)", s, s.sendoff.off, objSize)
+				return n, fmt.Errorf("%s: read (%d) shorter than size (%d)", s, s.sendoff.off, objSize)
 			}
 			err = nil
 		}
@@ -264,21 +278,26 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 	return
 }
 
+func (s *Stream) sendPDU(b []byte) (n int, err error) { return s.pdu.read(b) }
+
 // end-of-object updates stats, reset idle timeout, and post completion
 // NOTE: reader.Close() is done by the completion handling code doCmpl
 func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
-	size := obj.Hdr.ObjAttrs.Size
+	objSize := obj.Hdr.ObjAttrs.Size
+	if obj.IsUnsized() {
+		objSize = s.sendoff.off
+	}
 	s.Sizecur += s.sendoff.off
 	s.stats.Offset.Add(s.sendoff.off)
 	if err != nil {
 		goto exit
 	}
-	if s.sendoff.off != size {
+	if s.sendoff.off != objSize {
 		err = fmt.Errorf("%s: %s offset %d != size", s, obj, s.sendoff.off)
 		goto exit
 	}
-	s.stats.Size.Add(size)
+	s.stats.Size.Add(objSize)
 	s.Numcur++
 	s.stats.Num.Inc()
 	if verbose {
@@ -294,7 +313,7 @@ exit:
 	s.sendoff = sendoff{ins: inEOB}
 }
 
-func (s *Stream) inSend() bool { return s.sendoff.ins == inHdr || s.sendoff.ins == inData }
+func (s *Stream) inSend() bool { return s.sendoff.ins >= inHdr || s.sendoff.ins < inEOB }
 
 func (s *Stream) dryrun() {
 	var (
@@ -343,7 +362,10 @@ func (s *Stream) closeAndFree() {
 	close(s.workCh)
 	close(s.cmplCh)
 
-	s.slab.Free(s.maxheader)
+	s.mm.Free(s.maxheader)
+	if s.usePDU() {
+		s.mm.Free(s.pdu.buf)
+	}
 }
 
 // gc: post idle tick if idle
@@ -363,6 +385,7 @@ func (s *Stream) idleTick() {
 func (obj *Obj) IsLast() bool       { return obj.Hdr.IsLast() }
 func (obj *Obj) IsIdleTick() bool   { return obj.Hdr.ObjAttrs.Size == tickMarker }
 func (obj *Obj) IsHeaderOnly() bool { return obj.Hdr.ObjAttrs.Size == 0 || obj.Hdr.IsLast() }
+func (obj *Obj) IsUnsized() bool    { return obj.Hdr.IsUnsized() }
 func (obj *Obj) String() string {
 	s := fmt.Sprintf("sobj-%s/%s", obj.Hdr.Bck, obj.Hdr.ObjName)
 	if obj.IsHeaderOnly() {
@@ -375,7 +398,8 @@ func (obj *Obj) SetPrc(n int) {
 	obj.prc = atomic.NewInt64(int64(n))
 }
 
-func (hdr *ObjHdr) IsLast() bool { return hdr.ObjAttrs.Size == lastMarker }
+func (hdr *ObjHdr) IsLast() bool    { return hdr.ObjAttrs.Size == lastMarker }
+func (hdr *ObjHdr) IsUnsized() bool { return hdr.ObjAttrs.Size == SizeUnknown }
 
 func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName string, bck cmn.Bck, opaque []byte) {
 	hdr.Bck = bck
