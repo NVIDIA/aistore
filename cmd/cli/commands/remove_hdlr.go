@@ -149,7 +149,7 @@ func removeNodeHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("node %q does not exist", sid)
 	}
 
-	var id, action string
+	var id string
 	mode := parseStrFlag(c, maintenanceModeFlag)
 
 	if smap.IsPrimary(node) {
@@ -173,9 +173,9 @@ func removeNodeHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	if action == cmn.ActStopMaintenance {
+	if mode == maintenanceModeStop {
 		fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", sid)
-	} else if action == cmn.ActDecommission && skipRebalance {
+	} else if mode == maintenanceModeDecommission && skipRebalance {
 		fmt.Fprintf(c.App.Writer, "Node %q removed from the cluster\n", sid)
 	} else {
 		fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", sid)
