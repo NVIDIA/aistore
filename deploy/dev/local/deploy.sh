@@ -114,6 +114,8 @@ TEST_FSPATH_COUNT=${test_fspath_cnt}
 
 parse_cld_providers
 
+create_loopback_paths
+
 if ! AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}  make --no-print-directory -C ${AISTORE_DIR} node; then
   print_error "failed to compile 'aisnode' binary"
 fi

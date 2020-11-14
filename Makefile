@@ -148,12 +148,7 @@ kill: ## Kill all locally deployed targets and proxies
 
 clean: ## Remove all AIS related files and binaries
 	@echo -n "Cleaning... "
-	@rm -rf ~/.ais* && \
-		rm -rf ~/.authn && \
-		rm -rf /tmp/ais* && \
-		rm -f $(BUILD_DEST)/ais* # cleans 'ais' (CLI), 'aisnode' (TARGET/PROXY), 'aisfs' (FUSE), 'aisloader' && \
-		rm -f $(BUILD_DEST)/authn && \
-		rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
+	@"$(DEPLOY_DIR)/clean.sh"
 	@echo "done."
 
 clean-client-bindings: ## Remove all generated client binding files

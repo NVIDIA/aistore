@@ -19,7 +19,7 @@ function post_deploy() {
   echo "run tests with cloud bucket: ${BUCKET}"
 }
 
-# $1 - num_targets; $2 - num_proxies; $3 - num_mountpaths; $4 - cloud
+# $1 - num_targets; $2 - num_proxies; $3 - num_mountpaths; $4 - $6 - cloud; $7 loopback_mpaths
 function deploy() {
   cleanup
 
@@ -28,7 +28,7 @@ function deploy() {
 
   targets=$1
   proxies=$2
-  { echo $targets; echo $proxies; echo $3; echo $4; echo $5; echo $6; } | MODE="debug" make deploy
+  { echo $targets; echo $proxies; echo $3; echo $4; echo $5; echo $6; echo $7; } | MODE="debug" make deploy
   export NUM_PROXY=$proxies
   export NUM_TARGET=$targets
   post_deploy $((targets + proxies))
@@ -64,7 +64,7 @@ export K8S_HOST_NAME="minikube"
 # We use this because minikube is a 1-node kubernetes cluster
 # and with pod anti-affinities (for enabling single transformer per target at a time) it would
 # cause failures with pods getting stuck in `Pending` state.
-deploy 1 1 3 n n n
+deploy 1 1 3 n n n n
 echo "----- RUNNING K8S TESTS -----"
 BUCKET=test RE="TestETL" make test-run
 exit_code=$?
@@ -75,7 +75,7 @@ echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
 ./deploy/dev/k8s/stop.sh
 
 # Running long tests
-deploy 6 6 4 y y n
+deploy 6 6 4 y y n y
 for bucket in "aws://ais-jenkins" "gcp://ais-jenkins"; do
   echo "----- RUNNING LONG TESTS WITH: ${bucket} -----"
   BUCKET=${bucket} make test-long && make test-aisloader
