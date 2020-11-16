@@ -1169,6 +1169,11 @@ func TestDownloadSync(t *testing.T) {
 func TestDownloadJobLimitConnections(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
+	const (
+		limitConnection = 2
+		template        = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
+	)
+
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1176,8 +1181,6 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-
-		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
@@ -1191,7 +1194,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 			Bck:         bck,
 			Description: generateDownloadDesc(),
 			Limits: downloader.DlLimits{
-				Connections: 2,
+				Connections: limitConnection,
 			},
 		},
 		Template: template,
@@ -1199,21 +1202,30 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer abortDownload(t, id)
 
-	time.Sleep(2 * time.Second) // wait for downloader to pick up the job
+	tutils.Logln("waiting for checks...")
+	minConnectionLimitReached := false
+	for i := 0; i < 10; i++ {
+		resp, err := api.DownloadStatus(baseParams, id)
+		tassert.CheckFatal(t, err)
 
-	resp, err := api.DownloadStatus(baseParams, id)
-	tassert.CheckFatal(t, err)
-	targetCnt := smap.CountActiveTargets()
-	tassert.Errorf(
-		t, len(resp.CurrentTasks) > targetCnt,
-		"number of tasks mismatch (expected at least: %d, got: %d)",
-		targetCnt, len(resp.CurrentTasks),
-	)
-	tassert.Errorf(
-		t, len(resp.CurrentTasks) <= 2*targetCnt,
-		"number of tasks mismatch (expected as most: %d, got: %d)",
-		2*targetCnt, len(resp.CurrentTasks),
-	)
+		// Expect that we never exceed the limit of connections per target.
+		targetCnt := smap.CountActiveTargets()
+		tassert.Errorf(
+			t, len(resp.CurrentTasks) <= limitConnection*targetCnt,
+			"number of tasks mismatch (expected as most: %d, got: %d)",
+			2*targetCnt, len(resp.CurrentTasks),
+		)
+
+		// Expect that at some point in time there are more connections than targets.
+		if len(resp.CurrentTasks) > targetCnt {
+			minConnectionLimitReached = true
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	tassert.Errorf(t, minConnectionLimitReached, "expected more connections than number of targets")
+	tutils.Logln("done waiting")
 }
 
 func TestDownloadJobConcurrency(t *testing.T) {
