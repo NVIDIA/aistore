@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
@@ -105,31 +104,38 @@ func doHTTPRequestGetRespReader(reqParams ReqParams) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func doHTTPRequestGetHTTPResp(reqParams ReqParams) (*http.Response, error) {
-	var reqBody io.Reader
+func doHTTPRequestGetHTTPResp(reqParams ReqParams) (resp *http.Response, err error) {
+	var (
+		reqBody io.Reader
+		req     *http.Request
+	)
+
 	if reqParams.Body != nil {
 		reqBody = bytes.NewBuffer(reqParams.Body)
 	}
 
 	urlPath := reqParams.BaseParams.URL + reqParams.Path
-	req, err := http.NewRequest(reqParams.BaseParams.Method, urlPath, reqBody)
+	req, err = http.NewRequest(reqParams.BaseParams.Method, urlPath, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request, err: %v", err)
 	}
 	setRequestOptParams(req, reqParams)
 	setAuthToken(req, reqParams.BaseParams)
 
-	resp, err := reqParams.BaseParams.Client.Do(req)
-	if err != nil {
-		sleep := httpRetrySleep
-		if cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err) {
-			for i := 0; i < httpMaxRetries && err != nil; i++ {
-				time.Sleep(sleep)
-				resp, err = reqParams.BaseParams.Client.Do(req)
-				sleep += sleep / 2
-			}
+	call := func() (int, error) {
+		resp, err = reqParams.BaseParams.Client.Do(req) // nolint:bodyclose // closed by a caller
+		if resp != nil {
+			return resp.StatusCode, err
 		}
+		return 0, err
 	}
+
+	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+		Call:    call,
+		SoftErr: httpMaxRetries,
+		Sleep:   httpRetrySleep,
+		BackOff: true,
+	})
 
 	if err != nil {
 		err = fmt.Errorf("failed to %s, err: %v", reqParams.BaseParams.Method, err)

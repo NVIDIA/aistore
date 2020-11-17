@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
@@ -487,14 +486,14 @@ func (m *AisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err
 
 func (m *AisCloudProvider) try(remoteBck cmn.Bck, f func(bck cmn.Bck) error) (err error) {
 	remoteBck.Ns.UUID = ""
-	for i := 0; i < aisCloudRetries+1; i++ {
-		err = f(remoteBck)
-		if err == nil || !(cmn.IsErrConnectionRefused(err) || cmn.IsErrConnectionReset(err)) {
-			break
-		}
-		time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
-	}
-	return
+
+	return cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+		Call: func() (int, error) {
+			return 0, f(remoteBck)
+		},
+		SoftErr: aisCloudRetries + 1,
+		Sleep:   cmn.GCO.Get().Timeout.CplaneOperation,
+	})
 }
 
 func extractErrCode(e error) (int, error) {

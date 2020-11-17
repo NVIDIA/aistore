@@ -89,6 +89,20 @@ type (
 	}
 
 	HTTPMuxers map[string]*mux.ServeMux // by http.Method
+
+	CallWithRetryArgs struct {
+		Call    func() (int, error)
+		IsFatal func(error) bool
+
+		Action string
+		Caller string
+
+		SoftErr uint // How many retires on ConnectionRefused or ConnectionReset error.
+		HardErr uint // How many retries on any other error.
+		Sleep   time.Duration
+
+		BackOff bool // If requests should be retried less and less often.
+	}
 )
 
 // ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
@@ -537,4 +551,46 @@ func (m HTTPMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusBadRequest)
+}
+
+func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
+	Assert(args.SoftErr > 0 || args.HardErr > 0)
+	config := GCO.Get()
+
+	if args.Sleep == 0 {
+		args.Sleep = config.Timeout.CplaneOperation / 4
+	}
+
+	callerStr := ""
+	if args.Caller != "" {
+		callerStr = args.Caller + ": "
+	}
+
+	sleep := args.Sleep
+	for i, j, k := uint(0), uint(0), uint(1); ; k++ {
+		var status int
+		if status, err = args.Call(); err == nil {
+			return
+		}
+		if args.IsFatal != nil && args.IsFatal(err) {
+			glog.Error(err)
+			return
+		}
+
+		glog.Errorf("%sFailed to %s, err: %v (status code: %d)", callerStr, args.Action, err, status)
+		if IsErrConnectionRefused(err) || IsErrConnectionReset(err) {
+			j++
+		} else {
+			i++
+		}
+		if args.BackOff && k > 1 {
+			sleep = MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive)
+		}
+		if i > args.HardErr || j > args.SoftErr {
+			break
+		}
+		time.Sleep(sleep)
+		glog.Errorf("%sretrying on err: %v (status code: %d)...", callerStr, err, k)
+	}
+	return
 }

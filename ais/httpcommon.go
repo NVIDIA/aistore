@@ -1537,50 +1537,28 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 
 // NOTE: default retry policy for ops like join-cluster et al.
 func (h *httprunner) withRetry(call func(arg ...string) (int, error), action string, backoff bool, arg ...string) (err error) {
-	var (
-		sleep       time.Duration
-		config      = cmn.GCO.Get()
-		retryPolicy = struct {
-			sleep   time.Duration
-			anyerr  int
-			refused int
-			backoff bool
-		}{backoff: backoff}
-	)
+	config := cmn.GCO.Get()
+	retryArgs := cmn.CallWithRetryArgs{
+		Call: func() (int, error) {
+			return call(arg...)
+		},
+		IsFatal: func(err error) bool {
+			return strings.Contains(err.Error(), ciePrefix)
+		},
+		Action:  action,
+		Caller:  h.si.String(),
+		HardErr: 1,
+		SoftErr: 2,
+	}
+
 	if backoff {
-		retryPolicy.sleep = config.Timeout.CplaneOperation / 2
-		retryPolicy.anyerr = 2
-		retryPolicy.refused = 4
-	} else {
-		retryPolicy.sleep = config.Timeout.CplaneOperation / 4
-		retryPolicy.anyerr = 1
-		retryPolicy.refused = 2
+		retryArgs.Sleep = config.Timeout.CplaneOperation / 2
+		retryArgs.HardErr = 2
+		retryArgs.SoftErr = 4
+		retryArgs.BackOff = true
 	}
-	sleep = retryPolicy.sleep
-	for i, j, k := 0, 0, 1; i < retryPolicy.anyerr && j < retryPolicy.refused; k++ {
-		var status int
-		if status, err = call(arg...); err == nil {
-			return
-		}
-		if strings.Contains(err.Error(), ciePrefix) {
-			glog.Error(err)
-			return
-		}
-		glog.Errorf("%s: failed to %s, err: %v(%d)", h.si, action, err, status)
-		if cmn.IsErrConnectionRefused(err) {
-			j++
-		} else {
-			i++
-		}
-		if retryPolicy.backoff && k > 1 {
-			sleep = cmn.MinDuration(sleep+retryPolicy.sleep, config.Timeout.MaxKeepalive)
-		}
-		if i < retryPolicy.anyerr && j < retryPolicy.refused {
-			time.Sleep(sleep)
-			glog.Errorf("%s: retrying(%d)...", h.si, k)
-		}
-	}
-	return
+
+	return cmn.NetworkCallWithRetry(&retryArgs)
 }
 
 func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
