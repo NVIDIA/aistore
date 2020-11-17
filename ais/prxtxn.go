@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -723,11 +722,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 
 	// 4. Start rebalance
 	if !opts.SkipRebalance {
-		var cb nl.NotifCallback
-		if msg.Action == cmn.ActDecommission {
-			cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
-		}
-		return p.finalizeMaintenance(msg, si, cb)
+		return p.finalizeMaintenance(msg, si)
 	} else if msg.Action == cmn.ActDecommission {
 		_, err = p.unregisterNode(msg, si, true /*skipReb*/)
 	}

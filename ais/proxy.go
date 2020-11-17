@@ -3317,8 +3317,7 @@ func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionM
 }
 
 // Run rebalance and call a callback after the rebalance finishes
-func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
-	cb nl.NotifCallback) (rebID xaction.RebID, err error) {
+func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) (rebID xaction.RebID, err error) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("put %s under maintenance and rebalance: action %s", si, msg.Action)
 	}
@@ -3327,8 +3326,24 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode,
 		return
 	}
 
-	if err = p.canStartRebalance(true /*skip config*/); err != nil {
+	if err = p.canStartRebalance(true /*skip config*/); err == nil {
+		goto updateRMD
+	}
+
+	if _, ok := err.(*errNotEnoughTargets); !ok {
 		return
+	}
+	if msg.Action == cmn.ActDecommission {
+		_, err = p.unregisterNode(msg, si, true /*skipReb*/)
+		return
+	}
+	err = nil
+	return
+
+updateRMD:
+	var cb nl.NotifCallback
+	if msg.Action == cmn.ActDecommission {
+		cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
 	}
 	rmdCtx := &rmdModifier{
 		pre: func(_ *rmdModifier, clone *rebMD) {
