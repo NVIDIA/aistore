@@ -131,8 +131,8 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			firstBucketIdx                     int
 			additionalCompletions              []cli.BashCompleteFunc
 
-			bucketNames []string
-			providers   []string
+			bucketsToPrint []cmn.Bck
+			providers      []string
 		)
 
 		if len(args) > 0 {
@@ -168,25 +168,14 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			providers = []string{query.Provider}
 		}
 
-		if withProviders {
-			for _, p := range providers {
-				bucketNames = append(bucketNames, fmt.Sprintf("%s\\://", p))
-			}
-		}
-
 		for _, provider := range providers {
 			query.Provider = provider
 			buckets, err := api.ListBuckets(defaultAPIParams, query)
 			if err != nil {
 				return
 			}
-			for _, b := range buckets {
-				if b.Ns.IsGlobal() {
-					bucketNames = append(bucketNames, fmt.Sprintf("%s\\://%s", b.Provider, b.Name))
-				} else {
-					bucketNames = append(bucketNames, fmt.Sprintf("%s\\://%s/%s", b.Provider, b.Ns, b.Name))
-				}
-			}
+
+			bucketsToPrint = append(bucketsToPrint, buckets...)
 		}
 
 		sep := ""
@@ -194,12 +183,14 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 			sep = "/"
 		}
 
-		printNotUsedBuckets := func(buckets []string) {
-			for _, bucket := range buckets {
+		printNotUsedBuckets := func(buckets []cmn.Bck) {
+			for _, bck := range buckets {
 				alreadyListed := false
 				if multiple {
 					for _, bucketArg := range c.Args() {
-						if bucketArg == bucket {
+						argBck, err := parseBckURI(c, bucketArg)
+						cmn.AssertNoErr(err)
+						if argBck.Equal(bck) {
 							alreadyListed = true
 							break
 						}
@@ -207,12 +198,24 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 				}
 
 				if !alreadyListed {
-					fmt.Printf("%s%s\n", bucket, sep)
+					var bckStr string
+					if bck.Ns.IsGlobal() {
+						bckStr = fmt.Sprintf("%s\\://%s", bck.Provider, bck.Name)
+					} else {
+						bckStr = fmt.Sprintf("%s\\://%s/%s", bck.Provider, bck.Ns, bck.Name)
+					}
+					fmt.Printf("%s%s\n", bckStr, sep)
 				}
 			}
 		}
 
-		printNotUsedBuckets(bucketNames)
+		if withProviders {
+			for _, p := range providers {
+				fmt.Printf("%s\\://", p)
+			}
+		}
+
+		printNotUsedBuckets(bucketsToPrint)
 	}
 }
 
@@ -235,6 +238,22 @@ func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, se
 			p = provider[0]
 		}
 		bucketCompletions(bckCompletionsOpts{separator: separator, provider: p})(c)
+	}
+}
+
+func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstBckIdx, bucketsCnt int) cli.BashCompleteFunc {
+	return func(c *cli.Context) {
+		if c.NArg() < firstBckIdx || c.NArg() >= firstBckIdx+bucketsCnt {
+			// If before a bucket completion, suggest different.
+			for _, f := range additionalCompletions {
+				f(c)
+			}
+		}
+
+		if c.NArg() >= firstBckIdx && c.NArg() < firstBckIdx+bucketsCnt {
+			bucketCompletions(bckCompletionsOpts{firstBucketIdx: firstBckIdx, multiple: true})(c)
+			return
+		}
 	}
 }
 

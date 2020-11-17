@@ -49,22 +49,25 @@ var etlCmds = []cli.Command{
 				Action: etlListHandler,
 			},
 			{
-				Name:      subcmdLogs,
-				Usage:     "retrieve logs produced by ETL",
-				ArgsUsage: "ETL_ID [TARGET_ID]",
-				Action:    etlLogsHandler,
+				Name:         subcmdLogs,
+				Usage:        "retrieve logs produced by ETL",
+				ArgsUsage:    "ETL_ID [TARGET_ID]",
+				Action:       etlLogsHandler,
+				BashComplete: etlIDCompletions,
 			},
 			{
-				Name:      subcmdStop,
-				Usage:     "stop ETL with given id",
-				ArgsUsage: "ETL_ID",
-				Action:    etlStopHandler,
+				Name:         subcmdStop,
+				Usage:        "stop ETL with given id",
+				ArgsUsage:    "ETL_ID",
+				Action:       etlStopHandler,
+				BashComplete: etlIDCompletions,
 			},
 			{
-				Name:      subcmdObject,
-				Usage:     "transform object with given ETL",
-				ArgsUsage: "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
-				Action:    etlObjectHandler,
+				Name:         subcmdObject,
+				Usage:        "transform object with given ETL",
+				ArgsUsage:    "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
+				Action:       etlObjectHandler,
+				BashComplete: etlIDCompletions,
 			},
 			{
 				Name:      subcmdBucket,
@@ -76,10 +79,25 @@ var etlCmds = []cli.Command{
 					cpBckPrefixFlag,
 					cpBckDryRunFlag,
 				},
-				BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */),
+				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
 			},
 		},
 	},
+}
+
+func etlIDCompletions(c *cli.Context) {
+	if c.NArg() != 0 {
+		return
+	}
+
+	list, err := api.ETLList(defaultAPIParams)
+	if err != nil {
+		return
+	}
+
+	for _, l := range list {
+		fmt.Print(l.ID)
+	}
 }
 
 func etlInitHandler(c *cli.Context) (err error) {

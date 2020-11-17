@@ -31,7 +31,7 @@ var (
 					ArgsUsage:    bucketOldNewArgument,
 					Flags:        copyCmdsFlags[subcmdCopyBucket],
 					Action:       copyBucketHandler,
-					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */),
+					BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
 				},
 			},
 		},
@@ -56,7 +56,6 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("cannot copy bucket %q onto itself", fromBck)
 	}
 
-	fromBck.Provider, toBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
 	msg := &cmn.CopyBckMsg{
 		Prefix: parseStrFlag(c, cpBckPrefixFlag),
 		DryRun: flagIsSet(c, cpBckDryRunFlag),
