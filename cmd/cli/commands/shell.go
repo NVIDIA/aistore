@@ -184,13 +184,15 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		printNotUsedBuckets := func(buckets []cmn.Bck) {
-			for _, bck := range buckets {
+			for _, bckToPrint := range buckets {
 				alreadyListed := false
 				if multiple {
-					for _, bucketArg := range c.Args() {
-						argBck, err := parseBckURI(c, bucketArg)
-						cmn.AssertNoErr(err)
-						if argBck.Equal(bck) {
+					for _, argBck := range c.Args() {
+						parsedArgBck, err := parseBckURI(c, argBck)
+						if err != nil {
+							return
+						}
+						if parsedArgBck.Equal(bckToPrint) {
 							alreadyListed = true
 							break
 						}
@@ -199,10 +201,10 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 
 				if !alreadyListed {
 					var bckStr string
-					if bck.Ns.IsGlobal() {
-						bckStr = fmt.Sprintf("%s\\://%s", bck.Provider, bck.Name)
+					if bckToPrint.Ns.IsGlobal() {
+						bckStr = fmt.Sprintf("%s\\://%s", bckToPrint.Provider, bckToPrint.Name)
 					} else {
-						bckStr = fmt.Sprintf("%s\\://%s/%s", bck.Provider, bck.Ns, bck.Name)
+						bckStr = fmt.Sprintf("%s\\://%s/%s", bckToPrint.Provider, bckToPrint.Ns, bckToPrint.Name)
 					}
 					fmt.Printf("%s%s\n", bckStr, sep)
 				}
