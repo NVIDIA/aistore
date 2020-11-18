@@ -91,7 +91,7 @@ Get object with ETL defined by `ETL_ID`.
 Does ETL on `shards/shard-0.tar` object with `JGHEoo89gg` ETL (computes MD5 of the object) and print the output to the STDOUT.
 
 ```console
-$ ais etl object JGHEoo89gg shards/shard-0.tar -
+$ ais etl object JGHEoo89gg ais://shards/shard-0.tar -
 393c6706efb128fbc442d3f7d084a426
 ```
 
@@ -100,52 +100,61 @@ $ ais etl object JGHEoo89gg shards/shard-0.tar -
 Do ETL on `shards/shard-0.tar` object with `JGHEoo89gg` ETL (computes MD5 of the object) and save output to `output.txt` file.
 
 ```console
-$ ais etl object JGHEoo89gg shards/shard-0.tar output.txt
+$ ais etl object JGHEoo89gg ais://shards/shard-0.tar output.txt
 $ cat output.txt
 393c6706efb128fbc442d3f7d084a426
 ```
 
 ## Transform the whole bucket offline with given ETL
 
-`ais etl bucket ETL_ID BUCKET_FROM BUCKET_TO`
+`ais etl bucket ETL_ID SRC_BUCKET_NAME DST_BUCKET_NAME`
 
 ### Examples
 
-#### Transform ever object from BUCKET1 with ETL and put new objects to BUCKET2
+#### Transform bucket with ETL
+ 
+Transform every object from `src_bucket` with ETL and put new objects to `dst_bucket`.
 
 ```console
-$ XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2)
-$ ais wait xaction $XACT_ID # wait until offline ETL finishes
+$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket
+5JjIuGemR
+$ ais wait xaction 5JjIuGemR # wait until offline ETL finishes
 ```
 
-#### The same as above, but objects will have `etl-` prefix and objects with extension `.in1` will have `.out1` extension, objects with extension `.in2` will have `.out2` extension.
+#### Transform bucket with ETL and additional parameters
+
+The same as above, but objects will have `etl-` prefix and objects with extension `.in1` will have `.out1` extension, objects with extension `.in2` will have `.out2` extension.
 
 ```console
-$ ais ls bucket BUCKET1 --props=name
+$ ais ls ais://src_bucket --props=name
 NAME
 obj1.in1
 obj2.in2
 (...)
-$ XACT_ID=$(ais etl bucket JGHEoo89gg BUCKET1 BUCKET2 --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-")
-$ ais wait xaction $XACT_ID # wait until offline ETL finishes
-$ ais ls bucket BUCKET2 --props=name
+$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-"
+5JjIuGemR
+$ ais wait xaction 5JjIuGemR # wait until offline ETL finishes
+$ ais ls ais://dst_bucket --props=name
 NAME
 etl-obj1.out1
 etl-obj2.out2
 (...)
 ```
 
-#### The same as above, but don't actually perform any actions. Show what would have happened.
+#### Transform bucket with ETL but with dry-run
+
+Dry-run won't perform any actions but rather just show what would be transformed if we actually transformed a bucket.
+This is useful for preparing the actual run.
 
 ```console
-$ ais ls bucket BUCKET1 --props=name,size
+$ ais ls ais://src_bucket --props=name,size
 NAME        SIZE
 obj1.in1    10MiB
 obj2.in2    10MiB
 (...)
-$ ais etl bucket JGHEoo89gg BUCKET1 BUCKET2 --dry-run
+$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --dry-run
 [DRY RUN] No modifications on the cluster
-2 objects (20MiB) would have been put into bucket BUCKET2
+2 objects (20MiB) would have been put into bucket ais://dst_bucket
 ```
 
 

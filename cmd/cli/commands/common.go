@@ -164,7 +164,6 @@ const (
 	bucketArgument         = "BUCKET_NAME"
 	optionalBucketArgument = "[BUCKET_NAME]"
 	bucketsArgument        = "BUCKET_NAME [BUCKET_NAME...]"
-	bucketOldNewArgument   = bucketArgument + " NEW_NAME"
 	bucketPropsArgument    = bucketArgument + " " + jsonSpecArgument + "|" + keyValuePairsArgument
 	bucketAndPropsArgument = "BUCKET_NAME [PROP_PREFIX]"
 
@@ -174,7 +173,6 @@ const (
 	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET_NAME/OBJECT_NAME"
 	objectArgument           = "BUCKET_NAME/OBJECT_NAME"
 	optionalObjectsArgument  = "BUCKET_NAME/[OBJECT_NAME]..."
-	objectOldNewArgument     = "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME"
 
 	// Daemons
 	daemonIDArgument         = "DAEMON_ID"

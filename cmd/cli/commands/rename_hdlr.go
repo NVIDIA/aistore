@@ -27,7 +27,7 @@ var (
 				{
 					Name:         subcmdRenameBucket,
 					Usage:        "rename ais bucket",
-					ArgsUsage:    bucketOldNewArgument,
+					ArgsUsage:    "BUCKET_NAME NEW_BUCKET_NAME",
 					Flags:        renameCmdsFlags[subcmdRenameBucket],
 					Action:       renameBucketHandler,
 					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.ProviderAIS),
@@ -35,7 +35,7 @@ var (
 				{
 					Name:         subcmdRenameObject,
 					Usage:        "rename object in ais bucket",
-					ArgsUsage:    objectOldNewArgument,
+					ArgsUsage:    "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME",
 					Flags:        renameCmdsFlags[subcmdRenameObject],
 					Action:       renameObjectHandler,
 					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, true /* separator */, cmn.ProviderAIS),

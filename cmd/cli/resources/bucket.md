@@ -261,36 +261,27 @@ Evict a cloud bucket. It also resets the properties of the bucket (if changed).
 
 ## Rename a bucket
 
-`ais rename bucket BUCKET_NAME NEW_NAME`
+`ais rename bucket BUCKET_NAME NEW_BUCKET_NAME`
 
-Rename an ais bucket.
+Rename an AIS bucket.
+
+> Cloud bucket rename is not supported.
 
 ### Examples
 
-#### Rename local bucket
+#### Rename AIS bucket
 
-Rename local bucket `bucket_name` to local bucket `new_bucket_name`.
+Rename AIS bucket `bucket_name` to AIS bucket `new_bucket_name`.
 
 ```console
-$ ais rename bucket ais://bucket_name new_bucket_name
+$ ais rename bucket bucket_name new_bucket_name
 Renaming bucket "bucket_name" to "new_bucket_name" in progress.
-To check the status, run: ais show xaction renamelb bucket_name
-```
-
-#### Incorrect bucket rename
-
-Renaming cloud buckets is not supported.
-
-```console
-$ ais rename bucket cloud://bucket_name new_bucket_name
-Renaming cloud buckets (cloud://bucket_name) not supported
-$ ais rename bucket bucket_name cloud://new_bucket_name
-Renaming cloud buckets (cloud://new_bucket_name) not supported
+To check the status, run: ais show xaction renamelb new_bucket_name
 ```
 
 ## Copy bucket
 
-`ais cp bucket SRC_BUCKET DST_BUCKET`
+`ais cp bucket SRC_BUCKET_NAME DST_BUCKET_NAME`
 
 Copy an existing bucket to a new bucket. If destination bucket is a cloud bucket it has to exist.
 
@@ -302,38 +293,29 @@ Copy an existing bucket to a new bucket. If destination bucket is a cloud bucket
 
 ### Examples
 
-#### Copy local bucket
+#### Copy AIS bucket
 
-Copy local bucket `bucket_name` to local bucket `new_bucket_name`.
+Copy AIS bucket `src_bucket` to AIS bucket `dst_bucket`.
 
 ```console
-$ ais cp bucket ais://bucket_name new_bucket_name
-Copying bucket "ais://bucket_name" to "new_bucket_name" in progress.
-To check the status, run: ais show xaction copybck new_bucket_name
+$ ais cp bucket ais://src_bucket ais://dst_bucket
+Copying bucket "ais://bucket_name" to "ais://dst_bucket" in progress.
+To check the status, run: ais show xaction copybck ais://dst_bucket
 ```
 
 #### Copy cloud bucket to another cloud bucket
 
-Copy AWS bucket `bucket` to AWS bucket `dst_bucket`.
+Copy AWS bucket `src_bucket` to AWS bucket `dst_bucket`.
 
 ```console
 # Make sure that both buckets exist.
-$ ais ls cloud://
+$ ais ls aws://
 AWS Buckets (2)
-  aws://bucket
+  aws://src_bucket
   aws://dst_bucket
-$ ais cp bucket aws://bucket aws://dst_bucket
-Copying bucket "aws://bucket" to "aws://dst_bucket" in progress.
+$ ais cp bucket aws://src_bucket aws://dst_bucket
+Copying bucket "aws://src_bucket" to "aws://dst_bucket" in progress.
 To check the status, run: ais show xaction copybck aws://dst_bucket
-```
-
-#### Incorrect bucket rename
-
-Copying bucket to the same bucket.
-
-```console
-$ ais cp bucket bucket_name bucket_name
-Cannot copy bucket "bucket_name" onto itself.
 ```
 
 ## Show bucket summary
@@ -383,7 +365,7 @@ All options are required and must be greater than `0`.
 `ais show props BUCKET_NAME [PROP_PREFIX]`
 
 List [properties](../../../docs/bucket.md#properties-and-options) of the bucket.
-By default condensed form of bucket props sections is presented.
+By default, condensed form of bucket props sections is presented.
 
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
 Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioning`.

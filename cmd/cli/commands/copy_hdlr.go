@@ -28,7 +28,7 @@ var (
 				{
 					Name:         subcmdCopyBucket,
 					Usage:        "copy ais buckets",
-					ArgsUsage:    bucketOldNewArgument,
+					ArgsUsage:    "SRC_BUCKET_NAME DST_BUCKET_NAME",
 					Flags:        copyCmdsFlags[subcmdCopyBucket],
 					Action:       copyBucketHandler,
 					BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),

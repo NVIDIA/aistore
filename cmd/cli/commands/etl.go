@@ -72,7 +72,7 @@ var etlCmds = []cli.Command{
 			{
 				Name:      subcmdBucket,
 				Usage:     "offline transform bucket with given ETL",
-				ArgsUsage: "ETL_ID BUCKET_FROM BUCKET_TO",
+				ArgsUsage: "ETL_ID SRC_BUCKET_NAME DST_BUCKET_NAME",
 				Action:    etlOfflineHandler,
 				Flags: []cli.Flag{
 					etlExtFlag,
