@@ -5,6 +5,9 @@
 package etl
 
 import (
+	"io"
+	"time"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -49,7 +52,31 @@ func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 
 // Returns reader resulting from lom ETL transformation.
 func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, func(), error) {
-	body, length, err := dp.comm.Get(lom.Bck(), lom.ObjName)
+	var (
+		body   io.ReadCloser
+		length int64
+		err    error
+	)
+
+	call := func() (int, error) {
+		body, length, err = dp.comm.Get(lom.Bck(), lom.ObjName)
+		return 0, err
+	}
+
+	// Try repeating relatively many times, as ETL bucket is long operation, and should not be disturbed by possible
+	// network issues.
+	//
+	// TODO: We should check if ETL pod is healthy. If not, maybe we should wait some more time for it to become healthy
+	//  again.
+	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+		Call:    call,
+		Action:  "etl-obj-" + lom.Uname(),
+		SoftErr: 5,
+		HardErr: 2,
+		Sleep:   50 * time.Millisecond,
+		BackOff: true,
+	})
+
 	if err != nil {
 		return nil, nil, nil, err
 	}
