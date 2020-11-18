@@ -11,9 +11,9 @@ source $AISTORE_DIR/deploy/dev/utils.sh
 
 # Unmount and clears all virtual block disks.
 clean_loopback_paths
+
 rm -rf ~/.ais* && \
 		rm -rf ~/.authn && \
 		rm -rf /tmp/ais* && \
 		rm -f ${BUILD_DEST}/ais* # cleans 'ais' (CLI), 'aisnode' (TARGET/PROXY), 'aisfs' (FUSE), 'aisloader' && \
-		rm -f ${BUILD_DEST}/authn && \
-		rm -f ${GOPATH}/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
+		rm -f ${BUILD_DEST}/authn

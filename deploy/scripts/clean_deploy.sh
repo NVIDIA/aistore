@@ -37,7 +37,7 @@ pushd ${root_dir}
 make kill
 make clean
 
-echo -e "${targets}\n${proxies}\n5\n${cloud}" | make deploy
+echo -e "${targets}\n${proxies}\n5\n${cloud}\nn" | make deploy
 
 make aisfs && make cli
 

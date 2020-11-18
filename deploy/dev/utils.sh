@@ -17,6 +17,18 @@ is_boolean() {
   fi
 }
 
+is_command_available() {
+  if [[ -z $(command -v "$1") ]]; then
+    print_error "command '$1' not available"
+  fi
+}
+
+run_cmd() {
+  set -x
+  $@ &
+  { set +x; } 2>/dev/null
+}
+
 parse_cld_providers() {
   AIS_CLD_PROVIDERS=""
   echo "Select cloud providers:"
@@ -41,49 +53,36 @@ parse_cld_providers() {
 }
 
 create_loopback_paths() {
-    echo "Would you like to create loopback mount points"
-    read -r create_mount_points
-    if [[ "$create_mount_points" == "y" ]] ; then
-       for (( i=1; i<=${TEST_FSPATH_COUNT}; i++ ))
-       do
-        dir=${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}mp${i}
-        mkdir -p ${dir}
+  echo "Would you like to create loopback mount points: (y/n) ?"
+  read -r create_mount_points
+  if [[ "$create_mount_points" == "y" ]] ; then
+    for ((i=1; i<=TEST_FSPATH_COUNT; i++)); do
+      dir=${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}mp${i}
+      mkdir -p "${dir}"
 
-        if mount | grep ${dir} > /dev/null; then
-            continue
-        fi
+      if mount | grep "${dir}" > /dev/null; then
+        continue
+      fi
 
-        sudo dd if=/dev/zero of="${dir}.img" bs=100M count=50
-        sudo losetup -fP "${dir}.img"
-        sudo mkfs.ext4 "${dir}.img"
+      sudo dd if=/dev/zero of="${dir}.img" bs=100M count=50
+      sudo losetup -fP "${dir}.img"
+      sudo mkfs.ext4 "${dir}.img"
 
-        device=$(sudo losetup -l | grep "${dir}.img" | awk '{print $1}')
-        sudo mount -o loop ${device} ${dir}
-        sudo chown -R ${USER}: ${dir}
-       done
-    fi
-}
-
-clean_loopback_paths() {
-  for i in $(df -h | grep /tmp/ais/mp | awk '{print $1}'); do
-    sudo umount ${i}
-  done
-
-  for i in $(losetup -l | grep /tmp/ais/mp | awk '{print $1}'); do
-    sudo losetup -d ${i}
-  done
-}
-
-is_command_available() {
-  if [[ -z $(command -v "$1") ]]; then
-    print_error "command '$1' not available"
+      device=$(sudo losetup -l | grep "${dir}.img" | awk '{print $1}')
+      sudo mount -o loop "${device}" "${dir}"
+      sudo chown -R ${USER}: "${dir}"
+    done
   fi
 }
 
-run_cmd() {
-  set -x
-  $@ &
-  { set +x; } 2>/dev/null
+clean_loopback_paths() {
+  for mpath in $(df -h | grep /tmp/ais/mp | awk '{print $1}'); do
+    sudo umount "${mpath}"
+  done
+
+  if [[ -x "$(command -v losetup)" ]]; then
+    for mpath in $(losetup -l | grep /tmp/ais/mp | awk '{print $1}'); do
+      sudo losetup -d "${mpath}"
+    done
+  fi
 }
-
-
