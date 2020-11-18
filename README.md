@@ -181,9 +181,12 @@ In particular, the `make` provides a growing number of developer-friendly comman
 
 ## Deployment
 
-AIStore can be easily deployed on any bare-metal or virtualized hardware. This repository contains all the scripts needed to run AIS on your laptop or Linux workstation. For production deployments on Kubernetes, please refer to a separate dedicated github repo:
+AIStore can be easily deployed on any bare-metal or virtualized hardware.
+This repository contains all the scripts needed to run AIS on your laptop or Linux workstation.
+For production deployments on Kubernetes, please refer to a separate dedicated github repo:
 
-* [Deploying AIS on k8s](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md)
+* [Deploying AIStore on K8s](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md)
+* [Deploying AIStore on cloud K8s](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md)
 
 The rest of this section talks about a single Linux machine and, as such, is intended for developers and development, *or* for a quick trial.
 
@@ -292,6 +295,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
   - [Distributed Sort](cmd/cli/resources/dsort.md)
   - [User account and access management](cmd/cli/resources/users.md)
   - [Xaction (Job) management](cmd/cli/resources/xaction.md)
+- [ETL with AIStore](docs/etl.md)
 - [On-Disk Layout](docs/on-disk-layout.md)
 - [System Files](docs/sysfiles.md)
 - [Command line parameters](docs/command_line.md)
@@ -303,7 +307,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [Highly available control plane](docs/ha.md)
 - [How to benchmark](docs/howto_benchmark.md)
 - [RESTful API](docs/http_api.md)
-- [File access](cmd/aisfs/README.md)
+- [FUSE with AIStore](cmd/aisfs/README.md)
 - [Joining AIS cluster](docs/join_cluster.md)
 - [Removing a node from AIS cluster](docs/leave_cluster.md)
 - [AIS Buckets: definition, operations, properties](docs/bucket.md#bucket)
@@ -317,6 +321,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [Troubleshooting Cluster Operation](docs/troubleshooting.md)
 
 ## Selected Package READMEs
+
 - [Package `api`](api/README.md)
 - [Package `cli`](cmd/cli/README.md)
 - [Package `fuse`](cmd/aisfs/README.md)
