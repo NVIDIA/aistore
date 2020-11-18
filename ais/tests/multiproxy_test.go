@@ -36,7 +36,7 @@ var (
 	voteTests = []Test{
 		{"PrimaryCrash", primaryCrashElectRestart},
 		{"SetPrimaryBackToOriginal", primarySetToOriginal},
-		{"proxyCrash", proxyCrash},
+		{"ProxyCrash", proxyCrash},
 		{"PrimaryAndTargetCrash", primaryAndTargetCrash},
 		{"PrimaryAndProxyCrash", primaryAndProxyCrash},
 		{"CrashAndFastRestore", crashAndFastRestore},
@@ -198,8 +198,8 @@ func proxyCrash(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tutils.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
 
-	oldPrimaryURL, oldPrimaryID := smap.Primary.URL(cmn.NetworkPublic), smap.Primary.ID()
-	tutils.Logf("Primary proxy: %s\n", oldPrimaryURL)
+	primaryURL, primaryID := smap.Primary.URL(cmn.NetworkPublic), smap.Primary.ID()
+	tutils.Logf("Primary proxy: %s\n", primaryURL)
 
 	var (
 		secondURL      string
@@ -210,7 +210,7 @@ func proxyCrash(t *testing.T) {
 
 	// Select a random non-primary proxy
 	for k, v := range smap.Pmap {
-		if k != oldPrimaryID {
+		if k != primaryID {
 			secondURL = v.URL(cmn.NetworkPublic)
 			secondID = v.ID()
 			secondNode = v
@@ -222,14 +222,14 @@ func proxyCrash(t *testing.T) {
 	secondCmd, err := tutils.KillNode(secondNode)
 	tassert.CheckFatal(t, err)
 
-	smap, err = tutils.WaitForClusterState(oldPrimaryURL, "to propagate new Smap",
+	smap, err = tutils.WaitForClusterState(primaryURL, "to propagate new Smap",
 		smap.Version, origProxyCount-1, 0)
 	tassert.CheckFatal(t, err)
 
 	err = tutils.RestoreNode(secondCmd, false, "proxy")
 	tassert.CheckFatal(t, err)
 
-	smap = tutils.WaitNodeRestored(t, proxyURL, "to restore", secondID, smap.Version, origProxyCount, 0)
+	smap = tutils.WaitNodeRestored(t, primaryURL, "to restore", secondID, smap.Version, origProxyCount, 0)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Pmap[secondID]; !ok {
