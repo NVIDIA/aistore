@@ -36,14 +36,12 @@ func init() {
 	xreg.RegisterBucketXact(&putMirrorProvider{})
 }
 
-func newXactBckBase(id, kind string, opts *mpather.JoggerGroupOpts) *xactBckBase {
+func newXactBckBase(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts) *xactBckBase {
 	base := &xactBckBase{
-		XactBase: *xaction.NewXactBaseBck(id, kind, opts.Bck),
+		XactBase: *xaction.NewXactBaseBck(id, kind, bck),
 		t:        opts.T,
 	}
-	if opts.VisitObj != nil {
-		base.joggers = mpather.NewJoggerGroup(opts)
-	}
+	base.joggers = mpather.NewJoggerGroup(opts)
 	return base
 }
 

@@ -44,7 +44,7 @@ func (p *llcProvider) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return tr
 func (p *llcProvider) PostRenewHook(_ xreg.BucketEntry)              {}
 
 func newXactLLC(t cluster.Target, bck cmn.Bck) *xactLLC {
-	return &xactLLC{xactBckBase: *newXactBckBase("", cmn.ActLoadLomCache, &mpather.JoggerGroupOpts{
+	return &xactLLC{xactBckBase: *newXactBckBase("", cmn.ActLoadLomCache, bck, &mpather.JoggerGroupOpts{
 		T:        t,
 		Bck:      bck,
 		CTs:      []string{fs.ObjectType},

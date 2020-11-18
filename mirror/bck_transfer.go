@@ -101,7 +101,7 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 		parallel = etlBucketParallelCnt
 	}
 
-	xact.xactBckBase = *newXactBckBase(id, kind, &mpather.JoggerGroupOpts{
+	xact.xactBckBase = *newXactBckBase(id, kind, bckTo.Bck, &mpather.JoggerGroupOpts{
 		Bck:      bckFrom.Bck,
 		T:        t,
 		CTs:      []string{fs.ObjectType},

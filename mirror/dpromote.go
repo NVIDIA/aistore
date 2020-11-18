@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/mpather"
+	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -58,9 +58,12 @@ func (p *dirPromoteProvider) Get() cluster.Xact { return p.xact }
 
 func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.ActValPromote) *XactDirPromote {
 	return &XactDirPromote{
-		xactBckBase: *newXactBckBase("", cmn.ActPromote, &mpather.JoggerGroupOpts{T: t, Bck: bck}),
-		dir:         dir,
-		params:      params,
+		xactBckBase: xactBckBase{
+			XactBase: *xaction.NewXactBaseBck("", cmn.ActPromote, bck),
+			t:        t,
+		},
+		dir:    dir,
+		params: params,
 	}
 }
 

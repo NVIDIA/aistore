@@ -59,7 +59,7 @@ func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, cop
 	xact := &xactMNC{
 		copies: copies,
 	}
-	xact.xactBckBase = *newXactBckBase(id, cmn.ActMakeNCopies, &mpather.JoggerGroupOpts{
+	xact.xactBckBase = *newXactBckBase(id, cmn.ActMakeNCopies, bck, &mpather.JoggerGroupOpts{
 		Bck:      bck,
 		T:        t,
 		CTs:      []string{fs.ObjectType},
