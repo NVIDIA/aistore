@@ -226,6 +226,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		return
 	}
 
+	updateReadinessProbe(pod)
 	setPodEnvVariables(t, pod, customEnv)
 
 	// 1. Cleanup previously started entities (if any).
@@ -461,6 +462,19 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) erro
 	}}
 	pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = reqAntiAffinities
 	return nil
+}
+
+func updateReadinessProbe(pod *corev1.Pod) {
+	probe := pod.Spec.Containers[0].ReadinessProbe
+
+	// If someone already set these values, we don't to touch them.
+	if probe.TimeoutSeconds != 0 || probe.PeriodSeconds != 0 {
+		return
+	}
+
+	// Set default values.
+	probe.TimeoutSeconds = 5
+	probe.PeriodSeconds = 10
 }
 
 // Sets environment variables that can be accessed inside the container.
