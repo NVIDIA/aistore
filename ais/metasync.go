@@ -476,8 +476,9 @@ func (y *metasyncer) pending() (pending cluster.NodeMap, smap *smapX) {
 						inSync = false
 						break
 					} else if v > revs.version() {
-						msg := fmt.Sprintf("v: %d; revs.version: %d", v, revs.version())
-						cmn.AssertMsg(false, msg)
+						// skip older versions
+						// TODO -- FIXME: don't skip sending aisMsg associated with revs
+						glog.Errorf("v: %d; revs.version: %d", v, revs.version())
 					}
 				}
 				if inSync {

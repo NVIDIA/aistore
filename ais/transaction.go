@@ -182,6 +182,11 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (errDone error) {
 	var running bool
 	txns.Lock()
+
+	// Ignore downgrade error.
+	if isErrDowngrade(err) {
+		err = nil
+	}
 	if txn, ok := txns.m[msg.UUID]; ok {
 		running, errDone = txn.commitAfter(caller, msg, err, args...)
 	}
