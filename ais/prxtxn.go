@@ -106,7 +106,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 
 	// txn timeout - making an exception for this critical op
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.GCO.Get().Timeout.MaxKeepalive})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru

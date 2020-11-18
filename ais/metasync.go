@@ -260,14 +260,12 @@ func (y *metasyncer) becomeNonPrimary() {
 // main method; see top of the file; returns number of "sync" failures
 func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	var (
-		refused     cluster.NodeMap
-		pairsToSend []revsPair
-		method      string
-
-		smap   = y.p.owner.smap.get()
-		config = cmn.GCO.Get()
-
+		refused      cluster.NodeMap
+		method       string
 		newTargetIDs []string
+		smap         = y.p.owner.smap.get()
+		config       = cmn.GCO.Get()
+		pairsToSend  = pairs[:0] // share original slice
 	)
 	if y.stopping.Load() {
 		return
@@ -284,18 +282,16 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	} else {
 		cmn.Assertf(false, "unknown request type: %d", revsReqType)
 	}
-
-	pairsToSend = pairs[:0] // share original slice
 outer:
 	for _, pair := range pairs {
 		var (
 			revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
-			s              = fmt.Sprintf("[%s, action=%s, version=%d]", tag, msg.Action, revs.version())
+			detail         = fmt.Sprintf("[%s, action=%s, version=%d]", tag, msg.Action, revs.version())
 		)
 		// vs current Smap
 		if tag == revsSmapTag {
 			if revsReqType == revsReqSync && revs.version() > smap.version() {
-				ers := fmt.Sprintf("FATAL: %s is newer than the current %s", s, smap)
+				ers := fmt.Sprintf("FATAL: %s is newer than the current %s", detail, smap)
 				cmn.AssertMsg(false, ers)
 			}
 		}
@@ -303,13 +299,17 @@ outer:
 		switch lversion := y.lastVersion(tag); {
 		case lversion == revs.version():
 			if newCnt == 0 {
-				glog.Warningf("%s: %s duplicated - already sync-ed or pending", y.p.si, s)
+				glog.Warningf("%s: %s duplicated - already sync-ed or pending", y.p.si, detail)
 				// TODO -- FIXME: continue outer
 			}
-			glog.Infof("%s: %s duplicated - proceeding to sync %d new member(s)", y.p.si, s, newCnt)
+			glog.Infof("%s: %s duplicated - proceeding to sync %d new member(s)", y.p.si, detail, newCnt)
 		case lversion > revs.version():
-			glog.Errorf("%s: skipping %s: < current v%d", y.p.si, s, lversion)
-			continue outer
+			s := fmt.Sprintf("%s: older %s: < current v%d", y.p.si, detail, lversion)
+			if msg.UUID == "" {
+				glog.Errorln(s + " - skipping")
+				continue outer
+			}
+			glog.Warning(s) // NOTE: supporting transactional logic
 		}
 
 		pairsToSend = append(pairsToSend, pair)

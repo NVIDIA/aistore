@@ -1383,6 +1383,10 @@ func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msg *aisMs
 			return
 		}
 	}
+	// skip older iff not transactional - see t.receiveBMD()
+	if h.si.IsTarget() && msg.UUID != "" {
+		return
+	}
 	bmd := h.owner.bmd.get()
 	if newBMD.version() <= bmd.version() {
 		if newBMD.version() < bmd.version() {
