@@ -31,7 +31,6 @@ type (
 		// accessors
 		uuid() string
 		started(phase string, tm ...time.Time) time.Time
-		String() string
 		isDone() (done bool, err error)
 		// triggers
 		commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (bool, error)
@@ -39,6 +38,8 @@ type (
 		// cleanup
 		abort()
 		commit()
+		// log
+		String() string
 	}
 	rndzvs struct { // rendezvous records
 		callerName string
@@ -142,7 +143,7 @@ func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 	cmn.Assert(act == "" /*simply find*/ || act == cmn.ActAbort || act == cmn.ActCommit)
 	txns.Lock()
 	if txn, ok = txns.m[uuid]; !ok {
-		err = fmt.Errorf("%s: Txn[%s] doesn't exist (aborted?)", txns.t.si, uuid)
+		goto rerr
 	} else if act != "" {
 		delete(txns.m, uuid)
 		delete(txns.rendezvous, uuid)
@@ -153,6 +154,10 @@ func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 		}
 	}
 	txns.Unlock()
+	return
+rerr:
+	txns.Unlock()
+	err = fmt.Errorf("%s: Txn[%s] doesn't exist (aborted?)", txns.t.si, uuid)
 	return
 }
 
@@ -183,10 +188,14 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 		if rndzvs, ok := txns.rendezvous[msg.UUID]; ok {
 			rndzvs.err = &txnError{err: err}
 		} else {
-			errDone = fmt.Errorf("rendezvous record %s does not exist", msg.UUID) // can't happen
+			goto rerr
 		}
 	}
 	txns.Unlock()
+	return
+rerr:
+	txns.Unlock()
+	errDone = fmt.Errorf("rendezvous record %s does not exist", msg.UUID) // can't happen
 	return
 }
 
@@ -337,7 +346,7 @@ func (txn *txnBase) isDone() (done bool, err error) {
 func (txn *txnBase) rsvp(err error) {
 	txn.Lock()
 	txn.err = &txnError{err: err}
-	txn.RUnlock()
+	txn.Unlock()
 }
 
 func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
@@ -388,7 +397,8 @@ func (txn *txnBckBase) String() string {
 		txn.kind, txn.uid, txn.smapVer, txn.bmdVer, txn.action, txn.callerName, tm, res, txn.bck.Name)
 }
 
-func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...interface{}) (found bool, errDone error) {
+func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error,
+	args ...interface{}) (found bool, errDone error) {
 	if txn.callerName != caller || msg.UUID != txn.uuid() {
 		return
 	}
