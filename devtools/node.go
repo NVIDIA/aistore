@@ -84,7 +84,8 @@ func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVer
 		}
 		baseParams := BaseAPIParams(ctx, url)
 		daemonSmap, err := api.GetClusterMap(baseParams)
-		if err != nil && !cmn.IsErrConnectionRefused(err) {
+		// NOTE: Retry if node returns `http.StatusServiceUnavailable`
+		if err != nil && !cmn.IsErrConnectionRefused(err) && !cmn.IsStatusServiceUnavailable(err) {
 			return err
 		}
 

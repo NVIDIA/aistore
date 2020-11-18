@@ -105,6 +105,18 @@ func _errBucket(msg, node string) string {
 }
 
 ///////////////////////////
+// http-error helpers   //
+//////////////////////////
+
+func IsStatusServiceUnavailable(err error) (yes bool) {
+	hErr, ok := err.(*HTTPError)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusServiceUnavailable
+}
+
+///////////////////////////
 // syscall-based helpers //
 ///////////////////////////
 
