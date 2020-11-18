@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -115,10 +114,8 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		objLen, err = api.GetObject(defaultAPIParams, bck, object, objArgs)
 	}
 	if err != nil {
-		if httpErr, ok := err.(*cmn.HTTPError); ok {
-			if httpErr.Status == http.StatusNotFound {
-				return fmt.Errorf("object \"%s/%s\" does not exist", bck, object)
-			}
+		if cmn.IsStatusNotFound(err) {
+			return fmt.Errorf("object \"%s/%s\" does not exist", bck, object)
 		}
 		return
 	}
@@ -506,7 +503,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 func objectCheckExists(c *cli.Context, bck cmn.Bck, object string) error {
 	_, err := api.HeadObject(defaultAPIParams, bck, object, true)
 	if err != nil {
-		if err.(*cmn.HTTPError).Status == http.StatusNotFound {
+		if cmn.IsStatusNotFound(err) {
 			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
 			return nil
 		}
@@ -705,11 +702,7 @@ func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
 
 // This function is needed to print a nice error message for the user
 func handleObjHeadError(err error, bck cmn.Bck, object string) error {
-	httpErr, ok := err.(*cmn.HTTPError)
-	if !ok {
-		return err
-	}
-	if httpErr.Status == http.StatusNotFound {
+	if cmn.IsStatusNotFound(err) {
 		return fmt.Errorf("no such object %q in bucket %q", object, bck)
 	}
 

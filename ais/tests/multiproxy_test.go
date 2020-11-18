@@ -1425,7 +1425,7 @@ func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, num
 				tassert.Errorf(t, len(resList.Entries) == rangeSize, "should list %d objects", rangeSize)
 				return
 			}
-			if hErr, ok := err.(*cmn.HTTPError); ok && hErr.Status == http.StatusBadGateway {
+			if cmn.IsStatusBadGateway(err) {
 				// TODO -- FIXME : handle internally when cache owner is killed
 				return
 			}

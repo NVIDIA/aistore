@@ -6,7 +6,6 @@ package xrun
 
 import (
 	"errors"
-	"net/http"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -63,10 +62,10 @@ func (r *evictDelete) doObjEvictDelete(args *xreg.DeletePrefetchArgs, objName st
 		if cmn.IsObjNotExist(err) {
 			return nil
 		}
-		httpErr, ok := err.(*cmn.HTTPError)
-		if ok && httpErr.Status == http.StatusNotFound {
+		if cmn.IsStatusNotFound(err) {
 			return nil
 		}
+
 		return err
 	}
 	r.ObjectsInc()

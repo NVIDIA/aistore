@@ -77,15 +77,13 @@ func createBucket(c *cli.Context, bck cmn.Bck, props ...cmn.BucketPropsToUpdate)
 func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 	for _, bck := range buckets {
 		if err = api.DestroyBucket(defaultAPIParams, bck); err != nil {
-			if herr, ok := err.(*cmn.HTTPError); ok {
-				if herr.Status == http.StatusNotFound {
-					desc := fmt.Sprintf("Bucket %q does not exist", bck)
-					if !flagIsSet(c, ignoreErrorFlag) {
-						return fmt.Errorf(desc)
-					}
-					fmt.Fprint(c.App.Writer, desc)
-					continue
+			if cmn.IsStatusNotFound(err) {
+				desc := fmt.Sprintf("Bucket %q does not exist", bck)
+				if !flagIsSet(c, ignoreErrorFlag) {
+					return fmt.Errorf(desc)
 				}
+				fmt.Fprint(c.App.Writer, desc)
+				continue
 			}
 			return err
 		}

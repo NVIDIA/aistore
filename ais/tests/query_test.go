@@ -7,7 +7,6 @@ package integration
 import (
 	"bytes"
 	"fmt"
-	"net/http"
 	"sort"
 	"testing"
 	"time"
@@ -25,9 +24,7 @@ func checkQueryDone(t *testing.T, handle string) {
 
 	_, err := api.NextQueryResults(baseParams, handle, 1)
 	tassert.Fatalf(t, err != nil, "expected an error to occur")
-	httpErr, ok := err.(*cmn.HTTPError)
-	tassert.Fatalf(t, ok, "expected the error to be an http error")
-	tassert.Errorf(t, httpErr.Status == http.StatusGone, "expected 410 on finished query")
+	tassert.Errorf(t, cmn.IsStatusGone(err), "expected 410 on finished query")
 }
 
 func TestQueryBck(t *testing.T) {

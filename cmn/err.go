@@ -116,6 +116,30 @@ func IsStatusServiceUnavailable(err error) (yes bool) {
 	return hErr.Status == http.StatusServiceUnavailable
 }
 
+func IsStatusNotFound(err error) (yes bool) {
+	hErr, ok := err.(*HTTPError)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusNotFound
+}
+
+func IsStatusBadGateway(err error) (yes bool) {
+	hErr, ok := err.(*HTTPError)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusBadGateway
+}
+
+func IsStatusGone(err error) (yes bool) {
+	hErr, ok := err.(*HTTPError)
+	if !ok {
+		return false
+	}
+	return hErr.Status == http.StatusGone
+}
+
 ///////////////////////////
 // syscall-based helpers //
 ///////////////////////////
