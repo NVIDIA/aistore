@@ -6,6 +6,7 @@ package xrun
 
 import (
 	"errors"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -108,6 +109,11 @@ func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string
 	if !coldGet {
 		return nil
 	}
+	// Do not set Atime to current time as prefetching does not mean the object
+	// was used. At the same time, zero Atime make the lom life-span in the cache
+	// too short - the first housekeeping removes it. Set the special value:
+	// negatve Now() for correct processing the LOM while housekeeping
+	lom.SetAtimeUnix(-time.Now().UnixNano())
 	if _, err = r.t.GetCold(args.Ctx, lom, true); err != nil {
 		if !errors.Is(err, cmn.ErrSkip) {
 			return err

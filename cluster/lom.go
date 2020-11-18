@@ -911,14 +911,19 @@ func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 		go func(cache *sync.Map) {
 			feviat := func(hkey, value interface{}) bool {
 				var (
-					md    = value.(*lmeta)
-					atime = time.Unix(0, md.atime)
+					md     = value.(*lmeta)
+					mdTime = md.atime
 				)
+				// Special case for prefetched but not-yet used objects
+				if mdTime < 0 {
+					mdTime = -mdTime
+				}
+				atime := time.Unix(0, mdTime)
 				total.Add(1)
 				if now.Sub(atime) < d {
 					return true
 				}
-				if md.atime != md.atimefs {
+				if mdTime > 0 && md.atime != md.atimefs {
 					if lom, bucketExists := lomFromLmeta(md, bmd); bucketExists {
 						lom.flushAtime(atime)
 					}

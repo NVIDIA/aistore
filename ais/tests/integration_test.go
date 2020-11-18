@@ -1281,32 +1281,79 @@ func TestAtimePrefetch(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	var (
-		bck           = cliBck
-		proxyURL      = tutils.RandomProxyURL(t)
-		baseParams    = tutils.BaseAPIParams(proxyURL)
-		objectName    = t.Name()
-		objectContent = readers.NewBytesReader([]byte("dummy content"))
+		bck        = cliBck
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		objectName = t.Name()
+		numObjs    = 10
+		objPath    = "atime/obj-"
+		errCh      = make(chan error, numObjs)
+		nameCh     = make(chan string, numObjs)
+		objs       = make([]string, 0, numObjs)
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
 	api.DeleteObject(baseParams, bck, objectName)
-	defer api.DeleteObject(baseParams, bck, objectName)
+	defer func() {
+		for _, obj := range objs {
+			api.DeleteObject(baseParams, bck, obj)
+		}
+	}()
 
-	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, proxyURL, bck, objectName, objectContent)
-	time.Sleep(25 * time.Millisecond)
-	timeAfterPut := time.Now()
-
-	xactID, err := api.PrefetchList(baseParams, bck, []string{objectName})
+	wg := &sync.WaitGroup{}
+	for i := 0; i < numObjs; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			object := objPath + strconv.FormatUint(uint64(idx), 10)
+			err := api.PutObject(api.PutObjectArgs{
+				BaseParams: baseParams,
+				Bck:        bck,
+				Object:     object,
+				Reader:     readers.NewBytesReader([]byte("dummy content")),
+			})
+			if err == nil {
+				nameCh <- object
+			} else {
+				errCh <- err
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errCh)
+	close(nameCh)
+	tassert.SelectErr(t, errCh, "put", true)
+	for obj := range nameCh {
+		objs = append(objs, obj)
+	}
+	xactID, err := api.EvictList(baseParams, bck, objs)
 	tassert.CheckFatal(t, err)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
+	args := api.XactReqArgs{ID: xactID, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	atime := tutils.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
+	timeAfterPut := time.Now()
 
-	if atime.After(timeAfterPut) {
-		t.Errorf("Atime should not be updated after prefetch (got: atime after PUT: %s, atime after GET: %s).",
-			timeAfterPut.Format(time.RFC3339Nano), atime.Format(time.RFC3339Nano))
+	xactID, err = api.PrefetchList(baseParams, bck, objs)
+	tassert.CheckFatal(t, err)
+	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	timeFormat := time.RFC3339Nano
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: objPath}
+	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	if len(bucketList.Entries) != numObjs {
+		t.Errorf("Number of objects mismatch: expected %d, found %d", numObjs, len(bucketList.Entries))
+	}
+	for _, entry := range bucketList.Entries {
+		atime, err := time.Parse(timeFormat, entry.Atime)
+		tassert.CheckFatal(t, err)
+		if atime.After(timeAfterPut) {
+			t.Errorf("Atime should not be updated after prefetch (got: atime after PUT: %s, atime after GET: %s).",
+				timeAfterPut.Format(timeFormat), atime.Format(timeFormat))
+		}
 	}
 }
 
