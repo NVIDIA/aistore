@@ -198,8 +198,9 @@ func (t *targetrunner) Run() error {
 	}
 	t.httprunner.init(config)
 
-	cluster.Init()
-	cluster.InitTarget()
+	cluster.InitBckLocker()
+	cluster.InitLomLocker()
+	cluster.InitLomCacheHK(t.gmm, t)
 
 	t.statsT.RegisterAll()
 

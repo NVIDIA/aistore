@@ -14,6 +14,6 @@ import (
 
 func TestMirror(t *testing.T) {
 	RegisterFailHandler(Fail)
-	cluster.InitTarget()
+	cluster.InitLomLocker()
 	RunSpecs(t, "Mirror Suite")
 }

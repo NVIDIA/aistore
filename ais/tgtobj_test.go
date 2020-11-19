@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 	fs.Add(testMountpath, t.si.ID())
 	t.init(cmn.GCO.Get())
 	t.statsT = stats.NewTrackerMock()
-	cluster.InitTarget()
+	cluster.InitLomLocker()
 
 	bck := cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal)
 	bmd := newBucketMD()

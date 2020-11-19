@@ -272,7 +272,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		return nil
 	}
 
-	cluster.InitTarget()
+	cluster.InitLomLocker()
 
 	errs := fs.CreateBuckets("testing", bck)
 	if len(errs) > 0 {

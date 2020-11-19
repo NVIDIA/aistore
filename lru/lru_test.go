@@ -27,7 +27,7 @@ import (
 
 func TestLRUMain(t *testing.T) {
 	RegisterFailHandler(Fail)
-	cluster.InitTarget()
+	cluster.InitLomLocker()
 	go hk.DefaultHK.Run()
 	RunSpecs(t, "LRU Suite")
 }

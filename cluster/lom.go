@@ -15,16 +15,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 //
@@ -77,7 +74,7 @@ var (
 // interface guard
 var _ cmn.ObjHeaderMetaProvider = (*LOM)(nil)
 
-func InitTarget() {
+func InitLomLocker() {
 	lomLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	lomLocker.init()
 	maxLmeta.Store(xattrMaxSize)
@@ -878,114 +875,6 @@ func EvictLomCache(b *Bck) {
 		}(cache)
 	}
 	wg.Wait()
-}
-
-//
-// lom cache runner
-//
-const (
-	oomEvictAtime = time.Minute      // OOM
-	oomTimeIntval = time.Second * 10 // ===/===
-	mpeEvictAtime = time.Minute * 5  // extreme
-	mpeTimeIntval = time.Minute      // ===/===
-	mphEvictAtime = time.Minute * 10 // high
-	mphTimeIntval = time.Minute * 2  // ===/===
-	mpnEvictAtime = time.Hour        // normal
-	mpnTimeIntval = time.Minute * 10 // ===/===
-	minSize2Evict = cmn.KiB * 256
-)
-
-var minEvict = int(minSize2Evict / unsafe.Sizeof(lmeta{}))
-
-func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
-	var (
-		caches         = lomCaches()
-		now            = time.Now()
-		bmd            = t.Bowner().Get()
-		wg             = &sync.WaitGroup{}
-		evicted, total atomic.Uint32
-	)
-
-	for _, cache := range caches {
-		wg.Add(1)
-		go func(cache *sync.Map) {
-			feviat := func(hkey, value interface{}) bool {
-				var (
-					md     = value.(*lmeta)
-					mdTime = md.atime
-				)
-				// Special case for prefetched but not-yet used objects
-				if mdTime < 0 {
-					mdTime = -mdTime
-				}
-				atime := time.Unix(0, mdTime)
-				total.Add(1)
-				if now.Sub(atime) < d {
-					return true
-				}
-				if mdTime > 0 && md.atime != md.atimefs {
-					if lom, bucketExists := lomFromLmeta(md, bmd); bucketExists {
-						lom.flushAtime(atime)
-					}
-					// TODO: throttle via mountpath.IsIdle()
-				}
-				cache.Delete(hkey)
-				evicted.Add(1)
-				return true
-			}
-			cache.Range(feviat)
-			wg.Done()
-		}(cache)
-	}
-	wg.Wait()
-	return int(evicted.Load()), int(total.Load())
-}
-
-func LomCacheHousekeep(mem *memsys.MMSA, t Target) (housekeep hk.CleanupFunc, initialInterval time.Duration) {
-	initialInterval = 10 * time.Minute
-	housekeep = func() (d time.Duration) {
-		switch p := mem.MemPressure(); p { // TODO: heap-memory-arbiter (HMA) abstraction TBD
-		case memsys.OOM:
-			d = oomEvictAtime
-		case memsys.MemPressureExtreme:
-			d = mpeEvictAtime
-		case memsys.MemPressureHigh:
-			d = mphEvictAtime
-		default:
-			d = mpnEvictAtime
-		}
-
-		evicted, total := lomCacheCleanup(t, d)
-		if evicted < minEvict {
-			d = mpnTimeIntval
-		} else {
-			switch p := mem.MemPressure(); p {
-			case memsys.OOM:
-				d = oomTimeIntval
-			case memsys.MemPressureExtreme:
-				d = mpeTimeIntval
-			case memsys.MemPressureHigh:
-				d = mphTimeIntval
-			default:
-				d = mpnTimeIntval
-			}
-		}
-		cmn.Assert(total >= evicted)
-		glog.Infof("total %d, evicted %d, timer %v", total-evicted, evicted, d)
-		return
-	}
-	return
-}
-
-func (lom *LOM) flushAtime(atime time.Time) {
-	finfo, err := os.Stat(lom.FQN)
-	if err != nil {
-		return
-	}
-	mtime := finfo.ModTime()
-	if err = os.Chtimes(lom.FQN, atime, mtime); err != nil {
-		glog.Errorf("%s: flush atime err: %v", lom, err)
-	}
 }
 
 //

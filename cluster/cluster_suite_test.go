@@ -15,6 +15,6 @@ import (
 
 func TestCluster(t *testing.T) {
 	RegisterFailHandler(Fail)
-	cluster.InitTarget()
+	cluster.InitLomLocker()
 	RunSpecs(t, "Cluster Suite")
 }

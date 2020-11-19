@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -316,8 +315,6 @@ func initTarget() cmn.Runner {
 	daemon.rg.add(fshc)
 	t.fshc = fshc
 
-	housekeep, initialInterval := cluster.LomCacheHousekeep(t.gmm, t)
-	hk.Reg("lom-cache", housekeep, initialInterval)
 	if err := ts.InitCapacity(); err != nil { // goes after fs.Init
 		cmn.ExitLogf("%s", err)
 	}

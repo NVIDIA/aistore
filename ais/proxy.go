@@ -97,7 +97,7 @@ func (p *proxyrunner) Run() error {
 
 	p.owner.bmd.init() // initialize owner and load BMD
 
-	cluster.Init()
+	cluster.InitBckLocker()
 
 	// startup sequence - see earlystart.go for the steps and commentary
 	p.bootstrap()

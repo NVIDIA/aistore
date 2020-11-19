@@ -14,6 +14,6 @@ import (
 
 func TestTransform(t *testing.T) {
 	RegisterFailHandler(Fail)
-	cluster.InitTarget()
+	cluster.InitLomLocker()
 	RunSpecs(t, "Transformer Suite")
 }
