@@ -242,12 +242,11 @@ func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParam
 	return mpathsByTarget
 }
 
-func CheckNodeAlive(t testing.TB, node *cluster.Snode) {
-	_, err := getPID(node.PublicNet.DaemonPort)
-	tassert.CheckFatal(t, err)
-}
-
 func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
+	restoreNodesOnce.Do(func() {
+		initNodeCmd()
+	})
+
 	var (
 		daemonID = node.ID()
 		port     = node.PublicNet.DaemonPort
@@ -429,11 +428,17 @@ func EnsureOrigClusterState(t *testing.T) {
 		}
 	}
 
-	tassert.Errorf(t, afterProxyCnt == proxyCnt, "Some proxys crashed: expected %d, found %d containers",
-		proxyCnt, afterProxyCnt)
+	tassert.Errorf(
+		t, afterProxyCnt == proxyCnt,
+		"Some proxies crashed: expected %d, found %d containers",
+		proxyCnt, afterProxyCnt,
+	)
 
-	tassert.Errorf(t, tgtCnt == afterTargetCnt, "Some targets crashed: expected %d, found %d containers",
-		tgtCnt, afterTargetCnt)
+	tassert.Errorf(
+		t, tgtCnt == afterTargetCnt,
+		"Some targets crashed: expected %d, found %d containers",
+		tgtCnt, afterTargetCnt,
+	)
 
 	if !updated {
 		return

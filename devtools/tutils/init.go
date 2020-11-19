@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -41,8 +42,10 @@ type (
 )
 
 var (
-	proxyURLReadOnly string                // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
-	pmapReadOnly     cluster.NodeMap       // initial proxy map - it is read-only variable
+	proxyURLReadOnly string          // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
+	pmapReadOnly     cluster.NodeMap // initial proxy map - it is read-only variable
+
+	restoreNodesOnce sync.Once             // Ensures that the initialization happens only once.
 	restoreNodes     map[string]RestoreCmd // initial proxy and target nodes => command to restore them
 
 	transportArgs = cmn.TransportArgs{
@@ -82,7 +85,6 @@ func init() {
 
 	initProxyURL()
 	initPmap()
-	initNodeCmd()
 	initRemoteCluster()
 	initAuthToken()
 }
