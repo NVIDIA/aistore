@@ -216,9 +216,9 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 
 func WaitNodeRestored(t *testing.T, proxyURL, reason, nodeID string, origVersion int64, proxyCnt,
 	targetCnt int) *cluster.Smap {
-	smap, err := WaitForClusterState(proxyURL, reason, origVersion, proxyCnt, targetCnt)
+	_, err := api.WaitNodeAdded(BaseAPIParams(proxyURL), nodeID)
 	tassert.CheckFatal(t, err)
-	_, err = api.WaitNodeAdded(BaseAPIParams(proxyURL), nodeID)
+	smap, err := WaitForClusterState(proxyURL, reason, origVersion, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 	return smap
 }

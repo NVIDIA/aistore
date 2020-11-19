@@ -348,6 +348,8 @@ func crashAndFastRestore(t *testing.T) {
 	smap := tutils.GetClusterMap(t, proxyURL)
 	tutils.Logf("targets: %d, proxies: %d\n", smap.CountActiveTargets(), smap.CountActiveProxies())
 
+	// Make sure proxyURL is not primary URL.
+	_, proxyURL, _ = chooseNextProxy(smap)
 	oldPrimaryID := smap.Primary.ID()
 	tutils.Logf("The current primary %s, Smap version %d\n", oldPrimaryID, smap.Version)
 

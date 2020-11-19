@@ -225,7 +225,7 @@ while503:
 	if err == nil {
 		return nil
 	}
-	if HTTPStatus(err) != http.StatusServiceUnavailable {
+	if !cmn.IsStatusServiceUnavailable(err) && !cmn.IsErrConnectionRefused(err) {
 		return
 	}
 	time.Sleep(waitNodeStarted)

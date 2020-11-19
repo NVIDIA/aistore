@@ -139,7 +139,7 @@ func doHTTPRequestGetHTTPResp(reqParams ReqParams) (resp *http.Response, err err
 	})
 
 	if err != nil {
-		err = fmt.Errorf("failed to %s, err: %v", reqParams.BaseParams.Method, err)
+		err = fmt.Errorf("failed to %s, err: %w", reqParams.BaseParams.Method, err)
 	}
 	return resp, err
 }
