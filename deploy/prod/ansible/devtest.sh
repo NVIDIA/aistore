@@ -3,6 +3,7 @@
 cd $1/aistore/deploy/prod/ansible
 
 parallel-scp -h inventory/targets.txt rundevtest.sh '/home/ubuntu/'
+parallel-scp -h inventory/targets.txt /home/ubuntu/run.env '/home/ubuntu/'
 ssh $(head -1 inventory/targets.txt) './rundevtest.sh origin/master'
 EXIT_STATUS=$?
 echo "RUNTEST exit status is ${EXIT_STATUS}"

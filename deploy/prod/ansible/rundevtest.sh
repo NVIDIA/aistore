@@ -38,15 +38,15 @@ set -o xtrace
 source /etc/profile.d/aispaths.sh
 source aws.env
 source gcs.env
+source run.env
 
 cd $AISSRC && cd ..
 
 git fetch --all
 
-branch="origin/master"
-if [[ -n $1 ]]; then
-  branch=$1
-fi
+branch=${BRANCH:-"origin/master"}
+echo "working on branch ${branch}"
+git checkout $branch
 git reset --hard $branch
 
 git status
@@ -75,8 +75,8 @@ echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
 ./deploy/dev/k8s/stop.sh
 
 # Running long tests
-deploy 6 6 4 y y n y
-for bucket in "aws://ais-jenkins" "gcp://ais-jenkins"; do
+deploy ${TARGET_COUNT:-6} ${PROXY_COUNT:-6} ${MPATH_COUNT:-4} ${USE_AWS:-y} ${USE_GCP:-y} ${USE_AZURE:-n} ${USE_LOOPBACK:-y}
+for bucket in ${CLOUD_BCKS}; do
   echo "----- RUNNING LONG TESTS WITH: ${bucket} -----"
   BUCKET=${bucket} make test-long && make test-aisloader
   exit_code=$?
