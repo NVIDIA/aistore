@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/onsi/gomega"
 )
@@ -48,12 +50,18 @@ func destroyMatchingBuckets(subName string) (err error) {
 	return err
 }
 
-func randomTarget() string {
+func randomTarget() *cluster.Snode {
 	smap, err := api.GetClusterMap(BaseAPIParams(proxyURLReadOnly))
 	cmn.AssertNoErr(err)
 	si, err := smap.GetRandTarget()
 	cmn.AssertNoErr(err)
-	return si.DaemonID
+	return si
+}
+
+func randomMountpath(target *cluster.Snode) string {
+	mpaths, err := api.GetMountpaths(BaseAPIParams(proxyURLReadOnly), target)
+	cmn.AssertNoErr(err)
+	return mpaths.Available[rand.Intn(len(mpaths.Available))]
 }
 
 func readContent(r io.Reader, ignoreEmpty bool) []string {
@@ -83,7 +91,8 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		lastResult = ""
 		bucket     = cmn.RandString(10)
 		space      = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
-		targetID   = randomTarget()
+		target     = randomTarget()
+		mountpath  = randomMountpath(target)
 
 		inputFileName   = fileName + ".in"
 		outputFileName  = fileName + ".stdout"
@@ -100,7 +109,8 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 	substituteVariables := func(s string) string {
 		s = strings.ReplaceAll(s, "$BUCKET", bucket)
 		s = strings.ReplaceAll(s, "$OBJECT", object)
-		s = strings.ReplaceAll(s, "$RANDOM_TARGET", targetID)
+		s = strings.ReplaceAll(s, "$RANDOM_TARGET", target.ID())
+		s = strings.ReplaceAll(s, "$RANDOM_MOUNTPATH", mountpath)
 		s = strings.ReplaceAll(s, "$DIR", f.Dir)
 		s = strings.ReplaceAll(s, "$RESULT", lastResult)
 		return s

@@ -1,2 +1,2 @@
-Node "$RANDOM_TARGET": attached mountpath "/tmp/ais"
-Node "$RANDOM_TARGET": detached mountpath "/tmp/ais"
+Node "$RANDOM_TARGET" detached mountpath "$RANDOM_MOUNTPATH"
+Node "$RANDOM_TARGET" attached mountpath "$RANDOM_MOUNTPATH"

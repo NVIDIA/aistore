@@ -5,5 +5,5 @@ ais detach mountpath something // FAIL "no value for 'something'"
 ais attach mountpath $RANDOM_TARGET=/nonexisting // FAIL "fspath "/nonexisting" does not exist, err: no such file or directory"
 ais detach mountpath $RANDOM_TARGET=/nonexisting // FAIL "fspath "/nonexisting" does not exist, err: no such file or directory"
 
-ais attach mountpath $RANDOM_TARGET=/tmp/ais
-ais detach mountpath $RANDOM_TARGET=/tmp/ais
+ais detach mountpath $RANDOM_TARGET=$RANDOM_MOUNTPATH
+ais attach mountpath $RANDOM_TARGET=$RANDOM_MOUNTPATH
