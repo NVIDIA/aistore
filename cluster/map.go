@@ -342,7 +342,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 		}
 		return tsi, nil
 	}
-	err = &NoNodesError{cmn.Target, m, ""}
+	err = cmn.NewNoNodesError(cmn.Target)
 	return
 }
 

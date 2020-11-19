@@ -59,6 +59,9 @@ type (
 		mpath string
 		cause string
 	}
+	NoNodesError struct {
+		role string
+	}
 	XactionNotFoundError struct {
 		cause string
 	}
@@ -276,6 +279,18 @@ func (e InvalidMountpathError) Error() string {
 
 func NewInvalidaMountpathError(mpath, cause string) InvalidMountpathError {
 	return InvalidMountpathError{mpath: mpath, cause: cause}
+}
+
+func NewNoNodesError(role string) *NoNodesError {
+	return &NoNodesError{role: role}
+}
+
+func (e *NoNodesError) Error() string {
+	if e.role == Proxy {
+		return "no available proxies"
+	}
+	Assert(e.role == Target)
+	return "no available targets"
 }
 
 func (e XactionNotFoundError) Error() string { return "xaction '" + e.cause + "' not found" }

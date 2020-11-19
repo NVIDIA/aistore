@@ -17,25 +17,6 @@ import (
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 
-type (
-	NoNodesError struct {
-		role string
-		smap *Smap
-		skip string
-	}
-)
-
-func (e *NoNodesError) Error() string {
-	var skip string
-	if e.skip != "" {
-		skip = fmt.Sprintf(", skip=%s", e.skip)
-	}
-	if e.role == cmn.Proxy {
-		return fmt.Sprintf("no available proxies, %s%s", e.smap.StringEx(), skip)
-	}
-	return fmt.Sprintf("no available targets, %s%s", e.smap.StringEx(), skip)
-}
-
 // Returns the target with highest HRW that is "available"(e.g, is not under maintenance).
 func HrwTarget(uname string, smap *Smap, inMaintenance ...bool) (si *Snode, err error) {
 	var (
@@ -58,7 +39,7 @@ func HrwTarget(uname string, smap *Smap, inMaintenance ...bool) (si *Snode, err 
 		}
 	}
 	if si == nil {
-		err = &NoNodesError{cmn.Target, smap, ""}
+		err = cmn.NewNoNodesError(cmn.Target)
 	}
 	return
 }
@@ -147,7 +128,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		}
 	}
 	if pi == nil {
-		err = &NoNodesError{cmn.Proxy, smap, idToSkip}
+		err = cmn.NewNoNodesError(cmn.Proxy)
 	}
 	return
 }
@@ -192,7 +173,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		}
 	}
 	if si == nil {
-		err = &NoNodesError{cmn.Target, smap, ""}
+		err = cmn.NewNoNodesError(cmn.Target)
 	}
 	return
 }

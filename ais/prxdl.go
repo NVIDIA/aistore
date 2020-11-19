@@ -60,7 +60,9 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		respCnt   = len(responses)
 	)
 
-	cmn.Assert(respCnt > 0)
+	if respCnt == 0 {
+		return nil, http.StatusBadRequest, cmn.NewNoNodesError(cmn.Target)
+	}
 
 	validResponses := make([]callResult, 0, respCnt)
 	for resp := range responses {
@@ -75,7 +77,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 		err = resp.err
 	}
 
-	if notFoundCnt == respCnt { // all responded with 404
+	if notFoundCnt == respCnt { // All responded with 404.
 		return nil, http.StatusNotFound, err
 	}
 
