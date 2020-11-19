@@ -198,14 +198,14 @@ func (n *notifs) add(nl nl.NotifListener) (err error) {
 		return
 	}
 	nl.SetAddedTime()
-	glog.Infoln("add " + nl.String())
+	glog.FastV(4, glog.SmoduleAIS).Infoln("add " + nl.String())
 	return
 }
 
 func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
 	ok = n.nls.del(nl, locked /*locked*/)
 	if ok {
-		glog.Infoln("del " + nl.String())
+		glog.FastV(4, glog.SmoduleAIS).Infoln("del " + nl.String())
 	}
 	return
 }
@@ -625,7 +625,7 @@ func (n *notifs) UnmarshalJSON(data []byte) (err error) {
 	}
 	for _, nl := range removed {
 		n.nls.del(nl, true /*locked*/)
-		glog.Infoln("merge: del " + nl.String())
+		glog.FastV(4, glog.SmoduleAIS).Infoln("merge: del " + nl.String())
 	}
 	n.nls.Unlock()
 
