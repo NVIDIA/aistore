@@ -577,7 +577,6 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			return
 		}
 		if args.IsFatal != nil && args.IsFatal(err) {
-			glog.Error(err)
 			return
 		}
 

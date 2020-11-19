@@ -488,9 +488,8 @@ func (m *AisCloudProvider) try(remoteBck cmn.Bck, f func(bck cmn.Bck) error) (er
 	remoteBck.Ns.UUID = ""
 
 	return cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
-		Call: func() (int, error) {
-			return 0, f(remoteBck)
-		},
+		Call:    func() (int, error) { return 0, f(remoteBck) },
+		IsFatal: func(err error) bool { _, ok := err.(*cmn.HTTPError); return ok },
 		SoftErr: aisCloudRetries + 1,
 		Sleep:   cmn.GCO.Get().Timeout.CplaneOperation,
 	})
