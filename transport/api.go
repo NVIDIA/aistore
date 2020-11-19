@@ -202,11 +202,11 @@ func (s *MsgStream) Fin() {
 //////////////////////
 
 func HandleObjStream(trname string, rxObj ReceiveObj, mems ...*memsys.MMSA) error {
-	var mem *memsys.MMSA
+	var mm *memsys.MMSA
 	if len(mems) > 0 {
-		mem = mems[0]
+		mm = mems[0]
 	}
-	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname), mem: mem}
+	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname), mm: mm}
 	return h.handle()
 }
 

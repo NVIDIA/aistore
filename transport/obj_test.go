@@ -220,7 +220,7 @@ func Test_OneStream(t *testing.T) {
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
-	streamWriteUntil(t, 55, nil, ts, nil, nil, false)
+	streamWriteUntil(t, 55, nil, ts, nil, nil, false /*compress*/, true /*PDU*/)
 	printNetworkStats(t)
 }
 
@@ -236,7 +236,7 @@ func Test_MultiStream(t *testing.T) {
 	lock := &sync.Mutex{}
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
-		go streamWriteUntil(t, i, wg, ts, netstats, lock, false)
+		go streamWriteUntil(t, i, wg, ts, netstats, lock, false /*compress*/, false /*PDU*/)
 	}
 	wg.Wait()
 	compareNetworkStats(t, netstats)
@@ -298,7 +298,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	totalSend := int64(0)
 	random := newRand(mono.NanoTime())
 	for _, stream := range streams {
-		hdr, reader := makeRandReader(random)
+		hdr, reader := makeRandReader(random, false)
 		totalSend += hdr.ObjAttrs.Size
 		stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
 	}
@@ -338,7 +338,7 @@ func Test_OnSendCallback(t *testing.T) {
 	)
 	random := newRand(mono.NanoTime())
 	for idx := 0; idx < len(posted); idx++ {
-		hdr, rr := makeRandReader(random)
+		hdr, rr := makeRandReader(random, false)
 		mu.Lock()
 		posted[idx] = rr
 		mu.Unlock()
@@ -600,7 +600,7 @@ func Test_CompletionCount(t *testing.T) {
 			stream.Send(&transport.Obj{Hdr: hdr, Callback: callback})
 			rem = random.Int63() % 13
 		} else {
-			hdr, rr := makeRandReader(random)
+			hdr, rr := makeRandReader(random, false)
 			stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, Callback: callback})
 		}
 		numSent++
@@ -629,7 +629,7 @@ func Test_CompletionCount(t *testing.T) {
 //
 
 func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server,
-	netstats map[string]transport.EndpointStats, lock sync.Locker, compress bool) {
+	netstats map[string]transport.EndpointStats, lock sync.Locker, compress, usePDU bool) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -651,8 +651,14 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
 	var extra *transport.Extra
-	if compress {
-		extra = &transport.Extra{Compression: cmn.CompressAlways}
+	if compress || usePDU {
+		extra = &transport.Extra{}
+		if compress {
+			extra.Compression = cmn.CompressAlways
+		}
+		if usePDU {
+			extra.SizePDU = cmn.KiB * 32
+		}
 	}
 	stream := transport.NewObjStream(httpclient, url, extra)
 	trname, sessID := stream.ID()
@@ -667,7 +673,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	var randReader *randReader
 	for time.Since(now) < runFor {
 		obj := transport.AllocSend()
-		obj.Hdr, randReader = makeRandReader(random)
+		obj.Hdr, randReader = makeRandReader(random, usePDU)
 		obj.Reader = randReader
 		stream.Send(obj)
 		num++
@@ -712,7 +718,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 		if err != io.EOF {
 			tassert.CheckFatal(t, err)
 		}
-		if !hdr.IsUnsized() && written != hdr.ObjAttrs.Size {
+		if written != hdr.ObjAttrs.Size {
 			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		*totalReceived += written
@@ -737,22 +743,29 @@ func genStaticHeader() (hdr transport.ObjHdr) {
 	return
 }
 
-func genRandomHeader(random *rand.Rand) (hdr transport.ObjHdr) {
+func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 	x := random.Int63()
 	hdr.Bck.Name = strconv.FormatInt(x, 10)
 	hdr.ObjName = path.Join(hdr.Bck.Name, strconv.FormatInt(math.MaxInt64-x, 10))
+
 	pos := x % int64(len(text))
 	hdr.Opaque = []byte(text[int(pos):])
+
+	// test a variety of payload sizes
 	y := x & 3
 	switch y {
 	case 0:
 		hdr.ObjAttrs.Size = (x & 0xffffff) + 1
 	case 1:
-		hdr.ObjAttrs.Size = (x & 0xfffff) + 1 // TODO -- FIXME -- DEBUG transport.SizeUnknown
+		if usePDU {
+			hdr.ObjAttrs.Size = transport.SizeUnknown
+		} else {
+			hdr.ObjAttrs.Size = (x & 0xfffff) + 1
+		}
 	case 2:
 		hdr.ObjAttrs.Size = (x & 0xffff) + 1
 	default:
-		hdr.ObjAttrs.Size = (x & 0xfff) + 1
+		hdr.ObjAttrs.Size = 0
 	}
 	return
 }
@@ -779,17 +792,17 @@ func newRandReader(random *rand.Rand, hdr transport.ObjHdr, slab *memsys.Slab) *
 	}
 	r := &randReader{buf: buf, hdr: hdr, slab: slab, random: random}
 	if hdr.IsUnsized() {
-		r.offEOF = int64(random.Int31())
+		r.offEOF = int64(random.Int31() >> 1)
 	}
 	return r
 }
 
-func makeRandReader(random *rand.Rand) (transport.ObjHdr, *randReader) {
+func makeRandReader(random *rand.Rand, usePDU bool) (transport.ObjHdr, *randReader) {
 	slab, err := MMSA.GetSlab(32 * cmn.KiB)
 	if err != nil {
 		panic("Failed getting slab: " + err.Error())
 	}
-	hdr := genRandomHeader(random)
+	hdr := genRandomHeader(random, usePDU)
 	reader := newRandReader(random, hdr, slab)
 	return hdr, reader
 }

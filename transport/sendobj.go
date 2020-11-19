@@ -192,11 +192,24 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 			return
 		}
 	case inPDU:
-		if s.pdu.rem() > 0 {
-			return s.sendPDU(b)
+		for !s.pdu.done {
+			err = s.pdu.readFrom(&s.sendoff)
+			if s.pdu.done {
+				s.pdu.insHeader()
+				break
+			}
 		}
-		s.pdu.next(&s.sendoff.obj)
-		return s.sendPDU(b)
+		if s.pdu.rlength() > 0 {
+			n = s.sendPDU(b)
+			if s.pdu.rlength() == 0 {
+				s.sendoff.off += int64(s.pdu.slength())
+				if s.pdu.last {
+					s.eoObj(nil) // TODO -- FIXME
+				}
+				s.pdu.reset()
+			}
+		}
+		return
 	case inHdr:
 		return s.sendHdr(b)
 	}
@@ -209,14 +222,14 @@ repeat:
 			return
 		}
 		s.sendoff.obj = *obj
-		if s.sendoff.obj.IsIdleTick() {
+		obj = &s.sendoff.obj
+		if obj.IsIdleTick() {
 			if len(s.workCh) > 0 {
 				goto repeat
 			}
 			return s.deactivate()
 		}
-		cmn.Assert(!obj.IsUnsized() || s.usePDU()) // TODO: on the fly
-		l := insObjHeader(s.maxheader, &s.sendoff.obj.Hdr)
+		l := insObjHeader(s.maxheader, &obj.Hdr, s.usePDU())
 		s.header = s.maxheader[:l]
 		s.sendoff.ins = inHdr
 		return s.sendHdr(b)
@@ -278,7 +291,10 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 	return
 }
 
-func (s *Stream) sendPDU(b []byte) (n int, err error) { return s.pdu.read(b) }
+func (s *Stream) sendPDU(b []byte) (n int) {
+	n = s.pdu.read(b)
+	return
+}
 
 // end-of-object updates stats, reset idle timeout, and post completion
 // NOTE: reader.Close() is done by the completion handling code doCmpl
@@ -321,12 +337,12 @@ func (s *Stream) dryrun() {
 		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
 	)
 	for {
-		hlen, isObj, err := it.nextProtoHdr()
+		hlen, flags, err := it.nextProtoHdr()
 		if err == io.EOF {
 			break
 		}
 		cmn.AssertNoErr(err)
-		cmn.Assert(isObj)
+		cmn.Assert(flags&msgFlag == 0)
 		obj, err := it.nextObj(hlen)
 		if obj != nil {
 			cmn.DrainReader(obj)
@@ -386,6 +402,7 @@ func (obj *Obj) IsLast() bool       { return obj.Hdr.IsLast() }
 func (obj *Obj) IsIdleTick() bool   { return obj.Hdr.ObjAttrs.Size == tickMarker }
 func (obj *Obj) IsHeaderOnly() bool { return obj.Hdr.ObjAttrs.Size == 0 || obj.Hdr.IsLast() }
 func (obj *Obj) IsUnsized() bool    { return obj.Hdr.IsUnsized() }
+
 func (obj *Obj) String() string {
 	s := fmt.Sprintf("sobj-%s/%s", obj.Hdr.Bck, obj.Hdr.ObjName)
 	if obj.IsHeaderOnly() {

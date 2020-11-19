@@ -122,12 +122,12 @@ func (s *MsgStream) dryrun() {
 		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
 	)
 	for {
-		hlen, isObj, err := it.nextProtoHdr()
+		hlen, flags, err := it.nextProtoHdr()
 		if err == io.EOF {
 			break
 		}
 		cmn.AssertNoErr(err)
-		cmn.Assert(!isObj)
+		cmn.Assert(flags&msgFlag != 0)
 		_, _ = it.nextMsg(hlen)
 		if err != nil {
 			break

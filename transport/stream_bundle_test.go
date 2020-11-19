@@ -53,6 +53,13 @@ func Test_Bundle(t *testing.T) {
 			},
 		},
 		{
+			name: "not-compressed-unsized",
+			nvs: cmn.SimpleKVs{
+				"compression": cmn.CompressNever,
+				"unsized":     "yes",
+			},
+		},
+		{
 			name: "compress-block-1M",
 			nvs: cmn.SimpleKVs{
 				"compression": cmn.CompressAlways,
@@ -119,6 +126,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		size, prevsize int64
 		multiplier     = int(random.Int63()%13) + 4
 		num            int
+		usePDU         bool
 	)
 	if nvs["compression"] != cmn.CompressNever {
 		v, _ := cmn.S2B(nvs["block"])
@@ -130,28 +138,36 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 			tassert.CheckFatal(t, err)
 		}
 	}
+	if _, usePDU = nvs["unsized"]; usePDU {
+		extra.SizePDU = cmn.KiB * 32
+	}
 	_, _ = random.Read(wbuf)
 	sb := bundle.NewStreams(sowner, &lsnode, httpclient,
 		bundle.Args{Network: network, Trname: trname, Multiplier: multiplier, Extra: extra})
-	var numGs int64 = 10
+	var numGs int64 = 7
 	if testing.Short() {
 		numGs = 1
 	}
 	for size < cmn.GiB*numGs {
 		var err error
-		hdr := genRandomHeader(random)
+		hdr := genRandomHeader(random, usePDU)
+		objSize := hdr.ObjAttrs.Size
 		if num%7 == 0 {
-			hdr.ObjAttrs.Size = 0
+			objSize, hdr.ObjAttrs.Size = 0, 0
 			err = sb.Send(&transport.Obj{Hdr: hdr, Callback: callback}, nil)
 		} else {
 			reader := &randReader{buf: wbuf, hdr: hdr, slab: slab, clone: true} // FIXME: multiplier reopen
+			if hdr.IsUnsized() {
+				reader.offEOF = int64(random.Int31() >> 1)
+				objSize = reader.offEOF
+			}
 			err = sb.Send(&transport.Obj{Hdr: hdr, Callback: callback}, reader)
 		}
 		if err != nil {
 			t.Fatalf("%s: exiting with err [%v]\n", sb, err)
 		}
 		num++
-		size += hdr.ObjAttrs.Size
+		size += objSize
 		if size-prevsize >= cmn.GiB {
 			tutils.Logf("%s: %d GiB\n", sb, size/cmn.GiB)
 			prevsize = size

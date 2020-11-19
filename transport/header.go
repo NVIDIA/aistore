@@ -8,34 +8,38 @@ package transport
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xoshiro256"
 )
 
+// proto header
 const (
-	// header flags
-	msgMask = uint64(1 << (63 - iota)) // message vs object demux
-	PDUMask                            // PDU
-	lastPDU                            // last in unsized
+	// flags
+	msgFlag  = uint64(1 << (63 - iota)) // message vs object demux
+	pduFlag                             // PDU
+	lastPDU                             // last PDU in a given obj/msg
+	firstPDU                            // first --/--
 
-	// header sizes
-	sizeObjHdr = cmn.SizeofI64 * 2
-	sizeMsgHdr = cmn.SizeofI64 * 2
-	sizePDUHdr = cmn.SizeofI64 * 2
+	allFlags = msgFlag | pduFlag | lastPDU | firstPDU // NOTE: update when adding flags
 
-	lastMarker = math.MaxInt64              // end of stream: send and receive
-	tickMarker = math.MaxInt64 ^ 0xa5a5a5a5 // idle tick - send side only
+	// all 3 headers
+	sizeProtoHdr = cmn.SizeofI64 * 2
 )
 
 ////////////////////////////////
 // proto header serialization //
 ////////////////////////////////
 
-func insObjHeader(hbuf []byte, hdr *ObjHdr) (off int) {
-	off = sizeObjHdr
+func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
+	var flags uint64
+	if usePDU {
+		flags = firstPDU
+	} else {
+		debug.Assert(!hdr.IsUnsized())
+	}
+	off = sizeProtoHdr
 	off = insString(off, hbuf, hdr.Bck.Name)
 	off = insString(off, hbuf, hdr.ObjName)
 	off = insString(off, hbuf, hdr.Bck.Provider)
@@ -43,33 +47,34 @@ func insObjHeader(hbuf []byte, hdr *ObjHdr) (off int) {
 	off = insString(off, hbuf, hdr.Bck.Ns.UUID)
 	off = insByte(off, hbuf, hdr.Opaque)
 	off = insAttrs(off, hbuf, hdr.ObjAttrs)
-	hlen := uint64(off - sizeObjHdr)
-	insUint64(0, hbuf, hlen)
-	checksum := xoshiro256.Hash(hlen)
+	word1 := uint64(off-sizeProtoHdr) | flags
+	insUint64(0, hbuf, word1)
+	checksum := xoshiro256.Hash(word1)
 	insUint64(cmn.SizeofI64, hbuf, checksum)
 	return
 }
 
 func insMsg(hbuf []byte, msg *Msg) (off int) {
-	off = sizeMsgHdr
+	off = sizeProtoHdr
 	off = insInt64(off, hbuf, msg.Flags)
 	off = insByte(off, hbuf, msg.Body)
-	hlen := uint64(off - sizeMsgHdr)
-	insUint64(0, hbuf, hlen|msgMask)
-	checksum := xoshiro256.Hash(hlen)
+	word1 := uint64(off-sizeProtoHdr) | msgFlag
+	insUint64(0, hbuf, word1)
+	checksum := xoshiro256.Hash(word1)
 	insUint64(cmn.SizeofI64, hbuf, checksum)
 	return
 }
 
-func insPDUHeader(buf []byte, paylen int, err error) {
-	size := uint64(paylen)
-	// NOTE: partially filled PDU and any error triggers last-PDU
-	if err != nil || paylen < len(buf)-sizePDUHdr {
-		size |= lastPDU
+func (pdu *pdu) insHeader() {
+	buf, plen := pdu.buf, pdu.plength()
+	word1 := uint64(plen) | pduFlag
+	if pdu.last {
+		word1 |= lastPDU
 	}
-	insUint64(0, buf, size|PDUMask)
-	checksum := xoshiro256.Hash(size)
+	insUint64(0, buf, word1)
+	checksum := xoshiro256.Hash(word1)
 	insUint64(cmn.SizeofI64, buf, checksum)
+	pdu.done = true
 }
 
 func insString(off int, to []byte, str string) int {
@@ -107,18 +112,13 @@ func insAttrs(off int, to []byte, attr ObjectAttrs) int {
 // proto header deserialization //
 //////////////////////////////////
 
-func extProtoHdr(hbuf []byte, trname string) (hlen int, isObj bool, err error) {
-	_, hl64ex := extUint64(0, hbuf)
-	isObj = hl64ex&msgMask == 0
-	hl64 := int64(hl64ex & ^msgMask)
-	hlen = int(hl64)
-	if hlen > len(hbuf) {
-		err = fmt.Errorf("sbrk %s: hlen %d exceeds buf %d", trname, hlen, len(hbuf))
-		return
-	}
+func extProtoHdr(hbuf []byte, trname string) (hlen int, flags uint64, err error) {
+	off, word1 := extUint64(0, hbuf)
+	hlen = int(word1 & ^allFlags)
+	flags = word1 & allFlags
 	// validate checksum
-	_, checksum := extUint64(0, hbuf[cmn.SizeofI64:])
-	chc := xoshiro256.Hash(uint64(hl64))
+	_, checksum := extUint64(0, hbuf[off:])
+	chc := xoshiro256.Hash(word1)
 	if checksum != chc {
 		err = fmt.Errorf("sbrk %s: bad checksum %x != %x (hlen=%d)", trname, checksum, chc, hlen)
 	}

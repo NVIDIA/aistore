@@ -44,7 +44,7 @@ type (
 		sessions    sync.Map // map[uint64]*Stats
 		oldSessions sync.Map // map[uint64]time.Time
 		hkName      string   // house-keeping name
-		mem         *memsys.MMSA
+		mm          *memsys.MMSA
 	}
 )
 
@@ -107,20 +107,25 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 			obj *objReader
 			msg Msg
 		)
-		hlen, isObj, err := it.nextProtoHdr()
+		hlen, flags, err := it.nextProtoHdr()
 		if err != nil {
 			goto rerr
 		}
-		_ = stats.Offset.Add(int64(hlen + cmn.SizeofI64*2)) // to account for proto header
-		if isObj {
+		if lh := len(it.headerBuf); hlen > lh {
+			err = fmt.Errorf("sbrk %s: hlen %d exceeds buflen=%d", trname, hlen, lh)
+			goto rerr
+		}
+		_ = stats.Offset.Add(int64(hlen + sizeProtoHdr))
+		if flags&msgFlag == 0 {
 			obj, err = it.nextObj(hlen)
 			if obj != nil {
-				h.rxObj(w, obj.hdr, obj, eofOK(err))
+				if flags&firstPDU == 0 || obj.hdr.ObjAttrs.Size == 0 {
+					h.rxObj(w, obj.hdr, obj, eofOK(err))
+				} else {
+					err = it.rxPDUs(w, obj, h)
+				}
 				hdr := &obj.hdr
 				objSize := hdr.ObjAttrs.Size
-				if hdr.IsUnsized() && err == io.EOF {
-					objSize = obj.off
-				}
 				if objSize == obj.off {
 					var (
 						num = stats.Num.Inc()
@@ -135,8 +140,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 				}
 				xxh, _ := UID2SessID(uid)
 				num := stats.Num.Load()
-				err = fmt.Errorf("%s[%d:%d]: %v, num %d, off %d != %s",
-					trname, xxh, sessID, err, num, obj.off, obj)
+				err = fmt.Errorf("%s[%d:%d]: %v, num %d, off %d != %s", trname, xxh, sessID, err, num, obj.off, obj)
 			} else if err != nil && err != io.EOF {
 				h.rxObj(w, ObjHdr{}, nil, err)
 			}
@@ -209,17 +213,17 @@ func (it *iterator) Read(p []byte) (n int, err error) { return it.body.Read(p) }
 
 // nextProtoHdr receives and handles 16 bytes of the protocol header (not to confuse with transport.Obj.Hdr)
 // returns hlen, which is header length - for transport.Obj, and message length - for transport.Msg
-func (it *iterator) nextProtoHdr() (hlen int, isObj bool, err error) {
+func (it *iterator) nextProtoHdr() (hlen int, flags uint64, err error) {
 	var n int
-	n, err = it.Read(it.headerBuf[:cmn.SizeofI64*2])
-	if n < cmn.SizeofI64*2 {
+	n, err = it.Read(it.headerBuf[:sizeProtoHdr])
+	if n < sizeProtoHdr {
 		if err == nil {
 			err = fmt.Errorf("sbrk %s: failed to receive proto hdr (n=%d)", it.trname, n)
 		}
 		return
 	}
 	// extract and validate hlen
-	hlen, isObj, err = extProtoHdr(it.headerBuf, it.trname)
+	hlen, flags, err = extProtoHdr(it.headerBuf, it.trname)
 	return
 }
 
@@ -259,6 +263,37 @@ func (it *iterator) nextMsg(hlen int) (msg Msg, err error) {
 	if msg.IsLast() {
 		err = io.EOF
 	}
+	return
+}
+
+// TODO -- FIXME
+func (it *iterator) rxPDUs(w http.ResponseWriter, obj *objReader, h *handler) (err error) {
+	if h.mm == nil {
+		h.mm = memsys.DefaultPageMM()
+	}
+	sgl := h.mm.NewSGL(memsys.MaxPageSlabSize, memsys.DefaultBufSize)
+	defer sgl.Free()
+	for i := 1; ; i++ {
+		plen, flags, err := it.nextProtoHdr()
+		if debug.Enabled {
+			debug.Infof("%d: %d(%s)", i, plen, fl2s(flags))
+		}
+		cmn.Assert(flags&pduFlag != 0)
+		cmn.Assert(plen <= MaxSizePDU)
+		cmn.Assert(plen > 0 || (plen == 0 && flags&lastPDU != 0))
+		if err != nil {
+			break
+		}
+		sgl.ReadFrom(&io.LimitedReader{R: obj, N: int64(plen)})
+		if flags&lastPDU != 0 {
+			if obj.hdr.IsUnsized() {
+				obj.hdr.ObjAttrs.Size = obj.off
+			}
+			cmn.Assert(obj.off == sgl.Len())
+			break
+		}
+	}
+	h.rxObj(w, obj.hdr, sgl, eofOK(err))
 	return
 }
 
