@@ -167,6 +167,19 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 					}
 				}
 			}
+		} else if strings.HasPrefix(scmd, "// RUN") {
+			comment := strings.TrimSpace(strings.TrimPrefix(scmd, "// RUN"))
+			cmn.Assert(comment == "local-deployment")
+
+			// Skip running test if requires local deployment and the cluster
+			// is not in testing env.
+			config, err := getClusterConfig()
+			cmn.AssertNoErr(err)
+			if !config.TestingEnv() {
+				return
+			}
+
+			continue
 		}
 
 		scmd = substituteVariables(scmd)

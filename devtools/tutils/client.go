@@ -573,22 +573,19 @@ func GetClusterMap(t *testing.T, url string) (smap *cluster.Smap) {
 	return
 }
 
-func GetClusterConfig(t *testing.T) (config *cmn.Config) {
+func getClusterConfig() (config *cmn.Config, err error) {
 	proxyURL := GetPrimaryURL()
 	primary, err := GetPrimaryProxy(proxyURL)
-	tassert.CheckFatal(t, err)
-	return GetDaemonConfig(t, primary.ID())
+	if err != nil {
+		return nil, err
+	}
+	return api.GetDaemonConfig(BaseAPIParams(proxyURL), primary.ID())
 }
 
-func GetDaemonConfig(t *testing.T, nodeID string) (config *cmn.Config) {
-	var (
-		err        error
-		proxyURL   = GetPrimaryURL()
-		baseParams = BaseAPIParams(proxyURL)
-	)
-	config, err = api.GetDaemonConfig(baseParams, nodeID)
+func GetClusterConfig(t *testing.T) (config *cmn.Config) {
+	config, err := getClusterConfig()
 	tassert.CheckFatal(t, err)
-	return
+	return config
 }
 
 func SetClusterConfig(t *testing.T, nvs cmn.SimpleKVs) {
