@@ -1,11 +1,11 @@
 ais create bucket $BUCKET // IGNORE
-mkdir -p /tmp/prm && echo 012345 > /tmp/prm/obj && echo 012345 > /tmp/prm/discard  
-ais promote /tmp/prm/obj ais://$BUCKET/one/one --keep=true --target `ais show cluster target | awk 'FNR == 2 {print $1}'`
-ais promote /tmp/prm/discard ais://$BUCKET/two/ --keep=false  --target `ais show cluster target | awk 'FNR == 2 {print $1}'`
-ais promote /tmp/prm/ ais://$BUCKET/three --keep=true --target `ais show cluster target | awk 'FNR == 2 {print $1}'`
-ais promote /tmp/prm ais://$BUCKET/fourth --keep=true --target `ais show cluster target | awk 'FNR == 2 {print $1}'`
-ais promote /tmp/prm ais://$BUCKET/fifth/ --keep=true --target `ais show cluster target | awk 'FNR == 2 {print $1}'`
-ais promote /tmp/prm/ ais://$BUCKET/sixth/ --keep=true --target `ais show cluster target | awk 'FNR == 2 {print $1}'`
+mkdir -p /tmp/prm && echo 012345 > /tmp/prm/obj && echo 012345 > /tmp/prm/discard
+ais promote /tmp/prm/obj ais://$BUCKET/one/one --keep=true --target $RANDOM_TARGET
+ais promote /tmp/prm/discard ais://$BUCKET/two/ --keep=false  --target $RANDOM_TARGET
+ais promote /tmp/prm/ ais://$BUCKET/three --keep=true --target $RANDOM_TARGET
+ais promote /tmp/prm ais://$BUCKET/fourth --keep=true --target $RANDOM_TARGET
+ais promote /tmp/prm ais://$BUCKET/fifth/ --keep=true --target $RANDOM_TARGET
+ais promote /tmp/prm/ ais://$BUCKET/sixth/ --keep=true --target $RANDOM_TARGET
 
 ais ls ais://$BUCKET
 
