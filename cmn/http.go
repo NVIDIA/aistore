@@ -101,6 +101,7 @@ type (
 		HardErr uint // How many retries on any other error.
 		Sleep   time.Duration
 
+		NoLog   bool // Determine if we should stop logging errors.
 		BackOff bool // If requests should be retried less and less often.
 	}
 )
@@ -565,6 +566,9 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 	if args.Caller != "" {
 		callerStr = args.Caller + ": "
 	}
+	if args.Action == "" {
+		args.Action = "call"
+	}
 
 	sleep := args.Sleep
 	for i, j, k := uint(0), uint(0), uint(1); ; k++ {
@@ -577,7 +581,9 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			return
 		}
 
-		glog.Errorf("%sFailed to %s, err: %v (status code: %d)", callerStr, args.Action, err, status)
+		if !args.NoLog {
+			glog.Errorf("%sFailed to %s, err: %v (iter: %d, status code: %d)", callerStr, args.Action, err, k, status)
+		}
 		if IsErrConnectionRefused(err) || IsErrConnectionReset(err) {
 			j++
 		} else {
@@ -590,7 +596,6 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			break
 		}
 		time.Sleep(sleep)
-		glog.Errorf("%sretrying on err: %v (status code: %d)...", callerStr, err, k)
 	}
 	return
 }
