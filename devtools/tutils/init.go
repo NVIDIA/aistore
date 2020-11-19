@@ -50,9 +50,7 @@ var (
 		IdleConnsPerHost: 100,
 		UseHTTPProxyEnv:  true,
 	}
-	DefaultHTTPClient = &http.Client{}
-	HTTPClient        *http.Client
-	HTTPClientGetPut  *http.Client
+	HTTPClient *http.Client
 
 	RemoteCluster struct {
 		UUID  string
@@ -69,15 +67,13 @@ var (
 func init() {
 	MMSA = memsys.DefaultPageMM()
 	envURL := os.Getenv(cmn.EnvVars.Endpoint)
+
 	// Since tests do not have access to cluster configuration, the tests
 	// detect client type by the primary proxy URL passed by a user.
 	// Certificate check is always disabled.
 	transportArgs.UseHTTPS = cmn.IsHTTPS(envURL)
 	transportArgs.SkipVerify = cmn.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt))
 	HTTPClient = cmn.NewClient(transportArgs)
-
-	transportArgs.WriteBufferSize, transportArgs.ReadBufferSize = 65536, 65536
-	HTTPClientGetPut = cmn.NewClient(transportArgs)
 
 	devtoolsCtx = &devtools.Ctx{
 		Client: HTTPClient,

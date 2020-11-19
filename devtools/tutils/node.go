@@ -93,7 +93,7 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 		retries    = 3
 	)
 	if err == nil {
-		return _getRandomProxyURL(smap)
+		return getRandomProxyURL(smap)
 	}
 	for _, node := range pmapReadOnly {
 		url := node.URL(cmn.NetworkPublic)
@@ -105,7 +105,7 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 		}
 		baseParams = BaseAPIParams(url)
 		if smap, err = waitForStartup(baseParams); err == nil {
-			return _getRandomProxyURL(smap)
+			return getRandomProxyURL(smap)
 		}
 		retries--
 	}
@@ -116,7 +116,7 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 	return ""
 }
 
-func _getRandomProxyURL(smap *cluster.Smap) string {
+func getRandomProxyURL(smap *cluster.Smap) string {
 	proxies := smap.Pmap.ActiveNodes()
 	return proxies[rand.Intn(len(proxies))].URL(cmn.NetworkPublic)
 }
