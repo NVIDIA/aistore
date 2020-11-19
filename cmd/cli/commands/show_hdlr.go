@@ -32,9 +32,9 @@ type (
 	}
 
 	targetMpath struct {
-		DaemonID string
-		Avail    []string
-		Disabled []string
+		DaemonID  string   `json:"daemon_id"`
+		Available []string `json:"available"`
+		Disabled  []string `json:"disabled"`
 	}
 )
 
@@ -500,7 +500,11 @@ func showMpathHandler(c *cli.Context) (err error) {
 			if err != nil {
 				erCh <- err
 			} else {
-				mpCh <- &targetMpath{DaemonID: node.ID(), Avail: mpl.Available, Disabled: mpl.Disabled}
+				mpCh <- &targetMpath{
+					DaemonID:  node.ID(),
+					Available: mpl.Available,
+					Disabled:  mpl.Disabled,
+				}
 			}
 		}(node)
 	}
