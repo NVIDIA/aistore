@@ -137,13 +137,9 @@ deploy: ## Build 'aisnode' and deploy the specified numbers of local AIS proxies
 #
 .PHONY: kill clean clean-client-bindings
 
-# when profiling, make sure to let it flush accumulated stats
-# e.g., insert sleep prior to SIGKILL or remove it altogether
 kill: ## Kill all locally deployed targets and proxies
 	@echo -n "Local AIS shutdown... "
-	@pkill -SIGINT aisnode 2>/dev/null; true
-	@pkill authn 2>/dev/null; true
-	@pkill -SIGKILL aisnode 2>/dev/null; true
+	@"$(DEPLOY_DIR)/kill.sh"
 	@echo "done."
 
 clean: ## Remove all AIS related files and binaries

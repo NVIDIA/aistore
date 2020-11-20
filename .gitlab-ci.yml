@@ -17,6 +17,7 @@ variables:
 
 .gather_logs_template: &gather_logs_def
   after_script:
+    - make kill # To make sure that nodes flushed the logs.
     - mkdir $CI_PROJECT_DIR/logs
     - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
   artifacts:
@@ -85,7 +86,6 @@ test:short:
     - make aisfs cli aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\n'
-    - sleep 3
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="test" make test-short
     - FLAGS="--duration=10s" make test-aisloader
