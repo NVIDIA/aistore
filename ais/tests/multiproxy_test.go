@@ -188,7 +188,9 @@ func primaryAndTargetCrash(t *testing.T) {
 	err = tutils.RestoreNode(cmd, false, "proxy (prev primary)")
 	tassert.CheckFatal(t, err)
 
-	tutils.WaitNodeRestored(t, newPrimaryURL, "to restore", killedID, smap.Version, origProxyCount, origTargetCount)
+	tutils.WaitNodeRestored(t, newPrimaryURL, "to restore proxy", killedID, smap.Version, origProxyCount, origTargetCount)
+	tutils.WaitNodeRestored(t, newPrimaryURL, "to restore target", targetID, smap.Version, origProxyCount, origTargetCount)
+	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(newPrimaryURL))
 }
 
 // A very simple test to check if a primary proxy can detect non-primary one
@@ -331,13 +333,13 @@ func targetRejoin(t *testing.T) {
 	err = tutils.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
 
-	smap, err = tutils.WaitForClusterState(proxyURL, "to synchronize on 'target rejoined'",
+	smap = tutils.WaitNodeRestored(t, proxyURL, "to synchronize on 'target rejoined'", id,
 		smap.Version, smap.CountActiveProxies(), smap.CountActiveTargets()+1)
-	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Tmap[id]; !ok {
 		t.Fatalf("Restarted target %s did not rejoin the cluster", id)
 	}
+	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(proxyURL))
 }
 
 // crashAndFastRestore kills the primary and restores it before a new leader is elected
@@ -1076,14 +1078,12 @@ func primaryAndNextCrash(t *testing.T) {
 	// restore next and prev primaries in the reversed order
 	err = tutils.RestoreNode(cmdSecond, true, "proxy (next primary)")
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForClusterState(finalPrimaryURL, "to restore next primary",
+	smap = tutils.WaitNodeRestored(t, finalPrimaryURL, "to restore next primary", cmdSecond.Node.ID(),
 		smap.Version, origProxyCount-1, 0)
-	tassert.CheckFatal(t, err)
 	err = tutils.RestoreNode(cmdFirst, true, "proxy (prev primary)")
 	tassert.CheckFatal(t, err)
-	_, err = tutils.WaitForClusterState(finalPrimaryURL, "to restore prev primary",
+	tutils.WaitNodeRestored(t, finalPrimaryURL, "to restore prev primary", cmdFirst.Node.ID(),
 		smap.Version, origProxyCount, 0)
-	tassert.CheckFatal(t, err)
 }
 
 func TestIC(t *testing.T) {

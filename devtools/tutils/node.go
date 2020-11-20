@@ -394,6 +394,7 @@ func EnsureOrigClusterState(t *testing.T) {
 	var (
 		proxyURL       = RandomProxyURL()
 		smap           = GetClusterMap(t, proxyURL)
+		baseParam      = BaseAPIParams(proxyURL)
 		afterProxyCnt  = smap.CountActiveProxies()
 		afterTargetCnt = smap.CountActiveTargets()
 		tgtCnt         int
@@ -423,7 +424,11 @@ func EnsureOrigClusterState(t *testing.T) {
 		_, err := getPID(cmd.Node.PublicNet.DaemonPort)
 		if err != nil {
 			tassert.CheckError(t, err)
-			RestoreNode(cmd, false, cmd.Node.Type())
+			if err = RestoreNode(cmd, false, cmd.Node.Type()); err == nil {
+				_, err := api.WaitNodeAdded(baseParam, cmd.Node.ID())
+				tassert.CheckError(t, err)
+			}
+			tassert.CheckError(t, err)
 			updated = true
 		}
 	}
