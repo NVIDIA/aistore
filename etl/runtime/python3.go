@@ -21,7 +21,7 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/python:3
+      image: aistore/runtime_python:3
       ports:
         - name: default
           containerPort: 80
@@ -44,7 +44,7 @@ spec:
           mountPath: "/runtime"
   initContainers:
     - name: server-deps
-      image: aistore/python:3
+      image: aistore/runtime_python:3
       command:
         - 'sh'
         - '-c'
