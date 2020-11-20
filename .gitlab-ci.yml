@@ -133,6 +133,7 @@ test:long:
     NUM_PROXY: 6
     BUCKET: "test"
   script:
+    - make cli
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
     - make test-long
 
@@ -143,6 +144,7 @@ test:cloud:aws:
     BUCKET: "aws://ais-ci"
     AWS_REGION: "us-east-2"
   script:
+    - make cli
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
     - make test-long
 
@@ -153,6 +155,7 @@ test:cloud:gcp:
     BUCKET: "gs://ais-ci"
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
   script:
+    - make cli
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; })
     - make test-long

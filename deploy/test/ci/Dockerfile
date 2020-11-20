@@ -13,7 +13,8 @@ RUN chmod +x ./kubectl
 RUN mv ./kubectl /usr/local/bin/kubectl
 RUN kubectl version --client
 
-# Cache some of the dependencies.
+# Cache some of the dependencies, by building binaries.
+# Then remove these binaries and source code, so they're not used during CI jobs.
 RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && \
     make && AIS_CLD_PROVIDERS="ais aws gcp azure" make node && \
-    cd .. && rm -rf aistore
+    make clean && cd .. && rm -rf aistore
