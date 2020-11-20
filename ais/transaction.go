@@ -136,6 +136,7 @@ func (txns *transactions) begin(txn txn) error {
 	}
 	txn.started(cmn.ActBegin, time.Now())
 	txns.m[txn.uuid()] = txn
+	glog.Infof("begin: %s", txn)
 	return nil
 }
 
@@ -183,12 +184,16 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 	var running bool
 	txns.Lock()
 
-	// Ignore downgrade error.
-	if isErrDowngrade(err) {
-		err = nil
-	}
 	if txn, ok := txns.m[msg.UUID]; ok {
-		running, errDone = txn.commitAfter(caller, msg, err, args...)
+		// Ignore downgrade error.
+		if isErrDowngrade(err) {
+			err = nil
+			bmd := txns.t.owner.bmd.get()
+			glog.Warningf("%s: commit with downgraded (current: %s)", txn, bmd)
+		}
+		if running, errDone = txn.commitAfter(caller, msg, err, args...); running {
+			glog.Infof("committed: %s", txn)
+		}
 	}
 	if !running {
 		if rndzvs, ok := txns.rendezvous[msg.UUID]; ok {
@@ -372,7 +377,7 @@ func newTxnBckBase(kind string, bck cluster.Bck) *txnBckBase {
 	return &txnBckBase{txnBase: txnBase{kind: kind}, bck: bck}
 }
 
-func (txn *txnBckBase) abort() {
+func (txn *txnBckBase) cleanup() {
 	for _, p := range txn.nlps {
 		nlp, ok := p.(*cluster.NameLockPair)
 		cmn.Assert(ok)
@@ -381,8 +386,13 @@ func (txn *txnBckBase) abort() {
 	txn.nlps = txn.nlps[:0]
 }
 
+func (txn *txnBckBase) abort() {
+	txn.cleanup()
+	glog.Infof("aborted: %s", txn)
+}
+
 // NOTE: not keeping locks for the duration; see also: txnTransferBucket
-func (txn *txnBckBase) commit() { txn.abort() }
+func (txn *txnBckBase) commit() { txn.cleanup() }
 
 func (txn *txnBckBase) String() string {
 	var (

@@ -642,7 +642,6 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 		err = errors.New(createErrs)
 		return
 	}
-
 	// accept the new one
 	t.owner.bmd.put(newBMD)
 
