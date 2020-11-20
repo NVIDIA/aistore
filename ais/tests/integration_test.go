@@ -1261,7 +1261,7 @@ func TestAtimeColdGet(t *testing.T) {
 	api.DeleteObject(baseParams, bck, objectName)
 	defer api.DeleteObject(baseParams, bck, objectName)
 
-	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, proxyURL, bck, objectName, objectContent)
+	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, bck, objectName, objectContent)
 
 	timeAfterPut := time.Now()
 

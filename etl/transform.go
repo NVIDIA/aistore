@@ -429,10 +429,10 @@ func setTransformAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {
 			},
 		},
 	}
-	// TODO: RequiredDuringSchedulingIgnoredDuringExecution means that ETL container
-	//  will be placed on the same machine as target which creates it. However,
-	//  if 2 targets went down and up again at the same time, they may switch nodes,
-	//  leaving ETL containers running on the wrong machines.
+	// RequiredDuringSchedulingIgnoredDuringExecution means that ETL container will be placed on the same machine as
+	// target which creates it. This guarantee holds only during scheduling - initial pod start-up sequence.
+	// However, a target removes its ETL pod when it goes down, so this guarantee is sufficient.
+	// Additionally, if other targets notice that another target went down, they all stop all running ETL pods.
 	pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nodeSelector
 	return nil
 }

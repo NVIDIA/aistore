@@ -114,7 +114,7 @@ func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string
 	// too short - the first housekeeping removes it. Set the special value:
 	// negatve Now() for correct processing the LOM while housekeeping
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	if _, err = r.t.GetCold(args.Ctx, lom, true); err != nil {
+	if _, err = r.t.GetCold(args.Ctx, lom, cluster.Prefetch); err != nil {
 		if !errors.Is(err, cmn.ErrSkip) {
 			return err
 		}

@@ -46,11 +46,16 @@ type (
 		outPath     string         // optional
 		filesEqual  filesEqualFunc // optional
 		onlyLong    bool           // run only with long tests
+		cloud       bool           // run on a cloud bucket
 	}
 )
 
 func (tc testConfig) Name() string {
-	return fmt.Sprintf("%s/%s", tc.transformer, strings.TrimSuffix(tc.comm, "://"))
+	provider := "local"
+	if tc.cloud {
+		provider = "cloud"
+	}
+	return fmt.Sprintf("%s/%s/%s", tc.transformer, provider, strings.TrimSuffix(tc.comm, "://"))
 }
 
 // TODO: this should be a part of go-tfdata
@@ -116,10 +121,14 @@ func etlInit(name, comm string) (string, error) {
 	return api.ETLInit(baseParams, spec)
 }
 
-func testETL(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
+func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
+	bck := cmn.Bck{Name: "etl-test", Provider: cmn.ProviderAIS}
+	if cloud {
+		bck = cliBck
+	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Bck: bck, Long: onlyLong, Cloud: cloud})
+
 	var (
-		bck        = cmn.Bck{Name: "etl-test", Provider: cmn.ProviderAIS}
 		testObjDir = filepath.Join("data", "transformer", transformer)
 		objName    = fmt.Sprintf("%s-object", transformer)
 
@@ -140,9 +149,11 @@ func testETL(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath str
 		expectedOutputFileName = outPath
 	}
 
-	tutils.Logln("Creating bucket")
-	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+	if !cloud {
+		tutils.Logln("Creating bucket")
+		tutils.CreateFreshBucket(t, proxyURL, bck)
+		defer tutils.DestroyBucket(t, proxyURL, bck)
+	}
 
 	tutils.Logln("Putting object")
 	reader, err := readers.NewFileReaderFromFile(inputFileName, cmn.ChecksumNone)
@@ -150,11 +161,21 @@ func testETL(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath str
 	errCh := make(chan error, 1)
 	tutils.Put(proxyURL, bck, objName, reader, errCh)
 	tassert.SelectErr(t, errCh, "put", false)
+
+	if cloud {
+		// Evict object which was just put, to make sure that it is not stored locally.
+		tutils.EvictObjects(t, proxyURL, bck, []string{objName})
+		defer func() {
+			// Could bucket is not destroyed, remove created object instead
+			tassert.CheckError(t, api.DeleteObject(baseParams, bck, objName))
+		}()
+	}
+
 	uuid, err = etlInit(transformer, comm)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		tutils.Logf("Stop %q\n", uuid)
-		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
+		tassert.CheckError(t, api.ETLStop(baseParams, uuid))
 	}()
 
 	fho, err := cmn.CreateFile(outputFileName)
@@ -170,14 +191,14 @@ func testETL(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath str
 
 	tutils.Logln("Compare output")
 	same, err := fEq(outputFileName, expectedOutputFileName)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, same, "file contents after transformation differ")
+	tassert.CheckError(t, err)
+	tassert.Errorf(t, same, "file contents after transformation differ")
 }
 
 // TODO: currently this test only tests scenario where all objects are PUT to
 //  the same target which they are currently stored on. That's because our
 //  minikube tests only run with a single target.
-func testOfflineETL(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
+func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
 	bckTo := cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 
 	defer func() {
@@ -205,17 +226,22 @@ func TestETLObject(t *testing.T) {
 		{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
 		{transformer: tetl.Echo, comm: etl.RevProxyCommType, onlyLong: true},
 		{transformer: tetl.Echo, comm: etl.PushCommType, onlyLong: true},
-		{tetl.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tetl.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tetl.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
-		{tetl.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
-		{tetl.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
-		{tetl.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{tetl.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, true, false},
+		{tetl.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, true, false},
+		{tetl.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, true, false},
+		{tetl.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false, false},
+		{tetl.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false, false},
+		{tetl.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false, false},
+
+		// Cloud: only smoke tests to check if LOMs are loaded correctly.
+		{transformer: tetl.Echo, comm: etl.RedirectCommType, cloud: true},
+		{transformer: tetl.Echo, comm: etl.RevProxyCommType, cloud: true},
+		{transformer: tetl.Echo, comm: etl.PushCommType, cloud: true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			testETL(t, test.onlyLong, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
+			testETLObject(t, test.onlyLong, test.cloud, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
 		})
 	}
 }
@@ -256,7 +282,7 @@ func TestETLBucket(t *testing.T) {
 			uuid, err := etlInit(test.transformer, test.comm)
 			tassert.CheckFatal(t, err)
 
-			testOfflineETL(t, uuid, bck, objCnt)
+			testETLBucket(t, uuid, bck, objCnt)
 		})
 	}
 }
@@ -325,7 +351,7 @@ def transform(input_bytes: bytes) -> bytes:
 			})
 			tassert.CheckFatal(t, err)
 
-			testOfflineETL(t, uuid, m.bck, m.num)
+			testETLBucket(t, uuid, m.bck, m.num)
 		})
 	}
 }

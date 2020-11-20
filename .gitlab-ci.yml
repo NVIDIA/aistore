@@ -48,13 +48,13 @@ variables:
     K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
     NUM_TARGET: 1
     NUM_PROXY: 1
+    BUCKET: "aws://ais-ci"
+    AWS_REGION: "us-east-2"
   tags:
     - ais-kube
   before_script:
     - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecycle of transformers is implemented.
     - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecycle of transformers is implemented.
-
-
 
 # Stages
 
@@ -200,9 +200,9 @@ test:kube-short:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   script:
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n;  })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n;  })
     - status=0
-    - BUCKET="test" RE="TestETL" make test-short || status=$?
+    - RE="TestETL" make test-short || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
 
@@ -213,9 +213,9 @@ test:kube:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   stage: test-long
   script:
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
     - status=0
-    - BUCKET="test" RE="TestETL" make test-run || status=$?
+    - RE="TestETL" make test-run || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
 

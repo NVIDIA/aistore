@@ -5,6 +5,7 @@
 package etl
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -131,12 +132,25 @@ func (c baseComm) SvcName() string { return c.podName /*pod name is same as serv
 // pushComm //
 //////////////
 
-// TODO: make it work with cloud, including not cached objects.
-func (pc *pushComm) doRequest(bck *cluster.Bck, objName string) (*http.Response, error) {
+func (pc *pushComm) doRequest(bck *cluster.Bck, objName string) (resp *http.Response, err error) {
 	lom := &cluster.LOM{T: pc.t, ObjName: objName}
 	if err := lom.Init(bck.Bck); err != nil {
 		return nil, err
 	}
+
+	resp, err = pc.tryDoRequest(lom)
+	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
+		_, err = pc.t.GetCold(context.Background(), lom, cluster.PrefetchWait)
+		if err != nil {
+			return nil, err
+		}
+		resp, err = pc.tryDoRequest(lom)
+	}
+	return
+}
+
+// TODO: make it work with cloud, including not cached objects.
+func (pc *pushComm) tryDoRequest(lom *cluster.LOM) (*http.Response, error) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
 	if err := lom.Load(); err != nil {

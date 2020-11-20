@@ -461,7 +461,7 @@ do:
 			return http.StatusBadRequest, cs.Err
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		if errCode, err := goi.t.GetCold(goi.ctx, goi.lom, false /*prefetch*/); err != nil {
+		if errCode, err := goi.t.GetCold(goi.ctx, goi.lom, cluster.GetCold); err != nil {
 			return errCode, err
 		}
 		goi.t.putMirror(goi.lom)

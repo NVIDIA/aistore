@@ -314,8 +314,8 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize)
-func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch bool) (errCode int, err error) {
-	if prefetch {
+func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster.GetColdType) (errCode int, err error) {
+	if ty == cluster.Prefetch {
 		if !lom.TryLock(true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
 			return 0, cmn.ErrSkip
@@ -349,7 +349,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, prefetch b
 	lom.ReCache()
 
 	// NOTE: GET - downgrade and keep the lock, PREFETCH - unlock
-	if prefetch {
+	if ty == cluster.Prefetch || ty == cluster.PrefetchWait {
 		lom.Unlock(true)
 	} else {
 		t.statsT.AddMany(

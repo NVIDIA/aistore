@@ -17,15 +17,10 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-type RecvType int
-
-const (
-	ColdGet RecvType = iota
-	WarmGet
-	Migrated
-)
-
 type (
+	RecvType    int
+	GetColdType uint8
+
 	GFNType int
 	GFN     interface {
 		Activate() bool
@@ -34,6 +29,17 @@ type (
 )
 
 const (
+	ColdGet RecvType = iota
+	WarmGet
+	Migrated
+
+	// Error if lock is not available to be acquired immediately. Otherwise acquire, create an object, release the lock.
+	Prefetch GetColdType = iota
+	// Wait until a lock is acquired, create an object, release the lock.
+	PrefetchWait
+	// Wait until a lock is acquired, create an object, downgrade the lock.
+	GetCold
+
 	GFNGlobal GFNType = iota
 	GFNLocal
 )
@@ -121,7 +127,7 @@ type Target interface {
 	EvictObject(lom *LOM) error
 	DeleteObject(ctx context.Context, lom *LOM, evict bool) (errCode int, err error)
 	CopyObject(lom *LOM, params CopyObjectParams, localOnly bool) (bool, int64, error)
-	GetCold(ctx context.Context, lom *LOM, prefetch bool) (errCode int, err error)
+	GetCold(ctx context.Context, lom *LOM, getType GetColdType) (errCode int, err error)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool
 

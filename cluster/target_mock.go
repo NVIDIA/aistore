@@ -53,7 +53,7 @@ func (*TargetMock) CopyObject(_ *LOM, _ CopyObjectParams, _ bool) (bool, int64, 
 	return false, 0, nil
 }
 
-func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (int, error) {
+func (*TargetMock) GetCold(ctx context.Context, lom *LOM, _ GetColdType) (int, error) {
 	return http.StatusOK, nil
 }
 func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)      { return nil, nil }
