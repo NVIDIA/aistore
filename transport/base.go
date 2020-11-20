@@ -97,7 +97,7 @@ type (
 		}
 		wg        sync.WaitGroup
 		mm        *memsys.MMSA
-		pdu       *pdu   // PDU buffer
+		pdu       *spdu  // PDU buffer
 		maxheader []byte // max header buffer
 		header    []byte // object header - slice of the maxheader with bucket/objName, etc. fields
 		term      struct {
@@ -146,7 +146,7 @@ func newStreamBase(client Client, toURL string, extra *Extra) (s *streamBase) {
 			extra.SizePDU = MaxSizePDU
 		}
 		buf, _ := s.mm.Alloc(int64(extra.SizePDU))
-		s.pdu = newPDU(buf)
+		s.pdu = newSendPDU(buf)
 	}
 
 	s.sessST.Store(inactive) // NOTE: initiate HTTP session upon the first arrival

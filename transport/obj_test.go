@@ -657,7 +657,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 			extra.Compression = cmn.CompressAlways
 		}
 		if usePDU {
-			extra.SizePDU = cmn.KiB * 32
+			extra.SizePDU = transport.DefaultSizePDU
 		}
 	}
 	stream := transport.NewObjStream(httpclient, url, extra)
@@ -718,7 +718,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 		if err != io.EOF {
 			tassert.CheckFatal(t, err)
 		}
-		if written != hdr.ObjAttrs.Size {
+		if written != hdr.ObjAttrs.Size && !hdr.IsUnsized() {
 			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		*totalReceived += written
@@ -798,13 +798,15 @@ func newRandReader(random *rand.Rand, hdr transport.ObjHdr, slab *memsys.Slab) *
 }
 
 func makeRandReader(random *rand.Rand, usePDU bool) (transport.ObjHdr, *randReader) {
-	slab, err := MMSA.GetSlab(32 * cmn.KiB)
+	hdr := genRandomHeader(random, usePDU)
+	if hdr.ObjSize() == 0 {
+		return hdr, nil
+	}
+	slab, err := MMSA.GetSlab(memsys.DefaultBufSize)
 	if err != nil {
 		panic("Failed getting slab: " + err.Error())
 	}
-	hdr := genRandomHeader(random, usePDU)
-	reader := newRandReader(random, hdr, slab)
-	return hdr, reader
+	return hdr, newRandReader(random, hdr, slab)
 }
 
 func (r *randReader) Read(p []byte) (n int, err error) {
@@ -841,7 +843,7 @@ func (r *randReader) Open() (io.ReadCloser, error) {
 }
 
 func (r *randReader) Close() error {
-	if !r.clone {
+	if r != nil && !r.clone {
 		r.slab.Free(r.buf)
 	}
 	return nil
@@ -860,7 +862,9 @@ func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, reader io.ReadClose
 		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bck, hdr.ObjName, err)
 	}
 	rr := rrc.rr
-	rr.slab.Free(rr.buf)
+	if rr != nil {
+		rr.slab.Free(rr.buf)
+	}
 	rrc.mu.Lock()
 	rrc.posted[rrc.idx] = nil
 	if rrc.idx > 0 && rrc.posted[rrc.idx-1] != nil {

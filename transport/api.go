@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"time"
 	"unsafe"
 
@@ -25,8 +26,9 @@ import (
 ///////////////////
 
 const (
-	SizeUnknown = -1
-	MaxSizePDU  = cmn.MiB
+	SizeUnknown    = -1
+	DefaultSizePDU = memsys.DefaultBufSize
+	MaxSizePDU     = memsys.MaxPageSlabSize
 )
 
 type (
@@ -145,10 +147,14 @@ func (s *Stream) Send(obj *Obj) (err error) {
 		}
 		return
 	}
-	if obj.Reader == nil {
-		debug.Assert(obj.IsHeaderOnly())
-	} else if obj.IsHeaderOnly() {
-		debug.AssertMsg(false, obj.String()) // expecting nil reader
+	// reader == nil iff is-header-only
+	if debug.Enabled {
+		if obj.Reader == nil {
+			debug.Assert(obj.IsHeaderOnly())
+		} else if obj.IsHeaderOnly() {
+			val := reflect.ValueOf(obj.Reader)
+			debug.AssertMsg(val.IsNil(), obj.String())
+		}
 	}
 	s.workCh <- obj
 	if verbose {
@@ -205,6 +211,8 @@ func HandleObjStream(trname string, rxObj ReceiveObj, mems ...*memsys.MMSA) erro
 	var mm *memsys.MMSA
 	if len(mems) > 0 {
 		mm = mems[0]
+	} else {
+		mm = memsys.DefaultPageMM()
 	}
 	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname), mm: mm}
 	return h.handle()

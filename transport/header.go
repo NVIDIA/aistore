@@ -65,7 +65,7 @@ func insMsg(hbuf []byte, msg *Msg) (off int) {
 	return
 }
 
-func (pdu *pdu) insHeader() {
+func (pdu *spdu) insHeader() {
 	buf, plen := pdu.buf, pdu.plength()
 	word1 := uint64(plen) | pduFlag
 	if pdu.last {
@@ -112,7 +112,7 @@ func insAttrs(off int, to []byte, attr ObjectAttrs) int {
 // proto header deserialization //
 //////////////////////////////////
 
-func extProtoHdr(hbuf []byte, trname string) (hlen int, flags uint64, err error) {
+func extProtoHdr(hbuf []byte, loghdr string) (hlen int, flags uint64, err error) {
 	off, word1 := extUint64(0, hbuf)
 	hlen = int(word1 & ^allFlags)
 	flags = word1 & allFlags
@@ -120,7 +120,7 @@ func extProtoHdr(hbuf []byte, trname string) (hlen int, flags uint64, err error)
 	_, checksum := extUint64(0, hbuf[off:])
 	chc := xoshiro256.Hash(word1)
 	if checksum != chc {
-		err = fmt.Errorf("sbrk %s: bad checksum %x != %x (hlen=%d)", trname, checksum, chc, hlen)
+		err = fmt.Errorf("sbrk %s: bad checksum %x != %x (hlen=%d)", loghdr, checksum, chc, hlen)
 	}
 	return
 }

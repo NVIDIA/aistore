@@ -273,7 +273,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 func (s *Stream) sendData(b []byte) (n int, err error) {
 	var (
 		obj     = &s.sendoff.obj
-		objSize = obj.Hdr.ObjAttrs.Size
+		objSize = obj.Size()
 	)
 	n, err = obj.Reader.Read(b)
 	s.sendoff.off += int64(n)
@@ -300,7 +300,7 @@ func (s *Stream) sendPDU(b []byte) (n int) {
 // NOTE: reader.Close() is done by the completion handling code doCmpl
 func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
-	objSize := obj.Hdr.ObjAttrs.Size
+	objSize := obj.Size()
 	if obj.IsUnsized() {
 		objSize = s.sendoff.off
 	}
@@ -337,13 +337,13 @@ func (s *Stream) dryrun() {
 		it   = iterator{trname: s.trname, body: body, headerBuf: make([]byte, maxHeaderSize)}
 	)
 	for {
-		hlen, flags, err := it.nextProtoHdr()
+		hlen, flags, err := it.nextProtoHdr(s.String())
 		if err == io.EOF {
 			break
 		}
 		cmn.AssertNoErr(err)
 		cmn.Assert(flags&msgFlag == 0)
-		obj, err := it.nextObj(hlen)
+		obj, err := it.nextObj(s.String(), hlen)
 		if obj != nil {
 			cmn.DrainReader(obj)
 			FreeRecv(obj)
@@ -379,8 +379,8 @@ func (s *Stream) closeAndFree() {
 	close(s.cmplCh)
 
 	s.mm.Free(s.maxheader)
-	if s.usePDU() {
-		s.mm.Free(s.pdu.buf)
+	if s.pdu != nil {
+		s.pdu.free(s.mm)
 	}
 }
 
@@ -400,8 +400,10 @@ func (s *Stream) idleTick() {
 
 func (obj *Obj) IsLast() bool       { return obj.Hdr.IsLast() }
 func (obj *Obj) IsIdleTick() bool   { return obj.Hdr.ObjAttrs.Size == tickMarker }
-func (obj *Obj) IsHeaderOnly() bool { return obj.Hdr.ObjAttrs.Size == 0 || obj.Hdr.IsLast() }
+func (obj *Obj) IsHeaderOnly() bool { return obj.Hdr.IsHeaderOnly() }
 func (obj *Obj) IsUnsized() bool    { return obj.Hdr.IsUnsized() }
+
+func (obj *Obj) Size() int64 { return obj.Hdr.ObjSize() }
 
 func (obj *Obj) String() string {
 	s := fmt.Sprintf("sobj-%s/%s", obj.Hdr.Bck, obj.Hdr.ObjName)
@@ -415,8 +417,11 @@ func (obj *Obj) SetPrc(n int) {
 	obj.prc = atomic.NewInt64(int64(n))
 }
 
-func (hdr *ObjHdr) IsLast() bool    { return hdr.ObjAttrs.Size == lastMarker }
-func (hdr *ObjHdr) IsUnsized() bool { return hdr.ObjAttrs.Size == SizeUnknown }
+func (hdr *ObjHdr) IsLast() bool       { return hdr.ObjAttrs.Size == lastMarker }
+func (hdr *ObjHdr) IsUnsized() bool    { return hdr.ObjAttrs.Size == SizeUnknown }
+func (hdr *ObjHdr) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.IsLast() }
+
+func (hdr *ObjHdr) ObjSize() int64 { return hdr.ObjAttrs.Size }
 
 func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName string, bck cmn.Bck, opaque []byte) {
 	hdr.Bck = bck

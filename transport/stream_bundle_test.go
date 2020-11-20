@@ -106,7 +106,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		tassert.CheckFatal(t, err)
 		written, _ := io.Copy(ioutil.Discard, objReader)
-		cmn.Assert(written == hdr.ObjAttrs.Size)
+		cmn.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
 	}
 	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 		numCompleted.Inc()
@@ -121,7 +121,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		sowner         = &sowner{}
 		lsnode         = cluster.Snode{DaemonID: "local"}
 		random         = newRand(mono.NanoTime())
-		wbuf, slab     = MMSA.Alloc(32 * cmn.KiB)
+		wbuf, slab     = MMSA.Alloc()
 		extra          = &transport.Extra{Compression: nvs["compression"], MMSA: MMSA}
 		size, prevsize int64
 		multiplier     = int(random.Int63()%13) + 4

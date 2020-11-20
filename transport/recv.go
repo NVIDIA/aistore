@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"path"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -31,11 +32,14 @@ type (
 		trname    string
 		body      io.Reader
 		headerBuf []byte
+		pdu       *rpdu
 	}
 	objReader struct {
-		body io.Reader
-		off  int64
-		hdr  ObjHdr
+		body   io.Reader
+		off    int64
+		hdr    ObjHdr
+		pdu    *rpdu
+		loghdr string
 	}
 	handler struct {
 		trname      string
@@ -81,7 +85,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	mu.RUnlock()
 	// compression
 	if compressionType := r.Header.Get(cmn.HeaderCompress); compressionType != "" {
-		cmn.Assert(compressionType == cmn.LZ4Compression)
+		debug.Assert(compressionType == cmn.LZ4Compression)
 		lz4Reader = lz4.NewReader(r.Body)
 		reader = lz4Reader
 	}
@@ -93,59 +97,65 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 	uid := uniqueID(r, sessID)
 	statsif, loaded := h.sessions.LoadOrStore(uid, &Stats{})
+	xxh, id := UID2SessID(uid)
+	loghdr := fmt.Sprintf("%s[%d:%d]", trname, xxh, sessID)
 	if !loaded && debug.Enabled {
-		xxh, id := UID2SessID(uid)
 		debug.Assert(id == uint64(sessID))
-		debug.Infof("%s[%d:%d]: start-of-stream from %s", trname, xxh, sessID, r.RemoteAddr) // r.RemoteAddr => xxh
+		debug.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
 	}
 	stats := statsif.(*Stats)
 
 	// Rx loop
 	it := &iterator{trname: trname, body: reader, headerBuf: make([]byte, maxHeaderSize)}
+	defer func() {
+		if it.pdu != nil {
+			it.pdu.free(h.mm)
+		}
+	}()
 	for {
 		var (
-			obj *objReader
-			msg Msg
+			obj              *objReader
+			msg              Msg
+			hlen, flags, err = it.nextProtoHdr(loghdr)
 		)
-		hlen, flags, err := it.nextProtoHdr()
 		if err != nil {
 			goto rerr
 		}
 		if lh := len(it.headerBuf); hlen > lh {
-			err = fmt.Errorf("sbrk %s: hlen %d exceeds buflen=%d", trname, hlen, lh)
+			err = fmt.Errorf("sbr1 %s: hlen %d exceeds buflen=%d", loghdr, hlen, lh)
 			goto rerr
 		}
 		_ = stats.Offset.Add(int64(hlen + sizeProtoHdr))
 		if flags&msgFlag == 0 {
-			obj, err = it.nextObj(hlen)
+			obj, err = it.nextObj(loghdr, hlen)
 			if obj != nil {
-				if flags&firstPDU == 0 || obj.hdr.ObjAttrs.Size == 0 {
-					h.rxObj(w, obj.hdr, obj, eofOK(err))
-				} else {
-					err = it.rxPDUs(w, obj, h)
+				if flags&firstPDU != 0 && !obj.hdr.IsHeaderOnly() {
+					// alloc on demand
+					if it.pdu == nil {
+						buf, _ := h.mm.Alloc(MaxSizePDU)
+						it.pdu = newRecvPDU(it.body, buf)
+					}
+					obj.pdu = it.pdu
 				}
+				h.rxObj(w, obj.hdr, obj, eofOK(err))
 				hdr := &obj.hdr
-				objSize := hdr.ObjAttrs.Size
+				objSize := hdr.ObjSize()
 				if objSize == obj.off {
-					var (
-						num = stats.Num.Inc()
-						_   = stats.Size.Add(objSize)
-						off = stats.Offset.Add(objSize)
-					)
+					num := stats.Num.Inc()
+					off := stats.Offset.Add(objSize)
+					stats.Size.Add(objSize)
 					if verbose {
-						xxh, _ := UID2SessID(uid)
-						glog.Infof("%s[%d:%d] %s, num %d, off %d", trname, xxh, sessID, obj, num, off)
+						glog.Infof("%s: %s, num %d, off %d", loghdr, obj, num, off)
 					}
 					continue
 				}
-				xxh, _ := UID2SessID(uid)
 				num := stats.Num.Load()
-				err = fmt.Errorf("%s[%d:%d]: %v, num %d, off %d != %s", trname, xxh, sessID, err, num, obj.off, obj)
+				err = fmt.Errorf("sbr2 %s: %v, num %d, off %d != %s", loghdr, err, num, obj.off, obj)
 			} else if err != nil && err != io.EOF {
 				h.rxObj(w, ObjHdr{}, nil, err)
 			}
 		} else {
-			msg, err = it.nextMsg(hlen)
+			msg, err = it.nextMsg(loghdr, hlen)
 			if err == nil {
 				h.rxMsg(w, msg, nil)
 			} else if err != io.EOF {
@@ -213,26 +223,26 @@ func (it *iterator) Read(p []byte) (n int, err error) { return it.body.Read(p) }
 
 // nextProtoHdr receives and handles 16 bytes of the protocol header (not to confuse with transport.Obj.Hdr)
 // returns hlen, which is header length - for transport.Obj, and message length - for transport.Msg
-func (it *iterator) nextProtoHdr() (hlen int, flags uint64, err error) {
+func (it *iterator) nextProtoHdr(loghdr string) (hlen int, flags uint64, err error) {
 	var n int
 	n, err = it.Read(it.headerBuf[:sizeProtoHdr])
 	if n < sizeProtoHdr {
 		if err == nil {
-			err = fmt.Errorf("sbrk %s: failed to receive proto hdr (n=%d)", it.trname, n)
+			err = fmt.Errorf("sbr3 %s: failed to receive proto hdr (n=%d)", loghdr, n)
 		}
 		return
 	}
 	// extract and validate hlen
-	hlen, flags, err = extProtoHdr(it.headerBuf, it.trname)
+	hlen, flags, err = extProtoHdr(it.headerBuf, loghdr)
 	return
 }
 
-func (it *iterator) nextObj(hlen int) (obj *objReader, err error) {
+func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error) {
 	var n int
 	n, err = it.Read(it.headerBuf[:hlen])
 	if n < hlen {
 		if err == nil {
-			err = fmt.Errorf("sbrk %s: failed to receive obj hdr (%d < %d)", it.trname, n, hlen)
+			err = fmt.Errorf("sbr4 %s: failed to receive obj hdr (%d < %d)", loghdr, n, hlen)
 		}
 		return
 	}
@@ -242,19 +252,19 @@ func (it *iterator) nextObj(hlen int) (obj *objReader, err error) {
 		return
 	}
 	if obj = allocRecv(); obj != nil {
-		*obj = objReader{body: it.body, hdr: hdr}
+		*obj = objReader{body: it.body, hdr: hdr, loghdr: loghdr}
 	} else {
-		obj = &objReader{body: it.body, hdr: hdr}
+		obj = &objReader{body: it.body, hdr: hdr, loghdr: loghdr}
 	}
 	return
 }
 
-func (it *iterator) nextMsg(hlen int) (msg Msg, err error) {
+func (it *iterator) nextMsg(loghdr string, hlen int) (msg Msg, err error) {
 	var n int
 	n, err = it.Read(it.headerBuf[:hlen])
 	if n < hlen {
 		if err == nil {
-			err = fmt.Errorf("sbrk %s: failed to receive msg (%d < %d)", it.trname, n, hlen)
+			err = fmt.Errorf("sbr5 %s: failed to receive msg (%d < %d)", loghdr, n, hlen)
 		}
 		return
 	}
@@ -266,49 +276,16 @@ func (it *iterator) nextMsg(hlen int) (msg Msg, err error) {
 	return
 }
 
-// TODO -- FIXME
-func (it *iterator) rxPDUs(w http.ResponseWriter, obj *objReader, h *handler) (err error) {
-	if h.mm == nil {
-		h.mm = memsys.DefaultPageMM()
-	}
-	sgl := h.mm.NewSGL(memsys.MaxPageSlabSize, memsys.DefaultBufSize)
-	defer sgl.Free()
-	for i := 1; ; i++ {
-		plen, flags, err := it.nextProtoHdr()
-		if debug.Enabled {
-			debug.Infof("%d: %d(%s)", i, plen, fl2s(flags))
-		}
-		cmn.Assert(flags&pduFlag != 0)
-		cmn.Assert(plen <= MaxSizePDU)
-		cmn.Assert(plen > 0 || (plen == 0 && flags&lastPDU != 0))
-		if err != nil {
-			break
-		}
-		sgl.ReadFrom(&io.LimitedReader{R: obj, N: int64(plen)})
-		if flags&lastPDU != 0 {
-			if obj.hdr.IsUnsized() {
-				obj.hdr.ObjAttrs.Size = obj.off
-			}
-			cmn.Assert(obj.off == sgl.Len())
-			break
-		}
-	}
-	h.rxObj(w, obj.hdr, sgl, eofOK(err))
-	return
-}
-
 ///////////////
 // objReader //
 ///////////////
 
 func (obj *objReader) Read(b []byte) (n int, err error) {
-	if obj.hdr.IsUnsized() {
-		n, err = obj.body.Read(b)
-		obj.off += int64(n)
-		return
+	if obj.pdu != nil {
+		return obj.readPDU(b)
 	}
-	objSize := obj.hdr.ObjAttrs.Size
-	rem := objSize - obj.off
+	debug.Assert(obj.Size() >= 0)
+	rem := obj.Size() - obj.off
 	if rem < int64(len(b)) {
 		b = b[:int(rem)]
 	}
@@ -316,22 +293,66 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	obj.off += int64(n)
 	switch err {
 	case nil:
-		if obj.off >= objSize {
+		if obj.off >= obj.Size() {
 			err = io.EOF
-			debug.Assert(obj.off == objSize)
 		}
 	case io.EOF:
-		if obj.off != objSize {
-			glog.Errorf("actual off: %d, expected: %d", obj.off, objSize)
+		if obj.off != obj.Size() {
+			glog.Errorf("sbr6 %s: off %d != %s", obj.loghdr, obj.off, obj)
 		}
 	default:
-		glog.Errorf("err %v\n", err) // canceled?
+		glog.Error(err) // canceled?
 	}
 	return
 }
 
 func (obj *objReader) String() string {
-	return fmt.Sprintf("%s/%s(size=%d)", obj.hdr.Bck, obj.hdr.ObjName, obj.hdr.ObjAttrs.Size)
+	return fmt.Sprintf("%s/%s(size=%d)", obj.hdr.Bck, obj.hdr.ObjName, obj.Size())
+}
+
+func (obj *objReader) Size() int64 { return obj.hdr.ObjSize() }
+
+//
+// pduReader
+//
+
+func (obj *objReader) readPDU(b []byte) (n int, err error) {
+	pdu := obj.pdu
+	if pdu.woff == 0 {
+		err = pdu.readHdr(obj.loghdr)
+		if err != nil {
+			return
+		}
+	}
+	for !pdu.done {
+		_, err = pdu.readFrom()
+		if err != nil {
+			err = fmt.Errorf("sbr7 %s: failed to receive PDU, err %v, obj %s", obj.loghdr, err, obj)
+			break
+		}
+		if !pdu.done {
+			runtime.Gosched()
+		}
+	}
+	n = pdu.read(b)
+	obj.off += int64(n)
+
+	if err != nil {
+		pdu.reset()
+		return
+	}
+	if pdu.rlength() == 0 {
+		if pdu.last {
+			err = io.EOF
+			if obj.hdr.IsUnsized() {
+				obj.hdr.ObjAttrs.Size = obj.off
+			} else if obj.Size() != obj.off {
+				glog.Errorf("sbr8 %s: off %d != %s", obj.loghdr, obj.off, obj)
+			}
+		}
+		pdu.reset()
+	}
+	return
 }
 
 //
