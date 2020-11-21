@@ -755,14 +755,17 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (err e
 		pre:   p._destroyBMDPre,
 		final: p._syncBMDFinal,
 		msg:   msg,
+		txnID: c.uuid,
 		wait:  waitmsync,
 		bcks:  []*cluster.Bck{bck},
 	}
-	_, err = p.owner.bmd.modify(ctx)
+	bmd, err := p.owner.bmd.modify(ctx)
+	c.msg.BMDVersion = bmd.version()
+
 	if err != nil {
 		c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 		_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
-		return
+		return err
 	}
 
 	// 3. Commit

@@ -146,18 +146,23 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
-		txn, err := t.transactions.find(c.uuid, "")
-		if err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
-		}
-		// wait for newBMD w/timeout
-		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-			return fmt.Errorf("%s %s: %v", t.si, txn, err)
-		}
+		t._commitCreateDestroy(c)
 	default:
 		cmn.Assert(false)
 	}
 	return nil
+}
+
+func (t *targetrunner) _commitCreateDestroy(c *txnServerCtx) (err error) {
+	txn, err := t.transactions.find(c.uuid, "")
+	if err != nil {
+		return fmt.Errorf("%s %s: %v", t.si, txn, err)
+	}
+	// wait for newBMD w/timeout
+	if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
+		return fmt.Errorf("%s %s: %v", t.si, txn, err)
+	}
+	return
 }
 
 /////////////////
@@ -669,8 +674,10 @@ func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
 			return err
 		}
 		txn.nlps = []cmn.NLP{nlp}
-	case cmn.ActAbort, cmn.ActCommit:
-		t.transactions.find(c.uuid, c.phase)
+	case cmn.ActAbort:
+		t.transactions.find(c.uuid, cmn.ActAbort)
+	case cmn.ActCommit:
+		t._commitCreateDestroy(c)
 	default:
 		cmn.Assert(false)
 	}
