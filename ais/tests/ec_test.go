@@ -2571,6 +2571,7 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 }
 
 func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cmn.Bck) {
+	const startTimeout = 10 * time.Second
 	var (
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -2648,6 +2649,9 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 			}
 		}
 	}()
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: startTimeout}
+	err = api.WaitForXactionToStart(baseParams, xactArgs)
+	tassert.CheckError(t, err)
 
 	tutils.Logf("Unregistering %s...\n", tgtGone.ID())
 	args = &cmn.ActValDecommision{DaemonID: tgtGone.ID(), Force: true}

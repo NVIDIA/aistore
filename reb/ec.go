@@ -1084,8 +1084,24 @@ func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *clust
 			break
 		}
 	}
+	// If a cluster has the only slice left on the node that is under
+	// maintenance, HrwList does not contain any target, it results in
+	// obj.sender is nil here. Take the target from main slice as a sender.
+	if obj.sender == nil {
+		obj.sender = smap.GetTarget(mainSlice.DaemonID)
+	}
 
-	cmn.Assert(obj.sender != nil) // must not happen
+	if obj.sender == nil {
+		// slow path - must not happen
+		daemonList, hrwList := make([]string, 0, len(obj.locCT)), make([]string, 0, len(obj.hrwTargets))
+		for k := range obj.locCT {
+			daemonList = append(daemonList, k)
+		}
+		for _, si := range obj.hrwTargets {
+			hrwList = append(hrwList, si.ID())
+		}
+		return fmt.Errorf("failed to select a sender from %v for %v", hrwList, daemonList)
+	}
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("%s %s: hasSlice %v, fullObjExist: %v, isMain %v [mainHas: %v - %d], obj size: %d[%s]",
 			reb.t.Snode(), obj.uid, obj.hasCT, obj.fullObjFound, obj.isMain, obj.mainHasAny,
