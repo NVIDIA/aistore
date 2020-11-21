@@ -792,7 +792,7 @@ func newRandReader(random *rand.Rand, hdr transport.ObjHdr, slab *memsys.Slab) *
 	}
 	r := &randReader{buf: buf, hdr: hdr, slab: slab, random: random}
 	if hdr.IsUnsized() {
-		r.offEOF = int64(random.Int31() >> 1)
+		r.offEOF = int64(random.Int31()>>1) + 1
 	}
 	return r
 }
@@ -838,7 +838,7 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 func (r *randReader) Open() (io.ReadCloser, error) {
 	buf := r.slab.Alloc()
 	copy(buf, r.buf)
-	r2 := randReader{buf: buf, hdr: r.hdr, slab: r.slab}
+	r2 := randReader{buf: buf, hdr: r.hdr, slab: r.slab, offEOF: r.offEOF}
 	return &r2, nil
 }
 

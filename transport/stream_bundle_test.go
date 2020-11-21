@@ -73,6 +73,14 @@ func Test_Bundle(t *testing.T) {
 				"block":       "256KiB",
 			},
 		},
+		{
+			name: "compress-block-256K-unsized",
+			nvs: cmn.SimpleKVs{
+				"compression": cmn.CompressAlways,
+				"block":       "256KiB",
+				"unsized":     "yes",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -139,12 +147,12 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		}
 	}
 	if _, usePDU = nvs["unsized"]; usePDU {
-		extra.SizePDU = cmn.KiB * 32
+		extra.SizePDU = transport.DefaultSizePDU
 	}
 	_, _ = random.Read(wbuf)
 	sb := bundle.NewStreams(sowner, &lsnode, httpclient,
 		bundle.Args{Network: network, Trname: trname, Multiplier: multiplier, Extra: extra})
-	var numGs int64 = 7
+	var numGs int64 = 6
 	if testing.Short() {
 		numGs = 1
 	}
@@ -158,7 +166,7 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 		} else {
 			reader := &randReader{buf: wbuf, hdr: hdr, slab: slab, clone: true} // FIXME: multiplier reopen
 			if hdr.IsUnsized() {
-				reader.offEOF = int64(random.Int31() >> 1)
+				reader.offEOF = int64(random.Int31()>>1) + 1
 				objSize = reader.offEOF
 			}
 			err = sb.Send(&transport.Obj{Hdr: hdr, Callback: callback}, reader)
