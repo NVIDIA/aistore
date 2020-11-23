@@ -6,37 +6,8 @@
 package transport
 
 import (
-	"io"
 	"sync"
-
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
-
-///////////////////////////
-// objReader pool (recv) //
-///////////////////////////
-
-var (
-	recvPool        sync.Pool
-	recvPoolEnabled bool // TODO -- FIXME: enable&remove
-)
-
-func allocRecv() (obj *objReader) {
-	if recvPoolEnabled {
-		if v := recvPool.Get(); v != nil {
-			obj = v.(*objReader)
-		}
-	}
-	return
-}
-
-func FreeRecv(reader io.Reader) {
-	if recvPoolEnabled {
-		obj := reader.(*objReader)
-		debug.Assert(obj != nil)
-		recvPool.Put(obj)
-	}
-}
 
 /////////////////////
 // Obj pool (send) //

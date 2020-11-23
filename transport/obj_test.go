@@ -722,7 +722,6 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		*totalReceived += written
-		transport.FreeRecv(objReader)
 	}
 }
 

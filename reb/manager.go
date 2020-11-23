@@ -323,7 +323,6 @@ func (reb *Manager) waitForSmap() (*cluster.Smap, error) {
 }
 
 func (reb *Manager) recvObj(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-	defer transport.FreeRecv(objReader)
 	if err != nil {
 		glog.Error(err)
 		return

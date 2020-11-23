@@ -345,8 +345,7 @@ func (s *Stream) dryrun() {
 		cmn.Assert(flags&msgFlag == 0)
 		obj, err := it.nextObj(s.String(), hlen)
 		if obj != nil {
-			cmn.DrainReader(obj)
-			FreeRecv(obj)
+			cmn.DrainReader(obj) // TODO: recycle `objReader` here
 			continue
 		}
 		if err != nil {

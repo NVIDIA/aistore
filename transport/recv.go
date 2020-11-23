@@ -251,11 +251,7 @@ func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error)
 		err = io.EOF
 		return
 	}
-	if obj = allocRecv(); obj != nil {
-		*obj = objReader{body: it.body, hdr: hdr, loghdr: loghdr}
-	} else {
-		obj = &objReader{body: it.body, hdr: hdr, loghdr: loghdr}
-	}
+	obj = &objReader{body: it.body, hdr: hdr, loghdr: loghdr}
 	return
 }
 
