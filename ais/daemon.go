@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -78,7 +79,7 @@ func (g *rungroup) add(r cmn.Runner) {
 }
 
 func (g *rungroup) run(mainRunner cmn.Runner) error {
-	var rdone cmn.Runner
+	var mainDone atomic.Bool
 	g.errCh = make(chan error, len(g.rs))
 	for _, r := range g.rs {
 		go func(r cmn.Runner) {
@@ -86,14 +87,16 @@ func (g *rungroup) run(mainRunner cmn.Runner) error {
 			if err != nil {
 				glog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
 			}
-			rdone = r
+			if r.Name() == mainRunner.Name() {
+				mainDone.Store(true) // load it only once
+			}
 			g.errCh <- err
 		}(r)
 	}
 
 	// Stop all runners, target (or proxy) first.
 	err := <-g.errCh
-	if rdone.Name() != mainRunner.Name() {
+	if !mainDone.Load() {
 		mainRunner.Stop(err)
 	}
 	for _, r := range g.rs {
