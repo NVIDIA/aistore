@@ -158,12 +158,16 @@ func (gc *collector) do() {
 
 			s.time.ticks--
 			if s.time.ticks <= 0 {
+				var err error
 				delete(gc.streams, lid)
 				s.streamer.closeAndFree()
+				s.term.mu.Lock()
 				if s.term.err == nil {
 					s.term.err = errors.New(reasonUnknown)
 				}
-				s.streamer.abortPending(s.term.err, true /*completions*/)
+				err = s.term.err
+				s.term.mu.Unlock()
+				s.streamer.abortPending(err, true /*completions*/)
 			}
 		} else if s.sessST.Load() == active {
 			gc.update(s, s.time.ticks-1)

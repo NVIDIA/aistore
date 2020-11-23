@@ -101,7 +101,7 @@ type (
 		maxheader []byte // max header buffer
 		header    []byte // object header - slice of the maxheader with bucket/objName, etc. fields
 		term      struct {
-			mu         sync.Mutex
+			mu         sync.RWMutex
 			err        error
 			reason     *string
 			terminated bool
@@ -256,18 +256,26 @@ func (s *streamBase) sendLoop(dryrun bool) {
 
 	// handle termination caused by anything other than Fin()
 	if *s.term.reason != endOfStream {
-		if *s.term.reason == reasonStopped {
+		var (
+			err    error
+			reason string
+		)
+		s.term.mu.RLock()
+		err = s.term.err
+		reason = *s.term.reason
+		s.term.mu.RUnlock()
+		if reason == reasonStopped {
 			if verbose {
 				glog.Infof("%s: stopped", s)
 			}
 		} else {
-			glog.Errorf("%s: terminating (%s, %v)", s, *s.term.reason, s.term.err)
+			glog.Errorf("%s: terminating (%s, %v)", s, reason, err)
 		}
 		// wait for the SCQ/cmplCh to empty
 		s.wg.Wait()
 
 		// cleanup
-		s.streamer.abortPending(s.term.err, false /*completions*/)
+		s.streamer.abortPending(err, false /*completions*/)
 	}
 }
 
