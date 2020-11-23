@@ -25,12 +25,13 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("S3Request: %s - %s", r.Method, r.URL)
 	}
+
+	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
+	cmn.ReparseQuery(r)
 	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.S3)
 	if err != nil {
 		return
 	}
-	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
-	cmn.ReparseQuery(r)
 
 	switch r.Method {
 	case http.MethodHead:

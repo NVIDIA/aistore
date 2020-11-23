@@ -52,6 +52,10 @@ else
 	LDFLAGS = -ldflags "-w -s -X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
 endif
 
+ifdef MINIKUBE_TESTING
+    BUILD_TAGS += minikubetesting
+endif
+
 ifdef AIS_DEBUG
 	# Enable `debug` tag also when `AIS_DEBUG` is set.
 	BUILD_TAGS += debug
@@ -72,7 +76,7 @@ $(call make-lazy,term-reset)
 all: node cli aisfs authn aisloader ## Build all main binaries
 
 node: ## Build 'aisnode' binary
-	@echo "Building aisnode: version=$(VERSION) providers=$(AIS_CLD_PROVIDERS)"
+	@echo "Building aisnode: version=$(VERSION) providers=$(AIS_CLD_PROVIDERS) tags=$(BUILD_TAGS)"
 ifneq ($(strip $(GORACE)),)
 ifneq ($(findstring log_path,$(GORACE)),log_path)
 	@echo

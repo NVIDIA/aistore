@@ -28,8 +28,9 @@ const (
 
 	podNameLabel = "nvidia.com/ais-etl"
 	svcNameLabel = "nvidia.com/ais-etl-svc"
+
 	// ETL Pod's label describing which target ETL is associated with.
-	targetLabel = "nvidia.com/ais-etl-target"
+	podTargetLabel = "nvidia.com/ais-etl-target"
 )
 
 // Definitions:
@@ -206,7 +207,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		pod.Labels = make(map[string]string, 1)
 	}
 
-	pod.Labels[targetLabel] = k8s.NodeName
+	pod.Labels[podTargetLabel] = k8s.NodeName
 	pod.Labels[podNameLabel] = pod.GetName()
 
 	// Create service spec
@@ -454,15 +455,20 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) erro
 		return cmn.NewETLError(errCtx, "error in YAML spec, pod should not have any NodeAntiAffinities defined")
 	}
 
-	reqAntiAffinities = []corev1.PodAffinityTerm{{
-		LabelSelector: &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				targetLabel: k8s.NodeName,
+	// If this is a Minikube test deployment don't create antiaffinity limitation, to be able to run multiple
+	// ETL pods on a single machine. NOTE: This change allows deploying multiple different ETLs at the same time.
+	if !k8s.MinikubeTesting {
+		reqAntiAffinities = []corev1.PodAffinityTerm{{
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					podTargetLabel: k8s.NodeName,
+				},
 			},
-		},
-		TopologyKey: nodeNameLabel,
-	}}
-	pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = reqAntiAffinities
+			TopologyKey: nodeNameLabel,
+		}}
+		pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = reqAntiAffinities
+	}
+
 	return nil
 }
 

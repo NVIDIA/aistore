@@ -29,15 +29,16 @@ func TestParseURLScheme(t *testing.T) {
 }
 
 func TestReparseQuery(t *testing.T) {
-	var (
+	const (
 		versionID = "1"
 		uuid      = "R9oLVoEsxx"
+		basePath  = "/s3/imagenet-tar/oisubset-train-0000.tar"
 	)
 
 	r := &http.Request{
 		Method: http.MethodGet,
 		URL: &url.URL{
-			Path: fmt.Sprintf("/s3/imagenet-tar/oisubset-train-0000.tar?%s=%s", cmn.URLParamUUID, uuid),
+			Path: fmt.Sprintf("%s?%s=%s", basePath, cmn.URLParamUUID, uuid),
 		},
 	}
 	q := url.Values{}
@@ -48,4 +49,5 @@ func TestReparseQuery(t *testing.T) {
 	actualVersionID, actualUUID := r.URL.Query().Get("versionID"), r.URL.Query().Get(cmn.URLParamUUID)
 	tassert.Errorf(t, actualVersionID == versionID, "expected versionID to be %q, got %q", versionID, actualVersionID)
 	tassert.Errorf(t, actualUUID == uuid, "expected %s to be %q, got %q", cmn.URLParamUUID, uuid, actualUUID)
+	tassert.Errorf(t, r.URL.Path == basePath, "expected path to be %q, got %q", basePath, r.URL.Path)
 }

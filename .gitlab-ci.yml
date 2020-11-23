@@ -41,20 +41,6 @@ variables:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   <<: *gather_logs_def
 
-.test_kube_template: &test_kube_def
-  variables:
-    AIS_ENDPOINT: "localhost:8080"
-    K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
-    NUM_TARGET: 1
-    NUM_PROXY: 1
-    BUCKET: "aws://ais-ci"
-    AWS_REGION: "us-east-2"
-  tags:
-    - ais-kube
-  before_script:
-    - kubectl get pods | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete pod # TODO: this can be removed once the lifecycle of transformers is implemented.
-    - kubectl get svc | awk '/tar2tf|echo|minikube/{print $1}' | xargs -r kubectl delete svc # TODO: this can be removed once the lifecycle of transformers is implemented.
-
 # Stages
 
 build:linux:
@@ -192,6 +178,20 @@ test:aisloader:
 
 # Kubernetes stages
 
+.test_kube_template: &test_kube_def
+  variables:
+    AIS_ENDPOINT: "localhost:8080"
+    K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
+    NUM_TARGET: 1
+    NUM_PROXY: 1
+    BUCKET: "aws://ais-ci"
+    AWS_REGION: "us-east-2"
+  tags:
+    - ais-kube
+  before_script:
+    - kubectl delete pods -l nvidia.com/ais-etl-target # TODO: this can be removed once the lifecycle of transformers is implemented.
+    - kubectl delete svc -l nvidia.com/ais-etl-svc # TODO: this can be removed once the lifecycle of transformers is implemented.
+
 test:kube-short:
   stage: test-short
   only:
@@ -201,7 +201,8 @@ test:kube-short:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   <<: *test_kube_def
   script:
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n;  })
+    - export NUM_TARGET=3
+    - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-short || status=$?
     - make kill
@@ -218,6 +219,21 @@ test:kube:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   <<: *test_kube_def
   script:
+    - export NUM_TARGET=3
+    - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
+    - status=0
+    - RE="TestETL" make test-run || status=$?
+    - make kill
+    - exit $status # TODO: hack to prevent pod hangs on failures
+
+test:kube-single-target:
+  <<: *test_kube_def
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
+  stage: test-long
+  script:
+    #  Do not set MINIKUBE_TESTING as we want to have a tests checking correctness with non-testing environment.
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-run || status=$?
