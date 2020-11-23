@@ -257,7 +257,7 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 		}
 		// two timeouts
 		if found {
-			if timeoutHost != 0 && total > TxnTimeoutMult*timeoutHost {
+			if timeoutHost != 0 && total > timeoutHost {
 				err = errors.New("timed out waiting for txn to complete")
 				break
 			}

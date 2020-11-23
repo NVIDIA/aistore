@@ -1216,7 +1216,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 				Body:   body,
 			},
 			smap:    smap,
-			timeout: config.Timeout.MaxHostBusy + config.Timeout.CplaneOperation,
+			timeout: config.Timeout.MaxHostBusy + config.Timeout.MaxKeepalive,
 		}
 	)
 	results := p.bcastToGroup(args)

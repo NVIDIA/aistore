@@ -105,8 +105,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	// 4. commit
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 
-	// txn timeout - making an exception for this critical op
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.GCO.Get().Timeout.MaxKeepalive})
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
@@ -439,13 +438,15 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	nl = xaction.NewXactNL(xaction.RebID(rmd.Version).String(),
 		cmn.ActRebalance, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
-	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
+
+	// Rely on metasync to register rebalance/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	err = p.notifs.add(nl)
 	cmn.AssertNoErr(err)
 
 	// Register resilver `nl`
 	nl = xaction.NewXactNL(rmd.Resilver, cmn.ActResilver, &c.smap.Smap, nil)
 	nl.SetOwner(equalIC)
+
 	// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
 	err = p.notifs.add(nl)
 	cmn.AssertNoErr(err)
@@ -641,9 +642,8 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 
 	// 6. commit
 	unlockUpon = true
-	config := cmn.GCO.Get()
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err)
@@ -683,8 +683,9 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 
 	// 1. begin
 	var (
-		c       = p.prepTxnClient(msg, nil, false /* waitmsync */)
-		results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		waitmsync = false
+		c         = p.prepTxnClient(msg, nil, waitmsync)
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -706,13 +707,8 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	// 3. Commit
 	// NOTE: Call only the target being decommissioned, on all other targets commit phase is a null operation.
 	if msg.Action == cmn.ActDecommission {
-		config := cmn.GCO.Get()
 		c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-		res := p.call(callArgs{
-			si:      si,
-			req:     c.req,
-			timeout: config.Timeout.CplaneOperation,
-		})
+		res := p.call(callArgs{si: si, req: c.req, timeout: c.commitTimeout(waitmsync)})
 		if res.err != nil {
 			glog.Error(res.err)
 			err = res.err
@@ -770,9 +766,8 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (err e
 	}
 
 	// 3. Commit
-	config := cmn.GCO.Get()
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: config.Timeout.CplaneOperation})
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err)
@@ -784,9 +779,16 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (err e
 	return
 }
 
-/////////////////////////////
-// rollback & misc helpers //
-/////////////////////////////
+//////////////////////////////////////
+// context, rollback & misc helpers //
+//////////////////////////////////////
+
+func (c *txnClientCtx) commitTimeout(waitmsync bool) time.Duration {
+	if waitmsync {
+		return c.timeout.host + c.timeout.netw
+	}
+	return c.timeout.netw
+}
 
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bool) *txnClientCtx {
@@ -805,8 +807,8 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitms
 		query = cmn.AddBckToQuery(query, bck.Bck)
 	}
 	config := cmn.GCO.Get()
+	c.timeout.netw = config.Timeout.MaxKeepalive
 	if !waitmsync { // when commit does not block behind metasync
-		c.timeout.netw = config.Timeout.CplaneOperation
 		query.Set(cmn.URLParamNetwTimeout, cmn.UnixNano2S(int64(c.timeout.netw)))
 	}
 	c.timeout.host = config.Timeout.MaxHostBusy

@@ -339,7 +339,7 @@ func (server *netServer) shutdown() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.MaxHostBusy/2)
+	ctx, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.MaxHostBusy)
 	if err := server.s.Shutdown(ctx); err != nil {
 		glog.Infof("Stopped server, err: %v", err)
 	}

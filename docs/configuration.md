@@ -93,8 +93,8 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `rebalance.dest_retry_time` | `2m` | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | `rebalance.multiplier` | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
 | `rebalance.quiescent` | `20s` | Rebalace moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
-| `timeout.send_file_time` | `5m` | Timeout for getting an object from a neighbor target or for sending an object to the correct target while rebalance is in progress |
-| `timeout.max_host_busy` | `1m` | Determines how long should we wait for particular action to happen due to possible node/network overload |
+| `timeout.send_file_time` | `5m` | Timeout for sending/receiving an object from another target in the same cluster |
+| `timeout.max_host_busy` | `20s` | Maximum latency of control-plane operations that may involve receiving new bucket metadata and associated processing |
 | `client.client_timeout` | `10s` | Default client timeout |
 | `client.client_long_timeout` | `30m` | Default _long_ client timeout |
 | `client.list_timeout` | `2m` | Client list objects timeout |

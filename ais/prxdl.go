@@ -22,7 +22,7 @@ import (
 func (p *proxyrunner) broadcastDownloadRequest(method, path string, body []byte, query url.Values) chan callResult {
 	return p.bcastToGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: path, Body: body, Query: query},
-		timeout: cmn.GCO.Get().Timeout.MaxHostBusy,
+		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 	})
 }
 

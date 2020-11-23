@@ -31,11 +31,11 @@ cat > $AIS_CONF_FILE <<EOL
 		"retry_sync_time":   "2s"
 	},
 	"timeout": {
-		"max_keepalive":        "4s",
 		"cplane_operation":     "2s",
-		"send_file_time":       "5m",
+		"max_keepalive":        "4s",
+		"max_host_busy":        "20s",
 		"startup_time":         "1m",
-		"max_host_busy":        "1m"
+		"send_file_time":       "5m"
 	},
 	"client": {
 		"client_timeout":      "10s",

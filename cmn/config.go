@@ -208,18 +208,18 @@ type (
 		RetrySyncTime time.Duration `json:"-"`
 		NotifTime     time.Duration `json:"-"`
 	}
-	// timeoutconfig contains timeouts used for intra-cluster communication
+	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		MaxKeepaliveStr    string        `json:"max_keepalive"`
-		MaxKeepalive       time.Duration `json:"-"`
 		CplaneOperationStr string        `json:"cplane_operation"`
 		CplaneOperation    time.Duration `json:"-"`
-		SendFileStr        string        `json:"send_file_time"`
-		SendFile           time.Duration `json:"-"`
-		StartupStr         string        `json:"startup_time"`
-		Startup            time.Duration `json:"-"`
+		MaxKeepaliveStr    string        `json:"max_keepalive"`
+		MaxKeepalive       time.Duration `json:"-"`
 		MaxHostBusyStr     string        `json:"max_host_busy"`
 		MaxHostBusy        time.Duration `json:"-"`
+		StartupStr         string        `json:"startup_time"`
+		Startup            time.Duration `json:"-"`
+		SendFileStr        string        `json:"send_file_time"`
+		SendFile           time.Duration `json:"-"`
 	}
 	ClientConf struct {
 		TimeoutStr     string        `json:"client_timeout"`
