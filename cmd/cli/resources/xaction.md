@@ -67,9 +67,12 @@ Certain extended actions have additional CLI. In particular, rebalance stats can
 
 `ais show rebalance`
 
+Display details about the last rebalane xaction.
+
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--refresh [N]` | `string` | watch the rebalance until it finishes or CTRL-C is pressed. Display the current stats every N seconds, where N ends with time suffix: s, m. If N is not defined it prints stats every 1 second | `1s` |
+| `--all` | `bool` | If set, show all rebalance xactions | `false` |
 
 Output of this command differs from the generic xaction output.
 

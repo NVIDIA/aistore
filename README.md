@@ -114,13 +114,15 @@ Google Cloud Storage: (y/n) ?
 n
 Azure: (y/n) ?
 n
+Would you like to create loopback mount points: (y/n) ?
+n
 Building aisnode: version=df24df77 providers=
 ```
 
 Or, you can run all the above in one shot non-interactively:
 
 ```console
-$ make kill deploy <<< $'10\n3\n2\nn\nn\nn\n'
+$ make kill deploy <<< $'10\n3\n2\nn\nn\nn\nn\n'
 ```
 
 > The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems.
