@@ -399,7 +399,7 @@ outer:
 	smap = y.p.owner.smap.get()
 	for sid := range y.nodesRevs {
 		si := smap.GetNode(sid)
-		if si == nil || si.InMaintenance() {
+		if si == nil || smap.InMaintenance(si) {
 			delete(y.nodesRevs, sid)
 		}
 	}
@@ -410,7 +410,8 @@ outer:
 // keeping track of per-daemon versioning - TODO: extend to take care of aisMsg where pairs may be empty
 func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 	rvd, ok := y.nodesRevs[si.ID()]
-	if si.InMaintenance() {
+	smap := y.p.owner.smap.get()
+	if smap.InMaintenance(si) {
 		if ok {
 			delete(y.nodesRevs, si.ID())
 		}

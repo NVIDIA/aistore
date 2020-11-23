@@ -846,7 +846,7 @@ func (h *httprunner) notifDst(notif cluster.Notif) (nodes cluster.NodeMap) {
 	if len(dsts) == 1 && dsts[0] == equalIC {
 		nodes = make(cluster.NodeMap, smap.DefaultICSize())
 		for pid, psi := range smap.Pmap {
-			if psi.IsIC() && pid != h.si.ID() {
+			if smap.IsIC(psi) && pid != h.si.ID() {
 				nodes.Add(psi)
 			}
 		}
@@ -944,7 +944,7 @@ func (h *httprunner) bcastToNodes(bargs *bcastArgs) chan callResult {
 			if sid == h.si.ID() {
 				continue
 			}
-			if !bargs.ignoreMaintenance && si.InMaintenance() {
+			if !bargs.ignoreMaintenance && nodeMap.InMaintenance(si) {
 				continue
 			}
 			wg.Add(1)
@@ -1020,7 +1020,7 @@ func (h *httprunner) bcastToIC(msg *aisMsg, wait bool) {
 		ch = make(chan callResult, smap.ICCount())
 	}
 	for pid, psi := range smap.Pmap {
-		if !psi.IsIC() || pid == h.si.ID() {
+		if !smap.IsIC(psi) || pid == h.si.ID() {
 			continue
 		}
 		if wait {

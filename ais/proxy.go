@@ -600,8 +600,6 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			goto ExtractRMD
 		}
-		node := newSmap.GetNode(p.si.ID())
-		p.si.Flags = node.Flags
 
 		// When some node was removed from the cluster we need to clean up the
 		// reverse proxy structure.
@@ -659,7 +657,7 @@ func (p *proxyrunner) syncNewICOwners(smap, newSmap *smapX) {
 	}
 
 	for _, psi := range newSmap.Pmap {
-		if p.si.ID() != psi.ID() && psi.IsIC() && !smap.IsIC(psi) {
+		if p.si.ID() != psi.ID() && newSmap.IsIC(psi) && !smap.IsIC(psi) {
 			go func(psi *cluster.Snode) {
 				if err := p.ic.sendOwnershipTbl(psi); err != nil {
 					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p.si, psi, err)
@@ -2482,7 +2480,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if psi.InMaintenance() {
+	if smap.InMaintenance(psi) {
 		p.invalmsghdlrf(w, r, "cannot set new primary, node %q under maintenance", psi)
 		return
 	}
@@ -3506,7 +3504,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for pid, psi := range smap.Pmap {
-			if !psi.IsIC() || pid == dstID {
+			if !smap.IsIC(psi) || pid == dstID {
 				continue
 			}
 			result := p.call(
@@ -3539,7 +3537,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 			return
 		}
-		if si.InMaintenance() {
+		if smap.InMaintenance(si) {
 			p.invalmsghdlrf(w, r, "Node %q already in maintenance state", opts.DaemonID)
 			return
 		}
@@ -3570,7 +3568,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 			return
 		}
-		if !si.InMaintenance() {
+		if !smap.InMaintenance(si) {
 			p.invalmsghdlrf(w, r, "Node %q is not under maintenance", opts.DaemonID)
 			return
 		}

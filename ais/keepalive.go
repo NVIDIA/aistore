@@ -210,7 +210,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 				continue
 			}
 			// Skip nodes under maintenance
-			if si.InMaintenance() {
+			if daemons.InMaintenance(si) {
 				continue
 			}
 			wg.Add(1)

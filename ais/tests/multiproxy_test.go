@@ -836,12 +836,12 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 			skipped++
 			continue
 		}
-		if snode.NonElectable() {
+		if smap.NonElectable(snode) {
 			skipped++
 			continue
 		}
 
-		if snode.InMaintenance() {
+		if smap.InMaintenance(snode) {
 			skipped++
 			continue
 		}
@@ -1111,7 +1111,7 @@ func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tutils.RestoreCmd, 
 	primary := smap.Primary
 	var killNode *cluster.Snode
 	for _, psi := range smap.Pmap {
-		if psi.IsIC() && !psi.Equals(primary) {
+		if smap.IsIC(psi) && !psi.Equals(primary) {
 			killNode = psi
 			break
 		}
@@ -1128,7 +1128,7 @@ func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tutils.RestoreCmd, 
 func icFromSmap(smap *cluster.Smap) cmn.StringSet {
 	lst := make(cmn.StringSet, smap.DefaultICSize())
 	for pid, psi := range smap.Pmap {
-		if psi.IsIC() {
+		if smap.IsIC(psi) {
 			lst.Add(pid)
 		}
 	}

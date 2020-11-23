@@ -721,8 +721,6 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (
 	if err = t.owner.smap.synchronize(t.si, newSmap); err != nil {
 		return
 	}
-	node := newSmap.GetNode(t.si.ID())
-	t.si.Flags = node.Flags
 	return
 }
 

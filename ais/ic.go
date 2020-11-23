@@ -107,7 +107,7 @@ outer:
 			owner = ic.p.si.ID()
 		} else {
 			for pid, si := range smap.Pmap {
-				if !psi.IsIC() {
+				if !smap.IsIC(psi) {
 					continue
 				}
 				owner = pid
@@ -144,7 +144,7 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 	if !smap.IsIC(ic.p.si) {
 		var node *cluster.Snode
 		for _, psi := range smap.Pmap {
-			if psi.IsIC() {
+			if smap.IsIC(psi) {
 				node = psi
 				break
 			}
@@ -378,7 +378,7 @@ func (ic *ic) syncICBundle() error {
 	smap := ic.p.owner.smap.get()
 	si := ic.p.si
 	for _, psi := range smap.Pmap {
-		if psi.IsIC() && psi.ID() != si.ID() {
+		if smap.IsIC(psi) && psi.ID() != si.ID() {
 			si = psi
 			break
 		}

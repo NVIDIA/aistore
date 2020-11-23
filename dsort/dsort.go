@@ -766,7 +766,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	)
 
 	for _, d := range m.smap.Tmap {
-		if d.InMaintenance() {
+		if m.smap.InMaintenance(d) {
 			continue
 		}
 		shardsToTarget[d] = nil
@@ -924,7 +924,7 @@ func randomTargetOrder(salt uint64, tmap cluster.NodeMap) []*cluster.Snode {
 	targets := make(map[uint64]*cluster.Snode, len(tmap))
 	keys := make([]uint64, 0, len(tmap))
 	for i, d := range tmap {
-		if d.InMaintenance() {
+		if tmap.InMaintenance(d) {
 			continue
 		}
 		c := xxhash.ChecksumString64S(i, salt)

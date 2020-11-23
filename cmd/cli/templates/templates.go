@@ -41,7 +41,8 @@ const (
 		"{{ range $key, $value := .Smap.Tmap }}" + SmapBody + "{{end}}\n" +
 		"Non-Electable:\n" +
 		"{{ range $key, $si := .Smap.Pmap }} " +
-		"{{ if (eq $si.NonElectable true) }} ProxyID: {{$key}}\n{{end}}{{end}}\n" +
+		"{{ $nonElect := .Smap.NonElectable $si }}" +
+		"{{ if (eq $nonElect true) }} ProxyID: {{$key}}\n{{end}}{{end}}\n" +
 		"Primary Proxy: {{.Smap.Primary.ID}}\nProxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
 	// Proxy Info
@@ -79,7 +80,7 @@ const (
 	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoIDSingle + TargetInfoBody
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
-	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{CountNonElectable .Smap.Pmap}} - unelectable)\n " +
+	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} - unelectable)\n " +
 		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.Primary.ID}}\n Smap Version:\t{{.Smap.Version}}\n"
 
 	ClusterInfoTmpl = AllProxyInfoTmpl + "\n" + TargetInfoTmpl + "\n" + ClusterSummary
@@ -389,7 +390,6 @@ var (
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatFeatureFlags":  fmtFeatureFlags,
-		"CountNonElectable":   countNonElectable,
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -553,7 +553,7 @@ func fmtDaemonID(id string, smap cluster.Smap) string {
 	if id == smap.Primary.ID() {
 		return id + primarySuffix
 	}
-	if si.Flags.IsSet(cluster.SnodeNonElectable) {
+	if smap.NonElectable(si) {
 		return id + nonElectableSuffix
 	}
 	return id
@@ -615,14 +615,4 @@ func fmtFeatureFlags(flags cmn.FeatureFlags) string {
 		return "-"
 	}
 	return fmt.Sprintf("%s(%s)", flags, flags.Describe())
-}
-
-func countNonElectable(nodeMap cluster.NodeMap) int {
-	cnt := 0
-	for _, si := range nodeMap {
-		if si.NonElectable() {
-			cnt++
-		}
-	}
-	return cnt
 }

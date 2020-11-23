@@ -236,11 +236,14 @@ func (d *Snode) isDuplicateURL(n *Snode) bool {
 	return false
 }
 
-func (d *Snode) IsProxy() bool       { return d.DaemonType == cmn.Proxy }
-func (d *Snode) IsTarget() bool      { return d.DaemonType == cmn.Target }
-func (d *Snode) InMaintenance() bool { return d.Flags.IsAnySet(SnodeMaintenanceMask) }
-func (d *Snode) NonElectable() bool  { return d.Flags.IsSet(SnodeNonElectable) }
-func (d *Snode) IsIC() bool          { return d.Flags.IsSet(SnodeIC) }
+func (d *Snode) IsProxy() bool  { return d.DaemonType == cmn.Proxy }
+func (d *Snode) IsTarget() bool { return d.DaemonType == cmn.Target }
+
+// Functions nonElectable, inMaintenance, and isIC must be used in `cluster`
+// package only. All other packages must use Smap's or NodeMap's methods
+func (d *Snode) nonElectable() bool  { return d.Flags.IsSet(SnodeNonElectable) }
+func (d *Snode) inMaintenance() bool { return d.Flags.IsAnySet(SnodeMaintenanceMask) }
+func (d *Snode) isIC() bool          { return d.Flags.IsSet(SnodeIC) }
 
 //===============================================================
 //
@@ -278,7 +281,16 @@ func (m *Smap) CountProxies() int { return len(m.Pmap) }
 func (m *Smap) Count() int        { return len(m.Pmap) + len(m.Tmap) }
 func (m *Smap) CountActiveTargets() (count int) {
 	for _, t := range m.Tmap {
-		if !t.InMaintenance() {
+		if !t.inMaintenance() {
+			count++
+		}
+	}
+	return
+}
+
+func (m *Smap) CountNonElectable() (count int) {
+	for _, p := range m.Pmap {
+		if p.nonElectable() {
 			count++
 		}
 	}
@@ -287,7 +299,7 @@ func (m *Smap) CountActiveTargets() (count int) {
 
 func (m *Smap) CountActiveProxies() (count int) {
 	for _, t := range m.Pmap {
-		if !t.InMaintenance() {
+		if !t.inMaintenance() {
 			count++
 		}
 	}
@@ -336,7 +348,7 @@ func (m *Smap) GetNode(id string) *Snode {
 
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 	for _, tsi = range m.Tmap {
-		if tsi.InMaintenance() {
+		if tsi.inMaintenance() {
 			tsi = nil
 			continue
 		}
@@ -349,7 +361,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	if excludePrimary {
 		for _, proxy := range m.Pmap {
-			if proxy.InMaintenance() {
+			if proxy.inMaintenance() {
 				continue
 			}
 			if m.Primary.DaemonID != proxy.DaemonID {
@@ -359,7 +371,7 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 		return nil, fmt.Errorf("internal error: couldn't find non primary proxy")
 	}
 	for _, psi := range m.Pmap {
-		if psi.InMaintenance() {
+		if psi.inMaintenance() {
 			continue
 		}
 		return psi, nil
@@ -412,17 +424,27 @@ func (m *Smap) CompareTargets(other *Smap) (equal bool) {
 	return mapsEq(m.Tmap, other.Tmap)
 }
 
+func (m *Smap) NonElectable(psi *Snode) (ok bool) {
+	node := m.GetProxy(psi.ID())
+	return node != nil && node.nonElectable()
+}
+
+func (m *Smap) InMaintenance(psi *Snode) (ok bool) {
+	node := m.GetNode(psi.ID())
+	return node != nil && node.inMaintenance()
+}
+
 // Method is used when comparing one SMap to another ones, so
-// it cannot be replaced with single `psi.IsIC()` call
+// it cannot be replaced with single `psi.isIC()` call
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
 	node := m.GetProxy(psi.ID())
-	return node != nil && node.IsIC()
+	return node != nil && node.isIC()
 }
 
 func (m *Smap) StrIC(node *Snode) string {
 	all := make([]string, 0, m.DefaultICSize())
 	for pid, psi := range m.Pmap {
-		if !psi.IsIC() {
+		if !psi.isIC() {
 			continue
 		}
 		if node != nil && pid == node.ID() {
@@ -437,7 +459,7 @@ func (m *Smap) StrIC(node *Snode) string {
 func (m *Smap) ICCount() int {
 	count := 0
 	for _, psi := range m.Pmap {
-		if psi.IsIC() {
+		if psi.isIC() {
 			count++
 		}
 	}
@@ -455,7 +477,7 @@ func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaemonID] =
 func (m NodeMap) ActiveMap() (clone NodeMap) {
 	clone = make(NodeMap, len(m))
 	for id, node := range m {
-		if node.InMaintenance() {
+		if node.inMaintenance() {
 			continue
 		}
 		clone[id] = node
@@ -466,7 +488,7 @@ func (m NodeMap) ActiveMap() (clone NodeMap) {
 func (m NodeMap) ActiveNodes() []*Snode {
 	snodes := make([]*Snode, 0, len(m))
 	for _, node := range m {
-		if node.InMaintenance() {
+		if node.inMaintenance() {
 			continue
 		}
 		snodes = append(snodes, node)
@@ -477,6 +499,11 @@ func (m NodeMap) ActiveNodes() []*Snode {
 func (m NodeMap) Contains(daeID string) (exists bool) {
 	_, exists = m[daeID]
 	return
+}
+
+func (m NodeMap) InMaintenance(si *Snode) bool {
+	node, exists := m[si.ID()]
+	return exists && node.inMaintenance()
 }
 
 func mapsEq(a, b NodeMap) bool {

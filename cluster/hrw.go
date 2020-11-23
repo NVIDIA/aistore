@@ -29,7 +29,7 @@ func HrwTarget(uname string, smap *Smap, inMaintenance ...bool) (si *Snode, err 
 	}
 	for _, tsi := range smap.Tmap {
 		// Assumes that sinfo.idDigest is initialized
-		if skipMaintenance && tsi.InMaintenance() {
+		if skipMaintenance && tsi.inMaintenance() {
 			continue
 		}
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
@@ -97,7 +97,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 
 	for _, tsi := range smap.Tmap {
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
-		if tsi.InMaintenance() {
+		if tsi.inMaintenance() {
 			continue
 		}
 		hlist.add(cs, tsi)
@@ -119,7 +119,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		if psi.Flags.IsSet(SnodeNonElectable) {
 			continue
 		}
-		if psi.InMaintenance() {
+		if psi.inMaintenance() {
 			continue
 		}
 		if psi.idDigest >= max {
@@ -139,7 +139,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
-		if psi.InMaintenance() || !psi.IsIC() {
+		if psi.inMaintenance() || !psi.isIC() {
 			continue
 		}
 		cs := xoshiro256.Hash(psi.idDigest ^ digest)
@@ -162,7 +162,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cmn.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
-		if tsi.InMaintenance() {
+		if tsi.inMaintenance() {
 			continue
 		}
 		// Assumes that sinfo.idDigest is initialized

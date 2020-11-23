@@ -141,7 +141,7 @@ func (m *smapX) evictIC() {
 		return
 	}
 	for sid, si := range m.Pmap {
-		if sid == m.Primary.ID() || !si.IsIC() {
+		if sid == m.Primary.ID() || !m.IsIC(si) {
 			continue
 		}
 		m.clearNodeFlags(sid, cluster.SnodeIC)
@@ -240,7 +240,7 @@ func (m *smapX) putNode(nsi *cluster.Snode, flags cluster.SnodeFlags) (exists bo
 		}
 		m.addProxy(nsi)
 		nsi.Flags = flags
-		if nsi.NonElectable() {
+		if flags.IsSet(cluster.SnodeNonElectable) {
 			glog.Warningf("%s won't be electable", nsi)
 		}
 		if glog.V(3) {
