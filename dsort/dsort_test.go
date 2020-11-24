@@ -192,7 +192,9 @@ func (t *targetNodeMock) setup() {
 
 func (t *targetNodeMock) beforeTeardown() {
 	manager, _ := t.managers.Get(globalManagerUUID)
+	manager.lock()
 	manager.setInProgressTo(false)
+	manager.unlock()
 	manager.cleanup()
 }
 
@@ -381,7 +383,9 @@ var _ = Describe("Distributed Sort", func() {
 					for _, target := range tctx.targets {
 						manager, exists := target.managers.Get(globalManagerUUID)
 						Expect(exists).To(BeTrue())
+						manager.lock()
 						manager.setInProgressTo(true)
+						manager.unlock()
 					}
 
 					for _, target := range tctx.targets {
@@ -444,7 +448,9 @@ var _ = Describe("Distributed Sort", func() {
 							DSorterType: DSorterGeneralType,
 						}
 						ctx.node = ctx.smapOwner.Get().Tmap[target.daemonID]
+						manager.lock()
 						err := manager.init(rs)
+						manager.unlock()
 						if err != nil {
 							tctx.errCh <- err
 							return

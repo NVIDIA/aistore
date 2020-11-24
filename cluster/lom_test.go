@@ -648,18 +648,25 @@ var _ = Describe("LOM", func() {
 		}
 
 		prepareCopy := func(lom *cluster.LOM, fqn string) (dst *cluster.LOM) {
-			var err error
+			var (
+				err error
+				bck = lom.Bck()
+			)
+
 			dst, err = lom.CopyObject(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(dst.FQN).To(BeARegularFile())
 			Expect(dst.Size()).To(BeEquivalentTo(testFileSize))
-			lom.Uncache()
+
+			hrwLom := &cluster.LOM{ObjName: lom.ObjName, T: lom.T}
+			Expect(hrwLom.Init(bck.Bck)).NotTo(HaveOccurred())
+			hrwLom.Uncache()
 
 			// Reload copy, to make sure it is fresh
 			dst = NewBasicLom(dst.FQN, tMock)
 			Expect(dst.Load(false)).NotTo(HaveOccurred())
 			Expect(dst.ValidateContentChecksum()).NotTo(HaveOccurred())
-			lom.Uncache()
+			hrwLom.Uncache()
 			return
 		}
 

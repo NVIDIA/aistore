@@ -15,7 +15,7 @@ run_tests() {
 
   failed_tests=$(
     BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} \
-      go test -v -p 1 -parallel 4 -count 1 -timeout "${timeout_val}" ${short_val} ${re_val} "${AISTORE_DIR}/..." 2>&1 \
+      go test -v -p 1 -tags debug -parallel 4 -count 1 -timeout "${timeout_val}" ${short_val} ${re_val} "${AISTORE_DIR}/..." 2>&1 \
     | tee -a /dev/stderr \
     | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$"; \
     exit ${PIPESTATUS[0]} # Exit with the status of the first command in the pipe(line).

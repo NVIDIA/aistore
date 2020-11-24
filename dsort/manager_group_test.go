@@ -88,11 +88,12 @@ var _ = Describe("ManagerGroup", func() {
 
 		It("should persist manager but not return by default", func() {
 			m, err := mgrp.Add("uuid")
-			m.init(validRS)
-			m.unlock()
-			m.setInProgressTo(false)
-
 			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(m.init(validRS)).NotTo(HaveOccurred())
+			m.setInProgressTo(false)
+			m.unlock()
+
 			mgrp.persist("uuid")
 			m, exists := mgrp.Get("uuid")
 			Expect(exists).To(BeFalse())
@@ -101,11 +102,12 @@ var _ = Describe("ManagerGroup", func() {
 
 		It("should persist manager and return it when requested", func() {
 			m, err := mgrp.Add("uuid")
-			m.init(validRS)
-			m.unlock()
-			m.setInProgressTo(false)
-
 			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(m.init(validRS)).ToNot(HaveOccurred())
+			m.setInProgressTo(false)
+			m.unlock()
+
 			mgrp.persist("uuid")
 			m, exists := mgrp.Get("uuid", true /*allowPersisted*/)
 			Expect(exists).To(BeTrue())
