@@ -291,7 +291,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	sw.wg.Add(1)
 	r.regWriter(uname, sw)
 
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Requesting object %s/%s from %s", lom.Bck(), lom.ObjName, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, nil, nil, true); err != nil {
@@ -305,7 +305,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	}
 	r.unregWriter(uname)
 	lom.Uncache()
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Received object %s/%s from %s", lom.Bck(), lom.ObjName, daemonID)
 	}
 	return sw.n, nil

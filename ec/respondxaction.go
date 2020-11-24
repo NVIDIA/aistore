@@ -95,7 +95,7 @@ func (r *XactRespond) Run() (err error) {
 // Utility function to cleanup both object/slice and its meta on the local node
 // Used when processing object deletion request
 func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Delete request for %s/%s", bck.Name, objName)
 	}
 
@@ -135,7 +135,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 			err          error
 		)
 		if iReq.isSlice {
-			if glog.V(4) {
+			if glog.FastV(4, glog.SmoduleEC) {
 				glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 			}
 			ct, err := cluster.NewCTFromBO(bck.Bck.Name, bck.Bck.Provider, objName, r.t.Bowner(), SliceType)
@@ -150,7 +150,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 				glog.Error(err)
 				return
 			}
-		} else if glog.V(4) {
+		} else if glog.FastV(4, glog.SmoduleEC) {
 			glog.Infof("Received request for replica %s", objName)
 		}
 
@@ -181,7 +181,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 			return
 		}
 
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleEC) {
 			glog.Infof("Got slice=%t from %s (#%d of %s/%s) v%s, chsum: %s",
 				iReq.isSlice, iReq.sender, iReq.meta.SliceID, hdr.Bck, hdr.ObjName, meta.ObjVersion, meta.CksumValue)
 		}

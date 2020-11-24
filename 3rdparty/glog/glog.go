@@ -122,6 +122,7 @@ const (
 	SmoduleMirror
 	SmoduleFS
 	SmoduleReb
+	SmoduleEC
 	// NOTE: this guard is used to define size of 'smodules' array, make sure it is always last.
 	_smoduleLast
 )

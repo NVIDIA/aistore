@@ -52,6 +52,7 @@ func loadLogLevel() {
 			"mirror":    glog.SmoduleMirror,
 			"reb":       glog.SmoduleReb,
 			"transport": glog.SmoduleTransport,
+			"ec":        glog.SmoduleEC,
 		}
 	)
 

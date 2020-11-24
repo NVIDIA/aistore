@@ -212,7 +212,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		}
 		w.Free()
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Found meta -> obj get %s/%s, writer found: %v", req.LOM.Bck(), req.LOM.ObjName, writer != nil)
 	}
 
@@ -273,7 +273,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		errRm := os.RemoveAll(tmpFQN)
 		debug.AssertNoErr(errRm)
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Found meta -> obj get %s/%s, writer found: %v", req.LOM.Bck(), req.LOM.ObjName, writer != nil)
 	}
 
@@ -327,7 +327,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 			continue
 		}
 
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleEC) {
 			glog.Infof("Slice %s/%s ID %d requesting from %s", req.LOM.Bck(), req.LOM.ObjName, v.SliceID, k)
 		}
 		// create SGL to receive the slice data and save it to correct
@@ -374,7 +374,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	}
 
 	// broadcast slice request and wait for all targets respond
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Requesting daemons %v for slices of %s/%s", daemons, req.LOM.Bck(), req.LOM.ObjName)
 	}
 	if err := c.parent.sendByDaemonID(daemons, hdr, nil, nil, true); err != nil {

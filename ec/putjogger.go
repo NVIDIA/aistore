@@ -149,7 +149,7 @@ func (c *putJogger) ec(req *Request) error {
 
 // calculates and stores data and parity slices
 func (c *putJogger) encode(req *Request) error {
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Encoding %q...", req.LOM.FQN)
 	}
 	var (
@@ -596,7 +596,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		}
 		glog.Errorf("Error while copying %d slice%s (with parity=%d) for %q: %v",
 			ecConf.DataSlices, s, ecConf.ParitySlices, req.LOM.FQN, err)
-	} else if glog.V(4) {
+	} else if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("EC created %d slices (with %d parity) for %q: %v",
 			ecConf.DataSlices, ecConf.ParitySlices, req.LOM.FQN, err)
 	}

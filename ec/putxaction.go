@@ -185,7 +185,7 @@ func (r *XactPut) stop() {
 func (r *XactPut) Encode(req *Request) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("ECXAction for bucket %s (queue = %d): encode object %s",
 			r.bck, len(r.ecCh), req.LOM.Uname())
 	}
@@ -226,7 +226,7 @@ func (r *XactPut) dispatchRequest(req *Request) {
 
 	jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
 	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.putCh), req.LOM.Uname())
 	}
 	if req.rebuild {
