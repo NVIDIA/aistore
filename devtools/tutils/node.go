@@ -300,12 +300,6 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 		Logf("Restarting %s container %s\n", tag, cmd)
 		return containers.RestartContainer(cmd.Node.ID())
 	}
-	if asPrimary && !cmn.StringInSlice("-skip_startup=true", cmd.Args) {
-		// 50-50 to apply flag or not (randomize to test different startup paths)
-		if rand.Intn(2) == 0 {
-			cmd.Args = append(cmd.Args, "-skip_startup=true")
-		}
-	}
 
 	if !cmn.AnyHasPrefixInSlice("-daemon_id", cmd.Args) {
 		cmd.Args = append(cmd.Args, "-daemon_id="+cmd.Node.ID())

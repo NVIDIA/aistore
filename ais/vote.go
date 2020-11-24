@@ -445,13 +445,22 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// NOTE: not ignoring errDowngrade
 	if err := h.owner.smap.synchronize(h.si, newsmap); err != nil {
-		glog.Errorf("%s: failed to synch %s, err %v - voting No", h.si, newsmap, err)
-		if _, err := w.Write([]byte(VoteNo)); err != nil {
-			glog.Errorf("%s: failed to write a No vote: %v", h.si, err)
+		// double-checking errDowngrade
+		if isErrDowngrade(err) {
+			newsmap2 := h.owner.smap.get()
+			psi2 := newsmap2.GetProxy(candidate)
+			if psi2.Equals(psi) {
+				err = nil // not an error - can vote Yes
+			}
 		}
-		return
+		if err != nil {
+			glog.Errorf("%s: failed to synch %s, err %v - voting No", h.si, newsmap, err)
+			if _, err := w.Write([]byte(VoteNo)); err != nil {
+				glog.Errorf("%s: failed to write a No vote: %v", h.si, err)
+			}
+			return
+		}
 	}
 
 	vote, err := h.voteOnProxy(psi.ID(), currPrimaryID)
