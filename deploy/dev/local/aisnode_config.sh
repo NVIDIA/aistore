@@ -69,7 +69,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"dest_retry_time": "2m",
 		"quiescent":       "10s",
 		"compression":     "${COMPRESSION:-never}",
-		"multiplier":      ${REBALANCE_MULTIPLIER:-4}
+		"multiplier":      ${REBALANCE_MULTIPLIER:-2}
 	},
 	"checksum": {
 		"type":			"xxhash",
