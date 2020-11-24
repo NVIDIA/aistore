@@ -249,11 +249,6 @@ func TestETLObject(t *testing.T) {
 func TestETLBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 
-	if tutils.GetClusterMap(t, proxyURL).CountTargets() > 1 {
-		// TODO: Remove once tranport is ready.
-		t.Skip("Transfer bucket transport do not fully support sending unknown objects sizes")
-	}
-
 	var (
 		bck    = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		objCnt = 10
@@ -295,11 +290,6 @@ func TestETLBucket(t *testing.T) {
 
 func TestETLBuild(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
-
-	if tutils.GetClusterMap(t, proxyURL).CountTargets() > 1 {
-		// TODO: Remove once tranport is ready.
-		t.Skip("Transfer bucket transport do not fully support sending unknown objects sizes")
-	}
 
 	const (
 		md5 = `

@@ -43,12 +43,14 @@ type (
 		isOpen      atomic.Bool
 		laterx      atomic.Bool
 		multiplier  int
+		sizePDU     int32
 	}
 	// additional (and optional) params for new data mover
 	Extra struct {
 		RecvAck     transport.ReceiveObj
 		Compression string
 		Multiplier  int
+		SizePDU     int32
 	}
 )
 
@@ -67,6 +69,7 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 		return nil, fmt.Errorf("invalid multiplier %d", extra.Multiplier)
 	}
 	dm.multiplier = extra.Multiplier
+	dm.sizePDU = extra.SizePDU
 	switch extra.Compression {
 	case "":
 		dm.compression = cmn.CompressNever
@@ -123,6 +126,7 @@ func (dm *DataMover) Open() {
 				Compression: dm.compression,
 				Config:      config,
 				MMSA:        dm.mem,
+				SizePDU:     dm.sizePDU,
 			},
 			Ntype:        cluster.Targets,
 			Multiplier:   dm.multiplier,

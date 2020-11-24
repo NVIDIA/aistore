@@ -227,11 +227,15 @@ test:kube:
     - exit $status # TODO: hack to prevent pod hangs on failures
 
 test:kube-single-target:
-  <<: *test_kube_def
+  stage: test-long
+  needs: ["test:kube-short"]
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
-  stage: test-long
+  <<: *test_kube_def
   script:
     #  Do not set MINIKUBE_TESTING as we want to have a tests checking correctness with non-testing environment.
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })

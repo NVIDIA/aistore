@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -463,6 +464,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 			dm      *bundle.DataMover
 			config  = cmn.GCO.Get()
 			err     error
+			sizePDU int32
 
 			nlpTo, nlpFrom *cluster.NameLockPair
 		)
@@ -475,7 +477,10 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		if err := t.validateTransferBckTxn(bckFrom, c.msg.Action); err != nil {
 			return err
 		}
-		if dm, err = c.newDM(&config.Rebalance, c.uuid); err != nil {
+		if c.msg.Action == cmn.ActETLBucket {
+			sizePDU = memsys.DefaultBufSize
+		}
+		if dm, err = c.newDM(&config.Rebalance, c.uuid, sizePDU); err != nil {
 			return err
 		}
 
@@ -754,11 +759,14 @@ func (c *txnServerCtx) addNotif(xact cluster.Xact) {
 	})
 }
 
-func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string) (*bundle.DataMover, error) {
+func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU ...int32) (*bundle.DataMover, error) {
 	dmExtra := bundle.Extra{
 		RecvAck:     nil,                    // NOTE: no ACKs
 		Compression: rebcfg.Compression,     // TODO: define separately
 		Multiplier:  int(rebcfg.Multiplier), // ditto
+	}
+	if len(sizePDU) > 0 {
+		dmExtra.SizePDU = sizePDU[0]
 	}
 	dm, err := bundle.NewDataMover(c.t, recvObjTrname+"_"+uuid, c.t._recvObjDM, dmExtra)
 	if err != nil {

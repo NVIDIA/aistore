@@ -139,6 +139,11 @@ func (sb *Streams) Send(obj *transport.Obj, roc cmn.ReadOpenCloser, nodes ...*cl
 		err = fmt.Errorf("no streams %s => .../%s", sb.lsnode, sb.trname)
 		return
 	}
+	if obj.IsUnsized() && sb.extra.SizePDU == 0 {
+		err = fmt.Errorf("[%s/%s] sending unsized object supported only with PDUs", obj.Hdr.Bck.String(), obj.Hdr.ObjName)
+		return
+	}
+
 	if obj.Callback == nil {
 		obj.Callback = sb.extra.Callback
 	}
