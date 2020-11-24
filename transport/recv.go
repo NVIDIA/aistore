@@ -40,6 +40,7 @@ type (
 		hdr    ObjHdr
 		pdu    *rpdu
 		loghdr string
+		roff   atomic.Int64
 	}
 	handler struct {
 		trname      string
@@ -130,27 +131,19 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 			obj, err = it.nextObj(loghdr, hlen)
 			if obj != nil {
 				if flags&firstPDU != 0 && !obj.hdr.IsHeaderOnly() {
-					// alloc on demand
 					if it.pdu == nil {
 						buf, _ := h.mm.Alloc(MaxSizePDU)
 						it.pdu = newRecvPDU(it.body, buf)
 					}
 					obj.pdu = it.pdu
+					obj.pdu.reset()
 				}
 				h.rxObj(w, obj.hdr, obj, eofOK(err))
-				hdr := &obj.hdr
-				objSize := hdr.ObjSize()
-				if objSize == obj.off {
-					num := stats.Num.Inc()
-					off := stats.Offset.Add(objSize)
-					stats.Size.Add(objSize)
-					if verbose {
-						glog.Infof("%s: %s, num %d, off %d", loghdr, obj, num, off)
-					}
+				stats.Num.Inc()
+				stats.Size.Add(obj.roff.Load())
+				if eofOK(err) == nil {
 					continue
 				}
-				num := stats.Num.Load()
-				err = fmt.Errorf("sbr2 %s: %v, num %d, off %d != %s", loghdr, err, num, obj.off, obj)
 			} else if err != nil && err != io.EOF {
 				h.rxObj(w, ObjHdr{}, nil, err)
 			}
@@ -291,13 +284,16 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	case nil:
 		if obj.off >= obj.Size() {
 			err = io.EOF
+			obj.roff.Store(obj.off)
 		}
 	case io.EOF:
+		obj.roff.Store(obj.off)
 		if obj.off != obj.Size() {
-			glog.Errorf("sbr6 %s: off %d != %s", obj.loghdr, obj.off, obj)
+			err = fmt.Errorf("sbr6 %s: premature eof %d != %s, err %w", obj.loghdr, obj.off, obj, err)
 		}
 	default:
-		glog.Error(err) // canceled?
+		obj.roff.Store(obj.off)
+		err = fmt.Errorf("sbr7 %s: off %d, obj %s, err %w", obj.loghdr, obj.off, obj, err)
 	}
 	return
 }
@@ -306,7 +302,8 @@ func (obj *objReader) String() string {
 	return fmt.Sprintf("%s/%s(size=%d)", obj.hdr.Bck, obj.hdr.ObjName, obj.Size())
 }
 
-func (obj *objReader) Size() int64 { return obj.hdr.ObjSize() }
+func (obj *objReader) Size() int64     { return obj.hdr.ObjSize() }
+func (obj *objReader) IsUnsized() bool { return obj.hdr.IsUnsized() }
 
 //
 // pduReader
@@ -323,7 +320,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 	for !pdu.done {
 		_, err = pdu.readFrom()
 		if err != nil {
-			err = fmt.Errorf("sbr7 %s: failed to receive PDU, err %v, obj %s", obj.loghdr, err, obj)
+			err = fmt.Errorf("sbr8 %s: failed to receive PDU, err %w, obj %s", obj.loghdr, err, obj)
 			break
 		}
 		if !pdu.done {
@@ -334,19 +331,20 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 	obj.off += int64(n)
 
 	if err != nil {
-		pdu.reset()
 		return
 	}
 	if pdu.rlength() == 0 {
 		if pdu.last {
+			obj.roff.Store(obj.off)
 			err = io.EOF
-			if obj.hdr.IsUnsized() {
+			if obj.IsUnsized() {
 				obj.hdr.ObjAttrs.Size = obj.off
 			} else if obj.Size() != obj.off {
-				glog.Errorf("sbr8 %s: off %d != %s", obj.loghdr, obj.off, obj)
+				glog.Errorf("sbr9 %s: off %d != %s", obj.loghdr, obj.off, obj)
 			}
+		} else {
+			pdu.reset()
 		}
-		pdu.reset()
 	}
 	return
 }

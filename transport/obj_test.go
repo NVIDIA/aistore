@@ -18,6 +18,7 @@ package transport_test
 
 import (
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -715,7 +716,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 	return totalReceived, func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		written, err := io.Copy(ioutil.Discard, objReader)
-		if err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			tassert.CheckFatal(t, err)
 		}
 		if written != hdr.ObjAttrs.Size && !hdr.IsUnsized() {

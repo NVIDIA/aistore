@@ -7,6 +7,7 @@ package cmn
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -525,10 +526,12 @@ func ChecksumBytes(b []byte, cksumType string) (cksum *Cksum, err error) {
 }
 
 // DrainReader reads and discards all the data from a reader.
+// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
 func DrainReader(r io.Reader) {
-	// No need for `io.CopyBuffer` as `ioutil.Discard` has efficient `io.ReaderFrom` implementation.
 	_, err := io.Copy(ioutil.Discard, r)
-	debug.AssertNoErr(err)
+	if err != nil && !errors.Is(err, io.EOF) {
+		debug.AssertNoErr(err)
+	}
 }
 
 // FloodWriter writes `n` random bytes to provided writer.
