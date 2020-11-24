@@ -67,8 +67,9 @@ type (
 		smapOwner cluster.Sowner
 		bmdOwner  cluster.Bowner
 		node      *cluster.Snode
-		t         cluster.Target
+		t         cluster.Target // Set only on target.
 		stats     stats.Tracker
+		client    *http.Client // Client for broadcast.
 	}
 
 	buildingShardInfo struct {
@@ -149,7 +150,14 @@ func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *clus
 	ctx.stats = stats
 	cmn.Assert(mm == nil)
 
-	if t != nil {
+	config := cmn.GCO.Get()
+	ctx.client = cmn.NewClient(cmn.TransportArgs{
+		Timeout:    config.Timeout.MaxHostBusy,
+		UseHTTPS:   config.Net.HTTP.UseHTTPS,
+		SkipVerify: config.Net.HTTP.SkipVerify,
+	})
+
+	if ctx.node.IsTarget() {
 		mm = t.MMSA()
 		err := fs.CSM.RegisterContentType(filetype.DSortFileType, &filetype.DSortFile{})
 		cmn.AssertNoErr(err)
@@ -164,7 +172,6 @@ func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *clus
 func (m *Manager) init(rs *ParsedRequestSpec) error {
 	debug.AssertMutexLocked(&m.mu)
 
-	// smap, nameLocker setup
 	m.ctx = ctx
 	m.smap = m.ctx.smapOwner.Get()
 

@@ -363,7 +363,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
 	path = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Remove, managerUUID)
-	responses = broadcast(http.MethodDelete, path, nil, nil, targets, ctx.node)
+	responses = broadcast(http.MethodDelete, path, nil, nil, targets)
 	failed := make([]string, 0)
 	for _, r := range responses {
 		if r.statusCode != http.StatusOK {
@@ -735,15 +735,11 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func broadcast(method, path string, urlParams url.Values, body []byte, nodes cluster.NodeMap, ignore ...*cluster.Snode) []response {
-	config := cmn.GCO.Get()
-	client := cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Client.Timeout,
-		UseHTTPS:   config.Net.HTTP.UseHTTPS,
-		SkipVerify: config.Net.HTTP.SkipVerify,
-	})
-	responses := make([]response, len(nodes))
+	var (
+		responses = make([]response, len(nodes))
+		wg        = &sync.WaitGroup{}
+	)
 
-	wg := &sync.WaitGroup{}
 	call := func(idx int, node *cluster.Snode) {
 		defer wg.Done()
 
@@ -764,7 +760,7 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 			return
 		}
 
-		resp, err := client.Do(req) // nolint:bodyclose // closed inside cmn.Close
+		resp, err := ctx.client.Do(req) // nolint:bodyclose // Closed inside `cmn.Close`.
 		if err != nil {
 			responses[idx] = response{
 				si:         node,
@@ -799,7 +795,7 @@ outer:
 	}
 	wg.Wait()
 
-	return responses
+	return responses[:idx]
 }
 
 func checkHTTPMethod(w http.ResponseWriter, r *http.Request, expected string) bool {
