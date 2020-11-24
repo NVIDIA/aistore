@@ -31,16 +31,14 @@ variables:
     - merge_requests
     - schedules
 
-.default_ref_template: &default_ref_def
-  <<: *default_only_def
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
-
 .test_long_template: &test_long_def
   stage: test-long
-  only:
-    - schedules
+  needs: ["test:short"]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   <<: *gather_logs_def
 
 .test_kube_template: &test_kube_def
@@ -80,7 +78,10 @@ lint:linux:
 
 test:short:
   stage: test-short
-  <<: *default_ref_def
+  <<: *default_only_def
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   timeout: 15m
   script:
     - make aisfs cli aisloader
@@ -192,13 +193,13 @@ test:aisloader:
 # Kubernetes stages
 
 test:kube-short:
-  <<: *test_kube_def
   stage: test-short
   only:
     - merge_requests
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+  <<: *test_kube_def
   script:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n;  })
     - status=0
@@ -207,11 +208,15 @@ test:kube-short:
     - exit $status # TODO: hack to prevent pod hangs on failures
 
 test:kube:
-  <<: *test_kube_def
+  stage: test-long
+  needs: ["test:kube-short"]
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
-  stage: test-long
+  <<: *test_kube_def
   script:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
     - status=0
@@ -220,11 +225,15 @@ test:kube:
     - exit $status # TODO: hack to prevent pod hangs on failures
 
 test:kube-aisloader:
-  <<: *test_kube_def
+  stage: test-long
+  needs: ["test:kube-short"]
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
-  stage: test-long
+  <<: *test_kube_def
   script:
     - make aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
