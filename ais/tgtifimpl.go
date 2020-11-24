@@ -162,7 +162,10 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 func (t *targetrunner) sendTo(lom *cluster.LOM, params cluster.SendToParams) error {
 	debug.Assert(!t.Snode().Equals(params.Tsi))
 	cmn.Assert(params.HdrMeta != nil)
-	cmn.Assert(params.HdrMeta.Size() >= 0)
+
+	if params.HdrMeta.Size() < -1 {
+		return fmt.Errorf("[%s/%s] content length of %d not supported, -1 or greater required", lom.BckName(), lom.ObjName, params.HdrMeta.Size())
+	}
 
 	if params.DM != nil {
 		return _sendObjDM(lom, params)
