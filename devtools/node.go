@@ -26,7 +26,7 @@ func JoinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Du
 	// If node is already in cluster we should not wait for map version
 	// sync because update will not be scheduled
 	if node := smap.GetNode(node.ID()); node == nil {
-		err = WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, []string{})
+		err = WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, cmn.NewStringSet())
 		return
 	}
 	return
@@ -55,32 +55,35 @@ func UnregisterNode(ctx *Ctx, proxyURL string, args *cmn.ActValDecommision, time
 	// If node does not exists in cluster we should not wait for map version
 	// sync because update will not be scheduled
 	if node != nil {
-		return WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, []string{node.ID()})
+		return WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, cmn.NewStringSet(node.ID()))
 	}
 	return nil
 }
 
-func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore []string) error {
+func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore cmn.StringSet) error {
 	ctx.Log("Waiting to sync Smap version > v%d, ignoring %+v\n", prevVersion, idsToIgnore)
-	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore []string) (string, string, bool) {
+	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore cmn.StringSet) (string, string, bool) {
 		for _, d := range smap.Pmap {
-			if !cmn.StringInSlice(d.ID(), idsToIgnore) {
+			if !idsToIgnore.Contains(d.ID()) {
 				return d.ID(), d.PublicNet.DirectURL, true
 			}
 		}
 		for _, d := range smap.Tmap {
-			if !cmn.StringInSlice(d.ID(), idsToIgnore) {
+			if !idsToIgnore.Contains(d.ID()) {
 				return d.ID(), d.PublicNet.DirectURL, true
 			}
 		}
 
 		return "", "", false
 	}
-
+	var prevSid string
 	for {
 		sid, url, exists := checkAwaitingDaemon(smap, idsToIgnore)
 		if !exists {
 			break
+		}
+		if sid == prevSid {
+			time.Sleep(time.Second)
 		}
 		baseParams := BaseAPIParams(ctx, url)
 		daemonSmap, err := api.GetClusterMap(baseParams)
@@ -90,7 +93,7 @@ func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVer
 		}
 
 		if err == nil && daemonSmap.Version > prevVersion {
-			idsToIgnore = append(idsToIgnore, sid)
+			idsToIgnore.Add(sid)
 			*smap = *daemonSmap // update smap for newer version
 			continue
 		}
@@ -98,9 +101,10 @@ func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVer
 		if time.Now().After(timeout) {
 			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, url, smap.Version)
 		}
-
-		ctx.Log("waiting for Smap > v%d at %s (currently v%d)\n", prevVersion, sid, daemonSmap.Version)
-		time.Sleep(time.Second)
+		if daemonSmap != nil {
+			ctx.Log("waiting for Smap > v%d at %s (currently v%d)\n", prevVersion, sid, daemonSmap.Version)
+		}
+		prevSid = sid
 	}
 	return nil
 }

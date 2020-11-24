@@ -22,6 +22,11 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
+const (
+	nodeRetryInterval = 2 * time.Second // interval to check for node health
+	maxNodeRetry      = 10              // max retries to get health
+)
+
 type nodesCnt int
 
 func (n nodesCnt) satisfied(actual int) bool {
@@ -184,7 +189,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 					proxyID = p.ID()
 				}
 			}
-			err = WaitMapVersionSync(smapChangeDeadline, syncedSmap, origVersion, []string{MockDaemonID, proxyID})
+			err = WaitMapVersionSync(smapChangeDeadline, syncedSmap, origVersion, cmn.NewStringSet(MockDaemonID, proxyID))
 			if err != nil {
 				return nil, err
 			}
@@ -214,20 +219,11 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 	return nil, fmt.Errorf("timed out waiting for the cluster to stabilize")
 }
 
-func WaitNodeRestored(t *testing.T, proxyURL, reason, nodeID string, origVersion int64, proxyCnt,
-	targetCnt int) *cluster.Smap {
-	_, err := api.WaitNodeAdded(BaseAPIParams(proxyURL), nodeID)
-	tassert.CheckFatal(t, err)
-	smap, err := WaitForClusterState(proxyURL, reason, origVersion, proxyCnt, targetCnt)
-	tassert.CheckFatal(t, err)
-	return smap
-}
-
 func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, err error) {
 	return WaitForClusterState(proxyURL, "new smap version", prevVersion, 0, 0)
 }
 
-func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore []string) error {
+func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore cmn.StringSet) error {
 	return devtools.WaitMapVersionSync(devtoolsCtx, timeout, smap, prevVersion, idsToIgnore)
 }
 
@@ -419,7 +415,7 @@ func EnsureOrigClusterState(t *testing.T) {
 		if err != nil {
 			tassert.CheckError(t, err)
 			if err = RestoreNode(cmd, false, cmd.Node.Type()); err == nil {
-				_, err := api.WaitNodeAdded(baseParam, cmd.Node.ID())
+				_, err := WaitNodeAdded(baseParam, cmd.Node.ID())
 				tassert.CheckError(t, err)
 			}
 			tassert.CheckError(t, err)
@@ -449,4 +445,44 @@ func EnsureOrigClusterState(t *testing.T) {
 	if tgtCnt != afterTargetCnt {
 		WaitForRebalanceToComplete(t, BaseAPIParams(proxyURL))
 	}
+}
+
+func WaitNodeAdded(baseParams api.BaseParams, nodeID string) (*cluster.Smap, error) {
+	i := 0
+
+retry:
+	smap, err := api.GetClusterMap(baseParams)
+	if err != nil {
+		return nil, err
+	}
+	node := smap.GetNode(nodeID)
+	if node != nil {
+		baseParams.URL = node.URL(cmn.NetworkPublic)
+		return smap, waitStarted(baseParams)
+	}
+	time.Sleep(nodeRetryInterval)
+	i++
+	if i > maxNodeRetry {
+		return nil, fmt.Errorf("max retry (%d) exceeded - node not in smap", maxNodeRetry)
+	}
+
+	goto retry
+}
+
+func waitStarted(baseParams api.BaseParams) (err error) {
+	i := 0
+while503:
+	err = api.Health(baseParams)
+	if err == nil {
+		return nil
+	}
+	if !cmn.IsStatusServiceUnavailable(err) && !cmn.IsErrConnectionRefused(err) {
+		return
+	}
+	time.Sleep(nodeRetryInterval)
+	i++
+	if i > maxNodeRetry {
+		return fmt.Errorf("node start failed - max retries (%d) exceeded", maxNodeRetry)
+	}
+	goto while503
 }

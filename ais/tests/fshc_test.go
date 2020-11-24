@@ -522,8 +522,9 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tutils.RestoreNode(tcmd, false, "target")
 
-	smap = tutils.WaitNodeRestored(t, smap.Primary.URL(cmn.NetworkPublic), "to restore", target.ID(), smap.Version,
+	smap, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetworkPublic), "to restore", smap.Version,
 		proxyCnt, targetCnt)
+	tassert.CheckFatal(t, err)
 	if _, ok := smap.Tmap[target.ID()]; !ok {
 		t.Fatalf("Removed target didn't rejoin")
 	}
@@ -580,8 +581,9 @@ func TestFSDisableMpathRestart(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.RestoreNode(tcmd, false, "target")
-	smap = tutils.WaitNodeRestored(t, smap.Primary.URL(cmn.NetworkPublic), "to restore", target.ID(), smap.Version,
+	smap, err = tutils.WaitForClusterState(smap.Primary.URL(cmn.NetworkPublic), "to restore", smap.Version,
 		proxyCnt, targetCnt)
+	tassert.CheckFatal(t, err)
 	if _, ok := smap.Tmap[target.ID()]; !ok {
 		t.Fatalf("Removed target didn't rejoin")
 	}
