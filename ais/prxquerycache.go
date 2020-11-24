@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -74,7 +75,7 @@ type (
 		leftovers map[string]*queryBufferTarget // targetID (string) -> target buffer
 		// Contains the timestamp of the last access to this buffer. If given
 		// predefined time passes the buffer will be forgotten.
-		lastAccess int64
+		lastAccess atomic.Int64
 	}
 
 	// Contains all query buffers.
@@ -184,7 +185,7 @@ func (b *queryBuffer) mergeTargetBuffers() (filled bool) {
 }
 
 func (b *queryBuffer) get(token string, size uint) (entries []*cmn.BucketEntry, hasEnough bool) {
-	b.lastAccess = mono.NanoTime()
+	b.lastAccess.Store(mono.NanoTime())
 
 	// If user requested something before what we have currently in the buffer
 	// then we just need to forget it.
@@ -230,7 +231,7 @@ func (b *queryBuffer) set(id string, entries []*cmn.BucketEntry, size uint) {
 		entries: entries,
 		done:    uint(len(entries)) < size,
 	}
-	b.lastAccess = mono.NanoTime()
+	b.lastAccess.Store(mono.NanoTime())
 }
 
 func newQueryBuffers() *queryBuffers {
@@ -269,7 +270,7 @@ func (b *queryBuffers) set(id, targetID string, entries []*cmn.BucketEntry, size
 func (b *queryBuffers) housekeep() time.Duration {
 	b.buffers.Range(func(key, value interface{}) bool {
 		buffer := value.(*queryBuffer)
-		if mono.Since(buffer.lastAccess) > bufferLiveTimeout {
+		if mono.Since(buffer.lastAccess.Load()) > bufferLiveTimeout {
 			b.buffers.Delete(key)
 		}
 		return true
