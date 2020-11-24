@@ -218,7 +218,7 @@ func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 }
 
 func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-	if err != nil {
+	if err != nil && !cmn.IsEOF(err) {
 		glog.Error(err)
 		return
 	}

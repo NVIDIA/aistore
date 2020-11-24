@@ -112,7 +112,9 @@ func testBundle(t *testing.T, nvs cmn.SimpleKVs) {
 	smap.Version = 1
 
 	receive := func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-		tassert.CheckFatal(t, err)
+		if err != nil && !cmn.IsEOF(err) {
+			tassert.CheckFatal(t, err)
+		}
 		written, _ := io.Copy(ioutil.Discard, objReader)
 		cmn.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
 	}

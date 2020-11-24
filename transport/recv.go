@@ -130,6 +130,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		if flags&msgFlag == 0 {
 			obj, err = it.nextObj(loghdr, hlen)
 			if obj != nil {
+				unsized := obj.IsUnsized()
 				if flags&firstPDU != 0 && !obj.hdr.IsHeaderOnly() {
 					if it.pdu == nil {
 						buf, _ := h.mm.Alloc(MaxSizePDU)
@@ -138,7 +139,8 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 					obj.pdu = it.pdu
 					obj.pdu.reset()
 				}
-				h.rxObj(w, obj.hdr, obj, eofOK(err))
+				// err => err; EOF => (unsized => EOF, otherwise => nil)
+				h.rxObj(w, obj.hdr, obj, eofOK(err, unsized))
 				stats.Num.Inc()
 				stats.Size.Add(obj.roff.Load())
 				if eofOK(err) == nil {
@@ -170,7 +172,13 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func eofOK(err error) error {
+func eofOK(err error, unsized ...bool) error {
+	if len(unsized) > 0 && unsized[0] {
+		if err == nil {
+			return io.EOF
+		}
+		return err
+	}
 	if err == io.EOF {
 		return nil
 	}

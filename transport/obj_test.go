@@ -18,7 +18,6 @@ package transport_test
 
 import (
 	"encoding/binary"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -440,7 +439,7 @@ func Test_ObjAttrs(t *testing.T) {
 }
 
 func receive10G(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-	cmn.AssertNoErr(err)
+	cmn.Assert(err == nil || cmn.IsEOF(err))
 	written, _ := io.Copy(ioutil.Discard, objReader)
 	cmn.Assert(written == hdr.ObjAttrs.Size)
 }
@@ -714,9 +713,9 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 func makeRecvFunc(t *testing.T) (*int64, transport.ReceiveObj) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-		cmn.Assert(err == nil)
+		cmn.Assert(err == nil || cmn.IsEOF(err))
 		written, err := io.Copy(ioutil.Discard, objReader)
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil && !cmn.IsEOF(err) {
 			tassert.CheckFatal(t, err)
 		}
 		if written != hdr.ObjAttrs.Size && !hdr.IsUnsized() {

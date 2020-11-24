@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -105,6 +106,11 @@ func _errBucket(msg, node string) string {
 		return node + ": " + msg
 	}
 	return msg
+}
+
+// EOF (to accommodate unsized streaming)
+func IsEOF(err error) bool {
+	return err == io.ErrUnexpectedEOF || errors.Is(err, io.EOF)
 }
 
 ///////////////////////////
