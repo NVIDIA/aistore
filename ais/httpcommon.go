@@ -115,6 +115,7 @@ type (
 			Version    int64  `json:"version,string"`
 			UUID       string `json:"uuid"`
 			PrimaryURL string `json:"primary_url"`
+			PrimaryID  string `json:"primary_id"`
 		} `json:"smap"`
 	}
 
@@ -212,7 +213,8 @@ func isErrDowngrade(err error) bool { return errors.As(err, &errDowngrade{}) }
 ////////////////////////
 
 func (e *errNotEnoughTargets) Error() string {
-	return fmt.Sprintf("%s: not enough targets in %s: required: %d has: %d", e.si, e.smap, e.required, e.smap.CountActiveTargets())
+	return fmt.Sprintf("%s: not enough targets in %s: need %d, have %d",
+		e.si, e.smap, e.required, e.smap.CountActiveTargets())
 }
 
 ////////////////
@@ -1216,59 +1218,78 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 //
 // TODO: utilize for target startup and, for the targets, validate and return maxVerBMD
 //
-func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64, primaryURL string) {
+func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64, primaryURL, primaryID string, cnt int) {
 	var (
 		wg      = &sync.WaitGroup{}
 		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
 		timeout = cmn.GCO.Get().Timeout.CplaneOperation
 		mu      = &sync.Mutex{}
+		nodemap = smap.Pmap
+		retried bool
 	)
 	smapMaxVer = smap.version()
-	for sid, si := range smap.Pmap {
+	primaryURL = smap.Primary.URL(cmn.NetworkIntraControl)
+	debug.Assert(primaryURL != "" && smapMaxVer > 0 && smap.isValid())
+retry:
+	for sid, si := range nodemap {
 		if sid == h.si.ID() {
 			continue
 		}
 		wg.Add(1)
 		go func(si *cluster.Snode) {
 			var (
-				ver int64
-				url string
+				ver      int64
+				url, pid string
 			)
 			defer wg.Done()
 			body, _, err := h.Health(si, timeout, query)
 			if err != nil {
 				return
 			}
-			if ver, url = ciiToSmap(smap, body, h.si, si); ver == 0 {
+			if ver, url, pid = ciiToSmap(smap, body, h.si, si); ver == 0 {
 				return
 			}
 			mu.Lock()
 			if smapMaxVer < ver {
 				smapMaxVer = ver
-				primaryURL = url
+				// reset the confirmation count iff there's a disagreement on primary ID
+				if primaryID != pid {
+					cnt = 1
+					primaryURL, primaryID = url, pid
+				} else {
+					cnt++
+					primaryURL = url
+				}
+			} else if smapMaxVer == ver && primaryID == pid {
+				cnt++
 			}
 			mu.Unlock()
 		}(si)
 	}
 	wg.Wait()
+
+	// retry with Tmap when too few confirmations
+	if cnt < minPidConfirmations && !retried && smap.CountTargets() > 0 {
+		nodemap = smap.Tmap
+		retried = true
+		goto retry
+	}
 	return
 }
 
-func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (smapVersion int64, primaryURL string) {
+func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (smapVersion int64, primaryURL, primaryID string) {
 	var cii clusterInfo
 	if err := jsoniter.Unmarshal(body, &cii); err != nil {
 		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
 		return
 	}
-	if smap.version() < cii.Smap.Version {
-		if smap.UUID != cii.Smap.UUID {
-			glog.Errorf("%s: Smap have different UUIDs: %s and %s from %s",
-				self, smap.UUID, cii.Smap.UUID, si)
-			return
-		}
-		smapVersion = cii.Smap.Version
-		primaryURL = cii.Smap.PrimaryURL
+	if smap.UUID != cii.Smap.UUID {
+		glog.Errorf("%s: Smap have different UUIDs: %s and %s from %s", self, smap.UUID, cii.Smap.UUID, si)
+		return
 	}
+	smapVersion = cii.Smap.Version
+	primaryURL = cii.Smap.PrimaryURL
+	primaryID = cii.Smap.PrimaryID
 	return
 }
 
@@ -1731,4 +1752,21 @@ func (p *proxyrunner) rpErrHandler(w http.ResponseWriter, r *http.Request, err e
 	}
 	glog.Errorln(msg)
 	w.WriteHeader(http.StatusBadGateway)
+}
+
+/////////////////
+// clusterInfo //
+/////////////////
+
+func (cii *clusterInfo) fill(h *httprunner) {
+	var (
+		bmd  = h.owner.bmd.get()
+		smap = h.owner.smap.get()
+	)
+	cii.BMD.Version = bmd.version()
+	cii.BMD.UUID = bmd.UUID
+	cii.Smap.Version = smap.version()
+	cii.Smap.UUID = smap.UUID
+	cii.Smap.PrimaryURL = smap.Primary.URL(cmn.NetworkIntraControl)
+	cii.Smap.PrimaryID = smap.Primary.ID()
 }

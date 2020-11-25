@@ -249,12 +249,13 @@ func (t *targetrunner) Run() error {
 	if err := t.withRetry(t.joinCluster, "join", true /*backoff*/, contactURLs...); err != nil {
 		if reliable {
 			var (
-				smapMaxVer int64
-				primaryURL string
+				smapMaxVer            int64
+				primaryURL, primaryID string
+				cnt                   int // confirmation count
 			)
-			if smapMaxVer, primaryURL = t.bcastHealth(smap); smapMaxVer > smap.version() {
-				glog.Infof("%s: local copy of %s is older than v%d - retrying via %s",
-					t.si, smap, smapMaxVer, primaryURL)
+			if smapMaxVer, primaryURL, primaryID, cnt = t.bcastHealth(smap); smapMaxVer > smap.version() {
+				glog.Infof("%s: local copy of %s is older than v%d - retrying via %s(%s, cnt=%d)",
+					t.si, smap, smapMaxVer, primaryURL, primaryID, cnt)
 				err = t.withRetry(t.joinCluster, "join", true, primaryURL)
 			}
 		}

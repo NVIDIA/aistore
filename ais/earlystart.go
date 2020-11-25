@@ -14,6 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+const minPidConfirmations = 3
+
 // Background:
 // 	- Each proxy/gateway stores a local copy of the cluster map (Smap)
 // 	- Each Smap instance is versioned; the versioning is monotonic (increasing)
@@ -21,9 +23,10 @@ import (
 // 	- Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
 func (p *proxyrunner) bootstrap() {
 	var (
-		config          = cmn.GCO.Get()
-		pid, primaryURL string
-		primary         bool
+		config                = cmn.GCO.Get()
+		pid                   string
+		primaryURL, primaryID string
+		primary               bool
 	)
 
 	// 1: load a local copy and try to utilize it for discovery
@@ -39,12 +42,20 @@ func (p *proxyrunner) bootstrap() {
 		if pid != "" { // takes precedence over everything else
 			cmn.Assert(pid == p.si.ID())
 		} else if reliable {
-			var smapMaxVer int64
+			var (
+				smapMaxVer int64
+				cnt        int // confirmation count
+			)
 			// double-check
-			if smapMaxVer, primaryURL = p.bcastHealth(smap); smapMaxVer > smap.version() {
-				glog.Infof("%s: cannot assume the primary role with older %s < v%d",
-					p.si, smap, smapMaxVer)
-				primary = false
+			if smapMaxVer, primaryURL, primaryID, cnt = p.bcastHealth(smap); smapMaxVer > smap.version() {
+				if primaryID != p.si.ID() || cnt < minPidConfirmations {
+					glog.Warningf("%s: cannot assume the primary role: local %s < v%d(%s, cnt=%d)",
+						p.si, smap, smapMaxVer, primaryID, cnt)
+					primary = false
+				} else {
+					glog.Warningf("%s: proceeding as primary even though local %s < v%d(%s, cnt=%d)",
+						p.si, smap, smapMaxVer, primaryID, cnt)
+				}
 			}
 		}
 	}
@@ -183,7 +194,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
-				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.IntraControlNet.DirectURL)
+				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.URL(cmn.NetworkIntraControl))
 			if err := p.secondaryStartup(maxVerSmap); err != nil {
 				cmn.ExitLogf("FATAL: %v", err)
 			}

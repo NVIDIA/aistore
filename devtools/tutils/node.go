@@ -146,7 +146,7 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 	smapChangeDeadline = timeStart.Add(2 * proxyChangeLatency)
 	opDeadline = timeStart.Add(3 * proxyChangeLatency)
 
-	Logf("Waiting for cluster state = (p=%d, t=%d, version > v%d) %s\n", expPrx, expTgt, origVersion, reason)
+	Logf("Waiting for (p%d, t%d, version > v%d) %s\n", expPrx, expTgt, origVersion, reason)
 
 	var (
 		loopCnt    int
@@ -170,7 +170,8 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 			smap.Version > origVersion
 		if !satisfied {
 			d := time.Since(timeStart)
-			Logf("Still waiting at %s, current %s, elapsed (%s)\n", proxyURL, smap, d.Truncate(time.Second))
+			Logf("Still polling %s, %s(pid=%s) (%s)\n",
+				proxyURL, smap, smap.Primary.ID(), d.Truncate(time.Second))
 		}
 
 		if smap.Version != lastVersion {

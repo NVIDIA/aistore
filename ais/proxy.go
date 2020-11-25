@@ -686,7 +686,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	// NOTE: internal use
 	if getCii {
 		cii := &clusterInfo{}
-		cii.fill(p)
+		cii.fill(&p.httprunner)
 		_ = p.writeJSON(w, r, cii, "cluster-info")
 		return
 	}
@@ -696,18 +696,6 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-func (cii *clusterInfo) fill(p *proxyrunner) {
-	var (
-		bmd  = p.owner.bmd.get()
-		smap = p.owner.smap.get()
-	)
-	cii.BMD.Version = bmd.version()
-	cii.BMD.UUID = bmd.UUID
-	cii.Smap.Version = smap.version()
-	cii.Smap.UUID = smap.UUID
-	cii.Smap.PrimaryURL = smap.Primary.IntraControlNet.DirectURL
 }
 
 // POST { action } /v1/buckets[/bucket-name]

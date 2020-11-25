@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
@@ -1058,6 +1059,16 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	if !smap.containsID(callerID) {
 		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si, callerID, caller)
+	}
+
+	// NOTE: internal use
+	getCii := cmn.IsParseBool(query.Get(cmn.URLParamClusterInfo))
+	if getCii {
+		debug.Assert(query.Get(cmn.URLParamRebStatus) == "")
+		cii := &clusterInfo{}
+		cii.fill(&t.httprunner)
+		_ = t.writeJSON(w, r, cii, "cluster-info")
+		return
 	}
 
 	callerSmapVer, _ := strconv.ParseInt(r.Header.Get(cmn.HeaderCallerSmapVersion), 10, 64)
