@@ -20,16 +20,16 @@ import (
 )
 
 type (
-	IostatContext struct {
+	iostatContext struct {
 		mpathLock   sync.Mutex
 		mpath2disks map[string]fsDisks
 		disk2mpath  cmn.SimpleKVs
 		sorted      []string
 		disk2sysfn  cmn.SimpleKVs
 		cache       atomic.Pointer
-		cacheLock   *sync.Mutex
 		cacheHst    [16]*ioStatCache
 		cacheIdx    int
+		busy        atomic.Bool
 	}
 	SelectedDiskStats struct {
 		RBps, WBps, Util int64
@@ -64,33 +64,36 @@ type (
 	}
 )
 
-func NewIostatContext() (ctx *IostatContext) {
-	ctx = &IostatContext{
+// interface guard
+var _ IOStater = (*iostatContext)(nil)
+
+func NewIostatContext() IOStater {
+	ctx := &iostatContext{
 		mpath2disks: make(map[string]fsDisks, 10),
 		disk2mpath:  make(cmn.SimpleKVs, 10),
 		sorted:      make([]string, 0, 10),
 		disk2sysfn:  make(cmn.SimpleKVs, 10),
-		cacheLock:   &sync.Mutex{},
 	}
 	for i := 0; i < len(ctx.cacheHst); i++ {
 		ctx.cacheHst[i] = newIostatCache()
 	}
 	ctx.putStatsCache(ctx.cacheHst[0])
 	ctx.cacheIdx = 0
-	return
+	ctx.busy.Store(false)
+	return ctx
 }
 
 func newIostatCache() *ioStatCache {
 	return &ioStatCache{
-		diskIOms:   make(map[string]int64),
-		diskUtil:   make(map[string]int64),
-		diskRms:    make(map[string]int64),
-		diskRBytes: make(map[string]int64),
-		diskRBps:   make(map[string]int64),
-		diskWms:    make(map[string]int64),
-		diskWBytes: make(map[string]int64),
-		diskWBps:   make(map[string]int64),
-		mpathUtil:  make(map[string]int64),
+		diskIOms:   make(map[string]int64, 4), // TODO: mfs.ios.num-mountpaths(...) to opt
+		diskUtil:   make(map[string]int64, 4),
+		diskRms:    make(map[string]int64, 4),
+		diskRBytes: make(map[string]int64, 4),
+		diskRBps:   make(map[string]int64, 4),
+		diskWms:    make(map[string]int64, 4),
+		diskWBytes: make(map[string]int64, 4),
+		diskWBps:   make(map[string]int64, 4),
+		mpathUtil:  make(map[string]int64, 4),
 	}
 }
 
@@ -107,11 +110,7 @@ func (x *MpathsUtils) Store(mpath string, util int64) {
 	(*sync.Map)(x).Store(mpath, util)
 }
 
-//
-// public methods
-//
-
-func (ctx *IostatContext) AddMpath(mpath, fs string) {
+func (ctx *iostatContext) AddMpath(mpath, fs string) {
 	ctx.mpathLock.Lock()
 	defer ctx.mpathLock.Unlock()
 
@@ -128,7 +127,8 @@ func (ctx *IostatContext) AddMpath(mpath, fs string) {
 	ctx.mpath2disks[mpath] = fsdisks
 	for disk := range fsdisks {
 		if mp, ok := ctx.disk2mpath[disk]; ok && !config.TestingEnv() {
-			s := fmt.Sprintf("disk sharing is not permitted: mp %s, add fs %s mp %s, disk %s", mp, fs, mpath, disk)
+			s := fmt.Sprintf("disk sharing is not permitted: mp %s, add fs %s mp %s, disk %s",
+				mp, fs, mpath, disk)
 			cmn.AssertMsg(false, s)
 			return
 		}
@@ -155,7 +155,7 @@ func (ctx *IostatContext) AddMpath(mpath, fs string) {
 // `disk` list, so a target stops generating disk stats.
 // If another mountpath containing the same disk is found, the disk2mpath map
 // is updated. Otherwise, the function removes disk from the disk2map map.
-func (ctx *IostatContext) removeMpathDiskTesting(mpath, disk string) {
+func (ctx *iostatContext) removeMpathDiskTesting(mpath, disk string) {
 	if _, ok := ctx.disk2mpath[disk]; !ok {
 		return
 	}
@@ -173,7 +173,7 @@ func (ctx *IostatContext) removeMpathDiskTesting(mpath, disk string) {
 	delete(ctx.mpath2disks, disk)
 }
 
-func (ctx *IostatContext) removeMpathDisk(mpath, disk string) {
+func (ctx *iostatContext) removeMpathDisk(mpath, disk string) {
 	mp, ok := ctx.disk2mpath[disk]
 	if !ok {
 		return
@@ -182,7 +182,7 @@ func (ctx *IostatContext) removeMpathDisk(mpath, disk string) {
 	delete(ctx.disk2mpath, disk)
 }
 
-func (ctx *IostatContext) RemoveMpath(mpath string) {
+func (ctx *iostatContext) RemoveMpath(mpath string) {
 	ctx.mpathLock.Lock()
 	defer ctx.mpathLock.Unlock()
 
@@ -202,18 +202,18 @@ func (ctx *IostatContext) RemoveMpath(mpath string) {
 	delete(ctx.mpath2disks, mpath)
 }
 
-func (ctx *IostatContext) GetAllMpathUtils() *MpathsUtils {
+func (ctx *iostatContext) GetAllMpathUtils() *MpathsUtils {
 	cache := ctx.refreshIostatCache()
 	return &cache.mpathUtilRO
 }
 
-func (ctx *IostatContext) GetMpathUtil(mpath string) int64 {
+func (ctx *iostatContext) GetMpathUtil(mpath string) int64 {
 	return ctx.GetAllMpathUtils().Util(mpath)
 }
 
-func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStats) {
+func (ctx *iostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStats) {
 	cache := ctx.refreshIostatCache()
-	m = make(map[string]*SelectedDiskStats)
+	m = make(map[string]*SelectedDiskStats, len(cache.diskIOms))
 	for disk := range cache.diskIOms {
 		m[disk] = &SelectedDiskStats{
 			RBps: cache.diskRBps[disk],
@@ -224,7 +224,7 @@ func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStat
 	return
 }
 
-func (ctx *IostatContext) LogAppend(lines []string) []string {
+func (ctx *iostatContext) LogAppend(lines []string) []string {
 	cache := ctx.refreshIostatCache()
 	for _, disk := range ctx.sorted {
 		if _, ok := cache.diskIOms[disk]; !ok {
@@ -242,43 +242,61 @@ func (ctx *IostatContext) LogAppend(lines []string) []string {
 	return lines
 }
 
-//
-// private methods
-//
+// private methods ---
 
-// helper function for fetching and updating the Iostat cache
-//  assumes that the timestamp passed in is close enough to the current time
-func (ctx *IostatContext) refreshIostatCache() *ioStatCache {
+// update iostat cache
+func (ctx *iostatContext) refreshIostatCache() *ioStatCache {
 	var (
+		expireTime int64
 		nowTs      = mono.NanoTime()
 		statsCache = ctx.getStatsCache()
 	)
-
 	if statsCache.expireTime > nowTs {
 		return statsCache
 	}
-
-	ctx.cacheLock.Lock()
-	statsCache = ctx.getStatsCache()
-	if statsCache.expireTime > nowTs {
-		ctx.cacheLock.Unlock()
-		return statsCache
+	if !ctx.busy.CAS(false, true) {
+		return statsCache // never want callers to wait
 	}
-	//
-	// begin
-	//
-	ctx.mpathLock.Lock() // nested lock
-	nowTs = mono.NanoTime()
-	disksStats := readDiskStats(ctx.disk2mpath, ctx.disk2sysfn)
+	defer ctx.busy.Store(false)
+
+	// refresh under mpath lock
+	ncache, maxUtil, missingInfo := ctx._refresh()
+
+	config := cmn.GCO.Get()
+	if missingInfo {
+		expireTime = int64(config.Disk.IostatTimeShort)
+	} else { // use the maximum utilization to determine expiration time
+		var (
+			lowWM     = cmn.MaxI64(config.Disk.DiskUtilLowWM, 1)
+			highWM    = cmn.MinI64(config.Disk.DiskUtilHighWM, 100)
+			delta     = int64(config.Disk.IostatTimeLong - config.Disk.IostatTimeShort)
+			utilRatio = cmn.RatioPct(highWM, lowWM, maxUtil)
+		)
+		utilRatio = (utilRatio + 5) / 10 * 10 // round to nearest tenth
+		expireTime = int64(config.Disk.IostatTimeShort) + delta*(100-utilRatio)/100
+	}
+	ncache.expireTime = nowTs + expireTime
+	ctx.putStatsCache(ncache)
+
+	return ncache
+}
+
+func (ctx *iostatContext) _refresh() (ncache *ioStatCache, maxUtil int64, missingInfo bool) {
+	ctx.mpathLock.Lock()
+	defer ctx.mpathLock.Unlock()
 
 	ctx.cacheIdx++
 	ctx.cacheIdx %= len(ctx.cacheHst)
+	ncache = ctx.cacheHst[ctx.cacheIdx]
+
 	var (
-		ncache         = ctx.cacheHst[ctx.cacheIdx]
+		statsCache     = ctx.getStatsCache()
+		nowTs          = mono.NanoTime()
 		elapsed        = nowTs - statsCache.timestamp
 		elapsedSeconds = cmn.DivRound(elapsed, int64(time.Second))
 		elapsedMillis  = cmn.DivRound(elapsed, int64(time.Millisecond))
 	)
+
 	ncache.timestamp = nowTs
 	for mpath := range ctx.mpath2disks {
 		ncache.mpathUtil[mpath] = 0
@@ -289,7 +307,8 @@ func (ctx *IostatContext) refreshIostatCache() *ioStatCache {
 			ctx.cacheHst[ctx.cacheIdx] = ncache
 		}
 	}
-	missingInfo := false
+
+	disksStats := readDiskStats(ctx.disk2mpath, ctx.disk2sysfn)
 	for disk, mpath := range ctx.disk2mpath {
 		ncache.diskRBps[disk] = 0
 		ncache.diskWBps[disk] = 0
@@ -334,11 +353,6 @@ func (ctx *IostatContext) refreshIostatCache() *ioStatCache {
 	}
 
 	// average and max
-	var (
-		maxUtil    int64
-		expireTime int64
-		config     = cmn.GCO.Get()
-	)
 	for mpath, disks := range ctx.mpath2disks {
 		numDisk := int64(len(disks))
 		util := ncache.mpathUtil[mpath] / numDisk
@@ -347,32 +361,14 @@ func (ctx *IostatContext) refreshIostatCache() *ioStatCache {
 		ncache.mpathUtilRO.Store(mpath, util)
 		maxUtil = cmn.MaxI64(maxUtil, util)
 	}
-	ctx.mpathLock.Unlock()
-
-	if missingInfo {
-		expireTime = int64(config.Disk.IostatTimeShort)
-	} else { // use the maximum utilization to determine expiration time
-		var (
-			lowWM     = cmn.MaxI64(config.Disk.DiskUtilLowWM, 1)
-			highWM    = cmn.MinI64(config.Disk.DiskUtilHighWM, 100)
-			delta     = int64(config.Disk.IostatTimeLong - config.Disk.IostatTimeShort)
-			utilRatio = cmn.RatioPct(highWM, lowWM, maxUtil)
-		)
-		utilRatio = (utilRatio + 5) / 10 * 10 // round to nearest tenth
-		expireTime = int64(config.Disk.IostatTimeShort) + delta*(100-utilRatio)/100
-	}
-	ncache.expireTime = nowTs + expireTime
-	ctx.putStatsCache(ncache)
-	ctx.cacheLock.Unlock()
-
-	return ncache
+	return
 }
 
-func (ctx *IostatContext) getStatsCache() *ioStatCache {
+func (ctx *iostatContext) getStatsCache() *ioStatCache {
 	cache := (*ioStatCache)(ctx.cache.Load())
 	return cache
 }
 
-func (ctx *IostatContext) putStatsCache(cache *ioStatCache) {
+func (ctx *iostatContext) putStatsCache(cache *ioStatCache) {
 	ctx.cache.Store(unsafe.Pointer(cache))
 }
