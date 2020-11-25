@@ -457,8 +457,7 @@ retry:
 	}
 	node := smap.GetNode(nodeID)
 	if node != nil {
-		baseParams.URL = node.URL(cmn.NetworkPublic)
-		return smap, waitStarted(baseParams)
+		return smap, WaitNodeReady(node.URL(cmn.NetworkPublic))
 	}
 	time.Sleep(nodeRetryInterval)
 	i++
@@ -469,8 +468,11 @@ retry:
 	goto retry
 }
 
-func waitStarted(baseParams api.BaseParams) (err error) {
-	i := 0
+func WaitNodeReady(url string) (err error) {
+	var (
+		i          = 0
+		baseParams = BaseAPIParams(url)
+	)
 while503:
 	err = api.Health(baseParams)
 	if err == nil {

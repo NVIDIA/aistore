@@ -667,7 +667,11 @@ func proxyStress(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+	defer func() {
+		err := tutils.WaitNodeReady(proxyURL)
+		tassert.CheckFatal(t, err)
+		tutils.DestroyBucket(t, proxyURL, bck)
+	}()
 
 	// start all workers
 	for i := 0; i < workerCnt; i++ {
