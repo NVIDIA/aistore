@@ -436,7 +436,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 
 	args := &bcastArgs{
 		network: cmn.NetworkIntraControl,
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
+		timeout: cmn.GCO.Get().Timeout.MaxHostBusy,
 	}
 
 	// nodes to fetch stats from
