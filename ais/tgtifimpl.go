@@ -474,8 +474,9 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	if _, err = poi.finalize(); err == nil {
 		nlom = lom
 		if !params.KeepOrig {
-			err := cmn.RemoveFile(params.SrcFQN)
-			glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
+			if err := cmn.RemoveFile(params.SrcFQN); err != nil && !os.IsNotExist(err) {
+				glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
+			}
 		}
 	}
 	return
