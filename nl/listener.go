@@ -230,6 +230,7 @@ func (nlb *NotifListenerBase) Status() *NotifStatus {
 	return status
 }
 
+// NOTE: Results in non-critical DATA RACE when used outside `nlb.Lock()`
 func (nlb *NotifListenerBase) String() string {
 	var (
 		tm, res  string

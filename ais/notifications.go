@@ -102,6 +102,7 @@ func newListeners() *listeners {
 	return &listeners{m: make(map[string]nl.NotifListener, 64)}
 }
 
+func (l *listeners) len() int { return len(l.m) }
 func (l *listeners) entry(uuid string) (entry nl.NotifListener, exists bool) {
 	l.RLock()
 	entry, exists = l.m[uuid]
@@ -198,14 +199,16 @@ func (n *notifs) add(nl nl.NotifListener) (err error) {
 		return
 	}
 	nl.SetAddedTime()
-	glog.FastV(4, glog.SmoduleAIS).Infoln("add " + nl.String())
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infoln("add " + nl.String())
+	}
 	return
 }
 
 func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
 	ok = n.nls.del(nl, locked /*locked*/)
-	if ok {
-		glog.FastV(4, glog.SmoduleAIS).Infoln("del " + nl.String())
+	if ok && bool(glog.FastV(4, glog.SmoduleAIS)) {
+		glog.Infoln("del " + nl.String())
 	}
 	return
 }
@@ -398,11 +401,12 @@ func (n *notifs) housekeep() time.Duration {
 	}
 	n.fin.Unlock()
 
-	if len(n.nls.m) == 0 {
+	n.nls.RLock()
+	if n.nls.len() == 0 {
+		n.nls.RUnlock()
 		return notifsHousekeepT
 	}
-	n.nls.RLock()
-	tempn := make(map[string]nl.NotifListener, len(n.nls.m))
+	tempn := make(map[string]nl.NotifListener, n.nls.len())
 	for uuid, nl := range n.nls.m {
 		tempn[uuid] = nl
 	}
@@ -506,7 +510,7 @@ func (n *notifs) ListenSmapChanged() {
 	n.smapVer = smap.Version
 
 	n.nls.RLock()
-	if len(n.nls.m) == 0 {
+	if n.nls.len() == 0 {
 		n.nls.RUnlock()
 		return
 	}
@@ -563,19 +567,23 @@ func (n *notifs) MarshalJSON() (data []byte, err error) {
 	t := jsonNotifs{}
 	n.nls.RLock()
 	n.fin.RLock()
-	defer func() {
+	if n.nls.len() == 0 && n.fin.len() == 0 {
 		n.fin.RUnlock()
 		n.nls.RUnlock()
-	}()
-	t.Running = make([]*notifListenMsg, 0, len(n.nls.m))
-	t.Finished = make([]*notifListenMsg, 0, len(n.fin.m))
+		return
+	}
+	t.Running = make([]*notifListenMsg, 0, n.nls.len())
+	t.Finished = make([]*notifListenMsg, 0, n.fin.len())
 	for _, nl := range n.nls.m {
 		t.Running = append(t.Running, newNLMsg(nl))
 	}
+	n.nls.RUnlock()
 
 	for _, nl := range n.fin.m {
 		t.Finished = append(t.Finished, newNLMsg(nl))
 	}
+	n.fin.RUnlock()
+
 	return jsoniter.Marshal(t)
 }
 
@@ -625,7 +633,9 @@ func (n *notifs) UnmarshalJSON(data []byte) (err error) {
 	}
 	for _, nl := range removed {
 		n.nls.del(nl, true /*locked*/)
-		glog.FastV(4, glog.SmoduleAIS).Infoln("merge: del " + nl.String())
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infoln("merge: del " + nl.String())
+		}
 	}
 	n.nls.Unlock()
 
