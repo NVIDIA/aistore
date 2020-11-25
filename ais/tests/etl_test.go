@@ -129,12 +129,12 @@ func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Bck: bck, Long: onlyLong, Cloud: cloud})
 
 	var (
-		testObjDir = filepath.Join("data", "transformer", transformer)
-		objName    = fmt.Sprintf("%s-object", transformer)
-
+		testObjDir             = filepath.Join("data", "transformer", transformer)
 		inputFileName          = filepath.Join(testObjDir, "object.in")
 		expectedOutputFileName = filepath.Join(testObjDir, "object.out")
-		outputFileName         = filepath.Join(os.TempDir(), objName+".out")
+
+		objName        = fmt.Sprintf("%s-%s-object", transformer, cmn.RandString(5))
+		outputFileName = filepath.Join(t.TempDir(), objName+".out")
 
 		uuid string
 	)
@@ -158,16 +158,15 @@ func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath
 	tutils.Logln("Putting object")
 	reader, err := readers.NewFileReaderFromFile(inputFileName, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	errCh := make(chan error, 1)
-	tutils.Put(proxyURL, bck, objName, reader, errCh)
-	tassert.SelectErr(t, errCh, "put", false)
 
-	if cloud {
-		// Evict object which was just put, to make sure that it is not stored locally.
-		tutils.EvictObjects(t, proxyURL, bck, []string{objName})
+	if !cloud {
+		tutils.PutObject(t, bck, objName, reader)
+	} else {
+		tutils.PutObjectInCloudBucketWithoutCachingLocally(t, bck, objName, reader)
 		defer func() {
-			// Could bucket is not destroyed, remove created object instead
-			tassert.CheckError(t, api.DeleteObject(baseParams, bck, objName))
+			// Could bucket is not destroyed, remove created object instead.
+			err := api.DeleteObject(baseParams, bck, objName)
+			tassert.CheckError(t, err)
 		}()
 	}
 
@@ -180,10 +179,7 @@ func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath
 
 	fho, err := cmn.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)
-	defer func() {
-		fho.Close()
-		cmn.RemoveFile(outputFileName)
-	}()
+	defer fho.Close()
 
 	tutils.Logf("Read %q\n", uuid)
 	err = api.ETLObject(baseParams, uuid, bck, objName, fho)

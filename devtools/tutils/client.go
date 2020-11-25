@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -43,22 +42,6 @@ const (
 const (
 	evictPrefetchTimeout = 2 * time.Minute
 )
-
-func PingURL(url string) (err error) {
-	var (
-		conn net.Conn
-		addr = strings.TrimPrefix(url, "http://")
-	)
-
-	if addr == url {
-		addr = strings.TrimPrefix(url, "https://")
-	}
-	conn, err = net.Dial("tcp", addr)
-	if err == nil {
-		conn.Close()
-	}
-	return
-}
 
 func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
 	if wg != nil {
@@ -101,6 +84,16 @@ func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, err
 	if err != nil {
 		errCh <- err
 	}
+}
+
+// PutObject sends a PUT request to the given URL.
+func PutObject(t *testing.T, bck cmn.Bck, objName string, reader readers.Reader) {
+	var (
+		proxyURL = RandomProxyURL()
+		errCh    = make(chan error, 1)
+	)
+	Put(proxyURL, bck, objName, reader, errCh)
+	tassert.SelectErr(t, errCh, "put", true)
 }
 
 // ListObjectNames returns a slice of object names of all objects that match the prefix in a bucket
