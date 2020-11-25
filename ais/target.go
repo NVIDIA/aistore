@@ -1551,9 +1551,8 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 
 	// 3a. promote dir
 	if finfo.IsDir() {
-		if promoteArgs.Verbose {
-			glog.Infof("%s: promote %+v", t.si, promoteArgs)
-		}
+		glog.V(4).Infof("%s: promote %+v", t.si, promoteArgs)
+
 		xact, err := xreg.RenewDirPromote(t, bck, srcFQN, &promoteArgs)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -1573,7 +1572,6 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		ObjName:   objName,
 		Overwrite: promoteArgs.Overwrite,
 		KeepOrig:  promoteArgs.KeepOrig,
-		Verbose:   promoteArgs.Verbose,
 	}
 	if _, err = t.PromoteFile(params); err != nil {
 		t.invalmsghdlrf(w, r, fmtErr+" %s", t.si, msg.Action, err.Error())

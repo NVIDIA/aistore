@@ -130,9 +130,8 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	return
 }
 
-//////
-// Promote AIS-colocated files and directories to objects (NOTE: advanced usage only)
-//////
+// Promote AIS-colocated files and directories to objects.
+
 func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err error) {
 	target := parseStrFlag(c, targetFlag)
 
@@ -142,10 +141,9 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 		Object:     objName,
 		Target:     target,
 		FQN:        fqn,
-		Recurs:     flagIsSet(c, recursiveFlag),
+		Recursive:  flagIsSet(c, recursiveFlag),
 		Overwrite:  c.Bool(overwriteFlag.GetName()),
 		KeepOrig:   c.Bool(keepOrigFlag.GetName()),
-		Verbose:    flagIsSet(c, verboseFlag),
 	}
 	if err = api.PromoteFileOrDir(promoteArgs); err != nil {
 		return
@@ -154,7 +152,7 @@ func promoteFileOrDir(c *cli.Context, bck cmn.Bck, objName, fqn string) (err err
 	return
 }
 
-// PUT methods
+// PUT methods.
 
 func putSingleObject(c *cli.Context, bck cmn.Bck, objName, path string) (err error) {
 	var (

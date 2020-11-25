@@ -105,7 +105,6 @@ type (
 		Cksum     *cmn.Cksum
 		Overwrite bool
 		KeepOrig  bool
-		Verbose   bool
 	}
 )
 

@@ -928,7 +928,6 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			Cksum:     partialCksum,
 			Overwrite: true,
 			KeepOrig:  false,
-			Verbose:   false,
 		}
 		if _, err := aoi.t.PromoteFile(params); err != nil {
 			return "", 0, err

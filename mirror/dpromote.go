@@ -84,7 +84,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
 	}
-	if !r.params.Recurs {
+	if !r.params.Recursive {
 		fname, err := filepath.Rel(r.dir, fqn)
 		cmn.AssertNoErr(err)
 		if strings.ContainsRune(fname, filepath.Separator) {
@@ -113,7 +113,6 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		ObjName:   objName,
 		Overwrite: r.params.Overwrite,
 		KeepOrig:  r.params.KeepOrig,
-		Verbose:   r.params.Verbose,
 	}
 	lom, err := r.Target().PromoteFile(params)
 	if err != nil {

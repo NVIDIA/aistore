@@ -380,9 +380,8 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	}
 	// remote; TODO: handle overwrite (lookup first)
 	if si.ID() != t.si.ID() {
-		if params.Verbose {
-			glog.Infof("promote/PUT %s => %s @ %s", params.SrcFQN, lom, si.ID())
-		}
+		glog.V(4).Infof("Attempt to promote %q => (lom: %q, target_id: %s)", params.SrcFQN, lom, si.ID())
+
 		lom.FQN = params.SrcFQN
 		var (
 			coi        = &copyObjInfo{t: t}
@@ -391,7 +390,8 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		coi.BckTo = lom.Bck()
 		_, _, err = coi.putRemote(lom, sendParams)
 		if err == nil && !params.KeepOrig {
-			os.Remove(params.SrcFQN)
+			err := cmn.RemoveFile(params.SrcFQN)
+			glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
 		}
 		return
 	}
@@ -399,43 +399,55 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	// local
 	err = lom.Load(false)
 	if err == nil && !params.Overwrite {
-		// TODO: handle the case where the object does not exist but there are
-		// two or more targets racing to override the same object with their local promotions
-		glog.Errorf("%s already exists", lom)
+		// TODO: Handle the case where the object does not exist but there are two
+		//  or more targets racing to override the same object with their local promotions.
+		glog.Errorf("[promote] %s already exists", lom)
 		return
 	}
-	if params.Verbose {
+	if glog.V(4) {
 		s := ""
 		if params.Overwrite {
-			s = "+"
+			s = " with overwrite"
 		}
-		glog.Infof("promote%s %s => %s", s, params.SrcFQN, lom)
+		glog.Infof("Attempt to promote%s %q => (lom: %q)", s, params.SrcFQN, lom)
 	}
+
 	var (
-		cksum   *cmn.CksumHash
-		fi      os.FileInfo
-		written int64
-		workFQN string
-		poi     = &putObjInfo{t: t, lom: lom}
-		conf    = lom.CksumConf()
+		cksum    *cmn.CksumHash
+		fileSize int64
+		workFQN  string
+		poi      = &putObjInfo{t: t, lom: lom}
 	)
-	if params.KeepOrig {
+
+	copyFile := params.KeepOrig
+	if !params.KeepOrig {
+		// To use `params.SrcFQN` as `workFQN` we must be sure that they are on
+		// the same device. Right now, we do it by ensuring that they are on the
+		// same mountpath but this is stronger assumption.
+		//
+		// TODO: Try to determine if `params.SrcFQN` and `dstFQN` are on the device
+		//  without requiring it to be on the same mountpath.
+		info, _, err := fs.ParseMpathInfo(params.SrcFQN)
+		copyFile = err != nil || info.Path != lom.ParsedFQN.MpathInfo.Path
+	}
+	if copyFile {
 		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
 		buf, slab := t.gmm.Alloc()
-		written, cksum, err = cmn.CopyFile(params.SrcFQN, workFQN, buf, conf.Type)
+		fileSize, cksum, err = cmn.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumConf().Type)
 		slab.Free(buf)
 		if err != nil {
 			return
 		}
 		lom.SetCksum(cksum.Clone())
 	} else {
-		workFQN = params.SrcFQN // use the file as it would be intermediate (work) file
-		fi, err = os.Stat(params.SrcFQN)
-		if err != nil {
+		workFQN = params.SrcFQN // Use the file as it would be intermediate (work) file.
+
+		var fi os.FileInfo
+		if fi, err = os.Stat(params.SrcFQN); err != nil {
 			return
 		}
-		written = fi.Size()
+		fileSize = fi.Size()
 
 		if params.Cksum != nil {
 			// Checksum already computed somewhere else.
@@ -457,10 +469,13 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 
 	cmn.Assert(workFQN != "")
 	poi.workFQN = workFQN
-	lom.SetSize(written)
-	_, err = poi.finalize()
-	if err == nil {
+	lom.SetSize(fileSize)
+	if _, err = poi.finalize(); err == nil {
 		nlom = lom
+		if !params.KeepOrig {
+			err := cmn.RemoveFile(params.SrcFQN)
+			glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)
+		}
 	}
 	return
 }

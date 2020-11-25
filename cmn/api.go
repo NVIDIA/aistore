@@ -30,10 +30,9 @@ type (
 	ActValPromote struct {
 		Target    string `json:"target"`
 		ObjName   string `json:"objname"`
-		Recurs    bool   `json:"recurs"`
+		Recursive bool   `json:"recursive"`
 		Overwrite bool   `json:"overwrite"`
 		KeepOrig  bool   `json:"keep_original"`
-		Verbose   bool   `json:"verbose"`
 	}
 	ActValDecommision struct {
 		DaemonID      string `json:"sid"`

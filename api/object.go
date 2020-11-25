@@ -58,10 +58,9 @@ type PromoteArgs struct {
 	Object     string
 	Target     string
 	FQN        string
-	Recurs     bool
+	Recursive  bool
 	Overwrite  bool
 	KeepOrig   bool
-	Verbose    bool
 }
 
 type AppendArgs struct {
@@ -401,10 +400,9 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	actMsg.Value = &cmn.ActValPromote{
 		Target:    args.Target,
 		ObjName:   args.Object,
-		Recurs:    args.Recurs,
+		Recursive: args.Recursive,
 		Overwrite: args.Overwrite,
 		KeepOrig:  args.KeepOrig,
-		Verbose:   args.Verbose,
 	}
 
 	args.BaseParams.Method = http.MethodPost
