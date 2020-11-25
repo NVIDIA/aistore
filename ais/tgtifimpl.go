@@ -380,8 +380,9 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 	}
 	// remote; TODO: handle overwrite (lookup first)
 	if si.ID() != t.si.ID() {
-		glog.V(4).Infof("Attempt to promote %q => (lom: %q, target_id: %s)", params.SrcFQN, lom, si.ID())
-
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Attempt to promote %q => (lom: %q, target_id: %s)", params.SrcFQN, lom, si.ID())
+		}
 		lom.FQN = params.SrcFQN
 		var (
 			coi        = &copyObjInfo{t: t}

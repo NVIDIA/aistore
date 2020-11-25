@@ -87,8 +87,10 @@ func (m *Manager) start() (err error) {
 
 	s := binary.BigEndian.Uint64(m.rs.TargetOrderSalt)
 	targetOrder := randomTargetOrder(s, m.smap.Tmap)
-	glog.V(4).Infof("final target in targetOrder => URL: %s, Daemon ID: %s",
-		targetOrder[len(targetOrder)-1].PublicNet.DirectURL, targetOrder[len(targetOrder)-1].DaemonID)
+	if glog.V(4) {
+		glog.Infof("final target in targetOrder => URL: %s, Daemon ID: %s",
+			targetOrder[len(targetOrder)-1].PublicNet.DirectURL, targetOrder[len(targetOrder)-1].DaemonID)
+	}
 
 	// Phase 2.
 	curTargetIsFinal, err := m.participateInRecordDistribution(targetOrder)
@@ -106,7 +108,9 @@ func (m *Manager) start() (err error) {
 			// rs.ShardSizeBytes) can be estimated.
 			avgCompressRatio := m.avgCompressionRatio()
 			shardSize = int64(float64(m.rs.OutputShardSize) / avgCompressRatio)
-			glog.V(4).Infof("estimated output shard size required before gzip compression: %d", shardSize)
+			if glog.V(4) {
+				glog.Infof("estimated output shard size required before gzip compression: %d", shardSize)
+			}
 		}
 
 		// Phase 3.

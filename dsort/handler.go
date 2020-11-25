@@ -151,14 +151,18 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	// given dSort job. Also bug where we could send abort (which triggers cleanup)
 	// to not yet initialized target.
 
-	glog.V(4).Infof("[%s] broadcasting init request to all targets", managerUUID)
+	if glog.V(4) {
+		glog.Infof("[%s] broadcasting init request to all targets", managerUUID)
+	}
 	path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Init, managerUUID)
 	responses := broadcast(http.MethodPost, path, nil, b, ctx.smapOwner.Get().Tmap)
 	if err := checkResponses(responses); err != nil {
 		return
 	}
 
-	glog.V(4).Infof("[%s] broadcasting start request to all targets", managerUUID)
+	if glog.V(4) {
+		glog.Infof("[%s] broadcasting start request to all targets", managerUUID)
+	}
 	path = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Start, managerUUID)
 	responses = broadcast(http.MethodPost, path, nil, nil, ctx.smapOwner.Get().Tmap)
 	if err := checkResponses(responses); err != nil {
@@ -610,7 +614,9 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		dsortManager.addCompressionSizes(compressed, uncompressed)
 		dsortManager.recManager.EnqueueRecords(records)
 		dsortManager.incrementReceived()
-		glog.V(4).Infof("total times received records from another target: %d", dsortManager.received.count.Load())
+		if glog.V(4) {
+			glog.Infof("total times received records from another target: %d", dsortManager.received.count.Load())
+		}
 	}
 }
 

@@ -123,7 +123,7 @@ const (
 	SmoduleFS
 	SmoduleReb
 	SmoduleEC
-	// NOTE: this guard is used to define size of 'smodules' array, make sure it is always last.
+	// NOTE: guard to define the size of 'smodules' array - make sure it is always the last.
 	_smoduleLast
 )
 

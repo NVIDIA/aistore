@@ -121,9 +121,10 @@ func (reb *Manager) rebSyncAndRun(md *rebArgs) error {
 }
 
 func (reb *Manager) rebPreInit(md *rebArgs) bool {
-	glog.FastV(4, glog.SmoduleReb).Infof("global reb (v%d) started pre init", md.id)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("global reb (v%d) started pre init", md.id)
+	}
 	// 1. check whether other targets are up and running
-	glog.FastV(4, glog.SmoduleReb).Infof("global reb broadcast (v%d)", md.id)
 	if errCnt := reb.bcast(md, reb.pingTarget); errCnt > 0 {
 		return false
 	}
@@ -133,7 +134,9 @@ func (reb *Manager) rebPreInit(md *rebArgs) bool {
 
 	// 2. serialize (rebalancing operations - one at a time post this point)
 	//    start new xaction unless the one for the current version is already in progress
-	glog.FastV(4, glog.SmoduleReb).Infof("global reb serialize (v%d)", md.id)
+	if glog.FastV(4, glog.SmoduleReb) {
+		glog.Infof("global reb serialize (v%d)", md.id)
+	}
 	if newerRMD, alreadyRunning := reb.serialize(md); newerRMD || alreadyRunning {
 		return false
 	}

@@ -1551,8 +1551,9 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 
 	// 3a. promote dir
 	if finfo.IsDir() {
-		glog.V(4).Infof("%s: promote %+v", t.si, promoteArgs)
-
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s: promote %+v", t.si, promoteArgs)
+		}
 		xact, err := xreg.RenewDirPromote(t, bck, srcFQN, &promoteArgs)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
