@@ -237,6 +237,15 @@ func (n *notifs) find(flt nlFilter) (nl nl.NotifListener, exists bool) {
 	return
 }
 
+func (n *notifs) size() (size int) {
+	n.nls.RLock()
+	n.fin.RLock()
+	size = n.nls.len() + n.fin.len()
+	n.fin.RUnlock()
+	n.nls.RUnlock()
+	return
+}
+
 // verb /v1/notifs/[progress|finished]
 func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -588,8 +597,10 @@ func (n *notifs) MarshalJSON() (data []byte, err error) {
 }
 
 func (n *notifs) UnmarshalJSON(data []byte) (err error) {
+	if len(data) == 0 {
+		return
+	}
 	t := jsonNotifs{}
-
 	if err = jsoniter.Unmarshal(data, &t); err != nil {
 		return
 	}

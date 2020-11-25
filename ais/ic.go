@@ -271,7 +271,6 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		msg  = &aisMsg{}
 	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
-		ic.p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if !smap.IsIC(ic.p.si) {
@@ -359,6 +358,12 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
 }
 
 func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
+	if ic.p.notifs.size() == 0 {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s: ownership table empty, skipping sending to %s", ic.p.si, si)
+		}
+		return nil
+	}
 	actMsg := &cmn.ActionMsg{Action: cmn.ActMergeOwnershipTbl, Value: &ic.p.notifs}
 	msg := ic.p.newAisMsg(actMsg, nil, nil)
 	result := ic.p.call(callArgs{
