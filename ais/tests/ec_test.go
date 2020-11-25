@@ -1995,61 +1995,6 @@ func TestECEmergencyMpath(t *testing.T) {
 	}
 }
 
-// NOTE: wipes out all content including ais system files and user data
-func deleteAllFiles(t *testing.T, path string) {
-	if len(path) < 5 {
-		t.Fatalf("Invalid path %q", path)
-		return
-	}
-	walkDel := func(fqn string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if tutils.IsTrashDir(path) {
-			return filepath.SkipDir
-		}
-		if info.IsDir() {
-			return nil
-		}
-		cmn.Assert(len(fqn) > 5)
-		if err := os.Remove(fqn); err != nil {
-			t.Logf("Failed to delete %q: %v", fqn, err)
-		}
-		return nil
-	}
-	filepath.Walk(path, walkDel)
-}
-
-func moveAllFiles(t *testing.T, pathFrom, pathTo string) {
-	if len(pathFrom) < 5 || len(pathTo) < 5 {
-		t.Fatalf("Invalid path %q or %q", pathFrom, pathTo)
-		return
-	}
-	walkMove := func(fqn string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if tutils.IsTrashDir(fqn) {
-			return filepath.SkipDir
-		}
-		if info.IsDir() {
-			return nil
-		}
-		cmn.Assert(len(fqn) > 5)
-		newPath := filepath.Join(pathTo, strings.TrimPrefix(fqn, pathFrom))
-		newDir := filepath.Dir(newPath)
-		if err := cmn.CreateDir(newDir); err != nil {
-			t.Logf("Failed to create directory %q: %v", newDir, err)
-			return nil
-		}
-		if err := os.Rename(fqn, newPath); err != nil {
-			t.Logf("Failed to move %q to %q: %v", fqn, newPath, err)
-		}
-		return nil
-	}
-	filepath.Walk(pathFrom, walkMove)
-}
-
 func TestECRebalance(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	if containers.DockerRunning() {
@@ -2082,6 +2027,37 @@ func TestECRebalance(t *testing.T) {
 	}
 }
 
+func TestECMountpaths(t *testing.T) {
+	if containers.DockerRunning() {
+		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
+	}
+
+	var (
+		bck = cmn.Bck{
+			Name:     testBucketName + "-ec-mpaths",
+			Provider: cmn.ProviderAIS,
+		}
+		proxyURL = tutils.RandomProxyURL()
+	)
+	o := ecOptions{
+		objCount:    30,
+		concurrency: 8,
+		pattern:     "obj-reb-mp-%04d",
+		silent:      true,
+	}.init(t, proxyURL)
+
+	for _, test := range ecTests {
+		t.Run(test.name, func(t *testing.T) {
+			if o.smap.CountActiveTargets() <= test.parity+test.data {
+				t.Skip("insufficient number of targets")
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			ecMountpaths(t, o, proxyURL, bck)
+		})
+	}
+}
+
 // The test only checks that the number of object after rebalance equals
 // the number of objects before it
 func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
@@ -2110,49 +2086,20 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects created, starting rebalance\n", len(oldBucketList.Entries))
 
-	// select a target that loses its mpath(simulate drive death),
-	// and that has mpaths changed (simulate mpath added)
-	tgtList := o.smap.Tmap.ActiveNodes()
-	tgtLost, tgtSwap := tgtList[0], tgtList[1]
-
-	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
-	tassert.CheckFatal(t, err)
-	if len(lostFSList.Available) < 2 {
-		t.Fatalf("%s has only %d mountpaths, need at least 2", tgtLost.ID(), len(lostFSList.Available))
-	}
-	swapFSList, err := api.GetMountpaths(baseParams, tgtSwap)
-	tassert.CheckFatal(t, err)
-	if len(swapFSList.Available) < 2 {
-		t.Fatalf("%s has only %d mountpaths, need at least 2", tgtSwap.ID(), len(swapFSList.Available))
-	}
-
-	// make troubles in mpaths
-	// 1. Remove an mpath (only if parity is greater than 1, otherwise this
-	//    step and the next one running together can delete all object data in
-	//    case of the object is replicated)
-	if o.parityCnt > 1 {
-		lostPath := lostFSList.Available[0]
-		tutils.Logf("Removing mountpath %q on target %s\n", lostPath, tgtLost.ID())
-		tutils.CheckPathExists(t, lostPath, true /*dir*/)
-		deleteAllFiles(t, lostPath)
-	}
-
-	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
-	// delete obj1 & delete meta1; rename obj2 -> ob1, and meta2 -> meta1
-	swapPathObj1 := swapFSList.Available[0]
-	tutils.Logf("Removing mountpath %q on target %s\n", swapPathObj1, tgtSwap.ID())
-	tutils.CheckPathExists(t, swapPathObj1, true /*dir*/)
-	deleteAllFiles(t, swapPathObj1)
-
-	swapPathObj2 := swapFSList.Available[1]
-	tutils.Logf("Renaming mountpath %q -> %q on target %s\n", swapPathObj2, swapPathObj1, tgtSwap.ID())
-	tutils.CheckPathExists(t, swapPathObj2, true /*dir*/)
-	moveAllFiles(t, swapPathObj2, swapPathObj1)
-
 	// Kill a random target
 	_, removedTarget := tutils.RemoveTarget(t, proxyURL, o.smap)
+	defer func() {
+		rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
+		tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
+	}()
+
 	// Initiate rebalance
-	rebID, _ := tutils.RestoreTarget(t, proxyURL, removedTarget)
+	args := api.XactReqArgs{
+		Kind: cmn.ActRebalance,
+		Bck:  bck,
+	}
+	rebID, err := api.StartXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
 	tutils.WaitForRebalanceByID(t, baseParams, rebID, rebalanceTimeout)
 
 	newBucketList, err := api.ListObjects(baseParams, bck, msg, 0)
@@ -2687,5 +2634,69 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	if len(resECNew.Entries) != len(resECOld.Entries) {
 		t.Errorf("Incorrect number of objects: %d (expected %d)",
 			len(resECNew.Entries), len(resECOld.Entries))
+	}
+}
+
+// The test only checks that the number of object after rebalance equals
+// the number of objects before it
+func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
+	type removedMpath struct {
+		si    *cluster.Snode
+		mpath string
+	}
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
+
+	wg := sync.WaitGroup{}
+	wg.Add(o.objCount)
+	for i := 0; i < o.objCount; i++ {
+		objName := fmt.Sprintf(o.pattern, i)
+		go func(i int) {
+			defer wg.Done()
+			createECObject(t, baseParams, bck, objName, i, o)
+		}(i)
+	}
+	wg.Wait()
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsSize}
+	bucketList, err := api.ListObjects(baseParams, bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tutils.Logf("%d objects created, removing %d mountpaths\n", len(bucketList.Entries), o.parityCnt)
+
+	allMpaths := tutils.GetTargetsMountpaths(t, o.smap, baseParams)
+	removed := make(map[string]*removedMpath, o.parityCnt)
+	defer func() {
+		for _, rmMpath := range removed {
+			err := api.AddMountpath(baseParams, rmMpath.si, rmMpath.mpath)
+			tassert.CheckError(t, err)
+		}
+	}()
+	// Choose `parity` random mpaths and disable them
+	i := 0
+	for sid, paths := range allMpaths {
+		mpath := paths[rand.Intn(len(paths))]
+		uid := sid + "/" + mpath
+		if _, ok := removed[uid]; ok {
+			continue
+		}
+		err := api.RemoveMountpath(baseParams, sid, mpath)
+		tassert.CheckFatal(t, err)
+		rmMpath := &removedMpath{si: o.smap.GetTarget(sid), mpath: mpath}
+		removed[uid] = rmMpath
+		i++
+		tutils.Logf("%d. Disabled %s : %s\n", i, sid, mpath)
+		if i >= o.parityCnt {
+			break
+		}
+	}
+
+	for _, entry := range bucketList.Entries {
+		_, err := api.GetObject(baseParams, bck, entry.Name)
+		tassert.CheckError(t, err)
 	}
 }

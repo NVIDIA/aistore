@@ -475,7 +475,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	for i, sl := range slices {
 		if sl != nil && sl.writer != nil {
 			sz := sl.n
-			if glog.V(4) {
+			if glog.FastV(4, glog.SmoduleEC) {
 				glog.Infof("Got slice %d size %d (want %d) of %s/%s",
 					i+1, sz, sliceSize, req.LOM.Bck(), req.LOM.ObjName)
 			}
@@ -516,7 +516,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	// reconstruct the main object from slices
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Reconstructing %s/%s", req.LOM.Bck(), req.LOM.ObjName)
 	}
 	stream, err := reedsolomon.NewStreamC(meta.Data, meta.Parity, true, true)
@@ -583,7 +583,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	src := io.MultiReader(srcReaders...)
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Saving main object %s/%s to %q", req.LOM.Bck(), req.LOM.ObjName, req.LOM.FQN)
 	}
 
@@ -645,7 +645,7 @@ func (c *getJogger) emptyTargets(req *Request, meta *Metadata, idToNode map[int]
 		}
 		empty = append(empty, t.ID())
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Empty nodes for %s/%s are %#v", req.LOM.Bck(), req.LOM.ObjName, empty)
 	}
 	return empty, nil
@@ -695,7 +695,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 			reqType:  reqPut,
 		}
 
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleEC) {
 			glog.Infof("Sending slice %d %s/%s to %s", sliceMeta.SliceID, req.LOM.Bck(), req.LOM.ObjName, tid)
 		}
 
@@ -724,7 +724,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 // * meta - rebuild object's metadata
 // * nodes - the list of targets that responded with valid metadata
 func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[string]*Metadata, toDisk bool) error {
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Starting EC restore %s/%s", req.LOM.Bck(), req.LOM.ObjName)
 	}
 
@@ -765,12 +765,12 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 		// do not free `restored` here - it is done in transport callback when
 		// transport completes sending restored slices to correct target
 		freeSlices(slices)
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleEC) {
 			glog.Infof("Slices %s/%s restored successfully", req.LOM.Bck(), req.LOM.ObjName)
 		}
 	}()
 
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Main object %s/%s restored successfully", req.LOM.Bck(), req.LOM.ObjName)
 	}
 	freeWriters()
@@ -783,11 +783,11 @@ func (c *getJogger) restore(req *Request, toDisk bool) error {
 		return ErrorECDisabled
 	}
 
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Restoring %s/%s", req.LOM.Bck(), req.LOM.ObjName)
 	}
 	meta, nodes, err := c.requestMeta(req)
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Find meta for %s/%s: %v, err: %v", req.LOM.Bck(), req.LOM.ObjName, meta != nil, err)
 	}
 	if err != nil {
@@ -827,7 +827,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 			defer wg.Done()
 			md, err := requestECMeta(req.LOM.Bck().Bck, req.LOM.ObjName, si, c.client)
 			if err != nil {
-				if glog.V(4) {
+				if glog.FastV(4, glog.SmoduleEC) {
 					glog.Infof("No EC meta %s from %s: %v", req.LOM.ObjName, si, err)
 				}
 				return
