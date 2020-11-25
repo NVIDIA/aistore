@@ -92,7 +92,7 @@ var _ = Describe("newConcAdjuster", func() {
 		cfg := cmn.GCO.Get()
 
 		var (
-			perfectLimit = 42
+			perfectLimit = 13
 			perfectUtil  = int(cfg.Disk.DiskUtilMaxWM+cfg.Disk.DiskUtilHighWM) / 2
 		)
 		availablePaths, _ := fs.Get()
@@ -111,7 +111,7 @@ var _ = Describe("newConcAdjuster", func() {
 			})
 
 			// If we get enough close we can just break
-			if cmn.Abs(curLimit-perfectLimit) <= 2 {
+			if cmn.Abs(curLimit-perfectLimit) <= 1 {
 				break
 			}
 

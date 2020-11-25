@@ -226,7 +226,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// because we will skip a lot shards (which do not belong to us).
 	m.extractionPhase.adjuster = newConcAdjuster(
 		rs.ExtractConcMaxLimit,
-		3*targetCount, /*goroutineLimitCoef*/
+		2*targetCount, /*goroutineLimitCoef*/
 	)
 
 	// Fill ack map with current daemons. Once the finished ack is received from

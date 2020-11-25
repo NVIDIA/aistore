@@ -40,9 +40,9 @@ const (
 	// Setting this too high can result in big number of goroutines in the system
 	// what can put tremendous pressure on scheduler and other goroutines in the
 	// system - eg. http handlers which are spawned in new goroutines.
-	maxConcFuncPerDiskLimit = 50
+	maxConcFuncPerDiskLimit = 15
 	// Determines maximal concurrency limit per dSort per node.
-	maxConcFuncPerDSortLimit = 500
+	maxConcFuncPerDSortLimit = 200
 	// TODO: add global max concurrency limit - should be preserved between
 	//  all dSorts on single node.
 
