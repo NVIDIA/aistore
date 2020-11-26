@@ -588,7 +588,7 @@ func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 		loaded, err = h.owner.smap.load(smap, config)
 	)
 	if err != nil {
-		glog.Errorf("Failed to load smap (err: %v)", err)
+		glog.Errorf("Failed to load Smap (err: %v)", err)
 		smap = newSmap() // Reinitialize smap as it might have been corrupted during loading.
 	} else if loaded {
 		reliable = true

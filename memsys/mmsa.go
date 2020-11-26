@@ -6,6 +6,7 @@
 package memsys
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"runtime"
@@ -342,7 +343,9 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		}
 	}
 	hk.Reg(r.Name+".gc", r.garbageCollect, d)
-	debug.Infof("mmsa %q started", r.Name)
+	if debug.Enabled && flag.Parsed() {
+		debug.Infof("mmsa %q started", r.Name)
+	}
 	return
 }
 
