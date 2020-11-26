@@ -34,12 +34,6 @@ func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error)
 		kind := obj.GetObjectKind().GroupVersionKind().Kind
 		return nil, cmn.NewETLError(errCtx, "expected pod spec, got: %s", kind)
 	}
-	if _, ok := pod.Labels[appLabel]; !ok {
-		if pod.Labels == nil {
-			pod.Labels = map[string]string{}
-		}
-		pod.Labels[appLabel] = pod.GetName() + "-app"
-	}
 	return pod, nil
 }
 

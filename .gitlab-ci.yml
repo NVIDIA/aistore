@@ -189,8 +189,7 @@ test:aisloader:
   tags:
     - ais-kube
   before_script:
-    - kubectl delete pods -l nvidia.com/ais-etl-target # TODO: this can be removed once the lifecycle of transformers is implemented.
-    - kubectl delete svc -l nvidia.com/ais-etl-svc # TODO: this can be removed once the lifecycle of transformers is implemented.
+    - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
 
 test:kube-short:
   stage: test-short

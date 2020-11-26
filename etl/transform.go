@@ -23,13 +23,19 @@ import (
 )
 
 const (
-	// built-in label https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels
+	// Built-in label: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#built-in-node-labels.
 	nodeNameLabel = "kubernetes.io/hostname"
 
-	podNameLabel = "nvidia.com/ais-etl"
-	svcNameLabel = "nvidia.com/ais-etl-svc"
+	// Recommended labels: https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/.
+	appK8sNameLabel      = "app.kubernetes.io/name"
+	appK8sComponentLabel = "app.kubernetes.io/component"
+
+	// ETL Custom labels.
+	podNameLabel = "nvidia.com/ais-etl-name"
+	svcNameLabel = "nvidia.com/ais-etl-name"
 
 	// ETL Pod's label describing which target ETL is associated with.
+	podNodeLabel   = "nvidia.com/ais-etl-node"
 	podTargetLabel = "nvidia.com/ais-etl-target"
 )
 
@@ -193,6 +199,9 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	}
 
 	cmn.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
+
+	// TODO: Move below code into `createPodSpec`.
+
 	// Parse spec template.
 	if pod, err = ParsePodSpec(errCtx, msg.Spec); err != nil {
 		return
@@ -201,18 +210,8 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	originalPodName = pod.GetName()
 
 	// Override the name (add target's daemon ID and node ID to its name).
-	pod.SetName(k8s.CleanName(pod.GetName() + "-" + t.Snode().DaemonID + "-" + k8s.NodeName))
+	pod.SetName(k8s.CleanName(pod.GetName() + "-" + t.Snode().ID()))
 	errCtx.PodName = pod.GetName()
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string, 1)
-	}
-
-	pod.Labels[podTargetLabel] = k8s.NodeName
-	pod.Labels[podNameLabel] = pod.GetName()
-
-	// Create service spec
-	svc = createServiceSpec(pod)
-	errCtx.SvcName = svc.Name
 
 	// The following combination of Affinity and Anti-Affinity allows one to
 	// achieve the following:
@@ -222,13 +221,17 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	if err = setTransformAffinity(errCtx, pod); err != nil {
 		return
 	}
-
 	if err = setTransformAntiAffinity(errCtx, pod); err != nil {
 		return
 	}
 
+	updatePodLabels(t, pod)
 	updateReadinessProbe(pod)
 	setPodEnvVariables(t, pod, customEnv)
+
+	// Create service spec.
+	svc = createServiceSpec(pod)
+	errCtx.SvcName = svc.Name
 
 	// 1. Cleanup previously started entities (if any).
 	_ = cleanupEntities(errCtx, pod.Name, svc.Name)
@@ -306,17 +309,13 @@ func checkETLConnection(socketAddr string) error {
 }
 
 func createServiceSpec(pod *corev1.Pod) *corev1.Service {
-	return &corev1.Service{
+	svc := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: pod.GetName(),
-			Labels: map[string]string{
-				svcNameLabel: pod.GetName(),
-				appLabel:     pod.Labels[appLabel],
-			},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -329,6 +328,8 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 			Type: corev1.ServiceTypeNodePort,
 		},
 	}
+	updateServiceLabels(svc)
+	return svc
 }
 
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
@@ -470,6 +471,30 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) erro
 	}
 
 	return nil
+}
+
+func updatePodLabels(t cluster.Target, pod *corev1.Pod) {
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string, 6)
+	}
+
+	pod.Labels[appLabel] = "ais"
+	pod.Labels[podNameLabel] = pod.GetName()
+	pod.Labels[podNodeLabel] = k8s.NodeName
+	pod.Labels[podTargetLabel] = t.Snode().ID()
+	pod.Labels[appK8sNameLabel] = "etl"
+	pod.Labels[appK8sComponentLabel] = "server"
+}
+
+func updateServiceLabels(svc *corev1.Service) {
+	if svc.Labels == nil {
+		svc.Labels = make(map[string]string, 4)
+	}
+
+	svc.Labels[appLabel] = "ais"
+	svc.Labels[svcNameLabel] = svc.GetName()
+	svc.Labels[appK8sNameLabel] = "etl"
+	svc.Labels[appK8sComponentLabel] = "server"
 }
 
 func updateReadinessProbe(pod *corev1.Pod) {
