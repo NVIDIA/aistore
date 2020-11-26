@@ -17,7 +17,7 @@ const (
 func TestTimeoutStatsForDaemon(t *testing.T) {
 	k := &keepalive{
 		tt:               &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)},
-		maxKeepaliveTime: float64(maxKeepaliveTime.Nanoseconds()),
+		maxKeepaliveTime: float64(maxKeepaliveTime),
 	}
 	ts := k.timeoutStatsForDaemon(daemonID)
 	if ts == nil {
@@ -41,7 +41,7 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 	{
 		k := &keepalive{
 			tt:               &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)},
-			maxKeepaliveTime: float64(maxKeepaliveTime.Nanoseconds()),
+			maxKeepaliveTime: float64(maxKeepaliveTime),
 		}
 		initial := k.timeoutStatsForDaemon(daemonID)
 		nextRTT := time.Duration(initial.srtt * 0.75)
@@ -56,7 +56,7 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 	{
 		k := &keepalive{
 			tt:               &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)},
-			maxKeepaliveTime: float64(maxKeepaliveTime.Nanoseconds()),
+			maxKeepaliveTime: float64(maxKeepaliveTime),
 		}
 		initial := k.timeoutStatsForDaemon(daemonID)
 		nextRTT := time.Duration(initial.srtt * 1.1)
@@ -69,15 +69,16 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 	{
 		k := &keepalive{
 			tt:               &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)},
-			maxKeepaliveTime: minKeepaliveTime,
+			maxKeepaliveTime: float64(maxKeepaliveTime),
 		}
 		for i := 0; i < 100; i++ {
 			initial := k.timeoutStatsForDaemon(daemonID)
 			nextRTT := time.Duration(initial.srtt * 0.25)
 			nextTimeout := k.updateTimeoutForDaemon(daemonID, nextRTT)
-			if nextTimeout != time.Duration(minKeepaliveTime) {
+			// Eventually, the `nextTimeout` must converge and stop at `maxKeepaliveTime/2`.
+			if i > 25 && nextTimeout != maxKeepaliveTime/2 {
 				t.Errorf("updated timeout: %v should be equal to the min keepalive timeout: %v",
-					nextTimeout, time.Duration(minKeepaliveTime))
+					nextTimeout, maxKeepaliveTime/2)
 			}
 		}
 	}

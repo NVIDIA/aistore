@@ -35,8 +35,6 @@ var (
 	_ keepaliver         = (*proxyKeepaliveRunner)(nil)
 )
 
-var minKeepaliveTime = float64(time.Second.Nanoseconds())
-
 type keepaliver interface {
 	onerr(err error, status int)
 	heardFrom(sid string, reset bool)
@@ -464,7 +462,15 @@ func (k *keepalive) register(sendKeepalive func(time.Duration) (int, error), pri
 			i++
 			now = mono.NanoTime()
 			status, err = sendKeepalive(timeout)
-			timeout = k.updateTimeoutForDaemon(primaryProxyID, mono.Since(now))
+			delta := mono.Since(now)
+			// In case the error is some kind of connection error, the round-trip
+			// could be much shorter than the specified `timeout`. In such case
+			// we want to report the worst-case scenario, otherwise we could possibly
+			// decrease next retransmission timeout (which doesn't make much sense).
+			if cmn.IsErrConnectionRefused(err) || cmn.IsErrConnectionReset(err) {
+				delta = time.Duration(k.maxKeepaliveTime)
+			}
+			timeout = k.updateTimeoutForDaemon(primaryProxyID, delta)
 			if err == nil {
 				glog.Infof("%s: keepalive OK after %d attempt(s)", hname, i)
 				return
@@ -499,9 +505,7 @@ func (k *keepalive) updateTimeoutForDaemon(sid string, t time.Duration) time.Dur
 	ts.rttvar = (1-beta)*ts.rttvar + beta*(math.Abs(ts.srtt-next))
 	ts.srtt = (1-alpha)*ts.srtt + alpha*next
 	ts.timeout = math.Min(k.maxKeepaliveTime, ts.srtt+c*ts.rttvar)
-	if ts.timeout < minKeepaliveTime {
-		ts.timeout = minKeepaliveTime
-	}
+	ts.timeout = math.Max(ts.timeout, k.maxKeepaliveTime/2)
 	return time.Duration(ts.timeout)
 }
 
