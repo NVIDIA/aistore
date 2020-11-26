@@ -462,7 +462,7 @@ func setTransformAntiAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) erro
 		reqAntiAffinities = []corev1.PodAffinityTerm{{
 			LabelSelector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					podTargetLabel: k8s.NodeName,
+					podNodeLabel: k8s.NodeName,
 				},
 			},
 			TopologyKey: nodeNameLabel,
