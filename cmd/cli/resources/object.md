@@ -8,6 +8,7 @@
 - [Delete objects](#delete-objects)
 - [Evict objects](#evict-objects)
 - [Prefetch objects](#prefetch-objects)
+- [Preload objects](#preload-bucket)
 - [Rename object](#rename-object)
 - [Concat objects](#concat-objects)
 
@@ -579,6 +580,18 @@ Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and sto
 
 ```console
 $ ais start prefetch aws://cloudbucket --list 'o1,o2,o3'
+```
+
+## Preload bucket
+
+`ais start preload BUCKET_NAME`
+
+Preload bucket's objects metadata into in-memory caches.
+
+### Examples
+
+```console
+$ ais start preload ais://bucket
 ```
 
 ## Rename object

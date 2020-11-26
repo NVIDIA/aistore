@@ -67,6 +67,13 @@ var (
 					BashComplete: bucketCompletions(bckCompletionsOpts{multiple: true}),
 				},
 				{
+					Name:         subcmdPreload,
+					Usage:        "preload objects metadata into in-memory caches",
+					ArgsUsage:    bucketArgument,
+					Action:       loadLomCacheHandler,
+					BashComplete: bucketCompletions(),
+				},
+				{
 					Name:      subcmdStartDownload,
 					Usage:     "start a download job (downloads objects from external source)",
 					ArgsUsage: startDownloadArgument,
@@ -163,13 +170,23 @@ func startXactionHandler(c *cli.Context) (err error) {
 		return err
 	}
 
+	return startXaction(c, xactKind, bck)
+}
+
+func startXaction(c *cli.Context, xactKind string, bck cmn.Bck) (err error) {
+	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
+		return err
+	}
+
 	var (
 		id       string
 		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck}
 	)
+
 	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {
 		return
 	}
+
 	if id != "" {
 		fmt.Fprintf(c.App.Writer, "Started %s %q, %s\n", xactKind, id, xactProgressMsg(id))
 	} else {

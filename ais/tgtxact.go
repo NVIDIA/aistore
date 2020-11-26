@@ -126,6 +126,15 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
+
+	if !xaction.IsValid(xactMsg.Kind) {
+		return fmt.Errorf("unknown %q xaction kind", xactMsg.Kind)
+	}
+
+	if dtor := xaction.XactsDtor[xactMsg.Kind]; dtor.Type == xaction.XactTypeBck && bck == nil {
+		return fmt.Errorf(erfmn, xactMsg.Kind)
+	}
+
 	switch xactMsg.Kind {
 	// 1. globals
 	case cmn.ActLRU:
@@ -147,12 +156,10 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 		go t.runResilver(xactMsg.ID, false /*skipGlobMisplaced*/, notif)
 	// 2. with bucket
 	case cmn.ActPrefetch:
-		if bck == nil {
-			return fmt.Errorf(erfmn, xactMsg.Kind)
-		}
 		args := &xreg.DeletePrefetchArgs{
 			Ctx:      context.Background(),
 			RangeMsg: &cmn.RangeMsg{},
+			UUID:     xactMsg.ID,
 		}
 		xact := xreg.RenewPrefetch(t, bck, args)
 		xact.AddNotif(&xaction.NotifXact{
@@ -164,6 +171,8 @@ func (t *targetrunner) cmdXactStart(xactMsg *xaction.XactReqMsg, bck *cluster.Bc
 			Xact: xact,
 		})
 		go xact.Run()
+	case cmn.ActLoadLomCache:
+		return xreg.RenewBckLoadLomCache(t, xactMsg.ID, bck)
 	// 3. cannot start
 	case cmn.ActPutCopies:
 		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", xactMsg)

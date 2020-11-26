@@ -17,6 +17,7 @@ type (
 	llcProvider struct {
 		t    cluster.Target
 		xact *xactLLC
+		uuid string
 	}
 	xactLLC struct {
 		xactBckBase
@@ -27,11 +28,11 @@ type (
 var _ cluster.Xact = (*xactLLC)(nil)
 
 func (*llcProvider) New(args xreg.XactArgs) xreg.BucketEntry {
-	return &llcProvider{t: args.T}
+	return &llcProvider{t: args.T, uuid: args.UUID}
 }
 
 func (p *llcProvider) Start(bck cmn.Bck) error {
-	xact := newXactLLC(p.t, bck)
+	xact := newXactLLC(p.t, p.uuid, bck)
 	p.xact = xact
 	go xact.Run()
 	return nil
@@ -43,8 +44,8 @@ func (p *llcProvider) Get() cluster.Xact { return p.xact }
 func (p *llcProvider) PreRenewHook(_ xreg.BucketEntry) (bool, error) { return true, nil }
 func (p *llcProvider) PostRenewHook(_ xreg.BucketEntry)              {}
 
-func newXactLLC(t cluster.Target, bck cmn.Bck) *xactLLC {
-	return &xactLLC{xactBckBase: *newXactBckBase("", cmn.ActLoadLomCache, bck, &mpather.JoggerGroupOpts{
+func newXactLLC(t cluster.Target, uuid string, bck cmn.Bck) *xactLLC {
+	return &xactLLC{xactBckBase: *newXactBckBase(uuid, cmn.ActLoadLomCache, bck, &mpather.JoggerGroupOpts{
 		T:        t,
 		Bck:      bck,
 		CTs:      []string{fs.ObjectType},

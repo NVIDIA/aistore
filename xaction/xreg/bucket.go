@@ -190,13 +190,13 @@ func (r *registry) renewDirPromote(t cluster.Target, bck *cluster.Bck, dir strin
 	})
 }
 
-func RenewBckLoadLomCache(t cluster.Target, bck *cluster.Bck) {
-	defaultReg.renewBckLoadLomCache(t, bck)
+func RenewBckLoadLomCache(t cluster.Target, uuid string, bck *cluster.Bck) (err error) {
+	_, err = defaultReg.renewBckLoadLomCache(t, uuid, bck)
+	return
 }
 
-func (r *registry) renewBckLoadLomCache(t cluster.Target, bck *cluster.Bck) {
-	_, err := r.renewBucketXact(cmn.ActLoadLomCache, bck, XactArgs{T: t})
-	cmn.AssertNoErr(err)
+func (r *registry) renewBckLoadLomCache(t cluster.Target, uuid string, bck *cluster.Bck) (cluster.Xact, error) {
+	return r.renewBucketXact(cmn.ActLoadLomCache, bck, XactArgs{T: t, UUID: uuid})
 }
 
 func RenewPutMirror(lom *cluster.LOM) cluster.Xact {

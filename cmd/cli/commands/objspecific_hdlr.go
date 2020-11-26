@@ -148,6 +148,23 @@ func prefetchHandler(c *cli.Context) (err error) {
 	return missingArgumentsError(c, "object list or range")
 }
 
+func loadLomCacheHandler(c *cli.Context) (err error) {
+	var bck cmn.Bck
+
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket name")
+	}
+	if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "too many arguments")
+	}
+
+	if bck, err = parseBckURI(c, c.Args().First()); err != nil {
+		return err
+	}
+
+	return startXaction(c, cmn.ActLoadLomCache, bck)
+}
+
 func evictHandler(c *cli.Context) (err error) {
 	var (
 		bck     cmn.Bck

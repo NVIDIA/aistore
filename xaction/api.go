@@ -80,7 +80,7 @@ var XactsDtor = map[string]XactDescriptor{
 	cmn.ActECEncode:      {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
 	cmn.ActEvictObjects:  {Type: XactTypeBck, Startable: false, Mountpath: true},
 	cmn.ActDelete:        {Type: XactTypeBck, Startable: false, Mountpath: true},
-	cmn.ActLoadLomCache:  {Type: XactTypeBck, Startable: false, Mountpath: true},
+	cmn.ActLoadLomCache:  {Type: XactTypeBck, Startable: true, Mountpath: true},
 	cmn.ActPrefetch:      {Type: XactTypeBck, Startable: true},
 	cmn.ActPromote:       {Type: XactTypeBck, Startable: false, RefreshCap: true},
 	cmn.ActQueryObjects:  {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},

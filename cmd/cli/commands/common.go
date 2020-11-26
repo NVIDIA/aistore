@@ -140,6 +140,9 @@ const (
 	subcmdAuthRole    = "role"
 	subcmdAuthCluster = "cluster"
 
+	// Warm up subcommands
+	subcmdPreload = "preload"
+
 	// Default values for long running operations
 	refreshRateDefault = time.Second
 	countDefault       = 1
