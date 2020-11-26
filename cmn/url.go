@@ -28,6 +28,15 @@ const (
 
 func IsHTTPS(url string) bool { return strings.HasPrefix(url, "https://") }
 func IsHTTP(url string) bool  { return strings.HasPrefix(url, "http://") }
+func ParseURL(s string) (u *url.URL, valid bool) {
+	if s == "" {
+		return
+	}
+	var err error
+	u, err = url.Parse(s)
+	valid = err == nil && u.Scheme != "" && u.Host != ""
+	return
+}
 
 func IsGoogleStorageURL(u *url.URL) bool {
 	return u.Host == gsStorageURL

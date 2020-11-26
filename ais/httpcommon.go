@@ -1481,12 +1481,16 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 // - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
-func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResult) {
+func (h *httprunner) join(query url.Values, contactURLs ...string) (res callResult) {
 	var (
-		config       = cmn.GCO.Get()
-		candidates   = make([]string, 0, 4+len(primaryURLs))
-		addCandidate = func(url string) {
-			if url == "" {
+		config                   = cmn.GCO.Get()
+		candidates               = make([]string, 0, 4+len(contactURLs))
+		selfPublicURL, pubValid  = cmn.ParseURL(h.si.URL(cmn.NetworkPublic))
+		selfIntraURL, intraValid = cmn.ParseURL(h.si.URL(cmn.NetworkIntraControl))
+		addCandidate             = func(url string) {
+			if u, valid := cmn.ParseURL(url); !valid ||
+				u.Host == selfPublicURL.Host ||
+				u.Host == selfIntraURL.Host {
 				return
 			}
 			if cmn.StringInSlice(url, candidates) {
@@ -1495,6 +1499,7 @@ func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResu
 			candidates = append(candidates, url)
 		}
 	)
+	debug.Assert(pubValid && intraValid)
 	primaryURL, psi := h.getPrimaryURLAndSI()
 	addCandidate(primaryURL)
 	// NOTE: The url above is either config or the primary's IntraControlNet.DirectURL;
@@ -1505,7 +1510,7 @@ func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResu
 	addCandidate(config.Proxy.PrimaryURL)
 	addCandidate(config.Proxy.DiscoveryURL)
 	addCandidate(config.Proxy.OriginalURL)
-	for _, u := range primaryURLs {
+	for _, u := range contactURLs {
 		addCandidate(u)
 	}
 
@@ -1517,7 +1522,6 @@ func (h *httprunner) join(query url.Values, primaryURLs ...string) (res callResu
 				return
 			}
 		}
-
 		time.Sleep(10 * time.Second)
 	}
 	return
