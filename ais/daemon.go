@@ -314,7 +314,7 @@ func initTarget() cmn.Runner {
 	sc := transport.Init()
 	daemon.rg.add(sc)
 
-	fshc := health.NewFSHC(t, t.gmm, fs.CSM)
+	fshc := health.NewFSHC(t)
 	daemon.rg.add(fshc)
 	t.fshc = fshc
 

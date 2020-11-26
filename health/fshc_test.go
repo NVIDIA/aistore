@@ -10,20 +10,20 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
 	fsCheckerTmpDir = "/tmp/fshc"
 )
 
-func testCheckerMountPaths() {
+func initMountpaths(t *testing.T) {
+	t.Cleanup(func() {
+		os.RemoveAll(fsCheckerTmpDir)
+	})
+
 	cmn.CreateDir(fsCheckerTmpDir)
-	cmn.CreateDir(fsCheckerTmpDir + "/1")
-	cmn.CreateDir(fsCheckerTmpDir + "/2")
-	cmn.CreateDir(fsCheckerTmpDir + "/3")
-	cmn.CreateDir(fsCheckerTmpDir + "/4")
 
 	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
@@ -32,11 +32,16 @@ func testCheckerMountPaths() {
 	fs.Init()
 	fs.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
-		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
-		fs.Add(name, "daeID")
+		mpath := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
+
+		err := cmn.CreateDir(mpath)
+		tassert.CheckFatal(t, err)
+
+		_, err = fs.Add(mpath, "id")
+		tassert.CheckFatal(t, err)
 	}
 
-	os.RemoveAll(fsCheckerTmpDir + "/3") // one folder is deleted
+	os.RemoveAll(fsCheckerTmpDir + "/3") // One directory is deleted.
 	fs.Disable(fsCheckerTmpDir + "/4")
 }
 
@@ -48,63 +53,65 @@ func updateTestConfig() {
 }
 
 type MockFSDispatcher struct {
-	faultyPath    string
+	faultyPaths   []string
 	faultDetected bool
 }
 
-func newMockFSDispatcher(mpathToFail string) *MockFSDispatcher {
+func newMockFSDispatcher(mpathsToFail ...string) *MockFSDispatcher {
 	return &MockFSDispatcher{
-		faultyPath: mpathToFail,
+		faultyPaths: mpathsToFail,
 	}
 }
 
 func (d *MockFSDispatcher) DisableMountpath(path, reason string) (disabled bool, err error) {
-	d.faultDetected = path == d.faultyPath
+	d.faultDetected = cmn.StringInSlice(path, d.faultyPaths)
 	if d.faultDetected {
 		return false, fmt.Errorf("fault detected: %s", reason)
 	}
 	return true, nil
 }
 
-func testCheckerCleanup() {
-	os.RemoveAll(fsCheckerTmpDir)
+func setupTests(t *testing.T) {
+	updateTestConfig()
+	initMountpaths(t)
 }
 
-func TestFSChecker(t *testing.T) {
-	mm := memsys.DefaultPageMM()
-	defer mm.Terminate()
-
-	updateTestConfig()
+func TestFSCheckerInaccessibleMountpath(t *testing.T) {
+	setupTests(t)
 
 	var (
 		failedMpath = fsCheckerTmpDir + "/3"
-		dispatcher  = newMockFSDispatcher(failedMpath)
-		fshc        = NewFSHC(dispatcher, mm, fs.CSM)
+		filePath    = failedMpath + "/testfile"
+
+		dispatcher = newMockFSDispatcher(failedMpath)
+		fshc       = NewFSHC(dispatcher)
 	)
-	testCheckerMountPaths()
 
-	// initial state = 2 available FSes - must pass
-	availablePaths, disabledPaths := fs.Get()
-	if len(availablePaths) != 3 || len(disabledPaths) != 1 {
-		t.Errorf("Invalid number of mountpaths at start: %v - %v",
-			availablePaths, disabledPaths)
-	}
+	_, _, exists := fshc.testMountpath(filePath, failedMpath, 4, cmn.KiB)
+	tassert.Errorf(t, !exists, "testing non-existing mountpath must fail")
+}
 
-	// inaccessible mountpath
-	_, _, exists := fshc.testMountpath(
-		fsCheckerTmpDir+"/3/testfile", fsCheckerTmpDir+"/3", 4, 1024)
-	if exists {
-		t.Error("Testing non-existing mountpath must fail")
-	}
+func TestFSCheckerFailedMountpath(t *testing.T) {
+	setupTests(t)
 
-	// failed mountpath must be disabled
+	var (
+		failedMpath = fsCheckerTmpDir + "/3"
+
+		dispatcher = newMockFSDispatcher(failedMpath)
+		fshc       = NewFSHC(dispatcher)
+	)
+
+	// Failed mountpath must be disabled.
 	fshc.runMpathTest(failedMpath, failedMpath+"/dir/testfile")
+	tassert.Errorf(t, dispatcher.faultDetected, "faulty mountpath %s was not detected", failedMpath)
+}
 
-	if !dispatcher.faultDetected {
-		t.Errorf("Faulty mountpath %s was not detected", failedMpath)
-	}
+func TestFSCheckerDecisionFn(t *testing.T) {
+	updateTestConfig()
 
-	// decision making function
+	fshc := NewFSHC(nil)
+
+	// Decision making function.
 	type tstInfo struct {
 		title               string
 		readErrs, writeErrs int
@@ -127,6 +134,40 @@ func TestFSChecker(t *testing.T) {
 			}
 		})
 	}
+}
 
-	testCheckerCleanup()
+func TestFSCheckerTryReadFile(t *testing.T) {
+	setupTests(t)
+
+	var (
+		dispatcher = newMockFSDispatcher()
+		fshc       = NewFSHC(dispatcher)
+
+		mpath    = fsCheckerTmpDir + "/1"
+		filePath = mpath + "/smth.txt"
+	)
+
+	// Create file with some content inside.
+	file, err := cmn.CreateFile(filePath)
+	tassert.CheckFatal(t, err)
+	err = cmn.FloodWriter(file, cmn.MiB)
+	file.Close()
+	tassert.CheckFatal(t, err)
+
+	err = fshc.tryReadFile(filePath)
+	tassert.CheckFatal(t, err)
+}
+
+func TestFSCheckerTryWriteFile(t *testing.T) {
+	setupTests(t)
+
+	var (
+		dispatcher = newMockFSDispatcher()
+		fshc       = NewFSHC(dispatcher)
+
+		mpath = fsCheckerTmpDir + "/1"
+	)
+
+	err := fshc.tryWriteFile(mpath, cmn.KiB)
+	tassert.CheckFatal(t, err)
 }
