@@ -59,7 +59,6 @@ pushd deploy/dev/k8s
 popd
 
 # Running kubernetes based tests
-export K8S_HOST_NAME="minikube"
 # TODO: This requirement can be removed once we do not need single transformer per target.
 # We use this because minikube is a 1-node kubernetes cluster
 # and with pod anti-affinities (for enabling single transformer per target at a time) it would

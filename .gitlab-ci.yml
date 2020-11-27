@@ -181,7 +181,6 @@ test:aisloader:
 .test_kube_template: &test_kube_def
   variables:
     AIS_ENDPOINT: "localhost:8080"
-    K8S_HOST_NAME: "minikube" # WARNING: this is essential for podAffinity to work.
     NUM_TARGET: 1
     NUM_PROXY: 1
     BUCKET: "aws://ais-ci"

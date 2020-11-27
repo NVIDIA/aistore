@@ -16,10 +16,6 @@ spec:
     env:
      - name: AIS_NODE_ROLE
        value: "target"
-     - name: K8S_HOST_NAME
-       valueFrom:
-         fieldRef:
-           fieldPath: spec.nodeName
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/

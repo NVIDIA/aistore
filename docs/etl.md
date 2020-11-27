@@ -36,20 +36,8 @@ Deploying ETL consists of following steps:
 ## Prerequisites
 
 Target must know on which Kubernetes Node it runs.
-This is required to make sure that ETL container will be assigned on the same machine as target.
-To achieve that, `K8S_HOST_NAME = spec.nodeName` variable must be set inside the target Pod's container (see more [here](https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/)).
-
-Example:
-
-```yaml
-containers:
-- name: super-etl
-  env:
-  - name: K8S_HOST_NAME
-    valueFrom:
-      fieldRef:
-        fieldPath: spec.nodeName
-```
+To achieve this, target uses `HOSTNAME` environment variable, set by Kubernetes, to find out its Pod name.
+This variable should not be overwritten during the targets Pods deployment.
 
 ## `build` request
 

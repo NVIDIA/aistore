@@ -11,11 +11,10 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
-	k8sHostNameEnv = "K8S_HOST_NAME"
+	k8sPodNameEnv = "HOSTNAME"
 
 	Default = "default"
 	Pod     = "pod"
@@ -28,23 +27,35 @@ var (
 )
 
 func initDetect() {
-	if NodeName = os.Getenv(k8sHostNameEnv); NodeName == "" {
+	var podName string
+
+	if podName = os.Getenv(k8sPodNameEnv); podName == "" {
+		if glog.V(3) {
+			glog.Infof("HOSTNAME environment not found, assuming non-Kubernetes deployment")
+		}
 		return
 	}
 
+	glog.Infof("Verifying type of deployment (HOSTNAME = %q)", podName)
+
 	client, err := GetClient()
 	if err != nil {
-		glog.Errorf("couldn't initiate a K8s client, err: %v", err) // TODO: make it a Warning
-		NodeName = ""
+		glog.Warningf("Couldn't initiate a K8s client, err: %v", err)
 		return
 	}
-	node, err := client.Node(NodeName)
+
+	pod, err := client.Pod(podName)
 	if err != nil {
-		glog.Errorf("failed to get node, err: %v", err) // TODO: make it a Warning
-		NodeName = ""
+		glog.Warningf("Failed to get pod %q, err: %v", podName, err)
 		return
 	}
-	debug.Assert(node.Name == NodeName)
+
+	node, err := client.Node(pod.Spec.NodeName)
+	if err != nil {
+		glog.Errorf("Failed to get node of a pod %q, err: %v", podName, err)
+		return
+	}
+	NodeName = node.Name
 }
 
 func Detect() error {
