@@ -60,7 +60,6 @@ type (
 		finished []nl.NotifListener // reusable slice of `nl` to add to `fin`
 		smapVer  int64
 	}
-	// TODO: simplify using alternate encoding formats (e.g. GOB)
 	jsonNotifs struct {
 		Running  []*notifListenMsg `json:"running"`
 		Finished []*notifListenMsg `json:"finished"`
@@ -73,7 +72,6 @@ type (
 	//
 
 	// receiver to start listening
-	// TODO: explore other encoding formats (e.g. GOB) to simplify Marshal and Unmarshal logic
 	notifListenMsg struct {
 		nl nl.NotifListener
 	}
@@ -670,13 +668,9 @@ func newNLMsg(nl nl.NotifListener) *notifListenMsg {
 
 func (n *notifListenMsg) MarshalJSON() (data []byte, err error) {
 	n.nl.RLock()
-	defer n.nl.RUnlock()
-	t := jsonNL{Type: n.nl.Kind()}
-	t.NL, err = jsoniter.Marshal(n.nl)
-	if err != nil {
-		return
-	}
-	return jsoniter.Marshal(t)
+	msg := jsonNL{Type: n.nl.Kind(), NL: cmn.MustMarshal(n.nl)}
+	n.nl.RUnlock()
+	return jsoniter.Marshal(msg)
 }
 
 func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
@@ -691,11 +685,7 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	} else {
 		n.nl = &xaction.NotifXactListener{}
 	}
-	err = jsoniter.Unmarshal(t.NL, &n.nl)
-	if err != nil {
-		return
-	}
-	return
+	return jsoniter.Unmarshal(t.NL, &n.nl)
 }
 
 func isDLType(t string) bool {
