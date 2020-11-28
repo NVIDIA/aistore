@@ -1498,18 +1498,18 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		body []byte
 		smap = p.owner.smap.get()
 	)
-	if smap == nil || !smap.isValid() {
+	if !smap.isValid() {
+		errmsg := fmt.Sprintf("%s must be starting up: cannot execute", p.si)
 		if msg != nil {
-			s = fmt.Sprintf(`%s must be starting up: cannot execute "%s:%s"`, p.si, msg.Action, s)
+			p.invalmsghdlrstatusf(w, r, http.StatusServiceUnavailable, "%s %s: %s", errmsg, msg.Action, s)
 		} else {
-			s = fmt.Sprintf("%s must be starting up: cannot execute %q", p.si, s)
+			p.invalmsghdlrstatusf(w, r, http.StatusServiceUnavailable, "%s %q", errmsg, s)
 		}
-		p.invalmsghdlr(w, r, s)
 		return true
 	}
 	if p.inPrimaryTransition.Load() {
-		p.invalmsghdlr(w, r, "primary is in transition, cannot process the request", http.StatusServiceUnavailable)
-		return
+		p.invalmsghdlrstatusf(w, r, http.StatusServiceUnavailable, "%s is in transition, cannot process the request", p.si)
+		return true
 	}
 	if smap.isPrimary(p.si) {
 		return
@@ -2106,20 +2106,20 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			smap  = p.owner.smap.get()
 			sleep = cmn.GCO.Get().Timeout.CplaneOperation / 2
 		)
-		for i := 0; !smap.isValid() && i < max; i++ {
+		for i := 0; smap.validate() != nil && i < max; i++ {
 			if !p.NodeStarted() {
 				time.Sleep(sleep)
 				smap = p.owner.smap.get()
-				if !smap.isValid() {
-					glog.Errorf("%s is starting up, cannot return vaid %s yet...", p.si, smap)
+				if err := smap.validate(); err != nil {
+					glog.Errorf("%s is starting up, cannot return %s yet: %v", p.si, smap, err)
 				}
 				break
 			}
 			smap = p.owner.smap.get()
 			time.Sleep(sleep)
 		}
-		if !smap.isValid() {
-			glog.Errorf("%s: startup is taking unusually long time, %s", p.si, smap) // cluster
+		if err := smap.validate(); err != nil {
+			glog.Errorf("%s: startup is taking unusually long time: %s (%v)", p.si, smap, err) // cluster
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -2152,12 +2152,8 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if cmn.ReadJSON(w, r, newsmap) != nil {
 				return
 			}
-			if !newsmap.isValid() {
-				p.invalmsghdlrf(w, r, "received invalid Smap at startup/registration: %s", newsmap.pp())
-				return
-			}
-			if !newsmap.isPresent(p.si) {
-				p.invalmsghdlrf(w, r, "not finding self %s in the %s", p.si, newsmap.pp())
+			if err := newsmap.validate(); err != nil {
+				p.invalmsghdlrf(w, r, "%s: invalid %s: %v", p.si, newsmap, err)
 				return
 			}
 			if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
@@ -2291,11 +2287,11 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 		res  = p.call(args)
 	)
 	if res.err != nil {
-		return nil, fmt.Errorf("failed to get smap from %s: %v", baseURL, res.err)
+		return nil, fmt.Errorf("failed to get Smap from %s: %v", baseURL, res.err)
 	}
 	smap = res.v.(*smapX)
-	if !smap.isValid() {
-		return nil, fmt.Errorf("invalid Smap from %s: %s", baseURL, smap.pp())
+	if err := smap.validate(); err != nil {
+		return nil, fmt.Errorf("%s: invalid %s from %s: %v", p.si, smap, baseURL, err)
 	}
 	return
 }
@@ -3933,14 +3929,14 @@ func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
 	}
 	for u, lst := range mlist {
 		if l == len(lst) && u != uuid {
-			s := fmt.Sprintf("%s: BMDs have different uuids with no simple majority:\n%v",
+			s := fmt.Sprintf("%s: BMDs have different UUIDs with no simple majority:\n%v",
 				ciError(60), mlist)
 			return nil, &errBmdUUIDSplit{s}
 		}
 	}
 	var err error
 	if len(mlist) > 1 {
-		s := fmt.Sprintf("%s: BMDs have different uuids with simple majority: %s:\n%v",
+		s := fmt.Sprintf("%s: BMDs have different UUIDs with simple majority: %s:\n%v",
 			ciError(70), uuid, mlist)
 		err = &errTgtBmdUUIDDiffer{s}
 	}

@@ -24,7 +24,7 @@ As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io).
 > If you want to try ETL we recommend starting the AIStore cluster on the cloud.
 > We have provided scripts to make it easy for you, see [AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md).
 
-Deploying ETL consists of following steps:
+Deploying ETL consists of the following steps:
 1. To start distributed ETL processing, a user either:
    * needs to send transform function in [**build** request](#build-request) to the AIStore endpoint, or
    * needs to send documented [**init** request](#init-request) to the AIStore endpoint.

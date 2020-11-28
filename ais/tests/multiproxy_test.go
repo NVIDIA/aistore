@@ -477,6 +477,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
 func concurrentPutGetDel(t *testing.T) {
+	_ = tutils.RandomProxyURL(t)
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		proxyURL := tutils.RandomProxyURL(t)
 		smap := tutils.GetClusterMap(t, proxyURL)

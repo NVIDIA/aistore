@@ -175,6 +175,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	)
 	var (
 		smap             = newSmap()
+		uuid, created    string
 		haveRegistratons bool
 	)
 
@@ -221,6 +222,10 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, smap.StringEx(), added)
 		bmd := p.owner.bmd.get()
 		msg := p.newAisMsgStr(metaction1, smap, bmd)
+		if smap.UUID == "" {
+			uuid, created = newClusterUUID() // new uuid
+			smap.UUID, smap.CreationTime = uuid, created
+		}
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 		wg.Wait()
 	} else {
@@ -255,7 +260,11 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 			cmn.ExitLogf("FATAL: %s cannot create a new cluster with no targets, %s", p.si, smap)
 		}
 		clone := smap.clone()
-		clone.UUID, clone.CreationTime = newClusterUUID() // new uuid
+		if uuid == "" {
+			clone.UUID, clone.CreationTime = newClusterUUID()
+		} else {
+			clone.UUID, clone.CreationTime = uuid, created
+		}
 		clone.Version++
 		p.owner.smap.put(clone)
 		smap = clone
@@ -289,15 +298,21 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}}
 	)
 
+	// 8. bump up RMD (to take over) and resume rebalance if needed
 	err := p.canStartRebalance()
 	if err == nil && p.owner.rmd.rebalance.CAS(true, false) {
 		glog.Infof("rebalance did not finish, restarting...")
 		aisMsg.Action = cmn.ActRebalance
 		ctx := &rmdModifier{
-			pre: func(ctx *rmdModifier, clone *rebMD) { clone.inc() },
+			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
 		}
 		rmd := p.owner.rmd.modify(ctx)
 		pairs = append(pairs, revsPair{rmd, aisMsg})
+	} else {
+		ctx := &rmdModifier{
+			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
+		}
+		_ = p.owner.rmd.modify(ctx)
 	}
 
 	wg := p.metasyncer.sync(pairs...)
@@ -308,12 +323,12 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.markClusterStarted()
 }
 
+// maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on
 func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {
 	const (
-		// Number of iteration to consider cluster quiescent.
+		// Number of iteration to consider the cluster quiescent.
 		quiescentIter = 4
 	)
-
 	var (
 		deadlineTime         = config.Timeout.Startup
 		checkClusterInterval = deadlineTime / quiescentIter
@@ -327,10 +342,11 @@ func (p *proxyrunner) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.C
 		time.Sleep(sleepDuration)
 		// Check the cluster Smap only once at max.
 		if doClusterCheck && wait >= checkClusterInterval {
-			doClusterCheck = false
-			if maxVerSmap := p.bcastMaxVerBestEffort(loadedSmap); maxVerSmap != nil {
-				return maxVerSmap
+			if bcastSmap := p.bcastMaxVerBestEffort(loadedSmap); bcastSmap != nil {
+				maxVerSmap = bcastSmap
+				return
 			}
+			doClusterCheck = false
 		}
 
 		prevTargetCnt := smap.CountTargets()
@@ -381,8 +397,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	smapUUID, sameUUID, sameVersion, eq := smap.Compare(&maxVerSmap.Smap)
 	if !sameUUID {
 		// FATAL: cluster integrity error (cie)
-		cmn.ExitLogf("%s: split-brain uuid [%s %s] vs [%s %s]",
-			ciError(10), p.si, smap.StringEx(), maxVerSmap.Primary, maxVerSmap.StringEx())
+		cmn.ExitLogf("%s: split-brain uuid [%s %s] vs %s", ciError(10), p.si, smap.StringEx(), maxVerSmap.StringEx())
 	}
 	if eq && sameVersion {
 		return
@@ -395,15 +410,14 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 			return
 		}
 		// FATAL: cluster integrity error (cie)
-		cmn.ExitLogf("%s: split-brain local [%s %s] vs [%s %s]",
-			ciError(20), p.si, smap.StringEx(), maxVerSmap.Primary, maxVerSmap.StringEx())
+		cmn.ExitLogf("%s: split-brain local [%s %s] vs %s", ciError(20), p.si, smap.StringEx(), maxVerSmap.StringEx())
 	}
 	p.owner.smap.Lock()
 	clone := p.owner.smap.get().clone()
 	if !eq {
 		_, err := maxVerSmap.merge(clone, false /*err if detected (IP, port) duplicates*/)
 		if err != nil {
-			cmn.ExitLogf("%s: %v vs [%s: %s]", p.si, err, maxVerSmap.Primary, maxVerSmap.StringEx())
+			cmn.ExitLogf("%s: %v vs %s", p.si, err, maxVerSmap.StringEx())
 		}
 	} else {
 		clone.UUID = smapUUID
@@ -542,9 +556,9 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds map[*cluster.Snode]*buc
 func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	maxVerSmap, _, _, slowp := p.bcastMaxVer(smap, nil, nil)
 	if maxVerSmap != nil && !slowp {
-		if maxVerSmap.UUID == smap.UUID && maxVerSmap.version() > smap.version() {
-			if maxVerSmap.Primary != nil && maxVerSmap.Primary.ID() != p.si.ID() {
-				glog.Infof("%s: my %s is older than max-ver %s",
+		if maxVerSmap.UUID == smap.UUID && maxVerSmap.version() > smap.version() && maxVerSmap.validate() == nil {
+			if maxVerSmap.Primary.ID() != p.si.ID() {
+				glog.Warningf("%s: primary change whereby local %s is older than max-ver %s",
 					p.si, smap.StringEx(), maxVerSmap.StringEx())
 				return maxVerSmap
 			}

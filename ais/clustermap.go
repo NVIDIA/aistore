@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
@@ -159,6 +161,7 @@ func (m *smapX) tag() string         { return revsSmapTag }
 func (m *smapX) version() int64      { return m.Version }
 func (m *smapX) marshal() (b []byte) { return cmn.MustMarshal(m) }
 
+// to be used exclusively at startup - compare with validate() below
 func (m *smapX) isValid() bool {
 	if m == nil {
 		return false
@@ -171,6 +174,27 @@ func (m *smapX) isValid() bool {
 		return true
 	}
 	return false
+}
+
+// a stronger version of the above
+func (m *smapX) validate() error {
+	if m == nil {
+		return errors.New("is <nil>")
+	}
+	if m.version() == 0 {
+		return errors.New("version = 0")
+	}
+	if m.Primary == nil {
+		return errors.New("primary <nil>")
+	}
+	if !m.isPresent(m.Primary) {
+		return errors.New("primary not present")
+	}
+	cmn.Assert(m.Primary.ID() != "")
+	if !cmn.IsValidUUID(m.UUID) {
+		return fmt.Errorf("invalid UUID %q", m.UUID)
+	}
+	return nil
 }
 
 func (m *smapX) isPrimary(self *cluster.Snode) bool {
@@ -428,8 +452,8 @@ func (r *smapOwner) get() (smap *smapX) {
 }
 
 func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
-	if !newSmap.isValid() {
-		err = fmt.Errorf("%s: invalid %s", si, newSmap)
+	if err = newSmap.validate(); err != nil {
+		debug.Assertf(false, "%s: %s is invalid: %v", si, newSmap, err)
 		return
 	}
 	r.Lock()

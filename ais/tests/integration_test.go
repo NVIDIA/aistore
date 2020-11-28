@@ -410,7 +410,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
-		"to targets are registered",
+		"targets to join",
 		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
@@ -453,7 +453,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
-		"to target is removed",
+		"target to be removed",
 		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount-1,
@@ -492,7 +492,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	_, err = tutils.WaitForClusterState(
 		m.proxyURL,
-		"to targets are registered",
+		"targets to join",
 		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,

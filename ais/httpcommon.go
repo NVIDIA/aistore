@@ -568,7 +568,7 @@ func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bo
 func (h *httprunner) detectNodeChanges(smap *smapX) error {
 	snode := smap.GetNode(h.si.ID())
 	if snode == nil {
-		return fmt.Errorf("%s: not present in the loaded smap", h.si)
+		return fmt.Errorf("%s: not present in the loaded %s", h.si, smap)
 	}
 	if !snode.Equals(h.si) {
 		prev, _ := cmn.JSON.MarshalIndent(snode, "", " ")
@@ -750,7 +750,7 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 
 	req.Header.Set(cmn.HeaderCallerID, h.si.ID())
 	req.Header.Set(cmn.HeaderCallerName, h.si.Name())
-	if smap := h.owner.smap.get(); smap.isValid() {
+	if smap := h.owner.smap.get(); smap.validate() == nil {
 		req.Header.Set(cmn.HeaderCallerSmapVersion, strconv.FormatInt(smap.version(), 10))
 	}
 
@@ -1324,11 +1324,11 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		return
 	}
 	if !newSmap.isValid() {
-		err = fmt.Errorf("%s: invalid %s - lacking or missing primary", h.si, newSmap)
+		err = fmt.Errorf("%s: %s is invalid: %v", h.si, newSmap, newSmap.validate())
 		return
 	}
 	if !newSmap.isPresent(h.si) {
-		err = fmt.Errorf("%s: invalid %s - not finding ourselves in smap", h.si, newSmap)
+		err = fmt.Errorf("%s: not finding ourselves in %s", h.si, newSmap)
 		return
 	}
 	if msg.Action != "" {
@@ -1344,7 +1344,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		cmn.ExitLogf("%v", err) // otherwise, FATAL
 	}
 
-	glog.Infof("%s: receive %s (local %s)%s", h.si, newSmap.StringEx(), smap.StringEx(), s)
+	glog.Infof("%s: receive %s from %s (local %s)%s", h.si, newSmap.StringEx(), caller, smap.StringEx(), s)
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	cmn.Assert(sameOrigin)
 	if newSmap.version() < curVer {
@@ -1592,7 +1592,7 @@ func (h *httprunner) withRetry(call func(arg ...string) (int, error), action str
 
 func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 	smap := h.owner.smap.get()
-	if smap == nil || smap.version() == 0 || smap.Primary == nil || !smap.isValid() {
+	if smap.validate() != nil {
 		url, psi = cmn.GCO.Get().Proxy.PrimaryURL, nil
 		return
 	}
@@ -1604,7 +1604,7 @@ func (h *httprunner) pollClusterStarted(timeout time.Duration) {
 	for i := 1; ; i++ {
 		time.Sleep(time.Duration(i) * time.Second)
 		smap := h.owner.smap.get()
-		if !smap.isValid() {
+		if smap.validate() != nil {
 			continue
 		}
 		if _, _, err := h.Health(smap.Primary, timeout, nil); err == nil {

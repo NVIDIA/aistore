@@ -89,8 +89,8 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	newsmap := &msg.Request.Smap
-	if !newsmap.isValid() {
-		p.invalmsghdlrf(w, r, "%s: invalid %s in the Vote Request", p.si, newsmap)
+	if err := newsmap.validate(); err != nil {
+		p.invalmsghdlrf(w, r, "%s: invalid %s in the Vote Request: %v", p.si, newsmap, err)
 		return
 	}
 	if !newsmap.isPresent(p.si) {
@@ -284,10 +284,11 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 }
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
-	clone := p.owner.smap.get().clone()
-	if !clone.isValid() {
+	smap := p.owner.smap.get()
+	if smap.validate() != nil {
 		return
 	}
+	clone := smap.clone()
 	glog.Infof("%s: primary %s has failed\n", p.si, clone.Primary.NameEx())
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be
@@ -359,10 +360,11 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) onPrimaryProxyFailure() {
-	clone := t.owner.smap.get().clone()
-	if !clone.isValid() {
+	smap := t.owner.smap.get()
+	if smap.validate() != nil {
 		return
 	}
+	clone := smap.clone()
 	glog.Infof("%s: primary %s has failed", t.si, clone.Primary.NameEx())
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be

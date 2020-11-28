@@ -127,7 +127,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 
 func (t *targetrunner) unregister(_ ...string) (int, error) {
 	smap := t.owner.smap.get()
-	if smap == nil || !smap.isValid() {
+	if smap == nil || smap.validate() != nil {
 		return 0, nil
 	}
 	args := callArgs{
@@ -854,8 +854,8 @@ func (t *targetrunner) detectMpathChanges() {
 
 func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {
 	smap := t.owner.smap.get()
-	if smap == nil || !smap.isValid() {
-		return fmt.Errorf("%s: Smap is nil or invalid", t.si)
+	if err = smap.validate(); err != nil {
+		return fmt.Errorf("%s: %s is invalid: %v", t.si, smap, err)
 	}
 	psi := smap.Primary
 	q := url.Values{}

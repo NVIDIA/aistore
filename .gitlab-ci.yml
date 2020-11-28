@@ -68,7 +68,7 @@ test:short:
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
-  timeout: 15m
+  timeout: 16m
   script:
     - make aisfs cli aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })

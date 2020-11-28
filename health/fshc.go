@@ -142,8 +142,9 @@ func (f *FSHC) tryReadFile(fqn string) error {
 
 // Creates a random file in a random directory inside a mountpath.
 func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
+	const ftag = "temp file"
 	// Do not test a mountpath if it is already disabled. To avoid a race
-	// when a lot of PUTs fails and each of them calls FSHC, FSHC disables
+	// when a lot of PUTs fail and each one calls FSHC, FSHC disables
 	// the mountpath on the first run, so all other tryWriteFile are redundant
 	available, disabled := fs.Get()
 	if _, ok := disabled[mountpath]; ok {
@@ -151,27 +152,27 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int64) error {
 	}
 	mpath, ok := available[mountpath]
 	if !ok {
-		glog.Warningf("[fshc] Tried to write file on non-existing mountpath: %q", mountpath)
+		glog.Warningf("[fshc] Tried to write %s to non-existing mountpath %q", ftag, mountpath)
 		return nil
 	}
 
 	tmpFileName := filepath.Join(mpath.MakePathTrash(), "fshc-try-write-"+cmn.RandString(10))
 	tmpFile, err := cmn.CreateFile(tmpFileName)
 	if err != nil {
-		return fmt.Errorf("failed to create temporary file, err: %w", err)
+		return fmt.Errorf("failed to create %s, err: %w", ftag, err)
 	}
 
 	defer func() {
 		if err := tmpFile.Close(); err != nil {
-			glog.Errorf("[fshc] Failed to close temporary file (fqn: %q, err: %v)", tmpFileName, err)
+			glog.Errorf("[fshc] Failed to close %s %q, err: %v", ftag, tmpFileName, err)
 		}
 		if err := cmn.RemoveFile(tmpFileName); err != nil {
-			glog.Errorf("[fshc] Failed to remove temporary file (fqn: %q, err: %v)", tmpFileName, err)
+			glog.Errorf("[fshc] Failed to remove %s %q, err: %v", ftag, tmpFileName, err)
 		}
 	}()
 
 	if err = cmn.FloodWriter(tmpFile, fileSize); err != nil {
-		return fmt.Errorf("failed to write to a file %q, err: %w", tmpFileName, err)
+		return fmt.Errorf("failed to write %s %q, err: %w", ftag, tmpFileName, err)
 	}
 	return nil
 }

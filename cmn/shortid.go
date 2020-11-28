@@ -40,6 +40,11 @@ func GenUUID() (uuid string) {
 	return h + uuid + t
 }
 
+func IsValidUUID(uuid string) bool {
+	const idlen = 9 // as per https://github.com/teris-io/shortid#id-length
+	return len(uuid) >= idlen && isAlpha(uuid[0])
+}
+
 func isAlpha(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }

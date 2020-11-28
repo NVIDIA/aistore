@@ -172,7 +172,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 	if nbmd == nil || nbmd.Version == 0 || m.Version == 0 {
 		return
 	}
-	if m.UUID == "" || nbmd.UUID == "" {
+	if !cmn.IsValidUUID(m.UUID) || !cmn.IsValidUUID(nbmd.UUID) {
 		return
 	}
 	if m.UUID == nbmd.UUID {
@@ -186,7 +186,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller s
 	}
 	hname := si.Name()
 	// FATAL: cluster integrity error (cie)
-	s := fmt.Sprintf("%s: BMDs have different uuids: (%s, %s) vs (%s, %s)",
+	s := fmt.Sprintf("%s: BMDs have different UUIDs: (%s, %s) vs (%s, %s)",
 		ciError(40), hname, m.StringEx(), nsiname, nbmd.StringEx())
 	err = &errPrxBmdUUIDDiffer{s}
 	return

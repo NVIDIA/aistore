@@ -147,7 +147,7 @@ func (tkr *targetKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 
 func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 	smap := tkr.t.owner.smap.get()
-	if smap == nil || !smap.isValid() {
+	if smap == nil || smap.validate() != nil {
 		return
 	}
 	if stopped = tkr.register(tkr.t.sendKeepalive, smap.Primary.ID(), tkr.t.si.Name()); stopped {
@@ -166,7 +166,7 @@ func (pkr *proxyKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 
 func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 	smap := pkr.p.owner.smap.get()
-	if smap == nil || !smap.isValid() {
+	if smap == nil || smap.validate() != nil {
 		return
 	}
 	if smap.isPrimary(pkr.p.si) {

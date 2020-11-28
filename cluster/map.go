@@ -166,6 +166,9 @@ func (d *Snode) SetName() {
 }
 
 func (d *Snode) String() string {
+	if d == nil {
+		return "<nil>"
+	}
 	if d.Name() == "" {
 		d.SetName()
 	}
@@ -273,7 +276,7 @@ func (m *Smap) StringEx() string {
 	if m == nil {
 		return "Smap <nil>"
 	}
-	return fmt.Sprintf("Smap v%d[%s, t=%d, p=%d]", m.Version, m.UUID, m.CountTargets(), m.CountProxies())
+	return fmt.Sprintf("Smap v%d[%s, pid=%s, t=%d, p=%d]", m.Version, m.UUID, m.Primary, m.CountTargets(), m.CountProxies())
 }
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }
@@ -368,15 +371,17 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 				return proxy, nil
 			}
 		}
-		return nil, fmt.Errorf("internal error: couldn't find non primary proxy")
+		return nil, fmt.Errorf("couldn't find non-primary proxy")
 	}
+	cnt := 0
 	for _, psi := range m.Pmap {
 		if psi.inMaintenance() {
+			cnt++
 			continue
 		}
 		return psi, nil
 	}
-	return nil, fmt.Errorf("cluster doesn't have enough proxies, expected at least 1")
+	return nil, fmt.Errorf("couldn't find non-primary or primary proxy (maintenance-count=%d)", cnt)
 }
 
 func (m *Smap) IsDuplicateURL(nsi *Snode) (osi *Snode, err error) {

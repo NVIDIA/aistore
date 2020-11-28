@@ -223,22 +223,21 @@ func (t *targetrunner) Run() error {
 		contactURLs    []string
 		smap, reliable = t.tryLoadSmap()
 	)
-	if !reliable {
-		if smap.isValid() {
-			// As we cannot fully rely on the loaded smap we can just gather
-			// a couple of random contact URLs to increase our join chances.
-			var (
-				candidatesCnt = cmn.Min(int(cmn.FastLog2(uint64(len(smap.Pmap)))), 5)
-				candidates    = cmn.NewStringSet(smap.Primary.URL(cmn.NetworkIntraControl))
-			)
-			for _, proxy := range smap.Pmap {
-				candidates.Add(proxy.URL(cmn.NetworkIntraControl))
-				if len(candidates) >= candidatesCnt {
-					break
-				}
+	if smap.validate() == nil {
+		// Gather random URLs to increase our joining chances.
+		var (
+			candidatesCnt = cmn.Min(int(cmn.FastLog2(uint64(len(smap.Pmap)))), 5)
+			candidates    = cmn.NewStringSet(smap.Primary.URL(cmn.NetworkIntraControl))
+		)
+		for _, proxy := range smap.Pmap {
+			candidates.Add(proxy.URL(cmn.NetworkIntraControl))
+			if len(candidates) >= candidatesCnt {
+				break
 			}
-			contactURLs = candidates.Keys()
 		}
+		contactURLs = candidates.Keys()
+	}
+	if !reliable {
 		smap = newSmap()
 	}
 	// Insert self and always proceed starting up.
