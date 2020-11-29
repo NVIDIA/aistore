@@ -213,8 +213,8 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 		if time.Now().After(smapChangeDeadline) {
 			break
 		}
-
-		time.Sleep(cmn.MinDuration(time.Second*time.Duration(loopCnt), time.Second*7)) // sleep longer every loop
+		// sleep longer each iter (up to a certain limit)
+		time.Sleep(cmn.MinDuration(time.Second*time.Duration(loopCnt), time.Second*7))
 	}
 
 	return nil, fmt.Errorf("timed out waiting for the cluster to stabilize")

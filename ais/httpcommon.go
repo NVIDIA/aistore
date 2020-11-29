@@ -84,7 +84,8 @@ type (
 	// NOTE: exported for integration testing
 	SmapVoteMsg struct {
 		Smap           *smapX    `json:"smap"`
-		BucketMD       *bucketMD `json:"bucketmd"`
+		BMD            *bucketMD `json:"bucketmd"`
+		RMD            *rebMD    `json:"rmd"`
 		VoteInProgress bool      `json:"vote_in_progress"`
 	}
 
@@ -352,16 +353,31 @@ func (server *netServer) shutdown() {
 // httprunner //
 ////////////////
 
-func (h *httprunner) Name() string               { return h.name }
-func (h *httprunner) Snode() *cluster.Snode      { return h.si }
-func (h *httprunner) Bowner() cluster.Bowner     { return h.owner.bmd }
-func (h *httprunner) Sowner() cluster.Sowner     { return h.owner.smap }
+func (h *httprunner) Name() string           { return h.name }
+func (h *httprunner) Client() *http.Client   { return h.httpclientGetPut }
+func (h *httprunner) Snode() *cluster.Snode  { return h.si }
+func (h *httprunner) Bowner() cluster.Bowner { return h.owner.bmd }
+func (h *httprunner) Sowner() cluster.Sowner { return h.owner.smap }
+
+// usage: [API call => handler => ClusterStartedWithRetry ]
+func (h *httprunner) ClusterStartedWithRetry() bool {
+	if h.startup.cluster.Load() {
+		return true
+	}
+	if !h.NodeStarted() {
+		return false
+	}
+	time.Sleep(time.Second)
+	if !h.startup.cluster.Load() {
+		glog.ErrorDepth(1, fmt.Sprintf("%s: cluster is starting up (?)", h.si))
+	}
+	return h.startup.cluster.Load()
+}
 func (h *httprunner) ClusterStarted() bool       { return h.startup.cluster.Load() }
 func (h *httprunner) NodeStarted() bool          { return !h.startup.node.time.Load().IsZero() }
 func (h *httprunner) NodeStartedTime() time.Time { return h.startup.node.time.Load() }
 func (h *httprunner) markClusterStarted()        { h.startup.cluster.Store(true) }
 func (h *httprunner) markNodeStarted()           { h.startup.node.time.Store(time.Now()) }
-func (h *httprunner) Client() *http.Client       { return h.httpclientGetPut }
 
 func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	var (
@@ -1158,7 +1174,12 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body = h.owner.bmd.get()
 	case cmn.GetWhatSmapVote:
 		xact := xreg.GetXactRunning(cmn.ActElection)
-		msg := SmapVoteMsg{VoteInProgress: xact != nil, Smap: h.owner.smap.get(), BucketMD: h.owner.bmd.get()}
+		msg := SmapVoteMsg{
+			VoteInProgress: xact != nil,
+			Smap:           h.owner.smap.get(),
+			BMD:            h.owner.bmd.get(),
+			RMD:            h.owner.rmd.get(),
+		}
 		body = msg
 	case cmn.GetWhatSnode:
 		body = h.si

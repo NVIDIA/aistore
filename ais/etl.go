@@ -209,7 +209,7 @@ func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/etl
 func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStarted() {
+	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}

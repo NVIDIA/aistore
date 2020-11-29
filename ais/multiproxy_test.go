@@ -69,7 +69,7 @@ func discoverServerDefaultHandler(sv, lv int64) *httptest.Server {
 			msg := SmapVoteMsg{
 				VoteInProgress: false,
 				Smap:           &smapX{cluster.Smap{Version: smapVersion}},
-				BucketMD:       &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
+				BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
@@ -88,7 +88,7 @@ func discoverServerVoteOnceHandler(sv, lv int64) *httptest.Server {
 		msg := SmapVoteMsg{
 			VoteInProgress: cnt == 1,
 			Smap:           &smapX{cluster.Smap{Version: smapVersion}},
-			BucketMD:       &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
+			BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
 		}
 		b, _ := jsoniter.Marshal(msg)
 		w.Write(b)
@@ -109,7 +109,7 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 			msg := SmapVoteMsg{
 				VoteInProgress: false,
 				Smap:           &smapX{cluster.Smap{Version: smapVersion}},
-				BucketMD:       &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
+				BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
@@ -137,7 +137,7 @@ func discoverServerVoteInProgressHandler(sv, lv int64) *httptest.Server {
 			msg := SmapVoteMsg{
 				VoteInProgress: true,
 				Smap:           &smapX{cluster.Smap{Version: 12345}},
-				BucketMD:       &bucketMD{BMD: cluster.BMD{Version: 67890}},
+				BMD:            &bucketMD{BMD: cluster.BMD{Version: 67890}},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
@@ -276,28 +276,28 @@ func TestDiscoverServers(t *testing.T) {
 				discoverSmap.addTarget(cluster.NewSnode(s.id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 			}
 		}
-		smap, bucketmd := primary.uncoverMeta(discoverSmap)
+		svm := primary.uncoverMeta(discoverSmap)
 		if tc.smapVersion == 0 {
-			if smap != nil && smap.version() > 0 {
+			if svm.Smap != nil && svm.Smap.version() > 0 {
 				t.Errorf("test case %q: expecting nil Smap", tc.name)
 			}
 		} else {
-			if smap == nil || smap.version() == 0 {
+			if svm.Smap == nil || svm.Smap.version() == 0 {
 				t.Errorf("test case %q: expecting non-empty Smap", tc.name)
-			} else if tc.smapVersion != smap.Version {
-				t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.smapVersion, smap.Version)
+			} else if tc.smapVersion != svm.Smap.Version {
+				t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.smapVersion, svm.Smap.Version)
 			}
 		}
 
 		if tc.bmdVersion == 0 {
-			if bucketmd != nil && bucketmd.version() > 0 {
+			if svm.BMD != nil && svm.BMD.version() > 0 {
 				t.Errorf("test case %q: expecting nil BMD", tc.name)
 			}
 		} else {
-			if bucketmd == nil || bucketmd.version() == 0 {
+			if svm.BMD == nil || svm.BMD.version() == 0 {
 				t.Errorf("test case %q: expecting non-empty BMD", tc.name)
-			} else if tc.bmdVersion != bucketmd.Version {
-				t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.bmdVersion, bucketmd.Version)
+			} else if tc.bmdVersion != svm.BMD.Version {
+				t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.bmdVersion, svm.BMD.Version)
 			}
 		}
 	}

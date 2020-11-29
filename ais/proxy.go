@@ -272,7 +272,7 @@ func (p *proxyrunner) Stop(err error) {
 
 // verb /v1/buckets/
 func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStarted() {
+	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -565,15 +565,12 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
-		var (
-			xact   = xreg.GetXactRunning(cmn.ActElection)
-			msg    = p.si.String() + ": is primary, cannot be on the receiving side of metasync"
-			detail string
-		)
-		if xact != nil {
-			detail = fmt.Sprintf(" (%s)", xact)
+		const txt = "is primary, cannot be on the receiving side of metasync"
+		if xact := xreg.GetXactRunning(cmn.ActElection); xact != nil {
+			p.invalmsghdlrf(w, r, "%s: %s [%s, %s]", p.si, txt, smap, xact)
+		} else {
+			p.invalmsghdlrf(w, r, "%s: %s, %s", p.si, txt, smap)
 		}
-		p.invalmsghdlrf(w, r, msg, p.si, detail)
 		return
 	}
 	payload := make(msPayload)
@@ -2545,7 +2542,7 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/dsort
 func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStarted() {
+	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -2560,7 +2557,7 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 // http reverse-proxy handler, to handle unmodified requests
 // (not to confuse with p.rproxy)
 func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStarted() {
+	if !p.ClusterStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -3752,7 +3749,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 			fv:      func() interface{} { return &bucketMD{} },
 		})
-		bmds = make(map[*cluster.Snode]*bucketMD, len(results))
+		bmds = make(bmds, len(results))
 	)
 	for res := range results {
 		if res.err != nil {
@@ -3898,7 +3895,7 @@ func (rp *reverseProxy) init() {
 // misc utils //
 ////////////////
 
-func resolveUUIDBMD(bmds map[*cluster.Snode]*bucketMD) (*bucketMD, error) {
+func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 	var (
 		mlist = make(map[string][]nodeRegMeta) // uuid => list(targetRegMeta)
 		maxor = make(map[string]*bucketMD)     // uuid => max-ver BMD
