@@ -90,7 +90,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	}
 	newsmap := &msg.Request.Smap
 	if err := newsmap.validate(); err != nil {
-		p.invalmsghdlrf(w, r, "%s: invalid %s in the Vote Request: %v", p.si, newsmap, err)
+		p.invalmsghdlrf(w, r, "%s: invalid %s in the Vote Request, err: %v", p.si, newsmap, err)
 		return
 	}
 	if !newsmap.isPresent(p.si) {
@@ -113,9 +113,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 
 	// only continue the election if this proxy is actually the next in line
 	if psi.ID() != p.si.ID() {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Warningf("%s: not next in line: Received: %s", p.si, psi)
-		}
+		glog.Warningf("%s: not next in line, received: %s", p.si, psi)
 		return
 	}
 

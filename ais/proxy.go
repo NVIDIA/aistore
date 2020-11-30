@@ -205,7 +205,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 	// Smap
 	if err = p.owner.smap.synchronize(p.si, regMeta.Smap); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf("%s: failed to synch %s: %v", p.si, regMeta.Smap, err)
+			glog.Errorf("%s: failed to synch %s, err: %v", p.si, regMeta.Smap, err)
 		}
 	} else {
 		glog.Infof("%s: synch %s", p.si, regMeta.Smap)

@@ -79,11 +79,11 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		waitmsync = true // commit blocks behind metasync
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
-	glog.Infof("[Begin] create bucket (msg: %v, bck: %s)", msg, bck)
+	glog.Infof("Begin create-bucket (msg: %v, bck: %s)", msg, bck)
 	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
-			glog.Errorf("[Abort] create bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
+			glog.Errorf("Abort create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			return res.err
@@ -104,12 +104,12 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	cmn.AssertNoErr(err)
 
 	// 4. commit
-	glog.Infof("[Commit] create bucket (msg: %v, bck: %s)", msg, bck)
+	glog.Infof("Commit create-bucket (msg: %v, bck: %s)", msg, bck)
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 	for res := range results {
 		if res.err != nil {
-			glog.Errorf("[Failed to Commit] create bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
+			glog.Errorf("Failed to commit create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 			p.undoCreateBucket(msg, bck)
 			return res.err
 		}
@@ -740,11 +740,11 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		waitmsync = true
 		c         = p.prepTxnClient(actMsg, bck, waitmsync)
 	)
-	glog.Infof("[Begin] destroy bucket (msg: %v, bck: %s)", msg, bck)
+	glog.Infof("Begin destroy-bucket (msg: %v, bck: %s)", msg, bck)
 	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 	for res := range results {
 		if res.err != nil {
-			glog.Errorf("[Abort] destroy bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
+			glog.Errorf("Abort destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 			return res.err
@@ -762,19 +762,19 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	}
 	_, err := p.owner.bmd.modify(ctx)
 	if err != nil {
-		glog.Errorf("[Abort] destroy bucket (msg: %v, bck: %s, err: %v)", msg, bck, err)
+		glog.Errorf("Abort destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, err)
 		c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
 		_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
 		return err
 	}
 
 	// 3. Commit
-	glog.Infof("[Commit] destroy bucket (msg: %v, bck: %s)", msg, bck)
+	glog.Infof("Commit destroy-bucket (msg: %v, bck: %s)", msg, bck)
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 	for res := range results {
 		if res.err != nil {
-			glog.Errorf("[Failed to Commit] destroy bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
+			glog.Errorf("Failed to commit destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 			return res.err
 		}
 	}

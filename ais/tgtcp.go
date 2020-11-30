@@ -117,7 +117,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 		if isErrDowngrade(err) {
 			err = nil
 		} else {
-			glog.Errorf("%s: failed to synch %s: %v", t.si, regMeta.Smap, err)
+			glog.Errorf("%s: failed to synch %s, err: %v", t.si, regMeta.Smap, err)
 		}
 	} else {
 		glog.Infof("%s: synch %s", t.si, t.owner.smap.get())
