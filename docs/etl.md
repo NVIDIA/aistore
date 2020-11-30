@@ -2,12 +2,14 @@
 
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
-- [`build` request](#build-request)
-    - [Runtimes](#runtimes)
-- [`init` request](#init-request)
-    - [Requirements](#requirements)
-    - [Communication Mechanisms](#communication-mechanisms)
-    - [Annotations](#annotations)
+- [Initializing ETL](#defining-and-initializing-etl)
+    - [`build` request](#build-request)
+        - [Runtimes](#runtimes)
+    - [`init` request](#init-request)
+        - [Requirements](#requirements)
+        - [Communication Mechanisms](#communication-mechanisms)
+        - [Annotations](#annotations)
+- [Transforming objects with ETL](#transforming-objects-with-created-etl)
 - [Examples](#examples)
     - [Compute MD5](#compute-md5)
     - [PyTorch ImageNet preprocessing](#pytorch-imagenet-preprocessing)
@@ -21,38 +23,39 @@ To run data transformations *inline* and *close to data*, AIStore supports runni
 
 As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io).
 
-> If you want to try ETL we recommend starting the AIStore cluster on the cloud.
-> We have provided scripts to make it easy for you, see [AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md).
+> If you want to try ETL, we recommend starting the AIStore cluster on the cloud.
+> We have provided scripts to make it easy for you. See [AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md).
 
 Deploying ETL consists of the following steps:
 1. To start distributed ETL processing, a user either:
    * needs to send transform function in [**build** request](#build-request) to the AIStore endpoint, or
    * needs to send documented [**init** request](#init-request) to the AIStore endpoint.
      >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
-2. Upon receiving **build**/**init**, AIS proxy broadcasts the request to all AIS targets in the cluster.
+2. Upon receiving **build**/**init** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
 3. When a target receives **build**/**init**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
 
+## Defining and initializing ETL
 
-## Prerequisites
+This section is going to describe how to define and initialize custom ETL transformations in the AIStore cluster.
 
-Target must know on which Kubernetes Node it runs.
-To achieve this, target uses `HOSTNAME` environment variable, set by Kubernetes, to find out its Pod name.
-This variable should not be overwritten during the targets Pods deployment.
+### Prerequisites
 
-## `build` request
+A target must know on which Kubernetes Node it runs.
+To achieve this, the target uses `HOSTNAME` environment variable, set by Kubernetes, to discover its Pod name.
+This variable should not be overwritten during the deployment of a target Pod.
 
-You can write your own custom `transform` function (see example below) that takes input object bytes as a parameter and returns output bytes (the content of the transformed object).
-You can then use `build` request to execute this `transform` on the entire distributed dataset.
+### `build` request
 
-In effect, you can skip the entire step of writing your own Dockerfile and building custom ETL container - the `build` capability allows to skip this step entirely.
+You can write your own custom `transform` function (see example below) that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
+You can then use the `build` request to execute this `transform` on the entire distributed dataset.
 
-> First time users: it is recommended to start with simple "Hello world!" type transformations.
+In effect, a user can skip the entire step of writing your own Dockerfile and building a custom ETL container - the `build` capability allows the user to skip this step entirely.
 
-> If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service) then you probably will find this type of starting ETL most intuitive.
+> If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-### Runtimes
+#### Runtimes
 
-AIS-ETL provides a number of *runtimes* out of the box.
+AIS-ETL provides several *runtimes* out of the box.
 Each *runtime* determines the programming language of your custom `transform` function, the set of pre-installed packages and tools that your `transform` can utilize.
 
 Currently, the following runtimes are supported:
@@ -62,37 +65,38 @@ Currently, the following runtimes are supported:
 | `python2` | `python:2.7.18` is used to run the code. |
 | `python3` | `python:3.8.5` is used to run the code. |
 
-We will be adding more *runtimes* in the future, with the plans to support the most popular ETL toolchains.
+More *runtimes* will be added in the future, with the plans to support the most popular ETL toolchains.
 Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your own ETL container and deploy it via [`init` request](#init-request).
 
-## `init` request
+### `init` request
 
-Init covers all, even wildest, cases.
-It allows for running any Docker image that implements certain requirements that allow communication with the cluster.
-It also requires writing pod specification to make sure the targets will know how to start it.
+`Init` request covers all, even the most sophisticated, cases of ETL initialization.
+It allows running any Docker image that implements certain requirements on communication with the cluster. 
+The 'init' request requires writing a Pod specification following specification requirements.
 
-### Requirements
+#### Requirements
 
 Custom ETL container is expected to satisfy the following requirements:
 
-1. Start web server that supports at least one of the listed [communication mechanisms](#communication-mechanisms).
-2. The server can listen on any port but the port must be specified in pod spec with `containerPort` - the cluster must know how to contact the pod.
-3. AIS target(s) may send requests in parallel to the web server inside ETL container - any synchronization, therefore, must be done on the server-side.
+1. Start a web server that supports at least one of the listed [communication mechanisms](#communication-mechanisms).
+2. The server can listen on any port, but the port must be specified in Pod spec with `containerPort` - the cluster
+ must know how to contact the Pod.
+3. AIS target(s) may send requests in parallel to the web server inside the ETL container - any synchronization, therefore, must be done on the server-side.
 
-### Communication Mechanisms
+#### Communication Mechanisms
 
-To facilitate on the fly or offline transformation, AIS currently supports 3 (three) distinct target ⇔ container communication mechanisms.
+AIS currently supports 3 (three) distinct target ⇔ container communication mechanisms to facilitate the fly or offline transformation.
 User can choose and specify (via YAML spec) any of the following:
 
 | Name | Value | Description |
 |---|---|---|
 | **post** | `hpush://` | A target issues a POST request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
 | **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return the result to the target. |
-| **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make GET request to the target, transform bytes, and return the result to a user. |
+| **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
 
-### Annotations
+#### Annotations
 
-The target communicates with a pod defined in the pod specification under `communication_type` key:
+The target communicates with a Pod defined in the Pod specification under `communication_type` key:
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -119,17 +123,26 @@ metadata:
 > ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
 > To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
 
+## Transforming objects with created ETL
+
+AIStore supports an on-line transformation of single objects and an offline transformation of the whole buckets.
+
+There are two ways to run ETL transformations:
+- HTTP RESTful API described in [API Reference section](#api-reference) of this document,
+- [ETL CLI](/cmd/cli/resources/etl.md),
+- [AIS Loader](/bench/aisloader/README.md).
+
 ## Examples
 
 ### Compute MD5
 
-To showcase the capabilities of ETL, we will go over a simple ETL container that computes MD5 checksum of the object.
+To showcase ETL's capabilities, we will go over a simple ETL container that computes the MD5 checksum of the object.
 There are two ways of approaching this problem:
 
 1. **Simplified flow**
 
     In this example, we will be using `python3` runtime.
-    In simplified flow we are only expected to write a simple `transform` function, which can look like this (`code.py`):
+    In simplified flow, we are only expected to write a simple `transform` function, which can look like this (`code.py`):
 
     ```python
     import hashlib
@@ -140,9 +153,9 @@ There are two ways of approaching this problem:
         return md5.hexdigest().encode()
     ```
 
-    `transform` function must take bytes as argument (the content of the object) and return output bytes that will be saved in the transformed object.
+    `transform` function must take bytes as an argument (the object's content) and return output bytes that will be saved in the transformed object.
 
-    Once we have the `transform` function defined we can use CLI to build and initialize ETL:
+    Once we have the `transform` function defined, we can use CLI to build and initialize ETL:
     ```console
     $ ais etl build --from-file=code.py --runtime=python3
     JGHEoo89gg
@@ -206,7 +219,7 @@ There are two ways of approaching this problem:
     ```
 
     Once we have a server that computes the MD5, we need to create an image out of it.
-    For that we need to write `Dockerfile` which can look like this:
+    For that, we need to write `Dockerfile`, which can look like this:
 
     ```dockerfile
     FROM python:3.8.5-alpine3.11
@@ -220,7 +233,7 @@ There are two ways of approaching this problem:
     ENTRYPOINT [ "/code/server.py", "--listen", "0.0.0.0", "--port", "80" ]
     ```
 
-    Once we have the docker file we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/) so that our Kubernetes cluster can pull this image later.
+    Once we have the docker file, we must build it and publish it to some [Docker Registry](https://docs.docker.com/registry/) so that our Kubernetes cluster can pull this image later.
     In this example, we will use [quay.io](https://quay.io/) Docker Registry.
 
     ```console
@@ -228,7 +241,7 @@ There are two ways of approaching this problem:
     $ docker push quay.io/user/md5_server:v1
     ```
 
-    The next step would be to create a pod spec that would be run on Kubernetes (`spec.yaml`):
+    The next step is to create spec of a Pod, that will be run on Kubernetes (`spec.yaml`):
 
     ```yaml
     apiVersion: v1
@@ -249,18 +262,18 @@ There are two ways of approaching this problem:
     ```
 
     **Important**: the server listens on the same port as specified in `ports.containerPort`.
-    This is required, as a target needs to know precise address of the ETL container.
+    It is required, as a target needs to know the precise address of the ETL container.
 
     Another note is that we pass additional parameters via the `annotations` field.
-    We specified the communication type and wait time (for the pod to start).
+    We specified the communication type and wait time (for the Pod to start).
 
-    Once we have our `spec.yaml` we can initialize ETL with CLI:
+    Once we have our `spec.yaml`, we can initialize ETL with CLI:
     ```console
     $ ais etl init spec.yaml
     JGHEoo89gg
     ```
 
-Just before we started ETL containers our pods looked like this:
+Just before we started ETL containers, our Pods looked like this:
 
 ```console
 $ kubectl get pods
@@ -270,8 +283,8 @@ ais-target-9knsb     1/1     Running   0          46m
 ais-target-fsxhp     1/1     Running   0          46m
 ```
 
-We can see that the cluster is running with 1 proxy and 2 targets.
-After we initialized the ETL, we expect two more pods to be started (`#targets == #etl_containers`).
+We can see that the cluster is running with one proxy and two targets.
+After we initialized the ETL, we expect two more Pods to be started (`#targets == #etl_containers`).
 
 ```console
 $ kubectl get pods
@@ -283,7 +296,7 @@ transformer-md5-fgjk3-node1           1/1     Running   0          1m
 transformer-md5-vspra-node2           1/1     Running   0          1m
 ```
 
-As expected, two more pods are up and running - one for each target.
+As expected, two more Pods are up and running - one for each target.
 
 > ETL containers will be run on the same node as the targets that started them.
 > In other words, each ETL container runs close to data and does not generate any extract-transform-load
@@ -291,7 +304,7 @@ As expected, two more pods are up and running - one for each target.
 > (one container per target) and that all ETL containers run in parallel, the cumulative "transformation"
 > bandwidth scales proportionally to the number of storage nodes and disks.
 
-Finally, we can use newly created pods to transform the objects on the fly for us:
+Finally, we can use newly created Pods to transform the objects on the fly for us:
 
 ```console
 $ ais create bucket transform
@@ -302,7 +315,7 @@ $ ais etl object JGHEoo89gg transform/shard.in -
 
 Voila! The ETL container successfully computed the `md5` on the `transform/shard.in` object.
 
-Alternatively, one can use offline ETL feature, to transform the whole bucket.
+Alternatively, one can use the offline ETL feature to transform the whole bucket.
 
 ```console
 $ ais create bucket transform
@@ -312,7 +325,7 @@ $ ais etl bucket JGHEoo89gg ais://transform ais://transform-md5
 $ ais wait xaction 5JjIuGemR
 ```
 
-Once ETL isn't needed anymore, the pods can be stopped with:
+Once ETL isn't needed anymore, the Pods can be stopped with:
 
 ```console
 $ ais etl stop JGHEoo89gg
@@ -326,10 +339,10 @@ ais-target-fsxhp     1/1     Running   0          48m
 
 ### PyTorch ImageNet preprocessing
 
-In this example, we will see how ETL can be used to preprocess the images of ImageNet for the learning.
+In this example, we will see how ETL can be used to preprocess the images of ImageNet for learning.
 We will be using `python3` runtime.
 
-Before we start writing code let's put example tar file with ImageNet images to the AIStore.
+Before we start writing code, let's put an example tar file with ImageNet images to the AIStore.
 The tar we will be using is `n02085620.tar` (saved as `raw-train.tar`) from [ILSVRC2012_img_train_t3.tar](http://www.image-net.org/challenges/LSVRC/2012/dd31405981ef5f776aa17412e1f0c112/ILSVRC2012_img_train_t3.tar).
 
 ```console
@@ -395,21 +408,20 @@ $ tar -tvf preprocessed-train.tar | head -n 5
 -rw-r--r--  0 aditya86 users  150528 Jul  4  2012 n02085620_10976.JPEG
 ```
 
-As expected, the size of the images inside the new tarball has been standardized as all images have the same resolution (`224*224*3=150528`).
+As expected, the size of the new tarball images has been standardized as all images have the same resolution (`224*224*3=150528`).
 
 ## API Reference
 
 This section describes how to interact with ETLs via RESTful API.
-Alternatively, you can use [ETL CLI](/cmd/cli/resources/etl.md) or [AIS Loader](/bench/aisloader/README.md).
 
 > `G` - denotes a (`hostname:port`) address of a **gateway** (any gateway in a given AIS cluster)
 
 | Operation | Description | HTTP action | Example |
-|--- | --- | --- | ---|
-| Init ETL | Inits ETL based on `spec.yaml`. Returns `ETL_ID` | POST /v1/etl/init | `curl -X POST 'http://G/v1/etl/init' -T spec.yaml` |
-| Build ETL | Builds and initializes ETL based on the provided source code. Returns `ETL_ID` | POST /v1/etl/build | `curl -X POST 'http://G/v1/etl/build' '{"code": "...", "dependencies": "...", "runtime": "python3"}'` |
-| List ETLs | Lists all running ETLs | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
-| Transform object | Transforms an object based on ETL with `ETL_ID` | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
-| Transform bucket | Transforms all objects in a bucket and puts them to destination bucket | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "prefix":"prefix", "suffix": "suffix"}}' 'http://G/v1/buckets/from-name'` |
-| Dry run transform bucket | Accumulates in xaction stats how many objects and bytes would be created, without actually doing it | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "dry_run": true}}' 'http://G/v1/buckets/from-name'` |
-| Stop ETL | Stops ETL with given `ETL_ID` | DELETE /v1/etl/stop/ETL_ID | `curl -X DELETE 'http://G/v1/etl/stop/ETL_ID'` |
+| --- | --- | --- | --- |
+| Init ETL | Inits ETL based on `spec.yaml`. Returns `ETL_ID`. | POST /v1/etl/init | `curl -X POST 'http://G/v1/etl/init' -T spec.yaml` |
+| Build ETL | Builds and initializes ETL based on the provided source code. Returns `ETL_ID`. | POST /v1/etl/build | `curl -X POST 'http://G/v1/etl/build' '{"code": "...", "dependencies": "...", "runtime": "python3"}'` |
+| List ETLs | Lists all running ETLs. | GET /v1/etl/list | `curl -L -X GET 'http://G/v1/etl/list'` |
+| Transform object | Transforms an object based on ETL with `ETL_ID`. | GET /v1/objects/<bucket>/<objname>?uuid=ETL_ID | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?uuid=ETL_ID' -o transformed_shard01.tar` |
+| Transform bucket | Transforms all objects in a bucket and puts them to destination bucket. | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "prefix":"prefix", "suffix": "suffix"}}' 'http://G/v1/buckets/from-name'` |
+| Dry run transform bucket | Accumulates in xaction stats how many objects and bytes would be created, without actually doing it. | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "dry_run": true}}' 'http://G/v1/buckets/from-name'` |
+| Stop ETL | Stops ETL with given `ETL_ID`. | DELETE /v1/etl/stop/ETL_ID | `curl -X DELETE 'http://G/v1/etl/stop/ETL_ID'` |

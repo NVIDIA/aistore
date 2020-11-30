@@ -2,9 +2,9 @@
 
 `ais etl init SPEC_FILE`
 
-Init ETL with Pod yaml specification file.
+Init ETL with Pod YAML specification file.
 
-Note: as of AIStore v3.2 only one ETL at a time is supported.
+Note: currently, only one ETL at a time is supported.
 
 ### Example
 
@@ -35,13 +35,13 @@ JGHEoo89gg
 
 `ais etl build --from-file=CODE_FILE --runtime=RUNTIME [--deps-file=DEPS_FILE]`
 
-Builds and initializes ETL from provided `CODE_FILE` that contains transformation function named `transform`.
-The `transform` function must take `input_bytes` (raw bytes of the objects) as parameters and return transformed object (also raw bytes which will be saved into new object).
+Builds and initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`.
+The `transform` function must take `input_bytes` (raw bytes of the objects) as parameters and return the transformed object (also raw bytes that will be saved into a new object).
 
-> The ETL simply crashes if the function panics or throws exception.
+> The ETL crashes if the function panics or throws an exception.
 > Therefore, error handling should be done inside the function.
 
-Note: as of AIStore v3.2 only `python3` and `python2` runtimes are supported.
+Note: currently only `python3` and `python2` runtimes are supported.
 
 ### Example
 
@@ -70,13 +70,13 @@ Lists all available ETLs.
 `ais etl logs ETL_ID [TARGET_ID]`
 
 Output logs produced by given ETL.
-It is possible to pass additional parameter to specify particular `TARGET_ID` from which the logs must be retrieved.
+It is possible to pass an additional parameter to specify a particular `TARGET_ID` from which the logs must be retrieved.
 
 ## Stop ETL
 
 `ais etl stop ETL_ID`
 
-Stop ETL with specified id.
+Stop ETL with the specified id.
 
 ## Transform object on-the-fly with given ETL
 
@@ -97,7 +97,7 @@ $ ais etl object JGHEoo89gg ais://shards/shard-0.tar -
 
 #### Transform object to output file
 
-Do ETL on `shards/shard-0.tar` object with `JGHEoo89gg` ETL (computes MD5 of the object) and save output to `output.txt` file.
+Do ETL on the `shards/shard-0.tar` object with `JGHEoo89gg` ETL (computes MD5 of the object) and save the output to the `output.txt` file.
 
 ```console
 $ ais etl object JGHEoo89gg ais://shards/shard-0.tar output.txt
@@ -105,7 +105,7 @@ $ cat output.txt
 393c6706efb128fbc442d3f7d084a426
 ```
 
-## Transform the whole bucket offline with given ETL
+## Transform the whole bucket offline with the given ETL
 
 `ais etl bucket ETL_ID SRC_BUCKET_NAME DST_BUCKET_NAME`
 
@@ -156,7 +156,3 @@ $ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --dry-run
 [DRY RUN] No modifications on the cluster
 2 objects (20MiB) would have been put into bucket ais://dst_bucket
 ```
-
-
-
-
