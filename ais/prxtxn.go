@@ -80,7 +80,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
 	glog.Infof("Begin create-bucket (msg: %v, bck: %s)", msg, bck)
-	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	for res := range results {
 		if res.err != nil {
 			glog.Errorf("Abort create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
@@ -151,7 +151,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bck, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -191,7 +191,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 
 	// 5. commit
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
@@ -285,7 +285,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(nmsg, bck, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -328,7 +328,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 
 	// 5. commit
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 	return
 }
 
@@ -384,7 +384,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(nmsg, bckFrom, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -430,7 +430,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	c.req.Body = cmn.MustMarshal(c.msg)
 
-	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 
 	// 6. start rebalance and resilver
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
@@ -490,7 +490,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	var (
 		waitmsync = !dryRun
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -526,7 +526,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 
 	// 5. commit
 	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: cmn.LongTimeout})
+	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
 	xactID = c.uuid
 	return
 }
@@ -611,7 +611,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bck, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -686,7 +686,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	var (
 		waitmsync = false
 		c         = p.prepTxnClient(msg, nil, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
 	for res := range results {
 		if res.err != nil {
@@ -741,7 +741,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		c         = p.prepTxnClient(actMsg, bck, waitmsync)
 	)
 	glog.Infof("Begin destroy-bucket (msg: %v, bck: %s)", msg, bck)
-	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	for res := range results {
 		if res.err != nil {
 			glog.Errorf("Abort destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
