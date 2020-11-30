@@ -612,6 +612,10 @@ func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 			glog.Error(err)
 			reliable = false
 		}
+		if _, err := smap.IsDuplicate(h.si); err != nil {
+			glog.Error(err)
+			reliable = false
+		}
 	}
 	return smap, reliable
 }

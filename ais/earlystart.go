@@ -198,6 +198,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	if !daemon.cli.skipStartup {
 		maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
 		if maxVerSmap != nil {
+			if _, err := maxVerSmap.IsDuplicate(p.si); err != nil {
+				cmn.ExitLogf("FATAL: %v", err)
+			}
 			maxVerSmap.Pmap[p.si.ID()] = p.si
 			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
@@ -415,6 +418,9 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	}
 	if svm.Smap.Primary != nil && svm.Smap.Primary.ID() != p.si.ID() {
 		if svm.Smap.version() > smap.version() {
+			if _, err := svm.Smap.IsDuplicate(p.si); err != nil {
+				cmn.ExitLogf("FATAL: %v", err)
+			}
 			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p.si, smap.StringEx(), svm.Smap.StringEx())
 			svm.Smap.Pmap[p.si.ID()] = p.si
 			p.owner.smap.put(svm.Smap)

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -227,19 +228,30 @@ func (d *Snode) Clone() *Snode {
 	return &dst
 }
 
-func (d *Snode) isDuplicateURL(n *Snode) bool {
+func (d *Snode) isDuplicate(n *Snode) error {
 	var (
 		du = []string{d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL}
 		nu = []string{n.PublicNet.DirectURL, n.IntraControlNet.DirectURL, n.IntraDataNet.DirectURL}
 	)
 	for _, ni := range nu {
+		np, err := url.Parse(ni)
+		if err != nil {
+			return fmt.Errorf("failed to parse %s URL %q: %v", n, ni, err)
+		}
 		for _, di := range du {
+			dp, err := url.Parse(di)
+			if err != nil {
+				return fmt.Errorf("failed to parse %s URL %q: %v", d, di, err)
+			}
+			if np.Host == dp.Host {
+				return fmt.Errorf("duplicate IPs: %s and %s share the same %q", d, n, np.Host)
+			}
 			if ni == di {
-				return true
+				return fmt.Errorf("duplicate URLs: %s and %s share the same %q", d, n, ni)
 			}
 		}
 	}
-	return false
+	return nil
 }
 
 func (d *Snode) IsProxy() bool  { return d.DaemonType == cmn.Proxy }
@@ -387,23 +399,25 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	return nil, fmt.Errorf("couldn't find non-primary or primary proxy (maintenance-count=%d)", cnt)
 }
 
-func (m *Smap) IsDuplicateURL(nsi *Snode) (osi *Snode, err error) {
+func (m *Smap) IsDuplicate(nsi *Snode) (osi *Snode, err error) {
 	for _, tsi := range m.Tmap {
-		if tsi.ID() != nsi.ID() && tsi.isDuplicateURL(nsi) {
+		if tsi.ID() == nsi.ID() {
+			continue
+		}
+		if err = tsi.isDuplicate(nsi); err != nil {
 			osi = tsi
-			break
+			return
 		}
 	}
 	for _, psi := range m.Pmap {
-		if psi.ID() != nsi.ID() && psi.isDuplicateURL(nsi) {
+		if psi.ID() == nsi.ID() {
+			continue
+		}
+		if err = psi.isDuplicate(nsi); err != nil {
 			osi = psi
-			break
+			return
 		}
 	}
-	if osi == nil {
-		return
-	}
-	err = fmt.Errorf("duplicate URL:\n>>> new:\t%s\n<<< old:\t%s", nsi.NameEx(), osi.NameEx())
 	return
 }
 

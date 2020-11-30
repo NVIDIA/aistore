@@ -2978,7 +2978,7 @@ func (p *proxyrunner) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, tag s
 		p.owner.smap.put(clone)
 		return
 	}
-	if _, err = smap.IsDuplicateURL(nsi); err != nil {
+	if _, err = smap.IsDuplicate(nsi); err != nil {
 		err = errors.New(p.si.String() + ": " + err.Error())
 	}
 	update = err == nil

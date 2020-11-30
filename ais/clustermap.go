@@ -304,7 +304,7 @@ func (m *smapX) deepCopy(dst *smapX) {
 
 func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 	for id, si := range m.Tmap {
-		err = dst.handleDuplicateURL(si, override)
+		err = dst.handleDuplicateNode(si, override)
 		if err != nil {
 			return
 		}
@@ -316,7 +316,7 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 		}
 	}
 	for id, si := range m.Pmap {
-		err = dst.handleDuplicateURL(si, override)
+		err = dst.handleDuplicateNode(si, override)
 		if err != nil {
 			return
 		}
@@ -334,18 +334,20 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 	return
 }
 
-// detect duplicate URLs and delete the old one if required
-func (m *smapX) handleDuplicateURL(nsi *cluster.Snode, del bool) (err error) {
+// detect duplicate URLs and/or IPs; if del == true we delete an old one
+// so that the caller can add an updated Snode info instead
+func (m *smapX) handleDuplicateNode(nsi *cluster.Snode, del bool) (err error) {
 	var osi *cluster.Snode
-	if osi, err = m.IsDuplicateURL(nsi); err == nil {
+	if osi, err = m.IsDuplicate(nsi); err == nil {
 		return
 	}
 	glog.Error(err)
 	if !del {
 		return
 	}
+	// TODO: more diligence in determining old-ness
+	glog.Errorf("%v: removing old (?) %s from the current %s and future Smaps", err, osi, m)
 	err = nil
-	glog.Errorf("Warning: removing (old/obsolete) %s from future Smaps", osi)
 	if osi.IsProxy() {
 		m.delProxy(osi.ID())
 	} else {
