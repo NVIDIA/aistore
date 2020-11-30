@@ -7,6 +7,7 @@
         - [Runtimes](#runtimes)
     - [`init` request](#init-request)
         - [Requirements](#requirements)
+        - [YAML Specification](#specification-yaml-file)
         - [Communication Mechanisms](#communication-mechanisms)
         - [Annotations](#annotations)
 - [Transforming objects with ETL](#transforming-objects-with-created-etl)
@@ -82,6 +83,34 @@ Custom ETL container is expected to satisfy the following requirements:
 2. The server can listen on any port, but the port must be specified in Pod spec with `containerPort` - the cluster
  must know how to contact the Pod.
 3. AIS target(s) may send requests in parallel to the web server inside the ETL container - any synchronization, therefore, must be done on the server-side.
+
+#### Specification YAML file
+
+Specification of an ETL should be in form of YAML file.
+It is required to follow Kubernetes [Pod template format](https://kubernetes.io/docs/concepts/workloads/pods/#pod-templates)
+and contain all necessary fields to start the Pod.
+
+##### Required or additional fields
+
+| Path | Required | Description | Default |
+| --- | --- | --- | 
+| `metadata.annotations.communication_type` | `false` | [Communication type](#communication-mechanisms) of an ETL. | `hpush://` |
+| `metadata.annotations.wait_timeout` | `false` | Timeout on ETL Pods starting on target machines. See [annotations](#annotations) | infinity | 
+| `spec.containers` | `true` | Containers running inside a Pod, exactly one required. | - |
+| `spec.containers[0].image` | `true` | Docker image of ETL container. | - |
+| `spec.containers[0].ports` | `true` | Ports exposed by a container, at least one expected. | - |
+| `spec.containers[0].ports[0].Name` | `true` | Name of the first Pod should be `default`. | - |
+| `spec.containers[0].ports[0].containerPort` | `true` | Port which a cluster will contact containers on. | - |
+| `spec.containers[0].readinessProbe` | `true` | ReadinessProbe of a container. | - |
+| `spec.containers[0].readinessProbe.httpGet.Path` | `true` | Path for HTTP readiness probes. | - |
+| `spec.containers[0].readinessProbe.httpGet.Port` | `true` | Port for HTTP readiness probes. Required `default`. | - |
+
+##### Forbidden fields
+
+| Path | Reason |
+| --- | --- |
+| `spec.affinity.nodeAffinity` | Used by AIStore to colocate ETL containers with targets. |
+| `spec.affinity.nodeAntiAffinity` | Used by AIStore to require single ETL at a time. |
 
 #### Communication Mechanisms
 
