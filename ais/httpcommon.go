@@ -80,13 +80,17 @@ type (
 		net []string
 	}
 
-	// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
+	// SmapVoteMsg contains cluster-wide MD and a boolean representing whether or not a vote is currently in proress.
 	// NOTE: exported for integration testing
 	SmapVoteMsg struct {
 		Smap           *smapX    `json:"smap"`
 		BMD            *bucketMD `json:"bucketmd"`
 		RMD            *rebMD    `json:"rmd"`
 		VoteInProgress bool      `json:"vote_in_progress"`
+	}
+
+	electable interface {
+		proxyElection(vr *VoteRecord, primary *cluster.Snode)
 	}
 
 	// two pieces of metadata a self-registering (joining) target wants to know right away
@@ -127,6 +131,7 @@ type (
 		sndRcvBufSize int
 	}
 	httprunner struct {
+		electable
 		name               string
 		publicServer       *netServer
 		intraControlServer *netServer
@@ -148,9 +153,8 @@ type (
 				time atomic.Time // determines time when the node started up
 			}
 		}
-		// NOTE: For now, used only by the primary proxy which promotes other
-		//  proxy to become new primary.
-		// Determines if the primary transition is in progress.
+		// FIXME: Used by the current primary that promotes another proxy to become the new primary.
+		//        True if transition is in progress.
 		inPrimaryTransition atomic.Bool
 	}
 
