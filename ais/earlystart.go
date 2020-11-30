@@ -152,8 +152,8 @@ func (p *proxyrunner) secondaryStartup(smap *smapX, primaryURLs ...string) error
 		smap.Primary = nil
 	}
 	p.owner.smap.put(smap)
-	if err := p.withRetry(p.joinCluster, "join", true /* backoff */, primaryURLs...); err != nil {
-		glog.Errorf("%s failed to join, err: %v", p.si, err)
+	if status, err := p.joinCluster(primaryURLs...); err != nil {
+		glog.Errorf("%s failed to join cluster (status: %d, err: %v)", p.si, status, err)
 		return err
 	}
 

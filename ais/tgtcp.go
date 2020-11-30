@@ -1137,7 +1137,7 @@ func (t *targetrunner) enable() error {
 		return nil
 	}
 	glog.Infof("Enabling %s", t.si)
-	if err := t.withRetry(t.joinCluster, "register", false /* backoff */); err != nil {
+	if _, err := t.joinCluster(); err != nil {
 		return err
 	}
 	t.regstate.disabled = false

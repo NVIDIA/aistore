@@ -228,8 +228,8 @@ func (t *targetrunner) Run() error {
 	t.owner.smap.put(smap)
 
 	// Try joining the cluster.
-	if err := t.withRetry(t.joinCluster, "join", true /*backoff*/); err != nil {
-		glog.Errorf("%s failed to join cluster, err: %v", t.si, err)
+	if status, err := t.joinCluster(); err != nil {
+		glog.Errorf("%s failed to join cluster (status:%d, err: %v)", t.si, status, err)
 		glog.Errorf("%s is terminating", t.si)
 		return err
 	}
