@@ -199,6 +199,9 @@ func (d *Snode) URL(network string) string {
 }
 
 func (d *Snode) Equals(other *Snode) bool {
+	if d == nil || other == nil {
+		return false
+	}
 	return d.ID() == other.ID() && d.DaemonType == other.DaemonType &&
 		reflect.DeepEqual(d.PublicNet, other.PublicNet) &&
 		reflect.DeepEqual(d.IntraControlNet, other.IntraControlNet) &&

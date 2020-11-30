@@ -126,7 +126,6 @@ type (
 		stopCh       chan struct{}       // stop channel
 		workCh       chan revsReq        // work channel
 		retryTimer   *time.Timer         // timer to sync pending
-		stopping     atomic.Bool         // true: primary is shutting down
 		timerStopped bool                // true if retryTimer has been stopped, false otherwise
 	}
 )
@@ -267,7 +266,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		config       = cmn.GCO.Get()
 		pairsToSend  = pairs[:0] // share original slice
 	)
-	if y.stopping.Load() {
+	if daemon.stopping.Load() {
 		return
 	}
 	newCnt := y.countNewMembers(smap)

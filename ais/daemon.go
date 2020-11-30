@@ -54,9 +54,10 @@ type (
 
 	// daemon instance: proxy or storage target
 	daemonCtx struct {
-		cli    cliFlags
-		dryRun dryRunConfig
-		rg     *rungroup
+		cli      cliFlags
+		dryRun   dryRunConfig
+		rg       *rungroup
+		stopping atomic.Bool // true when exiting
 	}
 
 	rungroup struct {
@@ -81,6 +82,7 @@ func (g *rungroup) add(r cmn.Runner) {
 func (g *rungroup) run(mainRunner cmn.Runner) error {
 	var mainDone atomic.Bool
 	g.errCh = make(chan error, len(g.rs))
+	daemon.stopping.Store(false)
 	for _, r := range g.rs {
 		go func(r cmn.Runner) {
 			err := r.Run()
@@ -96,6 +98,7 @@ func (g *rungroup) run(mainRunner cmn.Runner) error {
 
 	// Stop all runners, target (or proxy) first.
 	err := <-g.errCh
+	daemon.stopping.Store(true)
 	if !mainDone.Load() {
 		mainRunner.Stop(err)
 	}

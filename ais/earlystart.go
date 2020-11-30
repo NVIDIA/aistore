@@ -453,6 +453,10 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm SmapVoteMsg) {
 		done, slowp bool
 	)
 	for {
+		if daemon.stopping.Load() {
+			svm.Smap = nil
+			return
+		}
 		last := time.Now().After(deadline)
 		svm, done, slowp = p.bcastMaxVer(bcastSmap, bmds, smaps)
 		if done || last {

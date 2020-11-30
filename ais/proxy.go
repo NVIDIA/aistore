@@ -240,7 +240,6 @@ func (p *proxyrunner) Stop(err error) {
 	xreg.AbortAll()
 
 	if isPrimary {
-		p.metasyncer.stopping.Store(true)
 		// give targets and non primary proxies some time to unregister
 		version := smap.version()
 		for i := 0; i < 20; i++ {

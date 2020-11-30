@@ -98,10 +98,18 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// NOTE: not ignoring errDowngrade
 	if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
-		p.invalmsghdlrf(w, r, "%s: failed to synch %s: %v", p.si, newsmap, err)
-		return
+		if isErrDowngrade(err) {
+			psi := newsmap.GetProxy(msg.Request.Candidate)
+			psi2 := p.owner.smap.get().GetProxy(msg.Request.Candidate)
+			if psi2.Equals(psi) {
+				err = nil
+			}
+		}
+		if err != nil {
+			p.invalmsghdlrf(w, r, "%s: failed to synch %s: %v", p.si, newsmap, err)
+			return
+		}
 	}
 
 	smap := p.owner.smap.get()
