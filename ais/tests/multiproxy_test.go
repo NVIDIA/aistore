@@ -35,7 +35,6 @@ const (
 var (
 	voteTests = []Test{
 		{"PrimaryCrash", primaryCrashElectRestart},
-		{"SetPrimaryBackToOriginal", primarySetToOriginal},
 		{"ProxyCrash", proxyCrash},
 		{"PrimaryAndTargetCrash", primaryAndTargetCrash},
 		{"PrimaryAndProxyCrash", primaryAndProxyCrash},
@@ -48,6 +47,7 @@ var (
 		{"ProxyStress", proxyStress},
 		{"NetworkFailure", networkFailure},
 		{"PrimaryAndNextCrash", primaryAndNextCrash},
+		{"DiscoveryAndOrignalPrimaryCrash", discoveryAndOrigPrimaryProxiesCrash},
 	}
 
 	icTests = []Test{
@@ -650,6 +650,80 @@ loop:
 	}
 }
 
+// Tests if a node is able to restart when discovery and original primary provided in config are not available
+// 1. Set primary as original primary from config
+// 2. Kill discovery node provided in config, a random proxy and target
+// 3. Try restoring the killed nodes one at a time
+func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
+	var (
+		config             = tutils.GetClusterConfig(t)
+		restoreCmd         = make([]tutils.RestoreCmd, 0, 3)
+		configDiscovery, _ = cmn.ParseURL(config.Proxy.DiscoveryURL)
+		proxyURL           string
+		randomKilled       bool
+	)
+
+	// Make sure primary is same config
+	smap := primarySetToOriginal(t)
+	origProxyCnt := smap.CountActiveProxies()
+	origTargetCnt := smap.CountActiveTargets()
+
+	for _, si := range smap.Pmap {
+		if smap.IsPrimary(si) {
+			continue
+		}
+		publicURL, _ := cmn.ParseURL(si.URL(cmn.NetworkPublic))
+		if publicURL.Host == configDiscovery.Host || configDiscovery.Port() == publicURL.Port() {
+			cmd, err := tutils.KillNode(si)
+			tassert.CheckFatal(t, err)
+			restoreCmd = append(restoreCmd, cmd)
+			continue
+		}
+		if randomKilled {
+			// Set proxyURL - used to get latest smap
+			proxyURL = si.URL(cmn.NetworkPublic)
+			continue
+		}
+
+		// Kill a random non primary proxy
+		cmd, err := tutils.KillNode(si)
+		tassert.CheckFatal(t, err)
+		restoreCmd = append(restoreCmd, cmd)
+		randomKilled = true
+	}
+
+	// Kill a random target
+	target, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	cmd, err := tutils.KillNode(target)
+	tassert.CheckFatal(t, err)
+	restoreCmd = append(restoreCmd, cmd)
+
+	// Kill original primary
+	cmd, err = tutils.KillNode(smap.Primary)
+	tassert.CheckFatal(t, err)
+	restoreCmd = append(restoreCmd, cmd)
+
+	proxyCnt, targetCnt := origProxyCnt-3, origTargetCnt-1
+	smap, err = tutils.WaitForClusterState(proxyURL, "kill proxies and target", smap.Version, proxyCnt, targetCnt)
+	tassert.CheckFatal(t, err)
+
+	// Restore all killed nodes
+	for _, cmd := range restoreCmd {
+		if cmd.Node.IsProxy() {
+			proxyCnt++
+		}
+		if cmd.Node.IsTarget() {
+			targetCnt++
+		}
+		tutils.RestoreNode(cmd, false, cmd.Node.Type())
+		_, err = tutils.WaitForClusterState(proxyURL, "to restore "+cmd.Node.ID(), smap.Version, proxyCnt, targetCnt)
+		tassert.CheckError(t, err)
+	}
+
+	tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(proxyURL))
+}
+
 // proxyStress starts a group of workers doing put/get/del in sequence against primary proxy,
 // while the operations are on going, a separate go routine kills the primary proxy, notifies all
 // workers about the proxy change, restart the killed proxy as a non-primary proxy.
@@ -773,15 +847,14 @@ func checkSmaps(t *testing.T, proxyURL string) {
 // NOTE: This test cannot be run as separate test. It requires that original
 // primary proxy was down and retuned back. So, the test should be executed
 // after primaryCrashElectRestart test
-func primarySetToOriginal(t *testing.T) {
-	proxyURL := tutils.GetPrimaryURL()
-	smap := tutils.GetClusterMap(t, proxyURL)
+func primarySetToOriginal(t *testing.T) *cluster.Smap {
 	var (
-		currID, currURL       string
+		proxyURL              = tutils.GetPrimaryURL()
+		smap                  = tutils.GetClusterMap(t, proxyURL)
+		currID                = smap.Primary.ID()
+		currURL               = smap.Primary.URL(cmn.NetworkPublic)
 		byURL, byPort, origID string
 	)
-	currID = smap.Primary.ID()
-	currURL = smap.Primary.URL(cmn.NetworkPublic)
 	if currURL != proxyURL {
 		t.Fatalf("Err in the test itself: expecting currURL %s == proxyurl %s", currURL, proxyURL)
 	}
@@ -819,10 +892,10 @@ func primarySetToOriginal(t *testing.T) {
 	tutils.Logf("Found original primary ID: %s\n", origID)
 	if currID == origID {
 		tutils.Logf("Original %s == the current primary: nothing to do\n", origID)
-		return
+		return smap
 	}
 
-	setPrimaryTo(t, proxyURL, smap, "", origID)
+	return setPrimaryTo(t, proxyURL, smap, "", origID)
 }
 
 // This is duplicated in the tests because the `idDigest` of `daemonInfo` is not
