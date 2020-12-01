@@ -1656,3 +1656,137 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 	m.ensureNumCopies(mpathCount)
 	m.ensureNoErrors()
 }
+
+// 1. Start rebalance
+// 2. Start changing the primary proxy
+// 3. IC must survive and rebalance must finish
+func TestICRebalance(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	var (
+		m = ioContext{
+			t:   t,
+			num: 25000,
+		}
+		rebID string
+	)
+
+	m.saveClusterState()
+	m.expectTargets(3)
+	m.expectProxies(3)
+	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
+	tassert.CheckFatal(t, err)
+	m.proxyURL = psi.URL(cmn.NetworkPublic)
+	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
+
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	m.puts()
+
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	tutils.Logf("Manually initiated rebalance\n")
+	rebID, err = api.StartXaction(baseParams, api.XactReqArgs{Kind: cmn.ActRebalance})
+	tassert.CheckFatal(t, err)
+
+	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance, Timeout: rebalanceStartTimeout}
+	api.WaitForXactionToStart(baseParams, xactArgs)
+
+	tutils.Logf("Killing: %s\n", icNode)
+	// cmd and args are the original command line of how the proxy is started
+	cmd, err := tutils.KillNode(icNode)
+	tassert.CheckFatal(t, err)
+
+	proxyCnt := m.smap.CountActiveProxies()
+	smap, err := tutils.WaitForClusterState(m.proxyURL, "to designate new primary", m.smap.Version, proxyCnt-1, 0)
+	tassert.CheckError(t, err)
+
+	// re-construct the command line to start the original proxy but add the current primary proxy to the args
+	err = tutils.RestoreNode(cmd, false, "proxy (prev primary)")
+	tassert.CheckFatal(t, err)
+
+	smap, err = tutils.WaitForClusterState(m.proxyURL, "to restore", smap.Version, proxyCnt, 0)
+	tassert.CheckFatal(t, err)
+	if _, ok := smap.Pmap[psi.ID()]; !ok {
+		t.Fatalf("Previous primary proxy did not rejoin the cluster")
+	}
+	checkSmaps(t, m.proxyURL)
+
+	tutils.Logf("Wait for rebalance: %s\n", rebID)
+	args := api.XactReqArgs{ID: rebID, Kind: cmn.ActRebalance, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckError(t, err)
+
+	m.assertClusterState()
+}
+
+// 1. Start decommissioning a target with rebalance
+// 2. Start changing the primary proxy
+// 3. IC must survive, rebalance must finish, and the target must be gone
+func TestICDecommission(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
+	var (
+		err error
+		m   = ioContext{
+			t:   t,
+			num: 25000,
+		}
+	)
+
+	m.saveClusterState()
+	m.expectTargets(3)
+	m.expectProxies(3)
+	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
+	tassert.CheckFatal(t, err)
+	m.proxyURL = psi.URL(cmn.NetworkPublic)
+	tutils.Logf("Monitoring node: %s\n", psi)
+	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
+
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	m.puts()
+
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	tsi, err := m.smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	tutils.Logf("Decommissioning %s\n", tsi)
+	actVal := &cmn.ActValDecommision{DaemonID: tsi.ID(), SkipRebalance: true}
+	_, err = api.Decommission(baseParams, actVal)
+	tassert.CheckFatal(t, err)
+	defer func() {
+		rebID, err := tutils.JoinCluster(m.proxyURL, tsi)
+		tassert.CheckFatal(t, err)
+		args := api.XactReqArgs{ID: rebID, Timeout: rebalanceTimeout}
+		_, err = api.WaitForXaction(baseParams, args)
+		tassert.CheckFatal(t, err)
+	}()
+
+	tassert.CheckFatal(t, err)
+	tutils.Logf("Killing: %s\n", icNode)
+
+	// cmd and args are the original command line of how the proxy is started
+	cmd, err := tutils.KillNode(icNode)
+	tassert.CheckFatal(t, err)
+
+	proxyCnt := m.smap.CountActiveProxies()
+	smap, err := tutils.WaitForClusterState(m.proxyURL, "to designate new primary", m.smap.Version, proxyCnt-1, 0)
+	tassert.CheckError(t, err)
+
+	// re-construct the command line to start the original proxy but add the current primary proxy to the args
+	err = tutils.RestoreNode(cmd, false, "proxy (prev primary)")
+	tassert.CheckFatal(t, err)
+
+	smap, err = tutils.WaitForClusterState(m.proxyURL, "to restore", smap.Version, proxyCnt, 0)
+	tassert.CheckFatal(t, err)
+	if _, ok := smap.Pmap[psi.ID()]; !ok {
+		t.Fatalf("Previous primary proxy did not rejoin the cluster")
+	}
+	checkSmaps(t, m.proxyURL)
+
+	_, err = tutils.WaitForClusterState(m.proxyURL, "target decommission",
+		m.smap.Version, m.smap.CountProxies(), m.smap.CountTargets()-1)
+	tassert.CheckFatal(t, err)
+}

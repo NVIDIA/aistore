@@ -126,6 +126,25 @@ func getRandomProxyURL(smap *cluster.Smap) string {
 	return proxies[rand.Intn(len(proxies))].URL(cmn.NetworkPublic)
 }
 
+// Return the first proxy from smap that is IC member. The primary
+// proxy has higher priority.
+func GetICProxy(t testing.TB, smap *cluster.Smap, ignoreID string) *cluster.Snode {
+	if smap.IsIC(smap.Primary) {
+		return smap.Primary
+	}
+	for _, proxy := range smap.Pmap {
+		if ignoreID != "" && proxy.ID() == ignoreID {
+			continue
+		}
+		if !smap.IsIC(proxy) {
+			continue
+		}
+		return proxy
+	}
+	t.Fatal("failed to choose random IC member")
+	return nil
+}
+
 // WaitForClusterState waits until a cluster reaches specified state, meaning:
 // - smap has version larger than origVersion
 // - number of proxies is equal proxyCnt, unless proxyCnt == 0
