@@ -219,24 +219,7 @@ func (t *targetrunner) Run() error {
 	// Init meta-owners and load local instances
 	t.owner.bmd.init()
 
-	var (
-		contactURLs    []string
-		smap, reliable = t.tryLoadSmap()
-	)
-	if smap.validate() == nil {
-		// Gather random URLs to increase our joining chances.
-		var (
-			candidatesCnt = cmn.Min(int(cmn.FastLog2(uint64(len(smap.Pmap)))), 5)
-			candidates    = cmn.NewStringSet(smap.Primary.URL(cmn.NetworkIntraControl))
-		)
-		for _, proxy := range smap.Pmap {
-			candidates.Add(proxy.URL(cmn.NetworkIntraControl))
-			if len(candidates) >= candidatesCnt {
-				break
-			}
-		}
-		contactURLs = candidates.Keys()
-	}
+	smap, reliable := t.tryLoadSmap()
 	if !reliable {
 		smap = newSmap()
 	}
@@ -245,24 +228,10 @@ func (t *targetrunner) Run() error {
 	t.owner.smap.put(smap)
 
 	// Try joining the cluster.
-	if err := t.withRetry(t.joinCluster, "join", true /*backoff*/, contactURLs...); err != nil {
-		if reliable {
-			var (
-				smapMaxVer            int64
-				primaryURL, primaryID string
-				cnt                   int // confirmation count
-			)
-			if smapMaxVer, primaryURL, primaryID, cnt = t.bcastHealth(smap); smapMaxVer > smap.version() {
-				glog.Infof("%s: local copy of %s is older than v%d - retrying via %s(%s, cnt=%d)",
-					t.si, smap, smapMaxVer, primaryURL, primaryID, cnt)
-				err = t.withRetry(t.joinCluster, "join", true, primaryURL)
-			}
-		}
-		if err != nil {
-			glog.Errorf("%s failed to join cluster, err: %v", t.si, err)
-			glog.Errorf("%s is terminating", t.si)
-			return err
-		}
+	if err := t.withRetry(t.joinCluster, "join", true /*backoff*/); err != nil {
+		glog.Errorf("%s failed to join cluster, err: %v", t.si, err)
+		glog.Errorf("%s is terminating", t.si)
+		return err
 	}
 
 	t.markNodeStarted()

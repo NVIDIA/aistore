@@ -117,10 +117,14 @@ type (
 			UUID    string `json:"uuid"`
 		} `json:"bmd"`
 		Smap struct {
-			Version    int64  `json:"version,string"`
-			UUID       string `json:"uuid"`
-			PrimaryURL string `json:"primary_url"`
-			PrimaryID  string `json:"primary_id"`
+			Version int64  `json:"version,string"`
+			UUID    string `json:"uuid"`
+			Primary struct {
+				PubURL  string `json:"pub_url"`
+				CtrlURL string `json:"control_url"`
+				ID      string `json:"id"`
+			}
+			VoteInProgress bool `json:"vote_in_progress"`
 		} `json:"smap"`
 	}
 
@@ -1244,52 +1248,64 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 
 // uses provided Smap and an extended version of the Health(clusterInfo) internal API
 // to discover a better Smap (ie., more current), if exists
-//
-// TODO: utilize for target startup and, for the targets, validate and return maxVerBMD
-//
-func (h *httprunner) bcastHealth(smap *smapX) (smapMaxVer int64, primaryURL, primaryID string, cnt int) {
+// TODO: for the targets, validate and return maxVerBMD
+// NOTE: if `checkAll` is set to false, we stop making further requests once minPidConfirmations is achieved
+func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
+	const maxParallel = 10
 	var (
 		wg      = &sync.WaitGroup{}
 		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
 		timeout = cmn.GCO.Get().Timeout.CplaneOperation
-		mu      = &sync.Mutex{}
+		mu      = &sync.RWMutex{}
 		nodemap = smap.Pmap
+		sema    *cmn.DynSemaphore
 		retried bool
 	)
-	smapMaxVer = smap.version()
-	primaryURL = smap.Primary.URL(cmn.NetworkIntraControl)
-	debug.Assert(primaryURL != "" && smapMaxVer > 0 && smap.isValid())
+	maxCii = &clusterInfo{}
+	maxCii.fillSmap(smap)
+	debug.Assert(maxCii.Smap.Primary.ID != "" && maxCii.Smap.Version > 0 && smap.isValid())
 retry:
+	if len(nodemap) > maxParallel && sema == nil {
+		sema = cmn.NewDynSemaphore(maxParallel)
+	}
 	for sid, si := range nodemap {
 		if sid == h.si.ID() {
 			continue
 		}
+		if len(nodemap) > maxParallel {
+			mu.RLock()
+			if len(checkAll) > 0 && !checkAll[1] && cnt >= minPidConfirmations {
+				mu.RUnlock()
+				break
+			}
+			sema.Acquire()
+		}
 		wg.Add(1)
 		go func(si *cluster.Snode) {
-			var (
-				ver      int64
-				url, pid string
-			)
-			defer wg.Done()
+			var cii *clusterInfo
+			defer func() {
+				if len(nodemap) > maxParallel {
+					sema.Release()
+				}
+				wg.Done()
+			}()
 			body, _, err := h.Health(si, timeout, query)
 			if err != nil {
 				return
 			}
-			if ver, url, pid = ciiToSmap(smap, body, h.si, si); ver == 0 {
+			if cii = ciiToSmap(smap, body, h.si, si); cii == nil {
 				return
 			}
 			mu.Lock()
-			if smapMaxVer < ver {
-				smapMaxVer = ver
+			if maxCii.Smap.Version < cii.Smap.Version {
 				// reset the confirmation count iff there's a disagreement on primary ID
-				if primaryID != pid {
+				if maxCii.Smap.Primary.ID != cii.Smap.Primary.ID || cii.Smap.VoteInProgress {
 					cnt = 1
-					primaryURL, primaryID = url, pid
 				} else {
 					cnt++
-					primaryURL = url
 				}
-			} else if smapMaxVer == ver && primaryID == pid {
+				maxCii = cii
+			} else if maxCii.smapEqual(cii) {
 				cnt++
 			}
 			mu.Unlock()
@@ -1306,20 +1322,17 @@ retry:
 	return
 }
 
-func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) (smapVersion int64, primaryURL, primaryID string) {
+func ciiToSmap(smap *smapX, body []byte, self, si *cluster.Snode) *clusterInfo {
 	var cii clusterInfo
 	if err := jsoniter.Unmarshal(body, &cii); err != nil {
 		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
-		return
+		return nil
 	}
 	if smap.UUID != cii.Smap.UUID {
 		glog.Errorf("%s: Smap have different UUIDs: %s and %s from %s", self, smap.UUID, cii.Smap.UUID, si)
-		return
+		return nil
 	}
-	smapVersion = cii.Smap.Version
-	primaryURL = cii.Smap.PrimaryURL
-	primaryID = cii.Smap.PrimaryID
-	return
+	return &cii
 }
 
 //////////////////////////
@@ -1553,6 +1566,23 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res callResu
 		}
 		time.Sleep(10 * time.Second)
 	}
+
+	smap := h.owner.smap.get()
+	if smap.validate() != nil {
+		return
+	}
+
+	// Failed to join cluster using config, try getting primary URL using existing smap.
+	cii, _ := h.bcastHealth(smap, false /*checkAll*/)
+	if cii.Smap.Version < smap.version() {
+		return
+	}
+	primaryURL = cii.Smap.Primary.PubURL
+	res = h.registerToURL(primaryURL, nil, cmn.DefaultTimeout, query, false)
+	if res.err == nil {
+		glog.Infof("%s: joined cluster via %s", h.si, primaryURL)
+	}
+
 	return
 }
 
@@ -1798,8 +1828,22 @@ func (cii *clusterInfo) fill(h *httprunner) {
 	)
 	cii.BMD.Version = bmd.version()
 	cii.BMD.UUID = bmd.UUID
+	cii.fillSmap(smap)
+}
+
+func (cii *clusterInfo) fillSmap(smap *smapX) {
 	cii.Smap.Version = smap.version()
 	cii.Smap.UUID = smap.UUID
-	cii.Smap.PrimaryURL = smap.Primary.URL(cmn.NetworkIntraControl)
-	cii.Smap.PrimaryID = smap.Primary.ID()
+	cii.Smap.Primary.CtrlURL = smap.Primary.URL(cmn.NetworkIntraControl)
+	cii.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetworkPublic)
+	cii.Smap.Primary.ID = smap.Primary.ID()
+	xact := xreg.GetXactRunning(cmn.ActElection)
+	cii.Smap.VoteInProgress = xact != nil
+}
+
+func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
+	if cii == nil || other == nil {
+		return false
+	}
+	return cii.Smap.Version == other.Smap.Version && cii.Smap.Primary.ID == other.Smap.Primary.ID
 }

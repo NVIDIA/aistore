@@ -29,10 +29,10 @@ type (
 // 	- Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
 func (p *proxyrunner) bootstrap() {
 	var (
-		config                = cmn.GCO.Get()
-		pid                   string
-		primaryURL, primaryID string
-		primary               bool
+		config          = cmn.GCO.Get()
+		pid, primaryURL string
+		cii             *clusterInfo
+		primary         bool
 	)
 
 	// 1: load a local copy and try to utilize it for discovery
@@ -48,19 +48,17 @@ func (p *proxyrunner) bootstrap() {
 		if pid != "" { // takes precedence over everything else
 			cmn.Assert(pid == p.si.ID())
 		} else if reliable {
-			var (
-				smapMaxVer int64
-				cnt        int // confirmation count
-			)
+			var cnt int // confirmation count
 			// double-check
-			if smapMaxVer, primaryURL, primaryID, cnt = p.bcastHealth(smap); smapMaxVer > smap.version() {
-				if primaryID != p.si.ID() || cnt < minPidConfirmations {
+			if cii, cnt = p.bcastHealth(smap); cii.Smap.Version > smap.version() {
+				if cii.Smap.Primary.ID != p.si.ID() || cnt < minPidConfirmations {
 					glog.Warningf("%s: cannot assume the primary role: local %s < v%d(%s, cnt=%d)",
-						p.si, smap, smapMaxVer, primaryID, cnt)
+						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
 					primary = false
+					primaryURL = cii.Smap.Primary.PubURL
 				} else {
 					glog.Warningf("%s: proceeding as primary even though local %s < v%d(%s, cnt=%d)",
-						p.si, smap, smapMaxVer, primaryID, cnt)
+						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
 				}
 			}
 		}
