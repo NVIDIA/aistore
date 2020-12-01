@@ -32,15 +32,15 @@ func isRedirect(q url.Values) (delta string) {
 	return q.Get(cmn.URLParamUnixTime)
 }
 
-func redirectLatency(started time.Time, ptime string) (redelta int64) {
+func requestLatency(started time.Time, ptime string) (delta int64) {
 	pts, err := cmn.S2UnixNano(ptime)
 	if err != nil {
 		glog.Errorf("unexpected: failed to convert %s to int, err: %v", ptime, err)
 		return
 	}
-	redelta = started.UnixNano() - pts
-	if redelta < 0 && -redelta < int64(clusterClockDrift) {
-		redelta = 0
+	delta = started.UnixNano() - pts
+	if delta < 0 && -delta < int64(clusterClockDrift) {
+		delta = 0
 	}
 	return
 }

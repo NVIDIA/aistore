@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xaction"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -23,6 +24,7 @@ import (
 // (compare with txnServerCtx & prepTxnServer)
 type (
 	txnClientCtx struct {
+		p       *proxyrunner
 		uuid    string
 		smap    *smapX
 		msg     *aisMsg
@@ -79,13 +81,12 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		waitmsync = true // commit blocks behind metasync
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
-	glog.Infof("Begin create-bucket (msg: %v, bck: %s)", msg, bck)
-	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
+	debug.Infof("Begin create-bucket (msg: %v, bck: %s)", msg, bck)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {
 			glog.Errorf("Abort create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			_ = c.bcast(cmn.ActAbort, 0)
 			return res.err
 		}
 	}
@@ -104,9 +105,8 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	cmn.AssertNoErr(err)
 
 	// 4. commit
-	glog.Infof("Commit create-bucket (msg: %v, bck: %s)", msg, bck)
-	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
+	debug.Infof("Commit create-bucket (msg: %v, bck: %s)", msg, bck)
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for res := range results {
 		if res.err != nil {
 			glog.Errorf("Failed to commit create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
@@ -151,13 +151,12 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bck, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			_ = c.bcast(cmn.ActAbort, 0)
 			err = res.err
 			return
 		}
@@ -190,8 +189,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err) // commit must go thru
@@ -285,13 +283,12 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(nmsg, bck, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			_ = c.bcast(cmn.ActAbort, 0)
 			err = res.err
 			return
 		}
@@ -327,8 +324,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	}
 
 	// 5. commit
-	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
+	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	return
 }
 
@@ -384,13 +380,12 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(nmsg, bckFrom, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			_ = c.bcast(cmn.ActAbort, 0)
 			err = res.err
 			return
 		}
@@ -427,10 +422,8 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 
 	// 5. commit
 	xactID = c.uuid
-	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 	c.req.Body = cmn.MustMarshal(c.msg)
-
-	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
+	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 
 	// 6. start rebalance and resilver
 	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
@@ -490,13 +483,12 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	var (
 		waitmsync = !dryRun
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			_ = c.bcast(cmn.ActAbort, 0)
 			err = res.err
 			return
 		}
@@ -525,8 +517,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
+	_ = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	xactID = c.uuid
 	return
 }
@@ -611,13 +602,12 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	var (
 		waitmsync = true
 		c         = p.prepTxnClient(msg, bck, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			_ = c.bcast(cmn.ActAbort, 0)
 			err = res.err
 			return
 		}
@@ -643,8 +633,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 
 	// 6. commit
 	unlockUpon = true
-	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for res := range results {
 		if res.err != nil {
 			glog.Error(res.err)
@@ -686,13 +675,12 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	var (
 		waitmsync = false
 		c         = p.prepTxnClient(msg, nil, waitmsync)
-		results   = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
 	)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {
 			// abort
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			_ = c.bcast(cmn.ActAbort, 0)
 			err = res.err
 			return
 		}
@@ -700,8 +688,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 
 	// 2. Put node under maintenance
 	if err = p.markMaintenance(msg, si); err != nil {
-		c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-		_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		_ = c.bcast(cmn.ActAbort, 0)
 		return
 	}
 
@@ -740,13 +727,12 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		waitmsync = true
 		c         = p.prepTxnClient(actMsg, bck, waitmsync)
 	)
-	glog.Infof("Begin destroy-bucket (msg: %v, bck: %s)", msg, bck)
-	results := p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.timeout.netw})
+	debug.Infof("Begin destroy-bucket (msg: %v, bck: %s)", msg, bck)
+	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {
 			glog.Errorf("Abort destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
-			c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-			_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+			_ = c.bcast(cmn.ActAbort, 0)
 			return res.err
 		}
 	}
@@ -763,15 +749,13 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	_, err := p.owner.bmd.modify(ctx)
 	if err != nil {
 		glog.Errorf("Abort destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, err)
-		c.req.Path = cmn.JoinWords(c.path, cmn.ActAbort)
-		_ = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap})
+		_ = c.bcast(cmn.ActAbort, 0)
 		return err
 	}
 
 	// 3. Commit
-	glog.Infof("Commit destroy-bucket (msg: %v, bck: %s)", msg, bck)
-	c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
-	results = p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: c.commitTimeout(waitmsync)})
+	debug.Infof("Commit destroy-bucket (msg: %v, bck: %s)", msg, bck)
+	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for res := range results {
 		if res.err != nil {
 			glog.Errorf("Failed to commit destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
@@ -793,9 +777,19 @@ func (c *txnClientCtx) commitTimeout(waitmsync bool) time.Duration {
 	return c.timeout.netw
 }
 
+func (c *txnClientCtx) bcast(phase string, timeout time.Duration) chan callResult {
+	c.req.Path = cmn.JoinWords(c.path, phase)
+	if phase != cmn.ActAbort {
+		now := time.Now()
+		c.req.Query.Set(cmn.URLParamUnixTime, cmn.UnixNano2S(now.UnixNano()))
+	}
+	return c.p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: timeout})
+}
+
 // txn client context
 func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitmsync bool) *txnClientCtx {
 	c := &txnClientCtx{
+		p:    p,
 		uuid: cmn.GenUUID(),
 		smap: p.owner.smap.get(),
 	}
@@ -817,7 +811,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitms
 	c.timeout.host = config.Timeout.MaxHostBusy
 	query.Set(cmn.URLParamHostTimeout, cmn.UnixNano2S(int64(c.timeout.host)))
 
-	c.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.JoinWords(c.path, cmn.ActBegin), Query: query, Body: body}
+	c.req = cmn.ReqArgs{Method: http.MethodPost, Query: query, Body: body}
 	return c
 }
 

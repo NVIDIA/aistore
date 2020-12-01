@@ -253,7 +253,7 @@ func (t *targetrunner) _sendPUT(params cluster.SendToParams) error {
 	)
 
 	hdr.Set(cmn.HeaderPutterID, t.si.ID())
-	query.Add(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
+	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetworkIntraData),
@@ -495,7 +495,7 @@ func (t *targetrunner) DisableMountpath(mountpath, reason string) (disabled bool
 func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error) {
 	// pull the data
 	query := url.Values{}
-	query.Add(cmn.URLParamRebData, "true")
+	query.Set(cmn.URLParamRebData, "true")
 	args := callArgs{
 		si: si,
 		req: cmn.ReqArgs{

@@ -337,7 +337,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 
 func (ic *ic) registerEqual(a regIC) {
 	if a.query != nil {
-		a.query.Add(cmn.URLParamNotifyMe, equalIC)
+		a.query.Set(cmn.URLParamNotifyMe, equalIC)
 	}
 	if a.smap.IsIC(ic.p.si) {
 		err := ic.p.notifs.add(a.nl)

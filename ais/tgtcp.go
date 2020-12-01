@@ -859,7 +859,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	}
 	psi := smap.Primary
 	q := url.Values{}
-	q.Add(cmn.URLParamWhat, what)
+	q.Set(cmn.URLParamWhat, what)
 	if renamed != "" {
 		q.Add(whatRenamedLB, renamed)
 	}
@@ -1150,7 +1150,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 	header := make(http.Header)
 	header.Add(cmn.HeaderCallerID, t.Snode().ID())
 	query := make(url.Values)
-	query.Add(cmn.URLParamSilent, "true")
+	query.Set(cmn.URLParamSilent, "true")
 	args := callArgs{
 		si: tsi,
 		req: cmn.ReqArgs{
@@ -1173,8 +1173,8 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	header := make(http.Header)
 	header.Add(cmn.HeaderCallerID, t.Snode().ID())
 	query := make(url.Values)
-	query.Add(cmn.URLParamSilent, "true")
-	query.Add(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
+	query.Set(cmn.URLParamSilent, "true")
+	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
 	res := t.bcastToGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,

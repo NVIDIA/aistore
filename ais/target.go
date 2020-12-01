@@ -774,7 +774,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 	// TODO: return TCP RST here and elsewhere
 
 	if ptime != "" {
-		if redelta := redirectLatency(started, ptime); redelta != 0 {
+		if redelta := requestLatency(started, ptime); redelta != 0 {
 			t.statsT.Add(stats.GetRedirLatency, redelta)
 		}
 	}
@@ -842,7 +842,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	started := time.Now()
 	if ptime != "" {
-		if redelta := redirectLatency(started, ptime); redelta != 0 {
+		if redelta := requestLatency(started, ptime); redelta != 0 {
 			t.statsT.Add(stats.PutRedirLatency, redelta)
 		}
 	}

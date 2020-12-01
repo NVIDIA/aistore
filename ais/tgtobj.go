@@ -641,7 +641,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	header := make(http.Header)
 	header.Add(cmn.HeaderCallerID, goi.t.Snode().ID())
 	query := url.Values{}
-	query.Add(cmn.URLParamIsGFNRequest, "true")
+	query.Set(cmn.URLParamIsGFNRequest, "true")
 	query = cmn.AddBckToQuery(query, lom.Bck().Bck)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,

@@ -1657,8 +1657,8 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 		redirect += r.URL.RawQuery + "&"
 	}
 
-	query.Add(cmn.URLParamProxyID, p.si.ID())
-	query.Add(cmn.URLParamUnixTime, cmn.UnixNano2S(ts.UnixNano()))
+	query.Set(cmn.URLParamProxyID, p.si.ID())
+	query.Set(cmn.URLParamUnixTime, cmn.UnixNano2S(ts.UnixNano()))
 	redirect += query.Encode()
 	return
 }
