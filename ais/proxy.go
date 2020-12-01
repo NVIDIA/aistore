@@ -186,6 +186,7 @@ func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error)
 	if len(res.bytes) == 0 {
 		return
 	}
+
 	err = p.applyRegMeta(res.bytes, "")
 	return
 }

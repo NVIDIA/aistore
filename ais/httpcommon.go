@@ -1555,6 +1555,9 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res callResu
 
 	for i := 0; i < 2; i++ {
 		for _, candidateURL := range candidates {
+			if daemon.stopping.Load() {
+				return
+			}
 			res = h.registerToURL(candidateURL, nil, cmn.DefaultTimeout, query, false)
 			if res.err == nil {
 				glog.Infof("%s: joined cluster via %s", h.si, candidateURL)
@@ -1575,6 +1578,11 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res callResu
 		return
 	}
 	primaryURL = cii.Smap.Primary.PubURL
+
+	// Daemon is stopping skip register
+	if daemon.stopping.Load() {
+		return
+	}
 	res = h.registerToURL(primaryURL, nil, cmn.DefaultTimeout, query, false)
 	if res.err == nil {
 		glog.Infof("%s: joined cluster via %s", h.si, primaryURL)
@@ -1608,6 +1616,10 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 }
 
 func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error) {
+	if daemon.stopping.Load() {
+		err = fmt.Errorf("%s is stopping", h.si)
+		return
+	}
 	primaryURL, psi := h.getPrimaryURLAndSI()
 	res := h.registerToURL(primaryURL, psi, timeout, nil, true)
 	if res.err != nil {
