@@ -131,7 +131,6 @@ type (
 		sndRcvBufSize int
 	}
 	httprunner struct {
-		electable
 		name               string
 		publicServer       *netServer
 		intraControlServer *netServer
@@ -153,6 +152,7 @@ type (
 				time atomic.Time // determines time when the node started up
 			}
 		}
+		electable electable
 		// FIXME: Used by the current primary that promotes another proxy to become the new primary.
 		//        True if transition is in progress.
 		inPrimaryTransition atomic.Bool

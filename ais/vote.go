@@ -343,7 +343,7 @@ func (h *httprunner) onPrimaryProxyFailure() {
 				Initiator: h.si.ID(),
 			}
 			vr.Smap = clone
-			h.proxyElection(vr, clone.Primary)
+			h.electable.proxyElection(vr, clone.Primary)
 			return
 		}
 

@@ -96,6 +96,7 @@ func (p *proxyrunner) initClusterCIDR() {
 func (p *proxyrunner) Run() error {
 	config := cmn.GCO.Get()
 	p.httprunner.init(config)
+	p.httprunner.electable = p
 	p.owner.bmd = newBMDOwnerPrx(config)
 
 	p.owner.bmd.init() // initialize owner and load BMD
