@@ -93,7 +93,7 @@ and contain all necessary fields to start the Pod.
 ##### Required or additional fields
 
 | Path | Required | Description | Default |
-| --- | --- | --- | 
+| --- | --- | --- | --- |
 | `metadata.annotations.communication_type` | `false` | [Communication type](#communication-mechanisms) of an ETL. | `hpush://` |
 | `metadata.annotations.wait_timeout` | `false` | Timeout on ETL Pods starting on target machines. See [annotations](#annotations) | infinity | 
 | `spec.containers` | `true` | Containers running inside a Pod, exactly one required. | - |
@@ -102,6 +102,8 @@ and contain all necessary fields to start the Pod.
 | `spec.containers[0].ports[0].Name` | `true` | Name of the first Pod should be `default`. | - |
 | `spec.containers[0].ports[0].containerPort` | `true` | Port which a cluster will contact containers on. | - |
 | `spec.containers[0].readinessProbe` | `true` | ReadinessProbe of a container. | - |
+| `spec.containers[0].readinessProbe.timeoutSeconds` | `false` | Timeout for a readiness probe in seconds. | `5` | 
+| `spec.containers[0].readinessProbe.periodSeconds` | `false` | Period between readiness probe requests in seconds. | `10` | 
 | `spec.containers[0].readinessProbe.httpGet.Path` | `true` | Path for HTTP readiness probes. | - |
 | `spec.containers[0].readinessProbe.httpGet.Port` | `true` | Port for HTTP readiness probes. Required `default`. | - |
 
