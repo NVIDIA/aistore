@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -87,9 +88,11 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	// 3. do
 	switch msg.Action {
 	case cmn.ActCreateLB, cmn.ActRegisterCB:
+		debug.Infof("Starting transaction create-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 		if err = t.createBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
+		debug.Infof("Finished transaction create-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 	case cmn.ActMakeNCopies:
 		if err = t.makeNCopies(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -125,9 +128,11 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActDestroyLB, cmn.ActEvictCB:
+		debug.Infof("Starting transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 		if err = t.destroyBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
+		debug.Infof("Finished transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 	default:
 		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
