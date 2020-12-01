@@ -608,7 +608,7 @@ func (n *notifs) UnmarshalJSON(data []byte) (err error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	// Populate added, removed and finished slices based on diff.
+	// Identify the diff in ownership table and populate `added`, `removed` and `finished` slices
 	added, removed, finished := n.added[:0], n.removed[:0], n.finished[:0]
 	n.nls.RLock()
 	n.fin.RLock()
@@ -659,6 +659,12 @@ fin:
 		n.fin.add(nl, true /*locked*/)
 	}
 	n.fin.Unlock()
+
+	// Call the Callback for each `nl` marking it finished.
+	now := time.Now().UnixNano()
+	for _, nl := range finished {
+		nl.Callback(nl, now)
+	}
 	return
 }
 
