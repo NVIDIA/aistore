@@ -54,6 +54,13 @@ type (
 		mu   sync.Mutex
 	}
 
+	// WG is an interface for wait group
+	WG interface {
+		Add(int)
+		Done()
+		Wait()
+	}
+
 	// LimitedWaitGroup is helper struct which combines standard wait group and
 	// semaphore to limit the number of goroutines created.
 	LimitedWaitGroup struct {
@@ -64,6 +71,12 @@ type (
 	MultiSyncMap struct {
 		M [MultiSyncMapCount]sync.Map
 	}
+)
+
+// interface guard
+var (
+	_ WG = (*LimitedWaitGroup)(nil)
+	_ WG = (*TimeoutGroup)(nil)
 )
 
 func NewTimeoutGroup() *TimeoutGroup {
@@ -213,13 +226,13 @@ func NewLimitedWaitGroup(n int) *LimitedWaitGroup {
 }
 
 func (wg *LimitedWaitGroup) Add(n int) {
-	wg.wg.Add(n)
 	wg.sema.Acquire(n)
+	wg.wg.Add(n)
 }
 
 func (wg *LimitedWaitGroup) Done() {
-	wg.wg.Done()
 	wg.sema.Release()
+	wg.wg.Done()
 }
 
 func (wg *LimitedWaitGroup) Wait() {

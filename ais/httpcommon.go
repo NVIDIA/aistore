@@ -1253,21 +1253,23 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
 	const maxParallel = 10
 	var (
-		wg      = &sync.WaitGroup{}
+		wg      cmn.WG
 		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
 		timeout = cmn.GCO.Get().Timeout.CplaneOperation
 		mu      = &sync.RWMutex{}
 		nodemap = smap.Pmap
-		sema    *cmn.DynSemaphore
 		retried bool
 	)
 	maxCii = &clusterInfo{}
 	maxCii.fillSmap(smap)
 	debug.Assert(maxCii.Smap.Primary.ID != "" && maxCii.Smap.Version > 0 && smap.isValid())
 retry:
-	if len(nodemap) > maxParallel && sema == nil {
-		sema = cmn.NewDynSemaphore(maxParallel)
+	if len(nodemap) > maxParallel {
+		wg = cmn.NewLimitedWaitGroup(maxParallel)
+	} else {
+		wg = &sync.WaitGroup{}
 	}
+
 	for sid, si := range nodemap {
 		if sid == h.si.ID() {
 			continue
@@ -1278,17 +1280,12 @@ retry:
 				mu.RUnlock()
 				break
 			}
-			sema.Acquire()
+			mu.RUnlock()
 		}
 		wg.Add(1)
 		go func(si *cluster.Snode) {
 			var cii *clusterInfo
-			defer func() {
-				if len(nodemap) > maxParallel {
-					sema.Release()
-				}
-				wg.Done()
-			}()
+			defer wg.Done()
 			body, _, err := h.Health(si, timeout, query)
 			if err != nil {
 				return
