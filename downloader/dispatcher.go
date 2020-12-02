@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"golang.org/x/sync/errgroup"
 )
@@ -392,6 +393,9 @@ func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok 
 }
 
 func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCode int, err error) {
+	debug.Infof("Dispatching admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
+	defer debug.Infof("Finished admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
+
 	req.responseCh = make(chan *response, 1)
 	switch req.action {
 	case actStatus:

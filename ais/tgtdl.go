@@ -114,9 +114,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if payload.ID != "" {
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Getting status of download: %v", payload)
-			}
 			response, statusCode, respErr = downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
 		} else {
 			var regex *regexp.Regexp
@@ -125,9 +122,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 					cmn.InvalidHandlerWithMsg(w, r, err.Error())
 					return
 				}
-			}
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Listing downloads")
 			}
 			response, statusCode, respErr = downloaderXact.ListJobs(regex)
 		}
@@ -149,14 +143,8 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		switch items[0] {
 		case cmn.Abort:
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Aborting download: %v", payload)
-			}
 			response, statusCode, respErr = downloaderXact.AbortJob(payload.ID)
 		case cmn.Remove:
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Removing download: %v", payload)
-			}
 			response, statusCode, respErr = downloaderXact.RemoveJob(payload.ID)
 		default:
 			t.invalmsghdlrf(w, r, "invalid action for DELETE request %q (expected either %q or %q)", items[0], cmn.Abort, cmn.Remove)
