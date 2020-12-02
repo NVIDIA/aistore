@@ -26,6 +26,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 Also, AIStore:
 
 * can be deployed on any commodity hardware;
+* supports single-command infrastructure and software deployment on Google Cloud Platform via [ais-k8s GitHub repo](https://github.com/NVIDIA/ais-k8s);
 * supports Amazon S3, Google Cloud, and Microsoft Azure backends (and all S3, GCS, and Azure-compliant object storages);
 * provides unified global namespace across (ad-hoc) connected AIS clusters;
 * can be used as a fast cache for GCS and S3; can be populated on-demand and/or via `prefetch` and `download` APIs;
@@ -188,7 +189,10 @@ This repository contains all the scripts needed to run AIS on your laptop or Lin
 For production deployments on Kubernetes, please refer to a separate dedicated github repo:
 
 * [Deploying AIStore on K8s](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md)
-* [Deploying AIStore on cloud K8s](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md)
+* [Deploying AIStore on cloud K8s](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md).
+  It supports single-command infrastructure and software deployment.
+  
+  <img src="docs/images/ais-k8s-deploy.gif" alt="Kubernetes cloud deployment" width="70%">
 
 The rest of this section talks about a single Linux machine and, as such, is intended for developers and development, *or* for a quick trial.
 
