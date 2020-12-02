@@ -1,6 +1,7 @@
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Initializing ETL](#defining-and-initializing-etl)
     - [`build` request](#build-request)
@@ -27,6 +28,30 @@ As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io).
 > If you want to try ETL, we recommend starting the AIStore cluster on the cloud.
 > We have provided scripts to make it easy for you. See [AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md).
 
+## Architecture
+
+The AIStore ETL extension is designed to maximize effectiveness of the transform process.
+It minimizes resources waste on unnecessary operations like exchanging data between storage and compute nodes, which takes place in conventional ETL systems.
+
+Based on specification provided by a user, each target starts its own ETL container (worker), which from now on will be responsible for transforming objects stored on the corresponding target.
+This approach minimizes I/O operations, as well as assures scalability of ETL with the number of targets in the cluster.
+
+The following picture presents architecture of the ETL extension.
+
+<img src="/docs/images/aistore-etl-arch.png" alt="ETL architecture" width="80%">
+
+
+## Prerequisites
+
+- Cluster has to be deployed on Kubernetes.
+- A target must know on which Kubernetes Node it runs.
+To achieve this, the target uses `HOSTNAME` environment variable, set by Kubernetes, to discover its Pod name.
+This variable should not be overwritten during the deployment of a target Pod.
+
+## Defining and initializing ETL
+
+This section is going to describe how to define and initialize custom ETL transformations in the AIStore cluster.
+
 Deploying ETL consists of the following steps:
 1. To start distributed ETL processing, a user either:
    * needs to send transform function in [**build** request](#build-request) to the AIStore endpoint, or
@@ -34,16 +59,6 @@ Deploying ETL consists of the following steps:
      >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
 2. Upon receiving **build**/**init** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
 3. When a target receives **build**/**init**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
-
-## Defining and initializing ETL
-
-This section is going to describe how to define and initialize custom ETL transformations in the AIStore cluster.
-
-### Prerequisites
-
-A target must know on which Kubernetes Node it runs.
-To achieve this, the target uses `HOSTNAME` environment variable, set by Kubernetes, to discover its Pod name.
-This variable should not be overwritten during the deployment of a target Pod.
 
 ### `build` request
 
