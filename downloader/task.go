@@ -97,13 +97,13 @@ func (t *singleObjectTask) download() {
 	t.parent.BytesAdd(t.currentSize.Load())
 }
 
-func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) error {
+func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) (fatal bool, err error) {
 	ctx, cancel := context.WithTimeout(t.downloadCtx, timeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.obj.link, nil)
 	if err != nil {
-		return err
+		return true, err
 	}
 
 	// Set "User-Agent" header when doing requests to Google Cloud Storage.
@@ -114,12 +114,13 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 
 	resp, err := clientForURL(t.obj.link).Do(req)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer cmn.Close(resp.Body)
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return fmt.Errorf("request failed with %d status code (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
+		err, _ := cmn.NewHTTPError(req, "", resp.StatusCode)
+		return false, err
 	}
 
 	var (
@@ -138,23 +139,21 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 		WithFinalize: true,
 	}
 	if _, err = t.parent.t.PutObject(lom, params); err != nil {
-		return err
+		return true, err
 	}
-	if err := lom.Load(); err != nil {
-		return err
-	}
-	return nil
+	return true, lom.Load()
 }
 
 func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {
 	var (
+		fatal   bool
 		httpErr = &cmn.HTTPError{}
 		timeout = t.initialTimeout()
 	)
 	for i := 0; i < retryCnt; i++ {
-		err = t.tryDownloadLocal(lom, timeout)
-		if err == nil {
-			return nil
+		fatal, err = t.tryDownloadLocal(lom, timeout)
+		if err == nil || fatal {
+			return err
 		} else if errors.Is(err, context.Canceled) || errors.Is(err, errThrottlerStopped) {
 			// Download was canceled or stopped, so just return.
 			return err
@@ -176,7 +175,7 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {
 
 		t.reset()
 	}
-	return
+	return err
 }
 
 func (t *singleObjectTask) wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {
