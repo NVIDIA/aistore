@@ -42,7 +42,8 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 			return false
 		}
 	}
-	cmn.Assert(msg.PageSize != 0)
+	debug.Assert(msg.PageSize != 0)
+	debug.Assert(msg.UUID != "")
 
 	xact, isNew, err := xreg.RenewObjList(t, bck, msg.UUID, msg)
 	// Double check that xaction has not gone before starting page read.

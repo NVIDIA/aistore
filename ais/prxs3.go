@@ -247,7 +247,7 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smsg := cmn.SelectMsg{TimeFormat: time.RFC3339}
+	smsg := cmn.SelectMsg{UUID: cmn.GenUUID(), TimeFormat: time.RFC3339}
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
 
