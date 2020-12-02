@@ -144,7 +144,7 @@ type (
 	// in a response object, which is used to communicate the outcome of the
 	// request.
 	response struct {
-		resp       interface{}
+		value      interface{}
 		err        error
 		statusCode int
 	}
@@ -157,7 +157,7 @@ type (
 		action     string         // one of: adminAbort, adminList, adminStatus, adminRemove
 		id         string         // id of the job task
 		regex      *regexp.Regexp // regex of descriptions to return if id is empty
-		responseCh chan *response // where the outcome of the request is written
+		response   *response      // where the outcome of the request is written
 		onlyActive bool           // request status of only active tasks
 	}
 
@@ -179,21 +179,20 @@ func clientForURL(u string) *http.Client {
 
 // ============================ Requests =======================================
 
-func (req *request) write(resp interface{}, err error, statusCode int) {
-	req.responseCh <- &response{
-		resp:       resp,
+func (req *request) write(value interface{}, err error, statusCode int) {
+	req.response = &response{
+		value:      value,
 		err:        err,
 		statusCode: statusCode,
 	}
-	close(req.responseCh)
 }
 
 func (req *request) writeErrResp(err error, statusCode int) {
 	req.write(nil, err, statusCode)
 }
 
-func (req *request) writeResp(resp interface{}) {
-	req.write(resp, nil, http.StatusOK)
+func (req *request) writeResp(value interface{}) {
+	req.write(value, nil, http.StatusOK)
 }
 
 // ========================== progressReader ===================================

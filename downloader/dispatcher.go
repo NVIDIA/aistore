@@ -396,7 +396,6 @@ func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCod
 	debug.Infof("Dispatching admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 	defer debug.Infof("Finished admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 
-	req.responseCh = make(chan *response, 1)
 	switch req.action {
 	case actStatus:
 		d.handleStatus(req)
@@ -409,8 +408,8 @@ func (d *dispatcher) dispatchAdminReq(req *request) (resp interface{}, statusCod
 	default:
 		cmn.Assertf(false, "%v; %v", req, req.action)
 	}
-	r := <-req.responseCh
-	return r.resp, r.statusCode, r.err
+	r := req.response
+	return r.value, r.statusCode, r.err
 }
 
 func (d *dispatcher) handleRemove(req *request) {
