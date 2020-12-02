@@ -786,7 +786,7 @@ func TestDistributedSortParallel(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 
 	runDSortTest(
-		t, dsortTestSpec{p: true, types: dsorterTypes},
+		t, dsortTestSpec{p: false, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
 			var (
 				m = &ioContext{
