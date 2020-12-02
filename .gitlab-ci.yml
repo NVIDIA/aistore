@@ -34,6 +34,7 @@ variables:
 .test_long_template: &test_long_def
   stage: test-long
   needs: ["test:short"]
+  timeout: 2h30m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
