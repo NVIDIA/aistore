@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"regexp"
 	"time"
@@ -37,8 +36,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	downloaderXact := xact.(*downloader.Downloader)
 	switch r.Method {
 	case http.MethodPost:
-		_, err := cmn.MatchRESTItems(r.URL.Path, 0, false, cmn.Version, cmn.Download)
-		debug.AssertNoErr(err)
+		if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Download); err != nil {
+			return
+		}
 
 		var (
 			ctx              = context.Background()
@@ -46,7 +46,11 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			dlb              = downloader.DlBody{}
 			progressInterval = downloader.DownloadProgressInterval
 		)
-		debug.Assert(uuid != "")
+		if uuid == "" {
+			debug.Assert(false)
+			t.invalmsghdlr(w, r, "expected uuid in query")
+			return
+		}
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
 			return
 		}
@@ -95,14 +99,19 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}, dlJob)
 		response, statusCode, respErr = downloaderXact.Download(dlJob)
 	case http.MethodGet:
-		_, err := cmn.MatchRESTItems(r.URL.Path, 0, false, cmn.Version, cmn.Download)
-		debug.AssertNoErr(err)
+		if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Download); err != nil {
+			return
+		}
 
 		payload := &downloader.DlAdminBody{}
 		if err := cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
-		debug.AssertNoErr(payload.Validate(false /*requireID*/))
+		if err := payload.Validate(false /*requireID*/); err != nil {
+			debug.Assert(false)
+			t.invalmsghdlr(w, r, "message is not valid")
+			return
+		}
 
 		if payload.ID != "" {
 			if glog.FastV(4, glog.SmoduleAIS) {
@@ -123,14 +132,20 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			response, statusCode, respErr = downloaderXact.ListJobs(regex)
 		}
 	case http.MethodDelete:
-		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.Version, cmn.Download)
-		debug.AssertNoErr(err)
+		items, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Download)
+		if err != nil {
+			return
+		}
 
 		payload := &downloader.DlAdminBody{}
 		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
-		debug.AssertNoErr(payload.Validate(true))
+		if err = payload.Validate(true /*requireID*/); err != nil {
+			debug.Assert(false)
+			t.invalmsghdlr(w, r, "message is not valid")
+			return
+		}
 
 		switch items[0] {
 		case cmn.Abort:
@@ -144,15 +159,11 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			response, statusCode, respErr = downloaderXact.RemoveJob(payload.ID)
 		default:
-			cmn.AssertMsg(false,
-				fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).",
-					items[0], cmn.Abort, cmn.Remove))
+			t.invalmsghdlrf(w, r, "invalid action for DELETE request %q (expected either %q or %q)", items[0], cmn.Abort, cmn.Remove)
 			return
 		}
 	default:
-		cmn.AssertMsg(false,
-			fmt.Sprintf("Invalid http method %s; expected one of %s, %s, %s",
-				r.Method, http.MethodGet, http.MethodPost, http.MethodDelete))
+		t.invalmsghdlrf(w, r, "invalid HTTP method %q", r.Method)
 		return
 	}
 
@@ -164,7 +175,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	if response != nil {
 		b := cmn.MustMarshal(response)
 		if _, err := w.Write(b); err != nil {
-			glog.Errorf("Failed to write to http response: %s.", err.Error())
+			glog.Errorf("Failed to write to HTTP response, err: %v", err)
 		}
 	}
 }
