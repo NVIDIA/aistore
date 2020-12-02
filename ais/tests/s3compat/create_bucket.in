@@ -1,3 +1,4 @@
 aws --endpoint-url http://localhost:8080/s3 s3 mb s3://$BUCKET
-aws --endpoint-url http://localhost:8080/s3 s3 ls // IGNORE
+aws --endpoint-url http://localhost:8080/s3 s3 ls
+aws --endpoint-url http://localhost:8080/s3 s3 ls s3://$BUCKET
 aws --endpoint-url http://localhost:8080/s3 s3 rb s3://$BUCKET

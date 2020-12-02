@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 )
 
@@ -180,6 +181,11 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			}
 
 			continue
+		} else if strings.HasPrefix(scmd, "// SKIP") {
+			message := strings.TrimSpace(strings.TrimPrefix(scmd, "// SKIP"))
+			message = strings.Trim(message, `"`)
+			ginkgo.Skip(message)
+			return
 		}
 
 		scmd = substituteVariables(scmd)

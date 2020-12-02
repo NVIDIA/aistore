@@ -1,3 +1,5 @@
+// SKIP "aws command does not handle redirects correctly"
+
 printf "0123456789" > $OBJECT.txt
 aws --endpoint-url http://localhost:8080/s3 s3 mb s3://$BUCKET // IGNORE
 aws --endpoint-url http://localhost:8080/s3 s3 cp $OBJECT.txt s3://$BUCKET$OBJECT // IGNORE

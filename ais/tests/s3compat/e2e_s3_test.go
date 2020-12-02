@@ -18,7 +18,6 @@ import (
 )
 
 func TestE2ES3(t *testing.T) {
-	t.Skip("disabled until AWS CLI redirect issue is resolved")
 	cmd := exec.Command("which", "aws")
 	if err := cmd.Run(); err != nil {
 		t.Skip("'aws' binary not found")
