@@ -15,7 +15,7 @@ ARG start_script
 RUN mkdir -p /usr/local/bin
 
 RUN apt-get update && apt-get install -y wget sysstat python-pip curl nodejs git iputils-ping netcat golang-go
-RUN pip install awscli
+RUN pip install awscli s3cmd
 RUN cd /opt && git clone git://github.com/etsy/statsd.git
 
 ENV GOPATH /go

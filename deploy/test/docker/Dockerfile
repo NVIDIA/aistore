@@ -5,7 +5,7 @@ RUN apt-get clean && apt-get update &&\
   apt-get --no-install-recommends -y install curl git ca-certificates wget vim python3-setuptools python3 python3-pip sysstat attr net-tools iproute2 build-essential lsof iputils-ping fuse &&\
   apt-get -y clean all
 
-RUN pip3 install awscli
+RUN pip3 install awscli s3cmd
 
 ENV GOLANG_VERSION 1.15
 

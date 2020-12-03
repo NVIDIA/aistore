@@ -1,12 +1,11 @@
-// SKIP "aws command does not handle redirects correctly"
-
 echo "0123456789" > $OBJECT.txt
-aws --endpoint-url http://localhost:8080/s3 s3 mb s3://$BUCKET
-aws --endpoint-url http://localhost:8080/s3 s3 cp $OBJECT.txt s3://$BUCKET$OBJECT // IGNORE
-aws --endpoint-url http://localhost:8080/s3 s3 ls s3://$BUCKET | wc -l
-aws --endpoint-url http://localhost:8080/s3 s3 cp s3://$BUCKET$OBJECT $OBJECT_copy.txt  // IGNORE
+s3cmd --host=http://localhost:8080/s3 mb s3://$BUCKET --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)"
+ais set props ais://$BUCKET checksum.type=md5
+s3cmd --host=http://localhost:8080/s3 put $OBJECT.txt s3://$BUCKET/$OBJECT --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)" // IGNORE
+s3cmd --host=http://localhost:8080/s3 ls s3://$BUCKET --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)" | wc -l
+s3cmd --host=http://localhost:8080/s3 get s3://$BUCKET$OBJECT $OBJECT_copy.txt --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)" // IGNORE
 cat $OBJECT_copy.txt
-aws --endpoint-url http://localhost:8080/s3 s3 rm s3://$BUCKET$OBJECT  // IGNORE
-aws --endpoint-url http://localhost:8080/s3 s3 rb s3://$BUCKET
 rm $OBJECT.txt // IGNORE
 rm $OBJECT_copy.txt // IGNORE
+s3cmd --host=http://localhost:8080/s3 rm s3://$BUCKET$OBJECT --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)"  // IGNORE
+s3cmd --host=http://localhost:8080/s3 rb s3://$BUCKET --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)"

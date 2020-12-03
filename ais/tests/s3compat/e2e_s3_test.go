@@ -18,9 +18,9 @@ import (
 )
 
 func TestE2ES3(t *testing.T) {
-	cmd := exec.Command("which", "aws")
+	cmd := exec.Command("which", "s3cmd")
 	if err := cmd.Run(); err != nil {
-		t.Skip("'aws' binary not found")
+		t.Skip("'s3cmd' binary not found")
 	}
 
 	config.DefaultReporterConfig.SlowSpecThreshold = 15 * time.Second.Seconds()

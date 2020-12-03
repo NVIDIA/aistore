@@ -1,7 +1,0 @@
-make_bucket: $BUCKET_1
-make_bucket: $BUCKET_2
-^.*11.*$
-^.*11.*$
-^.*11.*$
-remove_bucket: $BUCKET_1
-remove_bucket: $BUCKET_2

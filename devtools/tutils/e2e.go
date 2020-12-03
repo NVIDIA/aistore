@@ -90,7 +90,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		outs []string
 
 		lastResult = ""
-		bucket     = cmn.RandString(10)
+		bucket     = strings.ToLower(cmn.RandString(10))
 		space      = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
 		target     = randomTarget()
 		mountpath  = randomMountpath(target)

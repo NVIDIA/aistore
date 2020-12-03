@@ -24,7 +24,7 @@ RUN apt-get install -y nodejs
 
 RUN wget https://bootstrap.pypa.io/get-pip.py &&\
   python get-pip.py &&\
-  pip install awscli
+  pip install awscli s3cmd
 
 # Setting ENV variables
 ENV GOLANG_VERSION 1.15

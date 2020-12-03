@@ -1,4 +1,4 @@
-aws --endpoint-url http://localhost:8080/s3 s3 mb s3://$BUCKET
-aws --endpoint-url http://localhost:8080/s3 s3 ls
-aws --endpoint-url http://localhost:8080/s3 s3 ls s3://$BUCKET
-aws --endpoint-url http://localhost:8080/s3 s3 rb s3://$BUCKET
+s3cmd mb s3://$BUCKET --host=http://localhost:8080/s3 --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)"
+s3cmd ls --host=http://localhost:8080/s3 --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)"
+s3cmd ls s3://$BUCKET --host=http://localhost:8080/s3 --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)"
+s3cmd rb s3://$BUCKET --host=http://localhost:8080/s3 --no-ssl --no-check-certificate --region us-west-1 --host-bucket="http://localhost:8080/s3/%(bucket)"
