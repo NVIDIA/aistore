@@ -101,6 +101,8 @@ type (
 		Reb  bool           `json:"reb"`
 	}
 
+	nodeRegPool []nodeRegMeta
+
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
 	aisMsg struct {
 		cmn.ActionMsg

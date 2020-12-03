@@ -7,6 +7,8 @@ package ais
 import (
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -216,23 +218,24 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	// 2: merging local => boot
 	if haveRegistratons {
 		var added int
+		p.owner.smap.Lock()
+		smap = p.owner.smap.get()
 		if loadedSmap != nil {
 			added, _ = smap.merge(loadedSmap, true /*override (IP, port) duplicates*/)
-			p.owner.smap.Lock()
 			smap = loadedSmap
 			if added > 0 {
 				smap.Version = smap.Version + int64(added) + 1
 			}
-			p.owner.smap.put(smap)
-			p.owner.smap.Unlock()
 		}
 		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, smap.StringEx(), added)
-		bmd := p.owner.bmd.get()
-		msg := p.newAisMsgStr(metaction1, smap, bmd)
 		if smap.UUID == "" {
-			uuid, created = newClusterUUID() // new uuid
+			uuid, created = p.discoverClusterUUID()
 			smap.UUID, smap.CreationTime = uuid, created
 		}
+		p.owner.smap.put(smap)
+		p.owner.smap.Unlock()
+		bmd := p.owner.bmd.get()
+		msg := p.newAisMsgStr(metaction1, smap, bmd)
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 		wg.Wait()
 	} else {
@@ -323,6 +326,11 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	glog.Infof("%s: primary & cluster startup complete", p.si)
 	p.markClusterStarted()
+
+	// Clear regpool, only used in startup
+	p.regmu.Lock()
+	p.regpool = nil
+	p.regmu.Unlock()
 }
 
 // maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on
@@ -416,8 +424,17 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 	}
 	if svm.Smap.Primary != nil && svm.Smap.Primary.ID() != p.si.ID() {
 		if svm.Smap.version() > smap.version() {
-			if _, err := svm.Smap.IsDuplicate(p.si); err != nil {
-				cmn.ExitLogf("FATAL: %v", err)
+			if dupNode, err := svm.Smap.IsDuplicate(p.si); err != nil {
+				if !svm.Smap.IsPrimary(dupNode) {
+					cmn.ExitLogf("FATAL: %v", err)
+				}
+				// If the primary in max-ver Smap version and current node only differ by `DaemonID`,
+				// overwrite the proxy entry with current `Snode` and proceed to merging Smap.
+				// TODO: Add sophisticated validation to ensure `dupNode` and `p.si` only differ in `DaemonID`.
+				svm.Smap.Primary = p.si
+				svm.Smap.delProxy(dupNode.ID())
+				svm.Smap.Pmap[p.si.ID()] = p.si
+				goto merge
 			}
 			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p.si, smap.StringEx(), svm.Smap.StringEx())
 			svm.Smap.Pmap[p.si.ID()] = p.si
@@ -427,6 +444,7 @@ func (p *proxyrunner) discoverMeta(smap *smapX) {
 		// FATAL: cluster integrity error (cie)
 		cmn.ExitLogf("%s: split-brain local [%s %s] vs %s", ciError(20), p.si, smap.StringEx(), svm.Smap.StringEx())
 	}
+merge:
 	p.owner.smap.Lock()
 	clone := p.owner.smap.get().clone()
 	if !eq {
@@ -596,4 +614,39 @@ func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 		}
 	}
 	return nil
+}
+
+func (p *proxyrunner) discoverClusterUUID() (uuid, created string) {
+	p.regmu.RLock()
+	defer p.regmu.RUnlock()
+	if len(p.regpool) == 0 {
+		return newClusterUUID()
+	}
+	var maxCnt int
+	counter := make(map[string]int) // UUID => count
+	for _, regReq := range p.regpool {
+		if regReq.Smap == nil || !cmn.IsValidUUID(regReq.Smap.UUID) {
+			continue
+		}
+		counter[regReq.Smap.UUID]++
+		if maxCnt < counter[regReq.Smap.UUID] {
+			maxCnt = counter[regReq.Smap.UUID]
+			uuid, created = regReq.Smap.UUID, regReq.Smap.CreationTime
+		}
+	}
+
+	if len(counter) > 1 {
+		var uuids string
+		for id, cnt := range counter {
+			uuids += id + "(cnt-" + strconv.Itoa(cnt) + ") vs "
+		}
+		uuids = strings.TrimRight(uuids, "vs ")
+		glog.Errorf("%s: smap UUIDs don't match %s", ciError(10), uuids)
+	}
+
+	if (maxCnt > 0 && len(counter) == 1) || maxCnt > minPidConfirmations {
+		glog.Infof("%s: rediscovered cluster UUID %s at conf. count %d", p.si, uuid, maxCnt)
+		return
+	}
+	return newClusterUUID()
 }

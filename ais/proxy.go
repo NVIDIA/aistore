@@ -72,6 +72,8 @@ type (
 		rproxy     reverseProxy
 		notifs     notifs
 		ic         ic
+		regmu      sync.RWMutex
+		regpool    nodeRegPool
 		qm         queryMem
 		gmm        *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	}
@@ -2830,7 +2832,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlrf(w, r, "invalid URL path: %q", apiItems[0])
 		return
 	}
-
+	if selfRegister && !p.ClusterStarted() {
+		p.regmu.Lock()
+		p.regpool = append(p.regpool, regReq)
+		p.regmu.Unlock()
+	}
 	nsi := regReq.SI
 	if err := nsi.Validate(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
