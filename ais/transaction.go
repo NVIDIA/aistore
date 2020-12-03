@@ -379,9 +379,7 @@ func newTxnBckBase(kind string, bck cluster.Bck) *txnBckBase {
 
 func (txn *txnBckBase) cleanup() {
 	for _, p := range txn.nlps {
-		nlp, ok := p.(*cluster.NameLockPair)
-		cmn.Assert(ok)
-		nlp.Unlock()
+		p.Unlock()
 	}
 	txn.nlps = txn.nlps[:0]
 }
