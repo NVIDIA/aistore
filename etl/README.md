@@ -27,6 +27,21 @@ The example above uses [AIS CLI](/cmd/cli/README.md) to:
 
 5. **Compare** the output with locally computed MD5.
 
+## Offline ETL example
+
+<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
+
+The example above uses [AIS CLI](/cmd/cli/README.md) to:
+1. **Create** a new AIS bucket
+
+2. **PUT** multiple TAR files into created bucket
+
+3. **Init** ETL container based only on a python function
+
+4. **Transform** offline each TAR from the source bucket, by standardizing images from the TAR and putting results in a destination bucket
+
+5. **Verify** the transformation output by downloading one of the ransformed TARs and checking its content.
+
 ## Management and Benchmarking
 - [AIS CLI](/cmd/cli/resources/etl.md) includes commands to start, stop, and monitor ETL at runtime.
 - [AIS Loader](/bench/aisloader/README.md) has been extended to benchmark and stress test AIS clusters by running a number of pre-defined transformations that we include with the source code.

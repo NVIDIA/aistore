@@ -456,6 +456,11 @@ $ tar -tvf preprocessed-train.tar | head -n 5
 
 As expected, the size of the new tarball images has been standardized as all images have the same resolution (`224*224*3=150528`).
 
+The following GIF presents the whole operation.
+
+<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
+
+
 ## API Reference
 
 This section describes how to interact with ETLs via RESTful API.
