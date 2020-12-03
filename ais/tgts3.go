@@ -141,6 +141,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 		t.invalmsghdlr(w, r, err.Error(), errCode)
 		return
 	}
+	s3compat.SetHeaderFromLOM(w.Header(), lom, 0)
 }
 
 // PUT s3/bckName/objName

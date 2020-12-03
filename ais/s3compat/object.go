@@ -108,6 +108,8 @@ func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
 		if v, exists := lom.GetCustomMD(cluster.MD5ObjMD); exists {
 			header.Set(headerETag, v)
 		}
+	} else if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cmn.ChecksumMD5 {
+		header.Set(headerETag, cksum.Value())
 	}
 	header.Set(headerAtime, FormatTime(lom.Atime()))
 	header.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
