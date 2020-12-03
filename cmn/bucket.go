@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -71,8 +72,8 @@ type (
 	// implemented by cluster.Bck
 	NLP interface {
 		Lock()
-		TryLock() bool
-		TryRLock() bool
+		TryLock(timeout time.Duration) bool
+		TryRLock(timeout time.Duration) bool
 		Unlock()
 	}
 )

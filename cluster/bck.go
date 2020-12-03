@@ -17,6 +17,8 @@ import (
 
 const (
 	aisBIDmask = uint64(1 << 63)
+
+	nlpTryDefault = time.Second // nlp.TryLock default duration
 )
 
 type (
@@ -40,6 +42,8 @@ var bckLocker nameLocker
 func InitBckLocker() {
 	bckLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	bckLocker.init()
+
+	initDumpNameLocks() // when built with debug
 }
 
 func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
@@ -253,22 +257,26 @@ func (b *Bck) GetNameLockPair() (nlp *NameLockPair) {
 	return
 }
 
-const nlpTryDuration = 5 * time.Second
-
 func (nlp *NameLockPair) Lock() {
 	nlp.nlc.Lock(nlp.uname, true)
 	nlp.exclusive = true
 }
 
-func (nlp *NameLockPair) TryLock() (ok bool) {
-	ok = nlp.withRetry(nlpTryDuration, true)
+func (nlp *NameLockPair) TryLock(timeout time.Duration) (ok bool) {
+	if timeout == 0 {
+		timeout = nlpTryDefault
+	}
+	ok = nlp.withRetry(timeout, true)
 	nlp.exclusive = ok
 	return
 }
 
 // TODO: ensure single-time usage (no ref counting!)
-func (nlp *NameLockPair) TryRLock() (ok bool) {
-	ok = nlp.withRetry(nlpTryDuration, false)
+func (nlp *NameLockPair) TryRLock(timeout time.Duration) (ok bool) {
+	if timeout == 0 {
+		timeout = nlpTryDefault
+	}
+	ok = nlp.withRetry(timeout, false)
 	cmn.Assert(!nlp.exclusive)
 	return
 }

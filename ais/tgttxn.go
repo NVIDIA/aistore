@@ -186,7 +186,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 			return err
 		}
 		nlp := c.bck.GetNameLockPair()
-		if !nlp.TryLock() {
+		if !nlp.TryLock(c.timeout.netw / 2) {
 			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
 		}
 		txn := newTxnMakeNCopies(c, curCopies, newCopies)
@@ -266,7 +266,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 			return err
 		}
 		nlp := c.bck.GetNameLockPair()
-		if !nlp.TryLock() {
+		if !nlp.TryLock(c.timeout.netw / 2) {
 			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
 		}
 		txn := newTxnSetBucketProps(c, nprops)
@@ -360,10 +360,10 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		}
 		nlpFrom := bckFrom.GetNameLockPair()
 		nlpTo := bckTo.GetNameLockPair()
-		if !nlpFrom.TryLock() {
+		if !nlpFrom.TryLock(c.timeout.netw / 4) {
 			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
 		}
-		if !nlpTo.TryLock() {
+		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpFrom.Unlock()
 			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
 		}
@@ -490,14 +490,14 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		}
 
 		nlpFrom = bckFrom.GetNameLockPair()
-		if !nlpFrom.TryRLock() {
+		if !nlpFrom.TryRLock(c.timeout.netw / 4) {
 			dm.UnregRecv()
 			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
 		}
 
 		if !bck2BckMsg.DryRun {
 			nlpTo = bckTo.GetNameLockPair()
-			if !nlpTo.TryLock() {
+			if !nlpTo.TryLock(c.timeout.netw / 4) {
 				dm.UnregRecv()
 				nlpFrom.Unlock()
 				return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
@@ -596,7 +596,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 			return err
 		}
 		nlp := c.bck.GetNameLockPair()
-		if !nlp.TryLock() {
+		if !nlp.TryLock(c.timeout.netw / 2) {
 			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
 		}
 		nlp.Unlock() // TODO -- FIXME: introduce txn, unlock when done
@@ -674,7 +674,7 @@ func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
 	switch c.phase {
 	case cmn.ActBegin:
 		nlp := c.bck.GetNameLockPair()
-		if !nlp.TryLock() {
+		if !nlp.TryLock(c.timeout.netw / 2) {
 			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
 		}
 		txn := newTxnBckBase("dlb", *c.bck)

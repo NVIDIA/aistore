@@ -561,9 +561,8 @@ func parseECConf(value interface{}) (*cmn.ECConfToUpdate, error) {
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
 	var (
-		pname      = p.si.String()
-		nlp        = bck.GetNameLockPair()
-		unlockUpon bool
+		pname = p.si.String()
+		nlp   = bck.GetNameLockPair()
 	)
 
 	ecConf, err := parseECConf(msg.Value)
@@ -576,15 +575,11 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		return
 	}
 
-	if !nlp.TryLock() {
+	if !nlp.TryLock(cmn.GCO.Get().Timeout.CplaneOperation / 2) {
 		err = cmn.NewErrorBucketIsBusy(bck.Bck, pname)
 		return
 	}
-	defer func() {
-		if !unlockUpon {
-			nlp.Unlock()
-		}
-	}()
+	defer nlp.Unlock()
 
 	// 1. confirm existence
 	props, present := p.owner.bmd.get().Get(bck)
@@ -632,7 +627,6 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
-	unlockUpon = true
 	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
 	for res := range results {
 		if res.err != nil {

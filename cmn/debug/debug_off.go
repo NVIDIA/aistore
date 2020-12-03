@@ -15,6 +15,7 @@ const (
 	Enabled = false
 )
 
+func Errorln(a ...interface{})          {}
 func Errorf(f string, a ...interface{}) {}
 func Infof(f string, a ...interface{})  {}
 

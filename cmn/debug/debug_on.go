@@ -79,6 +79,14 @@ func loadLogLevel() {
 	}
 }
 
+func Errorln(a ...interface{}) {
+	if len(a) == 1 {
+		glog.ErrorDepth(1, "[DEBUG] ", a[0])
+		return
+	}
+	Errorf("%v", a...)
+}
+
 func Errorf(f string, a ...interface{}) {
 	glog.ErrorDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
 }
