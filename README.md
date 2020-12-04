@@ -124,6 +124,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 ## Guides and References
 
 - [AIS Overview](docs/overview.md)
+- [Playbooks](docs/playbooks/README.md)
 - [CLI](cmd/cli/README.md)
   - [Create, destroy, list, and other operations on buckets](cmd/cli/resources/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](cmd/cli/resources/object.md)

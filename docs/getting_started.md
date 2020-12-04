@@ -201,5 +201,5 @@ videoEnd -->
 
 #### Local Kubernetes deployment
 
-This deployment option makes use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and is documented [here](deploy/dev/k8s/README.md).
+This deployment option makes use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and is documented [here](/deploy/dev/k8s/README.md).
 Its most significant advantages are checking the AIStore behavior on the Kubernetes and the ability to run [Extract-Transform-Load](/docs/etl.md) operations on the data stored in the cluster.
