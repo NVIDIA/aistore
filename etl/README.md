@@ -5,42 +5,20 @@ The `etl` package compiles into `aisnode` executable to facilitate running custo
 Generally, AIStore v3.2 and later supports on the fly and offline user-defined dataset transformations, which allows moving I/O intensive (and expensive) operations from the computing client(s) into the storage cluster.
 Popular use cases include - but are not limited to - *dataset augmentation* (of any kind) and filtering of AI datasets.
 
-For prerequisites, 3 (three) supported ais <=> container communication mechanisms, and further details, please refer to [ETL readme](/docs/etl.md).
+For prerequisites, 3 (three) supported ais <=> container communication mechanisms, and usage guides please refer to [ETL readme](/docs/etl.md).
+This documentation contains techincal details, architecture overview and is obligatory to be read before using ETL.
 
+## Architecture
 
-## On the fly ETL example
+The AIStore ETL extension is designed to maximize effectiveness of the transform process.
+It minimizes resources waste on unnecessary operations like exchanging data between storage and compute nodes, which takes place in conventional ETL systems.
 
-<img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="900">
+Based on specification provided by a user, each target starts its own ETL container (worker), which from now on will be responsible for transforming objects stored on the corresponding target.
+This approach minimizes I/O operations, as well as assures scalability of ETL with the number of targets in the cluster.
 
-The example above uses [AIS CLI](/cmd/cli/README.md) to:
-1. **Create** a new AIS bucket
+The following picture presents architecture of the ETL extension.
 
-2. **PUT** an object into this bucket
-
-3. **Init** ETL container that performs simple MD5 computation.
-
-   > Both the container itself and its [YAML specification]((https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml) below are included primarily for illustration purposes.
-
-   * [MD5 ETL YAML](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml)
-
-4. **Transform** the object on the fly via custom ETL - the "transformation" in this case boils down to computing the object's MD5.
-
-5. **Compare** the output with locally computed MD5.
-
-## Offline ETL example
-
-<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
-
-The example above uses [AIS CLI](/cmd/cli/README.md) to:
-1. **Create** a new AIS bucket
-
-2. **PUT** multiple TAR files into created bucket
-
-3. **Init** ETL container based only on a python function
-
-4. **Transform** offline each TAR from the source bucket, by standardizing images from the TAR and putting results in a destination bucket
-
-5. **Verify** the transformation output by downloading one of the ransformed TARs and checking its content.
+<img src="/docs/images/aistore-etl-arch.png" alt="ETL architecture" width="80%">
 
 ## Management and Benchmarking
 - [AIS CLI](/cmd/cli/resources/etl.md) includes commands to start, stop, and monitor ETL at runtime.

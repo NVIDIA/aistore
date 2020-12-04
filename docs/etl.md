@@ -1,8 +1,9 @@
+# ETL: Getting started 
+
 ## Table of Contents
 
 - [Introduction](#introduction)
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
+- [Starting AIStore cluster](#starting-aistore-cluster)
 - [Initializing ETL](#defining-and-initializing-etl)
     - [`build` request](#build-request)
         - [Runtimes](#runtimes)
@@ -22,31 +23,66 @@
 [ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is "the general procedure of copying data from one or more sources into a destination system
 which represents the data differently from the source(s) or in a different context than the source(s)" ([wikipedia](https://en.wikipedia.org/wiki/Extract,_transform,_load)).
 To run data transformations *inline* and *close to data*, AIStore supports running ETL containers *in the storage cluster*.
+It allows transforming each object in a dataset efficiently and fast, accordingly to transformation specified by a user.
 
 As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io).
 
-> If you want to try ETL, we recommend starting the AIStore cluster on the cloud.
-> We have provided scripts to make it easy for you. See [AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md).
+### Demos
 
-## Architecture
+The following demos present interaction with the AIStore ETL feature.
+The details about each step are described in subsequent sections.
 
-The AIStore ETL extension is designed to maximize effectiveness of the transform process.
-It minimizes resources waste on unnecessary operations like exchanging data between storage and compute nodes, which takes place in conventional ETL systems.
+#### On the fly ETL example
 
-Based on specification provided by a user, each target starts its own ETL container (worker), which from now on will be responsible for transforming objects stored on the corresponding target.
-This approach minimizes I/O operations, as well as assures scalability of ETL with the number of targets in the cluster.
+<img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="900">
 
-The following picture presents architecture of the ETL extension.
+The example above uses [AIS CLI](/cmd/cli/README.md) to:
+1. **Create** a new AIS bucket
 
-<img src="/docs/images/aistore-etl-arch.png" alt="ETL architecture" width="80%">
+2. **PUT** an object into this bucket
 
+3. **Init** ETL container that performs simple MD5 computation.
 
-## Prerequisites
+   > Both the container itself and its [YAML specification]((https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml) below are included primarily for illustration purposes.
 
-- Cluster has to be deployed on Kubernetes.
-- A target must know on which Kubernetes Node it runs.
-To achieve this, the target uses `HOSTNAME` environment variable, set by Kubernetes, to discover its Pod name.
-This variable should not be overwritten during the deployment of a target Pod.
+   * [MD5 ETL YAML](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml)
+
+4. **Transform** the object on the fly via custom ETL - the "transformation" in this case boils down to computing the object's MD5.
+
+5. **Compare** the output with locally computed MD5.
+
+#### Offline ETL example
+
+<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="100%">
+
+The example above uses [AIS CLI](/cmd/cli/README.md) to:
+1. **Create** a new AIS bucket
+
+2. **PUT** multiple TAR files containing ImageNet images into the created bucket
+
+3. **Init** ETL container, based only on a simple python function
+
+4. **Transform** offline each TAR from the source bucket by standardizing images from the TAR and putting results in a destination bucket
+
+5. **Verify** the transformation output by downloading one of the transformed TARs and checking its content.
+
+## Starting AIStore cluster
+
+> If you already have running AIStore cluster deployed on Kubernetes, skip this section and go to [Initialize ETL section](#defining-and-initializing-etl).
+
+To deploy ETL-ready AIStore cluster, please refer to [AIStore Getting Started readme](/docs/getting_started.md).
+Please note that you have to choose one of the Kubernetes deployment types.
+If you don't have the hardware to run a cluster on, try [AIStore on the cloud](/docs/getting_started.md#on-cloud-deployment) deployment.
+
+> During the AIStore on Kubernetes deployment, `HOSTNAME` environment variable, set by Kubernetes, should not be overwritten.
+> Target uses it to discover its Pod name.
+
+To verify that your deployment is set up correctly, run the following [CLI](/cmd/cli/README.md) command:
+```console
+$ ais etl ls
+```
+
+If there is no error, just an empty response, it means that your AIStore cluster is ready for ETL.
 
 ## Defining and initializing ETL
 
@@ -101,8 +137,8 @@ Custom ETL container is expected to satisfy the following requirements:
 
 #### Specification YAML file
 
-Specification of an ETL should be in form of YAML file.
-It is required to follow Kubernetes [Pod template format](https://kubernetes.io/docs/concepts/workloads/pods/#pod-templates)
+Specification of an ETL should be in the form of a YAML file.
+It is required to follow the Kubernetes [Pod template format](https://kubernetes.io/docs/concepts/workloads/pods/#pod-templates)
 and contain all necessary fields to start the Pod.
 
 ##### Required or additional fields
@@ -456,10 +492,7 @@ $ tar -tvf preprocessed-train.tar | head -n 5
 
 As expected, the size of the new tarball images has been standardized as all images have the same resolution (`224*224*3=150528`).
 
-The following GIF presents the whole operation.
-
-<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
-
+The whole operation is presented as GIF in [Demos section](#offline-etl-example).
 
 ## API Reference
 
