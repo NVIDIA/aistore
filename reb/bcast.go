@@ -382,7 +382,7 @@ func (reb *Manager) waitECCleanup(si *cluster.Snode, md *rebArgs) bool {
 // Wait until all nodes finishes exchanging slice lists (do pull request if
 // the remote target's data is still missing).
 // Returns `true` if a target has sent its namespace or the xaction
-// has been aborted, indicating that no need to do extra pull requests.
+// has been aborted (indicating no need for extra pull requests).
 func (reb *Manager) waitECData(si *cluster.Snode, md *rebArgs) bool {
 	sleep := md.config.Timeout.CplaneOperation * 2
 	locStage := uint32(rebStageECDetect)
@@ -433,7 +433,7 @@ func (reb *Manager) waitECData(si *cluster.Snode, md *rebArgs) bool {
 // First stages are very short and fast targets may send their notifications too
 // quickly. So, for the first notifications there is no wait loop - just a single check.
 // Returns `true` if all targets have sent push notifications or the xaction
-// has been aborted, indicating that no need to do extra pull requests.
+// has been aborted (indicating no need for additional pull requests).
 func (reb *Manager) waitForPushReqs(md *rebArgs, stage uint32, timeout ...time.Duration) bool {
 	const defaultWaitTime = time.Minute
 	maxMissing := len(md.smap.Tmap) / 2

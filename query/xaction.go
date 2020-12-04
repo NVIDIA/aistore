@@ -341,7 +341,6 @@ func (r *ObjectsListingXact) ForEach(apply func(entry *cmn.BucketEntry) error) e
 }
 
 func (r *ObjectsListingXact) TokenFulfilled(token string) bool {
-	// Everything, that target has, has been already fetched.
 	return r.Finished() && !r.Aborted() && r.LastDiscardedResult() != "" && cmn.TokenIncludesObject(token, r.LastDiscardedResult())
 }
 

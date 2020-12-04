@@ -318,7 +318,7 @@ func (m *Manager) cleanup() {
 		m.state.cleaned = initiallyCleanedState
 		m.state.cleanWait.Signal()
 		m.unlock()
-		glog.Infof("%s %s cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
+		glog.Infof("%s %s finished cleanup in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 	}()
 
 	cmn.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
@@ -384,7 +384,7 @@ func (m *Manager) finalCleanup() {
 	m.unlock()
 
 	m.mg.persist(m.ManagerUUID)
-	glog.Infof("%s %s final cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
+	glog.Infof("%s %s finished final cleanup in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 }
 
 // abort stops currently running sort job and frees associated resources.
@@ -504,8 +504,8 @@ func (m *Manager) incrementReceived() {
 	m.received.ch <- m.received.count.Inc()
 }
 
-// listenReceived returns channel on which waiting goroutine can hang and wait
-// until received count value has been updated (see: incrementReceived).
+// listenReceived returns channel on which goroutine can wait
+// until received count value is updated (see: incrementReceived).
 func (m *Manager) listenReceived() chan int32 {
 	return m.received.ch
 }

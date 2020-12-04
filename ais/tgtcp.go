@@ -506,7 +506,8 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 	// files directly and put them directly on mountpaths. This can lead to
 	// problems where we get from new mountpath without asking other (old)
 	// mountpaths if they have it (resilver has not yet finished).
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been enabled during %s job - aborting due to possible errors", mountpath, cmn.DSortName))
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been enabled during %s job - aborting due to possible errors",
+		mountpath, cmn.DSortName))
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -526,7 +527,7 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 		return
 	}
 
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been disabled and is unusable", mountpath))
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been disabled", mountpath))
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -565,7 +566,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed and is unusable", mountpath))
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed", mountpath))
 }
 
 func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {

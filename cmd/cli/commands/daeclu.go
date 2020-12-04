@@ -320,7 +320,7 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 		tw.Flush()
 
 		if rebStats.Finished() {
-			fmt.Fprintln(c.App.Writer, "\nRebalance has been completed.")
+			fmt.Fprintln(c.App.Writer, "\nRebalance completed.")
 			break
 		}
 

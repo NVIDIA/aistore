@@ -133,7 +133,7 @@ func setPrimaryHandler(c *cli.Context) (err error) {
 	}
 	err = api.SetPrimaryProxy(defaultAPIParams, daemonID)
 	if err == nil {
-		fmt.Fprintf(c.App.Writer, "%s has been set as a new primary proxy\n", daemonID)
+		fmt.Fprintf(c.App.Writer, "%s is now a new primary\n", daemonID)
 	}
 	return err
 }

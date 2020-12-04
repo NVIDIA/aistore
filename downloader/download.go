@@ -78,24 +78,23 @@ import (
 //
 // ====== Status Updates ======
 //
-// Status updates are made possible by progressReader, which just overwrites the
-// io.Reader's Read method to additionally notify a Reporter Func, that gets
-// notified the number of bytes that have been read every time we read from the
-// response body from the HTTP GET request we make to to the link to download
-// the object.
+// Status updates are made possible by progressReader that overwrites the
+// io.Reader's Read method to additionally notify a Reporter Func.
+// The notification includes the number of bytes read so far from the GET
+// response body.
 //
 // When Dispatcher receives a status update request, it dispatches to a separate
 // jogger goroutine that checks if the downloaded completed. Otherwise it checks
 // if it is currently being downloaded. If it is being currently downloaded, it
 // returns the progress. Otherwise, it returns that the object hasn't been
-// downloaded yet. Now, the file may never be downloaded if the download was
-// never queued to the downloadCh.
+// downloaded yet. Now, the file may never be downloaded if the download (request)
+// was never queued to the downloadCh.
 //
 // Status updates are either reported in terms of size or size and percentage.
 // When downloading an object from a server, we attempt to obtain the object size
 // using the "Content-Length" field returned in the Header.
 // NOTE: Not all servers respond with a "Content-Length" request header.
-// For these cases, a progress percentage is not returned, just the current
+// In these cases progress percentage is not returned, just the current
 // downloaded size (in bytes).
 //
 // ====== Notes ======

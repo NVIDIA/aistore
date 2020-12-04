@@ -198,7 +198,7 @@ func RestartContainer(cid string) error {
 }
 
 // DisconnectContainer disconnects specific containerID from all networks.
-// Returns all networks from which has been disconnected.
+// Returns networks from which the container has been disconnected.
 func DisconnectContainer(containerID string) ([]string, error) {
 	networks, err := containerNetworkList(containerID)
 	if err != nil {

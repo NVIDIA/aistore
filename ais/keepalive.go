@@ -89,13 +89,11 @@ type controlSignal struct {
 // KeepaliveTracker defines the interface for keep alive tracking.
 // It is safe for concurrent access.
 type KeepaliveTracker interface {
-	// HeardFrom notifies the tracker that a message is received from server identified by 'id'
-	// 'reset' is true indicates the heard from is not a result of a regular keepalive call.
-	// it could be a reconnect, re-register, normally this indicates to discard previous data and
-	// start fresh.
+	// HeardFrom notifies tracker that the server identified by 'id' has responded;
+	// 'reset'=true when it is not a regular keepalive call (could be reconnect or re-register).
 	HeardFrom(id string, reset bool)
-	// TimedOut returns true if it is determined that a message has not been received from a server
-	// soon enough so it is consider that the server is down
+	// TimedOut returns true if the 'id` server did not respond - an indication that the server
+	// could be down
 	TimedOut(id string) bool
 }
 
@@ -581,14 +579,12 @@ func newHeartBeatTracker(interval time.Duration) *HeartBeatTracker {
 	}
 }
 
-// HeardFrom is called to indicate a keepalive message (or equivalent) has been received from a server.
 func (hb *HeartBeatTracker) HeardFrom(id string, reset bool) {
 	hb.mtx.Lock()
 	hb.last[id] = mono.NanoTime()
 	hb.mtx.Unlock()
 }
 
-// TimedOut returns true if it has determined that it has not heard from the server.
 func (hb *HeartBeatTracker) TimedOut(id string) bool {
 	hb.mtx.RLock()
 	t, ok := hb.last[id]
@@ -642,7 +638,6 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	a.rec[id] = rec
 }
 
-// TimedOut returns true if it has determined that is has not heard from the server.
 func (a *AverageTracker) TimedOut(id string) bool {
 	a.mtx.RLock()
 	rec, ok := a.rec[id]
