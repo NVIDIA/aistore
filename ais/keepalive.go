@@ -270,6 +270,9 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 			glog.Warningf("%s: cannot remove node %s: not present in the %s; (old %s)", pkr.p.si, sid, newSmap, smap)
 		}
 		metaction += ": " + sid + "],"
+
+		// Remove reverse proxy entry for the node.
+		pkr.p.rproxy.nodes.Delete(sid)
 	}
 	metaction += "]"
 

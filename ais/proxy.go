@@ -2420,6 +2420,9 @@ func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
 		// decision is made: going ahead to remove
 		glog.Infof("%s: removing failed primary %s", p.si, ctx.sid)
 		clone.delProxy(ctx.sid)
+
+		// Remove reverse proxy entry for the node.
+		p.rproxy.nodes.Delete(ctx.sid)
 	}
 
 	clone.Primary = clone.GetProxy(p.si.ID())
@@ -3167,6 +3170,10 @@ func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) (err error)
 		ctx.status = http.StatusInternalServerError
 		err = fmt.Errorf("%s: is not a primary", p.si)
 	}
+
+	// Remove reverse proxy entry for the node.
+	p.rproxy.nodes.Delete(ctx.sid)
+
 	return err
 }
 
