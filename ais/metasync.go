@@ -299,7 +299,6 @@ outer:
 		case lversion == revs.version():
 			if newCnt == 0 {
 				glog.Warningf("%s: %s duplicated - already sync-ed or pending", y.p.si, detail)
-				// TODO -- FIXME: continue outer
 			}
 			glog.Infof("%s: %s duplicated - proceeding to sync %d new member(s)", y.p.si, detail, newCnt)
 		case lversion > revs.version():

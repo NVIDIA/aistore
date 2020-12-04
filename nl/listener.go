@@ -255,7 +255,10 @@ func (nlb *NotifListenerBase) String() string {
 // effectively, cache owner
 func (nlb *NotifListenerBase) SetHrwOwner(smap *cluster.Smap) {
 	psiOwner, err := cluster.HrwIC(smap, nlb.UUID())
-	cmn.AssertNoErr(err) // TODO -- FIXME: handle
+	if err != nil {
+		debug.AssertNoErr(err)
+		return // TODO -- FIXME: return err
+	}
 	nlb.SetOwner(psiOwner.ID())
 }
 

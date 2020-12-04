@@ -82,8 +82,6 @@ const (
 
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
-// TODO -- FIXME: xattrMaxSize == MaxSmallSlabSize is the hard limit
-//                support runtime switch small => page allocator
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	var (
 		size      int64
@@ -135,8 +133,6 @@ func (lom *LOM) Persist() (err error) {
 	return
 }
 
-// TODO -- FIXME: xattrMaxSize == MaxSmallSlabSize is the hard limit
-//                support runtime switch small => page allocator
 func (lom *LOM) _persist() (buf []byte, mm *memsys.MMSA) {
 	var (
 		size   int64
