@@ -224,6 +224,7 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 
 func (p *proxyrunner) unregisterSelf() (int, error) {
 	smap := p.owner.smap.get()
+	cmn.Assert(smap.isValid())
 	args := callArgs{
 		si: smap.Primary,
 		req: cmn.ReqArgs{
@@ -240,16 +241,14 @@ func (p *proxyrunner) unregisterSelf() (int, error) {
 func (p *proxyrunner) Stop(err error) {
 	var (
 		smap      = p.owner.smap.get()
-		isPrimary bool
-	)
-	if smap != nil { // in tests
 		isPrimary = smap.isPrimary(p.si)
-	}
+	)
+
 	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.Name(), p.si, isPrimary, err)
 	xreg.AbortAll()
 
 	if isPrimary {
-		// give targets and non primary proxies some time to unregister
+		// Give targets and non-primary proxies some time to unregister.
 		version := smap.version()
 		for i := 0; i < 20; i++ {
 			time.Sleep(time.Second)
@@ -257,15 +256,11 @@ func (p *proxyrunner) Stop(err error) {
 			if version == v {
 				break
 			}
-
 			version = v
 		}
-	}
-
-	if !isPrimary {
-		_, unregerr := p.unregisterSelf()
-		if unregerr != nil {
-			glog.Warningf("Failed to unregister when terminating: %v", unregerr)
+	} else if smap.isValid() {
+		if _, err := p.unregisterSelf(); err != nil {
+			glog.Warningf("Failed to unregister when terminating, err: %v", err)
 		}
 	}
 
