@@ -1,6 +1,7 @@
 ## Table of Contents
 
 - [Overview](#overview)
+- [Client Configuration](#client-configuration)
 - [S3 Compatibility](#s3-compatibility)
 - [Examples](#examples)
 - [TensorFlow Demo](#tensorflow-demo)
@@ -19,6 +20,58 @@ S3 supports the following API requests:
 - Copy an object (within the same bucket or from one bucket to another one)
 - Multiple object deletion
 - Get, enable, and disable bucket versioning (though, multiple versions of the same object are not supported yet. Only the last version of an object is accessible)
+
+## Client Configuration
+
+S3 client must be properly configured before connecting to an AIS cluster.
+The section explains how to configure the `s3cmd` client with CLI options.
+As an alternative, you can run `s3cmd configure`, apply the rules below, and then use `s3cmd` without repeating the same CLI arguments every time.
+
+To connect an AIS server, pass the endpoint to the client.
+The endpoint consists of a cluster gateway(proxy) IP and port followed by `/s3`.
+
+Example: if a gateway IP is `10.10.0.1` and it listens on port `8080`, the endpoint is `10.10.0.1:8080/s3`:
+
+```console
+$ s3cmd ls --host=10.10.0.1:8080/s3
+```
+
+If an AIS cluster is deployed with HTTP protocol (default deployment disables HTTPS), turn off HTTPS in the client:
+
+```console
+$ s3cmd ls --host=10.10.0.1:8080/s3 --no-ssl
+```
+
+If the cluster deployed with HTTPS but it uses a self-signed certificate, the client may refuse the server certificate.
+In this case disable certificate check:
+
+```console
+$ s3cmd ls --host=10.10.0.1.8080/s3 --no-check-certificate
+```
+
+If the client complains about an empty S3 region, you could specify any valid region - as follows:
+
+```console
+$ s3cmd ls --host=10.10.0.1.8080/s3 --region us-west-1
+```
+
+The steps above will make all top-level commands to work.
+Note, however, that accessing bucket's objects requires defining the path format for a bucket:
+
+```console
+$ s3cmd ls s3://buckename --host=10.10.0.1.8080/s3 --host-bucket="10.10.0.1:8080/s3/%(bucket)"
+```
+
+The summary table of client settings:
+
+| Options | Usage | Example |
+| --- | --- | --- |
+| `--host` | Define an AIS cluster endpoint | `--host=10.10.0.1:8080/s3` |
+| `--host-bucket` | Define URL path to access a bucket of an AIS cluster | `--host-bucket="10.10.0.1:8080/s3/%(bucket)"` |
+| `--no-ssl` | Use HTTP instead of HTTPS | |
+| `--no-check-certificate` | Disable checking server's certificate in case of self-signed ones | |
+| `--region` | Define a bucket region | `--region=us-west-1` |
+
 
 ## S3 Compatibility
 
