@@ -1130,7 +1130,13 @@ func TestListObjectsCache(t *testing.T) {
 			num:      rand.Intn(3000) + 1481,
 			fileSize: cmn.KiB,
 		}
+		totalIters = 10
 	)
+
+	if testing.Short() {
+		m.num = 250 + rand.Intn(500)
+		totalIters = 5
+	}
 
 	m.init()
 
@@ -1142,7 +1148,7 @@ func TestListObjectsCache(t *testing.T) {
 	for _, useCache := range []bool{true, false} {
 		t.Run(fmt.Sprintf("cache=%t", useCache), func(t *testing.T) {
 			// Do it N times - first: fill the cache; next calls: use it.
-			for iter := 0; iter < 10; iter++ {
+			for iter := 0; iter < totalIters; iter++ {
 				var (
 					started = time.Now()
 					msg     = &cmn.SelectMsg{

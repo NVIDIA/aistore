@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -152,6 +153,7 @@ func TestDiscoverServers(t *testing.T) {
 		duration    time.Duration // how long to wait for discover servers call
 		smapVersion int64         // expected return from discover servers
 		bmdVersion  int64         // use '0' if expecting nil Smap or BMD
+		onlyLong    bool          // run only in long mode
 	}{
 		{
 			"empty discovery Smap",
@@ -159,6 +161,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond,
 			0,
 			0,
+			false,
 		},
 		{
 			"all agreed",
@@ -169,6 +172,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond,
 			1,
 			2,
+			false,
 		},
 		{
 			"mixed",
@@ -180,6 +184,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond,
 			4,
 			5,
+			false,
 		},
 		{
 			"voting",
@@ -190,6 +195,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond * 300,
 			0,
 			0,
+			true,
 		},
 		{
 			"voting and map mixed",
@@ -200,6 +206,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond * 300,
 			0,
 			0,
+			true,
 		},
 		{
 			"vote once",
@@ -210,6 +217,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond * 3000,
 			4,
 			5,
+			false,
 		},
 		{
 			"fail twice",
@@ -220,6 +228,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond * 3000,
 			4,
 			5,
+			true,
 		},
 		{
 			"all failed",
@@ -230,6 +239,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond * 400,
 			0,
 			0,
+			true,
 		},
 		{
 			"fail and good mixed",
@@ -240,6 +250,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond * 400,
 			4,
 			5,
+			true,
 		},
 		{
 			"zero Smap version",
@@ -250,6 +261,7 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond * 400,
 			0,
 			4,
+			false,
 		},
 		{
 			"zero BMD version",
@@ -260,45 +272,51 @@ func TestDiscoverServers(t *testing.T) {
 			time.Millisecond * 400,
 			1,
 			0,
+			false,
 		},
 	}
 
 	for _, tc := range tcs {
-		primary := newDiscoverServerPrimary()
+		t.Run(tc.name, func(t *testing.T) {
+			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: tc.onlyLong})
+			var (
+				primary      = newDiscoverServerPrimary()
+				discoverSmap = newSmap()
+			)
 
-		discoverSmap := newSmap()
-		for _, s := range tc.servers {
-			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
-			addrInfo := serverTCPAddr(ts.URL)
-			if s.isProxy {
-				discoverSmap.addProxy(cluster.NewSnode(s.id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+			for _, s := range tc.servers {
+				ts := s.httpHandler(s.smapVersion, s.bmdVersion)
+				addrInfo := serverTCPAddr(ts.URL)
+				if s.isProxy {
+					discoverSmap.addProxy(cluster.NewSnode(s.id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+				} else {
+					discoverSmap.addTarget(cluster.NewSnode(s.id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+				}
+			}
+			svm := primary.uncoverMeta(discoverSmap)
+			if tc.smapVersion == 0 {
+				if svm.Smap != nil && svm.Smap.version() > 0 {
+					t.Errorf("test case %q: expecting nil Smap", tc.name)
+				}
 			} else {
-				discoverSmap.addTarget(cluster.NewSnode(s.id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+				if svm.Smap == nil || svm.Smap.version() == 0 {
+					t.Errorf("test case %q: expecting non-empty Smap", tc.name)
+				} else if tc.smapVersion != svm.Smap.Version {
+					t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.smapVersion, svm.Smap.Version)
+				}
 			}
-		}
-		svm := primary.uncoverMeta(discoverSmap)
-		if tc.smapVersion == 0 {
-			if svm.Smap != nil && svm.Smap.version() > 0 {
-				t.Errorf("test case %q: expecting nil Smap", tc.name)
-			}
-		} else {
-			if svm.Smap == nil || svm.Smap.version() == 0 {
-				t.Errorf("test case %q: expecting non-empty Smap", tc.name)
-			} else if tc.smapVersion != svm.Smap.Version {
-				t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.smapVersion, svm.Smap.Version)
-			}
-		}
 
-		if tc.bmdVersion == 0 {
-			if svm.BMD != nil && svm.BMD.version() > 0 {
-				t.Errorf("test case %q: expecting nil BMD", tc.name)
+			if tc.bmdVersion == 0 {
+				if svm.BMD != nil && svm.BMD.version() > 0 {
+					t.Errorf("test case %q: expecting nil BMD", tc.name)
+				}
+			} else {
+				if svm.BMD == nil || svm.BMD.version() == 0 {
+					t.Errorf("test case %q: expecting non-empty BMD", tc.name)
+				} else if tc.bmdVersion != svm.BMD.Version {
+					t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.bmdVersion, svm.BMD.Version)
+				}
 			}
-		} else {
-			if svm.BMD == nil || svm.BMD.version() == 0 {
-				t.Errorf("test case %q: expecting non-empty BMD", tc.name)
-			} else if tc.bmdVersion != svm.BMD.Version {
-				t.Errorf("test case %q: expecting %d, got %d", tc.name, tc.bmdVersion, svm.BMD.Version)
-			}
-		}
+		})
 	}
 }
