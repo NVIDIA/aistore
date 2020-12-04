@@ -84,7 +84,7 @@ func Errorln(a ...interface{}) {
 		glog.ErrorDepth(1, "[DEBUG] ", a[0])
 		return
 	}
-	Errorf("%v", a...)
+	Errorf("%v", a)
 }
 
 func Errorf(f string, a ...interface{}) {
