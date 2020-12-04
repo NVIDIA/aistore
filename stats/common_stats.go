@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/stats/statsd"
@@ -475,7 +476,7 @@ waitStartup:
 	r.ticker = time.NewTicker(config.Periodic.StatsTime)
 	r.startedUp.Store(true)
 
-	startTime, checkNumGorHigh := time.Now(), time.Time{}
+	startTime, checkNumGorHigh := mono.NanoTime(), int64(0)
 	for {
 		select {
 		case nv, ok := <-r.workCh:
@@ -483,23 +484,22 @@ waitStartup:
 				logger.doAdd(nv)
 			}
 		case <-r.ticker.C:
-			uptime := time.Since(startTime)
-			logger.log(uptime)
+			now := mono.NanoTime()
+			logger.log(time.Duration(now - startTime)) // uptime
 			if ngr := runtime.NumGoroutine(); ngr > goMaxProcs*numGorHigh {
 				if ngr >= goMaxProcs*numGorExtreme {
 					glog.Errorf("Extremely high number of goroutines: %d", ngr)
 				}
-				now := time.Now()
-				if checkNumGorHigh.IsZero() {
+				if checkNumGorHigh == 0 {
 					checkNumGorHigh = now
-				} else if now.Sub(checkNumGorHigh) > numGorHighCheckTime {
+				} else if time.Duration(now-checkNumGorHigh) > numGorHighCheckTime {
 					if ngr < goMaxProcs*numGorExtreme {
 						glog.Warningf("High number of goroutines: %d", ngr)
 					}
-					checkNumGorHigh = time.Time{}
+					checkNumGorHigh = 0
 				}
 			} else {
-				checkNumGorHigh = time.Time{}
+				checkNumGorHigh = 0
 			}
 		case <-r.stopCh:
 			r.ticker.Stop()
