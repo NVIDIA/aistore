@@ -52,12 +52,12 @@ var _ = Describe("Notifications xaction test", func() {
 			tracker := &stats.TrackerMock{}
 			p := &proxyrunner{
 				httprunner: httprunner{
-					si:               mockNode(name, cmn.Proxy),
-					statsT:           tracker,
-					httpclientGetPut: &http.Client{},
-					httpclient:       &http.Client{},
+					si:     mockNode(name, cmn.Proxy),
+					statsT: tracker,
 				},
 			}
+			p.client.data = &http.Client{}
+			p.client.control = &http.Client{}
 			p.keepalive = newProxyKeepaliveRunner(p, tracker, atomic.NewBool(true))
 			return p
 		}

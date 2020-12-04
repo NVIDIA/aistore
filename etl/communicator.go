@@ -169,7 +169,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM) (*http.Response, error) {
 
 	req.ContentLength = lom.Size()
 	req.Header.Set(cmn.HeaderContentType, cmn.ContentBinary)
-	return pc.t.Client().Do(req)
+	return pc.t.DataClient().Do(req)
 }
 
 func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
@@ -218,7 +218,7 @@ func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 
 func (rc *redirectComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
 	etlURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
-	resp, err := rc.t.Client().Get(etlURL)
+	resp, err := rc.t.DataClient().Get(etlURL)
 	return handleResp(resp, err)
 }
 
@@ -234,7 +234,7 @@ func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 
 func (pc *revProxyComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
 	etlURL := cmn.JoinPath(pc.transformerURL, transformerPath(bck, objName))
-	resp, err := pc.t.Client().Get(etlURL)
+	resp, err := pc.t.DataClient().Get(etlURL)
 	return handleResp(resp, err)
 }
 

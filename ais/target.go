@@ -372,7 +372,7 @@ func (t *targetrunner) initRecvHandlers() {
 func (t *targetrunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.Name(), err)
 	xreg.AbortAll()
-	if t.publicServer.s != nil {
+	if t.netServ.pub.s != nil {
 		t.unregister() // ignore errors
 	}
 	t.httprunner.stop(err)

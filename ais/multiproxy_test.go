@@ -40,8 +40,8 @@ func newDiscoverServerPrimary() *proxyrunner {
 		tracker = stats.NewTrackerMock()
 	)
 	p.si = cluster.NewSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
-	p.httpclientGetPut = &http.Client{}
-	p.httpclient = &http.Client{}
+	p.client.data = &http.Client{}
+	p.client.control = &http.Client{}
 
 	config := cmn.GCO.BeginUpdate()
 	config.KeepaliveTracker.Proxy.Name = "heartbeat"

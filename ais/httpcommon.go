@@ -137,30 +137,30 @@ type (
 		sndRcvBufSize int
 	}
 	httprunner struct {
-		name               string
-		publicServer       *netServer
-		intraControlServer *netServer
-		intraDataServer    *netServer
-		logger             *log.Logger
-		si                 *cluster.Snode
-		httpclient         *http.Client // http client for intra-cluster comm
-		httpclientGetPut   *http.Client // http client to execute target <=> target GET & PUT (object)
-		keepalive          keepaliver
-		owner              struct {
+		name      string
+		si        *cluster.Snode
+		logger    *log.Logger
+		keepalive keepaliver
+		statsT    stats.Tracker
+		netServ   struct {
+			pub     *netServer
+			control *netServer
+			data    *netServer
+		}
+		client struct {
+			control *http.Client // http client for intra-cluster comm
+			data    *http.Client // http client to execute target <=> target GET & PUT (object)
+		}
+		owner struct {
 			smap *smapOwner
 			bmd  bmdOwner
 			rmd  *rmdOwner
 		}
-		statsT  stats.Tracker
 		startup struct {
 			cluster atomic.Bool // determines if the cluster has started up
-			node    struct {
-				time atomic.Time // determines time when the node started up
-			}
+			node    atomic.Time // determines time when the node started up
 		}
-		electable electable
-		// FIXME: Used by the current primary that promotes another proxy to become the new primary.
-		//        True if transition is in progress.
+		electable           electable
 		inPrimaryTransition atomic.Bool
 	}
 
@@ -363,11 +363,11 @@ func (server *netServer) shutdown() {
 // httprunner //
 ////////////////
 
-func (h *httprunner) Name() string           { return h.name }
-func (h *httprunner) Client() *http.Client   { return h.httpclientGetPut }
-func (h *httprunner) Snode() *cluster.Snode  { return h.si }
-func (h *httprunner) Bowner() cluster.Bowner { return h.owner.bmd }
-func (h *httprunner) Sowner() cluster.Sowner { return h.owner.smap }
+func (h *httprunner) Name() string             { return h.name }
+func (h *httprunner) DataClient() *http.Client { return h.client.data }
+func (h *httprunner) Snode() *cluster.Snode    { return h.si }
+func (h *httprunner) Bowner() cluster.Bowner   { return h.owner.bmd }
+func (h *httprunner) Sowner() cluster.Sowner   { return h.owner.smap }
 
 // usage: [API call => handler => ClusterStartedWithRetry ]
 func (h *httprunner) ClusterStartedWithRetry() bool {
@@ -384,10 +384,10 @@ func (h *httprunner) ClusterStartedWithRetry() bool {
 	return h.startup.cluster.Load()
 }
 func (h *httprunner) ClusterStarted() bool       { return h.startup.cluster.Load() }
-func (h *httprunner) NodeStarted() bool          { return !h.startup.node.time.Load().IsZero() }
-func (h *httprunner) NodeStartedTime() time.Time { return h.startup.node.time.Load() }
+func (h *httprunner) NodeStarted() bool          { return !h.startup.node.Load().IsZero() }
+func (h *httprunner) NodeStartedTime() time.Time { return h.startup.node.Load() }
 func (h *httprunner) markClusterStarted()        { h.startup.cluster.Store(true) }
-func (h *httprunner) markNodeStarted()           { h.startup.node.time.Store(time.Now()) }
+func (h *httprunner) markNodeStarted()           { h.startup.node.Store(time.Now()) }
 
 func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	var (
@@ -423,38 +423,38 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 
 func (h *httprunner) registerPublicNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
-		h.publicServer.muxers[v].HandleFunc(path, handler)
+		h.netServ.pub.muxers[v].HandleFunc(path, handler)
 		if !strings.HasSuffix(path, "/") {
-			h.publicServer.muxers[v].HandleFunc(path+"/", handler)
+			h.netServ.pub.muxers[v].HandleFunc(path+"/", handler)
 		}
 	}
 }
 
 func (h *httprunner) registerIntraControlNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
-		h.intraControlServer.muxers[v].HandleFunc(path, handler)
+		h.netServ.control.muxers[v].HandleFunc(path, handler)
 		if !strings.HasSuffix(path, "/") {
-			h.intraControlServer.muxers[v].HandleFunc(path+"/", handler)
+			h.netServ.control.muxers[v].HandleFunc(path+"/", handler)
 		}
 	}
 }
 
 func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
-		h.intraDataServer.muxers[v].HandleFunc(path, handler)
+		h.netServ.data.muxers[v].HandleFunc(path, handler)
 		if !strings.HasSuffix(path, "/") {
-			h.intraDataServer.muxers[v].HandleFunc(path+"/", handler)
+			h.netServ.data.muxers[v].HandleFunc(path+"/", handler)
 		}
 	}
 }
 
 func (h *httprunner) init(config *cmn.Config) {
-	h.httpclient = cmn.NewClient(cmn.TransportArgs{
+	h.client.control = cmn.NewClient(cmn.TransportArgs{
 		Timeout:    config.Client.Timeout,
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
-	h.httpclientGetPut = cmn.NewClient(cmn.TransportArgs{
+	h.client.data = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.TimeoutLong,
 		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
 		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
@@ -466,26 +466,18 @@ func (h *httprunner) init(config *cmn.Config) {
 	if h.si.IsProxy() {
 		bufsize = 0
 	}
+
 	muxers := newMuxers()
-	h.publicServer = &netServer{
-		muxers:        muxers,
-		sndRcvBufSize: bufsize,
-	}
-	h.intraControlServer = h.publicServer // by default intra control net is the same as public
+	h.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: bufsize}
+	h.netServ.control = h.netServ.pub // by default, intra-control net is the same as public
 	if config.Net.UseIntraControl {
 		muxers = newMuxers()
-		h.intraControlServer = &netServer{
-			muxers:        muxers,
-			sndRcvBufSize: 0,
-		}
+		h.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0}
 	}
-	h.intraDataServer = h.publicServer // by default intra data net is the same as public
+	h.netServ.data = h.netServ.pub // by default, intra-data net is the same as public
 	if config.Net.UseIntraData {
 		muxers = newMuxers()
-		h.intraDataServer = &netServer{
-			muxers:        muxers,
-			sndRcvBufSize: bufsize,
-		}
+		h.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: bufsize}
 	}
 
 	h.owner.smap = newSmapOwner()
@@ -647,20 +639,20 @@ func (h *httprunner) run() error {
 		if config.Net.UseIntraControl {
 			go func() {
 				addr := h.si.IntraControlNet.NodeIPAddr + ":" + h.si.IntraControlNet.DaemonPort
-				errCh <- h.intraControlServer.listenAndServe(addr, h.logger)
+				errCh <- h.netServ.control.listenAndServe(addr, h.logger)
 			}()
 		}
 
 		if config.Net.UseIntraData {
 			go func() {
 				addr := h.si.IntraDataNet.NodeIPAddr + ":" + h.si.IntraDataNet.DaemonPort
-				errCh <- h.intraDataServer.listenAndServe(addr, h.logger)
+				errCh <- h.netServ.data.listenAndServe(addr, h.logger)
 			}()
 		}
 
 		go func() {
 			addr := h.si.PublicNet.NodeIPAddr + ":" + h.si.PublicNet.DaemonPort
-			errCh <- h.publicServer.listenAndServe(addr, h.logger)
+			errCh <- h.netServ.pub.listenAndServe(addr, h.logger)
 		}()
 
 		return <-errCh
@@ -679,7 +671,7 @@ func (h *httprunner) run() error {
 		// listen on `*:port`.
 		addr = ":" + h.si.PublicNet.DaemonPort
 	}
-	return h.publicServer.listenAndServe(addr, h.logger)
+	return h.netServ.pub.listenAndServe(addr, h.logger)
 }
 
 // stop gracefully
@@ -690,14 +682,14 @@ func (h *httprunner) stop(err error) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		h.publicServer.shutdown()
+		h.netServ.pub.shutdown()
 		wg.Done()
 	}()
 
 	if config.Net.UseIntraControl {
 		wg.Add(1)
 		go func() {
-			h.intraControlServer.shutdown()
+			h.netServ.control.shutdown()
 			wg.Done()
 		}()
 	}
@@ -705,7 +697,7 @@ func (h *httprunner) stop(err error) {
 	if config.Net.UseIntraData {
 		wg.Add(1)
 		go func() {
-			h.intraDataServer.shutdown()
+			h.netServ.data.shutdown()
 			wg.Done()
 		}()
 	}
@@ -746,14 +738,14 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 			break
 		}
 
-		client = h.httpclient
+		client = h.client.control
 	case cmn.LongTimeout:
 		req, res.err = args.req.Req()
 		if res.err != nil {
 			break
 		}
 
-		client = h.httpclientGetPut
+		client = h.client.data
 	default:
 		var cancel context.CancelFunc
 		if args.timeout == 0 {
@@ -765,10 +757,10 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 		}
 		defer cancel() // timeout => context.deadlineExceededError
 
-		if args.timeout > h.httpclient.Timeout {
-			client = h.httpclientGetPut
+		if args.timeout > h.client.control.Timeout {
+			client = h.client.data
 		} else {
-			client = h.httpclient
+			client = h.client.control
 		}
 	}
 

@@ -105,8 +105,8 @@ func newPrimary() *proxyrunner {
 	cmn.GCO.CommitUpdate(config)
 	cmn.GCO.SetConfigFile("/tmp/ais-tests/ais.config")
 
-	p.httpclientGetPut = &http.Client{}
-	p.httpclient = &http.Client{}
+	p.client.data = &http.Client{}
+	p.client.control = &http.Client{}
 	p.keepalive = newProxyKeepaliveRunner(p, tracker, atomic.NewBool(true))
 
 	o := newBMDOwnerPrx(config)
@@ -120,8 +120,8 @@ func newSecondary(name string) *proxyrunner {
 	p.si = cluster.NewSnode(name, httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.owner.smap = newSmapOwner()
 	p.owner.smap.put(newSmap())
-	p.httpclientGetPut = &http.Client{}
-	p.httpclient = &http.Client{}
+	p.client.data = &http.Client{}
+	p.client.control = &http.Client{}
 
 	config := cmn.GCO.BeginUpdate()
 	config.Periodic.RetrySyncTime = time.Millisecond * 100

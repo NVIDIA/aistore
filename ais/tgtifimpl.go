@@ -268,7 +268,7 @@ func (t *targetrunner) _sendPUT(params cluster.SendToParams) error {
 		return fmt.Errorf("unexpected failure to create request, err: %w", err)
 	}
 	defer cancel()
-	resp, err := t.httpclientGetPut.Do(req)
+	resp, err := t.client.data.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to PUT to %s, err: %w", reqArgs.URL(), err)
 	}

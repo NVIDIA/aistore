@@ -18,5 +18,5 @@ type Node interface {
 	NodeStarted() bool
 	NodeStartedTime() time.Time
 
-	Client() *http.Client
+	DataClient() *http.Client
 }
