@@ -67,6 +67,8 @@ The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy a
 
 New ais buckets must be given a unique name that does not duplicate any existing ais or cloud bucket.
 
+If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`. For details, see [S3 compatibility](/docs/s3compat.md#s3-compatibility).
+
 ### CLI examples: create, rename and, destroy ais bucket
 
 To create an ais bucket with the name 'myBucket', rename it to 'myBucket2' and delete it, run:
@@ -199,7 +201,7 @@ $ curl -sL --max-redirs 3 -x localhost:8080 --noproxy "$(curl -s localhost:8080/
   > /dev/null
 ```
 
-Alternatively, an object can also be downloaded using the `get` and `cat` CLI commands. 
+Alternatively, an object can also be downloaded using the `get` and `cat` CLI commands.
 ```console
 $ ais get -f http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
 ```
