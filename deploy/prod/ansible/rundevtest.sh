@@ -1,6 +1,7 @@
 #!/bin/bash
 
 function cleanup() {
+  killall go # Kill test process if still running.
   make kill
   make clean
 }
@@ -83,7 +84,7 @@ for bucket in ${CLOUD_BCKS}; do
   echo "----- LONG TESTS FINISHED WITH: ${exit_code} -----"
 done
 
-# Note: only the logs from the last make test-long run survive - see function deploy above
+# NOTE: Only the logs from the last make test-long run survive - see function deploy above.
 make kill
 
 if [[ $result -ne 0 ]]; then
