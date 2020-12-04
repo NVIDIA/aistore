@@ -217,25 +217,31 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 
 	// 2: merging local => boot
 	if haveRegistratons {
-		var added int
 		p.owner.smap.Lock()
-		smap = p.owner.smap.get()
+		var (
+			added int
+			clone = p.owner.smap.get().clone()
+		)
 		if loadedSmap != nil {
-			added, _ = smap.merge(loadedSmap, true /*override (IP, port) duplicates*/)
-			smap = loadedSmap
+			added, _ = clone.merge(loadedSmap, true /*override (IP, port) duplicates*/)
+			clone = loadedSmap
 			if added > 0 {
-				smap.Version = smap.Version + int64(added) + 1
+				clone.Version = clone.Version + int64(added) + 1
 			}
 		}
-		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, smap.StringEx(), added)
-		if smap.UUID == "" {
+		glog.Infof("%s: initial %s, curr %s, added=%d", p.si, loadedSmap, clone.StringEx(), added)
+		if clone.UUID == "" {
 			uuid, created = p.discoverClusterUUID()
-			smap.UUID, smap.CreationTime = uuid, created
+			clone.UUID, clone.CreationTime = uuid, created
 		}
-		p.owner.smap.put(smap)
+		smap = clone
+		p.owner.smap.put(clone)
 		p.owner.smap.Unlock()
-		bmd := p.owner.bmd.get()
-		msg := p.newAisMsgStr(metaction1, smap, bmd)
+
+		var (
+			bmd = p.owner.bmd.get()
+			msg = p.newAisMsgStr(metaction1, smap, bmd)
+		)
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{bmd, msg})
 		wg.Wait()
 	} else {
