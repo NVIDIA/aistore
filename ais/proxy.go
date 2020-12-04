@@ -72,10 +72,12 @@ type (
 		rproxy     reverseProxy
 		notifs     notifs
 		ic         ic
-		regmu      sync.RWMutex
-		regpool    nodeRegPool
-		qm         queryMem
-		gmm        *memsys.MMSA // system pagesize-based memory manager and slab allocator
+		reg        struct {
+			mtx  sync.RWMutex
+			pool nodeRegPool
+		}
+		qm  queryMem
+		gmm *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	}
 )
 
@@ -2833,9 +2835,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if selfRegister && !p.ClusterStarted() {
-		p.regmu.Lock()
-		p.regpool = append(p.regpool, regReq)
-		p.regmu.Unlock()
+		p.reg.mtx.Lock()
+		p.reg.pool = append(p.reg.pool, regReq)
+		p.reg.mtx.Unlock()
 	}
 	nsi := regReq.SI
 	if err := nsi.Validate(); err != nil {

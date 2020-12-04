@@ -334,9 +334,9 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.markClusterStarted()
 
 	// Clear regpool, only used in startup
-	p.regmu.Lock()
-	p.regpool = nil
-	p.regmu.Unlock()
+	p.reg.mtx.Lock()
+	p.reg.pool = nil
+	p.reg.mtx.Unlock()
 }
 
 // maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on
@@ -623,14 +623,14 @@ func (p *proxyrunner) bcastMaxVerBestEffort(smap *smapX) *smapX {
 }
 
 func (p *proxyrunner) discoverClusterUUID() (uuid, created string) {
-	p.regmu.RLock()
-	defer p.regmu.RUnlock()
-	if len(p.regpool) == 0 {
+	p.reg.mtx.RLock()
+	defer p.reg.mtx.RUnlock()
+	if len(p.reg.pool) == 0 {
 		return newClusterUUID()
 	}
 	var maxCnt int
 	counter := make(map[string]int) // UUID => count
-	for _, regReq := range p.regpool {
+	for _, regReq := range p.reg.pool {
 		if regReq.Smap == nil || !cmn.IsValidUUID(regReq.Smap.UUID) {
 			continue
 		}
