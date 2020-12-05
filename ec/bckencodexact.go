@@ -80,9 +80,11 @@ func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode
 func (r *XactBckEncode) Run() (err error) {
 	bck := cluster.NewBckEmbed(r.bck)
 	if err := bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
+		r.Abort()
 		return err
 	}
 	if !bck.Props.EC.Enabled {
+		r.Abort()
 		return fmt.Errorf("bucket %q does not have EC enabled", r.bck.Name)
 	}
 

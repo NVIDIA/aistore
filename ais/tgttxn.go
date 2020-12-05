@@ -592,34 +592,49 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 	}
 	switch c.phase {
 	case cmn.ActBegin:
-		if err := t.validateEcEncode(c.bck, c.msg); err != nil {
+		if err := t.validateECEncode(c.bck, c.msg); err != nil {
 			return err
 		}
 		nlp := c.bck.GetNameLockPair()
-		if !nlp.TryLock(c.timeout.netw / 2) {
+		if !nlp.TryLock(c.timeout.netw / 4) {
 			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
 		}
-		nlp.Unlock() // TODO -- FIXME: introduce txn, unlock when done
-		if _, err := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActBegin); err != nil {
+
+		txn := newTxnECEncode(c, c.bck)
+		if err := t.transactions.begin(txn); err != nil {
+			nlp.Unlock()
 			return err
 		}
+		txn.nlps = []cmn.NLP{nlp}
 	case cmn.ActAbort:
-		// do nothing
+		t.transactions.find(c.uuid, cmn.ActAbort)
 	case cmn.ActCommit:
+		txn, err := t.transactions.find(c.uuid, "")
+		if err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+		// wait for newBMD w/timeout
+		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
+			return fmt.Errorf("%s %s: %v", t.si, txn, err)
+		}
+
 		xact, err := xreg.RenewECEncode(t, c.bck, c.uuid, cmn.ActCommit)
 		if err != nil {
-			glog.Error(err)
 			return err
 		}
-		go xact.Run()
-
+		c.addNotif(xact) // notify upon completion
+		go func() {
+			if err := xact.Run(); err != nil {
+				glog.Error(err)
+			}
+		}()
 	default:
 		cmn.Assert(false)
 	}
 	return nil
 }
 
-func (t *targetrunner) validateEcEncode(bck *cluster.Bck, msg *aisMsg) (err error) {
+func (t *targetrunner) validateECEncode(bck *cluster.Bck, msg *aisMsg) (err error) {
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		return cs.Err
 	}

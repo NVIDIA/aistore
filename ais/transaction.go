@@ -105,6 +105,9 @@ type (
 		dp      cluster.LomReaderProvider // optional
 		metaMsg *cmn.Bck2BckMsg           // optional, for object name translation.
 	}
+	txnECEncode struct {
+		txnBckBase
+	}
 )
 
 // interface guard
@@ -115,6 +118,7 @@ var (
 	_ txn = (*txnSetBucketProps)(nil)
 	_ txn = (*txnRenameBucket)(nil)
 	_ txn = (*txnTransferBucket)(nil)
+	_ txn = (*txnECEncode)(nil)
 )
 
 //////////////////
@@ -510,4 +514,16 @@ func newTxnTransferBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck, dm *bund
 func (txn *txnTransferBucket) abort() {
 	txn.txnBckBase.abort()
 	txn.dm.UnregRecv()
+}
+
+/////////////////////
+// txnECEncode     //
+/////////////////////
+
+func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
+	txn = &txnECEncode{
+		*newTxnBckBase("enc", *bck),
+	}
+	txn.fillFromCtx(c)
+	return
 }

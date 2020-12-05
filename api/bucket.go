@@ -476,7 +476,11 @@ func doListRangeRequest(baseParams BaseParams, bck cmn.Bck, action string, listR
 func ECEncodeBucket(baseParams BaseParams, bck cmn.Bck, data, parity int) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
 	// Without `string` conversion it makes base64 from []byte in `Body`.
-	ecConf := string(cmn.MustMarshal(&cmn.ECConfToUpdate{DataSlices: &data, ParitySlices: &parity}))
+	ecConf := string(cmn.MustMarshal(&cmn.ECConfToUpdate{
+		DataSlices:   &data,
+		ParitySlices: &parity,
+		Enabled:      Bool(true),
+	}))
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
