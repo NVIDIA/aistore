@@ -83,7 +83,7 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 	}
 }
 
-func TestKeepaliveTrackerHeartBeat(t *testing.T) {
+func TestHB(t *testing.T) {
 	hb := newHeartBeatTracker(time.Millisecond * 10)
 
 	if !hb.TimedOut("unknown server") {

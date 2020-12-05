@@ -44,7 +44,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 	p.client.control = &http.Client{}
 
 	config := cmn.GCO.BeginUpdate()
-	config.KeepaliveTracker.Proxy.Name = "heartbeat"
+	config.Keepalive.Proxy.Name = "heartbeat"
 	config.Timeout.Startup = 4 * time.Second
 	config.Timeout.CplaneOperation = 2 * time.Second
 	config.Timeout.MaxKeepalive = 4 * time.Second

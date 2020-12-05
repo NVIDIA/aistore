@@ -111,10 +111,10 @@ func newTargetKeepaliveRunner(t *targetrunner, statsT stats.Tracker, startedUp *
 	tkr.keepalive.k = tkr
 	tkr.statsT = statsT
 	tkr.keepalive.startedUp = startedUp
-	tkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Target)
+	tkr.kt = newKeepaliveTracker(config.Keepalive.Target)
 	tkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
 	tkr.controlCh = make(chan controlSignal) // unbuffered on purpose
-	tkr.interval = config.KeepaliveTracker.Target.Interval
+	tkr.interval = config.Keepalive.Target.Interval
 	tkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
 	return tkr
 }
@@ -127,18 +127,18 @@ func newProxyKeepaliveRunner(p *proxyrunner, statsT stats.Tracker, startedUp *at
 	pkr.keepalive.k = pkr
 	pkr.statsT = statsT
 	pkr.keepalive.startedUp = startedUp
-	pkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Proxy)
+	pkr.kt = newKeepaliveTracker(config.Keepalive.Proxy)
 	pkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
 	pkr.controlCh = make(chan controlSignal) // unbuffered on purpose
-	pkr.interval = config.KeepaliveTracker.Proxy.Interval
+	pkr.interval = config.Keepalive.Proxy.Interval
 	pkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
 	return pkr
 }
 
 func (tkr *targetKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
-	if !reflect.DeepEqual(oldConf.KeepaliveTracker.Target, newConf.KeepaliveTracker.Target) {
-		tkr.kt = newKeepaliveTracker(newConf.KeepaliveTracker.Target)
-		tkr.interval = newConf.KeepaliveTracker.Target.Interval
+	if !reflect.DeepEqual(oldConf.Keepalive.Target, newConf.Keepalive.Target) {
+		tkr.kt = newKeepaliveTracker(newConf.Keepalive.Target)
+		tkr.interval = newConf.Keepalive.Target.Interval
 	}
 	tkr.maxKeepaliveTime = float64(newConf.Timeout.MaxKeepalive.Nanoseconds())
 }
@@ -155,9 +155,9 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 }
 
 func (pkr *proxyKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
-	if !reflect.DeepEqual(oldConf.KeepaliveTracker.Proxy, newConf.KeepaliveTracker.Proxy) {
-		pkr.kt = newKeepaliveTracker(newConf.KeepaliveTracker.Proxy)
-		pkr.interval = newConf.KeepaliveTracker.Proxy.Interval
+	if !reflect.DeepEqual(oldConf.Keepalive.Proxy, newConf.Keepalive.Proxy) {
+		pkr.kt = newKeepaliveTracker(newConf.Keepalive.Proxy)
+		pkr.interval = newConf.Keepalive.Proxy.Interval
 	}
 	pkr.maxKeepaliveTime = float64(newConf.Timeout.MaxKeepalive.Nanoseconds())
 }

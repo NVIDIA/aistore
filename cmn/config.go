@@ -121,30 +121,30 @@ type (
 	//
 	// nolint:maligned // no performance critical code
 	Config struct {
-		Confdir          string          `json:"confdir"`
-		Cloud            CloudConf       `json:"cloud"`
-		Mirror           MirrorConf      `json:"mirror"`
-		EC               ECConf          `json:"ec"`
-		Log              LogConf         `json:"log"`
-		Periodic         PeriodConf      `json:"periodic"`
-		Timeout          TimeoutConf     `json:"timeout"`
-		Client           ClientConf      `json:"client"`
-		Proxy            ProxyConf       `json:"proxy"`
-		LRU              LRUConf         `json:"lru"`
-		Disk             DiskConf        `json:"disk"`
-		Rebalance        RebalanceConf   `json:"rebalance"`
-		Replication      ReplicationConf `json:"replication"`
-		Cksum            CksumConf       `json:"checksum"`
-		Versioning       VersionConf     `json:"versioning"`
-		FSpaths          FSPathsConf     `json:"fspaths"`
-		TestFSP          TestfspathConf  `json:"test_fspaths"`
-		Net              NetConf         `json:"net"`
-		FSHC             FSHCConf        `json:"fshc"`
-		Auth             AuthConf        `json:"auth"`
-		KeepaliveTracker KeepaliveConf   `json:"keepalivetracker"`
-		Downloader       DownloaderConf  `json:"downloader"`
-		DSort            DSortConf       `json:"distributed_sort"`
-		Compression      CompressionConf `json:"compression"`
+		Confdir     string          `json:"confdir"`
+		Cloud       CloudConf       `json:"cloud"`
+		Mirror      MirrorConf      `json:"mirror"`
+		EC          ECConf          `json:"ec"`
+		Log         LogConf         `json:"log"`
+		Periodic    PeriodConf      `json:"periodic"`
+		Timeout     TimeoutConf     `json:"timeout"`
+		Client      ClientConf      `json:"client"`
+		Proxy       ProxyConf       `json:"proxy"`
+		LRU         LRUConf         `json:"lru"`
+		Disk        DiskConf        `json:"disk"`
+		Rebalance   RebalanceConf   `json:"rebalance"`
+		Replication ReplicationConf `json:"replication"`
+		Cksum       CksumConf       `json:"checksum"`
+		Versioning  VersionConf     `json:"versioning"`
+		FSpaths     FSPathsConf     `json:"fspaths"`
+		TestFSP     TestfspathConf  `json:"test_fspaths"`
+		Net         NetConf         `json:"net"`
+		FSHC        FSHCConf        `json:"fshc"`
+		Auth        AuthConf        `json:"auth"`
+		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
+		Downloader  DownloaderConf  `json:"downloader"`
+		DSort       DSortConf       `json:"distributed_sort"`
+		Compression CompressionConf `json:"compression"`
 	}
 	CloudConf struct {
 		Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on cloud provider
@@ -1049,7 +1049,7 @@ func KeepaliveRetryDuration(cs ...*Config) time.Duration {
 	} else {
 		c = GCO.Get()
 	}
-	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.RetryFactor)
+	return c.Timeout.CplaneOperation * time.Duration(c.Keepalive.RetryFactor)
 }
 
 func Printf(format string, a ...interface{}) {

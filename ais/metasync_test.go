@@ -96,8 +96,8 @@ func newPrimary() *proxyrunner {
 	config := cmn.GCO.BeginUpdate()
 	config.Confdir = "/tmp/ais-tests"
 	config.Periodic.RetrySyncTime = time.Millisecond * 100
-	config.KeepaliveTracker.Proxy.Name = "heartbeat"
-	config.KeepaliveTracker.Proxy.IntervalStr = "as"
+	config.Keepalive.Proxy.Name = "heartbeat"
+	config.Keepalive.Proxy.IntervalStr = "as"
 	config.Timeout.CplaneOperation = 2 * time.Second
 	config.Timeout.MaxKeepalive = 4 * time.Second
 	config.Client.Timeout = 10 * time.Second
@@ -125,8 +125,8 @@ func newSecondary(name string) *proxyrunner {
 
 	config := cmn.GCO.BeginUpdate()
 	config.Periodic.RetrySyncTime = time.Millisecond * 100
-	config.KeepaliveTracker.Proxy.Name = "heartbeat"
-	config.KeepaliveTracker.Proxy.IntervalStr = "as"
+	config.Keepalive.Proxy.Name = "heartbeat"
+	config.Keepalive.Proxy.IntervalStr = "as"
 	config.Timeout.CplaneOperation = 2 * time.Second
 	config.Timeout.MaxKeepalive = 4 * time.Second
 	cmn.GCO.CommitUpdate(config)
