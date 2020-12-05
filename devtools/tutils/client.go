@@ -560,6 +560,13 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	return
 }
 
+func GetDaemonConfig(t *testing.T, daeID string) *cmn.Config {
+	baseParams := BaseAPIParams()
+	config, err := api.GetDaemonConfig(baseParams, daeID)
+	tassert.CheckFatal(t, err)
+	return config
+}
+
 func GetClusterMap(t *testing.T, url string) (smap *cluster.Smap) {
 	smap, _ = waitForStartup(BaseAPIParams(url), t)
 	return

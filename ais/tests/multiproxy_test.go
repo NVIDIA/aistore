@@ -10,7 +10,9 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
@@ -35,6 +39,7 @@ const (
 var (
 	voteTests = []Test{
 		{"PrimaryCrash", primaryCrashElectRestart},
+		{"NodeCrashRestoreDifferentIP", nodeCrashRestoreDifferentIP},
 		{"ProxyCrash", proxyCrash},
 		{"PrimaryAndTargetCrash", primaryAndTargetCrash},
 		{"PrimaryAndProxyCrash", primaryAndProxyCrash},
@@ -136,6 +141,89 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool, po
 		return setPrimaryTo(t, oldPrimaryURL, smap, "", oldPrimaryID)
 	}
 	return smap
+}
+
+func nodeCrashRestoreDifferentIP(t *testing.T) {
+	for _, ty := range []string{cmn.Proxy, cmn.Target} {
+		t.Run(ty, func(t *testing.T) {
+			killRestoreDiffIP(t, ty)
+		})
+	}
+}
+
+func killRestoreDiffIP(t *testing.T, nodeType string) {
+	// NOTE: This function requires local deployment as it changes node config
+	if k8s.Detect() == nil {
+		t.Skip("skipping in kubernetes")
+	}
+	if containers.DockerRunning() {
+		t.Skip("skipping in docker")
+	}
+
+	var (
+		proxyURL                      = tutils.GetPrimaryURL()
+		smap                          = tutils.GetClusterMap(t, proxyURL)
+		origProxyCnt, origTargetCount = smap.CountActiveProxies(), smap.CountActiveTargets()
+		portInc                       = 100
+		node                          *cluster.Snode
+		err                           error
+		pdc, tdc                      int
+		restore                       bool
+	)
+
+	if nodeType == cmn.Proxy {
+		node, err = smap.GetRandProxy(true)
+		pdc = 1
+	} else {
+		node, err = smap.GetRandTarget()
+		tdc = 1
+	}
+	tassert.CheckFatal(t, err)
+
+	cfg := tutils.GetDaemonConfig(t, node.ID())
+
+killRestore:
+	cmd, err := tutils.KillNode(node)
+	tassert.CheckFatal(t, err)
+
+	smap, err = tutils.WaitForClusterState(proxyURL, "kill primary", smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
+	tassert.CheckFatal(t, err)
+	cfg.Net.L4.Port += portInc
+	cfg.Net.L4.PortIntraControl += portInc
+	cfg.Net.L4.PortIntraData += portInc
+
+	cfg.Net.L4.PortStr = strconv.Itoa(cfg.Net.L4.Port)
+	cfg.Net.L4.PortIntraControlStr = strconv.Itoa(cfg.Net.L4.PortIntraControl)
+	cfg.Net.L4.PortIntraDataStr = strconv.Itoa(cfg.Net.L4.PortIntraData)
+
+	cfgPath := path.Join(cfg.Confdir, "ais.json")
+	err = jsp.Save(cfgPath, cfg, jsp.Plain())
+	tassert.CheckFatal(t, err)
+
+	err = tutils.RestoreNode(cmd, false, nodeType)
+	tassert.CheckFatal(t, err)
+
+	smap, err = tutils.WaitForClusterState(proxyURL, "restore with changed config", smap.Version, origProxyCnt, 0)
+	tassert.CheckFatal(t, err)
+
+	// Health check with old public URL should fail
+	err = api.Health(tutils.BaseAPIParams(node.URL(cmn.NetworkPublic)))
+	tassert.Errorf(t, err != nil, "health check with old IP information should fail %v", err)
+
+	newNode := smap.GetNode(node.ID())
+	err = tutils.WaitNodeReady(newNode.URL(cmn.NetworkPublic))
+	tassert.CheckError(t, err)
+	if !restore {
+		// Revert port changes
+		restore = true
+		node = newNode
+		portInc = -portInc
+		goto killRestore
+	}
+
+	if nodeType == cmn.Target {
+		tutils.WaitForRebalanceToComplete(t, tutils.BaseAPIParams(proxyURL))
+	}
 }
 
 // primaryAndTargetCrash kills the primary p[roxy and one random target, verifies the next in
