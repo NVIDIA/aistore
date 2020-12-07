@@ -33,7 +33,7 @@ The details about each step are described in subsequent sections.
 
 #### On the fly ETL example
 
-<img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="900">
+<img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="80%">
 
 The example above uses [AIS CLI](/cmd/cli/README.md) to:
 1. **Create** a new AIS bucket
@@ -52,7 +52,7 @@ The example above uses [AIS CLI](/cmd/cli/README.md) to:
 
 #### Offline ETL example
 
-<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="100%">
+<img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
 
 The example above uses [AIS CLI](/cmd/cli/README.md) to:
 1. **Create** a new AIS bucket
