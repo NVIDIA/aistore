@@ -299,11 +299,15 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 	if ct.hrwFQN != "" {
 		fqn = ct.hrwFQN
 	}
-	lom = &cluster.LOM{FQN: fqn}
-	if err := lom.Init(ct.Bck); err != nil {
+	parsedFQN, _, err := cluster.ResolveFQN(fqn)
+	if err != nil {
 		return err
 	}
-	if lom.ParsedFQN.ContentType == fs.ObjectType {
+	if parsedFQN.ContentType == fs.ObjectType {
+		lom = &cluster.LOM{ObjName: parsedFQN.ObjName, MpathInfo: parsedFQN.MpathInfo, Digest: parsedFQN.Digest}
+		if err := lom.Init(ct.Bck); err != nil {
+			return err
+		}
 		if err := lom.Load(false); err != nil {
 			return err
 		}

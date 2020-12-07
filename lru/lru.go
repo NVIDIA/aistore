@@ -331,6 +331,7 @@ func (j *lruJ) jogBck() (size int64, err error) {
 	heap.Init(j.heap)
 
 	// 2. collect
+	// TODO: LRU other CTs besides WorkfileType
 	opts := &fs.Options{
 		Mpath:    j.mpathInfo,
 		Bck:      j.bck,
@@ -355,19 +356,23 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 		return err
 	}
 	h := j.heap
-	lom := &cluster.LOM{FQN: fqn}
-	err := lom.Init(j.bck)
+	parsedFQN, _, err := cluster.ResolveFQN(fqn)
 	if err != nil {
 		return nil
 	}
 	// workfiles: remove old or do nothing
-	if lom.ParsedFQN.ContentType == fs.WorkfileType {
+	if parsedFQN.ContentType == fs.WorkfileType {
 		_, base := filepath.Split(fqn)
 		contentResolver := fs.CSM.RegisteredContentTypes[fs.WorkfileType]
 		_, old, ok := contentResolver.ParseUniqueFQN(base)
 		if ok && old {
 			j.oldWork = append(j.oldWork, fqn)
 		}
+		return nil
+	}
+	lom := &cluster.LOM{ObjName: parsedFQN.ObjName, MpathInfo: parsedFQN.MpathInfo, Digest: parsedFQN.Digest}
+	err = lom.Init(j.bck)
+	if err != nil {
 		return nil
 	}
 	if !j.allowDelObj {

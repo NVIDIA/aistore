@@ -130,7 +130,7 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 // slight variation vs t.doPut() above
 func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) (string, error) {
 	debug.Assert(params.Tag != "")
-	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, params.Tag)
+	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN(), fs.WorkfileType, params.Tag)
 	poi := &putObjInfo{
 		t:       t,
 		lom:     lom,
@@ -430,10 +430,10 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		// TODO: Try to determine if `params.SrcFQN` and `dstFQN` are on the device
 		//  without requiring it to be on the same mountpath.
 		info, _, err := fs.ParseMpathInfo(params.SrcFQN)
-		copyFile = err != nil || info.Path != lom.ParsedFQN.MpathInfo.Path
+		copyFile = err != nil || info.Path != lom.MpathInfo.Path
 	}
 	if copyFile {
-		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN(), fs.WorkfileType, fs.WorkfilePut)
 
 		buf, slab := t.gmm.Alloc()
 		fileSize, cksum, err = cmn.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumConf().Type)

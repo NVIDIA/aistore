@@ -126,7 +126,7 @@ func (wi *WalkInfo) SetObjectFilter(f cluster.ObjectFilter) {
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
 func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntry {
-	objName := lom.ParsedFQN.ObjName
+	objName := lom.ObjName
 	if wi.prefix != "" && !strings.HasPrefix(objName, wi.prefix) {
 		return nil
 	}

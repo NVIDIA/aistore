@@ -1167,7 +1167,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems
 			return
 		}
 	}
-	sliceFQN := lom.ParsedFQN.MpathInfo.MakePathFQN(bck.Bck, ec.SliceType, objName)
+	sliceFQN := lom.MpathInfo.MakePathFQN(bck.Bck, ec.SliceType, objName)
 	finfo, err := os.Stat(sliceFQN)
 	if err != nil {
 		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
@@ -1299,6 +1299,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		recvType   = r.URL.Query().Get(cmn.URLParamRecvType)
 	)
 	lom.FromHTTPHdr(header) // TODO: check that values parsed here are not coming from the user
+	parsedFQN := lom.ParsedFQN()
 	poi := &putObjInfo{
 		started:    started,
 		t:          t,
@@ -1306,7 +1307,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		r:          r.Body,
 		cksumToUse: cmn.NewCksum(cksumType, cksumValue),
 		ctx:        context.Background(),
-		workFQN:    fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
+		workFQN:    fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
 	if recvType != "" {
 		n, err := strconv.Atoi(recvType)

@@ -226,7 +226,7 @@ func (r *XactPut) dispatchRequest(req *Request) {
 
 	cmn.Assert(req.Action == ActDelete || req.Action == ActSplit)
 
-	jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
+	jogger, ok := r.putJoggers[req.LOM.MpathInfo.Path]
 	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.putCh), req.LOM.Uname())

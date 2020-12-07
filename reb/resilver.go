@@ -164,10 +164,10 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 			return
 		}
 		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
-		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.ParsedFQN.MpathInfo, newMpath.MpathInfo, buf)
+		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.MpathInfo, newMpath.MpathInfo, buf)
 		if err != nil {
 			glog.Warningf("%s: failed to move metafile %q -> %q: %v",
-				lom, lom.ParsedFQN.MpathInfo.Path, newMpath.MpathInfo.Path, err)
+				lom, lom.MpathInfo.Path, newMpath.MpathInfo.Path, err)
 			return
 		}
 	}

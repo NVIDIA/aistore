@@ -64,7 +64,7 @@ func (wg *WorkerGroup) Run() {
 }
 
 func (wg *WorkerGroup) Do(lom *cluster.LOM) bool {
-	path := lom.ParsedFQN.MpathInfo.Path
+	path := lom.MpathInfo.Path
 	if worker, ok := wg.workers[path]; ok {
 		worker.workCh <- lom
 		return true

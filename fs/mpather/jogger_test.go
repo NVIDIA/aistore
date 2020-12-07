@@ -232,11 +232,11 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
-			cnt := counters[lom.ParsedFQN.MpathInfo.Path].Inc()
+			cnt := counters[lom.MpathInfo.Path].Inc()
 
 			// Fail only once, on one mpath.
 			if cnt == failAt && failed.CAS(false, true) {
-				failOnMpath = lom.ParsedFQN.MpathInfo
+				failOnMpath = lom.MpathInfo
 				return fmt.Errorf("oops")
 			}
 			return nil
@@ -288,7 +288,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
 			tassert.Errorf(t, lom.Size() == 0, "expected LOM to not be loaded")
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
-			counters[lom.ParsedFQN.ContentType].Inc()
+			counters[fs.ObjectType].Inc()
 			return nil
 		},
 		VisitCT: func(ct *cluster.CT, buf []byte) error {

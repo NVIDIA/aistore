@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -105,7 +106,6 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 	var (
 		zr   *zip.Reader
 		size int64
-		fqn  = lom.ParsedFQN
 	)
 
 	if zr, err = zip.NewReader(r, r.Size()); err != nil {
@@ -141,8 +141,8 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 			}
 
 			args := extractRecordArgs{
-				shardName:     fqn.ObjName,
-				fileType:      fqn.ContentType,
+				shardName:     lom.ObjName,
+				fileType:      fs.ObjectType,
 				recordName:    header.Name,
 				r:             cmn.NewSizedReader(file, int64(header.UncompressedSize64)),
 				metadata:      bmeta,

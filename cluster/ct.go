@@ -82,11 +82,12 @@ func NewCTFromBO(bckName, bckProvider, objName string, b Bowner, ctType ...strin
 
 // Construct CT from LOM and change ContentType and FQN
 func NewCTFromLOM(lom *LOM, ctType string) *CT {
+	parsedFQN := lom.ParsedFQN()
 	return &CT{
-		fqn:       fs.CSM.GenContentParsedFQN(lom.ParsedFQN, ctType, "" /* workfile prefix */),
+		fqn:       fs.CSM.GenContentParsedFQN(parsedFQN, ctType, "" /* workfile prefix */),
 		bck:       lom.Bck(),
 		objName:   lom.ObjName,
-		parsedFQN: lom.ParsedFQN,
+		parsedFQN: parsedFQN,
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -148,7 +149,6 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 	var (
 		size   int64
 		header *tar.Header
-		fqn    = lom.ParsedFQN
 		tr     = tar.NewReader(r)
 	)
 
@@ -183,8 +183,8 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r *io.SectionReader, 
 			}
 
 			args := extractRecordArgs{
-				shardName:     fqn.ObjName,
-				fileType:      fqn.ContentType,
+				shardName:     lom.ObjName,
+				fileType:      fs.ObjectType,
 				recordName:    header.Name,
 				r:             data,
 				metadata:      bmeta,

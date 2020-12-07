@@ -121,7 +121,7 @@ func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 	}
 
 	for mpath, mpathInfo := range mpaths {
-		if mpath == lom.ParsedFQN.MpathInfo.Path {
+		if mpath == lom.MpathInfo.Path {
 			continue
 		}
 		if lom.HasCopies() {
@@ -138,7 +138,7 @@ func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 }
 
 func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *cluster.LOM, err error) {
-	copyFQN := fs.CSM.FQN(mpathInfo, lom.Bck().Bck, lom.ParsedFQN.ContentType, lom.ObjName)
+	copyFQN := fs.CSM.FQN(mpathInfo, lom.Bck().Bck, fs.ObjectType, lom.ObjName)
 	clone, err = lom.CopyObject(copyFQN, buf)
 	if err != nil {
 		return

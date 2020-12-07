@@ -51,14 +51,15 @@ type (
 		customMD cmn.SimpleKVs
 	}
 	LOM struct {
-		md      lmeta  // local meta
-		bck     *Bck   // bucket
-		FQN     string // fqn
-		ObjName string // object name in the bucket
-		HrwFQN  string // (misplaced?)
+		md        lmeta             // local meta
+		bck       *Bck              // bucket
+		MpathInfo *fs.MountpathInfo // object's mountpath
+		Digest    uint64            // mountpath's digest
+		FQN       string            // fqn
+		ObjName   string            // object name in the bucket
+		HrwFQN    string            // (misplaced?)
 		// runtime
-		ParsedFQN fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
-		loaded    bool
+		loaded bool
 	}
 
 	ObjectFilter func(*LOM) bool
@@ -109,13 +110,22 @@ func (lom *LOM) GetCustomMD(key string) (string, bool) {
 	value, exists := lom.md.customMD[key]
 	return value, exists
 }
-func (lom *LOM) ECEnabled() bool            { return lom.Bprops().EC.Enabled }
-func (lom *LOM) IsHRW() bool                { return lom.HrwFQN == lom.FQN } // subj to resilvering
-func (lom *LOM) Bck() *Bck                  { return lom.bck }
-func (lom *LOM) BckName() string            { return lom.bck.Name }
-func (lom *LOM) Bprops() *cmn.BucketProps   { return lom.bck.Props }
-func (lom *LOM) GetFQN() string             { return lom.FQN }
-func (lom *LOM) GetParsedFQN() fs.ParsedFQN { return lom.ParsedFQN }
+func (lom *LOM) ECEnabled() bool          { return lom.Bprops().EC.Enabled }
+func (lom *LOM) IsHRW() bool              { return lom.HrwFQN == lom.FQN } // subj to resilvering
+func (lom *LOM) Bck() *Bck                { return lom.bck }
+func (lom *LOM) BckName() string          { return lom.bck.Name }
+func (lom *LOM) Bprops() *cmn.BucketProps { return lom.bck.Props }
+func (lom *LOM) GetFQN() string           { return lom.FQN }
+
+func (lom *LOM) ParsedFQN() fs.ParsedFQN {
+	return fs.ParsedFQN{
+		Digest:      lom.Digest,
+		MpathInfo:   lom.MpathInfo,
+		ObjName:     lom.ObjName,
+		Bck:         lom.Bck().Bck,
+		ContentType: fs.ObjectType,
+	}
+}
 
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
@@ -124,7 +134,7 @@ func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
 	if lom.isMirror(from) {
-		lom.setCopiesMd(from.FQN, from.ParsedFQN.MpathInfo)
+		lom.setCopiesMd(from.FQN, from.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
 			lom.addCopyMd(fqn, mpathInfo)
 		}
@@ -236,7 +246,7 @@ func (lom *LOM) isMirror(dst *LOM) bool {
 func (lom *LOM) setCopiesMd(copyFQN string, mpi *fs.MountpathInfo) {
 	lom.md.copies = make(fs.MPI, 2)
 	lom.md.copies[copyFQN] = mpi
-	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
+	lom.md.copies[lom.FQN] = lom.MpathInfo
 }
 
 func (lom *LOM) addCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
@@ -244,7 +254,7 @@ func (lom *LOM) addCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
 		lom.md.copies = make(fs.MPI, 2)
 	}
 	lom.md.copies[copyFQN] = mpi
-	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
+	lom.md.copies[lom.FQN] = lom.MpathInfo
 }
 
 func (lom *LOM) delCopyMd(copyFQN string) {
@@ -305,7 +315,7 @@ func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 	}
 	availablePaths, _ := fs.Get()
 	for _, mpathInfo := range availablePaths {
-		copyFQN := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.ObjName)
+		copyFQN := fs.CSM.FQN(mpathInfo, lom.bck.Bck, fs.ObjectType, lom.ObjName)
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
@@ -352,10 +362,10 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 	availablePaths, _ := fs.Get()
 	buf, slab := T.MMSA().Alloc()
 	for path, mpathInfo := range availablePaths {
-		if path == lom.ParsedFQN.MpathInfo.Path {
+		if path == lom.MpathInfo.Path {
 			continue
 		}
-		fqn := fs.CSM.FQN(mpathInfo, lom.bck.Bck, lom.ParsedFQN.ContentType, lom.ObjName)
+		fqn := fs.CSM.FQN(mpathInfo, lom.bck.Bck, fs.ObjectType, lom.ObjName)
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
@@ -396,7 +406,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 	dst.CopyMetadata(lom)
 
-	workFQN := fs.CSM.GenContentParsedFQN(dst.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+	workFQN := fs.CSM.GenContentParsedFQN(dst.ParsedFQN(), fs.WorkfileType, fs.WorkfilePut)
 	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, cksumType)
 	if err != nil {
 		return
@@ -416,7 +426,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		dst.SetCksum(dstCksum.Clone())
 	}
 	if lom.isMirror(dst) {
-		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
+		if err = lom.AddCopy(dst.FQN, dst.MpathInfo); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
 				if errRemove := os.Remove(dst.FQN); errRemove != nil {
 					glog.Errorf("nested err: %v", errRemove)
@@ -446,7 +456,7 @@ func (lom *LOM) String() string { return lom._string(lom.bck.Name) }
 func (lom *LOM) _string(b string) string {
 	var (
 		a string
-		s = fmt.Sprintf("o[%s/%s fs=%s", b, lom.ObjName, lom.ParsedFQN.MpathInfo.FileSystem)
+		s = fmt.Sprintf("o[%s/%s fs=%s", b, lom.ObjName, lom.MpathInfo.FileSystem)
 	)
 	if glog.FastV(4, glog.SmoduleCluster) {
 		s += fmt.Sprintf("(%s)", lom.FQN)
@@ -496,7 +506,7 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 	if !lom.HasCopies() {
 		return lom.FQN
 	}
-	return fs.LoadBalanceGET(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.GetCopies())
+	return fs.LoadBalanceGET(lom.FQN, lom.MpathInfo.Path, lom.GetCopies())
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)
@@ -672,32 +682,38 @@ func (lom *LOM) Clone(fqn string) *LOM {
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
 func (lom *LOM) Hkey() (string, int) {
-	debug.Assert(lom.ParsedFQN.Digest != 0)
-	return lom.md.uname, int(lom.ParsedFQN.Digest & (cmn.MultiSyncMapCount - 1))
+	debug.Assert(lom.Digest != 0)
+	return lom.md.uname, int(lom.Digest & (cmn.MultiSyncMapCount - 1))
 }
 
 func (lom *LOM) Init(bck cmn.Bck) (err error) {
 	if lom.FQN != "" {
-		lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)
+		var parsedFQN fs.ParsedFQN
+		parsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)
 		if err != nil {
 			return
 		}
-		if bck.Name == "" {
-			bck.Name = lom.ParsedFQN.Bck.Name
-		} else if bck.Name != lom.ParsedFQN.Bck.Name {
-			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bck, lom.ParsedFQN.Bck)
+		if parsedFQN.ContentType != fs.ObjectType {
+			debug.Assertf(parsedFQN.ContentType == fs.ObjectType, "use CT for non-objects[%s]: %s", parsedFQN.ContentType, lom.FQN)
 		}
-		lom.ObjName = lom.ParsedFQN.ObjName
-		prov := lom.ParsedFQN.Bck.Provider
+		lom.MpathInfo = parsedFQN.MpathInfo
+		lom.Digest = parsedFQN.Digest
+		if bck.Name == "" {
+			bck.Name = parsedFQN.Bck.Name
+		} else if bck.Name != parsedFQN.Bck.Name {
+			return fmt.Errorf("lom-init %s: bucket mismatch (%s != %s)", lom.FQN, bck, parsedFQN.Bck)
+		}
+		lom.ObjName = parsedFQN.ObjName
+		prov := parsedFQN.Bck.Provider
 		if bck.Provider == "" {
 			bck.Provider = prov
 		} else if bck.Provider != prov {
 			return fmt.Errorf("lom-init %s: provider mismatch (%s != %s)", lom.FQN, bck.Provider, prov)
 		}
 		if bck.Ns.IsGlobal() {
-			bck.Ns = lom.ParsedFQN.Bck.Ns
-		} else if bck.Ns != lom.ParsedFQN.Bck.Ns {
-			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)", lom.FQN, bck.Ns, lom.ParsedFQN.Bck.Ns)
+			bck.Ns = parsedFQN.Bck.Ns
+		} else if bck.Ns != parsedFQN.Bck.Ns {
+			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)", lom.FQN, bck.Ns, parsedFQN.Bck.Ns)
 		}
 	}
 	bowner := T.Bowner()
@@ -707,15 +723,12 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
 	if lom.FQN == "" {
-		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = HrwMpath(lom.md.uname)
+		lom.MpathInfo, lom.Digest, err = HrwMpath(lom.md.uname)
 		if err != nil {
 			return
 		}
-		lom.ParsedFQN.ContentType = fs.ObjectType
-		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, lom.bck.Bck, fs.ObjectType, lom.ObjName)
+		lom.FQN = fs.CSM.FQN(lom.MpathInfo, lom.bck.Bck, fs.ObjectType, lom.ObjName)
 		lom.HrwFQN = lom.FQN
-		lom.ParsedFQN.Bck = lom.bck.Bck
-		lom.ParsedFQN.ObjName = lom.ObjName
 	}
 	return
 }
@@ -723,7 +736,7 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 func (lom *LOM) IsLoaded() (ok bool) {
 	var (
 		hkey, idx = lom.Hkey()
-		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
+		cache     = lom.MpathInfo.LomCache(idx)
 	)
 	_, ok = cache.Load(hkey)
 	return
@@ -733,7 +746,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	// fast path
 	var (
 		hkey, idx = lom.Hkey()
-		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
+		cache     = lom.MpathInfo.LomCache(idx)
 		add       = true // default: cache it
 	)
 	if len(adds) > 0 {
@@ -786,7 +799,7 @@ func (lom *LOM) ReCache() {
 	debug.Assert(!lom.IsCopy()) // not caching copies
 	var (
 		hkey, idx = lom.Hkey()
-		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
+		cache     = lom.MpathInfo.LomCache(idx)
 		md        = &lmeta{}
 	)
 	*md = lom.md
@@ -800,7 +813,7 @@ func (lom *LOM) Uncache() {
 	debug.Assert(!lom.IsCopy()) // not caching copies
 	var (
 		hkey, idx = lom.Hkey()
-		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
+		cache     = lom.MpathInfo.LomCache(idx)
 	)
 	cache.Delete(hkey)
 }
@@ -965,7 +978,7 @@ func (lom *LOM) Unlock(exclusive bool) {
 
 func (lom *LOM) CreateFile(fqn string) (*os.File, error) {
 	var (
-		mi  = lom.ParsedFQN.MpathInfo
+		mi  = lom.MpathInfo
 		dir = mi.MakePathBck(lom.Bck().Bck)
 	)
 	if _, err := os.Stat(dir); err != nil {

@@ -349,7 +349,7 @@ func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 		reader = io.LimitReader(reader, size)
 	}
 	readCloser := ioutil.NopCloser(reader)
-	bdir := lom.ParsedFQN.MpathInfo.MakePathBck(lom.Bck().Bck)
+	bdir := lom.MpathInfo.MakePathBck(lom.Bck().Bck)
 	if err := fs.Access(bdir); err != nil {
 		return err
 	}
