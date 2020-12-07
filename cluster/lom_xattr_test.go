@@ -37,7 +37,7 @@ var _ = Describe("LOM Xattributes", func() {
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
 			),
 		)
-		tMock = cluster.NewTargetMock(bmdMock)
+		tMock cluster.Target
 	)
 
 	BeforeEach(func() {
@@ -50,6 +50,8 @@ var _ = Describe("LOM Xattributes", func() {
 
 		available, _ := fs.Get()
 		copyMpathInfo = available[copyMpath]
+
+		tMock = cluster.NewTargetMock(bmdMock)
 	})
 
 	AfterEach(func() {
@@ -98,7 +100,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(b).ToNot(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 
-				hrwLom := &cluster.LOM{ObjName: testObjectName, T: tMock}
+				hrwLom := &cluster.LOM{ObjName: testObjectName}
 				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache()
 
@@ -130,7 +132,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(b).ToNot(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 
-				hrwLom := &cluster.LOM{ObjName: testObjectName, T: tMock}
+				hrwLom := &cluster.LOM{ObjName: testObjectName}
 				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache()
 

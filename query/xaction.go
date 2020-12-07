@@ -106,17 +106,16 @@ func (r *ObjectsListingXact) startFromTemplate() {
 	}()
 
 	var (
-		iter   = r.query.ObjectsSource.Pt.Iter()
-		bck    = r.query.BckSource.Bck
-		config = cmn.GCO.Get()
-		smap   = r.t.Sowner().Get()
+		iter = r.query.ObjectsSource.Pt.Iter()
+		bck  = r.query.BckSource.Bck
+		smap = r.t.Sowner().Get()
 	)
 
 	cmn.Assert(bck.IsAIS())
 
 	for objName, hasNext := iter(); hasNext; objName, hasNext = iter() {
-		lom := &cluster.LOM{T: r.t, ObjName: objName}
-		if err := lom.Init(bck.Bck, config); err != nil {
+		lom := &cluster.LOM{ObjName: objName}
+		if err := lom.Init(bck.Bck); err != nil {
 			r.putResult(&Result{err: err})
 			return
 		}

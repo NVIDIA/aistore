@@ -405,7 +405,7 @@ func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) 
 }
 
 func LomFromHeader(t cluster.Target, hdr transport.ObjHdr) (*cluster.LOM, error) {
-	lom := &cluster.LOM{T: t, ObjName: hdr.ObjName}
+	lom := &cluster.LOM{ObjName: hdr.ObjName}
 	if err := lom.Init(hdr.Bck); err != nil {
 		return nil, err
 	}

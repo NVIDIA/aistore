@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 	fs.Add(testMountpath, t.si.ID())
 	t.init(cmn.GCO.Get())
 	t.statsT = stats.NewTrackerMock()
-	cluster.InitLomLocker()
+	cluster.Init(t)
 
 	bck := cluster.NewBck(testBucket, cmn.ProviderAIS, cmn.NsGlobal)
 	bmd := newBucketMD()
@@ -97,7 +97,7 @@ func BenchmarkObjPut(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
-			lom := &cluster.LOM{T: t, ObjName: "objname"}
+			lom := &cluster.LOM{ObjName: "objname"}
 			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
@@ -143,7 +143,7 @@ func BenchmarkObjAppend(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
-			lom := &cluster.LOM{T: t, ObjName: "objname"}
+			lom := &cluster.LOM{ObjName: "objname"}
 			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
@@ -207,7 +207,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			benchName += "-chunked"
 		}
 		b.Run(benchName, func(b *testing.B) {
-			lom := &cluster.LOM{T: t, ObjName: "objname"}
+			lom := &cluster.LOM{ObjName: "objname"}
 			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)

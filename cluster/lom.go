@@ -57,8 +57,6 @@ type (
 		ObjName string // object name in the bucket
 		HrwFQN  string // (misplaced?)
 		// runtime
-		T         Target
-		config    *cmn.Config
 		ParsedFQN fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
 		loaded    bool
 	}
@@ -69,12 +67,23 @@ type (
 var (
 	lomLocker nameLocker
 	maxLmeta  atomic.Int64
+	T         Target
 )
 
 // interface guard
 var _ cmn.ObjHeaderMetaProvider = (*LOM)(nil)
 
-func InitLomLocker() {
+func Init(t Target) {
+	initBckLocker()
+	if t == nil {
+		return
+	}
+	initLomLocker()
+	initLomCacheHK(t.MMSA(), t)
+	T = t
+}
+
+func initLomLocker() {
 	lomLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	lomLocker.init()
 	maxLmeta.Store(xattrMaxSize)
@@ -108,12 +117,6 @@ func (lom *LOM) Bprops() *cmn.BucketProps   { return lom.bck.Props }
 func (lom *LOM) GetFQN() string             { return lom.FQN }
 func (lom *LOM) GetParsedFQN() fs.ParsedFQN { return lom.ParsedFQN }
 
-func (lom *LOM) Config() *cmn.Config {
-	if lom.config == nil {
-		lom.config = cmn.GCO.Get()
-	}
-	return lom.config
-}
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
 func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
@@ -330,7 +333,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		}
 		lom.delCopyMd(copyFQN)
 		if err1 := fs.Access(copyFQN); err1 != nil && !os.IsNotExist(err1) {
-			lom.T.FSHC(err, copyFQN) // TODO: notify scrubber
+			T.FSHC(err, copyFQN) // TODO: notify scrubber
 		}
 	}
 	return
@@ -347,7 +350,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 	}
 
 	availablePaths, _ := fs.Get()
-	buf, slab := lom.T.MMSA().Alloc()
+	buf, slab := T.MMSA().Alloc()
 	for path, mpathInfo := range availablePaths {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
@@ -357,7 +360,7 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 			continue
 		}
 		src := lom.Clone(fqn)
-		if err := src.Init(lom.bck.Bck, lom.Config()); err != nil {
+		if err := src.Init(lom.bck.Bck); err != nil {
 			continue
 		}
 		if err := src.Load(false); err != nil {
@@ -388,7 +391,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	dst = lom.Clone(dstFQN)
-	if err = dst.Init(cmn.Bck{}, lom.Config()); err != nil {
+	if err = dst.Init(cmn.Bck{}); err != nil {
 		return
 	}
 	dst.CopyMetadata(lom)
@@ -673,7 +676,7 @@ func (lom *LOM) Hkey() (string, int) {
 	return lom.md.uname, int(lom.ParsedFQN.Digest & (cmn.MultiSyncMapCount - 1))
 }
 
-func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
+func (lom *LOM) Init(bck cmn.Bck) (err error) {
 	if lom.FQN != "" {
 		lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)
 		if err != nil {
@@ -697,9 +700,9 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)", lom.FQN, bck.Ns, lom.ParsedFQN.Bck.Ns)
 		}
 	}
-	bowner := lom.T.Bowner()
+	bowner := T.Bowner()
 	lom.bck = NewBckEmbed(bck)
-	if err = lom.bck.Init(bowner, lom.T.Snode()); err != nil {
+	if err = lom.bck.Init(bowner, T.Snode()); err != nil {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
@@ -713,9 +716,6 @@ func (lom *LOM) Init(bck cmn.Bck, config ...*cmn.Config) (err error) {
 		lom.HrwFQN = lom.FQN
 		lom.ParsedFQN.Bck = lom.bck.Bck
 		lom.ParsedFQN.ObjName = lom.ObjName
-	}
-	if len(config) > 0 {
-		lom.config = config[0]
 	}
 	return
 }
@@ -765,11 +765,11 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 func (lom *LOM) checkBucket() error {
 	debug.Assert(lom.loaded) // cannot check bucket without first calling lom.Load()
 	var (
-		bmd             = lom.T.Bowner().Get()
+		bmd             = T.Bowner().Get()
 		bprops, present = bmd.Get(lom.bck)
 	)
 	if !present { // bucket does not exist
-		node := lom.T.Snode().String()
+		node := T.Snode().String()
 		if lom.bck.IsRemote() {
 			return cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck, node)
 		}
@@ -815,7 +815,7 @@ beg:
 	if err != nil {
 		if !os.IsNotExist(err) {
 			err = fmt.Errorf("%s: errstat %w", lom, err)
-			lom.T.FSHC(err, lom.FQN)
+			T.FSHC(err, lom.FQN)
 		}
 		return
 	}
@@ -828,7 +828,7 @@ beg:
 			}
 		}
 		err = cmn.NewObjMetaErr(lom.ObjName, err)
-		lom.T.FSHC(err, lom.FQN)
+		T.FSHC(err, lom.FQN)
 		return
 	}
 	// fstat & atime

@@ -19,16 +19,9 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
-)
-
-// not to confuse with default ones, see memsys/mmsa.go
-const (
-	gmmName = ".ais.mm"
-	smmName = ".ais.mm.small"
 )
 
 type (
@@ -236,8 +229,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 }
 
 func initProxy() cmn.Runner {
-	p := &proxyrunner{gmm: &memsys.MMSA{Name: gmmName}}
-	_ = p.gmm.Init(true /*panicOnErr*/)
+	p := &proxyrunner{}
 	p.initSI(cmn.Proxy)
 
 	// Persist daemon ID on disk
@@ -264,11 +256,7 @@ func initProxy() cmn.Runner {
 }
 
 func newTarget() *targetrunner {
-	t := &targetrunner{
-		gmm:   &memsys.MMSA{Name: gmmName},
-		smm:   &memsys.MMSA{Name: smmName, Small: true},
-		cloud: make(clouds, 8),
-	}
+	t := &targetrunner{cloud: make(clouds, 8)}
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 	t.owner.bmd = newBMDOwnerTgt()
 	return t
@@ -279,9 +267,6 @@ func initTarget() cmn.Runner {
 	fs.Init()
 
 	t := newTarget()
-	_ = t.gmm.Init(true /*panicOnErr*/)
-	_ = t.smm.Init(true /*panicOnErr*/)
-	t.gmm.Sibling, t.smm.Sibling = t.smm, t.gmm
 
 	// fs.Mountpaths must be inited prior to all runners that utilize them
 	// for mountpath definition, see fs/mountfs.go

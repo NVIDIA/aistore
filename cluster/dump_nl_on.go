@@ -7,24 +7,24 @@
 package cluster
 
 import (
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+var dnlOnce sync.Once
+
 func initDumpNameLocks() {
-	go dumpNameLocks()
+	dnlOnce.Do(func() {
+		go dumpNameLocks()
+	})
 }
 
 func dumpNameLocks() {
-	var disclaimed bool
 	var lines []string
 	for {
 		time.Sleep(5 * time.Minute)
-		if !disclaimed {
-			debug.Errorln("dumping name locks every 5 min...")
-			disclaimed = true
-		}
 		a := "bucket"
 		for i, nlocker := range []nameLocker{bckLocker, lomLocker} {
 			if i > 0 {

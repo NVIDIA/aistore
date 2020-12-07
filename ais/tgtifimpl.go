@@ -223,7 +223,7 @@ func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, o
 		return
 	}
 	defer cmn.DrainReader(objReader)
-	lom := &cluster.LOM{T: t, ObjName: hdr.ObjName}
+	lom := &cluster.LOM{ObjName: hdr.ObjName}
 	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
 		return
@@ -366,7 +366,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 
 // TODO: unify with ActRenameObject (refactor)
 func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LOM, err error) {
-	lom := &cluster.LOM{T: t, ObjName: params.ObjName}
+	lom := &cluster.LOM{ObjName: params.ObjName}
 	if err = lom.Init(params.Bck.Bck); err != nil {
 		return
 	}

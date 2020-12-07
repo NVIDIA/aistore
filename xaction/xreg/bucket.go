@@ -199,15 +199,12 @@ func (r *registry) renewBckLoadLomCache(t cluster.Target, uuid string, bck *clus
 	return r.renewBucketXact(cmn.ActLoadLomCache, bck, XactArgs{T: t, UUID: uuid})
 }
 
-func RenewPutMirror(lom *cluster.LOM) cluster.Xact {
-	return defaultReg.renewPutMirror(lom)
+func RenewPutMirror(t cluster.Target, lom *cluster.LOM) cluster.Xact {
+	return defaultReg.renewPutMirror(t, lom)
 }
 
-func (r *registry) renewPutMirror(lom *cluster.LOM) cluster.Xact {
-	xact, err := r.renewBucketXact(cmn.ActPutCopies, lom.Bck(), XactArgs{
-		T:      lom.T,
-		Custom: lom,
-	})
+func (r *registry) renewPutMirror(t cluster.Target, lom *cluster.LOM) cluster.Xact {
+	xact, err := r.renewBucketXact(cmn.ActPutCopies, lom.Bck(), XactArgs{T: t, Custom: lom})
 	cmn.AssertNoErr(err)
 	return xact
 }

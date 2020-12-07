@@ -218,8 +218,8 @@ var (
 )
 
 func init() {
-	gmm = &MMSA{Name: gmmName, MinPctFree: 50}
-	smm = &MMSA{Name: smmName, MinPctFree: 50, Small: true}
+	gmm = &MMSA{Name: gmmName}
+	smm = &MMSA{Name: smmName, Small: true}
 	verbose = bool(glog.FastV(4, glog.SmoduleMemsys))
 }
 

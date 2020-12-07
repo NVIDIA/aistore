@@ -163,7 +163,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		defer phaseInfo.adjuster.releaseGoroutineSema()
 
 		shardName := name + m.rs.Extension
-		lom := &cluster.LOM{T: m.ctx.t, ObjName: shardName}
+		lom := &cluster.LOM{ObjName: shardName}
 		if err := lom.Init(cmn.Bck{Name: m.rs.Bucket, Provider: m.rs.Provider}); err != nil {
 			return err
 		}
@@ -326,7 +326,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 		errCh = make(chan error, 2)
 	)
-	lom := &cluster.LOM{T: m.ctx.t, ObjName: shardName}
+	lom := &cluster.LOM{ObjName: shardName}
 	if err = lom.Init(cmn.Bck{Name: bucket, Provider: provider}); err != nil {
 		return
 	}

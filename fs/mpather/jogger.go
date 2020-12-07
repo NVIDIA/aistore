@@ -291,8 +291,8 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 
 	switch ct.ContentType() {
 	case fs.ObjectType:
-		lom := &cluster.LOM{T: j.opts.T, FQN: fqn}
-		if err := lom.Init(j.opts.Bck, j.config); err != nil {
+		lom := &cluster.LOM{FQN: fqn}
+		if err := lom.Init(j.opts.Bck); err != nil {
 			return err
 		}
 		if err := j.visitObj(lom, buf); err != nil {

@@ -29,7 +29,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/etl"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -76,8 +75,7 @@ type (
 			mtx  sync.RWMutex
 			pool nodeRegPool
 		}
-		qm  queryMem
-		gmm *memsys.MMSA // system pagesize-based memory manager and slab allocator
+		qm queryMem
 	}
 )
 
@@ -105,7 +103,7 @@ func (p *proxyrunner) Run() error {
 
 	p.owner.bmd.init() // initialize owner and load BMD
 
-	cluster.InitBckLocker()
+	cluster.Init(nil /*cluster.Target*/)
 
 	// startup sequence - see earlystart.go for the steps and commentary
 	p.bootstrap()

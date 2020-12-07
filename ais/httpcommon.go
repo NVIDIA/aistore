@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -160,6 +161,8 @@ type (
 			cluster atomic.Bool // determines if the cluster has started up
 			node    atomic.Time // determines time when the node started up
 		}
+		gmm                 *memsys.MMSA // system pagesize-based memory manager and slab allocator
+		smm                 *memsys.MMSA // system MMSA for small-size allocations
 		electable           electable
 		inPrimaryTransition atomic.Bool
 	}
@@ -483,6 +486,9 @@ func (h *httprunner) init(config *cmn.Config) {
 	h.owner.smap = newSmapOwner()
 	h.owner.rmd = newRMDOwner()
 	h.owner.rmd.load()
+
+	h.gmm = memsys.DefaultPageMM()
+	h.smm = memsys.DefaultSmallMM()
 }
 
 func newMuxers() cmn.HTTPMuxers {

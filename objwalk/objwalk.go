@@ -83,7 +83,6 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	}
 
 	var (
-		config          = cmn.GCO.Get()
 		localURL        = w.t.Snode().URL(cmn.NetworkPublic)
 		localID         = w.t.Snode().ID()
 		smap            = w.t.Sowner().Get()
@@ -105,8 +104,8 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		if needURL {
 			e.TargetURL = localURL
 		}
-		lom := &cluster.LOM{T: w.t, ObjName: e.Name}
-		if err := lom.Init(w.bck.Bck, config); err != nil {
+		lom := &cluster.LOM{ObjName: e.Name}
+		if err := lom.Init(w.bck.Bck); err != nil {
 			if cmn.IsErrBucketNought(err) {
 				return nil, err
 			}

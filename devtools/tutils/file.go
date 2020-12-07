@@ -171,7 +171,7 @@ func RandomObjDir(dirLen, maxDepth int) (dir string) {
 }
 
 func SetXattrCksum(fqn string, cksum *cmn.Cksum, t cluster.Target) error {
-	lom := &cluster.LOM{T: t, FQN: fqn}
+	lom := &cluster.LOM{FQN: fqn}
 	_ = lom.Init(cmn.Bck{})
 	_ = lom.LoadMetaFromFS()
 
@@ -245,7 +245,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 			Props:    &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
 		}
 		bmd   = cluster.NewBaseBownerMock(cluster.NewBckEmbed(bck))
-		tMock = cluster.NewTargetMock(bmd)
+		tMock cluster.Target
 	)
 
 	mios := ios.NewIOStaterMock()
@@ -272,7 +272,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		return nil
 	}
 
-	cluster.InitLomLocker()
+	tMock = cluster.NewTargetMock(bmd)
 
 	errs := fs.CreateBuckets("testing", bck)
 	if len(errs) > 0 {
@@ -299,7 +299,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 			switch ct.Type {
 			case fs.ObjectType:
-				lom := &cluster.LOM{T: tMock, FQN: fqn}
+				lom := &cluster.LOM{FQN: fqn}
 				err = lom.Init(cmn.Bck{})
 				tassert.CheckFatal(t, err)
 

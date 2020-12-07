@@ -150,8 +150,10 @@ func (r *XactGet) Run() (err error) {
 	for {
 		select {
 		case <-ticker.C:
-			if s := fmt.Sprintf("%v", r.ECStats()); s != "" {
-				glog.Info(s)
+			if glog.FastV(4, glog.SmoduleEC) {
+				if s := fmt.Sprintf("%v", r.ECStats()); s != "" {
+					glog.Info(s)
+				}
 			}
 		case req := <-r.ecCh:
 			if req.Action != ActRestore {

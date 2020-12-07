@@ -7,13 +7,11 @@ package etl
 import (
 	"testing"
 
-	"github.com/NVIDIA/aistore/cluster"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 func TestTransform(t *testing.T) {
 	RegisterFailHandler(Fail)
-	cluster.InitLomLocker()
 	RunSpecs(t, "Transformer Suite")
 }

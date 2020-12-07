@@ -30,7 +30,6 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
@@ -88,9 +87,7 @@ type (
 			local  localGFN
 			global globalGFN
 		}
-		regstate regstate     // the state of being registered with the primary, can be (en/dis)abled via API
-		gmm      *memsys.MMSA // system pagesize-based memory manager and slab allocator
-		smm      *memsys.MMSA // system MMSA for small-size allocations
+		regstate regstate // the state of being registered with the primary, can be (en/dis)abled via API
 	}
 )
 
@@ -198,9 +195,7 @@ func (t *targetrunner) Run() error {
 	}
 	t.httprunner.init(config)
 
-	cluster.InitBckLocker()
-	cluster.InitLomLocker()
-	cluster.InitLomCacheHK(t.gmm, t)
+	cluster.Init(t)
 
 	t.statsT.RegisterAll()
 
@@ -783,11 +778,11 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, ObjName: objName}
-	if err = lom.Init(bck.Bck, config); err != nil {
+	lom := &cluster.LOM{ObjName: objName}
+	if err = lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = lom.Init(bck.Bck, config)
+			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -825,9 +820,8 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 // PUT /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	var (
-		config = cmn.GCO.Get()
-		query  = r.URL.Query()
-		ptime  string
+		query = r.URL.Query()
+		ptime string
 	)
 	if ptime = isRedirect(query); ptime == "" && !isIntraPut(r.Header) {
 		// TODO: send TCP RST?
@@ -858,11 +852,11 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, ObjName: objName}
-	if err = lom.Init(bck.Bck, config); err != nil {
+	lom := &cluster.LOM{ObjName: objName}
+	if err = lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = lom.Init(bck.Bck, config)
+			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -927,7 +921,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, ObjName: objName}
+	lom := &cluster.LOM{ObjName: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -1022,7 +1016,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, ObjName: objName}
+	lom := &cluster.LOM{ObjName: objName}
 	if err = lom.Init(bck.Bck); err != nil {
 		invalidHandler(w, r, err.Error())
 		return
@@ -1156,18 +1150,17 @@ func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, ap
 }
 
 func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, apiItems []string) {
-	config := cmn.GCO.Get()
 	bucket, objName := apiItems[0], apiItems[1]
 	bck, err := newBckFromQuery(bucket, r.URL.Query())
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, ObjName: objName}
-	if err = lom.Init(bck.Bck, config); err != nil {
+	lom := &cluster.LOM{ObjName: objName}
+	if err = lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = lom.Init(bck.Bck, config)
+			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -1346,7 +1339,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		return
 	}
 	for i := 0; i < retries; i++ {
-		xputlrep := xreg.RenewPutMirror(lom)
+		xputlrep := xreg.RenewPutMirror(t, lom)
 		if xputlrep == nil {
 			return
 		}
@@ -1427,7 +1420,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	lom := &cluster.LOM{T: t, ObjName: objNameFrom}
+	lom := &cluster.LOM{ObjName: objNameFrom}
 	if err = lom.Init(bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return

@@ -87,7 +87,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		size      int64
 		read      []byte
 		mdSize    = maxLmeta.Load()
-		mm        = lom.T.SmallMMSA()
+		mm        = T.SmallMMSA()
 		buf, slab = mm.Alloc(mdSize)
 	)
 	read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
@@ -127,7 +127,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 func (lom *LOM) Persist() (err error) {
 	buf, mm := lom._persist()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
-		lom.T.FSHC(err, lom.FQN)
+		T.FSHC(err, lom.FQN)
 	}
 	mm.Free(buf)
 	return
@@ -138,7 +138,7 @@ func (lom *LOM) _persist() (buf []byte, mm *memsys.MMSA) {
 		size   int64
 		lmsize = maxLmeta.Load()
 	)
-	mm = lom.T.SmallMMSA()
+	mm = T.SmallMMSA()
 	buf = lom.md.marshal(mm, lmsize)
 
 	size = int64(len(buf))

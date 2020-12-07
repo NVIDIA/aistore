@@ -52,6 +52,6 @@ func (r *LomReader) Reader(lom *LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvi
 
 	// Get object directly from a cloud, as it doesn't exist locally
 	// TODO: revisit versus global rebalancing
-	reader, _, _, err := lom.T.Cloud(lom.Bck()).GetObjReader(context.Background(), lom)
+	reader, _, _, err := T.Cloud(lom.Bck()).GetObjReader(context.Background(), lom)
 	return cmn.NopOpener(reader), lom, func() {}, err
 }

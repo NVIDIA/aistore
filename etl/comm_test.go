@@ -60,9 +60,10 @@ var _ = Describe("CommunicatorTest", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		tMock = cluster.NewTargetMock(bmdMock)
+		// cluster.InitLomLocker(tMock)
 
 		// Create an object.
-		lom := &cluster.LOM{T: tMock, ObjName: objName}
+		lom := &cluster.LOM{ObjName: objName}
 		err = lom.Init(clusterBck.Bck)
 		Expect(err).NotTo(HaveOccurred())
 		err = createRandomFile(lom.GetFQN(), dataSize)

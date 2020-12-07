@@ -159,7 +159,7 @@ func (r *xactECBase) newSliceResponse(md *Metadata, attrs *transport.ObjectAttrs
 
 // replica/full object request
 func (r *xactECBase) newReplicaResponse(attrs *transport.ObjectAttrs, bck *cluster.Bck, objName string) (reader cmn.ReadOpenCloser, err error) {
-	lom := &cluster.LOM{T: r.t, ObjName: objName}
+	lom := &cluster.LOM{ObjName: objName}
 	err = lom.Init(bck.Bck)
 	if err != nil {
 		glog.Warning(err)

@@ -25,10 +25,10 @@ type TargetMock struct {
 }
 
 func NewTargetMock(bo Bowner) *TargetMock {
-	InitLomLocker()
-	return &TargetMock{
-		BO: bo,
-	}
+	t := &TargetMock{BO: bo}
+	T = t
+	initLomLocker()
+	return t
 }
 
 func (*TargetMock) Snode() *Snode                                       { return nil }

@@ -42,7 +42,6 @@ const (
 
 type ecSliceMD struct {
 	size int64
-	hash string
 }
 
 type ecOptions struct {
@@ -114,27 +113,12 @@ func defaultECBckProps(o *ecOptions) cmn.BucketPropsToUpdate {
 // The function uses heuristics to detect the main one: it should be the oldest
 func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSliceMD, string) {
 	var (
-		noObjCnt int64
-		main     string
+		main string
 
 		foundParts = make(map[string]ecSliceMD)
 		oldest     = time.Now().Add(time.Hour)
-
-		bckProvider = bck.Provider
-		bmd         = cluster.NewBaseBownerMock(
-			cluster.NewBck(
-				bck.Name, bck.Provider, bck.Ns,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
-			),
-		)
+		bckPattern = bck.Name + "/"
 	)
-
-	if !bck.IsAIS() {
-		bmd.Add(cluster.NewBck(bck.Name, bck.Provider, bck.Ns, cmn.DefaultAISBckProps()))
-	}
-
-	tMock := cluster.NewTargetMock(bmd)
-	bckPattern := bck.Name + "/"
 
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil {
@@ -155,35 +139,14 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 			return nil
 		}
 
-		sliceLom := &cluster.LOM{T: tMock, FQN: path}
-		if err = sliceLom.Init(cmn.Bck{Provider: bckProvider}); err != nil {
+		ct, err := cluster.NewCTFromFQN(path, nil)
+		tassert.CheckFatal(t, err)
+		if !cmn.StringInSlice(ct.ParsedFQN().ContentType, []string{ec.SliceType, ec.MetaType, fs.ObjectType}) {
 			return nil
 		}
 
-		_ = sliceLom.Load(false)
-		if !cmn.StringInSlice(sliceLom.ParsedFQN.ContentType, []string{ec.SliceType, ec.MetaType, fs.ObjectType}) {
-			return nil
-		}
-
-		var cksumVal string
-		if sliceLom.ParsedFQN.ContentType == ec.SliceType {
-			ct, err := cluster.NewCTFromFQN(path, nil)
-			if err != nil {
-				return err
-			}
-
-			fqn := ct.Make(ec.MetaType)
-			// Extract checksum from metadata for slices
-			md, err := ec.LoadMetadata(fqn)
-			if err == nil {
-				cksumVal = md.CksumValue
-			}
-		} else if sliceLom.Cksum() != nil {
-			_, cksumVal = sliceLom.Cksum().Get()
-		}
-
-		foundParts[path] = ecSliceMD{info.Size(), cksumVal}
-		if sliceLom.ParsedFQN.ContentType == fs.ObjectType && oldest.After(info.ModTime()) {
+		foundParts[path] = ecSliceMD{info.Size()}
+		if ct.ParsedFQN().ContentType == fs.ObjectType && oldest.After(info.ModTime()) {
 			main = path
 			oldest = info.ModTime()
 		}
@@ -193,10 +156,6 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 
 	err := filepath.Walk(rootDir, fsWalkFunc)
 	tassert.CheckFatal(t, err)
-
-	if noObjCnt > 1 {
-		tutils.Logf("meta not found for %d files matching object name %s\n", noObjCnt, objName)
-	}
 
 	return foundParts, main
 }
@@ -213,8 +172,6 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 		tassert.Errorf(t, ok, "invalid provider %s, expected to be in: %v", bck.Provider, config.Cloud.Providers)
 	}
 
-	sliced := sliceSize < objSize
-	hashes := make(map[string]bool)
 	metaCnt := 0
 	for k, md := range sliceList {
 		ct, err := cluster.NewCTFromFQN(k, nil)
@@ -225,23 +182,11 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 			tassert.Errorf(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
 		} else if ct.ContentType() == ec.SliceType {
 			tassert.Errorf(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
-			if sliced {
-				if _, ok := hashes[md.hash]; ok {
-					t.Logf("Duplicated slice hash(slice) %s/%s: %s\n", bck, objPath, md.hash)
-				}
-				hashes[md.hash] = true
-			}
 		} else {
 			tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
 			tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 			tassert.Errorf(t, ct.ObjName() == objPath, "invalid object name %s, expected: %s", ct.ObjName(), objPath)
 			tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
-			if sliced {
-				if _, ok := hashes[md.hash]; ok {
-					t.Logf("Duplicated slice hash(main) %s/%s: %s\n", bck, objPath, md.hash)
-				}
-				hashes[md.hash] = true
-			}
 		}
 	}
 

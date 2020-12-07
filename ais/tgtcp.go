@@ -1161,7 +1161,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
-		timeout: lom.Config().Timeout.CplaneOperation,
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	}
 	res := t.call(args)
 	ok = res.err == nil

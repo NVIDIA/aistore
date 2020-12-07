@@ -299,7 +299,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 	if ct.hrwFQN != "" {
 		fqn = ct.hrwFQN
 	}
-	lom = &cluster.LOM{T: reb.t, FQN: fqn}
+	lom = &cluster.LOM{FQN: fqn}
 	if err := lom.Init(ct.Bck); err != nil {
 		return err
 	}
@@ -930,7 +930,7 @@ func (reb *Manager) resilverSlice(fromFQN, toFQN string, buf []byte) error {
 }
 
 func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
-	lom := &cluster.LOM{T: reb.t, FQN: fromFQN}
+	lom := &cluster.LOM{FQN: fromFQN}
 	err := lom.Init(fromMpath.Bck)
 	if err == nil {
 		err = lom.Load()
@@ -1774,7 +1774,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 }
 
 func (reb *Manager) restoreObject(obj *rebObject, objMD *ec.Metadata, src io.Reader) (err error) {
-	lom := &cluster.LOM{T: reb.t, ObjName: obj.objName}
+	lom := &cluster.LOM{ObjName: obj.objName}
 	if err := lom.Init(obj.bck); err != nil {
 		return err
 	}

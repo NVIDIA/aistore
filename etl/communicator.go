@@ -133,7 +133,7 @@ func (c baseComm) SvcName() string { return c.podName /*pod name is same as serv
 //////////////
 
 func (pc *pushComm) doRequest(bck *cluster.Bck, objName string) (resp *http.Response, err error) {
-	lom := &cluster.LOM{T: pc.t, ObjName: objName}
+	lom := &cluster.LOM{ObjName: objName}
 	if err := lom.Init(bck.Bck); err != nil {
 		return nil, err
 	}

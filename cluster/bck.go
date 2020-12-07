@@ -39,7 +39,7 @@ var _ cmn.NLP = (*NameLockPair)(nil)
 
 var bckLocker nameLocker
 
-func InitBckLocker() {
+func initBckLocker() {
 	bckLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	bckLocker.init()
 

@@ -180,7 +180,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 	}
 
 	var objStatus uint16 = cmn.ObjStatusOK
-	lom := &cluster.LOM{T: wi.t, FQN: fqn}
+	lom := &cluster.LOM{FQN: fqn}
 	if err := lom.Init(cmn.Bck{}); err != nil {
 		return nil, err
 	}

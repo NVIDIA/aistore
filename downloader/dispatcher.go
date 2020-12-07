@@ -176,7 +176,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 						if diffResolver.Stopped() {
 							return cmn.NewAbortedError("stopped")
 						}
-						lom := &cluster.LOM{T: d.parent.t, FQN: fqn}
+						lom := &cluster.LOM{FQN: fqn}
 						if err := lom.Init(job.Bck()); err != nil {
 							return err
 						}
@@ -226,7 +226,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 				if !job.Sync() {
 					// When it is not a sync job, push LOM for a given object
 					// because we need to check if it exists.
-					lom := &cluster.LOM{T: d.parent.t, ObjName: obj.objName}
+					lom := &cluster.LOM{ObjName: obj.objName}
 					if err := lom.Init(job.Bck()); err != nil {
 						diffResolver.Abort(err)
 						return

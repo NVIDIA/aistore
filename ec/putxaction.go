@@ -117,8 +117,10 @@ func (r *XactPut) Run() (err error) {
 
 		select {
 		case <-ticker.C:
-			if s := fmt.Sprintf("%v", r.Stats()); s != "" {
-				glog.Info(s)
+			if glog.FastV(4, glog.SmoduleEC) {
+				if s := fmt.Sprintf("%v", r.Stats()); s != "" {
+					glog.Info(s)
+				}
 			}
 		case req := <-r.ecCh:
 			switch req.Action {

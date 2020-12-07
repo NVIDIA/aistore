@@ -59,7 +59,7 @@ type (
 )
 
 func (t *singleObjectTask) download() {
-	lom := &cluster.LOM{T: t.parent.t, ObjName: t.obj.objName}
+	lom := &cluster.LOM{ObjName: t.obj.objName}
 	err := lom.Init(t.job.Bck())
 	if err == nil {
 		err = lom.Load()

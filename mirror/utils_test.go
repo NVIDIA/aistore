@@ -49,7 +49,6 @@ var _ = Describe("Mirror", func() {
 		}
 		bck             = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
 		bmdMock         = cluster.NewBaseBownerMock(&cluster.Bck{Bck: bck})
-		tMock           = cluster.NewTargetMock(bmdMock)
 		mi              = fs.MountpathInfo{Path: mpath}
 		mi2             = fs.MountpathInfo{Path: mpath2}
 		bucketPath      = mi.MakePathCT(bck, fs.ObjectType)
@@ -60,6 +59,7 @@ var _ = Describe("Mirror", func() {
 	BeforeEach(func() {
 		_ = cmn.CreateDir(mpath)
 		_ = cmn.CreateDir(mpath2)
+		_ = cluster.NewTargetMock(bmdMock)
 	})
 
 	AfterEach(func() {
@@ -69,7 +69,7 @@ var _ = Describe("Mirror", func() {
 	Describe("copyTo", func() {
 		It("should copy correctly object and set xattrs", func() {
 			createTestFile(bucketPath, testObjectName, testObjectSize)
-			lom := newBasicLom(defaultObjFQN, tMock)
+			lom := newBasicLom(defaultObjFQN)
 			lom.SetSize(testObjectSize)
 			Expect(lom.Persist()).NotTo(HaveOccurred())
 			Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
@@ -90,7 +90,7 @@ var _ = Describe("Mirror", func() {
 			 */
 
 			// Check reloaded default LOM
-			newLOM := newBasicLom(defaultObjFQN, tMock)
+			newLOM := newBasicLom(defaultObjFQN)
 			Expect(newLOM.Load(false)).ShouldNot(HaveOccurred())
 			Expect(newLOM.IsCopy()).To(BeFalse())
 			Expect(newLOM.HasCopies()).To(BeTrue())
@@ -98,7 +98,7 @@ var _ = Describe("Mirror", func() {
 			Expect(newLOM.GetCopies()).To(And(HaveKey(defaultObjFQN), HaveKey(expectedCopyFQN)))
 
 			// Check reloaded copyLOM
-			copyLOM := newBasicLom(expectedCopyFQN, tMock)
+			copyLOM := newBasicLom(expectedCopyFQN)
 			Expect(copyLOM.Load(false)).ShouldNot(HaveOccurred())
 			copyCksum, err := copyLOM.ComputeCksumIfMissing()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -119,8 +119,8 @@ func createTestFile(filePath, objName string, size int64) {
 	Expect(r.Close()).ShouldNot(HaveOccurred())
 }
 
-func newBasicLom(fqn string, t cluster.Target) *cluster.LOM {
-	lom := &cluster.LOM{T: t, FQN: fqn}
+func newBasicLom(fqn string) *cluster.LOM {
+	lom := &cluster.LOM{FQN: fqn}
 	err := lom.Init(cmn.Bck{})
 	Expect(err).NotTo(HaveOccurred())
 	lom.Uncache()

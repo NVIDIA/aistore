@@ -52,7 +52,7 @@ func (r *evictDelete) objDelete(args *xreg.DeletePrefetchArgs, lom *cluster.LOM)
 }
 
 func (r *evictDelete) doObjEvictDelete(args *xreg.DeletePrefetchArgs, objName string) error {
-	lom := &cluster.LOM{T: r.t, ObjName: objName}
+	lom := &cluster.LOM{ObjName: objName}
 	err := lom.Init(r.Bck())
 	if err != nil {
 		glog.Error(err)
@@ -83,12 +83,12 @@ func (r *evictDelete) iterateBucketRange(args *xreg.DeletePrefetchArgs) error {
 }
 
 func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string) error {
-	var coldGet bool
-	lom := &cluster.LOM{T: r.t, ObjName: objName}
+	lom := &cluster.LOM{ObjName: objName}
 	err := lom.Init(r.Bck())
 	if err != nil {
 		return err
 	}
+	var coldGet bool
 	if err = lom.Load(); err != nil {
 		coldGet = cmn.IsErrObjNought(err)
 		if !coldGet {

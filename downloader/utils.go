@@ -277,7 +277,7 @@ func compareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
 		// This should succeed since we check if the bucket exists beforehand.
-		objMeta, _, err := src.T.Cloud(src.Bck()).HeadObj(ctx, src)
+		objMeta, _, err := cluster.T.Cloud(src.Bck()).HeadObj(ctx, src)
 		if err != nil {
 			return false, err
 		}

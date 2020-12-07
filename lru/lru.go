@@ -355,8 +355,8 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 		return err
 	}
 	h := j.heap
-	lom := &cluster.LOM{T: j.ini.T, FQN: fqn}
-	err := lom.Init(j.bck, j.config)
+	lom := &cluster.LOM{FQN: fqn}
+	err := lom.Init(j.bck)
 	if err != nil {
 		return nil
 	}
@@ -428,8 +428,8 @@ func (j *lruJ) evict() (size int64, err error) {
 				fqn     = lom.FQN
 				removed bool
 			)
-			lom = &cluster.LOM{T: j.ini.T, ObjName: lom.ObjName} // yes placed
-			if lom.Init(j.bck, j.config) != nil {
+			lom = &cluster.LOM{ObjName: lom.ObjName} // yes placed
+			if lom.Init(j.bck) != nil {
 				removed = os.Remove(fqn) == nil
 			} else if lom.FromFS() != nil {
 				removed = os.Remove(fqn) == nil

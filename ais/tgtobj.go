@@ -408,7 +408,7 @@ do:
 		goi.lom.Unlock(false)
 		doubleCheck, errCode, err = goi.tryRestoreObject()
 		if doubleCheck && err != nil {
-			lom2 := &cluster.LOM{T: goi.t, ObjName: goi.lom.ObjName}
+			lom2 := &cluster.LOM{ObjName: goi.lom.ObjName}
 			er2 := lom2.Init(goi.lom.Bck().Bck)
 			if er2 == nil {
 				er2 = lom2.Load()
@@ -650,7 +650,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
 		Query:  query,
 	}
-	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
+	req, _, cancel, err := reqArgs.ReqWithTimeout(cmn.GCO.Get().Timeout.SendFile)
 	if err != nil {
 		glog.Errorf("failed to create request, err: %v", err)
 		return
@@ -1042,7 +1042,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 	// At this point we must have an exclusive lock for the object.
 	defer srcLOM.Unlock(true)
 
-	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
+	dst := &cluster.LOM{ObjName: objNameTo}
 	err = dst.Init(coi.BckTo.Bck)
 	if err != nil {
 		return
@@ -1116,7 +1116,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 		return coi.dryRunCopyReader(lom)
 	}
 
-	dst := &cluster.LOM{T: coi.t, ObjName: objNameTo}
+	dst := &cluster.LOM{ObjName: objNameTo}
 	if err = dst.Init(coi.BckTo.Bck); err != nil {
 		return
 	}
@@ -1158,7 +1158,7 @@ func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo st
 		cleanUp()
 	}()
 
-	dstLOM := &cluster.LOM{T: coi.t, ObjName: objNameTo}
+	dstLOM := &cluster.LOM{ObjName: objNameTo}
 	// Cloud bucket has to exist, so it has to be in BMD.
 	if err := dstLOM.Init(coi.BckTo.Bck); err != nil {
 		return false, 0, err

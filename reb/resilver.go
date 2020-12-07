@@ -23,6 +23,7 @@ import (
 type (
 	joggerCtx struct {
 		xact cluster.Xact
+		t    cluster.Target
 	}
 )
 
@@ -52,7 +53,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	slab, err := reb.t.MMSA().GetSlab(memsys.MaxPageSlabSize)
 	cmn.AssertNoErr(err)
 
-	jctx := &joggerCtx{xact: xact}
+	jctx := &joggerCtx{xact: xact, t: reb.t}
 	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
 		T:                     reb.t,
 		CTs:                   []string{fs.ObjectType, ec.SliceType},
@@ -171,7 +172,7 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 		}
 	}
 	params := cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}
-	copied, _, err := lom.T.CopyObject(lom, params, true /*localOnly*/)
+	copied, _, err := rj.t.CopyObject(lom, params, true /*localOnly*/)
 	if err != nil || !copied {
 		if err != nil {
 			glog.Errorf("%s: %v", lom, err)

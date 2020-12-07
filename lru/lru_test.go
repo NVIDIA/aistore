@@ -27,7 +27,6 @@ import (
 
 func TestLRUMain(t *testing.T) {
 	RegisterFailHandler(Fail)
-	cluster.InitLomLocker()
 	go hk.DefaultHK.Run()
 	RunSpecs(t, "LRU Suite")
 }
@@ -135,11 +134,11 @@ func getRandomFileName(fileCounter int) string {
 	return fmt.Sprintf("%v-%v.txt", cmn.RandString(13), fileCounter)
 }
 
-func saveRandomFile(t cluster.Target, filename string, size int64) {
+func saveRandomFile(filename string, size int64) {
 	buff := make([]byte, size)
 	_, err := cmn.SaveReader(filename, rand.Reader, buff, cmn.ChecksumNone, size, "")
 	Expect(err).NotTo(HaveOccurred())
-	lom := &cluster.LOM{T: t, FQN: filename}
+	lom := &cluster.LOM{FQN: filename}
 	err = lom.Init(cmn.Bck{})
 	Expect(err).NotTo(HaveOccurred())
 	lom.SetSize(size)
@@ -147,17 +146,17 @@ func saveRandomFile(t cluster.Target, filename string, size int64) {
 	Expect(lom.Persist()).NotTo(HaveOccurred())
 }
 
-func saveRandomFilesWithMetadata(t cluster.Target, filesPath string, files []fileMetadata) {
+func saveRandomFilesWithMetadata(filesPath string, files []fileMetadata) {
 	for _, file := range files {
-		saveRandomFile(t, path.Join(filesPath, file.name), file.size)
+		saveRandomFile(path.Join(filesPath, file.name), file.size)
 	}
 }
 
 // Saves random bytes to a file with random name.
 // timestamps and names are not increasing in the same manner
-func saveRandomFiles(t cluster.Target, filesPath string, filesNumber int) {
+func saveRandomFiles(filesPath string, filesNumber int) {
 	for i := 0; i < filesNumber; i++ {
-		saveRandomFile(t, path.Join(filesPath, getRandomFileName(i)), fileSize)
+		saveRandomFile(path.Join(filesPath, getRandomFileName(i)), fileSize)
 	}
 }
 
@@ -198,7 +197,7 @@ var _ = Describe("LRU tests", func() {
 			})
 
 			It("should evict correct number of files", func() {
-				saveRandomFiles(t, filesPath, numberOfCreatedFiles)
+				saveRandomFiles(filesPath, numberOfCreatedFiles)
 
 				lru.Run(ini)
 
@@ -222,9 +221,9 @@ var _ = Describe("LRU tests", func() {
 					{getRandomFileName(4), fileSize},
 					{getRandomFileName(5), fileSize},
 				}
-				saveRandomFilesWithMetadata(t, filesPath, oldFiles)
+				saveRandomFilesWithMetadata(filesPath, oldFiles)
 				time.Sleep(1 * time.Second)
-				saveRandomFiles(t, filesPath, 3)
+				saveRandomFiles(filesPath, 3)
 
 				lru.Run(ini)
 
@@ -256,7 +255,7 @@ var _ = Describe("LRU tests", func() {
 					{getRandomFileName(2), int64(4 * cmn.MiB)},
 					{getRandomFileName(3), int64(8 * cmn.MiB)},
 				}
-				saveRandomFilesWithMetadata(t, filesPath, files)
+				saveRandomFilesWithMetadata(filesPath, files)
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
 				// Those files are 4Mb file and 16Mb file
@@ -273,8 +272,8 @@ var _ = Describe("LRU tests", func() {
 			})
 
 			It("should evict only files from requested bucket [ignores LRU prop]", func() {
-				saveRandomFiles(t, fpAnother, numberOfCreatedFiles)
-				saveRandomFiles(t, filesPath, numberOfCreatedFiles)
+				saveRandomFiles(fpAnother, numberOfCreatedFiles)
+				saveRandomFiles(filesPath, numberOfCreatedFiles)
 
 				ini.Buckets = []cmn.Bck{bckAnother}
 				ini.Force = true // Ignore LRU enabled
@@ -308,7 +307,7 @@ var _ = Describe("LRU tests", func() {
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
-				saveRandomFiles(t, filesPath, numberOfFiles)
+				saveRandomFiles(filesPath, numberOfFiles)
 
 				lru.Run(ini)
 
@@ -325,7 +324,7 @@ var _ = Describe("LRU tests", func() {
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
-				saveRandomFiles(t, filesPath, numberOfFiles)
+				saveRandomFiles(filesPath, numberOfFiles)
 
 				lru.Run(ini)
 
@@ -335,7 +334,7 @@ var _ = Describe("LRU tests", func() {
 			})
 
 			It("should not evict if LRU disabled and force is false", func() {
-				saveRandomFiles(t, fpAnother, numberOfCreatedFiles)
+				saveRandomFiles(fpAnother, numberOfCreatedFiles)
 
 				ini.Buckets = []cmn.Bck{bckAnother} // bckAnother has LRU disabled
 				lru.Run(ini)
@@ -355,7 +354,7 @@ var _ = Describe("LRU tests", func() {
 					mpath     = mpaths[basePath]
 				)
 
-				saveRandomFiles(t, filesPath, 10)
+				saveRandomFiles(filesPath, 10)
 				Expect(filesPath).To(BeADirectory())
 
 				err := mpath.MoveToTrash(filesPath)

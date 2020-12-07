@@ -47,9 +47,7 @@ func TestCompareObject(t *testing.T) {
 		dst = &DstElement{
 			Link: "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
 		}
-		src = &cluster.LOM{
-			T: cluster.NewTargetMock(nil),
-		}
+		src = &cluster.LOM{}
 	)
 
 	src.FQN, err = downloadObject(dst.Link)

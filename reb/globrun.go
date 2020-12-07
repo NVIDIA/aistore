@@ -584,7 +584,7 @@ func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if de.IsDir() {
 		return nil
 	}
-	lom = &cluster.LOM{T: t, FQN: fqn}
+	lom = &cluster.LOM{FQN: fqn}
 	err = lom.Init(cmn.Bck{})
 	if err != nil {
 		if cmn.IsErrBucketLevel(err) {
