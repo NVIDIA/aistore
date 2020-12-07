@@ -2879,6 +2879,17 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if selfRegister {
+		smap := p.owner.smap.get()
+		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
+			if p.detectDaemonDuplicate(osi, nsi) {
+				p.invalmsghdlrf(w, r, "duplicate DaemonID: trying to register a node with same DaemonID %q", nsi.ID())
+				return
+			}
+			glog.Warningf("%s: proceed with self registering node %s with duplicate DaemonID (%q)", p.si, nsi, nsi.ID())
+		}
+	}
+
 	p.owner.smap.Lock()
 	smap, update, err := p.handleJoinKalive(nsi, regReq.Smap, tag, keepalive, flags)
 	if !isProxy && p.NodeStarted() {
