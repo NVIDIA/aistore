@@ -103,13 +103,21 @@ func FormatTime(t time.Time) string {
 	return strings.Replace(s, "UTC", "GMT", 1) // expects: "%a, %d %b %Y %H:%M:%S GMT"
 }
 
-func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
+func lomCksum(lom *cluster.LOM) string {
 	if v, exists := lom.GetCustomMD(cluster.SourceObjMD); exists && v == cluster.SourceAmazonObjMD {
 		if v, exists := lom.GetCustomMD(cluster.MD5ObjMD); exists {
-			header.Set(headerETag, v)
+			return v
 		}
-	} else if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cmn.ChecksumMD5 {
-		header.Set(headerETag, cksum.Value())
+	}
+	if cksum := lom.Cksum(); cksum != nil && cksum.Type() == cmn.ChecksumMD5 {
+		return cksum.Value()
+	}
+	return ""
+}
+
+func SetHeaderFromLOM(header http.Header, lom *cluster.LOM, size int64) {
+	if cksumValue := lomCksum(lom); cksumValue != "" {
+		header.Set(headerETag, cksumValue)
 	}
 	header.Set(headerAtime, FormatTime(lom.Atime()))
 	header.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))

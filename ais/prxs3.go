@@ -251,7 +251,16 @@ func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket s
 	smsg.AddProps(cmn.GetPropsSize, cmn.GetPropsChecksum, cmn.GetPropsAtime, cmn.GetPropsVersion)
 	s3compat.FillMsgFromS3Query(r.URL.Query(), &smsg)
 
-	objList, err := p.listObjectsAIS(bck, smsg)
+	locationIsAIS := bck.IsAIS() || smsg.IsFlagSet(cmn.SelectCached)
+	var (
+		objList *cmn.BucketList
+		err     error
+	)
+	if locationIsAIS {
+		objList, err = p.listObjectsAIS(bck, smsg)
+	} else {
+		objList, err = p.listObjectsRemote(bck, smsg)
+	}
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
