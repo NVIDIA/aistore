@@ -21,7 +21,7 @@ The ability to scale linearly with each added disk was, and remains, one of the 
 * easy-to-use CLI that supports [TAB auto-completions](cmd/cli/README.md);
 * automated cluster rebalancing upon: changes in cluster membership, drive failures and attachments, bucket renames;
 * N-way mirroring (RAID-1), Reed–Solomon erasure coding, end-to-end data protection.
-* [ETL offload](/etl/README.md): running user-defined extract-transform-load workloads on (and by) performance optimized storage cluster;
+* [ETL offload](/docs/etl.md): running user-defined extract-transform-load workloads on (and by) performance-optimized storage cluster;
 
 Also, AIStore:
 
@@ -40,8 +40,8 @@ For AIStore **white paper** and design philosophy, for introduction to large-sca
 
 **Table of Contents**
 
-- [Prerequisites](#getting-started)
-- [Performance Monitoring](#performance-monitoring)
+- [Introduction](#introduction)
+- [Monitoring](#monitoring)
 - [Configuration](#configuration)
 - [Amazon S3 compatibility](docs/s3compat.md)
 - [TensorFlow integration](docs/tensorflow.md)
@@ -49,25 +49,27 @@ For AIStore **white paper** and design philosophy, for introduction to large-sca
 - [Assorted Tips](#assorted-tips)
 - [Selected Package READMEs](#selected-package-readmes)
 
-## Getting Started 
+## Introduction
 
-AIStore offers multiple ways of deployment.
-They vary based on deployment purpose, ease of deployment, expected performance and more.
+AIStore supports numeorous deployment options covering a spectrum from a single-laptop to petascale bare-metal clusters. The options, provided and documented, include in part:
 
-The deployment types include, but are not limited to:
-- Quick start and development,
-- Single-command infrastructure and software deployment on the cloud,
-- Kubernetes production, performance-oriented, deployment with Helm charts.
 
-For detailed information and step-by-step deployment guides refer to [Getting Started documentation](/docs/getting_started.md).
+| Deployment option | Targeted audience and objective |
+| --- | ---|
+| [Local playground](docs/getting_started.md#local-playground-and-development-deployment) | AIS developers and development, Linux or Mac OS |
+| Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
+| [Easy automated GCP/GKE deployment](docs/getting_started.md#cloud-deployment) | Developers, first-time users, AI researchers |
+| [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided (documented, automated) via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
 
-## Performance Monitoring
+For detailed information on these and other supported options, and for a step-by-step instruction, please refer to [Getting Started](/docs/getting_started.md).
+
+## Monitoring
 
 As is usually the case with storage clusters, there are multiple ways to monitor their performance.
 
 > AIStore includes `aisloader` - the tool to stress-test and benchmark storage performance. For background, command-line options, and usage, please see [Load Generator](bench/aisloader/README.md) and [How To Benchmark AIStore](docs/howto_benchmark.md).
 
-For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](xaction/README.md), and, of course, object storage transactions.
+For starters, AIS collects and logs a fairly large and growing number of counters that describe all aspects of its operation, including (but not limited to) those that reflect cluster recovery/rebalancing, all [extended long-running operations](xaction/README.md), and, of course, object storage transactions.
 
 In particular:
 
