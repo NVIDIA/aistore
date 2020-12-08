@@ -63,6 +63,12 @@ type (
 		}
 		nodes sync.Map // map of reverse proxies keyed by node DaemonIDs
 	}
+
+	singleRProxy struct {
+		rp *httputil.ReverseProxy
+		u  *url.URL
+	}
+
 	// proxy runner
 	proxyrunner struct {
 		httprunner
@@ -1532,22 +1538,7 @@ func (p *proxyrunner) reverseNodeRequest(w http.ResponseWriter, r *http.Request,
 }
 
 func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID string, parsedURL *url.URL) {
-	var rproxy *httputil.ReverseProxy
-
-	val, ok := p.rproxy.nodes.Load(nodeID)
-	if ok {
-		rproxy = val.(*httputil.ReverseProxy)
-	} else {
-		cfg := cmn.GCO.Get()
-		rproxy = httputil.NewSingleHostReverseProxy(parsedURL)
-		rproxy.Transport = cmn.NewTransport(cmn.TransportArgs{
-			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
-			SkipVerify: cfg.Net.HTTP.SkipVerify,
-		})
-		rproxy.ErrorHandler = p.rpErrHandler
-		p.rproxy.nodes.Store(nodeID, rproxy)
-	}
-
+	rproxy := p.rproxy.loadOrStore(nodeID, parsedURL, p.rpErrHandler)
 	rproxy.ServeHTTP(w, r)
 }
 
@@ -3917,6 +3908,28 @@ func (rp *reverseProxy) init() {
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		}),
 	}
+}
+
+func (rp *reverseProxy) loadOrStore(uuid string, u *url.URL, errHdlr func(w http.ResponseWriter, r *http.Request, err error)) *httputil.ReverseProxy {
+	revProxyIf, exists := rp.nodes.Load(uuid)
+	if exists {
+		shrp := revProxyIf.(*singleRProxy)
+		if shrp.u.Host == u.Host {
+			return shrp.rp
+		}
+	}
+
+	cfg := cmn.GCO.Get()
+	rproxy := httputil.NewSingleHostReverseProxy(u)
+	rproxy.Transport = cmn.NewTransport(cmn.TransportArgs{
+		UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
+		SkipVerify: cfg.Net.HTTP.SkipVerify,
+	})
+	rproxy.ErrorHandler = errHdlr
+	// NOTE: races are rare probably happen only when storing an entry for the first time or when URL changes.
+	// Also, races don't impact the correctness as we always have latest entry for `uuid`, `URL` pair (see: L3917).
+	rp.nodes.Store(uuid, &singleRProxy{rproxy, u})
+	return rproxy
 }
 
 ////////////////
