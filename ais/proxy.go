@@ -200,23 +200,26 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 		return fmt.Errorf("unexpected: %s failed to unmarshal reg-meta, err: %v", p.si, err)
 	}
 
-	// BMD
 	msg := p.newAisMsgStr(cmn.ActRegTarget, regMeta.Smap, regMeta.BMD)
-	if err = p.receiveBMD(regMeta.BMD, caller); err != nil {
+
+	// BMD
+	if err = p.receiveBMD(regMeta.BMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorf("%s: failed to synch(%q) %s: %v", p.si, msg.Action, regMeta.BMD, err)
+			glog.Errorf("%s: failed to synch %s, err: %v", p.si, regMeta.BMD, err)
 		}
 	} else {
 		glog.Infof("%s: synch %s", p.si, regMeta.BMD)
 	}
+
 	// Smap
-	if err = p.owner.smap.synchronize(p.si, regMeta.Smap); err != nil {
+	if err = p.receiveSmap(regMeta.Smap, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
 			glog.Errorf("%s: failed to synch %s, err: %v", p.si, regMeta.Smap, err)
 		}
 	} else {
 		glog.Infof("%s: synch %s", p.si, regMeta.Smap)
 	}
+
 	return
 }
 
@@ -585,58 +588,34 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		caller = r.Header.Get(cmn.HeaderCallerName)
 	)
 
-	newSmap, _, err := p.extractSmap(payload, caller)
+	newSmap, msgSmap, err := p.extractSmap(payload, caller)
 	if err != nil {
 		errs = append(errs, err)
 	} else if newSmap != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: new %s from %s", p.si, newSmap, caller)
+		if err = p.receiveSmap(newSmap, msgSmap, caller); err != nil && !isErrDowngrade(err) {
+			errs = append(errs, err)
 		}
-		if err = p.owner.smap.synchronize(p.si, newSmap); err != nil {
-			if !isErrDowngrade(err) {
-				errs = append(errs, fmt.Errorf("failed to synch %s: %v", newSmap, err))
-			}
-			goto ExtractRMD
-		}
-
-		// When some node was removed from the cluster we need to clean up the
-		// reverse proxy structure.
-		p.rproxy.nodes.Range(func(key, _ interface{}) bool {
-			nodeID := key.(string)
-			if smap.containsID(nodeID) && !newSmap.containsID(nodeID) {
-				p.rproxy.nodes.Delete(nodeID)
-			}
-			return true
-		})
-		p.syncNewICOwners(smap, newSmap)
 	}
 
-ExtractRMD:
-	newRMD, msgRMD, err := p.extractRMD(payload)
+	newRMD, msgRMD, err := p.extractRMD(payload, caller)
 	if err != nil {
 		errs = append(errs, err)
 	} else if newRMD != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: new %s from %s", p.si, newRMD, caller)
-		}
-		if err = p.receiveRMD(newRMD, msgRMD); err != nil {
+		if err = p.receiveRMD(newRMD, msgRMD, caller); err != nil {
 			errs = append(errs, err)
 		}
 	}
 
-	newBMD, msgBMD, err := p.extractBMD(payload)
+	newBMD, msgBMD, err := p.extractBMD(payload, caller)
 	if err != nil {
 		errs = append(errs, err)
 	} else if newBMD != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: new %s(%q) from %s", p.si, newBMD, msgBMD.Action, caller)
-		}
-		if err = p.receiveBMD(newBMD, caller); err != nil && !isErrDowngrade(err) {
+		if err = p.receiveBMD(newBMD, msgBMD, caller); err != nil && !isErrDowngrade(err) {
 			errs = append(errs, err)
 		}
 	}
 
-	revokedTokens, err := p.extractRevokedTokenList(payload)
+	revokedTokens, err := p.extractRevokedTokenList(payload, caller)
 	if err != nil {
 		errs = append(errs, err)
 	} else {
@@ -3606,6 +3585,14 @@ func (p *proxyrunner) _syncRMDFinal(ctx *rmdModifier, clone *rebMD) {
 	}
 }
 
+func (p *proxyrunner) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
+	msg := p.newAisMsg(ctx.msg, ctx.smap, clone, ctx.txnID)
+	wg := p.metasyncer.sync(revsPair{clone, msg})
+	if ctx.wait {
+		wg.Wait()
+	}
+}
+
 func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action string) {
 	var (
 		err   error
@@ -3656,20 +3643,16 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 	}
 }
 
-//========================
-//
-// broadcasts: Rx and Tx
-//
-//========================
-func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
-	if glog.V(3) {
-		s := fmt.Sprintf("receive %s", newRMD.String())
-		if msg.Action == "" {
-			glog.Infoln(s)
-		} else {
-			glog.Infof("%s, action %s", s, msg.Action)
-		}
-	}
+/////////////////
+// METASYNC RX //
+/////////////////
+
+func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
+	glog.Infof(
+		"[metasync] receive %s from %q (action: %q, uuid: %q)",
+		newRMD.String(), caller, msg.Action, msg.UUID,
+	)
+
 	p.owner.rmd.Lock()
 	rmd := p.owner.rmd.get()
 	if newRMD.version() <= rmd.version() {
@@ -3701,15 +3684,37 @@ func (p *proxyrunner) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	return
 }
 
-func (p *proxyrunner) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
-	msg := p.newAisMsg(ctx.msg, ctx.smap, clone, ctx.txnID)
-	wg := p.metasyncer.sync(revsPair{clone, msg})
-	if ctx.wait {
-		wg.Wait()
+func (p *proxyrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) error {
+	smap := p.owner.smap.get()
+
+	glog.Infof(
+		"[metasync] receive %s from %q (local: %s, action: %q, uuid: %q)",
+		newSmap.StringEx(), caller, smap.StringEx(), msg.Action, msg.UUID,
+	)
+
+	if err := p.owner.smap.synchronize(p.si, newSmap); err != nil {
+		return err
 	}
+
+	// When some node was removed from the cluster we need to clean up the
+	// reverse proxy structure.
+	p.rproxy.nodes.Range(func(key, _ interface{}) bool {
+		nodeID := key.(string)
+		if smap.containsID(nodeID) && !newSmap.containsID(nodeID) {
+			p.rproxy.nodes.Delete(nodeID)
+		}
+		return true
+	})
+	p.syncNewICOwners(smap, newSmap)
+	return nil
 }
 
-func (p *proxyrunner) receiveBMD(newBMD *bucketMD, caller string) (err error) {
+func (p *proxyrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, caller string) (err error) {
+	glog.Infof(
+		"[metasync] receive %s from %q (action: %q, uuid: %q)",
+		newBMD.String(), caller, msg.Action, msg.UUID,
+	)
+
 	p.owner.bmd.Lock()
 	bmd := p.owner.bmd.get()
 	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {

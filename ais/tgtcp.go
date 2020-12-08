@@ -590,20 +590,16 @@ func (t *targetrunner) receiveBMD(newBMD *bucketMD, msg *aisMsg, tag, caller str
 }
 
 func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller string) (err error) {
-	const failed = "failed to receive BMD"
 	var (
 		curVer                  int64
-		call, act               string
 		createErrs, destroyErrs string
 		bmd                     = t.owner.bmd.get()
 	)
-	if caller != "" {
-		call = ", caller " + caller
-	}
-	if msg.Action != "" {
-		act = ", action " + msg.Action
-	}
-	glog.Infof("%s: %s cur=%s, new=%s%s%s", t.si, tag, bmd, newBMD, act, call)
+
+	glog.Infof(
+		"[metasync] receive %s from %q (action: %q, uuid: %q)",
+		newBMD.StringEx(), caller, msg.Action, msg.UUID,
+	)
 
 	t.owner.bmd.Lock()
 	bmd = t.owner.bmd.get()
@@ -640,7 +636,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	// NOTE: create-dir errors are _not_ ignored
 	if createErrs != "" {
 		t.owner.bmd.Unlock()
-		glog.Errorf("%s: %s - create err: %s", t.si, failed, createErrs)
+		glog.Errorf("[metasync] failed to receive BMD, create errs: %s", createErrs)
 		err = errors.New(createErrs)
 		return
 	}
@@ -669,7 +665,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 			// TODO: revisit error handling.
 			// Consider performing DestroyBuckets asynchronously outside `bmd.Lock()`.
 			if err := fs.DestroyBuckets("recv-bmd-"+msg.Action, obck.Bck); err != nil {
-				destroyErrs = err.Error()
+				destroyErrs += "[" + err.Error() + "]"
 			}
 		}
 		return false
@@ -679,7 +675,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 
 	if destroyErrs != "" {
 		// TODO: revisit error handling
-		glog.Errorf("%s: %s - destroy err: %s", t.si, failed, destroyErrs)
+		glog.Errorf("[metasync] failed to receive BMD, destroy errs: %s", destroyErrs)
 	}
 
 	// evict LOM cache
@@ -694,7 +690,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 	if tag != bucketMDRegister {
 		// ecmanager will get updated BMD upon its init()
 		if err := ec.ECM.BucketsMDChanged(); err != nil {
-			glog.Errorf("Failed to initialize EC manager: %v", err)
+			glog.Errorf("[metasync] Failed to initialize EC manager: %v", err)
 		}
 	}
 
@@ -707,15 +703,11 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 }
 
 func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (err error) {
-	var s, from string
-	if caller != "" {
-		from = " from " + caller
-	}
-	// proxy => target control protocol (see p.httpclupost)
-	if msg.Action != "" {
-		s = ", action " + msg.Action
-	}
-	glog.Infof("%s: receive %s%s, primary %s%s", t.si, newSmap.StringEx(), from, newSmap.Primary, s)
+	glog.Infof(
+		"[metasync] receive %s from %q (primary: %s, action: %q, uuid: %q)",
+		newSmap.StringEx(), caller, newSmap.Primary, msg.Action, msg.UUID,
+	)
+
 	if !newSmap.isPresent(t.si) {
 		err = fmt.Errorf("%s: not finding self in the new %s", t.si, newSmap.StringEx())
 		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
@@ -728,15 +720,10 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (
 }
 
 func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
-	var s string
-	if caller != "" {
-		s += "; from: " + caller
-	}
-	// proxy => target control protocol (see p.httpclupost)
-	if msg.Action != "" {
-		s += "; action: " + msg.Action
-	}
-	glog.Infof("%s: receive %s%s", t.si, newRMD.String(), s)
+	glog.Infof(
+		"[metasync] receive %s from %q (action: %q, uuid: %q)",
+		newRMD.String(), caller, msg.Action, msg.UUID,
+	)
 
 	t.owner.rmd.Lock()
 	defer t.owner.rmd.Unlock()
@@ -753,14 +740,14 @@ func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (er
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 	}
 	if msg.Action == cmn.ActRebalance { // manual (triggered by user)
-		glog.Infof("%s: manual rebalance (version: %d)", t.si, newRMD.version())
+		glog.Infof("[metasync] manual rebalance (version: %d)", newRMD.version())
 		go t.rebManager.RunRebalance(smap, newRMD.Version, notif)
 		return
 	}
 
 	glog.Infof(
-		"%s: rebalance (version: %d; new_targets: %v; resilver: %v)",
-		t.si, newRMD.version(), newRMD.TargetIDs, newRMD.Resilver,
+		"[metasync] rebalance (version: %d; new_targets: %v; resilver: %v)",
+		newRMD.version(), newRMD.TargetIDs, newRMD.Resilver,
 	)
 	go t.rebManager.RunRebalance(smap, newRMD.Version, notif)
 	if newRMD.Resilver != "" {
@@ -967,39 +954,30 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		errs = append(errs, err)
 	} else if newSmap != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("new %s from %s", newSmap.StringEx(), caller)
-		}
 		if err := t.receiveSmap(newSmap, msgSmap, caller); err != nil && !isErrDowngrade(err) {
 			errs = append(errs, err)
 		}
 	}
 
-	newBMD, msgBMD, err := t.extractBMD(payload)
+	newBMD, msgBMD, err := t.extractBMD(payload, caller)
 	if err != nil {
 		errs = append(errs, err)
 	} else if newBMD != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("new %s from %s", newBMD.StringEx(), caller)
-		}
 		if err := t.receiveBMD(newBMD, msgBMD, bucketMDReceive, caller); err != nil && !isErrDowngrade(err) {
 			errs = append(errs, err)
 		}
 	}
 
-	newRMD, msgRMD, err := t.extractRMD(payload)
+	newRMD, msgRMD, err := t.extractRMD(payload, caller)
 	if err != nil {
 		errs = append(errs, err)
 	} else if newRMD != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("new %s from %s", newRMD.String(), caller)
-		}
 		if err := t.receiveRMD(newRMD, msgRMD, caller); err != nil {
 			errs = append(errs, err)
 		}
 	}
 
-	revokedTokens, err := t.extractRevokedTokenList(payload)
+	revokedTokens, err := t.extractRevokedTokenList(payload, caller)
 	if err != nil {
 		errs = append(errs, err)
 	} else {

@@ -1353,7 +1353,6 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		}
 	}
 	var (
-		s           string
 		smap        = h.owner.smap.get()
 		curVer      = smap.version()
 		isManualReb = msg.Action == cmn.ActRebalance && msg.Value != nil
@@ -1370,9 +1369,6 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		err = fmt.Errorf("%s: not finding ourselves in %s", h.si, newSmap)
 		return
 	}
-	if msg.Action != "" {
-		s = ", action " + msg.Action
-	}
 	if err = smap.validateUUID(newSmap, h.si, nil, caller); err != nil {
 		if h.si.IsProxy() {
 			cmn.Assert(!smap.isPrimary(h.si))
@@ -1383,7 +1379,11 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 		cmn.ExitLogf("%v", err) // otherwise, FATAL
 	}
 
-	glog.Infof("%s: receive %s from %s (local %s)%s", h.si, newSmap.StringEx(), caller, smap.StringEx(), s)
+	glog.Infof(
+		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
+		newSmap.StringEx(), caller, smap.StringEx(), msg.Action, msg.UUID,
+	)
+
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	cmn.Assert(sameOrigin)
 	if newSmap.version() < curVer {
@@ -1397,7 +1397,7 @@ func (h *httprunner) extractSmap(payload msPayload, caller string) (newSmap *sma
 	return
 }
 
-func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msg *aisMsg, err error) {
+func (h *httprunner) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg *aisMsg, err error) {
 	if _, ok := payload[revsRMDTag]; !ok {
 		return
 	}
@@ -1415,7 +1415,13 @@ func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msg *aisMsg, 
 			return
 		}
 	}
+
 	rmd := h.owner.rmd.get()
+	glog.Infof(
+		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
+		newRMD.String(), caller, rmd.String(), msg.Action, msg.UUID,
+	)
+
 	if newRMD.version() <= rmd.version() {
 		if newRMD.version() < rmd.version() {
 			err = newErrDowngrade(h.si, rmd.String(), newRMD.String())
@@ -1425,7 +1431,7 @@ func (h *httprunner) extractRMD(payload msPayload) (newRMD *rebMD, msg *aisMsg, 
 	return
 }
 
-func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msg *aisMsg, err error) {
+func (h *httprunner) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, msg *aisMsg, err error) {
 	if _, ok := payload[revsBMDTag]; !ok {
 		return
 	}
@@ -1443,11 +1449,17 @@ func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msg *aisMs
 			return
 		}
 	}
+
+	bmd := h.owner.bmd.get()
+	glog.Infof(
+		"[metasync] extract %s from %q (local: %s, action: %q, uuid: %q)",
+		newBMD.StringEx(), caller, bmd.StringEx(), msg.Action, msg.UUID,
+	)
+
 	// skip older iff not transactional - see t.receiveBMD()
 	if h.si.IsTarget() && msg.UUID != "" {
 		return
 	}
-	bmd := h.owner.bmd.get()
 	if newBMD.version() <= bmd.version() {
 		if newBMD.version() < bmd.version() {
 			err = newErrDowngrade(h.si, bmd.StringEx(), newBMD.StringEx())
@@ -1457,7 +1469,7 @@ func (h *httprunner) extractBMD(payload msPayload) (newBMD *bucketMD, msg *aisMs
 	return
 }
 
-func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, error) {
+func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (*TokenList, error) {
 	var (
 		msg       aisMsg
 		bytes, ok = payload[revsTokenTag]
@@ -1481,11 +1493,10 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload) (*TokenList, err
 			bytes, bytes, err)
 	}
 
-	s := ""
-	if msg.Action != "" {
-		s = ", action " + msg.Action
-	}
-	glog.Infof("received TokenList ntokens %d%s", len(tokenList.Tokens), s)
+	glog.Infof(
+		"[metasync] extract token list from %q (count: %d, action: %q, uuid: %q)",
+		caller, len(tokenList.Tokens), msg.Action, msg.UUID,
+	)
 
 	return tokenList, nil
 }
