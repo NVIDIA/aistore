@@ -174,8 +174,10 @@ func startXactionHandler(c *cli.Context) (err error) {
 }
 
 func startXaction(c *cli.Context, xactKind string, bck cmn.Bck) (err error) {
-	if bck, _, err = validateBucket(c, bck, "", false); err != nil {
-		return err
+	if xaction.IsTypeBck(xactKind) {
+		if bck, _, err = validateBucket(c, bck, "", false); err != nil {
+			return err
+		}
 	}
 
 	var (
