@@ -53,9 +53,11 @@ ENV MOUNTPATH /tmp/ais
 COPY aisnode_config.sh aisnode_config.sh
 COPY entrypoint/entrypoint.sh entrypoint.sh
 
-RUN go get -v github.com/NVIDIA/aistore
-WORKDIR "${GOPATH}/src/github.com/NVIDIA/aistore"
+RUN mkdir -p $GOPATH/src/github.com/NVIDIA && \
+    cd $GOPATH/src/github.com/NVIDIA && \
+    git clone https://github.com/NVIDIA/aistore.git
 
+WORKDIR "${GOPATH}/src/github.com/NVIDIA/aistore"
 
 EXPOSE 51080 9080 10080
 
