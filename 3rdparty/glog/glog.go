@@ -99,8 +99,7 @@ const (
 	infoLog severity = iota
 	warningLog
 	errorLog
-	fatalLog
-	numSeverity = 4
+	numSeverity = 3
 )
 
 const recycleBufMaxSize = 1024
@@ -111,7 +110,6 @@ var severityName = []string{
 	infoLog:    "INFO",
 	warningLog: "WARNING",
 	errorLog:   "ERROR",
-	fatalLog:   "FATAL",
 }
 
 const (
@@ -580,7 +578,7 @@ func (l *loggingT) formatHeader(s severity, file string, line int, redact bool) 
 	if line < 0 {
 		line = 0 // not a real line number, but acceptable to someDigits
 	}
-	if s > fatalLog {
+	if s > errorLog {
 		s = infoLog // for safety.
 	}
 	buf := l.getBuffer()
@@ -727,11 +725,6 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 			}
 		}
 		switch s {
-		case fatalLog:
-			if l.file[fatalLog] != nil {
-				l.file[fatalLog].Write(data)
-			}
-			fallthrough
 		case errorLog:
 			if l.file[errorLog] != nil {
 				l.file[errorLog].Write(data)
@@ -748,57 +741,11 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 			}
 		}
 	}
-	if s == fatalLog {
-		// If we got here via Exit rather than Fatal, print no stacks.
-		if atomic.LoadUint32(&fatalNoStacks) > 0 {
-			l.mu.Unlock()
-			timeoutFlush(3 * time.Second)
-			os.Exit(1)
-		}
-		// Dump all goroutine stacks before exiting.
-		// First, make sure we see the trace for the current goroutine on standard error.
-		// If -logtostderr has been specified, the loop below will do that anyway
-		// as the first stack in the full dump.
-		if !l.toStderr {
-			os.Stderr.Write(stacks(false))
-		}
-		// Write the stack trace for all goroutines to the files.
-		trace := stacks(true)
-		logExitFunc = func(error) {} // If we get a write error, we'll still exit below.
-		for log := fatalLog; log >= infoLog; log-- {
-			if f := l.file[log]; f != nil { // Can be nil if -logtostderr is set.
-				f.Write(trace)
-			}
-		}
-		l.mu.Unlock()
-		timeoutFlush(3 * time.Second)
-		os.Exit(255) // C++ uses -1, which is silly because it's anded with 255 anyway.
-	}
 	l.putBuffer(buf)
 	l.mu.Unlock()
 	if stats := severityStats[s]; stats != nil {
 		atomic.AddInt64(&stats.lines, 1)
 		atomic.AddInt64(&stats.bytes, int64(len(data)))
-	}
-}
-
-// timeoutFlush calls Flush and returns when it completes or after timeout
-// elapses, whichever happens first.  This is needed because the hooks invoked
-// by Flush may deadlock when glog.Fatal is called from a hook that holds
-// a lock.
-func timeoutFlush(timeout time.Duration) {
-	var (
-		t    = time.NewTimer(timeout)
-		done = make(chan bool, 1)
-	)
-	go func() {
-		Flush() // calls logging.lockAndFlushAll()
-		done <- true
-	}()
-	select {
-	case <-done:
-	case <-t.C:
-		fmt.Fprintln(os.Stderr, "glog: Flush took longer than", timeout)
 	}
 }
 
@@ -940,7 +887,7 @@ func (l *loggingT) lockAndFlushAll() {
 // l.mu is held.
 func (l *loggingT) flushAll() {
 	// Flush from fatal down, in case there's trouble flushing.
-	for s := fatalLog; s >= infoLog; s-- {
+	for s := errorLog; s >= infoLog; s-- {
 		file := l.file[s]
 		if file != nil {
 			file.Flush() // ignore error
@@ -1176,62 +1123,4 @@ func Errorln(args ...interface{}) {
 // Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
 func Errorf(format string, args ...interface{}) {
 	logging.printf(errorLog, format, args...)
-}
-
-// Fatal logs to the FATAL, ERROR, WARNING, and INFO logs,
-// including a stack trace of all running goroutines, then calls os.Exit(255).
-// Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
-func Fatal(args ...interface{}) {
-	logging.print(fatalLog, args...)
-}
-
-// FatalDepth acts as Fatal but uses depth to determine which call frame to log.
-// FatalDepth(0, "msg") is the same as Fatal("msg").
-func FatalDepth(depth int, args ...interface{}) {
-	logging.printDepth(fatalLog, depth, args...)
-}
-
-// Fatalln logs to the FATAL, ERROR, WARNING, and INFO logs,
-// including a stack trace of all running goroutines, then calls os.Exit(255).
-// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
-func Fatalln(args ...interface{}) {
-	logging.println(fatalLog, args...)
-}
-
-// Fatalf logs to the FATAL, ERROR, WARNING, and INFO logs,
-// including a stack trace of all running goroutines, then calls os.Exit(255).
-// Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
-func Fatalf(format string, args ...interface{}) {
-	logging.printf(fatalLog, format, args...)
-}
-
-// fatalNoStacks is non-zero if we are to exit without dumping goroutine stacks.
-// It allows Exit and relatives to use the Fatal logs.
-var fatalNoStacks uint32
-
-// Exit logs to the FATAL, ERROR, WARNING, and INFO logs, then calls os.Exit(1).
-// Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
-func Exit(args ...interface{}) {
-	atomic.StoreUint32(&fatalNoStacks, 1)
-	logging.print(fatalLog, args...)
-}
-
-// ExitDepth acts as Exit but uses depth to determine which call frame to log.
-// ExitDepth(0, "msg") is the same as Exit("msg").
-func ExitDepth(depth int, args ...interface{}) {
-	atomic.StoreUint32(&fatalNoStacks, 1)
-	logging.printDepth(fatalLog, depth, args...)
-}
-
-// Exitln logs to the FATAL, ERROR, WARNING, and INFO logs, then calls os.Exit(1).
-func Exitln(args ...interface{}) {
-	atomic.StoreUint32(&fatalNoStacks, 1)
-	logging.println(fatalLog, args...)
-}
-
-// Exitf logs to the FATAL, ERROR, WARNING, and INFO logs, then calls os.Exit(1).
-// Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
-func Exitf(format string, args ...interface{}) {
-	atomic.StoreUint32(&fatalNoStacks, 1)
-	logging.printf(fatalLog, format, args...)
 }
