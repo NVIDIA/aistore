@@ -5,10 +5,14 @@
 package tutils
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
 	"os/exec"
+	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -322,8 +326,12 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 	}
 
 	Logf("Restoring %s: %s %+v\n", tag, cmd.Cmd, cmd.Args)
+	_, err := startNode(cmd.Cmd, cmd.Args, asPrimary)
+	return err
+}
 
-	ncmd := exec.Command(cmd.Cmd, cmd.Args...)
+func startNode(cmd string, args []string, asPrimary bool) (pid int, err error) {
+	ncmd := exec.Command(cmd, args...)
 	// When using Ctrl-C on test, children (restored daemons) should not be
 	// killed as well.
 	// (see: https://groups.google.com/forum/#!topic/golang-nuts/shST-SDqIp4)
@@ -337,10 +345,74 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 		ncmd.Env = env
 	}
 
-	if err := ncmd.Start(); err != nil {
-		return err
+	if err = ncmd.Start(); err != nil {
+		return
 	}
-	return ncmd.Process.Release()
+	pid = ncmd.Process.Pid
+	err = ncmd.Process.Release()
+	return
+}
+
+func DeployNode(t *testing.T, daeType, cfgPath, daeID string) (int, error) {
+	args := []string{
+		"-config=" + cfgPath,
+		"-daemon_id=" + daeID,
+		"-role=" + daeType,
+	}
+
+	cmd := getAISNodeCmd(t)
+	return startNode(cmd, args, false)
+}
+
+// CleanupNode, cleanup the process and directories associated with node
+func CleanupNode(t *testing.T, pid int, cfg *cmn.Config, daeTy string) {
+	// Make sure the process is killed
+	exec.Command("kill", "-9", strconv.Itoa(pid)).CombinedOutput()
+
+	if err := os.RemoveAll(cfg.Confdir); err != nil && !os.IsNotExist(err) {
+		t.Error(err.Error())
+	}
+
+	if err := os.RemoveAll(cfg.Log.Dir); err != nil && !os.IsNotExist(err) {
+		t.Error(err.Error())
+	}
+
+	fsWalkFunc := func(p string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			return nil
+		}
+
+		if !strings.HasPrefix(info.Name(), "mp") {
+			return nil
+		}
+
+		deletePath := path.Join(p, info.Name(), strconv.Itoa(cfg.TestFSP.Instance))
+		if err := os.RemoveAll(deletePath); err != nil && !os.IsNotExist(err) {
+			t.Error(err.Error())
+		}
+		return nil
+	}
+	// Clean mountpaths for targets
+	if daeTy == cmn.Target {
+		filepath.Walk(cfg.TestFSP.Root, fsWalkFunc)
+	}
+}
+
+// getAISNodeCmd finds the command for deploying AIS node
+func getAISNodeCmd(t *testing.T) string {
+	// Get command from cached restore CMDs when available
+	if len(restoreNodes) != 0 {
+		for _, cmd := range restoreNodes {
+			return cmd.Cmd
+		}
+	}
+
+	// If no cached comand, use a random proxy to get command
+	proxyURL := RandomProxyURL()
+	proxy, err := GetPrimaryProxy(proxyURL)
+	tassert.CheckFatal(t, err)
+	rcmd := getRestoreCmd(proxy)
+	return rcmd.Cmd
 }
 
 // getPID uses 'lsof' to find the pid of the ais process listening on a port
@@ -385,6 +457,44 @@ func getProcess(port string) (string, string, []string, error) {
 	return pid, fields[0], fields[1:], nil
 }
 
+func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
+	var (
+		ctx           = context.Background()
+		retryInterval = time.Second
+		deadline      = time.Minute
+	)
+
+	if len(timeout) > 0 {
+		deadline = timeout[0]
+	}
+
+	Logf("Waiting for process ID %d to terminate", pid)
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, deadline)
+	defer cancel()
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return nil
+	}
+
+	done := make(chan error)
+	go func() {
+		_, err := process.Wait()
+		done <- err
+	}()
+	for {
+		time.Sleep(retryInterval)
+		select {
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			break
+		}
+	}
+}
+
 func getRestoreCmd(si *cluster.Snode) RestoreCmd {
 	var (
 		err error
@@ -401,6 +511,9 @@ func getRestoreCmd(si *cluster.Snode) RestoreCmd {
 // EnsureOrigClusterState verifies the cluster has the same nodes after tests
 // If a node is killed, it restores the node
 func EnsureOrigClusterState(t *testing.T) {
+	if len(restoreNodes) == 0 {
+		return
+	}
 	var (
 		proxyURL       = RandomProxyURL()
 		smap           = GetClusterMap(t, proxyURL)
