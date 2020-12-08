@@ -2502,7 +2502,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	for res := range results {
 		if res.err != nil {
 			if res.si.ID() == proxyid {
-				glog.Fatalf("Commit phase failure: new primary %s returned err %v", proxyid, res.err)
+				cmn.ExitLogf("Commit phase failure: new primary %q returned err: %v", proxyid, res.err)
 			} else {
 				glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
 					res.si.ID(), res.err, proxyid)

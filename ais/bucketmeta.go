@@ -317,7 +317,7 @@ func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 		}
 		if mainBMD != nil {
 			if !mainBMD.cksum.Equal(bmd.cksum) {
-				glog.Fatalf("BMD is different (%q): %v vs %v", mpath, mainBMD, bmd)
+				cmn.ExitLogf("BMD is different (%q): %v vs %v", mpath, mainBMD, bmd)
 			}
 			continue
 		}
