@@ -55,6 +55,7 @@ var (
 		{"PrimaryAndNextCrash", primaryAndNextCrash},
 		{"DiscoveryAndOrignalPrimaryCrash", discoveryAndOrigPrimaryProxiesCrash},
 		{"AddNodeDuplicateIP", addNodeDuplicateIP},
+		{"AddNodeDuplicateDaemonID", addNodeDuplicateDaemonID},
 	}
 
 	icTests = []Test{
@@ -327,6 +328,72 @@ func proxyCrash(t *testing.T) {
 	if _, ok := smap.Pmap[secondID]; !ok {
 		t.Fatalf("Non-primary proxy did not rejoin the cluster.")
 	}
+}
+
+func addNodeDuplicateDaemonID(t *testing.T) {
+	for _, ty := range []string{cmn.Proxy, cmn.Target} {
+		t.Run(ty, func(t *testing.T) {
+			_addNodeDuplicateDaemonID(t, ty)
+		})
+	}
+}
+
+// 1. Select a random proxy/target node based on `nodeType` param
+// 2. Try deploying a new node using the same DaemonID as randomly chosen node
+// 3. Wait for the newly deployed daemon to be terminated - failing to join cluster
+// NOTE: Test assumes that the randomly chosen node is healthy (i.e. doesn't terminate or restart)
+// TODO: add test for target that tries to join with duplicate DaemonID and contains user-data
+func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
+	// NOTE: This function requires local deployment as it changes node config
+	if k8s.Detect() == nil {
+		t.Skip("skipping in kubernetes")
+	}
+	if containers.DockerRunning() {
+		t.Skip("skipping in docker")
+	}
+
+	var (
+		proxyURL = tutils.GetPrimaryURL()
+		smap     = tutils.GetClusterMap(t, proxyURL)
+		node     *cluster.Snode
+		err      error
+
+		// node configs
+		instance = 42
+		portInc  = 100
+		suffName = "dup"
+		logDir   = "/tmp/ais/dup/log"
+	)
+
+	if nodeType == cmn.Proxy {
+		node, err = smap.GetRandProxy(true)
+	} else {
+		node, err = smap.GetRandTarget()
+	}
+	tassert.CheckFatal(t, err)
+
+	cfg := tutils.GetDaemonConfig(t, node.ID())
+	cfg.Confdir += suffName
+	cfg.Net.L4.PortStr = strconv.Itoa(cfg.Net.L4.Port + portInc)
+	cfg.Net.L4.PortIntraControlStr = strconv.Itoa(cfg.Net.L4.PortIntraControl + portInc)
+	cfg.Net.L4.PortIntraDataStr = strconv.Itoa(cfg.Net.L4.PortIntraData + portInc)
+
+	err = os.MkdirAll(cfg.Confdir, 0o755)
+	tassert.CheckFatal(t, err)
+	cfg.Log.Dir = logDir
+	cfg.TestFSP.Instance = instance
+	configFile := path.Join(cfg.Confdir, "ais.json")
+
+	err = jsp.Save(configFile, cfg, jsp.Plain())
+	tassert.CheckFatal(t, err)
+
+	// start with different config but same daemon ID
+	pid, err := tutils.DeployNode(t, nodeType, configFile, node.ID())
+	tassert.CheckFatal(t, err)
+	defer tutils.CleanupNode(t, pid, cfg, nodeType)
+
+	err = tutils.WaitForNodeToTerminate(pid)
+	tassert.CheckFatal(t, err)
 }
 
 func addNodeDuplicateIP(t *testing.T) {
