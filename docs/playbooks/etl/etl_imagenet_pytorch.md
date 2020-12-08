@@ -5,6 +5,18 @@ The following GIF presents the whole operation:
 
 <img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
 
+## Overview
+
+This tutorial consists of couple steps:
+1. Prepare AIStore cluster.
+2. Prepare dataset.
+3. Prepare transform code (ETL).
+4. Transform dataset on AIStore cluster with ETL.
+
+Here is a general overview of these steps:
+
+![ETL Pipeline](/docs/images/etl-pipeline.png)
+
 ## Prerequisites
 
 * AIStore cluster deployed on Kubernetes. We recommend following guide below.
@@ -72,6 +84,8 @@ To make sure that the code runs we need to specify required dependencies (`deps.
 torch==1.6.0
 torchvision==0.7.0
 ```
+
+## Transform dataset
 
 Now we can build the ETL:
 ```console

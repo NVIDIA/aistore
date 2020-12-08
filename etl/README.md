@@ -18,7 +18,7 @@ This approach minimizes I/O operations, as well as assures scalability of ETL wi
 
 The following picture presents architecture of the ETL extension.
 
-<img src="/docs/images/aistore-etl-arch.png" alt="ETL architecture" width="80%">
+<img src="/docs/images/etl-arch.png" alt="ETL architecture" width="80%">
 
 ## Management and Benchmarking
 - [AIS CLI](/cmd/cli/resources/etl.md) includes commands to start, stop, and monitor ETL at runtime.
