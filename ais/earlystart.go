@@ -189,7 +189,7 @@ func (p *proxyrunner) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntar
 	p.owner.smap.Lock()
 	si := p.si.Clone()
 	smap.Primary = si
-	smap.Pmap[p.si.ID()] = si
+	smap.addProxy(si)
 	p.owner.smap.put(smap)
 	p.owner.smap.Unlock()
 

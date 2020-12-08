@@ -81,11 +81,11 @@ if ! $is_primary; then
     # immediately (and if it doesn't there's no point in proceeding past this point, anyway).
     #
     proxy_ok=false
-    d_url="http://${CLUSTERIP_PROXY_SERVICE_HOSTNAME}:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/daemon?what=smap"
+    d_url="http://${CLUSTERIP_PROXY_SERVICE_HOSTNAME}:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/health"
     echo "Waiting for a 200 result on ${d_url}"
     elapsed=0
     while [[ $elapsed -lt 90 ]]; do
-        d_code=$(curl -X GET -o /dev/null --silent -w "%{http_code}" $d_url)
+        d_code=$(curl -X GET -o /dev/null --silent -w "%{http_code}" "${d_url}")
         if [[ "$d_code" == "200" ]]; then
             echo "   ... success after ${elapsed}s"
             proxy_ok=true
