@@ -472,7 +472,6 @@ func (r *MMSA) Free(buf []byte) {
 // Given a known, expected or minimum size to allocate, selects MMSA (page or small, if initialized)
 // and its Slab
 func (r *MMSA) SelectMemAndSlab(size int64) (mmsa *MMSA, slab *Slab) {
-	cmn.Assert(size > 0)
 	if size > r.maxSlabSize && r.Small && r.Sibling != nil {
 		return r.Sibling, r.Sibling._selectSlab(size)
 	}

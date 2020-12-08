@@ -717,11 +717,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		return
 	}
 
-	if goi.lom.Size() == 0 {
-		// TODO -- FIXME
-		return
-	}
-
 	if rw, ok := goi.w.(http.ResponseWriter); ok {
 		hdr = rw.Header()
 	}
