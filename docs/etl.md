@@ -17,14 +17,26 @@
 
 ## Introduction
 
-[ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) is "the general procedure of copying data from one or more sources into a destination system
-which represents the data differently from the source(s) or in a different context than the source(s)" ([wikipedia](https://en.wikipedia.org/wiki/Extract,_transform,_load)).
-To run data transformations *inline* and *close to data*, AIStore supports running ETL containers *in the storage cluster*.
-It allows transforming each object in a dataset efficiently and fast, accordingly to transformation specified by a user.
+**ETL** stands for **E**xtract, **T**ransform, **L**oad. More specifically:
 
-As such, AIS-ETL (capability) requires [Kubernetes](https://kubernetes.io).
+* **E**xtract - data from different original formats and/or multiple sources;
+* **T**ransform - to the unified common format optimized for subsequent computation (e. g., training deep learning model);
+* **L**oad - transformed data into a new destination - e. g., a storage system that supports high-performance computing over large scale datasets.
 
-Please refer to [playbooks directory](/docs/playbooks/etl) for examples of ETL.
+The latter can be AIStore. In fact, AIS is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. You can easily task AIS cluster with running custom transformations:
+
+* *inline* - that is, transforming datasets on the fly by virtue of (randomly) reading them and streaming a resulting transformed output directly to (computing) clients that perform those reads;
+* *offline* - storing transformed output as a new dataset that AIStore will make available for any number of future computations.
+
+Implementation-wise, there are many similarities between *inline* and *offline* transformations on the one hand, and between *offline* transformation and copying datasets, on the other. The latter has been one of the supported AIStore storage services for quite a while; in the v3.3 we have amended it to become, effectively, a *no-op* transformation.
+
+Most notably, AIS always runs transformations locally - *close to data*. Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
+
+This was the principle behind *distributed shuffle* (code-named [dSort](/dsort/README.md)). And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
+
+Technically, the service supports running user-provided ETL containers **and** custom Python scripts *in the* (and *by the*) storage cluster.
+
+Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io). For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/docs/playbooks/etl).
 
 ### Demos
 
@@ -91,6 +103,7 @@ Deploying ETL consists of the following steps:
 1. To start distributed ETL processing, a user either:
    * needs to send transform function in [**build** request](#build-request) to the AIStore endpoint, or
    * needs to send documented [**init** request](#init-request) to the AIStore endpoint.
+
      >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
 2. Upon receiving **build**/**init** request, AIS proxy broadcasts the request to all AIS targets in the cluster.
 3. When a target receives **build**/**init**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
@@ -145,15 +158,15 @@ and contain all necessary fields to start the Pod.
 | Path | Required | Description | Default |
 | --- | --- | --- | --- |
 | `metadata.annotations.communication_type` | `false` | [Communication type](#communication-mechanisms) of an ETL. | `hpush://` |
-| `metadata.annotations.wait_timeout` | `false` | Timeout on ETL Pods starting on target machines. See [annotations](#annotations) | infinity | 
+| `metadata.annotations.wait_timeout` | `false` | Timeout on ETL Pods starting on target machines. See [annotations](#annotations) | infinity |
 | `spec.containers` | `true` | Containers running inside a Pod, exactly one required. | - |
 | `spec.containers[0].image` | `true` | Docker image of ETL container. | - |
 | `spec.containers[0].ports` | `true` | Ports exposed by a container, at least one expected. | - |
 | `spec.containers[0].ports[0].Name` | `true` | Name of the first Pod should be `default`. | - |
 | `spec.containers[0].ports[0].containerPort` | `true` | Port which a cluster will contact containers on. | - |
 | `spec.containers[0].readinessProbe` | `true` | ReadinessProbe of a container. | - |
-| `spec.containers[0].readinessProbe.timeoutSeconds` | `false` | Timeout for a readiness probe in seconds. | `5` | 
-| `spec.containers[0].readinessProbe.periodSeconds` | `false` | Period between readiness probe requests in seconds. | `10` | 
+| `spec.containers[0].readinessProbe.timeoutSeconds` | `false` | Timeout for a readiness probe in seconds. | `5` |
+| `spec.containers[0].readinessProbe.periodSeconds` | `false` | Period between readiness probe requests in seconds. | `10` |
 | `spec.containers[0].readinessProbe.httpGet.Path` | `true` | Path for HTTP readiness probes. | - |
 | `spec.containers[0].readinessProbe.httpGet.Port` | `true` | Port for HTTP readiness probes. Required `default`. | - |
 
