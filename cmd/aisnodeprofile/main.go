@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 var (
@@ -38,11 +38,11 @@ func run() int {
 		*cpuProfile = s + "." + strconv.Itoa(syscall.Getpid())
 		f, err := os.Create(*cpuProfile)
 		if err != nil {
-			glog.Fatal("could not create CPU profile: ", err)
+			cmn.ExitLogf("Couldn't create CPU profile: %v", err)
 		}
 		defer f.Close()
 		if err := pprof.StartCPUProfile(f); err != nil {
-			glog.Fatal("could not start CPU profile: ", err)
+			cmn.ExitLogf("Couldn't start CPU profile: %v", err)
 		}
 		defer pprof.StopCPUProfile()
 	}
@@ -53,12 +53,12 @@ func run() int {
 		*memProfile = s + "." + strconv.Itoa(syscall.Getpid())
 		f, err := os.Create(*memProfile)
 		if err != nil {
-			glog.Fatal("could not create memory profile: ", err)
+			cmn.ExitLogf("Couldn't create memory profile: %v", err)
 		}
 		defer f.Close()
 		runtime.GC() // get up-to-date statistics
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			glog.Fatal("could not write memory profile: ", err)
+			cmn.ExitLogf("Couldn't write memory profile: %v", err)
 		}
 	}
 

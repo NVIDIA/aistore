@@ -250,7 +250,7 @@ func Init(t cluster.Target) {
 	xreg.RegisterBucketXact(&xactBckEncodeProvider{})
 
 	if err := initManager(t); err != nil {
-		glog.Fatal(err)
+		cmn.ExitLogf("Failed to init manager: %v", err)
 	}
 }
 

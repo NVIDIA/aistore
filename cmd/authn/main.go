@@ -53,40 +53,37 @@ func main() {
 	}
 
 	if configPath == "" {
-		glog.Fatalf("Missing configuration file")
+		cmn.ExitLogf("Missing configuration file")
 	}
 
 	if glog.V(4) {
 		glog.Infof("Reading configuration from %s", configPath)
 	}
 	if _, err = jsp.Load(configPath, conf, jsp.Plain()); err != nil {
-		glog.Fatalf("Failed to load configuration: %v", err)
+		cmn.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
 	conf.path = configPath
 	conf.applySecrets()
 	if err = conf.validate(); err != nil {
-		glog.Fatalf("Invalid configuration: %v", err)
+		cmn.ExitLogf("Invalid configuration: %v", err)
 	}
 
 	if err = updateLogOptions(); err != nil {
-		glog.Fatalf("Failed to set up logger: %v", err)
+		cmn.ExitLogf("Failed to set up logger: %v", err)
 	}
 
 	dbPath := filepath.Join(conf.ConfDir, authDB)
 	driver, err := dbdriver.NewBuntDB(dbPath)
 	if err != nil {
-		glog.Fatal(err)
+		cmn.ExitLogf("Failed to init local database: %v", err)
 	}
 	mgr, err := newUserManager(driver)
 	if err != nil {
-		glog.Fatal(err)
+		cmn.ExitLogf("Failed to init user manager: %v", err)
 	}
 
 	srv := newAuthServ(mgr)
-	if err != nil {
-		glog.Fatal(err)
-	}
 	if err := srv.run(); err != nil {
-		glog.Fatalf(err.Error())
+		cmn.ExitLogf("Server failed: %v", err)
 	}
 }
