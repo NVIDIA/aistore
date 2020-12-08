@@ -16,6 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+const defaultLastModified = 0 // When an object was not accessed yet
+
 type (
 	// List objects response
 	ListObjectResult struct {
@@ -76,25 +78,31 @@ func (r *ListObjectResult) MustMarshal() []byte {
 	return []byte(xml.Header + string(b))
 }
 
-func (r *ListObjectResult) Add(entry *cmn.BucketEntry) {
-	r.Contents = append(r.Contents, entryToS3(entry))
+func (r *ListObjectResult) Add(entry *cmn.BucketEntry, smsg *cmn.SelectMsg) {
+	r.Contents = append(r.Contents, entryToS3(entry, smsg))
 }
 
-func entryToS3(entry *cmn.BucketEntry) *ObjInfo {
-	return &ObjInfo{
+func entryToS3(entry *cmn.BucketEntry, smsg *cmn.SelectMsg) *ObjInfo {
+	objInfo := &ObjInfo{
 		Key:          entry.Name,
 		LastModified: entry.Atime,
 		ETag:         entry.Checksum,
 		Size:         entry.Size,
 	}
+	// Some S3 clients do not tolerate empty or missing LastModified, so fill it
+	// with a zero time if the object was not accessed yet
+	if objInfo.LastModified == "" {
+		objInfo.LastModified = cmn.FormatUnixNano(defaultLastModified, smsg.TimeFormat)
+	}
+	return objInfo
 }
 
-func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList) {
+func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.BucketList, smsg *cmn.SelectMsg) {
 	r.KeyCount = len(bckList.Entries)
 	r.IsTruncated = bckList.ContinuationToken != ""
 	r.ContinuationToken = bckList.ContinuationToken
 	for _, e := range bckList.Entries {
-		r.Add(e)
+		r.Add(e, smsg)
 	}
 }
 

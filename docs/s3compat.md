@@ -75,6 +75,8 @@ The summary table of client settings:
 
 ## S3 Compatibility
 
+### Object checksum
+
 S3 API provides `ETag` in the response header that is the object's checksum.
 Amazon S3 calculates a checksum using `md5` algorithm.
 The default checksum type for an AIS cluster is `xxhash`.
@@ -101,6 +103,34 @@ Bucket props successfully updated
 ```
 
 Please note that changing the bucket's checksum does not recalculate `ETag` for *existing* objects. The existing `ETag` value will be recalculated using a new checksum type when an object is updated.
+
+### Last modification time
+
+AIS tracks object last *access* time and returns it as `LastModified` for S3 clients. If an object has never been accessed, which can happen when AIS bucket uses a Cloud bucket as a backend one, zero Unix time is returned.
+
+Example when access time is undefined (not set):
+
+```console
+# create an AIS bucket with AWS backend bucket
+$ ais create ais://bck
+$ ais set props ais://bck backend_bck=aws://bckaws
+$ ais set props ais://bck checksum.type=md5
+
+# put an object with ais - it affects access time
+$ ais put object.txt ais://bck/obj-ais
+
+# put another object with s3cmd - the object bypasses ais, so no access time in list
+$ s3cmd put object.txt s3://bck/obj-aws --host=localhost:8080 --host-bucket="localhost:8080/s3/%(bucket)"
+
+$ ais ls ais://bck --props checksum,size,atime
+NAME            CHECKSUM                                SIZE            ATIME
+obj-ais         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB        08 Dec 20 11:25 PST
+obj-aws         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB
+
+$ s3cmd ls s3://bck --host=localhost:8080 --host-bucket="localhost:8080/s3/%(bucket)"
+2020-12-08 11:25     71671   s3://test/obj-ais
+1969-12-31 16:00     71671   s3://test/obj-aws
+```
 
 ## Examples
 
