@@ -1,13 +1,12 @@
-# Production standalone Docker
+# Production-ready Standalone Docker
 
-Production ready standalone AIStore Docker starts up minimal AIS cluster.
-The cluster consists of 1 target and 1 proxy.
+That is an absolutely minimal AIStore realization - the cluster consisting of a single storage target and a single proxy/gateway, all in one preconfigured ready-for-usage docker image.
 
-The default exposed port from proxy is `51080`.
+Once `docker run`-deployed, the minimal cluster will be listening on the default AIS port `51080`.
 
 ## Run
 
-`aistore/aistore:latest-minimal` Docker image is used to deploy the cluster.
+`aistore/cluster:latest-minimal` Docker image is used to deploy the cluster.
 Docker image can be started with attached volumes which will be used by the target to store the data.
 
 **Important**: Currently assuming that all volumes will be mounted in `/ais/*` directory.
@@ -50,7 +49,7 @@ $ docker run \
     -v /disk0:/ais/disk0 \
     -v /disk1:/ais/disk1 \
     -v /some/disk2:/ais/disk2 \
-    aistore/aistore:latest-minimal
+    aistore/cluster:latest-minimal
 ```
 
 This starts AIS cluster with 3 disks (`/disk0`, `/disk1` and `/some/disk2`) with a sample configuration and exposes it on port `51080`.
@@ -78,7 +77,7 @@ $ docker run \
     -e AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
     -e AWS_DEFAULT_REGION="us-west-2" \
     -v /disk0:/ais/disk0 \
-    aistore/aistore:latest-minimal
+    aistore/cluster:latest-minimal
 ```
 
 
@@ -90,7 +89,7 @@ $ docker run \
     -v /home/user/Downloads/[GCP_CREDENTIALS].json:/credentials/[GCP_CREDENTIALS].json \
     -e GOOGLE_APPLICATION_CREDENTIALS="/credentials/[GCP_CREDENTIALS].json" \
     -v /disk0:/ais/disk0 \
-    aistore/aistore:latest-minimal
+    aistore/cluster:latest-minimal
 ```
 
 
