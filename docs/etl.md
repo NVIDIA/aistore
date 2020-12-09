@@ -48,52 +48,43 @@ The details about each step are described in subsequent sections.
 <img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="80%">
 
 The example above uses [AIS CLI](/cmd/cli/README.md) to:
-1. **Create** a new AIS bucket
-
-2. **PUT** an object into this bucket
-
-3. **Init** ETL container that performs simple MD5 computation.
-
-   > Both the container itself and its [YAML specification]((https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml) below are included primarily for illustration purposes.
-
-   * [MD5 ETL YAML](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml)
-
+1. **Create** a new bucket;
+2. **PUT** an object into this bucket;
+3. **Init** ETL container that performs MD5 computation.
 4. **Transform** the object on the fly via custom ETL - the "transformation" in this case boils down to computing the object's MD5.
-
 5. **Compare** the output with locally computed MD5.
+
+Note that both the container itself and its [YAML specification](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml) (below) are included primarily for illustration purposes.
+
+* [MD5 ETL YAML](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml)
 
 #### Offline ETL example
 
 <img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
 
 The example above uses [AIS CLI](/cmd/cli/README.md) to:
-1. **Create** a new AIS bucket
-
-2. **PUT** multiple TAR files containing ImageNet images into the created bucket
-
-3. **Init** ETL container, based only on a simple python function
-
-4. **Transform** offline each TAR from the source bucket by standardizing images from the TAR and putting results in a destination bucket
-
+1. **Create** a new AIS bucket;
+2. **PUT** multiple TAR files containing ImageNet images into the created bucket;
+3. **Init** ETL container based only on a simple python function;
+4. **Transform** offline each TAR from the source bucket by standardizing images from the TAR and putting results in a destination bucket;
 5. **Verify** the transformation output by downloading one of the transformed TARs and checking its content.
 
 ## Starting AIStore cluster
 
-> If you already have running AIStore cluster deployed on Kubernetes, skip this section and go to [Initialize ETL section](#defining-and-initializing-etl).
+> If you already have running AIStore cluster deployed on Kubernetes, skip this section and go to the [Initialize ETL](#defining-and-initializing-etl) section.
 
-To deploy ETL-ready AIStore cluster, please refer to [AIStore Getting Started readme](/docs/getting_started.md).
-Please note that you have to choose one of the Kubernetes deployment types.
-If you don't have the hardware to run a cluster on, try [AIStore on the cloud](/docs/getting_started.md#on-cloud-deployment) deployment.
+To deploy ETL-ready AIStore cluster, please refer to [Getting Started](/docs/getting_started.md).
 
-> During the AIStore on Kubernetes deployment, `HOSTNAME` environment variable, set by Kubernetes, should not be overwritten.
-> Target uses it to discover its Pod name.
+> Note that you have to choose one of the deployment types that supports Kubernetes - for example, [Cloud Deployment](/docs/getting_started.md#cloud-deployment).
+
+> During the AIStore on Kubernetes deployment, `HOSTNAME` environment variable, set by Kubernetes, should not be overwritten - AIS target uses it to discover its Pod name.
 
 To verify that your deployment is set up correctly, run the following [CLI](/cmd/cli/README.md) command:
 ```console
 $ ais etl ls
 ```
 
-If there is no error, just an empty response, it means that your AIStore cluster is ready for ETL.
+If you see an empty response (and no errors) - your AIStore cluster is ready to run ETL.
 
 ## Defining and initializing ETL
 

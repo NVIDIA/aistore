@@ -4,12 +4,12 @@ You could start running AIS on a single Linux or Mac host. Alternatively, or in 
 
 Generally, when deciding how to deploy a system like AIS with so many options to choose from, a good place to start would be answering the following two fundamental questions:
 
-* what's the dataset size, and
-* which hardware? 
+* what's the dataset size, or sizes?
+* what hardware will I use?
 
-For datasets below, roughly, 50TB a single host should be considered a viable option. On the other hand, [Cloud deployment](#cloud-deployment) option may sound attractive for its convenience of _not_ thinking about the hardware and the sizes - at least, not right away.
+For datasets, say, below 50TB a single host may suffice and should, therefore, be considered a viable option. On the other hand, [Cloud deployment](#cloud-deployment) option may sound attractive for its ubiquitous convenience and for  _not_ thinking about the hardwares and the sizes - at least, not right away.
 
-> Note as well that **you can always start small**: a single host, a 3-node cluster in the Cloud or on premises, etc. AIStore supports a number of options to inter-connect existing clusters - the capability called *unified global namespace* - and/or migrate existing datasets. For details, please refer to the [AIStore Overview](overview.md).
+> Note as well that **you can always start small**: a single-host deployment, a 3-node cluster in the Cloud or on premises, etc. AIStore supports a number of options to inter-connect existing clusters - the capability called *unified global namespace* - or migrate existing datasets (on demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](overview.md).
 
 ## Cloud deployment
 

@@ -22,8 +22,8 @@ Here is a general overview of these steps:
 * AIStore cluster deployed on Kubernetes. We recommend following guide below.
   * [Deploy AIStore on the cloud](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md)
   * [Deploy AIStore on local Kuberenetes cluster](/docs/getting_started.md#on-premise-deployment)
-    
-## Prepare dataset 
+
+## Prepare dataset
 
 Before we start writing code, let's put an example tarball file with ImageNet images to the AIStore.
 The tarball we will be using is `n02085620.tar` (saved as `raw-train.tar`) from [ILSVRC2012_img_train_t3.tar](http://www.image-net.org/challenges/LSVRC/2012/dd31405981ef5f776aa17412e1f0c112/ILSVRC2012_img_train_t3.tar).

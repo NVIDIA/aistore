@@ -2,21 +2,21 @@
 
 The `etl` package compiles into `aisnode` executable to facilitate running custom ETL containers and communicating with those containers at runtime.
 
-Generally, AIStore v3.2 and later supports on the fly and offline user-defined dataset transformations, which allows moving I/O intensive (and expensive) operations from the computing client(s) into the storage cluster.
+AIStore supports both on the fly (aka *inline*) and offline user-defined dataset transformations. All the respective I/O intensive (and expensive) operation is confined to the storage cluster, with computing clients retaining all their resources to execute computation over transformed, filtered, and sorted data.
+
 Popular use cases include - but are not limited to - *dataset augmentation* (of any kind) and filtering of AI datasets.
 
-For prerequisites, 3 (three) supported ais <=> container communication mechanisms, and usage guides please refer to [ETL readme](/docs/etl.md).
-This documentation contains techincal details, architecture overview and is obligatory to be read before using ETL.
+Please refer to [ETL readme](/docs/etl.md) for the prerequisites, 3 (three) supported ais <=> container communication mechanisms, and usage examples.
+
+> [ETL readme](/docs/etl.md) also contains an overview of the architecture, important technical details, and further guidance.
 
 ## Architecture
 
-The AIStore ETL extension is designed to maximize effectiveness of the transform process.
-It minimizes resources waste on unnecessary operations like exchanging data between storage and compute nodes, which takes place in conventional ETL systems.
+AIS-ETL extension is designed to maximize the effectiveness of the transformation process. In particular, AIS-ETL optimizes-out the entire networking operation that would otherwise be required to move pre-transformed data between storage and compute nodes.
 
-Based on specification provided by a user, each target starts its own ETL container (worker), which from now on will be responsible for transforming objects stored on the corresponding target.
-This approach minimizes I/O operations, as well as assures scalability of ETL with the number of targets in the cluster.
+Based on the specification provided by a user, each target starts its own ETL container (worker) - one ETL container per each storage target in the cluster. From now this "local" ETL container will be responsible for transforming objects stored on "its" AIS target. This approach allows us to run custom transformations **close to data**. This approach also ensures performance and scalability of the transformation workloads - the scalability that for all intents and purposes must be considered practially unlimited.
 
-The following picture presents architecture of the ETL extension.
+The following figure illustrates a cluster of 3 AIS proxies (gateways) and 4 storage targets, with each target running user-defined ETL in parallel:
 
 <img src="/docs/images/etl-arch.png" alt="ETL architecture" width="80%">
 
