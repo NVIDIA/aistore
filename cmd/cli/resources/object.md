@@ -8,18 +8,19 @@ redirect_from:
 
 # GET, PUT, APPEND, PROMOTE, and other operations on objects
 
-- [Get object](#get-object)
+- [GET object](#get-object)
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
-- [Put object](#put-object)
-- [Promote objects](#promote-objects)
+- [PUT object](#put-object)
+- [Promote files and directories](#promote-files-and-directories)
 - [Delete objects](#delete-objects)
 - [Evict objects](#evict-objects)
 - [Prefetch objects](#prefetch-objects)
+- [Preload objects](#preload-bucket)
 - [Rename object](#rename-object)
 - [Concat objects](#concat-objects)
 
-## Get object
+## GET object
 
 `ais get BUCKET_NAME/OBJECT_NAME OUT_FILE`
 
@@ -57,7 +58,14 @@ $ ais get cloud://imagenet/imagenet_train-000010.tgz -
 
 #### Check if object is cached
 
-Check if the object `imagenet_train-000010.tgz` from `imagenet` bucket is cached locally.
+We say that "an object is cached" to indicate two separate things:
+
+* The object was originally downloaded from a Cloud bucket, bucket in a remote AIS cluster, or HTTP(s) based dataset;
+* The object is stored in the AIS cluster.
+
+In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location. Being "cached" does not have any implications on object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
+
+The following example checks whether `imagenet_train-000010.tgz` is "cached" in the bucket `imagenet`:
 
 ```console
 $ ais get --is-cached imagenet/imagenet_train-000010.tgz
@@ -156,7 +164,7 @@ SIZE    VERSION EC
 7.63MiB 1       2:2[replicated]
 ```
 
-## Put object
+## PUT object
 
 `ais put -|FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
@@ -357,7 +365,7 @@ $ ais put "~/dir/test{0..2}/dir/test{0..2}.txt" mybucket --dry-run
 (...)
 ```
 
-#### Put multiple directories
+#### PUT multiple directories
 
 Put multiple directories into the cluster with range syntax.
 
@@ -368,7 +376,7 @@ $ ais put "dir{0..10}" mybucket -y
 # PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
 ```
 
-## Promote objects
+## Promote files and directories
 
 `ais promote FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
@@ -382,36 +390,46 @@ Colocation in the context means that the files in question are already located *
 | `--verbose` or `-v` | `bool` | Verbose printout | `false` |
 | `--target` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
 | `--recursive` or `-r` | `bool` | Promote nested directories | `false` |
-| `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `false` |
+| `--overwrite` or `-o` | `bool` | Overwrite destination (object) if exists | `true` |
+| `--keep` | `bool` | Keep original files | `true` |
+
+**Note:** `--keep` flag defaults to `true` and we retain the origin file to ensure safety. 
 
 ### Object names
 
-PROMOTE command handles two possible ways to specify resulting object name if source references single file:
-- Object name is not provided: `ais promote /path/to/(..)/file.go bucket/` promotes to object `file.go` in `bucket`
-- Explicit object name is provided: `ais promote /path/to/(..)/file.go bucket/path/to/object.go` promotes object `path/to/object.go` in `bucket`
+When the specified source references a directory or a tree of nested directories, object naming is done as follows:
 
-PROMOTE command handles object naming if its source references directories:
 - For path `p` of source directory, resulting objects names are path to files with trimmed `p` prefix
 - `OBJECT_NAME` is prepended to each object name.
 - Abbreviations in source like `../` are not supported at the moment.
 
+If the source references a single file, the resulting object name is set as follows:
+
+- Object name is not provided: `ais promote /path/to/(..)/file.go bucket/` promotes to object `file.go` in `bucket`
+- Explicit object name is provided: `ais promote /path/to/(..)/file.go bucket/path/to/object.go` promotes object `path/to/object.go` in `bucket`
+
+
 ### Examples
 
-#### Promote single file
+Notice that `keep` option is required - it cannot be omitted.
+
+> The usual argument for **not keeping** the original file-based content (`keep=false`) is a) saving space on the target servers and b) optimizing time to promote (larger) files and directories.
+
+#### Promote a single file
 
 Promote `/tmp/examples/example1.txt` without specified object name.
 
 ```bash
-$ ais promote /tmp/examples/example1.txt mybucket
+$ ais promote /tmp/examples/example1.txt mybucket --keep=true
 # PROMOTE /tmp/examples/example1.txt => mybucket/example1.txt
 ```
 
-#### Promote file with specifying custom name
+#### Promote file while specifying custom (resulting) name
 
 Promote /tmp/examples/example1.txt as object with name `example1.txt`.
 
 ```bash
-$ ais promote /tmp/examples/example1.txt mybucket/example1.txt
+$ ais promote /tmp/examples/example1.txt mybucket/example1.txt --keep=true
 # PROMOTE /tmp/examples/example1.txt => mybucket/example1.txt
 ```
 
@@ -421,7 +439,7 @@ Make AIS objects out of `/tmp/examples` files (**one file = one object**).
 `/tmp/examples` is a directory present on some (or all) of the deployed storage nodes.
 
 ```console
-$ ais promote /tmp/examples mybucket/ -r
+$ ais promote /tmp/examples mybucket/ -r --keep=true
 ```
 
 #### Promote directory with specifying custom prefix
@@ -429,7 +447,7 @@ $ ais promote /tmp/examples mybucket/ -r
 Promote `/tmp/examples` files to AIS objects. Objects names will have `examples/` prefix.
 
 ```console
-$ ais promote /tmp/examples mybucket/examples/ -r
+$ ais promote /tmp/examples mybucket/examples/ -r --keep=false
 ```
 
 #### Promote invalid path
@@ -443,7 +461,7 @@ $ ais show cluster
 TARGET		 MEM USED %	 MEM AVAIL	 CAP USED %	 CAP AVAIL	 CPU USED %	 REBALANCE
 1014646t8081	   0.00		 4.00GiB	 59		 375.026GiB	   0.00		 finished; 1 moved (2.5KiB)
 ...
-$ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t8081
+$ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t8081 --keep=false
 (...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
 ```
 
@@ -570,6 +588,18 @@ Downloads copies of objects o1,o2,o3 from AWS bucket named `cloudbucket` and sto
 
 ```console
 $ ais start prefetch aws://cloudbucket --list 'o1,o2,o3'
+```
+
+## Preload bucket
+
+`ais start preload BUCKET_NAME`
+
+Preload bucket's objects metadata into in-memory caches.
+
+### Examples
+
+```console
+$ ais start preload ais://bucket
 ```
 
 ## Rename object

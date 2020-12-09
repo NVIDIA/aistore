@@ -173,7 +173,7 @@ List all objects contained in `BUCKET_NAME` bucket.
 | `--props` | `string` | Comma-separated properties to return with object names | `"size,version"`
 | `--limit` | `int` | Max. number of object names to list | `0` |
 | `--show-unmatched` | `bool` | List objects unmatched by regex and template as well, after the matched ones | `false` |
-| `--all-items` | `bool` | Show all items, including all, duplicated, etc. | `false` |
+| `--all` | `bool` | Show all objects, including misplaced, duplicated, etc. | `false` |
 | `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 | `--cached` | `bool` | For a cloud bucket, shows only objects that have already been downloaded and are cached on local drives (ignored for ais buckets) | `false` |
@@ -269,58 +269,61 @@ Evict a cloud bucket. It also resets the properties of the bucket (if changed).
 
 ## Rename a bucket
 
-`ais rename bucket BUCKET_NAME NEW_NAME`
+`ais rename bucket BUCKET_NAME NEW_BUCKET_NAME`
 
-Rename an ais bucket.
+Rename an AIS bucket.
+
+> Cloud bucket rename is not supported.
 
 ### Examples
 
-#### Rename local bucket
+#### Rename AIS bucket
 
-Rename local bucket `bucket_name` to local bucket `new_bucket_name`.
+Rename AIS bucket `bucket_name` to AIS bucket `new_bucket_name`.
 
 ```console
-$ ais rename bucket ais://bucket_name new_bucket_name
+$ ais rename bucket bucket_name new_bucket_name
 Renaming bucket "bucket_name" to "new_bucket_name" in progress.
-To check the status, run: ais show xaction renamelb bucket_name
-```
-
-#### Incorrect bucket rename
-
-Renaming cloud buckets is not supported.
-
-```console
-$ ais rename bucket cloud://bucket_name new_bucket_name
-Renaming cloud buckets (cloud://bucket_name) not supported
-$ ais rename bucket bucket_name cloud://new_bucket_name
-Renaming cloud buckets (cloud://new_bucket_name) not supported
+To check the status, run: ais show xaction renamelb new_bucket_name
 ```
 
 ## Copy bucket
 
-`ais cp bucket BUCKET_NAME NEW_NAME`
+`ais cp bucket SRC_BUCKET_NAME DST_BUCKET_NAME`
 
-Copy an existing ais bucket to a new ais bucket.
+Copy an existing bucket to a new bucket. If destination bucket is a cloud bucket it has to exist.
+
+### Options
+| Name | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--dry-run` | `bool` | Don't actually copy bucket, only include stats what would happen | `false` |
+| `--prefix` | `string` | Prefix added to every new object's name | `""` |
 
 ### Examples
 
-#### Copy local bucket
+#### Copy AIS bucket
 
-Copy local bucket `bucket_name` to local bucket `new_bucket_name`.
+Copy AIS bucket `src_bucket` to AIS bucket `dst_bucket`.
 
 ```console
-$ ais cp bucket ais://bucket_name new_bucket_name
-Copying bucket "bucket_name" to "new_bucket_name" in progress.
-To check the status, run: ais show xaction copybck new_bucket_name
+$ ais cp bucket ais://src_bucket ais://dst_bucket
+Copying bucket "ais://bucket_name" to "ais://dst_bucket" in progress.
+To check the status, run: ais show xaction copybck ais://dst_bucket
 ```
 
-#### Incorrect bucket rename
+#### Copy cloud bucket to another cloud bucket
 
-Copying cloud buckets is not supported.
+Copy AWS bucket `src_bucket` to AWS bucket `dst_bucket`.
 
 ```console
-$ ais cp bucket cloud://bucket_name cloud://new_bucket_name
-Copying of cloud buckets not supported
+# Make sure that both buckets exist.
+$ ais ls aws://
+AWS Buckets (2)
+  aws://src_bucket
+  aws://dst_bucket
+$ ais cp bucket aws://src_bucket aws://dst_bucket
+Copying bucket "aws://src_bucket" to "aws://dst_bucket" in progress.
+To check the status, run: ais show xaction copybck aws://dst_bucket
 ```
 
 ## Show bucket summary
@@ -370,7 +373,7 @@ All options are required and must be greater than `0`.
 `ais show props BUCKET_NAME [PROP_PREFIX]`
 
 List [properties](../../../docs/bucket.md#properties-and-options) of the bucket.
-By default condensed form of bucket props sections is presented.
+By default, condensed form of bucket props sections is presented.
 
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
 Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioning`.

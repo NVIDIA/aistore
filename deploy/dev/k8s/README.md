@@ -60,6 +60,12 @@ The script [dev.sh](dev.sh) starts a development version of AIStore on Minikube.
 $ ./dev.sh
 ```
 
+It's possible to pass input to the command, so no interaction is required:
+
+```console
+$ ./dev.sh <<< $'n\ny\n1\n1\n1\n2\nn\nn\nn\ny'
+```
+
 ### Stopping and cleanup
 
 The script [stop_ais.sh](stop_ais.sh) stops the AIStore cluster while keeping Minikube still running.
@@ -82,9 +88,8 @@ See [known issues](https://minikube.sigs.k8s.io/docs/drivers/docker/#known-issue
 
 1. Deploying the cluster
 
-```
-➜  k8s git:(mini-ais) ✗ ./try.sh
-
+```console
+$ ./try.sh
 🔥  Deleting "minikube" in docker ...
 🔥  Deleting container "minikube" ...
 🔥  Removing /home/mj/.minikube/machines/minikube ...
@@ -111,43 +116,44 @@ List of running pods
 NAME         READY   STATUS              RESTARTS   AGE   IP            NODE       NOMINATED NODE   READINESS GATES
 ais-proxy    0/1     ContainerCreating   0          31s   192.168.0.3   minikube   <none>           <none>
 ais-target   0/1     Pending             0          0s    <none>        minikube   <none>           <none>
-Done
-Please set the AIS_ENDPOINT for use of cli
+Done.
+
+Please set the "AIS_ENDPOINT" for use of CLI:
 export AIS_ENDPOINT="http://192.168.0.3:8080"
 ```
 
 2. Exporting the AIS_ENDPOINT
 
-```
-➜  k8s git:(mini-ais) ✗ export AIS_ENDPOINT="http://192.168.0.3:8080"
+```console
+$ export AIS_ENDPOINT="http://192.168.0.3:8080"
 ```
 
 3. Checking status
 
-```
-➜  k8s git:(mini-ais) ✗ kubectl get pods
+```console
+$ kubectl get pods
 NAME                             READY   STATUS    RESTARTS   AGE
 ais-proxy                        1/1     Running   0          80s
 ais-target                       1/1     Running   0          49s
-➜  k8s git:(mini-ais) ✗ # ais is running
-➜  k8s git:(mini-ais) ✗ ais create bucket test-bucket
+$ # ais is running
+$ ais create bucket test-bucket
 "test-bucket" bucket created
-➜  k8s git:(mini-ais) ✗ cat > sample
+$ cat > sample
 This is a sample data
 ^C
 ```
 
 4. Putting sample object
 
-```
-➜  k8s git:(mini-ais) ✗ ais put sample test-bucket/test-obj
+```console
+$ ais put sample test-bucket/test-obj
 PUT "test-obj" into bucket "test-bucket"
 ```
 
 5. Creating sample spec for transformer
 
-```
-➜  k8s git:(mini-ais) ✗ cat > spec.yaml
+```console
+$ cat > spec.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -169,15 +175,15 @@ spec:
 
 6. Initiating a transformer
 
-```
-➜  k8s git:(mini-ais) ✗ ais transform init spec.yaml
+```console
+$ ais transform init spec.yaml
 veSC9rvQQ
 ```
 
 7. Transforming an object
 
-```
-➜  k8s git:(mini-ais) ✗ ais transform --help
+```console
+$ ais transform --help
 NAME:
    ais transform - use transformations
 
@@ -193,7 +199,7 @@ COMMANDS:
 OPTIONS:
    --help, -h  show help
 
-➜  k8s git:(mini-ais) ✗ ais transform object --help
+$ ais transform object --help
 NAME:
    ais transform object - get transformed object
 
@@ -203,7 +209,7 @@ USAGE:
 OPTIONS:
    --help, -h  show help
 
-➜  k8s git:(mini-ais) ✗ ais transform object veSC9rvQQ test-bucket/test-obj out.txt
-➜  k8s git:(mini-ais) ✗ cat out.txt
+$ ais transform object veSC9rvQQ test-bucket/test-obj out.txt
+$ cat out.txt
 This is a sample data
 ```

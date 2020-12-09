@@ -45,7 +45,7 @@ Following is a high-level architecture with an emphasis on supported (frontend a
 
 Most recently capabilities include:
 
-- (**new**) ETL offload: support for running custom extract-transform-load workloads on (and by) storage cluster;
+- (**new**) [ETL offload](/aistore/etl/README.md): support for running custom extract-transform-load workloads on (and by) storage cluster;
 - (**new**) TensorFlow integration to support existing training clients that use S3 API - done via `tar2tf` ETL offload that handles on the fly TFRecord/tf.Example conversion;
 
 <img src="images/etl-v3.2.png" alt="ETL 1.0" width="450">
@@ -191,7 +191,7 @@ Finally, AIS can *promote* files and directories to objects. The only requiremen
 Let's consider a quick example. Say, some (or all) of the deployed storage nodes contain a directory called `/tmp/mydata`. By running the following [CLI](/aistore/cmd/cli/README.md), we could make AIS objects (**one file = one object**) out of all files scattered across all nodes:
 
 ```console
-$ ais promote /tmp/mydata mybucket/ -r
+$ ais promote /tmp/mydata mybucket/ -r --keep=false
 ```
 
 In this example, `mybucket` would be the designated (destination) bucket.

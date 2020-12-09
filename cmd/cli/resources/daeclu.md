@@ -125,9 +125,24 @@ Proxy with ID "23kfa10f" successfully joined the cluster.
 
 ## Remove a node
 
-`ais rm node DAEMON_ID`
+`ais rm node DAEMON_ID --mode=OPERATION`
 
 Remove an existing node from the cluster.
+
+### Options
+
+Currently, `ais rm node` requires option `--mode=`(administrative operation) to be defined.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--mode` | `string` | The type of administrative operation to temporarily (`start-maintenance`, `stop-maintenance`) or permanently (`decommission`) remove a node from the cluster. One of: `start-maintenance`, `stop-maintenance`, `decommission` | n/a |
+| `--no-rebalance` | `bool` | By default, `ais rm node --mode=...` triggers a global cluster-wide rebalance. The `--no-rebalance` flag disables automatic rebalance thus providing for the administrative option to rebalance the cluster manually at a later time. BEWARE: advanced usage only! | `false` |
+
+Further, the `--mode` values are:
+
+- `start-maintenance` - put a given node in maintenance mode. The operation results in cluster gradually transitioning to operating without the specified node (which is labeled `maintenance` in the cluster map).
+- `stop-maintenance` - take a node out of maintenance.
+- `decommission` - permanently remove a node from the cluster. While rebalance is running, the node still exists in the cluster map labeled `decommission`.
 
 ### Examples
 
@@ -138,6 +153,43 @@ Remove a proxy node with ID `23kfa10f` from the cluster.
 ```console
 $ ais rm node 23kfa10f
 Node with ID "23kfa10f" has been successfully removed from the cluster.
+```
+
+#### Temporarily put a node in maintenance
+
+```console
+$ ais show cluster
+PROXY            MEM USED %      MEM AVAIL       CPU USED %      UPTIME  STATUS
+202446p8082      0.09            31.28GiB        0.00            70s     healthy
+279128p8080[P]   0.11            31.28GiB        0.36            80s     healthy
+
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  STATUS
+147665t8084      0.10            31.28GiB        16              2.458TiB        0.12            not started     70s     healthy
+165274t8087      0.10            31.28GiB        16              2.458TiB        0.12            not started     70s     healthy
+
+$ ais rm node 147665t8084 --mode=start-maintenance
+$ ais show cluster
+PROXY            MEM USED %      MEM AVAIL       CPU USED %      UPTIME  STATUS
+202446p8082      0.09            31.28GiB        0.00            70s     healthy
+279128p8080[P]   0.11            31.28GiB        0.36            80s     healthy
+
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  STATUS
+147665t8084      0.10            31.28GiB        16              2.458TiB        0.12            not started     70s     maintenance
+165274t8087      0.10            31.28GiB        16              2.458TiB        0.12            not started     70s     healthy
+```
+
+#### Take a node out of maintenance
+
+```console
+$ ais rm node 147665t8084 --mode=stop-maintenance
+$ ais show cluster
+PROXY            MEM USED %      MEM AVAIL       CPU USED %      UPTIME  STATUS
+202446p8082      0.09            31.28GiB        0.00            80s     healthy
+279128p8080[P]   0.11            31.28GiB        0.36            90s     healthy
+
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  STATUS
+147665t8084      0.10            31.28GiB        16              2.458TiB        0.12            not started     80s     healthy
+165274t8087      0.10            31.28GiB        16              2.458TiB        0.12            not started     80s     healthy
 ```
 
 ## Show config

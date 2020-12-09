@@ -85,7 +85,8 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 |---|---|---|
 | `log.level` | `3` | Set global logging level. The greater number the more verbose log output |
 | `vmodule` | `""` | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
-| `periodic.stats_time` | `10s` | A node periodically does 'housekeeping': updates internal statistics, remove old logs, and executes extended actions prefetch and LRU waiting in the line |
+| `periodic.stats_time` | `10s` | A *housekeeping* time interval to periodically update and log internal statistics, remove/rotate old logs, check available space (and run LRU *xaction* if need be), etc. |
+| `periodic.notif_time` | `30s` | An interval of time to notify subscribers (IC members) of the status and statistics of a given asynchronous operation (such as Download, Copy Bucket, etc.)  |
 | `lru.enabled` | `true` | Enables and disabled the LRU |
 | `lru.lowwm` | `75` | If filesystem usage exceeds `highwm` LRU tries to evict objects so the filesystem usage drops to `lowwm` |
 | `lru.highwm` | `90` | LRU starts immediately if a filesystem usage exceeds the value |
@@ -100,8 +101,8 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `rebalance.dest_retry_time` | `2m` | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | `rebalance.multiplier` | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
 | `rebalance.quiescent` | `20s` | Rebalace moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
-| `timeout.send_file_time` | `5m` | Timeout for getting an object from a neighbor target or for sending an object to the correct target while rebalance is in progress |
-| `timeout.max_host_busy` | `1m` | Determines how long should we wait for particular action to happen due to possible node/network overload |
+| `timeout.send_file_time` | `5m` | Timeout for sending/receiving an object from another target in the same cluster |
+| `timeout.max_host_busy` | `20s` | Maximum latency of control-plane operations that may involve receiving new bucket metadata and associated processing |
 | `client.client_timeout` | `10s` | Default client timeout |
 | `client.client_long_timeout` | `30m` | Default _long_ client timeout |
 | `client.list_timeout` | `2m` | Client list objects timeout |

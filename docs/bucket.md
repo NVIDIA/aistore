@@ -75,6 +75,8 @@ The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy a
 
 New ais buckets must be given a unique name that does not duplicate any existing ais or cloud bucket.
 
+If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`. For details, see [S3 compatibility](/aistore/docs/s3compat.md#s3-compatibility).
+
 ### CLI examples: create, rename and, destroy ais bucket
 
 To create an ais bucket with the name 'myBucket', rename it to 'myBucket2' and delete it, run:
@@ -207,7 +209,7 @@ $ curl -sL --max-redirs 3 -x localhost:8080 --noproxy "$(curl -s localhost:8080/
   > /dev/null
 ```
 
-Alternatively, an object can also be downloaded using the `get` and `cat` CLI commands. 
+Alternatively, an object can also be downloaded using the `get` and `cat` CLI commands.
 ```console
 $ ais get -f http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
 ```
@@ -450,8 +452,15 @@ SelectMsg extended flags:
 
 | Name | Value | Description |
 | --- | --- | --- |
-| `SelectCached` | `1` | For Cloud buckets only: return only objects that are cached on local drives, i.e. objects that can be read without accessing to the Cloud |
+| `SelectCached` | `1` | For Cloud buckets only: return only objects that are cached on AIS drives, i.e. objects that can be read without accessing to the Cloud |
 | `SelectMisplaced` | `2` | Include objects that are on incorrect target or mountpath |
+
+We say that "an object is cached" to indicate two separate things:
+
+* The object was originally downloaded from a Cloud bucket, bucket in a remote AIS cluster, or an HTTP(s) based dataset;
+* The object is stored in the AIS cluster.
+
+In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go and check the object's original location. Being "cached" does not have any implications on object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
 
 Note that the list generated with `SelectMisplaced` option may have duplicated entries.
 E.g, after rebalance the list can contain two entries for the same object:
