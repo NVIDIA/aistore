@@ -1,18 +1,12 @@
-# ETL: Getting started
-
-## Table of Contents
+# Extract, Transform, Load (ETL) with AIStore
 
 - [Introduction](#introduction)
-- [Starting AIStore cluster](#starting-aistore-cluster)
-- [Initializing ETL](#defining-and-initializing-etl)
-    - [`build` request](#build-request)
-        - [Runtimes](#runtimes)
-    - [`init` request](#init-request)
-        - [Requirements](#requirements)
-        - [YAML Specification](#specification-yaml-file)
-        - [Communication Mechanisms](#communication-mechanisms)
-        - [Annotations](#annotations)
-- [Transforming objects with ETL](#transforming-objects-with-created-etl)
+- [Getting Started](#getting-started)
+- [Inline ETL example](#inline-etl-example)
+- [Offline ETL example](#offline-etl-example)
+- [Kubernetes Deployment](#kubernetes-deployment)
+- [Defining and initializing ETL](#defining-and-initializing-etl)
+- [Transforming objects](#transforming-objects)
 - [API Reference](#api-reference)
 
 ## Introduction
@@ -38,18 +32,13 @@ Technically, the service supports running user-provided ETL containers **and** c
 
 Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io). For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/docs/playbooks/etl).
 
-### Demos
-
-The following demos present interaction with the AIStore ETL feature.
-The details about each step are described in subsequent sections.
-
-#### AIStore ETL Getting Started
+## Getting Started
 
 The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)") demonstrates AIStore's ETL feature using Jupyter Notebook.
 
 [<img src="images/etl-getting-started-400.png" alt="AIStore - Getting Started with ETL video" width="400">](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
 
-#### On the fly ETL example
+## Inline ETL example
 
 <img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="80%">
 
@@ -64,7 +53,7 @@ Note that both the container itself and its [YAML specification](https://raw.git
 
 * [MD5 ETL YAML](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml)
 
-#### Offline ETL example
+## Offline ETL example
 
 <img src="/docs/images/etl-imagenet.gif" alt="ETL-ImageNet" width="80%">
 
@@ -75,9 +64,9 @@ The example above uses [AIS CLI](/cmd/cli/README.md) to:
 4. **Transform** offline each TAR from the source bucket by standardizing images from the TAR and putting results in a destination bucket;
 5. **Verify** the transformation output by downloading one of the transformed TARs and checking its content.
 
-## Starting AIStore cluster
+## Kubernetes Deployment
 
-> If you already have running AIStore cluster deployed on Kubernetes, skip this section and go to the [Initialize ETL](#defining-and-initializing-etl) section.
+> If you already have a running AIStore cluster deployed on Kubernetes, skip this section and go to the [Initialize ETL](#defining-and-initializing-etl) section.
 
 To deploy ETL-ready AIStore cluster, please refer to [Getting Started](/docs/getting_started.md).
 
@@ -114,7 +103,7 @@ In effect, a user can skip the entire step of writing your own Dockerfile and bu
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-#### Runtimes
+### Runtimes
 
 AIS-ETL provides several *runtimes* out of the box.
 Each *runtime* determines the programming language of your custom `transform` function, the set of pre-installed packages and tools that your `transform` can utilize.
@@ -135,7 +124,7 @@ Still, since the number of supported  *runtimes* will always remain somewhat lim
 It allows running any Docker image that implements certain requirements on communication with the cluster. 
 The 'init' request requires writing a Pod specification following specification requirements.
 
-#### Requirements
+### Requirements
 
 Custom ETL container is expected to satisfy the following requirements:
 
@@ -144,13 +133,13 @@ Custom ETL container is expected to satisfy the following requirements:
  must know how to contact the Pod.
 3. AIS target(s) may send requests in parallel to the web server inside the ETL container - any synchronization, therefore, must be done on the server-side.
 
-#### Specification YAML file
+### Specification YAML
 
 Specification of an ETL should be in the form of a YAML file.
 It is required to follow the Kubernetes [Pod template format](https://kubernetes.io/docs/concepts/workloads/pods/#pod-templates)
 and contain all necessary fields to start the Pod.
 
-##### Required or additional fields
+### Required or additional fields
 
 | Path | Required | Description | Default |
 | --- | --- | --- | --- |
@@ -167,14 +156,14 @@ and contain all necessary fields to start the Pod.
 | `spec.containers[0].readinessProbe.httpGet.Path` | `true` | Path for HTTP readiness probes. | - |
 | `spec.containers[0].readinessProbe.httpGet.Port` | `true` | Port for HTTP readiness probes. Required `default`. | - |
 
-##### Forbidden fields
+### Forbidden fields
 
 | Path | Reason |
 | --- | --- |
 | `spec.affinity.nodeAffinity` | Used by AIStore to colocate ETL containers with targets. |
 | `spec.affinity.nodeAntiAffinity` | Used by AIStore to require single ETL at a time. |
 
-#### Communication Mechanisms
+### Communication Mechanisms
 
 AIS currently supports 3 (three) distinct target ⇔ container communication mechanisms to facilitate the fly or offline transformation.
 User can choose and specify (via YAML spec) any of the following:
@@ -185,7 +174,7 @@ User can choose and specify (via YAML spec) any of the following:
 | **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return the result to the target. |
 | **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
 
-#### Annotations
+### Annotations
 
 The target communicates with a Pod defined in the Pod specification under `communication_type` key:
 ```yaml
@@ -214,9 +203,9 @@ metadata:
 > ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
 > To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
 
-## Transforming objects with created ETL
+## Transforming objects
 
-AIStore supports an on-line transformation of single objects and an offline transformation of the whole buckets.
+AIStore supports both *inline* transformation of selected objects and *offline* transformation of an entire bucket.
 
 There are two ways to run ETL transformations:
 - HTTP RESTful API described in [API Reference section](#api-reference) of this document,

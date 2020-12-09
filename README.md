@@ -36,7 +36,7 @@ Also, AIStore:
 
 Last but not least, AIS runs natively on Kubernetes and features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
-For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets).
+For AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and animated presentations can be found at [videos](docs/videos.md).
 
 **Table of Contents**
 
@@ -127,6 +127,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 
 - [AIS Overview](docs/overview.md)
 - [Playbooks](docs/playbooks/README.md)
+- [Videos](docs/videos.md)
 - [CLI](cmd/cli/README.md)
   - [Create, destroy, list, and other operations on buckets](cmd/cli/resources/bucket.md)
   - [GET, PUT, APPEND, PROMOTE, and other operations on objects](cmd/cli/resources/object.md)
