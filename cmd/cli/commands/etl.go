@@ -34,7 +34,7 @@ var etlCmds = []cli.Command{
 			},
 			{
 				Name:  subcmdBuild,
-				Usage: "build",
+				Usage: "build ETL with provided code, optional dependencies and runtime",
 				Flags: []cli.Flag{
 					fromFileFlag,
 					depsFileFlag,
