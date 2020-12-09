@@ -39,7 +39,7 @@ redirect_from:
 
 This section comprises a number of videos illustrating different aspects of the AIS-ETL extension. A good place to start, though, would be the following [comprehensive introduction and a Jupyter notebook walk-through](https://www.youtube.com/watch?v=4PHkqTSE0ls):
 
-[<img src="images/etl-getting-started-400.png" alt="AIStore - Getting Started with ETL video" width="400">](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
+[![AIStore ETL Getting Started](./images/etl-getting-started-400.png)](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
 
 ## ETL build: ImageNet Transformation
 
@@ -55,4 +55,4 @@ This section comprises a number of videos illustrating different aspects of the 
 
 # Developer Playground
 
-[<img src="images/dev-playground-400.png" alt="AIStore Developer Playground video" width="400">](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
+[![AIStore Developer Playground](./images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")

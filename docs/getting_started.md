@@ -68,9 +68,9 @@ This option has the unmatched convenience of requiring an absolute minimum time 
 You could use the instruction below for a quick evaluation, experimenting with features, first-time usage - and, of course, for development.
 Local AIStore playground is not intended for production clusters and is not meant to provide optimal performance.
 
-The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube vide)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
+The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
 
-[<img src="images/dev-playground-400.png" alt="AIStore Developer Playground video" width="400">](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
+[![AIStore Developer Playground](./images/dev-playground-400.png)](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
 
 Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
