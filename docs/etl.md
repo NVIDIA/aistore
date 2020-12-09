@@ -43,6 +43,12 @@ Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io). For getting
 The following demos present interaction with the AIStore ETL feature.
 The details about each step are described in subsequent sections.
 
+#### AIStore ETL Getting Started
+
+The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)") demonstrates AIStore's ETL feature using Jupyter Notebook.
+
+[<img src="images/etl-getting-started-400.png" alt="AIStore - Getting Started with ETL video" width="400">](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)")
+
 #### On the fly ETL example
 
 <img src="/docs/images/etl-md5.gif" alt="ETL-MD5" width="80%">
