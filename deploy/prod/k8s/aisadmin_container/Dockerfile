@@ -15,7 +15,7 @@ FROM ubuntu:18.04
 
 RUN apt-get update -yq
 RUN apt-get install -y wget sysstat curl git iputils-ping netcat make coreutils
-RUN apt-get install -y net-tools iproute2 tcptrack
+RUN apt-get install -y net-tools iproute2 tcptrack vim
 
 RUN mkdir -p /usr/local/bin
 ENV PATH="/usr/local/bin:${PATH}"
