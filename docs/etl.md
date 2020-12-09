@@ -1,4 +1,4 @@
-# ETL: Getting started 
+# ETL: Getting started
 
 ## Table of Contents
 

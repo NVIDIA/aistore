@@ -1,11 +1,8 @@
 # Playbooks
 
-The playbooks directory contains a database of step-by-step examples for different topics around AIStore.
+A set of convenience playbooks to assist in running and using AIStore and its various extensions. The first topic we try to cover here is [ETL](/docs/etl.md#introduction), and specifically:
 
-## Topics
+- [PyTorch ImageNet preprocessing](/docs/playbooks/etl/etl_imagenet_pytorch.md)
+- [Compute MD5 of the object](/docs/playbooks/etl/compute_md5.md)
 
-Here is a list of topics covered in playbooks:
-
-- ETL (see also [docs](/docs/etl.md)):
-  - [PyTorch ImageNet preprocessing](/docs/playbooks/etl/etl_imagenet_pytorch.md)
-  - [Compute MD5 of the object](/docs/playbooks/etl/compute_md5.md)
+> See also: [Getting Started with AIS-ETL](/docs/etl.md)):
