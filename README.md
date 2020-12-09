@@ -51,7 +51,7 @@ For AIStore **white paper** and design philosophy, for introduction to large-sca
 
 ## Introduction
 
-AIStore supports numeorous deployment options covering a spectrum from a single-laptop to petascale bare-metal clusters. The options, provided and documented, include in part:
+AIStore supports numerous deployment options covering a spectrum from a single-laptop to petascale bare-metal clusters of any size. This includes:
 
 
 | Deployment option | Targeted audience and objective |
