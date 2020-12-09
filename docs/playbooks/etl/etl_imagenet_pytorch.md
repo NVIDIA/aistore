@@ -52,13 +52,19 @@ import torch, tarfile, io
 from PIL import Image
 from torchvision import transforms
 
+def img_to_bytes(img):
+    buf = io.BytesIO()
+    img = img.convert('RGB')
+    img.save(buf, format='JPEG')
+    return buf.getvalue()
+
 preprocessing = transforms.Compose([
     transforms.RandomResizedCrop(224),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     transforms.ToPILImage(),
-    transforms.Lambda(lambda x: x.tobytes()),
+    transforms.Lambda(img_to_bytes),
 ])
 
 def transform(input_bytes: bytes) -> bytes:
