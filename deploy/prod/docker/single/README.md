@@ -19,7 +19,7 @@ Docker image can be started with attached volumes which will be used by the targ
 $ docker run \
     -p 51080:51080 \
     -v $(mktemp -d):/ais/disk0 \
-    aistore/aistore:latest-minimal
+    aistore/cluster:latest-minimal
 ```
 
 This starts AIS cluster with 1 disk (at least one disk is required!) that is mounted under temporary directory on the host.
