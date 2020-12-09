@@ -88,9 +88,13 @@ For production deployment on a local machine, please refer to this [README](/dep
 
 #### Local playground and development deployment
 
-This type of deployment is meant for a first-time usage, experimenting with AIStore features, or development.
-However, it is not meant to provide the best performance. 
-For this purpose, other deployment types should be used.
+This type of deployment is meant for a first-time usage, experimenting with features, or AIStore development.
+This scenario is not intended for production clusters, and it is not meant to provide the best performance.
+Multi-node Kubernetes clusters should be used for actual workloads.
+
+The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube vide)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
+
+[<img src="images/dev-playground-400.png" alt="AIStore Developer Playground video" width="400">](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube video)")
 
 Assuming that [Go](https://golang.org/dl/) toolchain is already installed, the steps to deploy AIS locally on a single development machine are:
 
