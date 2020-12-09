@@ -19,28 +19,7 @@ For datasets, say, below 50TB a single host may suffice and should, therefore, b
 
 > Note as well that **you can always start small**: a single-host deployment, a 3-node cluster in the Cloud or on premises, etc. AIStore supports a number of options to inter-connect existing clusters - the capability called *unified global namespace* - or migrate existing datasets (on demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](overview.md).
 
-## Cloud deployment
-
-[AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides the (single-line) command to deploy Kubernetes cluster and the underlying infrastructure with AIStore cluster running inside. The only requirement is having a few dependencies installed (e.g., `helm`) and a Cloud account.
-
-The following GIF presents a flow of this deployment.
-  
-<img src="/aistore/docs/images/ais-k8s-deploy.gif" alt="Kubernetes cloud deployment" width="100%">
-
-> If you already have a Kubernetes cluster deployed in the cloud, and you need more customization, refer to [Kubernetes production deployment](#kubernetes-production-deployment).
-
-## On-premises deployment
-
-This section is divided into two parts:
-- [Prerequisites](#prerequisites) - describes requirements which have to be met when deploying AIStore on own hardware;
-- [Deployments](#deployments) - focuses on different ways to deploy the AIStore on own hardware.
-    - [Kubernetes production deployment](#kubernetes-production-deployment)
-    - [Local production deployment](#local-production-deployment)
-    - [Local playground and development deployment](#local-playground-and-development-deployment)
-    - [Local Docker deployment](#local-docker-deployment)
-    - [Local Kubernetes deployment](#local-kubernetes-deployment)
-
-### Prerequisites
+## Prerequisites
 
 AIStore runs on commodity Linux machines with no special hardware requirements whatsoever.
 
@@ -51,7 +30,7 @@ AIStore runs on commodity Linux machines with no special hardware requirements w
 * Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
-#### Linux host
+### Linux host
 
 Depending on your Linux distribution, you may or may not have `gcc`, `sysstat`, and/or `attr` packages.
 
@@ -60,45 +39,34 @@ Unfortunately, extended attributes (xattrs) may not always be enabled (by the Li
 
 > If disabled, please make sure to enable xattrs in your Linux kernel configuration.
 
-#### MacOS host
+### MacOS host
 
 MacOS/Darwin is also supported, albeit for development only.
 Certain capabilities related to querying the state-and-status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
 
-#### Containerized Deployments: Host Resource Sharing
+## Cloud Deployment
 
-The following **applies to all containerized deployments**:
+[AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides the (single-line) command to deploy Kubernetes cluster and the underlying infrastructure with AIStore cluster running inside. The only requirement is having a few dependencies installed (e.g., `helm`) and a Cloud account.
 
-1. AIS nodes always automatically detect *containerization*.
-2. If deployed as a container, each AIS node independently discovers whether its own container's memory and/or CPU resources are restricted.
-3. Finally, the node then abides by those restrictions.
+The following GIF presents a flow of this deployment.
+  
+<img src="/aistore/docs/images/ais-k8s-deploy.gif" alt="Kubernetes cloud deployment" width="100%">
 
-To that end, each AIS node at startup loads and parses [cgroup](https://www.kernel.org/doc/Documentation/cgroup-v2.txt) settings for the container and, if the number of CPUs is restricted, adjusts the number of allocated system threads for its goroutines.
+> If you already have a Kubernetes cluster deployed in the cloud, and you need more customization, refer to [Kubernetes production deployment](#kubernetes-production-deployment).
 
-> This adjustment is accomplished via the Go runtime [GOMAXPROCS variable](https://golang.org/pkg/runtime/). For in-depth information on CPU bandwidth control and scheduling in a multi-container environment, please refer to the [CFS Bandwidth Control](https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt) document.
-
-Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself.
-
-> Limits on memory may affect [dSort](dsort/README.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
-
-> For technical details on AIS memory management, please see [this readme](memsys/README.md).
-
-### Deployments
-
-#### Kubernetes production deployment
+## Production Deployment: Kubernetes
 
 This type of deployment is described in [AIS-K8s GitHub repo](https://github.com/NVIDIA/ais-k8s/blob/master/docs/README.md) containing all necessary information.
 It includes Helm Charts and dedicated documentation for different use cases and configurations.
 
-#### Local production deployment
+## Minimal all-in-one-docker Deployment
 
-For production deployment on a local machine, please refer to this [README](/aistore/deploy/prod/docker/single/README.md).
+This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/aistore/deploy/prod/docker/single/README.md) for details.
 
-#### Local playground and development deployment
+## Local Playground
 
-This type of deployment is meant for a first-time usage, experimenting with features, or AIStore development.
-This scenario is not intended for production clusters, and it is not meant to provide the best performance.
-Multi-node Kubernetes clusters should be used for actual workloads.
+You could use the instruction below for a quick evaluation, experimenting with features, first-time usage - and, of course, for development.
+Local AIStore playground is not intended for production clusters and is not meant to provide optimal performance.
 
 The following [video](https://www.youtube.com/watch?v=ANshjHphqfI "AIStore Developer Playground (Youtube vide)") gives a quick intro to AIStore, along with a brief demo of the local playground and development environment.
 
@@ -150,7 +118,6 @@ $ make kill deploy <<< $'10\n3\n2\nn\nn\nn\nn\n'
 
 > `make kill` will terminate local AIStore if it's already running.
 
-
 For more development options and tools, please refer to [development docs](docs/development.md).
 
 Finally, the `go test` (above) will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
@@ -162,7 +129,13 @@ For example, the following will download objects from your (presumably) S3 bucke
 $ BUCKET=aws://myS3bucket go test ./tests -v -run=download
 ```
 
-##### HTTPS
+## Kubernetes Playground
+
+In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/aistore/deploy/dev/k8s/README.md), to run Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](/aistore/docs/etl.md), for example - can be developed rather efficiently.
+
+* [AIStore on Minikube](/aistore/deploy/dev/k8s/README.md)
+
+## HTTPS
 
 In the end, all examples above run a bunch of local web servers that listen for plain HTTP requests. Following are quick steps for developers to engage HTTPS:
 
@@ -188,12 +161,12 @@ $ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go tes
 
 > Notice environment variables above: **AIS_USE_HTTPS**, **AIS_ENDPOINT**, and **AIS_SKIP_VERIFY_CRT**.
 
-##### Build, Make and Development Tools
+## Build, Make and Development Tools
 
-As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
+As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/aistore/deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
 
 * **building** AIS binary (called `aisnode`) deployable as both a storage target **or** a proxy/gateway;
-* **building** [CLI](cmd/cli/README.md), [aisfs](cmd/aisfs/README.md), and benchmark binaries;
+* **building** [CLI](/aistore/cmd/cli/README.md), [aisfs](/aistore/cmd/aisfs/README.md), and benchmark binaries;
 
 In particular, the `make` provides a growing number of developer-friendly commands to:
 
@@ -201,18 +174,20 @@ In particular, the `make` provides a growing number of developer-friendly comman
 * **run** all or selected tests;
 * **instrument** AIS binary with race detection, CPU and/or memory profiling, and more.
 
-#### Local Docker deployment
+## Containerized Deployments: Host Resource Sharing
 
-[Local Playground](#local-playground-and-development-deployment) is probably the speediest option to run AIS clusters.
-However, to take advantage of containerization (which includes, for instance, multiple logically-isolated configurable networks), you can also run AIStore as described here:
+The following **applies to all containerized deployments**:
 
-* [Getting started with Docker](docs/docker_main.md).
+1. AIS nodes always automatically detect *containerization*.
+2. If deployed as a container, each AIS node independently discovers whether its own container's memory and/or CPU resources are restricted.
+3. Finally, the node then abides by those restrictions.
 
+To that end, each AIS node at startup loads and parses [cgroup](https://www.kernel.org/doc/Documentation/cgroup-v2.txt) settings for the container and, if the number of CPUs is restricted, adjusts the number of allocated system threads for its goroutines.
 
-{% include_relative docker_videos.md %}
+> This adjustment is accomplished via the Go runtime [GOMAXPROCS variable](https://golang.org/pkg/runtime/). For in-depth information on CPU bandwidth control and scheduling in a multi-container environment, please refer to the [CFS Bandwidth Control](https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt) document.
 
+Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself.
 
-#### Local Kubernetes deployment
+> Limits on memory may affect [dSort](/aistore/dsort/README.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding that also requires memory to rebuild objects from slices, etc.
 
-This deployment option makes use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and is documented [here](/aistore/deploy/dev/k8s/README.md).
-Its most significant advantages are checking the AIStore behavior on the Kubernetes and the ability to run [Extract-Transform-Load](/aistore/docs/etl.md) operations on the data stored in the cluster.
+> For technical details on AIS memory management, please see [this readme](/aistore/memsys/README.md).
