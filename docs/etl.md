@@ -1,5 +1,9 @@
 # Extract, Transform, Load (ETL) with AIStore
 
+**New** in v3.3: offline transformation and the capability to run user-defined functions (in addition to custom ETL containers). Also, bug fixes, performance improvements across the board, video and GIF presentations, and more.
+
+<img src="images/etl-v3.3.png" width="450">
+
 - [Introduction](#introduction)
 - [Getting Started](#getting-started)
 - [Inline ETL example](#inline-etl-example)

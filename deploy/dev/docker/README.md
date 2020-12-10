@@ -227,13 +227,13 @@ Refer to the `logs.sh` script for more details about its usage.
 
 ### `get_ip_addresses.sh`
 
-If you want to quickly get the ip addresses of each container of all clusters, use the following script:
+If you'd want to quickly get IP addresses of all running containers, execute the following:
 
 ```console
 $ ./get_ip_addresses.sh
 ```
 
-* Note: The port numbers for the ip addresses for each container will be 51080, 9080, 10080 by default for the public, intra control and intra data networks respectively.
+> The default port numbers will be `51080`, `9080`, and `10080` respectively for the **public**, **intra-control** and **intra-data** networks.
 
 ### Prune docker
 

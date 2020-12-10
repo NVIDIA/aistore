@@ -1,6 +1,6 @@
 # Getting Started
 
-You could start running AIS on a single Linux or Mac host. Alternatively, or in addition, you could quickly deploy your first AIS cluster on [GCP/GKE](https://cloud.google.com/kubernetes-engine). This document introduces these and other supported options and provides quick links for further information.
+You could run AIS on a single Linux or Mac machine. Or, you could quickly deploy your first AIS cluster on [GCP/GKE](https://cloud.google.com/kubernetes-engine) cloud. This document introduces these and other supported options and provides quick links for further information.
 
 Generally, when deciding how to deploy a system like AIS with so many options to choose from, a good place to start would be answering the following two fundamental questions:
 
