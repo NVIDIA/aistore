@@ -1352,7 +1352,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	t.Skip("test is flaky, run it only when necessary")
 
 	runDSortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes, phases: dsortPhases},
