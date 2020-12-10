@@ -343,7 +343,9 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Stats:       tstats.CoreStats(),
 			Capacity:    tstats.MPCap,
 			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
+			DeployedOn:  deploymentType(),
 		}
+
 		t.writeJSON(w, r, msg, httpdaeWhat)
 	case cmn.GetWhatDiskStats:
 		diskStats := fs.GetSelectedDiskStats()

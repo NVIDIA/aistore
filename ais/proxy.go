@@ -2102,7 +2102,9 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			SmapVersion: p.owner.smap.get().Version,
 			SysInfo:     sys.FetchSysInfo(),
 			Stats:       p.statsT.CoreStats(),
+			DeployedOn:  deploymentType(),
 		}
+
 		p.writeJSON(w, r, msg, what)
 	default:
 		p.httprunner.httpdaeget(w, r)

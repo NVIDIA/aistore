@@ -51,7 +51,8 @@ const (
 	//////////////////
 
 	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} - unelectable)\n " +
-		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.Primary.ID}}\n Smap Version:\t{{.Smap.Version}}\n"
+		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.Primary.ID}}\n Smap Version:\t{{.Smap.Version}}\n " +
+		"Deployment:\t{{ ( Deployments .Status) }}\n"
 
 	// Disk Stats
 	DiskStatsHeader = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
@@ -357,6 +358,7 @@ var (
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatFeatureFlags":  fmtFeatureFlags,
+		"Deployments":         func(h DaemonStatusTemplateHelper) string { return strings.Join(h.Deployments().Keys(), ",") },
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -586,4 +588,18 @@ func fmtFeatureFlags(flags cmn.FeatureFlags) string {
 		return "-"
 	}
 	return fmt.Sprintf("%s(%s)", flags, flags.Describe())
+}
+
+func daemonsDeployments(ds map[string]*stats.DaemonStatus) cmn.StringSet {
+	deployments := cmn.NewStringSet()
+	for _, s := range ds {
+		deployments.Add(s.DeployedOn)
+	}
+	return deployments
+}
+
+func (h *DaemonStatusTemplateHelper) Deployments() cmn.StringSet {
+	p := daemonsDeployments(h.Pmap)
+	p.Add(daemonsDeployments(h.Tmap).Keys()...)
+	return p
 }

@@ -72,6 +72,7 @@ var (
 			longRunFlags,
 			jsonFlag,
 			noHeaderFlag,
+			verboseFlag,
 		),
 		subcmdSmap: {
 			jsonFlag,
@@ -318,7 +319,7 @@ func showClusterHandler(c *cli.Context) (err error) {
 	if err = updateLongRunParams(c); err != nil {
 		return
 	}
-	return clusterDaemonStatus(c, primarySmap, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+	return clusterDaemonStatus(c, primarySmap, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag), flagIsSet(c, verboseFlag))
 }
 
 func showXactionHandler(c *cli.Context) (err error) {

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"time"
 
@@ -219,4 +220,16 @@ func withRetry(cond func() bool) (ok bool) {
 
 func isETLRequest(query url.Values) bool {
 	return query.Get(cmn.URLParamUUID) != ""
+}
+
+func deploymentType() string {
+	if k8s.Detect() == nil {
+		if k8s.MinikubeTesting {
+			return "K8s dev"
+		}
+		return "K8s"
+	} else if cmn.GCO.Get().TestingEnv() {
+		return "dev"
+	}
+	return runtime.GOOS
 }

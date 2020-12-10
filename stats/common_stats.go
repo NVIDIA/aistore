@@ -133,6 +133,7 @@ type (
 		SmapVersion int64          `json:"smap_version,string"`
 		TStatus     *TargetStatus  `json:"target_status,omitempty"`
 		Status      string         `json:"status"`
+		DeployedOn  string         `json:"deployment"`
 	}
 )
 

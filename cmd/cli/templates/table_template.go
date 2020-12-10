@@ -16,16 +16,17 @@ import (
 const (
 	sepa = "\t "
 
-	headerProxy     = "PROXY"
-	headerTarget    = "TARGET"
-	headerMemUsed   = "MEM USED %"
-	headerMemAvail  = "MEM AVAIL"
-	headerCapUsed   = "CAP USED %"
-	headerCapAvail  = "CAP AVAIL"
-	headerCPUUsed   = "CPU USED %"
-	headerRebalance = "REBALANCE"
-	headerUptime    = "UPTIME"
-	headerStatus    = "STATUS"
+	headerProxy      = "PROXY"
+	headerTarget     = "TARGET"
+	headerDeployment = "DEPLOYMENT"
+	headerMemUsed    = "MEM USED %"
+	headerMemAvail   = "MEM AVAIL"
+	headerCapUsed    = "CAP USED %"
+	headerCapAvail   = "CAP AVAIL"
+	headerCPUUsed    = "CPU USED %"
+	headerRebalance  = "REBALANCE"
+	headerUptime     = "UPTIME"
+	headerStatus     = "STATUS"
 )
 
 type (
@@ -39,6 +40,11 @@ type (
 	TemplateTable struct {
 		headers []*header
 		rows    []row
+	}
+
+	NodeTableArgs struct {
+		Verbose        bool
+		HideDeployment bool
 	}
 )
 
@@ -89,22 +95,34 @@ func (t *TemplateTable) Template(hideHeader bool) string {
 // Proxies table
 
 func NewProxyTable(proxyStats *stats.DaemonStatus, smap *cluster.Smap) *TemplateTable {
-	return NewProxiesTable(map[string]*stats.DaemonStatus{proxyStats.Snode.ID(): proxyStats}, smap)
+	return newTableProxies(map[string]*stats.DaemonStatus{proxyStats.Snode.ID(): proxyStats}, smap, false, false)
 }
 
-func NewProxiesTable(ps map[string]*stats.DaemonStatus, smap *cluster.Smap) *TemplateTable {
+func NewProxiesTable(ds *DaemonStatusTemplateHelper, smap *cluster.Smap, onlyProxies, verbose bool) *TemplateTable {
+	deployments := daemonsDeployments(ds.Pmap)
+	if !onlyProxies {
+		deployments.Add(daemonsDeployments(ds.Tmap).Keys()...)
+	}
+
+	hideDeployments := !verbose && len(deployments) <= 1
+	return newTableProxies(ds.Pmap, smap, hideDeployments, len(ds.Pmap) > 1 && allNodesOnline(ds.Pmap))
+}
+
+func newTableProxies(ps map[string]*stats.DaemonStatus, smap *cluster.Smap, hideDeployments, hideStatus bool) *TemplateTable {
 	headers := []*header{
 		{name: headerProxy},
+		{name: headerDeployment, hide: hideDeployments},
 		{name: headerMemUsed},
 		{name: headerMemAvail},
 		{name: headerUptime},
-		{name: headerStatus, hide: len(ps) > 1 && allNodesOnline(ps)},
+		{name: headerStatus, hide: hideStatus},
 	}
 
 	table := newTemplateTable(headers...)
 	for _, status := range ps {
 		row := []string{
 			fmtDaemonID(status.Snode.ID(), *smap),
+			status.DeployedOn,
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed),
 			cmn.UnsignedB2S(status.SysInfo.MemAvail, 2),
 			fmtDuration(extractStat(status.Stats, "up.ns.time")),
@@ -118,12 +136,23 @@ func NewProxiesTable(ps map[string]*stats.DaemonStatus, smap *cluster.Smap) *Tem
 // Targets table
 
 func NewTargetTable(targetStats *stats.DaemonStatus) *TemplateTable {
-	return NewTargetsTable(map[string]*stats.DaemonStatus{targetStats.Snode.ID(): targetStats})
+	return newTableTargets(map[string]*stats.DaemonStatus{targetStats.Snode.ID(): targetStats}, false, false)
 }
 
-func NewTargetsTable(ts map[string]*stats.DaemonStatus) *TemplateTable {
+func NewTargetsTable(ds *DaemonStatusTemplateHelper, onlyTargets, verbose bool) *TemplateTable {
+	deployments := daemonsDeployments(ds.Tmap)
+	if !onlyTargets {
+		deployments.Add(daemonsDeployments(ds.Pmap).Keys()...)
+	}
+
+	hideDeployments := !verbose && len(deployments) <= 1
+	return newTableTargets(ds.Tmap, hideDeployments, len(ds.Tmap) > 1 && allNodesOnline(ds.Pmap))
+}
+
+func newTableTargets(ts map[string]*stats.DaemonStatus, hideDeployments, hideStatus bool) *TemplateTable {
 	headers := []*header{
 		{name: headerTarget},
+		{name: headerDeployment, hide: hideDeployments},
 		{name: headerMemUsed},
 		{name: headerMemAvail},
 		{name: headerCapUsed},
@@ -131,13 +160,14 @@ func NewTargetsTable(ts map[string]*stats.DaemonStatus) *TemplateTable {
 		{name: headerCPUUsed},
 		{name: headerRebalance},
 		{name: headerUptime},
-		{name: headerStatus, hide: len(ts) > 1 && allNodesOnline(ts)},
+		{name: headerStatus, hide: hideStatus},
 	}
 
 	table := newTemplateTable(headers...)
 	for _, status := range ts {
 		row := []string{
 			status.Snode.ID(),
+			status.DeployedOn,
 			fmt.Sprintf("%.2f%%", status.SysInfo.PctMemUsed),
 			cmn.UnsignedB2S(status.SysInfo.MemAvail, 2),
 			fmt.Sprintf("%.2f%%", calcCapPercentage(status)),

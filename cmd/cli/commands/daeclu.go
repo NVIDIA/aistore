@@ -73,7 +73,7 @@ func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, use
 }
 
 // Displays the status of the cluster or daemon
-func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
+func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader, verbose bool) error {
 	body := templates.StatusTemplateHelper{
 		Smap: smap,
 		Status: templates.DaemonStatusTemplateHelper{
@@ -87,12 +87,14 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 	} else if res, targetOK := target[daemonID]; targetOK {
 		return templates.DisplayOutput(res, c.App.Writer, templates.NewTargetTable(res).Template(hideHeader), useJSON)
 	} else if daemonID == cmn.Proxy {
-		return templates.DisplayOutput(body, c.App.Writer, templates.NewProxiesTable(proxy, smap).Template(hideHeader), useJSON)
+		template := templates.NewProxiesTable(&body.Status, smap, true, verbose).Template(hideHeader)
+		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Target {
-		return templates.DisplayOutput(body, c.App.Writer, templates.NewTargetsTable(target).Template(hideHeader), useJSON)
+		return templates.DisplayOutput(body, c.App.Writer,
+			templates.NewTargetsTable(&body.Status, true, verbose).Template(hideHeader), useJSON)
 	} else if daemonID == "" {
-		template := templates.NewProxiesTable(proxy, smap).Template(false) + "\n" +
-			templates.NewTargetsTable(target).Template(false) + "\n" +
+		template := templates.NewProxiesTable(&body.Status, smap, false, verbose).Template(false) + "\n" +
+			templates.NewTargetsTable(&body.Status, false, verbose).Template(false) + "\n" +
 			templates.ClusterSummary
 		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	}
