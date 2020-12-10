@@ -90,12 +90,12 @@ func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
 		glog.Warning(err)
 		return
 	}
-	if destMpath.Path == ct.ParsedFQN().MpathInfo.Path {
+	if destMpath.Path == ct.MpathInfo().Path {
 		return
 	}
 
 	destFQN := destMpath.MakePathFQN(ct.Bck().Bck, ec.SliceType, ct.ObjName())
-	srcMetaFQN, destMetaFQN, err := rj.moveECMeta(ct, ct.ParsedFQN().MpathInfo, destMpath, buf)
+	srcMetaFQN, destMetaFQN, err := rj.moveECMeta(ct, ct.MpathInfo(), destMpath, buf)
 	if err != nil {
 		return
 	}
@@ -164,10 +164,10 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 			return
 		}
 		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
-		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.MpathInfo, newMpath.MpathInfo, buf)
+		metaOldPath, metaNewPath, err = rj.moveECMeta(ct, lom.MpathInfo(), newMpath.MpathInfo, buf)
 		if err != nil {
 			glog.Warningf("%s: failed to move metafile %q -> %q: %v",
-				lom, lom.MpathInfo.Path, newMpath.MpathInfo.Path, err)
+				lom, lom.MpathInfo().Path, newMpath.MpathInfo.Path, err)
 			return
 		}
 	}

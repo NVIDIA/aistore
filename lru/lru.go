@@ -370,7 +370,7 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 		}
 		return nil
 	}
-	lom := &cluster.LOM{ObjName: parsedFQN.ObjName, MpathInfo: parsedFQN.MpathInfo, Digest: parsedFQN.Digest}
+	lom := &cluster.LOM{ObjName: parsedFQN.ObjName}
 	err = lom.Init(j.bck)
 	if err != nil {
 		return nil

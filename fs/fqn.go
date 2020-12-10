@@ -25,7 +25,6 @@ const (
 	WorkfileColdget = "cold"   // object GET: coldget
 	WorkfilePut     = "put"    // object PUT
 	WorkfileAppend  = "append" // object APPEND
-	WorkfileFSHC    = "fshc"   // FSHC test file
 )
 
 type ParsedFQN struct {

@@ -304,7 +304,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 		return err
 	}
 	if parsedFQN.ContentType == fs.ObjectType {
-		lom = &cluster.LOM{ObjName: parsedFQN.ObjName, MpathInfo: parsedFQN.MpathInfo, Digest: parsedFQN.Digest}
+		lom = &cluster.LOM{ObjName: parsedFQN.ObjName}
 		if err := lom.Init(ct.Bck); err != nil {
 			return err
 		}

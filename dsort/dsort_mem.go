@@ -481,8 +481,8 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	if err != nil {
 		return
 	}
-	ds.creationPhase.adjuster.read.acquireSema(ct.ParsedFQN().MpathInfo)
-	defer ds.creationPhase.adjuster.read.releaseSema(ct.ParsedFQN().MpathInfo)
+	ds.creationPhase.adjuster.read.acquireSema(ct.MpathInfo())
+	defer ds.creationPhase.adjuster.read.releaseSema(ct.MpathInfo())
 
 	if ds.m.aborted() {
 		return newDSortAbortedError(ds.m.ManagerUUID)

@@ -304,7 +304,7 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	}
 
 	cmn.Assert(lom.FQN != "")
-	cmn.Assert(lom.MpathInfo != nil && lom.MpathInfo.Path != "")
+	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
 		return nil
@@ -330,7 +330,7 @@ func (mgr *Manager) CleanupObject(lom *cluster.LOM) {
 		return
 	}
 	cmn.Assert(lom.FQN != "")
-	cmn.Assert(lom.MpathInfo != nil && lom.MpathInfo.Path != "")
+	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	req := &Request{
 		Action: ActDelete,
 		LOM:    lom,
@@ -354,7 +354,7 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 		return ErrorInsufficientTargets
 	}
 
-	cmn.Assert(lom.MpathInfo != nil && lom.MpathInfo.Path != "")
+	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	req := &Request{
 		Action: ActRestore,
 		LOM:    lom,

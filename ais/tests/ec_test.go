@@ -141,12 +141,12 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 
 		ct, err := cluster.NewCTFromFQN(path, nil)
 		tassert.CheckFatal(t, err)
-		if !cmn.StringInSlice(ct.ParsedFQN().ContentType, []string{ec.SliceType, ec.MetaType, fs.ObjectType}) {
+		if !cmn.StringInSlice(ct.ContentType(), []string{ec.SliceType, ec.MetaType, fs.ObjectType}) {
 			return nil
 		}
 
 		foundParts[path] = ecSliceMD{info.Size()}
-		if ct.ParsedFQN().ContentType == fs.ObjectType && oldest.After(info.ModTime()) {
+		if ct.ContentType() == fs.ObjectType && oldest.After(info.ModTime()) {
 			main = path
 			oldest = info.ModTime()
 		}

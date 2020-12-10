@@ -232,11 +232,11 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
-			cnt := counters[lom.MpathInfo.Path].Inc()
+			cnt := counters[lom.MpathInfo().Path].Inc()
 
 			// Fail only once, on one mpath.
 			if cnt == failAt && failed.CAS(false, true) {
-				failOnMpath = lom.MpathInfo
+				failOnMpath = lom.MpathInfo()
 				return fmt.Errorf("oops")
 			}
 			return nil

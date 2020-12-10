@@ -663,7 +663,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 		return
 	}
 	lom.FromHTTPHdr(resp.Header)
-	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN(), fs.WorkfileType, fs.WorkfileRemote)
+	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfileRemote)
 	poi := &putObjInfo{
 		t:        goi.t,
 		lom:      lom,
@@ -865,8 +865,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 	case cmn.AppendOp:
 		var f *os.File
 		if filePath == "" {
-			parsedFQN := aoi.lom.ParsedFQN()
-			filePath = fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfileAppend)
+			filePath = fs.CSM.GenContentFQN(aoi.lom, fs.WorkfileType, fs.WorkfileAppend)
 			f, err = aoi.lom.CreateFile(filePath)
 			if err != nil {
 				errCode = http.StatusInternalServerError

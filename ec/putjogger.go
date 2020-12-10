@@ -413,11 +413,6 @@ func finalizeSlices(ctx *encodeCtx, lom *cluster.LOM, writers []io.Writer, dataS
 // * Main object file handle
 // * constructed from the main object slices
 func generateSlicesToDisk(lom *cluster.LOM, dataSlices, paritySlices int) (cmn.ReadOpenCloser, []*slice, error) {
-	var (
-		fqn  = lom.FQN
-		conf = lom.CksumConf()
-	)
-
 	ctx, err := initializeSlices(lom, dataSlices, paritySlices)
 	if err != nil {
 		return ctx.fh, ctx.slices, err
@@ -441,8 +436,9 @@ func generateSlicesToDisk(lom *cluster.LOM, dataSlices, paritySlices int) (cmn.R
 		}
 	}()
 
+	conf := lom.CksumConf()
 	for i := 0; i < paritySlices; i++ {
-		workFQN := fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
+		workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
 		writer, err := lom.CreateFile(workFQN)
 		if err != nil {
 			return ctx.fh, ctx.slices, err

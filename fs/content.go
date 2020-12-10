@@ -53,6 +53,12 @@ type (
 		ParseUniqueFQN(base string) (orig string, old, ok bool)
 	}
 
+	PartsFQN interface {
+		Bucket() cmn.Bck
+		MpathInfo() *MountpathInfo
+		ObjectName() string
+	}
+
 	ContentInfo struct {
 		Dir  string // Original directory
 		Base string // Original base name of the file
@@ -81,22 +87,13 @@ func (f *ContentSpecMgr) RegisterContentType(contentType string, spec ContentRes
 	return nil
 }
 
-// GenContentFQN returns a new fqn generated from given fqn. Generated fqn will
-// contain additional info which will then speed up subsequent parsing
-func (f *ContentSpecMgr) GenContentFQN(fqn, contentType, prefix string) string {
-	parsedFQN, err := ParseFQN(fqn)
-	cmn.AssertNoErr(err)
-	return f.GenContentParsedFQN(parsedFQN, contentType, prefix)
-}
-
-func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN ParsedFQN, contentType, prefix string) (fqn string) {
-	spec := f.RegisteredContentTypes[contentType]
-	fqn = f.FQN(
-		parsedFQN.MpathInfo,
-		parsedFQN.Bck,
-		contentType,
-		spec.GenUniqueFQN(parsedFQN.ObjName, prefix))
-	return
+// GenContentFQN returns a new FQN generated from given parts.
+func (f *ContentSpecMgr) GenContentFQN(parts PartsFQN, contentType, prefix string) (fqn string) {
+	var (
+		spec    = f.RegisteredContentTypes[contentType]
+		objName = spec.GenUniqueFQN(parts.ObjectName(), prefix)
+	)
+	return f.FQN(parts.MpathInfo(), parts.Bucket(), contentType, objName)
 }
 
 // FileSpec returns the specification/attributes and information about fqn. spec

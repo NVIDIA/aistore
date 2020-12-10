@@ -283,7 +283,7 @@ func (r *XactGet) dispatchRequest(req *Request) {
 
 	cmn.Assert(req.Action == ActRestore)
 
-	jogger, ok := r.getJoggers[req.LOM.MpathInfo.Path]
+	jogger, ok := r.getJoggers[req.LOM.MpathInfo().Path]
 	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
 	r.stats.updateQueue(len(jogger.workCh))
 	jogger.workCh <- req

@@ -16,19 +16,23 @@ import (
 //////////////////////////////
 
 type CT struct {
-	fqn     string // FQN to make it from
-	bck     *Bck   // bucket
-	objName string // object name
-
-	parsedFQN fs.ParsedFQN
+	fqn         string
+	bck         *Bck
+	objName     string
+	contentType string
+	mpathInfo   *fs.MountpathInfo
 }
 
-func (ct *CT) ContentType() string      { return ct.parsedFQN.ContentType }
-func (ct *CT) ObjName() string          { return ct.parsedFQN.ObjName }
+func (ct *CT) ContentType() string      { return ct.contentType }
+func (ct *CT) ObjName() string          { return ct.objName }
 func (ct *CT) Bprops() *cmn.BucketProps { return ct.bck.Props }
 func (ct *CT) Bck() *Bck                { return ct.bck }
-func (ct *CT) ParsedFQN() fs.ParsedFQN  { return ct.parsedFQN }
 func (ct *CT) FQN() string              { return ct.fqn }
+
+// TODO: Remove redundancy.
+func (ct *CT) Bucket() cmn.Bck              { return ct.Bck().Bck }
+func (ct *CT) ObjectName() string           { return ct.ObjName() }
+func (ct *CT) MpathInfo() *fs.MountpathInfo { return ct.mpathInfo }
 
 // e.g.: generate workfile FQN from object FQN:
 //  ct, err := NewCTFromFQN(fqn, nil)
@@ -41,14 +45,17 @@ func (ct *CT) FQN() string              { return ct.fqn }
 //  fqn := ct.Make(MetaType)
 
 func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
-	ct = &CT{
-		fqn: fqn,
-	}
-	ct.parsedFQN, _, err = ResolveFQN(fqn)
+	parsedFQN, _, err := ResolveFQN(fqn)
 	if err != nil {
-		return ct, err
+		return nil, err
 	}
-	ct.bck = &Bck{Bck: ct.parsedFQN.Bck}
+	ct = &CT{
+		fqn:         fqn,
+		bck:         &Bck{Bck: parsedFQN.Bck},
+		objName:     parsedFQN.ObjName,
+		contentType: parsedFQN.ContentType,
+		mpathInfo:   parsedFQN.MpathInfo,
+	}
 	if b != nil {
 		err = ct.bck.Init(b, nil)
 	}
@@ -65,39 +72,38 @@ func NewCTFromBO(bckName, bckProvider, objName string, b Bowner, ctType ...strin
 			return
 		}
 	}
-	ct.parsedFQN.MpathInfo, ct.parsedFQN.Digest, err = HrwMpath(ct.bck.MakeUname(objName))
+	ct.mpathInfo, _, err = HrwMpath(ct.bck.MakeUname(objName))
 	if err != nil {
 		return
 	}
 	if len(ctType) == 0 {
-		ct.parsedFQN.ContentType = fs.ObjectType
+		ct.contentType = fs.ObjectType
 	} else {
-		ct.parsedFQN.ContentType = ctType[0]
+		ct.contentType = ctType[0]
 	}
-	ct.parsedFQN.Bck = ct.bck.Bck
-	ct.parsedFQN.ObjName = objName
-	ct.fqn = fs.CSM.GenContentParsedFQN(ct.parsedFQN, ct.parsedFQN.ContentType, "" /* workfile prefix */)
+	ct.objName = objName
+	ct.fqn = fs.CSM.GenContentFQN(ct, ct.contentType, "")
 	return
 }
 
 // Construct CT from LOM and change ContentType and FQN
 func NewCTFromLOM(lom *LOM, ctType string) *CT {
-	parsedFQN := lom.ParsedFQN()
 	return &CT{
-		fqn:       fs.CSM.GenContentParsedFQN(parsedFQN, ctType, "" /* workfile prefix */),
+		fqn:       fs.CSM.GenContentFQN(lom, ctType, ""),
 		bck:       lom.Bck(),
 		objName:   lom.ObjName,
-		parsedFQN: parsedFQN,
+		mpathInfo: lom.mpathInfo,
 	}
 }
 
 // Clone CT and change ContentType and FQN
 func (ct *CT) Clone(ctType string) *CT {
 	return &CT{
-		fqn:       fs.CSM.GenContentParsedFQN(ct.parsedFQN, ctType, "" /* workfile prefix */),
-		bck:       ct.bck,
-		objName:   ct.objName,
-		parsedFQN: ct.parsedFQN,
+		fqn:         fs.CSM.GenContentFQN(ct, ctType, ""),
+		bck:         ct.bck,
+		objName:     ct.objName,
+		contentType: ctType,
+		mpathInfo:   ct.mpathInfo,
 	}
 }
 
@@ -108,14 +114,14 @@ func (ct *CT) Make(toType string, pref ...string /*optional prefix*/) string {
 	if len(pref) > 0 {
 		prefix = pref[0]
 	}
-	return fs.CSM.GenContentParsedFQN(ct.parsedFQN, toType, prefix)
+	return fs.CSM.GenContentFQN(ct, toType, prefix)
 }
 
 // Save CT to local drives. If workFQN is set, it saves in two steps: first,
 // save to workFQN; second, rename workFQN to ct.FQN. If unset, it writes
 // directly to ct.FQN
 func (ct *CT) Write(t Target, reader io.Reader, size int64, workFQN ...string) (err error) {
-	bdir := ct.parsedFQN.MpathInfo.MakePathBck(ct.bck.Bck)
+	bdir := ct.mpathInfo.MakePathBck(ct.bck.Bck)
 	if err := fs.Access(bdir); err != nil {
 		return err
 	}

@@ -247,7 +247,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 	)
 	// try read a replica from targets one by one until the replica is got
 	objFQN := req.LOM.FQN
-	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec-restore-repl")
+	tmpFQN := fs.CSM.GenContentFQN(req.LOM, fs.WorkfileType, "ec-restore-repl")
 
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bck(), req.LOM.ObjName)
@@ -336,7 +336,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 		lom := *(req.LOM)
 		if toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
-			fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
+			fqn := fs.CSM.GenContentFQN(req.LOM, fs.WorkfileType, prefix)
 			fh, err := req.LOM.CreateFile(fqn)
 			if err != nil {
 				return slices, nil, err
@@ -394,7 +394,7 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice, cksums 
 	cksumType string, idToNode map[int]string, toDisk bool, id int, sliceSize int64) error {
 	if toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", id)
-		fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
+		fqn := fs.CSM.GenContentFQN(req.LOM, fs.WorkfileType, prefix)
 		file, err := req.LOM.CreateFile(fqn)
 		if err != nil {
 			return err

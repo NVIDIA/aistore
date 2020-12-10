@@ -121,7 +121,7 @@ func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 	}
 
 	for mpath, mpathInfo := range mpaths {
-		if mpath == lom.MpathInfo.Path {
+		if mpath == lom.MpathInfo().Path {
 			continue
 		}
 		if lom.HasCopies() {
