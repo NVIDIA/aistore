@@ -1265,7 +1265,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, "%q is not supported for erasure-coded buckets: %s", msg.Action, bck)
 			return
 		}
-		p.objRename(w, r, bck)
+		p.objRename(w, r, bck, &msg)
 		return
 	case cmn.ActPromote:
 		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessPROMOTE); err != nil {
@@ -1847,13 +1847,17 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	return allEntries, nil
 }
 
-func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
+func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
 	started := time.Now()
 	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
 	objName := apiItems[1]
+	if objName == msg.Name {
+		p.invalmsghdlr(w, r, "the new and the current names are the same")
+		return
+	}
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {

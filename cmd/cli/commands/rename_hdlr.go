@@ -64,6 +64,9 @@ func renameBucketHandler(c *cli.Context) error {
 	}
 
 	bck.Provider, newBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
+	if bck.Equal(newBck) {
+		return incorrectUsageMsg(c, "cannot rename %q as %q", bck, newBck)
+	}
 
 	return renameBucket(c, bck, newBck)
 }
@@ -91,6 +94,20 @@ func renameObjectHandler(c *cli.Context) (err error) {
 	}
 	if bck.Provider != "" && !bck.IsAIS() {
 		return incorrectUsageMsg(c, "provider %q not supported", bck.Provider)
+	}
+
+	if bckDst, objDst, err := parseBckObjectURI(c, newObj); err == nil && bckDst.Name != "" && bckDst.Provider != "" {
+		if !bckDst.Equal(bck) {
+			return incorrectUsageMsg(c, "moving an object to another bucket(%s) is not supported", bckDst)
+		}
+		if oldObj == "" {
+			return missingArgumentsError(c, "no object specified in %q", newObj)
+		}
+		newObj = objDst
+	}
+
+	if newObj == oldObj {
+		return incorrectUsageMsg(c, "source and destination are the same object")
 	}
 
 	bck.Provider = cmn.ProviderAIS
