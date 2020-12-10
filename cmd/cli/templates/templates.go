@@ -45,45 +45,59 @@ const (
 		"{{ if (eq $nonElect true) }} ProxyID: {{$key}}\n{{end}}{{end}}\n" +
 		"Primary Proxy: {{.Smap.Primary.ID}}\nProxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
-	// Proxy Info
-	ProxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t CPU USED %\t UPTIME\t STATUS\n"
-	ProxyInfoBody   = "{{$value.Snode.ID}}\t {{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t " +
-		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
+	////////////////
+	// Nodes Info //
+	////////////////
+
+	nodeIDSingle = "{{$value.Snode.ID}}\t "
+	nodeIDAll    = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t "
+
+	////////////////
+	// Proxy Info //
+	////////////////
+
+	proxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t UPTIME\t STATUS\n"
+	proxyInfoBody   = "{{$value.SysInfo.PctMemUsed | printf `%.2f%%`}}\t " +
+		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}\t " +
 		"{{$value.Status}}\n"
 
-	ProxyInfoBodyTmpl       = "{{ range $key, $value := .Status.Pmap }}" + ProxyInfoBody + "{{end}}"
-	ProxyInfoTmpl           = ProxyInfoHeader + ProxyInfoBodyTmpl
-	ProxyInfoSingleBodyTmpl = "{{$value := . }}" + ProxyInfoBody
-	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
+	// Single proxy display
+	ProxyInfoNoHeaderTmpl = "{{$value := . }}" + nodeIDSingle + proxyInfoBody
+	ProxyInfoTmpl         = proxyInfoHeader + ProxyInfoNoHeaderTmpl
 
-	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t " +
-		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}\t " +
-		"{{$value.Status}}\n"
-	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status.Pmap }}" + AllProxyInfoBody + "{{end}}"
-	AllProxyInfoTmpl     = ProxyInfoHeader + AllProxyInfoBodyTmpl
+	// Multiple proxies display
+	AllProxiesInfoNoHeaderTmpl = "{{ range $key, $value := .Status.Pmap }}" + nodeIDAll + proxyInfoBody + "{{end}}"
+	AllProxiesInfoTmpl         = proxyInfoHeader + AllProxiesInfoNoHeaderTmpl
 
-	// Target Info
-	TargetInfoHeader   = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t UPTIME\t STATUS\n"
-	TargetInfoIDSingle = "{{$value.Snode.ID}}\t "
-	TargetInfoIDAll    = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t "
-	TargetInfoBody     = "{{$value.SysInfo.PctMemUsed | printf `%.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
-		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
-		"{{$value.SysInfo.PctCPUUsed | printf `%.2f`}}\t " +
+	/////////////////
+	// Target Info //
+	/////////////////
+
+	targetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t UPTIME\t STATUS\n"
+	targetInfoBody   = "{{$value.SysInfo.PctMemUsed | printf `%.2f%%`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
+		"{{CalcCap $value `percent` | printf `%d%%`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
+		"{{$value.SysInfo.PctCPUUsed | printf `%.2f%%`}}\t " +
 		"{{FormatXactStatus $value.TStatus }}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}\t " +
 		"{{$value.Status}}\n"
 
-	TargetInfoBodyTmpl       = "{{ range $key, $value := .Status.Tmap }}" + TargetInfoIDAll + TargetInfoBody + "{{end}}"
-	TargetInfoTmpl           = TargetInfoHeader + TargetInfoBodyTmpl
-	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoIDSingle + TargetInfoBody
-	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
+	// Single target display
+	TargetInfoTmpl         = targetInfoHeader + TargetInfoNoHeaderTmpl
+	TargetInfoNoHeaderTmpl = "{{$value := . }}" + nodeIDSingle + targetInfoBody
+
+	// Multiple targets display
+	AllTargetsInfoNoHeaderTmpl = "{{ range $key, $value := .Status.Tmap }}" + nodeIDAll + targetInfoBody + "{{end}}"
+	AllTargetsInfoTmpl         = targetInfoHeader + AllTargetsInfoNoHeaderTmpl
+
+	//////////////////
+	// Cluster info //
+	//////////////////
 
 	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} - unelectable)\n " +
 		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.Primary.ID}}\n Smap Version:\t{{.Smap.Version}}\n"
 
-	ClusterInfoTmpl = AllProxyInfoTmpl + "\n" + TargetInfoTmpl + "\n" + ClusterSummary
+	ClusterInfoTmpl = AllProxiesInfoTmpl + "\n" + AllTargetsInfoTmpl + "\n" + ClusterSummary
 	// Disk Stats
 	DiskStatsHeader = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
 

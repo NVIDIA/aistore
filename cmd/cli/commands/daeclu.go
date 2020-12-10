@@ -83,16 +83,16 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 	}
 
 	if res, proxyOK := proxy[daemonID]; proxyOK {
-		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
+		template := chooseTmpl(templates.ProxyInfoNoHeaderTmpl, templates.ProxyInfoTmpl, hideHeader)
 		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
 	} else if res, targetOK := target[daemonID]; targetOK {
-		template := chooseTmpl(templates.TargetInfoSingleBodyTmpl, templates.TargetInfoSingleTmpl, hideHeader)
+		template := chooseTmpl(templates.TargetInfoNoHeaderTmpl, templates.TargetInfoTmpl, hideHeader)
 		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Proxy {
-		template := chooseTmpl(templates.ProxyInfoBodyTmpl, templates.ProxyInfoTmpl, hideHeader)
+		template := chooseTmpl(templates.AllProxiesInfoNoHeaderTmpl, templates.AllProxiesInfoTmpl, hideHeader)
 		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Target {
-		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
+		template := chooseTmpl(templates.AllTargetsInfoNoHeaderTmpl, templates.AllTargetsInfoTmpl, hideHeader)
 		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	} else if daemonID == "" {
 		return templates.DisplayOutput(body, c.App.Writer, templates.ClusterInfoTmpl, useJSON)

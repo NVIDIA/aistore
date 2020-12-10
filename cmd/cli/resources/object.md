@@ -450,8 +450,8 @@ Try to promote a file that does not exist.
 $ ais create bucket testbucket
 testbucket bucket created
 $ ais show cluster
-TARGET		 MEM USED %	 MEM AVAIL	 CAP USED %	 CAP AVAIL	 CPU USED %	 REBALANCE
-1014646t8081	   0.00		 4.00GiB	 59		 375.026GiB	   0.00		 finished; 1 moved (2.5KiB)
+TARGET          MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBALANCE
+1014646t8081    0.00%	    4.00GiB	    59%         375.026GiB  0.00%	    finished; 1 moved (2.5KiB)
 ...
 $ ais promote /target/1014646t8081/nonexistent/dir/ testbucket --target 1014646t8081 --keep=false
 (...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
