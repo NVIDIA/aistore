@@ -122,17 +122,6 @@ func (xs NodesXactMultiStats) GetNodesXactStat(id string) (xactStat NodesXactSta
 	return
 }
 
-func (xs NodesXactMultiStats) GetNodeLastStartedXactStat(id string) (stats *xaction.BaseXactStatsExt) {
-	var latest time.Time
-	for _, s := range xs[id] {
-		if s.StartTime().After(latest) {
-			stats = s
-			latest = s.StartTime()
-		}
-	}
-	return stats
-}
-
 // StartXaction starts a given xaction.
 func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error) {
 	if !xaction.XactsDtor[args.Kind].Startable {

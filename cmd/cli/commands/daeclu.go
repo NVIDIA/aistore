@@ -25,10 +25,17 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type targetDiskStats struct {
-	stats    map[string]*ios.SelectedDiskStats
-	targetID string
-}
+type (
+	targetDiskStats struct {
+		targetID string
+		stats    map[string]*ios.SelectedDiskStats
+	}
+
+	targetRebStats struct {
+		targetID string
+		stats    *xaction.BaseXactStatsExt
+	}
+)
 
 var (
 	proxy  = make(map[string]*stats.DaemonStatus)
@@ -268,7 +275,6 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
-	const numCols = 9
 
 	// run until rebalance is completed
 	xactArgs := api.XactReqArgs{Kind: cmn.ActRebalance}
@@ -287,35 +293,39 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 			}
 		}
 
+		allStats := make([]*targetRebStats, 0, 100)
 		for daemonID, daemonStats := range rebStats {
-			if len(daemonStats) == 0 {
-				delete(rebStats, daemonID)
-			}
-		}
-
-		sortedIDs := make([]string, 0, len(rebStats))
-		for daemonID := range rebStats {
-			sortedIDs = append(sortedIDs, daemonID)
-		}
-		sort.Strings(sortedIDs)
-
-		fmt.Fprintln(tw, "DaemonID\tRebID\tObjRcv\tSizeRcv\tObjSent\tSizeSent\tStartTime\tEndTime\tAborted")
-		fmt.Fprintln(tw, strings.Repeat("======\t", numCols /* num of columns */))
-		for _, daemonID := range sortedIDs {
-			if flagIsSet(c, allXactionsFlag) {
-				stats := rebStats[daemonID]
-				sort.Slice(stats, func(i, j int) bool {
-					di, dj := stats[i], stats[j]
-					return dj.ID() < di.ID()
+			for _, sts := range daemonStats {
+				allStats = append(allStats, &targetRebStats{
+					targetID: daemonID,
+					stats:    sts,
 				})
-				for _, st := range stats {
-					displayRebStats(tw, daemonID, st)
-				}
-				fmt.Fprintln(tw, strings.Repeat("\t", numCols /* num of columns */))
-				continue
 			}
-			st := rebStats.GetNodeLastStartedXactStat(daemonID)
-			displayRebStats(tw, daemonID, st)
+		}
+		sort.Slice(allStats, func(i, j int) bool {
+			if allStats[i].stats.ID() != allStats[j].stats.ID() {
+				return allStats[i].stats.ID() > allStats[j].stats.ID()
+			}
+			return allStats[i].targetID < allStats[j].targetID
+		})
+
+		// NOTE: If changing header do not forget to change `colCount` couple
+		//  lines below and `displayRebStats` logic.
+		fmt.Fprintln(tw, "REB ID\t DAEMON ID\t OBJECTS RECV\t SIZE RECV\t OBJECTS SENT\t SIZE SENT\t START TIME\t END TIME\t ABORTED")
+		prevID := ""
+		for _, sts := range allStats {
+			if flagIsSet(c, allXactionsFlag) {
+				if prevID != "" && sts.stats.ID() != prevID {
+					fmt.Fprintln(tw, strings.Repeat("\t ", 9 /*colCount*/))
+				}
+				displayRebStats(tw, sts)
+			} else {
+				if prevID != "" && sts.stats.ID() != prevID {
+					break
+				}
+				displayRebStats(tw, sts)
+			}
+			prevID = sts.stats.ID()
 		}
 		tw.Flush()
 
@@ -334,23 +344,23 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 	return nil
 }
 
-func displayRebStats(tw *tabwriter.Writer, daeID string, st *xaction.BaseXactStatsExt) {
+func displayRebStats(tw *tabwriter.Writer, st *targetRebStats) {
 	extRebStats := &stats.ExtRebalanceStats{}
-	if err := cmn.MorphMarshal(st.Ext, &extRebStats); err != nil {
+	if err := cmn.MorphMarshal(st.stats.Ext, &extRebStats); err != nil {
 		return
 	}
 
 	endTime := "-"
-	if !st.EndTimeX.IsZero() {
-		endTime = st.EndTimeX.Format("01-02 15:04:05")
+	if !st.stats.EndTime().IsZero() {
+		endTime = st.stats.EndTime().Format("01-02 15:04:05")
 	}
-	startTime := st.StartTimeX.Format("01-02 15:04:05")
+	startTime := st.stats.StartTime().Format("01-02 15:04:05")
 
 	fmt.Fprintf(tw,
-		"%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%t\n",
-		daeID, st.ID(),
+		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %t\n",
+		st.stats.ID(), st.targetID,
 		extRebStats.RebRxCount, cmn.B2S(extRebStats.RebRxSize, 2),
 		extRebStats.RebTxCount, cmn.B2S(extRebStats.RebTxSize, 2),
-		startTime, endTime, st.AbortedX,
+		startTime, endTime, st.stats.Aborted(),
 	)
 }
