@@ -533,8 +533,10 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 	)
 
 	if showProgress {
-		sizeBarArg := progressBarArgs{total: p.totalSize, barText: "Uploaded sizes progress", barType: sizeArg}
-		filesBarArg := progressBarArgs{total: int64(len(p.files)), barText: "Uploaded files progress", barType: unitsArg}
+		var (
+			filesBarArg = progressBarArgs{total: int64(len(p.files)), barText: "Uploaded files progress", barType: unitsArg}
+			sizeBarArg  = progressBarArgs{total: p.totalSize, barText: "Uploaded sizes progress", barType: sizeArg}
+		)
 		progress, totalBars = simpleProgressBar(filesBarArg, sizeBarArg)
 	}
 
@@ -555,10 +557,11 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		// lock after releasing semaphore, so the next file can start
 		// uploading even if we are stuck on mutex for a while
 		mx.Lock()
-		if time.Since(lastReport) > reportEvery {
-			fmt.Fprintf(c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%).\n",
-				total, 100*total/len(p.files),
-				cmn.B2S(size, 1), 100*size/p.totalSize)
+		if !showProgress && time.Since(lastReport) > reportEvery {
+			fmt.Fprintf(
+				c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%).\n",
+				total, 100*total/len(p.files), cmn.B2S(size, 1), 100*size/p.totalSize,
+			)
 			lastReport = time.Now()
 		}
 		mx.Unlock()

@@ -37,12 +37,14 @@ type (
 		Size() int64
 	}
 	CallbackROC struct {
-		ReadOpenCloser
+		roc          ReadOpenCloser
 		readCallback func(int, error)
-	}
-	CallbackRC struct {
-		io.ReadCloser
-		readCallback func(int, error)
+		// Number of bytes we've already read, counting from last `Open`.
+		readBytes int
+		// Since we could possibly reopen a reader we must keep track of the
+		// bytes we already reported to `readCallback` so there is no duplications.
+		// This value is preserved across all the `Open`'s.
+		reportedBytes int
 	}
 	FileHandle struct {
 		*os.File
@@ -180,42 +182,36 @@ func (f *SizedReader) Size() int64 {
 
 func NewCallbackReadOpenCloser(r ReadOpenCloser, readCb func(int, error)) *CallbackROC {
 	return &CallbackROC{
-		ReadOpenCloser: r,
-		readCallback:   readCb,
-	}
-}
-
-func (r *CallbackROC) Read(p []byte) (n int, err error) {
-	n, err = r.ReadOpenCloser.Read(p)
-	r.readCallback(n, err)
-	return n, err
-}
-
-func (r *CallbackROC) Open() (io.ReadCloser, error) {
-	rc, err := r.ReadOpenCloser.Open()
-	if err != nil {
-		return rc, err
-	}
-
-	return NewCallbackReadCloser(rc, r.readCallback), nil
-}
-
-////////////////
-// CallbackRC //
-////////////////
-
-func NewCallbackReadCloser(r io.ReadCloser, readCb func(int, error)) *CallbackRC {
-	return &CallbackRC{
-		ReadCloser:   r,
+		roc:          r,
 		readCallback: readCb,
 	}
 }
 
-func (r *CallbackRC) Read(p []byte) (n int, err error) {
-	n, err = r.ReadCloser.Read(p)
-	r.readCallback(n, err)
+func (r *CallbackROC) Read(p []byte) (n int, err error) {
+	n, err = r.roc.Read(p)
+	r.readBytes += n
+	if r.readBytes > r.reportedBytes {
+		diff := r.readBytes - r.reportedBytes
+		r.readCallback(diff, err)
+		r.reportedBytes += diff
+	}
 	return n, err
 }
+
+func (r *CallbackROC) Open() (io.ReadCloser, error) {
+	rc, err := r.roc.Open()
+	if err != nil {
+		return rc, err
+	}
+	return &CallbackROC{
+		roc:           NopOpener(rc),
+		readCallback:  r.readCallback,
+		readBytes:     0,
+		reportedBytes: r.reportedBytes,
+	}, nil
+}
+
+func (r *CallbackROC) Close() error { return r.roc.Close() }
 
 ///////////////////
 // SectionHandle //
