@@ -14,7 +14,7 @@ Once `docker run`-deployed, the minimal cluster will be listening on the default
 
 ## Run
 
-`aistore/cluster:latest-minimal` Docker image is used to deploy the cluster.
+`aistore/cluster-minimal:latest` Docker image is used to deploy the cluster.
 Docker image can be started with attached volumes which will be used by the target to store the data.
 
 **Important**: Currently assuming that all volumes will be mounted in `/ais/*` directory.
@@ -27,7 +27,7 @@ Docker image can be started with attached volumes which will be used by the targ
 $ docker run \
     -p 51080:51080 \
     -v $(mktemp -d):/ais/disk0 \
-    aistore/cluster:latest-minimal
+    aistore/cluster-minimal:latest
 ```
 
 This starts AIS cluster with 1 disk (at least one disk is required!) that is mounted under temporary directory on the host.
@@ -57,7 +57,7 @@ $ docker run \
     -v /disk0:/ais/disk0 \
     -v /disk1:/ais/disk1 \
     -v /some/disk2:/ais/disk2 \
-    aistore/cluster:latest-minimal
+    aistore/cluster-minimal:latest
 ```
 
 This starts AIS cluster with 3 disks (`/disk0`, `/disk1` and `/some/disk2`) with a sample configuration and exposes it on port `51080`.
@@ -65,7 +65,7 @@ Important note is that disk paths must resolve to distinct and disjoint filesyst
 
 #### Cloud provider
 
-To make the cluster work properly with cloud providers it is essential to pass the credentials to the docker image.
+To make the cluster work properly with cloud providers it is essential to set the environment variable `AIS_CLD_PROVIDERS`, a space separated list of supported provides, and pass the credentials to the docker image.
 The easiest way to pass the credentials is to mount a volume and provide a path to config file as envvar:
  - AWS: `AWS_CONFIG_FILE`
  - GCP: `GOOGLE_APPLICATION_CREDENTIALS`
@@ -84,8 +84,9 @@ $ docker run \
     -e AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
     -e AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
     -e AWS_DEFAULT_REGION="us-west-2" \
+    -e AIS_CLD_PROVIDERS="aws" \
     -v /disk0:/ais/disk0 \
-    aistore/cluster:latest-minimal
+    aistore/cluster-minimal:latest
 ```
 
 
@@ -94,10 +95,11 @@ Start an AIS docker cluster with single disk and `gcp` provider credentials as a
 ```console
 $ docker run \
     -p 51080:51080 \
-    -v /home/user/Downloads/[GCP_CREDENTIALS].json:/credentials/[GCP_CREDENTIALS].json \
-    -e GOOGLE_APPLICATION_CREDENTIALS="/credentials/[GCP_CREDENTIALS].json" \
+    -v <path_to_gcp_config>.json:/credentials/gcp.json \
+    -e GOOGLE_APPLICATION_CREDENTIALS="/credentials/gcp.json" \
+    -e AIS_CLD_PROVIDERS="gcp" \
     -v /disk0:/ais/disk0 \
-    aistore/cluster:latest-minimal
+    aistore/cluster-minimal:latest
 ```
 
 

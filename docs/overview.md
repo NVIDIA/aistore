@@ -43,12 +43,12 @@ Following is a high-level architecture with an emphasis on supported (frontend a
 
 <img src="images/ais-block.png" alt="New in 3.1" width="700">
 
-Most recently capabilities include:
+Most recently added capabilities include:
 
 - (**new**) [ETL offload](/aistore/etl/README.md): support for running custom extract-transform-load workloads on (and by) storage cluster;
 - (**new**) TensorFlow integration to support existing training clients that use S3 API - done via `tar2tf` ETL offload that handles on the fly TFRecord/tf.Example conversion;
 
-<img src="images/etl-v3.2.png" alt="ETL 1.0" width="450">
+<img src="images/etl-v3.3.png" width="450">
 
 - List objects v2: optimized `list-objects` to greatly reduce response times;
 - (**new**) Query objects: extends `list-objects` with advanced filtering capabilities;

@@ -14,7 +14,7 @@ We refer to those ways as [quick-start mode](#quick-start-ais-cluster) and [deve
 
 ## Quick-start AIS Cluster
 
-Create a containerized, one-proxy, one-target deployment of AIStore within seconds.
+Create a containerized deployment of AIStore within seconds.
 The minimum requirements to get this working is to have Docker installed.
 If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/aistore/docs/docker_main.md)
 
@@ -31,8 +31,7 @@ If you don't have Docker and Docker-Compose installed, please see [Getting start
 2. Once it finishes building, you should be inside the AIS container. Run:
 
     ```console
-    $ cd $WORKDIR
-    $ ./setup/deploy.sh
+    $ make deploy
     ```
 
 Type `1` for all options to create a very basic AIStore cluster.
@@ -92,7 +91,6 @@ The script copies AWS credentials and configuration from the provided location t
 
 To deploy a cluster in 'silent' mode use the following options (if any of them are not set, then the script switches to interactive mode and asks for the missing configuration parameters):
 
-* `-a=AWS_DIR` or `--aws=AWS_DIR`           : to use AWS, where AWS_DIR is the location of AWS configuration and credential files
 * `-c=NUM` or `--cluster=NUM`               : where NUM is the number of clusters
 * `-d=NUM` or `--directories=NUM`           : where NUM is the number of local cache directories
 * `-f=LIST` or `--filesystems=LIST`         : where LIST is a comma separated list of filesystems
@@ -190,7 +188,7 @@ Useful script variables:
 | PUB_NET | 172.50.0 | Public network (data plane for multiple networks case) |
 | INT_CONTROL_NET | 172.51.0 | Internal network (control plane for multiple networks case) |
 | INT_DATA_NET | 172.52.0 | Internal network (data plane for multiple networks case) |
-| PORT | 8080 | HTTP port for public API |
+| PORT | 51080 | HTTP port for public API |
 | PORT_INTRA_CONTROL | 9080 | HTTP port for internal control plane API (for multiple networks case) |
 | PORT_INTRA_DATA | 10080 | HTTP port for internal data plane API (for multiple networks case) |
 | TEST_FSPATH_ROOT | `/tmp/ais/` | the base directory for directories used in testing mode(option `-l` is set). All testing directories are located inside TESTFSPATHROOT and have short names 0, 1, 2 etc. |
@@ -205,10 +203,10 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h
 
 > The above command assumes that you're in the `aistore/ais` directory
 
-Tests detect the Docker cluster and use primary URL "http://172.50.0.2:8080" (see `PUB_NET` variable). If `PUB_NET` or `PORT` variable is changed or original primary is stopped or deleted then tests require extra argument that points to an existing proxy, preferably the current primary one:
+Tests detect the Docker cluster and use primary URL "http://172.50.0.2:51080" (see `PUB_NET` variable). If `PUB_NET` or `PORT` variable is changed or original primary is stopped or deleted then tests require extra argument that points to an existing proxy, preferably the current primary one:
 
 ```console
-$ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.0.7:8080
+$ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.0.7:51080
 ```
 
 **NOTE:** Some tests require a minimum number of targets or proxies. Also, due to Docker permissions, you might have to run tests with `sudo` too.
@@ -237,13 +235,13 @@ Refer to the `logs.sh` script for more details about its usage.
 
 ### `get_ip_addresses.sh`
 
-If you want to quickly get the ip addresses of each container of all clusters, use the following script:
+If you'd want to quickly get IP addresses of all running containers, execute the following:
 
 ```console
 $ ./get_ip_addresses.sh
 ```
 
-* Note: The port numbers for the ip addresses for each container will be 8080, 9080, 10080 by default for the public, intra control and intra data networks respectively.
+> The default port numbers will be `51080`, `9080`, and `10080` respectively for the **public**, **intra-control** and **intra-data** networks.
 
 ### Prune docker
 
