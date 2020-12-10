@@ -131,11 +131,12 @@ deploy_quickstart() {
     docker build -q -t ais-quickstart --build-arg GOBASE=/go --build-arg QUICK=quick .
     if [ ! -d "$QS_AWSDIR" ]; then
         echo "AWS credentials not found (tests may not work!) ..."
-        docker run -di ais-quickstart:latest
+        docker run -di  --entrypoint=/bin/bash ais-quickstart:latest
     else
         echo "AWS credentials found (${QS_AWSDIR}), continuing ..."
-        docker run -div ${QS_AWSDIR}credentials:/root/.aws/credentials -v ${QS_AWSDIR}config:/root/.aws/config ais-quickstart:latest
+        docker run -di --entrypoint=/bin/bash -v ${QS_AWSDIR}credentials:/root/.aws/credentials -v ${QS_AWSDIR}config:/root/.aws/config ais-quickstart:latest
     fi
+
     echo "SSH into container ..."
     container_id=`docker ps | grep ais-quickstart | awk '{ print $1 }'`
     docker exec -it $container_id /bin/bash -c "echo 'Hello from AIS!'; /bin/bash;"
@@ -277,7 +278,7 @@ echo "Configured cloud providers: '${AIS_CLD_PROVIDERS}'"
 if [[ "${AIS_CLD_PROVIDERS}" == *aws* ]]; then
     echo "Enter the location of your AWS configuration and credentials files:"
     echo "Note: No input will result in using the default aws dir (~/.aws/)"
-    read aws_env
+    read AWS_ENV
 
     if [[ -z ${aws_env} ]]; then
         AWS_ENV="${HOME}/.aws/"
@@ -285,19 +286,23 @@ if [[ "${AIS_CLD_PROVIDERS}" == *aws* ]]; then
 
     AWS_ENV="${AWS_ENV/#\~/$HOME}"
     temp_file="${AWS_ENV}/credentials"
+    has_reg=0
     if [[ -f ${temp_file} ]]; then
         cp ${temp_file} ${LOCAL_AWS}
+        has_reg=$(cat ${temp_file} | grep -c "region")
     else
         echo "No AWS credentials file found in specified directory. Exiting..."
         exit 1
     fi
 
-    temp_file="${AWS_ENV}/config"
-    if [[ -f ${temp_file} ]] && [[ $(cat ${temp_file} | grep -c "region") -gt 0 ]]; then
-        grep region ${temp_file} >> ${LOCAL_AWS}
-    else
-        echo "No region config field found in aws directory. Exiting..."
-        exit 1
+    if [[ $has_reg -eq 0 ]]; then
+        temp_file="${AWS_ENV}/config"
+        if [[ -f ${temp_file} ]] && [[ $(cat ${temp_file} | grep -c "region") -gt 0 ]]; then
+            grep region ${temp_file} >> ${LOCAL_AWS}
+        else
+            echo "No region config field found in aws directory. Exiting..."
+            exit 1
+        fi
     fi
 
     sed -i 's/\[default\]//g' ${LOCAL_AWS}
