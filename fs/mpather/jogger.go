@@ -279,7 +279,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	}
 
 	if j.opts.SkipGloballyMisplaced {
-		uname := ct.Bck().MakeUname(ct.ObjName())
+		uname := ct.Bck().MakeUname(ct.ObjectName())
 		tsi, err := cluster.HrwTarget(uname, j.opts.T.Sowner().Get()) // TODO: should we get smap once?
 		if err != nil {
 			return err

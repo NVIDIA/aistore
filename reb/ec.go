@@ -794,7 +794,7 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 	// do not touch directories for buckets with EC disabled (for now)
-	if !ct.Bprops().EC.Enabled {
+	if !ct.Bck().Props.EC.Enabled {
 		return filepath.SkipDir
 	}
 
@@ -819,9 +819,9 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 
 	// calculate correct FQN
 	if isReplica {
-		hrwFQN, _, err = cluster.HrwFQN(ct.Bck(), fs.ObjectType, ct.ObjName())
+		hrwFQN, _, err = cluster.HrwFQN(ct.Bck(), fs.ObjectType, ct.ObjectName())
 	} else {
-		hrwFQN, _, err = cluster.HrwFQN(ct.Bck(), ec.SliceType, ct.ObjName())
+		hrwFQN, _, err = cluster.HrwFQN(ct.Bck(), ec.SliceType, ct.ObjectName())
 	}
 	if err != nil {
 		return err
@@ -834,8 +834,8 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 
 	id := reb.t.Snode().ID()
 	rec := &rebCT{
-		Bck:          ct.Bck().Bck,
-		ObjName:      ct.ObjName(),
+		Bck:          ct.Bucket(),
+		ObjName:      ct.ObjectName(),
 		DaemonID:     id,
 		ObjHash:      md.ObjCksum,
 		ObjSize:      md.Size,

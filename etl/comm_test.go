@@ -66,7 +66,7 @@ var _ = Describe("CommunicatorTest", func() {
 		lom := &cluster.LOM{ObjName: objName}
 		err = lom.Init(clusterBck.Bck)
 		Expect(err).NotTo(HaveOccurred())
-		err = createRandomFile(lom.GetFQN(), dataSize)
+		err = createRandomFile(lom.FQN, dataSize)
 		Expect(err).NotTo(HaveOccurred())
 		lom.SetSize(dataSize)
 		err = lom.Persist()

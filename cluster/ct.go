@@ -17,21 +17,22 @@ import (
 
 type CT struct {
 	fqn         string
-	bck         *Bck
 	objName     string
 	contentType string
+	bck         *Bck
 	mpathInfo   *fs.MountpathInfo
 }
 
-func (ct *CT) ContentType() string      { return ct.contentType }
-func (ct *CT) ObjName() string          { return ct.objName }
-func (ct *CT) Bprops() *cmn.BucketProps { return ct.bck.Props }
-func (ct *CT) Bck() *Bck                { return ct.bck }
-func (ct *CT) FQN() string              { return ct.fqn }
+// interface guard
+var (
+	_ fs.PartsFQN = (*CT)(nil)
+)
 
-// TODO: Remove redundancy.
+func (ct *CT) FQN() string                  { return ct.fqn }
+func (ct *CT) ObjectName() string           { return ct.objName }
+func (ct *CT) ContentType() string          { return ct.contentType }
+func (ct *CT) Bck() *Bck                    { return ct.bck }
 func (ct *CT) Bucket() cmn.Bck              { return ct.Bck().Bck }
-func (ct *CT) ObjectName() string           { return ct.ObjName() }
 func (ct *CT) MpathInfo() *fs.MountpathInfo { return ct.mpathInfo }
 
 // e.g.: generate workfile FQN from object FQN:
@@ -51,9 +52,9 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 	}
 	ct = &CT{
 		fqn:         fqn,
-		bck:         &Bck{Bck: parsedFQN.Bck},
 		objName:     parsedFQN.ObjName,
 		contentType: parsedFQN.ContentType,
+		bck:         &Bck{Bck: parsedFQN.Bck},
 		mpathInfo:   parsedFQN.MpathInfo,
 	}
 	if b != nil {
@@ -64,8 +65,8 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 
 func NewCTFromBO(bckName, bckProvider, objName string, b Bowner, ctType ...string) (ct *CT, err error) {
 	ct = &CT{
-		bck:     NewBck(bckName, bckProvider, cmn.NsGlobal),
 		objName: objName,
+		bck:     NewBck(bckName, bckProvider, cmn.NsGlobal),
 	}
 	if b != nil {
 		if err = ct.bck.Init(b, nil); err != nil {
@@ -81,7 +82,6 @@ func NewCTFromBO(bckName, bckProvider, objName string, b Bowner, ctType ...strin
 	} else {
 		ct.contentType = ctType[0]
 	}
-	ct.objName = objName
 	ct.fqn = fs.CSM.GenContentFQN(ct, ct.contentType, "")
 	return
 }
@@ -89,10 +89,11 @@ func NewCTFromBO(bckName, bckProvider, objName string, b Bowner, ctType ...strin
 // Construct CT from LOM and change ContentType and FQN
 func NewCTFromLOM(lom *LOM, ctType string) *CT {
 	return &CT{
-		fqn:       fs.CSM.GenContentFQN(lom, ctType, ""),
-		bck:       lom.Bck(),
-		objName:   lom.ObjName,
-		mpathInfo: lom.mpathInfo,
+		fqn:         fs.CSM.GenContentFQN(lom, ctType, ""),
+		objName:     lom.ObjName,
+		contentType: ctType,
+		bck:         lom.Bck(),
+		mpathInfo:   lom.mpathInfo,
 	}
 }
 
@@ -100,9 +101,9 @@ func NewCTFromLOM(lom *LOM, ctType string) *CT {
 func (ct *CT) Clone(ctType string) *CT {
 	return &CT{
 		fqn:         fs.CSM.GenContentFQN(ct, ctType, ""),
-		bck:         ct.bck,
 		objName:     ct.objName,
 		contentType: ctType,
+		bck:         ct.bck,
 		mpathInfo:   ct.mpathInfo,
 	}
 }

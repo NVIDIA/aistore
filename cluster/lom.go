@@ -72,7 +72,10 @@ var (
 )
 
 // interface guard
-var _ cmn.ObjHeaderMetaProvider = (*LOM)(nil)
+var (
+	_ cmn.ObjHeaderMetaProvider = (*LOM)(nil)
+	_ fs.PartsFQN               = (*LOM)(nil)
+)
 
 func Init(t Target) {
 	initBckLocker()
@@ -110,16 +113,14 @@ func (lom *LOM) GetCustomMD(key string) (string, bool) {
 	value, exists := lom.md.customMD[key]
 	return value, exists
 }
-func (lom *LOM) ECEnabled() bool          { return lom.Bprops().EC.Enabled }
-func (lom *LOM) IsHRW() bool              { return lom.HrwFQN == lom.FQN } // subj to resilvering
-func (lom *LOM) Bck() *Bck                { return lom.bck }
-func (lom *LOM) BckName() string          { return lom.bck.Name }
-func (lom *LOM) Bprops() *cmn.BucketProps { return lom.bck.Props }
-func (lom *LOM) GetFQN() string           { return lom.FQN }
+func (lom *LOM) ECEnabled() bool { return lom.Bprops().EC.Enabled }
+func (lom *LOM) IsHRW() bool     { return lom.HrwFQN == lom.FQN } // subj to resilvering
 
-// TODO: Bucket method is redundant (see: `Bck` method).
-func (lom *LOM) Bucket() cmn.Bck              { return lom.Bck().Bck }
 func (lom *LOM) ObjectName() string           { return lom.ObjName }
+func (lom *LOM) Bck() *Bck                    { return lom.bck }
+func (lom *LOM) BckName() string              { return lom.bck.Name }
+func (lom *LOM) Bprops() *cmn.BucketProps     { return lom.bck.Props }
+func (lom *LOM) Bucket() cmn.Bck              { return lom.bck.Bck }
 func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
 
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }

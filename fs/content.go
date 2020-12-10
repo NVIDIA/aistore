@@ -54,9 +54,9 @@ type (
 	}
 
 	PartsFQN interface {
+		ObjectName() string
 		Bucket() cmn.Bck
 		MpathInfo() *MountpathInfo
-		ObjectName() string
 	}
 
 	ContentInfo struct {

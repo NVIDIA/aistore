@@ -103,14 +103,14 @@ func (wi *WalkInfo) ProcessDir(fqn string) error {
 	// every directory has to either:
 	// - be contained in prefix (for levels lower than prefix: prefix="abcd/def", directory="abcd")
 	// - or include prefix (for levels deeper than prefix: prefix="a/", directory="a/b")
-	if wi.prefix != "" && !(strings.HasPrefix(wi.prefix, ct.ObjName()) || strings.HasPrefix(ct.ObjName(), wi.prefix)) {
+	if wi.prefix != "" && !(strings.HasPrefix(wi.prefix, ct.ObjectName()) || strings.HasPrefix(ct.ObjectName(), wi.prefix)) {
 		return filepath.SkipDir
 	}
 
 	// When markerDir = "b/c/d/" we should skip directories: "a/", "b/a/",
 	// "b/b/" etc. but should not skip entire "b/" or "b/c/" since it is our
 	// parent which we want to traverse (see that: "b/" < "b/c/d/").
-	if wi.markerDir != "" && ct.ObjName() < wi.markerDir && !strings.HasPrefix(wi.markerDir, ct.ObjName()) {
+	if wi.markerDir != "" && ct.ObjectName() < wi.markerDir && !strings.HasPrefix(wi.markerDir, ct.ObjectName()) {
 		return filepath.SkipDir
 	}
 

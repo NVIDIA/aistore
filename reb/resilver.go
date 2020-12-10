@@ -84,7 +84,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 // end does proper cleanup: removes ether source files(on success), or
 // destination files(on copy failure)
 func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
-	uname := ct.Bck().MakeUname(ct.ObjName())
+	uname := ct.Bck().MakeUname(ct.ObjectName())
 	destMpath, _, err := cluster.HrwMpath(uname)
 	if err != nil {
 		glog.Warning(err)
@@ -94,7 +94,7 @@ func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
 		return
 	}
 
-	destFQN := destMpath.MakePathFQN(ct.Bck().Bck, ec.SliceType, ct.ObjName())
+	destFQN := destMpath.MakePathFQN(ct.Bucket(), ec.SliceType, ct.ObjectName())
 	srcMetaFQN, destMetaFQN, err := rj.moveECMeta(ct, ct.MpathInfo(), destMpath, buf)
 	if err != nil {
 		return
@@ -123,14 +123,14 @@ func (rj *joggerCtx) moveSlice(ct *cluster.CT, buf []byte) {
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
 func (rj *joggerCtx) moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byte) (string, string, error) {
-	src := srcMpath.MakePathFQN(ct.Bck().Bck, ec.MetaType, ct.ObjName())
+	src := srcMpath.MakePathFQN(ct.Bucket(), ec.MetaType, ct.ObjectName())
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
 	// the metafile has gone
 	if err := fs.Access(src); os.IsNotExist(err) {
 		return "", "", nil
 	}
-	dst := dstMpath.MakePathFQN(ct.Bck().Bck, ec.MetaType, ct.ObjName())
+	dst := dstMpath.MakePathFQN(ct.Bucket(), ec.MetaType, ct.ObjectName())
 	_, _, err := cmn.CopyFile(src, dst, buf, cmn.ChecksumNone)
 	if err == nil {
 		return src, dst, err
@@ -205,7 +205,7 @@ func (rj *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 
 func (rj *joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
 	cmn.Assert(ct.ContentType() == ec.SliceType)
-	if !ct.Bprops().EC.Enabled {
+	if !ct.Bck().Props.EC.Enabled {
 		// Since `%ec` directory is inside a bucket, it is safe to skip
 		// the entire `%ec` directory when EC is disabled for the bucket.
 		return filepath.SkipDir

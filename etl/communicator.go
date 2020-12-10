@@ -158,7 +158,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM) (*http.Response, error) {
 	}
 
 	// `fh` is closed by Do(req).
-	fh, err := cmn.NewFileHandle(lom.GetFQN())
+	fh, err := cmn.NewFileHandle(lom.FQN)
 	if err != nil {
 		return nil, err
 	}
