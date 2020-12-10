@@ -87,6 +87,7 @@ func BenchmarkRecordsMarshal(b *testing.B) {
 		{recordCnt: 100_000, recordObjCnt: 5},
 	}
 
+	buf := make([]byte, 0, serializationBufSize)
 	for _, bench := range benches {
 		name := fmt.Sprintf("r:%d_o:%d", bench.recordCnt, bench.recordObjCnt)
 		b.Run(name, func(b *testing.B) {
@@ -96,7 +97,7 @@ func BenchmarkRecordsMarshal(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				w := ioutil.Discard
-				err := records.EncodeMsg(msgp.NewWriterSize(w, serializationBufSize))
+				err := records.EncodeMsg(msgp.NewWriterBuf(w, buf))
 				cmn.AssertNoErr(err)
 			}
 		})
@@ -125,13 +126,17 @@ func BenchmarkRecordsUnmarshal(b *testing.B) {
 		{recordCnt: 100_000, recordObjCnt: 5},
 	}
 
+	buf := make([]byte, 0, serializationBufSize)
 	for _, bench := range benches {
 		name := fmt.Sprintf("r:%d_o:%d", bench.recordCnt, bench.recordObjCnt)
 		b.Run(name, func(b *testing.B) {
 			b.ReportAllocs()
-			records := generateRecords(bench.recordCnt, bench.recordObjCnt)
-			buf := bytes.NewBuffer(nil)
-			w := msgp.NewWriter(buf)
+			var (
+				records = generateRecords(bench.recordCnt, bench.recordObjCnt)
+				network = bytes.NewBuffer(nil)
+				w       = msgp.NewWriter(network)
+			)
+
 			err := records.EncodeMsg(w)
 			cmn.AssertNoErr(err)
 			cmn.AssertNoErr(w.Flush())
@@ -139,11 +144,13 @@ func BenchmarkRecordsUnmarshal(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				buf := bytes.NewReader(buf.Bytes())
-				newRecords := extract.NewRecords(bench.recordCnt)
+				var (
+					r          = bytes.NewReader(network.Bytes())
+					newRecords = extract.NewRecords(bench.recordCnt)
+				)
 				b.StartTimer()
 
-				err := newRecords.DecodeMsg(msgp.NewReaderSize(buf, serializationBufSize))
+				err := newRecords.DecodeMsg(msgp.NewReaderBuf(r, buf))
 				cmn.AssertNoErr(err)
 			}
 		})
@@ -203,27 +210,32 @@ func BenchmarkCreationPhaseMetadataUnmarshal(b *testing.B) {
 		{shardCnt: 1_000, recordCnt: 1_000, recordObjCnt: 3},
 	}
 
+	buf := make([]byte, 0, serializationBufSize)
 	for _, bench := range benches {
 		name := fmt.Sprintf("s:%d_r:%d_o:%d", bench.shardCnt, bench.recordCnt, bench.recordObjCnt)
 		b.Run(name, func(b *testing.B) {
 			b.ReportAllocs()
 
-			md := CreationPhaseMetadata{
-				Shards: generateShards(bench.shardCnt, bench.recordCnt, bench.recordObjCnt),
-			}
-			buf := bytes.NewBuffer(nil)
-			w := msgp.NewWriter(buf)
+			var (
+				md = CreationPhaseMetadata{
+					Shards: generateShards(bench.shardCnt, bench.recordCnt, bench.recordObjCnt),
+				}
+				network = bytes.NewBuffer(nil)
+				w       = msgp.NewWriter(network)
+			)
 			cmn.AssertNoErr(md.EncodeMsg(w))
 			cmn.AssertNoErr(w.Flush())
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				buf := bytes.NewReader(buf.Bytes())
-				newMD := &CreationPhaseMetadata{}
+				var (
+					r     = bytes.NewReader(network.Bytes())
+					newMD = &CreationPhaseMetadata{}
+				)
 				b.StartTimer()
 
-				err := newMD.DecodeMsg(msgp.NewReaderSize(buf, serializationBufSize))
+				err := newMD.DecodeMsg(msgp.NewReaderBuf(r, buf))
 				cmn.AssertNoErr(err)
 			}
 		})

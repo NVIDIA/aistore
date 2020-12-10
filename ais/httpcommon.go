@@ -803,7 +803,9 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 
 	if args.v != nil {
 		if v, ok := args.v.(msgp.Decodable); ok {
-			res.err = v.DecodeMsg(msgp.NewReaderSize(resp.Body, 10*cmn.KiB))
+			buf, slab := h.smm.Alloc(10 * cmn.KiB)
+			res.err = v.DecodeMsg(msgp.NewReaderBuf(resp.Body, buf))
+			slab.Free(buf)
 		} else {
 			res.err = jsoniter.NewDecoder(resp.Body).Decode(args.v)
 		}
@@ -1100,9 +1102,12 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 
 func (h *httprunner) writeMsgPack(w http.ResponseWriter, r *http.Request, v interface{}, tag string) (ok bool) {
 	var (
-		err error
-		mw  = msgp.NewWriterSize(w, 10*cmn.KiB)
+		err       error
+		buf, slab = h.smm.Alloc(10 * cmn.KiB)
+		mw        = msgp.NewWriterBuf(w, buf)
 	)
+	defer slab.Free(buf)
+
 	w.Header().Set(cmn.HeaderContentType, cmn.ContentMsgPack)
 	if err = v.(msgp.Encodable).EncodeMsg(mw); err == nil {
 		err = mw.Flush()

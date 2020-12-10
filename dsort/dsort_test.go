@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -206,6 +207,8 @@ func (t *targetNodeMock) teardown() {
 func (tctx *testContext) setup() {
 	tctx.errCh = make(chan error, tctx.targetCnt)
 	tctx.wg = &sync.WaitGroup{}
+
+	mm = memsys.DefaultPageMM()
 
 	fs.Init()
 	err := cmn.CreateDir(testDir)

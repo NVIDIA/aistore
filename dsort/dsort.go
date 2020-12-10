@@ -521,7 +521,12 @@ func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (cu
 				r, w       = io.Pipe()
 			)
 			group.Go(func() error {
-				msgpw := msgp.NewWriterSize(w, serializationBufSize)
+				var (
+					buf, slab = mm.Alloc(serializationBufSize)
+					msgpw     = msgp.NewWriterBuf(w, buf)
+				)
+				defer slab.Free(buf)
+
 				if err := m.recManager.Records.EncodeMsg(msgpw); err != nil {
 					w.CloseWithError(err)
 					return errors.Errorf("failed to marshal, err: %v", err)
@@ -849,11 +854,16 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				r, w  = io.Pipe()
 			)
 			group.Go(func() error {
-				msgpw := msgp.NewWriterSize(w, serializationBufSize)
-				md := &CreationPhaseMetadata{
-					Shards:    s,
-					SendOrder: order,
-				}
+				var (
+					buf, slab = mm.Alloc(serializationBufSize)
+					msgpw     = msgp.NewWriterBuf(w, buf)
+					md        = &CreationPhaseMetadata{
+						Shards:    s,
+						SendOrder: order,
+					}
+				)
+				defer slab.Free(buf)
+
 				if err := md.EncodeMsg(msgpw); err != nil {
 					w.CloseWithError(err)
 					return err

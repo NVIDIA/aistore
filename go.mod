@@ -31,14 +31,14 @@ require (
 	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
-	github.com/philhofer/fwd v1.0.0 // indirect
+	github.com/philhofer/fwd v1.1.1 // indirect
 	github.com/pierrec/lz4/v3 v3.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/seiflotfy/cuckoofilter v0.0.0-20200511222245-56093a4d3841
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/tidwall/buntdb v1.1.2
 	github.com/tidwall/gjson v1.6.1 // indirect
-	github.com/tinylib/msgp v1.1.2
+	github.com/tinylib/msgp v1.1.3
 	github.com/urfave/cli v1.22.4
 	github.com/valyala/fasthttp v1.16.0
 	github.com/vbauerster/mpb/v4 v4.12.2

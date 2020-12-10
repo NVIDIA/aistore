@@ -536,8 +536,13 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 
-		tmpMetadata := &CreationPhaseMetadata{}
-		if err := tmpMetadata.DecodeMsg(msgp.NewReaderSize(r.Body, serializationBufSize)); err != nil {
+		var (
+			buf, slab   = mm.Alloc(serializationBufSize)
+			tmpMetadata = &CreationPhaseMetadata{}
+		)
+		defer slab.Free(buf)
+
+		if err := tmpMetadata.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -605,8 +610,13 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 
-		records := extract.NewRecords(int(d))
-		if err := records.DecodeMsg(msgp.NewReaderSize(r.Body, serializationBufSize)); err != nil {
+		var (
+			buf, slab = mm.Alloc(serializationBufSize)
+			records   = extract.NewRecords(int(d))
+		)
+		defer slab.Free(buf)
+
+		if err := records.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
 			return
 		}
