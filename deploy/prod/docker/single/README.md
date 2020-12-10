@@ -28,11 +28,11 @@ The command exposes `51080` port, so it's possible to reach the cluster with `ht
 To check the cluster status:
 ```console
 $ AIS_ENDPOINT="http://localhost:51080" ais show cluster
-PROXY                   MEM USED %  MEM AVAIL   UPTIME  STATUS
-proxy-0934deff64b7[P]   0.40%       7.78GiB     3m30s   healthy
+PROXY                   MEM USED %  MEM AVAIL   UPTIME
+proxy-0934deff64b7[P]   0.40%       7.78GiB     3m30s
 
-TARGET              MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBALANCE   UPTIME  STATUS
-target-0934deff64b7 0.41%       7.78GiB     84%         8.950TiB    0.07%       not started 3m30s   healthy
+TARGET              MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBALANCE   UPTIME
+target-0934deff64b7 0.41%       7.78GiB     84%         8.950TiB    0.07%       not started 3m30s
 
 Summary:
  Proxies:	1 (0 - unelectable)

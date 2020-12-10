@@ -12,6 +12,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ios"
@@ -56,39 +57,42 @@ const (
 	// Proxy Info //
 	////////////////
 
-	proxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t UPTIME\t STATUS\n"
+	proxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t UPTIME{{ if not $hideStatus }}\t STATUS{{end}}\n"
 	proxyInfoBody   = "{{$value.SysInfo.PctMemUsed | printf `%.2f%%`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}\t " +
-		"{{$value.Status}}\n"
+		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}" +
+		"{{ if not $hideStatus }}\t {{$value.Status}}{{end}}\n"
 
 	// Single proxy display
-	ProxyInfoNoHeaderTmpl = "{{$value := . }}" + nodeIDSingle + proxyInfoBody
-	ProxyInfoTmpl         = proxyInfoHeader + ProxyInfoNoHeaderTmpl
+	ProxyInfoNoHeaderTmpl = "{{ $hideStatus := false}}{{$value := . }}" + nodeIDSingle + proxyInfoBody
+	ProxyInfoTmpl         = "{{ $hideStatus := false}}" + proxyInfoHeader + ProxyInfoNoHeaderTmpl
 
 	// Multiple proxies display
-	AllProxiesInfoNoHeaderTmpl = "{{ range $key, $value := .Status.Pmap }}" + nodeIDAll + proxyInfoBody + "{{end}}"
-	AllProxiesInfoTmpl         = proxyInfoHeader + AllProxiesInfoNoHeaderTmpl
+	AllProxiesInfoNoHeaderTmpl = "{{ $hideStatus := ( AllOnline $.Status.Pmap) }}{{ range $key, $value := .Status.Pmap }}" + nodeIDAll + proxyInfoBody + "{{end}}"
+	AllProxiesInfoTmpl         = "{{ $hideStatus := ( AllOnline $.Status.Pmap) }}" + proxyInfoHeader + AllProxiesInfoNoHeaderTmpl
 
 	/////////////////
 	// Target Info //
 	/////////////////
 
-	targetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t UPTIME\t STATUS\n"
-	targetInfoBody   = "{{$value.SysInfo.PctMemUsed | printf `%.2f%%`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
+	targetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t UPTIME" +
+		"{{ if not $hideStatus }}\t STATUS{{end}}\n"
+
+	targetInfoBody = "{{$value.SysInfo.PctMemUsed | printf `%.2f%%`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{CalcCap $value `percent` | printf `%d%%`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%.2f%%`}}\t " +
 		"{{FormatXactStatus $value.TStatus }}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}\t " +
-		"{{$value.Status}}\n"
+		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}" +
+		"{{ if not $hideStatus }}\t {{$value.Status}}{{end}}\n"
 
 	// Single target display
-	TargetInfoTmpl         = targetInfoHeader + TargetInfoNoHeaderTmpl
-	TargetInfoNoHeaderTmpl = "{{$value := . }}" + nodeIDSingle + targetInfoBody
+	TargetInfoTmpl         = "{{ $hideStatus := false}}" + targetInfoHeader + TargetInfoNoHeaderTmpl
+	TargetInfoNoHeaderTmpl = "{{ $hideStatus := false}}{{$value := . }}" + nodeIDSingle + targetInfoBody
 
 	// Multiple targets display
-	AllTargetsInfoNoHeaderTmpl = "{{ range $key, $value := .Status.Tmap }}" + nodeIDAll + targetInfoBody + "{{end}}"
-	AllTargetsInfoTmpl         = targetInfoHeader + AllTargetsInfoNoHeaderTmpl
+	AllTargetsInfoNoHeaderTmpl = "{{ $hideStatus := ( AllOnline $.Status.Tmap) }}{{ range $key, $value := .Status.Tmap }}" +
+		nodeIDAll + targetInfoBody + "{{end}}"
+	AllTargetsInfoTmpl = "{{ $hideStatus := ( AllOnline $.Status.Tmap) }}" + targetInfoHeader + AllTargetsInfoNoHeaderTmpl
 
 	//////////////////
 	// Cluster info //
@@ -404,6 +408,7 @@ var (
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatFeatureFlags":  fmtFeatureFlags,
+		"AllOnline":           allNodesOnline,
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -458,6 +463,15 @@ func extractStat(daemon *stats.CoreStats, statName string) int64 {
 		return 0
 	}
 	return daemon.Tracker[statName].Value
+}
+
+func allNodesOnline(stats map[string]*stats.DaemonStatus) bool {
+	for _, stat := range stats {
+		if stat.Status != api.StatusOnline {
+			return false
+		}
+	}
+	return true
 }
 
 func calcCap(daemon *stats.DaemonStatus, option string) (total uint64) {

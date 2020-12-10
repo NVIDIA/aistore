@@ -151,23 +151,23 @@ Node with ID "23kfa10f" has been successfully removed from the cluster.
 
 ```console
 $ ais show cluster
-PROXY            MEM USED %      MEM AVAIL       UPTIME  STATUS
-202446p8082      0.09%           31.28GiB        70s     healthy
-279128p8080[P]   0.11%           31.28GiB        80s     healthy
+PROXY            MEM USED %      MEM AVAIL       UPTIME
+202446p8082      0.09%           31.28GiB        70s
+279128p8080[P]   0.11%           31.28GiB        80s
 
-TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  STATUS
-147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     70s     healthy
-165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     70s     healthy
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME
+147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     70s
+165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     70s
 
 $ ais rm node 147665t8084 --mode=start-maintenance
 $ ais show cluster
-PROXY            MEM USED %      MEM AVAIL       UPTIME  STATUS
-202446p8082      0.09%           31.28GiB        70s     healthy
-279128p8080[P]   0.11%           31.28GiB        80s     healthy
+PROXY            MEM USED %      MEM AVAIL       UPTIME
+202446p8082      0.09%           31.28GiB        70s
+279128p8080[P]   0.11%           31.28GiB        80s
 
 TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  STATUS
-147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     71s     healthy
-165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     71s     healthy
+147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     71s     maintenance
+165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     71s     online
 ```
 
 #### Take a node out of maintenance
@@ -175,13 +175,13 @@ TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL      
 ```console
 $ ais rm node 147665t8084 --mode=stop-maintenance
 $ ais show cluster
-PROXY            MEM USED %      MEM AVAIL       UPTIME  STATUS
-202446p8082      0.09%           31.28GiB        80s     healthy
-279128p8080[P]   0.11%           31.28GiB        90s     healthy
+PROXY            MEM USED %      MEM AVAIL       UPTIME
+202446p8082      0.09%           31.28GiB        80s
+279128p8080[P]   0.11%           31.28GiB        90s
 
-TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  STATUS
-147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     80s     healthy
-165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     80s     healthy
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME
+147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     80s
+165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     80s
 ```
 
 ## Show config

@@ -99,7 +99,7 @@ In the example below it is safe to turn off the node (the column `REBALANCE` sta
 $ ais show cluster target
 TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE               UPTIME  STATUS
 59262t8087       0.13%           31.28GiB        16%             2.435TiB        0.00%           finished; 0 moved (0B)  31m     maintenance
-93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           finished; 0 moved (0B)  31m     healthy
+93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           finished; 0 moved (0B)  31m     online
 ```
 
 For decommissioning nodes, the status looks this while the rebalance is running:
@@ -108,13 +108,13 @@ For decommissioning nodes, the status looks this while the rebalance is running:
 $ ais show cluster target
 TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE               UPTIME  STATUS
 59262t8087       0.13%           31.28GiB        16%             2.435TiB        0.00%           running; 0 moved (0B)   31m     decommission
-93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           running; 0 moved (0B)   31m     healthy
+93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           running; 0 moved (0B)   31m     online
 ```
 
 On finishing the rebalance, the primary proxy removes the node automatically:
 
 ```console
 $ ais show cluster target
-TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE               UPTIME  STATUS
-93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           running; 0 moved (0B)   31m     healthy
+TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE               UPTIME
+93683t8084       0.13%           31.28GiB        16%             2.435TiB        0.12%           running; 0 moved (0B)   31m
 ```

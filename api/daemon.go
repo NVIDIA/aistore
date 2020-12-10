@@ -16,6 +16,12 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+const (
+	StatusOnline   = "online"
+	StatusOffline  = "offline"
+	StatusTimedOut = "timed out"
+)
+
 // GetMountpaths given the direct public URL of the target, returns its
 // mountpaths or error.
 func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.MountpathList, err error) {
@@ -104,12 +110,12 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 		Header:     http.Header{cmn.HeaderNodeID: []string{node.ID()}},
 	}, &daeInfo)
 	if err == nil {
-		daeInfo.Status = "healthy"
+		daeInfo.Status = StatusOnline
 	} else {
 		httpErr := &cmn.HTTPError{}
-		daeInfo = &stats.DaemonStatus{Snode: node, Status: "offline"}
+		daeInfo = &stats.DaemonStatus{Snode: node, Status: StatusOffline}
 		if errors.Is(err, context.DeadlineExceeded) {
-			daeInfo.Status = "timed out"
+			daeInfo.Status = StatusTimedOut
 		} else if errors.As(err, &httpErr) {
 			daeInfo.Status = fmt.Sprintf("error: %d", httpErr.Status)
 		}

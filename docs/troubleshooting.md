@@ -13,18 +13,18 @@ For example:
 
 ```console
 $ ais show cluster
-PROXY            MEM USED %    MEM AVAIL       UPTIME	STATUS
-202446p8082      0.06%         31.28GiB        19m   	healthy
-279128p8080      0.07%         31.28GiB        19m   	healthy
-928059p8081[P]   0.08%         31.28GiB        19m   	healthy
+PROXY            MEM USED %    MEM AVAIL       UPTIME
+202446p8082      0.06%         31.28GiB        19m
+279128p8080      0.07%         31.28GiB        19m
+928059p8081[P]   0.08%         31.28GiB        19m
 
-TARGET           MEM USED %    MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %    REBALANCE      UPTIME	 STATUS
-147665t8084      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m  	 healthy
-165274t8087      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m 	 healthy
-198815t8088      0.08%         31.28GiB        14%             2.511TiB        0.00%         not started    19m 	 healthy
-247389t8085      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m 	 healthy
-426988t8086      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m 	 healthy
-968103t8083      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m 	 healthy
+TARGET           MEM USED %    MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %    REBALANCE      UPTIME
+147665t8084      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
+165274t8087      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
+198815t8088      0.08%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
+247389t8085      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
+426988t8086      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
+968103t8083      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
 ```
 
 Since at any given time there's only one primary gateway, you may also find it useful to be able to designate a different one administratively. This is easy - example:
@@ -35,10 +35,10 @@ $ ais set primary <TAB>-<TAB>
 $ ais set primary 279128p8080
 279128p8080 has been set as a new primary proxy
 $ ais show cluster
-PROXY            MEM USED %    MEM AVAIL       UPTIME	 STATUS
-202446p8082      0.08%         31.28GiB        46m 	 healthy
-279128p8080[P]   0.08%         31.28GiB        46m 	 healthy
-928059p8081      0.08%         31.28GiB        46m10s	 healthy
+PROXY            MEM USED %    MEM AVAIL       UPTIME
+202446p8082      0.08%         31.28GiB        46m
+279128p8080[P]   0.08%         31.28GiB        46m
+928059p8081      0.08%         31.28GiB        46m10s
 ...
 ```
 
