@@ -80,6 +80,7 @@ def transform(input_bytes: bytes) -> bytes:
         member.size = len(processed)
         output_tar.addfile(member, io.BytesIO(processed))
 
+    output_tar.close()
     return output_bytes.getvalue()
 ```
 
