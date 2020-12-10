@@ -12,8 +12,7 @@ touch ${AIS_LOG_DIR}/statsd.log
 source /aisnode_config.sh
 
 exec node /statsd/stats.js ${STATSD_CONF_FILE} 2>&1 | tee -a ${AIS_LOG_DIR}/statsd.log &
-cd ${GOPATH}/src/github.com/NVIDIA/aistore
-make node
+
 ${GOBIN}/aisnode \
     -config=${AIS_CONF_FILE} \
     -role=${AIS_NODE_ROLE} \

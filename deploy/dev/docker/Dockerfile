@@ -55,7 +55,10 @@ COPY entrypoint/entrypoint.sh entrypoint.sh
 
 RUN mkdir -p $GOPATH/src/github.com/NVIDIA && \
     cd $GOPATH/src/github.com/NVIDIA && \
-    git clone https://github.com/NVIDIA/aistore.git
+    git clone https://github.com/NVIDIA/aistore.git && \
+    cd ${GOPATH}/src/github.com/NVIDIA/aistore && \
+    AIS_CLD_PROVIDERS="ais aws gcp azure" make node
+
 
 WORKDIR "${GOPATH}/src/github.com/NVIDIA/aistore"
 

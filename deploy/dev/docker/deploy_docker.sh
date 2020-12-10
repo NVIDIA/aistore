@@ -382,7 +382,7 @@ fi
 
 cp $DIR/../local/aisnode_config.sh aisnode_config.sh
 
-docker network create docker_default
+docker network create docker_default || true
 if [ "$GRAFANA" == true ]; then
     GRAPHITE_PORT=2003
     GRAPHITE_SERVER="graphite"
@@ -496,4 +496,10 @@ docker ps
 cd $DIR/../../../ && make cli
 
 deploy_mode
+
+for ((i=0; i<${CLUSTER_CNT}; i++)); do
+    PRIMARY_IP=$(docker inspect -f "{{ .NetworkSettings.Networks.ais${i}_public.IPAddress }}" ais${i}_proxy_1)
+    echo "Cluster${i} deployed! use 'AIS_ENDPOINT=\"http://${PRIMARY_IP}:${PORT}\" ais show cluster' to view cluster info"
+done
+
 echo done
