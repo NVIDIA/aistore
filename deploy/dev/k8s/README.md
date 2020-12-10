@@ -165,43 +165,46 @@ spec:
 ^C
 ```
 
-6. Initiating a transformer
+6. Initiating ETL
 
 ```console
-$ ais transform init spec.yaml
+$ ais etl init spec.yaml
 veSC9rvQQ
 ```
 
 7. Transforming an object
 
 ```console
-$ ais transform --help
+$ ais etl --help
 NAME:
-   ais transform - use transformations
+   ais etl - use ETLs
 
 USAGE:
-   ais transform command [command options] [arguments...]
+   ais etl command [command options] [arguments...]
 
 COMMANDS:
-   init    initialize transformation with yaml spec
-   ls      list all transformations
-   stop    stop transformation with given id
-   object  get transformed object
+   init    initialize ETL with yaml spec
+   build   build ETL with provided code, optional dependencies and runtime
+   ls      list all ETLs
+   logs    retrieve logs produced by ETL
+   stop    stop ETL with given id
+   object  transform object with given ETL
+   bucket  offline transform bucket with given ETL
 
 OPTIONS:
    --help, -h  show help
 
-$ ais transform object --help
+$ ais etl object --help
 NAME:
-   ais transform object - get transformed object
+   ais etl object - transform object with given ETL
 
 USAGE:
-   ais transform object [command options] TRANSFORM_ID BUCKET_NAME/OBJECT_NAME OUTPUT
+   ais etl object [command options] ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT
 
 OPTIONS:
    --help, -h  show help
 
-$ ais transform object veSC9rvQQ test-bucket/test-obj out.txt
+$ ais etl object veSC9rvQQ test-bucket/test-obj out.txt
 $ cat out.txt
 This is a sample data
 ```
