@@ -1406,13 +1406,16 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessPATCH); err != nil {
+	permsToCheck := propsToUpdate.PermsToCheck()
+	if err := p.checkPermissions(r.Header, &bck.Bck, permsToCheck); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
-	if err := bck.Allow(cmn.AccessPATCH); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
-		return
+	if !propsToUpdate.HasOnlyPermissions() {
+		if err := bck.Allow(cmn.AccessPATCH); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
 	}
 	if err = p.checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
 		p.invalmsghdlr(w, r, err.Error())

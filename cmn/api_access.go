@@ -29,6 +29,7 @@ const (
 	AccessEC
 	AccessSYNC
 	AccessBckDELETE
+	AccessBckPERMISSION
 	// cluster
 	AccessBckCREATE
 	AccessBckLIST
@@ -71,8 +72,9 @@ var accessOp = map[int]string{
 	AccessSYNC:        "SYNC-BUCKET",
 	AccessBckDELETE:   "DELETE-BUCKET",
 	// cluster
-	AccessBckCREATE: "CREATE-BUCKET",
-	AccessADMIN:     "ADMIN",
+	AccessBckPERMISSION: "SET-BUCKET-PERMISSIONS",
+	AccessBckCREATE:     "CREATE-BUCKET",
+	AccessADMIN:         "ADMIN",
 }
 
 func NoAccess() AccessAttrs                      { return 0 }
@@ -131,6 +133,9 @@ func (a AccessAttrs) Describe() string {
 	}
 	if a.Has(AccessBckDELETE) {
 		accList = append(accList, accessOp[AccessBckDELETE])
+	}
+	if a.Has(AccessBckPERMISSION) {
+		accList = append(accList, accessOp[AccessBckPERMISSION])
 	}
 	return strings.Join(accList, ",")
 }
