@@ -834,7 +834,7 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 	}
 }
 
-func (r *randReader) Open() (io.ReadCloser, error) {
+func (r *randReader) Open() (cmn.ReadOpenCloser, error) {
 	buf := r.slab.Alloc()
 	copy(buf, r.buf)
 	r2 := randReader{buf: buf, hdr: r.hdr, slab: r.slab, offEOF: r.offEOF}

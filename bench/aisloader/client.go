@@ -175,7 +175,9 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum,
 
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = reader.Open
+		req.GetBody = func() (io.ReadCloser, error) {
+			return reader.Open()
+		}
 		if cksum != nil {
 			req.Header.Set(cmn.HeaderObjCksumType, cksum.Type())
 			req.Header.Set(cmn.HeaderObjCksumVal, cksum.Value())

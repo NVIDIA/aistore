@@ -179,7 +179,7 @@ func (z *SGL) WriteAt(p []byte, off int64) (n int, err error) {
 func (z *SGL) Reset()     { z.woff, z.roff = 0, 0 }
 func (z *SGL) Len() int64 { return z.woff - z.roff }
 
-func (z *SGL) Open() (io.ReadCloser, error) { return NewReader(z), nil }
+func (z *SGL) Open() (cmn.ReadOpenCloser, error) { return NewReader(z), nil }
 
 func (z *SGL) Close() error { return nil }
 
@@ -207,7 +207,7 @@ func (z *SGL) Bytes() (b []byte) {
 
 func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
 
-func (r *Reader) Open() (io.ReadCloser, error) { return NewReader(r.z), nil }
+func (r *Reader) Open() (cmn.ReadOpenCloser, error) { return NewReader(r.z), nil }
 
 func (r *Reader) Close() error { return nil }
 

@@ -25,7 +25,7 @@ type (
 	}
 	ReadOpenCloser interface {
 		io.ReadCloser
-		Open() (io.ReadCloser, error)
+		Open() (ReadOpenCloser, error)
 	}
 	WriterAt interface {
 		io.Writer
@@ -90,6 +90,7 @@ type (
 var (
 	_ io.Reader      = (*nopReader)(nil)
 	_ ReadOpenCloser = (*FileHandle)(nil)
+	_ ReadOpenCloser = (*CallbackROC)(nil)
 	_ ReadSizer      = (*SizedReader)(nil)
 	_ ReadOpenCloser = (*SectionHandle)(nil)
 	_ ReadOpenCloser = (*FileSectionHandle)(nil)
@@ -131,8 +132,8 @@ func (b *ByteHandle) Close() error {
 	return nil
 }
 
-func (b *ByteHandle) Open() (io.ReadCloser, error) {
-	return ioutil.NopCloser(bytes.NewReader(b.b)), nil
+func (b *ByteHandle) Open() (ReadOpenCloser, error) {
+	return NewByteHandle(b.b), nil
 }
 
 ///////////////
@@ -143,7 +144,7 @@ func NopOpener(r io.ReadCloser) ReadOpenCloser {
 	return &nopOpener{r}
 }
 
-func (n *nopOpener) Open() (io.ReadCloser, error) {
+func (n *nopOpener) Open() (ReadOpenCloser, error) {
 	return n, nil
 }
 
@@ -160,8 +161,8 @@ func NewFileHandle(fqn string) (*FileHandle, error) {
 	return &FileHandle{file, fqn}, nil
 }
 
-func (f *FileHandle) Open() (io.ReadCloser, error) {
-	return os.Open(f.fqn)
+func (f *FileHandle) Open() (ReadOpenCloser, error) {
+	return NewFileHandle(f.fqn)
 }
 
 /////////////////
@@ -180,10 +181,16 @@ func (f *SizedReader) Size() int64 {
 // CallbackROC //
 /////////////////
 
-func NewCallbackReadOpenCloser(r ReadOpenCloser, readCb func(int, error)) *CallbackROC {
+func NewCallbackReadOpenCloser(r ReadOpenCloser, readCb func(int, error), reportedBytes ...int) *CallbackROC {
+	var rb int
+	if len(reportedBytes) > 0 {
+		rb = reportedBytes[0]
+	}
 	return &CallbackROC{
-		roc:          r,
-		readCallback: readCb,
+		roc:           r,
+		readCallback:  readCb,
+		readBytes:     0,
+		reportedBytes: rb,
 	}
 }
 
@@ -198,17 +205,12 @@ func (r *CallbackROC) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func (r *CallbackROC) Open() (io.ReadCloser, error) {
+func (r *CallbackROC) Open() (ReadOpenCloser, error) {
 	rc, err := r.roc.Open()
 	if err != nil {
 		return rc, err
 	}
-	return &CallbackROC{
-		roc:           NopOpener(rc),
-		readCallback:  r.readCallback,
-		readBytes:     0,
-		reportedBytes: r.reportedBytes,
-	}, nil
+	return NewCallbackReadOpenCloser(rc, r.readCallback, r.reportedBytes), nil
 }
 
 func (r *CallbackROC) Close() error { return r.roc.Close() }
@@ -222,7 +224,7 @@ func NewSectionHandle(r io.ReaderAt, offset, size, padding int64) *SectionHandle
 	return &SectionHandle{r, sec, offset, size, padding, 0}
 }
 
-func (f *SectionHandle) Open() (io.ReadCloser, error) {
+func (f *SectionHandle) Open() (ReadOpenCloser, error) {
 	return NewSectionHandle(f.r, f.offset, f.size, f.padding), nil
 }
 
@@ -280,7 +282,7 @@ func NewFileSectionHandle(fqn string, offset, size int64) (*FileSectionHandle, e
 	return &FileSectionHandle{fh: fh, sec: sec}, nil
 }
 
-func (f *FileSectionHandle) Open() (io.ReadCloser, error) {
+func (f *FileSectionHandle) Open() (ReadOpenCloser, error) {
 	return NewFileSectionHandle(f.fh.fqn, f.sec.offset, f.sec.size)
 }
 

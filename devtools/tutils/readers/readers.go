@@ -35,9 +35,8 @@ const (
 // Reader is the interface a client works with to read in data and send to a HTTP server
 type (
 	Reader interface {
-		io.ReadCloser
+		cmn.ReadOpenCloser
 		io.Seeker
-		Open() (io.ReadCloser, error)
 		Cksum() *cmn.Cksum
 	}
 
@@ -89,7 +88,7 @@ func (r *randReader) Read(buf []byte) (int, error) {
 
 // Open implements the Reader interface.
 // Returns a new rand reader using the same seed.
-func (r *randReader) Open() (io.ReadCloser, error) {
+func (r *randReader) Open() (cmn.ReadOpenCloser, error) {
 	return &randReader{
 		seed:  r.seed,
 		rnd:   rand.New(rand.NewSource(r.seed)),
@@ -196,8 +195,8 @@ func (rr *rrLimited) Read(p []byte) (n int, err error) {
 
 type fileReader struct {
 	*os.File
-	fullName string // Example: "/dir/ais/smoke/bGzhWKWoxHDSePnELftx"
-	name     string // Example: smoke/bGzhWKWoxHDSePnELftx
+	filePath string // Example: "/dir/ais/"
+	name     string // Example: "smoke/bGzhWKWoxHDSePnELftx"
 	cksum    *cmn.Cksum
 }
 
@@ -205,8 +204,12 @@ type fileReader struct {
 var _ Reader = (*fileReader)(nil)
 
 // Open implements the Reader interface.
-func (r *fileReader) Open() (io.ReadCloser, error) {
-	return os.Open(r.fullName)
+func (r *fileReader) Open() (cmn.ReadOpenCloser, error) {
+	cksumType := cmn.ChecksumNone
+	if r.cksum != nil {
+		cksumType = r.cksum.Type()
+	}
+	return NewFileReader(r.filePath, r.name, -1, cksumType)
 }
 
 // XXHash implements the Reader interface.
@@ -215,18 +218,28 @@ func (r *fileReader) Cksum() *cmn.Cksum {
 }
 
 // NewFileReader creates/opens the file, populates it with random data, and returns a new fileReader
-// Caller is responsible for closing
+// NOTE: Caller is responsible for closing.
 func NewFileReader(filepath, name string, size int64, cksumType string) (Reader, error) {
 	var (
-		cksum  *cmn.Cksum
-		fn     = path.Join(filepath, name)
-		f, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0o666) // wr-wr-wr-
+		cksum     *cmn.Cksum
+		cksumHash *cmn.CksumHash
+		fn        = path.Join(filepath, name)
+		f, err    = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0o666) // wr-wr-wr-
 	)
 	if err != nil {
 		return nil, err
 	}
-
-	cksumHash, err := copyRandWithHash(f, size, cksumType, cmn.NowRand())
+	if size == -1 {
+		// Assuming that the file already exists and contains data.
+		if cksumType != cmn.ChecksumNone {
+			buf, slab := mmsa.Alloc()
+			_, cksumHash, err = cmn.CopyAndChecksum(ioutil.Discard, f, buf, cksumType)
+			slab.Free(buf)
+		}
+	} else {
+		// Populate the file with random data.
+		cksumHash, err = copyRandWithHash(f, size, cksumType, cmn.NowRand())
+	}
 	if err != nil {
 		f.Close()
 		return nil, err
@@ -238,33 +251,14 @@ func NewFileReader(filepath, name string, size int64, cksumType string) (Reader,
 	if cksumType != cmn.ChecksumNone {
 		cksum = cksumHash.Clone()
 	}
-	// FIXME: No need to have 'f' in fileReader?
-	return &fileReader{f, fn, name, cksum}, nil
+	return &fileReader{f, filepath, name, cksum}, nil
 }
 
 // NewFileReaderFromFile opens an existing file, reads it to compute checksum,
 // and returns a new reader.
-// See also (and note the difference from): NewFileReader
-// Caller responsible for closing
+// NOTE: Caller responsible for closing.
 func NewFileReaderFromFile(fn, cksumType string) (Reader, error) {
-	var (
-		cksum  *cmn.Cksum
-		f, err = os.Open(fn)
-	)
-	if err != nil {
-		return nil, err
-	}
-	if cksumType != cmn.ChecksumNone {
-		buf, slab := mmsa.Alloc()
-		_, cksumHash, err := cmn.CopyAndChecksum(ioutil.Discard, f, buf, cksumType)
-		if err != nil {
-			return nil, err
-		}
-		slab.Free(buf)
-		cksum = cksumHash.Clone()
-	}
-
-	return &fileReader{f, fn, "" /* ais prefix */, cksum}, nil
+	return NewFileReader(fn, "", -1, cksumType)
 }
 
 type sgReader struct {
@@ -303,7 +297,7 @@ type bytesReader struct {
 }
 
 // Open implements the Reader interface.
-func (r *bytesReader) Open() (io.ReadCloser, error) {
+func (r *bytesReader) Open() (cmn.ReadOpenCloser, error) {
 	return &bytesReader{bytes.NewBuffer(r.buf), r.buf}, nil
 }
 
@@ -392,7 +386,7 @@ func (r *tarReader) Close() error {
 }
 
 // To implement Reader
-func (r *tarReader) Open() (io.ReadCloser, error) {
+func (r *tarReader) Open() (cmn.ReadOpenCloser, error) {
 	return &tarReader{
 		Reader: *bytes.NewReader(r.b),
 		cksum:  r.cksum,

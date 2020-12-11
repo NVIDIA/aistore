@@ -287,8 +287,10 @@ func PutObject(args PutObjectArgs) (err error) {
 
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = args.Reader.Open
-		if args.Cksum != nil {
+		req.GetBody = func() (io.ReadCloser, error) {
+			return args.Reader.Open()
+		}
+		if args.Cksum != nil && args.Cksum.Type() != cmn.ChecksumNone {
 			req.Header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
 			ckVal := args.Cksum.Value()
 			if ckVal == "" {
@@ -339,7 +341,9 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 
 		// The HTTP package doesn't automatically set this for files, so it has to be done manually
 		// If it wasn't set, we would need to deal with the redirect manually.
-		req.GetBody = args.Reader.Open
+		req.GetBody = func() (io.ReadCloser, error) {
+			return args.Reader.Open()
+		}
 		if args.Size != 0 {
 			req.ContentLength = args.Size // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
 		}
@@ -364,7 +368,7 @@ func FlushObject(args FlushArgs) (err error) {
 	query = cmn.AddBckToQuery(query, args.Bck)
 
 	var header http.Header
-	if args.Cksum != nil {
+	if args.Cksum != nil && args.Cksum.Type() != cmn.ChecksumNone {
 		header = make(http.Header)
 		header.Set(cmn.HeaderObjCksumType, args.Cksum.Type())
 		header.Set(cmn.HeaderObjCksumVal, args.Cksum.Value())
