@@ -20,8 +20,6 @@ var (
 	_ io.WriterTo        = (*SGL)(nil)
 	_ cmn.ReadOpenCloser = (*SGL)(nil)
 	_ cmn.ReadOpenCloser = (*Reader)(nil)
-	_ cmn.ReadOpenCloser = (*SliceReader)(nil)
-	_ io.Seeker          = (*SliceReader)(nil)
 )
 
 type (
@@ -36,12 +34,6 @@ type (
 	Reader struct {
 		z    *SGL
 		roff int64
-	}
-	// uses the underlying SGL to implement io.ReadWriteCloser + io.Seeker
-	SliceReader struct {
-		z          *SGL
-		roff       int64
-		soff, slen int64
 	}
 )
 
@@ -240,58 +232,4 @@ func (r *Reader) Seek(from int64, whence int) (offset int64, err error) {
 	}
 	r.roff = offset
 	return
-}
-
-//
-// SGL Slice Reader - implements cmn.ReadOpenCloser + io.Seeker within given bounds
-//
-
-func NewSliceReader(z *SGL, soff, slen int64) *SliceReader {
-	return &SliceReader{z: z, roff: 0, soff: soff, slen: slen}
-}
-
-func (r *SliceReader) Open() (io.ReadCloser, error) {
-	_, err := r.Seek(0, io.SeekStart)
-	return r, err
-}
-
-func (r *SliceReader) Close() error { return nil }
-
-func (r *SliceReader) Read(b []byte) (n int, err error) {
-	var (
-		offout int64
-		offin  = r.roff + r.soff
-		rem    = cmn.MinI64(r.z.woff-offin, r.slen-r.roff)
-	)
-	if rem < int64(len(b)) {
-		b = b[:int(rem)]
-		err = io.EOF
-	}
-
-	n, offout, _ = r.z.readAtOffset(b, offin)
-	r.roff = offout - r.soff
-	return
-}
-
-func (r *SliceReader) Seek(from int64, whence int) (offset int64, err error) {
-	switch whence {
-	case io.SeekStart:
-		offset = from
-	case io.SeekCurrent:
-		offset = r.roff + from
-	case io.SeekEnd:
-		offset = cmn.MinI64(r.z.woff, r.roff+r.soff+r.slen) + from
-	default:
-		return 0, errors.New("invalid whence")
-	}
-	if offset < 0 {
-		return 0, errors.New("negative position")
-	}
-	r.roff = offset
-	return
-}
-
-func (r *SliceReader) Reset() error {
-	_, err := r.Seek(0, io.SeekStart)
-	return err
 }

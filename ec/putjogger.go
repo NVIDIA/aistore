@@ -521,8 +521,6 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		if slices[i].reader != nil {
 			reader = slices[i].reader
 			switch r := reader.(type) {
-			case *memsys.SliceReader:
-				_, err = r.Seek(0, io.SeekStart)
 			case *memsys.Reader:
 				_, err = r.Seek(0, io.SeekStart)
 			case *cmn.SectionHandle:
