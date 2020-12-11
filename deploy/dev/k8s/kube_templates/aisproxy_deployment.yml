@@ -17,10 +17,14 @@ spec:
       initialDelaySeconds: 20
       periodSeconds: 10
     env:
-     - name: AIS_NODE_ROLE
-       value: "proxy"
-     - name: AIS_IS_PRIMARY
-       value: "${AIS_IS_PRIMARY}"
+      - name: K8S_NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+      - name: AIS_NODE_ROLE
+        value: "proxy"
+      - name: AIS_IS_PRIMARY
+        value: "${AIS_IS_PRIMARY}"
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/

@@ -76,7 +76,15 @@ To deploy ETL-ready AIStore cluster, please refer to [Getting Started](/docs/get
 
 > Note that you have to choose one of the deployment types that supports Kubernetes - for example, [Cloud Deployment](/docs/getting_started.md#cloud-deployment).
 
-> During the AIStore on Kubernetes deployment, `HOSTNAME` environment variable, set by Kubernetes, should not be overwritten - AIS target uses it to discover its Pod name.
+> During the AIStore on Kubernetes deployment, `HOSTNAME` environment variable, set by Kubernetes, **shouldn't** be overwritten - AIS target uses it to discover its Pod and Node name.
+> In some environments (like `minikube`) the `HOSTNAME` is not reliable and in such cases it's required to set `K8S_NODE_NAME` in Pod spec:
+> ```yaml
+> env:
+>  - name: K8S_NODE_NAME
+>     valueFrom:
+>       fieldRef:
+>         fieldPath: spec.nodeName
+> ```
 
 To verify that your deployment is set up correctly, run the following [CLI](/cmd/cli/README.md) command:
 ```console

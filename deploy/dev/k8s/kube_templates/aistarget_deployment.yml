@@ -14,8 +14,12 @@ spec:
       # Required for hostport to operate, or implement a full pod security policy
       privileged: true
     env:
-     - name: AIS_NODE_ROLE
-       value: "target"
+      - name: K8S_NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+      - name: AIS_NODE_ROLE
+        value: "target"
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/
@@ -40,7 +44,6 @@ spec:
         export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
         source /etc/ais/aisnode_config.sh &&
         aisnode -config=/etc/ais/ais.json -role=target -alsologtostderr=true;
-
   volumes:
     - name: aws-credentials
       secret:

@@ -11,10 +11,12 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
-	k8sPodNameEnv = "HOSTNAME"
+	k8sPodNameEnv  = "HOSTNAME"
+	k8sNodeNameEnv = "K8S_NODE_NAME"
 
 	Default = "default"
 	Pod     = "pod"
@@ -27,35 +29,51 @@ var (
 )
 
 func initDetect() {
-	var podName string
+	var (
+		pod *v1.Pod
 
-	if podName = os.Getenv(k8sPodNameEnv); podName == "" {
-		if glog.V(3) {
-			glog.Infof("HOSTNAME environment not found, assuming non-Kubernetes deployment")
-		}
-		return
-	}
+		nodeName = os.Getenv(k8sNodeNameEnv)
+		podName  = os.Getenv(k8sPodNameEnv)
+	)
 
-	glog.Infof("Verifying type of deployment (HOSTNAME = %q)", podName)
+	glog.Infof(
+		"Verifying type of deployment (%s: %q, %s: %q)",
+		k8sPodNameEnv, podName, k8sNodeNameEnv, nodeName,
+	)
 
 	client, err := GetClient()
 	if err != nil {
-		glog.Warningf("Couldn't initiate a K8s client, err: %v", err)
+		glog.Infof("Couldn't initiate a K8s client, assuming non-Kubernetes deployment")
 		return
 	}
 
-	pod, err := client.Pod(podName)
-	if err != nil {
-		glog.Warningf("Failed to get pod %q, err: %v", podName, err)
+	// If the `k8sNodeNameEnv` is set then we should just use it as we trust it
+	// more than anything else.
+	if nodeName != "" {
+		goto checkNode
+	}
+
+	if podName == "" {
+		glog.Infof("%s environment not found, assuming non-Kubernetes deployment", k8sPodNameEnv)
 		return
 	}
 
-	node, err := client.Node(pod.Spec.NodeName)
+	pod, err = client.Pod(podName)
 	if err != nil {
-		glog.Errorf("Failed to get node of a pod %q, err: %v", podName, err)
+		glog.Errorf("Failed to get pod %q, err: %v. Try setting %q env variable", podName, err, k8sNodeNameEnv)
 		return
 	}
+	nodeName = pod.Spec.NodeName
+
+checkNode:
+	node, err := client.Node(nodeName)
+	if err != nil {
+		glog.Errorf("Failed to get node %q, err: %v. Try setting %q env variable", nodeName, err, k8sNodeNameEnv)
+		return
+	}
+
 	NodeName = node.Name
+	glog.Infof("Successfully got node name %q, assuming Kubernetes deployment", NodeName)
 }
 
 func Detect() error {
