@@ -349,7 +349,6 @@ var (
 		"FormatUnixNano":      func(t int64) string { return cmn.FormatUnixNano(t, "") },
 		"FormatEC":            fmtEC,
 		"FormatDur":           fmtDuration,
-		"FormatXactStatus":    fmtXactStatus,
 		"FormatObjStatus":     fmtObjStatus,
 		"FormatObjIsCached":   fmtObjIsCached,
 		"FormatDaemonID":      fmtDaemonID,
@@ -444,17 +443,17 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 
 func fmtXactStatus(tStatus *stats.TargetStatus) string {
 	if tStatus == nil || tStatus.RebalanceStats == nil {
-		return "not started"
+		return "-"
 	}
 
 	tStats := tStatus.RebalanceStats
 	if tStats.Aborted() {
-		return fmt.Sprintf("aborted; %d moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+		return "aborted"
 	}
 	if tStats.EndTime().IsZero() {
-		return fmt.Sprintf("running; %d moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+		return "running"
 	}
-	return fmt.Sprintf("finished; %d moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+	return "finished"
 }
 
 func fmtObjStatus(obj *cmn.BucketEntry) string {

@@ -32,7 +32,7 @@ PROXY                   MEM USED %  MEM AVAIL   UPTIME
 proxy-0934deff64b7[P]   0.40%       7.78GiB     3m30s
 
 TARGET              MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBALANCE   UPTIME
-target-0934deff64b7 0.41%       7.78GiB     84%         8.950TiB    0.07%       not started 3m30s
+target-0934deff64b7 0.41%       7.78GiB     84%         8.950TiB    0.07%       -           3m30s
 
 Summary:
  Proxies:	1 (0 - unelectable)

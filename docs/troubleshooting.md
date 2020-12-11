@@ -19,12 +19,12 @@ PROXY            MEM USED %    MEM AVAIL       UPTIME
 928059p8081[P]   0.08%         31.28GiB        19m
 
 TARGET           MEM USED %    MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %    REBALANCE      UPTIME
-147665t8084      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
-165274t8087      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
-198815t8088      0.08%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
-247389t8085      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
-426988t8086      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
-968103t8083      0.07%         31.28GiB        14%             2.511TiB        0.00%         not started    19m
+147665t8084      0.07%         31.28GiB        14%             2.511TiB        0.00%         -              19m
+165274t8087      0.07%         31.28GiB        14%             2.511TiB        0.00%         -              19m
+198815t8088      0.08%         31.28GiB        14%             2.511TiB        0.00%         -              19m
+247389t8085      0.07%         31.28GiB        14%             2.511TiB        0.00%         -              19m
+426988t8086      0.07%         31.28GiB        14%             2.511TiB        0.00%         -              19m
+968103t8083      0.07%         31.28GiB        14%             2.511TiB        0.00%         -              19m
 ```
 
 Since at any given time there's only one primary gateway, you may also find it useful to be able to designate a different one administratively. This is easy - example:

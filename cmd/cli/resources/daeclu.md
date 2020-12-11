@@ -156,8 +156,8 @@ PROXY            MEM USED %      MEM AVAIL       UPTIME
 279128p8080[P]   0.11%           31.28GiB        80s
 
 TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME
-147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     70s
-165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     70s
+147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               70s
+165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               70s
 
 $ ais rm node 147665t8084 --mode=start-maintenance
 $ ais show cluster
@@ -166,8 +166,8 @@ PROXY            MEM USED %      MEM AVAIL       UPTIME
 279128p8080[P]   0.11%           31.28GiB        80s
 
 TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME  STATUS
-147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     71s     maintenance
-165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     71s     online
+147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               71s     maintenance
+165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               71s     online
 ```
 
 #### Take a node out of maintenance
@@ -180,8 +180,8 @@ PROXY            MEM USED %      MEM AVAIL       UPTIME
 279128p8080[P]   0.11%           31.28GiB        90s
 
 TARGET           MEM USED %      MEM AVAIL       CAP USED %      CAP AVAIL       CPU USED %      REBALANCE       UPTIME
-147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     80s
-165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           not started     80s
+147665t8084      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               80s
+165274t8087      0.10%           31.28GiB        16%             2.458TiB        0.12%           -               80s
 ```
 
 ## Show config
