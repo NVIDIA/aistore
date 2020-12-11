@@ -40,7 +40,7 @@ spec:
         export TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT} &&
         export IPV4LIST=${IPV4LIST} &&
         export AIS_PRIMARY_URL=${AIS_PRIMARY_URL} &&
-        export AIS_CLD_PROVIDER=${AIS_CLD_PROVIDER} &&
+        export AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS}" &&
         export AIS_CONF_FILE=/etc/ais/ais.json &&
         export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
         export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&

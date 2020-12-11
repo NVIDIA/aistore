@@ -132,7 +132,6 @@ $ ais create bucket test-bucket
 "test-bucket" bucket created
 $ cat > sample
 This is a sample data
-^C
 ```
 
 4. Putting sample object
@@ -162,7 +161,6 @@ spec:
       ports:
         - containerPort: 80
       command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
-^C
 ```
 
 6. Initiating ETL

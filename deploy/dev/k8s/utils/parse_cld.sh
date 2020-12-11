@@ -1,5 +1,5 @@
 
-export LOCAL_AWS="/tmp/aws.env"
+export LOCAL_AWS="/tmp/credentials"
 touch $LOCAL_AWS
 export AIS_CLD_PROVIDERS="" # See deploy.sh for more informations about empty AIS_CLD_PROVIDERS
 source ../utils.sh
@@ -34,12 +34,6 @@ if [[ "${AIS_CLD_PROVIDERS}" == *aws* ]]; then
             exit 1
         fi
     fi
-
-    sed -i 's/\[default\]//g' ${LOCAL_AWS}
-    sed -i 's/ = /=/g' ${LOCAL_AWS}
-    sed -i 's/aws_access_key_id/AWS_ACCESS_KEY_ID/g' ${LOCAL_AWS}
-    sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
-    sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
 fi
 
 # TODO: The following should happen only for AWS. This is because
