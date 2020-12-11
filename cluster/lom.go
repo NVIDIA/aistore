@@ -58,8 +58,6 @@ type (
 		FQN         string            // fqn
 		ObjName     string            // object name in the bucket
 		HrwFQN      string            // (misplaced?)
-		// runtime
-		loaded bool
 	}
 
 	ObjectFilter func(*LOM) bool
@@ -126,6 +124,8 @@ func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
 func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
+
+func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
@@ -466,17 +466,19 @@ func (lom *LOM) _string(b string) string {
 			s += " " + lom.md.cksum.String()
 		}
 	}
-	if !lom.loaded {
-		a = "(-)"
-	} else {
-		if !lom.IsHRW() {
-			a += "(misplaced)"
-		}
+	if lom.loaded() {
 		if lom.IsCopy() {
 			a += "(copy)"
+		} else if !lom.IsHRW() {
+			a += "(misplaced)"
 		}
 		if n := lom.NumCopies(); n > 1 {
 			a += fmt.Sprintf("(%dc)", n)
+		}
+	} else {
+		a = "(-)"
+		if !lom.IsHRW() {
+			a += "(not-hrw)"
 		}
 	}
 	return s + a + "]"
@@ -748,7 +750,6 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	if len(adds) > 0 {
 		add = adds[0]
 	}
-	lom.loaded = true
 	if md, ok := cache.Load(hkey); ok { // fast path
 		lmeta := md.(*lmeta)
 		lom.md = *lmeta
@@ -772,7 +773,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 }
 
 func (lom *LOM) checkBucket() error {
-	debug.Assert(lom.loaded) // cannot check bucket without first calling lom.Load()
+	debug.Assert(lom.loaded()) // cannot check bucket without first calling lom.Load()
 	var (
 		bmd             = T.Bowner().Get()
 		bprops, present = bmd.Get(lom.bck)
