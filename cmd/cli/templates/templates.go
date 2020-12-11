@@ -46,54 +46,6 @@ const (
 		"{{ if (eq $nonElect true) }} ProxyID: {{$key}}\n{{end}}{{end}}\n" +
 		"Primary Proxy: {{.Smap.Primary.ID}}\nProxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
-	////////////////
-	// Nodes Info //
-	////////////////
-
-	nodeIDSingle = "{{$value.Snode.ID}}\t "
-	nodeIDAll    = "{{FormatDaemonID $value.Snode.ID $.Smap}}\t "
-
-	////////////////
-	// Proxy Info //
-	////////////////
-
-	proxyInfoHeader = "PROXY\t MEM USED %\t MEM AVAIL\t UPTIME{{ if not $hideStatus }}\t STATUS{{end}}\n"
-	proxyInfoBody   = "{{$value.SysInfo.PctMemUsed | printf `%.2f%%`}}\t " +
-		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}" +
-		"{{ if not $hideStatus }}\t {{$value.Status}}{{end}}\n"
-
-	// Single proxy display
-	ProxyInfoNoHeaderTmpl = "{{ $hideStatus := false}}{{$value := . }}" + nodeIDSingle + proxyInfoBody
-	ProxyInfoTmpl         = "{{ $hideStatus := false}}" + proxyInfoHeader + ProxyInfoNoHeaderTmpl
-
-	// Multiple proxies display
-	AllProxiesInfoNoHeaderTmpl = "{{ $hideStatus := ( AllOnline $.Status.Pmap) }}{{ range $key, $value := .Status.Pmap }}" + nodeIDAll + proxyInfoBody + "{{end}}"
-	AllProxiesInfoTmpl         = "{{ $hideStatus := ( AllOnline $.Status.Pmap) }}" + proxyInfoHeader + AllProxiesInfoNoHeaderTmpl
-
-	/////////////////
-	// Target Info //
-	/////////////////
-
-	targetInfoHeader = "TARGET\t MEM USED %\t MEM AVAIL\t CAP USED %\t CAP AVAIL\t CPU USED %\t REBALANCE\t UPTIME" +
-		"{{ if not $hideStatus }}\t STATUS{{end}}\n"
-
-	targetInfoBody = "{{$value.SysInfo.PctMemUsed | printf `%.2f%%`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
-		"{{CalcCap $value `percent` | printf `%d%%`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
-		"{{$value.SysInfo.PctCPUUsed | printf `%.2f%%`}}\t " +
-		"{{FormatXactStatus $value.TStatus }}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.ns.time`)}}" +
-		"{{ if not $hideStatus }}\t {{$value.Status}}{{end}}\n"
-
-	// Single target display
-	TargetInfoTmpl         = "{{ $hideStatus := false}}" + targetInfoHeader + TargetInfoNoHeaderTmpl
-	TargetInfoNoHeaderTmpl = "{{ $hideStatus := false}}{{$value := . }}" + nodeIDSingle + targetInfoBody
-
-	// Multiple targets display
-	AllTargetsInfoNoHeaderTmpl = "{{ $hideStatus := ( AllOnline $.Status.Tmap) }}{{ range $key, $value := .Status.Tmap }}" +
-		nodeIDAll + targetInfoBody + "{{end}}"
-	AllTargetsInfoTmpl = "{{ $hideStatus := ( AllOnline $.Status.Tmap) }}" + targetInfoHeader + AllTargetsInfoNoHeaderTmpl
-
 	//////////////////
 	// Cluster info //
 	//////////////////
@@ -101,7 +53,6 @@ const (
 	ClusterSummary = "Summary:\n Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} - unelectable)\n " +
 		"Targets:\t{{len .Smap.Tmap}}\n Primary Proxy:\t{{.Smap.Primary.ID}}\n Smap Version:\t{{.Smap.Version}}\n"
 
-	ClusterInfoTmpl = AllProxiesInfoTmpl + "\n" + AllTargetsInfoTmpl + "\n" + ClusterSummary
 	// Disk Stats
 	DiskStatsHeader = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
 
@@ -390,10 +341,8 @@ var (
 	}
 
 	funcMap = template.FuncMap{
-		"ExtractStat":         extractStat,
 		"FormatBytesSigned":   cmn.B2S,
 		"FormatBytesUnsigned": cmn.UnsignedB2S,
-		"CalcCap":             calcCap,
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
 		"FormatUnixNano":      func(t int64) string { return cmn.FormatUnixNano(t, "") },
@@ -408,7 +357,6 @@ var (
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatFeatureFlags":  fmtFeatureFlags,
-		"AllOnline":           allNodesOnline,
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -474,27 +422,22 @@ func allNodesOnline(stats map[string]*stats.DaemonStatus) bool {
 	return true
 }
 
-func calcCap(daemon *stats.DaemonStatus, option string) (total uint64) {
+func calcCapPercentage(daemon *stats.DaemonStatus) (total float64) {
 	for _, fs := range daemon.Capacity {
-		switch option {
-		case "capacity":
-			total += fs.Avail
-		case "percent":
-			total += uint64(fs.PctUsed)
-		}
+		total += float64(fs.PctUsed)
 	}
 
-	switch option {
-	case "capacity":
-		return total
-	case "percent":
-		if len(daemon.Capacity) == 0 {
-			return 0
-		}
-		return total / uint64(len(daemon.Capacity))
+	if len(daemon.Capacity) == 0 {
+		return 0
 	}
+	return total / float64(len(daemon.Capacity))
+}
 
-	return 0
+func calcCap(daemon *stats.DaemonStatus) (total uint64) {
+	for _, fs := range daemon.Capacity {
+		total += fs.Avail
+	}
+	return total
 }
 
 func fmtXactStatus(tStatus *stats.TargetStatus) string {
