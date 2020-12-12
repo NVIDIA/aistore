@@ -1921,7 +1921,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 
 	for res := range results {
 		if res.err != nil {
-			p.invalmsghdlrf(w, r, "%s failed, err: %s", msg.Action, res.err)
+			p.invalmsghdlrf(w, r, res.err.Error())
 			return
 		}
 	}
@@ -3594,10 +3594,7 @@ func (p *proxyrunner) _syncBMDFinal(ctx *bmdModifier, clone *bucketMD) {
 }
 
 func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action string) {
-	var (
-		err   error
-		query = r.URL.Query()
-	)
+	query := r.URL.Query()
 	switch action {
 	case cmn.Proxy:
 		// cluster-wide: designate a new primary proxy administratively
@@ -3613,7 +3610,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
-				p.keepalive.onerr(err, res.status)
+				p.keepalive.onerr(res.err, res.status)
 				return
 			}
 		}
@@ -3636,7 +3633,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
-				p.keepalive.onerr(err, res.status)
+				p.keepalive.onerr(res.err, res.status)
 				return
 			}
 		}
