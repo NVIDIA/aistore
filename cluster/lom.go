@@ -38,7 +38,6 @@ const (
 )
 
 type (
-	// NOTE: sizeof(lmeta) = 88 as of 5/26
 	lmeta struct {
 		uname    string
 		version  string
@@ -49,6 +48,7 @@ type (
 		cksum    *cmn.Cksum // ReCache(ref)
 		copies   fs.MPI     // ditto
 		customMD cmn.SimpleKVs
+		dirty    bool
 	}
 	LOM struct {
 		md          lmeta             // local meta
@@ -124,6 +124,15 @@ func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
 func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
+
+func (lom *LOM) WritePolicy() (p cmn.MDWritePolicy) {
+	if bprops := lom.Bprops(); bprops == nil {
+		p = cmn.WriteImmediate
+	} else {
+		p = bprops.MDWrite
+	}
+	return
+}
 
 func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
@@ -267,7 +276,7 @@ func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
 
 func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 	numCopies := lom.NumCopies()
-	// 1. Delete all copies from metadata
+	// 1. Delete all copies from the metadata
 	for _, copyFQN := range copiesFQN {
 		if _, ok := lom.md.copies[copyFQN]; !ok {
 			return fmt.Errorf("lom %s(num: %d): copy %s %s", lom, numCopies, copyFQN, cmn.DoesNotExist)
@@ -275,18 +284,16 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 		lom.delCopyMd(copyFQN)
 	}
 
-	// 2. Try to update metadata on left copies
+	// 2. Update metadata on remaining copies, if any
 	if err := lom.syncMetaWithCopies(); err != nil {
-		return err // Hard error which probably removed default object.
+		debug.AssertNoErr(err)
+		return err
 	}
 
-	// 3. If everything succeeded, finally remove the requested copies.
-	//
-	// NOTE: We should not report error if there was problem with removing copies.
-	// LRU should take care of that later.
+	// 3. Remove the copies
 	for _, copyFQN := range copiesFQN {
 		if err1 := cmn.RemoveFile(copyFQN); err1 != nil {
-			glog.Error(err1)
+			glog.Error(err1) // TODO: LRU should take care of that later.
 			continue
 		}
 	}
@@ -328,9 +335,14 @@ func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 
 // syncMetaWithCopies tries to make sure that all copies have identical metadata.
 // NOTE: uname for LOM must be already locked.
+// NOTE: changes _may_ be made - the caller must call lom.Persist() upon return
 func (lom *LOM) syncMetaWithCopies() (err error) {
 	var copyFQN string
 	if !lom.HasCopies() {
+		return nil
+	}
+	if lom.WritePolicy() != cmn.WriteImmediate {
+		lom.md.dirty = true
 		return nil
 	}
 	for {
@@ -801,11 +813,11 @@ func (lom *LOM) ReCache() {
 	)
 	*md = lom.md
 	md.bckID = lom.Bprops().BID
-	if md.bckID != 0 {
-		cache.Store(hkey, md)
-	}
+	debug.Assert(md.bckID != 0)
+	cache.Store(hkey, md)
 }
 
+// TODO -- FIXME: cannot uncache dirty unless on-error
 func (lom *LOM) Uncache() {
 	debug.Assert(!lom.IsCopy()) // not caching copies
 	var (

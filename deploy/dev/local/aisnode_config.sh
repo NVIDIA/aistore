@@ -150,7 +150,8 @@ cat > $AIS_CONF_FILE <<EOL
 		"dsorter_mem_threshold": "100GB",
 		"compression":           "${COMPRESSION:-never}",
 		"call_timeout":          "10m"
-	}
+	},
+	"md_write": "${MD_WITE:-}"
 }
 EOL
 

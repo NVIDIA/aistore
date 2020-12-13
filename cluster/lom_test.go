@@ -73,11 +73,11 @@ var _ = Describe("LOM", func() {
 		bmd = cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				bucketLocalA, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}},
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumNone}, BID: 1},
 			),
 			cluster.NewBck(
 				bucketLocalB, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}},
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
 			),
 			cluster.NewBck(
 				bucketLocalC, cmn.ProviderAIS, cmn.NsGlobal,
@@ -85,12 +85,13 @@ var _ = Describe("LOM", func() {
 					Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
 					LRU:    cmn.LRUConf{Enabled: true},
 					Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
+					BID:    3,
 				},
 			),
-			cluster.NewBck(sameBucketName, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{}),
-			cluster.NewBck(bucketCloudA, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}),
-			cluster.NewBck(bucketCloudB, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}),
-			cluster.NewBck(sameBucketName, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{}),
+			cluster.NewBck(sameBucketName, cmn.ProviderAIS, cmn.NsGlobal, &cmn.BucketProps{BID: 4}),
+			cluster.NewBck(bucketCloudA, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 5}),
+			cluster.NewBck(bucketCloudB, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 6}),
+			cluster.NewBck(sameBucketName, cmn.ProviderAmazon, cmn.NsGlobal, &cmn.BucketProps{BID: 7}),
 		)
 		tMock cluster.Target
 	)

@@ -46,6 +46,7 @@ var _ = Describe("Mirror", func() {
 			Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
 			LRU:    cmn.LRUConf{Enabled: true},
 			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
+			BID:    1,
 		}
 		bck             = cmn.Bck{Name: testBucketName, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal, Props: props}
 		bmdMock         = cluster.NewBaseBownerMock(&cluster.Bck{Bck: bck})

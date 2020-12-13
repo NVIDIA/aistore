@@ -90,8 +90,9 @@ var _ = Describe("IterFields", func() {
 					"extra.original_url": "",
 					"extra.cloud_region": "",
 
-					"access":  cmn.AccessAttrs(0),
-					"created": int64(0),
+					"access":   cmn.AccessAttrs(0),
+					"md_write": cmn.MDWritePolicy(""),
+					"created":  int64(0),
 				},
 			),
 			Entry("list BucketPropsToUpdate fields",
@@ -104,7 +105,8 @@ var _ = Describe("IterFields", func() {
 					Cksum: &cmn.CksumConfToUpdate{
 						Type: api.String(cmn.ChecksumXXHash),
 					},
-					Access: api.AccessAttrs(1024),
+					Access:  api.AccessAttrs(1024),
+					MDWrite: api.MDWritePolicy("never"),
 				},
 				map[string]interface{}{
 					"backend_bck.name":     (*string)(nil),
@@ -136,7 +138,8 @@ var _ = Describe("IterFields", func() {
 					"lru.highwm":       (*int64)(nil),
 					"lru.out_of_space": (*int64)(nil),
 
-					"access": api.AccessAttrs(1024),
+					"access":   api.AccessAttrs(1024),
+					"md_write": api.MDWritePolicy("never"),
 				},
 			),
 			Entry("check for omit tag",
@@ -196,7 +199,8 @@ var _ = Describe("IterFields", func() {
 
 					"checksum.type": cmn.ChecksumXXHash,
 
-					"access": "12", // type == uint64
+					"access":   "12", // type == uint64
+					"md_write": "never",
 				},
 				&cmn.BucketProps{
 					Mirror: cmn.MirrorConf{
@@ -216,7 +220,8 @@ var _ = Describe("IterFields", func() {
 						Enabled:         false,
 						ValidateWarmGet: true,
 					},
-					Access: 12,
+					Access:  12,
+					MDWrite: "never",
 				},
 			),
 			Entry("update some BucketPropsToUpdate",
@@ -239,7 +244,8 @@ var _ = Describe("IterFields", func() {
 
 					"checksum.type": cmn.ChecksumXXHash,
 
-					"access": "12", // type == uint64
+					"access":   "12", // type == uint64
+					"md_write": "never",
 				},
 				&cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
@@ -260,7 +266,8 @@ var _ = Describe("IterFields", func() {
 						Type:            api.String(cmn.ChecksumXXHash),
 						ValidateWarmGet: api.Bool(true),
 					},
-					Access: api.AccessAttrs(12),
+					Access:  api.AccessAttrs(12),
+					MDWrite: api.MDWritePolicy(cmn.WriteNever),
 				},
 			),
 		)

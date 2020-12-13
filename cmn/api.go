@@ -140,6 +140,9 @@ type (
 		// Mirror defines local-mirroring policy for the bucket
 		Mirror MirrorConf `json:"mirror"`
 
+		// Metadata write policy
+		MDWrite MDWritePolicy `json:"md_write"`
+
 		// EC defines erasure coding setting for the bucket
 		EC ECConf `json:"ec"`
 
@@ -172,6 +175,7 @@ type (
 		Mirror     *MirrorConfToUpdate  `json:"mirror"`
 		EC         *ECConfToUpdate      `json:"ec"`
 		Access     *AccessAttrs         `json:"access,string"`
+		MDWrite    *MDWritePolicy       `json:"md_write"`
 	}
 	BckToUpdate struct {
 		Name     *string `json:"name"`
@@ -477,7 +481,7 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 	}
 
 	validationArgs := &ValidationArgs{TargetCnt: targetCnt}
-	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}
+	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, bp.MDWrite}
 	for _, validator := range validators {
 		if err := validator.ValidateAsProps(validationArgs); err != nil {
 			return err

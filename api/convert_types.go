@@ -32,3 +32,7 @@ func Int64(v int64) *int64 {
 func AccessAttrs(v cmn.AccessAttrs) *cmn.AccessAttrs {
 	return &v
 }
+
+func MDWritePolicy(v cmn.MDWritePolicy) *cmn.MDWritePolicy {
+	return &v
+}

@@ -146,7 +146,8 @@ var _ = Describe("API", func() {
 						ParitySlices: api.Int(1024),
 						Compression:  api.String("false"),
 					},
-					Access: api.AccessAttrs(1024),
+					Access:  api.AccessAttrs(1024),
+					MDWrite: api.MDWritePolicy(cmn.WriteDelayed),
 				},
 				cmn.BucketProps{
 					Versioning: cmn.VersionConf{
@@ -174,7 +175,8 @@ var _ = Describe("API", func() {
 						ParitySlices: 1024,
 						Compression:  "false",
 					},
-					Access: 1024,
+					Access:  1024,
+					MDWrite: "delayed",
 				},
 			),
 		)

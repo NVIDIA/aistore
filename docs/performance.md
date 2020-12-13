@@ -2,7 +2,6 @@ AIStore is all about the performance.
 Below you will find some tips and tricks to ensure that AIStore does deliver.
 
 - [Performance tuning](#performance-tuning)
-    - [General](#general)
     - [CPU](#cpu)
     - [Network](#network)
         - [Smoke test](#smoke-test)
@@ -13,16 +12,17 @@ Below you will find some tips and tricks to ensure that AIStore does deliver.
         - [Underlying filesystem](#underlying-filesystem)
             - [noatime](#noatime)
     - [Virtualization](#virtualization)
+    - [Metadata write policy](#metadata-write-policy)
 - [Performance testing](#performance-testing)
 
-## Performance tuning
+# Performance tuning
 
 Articles you may find useful:
 
 * https://wiki.mikejung.biz/Ubuntu_Performance_Tuning <- good guide about general optimizations (some of them are described below)
 * https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf <- detailed view on how to tune the RHEL lot of the tips and tricks apply for other Linux distributions
 
-### CPU
+## CPU
 
 Setting CPU governor (P-States) to `performance` may make a big difference and, in particular, result in much better network throughput:
 
@@ -39,7 +39,7 @@ $ cpupower frequency-info # check settings after the change
 
 Once the packages are installed (the step that will depend on your Linux distribution), you can then follow the *tuning instructions* from the referenced PDF (above).
 
-### Network
+## Network
 
 * MTU should be set to `9000` (Jumbo frames) - this is one of the most important configurations
 * Optimize TCP send buffer sizes on the target side (`net.core.rmem_max`, `net.ipv4.tcp_rmem`)
@@ -47,7 +47,7 @@ Once the packages are installed (the step that will depend on your Linux distrib
 * `net.ipv4.tcp_mtu_probing = 2` # especially important in communication between client <-> proxy or client <-> target and if client has `mtu` set > 1500
 * Wait.. there is more: [all ip-sysctl configurations](https://www.cyberciti.biz/files/linux-kernel/Documentation/networking/ip-sysctl.txt)
 
-#### Smoke test
+### Smoke test
 
 To ensure client ⇔ proxy, client ⇔ target, proxy ⇔ target, and target ⇔ target connectivity you can use `iperf` (make sure to use Jumbo frames and disable fragmentation).
 Here is example use of `iperf`:
@@ -58,7 +58,7 @@ $ iperf -P 20 -l 128K -i 1 -t 30 -w 512K -c <IP-address>
 
 **NOTE**: `iperf` must show 95% of the bandwidth of a given phys interface. If it does not, try to find out why. It might have no sense to run any benchmark prior to finding out.
 
-#### Maximum open files
+### Maximum open files
 
 To ensure that AIStore works properly you probably need to increase the default number of open files. To check the current settings, you can use `ulimit -n`.
 
@@ -82,7 +82,7 @@ ubuntu           soft    nofile          999999
 
 > If the change in the ` /etc/security/limits.conf` (above) does not cause `ulimit -n` to show expected numbers, try then modifying `/etc/systemd/user.conf` and `/etc/systemd/system.conf`. In both configurations files, look for the line `#DefaultLimitNOFILE=` and uncomment it as `DefaultLimitNOFILE=999999`. A brief discussion of the topic can be found [here](https://superuser.com/questions/1200539/cannot-increase-open-file-limit-past-4096-ubuntu).
 
-### Storage
+## Storage
 
 Storage-wise, each local `ais.json` config must be looking as follows:
 
@@ -92,7 +92,7 @@ Storage-wise, each local `ais.json` config must be looking as follows:
 * Each local filesystem (above) must utilize one or more data drives, whereby none of the data drives is shared between two or more local filesystems.
 * Each filesystem must be fine-tuned for reading large files/blocks/xfersizes.
 
-#### Block settings
+### Block settings
 
 When initializing the disk it is necessary to set proper block size: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/disk-performance.html
 
@@ -100,7 +100,7 @@ When initializing the disk it is necessary to set proper block size: https://doc
 $ dd if=/dev/zero of=/dev/<disk_name> bs=<block_size>
 ```
 
-#### Benchmarking disk
+### Benchmarking disk
 
 **TIP:** double check that rootfs/tmpfs of the AIStore target are _not_ used when reading and writing data.
 
@@ -124,7 +124,7 @@ $ hdparm -t --direct --offset 100 /dev/<drive-name>
 
 More: [Tune hard disk with `hdparm`](http://www.linux-magazine.com/Online/Features/Tune-Your-Hard-Disk-with-hdparm).
 
-#### Underlying filesystem
+### Underlying filesystem
 
 Another way to increase storage performance is to benchmark different filesystems: `ext`, `xfs`, `openzfs`.
 Tuning the IO scheduler can be a very important part of this process:
@@ -136,7 +136,7 @@ When you consider using `xfs` keep in mind that:
 
 > According to xfs.org, the CFQ scheduler defeats much of the parallelization in XFS.
 
-##### noatime
+#### noatime
 
 One of the most important performance improvements can be achieved by turning off `atime` (access time) updates on the filesystem.
 This can be achieved by specifying `noatime` option when mounting the storage disk.
@@ -151,7 +151,7 @@ External links:
  * https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/global_file_system_2/s2-manage-mountnoatime
  * https://lonesysadmin.net/2013/12/08/gain-30-linux-disk-performance-noatime-nodiratime-relatime/
 
-### Virtualization
+## Virtualization
 
 AIStore node (proxy and target) must be deployed as a single VM on a given bare-metal host.
 There must be no sharing of host resources between two or more VMs.
@@ -161,7 +161,21 @@ Make sure to use PCI passthrough to assign a device (NIC, HDD) directly to the A
 
 AIStore's primary goal is to scale with clustered drives. Therefore, the choice of a drive (type and capabilities) is very important.
 
-## Performance testing
+## Metadata write policy
+
+Sometimes it will make sense to keep storage system's metadata strictly in memory or, maybe, cache and flush it on a best-effort basis. The corresponding use cases include temporary datasets - transient data of any kind that can (and will) be discarded. There's also the case when AIS is used as a high-performance caching layer with original data already sufficiently replicated and protected.
+
+Metadata write policy - json tag `md_write` - was introduced specifically to support those and related scenarios. Configurable both globally and for each individual bucket (or dataset), the current set of supported policies includes:
+
+| Policy | Description |
+| --- | ---|
+| `immediate` | write immediately upon updates (global default) |
+| `delayed`   | cache and flush when not accessed for a while (see also: [noatime](#noatime)) |
+| `never`     | never write but always keep metadata in memory (aka "transient") |
+
+> For the most recently updated enumeration, please see the [source](/cmn/api_const.go).
+
+# Performance testing
 
 [AIStore load generator](/docs/howto_benchmark.md) is a built-in tool to test performance. One of the most common questions that arise when analyzing performance results is whether the bottleneck is imposed by the hardware - namely, HDDs.
 

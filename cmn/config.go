@@ -145,6 +145,7 @@ type (
 		Downloader  DownloaderConf  `json:"downloader"`
 		DSort       DSortConf       `json:"distributed_sort"`
 		Compression CompressionConf `json:"compression"`
+		MDWrite     MDWritePolicy   `json:"md_write"`
 	}
 	CloudConf struct {
 		Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on cloud provider
@@ -719,8 +720,6 @@ func (c *VersionConf) Validate(_ *Config) error {
 	return nil
 }
 
-func (c *VersionConf) ValidateAsProps() error { return c.Validate(nil) }
-
 func (c *MirrorConf) Validate(_ *Config) error {
 	if c.UtilThresh < 0 || c.UtilThresh > 100 {
 		return fmt.Errorf("invalid mirror.util_thresh: %v (expected value in range [0, 100])",
@@ -741,6 +740,15 @@ func (c *MirrorConf) ValidateAsProps(args *ValidationArgs) error {
 	}
 	return c.Validate(nil)
 }
+
+func (c MDWritePolicy) Validate(_ *Config) (err error) {
+	if c == WriteImmediate || c == WriteDelayed || c == WriteNever {
+		return
+	}
+	return fmt.Errorf("invalid md_write policy %q", c)
+}
+
+func (c MDWritePolicy) ValidateAsProps(_ *ValidationArgs) (err error) { return c.Validate(nil) }
 
 func (c *ECConf) Validate(_ *Config) error {
 	if c.ObjSizeLimit < 0 {

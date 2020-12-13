@@ -99,7 +99,7 @@ const (
 	ActXactStart = Start
 
 	// auxiliary
-	ActTransient = "transient" // do not save on the disk
+	ActTransient = "transient" // transient - in-memory only
 )
 
 // xaction begin-commit phases
@@ -375,4 +375,13 @@ const (
 const (
 	DefaultTimeout = time.Duration(-1)
 	LongTimeout    = time.Duration(-2)
+)
+
+// metadata write policy
+type MDWritePolicy string
+
+const (
+	WriteImmediate = MDWritePolicy("")        // immediate write (default)
+	WriteDelayed   = MDWritePolicy("delayed") // cache and flush when not accessed for a while (lom_cache_hk.go)
+	WriteNever     = MDWritePolicy("never")   // transient - in-memory only
 )

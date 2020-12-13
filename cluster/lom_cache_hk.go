@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -75,13 +76,13 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 	)
 	defer lchk.running.Store(false)
 
-	// one cache at a time (TODO: throttle via mountpath.IsIdle())
+	// one cache at a time (TODO -- FIXME: throttle via mountpath.IsIdle())
 	for _, cache := range caches {
 		f := func(hkey, value interface{}) bool {
 			md := value.(*lmeta)
 			mdTime := md.atime
 			if mdTime < 0 {
-				mdTime = -mdTime // special case: prefetched but not-yet accessed
+				mdTime = -mdTime // special case: prefetched but not yet accessed
 			}
 			totalCnt++
 			atime := time.Unix(0, mdTime)
@@ -91,6 +92,10 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 			if mdTime > 0 && md.atime != md.atimefs {
 				if lom, bucketExists := lomFromLmeta(md, bmd); bucketExists {
 					lom.flushAtime(atime)
+					if md.dirty && lom.WritePolicy() != cmn.WriteNever {
+						lom.md = *md
+						lom.persistDirty() // write this lom and update its copies
+					}
 				}
 			}
 			cache.Delete(hkey)

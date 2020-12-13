@@ -125,7 +125,12 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 }
 
 func (lom *LOM) Persist() (err error) {
-	buf, mm := lom._persist()
+	if lom.WritePolicy() != cmn.WriteImmediate {
+		lom.md.dirty = true
+		lom.ReCache()
+		return
+	}
+	buf, mm := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		T.FSHC(err, lom.FQN)
 	}
@@ -133,15 +138,38 @@ func (lom *LOM) Persist() (err error) {
 	return
 }
 
-func (lom *LOM) _persist() (buf []byte, mm *memsys.MMSA) {
-	var (
-		size   int64
-		lmsize = maxLmeta.Load()
-	)
+func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
+	buf, mm := lom.marshal()
+	// replicate across copies
+	for copyFQN = range lom.md.copies {
+		if copyFQN == lom.FQN {
+			continue
+		}
+		if err = fs.SetXattr(copyFQN, XattrLOM, buf); err != nil {
+			break
+		}
+	}
+	mm.Free(buf)
+	return
+}
+
+// NOTE: not clearing dirty flag as the caller will uncache anyway
+func (lom *LOM) persistDirty() {
+	if err := lom.syncMetaWithCopies(); err != nil {
+		return
+	}
+	buf, mm := lom.marshal()
+	if err := fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
+		T.FSHC(err, lom.FQN)
+	}
+	mm.Free(buf)
+}
+
+func (lom *LOM) marshal() (buf []byte, mm *memsys.MMSA) {
+	lmsize := maxLmeta.Load()
 	mm = T.SmallMMSA()
 	buf = lom.md.marshal(mm, lmsize)
-
-	size = int64(len(buf))
+	size := int64(len(buf))
 	cmn.Assert(size <= xattrMaxSize)
 	lom._recomputeMdSize(size, lmsize)
 	return
@@ -157,21 +185,6 @@ func (lom *LOM) _recomputeMdSize(size, mdSize int64) {
 		nsize = cmn.MinI64(size+grow, (size+xattrMaxSize)/2)
 		maxLmeta.CAS(mdSize, nsize)
 	}
-}
-
-func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
-	buf, mm := lom._persist()
-	// replicate for all the copies
-	for copyFQN = range lom.md.copies {
-		if copyFQN == lom.FQN {
-			continue
-		}
-		if err = fs.SetXattr(copyFQN, XattrLOM, buf); err != nil {
-			break
-		}
-	}
-	mm.Free(buf)
-	return
 }
 
 //
