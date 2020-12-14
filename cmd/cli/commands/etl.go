@@ -40,6 +40,7 @@ var etlCmds = []cli.Command{
 					depsFileFlag,
 					runtimeFlag,
 					waitTimeoutFlag,
+					etlUID,
 				},
 				Action: etlBuildHandler,
 			},
@@ -100,6 +101,20 @@ func etlIDCompletions(c *cli.Context) {
 	}
 }
 
+func etlExists(uuid string) (err error) {
+	// TODO: Replace with a generic API for checking duplicate UUID
+	list, err := api.ETLList(defaultAPIParams)
+	if err != nil {
+		return
+	}
+	for _, l := range list {
+		if l.ID == uuid {
+			return fmt.Errorf("ETL %q already exists", uuid)
+		}
+	}
+	return
+}
+
 func etlInitHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "SPEC_FILE")
@@ -107,6 +122,16 @@ func etlInitHandler(c *cli.Context) (err error) {
 	spec, err := ioutil.ReadFile(c.Args()[0])
 	if err != nil {
 		return err
+	}
+
+	var msg etl.InitMsg
+	if msg, err = etl.ValidateSpec(spec); err != nil {
+		return err
+	}
+
+	// msg.ID is `metadata.name` from podSpec
+	if err = etlExists(msg.ID); err != nil {
+		return
 	}
 
 	id, err := api.ETLInit(defaultAPIParams, spec)
@@ -124,6 +149,17 @@ func etlBuildHandler(c *cli.Context) (err error) {
 	if fromFile == "" {
 		return fmt.Errorf("%s flag cannot be empty", fromFileFlag.Name)
 	}
+
+	msg.ID = parseStrFlag(c, etlUID)
+	if msg.ID != "" {
+		if err = cmn.ValidateID(msg.ID); err != nil {
+			return
+		}
+		if err = etlExists(msg.ID); err != nil {
+			return
+		}
+	}
+
 	if msg.Code, err = ioutil.ReadFile(fromFile); err != nil {
 		return fmt.Errorf("failed to read file: %q, err: %v", fromFile, err)
 	}

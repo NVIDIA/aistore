@@ -73,10 +73,9 @@ func (r *registry) removeByUUID(uuid string) (c Communicator) {
 func (r *registry) list() []Info {
 	r.mtx.RLock()
 	etls := make([]Info, 0, len(r.byUUID))
-	for uuid, c := range r.byUUID {
+	for uuid := range r.byUUID {
 		etls = append(etls, Info{
-			ID:   uuid,
-			Name: c.Name(),
+			ID: uuid,
 		})
 	}
 	r.mtx.RUnlock()

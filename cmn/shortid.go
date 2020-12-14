@@ -5,7 +5,9 @@
 package cmn
 
 import (
+	"fmt"
 	"math/rand"
+	"regexp"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/teris-io/shortid"
@@ -14,12 +16,15 @@ import (
 const (
 	// Alphabet for generating UUIDs similar to the shortid.DEFAULT_ABC
 	// NOTE: len(uuidABC) > 0x3f - see GenTie()
-	uuidABC = "-5nZJDft6LuzsjGNpPwY7rQa39vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk_"
+	uuidABC  = "-5nZJDft6LuzsjGNpPwY7rQa39vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk_"
+	minIDLen = 5
+	maxIDLen = 21
 )
 
 var (
-	sid  *shortid.Shortid
-	rtie atomic.Int32
+	sid     *shortid.Shortid
+	rtie    atomic.Int32
+	idRegex = regexp.MustCompile("^[A-Za-z][A-Za-z0-9-_]{4,20}$")
 )
 
 func InitShortID(seed uint64) {
@@ -56,4 +61,15 @@ func GenTie() string {
 	b1 := uuidABC[-tie&0x3f]
 	b2 := uuidABC[(tie>>2)&0x3f]
 	return string([]byte{b0, b1, b2})
+}
+
+func ValidateID(id string) error {
+	if len(id) <= minIDLen || len(id) >= maxIDLen {
+		return fmt.Errorf("invalid ID: length should be > %d and < %d", minIDLen, maxIDLen)
+	}
+
+	if !idRegex.MatchString(id) {
+		return fmt.Errorf("invalid ID: can contain only alphabets, numbers, '_', or '-'")
+	}
+	return nil
 }

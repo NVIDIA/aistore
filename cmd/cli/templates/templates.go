@@ -291,9 +291,9 @@ const (
 	SearchTmpl = "{{ JoinListNL . }}\n"
 
 	// Command `transform`
-	TransformListTmpl = "ID\tNAME\n" +
+	TransformListTmpl = "ID\n" +
 		"{{range $transform := .}}" +
-		"{{$transform.ID}}\t{{$transform.Name}}\n" +
+		"{{$transform.ID}}\n" +
 		"{{end}}"
 
 	// Command `show mountpath`

@@ -2,7 +2,7 @@
 
 `ais etl init SPEC_FILE`
 
-Init ETL with Pod YAML specification file.
+Init ETL with Pod YAML specification file. The `metadata.name` attribute in the specification is used as unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
 Note: currently, only one ETL at a time is supported.
 
@@ -33,9 +33,9 @@ JGHEoo89gg
 
 ## Build ETL
 
-`ais etl build --from-file=CODE_FILE --runtime=RUNTIME [--deps-file=DEPS_FILE]`
+`ais etl build --from-file=CODE_FILE --runtime=RUNTIME [--deps-file=DEPS_FILE] [--name=UNIQUE_ID]`
 
-Builds and initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`.
+Builds and initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform`. The `--name` parameter is used to assign a user defined unique ID (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 The `transform` function must take `input_bytes` (raw bytes of the objects) as parameters and return the transformed object (also raw bytes that will be saved into a new object).
 
 > The ETL crashes if the function panics or throws an exception.

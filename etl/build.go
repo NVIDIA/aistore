@@ -21,7 +21,7 @@ func Build(t cluster.Target, msg BuildMsg) error {
 	var (
 		// We clean up the `msg.ID` as K8s doesn't allow `_` and uppercase
 		// letters in the names.
-		name    = k8s.CleanName("etl-" + msg.ID)
+		name    = k8s.CleanName(msg.ID)
 		podSpec = r.PodSpec()
 	)
 

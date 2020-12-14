@@ -274,7 +274,6 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	msg.ID = cmn.GenUUID()
 
 	results := p.bcastToGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)},
@@ -317,7 +316,13 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg.ID = cmn.GenUUID()
+	if msg.ID == "" {
+		msg.ID = cmn.GenUUID()
+	} else if err = cmn.ValidateID(msg.ID); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
 	if err := msg.Validate(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return

@@ -12,6 +12,7 @@
 - [Defining and initializing ETL](#defining-and-initializing-etl)
 - [Transforming objects](#transforming-objects)
 - [API Reference](#api-reference)
+- [ETL name specifications](#etl-name-specifications)
 
 ## Introduction
 
@@ -255,3 +256,30 @@ This section describes how to interact with ETLs via RESTful API.
 | Transform bucket | Transforms all objects in a bucket and puts them to destination bucket. | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "prefix":"prefix", "suffix": "suffix"}}' 'http://G/v1/buckets/from-name'` |
 | Dry run transform bucket | Accumulates in xaction stats how many objects and bytes would be created, without actually doing it. | POST {"action": "etlbck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etlbck", "name": "to-name", "value":{"ext":"destext", "dry_run": true}}' 'http://G/v1/buckets/from-name'` |
 | Stop ETL | Stops ETL with given `ETL_ID`. | DELETE /v1/etl/stop/ETL_ID | `curl -X DELETE 'http://G/v1/etl/stop/ETL_ID'` |
+
+
+## ETL name specifications
+
+Every initialized ETL has a unique `ETL_ID` associated with it, used for running transforms/computation on data or stopping the ETL. 
+
+The `pod` name is used as the `ETL_ID` when an ETL is initialized using YAML specification. For instance, below YAML spec sets `ETL_ID` to `compute-md5`.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compute-md5
+(...)
+```
+
+When building ETL from code, a valid user-defined `ETL_ID` can be assigned using the `--name` CLI parameter as shown below. If the parameter is left empty, an auto-generated ID is assigned.
+
+```console
+$ ais etl build --name=etl-md5 --from-file=code.py --runtime=python3 --deps-file=deps.txt
+```
+
+Below are specifications for a valid `ETL_ID`:
+1. Starts with an alphabet 'A' to 'Z' or 'a' to 'z'
+2. Can contain alphabets, numbers, underscore ('_'), or hyphen ('-')
+3. Should have a length greater that 5 and less than 21
+4. Shouldn't contain special characters, except for underscore and hyphen
