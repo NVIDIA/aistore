@@ -11,7 +11,10 @@ if command -v /opt/cisco/anyconnect/bin/vpn &> /dev/null; then
   fi
 fi
 
-source utils/deploy_minikube.sh
-source utils/minikube_registry.sh
+if [[ "$1" != "redeploy" ]]; then
+  # TODO: When option is redeploy, ensure Minikube and registry are present.
+  source utils/deploy_minikube.sh
+  source utils/minikube_registry.sh
+fi
 
 source utils/deploy_ais.sh

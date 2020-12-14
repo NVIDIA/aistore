@@ -9,7 +9,9 @@ minikube delete
 
 # We use docker as it is simple to use.
 # It's run in subshell to not "eat" the input.
-(minikube start --driver=docker)
+minikube_cpu=${MINIKUBE_CPU:-4}
+minikube_memory=${MINIKUBE_MEMORY:-8192}
+(minikube start --driver=docker --cpus ${minikube_cpu} --memory ${minikube_memory})
 
 source utils/ais_minikube_setup.sh
 

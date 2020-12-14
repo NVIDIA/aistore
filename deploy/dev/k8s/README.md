@@ -1,3 +1,12 @@
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Prerequisites](#prerequisites)
+- [Files](#files)
+- [Trying AIStore on Minikube](#trying-aistore-on-minikube)
+- [Developing AIStore on Minikube](#developing-aistore-on-minikube)
+- [Troubleshooting Minikube](#troubleshooting-minikube)
+
 ## Introduction
 
 [Minikube](https://kubernetes.io/docs/setup/learning-environment/minikube/) allows one to run Kubernetes in a local environment like your laptop for testing out applications in a native Kubernetes envrironment. It can only be used for single-node Kubernetes cluster. It supports a range of drivers like Virtualbox, KVM, Docker etc. Virtualbox, KVM require a hypervisor.  However, if you choose to use docker on a Linux machine there is no need for a hypervisor.
@@ -20,6 +29,18 @@ $ sudo service docker start
    operations try running with VPN disabled.**
 
 All commands below are running from the same directory i.e `${AISTORE_ROOT}/deploy/dev/k8s`
+
+## Files
+
+| Name | Description |
+| --- | --- |
+| [try.sh](try.sh) | try basic version of AIStore on `Minikube` ([ref](#trying-aistore-on-minikube)) |
+| [dev.sh](dev.sh) | deploy multi-proxy/target AIStore with other utilities ([ref](#developing-aistore-on-minikube)) |
+| [stop_ais.sh](stop_ais.sh) | stop running AIStore pods  |
+| [stop.sh](stop.sh) | stop minikube cluster |
+| [Dockerfile-aisnode-ubuntu](Dockerfile-aisnode-ubuntu) | build AIStore node docker image on `Ubuntu 18.04` |
+| [Dockerfile-aisnode-alphine](Dockerfile-aisnode-alphine) | build AIStore node docker image on `alphine` |
+| [Dockerfile-datascience](Dockerfile-datascience) | build docker image for data science - jupyter notebook, pandas, pytorch, etc. |
 
 ## Trying AIStore on Minikube
 
@@ -55,7 +76,36 @@ $ ./dev.sh
 It's possible to pass input to the command, so no interaction is required:
 
 ```console
-$ ./dev.sh <<< $'n\ny\n1\n1\n1\n2\nn\nn\nn\ny'
+$ ./dev.sh <<< $'n\ny\n1\n1\n1\n2\nn\nn\nn\ny\nn'
+```
+
+To update the aisnode images, or to redeploy AIStore, execute the script with `redeploy` argument, as shown below. This will skip the Minikube and Docker registry deployment.
+
+```console
+$ ./dev.sh redeploy
+```
+
+### Datascience stack
+
+In addition to deploying an AIStore cluster, the `dev.sh` script also provides an option to run datascience stack. Developers can utilize it to run and test simple ML/DL pipelines against the AIStore cluster.
+
+The datascience stack comprises of utilities to interact with AIStore cluster, interactive jupyter notebook, `python3.8` environment with commonly used datascience libraries, such as `scipy`, `matplotlib`, `numpy`, `pytorch`, etc.
+
+Non-interactive command for deploying AIStore cluster with datascience stack:
+
+```console
+$ JUPYTER_TOKEN="aistoretoken" ./dev.sh <<< $'n\ny\n1\n1\n1\n2\nn\nn\nn\ny\ny'
+```
+
+In the above command, `JUPYTER_TOKEN` is the token used to access the jupyter notebook. By default, the jupyter notebook can be access over [http://localhost:8888] using the `JUPYTER_TOKEN`. However, the default port can be overwritten using the `JUPYTER_PORT` variable, as show below:
+
+```console
+$ JUPYTER_PORT=8899 JUPYTER_TOKEN="aistoretoken" ./dev.sh <<< $'n\ny\n1\n1\n1\n2\nn\nn\nn\ny\ny'
+```
+
+To prevent losing progress made on jupyter notebooks, a local directory (by default `./ais_datascience`) is mounted onto the docker container running jupyter notebooks where all the notebooks are persisted. The default local directory can be overwritten using the `JUPYTER_LOCAL_DIR` variable, as shown below:
+```console
+$ JUPYTER_LOCAL_DIR="/home/ubuntu/ais_datascience" JUPYTER_TOKEN="aistoretoken" ./dev.sh <<< $'n\ny\n1\n1\n1\n2\nn\nn\nn\ny\ny'
 ```
 
 ### Stopping and cleanup
@@ -71,6 +121,8 @@ For stopping and deleting the Minikube cluster
 ```console
 $ ./stop.sh
 ```
+
+NOTE: If the default jupyter local directory was overwritten while deploying, ensure `JUPYTER_LOCAL_DIR` is pointing to the correct directory when performing a cleanup.
 
 ## Troubleshooting Minikube
 
