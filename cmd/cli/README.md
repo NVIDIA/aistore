@@ -1,3 +1,19 @@
+# Table of content
+
+- [Getting Started](#getting-started)
+- [Using AIS CLI](#using-ais-cli)
+	- [Config](#config)
+	- [First steps](#first-steps)
+	- [Global options](#global-options)
+- [AIS CLI Shell Autocomplete](#ais-cli-shell-autocomplete)
+	- [Installing](#installing)
+	- [Uninstalling](#uninstalling)
+- [CLI reference](#cli-reference)
+- [Info For Developers](#info-for-developers)
+	- [Adding New Commands](#adding-new-commands)
+- [Default flag and argument values via environment variables](#default-flag-and-argument-values-via-environment-variables)
+
+
 AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle.
 In addition, CLI provides dataset management commands, commands to read and write data, and more.
 
@@ -52,6 +68,23 @@ To check if the CLI can correctly contact the cluster and to get cluster status,
 
 ```console
 $ ais show cluster
+```
+
+### Global options
+
+Besides a set of options specific for each command, AIS CLI provides global options:
+
+- `--no-colors` - by default AIS CLI displays messages with colors(e.g, errors are printed in red color). Colors are automatically disabled if CLI output is redirected or environment variable `TERM=dumb` is set. To disable colors in other cases, pass `--no-colors` to the application.
+
+Please note that the place of a global options in the command line is fixed. Global options must follow the application name directly. At the same time, the location of a command-specific option is arbitrary: you can put them anywhere. Examples:
+
+```console
+# correct usage of global and command-specific options
+$ ais --no-colors ls ais://bck --props all
+$ ais --no-colors ls --props all ais://bck
+
+# incorrect usage of a global option
+$ ais ls ais://bck --props all --no-colors
 ```
 
 ## AIS CLI Shell Autocomplete

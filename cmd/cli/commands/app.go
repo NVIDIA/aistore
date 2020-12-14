@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
 
@@ -27,6 +28,10 @@ var (
 	// Global config object
 	cfg              *config.Config
 	unreachableRegex *regexp.Regexp = regexp.MustCompile("dial.*(timeout|refused)")
+	noColorFlag                     = cli.BoolFlag{
+		Name:  "no-colors",
+		Usage: "disable colored output",
+	}
 )
 
 // AISCLI represents an instance of an AIS command line interface
@@ -54,7 +59,7 @@ func New(build, version string) *AISCLI {
 // Run runs the CLI
 func (aisCLI *AISCLI) Run(input []string) error {
 	if err := aisCLI.runOnce(input); err != nil {
-		return aisCLI.handleCLIError(err)
+		return err
 	}
 
 	if aisCLI.longRunParams.isInfiniteRun() {
@@ -65,7 +70,7 @@ func (aisCLI *AISCLI) Run(input []string) error {
 }
 
 func (aisCLI *AISCLI) runOnce(input []string) error {
-	return aisCLI.app.Run(input)
+	return aisCLI.handleCLIError(aisCLI.app.Run(input))
 }
 
 func (aisCLI *AISCLI) runForever(input []string) error {
@@ -109,22 +114,38 @@ func (aisCLI *AISCLI) isUnreachableError(err error) bool {
 
 // Formats the error message to a nice string
 func (aisCLI *AISCLI) handleCLIError(err error) error {
+	if err == nil {
+		return nil
+	}
+	red := color.New(color.FgRed).SprintFunc()
 	if aisCLI.isUnreachableError(err) {
 		return fmt.Errorf(
-			"AIStore proxy unreachable at %s. You may need to update environment variable AIS_ENDPOINT",
+			red("AIStore proxy unreachable at %s. You may need to update environment variable AIS_ENDPOINT"),
 			clusterURL)
 	}
 	switch err := err.(type) {
 	case *cmn.HTTPError:
-		return errors.New(cmn.CapitalizeString(err.Message))
+		return errors.New(red(cmn.CapitalizeString(err.Message)))
 	case *usageError:
 		return err
 	case *additionalInfoError:
 		err.baseErr = aisCLI.handleCLIError(err.baseErr)
 		return err
 	default:
-		return errors.New(cmn.CapitalizeString(err.Error()))
+		return errors.New(red(cmn.CapitalizeString(err.Error())))
 	}
+}
+
+func onBeforeCommand(c *cli.Context) error {
+	// While `color.NoColor = flagIsSet(c, noColorFlag)` looks shorter and
+	// better, it may ruin some output. Why: the library automatically
+	// disables coloring if TERM="dumb" or Stdout is redirected. In those
+	// cases, we should not override `NoColor` with `false` when the flag
+	// is not defined. So, here we can only disable coloring manually.
+	if flagIsSet(c, noColorFlag) {
+		color.NoColor = true
+	}
+	return nil
 }
 
 func (aisCLI *AISCLI) init(build, version string) {
@@ -135,12 +156,13 @@ func (aisCLI *AISCLI) init(build, version string) {
 	app.Version = fmt.Sprintf("%s (build %s)", version, build)
 	app.EnableBashCompletion = true
 	app.HideHelp = true
-	app.Flags = []cli.Flag{cli.HelpFlag}
+	app.Flags = []cli.Flag{cli.HelpFlag, noColorFlag}
 	app.CommandNotFound = commandNotFoundHandler
 	app.OnUsageError = incorrectUsageHandler
 	app.Metadata = map[string]interface{}{metadata: aisCLI.longRunParams}
 	app.Writer = aisCLI.outWriter
 	app.ErrWriter = aisCLI.errWriter
+	app.Before = onBeforeCommand // to disable colors if `no-colors' is set
 
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",
