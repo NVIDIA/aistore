@@ -63,7 +63,7 @@ func (r *ObjectsListingXact) stop() {
 	r.timer.Stop()
 }
 
-func (r *ObjectsListingXact) Run() error {
+func (r *ObjectsListingXact) Run() {
 	defer func() {
 		r.fetchingDone = true
 	}()
@@ -76,11 +76,10 @@ func (r *ObjectsListingXact) Run() error {
 
 	if r.query.ObjectsSource.Pt != nil {
 		r.startFromTemplate()
-		return nil
+		return
 	}
 
 	r.startFromBck()
-	return nil
 }
 
 // TODO: make thread-safe

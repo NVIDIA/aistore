@@ -77,15 +77,15 @@ func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode
 	}
 }
 
-func (r *XactBckEncode) Run() (err error) {
-	bck := cluster.NewBckEmbed(r.bck)
+func (r *XactBckEncode) Run() {
+	bck := cluster.NewBckEmbed(r.bck) // TODO: Bucket should be already initialized.
 	if err := bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
-		r.Abort()
-		return err
+		r.Finish(err)
+		return
 	}
 	if !bck.Props.EC.Enabled {
-		r.Abort()
-		return fmt.Errorf("bucket %q does not have EC enabled", r.bck.Name)
+		r.Finish(fmt.Errorf("bucket %q does not have EC enabled", r.bck.Name))
+		return
 	}
 
 	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
@@ -97,6 +97,7 @@ func (r *XactBckEncode) Run() (err error) {
 	})
 	jg.Run()
 
+	var err error
 	select {
 	case <-r.ChanAbort():
 		jg.Stop()
@@ -107,7 +108,6 @@ func (r *XactBckEncode) Run() (err error) {
 	r.wg.Wait() // Need to wait for all async actions to finish.
 
 	r.Finish(err)
-	return
 }
 
 func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }

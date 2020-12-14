@@ -152,7 +152,7 @@ func (r *Xact) initTraverse() {
 	go r.traverseBucket(r.msg.Clone())
 }
 
-func (r *Xact) Run() error {
+func (r *Xact) Run() {
 	glog.Infoln(r.String())
 
 	r.init()
@@ -169,10 +169,10 @@ func (r *Xact) Run() error {
 			r.respCh <- r.dispatchRequest()
 		case <-r.IdleTimer():
 			r.stop()
-			return nil
+			return
 		case <-r.ChanAbort():
 			r.stop()
-			return nil
+			return
 		}
 	}
 }

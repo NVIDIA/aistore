@@ -114,18 +114,17 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 	return xact
 }
 
-func (r *XactTransferBck) Run() (err error) {
+func (r *XactTransferBck) Run() {
 	r.dm.SetXact(r)
 	r.dm.Open()
 
 	r.xactBckBase.runJoggers()
 	glog.Infoln(r.String(), r.bckFrom.Bck, "=>", r.bckTo.Bck)
-	err = r.xactBckBase.waitDone()
+	err := r.xactBckBase.waitDone()
 	r.dm.Close(err)
 	r.dm.UnregRecv()
 
 	r.Finish(err)
-	return
 }
 
 func (r *XactTransferBck) String() string {

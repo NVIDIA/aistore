@@ -48,7 +48,7 @@ func newXactBckBase(id, kind string, bck cmn.Bck, opts *mpather.JoggerGroupOpts)
 //
 // as XactBck interface
 //
-func (r *xactBckBase) Run() error             { cmn.Assert(false); return nil }
+func (r *xactBckBase) Run()                   { cmn.Assert(false) }
 func (r *xactBckBase) DoneCh() chan struct{}  { return r.doneCh }
 func (r *xactBckBase) Target() cluster.Target { return r.t }
 

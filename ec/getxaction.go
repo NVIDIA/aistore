@@ -133,7 +133,7 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 	}
 }
 
-func (r *XactGet) Run() (err error) {
+func (r *XactGet) Run() {
 	glog.Infoln(r.String())
 
 	for _, jog := range r.getJoggers {
@@ -173,7 +173,7 @@ func (r *XactGet) Run() (err error) {
 		case <-r.IdleTimer():
 			// It's OK not to notify ecmanager, it'll just have stopped xact in a map.
 			r.stop()
-			return nil
+			return
 		case msg := <-r.controlCh:
 			if msg.Action == ActEnableRequests {
 				r.setEcRequestsEnabled()
@@ -191,12 +191,12 @@ func (r *XactGet) Run() (err error) {
 					r.abortECRequestWhenDisabled(req)
 				default:
 					r.stop()
-					return nil
+					return
 				}
 			}
 		case <-r.ChanAbort():
 			r.stop()
-			return cmn.NewAbortedError(r.String())
+			return
 		}
 	}
 }

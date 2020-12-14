@@ -623,11 +623,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 			return err
 		}
 		c.addNotif(xact) // notify upon completion
-		go func() {
-			if err := xact.Run(); err != nil {
-				glog.Error(err)
-			}
-		}()
+		go xact.Run()
 	default:
 		cmn.Assert(false)
 	}

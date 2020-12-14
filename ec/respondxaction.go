@@ -66,7 +66,7 @@ func NewRespondXact(t cluster.Target, bck cmn.Bck, mgr *Manager) *XactRespond {
 	return runner
 }
 
-func (r *XactRespond) Run() (err error) {
+func (r *XactRespond) Run() {
 	glog.Infoln(r.String())
 
 	var (
@@ -84,10 +84,10 @@ func (r *XactRespond) Run() (err error) {
 			}
 		case <-r.IdleTimer():
 			r.stop()
-			return nil
+			return
 		case <-r.ChanAbort():
 			r.stop()
-			return cmn.NewAbortedError(r.String())
+			return
 		}
 	}
 }

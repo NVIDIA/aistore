@@ -102,14 +102,11 @@ func RunXactPut(lom *cluster.LOM, slab *memsys.Slab) (r *XactPut, err error) {
 	r.InitIdle()
 
 	// Run
-	go func() {
-		err := r.Run()
-		r.Finish(err)
-	}()
+	go r.Run()
 	return
 }
 
-func (r *XactPut) Run() error {
+func (r *XactPut) Run() {
 	glog.Infoln(r.String())
 
 	r.workers.Run()
@@ -126,12 +123,15 @@ func (r *XactPut) Run() error {
 				glog.Errorf("failed to get post with path: %s", lom)
 			}
 		case <-r.IdleTimer():
-			return r.stop()
+			err := r.stop()
+			r.Finish(err)
+			return
 		case <-r.ChanAbort():
 			if err := r.stop(); err != nil {
-				return cmn.NewAbortedError(err.Error())
+				r.Finish(err)
 			}
-			return cmn.NewAbortedError(r.String())
+			r.Finish(cmn.NewAbortedError(r.String()))
+			return
 		}
 	}
 }

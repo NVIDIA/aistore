@@ -88,7 +88,7 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 	}
 }
 
-func (r *XactPut) Run() (err error) {
+func (r *XactPut) Run() {
 	glog.Infoln(r.String())
 
 	for _, jog := range r.putJoggers {
@@ -111,7 +111,7 @@ func (r *XactPut) Run() (err error) {
 		select {
 		case <-r.ChanAbort():
 			r.stop()
-			return fmt.Errorf("%s aborted, exiting", r)
+			return
 		default:
 		}
 
@@ -135,7 +135,7 @@ func (r *XactPut) Run() (err error) {
 		case <-r.IdleTimer():
 			// It's OK not to notify ecmanager, it'll just have stopped xact in a map.
 			r.stop()
-			return nil
+			return
 		case msg := <-r.controlCh:
 			if msg.Action == ActEnableRequests {
 				r.setEcRequestsEnabled()
@@ -153,12 +153,12 @@ func (r *XactPut) Run() (err error) {
 					r.abortECRequestWhenDisabled(req)
 				default:
 					r.stop()
-					return nil
+					return
 				}
 			}
 		case <-r.ChanAbort():
 			r.stop()
-			return fmt.Errorf("%s aborted, exiting", r)
+			return
 		}
 	}
 }

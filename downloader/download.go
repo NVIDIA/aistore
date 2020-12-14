@@ -256,11 +256,10 @@ func newDownloader(t cluster.Target, statsT stats.Tracker) (d *Downloader) {
 	return downloader
 }
 
-func (d *Downloader) Run() error {
+func (d *Downloader) Run() {
 	glog.Infof("starting %s", d.Name())
 	err := d.dispatcher.run()
 	d.stop(err)
-	return nil
 }
 
 // stop terminates the downloader and all dependent entities.

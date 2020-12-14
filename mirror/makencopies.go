@@ -71,16 +71,16 @@ func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, cop
 	return xact
 }
 
-func (r *xactMNC) Run() (err error) {
-	if err = ValidateNCopies(r.Target().Snode().Name(), r.copies); err != nil {
+func (r *xactMNC) Run() {
+	if err := ValidateNCopies(r.Target().Snode().Name(), r.copies); err != nil {
+		r.Finish(err)
 		return
 	}
 
 	r.xactBckBase.runJoggers()
 	glog.Infoln(r.String(), "copies=", r.copies)
-	err = r.xactBckBase.waitDone()
+	err := r.xactBckBase.waitDone()
 	r.Finish(err)
-	return
 }
 
 func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {

@@ -67,7 +67,7 @@ func NewXactDirPromote(dir string, bck cmn.Bck, t cluster.Target, params *cmn.Ac
 	}
 }
 
-func (r *XactDirPromote) Run() (err error) {
+func (r *XactDirPromote) Run() {
 	glog.Infoln(r.String(), r.dir, "=>", r.Bck())
 	opts := &fs.Options{
 		Dir:      r.dir,
@@ -77,7 +77,6 @@ func (r *XactDirPromote) Run() (err error) {
 	if err := fs.Walk(opts); err != nil {
 		glog.Errorln(err)
 	}
-	return
 }
 
 func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {

@@ -97,7 +97,7 @@ func newBckRename(uuid, kind string, bck cmn.Bck, t cluster.Target,
 
 func (r *bckRename) String() string { return fmt.Sprintf("%s <= %s", r.XactBase.String(), r.bckFrom) }
 
-func (r *bckRename) Run() error {
+func (r *bckRename) Run() {
 	glog.Infoln(r.String())
 	// FIXME: smart wait for resilver. For now assuming that rebalance takes longer than resilver.
 	var (
@@ -116,7 +116,6 @@ func (r *bckRename) Run() error {
 
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.Finish()
-	return nil
 }
 
 //
@@ -171,15 +170,14 @@ func newEvictDelete(uuid, kind string, bck cmn.Bck, t cluster.Target, args *xreg
 	}
 }
 
-func (r *evictDelete) Run() error {
+func (r *evictDelete) Run() {
 	var err error
 	if r.args.RangeMsg != nil {
 		err = r.iterateBucketRange(r.args)
 	} else {
 		err = r.listOperation(r.args, r.args.ListMsg)
 	}
-	r.Finish()
-	return err
+	r.Finish(err)
 }
 
 //
@@ -226,13 +224,12 @@ func newPrefetch(uuid, kind string, bck cmn.Bck, t cluster.Target, args *xreg.De
 	}
 }
 
-func (r *prefetch) Run() error {
+func (r *prefetch) Run() {
 	var err error
 	if r.args.RangeMsg != nil {
 		err = r.iterateBucketRange(r.args)
 	} else {
 		err = r.listOperation(r.args, r.args.ListMsg)
 	}
-	r.Finish()
-	return err
+	r.Finish(err)
 }

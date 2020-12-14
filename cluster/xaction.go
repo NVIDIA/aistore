@@ -18,7 +18,7 @@ type (
 	}
 
 	Xact interface {
-		Run() error
+		Run()
 		ID() XactID
 		Kind() string
 		Bck() cmn.Bck

@@ -74,7 +74,7 @@ func (e *bckSummaryTaskEntry) Get() cluster.Xact { return e.xact }
 // bckSummaryTask
 //
 
-func (t *bckSummaryTask) Run() error {
+func (t *bckSummaryTask) Run() {
 	var (
 		buckets []*cluster.Bck
 		bmd     = t.t.Bowner().Get()
@@ -112,13 +112,13 @@ func (t *bckSummaryTask) Run() error {
 	totalDisksSize, err := fs.GetTotalDisksSize()
 	if err != nil {
 		t.UpdateResult(nil, err)
-		return err
+		return
 	}
 
 	si, err := cluster.HrwTargetTask(t.msg.UUID, t.t.Sowner().Get())
 	if err != nil {
 		t.UpdateResult(nil, err)
-		return err
+		return
 	}
 
 	// Check if we are the target that needs to list cloud bucket (we only want
@@ -217,11 +217,10 @@ func (t *bckSummaryTask) Run() error {
 	close(errCh)
 	for err := range errCh {
 		t.UpdateResult(nil, err)
-		return err
+		return
 	}
 
 	t.UpdateResult(summaries, nil)
-	return nil
 }
 
 func (t *bckSummaryTask) doBckSummaryFast(bck *cluster.Bck) (objCount, size uint64, err error) {
