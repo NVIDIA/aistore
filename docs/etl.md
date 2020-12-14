@@ -34,7 +34,9 @@ This was the principle behind *distributed shuffle* (code-named [dSort](/dsort/R
 
 Technically, the service supports running user-provided ETL containers **and** custom Python scripts *in the* (and *by the*) storage cluster.
 
-Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io). For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/docs/playbooks/etl).
+Note AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
+
+For getting-started details and numerous examples, please refer to rest of this document and the [playbooks directory](/docs/playbooks/README.md).
 
 ## Getting Started
 
@@ -108,14 +110,26 @@ Deploying ETL consists of the following steps:
 
 ### `build` request
 
-You can write your own custom `transform` function (see example below) that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
+You can write your own custom `transform` function that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
 You can then use the `build` request to execute this `transform` on the entire distributed dataset.
 
-In effect, a user can skip the entire step of writing your own Dockerfile and building a custom ETL container - the `build` capability allows the user to skip this step entirely.
+In effect, a user can skip the entire step of writing own Dockerfile and building a custom ETL container - the `build` capability allows the user to skip this step entirely.
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-### Runtimes
+For detailed step-by-step tutorial on `build` request, please see [ImageNet ETL playbook](/docs/playbooks/etl/etl_imagenet_pytorch.md).
+
+#### `transform` function
+
+To use `build` request a user has to provide a Python script with defined `transform` function which has the following signature:
+```python
+def transform(input_bytes: bytes) -> bytes
+```
+
+If the function uses external dependencies, a user can provide an optional dependencies file, in `pip` [requirements file format](https://pip.pypa.io/en/stable/user_guide/#requirements-files).
+These requirements will be installed on the machine executing the `transform` function and will be available for the function.
+
+#### Runtimes
 
 AIS-ETL provides several *runtimes* out of the box.
 Each *runtime* determines the programming language of your custom `transform` function, the set of pre-installed packages and tools that your `transform` can utilize.
@@ -136,7 +150,9 @@ Still, since the number of supported  *runtimes* will always remain somewhat lim
 It allows running any Docker image that implements certain requirements on communication with the cluster. 
 The 'init' request requires writing a Pod specification following specification requirements.
 
-### Requirements
+For detailed step-by-step tutorial on `init` request, please see [MD5 ETL playbook](/docs/playbooks/etl/compute_md5.md).
+
+#### Requirements
 
 Custom ETL container is expected to satisfy the following requirements:
 
@@ -145,13 +161,13 @@ Custom ETL container is expected to satisfy the following requirements:
  must know how to contact the Pod.
 3. AIS target(s) may send requests in parallel to the web server inside the ETL container - any synchronization, therefore, must be done on the server-side.
 
-### Specification YAML
+#### Specification YAML
 
 Specification of an ETL should be in the form of a YAML file.
 It is required to follow the Kubernetes [Pod template format](https://kubernetes.io/docs/concepts/workloads/pods/#pod-templates)
 and contain all necessary fields to start the Pod.
 
-### Required or additional fields
+#### Required or additional fields
 
 | Path | Required | Description | Default |
 | --- | --- | --- | --- |
@@ -168,14 +184,14 @@ and contain all necessary fields to start the Pod.
 | `spec.containers[0].readinessProbe.httpGet.Path` | `true` | Path for HTTP readiness probes. | - |
 | `spec.containers[0].readinessProbe.httpGet.Port` | `true` | Port for HTTP readiness probes. Required `default`. | - |
 
-### Forbidden fields
+#### Forbidden fields
 
 | Path | Reason |
 | --- | --- |
 | `spec.affinity.nodeAffinity` | Used by AIStore to colocate ETL containers with targets. |
 | `spec.affinity.nodeAntiAffinity` | Used by AIStore to require single ETL at a time. |
 
-### Communication Mechanisms
+#### Communication Mechanisms
 
 AIS currently supports 3 (three) distinct target ⇔ container communication mechanisms to facilitate the fly or offline transformation.
 User can choose and specify (via YAML spec) any of the following:
@@ -186,7 +202,7 @@ User can choose and specify (via YAML spec) any of the following:
 | **reverse proxy** | `hrev://` | A target uses a [reverse proxy](https://en.wikipedia.org/wiki/Reverse_proxy) to send (GET) request to cluster using ETL container. ETL container should make GET request to a target, transform bytes, and return the result to the target. |
 | **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send (GET) request to cluster using ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
 
-### Annotations
+#### Annotations
 
 The target communicates with a Pod defined in the Pod specification under `communication_type` key:
 ```yaml
