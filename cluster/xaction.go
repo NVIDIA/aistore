@@ -36,7 +36,7 @@ type (
 
 		// modifiers
 		Renew()
-		Finish(errs ...error)
+		Finish(err error)
 		Abort()
 		AddNotif(n Notif)
 

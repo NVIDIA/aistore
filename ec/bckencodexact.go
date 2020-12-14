@@ -101,7 +101,7 @@ func (r *XactBckEncode) Run() {
 	select {
 	case <-r.ChanAbort():
 		jg.Stop()
-		err = fmt.Errorf("%s aborted, exiting", r)
+		err = cmn.NewAbortedError(r.String())
 	case <-jg.ListenFinished():
 		err = jg.Stop()
 	}

@@ -77,7 +77,7 @@ func (reb *Manager) RunResilver(id string, skipGlobMisplaced bool, notifs ...*xa
 	}
 
 	reb.t.GFN(cluster.GFNLocal).Deactivate()
-	xact.Finish()
+	xact.Finish(nil)
 }
 
 // Copies a slice and its metafile (if exists) to the current mpath. At the

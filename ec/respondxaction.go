@@ -220,5 +220,5 @@ func (r *XactRespond) Stop(error) { r.Abort() }
 
 func (r *XactRespond) stop() {
 	r.XactDemandBase.Stop()
-	r.Finish()
+	r.Finish(nil)
 }

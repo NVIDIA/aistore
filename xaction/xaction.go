@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 )
@@ -154,20 +155,19 @@ func (xact *XactBase) EndTime() time.Time {
 // - atomically set end-time
 // - optionally, notify listener(s)
 // - optionally, refresh local capacity stats, etc.
-func (xact *XactBase) _setEndTime(errs ...error) {
+func (xact *XactBase) _setEndTime(err error) {
 	xact.eutime.Store(time.Now().UnixNano())
 
 	// notifications
 	if n := xact.Notif(); n != nil {
-		var err error
-		if len(errs) > 0 {
-			err = errs[0]
-		}
 		nl.OnFinished(n, err)
 	}
 
 	if xact.Kind() != cmn.ActListObjects {
-		glog.Infoln(xact.String())
+		debug.Infof("%s finished, err: %v", xact, err)
+		if err != nil {
+			glog.Errorf("%s finished with err: %v", xact, err)
+		}
 	}
 
 	xactDtor := XactsDtor[xact.kind]
@@ -210,11 +210,11 @@ func (xact *XactBase) Abort() {
 	glog.Infof("ABORT: " + xact.String())
 }
 
-func (xact *XactBase) Finish(errs ...error) {
+func (xact *XactBase) Finish(err error) {
 	if xact.Aborted() {
 		return
 	}
-	xact._setEndTime(errs...)
+	xact._setEndTime(err)
 }
 
 func (xact *XactBase) Result() (interface{}, error) {

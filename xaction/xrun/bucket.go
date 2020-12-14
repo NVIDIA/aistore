@@ -115,7 +115,7 @@ func (r *bckRename) Run() {
 	}
 
 	r.t.BMDVersionFixup(nil, r.bckFrom.Bck, false) // piggyback bucket renaming (last step) on getting updated BMD
-	r.Finish()
+	r.Finish(nil)
 }
 
 //

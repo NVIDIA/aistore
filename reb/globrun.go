@@ -455,7 +455,7 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 	reb.filterGFN.Reset()
 
 	if !reb.xact().Finished() {
-		reb.xact().Finish()
+		reb.xact().Finish(nil)
 	} else {
 		glog.Infoln(reb.xact().String())
 	}

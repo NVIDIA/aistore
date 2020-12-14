@@ -74,9 +74,8 @@ func (r *XactDirPromote) Run() {
 		Callback: r.walk,
 		Sorted:   false,
 	}
-	if err := fs.Walk(opts); err != nil {
-		glog.Errorln(err)
-	}
+	err := fs.Walk(opts)
+	r.Finish(err)
 }
 
 func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {

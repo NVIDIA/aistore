@@ -205,7 +205,7 @@ func TestXactionQueryFinished(t *testing.T) {
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
 	xactBck2, err := xreg.RenewBckRename(tMock, bck2, bck2, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck2 != nil, "Xaction must be created %v", err)
-	xactBck1.Finish()
+	xactBck1.Finish(nil)
 	xactBck1, err = xreg.RenewBckRename(tMock, bck1, bck1, "uuid", 123, "phase")
 	tassert.Errorf(t, err == nil && xactBck1 != nil, "Xaction must be created")
 	xactBck3 := xreg.RenewPrefetch(tMock, bck1, &xreg.DeletePrefetchArgs{})

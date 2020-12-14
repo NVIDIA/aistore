@@ -57,7 +57,6 @@ func newXactLLC(t cluster.Target, uuid string, bck cmn.Bck) *xactLLC {
 func (r *xactLLC) Run() {
 	r.xactBckBase.runJoggers()
 	glog.Infoln(r.String())
-	if err := r.xactBckBase.waitDone(); err != nil {
-		glog.Error(err)
-	}
+	err := r.xactBckBase.waitDone()
+	r.Finish(err)
 }

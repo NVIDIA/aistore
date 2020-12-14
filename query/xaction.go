@@ -265,7 +265,7 @@ func (r *ObjectsListingXact) discardN(n uint) {
 
 	if r.fetchingDone && len(r.buff) == 0 {
 		Registry.Delete(r.ID().String())
-		r.Finish()
+		r.Finish(nil)
 	}
 }
 

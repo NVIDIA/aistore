@@ -180,7 +180,7 @@ func (r *XactPut) stop() {
 
 	// Don't close bundles, they are shared between different EC xactions
 
-	r.Finish()
+	r.Finish(nil)
 }
 
 // Encode schedules FQN for erasure coding process

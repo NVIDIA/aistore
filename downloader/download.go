@@ -265,12 +265,7 @@ func (d *Downloader) Run() {
 // stop terminates the downloader and all dependent entities.
 func (d *Downloader) stop(err error) {
 	d.XactDemandBase.Stop()
-	d.Finish()
-	if err != nil {
-		glog.Errorf("stopping %s, err: %v", d.Name(), err)
-	} else {
-		glog.Infof("stopped %s", d.Name())
-	}
+	d.Finish(err)
 }
 
 /*

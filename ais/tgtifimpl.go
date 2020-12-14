@@ -111,7 +111,8 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 	})
 	lru.Run(&ini) // blocking
 
-	xlru.Finish()
+	// TODO: This should be in `lru.Run`.
+	xlru.Finish(nil)
 }
 
 // slight variation vs t.httpobjget()

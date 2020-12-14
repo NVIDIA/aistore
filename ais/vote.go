@@ -151,7 +151,8 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	}
 	glog.Infoln(xele.String())
 	p.doProxyElection(vr, curPrimary, xele)
-	xele.Finish()
+
+	xele.Finish(nil)
 }
 
 func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact cluster.Xact) {
