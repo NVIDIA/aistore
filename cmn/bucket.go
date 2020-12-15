@@ -270,9 +270,11 @@ func (b Bck) Validate() error {
 	if err := ValidateBckName(b.Name); err != nil {
 		return err
 	}
-	if err := ValidateProvider(b.Provider); err != nil {
+	provider, err := NormalizeProvider(b.Provider)
+	if err != nil {
 		return NewErrorInvalidBucketProvider(b, err)
 	}
+	b.Provider = provider
 	return b.Ns.Validate()
 }
 

@@ -49,14 +49,16 @@ func initBckLocker() {
 func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
 	var (
 		props *cmn.BucketProps
-		bck   = cmn.Bck{Name: name, Provider: provider, Ns: ns}
+		err   error
 	)
+	provider, err = cmn.NormalizeProvider(provider)
+	if err != nil {
+		cmn.AssertNoErr(err)
+	}
 
+	bck := cmn.Bck{Name: name, Provider: provider, Ns: ns}
 	if len(optProps) > 0 {
 		props = optProps[0]
-	}
-	if provider != "" {
-		cmn.AssertNoErr(cmn.ValidateProvider(provider))
 	}
 	bck.Props = props
 	b := &Bck{Bck: bck}
