@@ -29,8 +29,6 @@ var (
 	_ DlJob = (*rangeDlJob)(nil)
 )
 
-var errAISBckReq = errors.New("regular download requires ais bucket")
-
 type (
 	dlObj struct {
 		objName   string
@@ -207,9 +205,6 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 }
 
 func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMultiBody, dlXact *Downloader) (*multiDlJob, error) {
-	if !bck.IsAIS() {
-		return nil, errAISBckReq
-	}
 	var (
 		objs cmn.SimpleKVs
 		err  error
@@ -226,10 +221,6 @@ func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlMul
 }
 
 func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlSingleBody, dlXact *Downloader) (*singleDlJob, error) {
-	if !bck.IsAIS() {
-		return nil, errAISBckReq
-	}
-
 	var (
 		objs cmn.SimpleKVs
 		err  error
@@ -393,10 +384,6 @@ func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *clus
 }
 
 func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *DlRangeBody, dlXact *Downloader) (*rangeDlJob, error) {
-	if !bck.IsAIS() {
-		return nil, errAISBckReq
-	}
-
 	var (
 		pt  cmn.ParsedTemplate
 		err error

@@ -12,13 +12,14 @@ Download the object(s) from `SOURCE` location and saves it as specified in `DEST
 * `"gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz"`
 
 Currently, the schemas supported for `SOURCE` location are:
-* `gs://` - refers to Google Cloud Storage, eg. `gs://bucket/sub_folder/object_name.tar`
-* `s3://` - refers to Amazon Web Services S3 storage, eg. `s3://bucket/sub_folder/object_name.tar`
 * `ais://` - refers to AIS cluster. IP address and port number of the cluster's proxy should follow the protocol. If port number is omitted, "8080" is used. E.g, `ais://172.67.50.120:8080/bucket/imagenet_train-{0..100}.tgz`. Can be used to copy objects between buckets of the same cluster, or to download objects from any remote AIS cluster
+* `aws://` or `s3://` - refers to Amazon Web Services S3 storage, eg. `s3://bucket/sub_folder/object_name.tar`
+* `azure://` or `az://` - refers to Azure Blob Storage, eg. `az://bucket/sub_folder/object_name.tar`
+* `gcp://` or `gs://` - refers to Google Cloud Storage, eg. `gs://bucket/sub_folder/object_name.tar`
 * `http://` or `https://` - refers to external link somewhere on the web, eg. `http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso`
 
-As for `DESTINATION` location, the only supported schema is `ais://` and the link should be constructed as follows: `ais://bucket/sub_folder/object_name`, where:
-* `ais://` - schema, specifying that the destination is AIS cluster
+As for `DESTINATION` location should be in form `schema://bucket/sub_folder/object_name`:
+* `schema://` - schema specifying the provider of the destination bucket (`ais://`, `aws://`, `azure://`, `gcp://`)
 * `bucket` - bucket name where the object(s) will be stored
 * `sub_folder/object_name` - in case of downloading a single file, this will be the name of the object saved in AIS cluster.
 

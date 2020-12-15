@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
@@ -230,10 +231,6 @@ func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version 
 
 func TestDownloadSingle(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
-		}
 		proxyURL      = tutils.RandomProxyURL(t)
 		baseParams    = tutils.BaseAPIParams(proxyURL)
 		objName       = "object"
@@ -245,60 +242,63 @@ func TestDownloadSingle(t *testing.T) {
 		linkSmall = "storage.googleapis.com/minikube/iso/minikube-v0.23.0.iso.sha256"
 	)
 
-	clearDownloadList(t)
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		m := ioContext{
+			t:   t,
+			bck: bck.Bck,
+		}
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+		m.init()
+		defer m.del()
 
-	id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, linkLarge)
-	tassert.CheckError(t, err)
+		clearDownloadList(t)
 
-	time.Sleep(time.Second)
+		id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck.Bck, objName, linkLarge)
+		tassert.CheckError(t, err)
 
-	// Schedule second object.
-	idSecond, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objNameSecond, linkLarge)
-	tassert.CheckError(t, err)
+		time.Sleep(time.Second)
 
-	// Cancel second object.
-	err = api.AbortDownload(baseParams, idSecond)
-	tassert.CheckError(t, err)
+		// Schedule second object.
+		idSecond, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bck.Bck, objNameSecond, linkLarge)
+		tassert.CheckError(t, err)
 
-	// Cancel first object.
-	abortDownload(t, id)
+		// Cancel second object.
+		err = api.AbortDownload(baseParams, idSecond)
+		tassert.CheckError(t, err)
 
-	time.Sleep(time.Second)
+		// Cancel first object.
+		abortDownload(t, id)
 
-	// Check if the status is still available after some time.
-	if resp, err := api.DownloadStatus(baseParams, id); err != nil {
-		t.Errorf("got error when getting status for link that is not being downloaded: %v", err)
-	} else if !resp.Aborted {
-		t.Errorf("canceled link not marked: %v", resp)
-	}
+		time.Sleep(time.Second)
 
-	err = api.AbortDownload(baseParams, id)
-	tassert.CheckError(t, err)
+		// Check if the status is still available after some time.
+		if resp, err := api.DownloadStatus(baseParams, id); err != nil {
+			t.Errorf("got error when getting status for link that is not being downloaded: %v", err)
+		} else if !resp.Aborted {
+			t.Errorf("canceled link not marked: %v", resp)
+		}
 
-	err = api.RemoveDownload(baseParams, id)
-	tassert.CheckError(t, err)
+		err = api.AbortDownload(baseParams, id)
+		tassert.CheckError(t, err)
 
-	err = api.RemoveDownload(baseParams, id)
-	tassert.Errorf(t, err != nil, "expected error when removing non-existent task")
+		err = api.RemoveDownload(baseParams, id)
+		tassert.CheckError(t, err)
 
-	id, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, linkSmall)
-	tassert.CheckError(t, err)
+		err = api.RemoveDownload(baseParams, id)
+		tassert.Errorf(t, err != nil, "expected error when removing non-existent task")
 
-	waitForDownload(t, id, 30*time.Second)
-	checkDownloadedObjects(t, id, bck, []string{objName})
+		id, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck.Bck, objName, linkSmall)
+		tassert.CheckError(t, err)
 
-	checkDownloadList(t, 2)
+		waitForDownload(t, id, 30*time.Second)
+		checkDownloadedObjects(t, id, bck.Bck, []string{objName})
+
+		checkDownloadList(t, 2)
+	})
 }
 
 func TestDownloadRange(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
-		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
@@ -312,27 +312,29 @@ func TestDownloadRange(t *testing.T) {
 		}
 	)
 
-	clearDownloadList(t)
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		m := ioContext{
+			t:   t,
+			bck: bck.Bck,
+		}
 
-	// Create ais bucket
-	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+		m.init()
+		defer m.del()
 
-	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
-	tassert.CheckFatal(t, err)
+		clearDownloadList(t)
 
-	waitForDownload(t, id, 10*time.Second)
-	checkDownloadedObjects(t, id, bck, expectedObjects)
+		id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck.Bck, template)
+		tassert.CheckFatal(t, err)
 
-	checkDownloadList(t)
+		waitForDownload(t, id, 10*time.Second)
+		checkDownloadedObjects(t, id, bck.Bck, expectedObjects)
+
+		checkDownloadList(t)
+	})
 }
 
 func TestDownloadMultiRange(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
-		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 
@@ -345,55 +347,59 @@ func TestDownloadMultiRange(t *testing.T) {
 		}
 	)
 
-	clearDownloadList(t)
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		m := ioContext{
+			t:   t,
+			bck: bck.Bck,
+		}
 
-	// Create ais bucket
-	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+		m.init()
+		defer m.del()
 
-	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
-	tassert.CheckFatal(t, err)
+		clearDownloadList(t)
 
-	waitForDownload(t, id, 10*time.Second)
-	checkDownloadedObjects(t, id, bck, expectedObjects)
+		id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck.Bck, template)
+		tassert.CheckFatal(t, err)
 
-	checkDownloadList(t)
+		waitForDownload(t, id, 10*time.Second)
+		checkDownloadedObjects(t, id, bck.Bck, expectedObjects)
+
+		checkDownloadList(t)
+	})
 }
 
 func TestDownloadMultiMap(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
-		}
-		m = map[string]string{
+		mapping = map[string]string{
 			"ais": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
 			"k8s": "https://raw.githubusercontent.com/kubernetes/kubernetes/master/README.md",
 		}
 		expectedObjects = []string{"ais", "k8s"}
-		proxyURL        = tutils.RandomProxyURL(t)
 	)
 
-	clearDownloadList(t)
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		m := ioContext{
+			t:   t,
+			bck: bck.Bck,
+		}
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+		m.init()
+		defer m.del()
 
-	id, err := api.DownloadMulti(tutils.BaseAPIParams(), generateDownloadDesc(), bck, m)
-	tassert.CheckFatal(t, err)
+		clearDownloadList(t)
 
-	waitForDownload(t, id, 10*time.Second)
-	checkDownloadedObjects(t, id, bck, expectedObjects)
+		id, err := api.DownloadMulti(tutils.BaseAPIParams(), generateDownloadDesc(), bck.Bck, mapping)
+		tassert.CheckFatal(t, err)
 
-	checkDownloadList(t)
+		waitForDownload(t, id, 10*time.Second)
+		checkDownloadedObjects(t, id, bck.Bck, expectedObjects)
+
+		checkDownloadList(t)
+	})
 }
 
 func TestDownloadMultiList(t *testing.T) {
 	var (
-		bck = cmn.Bck{
-			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
-		}
 		l = []string{
 			"https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
 			"https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE?query=values",
@@ -403,18 +409,25 @@ func TestDownloadMultiList(t *testing.T) {
 		baseParams   = tutils.BaseAPIParams(proxyURL)
 	)
 
-	clearDownloadList(t)
+	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		m := ioContext{
+			t:   t,
+			bck: bck.Bck,
+		}
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+		m.init()
+		defer m.del()
 
-	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, l)
-	tassert.CheckFatal(t, err)
+		clearDownloadList(t)
 
-	waitForDownload(t, id, 10*time.Second)
-	checkDownloadedObjects(t, id, bck, expectedObjs)
+		id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck.Bck, l)
+		tassert.CheckFatal(t, err)
 
-	checkDownloadList(t)
+		waitForDownload(t, id, 10*time.Second)
+		checkDownloadedObjects(t, id, bck.Bck, expectedObjs)
+
+		checkDownloadList(t)
+	})
 }
 
 func TestDownloadTimeout(t *testing.T) {

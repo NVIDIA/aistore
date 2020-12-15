@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/urfave/cli"
 )
 
 func TestParseSourceValidURIs(t *testing.T) {
@@ -193,17 +194,20 @@ func TestParseSourceValidURIs(t *testing.T) {
 func TestParseDestValidURIs(t *testing.T) {
 	parseDestTests := []struct {
 		url     string
-		bucket  string
+		bucket  cmn.Bck
 		objName string
 	}{
-		{"ais://bucket/objname", "bucket", "objname"},
-		{"ais://bucket//subfolder/objname.tar", "bucket", "subfolder/objname.tar"},
-		{"ais://bucket/subfolder/objname.tar", "bucket", "subfolder/objname.tar"},
-		{"ais://bucket", "bucket", ""},
+		{"ais://bucket/objname", cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}, "objname"},
+		{"ais://bucket//subfolder/objname.tar", cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}, "subfolder/objname.tar"},
+		{"ais://bucket/subfolder/objname.tar", cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}, "subfolder/objname.tar"},
+		{"ais://bucket", cmn.Bck{Provider: cmn.ProviderAIS, Name: "bucket"}, ""},
+		{"aws://bucket/something/", cmn.Bck{Provider: cmn.ProviderAmazon, Name: "bucket"}, "something"},
+		{"az://bucket/something//", cmn.Bck{Provider: cmn.ProviderAzure, Name: "bucket"}, "something"},
+		{"gcp://bucket/one/two/", cmn.Bck{Provider: cmn.ProviderGoogle, Name: "bucket"}, "one/two"},
 	}
 
 	for _, test := range parseDestTests {
-		bucket, pathSuffix, err := parseDest(test.url)
+		bucket, pathSuffix, err := parseDest(&cli.Context{}, test.url)
 		if err != nil {
 			t.Errorf("unexpected error while parsing dest URI %s: %v", test.url, err)
 		}
@@ -219,16 +223,15 @@ func TestParseDestValidURIs(t *testing.T) {
 
 func TestParseDestInvalidURIs(t *testing.T) {
 	parseDestTests := []string{
-		"gcp://bucket",
-		"gcp://bucket/objname",
-		"s3://bucket/objname",
-		"aws://bucket/objname",
-		"http://bucket/objname",
 		"ais://",
+		"ais:///",
+		"http://",
+		"http://bucket",
+		"http://bucket/something",
 	}
 
 	for _, test := range parseDestTests {
-		_, _, err := parseDest(test)
+		_, _, err := parseDest(&cli.Context{}, test)
 		if err == nil {
 			t.Errorf("expected error while parsing dest URI %s: %v", test, err)
 		}

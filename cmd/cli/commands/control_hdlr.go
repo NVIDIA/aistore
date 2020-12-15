@@ -259,7 +259,7 @@ func startDownloadHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	bucket, pathSuffix, err := parseDest(dst)
+	bck, pathSuffix, err := parseDest(c, dst)
 	if err != nil {
 		return err
 	}
@@ -274,11 +274,7 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	basePayload := downloader.DlBase{
-		Bck: cmn.Bck{
-			Name:     bucket,
-			Provider: cmn.ProviderAIS,
-			Ns:       cmn.NsGlobal,
-		},
+		Bck:              bck,
 		Timeout:          timeout,
 		Description:      description,
 		ProgressInterval: progressInterval,

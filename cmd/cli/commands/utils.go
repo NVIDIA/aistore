@@ -360,22 +360,17 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	}, err
 }
 
-func parseDest(rawURL string) (bucket, pathSuffix string, err error) {
-	destScheme, destBucket, destPathSuffix, err := parseURI(rawURL)
+func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err error) {
+	bck, pathSuffix, err = parseBckObjectURI(c, uri)
 	if err != nil {
 		return
 	}
-	if destScheme != cmn.AISScheme {
-		err = fmt.Errorf("destination must look as %q, for instance: %s://bucket/objName (got %s)",
-			cmn.AISScheme, cmn.AISScheme, destScheme)
-		return
-	}
-	if destBucket == "" {
+	if bck.Name == "" {
 		err = fmt.Errorf("destination bucket name cannot be omitted")
 		return
 	}
-	destPathSuffix = strings.Trim(destPathSuffix, "/")
-	return destBucket, destPathSuffix, nil
+	pathSuffix = strings.Trim(pathSuffix, "/")
+	return
 }
 
 func parseBckURI(c *cli.Context, bucketDef string, query ...bool) (bck cmn.Bck, err error) {
@@ -397,18 +392,6 @@ func parseBckObjectURI(c *cli.Context, objName string, query ...bool) (bck cmn.B
 	if err != nil {
 		return bck, object, incorrectUsageError(c, err)
 	}
-	return
-}
-
-func parseURI(rawURL string) (scheme, bucket, objName string, err error) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return
-	}
-
-	scheme = u.Scheme
-	bucket = u.Host
-	objName = u.Path
 	return
 }
 
