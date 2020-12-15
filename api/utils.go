@@ -202,15 +202,17 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 	if resp.StatusCode < http.StatusBadRequest {
 		return nil
 	}
-	var httpErr *cmn.HTTPError
+	var (
+		httpErr *cmn.HTTPError
+		msg, _  = ioutil.ReadAll(resp.Body)
+	)
 	if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
-		if jsonErr := jsoniter.NewDecoder(resp.Body).Decode(&httpErr); jsonErr == nil {
+		if jsonErr := jsoniter.Unmarshal(msg, &httpErr); jsonErr == nil {
 			return httpErr
 		}
 	}
-	msg, _ := ioutil.ReadAll(resp.Body)
-	strMsg := string(msg)
 
+	strMsg := string(msg)
 	if resp.StatusCode == http.StatusServiceUnavailable && strMsg == "" {
 		strMsg = fmt.Sprintf("[%s]: starting up, please try again later...",
 			http.StatusText(http.StatusServiceUnavailable))

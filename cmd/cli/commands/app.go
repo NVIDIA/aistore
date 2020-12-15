@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
@@ -117,22 +118,32 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
-	red := color.New(color.FgRed).SprintFunc()
+
+	var (
+		red          = color.New(color.FgRed).SprintFunc()
+		prepareError = func(msg string) error {
+			msg = cmn.CapitalizeString(msg)
+			msg = strings.TrimRight(msg, "\n") // Remove newlines if any.
+			return errors.New(red(msg))
+		}
+	)
+
 	if aisCLI.isUnreachableError(err) {
 		return fmt.Errorf(
 			red("AIStore proxy unreachable at %s. You may need to update environment variable AIS_ENDPOINT"),
 			clusterURL)
 	}
+
 	switch err := err.(type) {
 	case *cmn.HTTPError:
-		return errors.New(red(cmn.CapitalizeString(err.Message)))
+		return prepareError(err.Message)
 	case *usageError:
 		return err
 	case *additionalInfoError:
 		err.baseErr = aisCLI.handleCLIError(err.baseErr)
 		return err
 	default:
-		return errors.New(red(cmn.CapitalizeString(err.Error())))
+		return prepareError(err.Error())
 	}
 }
 
