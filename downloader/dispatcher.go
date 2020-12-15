@@ -6,7 +6,6 @@ package downloader
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -189,7 +188,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 					Sorted: true,
 				},
 			})
-			if err != nil && !errors.As(err, &cmn.AbortedError{}) {
+			if err != nil && !cmn.IsErrAborted(err) {
 				diffResolver.Abort(err)
 			}
 		}()

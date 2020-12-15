@@ -6,8 +6,6 @@
 package dsort
 
 import (
-	"errors"
-
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -18,5 +16,5 @@ func newDSortAbortedError(managerUUID string) cmn.AbortedError {
 // Returns if the error is not abort error - in other cases we need to report
 // the error to the user.
 func isReportableError(err error) bool {
-	return !errors.As(err, &cmn.AbortedError{})
+	return !cmn.IsErrAborted(err)
 }

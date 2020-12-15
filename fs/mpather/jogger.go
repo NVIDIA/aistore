@@ -6,7 +6,6 @@ package mpather
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime"
 	"time"
@@ -220,7 +219,7 @@ func (j *jogger) runBck(bck cmn.Bck) (aborted bool, err error) {
 	}
 
 	if err != nil {
-		if errors.As(err, &cmn.AbortedError{}) {
+		if cmn.IsErrAborted(err) {
 			glog.Infof("%s stopping traversal: %v", j, err)
 			return true, nil
 		}

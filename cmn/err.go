@@ -116,9 +116,13 @@ func IsEOF(err error) bool {
 	return err == io.ErrUnexpectedEOF || errors.Is(err, io.EOF)
 }
 
-///////////////////////////
-// http-error helpers   //
-//////////////////////////
+func IsErrAborted(err error) bool {
+	return errors.As(err, &AbortedError{})
+}
+
+////////////////////////
+// http-error helpers //
+////////////////////////
 
 func IsStatusServiceUnavailable(err error) (yes bool) {
 	hErr, ok := err.(*HTTPError)
@@ -172,12 +176,6 @@ func IsErrBrokenPipe(err error) bool {
 
 func IsErrOOS(err error) bool {
 	return errors.Is(err, syscall.ENOSPC)
-}
-
-func IsReqCanceled(err error) bool {
-	// TODO: find a better alternative
-	// Currently net/http does not have an exported error type for this
-	return strings.Contains(err.Error(), "net/http: request canceled")
 }
 
 func IsUnreachable(err error, status int) bool {
