@@ -235,21 +235,26 @@ func (e *errNotEnoughTargets) Error() string {
 // glogWriter //
 ////////////////
 
+const tlsHandshakeErrorPrefix = "http: TLS handshake error"
+
 func (r *glogWriter) Write(p []byte) (int, error) {
-	n := len(p)
-	s := string(p[:n])
+	s := string(p)
+	// Ignore TLS handshake errors (see: https://github.com/golang/go/issues/26918).
+	if strings.Contains(s, tlsHandshakeErrorPrefix) {
+		return len(p), nil
+	}
+
 	glog.Errorln(s)
 
 	stacktrace := rdebug.Stack()
-	n1 := len(stacktrace)
-	s1 := string(stacktrace[:n1])
-	glog.Errorln(s1)
-	return n, nil
+	glog.Errorln(string(stacktrace))
+	return len(p), nil
 }
 
 /////////////////
 // clusterInfo //
 /////////////////
+
 func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
 
 ///////////////
