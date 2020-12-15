@@ -150,12 +150,11 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 		return
 	}
 	glog.Infoln(xele.String())
-	p.doProxyElection(vr, curPrimary, xele)
-
+	p.doProxyElection(vr, curPrimary)
 	xele.Finish(nil)
 }
 
-func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact cluster.Xact) {
+func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	var (
 		err    = context.DeadlineExceeded
 		config = cmn.GCO.Get()
@@ -167,17 +166,17 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	}
 	if err == nil {
 		// move back to idle
-		glog.Infof("%s: the current primary %s is up, moving back to idle", p.si, curPrimary)
+		glog.Infof("Current primary %s is up, moving back to idle", curPrimary)
 		return
 	}
-	glog.Infof("%s: primary %s is confirmed down(%v)", p.si, curPrimary, err)
+	glog.Infof("Primary %s is confirmed down (err: %v)", curPrimary, err)
 
 	// 2. election phase 1
 	glog.Info("Moving to election state phase 1 (prepare)")
-	elected, votingErrors := p.electAmongProxies(vr, xact)
+	elected, votingErrors := p.electAmongProxies(vr)
 	if !elected {
-		glog.Errorf("%s: election phase 1 (prepare) failed: primary remains %s, moving back to idle",
-			p.si, curPrimary)
+		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle",
+			curPrimary)
 		return
 	}
 
@@ -185,24 +184,25 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	glog.Info("Moving to election state phase 2 (commit)")
 	confirmationErrors := p.confirmElectionVictory(vr)
 	for sid := range confirmationErrors {
-		if _, ok := votingErrors[sid]; !ok {
-			// NOTE: p of no return
-			glog.Errorf("%s: error confirming the election with %s that was healthy when voting", p.si, sid)
+		if !votingErrors.Contains(sid) {
+			glog.Errorf("Error confirming the election: %s was healthy when voting", sid)
 		}
 	}
 
 	// 4. become!
 	glog.Infof("%s: moving (self) to primary state", p.si)
-	p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */)
+	p.becomeNewPrimary(vr.Primary /*proxyIDToRemove*/)
 }
 
-func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact cluster.Xact) (winner bool, errors map[string]bool) {
-	// Simple Majority Vote
-	resch := p.requestVotes(vr)
-	errors = make(map[string]bool)
-	y, n := 0, 0
+// Simple majority voting.
+func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors cmn.StringSet) {
+	var (
+		resCh = p.requestVotes(vr)
+		y, n  = 0, 0
+	)
+	errors = cmn.NewStringSet()
 
-	for res := range resch {
+	for res := range resCh {
 		if res.err != nil {
 			if cmn.IsErrConnectionRefused(res.err) {
 				if res.daemonID == vr.Primary {
@@ -214,11 +214,11 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact cluster.Xact) (winn
 			} else {
 				glog.Warningf("Error response from %s, err: %v", res.daemonID, res.err)
 			}
-			errors[res.daemonID] = true
+			errors.Add(res.daemonID)
 			n++
 		} else {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Proxy %s responded with %v", res.daemonID, res.yes)
+				glog.Infof("Node %s responded with (winner: %t)", res.daemonID, res.yes)
 			}
 			if res.yes {
 				y++
@@ -228,9 +228,8 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact cluster.Xact) (winn
 		}
 	}
 
-	xact.ObjectsAdd(int64(y + n))
 	winner = y > n || (y+n == 0) // No Votes: Default Winner
-	glog.Infof("Vote Results:\n Y: %v, N:%v\n Victory: %v\n", y, n, winner)
+	glog.Infof("Vote Results:\n Y: %d, N: %d\n Victory: %t\n", y, n, winner)
 	return
 }
 
@@ -262,19 +261,20 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	return resCh
 }
 
-func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
-	msg := &VoteResultMessage{
-		VoteResult{
-			Candidate: vr.Candidate,
-			Primary:   vr.Primary,
-			Smap:      vr.Smap,
-			StartTime: time.Now(),
-			Initiator: p.si.ID(),
-		},
-	}
-
-	res := p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Vote, cmn.Voteres), cmn.MustMarshal(msg))
-	errors := make(map[string]bool)
+func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cmn.StringSet {
+	var (
+		errors = cmn.NewStringSet()
+		msg    = &VoteResultMessage{
+			VoteResult{
+				Candidate: vr.Candidate,
+				Primary:   vr.Primary,
+				Smap:      vr.Smap,
+				StartTime: time.Now(),
+				Initiator: p.si.ID(),
+			},
+		}
+		res = p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Vote, cmn.Voteres), cmn.MustMarshal(msg))
+	)
 	for r := range res {
 		if r.err != nil {
 			glog.Warningf(
@@ -283,7 +283,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 				r.si.IntraControlNet.DirectURL,
 				r.err,
 			)
-			errors[r.si.ID()] = true
+			errors.Add(r.si.ID())
 		}
 	}
 	return errors
