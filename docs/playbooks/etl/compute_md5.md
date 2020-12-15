@@ -200,9 +200,7 @@ Alternatively, one can use the offline ETL feature to transform the whole bucket
 ```console
 $ ais create bucket transform
 $ echo "some text :)" | ais put - transform/shard.in
-$ ais etl bucket JGHEoo89gg ais://transform ais://transform-md5
-5JjIuGemR
-$ ais wait xaction 5JjIuGemR
+$ ais etl bucket JGHEoo89gg ais://transform ais://transform-md5 --wait
 ```
 
 Once ETL isn't needed anymore, the Pods can be stopped with:

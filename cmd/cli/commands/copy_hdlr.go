@@ -17,6 +17,7 @@ var (
 		subcmdCopyBucket: {
 			cpBckDryRunFlag,
 			cpBckPrefixFlag,
+			waitFlag,
 		},
 	}
 

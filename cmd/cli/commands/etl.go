@@ -79,6 +79,7 @@ var etlCmds = []cli.Command{
 					etlExtFlag,
 					cpBckPrefixFlag,
 					cpBckDryRunFlag,
+					waitFlag,
 				},
 				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
 			},
@@ -315,13 +316,16 @@ func etlOfflineHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	if !flagIsSet(c, cpBckDryRunFlag) {
+	if !flagIsSet(c, waitFlag) {
 		fmt.Fprintln(c.App.Writer, xactID)
 		return nil
 	}
 
 	if _, err := api.WaitForXaction(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
 		return err
+	}
+	if !flagIsSet(c, cpBckDryRunFlag) {
+		return nil
 	}
 
 	stat, err := api.GetXactionStatsByID(defaultAPIParams, xactID)

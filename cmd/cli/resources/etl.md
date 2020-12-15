@@ -117,8 +117,16 @@ Transform every object from `src_bucket` with ETL and put new objects to `dst_bu
 
 ```console
 $ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket
-5JjIuGemR
-$ ais wait xaction 5JjIuGemR # wait until offline ETL finishes
+MMi9l8Z11
+$ ais wait xaction MMi9l8Z11
+```
+
+#### Transform bucket with ETL
+
+The same as above, but wait for the ETL bucket to finish.
+
+```console
+$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --wait
 ```
 
 #### Transform bucket with ETL and additional parameters
@@ -131,9 +139,7 @@ NAME
 obj1.in1
 obj2.in2
 (...)
-$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-"
-5JjIuGemR
-$ ais wait xaction 5JjIuGemR # wait until offline ETL finishes
+$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --ext="{'in1':'out1', 'in2':'out2'}" --prefix="etl-" --wait
 $ ais ls ais://dst_bucket --props=name
 NAME
 etl-obj1.out1
@@ -152,7 +158,7 @@ NAME        SIZE
 obj1.in1    10MiB
 obj2.in2    10MiB
 (...)
-$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --dry-run
+$ ais etl bucket JGHEoo89gg ais://src_bucket ais://dst_bucket --dry-run --wait
 [DRY RUN] No modifications on the cluster
 2 objects (20MiB) would have been put into bucket ais://dst_bucket
 ```

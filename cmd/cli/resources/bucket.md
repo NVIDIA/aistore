@@ -290,6 +290,7 @@ Copy an existing bucket to a new bucket. If destination bucket is a cloud bucket
 | --- | --- | --- | --- |
 | `--dry-run` | `bool` | Don't actually copy bucket, only include stats what would happen | `false` |
 | `--prefix` | `string` | Prefix added to every new object's name | `""` |
+| `--wait` | `bool` | Wait until copying of a bucket is finished | `false` |
 
 ### Examples
 
@@ -301,6 +302,14 @@ Copy AIS bucket `src_bucket` to AIS bucket `dst_bucket`.
 $ ais cp bucket ais://src_bucket ais://dst_bucket
 Copying bucket "ais://bucket_name" to "ais://dst_bucket" in progress.
 To check the status, run: ais show xaction copybck ais://dst_bucket
+```
+
+#### Copy AIS bucket and wait until finish
+
+The same as above, but wait until copying is finished.
+
+```console
+$ ais cp bucket ais://src_bucket ais://dst_bucket --wait
 ```
 
 #### Copy cloud bucket to another cloud bucket

@@ -108,7 +108,13 @@ func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 
 // Copy ais bucket
 func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *cmn.CopyBckMsg) (err error) {
-	if _, err = api.CopyBucket(defaultAPIParams, fromBck, toBck, msg); err != nil {
+	var xactID string
+	if xactID, err = api.CopyBucket(defaultAPIParams, fromBck, toBck, msg); err != nil {
+		return
+	}
+
+	if flagIsSet(c, waitFlag) {
+		_, err = api.WaitForXaction(defaultAPIParams, api.XactReqArgs{ID: xactID})
 		return
 	}
 

@@ -353,6 +353,12 @@ var (
 		Name:  "wait-timeout",
 		Usage: "determines how long ais target should wait for pod to become ready",
 	}
+	waitFlag = cli.BoolFlag{
+		Name:  "wait",
+		Usage: "wait until the operation is finished",
+	}
+
+	// Maintenance
 	maintenanceModeFlag = cli.StringFlag{
 		Name: "mode", Required: true,
 		Usage: "node maintenance mode: start-maintenance, stop-maintenance, decommission",
