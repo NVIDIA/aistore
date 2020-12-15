@@ -206,7 +206,7 @@ Given the url of an AIS gateway, `ListBuckets` returns the names of all existing
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string       | URL of the proxy (gateway)                                                            |
-| provider   | string       | One of "" (empty), "cloud", "ais", "aws", "gcp", or "azure". If the value is empty, returns all bucket names. Otherwise, returns only "cloud" or "ais" buckets.|
+| provider   | string       | Can be "" (empty), "ais", "aws", "gcp", or "azure". Returns bucket names for the specified cloud provider. If the provider value is empty, returns *all* bucket names. |
 
 ##### Return
 Two lists: one for the names of ais buckets, and the other for the names of cloud buckets

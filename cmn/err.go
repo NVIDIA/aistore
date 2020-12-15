@@ -32,9 +32,12 @@ type (
 	ErrorRemoteBucketDoesNotExist nodeBckPair
 	ErrorCloudBucketOffline       nodeBckPair
 	ErrorBucketDoesNotExist       nodeBckPair
-	ErrorInvalidBucketProvider    nodeBckPair
 	ErrorBucketIsBusy             nodeBckPair
 
+	ErrorInvalidBucketProvider struct {
+		bck Bck
+		err error
+	}
 	ErrorCapacityExceeded struct {
 		high int64
 		used int32
@@ -229,12 +232,12 @@ func (e *ErrorBucketDoesNotExist) Error() string {
 	return _errBucket(fmt.Sprintf("bucket %s does not exist", e.bck), e.node)
 }
 
-func NewErrorInvalidBucketProvider(bck Bck, node string) *ErrorInvalidBucketProvider {
-	return &ErrorInvalidBucketProvider{node: node, bck: bck}
+func NewErrorInvalidBucketProvider(bck Bck, err error) *ErrorInvalidBucketProvider {
+	return &ErrorInvalidBucketProvider{bck: bck, err: err}
 }
 
 func (e *ErrorInvalidBucketProvider) Error() string {
-	return _errBucket(fmt.Sprintf("invalid provider %q of bucket %s", e.bck.Provider, e.bck), e.node)
+	return fmt.Sprintf("%v, bucket %s", e.err, e.bck)
 }
 
 func NewErrorBucketIsBusy(bck Bck, node string) *ErrorBucketIsBusy {

@@ -421,7 +421,8 @@ func MergeCloudBckProps(base *BucketProps, header http.Header) (props *BucketPro
 	Assert(len(header) > 0)
 	props = base.Clone()
 	props.Provider = header.Get(HeaderCloudProvider)
-	Assert(IsValidProvider(props.Provider))
+	err := ValidateProvider(props.Provider)
+	AssertNoErr(err)
 
 	if props.Provider == ProviderHTTP {
 		props.Extra.OrigURLBck = header.Get(HeaderOrigURLBck)
@@ -458,8 +459,8 @@ func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
 }
 
 func (bp *BucketProps) Validate(targetCnt int) error {
-	if !IsValidProvider(bp.Provider) {
-		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s)", bp.Provider, allProviders)
+	if err := ValidateProvider(bp.Provider); err != nil {
+		return err
 	}
 	if !bp.BackendBck.IsEmpty() {
 		if bp.BackendBck.Provider == "" {

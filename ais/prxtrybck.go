@@ -102,8 +102,8 @@ func (args *remBckAddArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 		}
 		return
 	}
-	if !cmn.IsValidProvider(args.queryBck.Provider) {
-		err = cmn.NewErrorInvalidBucketProvider(args.queryBck.Bck, args.p.si.Name())
+	if err = cmn.ValidateProvider(args.queryBck.Provider); err != nil {
+		err = cmn.NewErrorInvalidBucketProvider(args.queryBck.Bck, err)
 		errCode = http.StatusBadRequest
 		return
 	}

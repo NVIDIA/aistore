@@ -55,8 +55,8 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 	if len(optProps) > 0 {
 		props = optProps[0]
 	}
-	if !cmn.IsValidProvider(provider) {
-		cmn.Assert(provider == "")
+	if provider != "" {
+		cmn.AssertNoErr(cmn.ValidateProvider(provider))
 	}
 	bck.Props = props
 	b := &Bck{Bck: bck}

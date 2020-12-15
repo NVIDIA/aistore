@@ -1739,8 +1739,10 @@ func (h *httprunner) selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.Bu
 
 func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
 	provider := query.Get(cmn.URLParamProvider)
-	if provider != "" && !cmn.IsValidProvider(provider) {
-		return nil, fmt.Errorf("invalid provider %q", provider)
+	if provider != "" {
+		if err := cmn.ValidateProvider(provider); err != nil {
+			return nil, err
+		}
 	}
 	namespace := cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
 	return cluster.NewBck(bckName, provider, namespace), nil

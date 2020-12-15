@@ -114,6 +114,8 @@ func ParseNsUname(s string) (n Ns) {
 // Replace provider aliases with real provider names
 func NormalizeProvider(provider string) (string, error) {
 	switch provider {
+	case "":
+		return "", nil
 	case GSScheme:
 		return ProviderGoogle, nil
 	case S3Scheme:
@@ -121,9 +123,8 @@ func NormalizeProvider(provider string) (string, error) {
 	case AZScheme:
 		return ProviderAzure, nil
 	}
-
-	if provider != "" && !IsValidProvider(provider) {
-		return "", fmt.Errorf("invalid bucket provider %q", provider)
+	if err := ValidateProvider(provider); err != nil {
+		return "", err
 	}
 	return provider, nil
 }
@@ -269,8 +270,8 @@ func (b Bck) Validate() error {
 	if err := ValidateBckName(b.Name); err != nil {
 		return err
 	}
-	if !IsValidProvider(b.Provider) {
-		return NewErrorInvalidBucketProvider(b, "")
+	if err := ValidateProvider(b.Provider); err != nil {
+		return NewErrorInvalidBucketProvider(b, err)
 	}
 	return b.Ns.Validate()
 }
@@ -335,14 +336,16 @@ func (b Bck) IsCloud() bool { // is 3rd party Cloud
 		debug.Assert(bck.IsCloud()) // currently, backend is always Cloud
 		return bck.IsCloud()
 	}
-	return b.Provider != ProviderAIS && IsValidProvider(b.Provider)
+	return b.Provider != ProviderAIS && ValidateProvider(b.Provider) == nil
 }
 
-func (b Bck) HasProvider() bool { return IsValidProvider(b.Provider) }
+func (b Bck) HasProvider() bool { return ValidateProvider(b.Provider) == nil }
 
-func IsValidProvider(provider string) bool {
-	_, ok := Providers[provider]
-	return ok
+func ValidateProvider(provider string) error {
+	if _, ok := Providers[provider]; ok {
+		return nil
+	}
+	return fmt.Errorf("invalid cloud provider %q: must be one of (%s)", provider, allProviders)
 }
 
 func (query QueryBcks) String() string     { return Bck(query).String() }

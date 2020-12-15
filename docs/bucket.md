@@ -54,8 +54,6 @@ Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DEL
 * `azure` - for Microsoft Azure Blob Storage buckets
 * `ht` - for HTTP(S) based datasets
 
-* and finally, you can simple say `cloud` to designate any one of the 5 Cloud providers listed above.
-
 For API reference, please refer [to the RESTful API and examples](http_api.md).
 The rest of this document serves to further explain features and concepts specific to storage buckets.
 

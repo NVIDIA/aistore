@@ -36,8 +36,8 @@ func setBucket() (bck cmn.Bck, err error) {
 			return bck, fmt.Errorf("provider is set for both 'BUCKET' (%q) and 'PROVIDER' (%q) env variables",
 				bck, provider)
 		}
-		if !cmn.IsValidProvider(provider) {
-			return bck, fmt.Errorf("invalid provider set for 'PROVIDER' (%q) env variable", provider)
+		if err = cmn.ValidateProvider(provider); err != nil {
+			return bck, fmt.Errorf("%v (make sure 'PROVIDER' env variable is properly set)", err)
 		}
 		bck.Provider = provider
 	}
