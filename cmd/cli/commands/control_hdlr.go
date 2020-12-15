@@ -285,6 +285,13 @@ func startDownloadHandler(c *cli.Context) error {
 		},
 	}
 
+	if basePayload.Bck.Props, err = api.HeadBucket(defaultAPIParams, basePayload.Bck); err != nil {
+		if !cmn.IsStatusNotFound(err) {
+			return err
+		}
+		fmt.Fprintf(c.App.Writer, "Warning: destination bucket %q doesn't exist. A bucket with default properties will be created!\n", basePayload.Bck)
+	}
+
 	// Heuristics to determine the download type.
 	var dlType downloader.DlType
 	if objectsListPath != "" {

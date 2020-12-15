@@ -821,10 +821,10 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 		Name:     bucket,
 		Provider: cmn.ProviderAIS,
 	}
-	_, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, obj)
-	tassert.Fatalf(t, err != nil, "expected an error, but got none")
 
-	tutils.CheckErrIsNotFound(t, err)
+	_, err = api.DownloadSingle(baseParams, generateDownloadDesc(), bck, objName, obj)
+	tassert.CheckError(t, err)
+	api.DestroyBucket(baseParams, bck)
 }
 
 func TestDownloadMpathEvents(t *testing.T) {

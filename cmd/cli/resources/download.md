@@ -23,6 +23,8 @@ As for `DESTINATION` location should be in form `schema://bucket/sub_folder/obje
 * `bucket` - bucket name where the object(s) will be stored
 * `sub_folder/object_name` - in case of downloading a single file, this will be the name of the object saved in AIS cluster.
 
+If the `DESTINATION` bucket doesn't exist, a new bucket with the default properties (as defined by the global configuration) will be automatically created.
+
 ### Options
 
 | Flag | Type | Description | Default |

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -197,6 +198,10 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 
 	if bck.HasBackendBck() {
 		bck = cluster.BackendBck(bck)
+	}
+
+	if bck.IsAIS() {
+		glog.Warningf("%s: bucket %q doesn't exist, proceeding to create", args.p.si, args.queryBck.Bck)
 	}
 
 	if bck.IsCloud() || bck.IsHTTP() {
