@@ -62,7 +62,7 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 			}
 			item = item[1:]
 			if err = cmn.ValidateProvider(item); err != nil {
-				err = fmt.Errorf("invalid fqn %q: [%v]", fqn, err)
+				err = fmt.Errorf("invalid fqn %s, err: %v", fqn, err)
 				return
 			}
 			parsed.Bck.Provider = item

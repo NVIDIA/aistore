@@ -421,8 +421,7 @@ func MergeCloudBckProps(base *BucketProps, header http.Header) (props *BucketPro
 	Assert(len(header) > 0)
 	props = base.Clone()
 	props.Provider = header.Get(HeaderCloudProvider)
-	err := ValidateProvider(props.Provider)
-	AssertNoErr(err)
+	AssertNoErr(ValidateProvider(props.Provider))
 
 	if props.Provider == ProviderHTTP {
 		props.Extra.OrigURLBck = header.Get(HeaderOrigURLBck)

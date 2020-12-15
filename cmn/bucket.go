@@ -21,7 +21,7 @@ const (
 	ProviderAIS    = "ais"
 	ProviderAzure  = "azure"
 	ProviderHTTP   = "ht"
-	allProviders   = "aws, gcp, ais, azure, ht"
+	allProviders   = "ais, aws (s3://), gcp (gs://), azure (az://), ht://"
 
 	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
@@ -345,7 +345,7 @@ func ValidateProvider(provider string) error {
 	if _, ok := Providers[provider]; ok {
 		return nil
 	}
-	return fmt.Errorf("invalid cloud provider %q: must be one of (%s)", provider, allProviders)
+	return fmt.Errorf("invalid cloud provider %q: must be one of [%s]", provider, allProviders)
 }
 
 func (query QueryBcks) String() string     { return Bck(query).String() }
