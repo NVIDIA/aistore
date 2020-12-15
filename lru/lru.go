@@ -147,9 +147,10 @@ func Run(ini *InitLRU) {
 		joggers           = make(map[string]*lruJ, num)
 		parent            = &lruP{joggers: joggers, ini: *ini}
 	)
-	glog.Infof("%s: %s started: dont-evict-time %v", ini.T.Snode(), xlru, config.LRU.DontEvictTime)
+	glog.Infof("[lru] %s started: dont-evict-time %v", xlru, config.LRU.DontEvictTime)
 	if num == 0 {
-		glog.Errorln(cmn.NoMountpaths)
+		glog.Warningf("[lru] no mountpaths to visit")
+		xlru.stop()
 		return
 	}
 	for mpath, mpathInfo := range availablePaths {
@@ -185,18 +186,18 @@ repeat:
 				goto ex
 			}
 			if j.totalSize < minEvictThresh {
-				glog.Infof("%s: used cap below threshold, nothing to do", j)
+				glog.Infof("[lru] %s: used cap below threshold, nothing to do", j)
 				return
 			}
 			if len(j.ini.Buckets) != 0 {
-				glog.Infof("%s: freeing-up %s", j, cmn.B2S(j.totalSize, 2))
+				glog.Infof("[lru] %s: freeing-up %s", j, cmn.B2S(j.totalSize, 2))
 				err = j.jogBcks(j.ini.Buckets, j.ini.Force)
 			} else {
 				err = j.jog(providers)
 			}
 		ex:
 			if err != nil && !os.IsNotExist(err) {
-				glog.Errorf("%s: exited with err %v", j, err)
+				glog.Errorf("[lru] %s: exited with err %v", j, err)
 				if fail.CAS(false, true) {
 					for _, j := range joggers {
 						j.stop()
@@ -208,17 +209,17 @@ repeat:
 	parent.wg.Wait()
 
 	if fail.Load() {
-		xlru.XactDemandBase.Stop()
+		xlru.stop()
 		return
 	}
 	// linger for a while and circle back if renewed
 	xlru.XactDemandBase.DecPending()
 	select {
 	case <-xlru.IdleTimer():
-		xlru.XactDemandBase.Stop()
+		xlru.stop()
 		return
 	case <-xlru.ChanAbort():
-		xlru.XactDemandBase.Stop()
+		xlru.stop()
 		return
 	case <-xlru.Renewed:
 		for len(xlru.Renewed) > 0 {
@@ -234,6 +235,10 @@ repeat:
 
 func (r *Xaction) Run()   { cmn.Assert(false) }
 func (r *Xaction) Renew() { r.Renewed <- struct{}{} }
+func (r *Xaction) stop() {
+	r.XactDemandBase.Stop()
+	r.Finish(nil)
+}
 
 //////////
 // lruJ //

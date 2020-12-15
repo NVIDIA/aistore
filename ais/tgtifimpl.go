@@ -76,8 +76,7 @@ func (t *targetrunner) GFN(gfnType cluster.GFNType) cluster.GFN {
 	return nil
 }
 
-// gets triggered by the stats evaluation of a remaining capacity
-// and then runs in a goroutine - see stats package, target_stats.go
+// RunLRU is triggered by the stats evaluation of a remaining capacity, see `target_stats.go`.
 func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 	regToIC := id == ""
 	if regToIC {
@@ -109,10 +108,7 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 		NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		Xact:      xlru,
 	})
-	lru.Run(&ini) // blocking
-
-	// TODO: This should be in `lru.Run`.
-	xlru.Finish(nil)
+	lru.Run(&ini) // Blocking call.
 }
 
 // slight variation vs t.httpobjget()
