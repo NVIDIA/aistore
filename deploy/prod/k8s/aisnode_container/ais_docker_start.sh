@@ -83,18 +83,22 @@ if ! $is_primary; then
     proxy_ok=false
     d_url="http://${CLUSTERIP_PROXY_SERVICE_HOSTNAME}:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/health"
     echo "Waiting for a 200 result on ${d_url}"
+
+    start_time="$(date -u +%s)"
     elapsed=0
     while [[ $elapsed -lt 90 ]]; do
-        d_code=$(curl -X GET -o /dev/null --silent -w "%{http_code}" "${d_url}")
+        d_code=$(curl -X GET -o /dev/null --max-time 5 --silent -w "%{http_code}" "${d_url}")
         if [[ "$d_code" == "200" ]]; then
             echo "   ... success after ${elapsed}s"
             proxy_ok=true
             break
         else
             echo "   ... failed (code=$d_code) at ${elapsed}s, trying for up to 90s"
-            elapsed=$((elapsed + 1))
             sleep 1
         fi
+
+        end_time="$(date -u +%s)"
+        elapsed="$((end_time-start_time))"
     done
 
     total_wait=$((total_wait + elapsed))
