@@ -211,7 +211,7 @@ var GetPropsDefault = []string{
 }
 
 // GetPropsAll is a list of all `GetProps*` options.
-// NOTE: do **NOT** forget update this array when a prop is added/removed.
+// NOTE: do **NOT** forget to update this array when a prop is added/removed.
 var GetPropsAll = append(GetPropsDefault,
 	GetPropsVersion, GetPropsCached, GetTargetURL, GetPropsStatus, GetPropsCopies, GetPropsEC,
 )

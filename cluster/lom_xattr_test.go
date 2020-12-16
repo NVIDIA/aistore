@@ -20,10 +20,12 @@ var _ = Describe("LOM Xattributes", func() {
 		xattrMpath = tmpDir + "/xattr"
 		copyMpath  = tmpDir + "/copy"
 
-		bucketLocal = "LOM_TEST_Local"
+		bucketLocal  = "LOM_TEST_Local"
+		bucketCached = "LOM_TEST_Cached"
 	)
 
 	localBck := cmn.Bck{Name: bucketLocal, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
+	cachedBck := cmn.Bck{Name: bucketCached, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal}
 
 	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
@@ -34,7 +36,11 @@ var _ = Describe("LOM Xattributes", func() {
 		bmdMock       = cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				bucketLocal, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 201},
+			),
+			cluster.NewBck(
+				bucketCached, cmn.ProviderAIS, cmn.NsGlobal,
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, MDWrite: "never", BID: 202},
 			),
 		)
 		tMock cluster.Target
@@ -66,7 +72,8 @@ var _ = Describe("LOM Xattributes", func() {
 			testObjectName = "xattr-foldr/test-obj.ext"
 
 			// Bucket needs to have checksum enabled
-			localFQN = mix.MakePathFQN(localBck, fs.ObjectType, testObjectName)
+			localFQN  = mix.MakePathFQN(localBck, fs.ObjectType, testObjectName)
+			cachedFQN = mix.MakePathFQN(cachedBck, fs.ObjectType, testObjectName)
 
 			fqns []string
 		)
@@ -102,7 +109,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
 				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
-				hrwLom.Uncache()
+				hrwLom.Uncache(false)
 
 				newLom := NewBasicLom(localFQN, tMock)
 				err = newLom.Load(false)
@@ -112,6 +119,85 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.GetCopies()).To(HaveLen(3))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
 				Expect(lom.CustomMD()).To(HaveLen(3))
+				Expect(lom.CustomMD()).To(BeEquivalentTo(newLom.CustomMD()))
+			})
+
+			It("should _not_ save meta to disk", func() {
+				lom := filePut(cachedFQN, testFileSize, tMock)
+				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
+				lom.SetVersion("dummy_version")
+				Expect(lom.Persist()).NotTo(HaveOccurred())
+
+				lom.SetCustomMD(cmn.SimpleKVs{
+					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
+					cluster.VersionObjMD: "version",
+					cluster.CRC32CObjMD:  "crc32",
+				})
+				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
+				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
+				Expect(lom.Persist()).NotTo(HaveOccurred())
+
+				b, err := fs.GetXattr(cachedFQN, cluster.XattrLOM)
+				Expect(b).To(BeEmpty())
+				Expect(err).To(HaveOccurred())
+
+				hrwLom := &cluster.LOM{ObjName: testObjectName}
+				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
+				hrwLom.Uncache(false)
+
+				lom.Uncache(false)
+
+				newLom := NewBasicLom(cachedFQN, tMock)
+				err = newLom.Load(false)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
+				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
+				Expect(lom.GetCopies()).To(HaveLen(3))
+				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
+				Expect(lom.CustomMD()).To(HaveLen(3))
+				Expect(lom.CustomMD()).To(BeEquivalentTo(newLom.CustomMD()))
+			})
+
+			It("should copy object with meta in memory", func() {
+				lom := filePut(cachedFQN, testFileSize, tMock)
+				cksumHash, err := lom.ComputeCksum()
+				Expect(err).NotTo(HaveOccurred())
+				lom.SetCksum(cksumHash.Clone())
+				lom.SetVersion("first_version")
+				Expect(lom.Persist()).NotTo(HaveOccurred())
+
+				lom.SetCustomMD(cmn.SimpleKVs{
+					cluster.SourceObjMD:  cluster.SourceGoogleObjMD,
+					cluster.VersionObjMD: "version",
+					cluster.CRC32CObjMD:  "crc32",
+				})
+				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
+				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
+				lom.SetVersion("second_version")
+				Expect(lom.Persist()).NotTo(HaveOccurred())
+
+				b, err := fs.GetXattr(cachedFQN, cluster.XattrLOM)
+				Expect(b).To(BeEmpty())
+				Expect(err).To(HaveOccurred())
+
+				hrwLom := &cluster.LOM{ObjName: testObjectName}
+				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
+				hrwLom.Uncache(false)
+
+				lom.Uncache(false)
+				lom.Load(true)
+				Expect(lom.Version()).To(BeEquivalentTo("second_version"))
+				Expect(lom.GetCopies()).To(HaveLen(3))
+
+				buf := make([]byte, cmn.KiB)
+				newLom, err := lom.CopyObject(cachedFQN+"-copy", buf)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = newLom.Load(false)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
+				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
+				Expect(newLom.CustomMD()).To(HaveLen(3))
 				Expect(lom.CustomMD()).To(BeEquivalentTo(newLom.CustomMD()))
 			})
 
@@ -134,7 +220,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
 				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
-				hrwLom.Uncache()
+				hrwLom.Uncache(false)
 
 				newLom := NewBasicLom(localFQN, tMock)
 				err = newLom.Load(false)

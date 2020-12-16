@@ -564,7 +564,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	// different versions may have different checksums
 	if md.version == lom.md.version && !lom.md.cksum.Equal(md.cksum) {
 		err = cmn.NewBadDataCksumError(lom.md.cksum, md.cksum, lom.String())
-		lom.Uncache()
+		lom.Uncache(true /*delDirty*/)
 	}
 	return err
 }
@@ -623,7 +623,7 @@ recomp:
 	}
 ex:
 	err = cmn.NewBadDataCksumError(&cksums.comp.Cksum, cksums.stor, lom.String())
-	lom.Uncache()
+	lom.Uncache(true /*delDirty*/)
 	return
 }
 
@@ -800,7 +800,7 @@ func (lom *LOM) checkBucket() error {
 	if lom.md.bckID == bprops.BID {
 		return nil // ok
 	}
-	lom.Uncache()
+	lom.Uncache(true /*delDirty*/)
 	return cmn.NewObjDefunctError(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 }
 
@@ -817,13 +817,22 @@ func (lom *LOM) ReCache() {
 	cache.Store(hkey, md)
 }
 
-// TODO -- FIXME: cannot uncache dirty unless on-error
-func (lom *LOM) Uncache() {
+func (lom *LOM) Uncache(delDirty bool) {
 	debug.Assert(!lom.IsCopy()) // not caching copies
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.mpathInfo.LomCache(idx)
 	)
+	if delDirty {
+		cache.Delete(hkey)
+		return
+	}
+	if md, ok := cache.Load(hkey); ok {
+		lmeta := md.(*lmeta)
+		if lmeta.dirty {
+			return
+		}
+	}
 	cache.Delete(hkey)
 }
 
@@ -864,7 +873,7 @@ beg:
 }
 
 func (lom *LOM) Remove() (err error) {
-	lom.Uncache()
+	lom.Uncache(true /*delDirty*/)
 	err = cmn.RemoveFile(lom.FQN)
 	for copyFQN := range lom.md.copies {
 		if err := cmn.RemoveFile(copyFQN); err != nil {

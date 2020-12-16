@@ -944,7 +944,7 @@ func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string
 	}
 
 	lom.Lock(true)
-	lom.Uncache()
+	lom.Uncache(true /*delDirty*/)
 	_, err = lom.CopyObject(toFQN, buf)
 	lom.Unlock(true)
 	if err != nil {

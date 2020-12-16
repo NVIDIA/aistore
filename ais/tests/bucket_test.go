@@ -159,12 +159,79 @@ func TestCreateWithBucketProps(t *testing.T) {
 			ValidateColdGet: api.Bool(false),
 			ValidateObjMove: api.Bool(true),
 		},
+		MDWrite: api.MDWritePolicy("never"),
 	}
 	tutils.CreateFreshBucket(t, proxyURL, bck, propsToSet)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, propsToSet, p)
+}
+
+func TestOverwriteLomCache(t *testing.T) {
+	var (
+		m = ioContext{
+			t:         t,
+			num:       234,
+			fileSize:  73,
+			fixedSize: true,
+			prefix:    cmn.RandString(6) + "-",
+		}
+		baseParams = tutils.BaseAPIParams()
+	)
+	m.init()
+	m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
+
+	for _, target := range m.smap.Tmap.ActiveNodes() {
+		mpList, err := api.GetMountpaths(baseParams, target)
+		tassert.CheckFatal(t, err)
+		l := len(mpList.Available)
+		tassert.Fatalf(t, l >= 2, "%s has %d mountpaths, need at least 2", target, l)
+	}
+	tutils.Logf("Create %s(mirrored, md-write=never)\n", m.bck)
+	propsToSet := cmn.BucketPropsToUpdate{
+		Mirror:  &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
+		MDWrite: api.MDWritePolicy("never"),
+	}
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, propsToSet)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
+
+	m.puts()
+
+	tutils.Logf("List %q\n", m.bck)
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsName}
+	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(objList.Entries) == m.num, "expecting %d entries, have %d",
+		m.num, len(objList.Entries))
+
+	tutils.Logf("Overwrite %s objects with newer versions\n", m.bck)
+	nsize := int64(m.fileSize) * 10
+	for _, entry := range objList.Entries {
+		reader, err := readers.NewRandReader(nsize, cmn.ChecksumNone)
+		tassert.CheckFatal(t, err)
+		err = api.PutObject(api.PutObjectArgs{
+			BaseParams: baseParams,
+			Bck:        m.bck,
+			Object:     entry.Name,
+			Reader:     reader,
+		})
+		tassert.CheckFatal(t, err)
+	}
+
+	tutils.Logf("List %s new versions\n", m.bck)
+	msg = &cmn.SelectMsg{}
+	msg.AddProps(cmn.GetPropsAll...)
+	objList, err = api.ListObjects(baseParams, m.bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(objList.Entries) == m.num, "expecting %d entries, have %d",
+		m.num, len(objList.Entries))
+
+	for _, entry := range objList.Entries {
+		n, s, c := entry.Name, entry.Size, entry.Copies
+		tassert.Fatalf(t, s == nsize, "%s: expecting size = %d, got %d", n, nsize, s)
+		tassert.Fatalf(t, c == 2, "%s: expecting copies = %d, got %d", n, 2, c)
+	}
 }
 
 func TestStressCreateDestroyBucket(t *testing.T) {
@@ -374,7 +441,7 @@ func TestListObjectCloudVersions(t *testing.T) {
 	m.puts()
 	defer m.del()
 
-	tutils.Logf("Reading %q objects\n", m.bck)
+	tutils.Logf("Listing %q objects\n", m.bck)
 	msg := &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsVersion}
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)

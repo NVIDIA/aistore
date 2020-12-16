@@ -304,7 +304,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		return 0, fmt.Errorf("timed out waiting for %s is read", uname)
 	}
 	r.unregWriter(uname)
-	lom.Uncache()
+	lom.Uncache(true)
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Received object %s/%s from %s", lom.Bck(), lom.ObjName, daemonID)
 	}

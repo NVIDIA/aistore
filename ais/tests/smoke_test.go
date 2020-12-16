@@ -33,7 +33,7 @@ func TestSmoke(t *testing.T) {
 			proxyURL = tutils.GetPrimaryURL()
 		)
 		if bck.IsCloud() && bck.RemoteBck().Provider == cmn.ProviderGoogle {
-			t.Skip("GCP does not work fine when overloaded with requests, skipping")
+			t.Skip("GCP fails intermittently when overloaded with requests - skipping")
 		}
 		for _, fs := range objSizes {
 			for _, r := range ratios {

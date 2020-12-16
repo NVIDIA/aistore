@@ -80,6 +80,7 @@ const (
 	OrigURLObjMD = "orig_url"
 )
 
+// NOTE: used in tests, ignores `dirty`
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {

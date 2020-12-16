@@ -158,7 +158,7 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 				glog.Errorf("Nested error: %s => (remove %s => err: %v)", err1, poi.workFQN, err2)
 			}
 		}
-		poi.lom.Uncache()
+		poi.lom.Uncache(true /*delDirty*/)
 		return
 	}
 	if !poi.skipEC {
@@ -213,7 +213,8 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		defer lom.Unlock(true)
 	}
 
-	if bck.IsAIS() && lom.VersionConf().Enabled && (poi.recvType == cluster.RegularPut || poi.recvType == cluster.Downloaded) {
+	if bck.IsAIS() && lom.VersionConf().Enabled &&
+		(poi.recvType == cluster.RegularPut || poi.recvType == cluster.Downloaded) {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}
@@ -221,6 +222,8 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
 		return 0, fmt.Errorf("rename failed => %s: %w", lom, err)
 	}
+
+	lom.Uncache(true /*delDirty*/)
 	if lom.HasCopies() {
 		if err = lom.DelAllCopies(); err != nil {
 			return
@@ -434,7 +437,7 @@ do:
 		if goi.lom.Version() != "" && goi.lom.VersionConf().ValidateWarmGet {
 			goi.lom.Unlock(false)
 			if coldGet, errCode, err = goi.t.CheckCloudVersion(goi.ctx, goi.lom); err != nil {
-				goi.lom.Uncache()
+				goi.lom.Uncache(true /*delDirty*/)
 				return
 			}
 			goi.lom.Lock(false)
@@ -477,7 +480,7 @@ get:
 	if retry && !retried {
 		glog.Warningf("GET %s: uncaching and retrying...", goi.lom)
 		retried = true
-		goi.lom.Uncache()
+		goi.lom.Uncache(true /*delDirty*/)
 		goto do
 	}
 
@@ -1011,7 +1014,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 	}
 
 	if coi.uncache {
-		defer srcLOM.Uncache()
+		defer srcLOM.Uncache(false /*delDirty*/)
 	}
 
 	if si.ID() != coi.t.si.ID() {

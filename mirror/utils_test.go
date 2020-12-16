@@ -124,6 +124,6 @@ func newBasicLom(fqn string) *cluster.LOM {
 	lom := &cluster.LOM{FQN: fqn}
 	err := lom.Init(cmn.Bck{})
 	Expect(err).NotTo(HaveOccurred())
-	lom.Uncache()
+	lom.Uncache(false)
 	return lom
 }
