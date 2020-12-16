@@ -131,17 +131,11 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, 
 	query.Set(cmn.URLParamUUID, id)
 
 	responses := p.broadcastDownloadRequest(http.MethodPost, r.URL.Path, body, query)
-	failures := make([]error, 0, len(responses))
 	for resp := range responses {
 		if resp.err != nil {
-			failures = append(failures, resp.err)
+			return resp.status, resp.err
 		}
 	}
-
-	if len(failures) > 0 {
-		return http.StatusBadRequest, fmt.Errorf("following downloads failed: %v", failures)
-	}
-
 	return http.StatusOK, nil
 }
 
