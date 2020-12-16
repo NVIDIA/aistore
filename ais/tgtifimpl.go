@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -204,32 +203,6 @@ func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 	}
 	wg.Wait()
 	return nil
-}
-
-func (t *targetrunner) _recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
-	if err != nil && !cmn.IsEOF(err) {
-		glog.Error(err)
-		return
-	}
-	defer cmn.DrainReader(objReader)
-	lom := &cluster.LOM{ObjName: hdr.ObjName}
-	if err := lom.Init(hdr.Bck); err != nil {
-		glog.Error(err)
-		return
-	}
-	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
-	lom.SetVersion(hdr.ObjAttrs.Version)
-
-	params := cluster.PutObjectParams{
-		Tag:      fs.WorkfilePut,
-		Reader:   ioutil.NopCloser(objReader),
-		RecvType: cluster.Migrated,
-		Cksum:    cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
-		Started:  time.Now(),
-	}
-	if err := t.PutObject(lom, params); err != nil {
-		glog.Error(err)
-	}
 }
 
 // _sendPUT requires params.HdrMeta not to be nil.

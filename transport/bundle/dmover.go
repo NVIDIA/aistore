@@ -44,6 +44,7 @@ type (
 		laterx      atomic.Bool
 		multiplier  int
 		sizePDU     int32
+		recvType    cluster.RecvType
 	}
 	// additional (and optional) params for new data mover
 	Extra struct {
@@ -57,7 +58,12 @@ type (
 // interface guard
 var _ cluster.DataMover = (*DataMover)(nil)
 
-func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, extra Extra) (*DataMover, error) {
+// recvType is mandatory DM property: a data mover passes the property to
+// `target.PutObject` to make to finalize an object properly after the object
+// is saved to local drives(e.g, PUT the object to the Cloud as well).
+// For DMs that does not create new objects(e.g, rebalance), recvType should
+// be `Migrated`, and `RegularPut` for others(e.g, CopyBucket).
+func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, recvType cluster.RecvType, extra Extra) (*DataMover, error) {
 	var (
 		config = cmn.GCO.Get()
 		dm     = &DataMover{t: t, mem: t.MMSA()}
@@ -68,6 +74,7 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	if extra.Multiplier > 8 {
 		return nil, fmt.Errorf("invalid multiplier %d", extra.Multiplier)
 	}
+	dm.recvType = recvType
 	dm.multiplier = extra.Multiplier
 	dm.sizePDU = extra.SizePDU
 	switch extra.Compression {
@@ -98,9 +105,10 @@ func NewDataMover(t cluster.Target, trname string, recvCB transport.ReceiveObj, 
 	return dm, nil
 }
 
-func (dm *DataMover) useACKs() bool { return dm.ack.recv != nil }
-func (dm *DataMover) NetD() string  { return dm.data.net }
-func (dm *DataMover) NetC() string  { return dm.ack.net }
+func (dm *DataMover) useACKs() bool              { return dm.ack.recv != nil }
+func (dm *DataMover) NetD() string               { return dm.data.net }
+func (dm *DataMover) NetC() string               { return dm.ack.net }
+func (dm *DataMover) RecvType() cluster.RecvType { return dm.recvType }
 
 // associate xaction with data mover, primarily to sync on aborts
 func (dm *DataMover) SetXact(xact cluster.Xact) { dm.xact = xact }

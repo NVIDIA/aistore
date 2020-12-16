@@ -73,6 +73,7 @@ type (
 		UnregRecv()
 		Send(obj *transport.Obj, roc cmn.ReadOpenCloser, tsi *Snode) error
 		ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *Snode) error
+		RecvType() RecvType
 	}
 	PutObjectParams struct {
 		Tag        string // Used to distinguish between different PUT operation.

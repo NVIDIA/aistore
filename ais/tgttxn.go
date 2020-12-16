@@ -7,6 +7,8 @@ package ais
 import (
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -485,6 +488,8 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		if c.msg.Action == cmn.ActETLBucket {
 			sizePDU = memsys.DefaultBufSize
 		}
+		// Reuse rebalance configuration to create a DM for copying objects.
+		// TODO: implement separate configuration for Copy/ETL MD.
 		if dm, err = c.newDM(&config.Rebalance, c.uuid, sizePDU); err != nil {
 			return err
 		}
@@ -790,6 +795,36 @@ func (c *txnServerCtx) addNotif(xact cluster.Xact) {
 	})
 }
 
+func (c *txnServerCtx) recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, objReader io.Reader, err error) {
+	if err != nil && !cmn.IsEOF(err) {
+		glog.Error(err)
+		return
+	}
+	defer cmn.DrainReader(objReader)
+	lom := &cluster.LOM{ObjName: hdr.ObjName}
+	if err := lom.Init(hdr.Bck); err != nil {
+		glog.Error(err)
+		return
+	}
+	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+	lom.SetVersion(hdr.ObjAttrs.Version)
+
+	params := cluster.PutObjectParams{
+		Tag:    fs.WorkfilePut,
+		Reader: ioutil.NopCloser(objReader),
+		// Transaction is used only by CopyBucket and ETL. In both cases new objects
+		// are created at the destination. Setting `RegularPut` type informs `c.t.PutObject`
+		// that it must PUT the object to the Cloud as well after the local data are
+		// finalized in case of destination is Cloud.
+		RecvType: cluster.RegularPut,
+		Cksum:    cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		Started:  time.Now(),
+	}
+	if err := c.t.PutObject(lom, params); err != nil {
+		glog.Error(err)
+	}
+}
+
 func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU ...int32) (*bundle.DataMover, error) {
 	dmExtra := bundle.Extra{
 		RecvAck:     nil,                    // NOTE: no ACKs
@@ -799,7 +834,7 @@ func (c *txnServerCtx) newDM(rebcfg *cmn.RebalanceConf, uuid string, sizePDU ...
 	if len(sizePDU) > 0 {
 		dmExtra.SizePDU = sizePDU[0]
 	}
-	dm, err := bundle.NewDataMover(c.t, recvObjTrname+"_"+uuid, c.t._recvObjDM, dmExtra)
+	dm, err := bundle.NewDataMover(c.t, recvObjTrname+"_"+uuid, c.recvObjDM, cluster.RegularPut, dmExtra)
 	if err != nil {
 		return nil, err
 	}

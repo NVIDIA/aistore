@@ -1128,10 +1128,16 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	}
 	defer cleanUp()
 
+	// Set the correct recvType: some transactions must update the object
+	// in the Cloud(if destination is a Cloud bucket).
+	recvType := cluster.Migrated
+	if coi.DM != nil {
+		recvType = coi.DM.RecvType()
+	}
 	params := cluster.PutObjectParams{
 		Tag:      "copy-dp",
 		Reader:   reader,
-		RecvType: cluster.Migrated,
+		RecvType: recvType,
 	}
 	if err := coi.t.PutObject(dst, params); err != nil {
 		return false, 0, err

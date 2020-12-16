@@ -130,7 +130,7 @@ func NewManager(t cluster.Target, config *cmn.Config, st stats.Tracker) *Manager
 		Compression: rebcfg.Compression,
 		Multiplier:  int(rebcfg.Multiplier),
 	}
-	dm, err := bundle.NewDataMover(t, rebTrname, reb.recvObj, dmExtra)
+	dm, err := bundle.NewDataMover(t, rebTrname, reb.recvObj, cluster.Migrated, dmExtra)
 	if err != nil {
 		cmn.ExitLogf("%v", err)
 	}
