@@ -1229,6 +1229,8 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 }
 
 func TestDownloadJobConcurrency(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1246,12 +1248,15 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
 
+	tutils.Logln("Starting first download...")
+
 	id1, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
 		DlBase: downloader.DlBase{
 			Bck:         bck,
 			Description: generateDownloadDesc(),
 			Limits: downloader.DlLimits{
-				Connections: 1,
+				Connections:  1,
+				BytesPerHour: 100 * cmn.MiB,
 			},
 		},
 		Template: template,
@@ -1259,11 +1264,22 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	defer abortDownload(t, id1)
 
-	id2, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
+	tutils.Logln("Starting second download...")
+
+	id2, err := api.DownloadWithParam(baseParams, downloader.DlTypeRange, downloader.DlRangeBody{
+		DlBase: downloader.DlBase{
+			Bck:         bck,
+			Description: generateDownloadDesc(),
+			Limits: downloader.DlLimits{
+				BytesPerHour: 100 * cmn.MiB,
+			},
+		},
+		Template: template,
+	})
 	tassert.CheckFatal(t, err)
 	defer abortDownload(t, id2)
 
-	tutils.Logln("waiting for checks...")
+	tutils.Logln("Waiting for checks...")
 	var (
 		concurrentJobs bool
 		resp1, resp2   downloader.DlStatusResp
@@ -1291,7 +1307,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	}
 
 	tassert.Errorf(t, concurrentJobs, "expected jobs to run concurrently")
-	tutils.Logln("done waiting")
+	tutils.Logln("Done waiting")
 }
 
 // NOTE: Test may fail if the network is SUPER slow!!
