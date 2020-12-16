@@ -381,8 +381,7 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Fprintln(c.App.Writer, id)
-	fmt.Fprintf(c.App.Writer, "Run `ais show download %s --progress` to monitor the progress of downloading.\n", id)
+	fmt.Fprintf(c.App.Writer, "Download started. Run `ais show download %s --progress` to monitor the progress.\n", id)
 	return nil
 }
 

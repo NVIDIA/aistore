@@ -273,14 +273,8 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 		return
 	}
 	bck := cluster.NewBckEmbed(dlBase.Bck)
-	if err := bck.Init(p.owner.bmd, p.si); err != nil {
-		args := remBckAddArgs{p: p, w: w, r: r, queryBck: bck, err: err}
-		if bck, err = args.try(); err != nil {
-			return
-		}
-	}
-	if err := bck.Allow(cmn.AccessDOWNLOAD); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
+	args := bckInitArgs{p: p, w: w, r: r, queryBck: bck, perms: cmn.AccessDOWNLOAD, tryOnlyRem: true}
+	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
 	ok = true

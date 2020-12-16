@@ -58,7 +58,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	if bck.Props != nil {
 		bucketProps = bck.Props
 	}
-	if len(cloudHeader) != 0 {
+	if len(cloudHeader) != 0 && len(cloudHeader[0]) > 0 {
 		cloudProps := cmn.DefaultCloudBckProps(cloudHeader[0])
 		if bck.Props == nil {
 			bucketProps = cloudProps
@@ -249,7 +249,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 			cmn.Assert(p.owner.smap.get().isPrimary(p.si))
 			// Make sure that destination bucket exists.
 			backendBck := cluster.NewBckEmbed(nprops.BackendBck)
-			args := remBckAddArgs{p: p, w: w, r: r, queryBck: backendBck, err: err, msg: msg}
+			args := bckInitArgs{p: p, w: w, r: r, queryBck: backendBck, err: err, msg: msg}
 			if _, err = args.initAndTry(backendBck.Name); err != nil {
 				return
 			}

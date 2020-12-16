@@ -12,57 +12,156 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/xaction"
 )
 
-type remBckAddArgs struct {
-	p        *proxyrunner
-	w        http.ResponseWriter
-	r        *http.Request
-	query    url.Values
+type bckInitArgs struct {
+	p *proxyrunner
+	w http.ResponseWriter
+	r *http.Request
+
 	queryBck *cluster.Bck
 	err      error
 	msg      *cmn.ActionMsg
+
 	// bck.IsHTTP()
-	origURLBck   string
-	allowHTTPBck bool
-	// If set then error is not returned when bucket does not exist.
-	allowBckNotExist bool
+	origURLBck string
+
+	perms int // access bits eg. cmn.AccessGET, cmn.AccessPATCH etc.
+
+	skipBackend bool // initialize bucket `bck.InitNoBackend`
+	tryOnlyRem  bool // try only creating remote bucket
+	exists      bool // marks if bucket already exists
 }
 
 /////////////////////////////////////////////
-// lookup and add remote bucket on the fly //
+// lookup and add bucket on the fly        //
 /////////////////////////////////////////////
+
+// init initializes bucket and checks access permissions.
+func (args *bckInitArgs) init(bucket string, origURLBck ...string) (bck *cluster.Bck, errCode int, err error) {
+	if args.queryBck == nil {
+		query := args.r.URL.Query()
+		args.queryBck, err = newBckFromQuery(bucket, query)
+		if err != nil {
+			errCode = http.StatusBadRequest
+			return
+		}
+	}
+
+	bck = args.queryBck
+	if err = args._checkRemoteBckPermissions(); err != nil {
+		errCode = http.StatusBadRequest
+		return
+	}
+
+	if args.skipBackend {
+		err = bck.InitNoBackend(args.p.owner.bmd, args.p.si)
+	} else {
+		err = bck.Init(args.p.owner.bmd, args.p.si)
+	}
+
+	if err != nil && cmn.IsErrBucketNought(err) {
+		errCode = http.StatusNotFound
+		return
+	}
+
+	if err != nil {
+		errCode = http.StatusBadRequest
+		return
+	}
+
+	args.queryBck = bck
+	args.exists = true
+
+	// Check for msg.Action permission if permissions are not explicitly specified
+	if args.perms == 0 && args.msg != nil {
+		xactDtor, ok := xaction.XactsDtor[args.msg.Action]
+		if !ok || xactDtor.Access == 0 {
+			return
+		}
+		args.perms = xactDtor.Access
+	}
+	errCode, err = args._checkPermission(bck)
+	return
+}
+
+// TODO -- FIXME: A hack to check permissions specific to providers. Should automatically check based on providers.
+func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
+	if args.queryBck.IsAIS() {
+		return
+	}
+
+	bckType := "cloud"
+	if args.queryBck.IsHTTP() {
+		bckType = "http"
+	}
+
+	// HTTP buckets should fail on PUT and bucket rename operations
+	if args.queryBck.IsHTTP() && args._requiresPermission(cmn.AccessPUT) {
+		goto retErr
+	}
+
+	// Destroy and Rename are not permitted.
+	if args.queryBck.IsCloud() && args._requiresPermission(cmn.AccessBckDELETE) && args.msg.Action == cmn.ActDestroyLB {
+		goto retErr
+	}
+
+	if args._requiresPermission(cmn.AccessBckRENAME) {
+		goto retErr
+	}
+
+	return
+retErr:
+	op := "operation"
+	if args.msg != nil {
+		op = fmt.Sprintf("operation %q", args.msg.Action)
+	}
+	err = fmt.Errorf("%s is not supported by %s buckets (bucket=%s)", op, bckType, args.queryBck)
+	return
+}
+
+func (args *bckInitArgs) _requiresPermission(perm int) bool {
+	return (args.perms & perm) == perm
+}
+
+func (args *bckInitArgs) _checkPermission(bck *cluster.Bck) (errCode int, err error) {
+	if err = args.p.checkPermissions(args.r.Header, &bck.Bck, cmn.AccessAttrs(args.perms)); err != nil {
+		errCode = http.StatusUnauthorized
+		return
+	}
+
+	if err = bck.Allow(args.perms); err != nil {
+		errCode = http.StatusForbidden
+	}
+	return
+}
 
 // initAndTry initializes bucket and tries to add it if doesn't exist.
 // The method sets and returns err if was not successful and any point (if err
 // is set then `p.invalmsghdlr` is called so caller doesn't need to).
-func (args *remBckAddArgs) initAndTry(bucket string, origURLBck ...string) (bck *cluster.Bck, err error) {
-	if len(origURLBck) > 0 {
-		args.allowHTTPBck = true
+func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *cluster.Bck, err error) {
+	var errCode int
+	bck, errCode, err = args.init(bucket, origURLBck...)
+	if err == nil {
+		return
 	}
-	if args.queryBck == nil {
-		if args.query == nil {
-			args.query = args.r.URL.Query()
-		}
-		bck, err = newBckFromQuery(bucket, args.query)
-		if err != nil {
-			args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
-			return nil, err
-		}
-	} else {
-		bck = args.queryBck
-	}
-	if err = bck.Init(args.p.owner.bmd, args.p.si); err == nil {
-		return bck, nil
+	if errCode != http.StatusNotFound {
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+		return
 	}
 
-	args.queryBck = bck
+	// Should create only for remote bucket when `tryOnlyRem` flag is set.
+	if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok && args.tryOnlyRem {
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+		return
+	}
+
 	args.err = err
-	if args.allowHTTPBck {
+	if args.queryBck.IsHTTP() {
 		if len(origURLBck) > 0 {
-			args.allowHTTPBck = true
 			args.origURLBck = origURLBck[0]
-		} else if origURL := args.query.Get(cmn.URLParamOrigURL); origURL != "" {
+		} else if origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
@@ -70,19 +169,21 @@ func (args *remBckAddArgs) initAndTry(bucket string, origURLBck ...string) (bck 
 			}
 			args.origURLBck = hbo.OrigURLBck
 		}
+		if args.origURLBck == "" {
+			err = fmt.Errorf("failed to initialize HTTP bucket %q, requires original HTTP URL", args.queryBck)
+			args.p.invalmsghdlr(args.w, args.r, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
+
 	bck, err = args.try()
 	return
 }
 
-func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
+func (args *bckInitArgs) try() (bck *cluster.Bck, err error) {
 	bck, errCode, err := args._try()
 	if err != nil && err != cmn.ErrForwarded {
-		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok && args.allowBckNotExist {
-			err = nil
-		} else {
-			args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
-		}
+		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
 	}
 	return bck, err
 }
@@ -91,32 +192,20 @@ func (args *remBckAddArgs) try() (bck *cluster.Bck, err error) {
 // methods that are internal to this source
 //
 
-func (args *remBckAddArgs) _try() (bck *cluster.Bck, errCode int, err error) {
+func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	var cloudProps http.Header
-	if _, ok := args.err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
+	if args.err != nil && !cmn.IsErrBucketNought(args.err) {
 		err = args.err
-		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
-			errCode = http.StatusNotFound
-		} else {
-			errCode = http.StatusBadRequest
-		}
+		errCode = http.StatusBadRequest
 		return
 	}
+
 	if err = cmn.ValidateProvider(args.queryBck.Provider); err != nil {
 		err = cmn.NewErrorInvalidBucketProvider(args.queryBck.Bck, err)
 		errCode = http.StatusBadRequest
 		return
 	}
 
-	if args.queryBck.IsHTTP() && !args.allowHTTPBck {
-		op := "operation"
-		if args.msg != nil {
-			op = fmt.Sprintf("operation %q", args.msg.Action)
-		}
-		err = fmt.Errorf("%s does not support http buckets (bucket=%s)", op, args.queryBck)
-		errCode = http.StatusBadRequest
-		return
-	}
 	// forward maybe
 	if args.p.forwardCP(args.w, args.r, args.msg, "add-remote-bucket") {
 		err = cmn.ErrForwarded
@@ -124,18 +213,24 @@ func (args *remBckAddArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	}
 	// from this point on it's the primary - lookup via random target and try bucket add to BMD
 	bck = args.queryBck
+	action := cmn.ActCreateLB
+
 	if bck.HasBackendBck() {
 		bck = cluster.BackendBck(bck)
 	}
-	if cloudProps, errCode, err = args._lookup(bck); err != nil {
-		bck = nil
-		return
+
+	if bck.IsCloud() || bck.IsHTTP() {
+		action = cmn.ActRegisterCB
+		if cloudProps, errCode, err = args._lookup(bck); err != nil {
+			bck = nil
+			return
+		}
 	}
 	if args.queryBck.IsHTTP() {
 		debug.Assert(args.origURLBck != "")
 		cloudProps.Set(cmn.HeaderOrigURLBck, args.origURLBck)
 	}
-	if err = args.p.createBucket(&cmn.ActionMsg{Action: cmn.ActRegisterCB}, bck, cloudProps); err != nil {
+	if err = args.p.createBucket(&cmn.ActionMsg{Action: action}, bck, cloudProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			errCode = http.StatusConflict
 			return
@@ -150,7 +245,7 @@ func (args *remBckAddArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	return
 }
 
-func (args *remBckAddArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCode int, err error) {
+func (args *bckInitArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCode int, err error) {
 	q := url.Values{}
 	if bck.IsHTTP() {
 		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)

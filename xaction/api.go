@@ -21,6 +21,7 @@ const (
 type (
 	XactDescriptor struct {
 		Type       string // XactTypeGlobal, etc. - enum above
+		Access     int    // Access required by xact (see: cmn.Access*)
 		Startable  bool   // determines if this xaction can be started via API
 		Metasync   bool   // true: changes and metasyncs cluster-wide meta
 		Owned      bool   // true: JTX-owned
@@ -69,23 +70,24 @@ var XactsDtor = map[string]XactDescriptor{
 	cmn.ActDownload:  {Type: XactTypeGlobal, Startable: false, Mountpath: true},
 
 	// xactions that run on a given bucket or buckets
-	cmn.ActECGet:         {Type: XactTypeBck, Startable: false},
-	cmn.ActECPut:         {Type: XactTypeBck, Startable: false},
-	cmn.ActECRespond:     {Type: XactTypeBck, Startable: false},
-	cmn.ActMakeNCopies:   {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActPutCopies:     {Type: XactTypeBck, Startable: false},
-	cmn.ActRenameLB:      {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, Mountpath: true},
-	cmn.ActCopyBucket:    {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActETLBucket:     {Type: XactTypeBck, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActECEncode:      {Type: XactTypeBck, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActEvictObjects:  {Type: XactTypeBck, Startable: false, Mountpath: true},
-	cmn.ActDelete:        {Type: XactTypeBck, Startable: false, Mountpath: true},
-	cmn.ActLoadLomCache:  {Type: XactTypeBck, Startable: true, Mountpath: true},
-	cmn.ActPrefetch:      {Type: XactTypeBck, Startable: true},
-	cmn.ActPromote:       {Type: XactTypeBck, Startable: false, RefreshCap: true},
-	cmn.ActQueryObjects:  {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
-	cmn.ActListObjects:   {Type: XactTypeBck, Startable: false, Metasync: false, Owned: true},
-	cmn.ActSummaryBucket: {Type: XactTypeTask, Startable: false, Metasync: false, Owned: true, Mountpath: true},
+	cmn.ActECGet:          {Type: XactTypeBck, Startable: false},
+	cmn.ActECPut:          {Type: XactTypeBck, Startable: false},
+	cmn.ActECRespond:      {Type: XactTypeBck, Startable: false},
+	cmn.ActMakeNCopies:    {Type: XactTypeBck, Access: cmn.AccessMAKENCOPIES, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActPutCopies:      {Type: XactTypeBck, Startable: false},
+	cmn.ActRenameLB:       {Type: XactTypeBck, Access: cmn.AccessBckRENAME, Startable: false, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActCopyBucket:     {Type: XactTypeBck, Access: cmn.AccessGET, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActETLBucket:      {Type: XactTypeBck, Access: cmn.AccessGET, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActECEncode:       {Type: XactTypeBck, Access: cmn.AccessEC, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActEvictObjects:   {Type: XactTypeBck, Access: cmn.AccessObjDELETE, Startable: false, Mountpath: true},
+	cmn.ActDelete:         {Type: XactTypeBck, Access: cmn.AccessObjDELETE, Startable: false, Mountpath: true},
+	cmn.ActLoadLomCache:   {Type: XactTypeBck, Startable: true, Mountpath: true},
+	cmn.ActPrefetch:       {Type: XactTypeBck, Access: cmn.AccessSYNC, Startable: true},
+	cmn.ActPromote:        {Type: XactTypeBck, Access: cmn.AccessPROMOTE, Startable: false, RefreshCap: true},
+	cmn.ActQueryObjects:   {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
+	cmn.ActListObjects:    {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
+	cmn.ActSummaryBucket:  {Type: XactTypeTask, Access: cmn.AccessObjLIST | cmn.AccessBckHEAD, Startable: false, Metasync: false, Owned: true, Mountpath: true},
+	cmn.ActInvalListCache: {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false},
 }
 
 func IsValid(kind string) bool     { _, ok := XactsDtor[kind]; return ok }
