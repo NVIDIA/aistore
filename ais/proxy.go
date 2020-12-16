@@ -1435,7 +1435,6 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 	var (
 		started       = time.Now()
 		query         = r.URL.Query()
-		checkExists   = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
 		apiItems, err = p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	)
 	if err != nil {
@@ -1466,9 +1465,6 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
-	if checkExists {
-		redirectURL += fmt.Sprintf("&%s=true", cmn.URLParamCheckExists)
-	}
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
