@@ -1184,7 +1184,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 
 	const (
 		limitConnection = 2
-		template        = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
+		template        = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.{0..1}.iso"
 	)
 
 	var (
@@ -1207,7 +1207,8 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 			Bck:         bck,
 			Description: generateDownloadDesc(),
 			Limits: downloader.DlLimits{
-				Connections: limitConnection,
+				Connections:  limitConnection,
+				BytesPerHour: 200 * cmn.MiB,
 			},
 		},
 		Template: template,
