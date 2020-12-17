@@ -93,6 +93,20 @@ func (m *ioContext) init() {
 		m.numGetsEachFile = 1
 	}
 	m.stopCh = make(chan struct{})
+
+	if m.bck.IsCloud() {
+		// Remove unnecessary local objects.
+		tassert.CheckFatal(m.t, api.EvictCloudBucket(tutils.BaseAPIParams(m.proxyURL), m.bck))
+	}
+	m.t.Cleanup(m._cleanup)
+}
+
+func (m *ioContext) _cleanup() {
+	m.del()
+	if m.bck.IsCloud() {
+		// Ensure all local objects are removed.
+		tutils.EvictCloudBucket(m.t, m.proxyURL, m.bck)
+	}
 }
 
 func (m *ioContext) assertClusterState() {
@@ -315,6 +329,12 @@ func (m *ioContext) del(cnt ...int) {
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
+
+	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(m.bck))
+	tassert.CheckFatal(m.t, err)
+	if !exists {
+		return
+	}
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
@@ -593,7 +613,6 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			},
 		},
 	}
-
 	for _, test := range tests { // nolint:gocritic // no performance critical code
 		t.Run(test.name, func(t *testing.T) {
 			if test.backendBck.IsEmpty() {

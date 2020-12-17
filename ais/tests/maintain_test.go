@@ -65,7 +65,6 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 	m.saveClusterState()
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	m.puts()
 	// 1. Perform list-object and populate entries map
@@ -197,7 +196,6 @@ func TestMaintenanceRebalance(t *testing.T) {
 
 	m.saveClusterState()
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	m.puts()
 	tsi, _ := m.smap.GetRandTarget()
@@ -256,7 +254,6 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 
 	m.saveClusterState()
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	m.puts()
 	go m.getsUntilStop()

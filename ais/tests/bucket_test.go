@@ -66,7 +66,6 @@ func Test_BucketNames(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{})
 	tassert.CheckFatal(t, err)
@@ -131,7 +130,7 @@ func TestDefaultBucketProps(t *testing.T) {
 	})
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 	if !p.EC.Enabled {
@@ -162,7 +161,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 		MDWrite: api.MDWritePolicy("never"),
 	}
 	tutils.CreateFreshBucket(t, proxyURL, bck, propsToSet)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
+
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, propsToSet, p)
@@ -211,7 +210,6 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 		MDWrite: api.MDWritePolicy(mdwrite),
 	}
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, propsToSet)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	m.puts()
 	// TODO: must be able to wait for cmn.ActPutCopies
@@ -325,7 +323,6 @@ func TestResetBucketProps(t *testing.T) {
 	})
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	defaultProps, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
@@ -422,7 +419,6 @@ func TestSetInvalidBucketProps(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -458,7 +454,6 @@ func TestListObjectCloudVersions(t *testing.T) {
 	}
 
 	m.puts()
-	defer m.del()
 
 	tutils.Logf("Listing %q objects\n", m.bck)
 	msg := &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsVersion}
@@ -489,7 +484,6 @@ func TestListObjectsSmoke(t *testing.T) {
 
 		m.init()
 		m.puts()
-		defer m.del()
 
 		// Run couple iterations to see that we get deterministic results.
 		tutils.Logf("run %d list objects iterations\n", iters)
@@ -525,7 +519,6 @@ func TestListObjectsGoBack(t *testing.T) {
 
 		m.init()
 		m.puts()
-		defer m.del()
 
 		var (
 			tokens          []string
@@ -593,7 +586,6 @@ func TestListObjectsRerequestPage(t *testing.T) {
 
 		m.init()
 		m.puts()
-		defer m.del()
 
 		var (
 			err     error
@@ -640,7 +632,6 @@ func TestListObjectsStartAfter(t *testing.T) {
 
 		m.init()
 		m.puts()
-		defer m.del()
 
 		objList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 		tassert.CheckFatal(t, err)
@@ -681,7 +672,6 @@ func TestListObjectsProps(t *testing.T) {
 
 		m.init()
 		m.puts()
-		defer m.del()
 
 		checkProps := func(useCache bool, props []string, f func(entry *cmn.BucketEntry)) {
 			msg := &cmn.SelectMsg{PageSize: 100, UseCache: useCache}
@@ -776,7 +766,6 @@ func TestListObjectsCloudCached(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 	m.init()
-	defer m.del()
 
 	for _, evict := range []bool{false, true} {
 		tutils.Logf("list cloud objects with evict=%t\n", evict)
@@ -830,7 +819,6 @@ func TestListObjectsRandProxy(t *testing.T) {
 
 		m.init()
 		m.puts()
-		defer m.del()
 
 		for {
 			baseParams := tutils.BaseAPIParams()
@@ -870,7 +858,6 @@ func TestListObjectsRandPageSize(t *testing.T) {
 
 		m.init()
 		m.puts()
-		defer m.del()
 
 		for {
 			msg.PageSize = uint(rand.Intn(50) + 50)
@@ -941,7 +928,6 @@ func TestListObjects(t *testing.T) {
 			)
 
 			tutils.CreateFreshBucket(t, proxyURL, bck)
-			defer tutils.DestroyBucket(t, proxyURL, bck)
 
 			p := cmn.DefaultAISBckProps()
 
@@ -1110,7 +1096,6 @@ func TestListObjectsPrefix(t *testing.T) {
 					Provider: provider,
 				}
 				tutils.CreateFreshBucket(t, proxyURL, bck)
-				defer tutils.DestroyBucket(t, proxyURL, bck)
 
 				p := cmn.DefaultAISBckProps()
 				cksumType = p.Cksum.Type
@@ -1227,8 +1212,6 @@ func TestListObjectsCache(t *testing.T) {
 	m.init()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-
 	m.puts()
 
 	for _, useCache := range []bool{true, false} {
@@ -1287,7 +1270,6 @@ func TestListObjectsWithRebalance(t *testing.T) {
 	m.expectTargets(2)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := m.unregisterTarget()
 
@@ -1335,7 +1317,6 @@ func TestBucketSingleProp(t *testing.T) {
 	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	tutils.Logf("Changing bucket %q properties...\n", m.bck)
 
@@ -1554,8 +1535,6 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	}
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-
 	{
 		baseParams := tutils.BaseAPIParams()
 		_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
@@ -1619,7 +1598,6 @@ func TestCloudMirror(t *testing.T) {
 
 	m.init()
 	m.cloudPuts(true /*evict*/)
-	defer m.del()
 
 	// enable mirror
 	_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
@@ -1665,7 +1643,6 @@ func TestBucketReadOnly(t *testing.T) {
 	}
 	m.init()
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 	baseParams := tutils.BaseAPIParams()
 
 	m.puts()
@@ -1717,7 +1694,6 @@ func TestRenameBucketEmpty(t *testing.T) {
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
 	defer func() {
-		tutils.DestroyBucket(t, m.proxyURL, srcBck)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck)
 	}()
 	tutils.DestroyBucket(t, m.proxyURL, dstBck)
@@ -1773,9 +1749,6 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
 	defer func() {
-		// This bucket should not be present (thus ignoring error) but
-		// try to delete in case something failed.
-		api.DestroyBucket(baseParams, srcBck)
 		// This bucket should be present.
 		tutils.DestroyBucket(t, m.proxyURL, dstBck)
 	}()
@@ -1826,12 +1799,10 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 	m.expectTargets(1)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	m.setRandBucketProps()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, tmpBck)
-	defer tutils.DestroyBucket(t, m.proxyURL, tmpBck)
 
 	// Rename it
 	tutils.Logf("try rename %s => %s\n", m.bck, tmpBck)
@@ -1885,9 +1856,8 @@ func TestRenameBucketTwice(t *testing.T) {
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
 	defer func() {
-		// These buckets should not be present (thus ignoring error) but
+		// This bucket should not be present (thus ignoring error) but
 		// try to delete in case something failed.
-		api.DestroyBucket(baseParams, srcBck)
 		api.DestroyBucket(baseParams, dstBck2)
 		// This one should be present.
 		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
@@ -2074,16 +2044,10 @@ func TestCopyBucket(t *testing.T) {
 
 			for _, dstm := range dstms {
 				dstm.init()
-
-				if dstm.bck.IsCloud() {
-					// Remove unnecessary local objects.
-					tassert.CheckFatal(t, api.EvictCloudBucket(baseParams, dstm.bck))
-				}
 			}
 
 			if bckTest.IsAIS() {
 				tutils.CreateFreshBucket(t, srcm.proxyURL, srcm.bck)
-				defer tutils.DestroyBucket(t, srcm.proxyURL, srcm.bck)
 				srcm.setRandBucketProps()
 			}
 
@@ -2098,26 +2062,10 @@ func TestCopyBucket(t *testing.T) {
 				for _, dstm := range dstms {
 					if !dstm.bck.IsCloud() {
 						tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
+						defer tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
 					}
 				}
 			}
-
-			defer func() {
-				for _, dstm := range dstms {
-					if !dstm.bck.IsCloud() {
-						tutils.DestroyBucket(t, dstm.proxyURL, dstm.bck)
-					} else {
-						msg := &cmn.SelectMsg{Flags: cmn.SelectCached}
-						entries, err := api.ListObjects(baseParams, dstm.bck, msg, 0)
-						tassert.CheckFatal(t, err)
-						for _, e := range entries.Entries {
-							if err := api.DeleteObject(baseParams, dstm.bck, e.Name); err != nil {
-								tutils.Logf("failed to delete object %s/%s\n", dstm.bck, e.Name)
-							}
-						}
-					}
-				}
-			}()
 
 			srcProps, err := api.HeadBucket(baseParams, srcm.bck)
 			tassert.CheckFatal(t, err)
@@ -2138,8 +2086,6 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			} else if bckTest.IsCloud() {
 				srcm.cloudPuts(false /*evict*/)
-				defer srcm.del()
-
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
 			} else {
@@ -2246,7 +2192,6 @@ func TestCopyBucketSimple(t *testing.T) {
 
 	tutils.Logln("Preparing a source bucket")
 	tutils.CreateFreshBucket(t, proxyURL, srcBck)
-	defer tutils.DestroyBucket(t, proxyURL, srcBck)
 	m.init()
 
 	tutils.Logln("Putting objects to the source bucket")
@@ -2375,7 +2320,6 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
 	defer func() {
-		tutils.DestroyBucket(t, m.proxyURL, srcBck)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
 	}()
@@ -2456,7 +2400,6 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	srcBck := m.bck
 	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
 	defer func() {
-		tutils.DestroyBucket(t, m.proxyURL, srcBck)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
 	}()
@@ -2532,14 +2475,12 @@ func TestBackendBucket(t *testing.T) {
 	m.init()
 
 	tutils.CreateFreshBucket(t, proxyURL, aisBck)
-	defer tutils.DestroyBucket(t, proxyURL, aisBck)
 
 	p, err := api.HeadBucket(baseParams, cloudBck)
 	tassert.CheckFatal(t, err)
 	cloudBck.Provider = p.Provider
 
 	m.cloudPuts(false /*evict*/)
-	defer m.del()
 
 	msg := &cmn.SelectMsg{Prefix: m.prefix}
 	cloudObjList, err := api.ListObjects(baseParams, cloudBck, msg, 0)
@@ -2678,11 +2619,10 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		m.fileSize = cmn.KiB
 		numCorrupted = 13
 	}
+
 	m.saveClusterState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	{
 		if mirrored {
@@ -2894,6 +2834,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			if !bckTest.IsAIS() {
 				m.num = 123
 			}
+
 			cacheSize := m.num / 2 // determines number of objects which should be cached
 
 			m.saveClusterState()
@@ -2902,8 +2843,6 @@ func TestBucketListAndSummary(t *testing.T) {
 			expectedFiles := m.num
 			if bckTest.IsAIS() {
 				tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-				defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
-
 				m.puts()
 			} else if bckTest.IsCloud() {
 				m.bck.Name = cliBck.Name
@@ -2911,8 +2850,6 @@ func TestBucketListAndSummary(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 
 				m.cloudPuts(true /*evict*/)
-				defer m.del()
-
 				if test.cached {
 					m.cloudPrefetch(cacheSize)
 					expectedFiles = cacheSize

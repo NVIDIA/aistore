@@ -506,7 +506,6 @@ func TestObjProps(t *testing.T) {
 				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
 			} else {
 				tutils.CreateFreshBucket(t, proxyURL, m.bck)
-				defer tutils.DestroyBucket(t, proxyURL, m.bck)
 			}
 
 			defaultBckProp, err := api.HeadBucket(baseParams, m.bck)
@@ -530,8 +529,6 @@ func TestObjProps(t *testing.T) {
 			}
 			if test.cloud {
 				m.cloudPuts(test.evict)
-				defer m.del()
-
 				defer api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
 						Enabled: api.Bool(defaultBckProp.Versioning.Enabled),

@@ -457,9 +457,6 @@ func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		o.dataCnt, o.parityCnt, o.seed, o.concurrency)
 	_, err := api.SetBucketProps(baseParams, bck, bckProps)
-	if err != nil {
-		tutils.DestroyBucket(t, proxyURL, bck)
-	}
 	tassert.CheckFatal(t, err)
 }
 
@@ -548,7 +545,6 @@ func TestECChange(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	bucketProps := cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
@@ -848,7 +844,6 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
 			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-			defer tutils.DestroyBucket(t, proxyURL, bck)
 
 			wg := sync.WaitGroup{}
 			wg.Add(o.objCount)
@@ -921,7 +916,6 @@ func TestECChecksum(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	objName1 := fmt.Sprintf(o.pattern, 1)
 	objPath1 := ecTestDir + objName1
@@ -987,7 +981,6 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	}.init(t, proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	// End of preparation, create files with EC enabled, check if are restored properly
 
@@ -1076,8 +1069,6 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	}.init(t, proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
-
 	// End of preparation, create files with EC enabled, check if are restored properly
 
 	wg := &sync.WaitGroup{}
@@ -1178,9 +1169,6 @@ func TestECStress(t *testing.T) {
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
 			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-
-			defer tutils.DestroyBucket(t, proxyURL, bck)
-
 			doECPutsAndCheck(t, baseParams, bck, o)
 
 			msg := &cmn.SelectMsg{Props: "size,status"}
@@ -1228,8 +1216,6 @@ func TestECStressManyBuckets(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	newLocalBckWithProps(t, baseParams, bck1, defaultECBckProps(o1), o1)
 	newLocalBckWithProps(t, baseParams, bck2, defaultECBckProps(o2), o2)
-	defer tutils.DestroyBucket(t, proxyURL, bck1)
-	defer tutils.DestroyBucket(t, proxyURL, bck2)
 
 	// Run EC on different buckets concurrently
 	wg := &sync.WaitGroup{}
@@ -1308,7 +1294,6 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	started := time.Now()
 
@@ -1419,7 +1404,6 @@ func TestECXattrs(t *testing.T) {
 	}
 
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	oneObj := func(idx int, objName string) {
 		totalCnt, objSize, sliceSize, doEC := randObjectSize(idx, smallEvery, o)
@@ -1576,7 +1560,6 @@ func TestECDestroyBucket(t *testing.T) {
 
 	// create bucket with the same name and check if puts are successful
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 	doECPutsAndCheck(t, baseParams, bck, o)
 
 	// check if get requests are successful
@@ -1624,7 +1607,6 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	defer sgl.Free()
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	wg := &sync.WaitGroup{}
 
@@ -1727,7 +1709,6 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	wg := sync.WaitGroup{}
 
@@ -1870,7 +1851,6 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	bckProps := defaultECBckProps(o)
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	wg := &sync.WaitGroup{}
 
@@ -2009,7 +1989,6 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
@@ -2099,7 +2078,6 @@ func TestECBucketEncode(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, proxyURL, m.bck)
 
 	m.puts()
 	if t.Failed() {
@@ -2232,9 +2210,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckReg)
-	defer tutils.DestroyBucket(t, proxyURL, bckReg)
 	newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bckEC)
 
 	// select a target that loses its mpath(simulate drive death),
 	// and that has mpaths changed (simulate mpath added)
@@ -2359,7 +2335,6 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tgtList := o.smap.Tmap.ActiveNodes()
 	tgtLost := tgtList[0]
@@ -2452,7 +2427,6 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
 			newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
-			defer tutils.DestroyBucket(t, proxyURL, bckEC)
 			defer tutils.WaitForRebalanceToComplete(t, baseParams)
 			ecAndRegularUnregisterWhileRebalancing(t, o, bckEC)
 
@@ -2591,7 +2565,6 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)

@@ -45,7 +45,6 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	// Step 1.
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 2.
 	target := m.unregisterTarget()
@@ -97,7 +96,6 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	// Step 1.
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 2.
 	target := m.unregisterTarget()
@@ -186,7 +184,6 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 	// Step 2
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 3
 	m.puts()
@@ -250,7 +247,6 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	targets := m.smap.Tmap.ActiveNodes()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Unregister target 0
 	tutils.Logf("Unregister target %s\n", targets[0].ID())
@@ -314,7 +310,6 @@ func TestAckRebalance(t *testing.T) {
 	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := m.unregisterTarget()
 
@@ -344,7 +339,6 @@ func TestStressRebalance(t *testing.T) {
 	m.expectTargets(4)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	for i := 1; i <= 3; i++ {
 		tutils.Logf("Iteration #%d ======\n", i)
@@ -442,7 +436,6 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	targets := m.smap.Tmap.ActiveNodes()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Unregister target
 	target0, target1 := targets[0], targets[1]
@@ -521,7 +514,6 @@ func TestPutDuringRebalance(t *testing.T) {
 	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := m.unregisterTarget()
 
@@ -568,7 +560,6 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	m.expectTargets(2)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Select a random target to disable one of its mountpaths,
 	// and another random target to unregister.
@@ -671,7 +662,6 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	m.expectTargets(1)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
@@ -736,7 +726,6 @@ func TestGetDuringRebalance(t *testing.T) {
 	m.expectTargets(3)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := m.unregisterTarget(true /*force*/)
 
@@ -815,8 +804,6 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 			defer wg.Done()
 			tutils.CreateFreshBucket(t, m.proxyURL, bck)
 		}()
-
-		defer tutils.DestroyBucket(t, m.proxyURL, bck)
 	}
 	wg.Wait()
 	m.assertClusterState()
@@ -858,7 +845,6 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -912,7 +898,6 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		if !containers.DockerRunning() {
 			os.RemoveAll(newMountpath)
 		}
-		tutils.DestroyBucket(t, m.proxyURL, m.bck)
 	}()
 
 	m.puts()
@@ -965,7 +950,6 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 		if !containers.DockerRunning() {
 			os.RemoveAll(newMountpath)
 		}
-		tutils.DestroyBucket(t, m.proxyURL, m.bck)
 	}()
 
 	// PUT random objects
@@ -1063,7 +1047,6 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1111,8 +1094,6 @@ func TestForwardCP(t *testing.T) {
 	origID, origURL := m.smap.Primary.ID(), m.smap.Primary.PublicNet.DirectURL
 	nextProxyID, nextProxyURL, _ := chooseNextProxy(m.smap)
 
-	tutils.DestroyBucket(t, m.proxyURL, m.bck)
-
 	tutils.CreateFreshBucket(t, nextProxyURL, m.bck)
 	tutils.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)
 
@@ -1154,7 +1135,6 @@ func TestAtimeRebalance(t *testing.T) {
 	m.expectTargets(2)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	target := m.unregisterTarget()
 
@@ -1229,7 +1209,6 @@ func TestAtimeLocalGet(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
@@ -1370,7 +1349,6 @@ func TestAtimeLocalPut(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	timeBeforePut := time.Now()
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
@@ -1404,7 +1382,6 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	target := m.unregisterTarget()
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	rebID := m.reregisterTarget(target)
 
@@ -1449,7 +1426,6 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	m.puts()
 
@@ -1487,7 +1463,6 @@ func TestRenewRebalance(t *testing.T) {
 
 	// Step 2: Create an ais bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
@@ -1556,7 +1531,6 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 
 	// Step 1: Create a local bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 2: Make the bucket redundant
 	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
@@ -1617,7 +1591,6 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 
 	// Step 1: Create a local bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	// Step 2: Make the bucket redundant
 	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
@@ -1680,7 +1653,6 @@ func TestICRebalance(t *testing.T) {
 	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	m.puts()
 
@@ -1745,7 +1717,6 @@ func TestICDecommission(t *testing.T) {
 	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	m.puts()
 

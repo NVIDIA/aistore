@@ -249,7 +249,6 @@ func TestDownloadSingle(t *testing.T) {
 		}
 
 		m.init()
-		defer m.del()
 
 		clearDownloadList(t)
 
@@ -319,7 +318,6 @@ func TestDownloadRange(t *testing.T) {
 		}
 
 		m.init()
-		defer m.del()
 
 		clearDownloadList(t)
 
@@ -354,8 +352,6 @@ func TestDownloadMultiRange(t *testing.T) {
 		}
 
 		m.init()
-		defer m.del()
-
 		clearDownloadList(t)
 
 		id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck.Bck, template)
@@ -384,8 +380,6 @@ func TestDownloadMultiMap(t *testing.T) {
 		}
 
 		m.init()
-		defer m.del()
-
 		clearDownloadList(t)
 
 		id, err := api.DownloadMulti(tutils.BaseAPIParams(), generateDownloadDesc(), bck.Bck, mapping)
@@ -416,8 +410,6 @@ func TestDownloadMultiList(t *testing.T) {
 		}
 
 		m.init()
-		defer m.del()
-
 		clearDownloadList(t)
 
 		id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck.Bck, l)
@@ -445,7 +437,6 @@ func TestDownloadTimeout(t *testing.T) {
 	clearDownloadList(t)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	body := downloader.DlSingleBody{
 		DlSingleObj: downloader.DlSingleObj{
@@ -518,7 +509,6 @@ func TestDownloadCloud(t *testing.T) {
 
 			if test.dstBck.IsAIS() {
 				tutils.CreateFreshBucket(t, proxyURL, test.dstBck)
-				defer tutils.DestroyBucket(t, proxyURL, test.dstBck)
 			}
 
 			tutils.CleanupCloudBucket(t, proxyURL, test.srcBck, prefix)
@@ -634,7 +624,6 @@ func TestDownloadStatus(t *testing.T) {
 	clearDownloadList(t)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, bck)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, files)
 	tassert.CheckFatal(t, err)
@@ -679,7 +668,6 @@ func TestDownloadStatusError(t *testing.T) {
 
 	// Create ais bucket
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, files)
 	tassert.CheckFatal(t, err)
@@ -727,7 +715,6 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -769,7 +756,6 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -806,7 +792,6 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -865,7 +850,6 @@ func TestDownloadMpathEvents(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	id1, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
@@ -936,7 +920,6 @@ func TestDownloadOverrideObject(t *testing.T) {
 	clearDownloadList(t)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
@@ -981,7 +964,6 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 	clearDownloadList(t)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
@@ -1028,11 +1010,8 @@ func TestDownloadOverrideObjectCloud(t *testing.T) {
 
 	m.init()
 	m.cloudPuts(false /*evict*/)
-	defer m.del()
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
-
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
 	downloadObjectCloud(t, dlBody, m.num, 0)
@@ -1056,7 +1035,6 @@ func TestDownloadSkipObject(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
@@ -1091,10 +1069,8 @@ func TestDownloadSkipObjectCloud(t *testing.T) {
 
 	m.init()
 	m.cloudPuts(false /*evict*/)
-	defer m.del()
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
@@ -1131,11 +1107,8 @@ func TestDownloadSync(t *testing.T) {
 
 	m.init()
 	m.cloudPuts(false /*evict*/)
-	defer m.del()
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
-
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
 	tutils.Logln("1. initial sync of cloud bucket...")
@@ -1197,7 +1170,6 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
@@ -1257,7 +1229,6 @@ func TestDownloadJobConcurrency(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
@@ -1348,7 +1319,6 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeSingle, downloader.DlSingleBody{
 		DlBase: downloader.DlBase{

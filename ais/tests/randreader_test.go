@@ -28,7 +28,6 @@ func TestRandomReaderPutStress(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)

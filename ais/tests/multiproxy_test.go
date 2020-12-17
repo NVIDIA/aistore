@@ -962,7 +962,6 @@ func proxyStress(t *testing.T) {
 	defer func() {
 		err := tutils.WaitNodeReady(proxyURL)
 		tassert.CheckFatal(t, err)
-		tutils.DestroyBucket(t, proxyURL, bck)
 	}()
 
 	// start all workers
@@ -1519,7 +1518,6 @@ func icSyncOwnershipTable(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, src)
-	defer tutils.DestroyBucket(t, proxyURL, src)
 
 	// Start any xaction and get ID.
 	xactID, err := api.CopyBucket(baseParams, src, dstBck)
@@ -1589,7 +1587,6 @@ func icSinglePrimaryRevamp(t *testing.T) {
 	proxyURL = smap.Primary.URL(cmn.NetworkPublic)
 	baseParams = tutils.BaseAPIParams(proxyURL)
 	tutils.CreateFreshBucket(t, proxyURL, src)
-	defer tutils.DestroyBucket(t, proxyURL, src)
 
 	// Start any xaction and get ID.
 	xactID, err := api.CopyBucket(baseParams, src, dstBck)
@@ -1628,7 +1625,6 @@ func icStressMonitorXactMultiICFail(t *testing.T) {
 	// 1. Populate a bucket required for copy xactions
 	m.init()
 	tutils.CreateFreshBucket(t, proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, proxyURL, m.bck)
 	m.puts()
 
 	// 2. Kill and restore random IC members in background
@@ -1673,7 +1669,6 @@ func icStressCachedXactions(t *testing.T) {
 
 	// 1. Populate a bucket required for copy xactions
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)

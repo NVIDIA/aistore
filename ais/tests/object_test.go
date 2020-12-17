@@ -83,7 +83,6 @@ func TestObjectInvalidName(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	for _, test := range tests {
 		t.Run(test.op, func(t *testing.T) {
@@ -240,7 +239,6 @@ func TestAppendObject(t *testing.T) {
 					Type: api.String(cksumType),
 				},
 			})
-			defer tutils.DestroyBucket(t, proxyURL, bck)
 
 			var (
 				err    error
@@ -366,7 +364,6 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
-	defer tutils.DestroyBucket(t, proxyURL, bckLocal)
 
 	// PUT
 	tutils.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
@@ -459,7 +456,6 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bckCloud})
 
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
-	defer tutils.DestroyBucket(t, proxyURL, bckLocal)
 
 	bucketPropsLocal := cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
@@ -679,7 +675,6 @@ func TestHeadBucket(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	bckPropsToUpdate := cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
@@ -1060,7 +1055,6 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 	conf := cmn.DefaultAISBckProps().Cksum
 
 	tutils.PutRandObjs(proxyURL, bck, objPrefix, fileSize, numFiles, errCh, fileNameCh, conf.Type)
@@ -1543,7 +1537,6 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		badCksumVal  = "badchecksum"
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
-	defer tutils.DestroyBucket(t, proxyURL, bckLocal)
 	putArgs := api.PutObjectArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,

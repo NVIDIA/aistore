@@ -308,7 +308,6 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	defer func() {
-		tutils.DestroyBucket(t, md.proxyURL, md.bck)
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}
@@ -361,7 +360,6 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
 	tutils.CreateFreshBucket(t, md.proxyURL, md.bck)
 	defer func() {
-		tutils.DestroyBucket(t, md.proxyURL, md.bck)
 		if err := api.RemoveMountpath(md.baseParams, selectedTarget.ID(), selectedMpath); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget, err)
 		}

@@ -77,8 +77,6 @@ func BenchmarkListObject(b *testing.B) {
 				baseParams = tutils.BaseAPIParams()
 			)
 
-			defer tutils.DestroyBucket(b, baseParams.URL, bck)
-
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {

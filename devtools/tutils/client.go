@@ -133,11 +133,15 @@ func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
 	return smap.Primary, err
 }
 
+// CreateFreshBucket, destroys bucket if exists and creates new. The bucket is destroyed on test completion.
 func CreateFreshBucket(tb testing.TB, proxyURL string, bck cmn.Bck, ops ...cmn.BucketPropsToUpdate) {
 	DestroyBucket(tb, proxyURL, bck)
 	baseParams := BaseAPIParams(proxyURL)
 	err := api.CreateBucket(baseParams, bck, ops...)
 	tassert.CheckFatal(tb, err)
+	tb.Cleanup(func() {
+		DestroyBucket(tb, proxyURL, bck)
+	})
 }
 
 func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
@@ -150,9 +154,27 @@ func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	}
 }
 
+func EvictCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
+	if !bck.IsCloud() {
+		return
+	}
+	err := api.EvictCloudBucket(BaseAPIParams(proxyURL), bck)
+	tassert.CheckFatal(tb, err)
+}
+
 func CleanupCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
+	if !bck.IsCloud() {
+		return
+	}
+
 	toDelete, err := ListObjectNames(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
+	defer EvictCloudBucket(t, proxyURL, bck)
+
+	if len(toDelete) == 0 {
+		return
+	}
+
 	baseParams := BaseAPIParams(proxyURL)
 	xactID, err := api.DeleteList(baseParams, bck, toDelete)
 	tassert.CheckFatal(t, err)
@@ -386,7 +408,7 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 
 func BaseAPIParams(urls ...string) api.BaseParams {
 	var u string
-	if len(urls) > 0 {
+	if len(urls) > 0 && len(urls[0]) > 0 {
 		u = urls[0]
 	} else {
 		u = RandomProxyURL()

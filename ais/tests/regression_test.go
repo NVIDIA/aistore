@@ -82,7 +82,6 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType, true)
 	tassert.SelectErr(t, errCh, "put", true)
@@ -251,7 +250,6 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
@@ -282,7 +280,6 @@ func TestRegressionBuckets(t *testing.T) {
 		cksumType = cmn.DefaultAISBckProps().Cksum.Type
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck}, cksumType)
 }
 
@@ -306,7 +303,6 @@ func TestRenameBucket(t *testing.T) {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
 			tutils.CreateFreshBucket(t, proxyURL, bck)
 			tutils.DestroyBucket(t, proxyURL, renamedBck) // cleanup post Ctrl-C etc.
-			defer tutils.DestroyBucket(t, proxyURL, bck)
 			defer tutils.DestroyBucket(t, proxyURL, renamedBck)
 
 			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
@@ -441,7 +437,6 @@ func TestRenameObjects(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tutils.PutRandObjs(proxyURL, bck, "", 0, numPuts, errCh, objsPutCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
@@ -540,7 +535,6 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	// Step 2: PUT objects into a newly created bucket
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
-	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 	m.puts()
 
 	// Step 3: Start performing GET requests
@@ -694,7 +688,6 @@ func TestLRU(t *testing.T) {
 
 	m.init()
 	m.cloudPuts(false /*evict*/)
-	defer m.del()
 
 	// Remember targets' watermarks
 	var (
@@ -1043,7 +1036,6 @@ func TestStressDeleteRange(t *testing.T) {
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	// 1. PUT
 	tutils.Logln("putting objects...")
