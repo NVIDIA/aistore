@@ -240,6 +240,7 @@ var (
 	allXactionsFlag = cli.BoolTFlag{Name: "all", Usage: "show all xactions including finished"}
 	allItemsFlag    = cli.BoolTFlag{Name: "all", Usage: "list all items"} // TODO: differentiate bucket names vs objects
 	allJobsFlag     = cli.BoolTFlag{Name: "all", Usage: "remove all finished jobs"}
+	allETLStopFlag  = cli.BoolTFlag{Name: "all", Usage: "stop all ETLs"}
 
 	// Bucket
 	startAfterFlag = cli.StringFlag{

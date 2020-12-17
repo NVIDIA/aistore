@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/etl"
+	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
@@ -24,17 +25,17 @@ import (
 var etlCmds = []cli.Command{
 	{
 		Name:  commandETL,
-		Usage: "use ETLs",
+		Usage: "execute custom transformations on objects",
 		Subcommands: []cli.Command{
 			{
 				Name:      subcmdInit,
-				Usage:     "initialize ETL with yaml spec",
+				Usage:     "start ETL with YAML Pod specification",
 				ArgsUsage: "SPEC_FILE",
 				Action:    etlInitHandler,
 			},
 			{
 				Name:  subcmdBuild,
-				Usage: "build ETL with provided code, optional dependencies and runtime",
+				Usage: "start ETL with transformation source code",
 				Flags: []cli.Flag{
 					fromFileFlag,
 					depsFileFlag,
@@ -46,35 +47,36 @@ var etlCmds = []cli.Command{
 			},
 			{
 				Name:   subcmdList,
-				Usage:  "list all ETLs",
+				Usage:  "list all running ETLs",
 				Action: etlListHandler,
 			},
 			{
 				Name:         subcmdLogs,
-				Usage:        "retrieve logs produced by ETL",
+				Usage:        "retrieve logs produced by an ETL",
 				ArgsUsage:    "ETL_ID [TARGET_ID]",
 				Action:       etlLogsHandler,
 				BashComplete: etlIDCompletions,
 			},
 			{
 				Name:         subcmdStop,
-				Usage:        "stop ETL with given id",
-				ArgsUsage:    "ETL_ID",
+				Usage:        "stop ETL",
+				ArgsUsage:    "[ETL_ID...]",
 				Action:       etlStopHandler,
 				BashComplete: etlIDCompletions,
+				Flags:        []cli.Flag{allETLStopFlag},
 			},
 			{
 				Name:         subcmdObject,
-				Usage:        "transform object with given ETL",
+				Usage:        "transform an object",
 				ArgsUsage:    "ETL_ID BUCKET_NAME/OBJECT_NAME OUTPUT",
 				Action:       etlObjectHandler,
 				BashComplete: etlIDCompletions,
 			},
 			{
 				Name:      subcmdBucket,
-				Usage:     "offline transform bucket with given ETL",
+				Usage:     "transform bucket and put results to another bucket",
 				ArgsUsage: "ETL_ID SRC_BUCKET_NAME DST_BUCKET_NAME",
-				Action:    etlOfflineHandler,
+				Action:    etlBucketHandler,
 				Flags: []cli.Flag{
 					etlExtFlag,
 					cpBckPrefixFlag,
@@ -226,14 +228,37 @@ func etlLogsHandler(c *cli.Context) (err error) {
 }
 
 func etlStopHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, "ETL_ID")
+	var etls []string
+	if flagIsSet(c, allETLStopFlag) {
+		if c.NArg() != 0 {
+			return fmt.Errorf("specify either --all flag or ETL IDs")
+		}
+
+		res, err := api.ETLList(defaultAPIParams)
+		if err != nil {
+			return err
+		}
+		for _, etlInfo := range res {
+			etls = append(etls, etlInfo.ID)
+		}
+	} else {
+		if c.NArg() == 0 {
+			return fmt.Errorf("either specify --all flag or provide at least one ETL ID")
+		}
+		etls = c.Args()
 	}
-	id := c.Args()[0]
-	if err := api.ETLStop(defaultAPIParams, id); err != nil {
-		return err
+
+	for _, id := range etls {
+		if err := api.ETLStop(defaultAPIParams, id); err != nil {
+			if httpErr, ok := err.(*cmn.HTTPError); ok && httpErr.Status == http.StatusNotFound {
+				color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL %q not found", id)
+				continue
+			}
+			return err
+		}
+		fmt.Fprintf(c.App.Writer, "ETL %q stopped successfully\n", id)
 	}
-	fmt.Fprintln(c.App.Writer, "ETL containers stopped successfully.")
+
 	return nil
 }
 
@@ -272,7 +297,7 @@ func etlObjectHandler(c *cli.Context) (err error) {
 	return handleETLHTTPError(api.ETLObject(defaultAPIParams, id, bck, objName, w), id)
 }
 
-func etlOfflineHandler(c *cli.Context) (err error) {
+func etlBucketHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "ETL_ID")
 	} else if c.NArg() == 1 {
