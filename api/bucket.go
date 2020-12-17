@@ -81,6 +81,27 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 
 	resp, err := doHTTPRequestGetResp(ReqParams{BaseParams: baseParams, Path: path, Query: q}, nil)
 	if err != nil {
+		// Since HEAD request will never contain an error message we must try
+		// to create it here so it could be useful for the caller.
+		httpErr := &cmn.HTTPError{}
+		if errors.As(err, &httpErr) {
+			switch httpErr.Status {
+			case http.StatusUnauthorized:
+				httpErr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)
+			case http.StatusForbidden:
+				httpErr.Message = fmt.Sprintf("Bucket %q access denied", bck)
+			case http.StatusNotFound:
+				httpErr.Message = fmt.Sprintf("Bucket %q not found", bck)
+			case http.StatusGone:
+				httpErr.Message = fmt.Sprintf("Bucket %q has been removed from the cloud", bck)
+			default:
+				httpErr.Message = fmt.Sprintf(
+					"Failed to access bucket %q (code: %d)",
+					bck, httpErr.Status,
+				)
+			}
+			err = httpErr
+		}
 		return
 	}
 
