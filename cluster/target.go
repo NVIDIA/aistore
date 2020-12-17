@@ -32,7 +32,6 @@ const (
 	RegularPut RecvType = iota
 	ColdGet
 	Migrated
-	Downloaded
 
 	// Error if lock is not available to be acquired immediately. Otherwise acquire, create an object, release the lock.
 	Prefetch GetColdType = iota

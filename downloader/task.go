@@ -134,7 +134,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	params := cluster.PutObjectParams{
 		Tag:      "dl",
 		Reader:   r,
-		RecvType: cluster.Downloaded,
+		RecvType: cluster.RegularPut,
 		Started:  t.started.Load(),
 	}
 	if err := t.parent.t.PutObject(lom, params); err != nil {

@@ -112,7 +112,7 @@ type (
 ////////////////
 
 func (poi *putObjInfo) putObject() (errCode int, err error) {
-	debug.Assert(cluster.RegularPut <= poi.recvType && poi.recvType <= cluster.Downloaded)
+	debug.Assert(cluster.RegularPut <= poi.recvType && poi.recvType <= cluster.Migrated)
 
 	lom := poi.lom
 	// optimize out if the checksums do match
@@ -213,8 +213,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		defer lom.Unlock(true)
 	}
 
-	if bck.IsAIS() && lom.VersionConf().Enabled &&
-		(poi.recvType == cluster.RegularPut || poi.recvType == cluster.Downloaded) {
+	if bck.IsAIS() && lom.VersionConf().Enabled && poi.recvType == cluster.RegularPut {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}
