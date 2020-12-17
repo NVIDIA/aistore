@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/xaction"
+	"github.com/fatih/color"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v2"
@@ -306,7 +307,7 @@ func startDownloadHandler(c *cli.Context) error {
 				return err
 			}
 			if !p.BackendBck.Equal(source.cloud.bck) {
-				fmt.Fprintf(c.App.Writer,
+				color.New(color.FgYellow).Fprintf(c.App.ErrWriter,
 					"Warning: bucket %q does not have Cloud bucket %q as its *backend* - proceeding to download anyway\n",
 					basePayload.Bck, source.cloud.bck,
 				)
@@ -381,7 +382,8 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Fprintf(c.App.Writer, "Download started. Run `ais show download %s --progress` to monitor the progress.\n", id)
+	fmt.Fprintln(c.App.Writer, id)
+	fmt.Fprintf(c.App.Writer, "Run `ais show download %s --progress` to monitor the progress.\n", id)
 	return nil
 }
 
