@@ -59,9 +59,7 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 }
 
 func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error) {
-	// TODO: We could potentially change it to `lom.Lock(false)` if we would
-	//  take an exclusive lock for updating metadata (but for now we dont have
-	//  mechanism for locking only metadata so we need to lock exclusively).
+	// TODO: finer-grade mechanism to write-protect metadata only (md.copies in this case)
 	lom.Lock(true)
 	defer lom.Unlock(true)
 

@@ -649,7 +649,8 @@ var _ = Describe("LOM", func() {
 				err error
 				bck = lom.Bck()
 			)
-
+			lom.Lock(true)
+			defer lom.Unlock(true)
 			dst, err = lom.CopyObject(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(dst.FQN).To(BeARegularFile())
@@ -903,6 +904,8 @@ var _ = Describe("LOM", func() {
 				expectedHash := getTestFileHash(lom.FQN)
 
 				// Check that copies were added to metadata.
+				lom.Lock(true)
+				defer lom.Unlock(true)
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeTrue())
 				Expect(lom.NumCopies()).To(Equal(3))

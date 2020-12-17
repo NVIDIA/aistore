@@ -50,6 +50,17 @@ func (nl nameLocker) init() {
 // nlc
 //
 
+func (nlc *nlc) IsLocked(uname string) (rc int, exclusive bool) {
+	nlc.mu.Lock()
+	defer nlc.mu.Unlock()
+
+	lockInfo, found := nlc.m[uname]
+	if !found {
+		return
+	}
+	return lockInfo.rc, lockInfo.exclusive
+}
+
 func (nlc *nlc) TryLock(uname string, exclusive bool) bool {
 	nlc.mu.Lock()
 

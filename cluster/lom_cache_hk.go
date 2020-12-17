@@ -5,12 +5,10 @@
 package cluster
 
 import (
-	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -91,11 +89,7 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 			}
 			if mdTime > 0 && md.atime != md.atimefs {
 				if lom, bucketExists := lomFromLmeta(md, bmd); bucketExists {
-					lom.flushAtime(atime)
-					if md.dirty && lom.WritePolicy() != cmn.WriteNever {
-						lom.md = *md
-						lom.persistDirty() // write this lom and update its copies
-					}
+					lom.flushCold(md, atime)
 				}
 			}
 			cache.Delete(hkey)
@@ -106,16 +100,5 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 	}
 	if _, tag := lchk.mp(); tag != "" {
 		glog.Infof("memory pressure %q, total %d, evicted %d", tag, totalCnt, evictedCnt)
-	}
-}
-
-func (lom *LOM) flushAtime(atime time.Time) {
-	finfo, err := os.Stat(lom.FQN)
-	if err != nil {
-		return
-	}
-	mtime := finfo.ModTime()
-	if err = os.Chtimes(lom.FQN, atime, mtime); err != nil {
-		glog.Errorf("%s: flush atime err: %v", lom, err)
 	}
 }

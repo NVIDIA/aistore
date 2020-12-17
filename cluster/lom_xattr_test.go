@@ -92,6 +92,8 @@ var _ = Describe("LOM Xattributes", func() {
 		Describe("Persist", func() {
 			It("should save correct meta to disk", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
+				lom.Lock(true)
+				defer lom.Unlock(true)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
 				lom.SetCustomMD(cmn.SimpleKVs{
@@ -124,6 +126,8 @@ var _ = Describe("LOM Xattributes", func() {
 
 			It("should _not_ save meta to disk", func() {
 				lom := filePut(cachedFQN, testFileSize, tMock)
+				lom.Lock(true)
+				defer lom.Unlock(true)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
 				Expect(lom.Persist()).NotTo(HaveOccurred())
@@ -160,6 +164,8 @@ var _ = Describe("LOM Xattributes", func() {
 
 			It("should copy object with meta in memory", func() {
 				lom := filePut(cachedFQN, testFileSize, tMock)
+				lom.Lock(true)
+				defer lom.Unlock(true)
 				cksumHash, err := lom.ComputeCksum()
 				Expect(err).NotTo(HaveOccurred())
 				lom.SetCksum(cksumHash.Clone())
@@ -203,6 +209,8 @@ var _ = Describe("LOM Xattributes", func() {
 
 			It("should override old values", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
+				lom.Lock(true)
+				defer lom.Unlock(true)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version1")
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
@@ -237,6 +245,8 @@ var _ = Describe("LOM Xattributes", func() {
 				createTestFile(localFQN, testFileSize)
 				lom1 := NewBasicLom(localFQN, tMock)
 				lom2 := NewBasicLom(localFQN, tMock)
+				lom1.Lock(true)
+				defer lom1.Unlock(true)
 				lom1.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom1.SetVersion("dummy_version")
 				Expect(lom1.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
@@ -258,6 +268,8 @@ var _ = Describe("LOM Xattributes", func() {
 				BeforeEach(func() {
 					createTestFile(localFQN, testFileSize)
 					lom = NewBasicLom(localFQN, tMock)
+					lom.Lock(true)
+					defer lom.Unlock(true)
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 					lom.SetVersion("dummy_version")
 					Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())

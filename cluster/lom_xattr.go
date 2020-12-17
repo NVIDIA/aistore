@@ -8,8 +8,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -161,7 +163,16 @@ func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
 }
 
 // NOTE: not clearing dirty flag as the caller will uncache anyway
-func (lom *LOM) persistDirty() {
+func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
+	lom.Lock(true)
+	defer lom.Unlock(true)
+	if err := lom.flushAtime(atime); err != nil {
+		return
+	}
+	if !md.dirty || lom.WritePolicy() == cmn.WriteNever {
+		return
+	}
+	lom.md = *md
 	if err := lom.syncMetaWithCopies(); err != nil {
 		return
 	}
@@ -170,6 +181,19 @@ func (lom *LOM) persistDirty() {
 		T.FSHC(err, lom.FQN)
 	}
 	mm.Free(buf)
+}
+
+func (lom *LOM) flushAtime(atime time.Time) (err error) {
+	var finfo os.FileInfo
+	finfo, err = os.Stat(lom.FQN)
+	if err != nil {
+		return
+	}
+	mtime := finfo.ModTime()
+	if err = os.Chtimes(lom.FQN, atime, mtime); err != nil {
+		glog.Errorf("%s: flush atime err: %v", lom, err)
+	}
+	return
 }
 
 func (lom *LOM) marshal() (buf []byte, mm *memsys.MMSA) {

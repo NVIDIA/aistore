@@ -166,9 +166,6 @@ func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 ////////////////////////////
 // LOCAL COPY MANAGEMENT //
 ///////////////////////////
-//
-// TODO -- FIXME: lom.md.copies are not protected and are subject to races
-//                the caller to use lom.Lock/Unlock (as in mirror)
 
 func (lom *LOM) _whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
@@ -187,28 +184,27 @@ func (lom *LOM) NumCopies() int {
 	if len(lom.md.copies) == 0 {
 		return 1
 	}
-	if debug.Enabled && lom.IsHRW() {
-		_, ok := lom.md.copies[lom.FQN]
-		debug.Assertf(ok, "md.copies does not contain itself %s, copies: %v", lom.FQN, lom.md.copies)
-	}
+	debug.AssertFunc(func() (ok bool) {
+		_, ok = lom.md.copies[lom.FQN]
+		if !ok {
+			glog.Errorf("%s: missing self (%s) in copies %v", lom, lom.FQN, lom.md.copies)
+		}
+		return
+	})
 	return len(lom.md.copies)
 }
 
-// GetCopies returns all copies.
-//
-// NOTE: This method can also return the mpath/FQN of current lom.
-// This means that the caller is responsible for filtering it out if necessary!
-func (lom *LOM) GetCopies() fs.MPI {
-	return lom.md.copies
-}
+// GetCopies returns all copies (and NOTE that copies include self)
+func (lom *LOM) GetCopies() fs.MPI { return lom.md.copies }
 
 // given an existing (on-disk) object, determines whether it is a _copy_
 // (compare with isMirror below)
 func (lom *LOM) IsCopy() bool {
-	if lom.IsHRW() {
+	if !lom.HasCopies() || lom.IsHRW() {
 		return false
 	}
 	_, ok := lom.md.copies[lom.FQN]
+	debug.Assert(ok)
 	return ok
 }
 
@@ -220,14 +216,6 @@ func (lom *LOM) isMirror(dst *LOM) bool {
 		lom.Bck().Equal(dst.Bck(), true /* must have same BID*/, true /* same backend */)
 }
 
-func (lom *LOM) addCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
-	if lom.md.copies == nil {
-		lom.md.copies = make(fs.MPI, 2)
-	}
-	lom.md.copies[copyFQN] = mpi
-	lom.md.copies[lom.FQN] = lom.mpathInfo
-}
-
 func (lom *LOM) delCopyMd(copyFQN string) {
 	delete(lom.md.copies, copyFQN)
 	if len(lom.md.copies) <= 1 {
@@ -235,8 +223,13 @@ func (lom *LOM) delCopyMd(copyFQN string) {
 	}
 }
 
+// NOTE: used only in tests
 func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
-	lom.addCopyMd(copyFQN, mpi)
+	if lom.md.copies == nil {
+		lom.md.copies = make(fs.MPI, 2)
+	}
+	lom.md.copies[copyFQN] = mpi
+	lom.md.copies[lom.FQN] = lom.mpathInfo
 	return lom.syncMetaWithCopies()
 }
 
@@ -307,6 +300,11 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 	if !lom.HasCopies() {
 		return nil
 	}
+	// NOTE: caller is responsible for write-locking
+	debug.AssertFunc(func() bool {
+		_, exclusive := lom.IsLocked()
+		return exclusive
+	})
 	if lom.WritePolicy() != cmn.WriteImmediate {
 		lom.md.dirty = true
 		return nil
@@ -380,17 +378,17 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 	dst.md.copies = nil
 	if dst.isMirror(lom) {
-		if lom.md.copies == nil {
-			lom.md.copies = make(fs.MPI, 2)
-			dst.md.copies = make(fs.MPI, 2)
-		} else {
+		// NOTE: caller is responsible for write-locking
+		debug.AssertFunc(func() bool {
+			_, exclusive := lom.IsLocked()
+			return exclusive
+		})
+		if lom.md.copies != nil {
 			dst.md.copies = make(fs.MPI, len(lom.md.copies)+1)
 			for fqn, mpi := range lom.md.copies {
 				dst.md.copies[fqn] = mpi
 			}
 		}
-		lom.md.copies[dstFQN], dst.md.copies[dstFQN] = dst.mpathInfo, dst.mpathInfo
-		lom.md.copies[lom.FQN], dst.md.copies[lom.FQN] = lom.mpathInfo, lom.mpathInfo
 	}
 
 	workFQN := fs.CSM.GenContentFQN(dst, fs.WorkfileType, fs.WorkfilePut)
@@ -412,8 +410,16 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}
+
+	// persist
 	if lom.isMirror(dst) {
-		if err = lom.AddCopy(dst.FQN, dst.mpathInfo); err != nil {
+		if lom.md.copies == nil {
+			lom.md.copies = make(fs.MPI, 2)
+			dst.md.copies = make(fs.MPI, 2)
+		}
+		lom.md.copies[dstFQN], dst.md.copies[dstFQN] = dst.mpathInfo, dst.mpathInfo
+		lom.md.copies[lom.FQN], dst.md.copies[lom.FQN] = lom.mpathInfo, lom.mpathInfo
+		if err = lom.syncMetaWithCopies(); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
 				if errRemove := os.Remove(dst.FQN); errRemove != nil {
 					glog.Errorf("nested err: %v", errRemove)
@@ -930,6 +936,14 @@ func lomCaches() []*sync.Map {
 //
 
 func getLomLocker(idx int) *nlc { return &lomLocker[idx] }
+
+func (lom *LOM) IsLocked() (int /*rc*/, bool /*exclusive*/) {
+	var (
+		_, idx = lom.Hkey()
+		nlc    = getLomLocker(idx)
+	)
+	return nlc.IsLocked(lom.Uname())
+}
 
 func (lom *LOM) TryLock(exclusive bool) bool {
 	var (
