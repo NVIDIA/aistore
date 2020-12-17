@@ -169,6 +169,20 @@ func TestCreateWithBucketProps(t *testing.T) {
 }
 
 func TestOverwriteLomCache(t *testing.T) {
+	for _, mdwrite := range []cmn.MDWritePolicy{cmn.WriteImmediate, cmn.WriteNever} {
+		name := string(mdwrite)
+		if name == "" {
+			name = "write-immediate"
+		} else {
+			name = "write-" + name
+		}
+		t.Run(name, func(t *testing.T) {
+			overwriteLomCache(mdwrite, t)
+		})
+	}
+}
+
+func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 	var (
 		m = ioContext{
 			t:         t,
@@ -179,6 +193,9 @@ func TestOverwriteLomCache(t *testing.T) {
 		}
 		baseParams = tutils.BaseAPIParams()
 	)
+	if testing.Short() {
+		m.num = 50
+	}
 	m.init()
 	m.smap = tutils.GetClusterMap(m.t, m.proxyURL)
 
@@ -191,12 +208,13 @@ func TestOverwriteLomCache(t *testing.T) {
 	tutils.Logf("Create %s(mirrored, md-write=never)\n", m.bck)
 	propsToSet := cmn.BucketPropsToUpdate{
 		Mirror:  &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
-		MDWrite: api.MDWritePolicy("never"),
+		MDWrite: api.MDWritePolicy(mdwrite),
 	}
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, propsToSet)
 	defer tutils.DestroyBucket(t, m.proxyURL, m.bck)
 
 	m.puts()
+	// TODO: must be able to wait for cmn.ActPutCopies
 
 	tutils.Logf("List %q\n", m.bck)
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsName}
@@ -218,6 +236,7 @@ func TestOverwriteLomCache(t *testing.T) {
 		})
 		tassert.CheckFatal(t, err)
 	}
+	// TODO: wait for cmn.ActPutCopies
 
 	tutils.Logf("List %s new versions\n", m.bck)
 	msg = &cmn.SelectMsg{}

@@ -76,7 +76,8 @@ var _ = Describe("Mirror", func() {
 			Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
 			// Make copy
-			clone, err := copyTo(lom, &mi2, nil)
+			copyFQN := fs.CSM.FQN(&mi2, lom.Bck().Bck, fs.ObjectType, lom.ObjName)
+			clone, err := lom.CopyObject(copyFQN, nil)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(expectedCopyFQN).To(BeARegularFile())
 			Expect(clone.Size()).To(BeEquivalentTo(testObjectSize))

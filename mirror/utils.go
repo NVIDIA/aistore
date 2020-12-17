@@ -54,10 +54,7 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 	if err = lom.DelCopies(copiesFQN...); err != nil {
 		return
 	}
-	if err = lom.Persist(); err != nil {
-		return
-	}
-	lom.ReCache()
+	err = lom.Persist()
 	return
 }
 
@@ -79,15 +76,13 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 		return 0, nil
 	}
 
-	// Duplicate lom.md.copies for write access.
-	lom.CloneCopiesMd()
-
 	//  While copying we may find out that some copies do not exist -
 	//  these copies will be removed and `NumCopies()` will decrease.
 	for lom.NumCopies() < copies {
 		if mpathInfo := findLeastUtilized(lom); mpathInfo != nil {
 			var clone *cluster.LOM
-			if clone, err = copyTo(lom, mpathInfo, buf); err != nil {
+			copyFQN := fs.CSM.FQN(mpathInfo, lom.Bck().Bck, fs.ObjectType, lom.ObjName)
+			if clone, err = lom.CopyObject(copyFQN, buf); err != nil {
 				glog.Errorln(err)
 				return
 			}
@@ -100,7 +95,6 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 			return
 		}
 	}
-	lom.ReCache()
 	return
 }
 
@@ -133,15 +127,6 @@ func findLeastUtilized(lom *cluster.LOM) (out *fs.MountpathInfo) {
 			minUtil = curUtil
 			out = mpathInfo
 		}
-	}
-	return
-}
-
-func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *cluster.LOM, err error) {
-	copyFQN := fs.CSM.FQN(mpathInfo, lom.Bck().Bck, fs.ObjectType, lom.ObjName)
-	clone, err = lom.CopyObject(copyFQN, buf)
-	if err != nil {
-		return
 	}
 	return
 }

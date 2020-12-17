@@ -228,10 +228,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 			return
 		}
 	}
-	if err = lom.Persist(); err != nil {
-		return
-	}
-	lom.ReCache()
+	err = lom.Persist(true)
 	return
 }
 
@@ -834,8 +831,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 
 	// GFN: atime must be already set
 	if !coldGet && !goi.isGFN {
+		goi.lom.Load(false)
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		goi.lom.ReCache() // GFN and cold GETs already did this
+		goi.lom.ReCache(true) // GFN and cold GETs already did this
 	}
 
 	// Update objects which were sent during GFN. Thanks to this we will not
@@ -1070,7 +1068,6 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 
 	if dst, err = srcLOM.CopyObject(dst.FQN, coi.Buf); err == nil {
 		copied = true
-		dst.ReCache()
 		if coi.finalize {
 			coi.t.putMirror(dst)
 		}

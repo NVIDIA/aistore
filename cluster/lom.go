@@ -136,34 +136,6 @@ func (lom *LOM) WritePolicy() (p cmn.MDWritePolicy) {
 
 func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
-func (lom *LOM) CopyMetadata(from *LOM) {
-	lom.md.copies = nil
-	if lom.isMirror(from) {
-		lom.setCopiesMd(from.FQN, from.mpathInfo)
-		for fqn, mpathInfo := range from.GetCopies() {
-			lom.addCopyMd(fqn, mpathInfo)
-		}
-		// TODO: in future we should have invariant: cmn.Assert(lom.NumCopies() == from.NumCopies())
-	}
-
-	lom.md.cksum = from.md.cksum
-	lom.md.size = from.md.size
-	lom.md.version = from.md.version
-	lom.md.atime = from.md.atime
-}
-
-func (lom *LOM) CloneCopiesMd() int {
-	var (
-		num    = len(lom.md.copies)
-		copies = lom.md.copies
-	)
-	lom.md.copies = make(fs.MPI, num)
-	for fqn, mpi := range copies {
-		lom.md.copies[fqn] = mpi
-	}
-	return num
-}
-
 // see also: transport.FromHdrProvider()
 func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
 	return cmn.ToHTTPHdr(lom, hdr)
@@ -246,12 +218,6 @@ func (lom *LOM) isMirror(dst *LOM) bool {
 	return lom.MirrorConf().Enabled &&
 		lom.ObjName == dst.ObjName &&
 		lom.Bck().Equal(dst.Bck(), true /* must have same BID*/, true /* same backend */)
-}
-
-func (lom *LOM) setCopiesMd(copyFQN string, mpi *fs.MountpathInfo) {
-	lom.md.copies = make(fs.MPI, 2)
-	lom.md.copies[copyFQN] = mpi
-	lom.md.copies[lom.FQN] = lom.mpathInfo
 }
 
 func (lom *LOM) addCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
@@ -412,7 +378,20 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	if err = dst.Init(cmn.Bck{}); err != nil {
 		return
 	}
-	dst.CopyMetadata(lom)
+	dst.md.copies = nil
+	if dst.isMirror(lom) {
+		if lom.md.copies == nil {
+			lom.md.copies = make(fs.MPI, 2)
+			dst.md.copies = make(fs.MPI, 2)
+		} else {
+			dst.md.copies = make(fs.MPI, len(lom.md.copies)+1)
+			for fqn, mpi := range lom.md.copies {
+				dst.md.copies[fqn] = mpi
+			}
+		}
+		lom.md.copies[dstFQN], dst.md.copies[dstFQN] = dst.mpathInfo, dst.mpathInfo
+		lom.md.copies[lom.FQN], dst.md.copies[lom.FQN] = lom.mpathInfo, lom.mpathInfo
+	}
 
 	workFQN := fs.CSM.GenContentFQN(dst, fs.WorkfileType, fs.WorkfilePut)
 	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, cksumType)
@@ -597,9 +576,7 @@ recomp:
 		lom.md.cksum = cksums.comp.Clone()
 		if err = lom.Persist(); err != nil {
 			lom.md.cksum = cksums.stor
-			return
 		}
-		lom.ReCache()
 		return
 	}
 	if cksums.comp.Equal(lom.md.cksum) {
@@ -666,7 +643,7 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err er
 	return
 }
 
-// NOTE: Clone performs shallow copy of the LOM struct.
+// NOTE: Clone performs a shallow copy of the LOM.
 func (lom *LOM) Clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
@@ -804,17 +781,21 @@ func (lom *LOM) checkBucket() error {
 	return cmn.NewObjDefunctError(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 }
 
-func (lom *LOM) ReCache() {
-	debug.Assert(!lom.IsCopy()) // not caching copies
+func (lom *LOM) ReCache(store bool) {
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.mpathInfo.LomCache(idx)
 		md        = &lmeta{}
 	)
-	*md = lom.md
-	md.bckID = lom.Bprops().BID
-	debug.Assert(md.bckID != 0)
-	cache.Store(hkey, md)
+	if !store {
+		_, store = cache.Load(hkey) // refresh an existing one
+	}
+	if store {
+		*md = lom.md
+		md.bckID = lom.Bprops().BID
+		debug.Assert(md.bckID != 0)
+		cache.Store(hkey, md)
+	}
 }
 
 func (lom *LOM) Uncache(delDirty bool) {

@@ -125,15 +125,21 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	return
 }
 
-func (lom *LOM) Persist() (err error) {
+func (lom *LOM) Persist(stores ...bool) (err error) {
 	if lom.WritePolicy() != cmn.WriteImmediate {
 		lom.md.dirty = true
-		lom.ReCache()
+		lom.ReCache(true)
 		return
 	}
 	buf, mm := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		T.FSHC(err, lom.FQN)
+	} else {
+		var store bool
+		if len(stores) > 0 {
+			store = stores[0]
+		}
+		lom.ReCache(store)
 	}
 	mm.Free(buf)
 	return

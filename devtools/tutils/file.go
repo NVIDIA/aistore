@@ -170,11 +170,10 @@ func RandomObjDir(dirLen, maxDepth int) (dir string) {
 	return
 }
 
-func SetXattrCksum(fqn string, cksum *cmn.Cksum, t cluster.Target) error {
+func SetXattrCksum(fqn string, bck cmn.Bck, cksum *cmn.Cksum, t cluster.Target) error {
 	lom := &cluster.LOM{FQN: fqn}
-	_ = lom.Init(cmn.Bck{})
+	_ = lom.Init(bck)
 	_ = lom.LoadMetaFromFS()
-
 	lom.SetCksum(cksum)
 	return lom.Persist()
 }
