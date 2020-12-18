@@ -66,7 +66,11 @@ func (c *putJogger) processRequest(req *Request) {
 	c.toDisk = useDisk(memRequired)
 	req.tm = time.Now()
 	err := c.ec(req)
-	c.parent.DecPending()
+	// In case of everything is OK, a transport bundle calls `DecPending`
+	// on finishing transferring all the data
+	if err != nil {
+		c.parent.DecPending()
+	}
 	if req.Callback != nil {
 		req.Callback(req.LOM, err)
 	}
@@ -195,6 +199,7 @@ func (c *putJogger) encode(req *Request) error {
 	if meta.IsCopy {
 		if err := c.createCopies(req, meta); err != nil {
 			c.cleanup(req)
+			return err
 		}
 		return nil
 	}
@@ -203,6 +208,7 @@ func (c *putJogger) encode(req *Request) error {
 	if slices, err := c.sendSlices(req, meta); err != nil {
 		freeSlices(slices)
 		c.cleanup(req)
+		return err
 	}
 	return nil
 }
@@ -266,6 +272,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 		if err != nil {
 			glog.Errorf("Failed to to %v: %v", nodes, err)
 		}
+		c.parent.DecPending()
 	}
 	src := &dataSource{
 		reader:   fh,
@@ -490,19 +497,23 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		return nil, err
 	}
 
-	wg := sync.WaitGroup{}
-	ch := make(chan error, totalCnt)
 	mainObj := &slice{refCnt: *atomic.NewInt32(int32(ecConf.DataSlices)), obj: objReader}
 	sliceSize := SliceSize(req.LOM.Size(), ecConf.DataSlices)
+	sliceCnt := cmn.Min(totalCnt, len(targets)-1)
+	counter := atomic.NewInt32(int32(sliceCnt))
 
 	// transfer a slice to remote target
 	// If the slice is data one - no immediate cleanup is required because this
 	// slice is just a reader of global SGL for the entire file (that is why a
 	// counter is used here)
-	copySlice := func(i int) {
-		defer wg.Done()
+	copySlice := func(i int) error {
+		var (
+			reader cmn.ReadOpenCloser
+			err    error
+			rc     io.ReadCloser
+			data   *slice
+		)
 
-		var data *slice
 		if i < ecConf.DataSlices {
 			// the slice is just a reader that does not allocate new memory
 			data = mainObj
@@ -513,11 +524,6 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 		// In case of data slice, reopen its reader, because it was read
 		// to the end by erasure encoding while calculating parity slices
-		var (
-			reader cmn.ReadOpenCloser
-			err    error
-			rc     io.ReadCloser
-		)
 		if slices[i].reader != nil {
 			reader = slices[i].reader
 			switch r := reader.(type) {
@@ -541,8 +547,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			}
 		}
 		if err != nil {
-			ch <- fmt.Errorf("failed to reset reader: %v", err)
-			return
+			return fmt.Errorf("failed to reset reader: %v", err)
 		}
 
 		mcopy := &Metadata{}
@@ -561,29 +566,32 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			isSlice:  true,
 			reqType:  reqPut,
 		}
+		sentCB := func(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
+			if data != nil {
+				data.release()
+			}
+			if err != nil {
+				glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
+			}
+			if cnt := counter.Dec(); cnt == 0 {
+				c.parent.DecPending()
+			}
+		}
 
 		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target
 		lom := *req.LOM
-		err = c.parent.writeRemote([]string{targets[i+1].ID()}, &lom, src, nil)
-		if err != nil {
-			ch <- err
-			return
-		}
+		return c.parent.writeRemote([]string{targets[i+1].ID()}, &lom, src, sentCB)
 	}
 
 	// Send as many as possible to be able to restore the object later.
-	for i := 0; i < totalCnt; i++ {
-		if i >= len(targets)-1 {
-			break
+	var copyErr error
+	for i := 0; i < sliceCnt; i++ {
+		if err := copySlice(i); err != nil {
+			copyErr = err
 		}
-		wg.Add(1)
-		go copySlice(i)
 	}
 
-	wg.Wait()
-	close(ch)
-
-	if err, ok := <-ch; ok {
+	if copyErr != nil {
 		var s string
 		if ecConf.DataSlices > 1 {
 			s = "s"

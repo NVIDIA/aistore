@@ -16,6 +16,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -50,7 +51,6 @@ func (c *getJogger) run() {
 			c.parent.stats.updateWaitTime(time.Since(req.tm))
 			req.tm = time.Now()
 			c.ec(req)
-			c.parent.DecPending()
 		case <-c.stopCh:
 			return
 		}
@@ -91,14 +91,18 @@ func (c *getJogger) ec(req *Request) {
 				c.parent.stats.updateObjTime(time.Since(req.putTime))
 			}
 			<-c.sema
+			// In case of everything is OK, a transport bundle calls `DecPending`
+			// on finishing transferring all the data
+			if err != nil {
+				c.parent.DecPending()
+			}
 		}
 		c.jobMtx.Lock()
 		c.jobs[jobID] = restore
 		c.jobMtx.Unlock()
-		go func() {
-			restore(req, toDisk, cb)
-		}()
+		go restore(req, toDisk, cb)
 	default:
+		c.parent.DecPending()
 		err := fmt.Errorf("invalid EC action for getJogger: %v", req.Action)
 		glog.Errorf("Error restoring object [%s/%s], fqn: %q, err: %v",
 			req.LOM.Bck(), req.LOM.ObjName, req.LOM.FQN, err)
@@ -116,12 +120,11 @@ func (c *getJogger) ec(req *Request) {
 // * metadata - object's EC metadata
 // * nodes - targets that have metadata and replica - filled by requestMeta
 // * replicaCnt - total number of replicas including main one
-func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata, nodes map[string]*Metadata, replicaCnt int) {
+func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata, nodes map[string]*Metadata, replicaCnt int) error {
 	targets, err := cluster.HrwTargetList(lom.Uname(), c.parent.smap.Get(), replicaCnt)
 	if err != nil {
 		freeObject(reader)
-		glog.Errorf("failed to get list of %d targets: %s", replicaCnt, err)
-		return
+		return err
 	}
 
 	// fill the list of daemonIDs that do not have replica
@@ -141,7 +144,8 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 	// Otherwise just free allocated memory and return immediately
 	if len(daemons) == 0 {
 		freeObject(reader)
-		return
+		c.parent.DecPending()
+		return nil
 	}
 	var srcReader cmn.ReadOpenCloser
 
@@ -155,9 +159,8 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 	}
 
 	if err != nil {
-		glog.Error(err)
 		freeObject(reader)
-		return
+		return err
 	}
 
 	// _ io.ReadCloser: pass copyMisssingReplicas reader argument(memsys.SGL type)
@@ -168,6 +171,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 			glog.Errorf("%s failed to send %s/%s to %v: %v", c.parent.t.Snode(), lom.Bck(), lom.ObjName, daemons, err)
 		}
 		freeObject(reader)
+		c.parent.DecPending()
 	}
 
 	src := &dataSource{
@@ -176,9 +180,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 		metadata: metadata,
 		reqType:  reqPut,
 	}
-	if err := c.parent.writeRemote(daemons, lom, src, cb); err != nil {
-		glog.Errorf("%s failed to copy replica %s/%s to %v: %v", c.parent.t.Snode(), lom.Bck(), lom.ObjName, daemons, err)
-	}
+	return c.parent.writeRemote(daemons, lom, src, cb)
 }
 
 // starting point of restoration of the object that was replicated
@@ -234,9 +236,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 
 	// now a client can read the object, but EC needs to restore missing
 	// replicas. So, execute copying replicas in background and return
-	go c.copyMissingReplicas(req.LOM, writer, meta, nodes, meta.Parity+1)
-
-	return nil
+	return c.copyMissingReplicas(req.LOM, writer, meta, nodes, meta.Parity+1)
 }
 
 func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, nodes map[string]*Metadata) error {
@@ -300,9 +300,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 	if err != nil {
 		return err
 	}
-	go c.copyMissingReplicas(req.LOM, reader, meta, nodes, meta.Parity+1)
-
-	return nil
+	return c.copyMissingReplicas(req.LOM, reader, meta, nodes, meta.Parity+1)
 }
 
 // Main object is not found and it is clear that it was encoded. Request
@@ -656,19 +654,27 @@ func (c *getJogger) emptyTargets(req *Request, meta *Metadata, idToNode map[int]
 // * meta - rebuilt object's metadata
 // * slices - object slices reconstructed by `restoreMainObj`
 // * idToNode - a map of targets that already contain a slice (SliceID <-> target)
-func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) {
+func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) error {
 	emptyNodes, err := c.emptyTargets(req, meta, idToNode)
 	if err != nil {
-		return
+		return err
 	}
 
 	var (
-		sliceID int
-		sl      *slice
+		sliceID   int
+		sl        *slice
+		remoteErr error
+		counter   = atomic.NewInt32(0)
 	)
-	// send reconstructed slices one by one to targets that are "empty".
+	// First, count the number of slices and initialize the counter to avoid
+	// races when network is faster than FS and transport callback comes before
+	// the next slice is being sent
+	for sl, id := getNextNonEmptySlice(slices, 0); sl != nil && len(emptyNodes) != 0; sl, id = getNextNonEmptySlice(slices, id) {
+		counter.Inc()
+	}
+	// Last, send reconstructed slices one by one to targets that are "empty".
 	// Do not wait until the data transfer is complete
-	for sl, sliceID = getNextNonEmptySlice(slices, sliceID); sl != nil && len(emptyNodes) != 0; {
+	for sl, sliceID = getNextNonEmptySlice(slices, 0); sl != nil && len(emptyNodes) != 0; sl, sliceID = getNextNonEmptySlice(slices, sliceID) {
 		tid := emptyNodes[0]
 		emptyNodes = emptyNodes[1:]
 
@@ -706,9 +712,13 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 					glog.Errorf("%s failed to send %s/%s to %v: %v", c.parent.t.Snode(), req.LOM.Bck(), req.LOM.ObjName, daemonID, err)
 				}
 				s.free()
+				if cnt := counter.Dec(); cnt == 0 {
+					c.parent.DecPending()
+				}
 			}
 		}(tid, sl)
 		if err := c.parent.writeRemote([]string{tid}, req.LOM, dataSrc, cb); err != nil {
+			remoteErr = err
 			glog.Errorf("%s failed to send slice %d of %s/%s to %s",
 				c.parent.t.Snode(), sliceID, req.LOM.Bck(), req.LOM.ObjName, tid)
 		}
@@ -717,6 +727,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 	for sl, sliceID = getNextNonEmptySlice(slices, sliceID); sl != nil; sl, sliceID = getNextNonEmptySlice(slices, sliceID) {
 		sl.free()
 	}
+	return remoteErr
 }
 
 // main function that starts restoring an object that was encoded

@@ -382,25 +382,11 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		ObjAttrs: objAttrs,
 		Opaque:   putData,
 	}
-	if cb == nil && src.obj != nil {
-		obj := src.obj
-		cb = func(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, err error) {
-			mm.Free(hdr.Opaque)
-			if obj != nil {
-				obj.release()
-			}
-			if err != nil {
-				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bck(), lom.ObjName, daemonIDs, err)
-			}
-		}
-	} else {
-		// wrapper to properly cleanup memory allocated by MMSA
-		oldCallback := cb
-		cb = func(hdr transport.ObjHdr, reader io.ReadCloser, ptr unsafe.Pointer, err error) {
-			mm.Free(hdr.Opaque)
-			if oldCallback != nil {
-				oldCallback(hdr, reader, ptr, err)
-			}
+	oldCallback := cb
+	cb = func(hdr transport.ObjHdr, reader io.ReadCloser, ptr unsafe.Pointer, err error) {
+		mm.Free(hdr.Opaque)
+		if oldCallback != nil {
+			oldCallback(hdr, reader, ptr, err)
 		}
 	}
 	return r.sendByDaemonID(daemonIDs, hdr, src.reader, cb, false)

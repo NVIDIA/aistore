@@ -384,6 +384,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 }
 
 func TestFSCheckerEnablingMpath(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -437,6 +438,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 }
 
 func TestFSCheckerTargetDisable(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		target *cluster.Snode
 
@@ -535,6 +537,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 }
 
 func TestFSDisableMpathRestart(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		target *cluster.Snode
 
