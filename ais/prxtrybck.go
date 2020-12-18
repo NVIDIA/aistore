@@ -243,6 +243,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 		err = fmt.Errorf("%s: unexpected failure to add remote %s, err: %v", args.p.si, bck, err)
 		errCode = http.StatusInternalServerError
 	}
+	bck = args.queryBck
 	return
 }
 

@@ -158,6 +158,9 @@ func EvictCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	if !bck.IsCloud() {
 		return
 	}
+	if bck.HasBackendBck() {
+		bck = *bck.BackendBck()
+	}
 	err := api.EvictCloudBucket(BaseAPIParams(proxyURL), bck)
 	tassert.CheckFatal(tb, err)
 }

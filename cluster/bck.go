@@ -177,6 +177,9 @@ func (b *Bck) Init(bowner Bowner, si *Snode) (err error) {
 		return
 	}
 	backend := NewBckEmbed(b.Props.BackendBck)
+	// Ensure no cached props
+	backend.Props = nil
+
 	if !backend.IsCloud() {
 		err = fmt.Errorf("bucket %s: invalid backend %s (not a Cloud bucket)", b, backend)
 		return

@@ -470,27 +470,38 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 // DELETE { action } /v1/buckets
 func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
-	var (
-		msg   cmn.ActionMsg
-		query = r.URL.Query()
-		perms = cmn.AccessBckDELETE
-	)
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
+
+	msg := cmn.ActionMsg{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
 
-	bucket := apiItems[0]
+	var (
+		bck     *cluster.Bck
+		query   = r.URL.Query()
+		perms   = cmn.AccessBckDELETE
+		bucket  = apiItems[0]
+		errCode int
+	)
 	if msg.Action == cmn.ActDelete || msg.Action == cmn.ActEvictObjects {
 		perms = cmn.AccessObjDELETE
 	}
 
 	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, tryOnlyRem: true}
-	bck, err := bckArgs.initAndTry(bucket)
-	if err != nil {
+	if msg.Action == cmn.ActEvictCB {
+		bck, errCode, err = bckArgs.init(bucket)
+		if errCode == http.StatusNotFound {
+			// Cloud bucket not in BMD, ignore error
+			return
+		}
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error(), errCode)
+		}
+	} else if bck, err = bckArgs.initAndTry(bucket); err != nil {
 		return
 	}
 

@@ -96,7 +96,7 @@ func (m *ioContext) init() {
 
 	if m.bck.IsCloud() {
 		// Remove unnecessary local objects.
-		tassert.CheckFatal(m.t, api.EvictCloudBucket(tutils.BaseAPIParams(m.proxyURL), m.bck))
+		tutils.EvictCloudBucket(m.t, m.proxyURL, m.bck)
 	}
 	m.t.Cleanup(m._cleanup)
 }
