@@ -801,7 +801,7 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 	if res.status >= http.StatusBadRequest {
 		var b bytes.Buffer
 		b.ReadFrom(resp.Body)
-		res.err = errors.New(b.String())
+		res.err, _ = cmn.NewHTTPError(req, b.String(), res.status)
 		res.details = res.err.Error()
 		return
 	}
