@@ -186,13 +186,13 @@ Retry:
 		}
 	}
 	// TODO: remove and make it work when the space is extremely constrained (J)
-	if debug.Enabled {
+	debug.Func(func() {
 		go func() {
 			if err := os.RemoveAll(tmpDir); err != nil {
 				glog.Errorf("RemoveAll for %q failed with %v", tmpDir, err)
 			}
 		}()
-	}
+	})
 	return nil
 }
 

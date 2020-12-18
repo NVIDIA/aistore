@@ -343,9 +343,11 @@ func (r *MMSA) Init(panicOnErr bool) (err error) {
 		}
 	}
 	hk.Reg(r.Name+".gc", r.garbageCollect, d)
-	if debug.Enabled && flag.Parsed() {
-		debug.Infof("mmsa %q started", r.Name)
-	}
+	debug.Func(func() {
+		if flag.Parsed() {
+			debug.Infof("mmsa %q started", r.Name)
+		}
+	})
 	return
 }
 
@@ -537,12 +539,12 @@ func (s *Slab) Free(bufs ...[]byte) {
 		for _, buf := range bufs {
 			size := cap(buf)
 			b := buf[:size] // NOTE: always freeing the original (full) size
-			if debug.Enabled {
+			debug.Func(func() {
 				debug.Assert(int64(size) == s.Size())
 				for i := 0; i < len(b); i += len(deadBEEF) {
 					copy(b[i:], deadBEEF)
 				}
-			}
+			})
 			s.put = append(s.put, b)
 		}
 		s.muput.Unlock()

@@ -199,13 +199,15 @@ func (b *Bck) InitNoBackend(bowner Bowner, si *Snode) (err error) {
 	} else if b.IsHTTP() {
 		debug.Assert(b.Ns == cmn.NsGlobal)
 		present := bmd.initBckCloudProvider(b)
-		if debug.Enabled && present {
-			var (
-				origURL = b.Props.Extra.OrigURLBck
-				bckName = cmn.OrigURLBck2Name(origURL)
-			)
-			debug.Assertf(b.Name == bckName, "%s != %s; original_url: %s", b.Name, bckName, origURL)
-		}
+		debug.Func(func() {
+			if present {
+				var (
+					origURL = b.Props.Extra.OrigURLBck
+					bckName = cmn.OrigURLBck2Name(origURL)
+				)
+				debug.Assertf(b.Name == bckName, "%s != %s; original_url: %s", b.Name, bckName, origURL)
+			}
+		})
 	} else {
 		b.Props, _ = bmd.Get(b)
 	}

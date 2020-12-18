@@ -148,14 +148,14 @@ func (s *Stream) Send(obj *Obj) (err error) {
 		return
 	}
 	// reader == nil iff is-header-only
-	if debug.Enabled {
+	debug.Func(func() {
 		if obj.Reader == nil {
 			debug.Assert(obj.IsHeaderOnly())
 		} else if obj.IsHeaderOnly() {
 			val := reflect.ValueOf(obj.Reader)
 			debug.AssertMsg(val.IsNil(), obj.String())
 		}
-	}
+	})
 	s.workCh <- obj
 	if verbose {
 		glog.Infof("%s: send %s[sq=%d]", s, obj, len(s.workCh))

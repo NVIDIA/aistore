@@ -100,10 +100,12 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	statsif, loaded := h.sessions.LoadOrStore(uid, &Stats{})
 	xxh, id := UID2SessID(uid)
 	loghdr := fmt.Sprintf("%s[%d:%d]", trname, xxh, sessID)
-	if !loaded && debug.Enabled {
-		debug.Assert(id == uint64(sessID))
-		debug.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
-	}
+	debug.Func(func() {
+		if !loaded {
+			debug.Assert(id == uint64(sessID))
+			debug.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
+		}
+	})
 	stats := statsif.(*Stats)
 
 	// Rx loop

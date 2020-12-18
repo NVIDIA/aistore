@@ -11,13 +11,13 @@ import "sync"
 const (
 	MtxLocked  = 0
 	MtxRLocked = 0
-
-	Enabled = false
 )
 
 func Errorln(a ...interface{})          {}
 func Errorf(f string, a ...interface{}) {}
 func Infof(f string, a ...interface{})  {}
+
+func Func(f func()) {}
 
 func Assert(cond bool, a ...interface{})            {}
 func AssertFunc(f func() bool, a ...interface{})    {}

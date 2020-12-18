@@ -270,16 +270,17 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		return
 	}
 	newCnt := y.countNewMembers(smap)
+
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
-	if debug.Enabled {
+	debug.Func(func() {
 		y.validateCoW()
-	}
+		debug.Assertf(revsReqType == revsReqNotify || revsReqType == revsReqSync,
+			"unknown request type: %d", revsReqType)
+	})
 	if revsReqType == revsReqNotify {
 		method = http.MethodPost
-	} else if revsReqType == revsReqSync {
-		method = http.MethodPut
 	} else {
-		cmn.Assertf(false, "unknown request type: %d", revsReqType)
+		method = http.MethodPut
 	}
 outer:
 	for _, pair := range pairs {
@@ -327,9 +328,7 @@ outer:
 
 		y.lastSynced[tag] = revs
 		revsBody := revs.marshal()
-		if debug.Enabled {
-			y.lastClone[tag] = revsBody
-		}
+		debug.Func(func() { y.lastClone[tag] = revsBody })
 		msgJSON := cmn.MustMarshal(msg)
 
 		if tag == revsRMDTag {
@@ -588,7 +587,7 @@ func (y *metasyncer) validateCoW() {
 			}
 			s := fmt.Sprintf("CoW violation: previously sync-ed %s v%d has been updated in-place",
 				tag, revs.version())
-			cmn.AssertMsg(false, s)
+			debug.AssertMsg(false, s)
 		}
 	}
 }

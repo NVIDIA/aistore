@@ -20,8 +20,6 @@ import (
 const (
 	MtxLocked = 1 << (iota + 1)
 	MtxRLocked
-
-	Enabled = true
 )
 
 func init() {
@@ -94,6 +92,8 @@ func Errorf(f string, a ...interface{}) {
 func Infof(f string, a ...interface{}) {
 	glog.InfoDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
 }
+
+func Func(f func()) { f() }
 
 func Assert(cond bool, a ...interface{}) {
 	if !cond {

@@ -107,10 +107,11 @@ func PersistOnMpaths(path, backupPath string, what interface{}, atMost int, opts
 		}
 	}
 
-	if debug.Enabled {
+	debug.Func(func() {
 		expected := cmn.Min(atMost, availCnt)
-		cmn.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead", path, expected, cnt)
-	}
+		debug.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead",
+			path, expected, cnt)
+	})
 
 	return
 }

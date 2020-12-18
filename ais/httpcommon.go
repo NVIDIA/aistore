@@ -1074,14 +1074,13 @@ func (h *httprunner) bcastToIC(msg *aisMsg, wait bool) {
 	if cnt == 0 {
 		glog.Errorf("%s: node count is zero in broadcast-to-IC, %s", h.si, smap.StrIC(h.si))
 	}
-	if !debug.Enabled {
-		return
-	}
-	for res := range ch {
-		if res.err != nil {
-			glog.Error(res.err)
+	debug.Func(func() {
+		for res := range ch {
+			if res.err != nil {
+				glog.Error(res.err)
+			}
 		}
-	}
+	})
 }
 
 //////////////////////////////////
