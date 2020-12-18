@@ -10,7 +10,7 @@ IMAGE_REPO=aistore/admin
 all: build push
 
 build:
-	docker build -t $(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile .
+	docker build --quiet -t $(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile .
 
 push:
 	docker push $(IMAGE_REPO):$(IMAGE_TAG)
