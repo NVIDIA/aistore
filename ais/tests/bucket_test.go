@@ -430,7 +430,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 	}
 }
 
-func TestListObjectCloudVersions(t *testing.T) {
+func TestListObjectsCloudVersions(t *testing.T) {
 	var (
 		m = ioContext{
 			t:        t,
@@ -2145,8 +2145,11 @@ func TestCopyBucket(t *testing.T) {
 
 				_, err := api.HeadBucket(baseParams, srcm.bck)
 				tassert.CheckFatal(t, err)
+				dstmProps, err := api.HeadBucket(baseParams, dstm.bck)
+				tassert.CheckFatal(t, err)
 
 				msg := &cmn.SelectMsg{}
+				msg.AddProps(cmn.GetPropsVersion)
 				if test.dstCloud {
 					msg.Flags = cmn.SelectCached
 				}
@@ -2155,11 +2158,20 @@ func TestCopyBucket(t *testing.T) {
 				if len(dstBckList.Entries) != expectedObjCount {
 					t.Fatalf("list_objects: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)
 				}
+
+				tutils.Logf("checking equality of %d objects", expectedObjCount)
 				for _, a := range srcBckList.Entries {
 					var found bool
 					for _, b := range dstBckList.Entries {
 						if a.Name == b.Name {
 							found = true
+
+							if dstm.bck.IsAIS() {
+								tassert.Fatalf(t, b.Version == "1", "Expected object %q to have initial version, got %s", b.Name, b.Version)
+							} else if dstmProps.Versioning.Enabled {
+								tassert.Fatalf(t, b.Version != "", "Expected non-empty object %q version", b.Name)
+							}
+
 							break
 						}
 					}

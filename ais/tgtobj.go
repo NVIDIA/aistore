@@ -213,7 +213,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 		defer lom.Unlock(true)
 	}
 
-	if bck.IsAIS() && lom.VersionConf().Enabled && poi.recvType == cluster.RegularPut {
+	if bck.IsAIS() && lom.VersionConf().Enabled && (poi.recvType == cluster.RegularPut || lom.Version() == "") {
 		if err = lom.IncVersion(); err != nil {
 			return
 		}
@@ -1015,7 +1015,13 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 	}
 
 	if si.ID() != coi.t.si.ID() {
-		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si, DM: coi.DM, Locked: true}
+		params := cluster.SendToParams{
+			ObjNameTo: objNameTo,
+			Tsi:       si,
+			DM:        coi.DM,
+			Locked:    true,
+			NoVersion: !srcLOM.Bck().Bck.Equal(coi.BckTo.Bck), // Don't include version when totally different object.
+		}
 		copied, _, err = coi.putRemote(srcLOM, params) // NOTE: srcLOM.Unlock inside
 		return
 	}
@@ -1089,7 +1095,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 //
 // If destination bucket is remote bucket, copyReader will always create a cached copy of an object on one of the
 // targets as well as make put to the relevant cloud provider.
-// TODO: make it possible to skip caching an object from a cloud bucket.
+// TODO: Make it possible to skip caching an object from a cloud bucket.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
 	cmn.Assert(coi.DP != nil)
 
@@ -1105,7 +1111,12 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	}
 
 	if si.ID() != coi.t.si.ID() {
-		params := cluster.SendToParams{ObjNameTo: objNameTo, Tsi: si, DM: coi.DM}
+		params := cluster.SendToParams{
+			ObjNameTo: objNameTo,
+			Tsi:       si,
+			DM:        coi.DM,
+			NoVersion: !lom.Bck().Bck.Equal(coi.BckTo.Bck),
+		}
 		return coi.putRemote(lom, params)
 	}
 
@@ -1117,6 +1128,9 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	dst := &cluster.LOM{ObjName: objNameTo}
 	if err = dst.Init(coi.BckTo.Bck); err != nil {
 		return
+	}
+	if lom.Bck().Bck.Equal(coi.BckTo.Bck) {
+		dst.SetVersion(lom.Version())
 	}
 
 	if reader, _, cleanUp, err = coi.DP.Reader(lom); err != nil {
@@ -1222,6 +1236,10 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 			cmn.Close(params.Reader)
 			return err == nil, written, err
 		}
+	}
+	debug.Assert(params.HdrMeta != nil)
+	if params.NoVersion {
+		params.HdrMeta = cmn.NewHdrMetaCustomVersion(params.HdrMeta, "")
 	}
 	params.BckTo = coi.BckTo
 	if err := coi.t.sendTo(lom, params); err != nil {

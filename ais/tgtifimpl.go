@@ -149,7 +149,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 // `params.Reader` is closed always, even on errors.
 func (t *targetrunner) sendTo(lom *cluster.LOM, params cluster.SendToParams) error {
 	debug.Assert(!t.Snode().Equals(params.Tsi))
-	cmn.Assert(params.HdrMeta != nil)
+	debug.Assert(params.HdrMeta != nil)
 
 	if params.HdrMeta.Size() < -1 {
 		return fmt.Errorf("[%s/%s] content length of %d not supported, -1 or greater required", lom.BckName(), lom.ObjName, params.HdrMeta.Size())

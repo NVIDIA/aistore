@@ -807,7 +807,7 @@ var _ = Describe("LOM", func() {
 				Expect(nonMirroredLOM.FQN).NotTo(Equal(lom.FQN))
 				_, cksumValue := nonMirroredLOM.Cksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
-				Expect(nonMirroredLOM.Version()).To(Equal(desiredVersion))
+				Expect(nonMirroredLOM.Version()).To(Equal("1"))
 				Expect(nonMirroredLOM.Size()).To(BeEquivalentTo(testFileSize))
 
 				Expect(nonMirroredLOM.IsCopy()).To(BeFalse())

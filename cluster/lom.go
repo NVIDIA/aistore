@@ -391,6 +391,11 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 	}
 
+	if !dst.Bck().Bck.Equal(lom.Bck().Bck) {
+		// The copy will be in a new bucket - completely separate object. Hence, we have to set initial version.
+		dst.SetVersion(lomInitialVersion)
+	}
+
 	workFQN := fs.CSM.GenContentFQN(dst, fs.WorkfileType, fs.WorkfilePut)
 	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, cksumType)
 	if err != nil {
@@ -490,7 +495,7 @@ func (lom *LOM) IncVersion() error {
 	}
 	ver, err := strconv.Atoi(lom.Version())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to increase version, expected number, err: %v", err)
 	}
 	lom.SetVersion(strconv.Itoa(ver + 1))
 	return nil

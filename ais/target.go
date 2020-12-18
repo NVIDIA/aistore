@@ -1311,7 +1311,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	if recvType != "" {
 		n, err := strconv.Atoi(recvType)
 		if err != nil {
-			return http.StatusBadRequest, err
+			return http.StatusBadRequest, fmt.Errorf("failed to parse receive type, err: %v", err)
 		}
 		poi.recvType = cluster.RecvType(n)
 	}

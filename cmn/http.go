@@ -80,14 +80,6 @@ type (
 		BodyR io.Reader
 	}
 
-	ObjHeaderMetaProvider interface {
-		Size() int64
-		Cksum() *Cksum
-		Version() string
-		AtimeUnix() int64
-		CustomMD() SimpleKVs
-	}
-
 	HTTPMuxers map[string]*mux.ServeMux // by http.Method
 
 	CallWithRetryArgs struct {

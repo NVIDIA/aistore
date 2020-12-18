@@ -83,8 +83,8 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn
 
 	om := &objMeta{
 		size:    length,
-		version: lom.Version(),
-		cksum:   cmn.NoneCksum,
+		version: "",            // Object after ETL is a new object with a new version.
+		cksum:   cmn.NoneCksum, // TODO: Revisit and check if possible to have a checksum.
 		atime:   lom.AtimeUnix(),
 	}
 	return cmn.NopOpener(body), om, func() {}, nil
