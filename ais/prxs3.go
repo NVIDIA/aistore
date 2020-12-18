@@ -138,7 +138,7 @@ func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket st
 		return
 	}
 	msg := cmn.ActionMsg{Action: cmn.ActCreateLB}
-	if p.forwardCP(w, r, &msg, bucket) {
+	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
 	if err := p.createBucket(&msg, bck); err != nil {
@@ -163,7 +163,7 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
-	if p.forwardCP(w, r, &msg, bucket) {
+	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
 	if err := p.destroyBucket(&msg, bck); err != nil {
@@ -490,7 +490,7 @@ func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request,
 // PUT s3/bk-name?versioning
 func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	msg := &cmn.ActionMsg{Action: cmn.ActSetBprops}
-	if p.forwardCP(w, r, msg, bucket) {
+	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)

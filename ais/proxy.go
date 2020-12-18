@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -1358,7 +1359,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 //============================
 // forward control plane request to the current primary proxy
 // return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
-func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, s string) (forf bool) {
+func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, s string, origBody ...[]byte) (forf bool) {
 	var (
 		body []byte
 		smap = p.owner.smap.get()
@@ -1381,8 +1382,12 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	}
 	// We must **not** send any request body when doing HEAD request.
 	// Otherwise, the request can be rejected and terminated.
-	if r.Method != http.MethodHead && msg != nil {
-		body = cmn.MustMarshal(msg)
+	if r.Method != http.MethodHead {
+		if len(origBody) > 0 && len(origBody[0]) > 0 {
+			body = origBody[0]
+		} else if msg != nil {
+			body = cmn.MustMarshal(msg)
+		}
 	}
 	primary := &p.rproxy.primary
 	primary.Lock()
@@ -1400,6 +1405,11 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	}
 	primary.Unlock()
 	if len(body) > 0 {
+		debug.AssertFunc(func() bool {
+			l, _ := io.Copy(ioutil.Discard, r.Body)
+			return l == 0
+		})
+
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}

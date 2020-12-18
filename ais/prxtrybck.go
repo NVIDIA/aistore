@@ -16,9 +16,10 @@ import (
 )
 
 type bckInitArgs struct {
-	p *proxyrunner
-	w http.ResponseWriter
-	r *http.Request
+	p       *proxyrunner
+	w       http.ResponseWriter
+	r       *http.Request
+	reqBody []byte // request body of original request
 
 	queryBck *cluster.Bck
 	err      error
@@ -207,7 +208,7 @@ func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
 	}
 
 	// forward maybe
-	if args.p.forwardCP(args.w, args.r, args.msg, "add-remote-bucket") {
+	if args.p.forwardCP(args.w, args.r, args.msg, "add-bucket", args.reqBody) {
 		err = cmn.ErrForwarded
 		return
 	}
