@@ -672,6 +672,9 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 	for sl, id := getNextNonEmptySlice(slices, 0); sl != nil && len(emptyNodes) != 0; sl, id = getNextNonEmptySlice(slices, id) {
 		counter.Inc()
 	}
+	if counter.Load() == 0 {
+		c.parent.DecPending()
+	}
 	// Last, send reconstructed slices one by one to targets that are "empty".
 	// Do not wait until the data transfer is complete
 	for sl, sliceID = getNextNonEmptySlice(slices, 0); sl != nil && len(emptyNodes) != 0; sl, sliceID = getNextNonEmptySlice(slices, sliceID) {

@@ -239,11 +239,6 @@ func (r *XactPut) dispatchRequest(req *Request) {
 	}
 }
 
-type PutTargetStats struct {
-	xaction.BaseXactStats
-	Ext ExtECPutStats `json:"ext"`
-}
-
 type ExtECPutStats struct {
 	AvgEncodeTime  cmn.DurationJSON `json:"ec.encode.time"`
 	AvgDeleteTime  cmn.DurationJSON `json:"ec.delete.time"`
@@ -254,26 +249,26 @@ type ExtECPutStats struct {
 	DeleteErrCount int64            `json:"ec.delete.err.n,string"`
 	AvgObjTime     cmn.DurationJSON `json:"ec.obj.process.time"`
 	AvgQueueLen    float64          `json:"ec.queue.len.n"`
+	IsIdle         bool             `json:"is_idle"`
 }
 
-// interface guard
-var _ cluster.XactStats = (*PutTargetStats)(nil)
-
 func (r *XactPut) Stats() cluster.XactStats {
-	baseStats := r.XactBase.Stats().(*xaction.BaseXactStats)
-	putStats := PutTargetStats{BaseXactStats: *baseStats}
+	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
-	putStats.Ext.AvgEncodeTime = cmn.DurationJSON(st.EncodeTime.Nanoseconds())
-	putStats.Ext.EncodeSize = cmn.SizeJSON(st.EncodeSize)
-	putStats.Ext.EncodeCount = st.PutReq
-	putStats.Ext.EncodeErrCount = st.EncodeErr
-	putStats.Ext.AvgDeleteTime = cmn.DurationJSON(st.DeleteTime.Nanoseconds())
-	putStats.Ext.DeleteErrCount = st.DeleteErr
-	putStats.Ext.DeleteCount = st.DelReq
-	putStats.Ext.AvgObjTime = cmn.DurationJSON(st.ObjTime.Nanoseconds())
-	putStats.Ext.AvgQueueLen = st.QueueLen
+	baseStats.Ext = &ExtECPutStats{
+		AvgEncodeTime:  cmn.DurationJSON(st.EncodeTime.Nanoseconds()),
+		EncodeSize:     cmn.SizeJSON(st.EncodeSize),
+		EncodeCount:    st.PutReq,
+		EncodeErrCount: st.EncodeErr,
+		AvgDeleteTime:  cmn.DurationJSON(st.DeleteTime.Nanoseconds()),
+		DeleteErrCount: st.DeleteErr,
+		DeleteCount:    st.DelReq,
+		AvgObjTime:     cmn.DurationJSON(st.ObjTime.Nanoseconds()),
+		AvgQueueLen:    st.QueueLen,
+		IsIdle:         r.IsIdle(),
+	}
 
-	putStats.ObjCountX = st.PutReq + st.DelReq
-	putStats.BytesCountX = st.EncodeSize
-	return &putStats
+	baseStats.ObjCountX = st.PutReq + st.DelReq
+	baseStats.BytesCountX = st.EncodeSize
+	return baseStats
 }

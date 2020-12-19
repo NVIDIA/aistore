@@ -240,6 +240,12 @@ func (r *Xaction) stop() {
 	r.Finish(nil)
 }
 
+func (r *Xaction) Stats() cluster.XactStats {
+	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.IsIdle()}
+	return baseStats
+}
+
 //////////
 // lruJ //
 //////////

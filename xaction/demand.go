@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -29,6 +30,7 @@ type (
 		IncPending()
 		DecPending()
 		SubPending(n int)
+		IsIdle() bool
 	}
 
 	idleInfo struct {
@@ -122,7 +124,9 @@ func (r *XactDemandBase) InitIdle() {
 }
 
 func (r *XactDemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }
-func (r *XactDemandBase) Pending() int64             { return r.pending.Load() }
+
+func (r *XactDemandBase) IsIdle() bool   { return r.Pending() == 0 }
+func (r *XactDemandBase) Pending() int64 { return r.pending.Load() }
 func (r *XactDemandBase) IncPending() {
 	debug.AssertMsg(r.hkReg.Load(), "unregistered at hk, forgot InitIdle?")
 	r.pending.Inc()
@@ -137,4 +141,58 @@ func (r *XactDemandBase) SubPending(n int) {
 func (r *XactDemandBase) Stop() {
 	hk.Unreg(r.hkName)
 	r.idle.ticks.Close()
+}
+
+func (r *XactDemandBase) Stats() cluster.XactStats {
+	return &BaseXactStatsExt{
+		BaseXactStats: BaseXactStats{
+			IDX:         r.ID().String(),
+			KindX:       r.Kind(),
+			StartTimeX:  r.StartTime(),
+			EndTimeX:    r.EndTime(),
+			BckX:        r.Bck(),
+			ObjCountX:   r.ObjCount(),
+			BytesCountX: r.BytesCount(),
+			AbortedX:    r.Aborted(),
+		},
+	}
+}
+
+func (r *XactDemandBase) isQuiescent() bool {
+	const (
+		quiesceTime = 2 * time.Second
+		probes      = 4
+	)
+	sleepTime := quiesceTime / probes
+	for t := time.Duration(0); t < quiesceTime; t += sleepTime {
+		if !r.IsIdle() {
+			return false
+		}
+		time.Sleep(sleepTime)
+	}
+	return true
+}
+
+func (r *XactDemandBase) Abort() {
+	if !r.aborted.CAS(false, true) {
+		glog.Infof("already aborted: " + r.String())
+		return
+	}
+	if r.Kind() == cmn.ActListObjects || r.isQuiescent() {
+		r._setEndTime(nil)
+	} else {
+		r._setEndTime(cmn.NewAbortedError(r.String()))
+	}
+	close(r.abrt)
+	glog.Infof("ABORT: " + r.String())
+}
+
+func (r *XactDemandBase) Finish(err error) {
+	if r.Aborted() {
+		return
+	}
+	if cmn.IsErrAborted(err) && (r.Kind() == cmn.ActListObjects || r.isQuiescent()) {
+		err = nil
+	}
+	r._setEndTime(err)
 }

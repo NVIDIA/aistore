@@ -118,9 +118,33 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	return nil
 }
 
+func (r *XactRespond) trySendCT(iReq intraReq, bck *cluster.Bck, objName string) error {
+	var (
+		fqn, metaFQN string
+		md           *Metadata
+	)
+	if glog.FastV(4, glog.SmoduleEC) {
+		glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
+	}
+	if iReq.isSlice {
+		ct, err := cluster.NewCTFromBO(bck.Bck.Name, bck.Bck.Provider, objName, r.t.Bowner(), SliceType)
+		if err != nil {
+			return err
+		}
+		fqn = ct.FQN()
+		metaFQN = ct.Make(MetaType)
+		if md, err = LoadMetadata(metaFQN); err != nil {
+			return err
+		}
+	}
+
+	return r.dataResponse(respPut, fqn, bck, objName, iReq.sender, md)
+}
+
 // DispatchReq is responsible for handling request from other targets
 func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName string) {
-	daemonID := iReq.sender
+	r.IncPending()
+	doCleanup := true
 	switch iReq.act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
@@ -128,42 +152,24 @@ func (r *XactRespond) DispatchReq(iReq intraReq, bck *cluster.Bck, objName strin
 			glog.Errorf("%s failed to delete %s/%s: %v", r.t.Snode(), bck.Name, objName, err)
 		}
 	case reqGet:
-		// slice or replica request: send the object's data to the caller
-		var (
-			fqn, metaFQN string
-			md           *Metadata
-			err          error
-		)
-		if iReq.isSlice {
-			if glog.FastV(4, glog.SmoduleEC) {
-				glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
-			}
-			ct, err := cluster.NewCTFromBO(bck.Bck.Name, bck.Bck.Provider, objName, r.t.Bowner(), SliceType)
-			if err != nil {
-				glog.Error(err)
-				return
-			}
-			fqn = ct.FQN()
-			metaFQN = ct.Make(MetaType)
-			md, err = LoadMetadata(metaFQN)
-			if err != nil {
-				glog.Error(err)
-				return
-			}
-		} else if glog.FastV(4, glog.SmoduleEC) {
-			glog.Infof("Received request for replica %s", objName)
-		}
-
-		if err = r.dataResponse(respPut, fqn, bck, objName, daemonID, md); err != nil {
-			glog.Errorf("%s failed to send back [GET req] %q: %v", r.t.Snode(), fqn, err)
+		err := r.trySendCT(iReq, bck, objName)
+		// When err==nil, the data is sent by transport and the callback cleans everything up
+		doCleanup = err != nil
+		if err != nil {
+			glog.Error(err)
 		}
 	default:
 		// invalid request detected
 		glog.Errorf("Invalid request type %d", iReq.act)
 	}
+	if doCleanup {
+		r.DecPending()
+	}
 }
 
 func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object io.Reader) {
+	r.IncPending()
+	defer r.DecPending() // no async operation, so DecPending is deferred
 	switch iReq.act {
 	case reqPut:
 		// a remote target sent a replica/slice while it was
@@ -221,4 +227,10 @@ func (r *XactRespond) Stop(error) { r.Abort() }
 func (r *XactRespond) stop() {
 	r.XactDemandBase.Stop()
 	r.Finish(nil)
+}
+
+func (r *XactRespond) Stats() cluster.XactStats {
+	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.IsIdle()}
+	return baseStats
 }

@@ -303,3 +303,77 @@ func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string,
 	}, &xactID)
 	return
 }
+
+// IsXactionIdle return true if an xaction is not running or idle on all targets
+func IsXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err error) {
+	msg := xaction.XactReqMsg{
+		ID:          args.ID,
+		Kind:        args.Kind,
+		Bck:         args.Bck,
+		OnlyRunning: Bool(true),
+	}
+	var xactStats NodesXactMultiStats
+	baseParams.Method = http.MethodGet
+	err = DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
+		Body:       cmn.MustMarshal(msg),
+		Query:      url.Values{cmn.URLParamWhat: []string{cmn.QueryXactStats}},
+	}, &xactStats)
+	if err != nil {
+		return false, err
+	}
+	if len(xactStats) == 0 {
+		return true, err
+	}
+	for _, xactStatList := range xactStats {
+		for _, xactStat := range xactStatList {
+			if xactStat.Ext == nil {
+				continue
+			}
+			var baseExt xaction.BaseXactDemandStatsExt
+			if err := cmn.MorphMarshal(xactStat.Ext, &baseExt); err == nil {
+				if !baseExt.IsIdle {
+					return false, nil
+				}
+			}
+		}
+	}
+	return true, nil
+}
+
+// WaitForXactionIdle waits for a given on-demand xaction to be idle.
+func WaitForXactionIdle(baseParams BaseParams, args XactReqArgs) error {
+	// The number of consecutive 'idle' states
+	const idleMax = 3
+	ctx := context.Background()
+	if args.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, args.Timeout)
+		defer cancel()
+	}
+
+	idles := 0
+	for {
+		idle, err := IsXactionIdle(baseParams, args)
+		if err != nil {
+			return err
+		}
+		if idle {
+			if idles == idleMax {
+				return nil
+			}
+			idles++
+		} else {
+			idles = 0
+		}
+
+		time.Sleep(xactRetryInterval)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			break
+		}
+	}
+}

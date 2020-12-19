@@ -310,29 +310,24 @@ func (r *XactGet) removeMpath(mpath string) {
 	delete(r.getJoggers, mpath)
 }
 
-type GetTargetStats struct {
-	xaction.BaseXactStats
-	Ext ExtECGetStats `json:"ext"`
-}
-
 type ExtECGetStats struct {
 	AvgTime     cmn.DurationJSON `json:"ec.decode.time"`
 	ErrCount    int64            `json:"ec.decode.err.n,string"`
 	AvgObjTime  cmn.DurationJSON `json:"ec.obj.process.time"`
 	AvgQueueLen float64          `json:"ec.queue.len.n"`
+	IsIdle      bool             `json:"is_idle"`
 }
 
-// interface guard
-var _ cluster.XactStats = (*GetTargetStats)(nil)
-
 func (r *XactGet) Stats() cluster.XactStats {
-	baseStats := r.XactBase.Stats().(*xaction.BaseXactStats)
-	getStats := GetTargetStats{BaseXactStats: *baseStats}
+	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
 	st := r.stats.stats()
-	getStats.Ext.AvgTime = cmn.DurationJSON(st.DecodeTime.Nanoseconds())
-	getStats.Ext.ErrCount = st.DecodeErr
-	getStats.ObjCountX = st.GetReq
-	getStats.Ext.AvgObjTime = cmn.DurationJSON(st.ObjTime.Nanoseconds())
-	getStats.Ext.AvgQueueLen = st.QueueLen
-	return &getStats
+	baseStats.Ext = &ExtECGetStats{
+		AvgTime:     cmn.DurationJSON(st.DecodeTime.Nanoseconds()),
+		ErrCount:    st.DecodeErr,
+		AvgObjTime:  cmn.DurationJSON(st.ObjTime.Nanoseconds()),
+		AvgQueueLen: st.QueueLen,
+		IsIdle:      r.IsIdle(),
+	}
+	baseStats.ObjCountX = st.GetReq
+	return baseStats
 }

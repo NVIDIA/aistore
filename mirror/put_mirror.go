@@ -184,3 +184,9 @@ func (r *XactPut) stop() (err error) {
 	}
 	return err
 }
+
+func (r *XactPut) Stats() cluster.XactStats {
+	baseStats := r.XactDemandBase.Stats().(*xaction.BaseXactStatsExt)
+	baseStats.Ext = &xaction.BaseXactDemandStatsExt{IsIdle: r.IsIdle()}
+	return baseStats
+}

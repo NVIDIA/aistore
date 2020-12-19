@@ -66,6 +66,8 @@ type ECStats struct {
 	PutReq int64
 	// name of the bucket
 	Bck cmn.Bck
+	// xaction state: working or waiting for commands
+	IsIdle bool
 }
 
 func (s *stats) updateQueue(l int) {

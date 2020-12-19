@@ -221,6 +221,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn string, bck *cluster.Bck
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bck, hdr.ObjName, err)
 		}
+		r.DecPending()
 	}
 	return r.sendByDaemonID([]string{id}, rHdr, reader, cb, false)
 }

@@ -2665,8 +2665,9 @@ func TestAllChecksums(t *testing.T) {
 
 func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	const (
-		copyCnt   = 2
-		parityCnt = 2
+		copyCnt     = 2
+		parityCnt   = 2
+		xactTimeout = 10 * time.Second
 	)
 	var (
 		m = ioContext{
@@ -2747,22 +2748,14 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// wait for mirroring
 	if mirrored {
-		// TODO: there must be a better way for waiting for all copies.
-		if testing.Short() {
-			time.Sleep(5 * time.Second)
-		} else {
-			time.Sleep(10 * time.Second)
-		}
+		args := api.XactReqArgs{Kind: cmn.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
+		api.WaitForXactionIdle(baseParams, args)
 		m.ensureNumCopies(copyCnt)
 	}
 	// wait for erasure-coding
 	if eced {
-		// TODO: must be able to wait for Kind = cmn.ActECPut
-		if testing.Short() {
-			time.Sleep(3 * time.Second)
-		} else {
-			time.Sleep(8 * time.Second)
-		}
+		args := api.XactReqArgs{Kind: cmn.ActECPut, Bck: m.bck, Timeout: xactTimeout}
+		api.WaitForXactionIdle(baseParams, args)
 	}
 
 	// read all

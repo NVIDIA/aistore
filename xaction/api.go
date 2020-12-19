@@ -53,6 +53,10 @@ type (
 		BaseXactStats
 		Ext interface{} `json:"ext"`
 	}
+
+	BaseXactDemandStatsExt struct {
+		IsIdle bool `json:"is_idle"`
+	}
 )
 
 // interface guard
