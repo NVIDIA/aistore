@@ -194,8 +194,16 @@ func (lom *LOM) NumCopies() int {
 	return len(lom.md.copies)
 }
 
-// GetCopies returns all copies (and NOTE that copies include self)
-func (lom *LOM) GetCopies() fs.MPI { return lom.md.copies }
+// GetCopies returns all copies
+// NOTE: that copies include self
+// NOTE: caller must take a lock
+func (lom *LOM) GetCopies() fs.MPI {
+	debug.AssertFunc(func() bool {
+		rc, exclusive := lom.IsLocked()
+		return exclusive || rc > 0
+	})
+	return lom.md.copies
+}
 
 // given an existing (on-disk) object, determines whether it is a _copy_
 // (compare with isMirror below)
@@ -378,7 +386,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 	dst.md.copies = nil
 	if dst.isMirror(lom) {
-		// NOTE: caller is responsible for write-locking
+		// caller must take wlock
 		debug.AssertFunc(func() bool {
 			_, exclusive := lom.IsLocked()
 			return exclusive
@@ -506,7 +514,8 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 	if !lom.HasCopies() {
 		return lom.FQN
 	}
-	return fs.LoadBalanceGET(lom.FQN, lom.mpathInfo.Path, lom.GetCopies())
+	fqn = fs.LoadBalanceGET(lom.FQN, lom.mpathInfo.Path, lom.GetCopies())
+	return
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)
@@ -865,6 +874,11 @@ beg:
 }
 
 func (lom *LOM) Remove() (err error) {
+	// caller must take wlock
+	debug.AssertFunc(func() bool {
+		rc, exclusive := lom.IsLocked()
+		return exclusive || rc > 0
+	})
 	lom.Uncache(true /*delDirty*/)
 	err = cmn.RemoveFile(lom.FQN)
 	for copyFQN := range lom.md.copies {

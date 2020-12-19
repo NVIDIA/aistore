@@ -644,13 +644,15 @@ var _ = Describe("LOM", func() {
 			return
 		}
 
-		prepareCopy := func(lom *cluster.LOM, fqn string) (dst *cluster.LOM) {
+		prepareCopy := func(lom *cluster.LOM, fqn string, locked ...bool) (dst *cluster.LOM) {
 			var (
 				err error
 				bck = lom.Bck()
 			)
-			lom.Lock(true)
-			defer lom.Unlock(true)
+			if len(locked) == 0 {
+				lom.Lock(true)
+				defer lom.Unlock(true)
+			}
 			dst, err = lom.CopyObject(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(dst.FQN).To(BeARegularFile())
@@ -699,6 +701,8 @@ var _ = Describe("LOM", func() {
 				copyLOM := prepareCopy(lom, copyFQNs[1])
 				expectedHash := getTestFileHash(lom.FQN)
 
+				lom.Lock(false)
+				defer lom.Unlock(false)
 				// Check that no copies were added to metadata
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeFalse())
@@ -727,6 +731,8 @@ var _ = Describe("LOM", func() {
 				expectedHash := getTestFileHash(lom.FQN)
 
 				// Check that copies were added to metadata
+				lom.Lock(false)
+				defer lom.Unlock(false)
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeTrue())
 				Expect(lom.NumCopies()).To(Equal(2))
@@ -751,8 +757,10 @@ var _ = Describe("LOM", func() {
 
 			It("should successfully copy the object and update metadata for other copies", func() {
 				lom := prepareLOM(mirrorFQNs[0])
-				_ = prepareCopy(lom, mirrorFQNs[1])
-				_ = prepareCopy(lom, mirrorFQNs[2])
+				lom.Lock(true)
+				defer lom.Unlock(true)
+				_ = prepareCopy(lom, mirrorFQNs[1], true)
+				_ = prepareCopy(lom, mirrorFQNs[2], true)
 
 				// Check that copies were added to metadata.
 				Expect(lom.IsCopy()).To(BeFalse())
@@ -766,7 +774,9 @@ var _ = Describe("LOM", func() {
 
 			It("should check for missing copies during `syncMetaWithCopies`", func() {
 				lom := prepareLOM(mirrorFQNs[0])
-				_ = prepareCopy(lom, mirrorFQNs[1])
+				lom.Lock(true)
+				defer lom.Unlock(true)
+				_ = prepareCopy(lom, mirrorFQNs[1], true)
 
 				// Check that copies were added to metadata.
 				Expect(lom.IsCopy()).To(BeFalse())
@@ -778,7 +788,7 @@ var _ = Describe("LOM", func() {
 				cmn.RemoveFile(mirrorFQNs[1])
 
 				// Prepare another one (to trigger `syncMetaWithCopies`).
-				_ = prepareCopy(lom, mirrorFQNs[2])
+				_ = prepareCopy(lom, mirrorFQNs[2], true)
 
 				// Check metadata of left copies (it also checks default object).
 				checkCopies(lom, mirrorFQNs[0], mirrorFQNs[2])
@@ -787,15 +797,16 @@ var _ = Describe("LOM", func() {
 			It("should copy object without adding it to copies if dst bucket does not support mirroring", func() {
 				lom := prepareLOM(mirrorFQNs[0])
 				_ = prepareCopy(lom, mirrorFQNs[1])
+				nonMirroredLOM := prepareCopy(lom, copyFQNs[0])
 				expectedHash := getTestFileHash(lom.FQN)
 
 				// Check that copies were added to metadata.
+				lom.Lock(false)
+				defer lom.Unlock(false)
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeTrue())
 				Expect(lom.NumCopies()).To(Equal(2))
 				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
-
-				nonMirroredLOM := prepareCopy(lom, copyFQNs[0])
 
 				// Check that nothing has changed in the src.
 				Expect(lom.IsCopy()).To(BeFalse())
@@ -804,6 +815,8 @@ var _ = Describe("LOM", func() {
 				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
 
 				// Check destination lom.
+				nonMirroredLOM.Lock(false)
+				defer nonMirroredLOM.Unlock(false)
 				Expect(nonMirroredLOM.FQN).NotTo(Equal(lom.FQN))
 				_, cksumValue := nonMirroredLOM.Cksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
@@ -827,6 +840,8 @@ var _ = Describe("LOM", func() {
 				expectedHash := getTestFileHash(lom.FQN)
 
 				// Check that no copies were added to metadata.
+				lom.Lock(false)
+				defer lom.Unlock(false)
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.IsHRW()).To(BeTrue())
 				Expect(lom.HasCopies()).To(BeFalse())
@@ -834,6 +849,8 @@ var _ = Describe("LOM", func() {
 				Expect(lom.GetCopies()).To(BeNil())
 
 				// Check copy created.
+				copyLOM.Lock(false)
+				defer copyLOM.Unlock(false)
 				Expect(copyLOM.FQN).NotTo(Equal(lom.FQN))
 				_, cksumValue := copyLOM.Cksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
@@ -854,6 +871,8 @@ var _ = Describe("LOM", func() {
 				lom := prepareCopy(copyLOM, mirrorFQNs[0])
 
 				// Check that HRW object was created correctly.
+				lom.Lock(false)
+				defer lom.Unlock(false)
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeTrue())
 				Expect(lom.NumCopies()).To(Equal(2))
@@ -878,6 +897,8 @@ var _ = Describe("LOM", func() {
 				_ = prepareCopy(lom, mirrorFQNs[1])
 
 				// Check that no copies were added to metadata.
+				lom.Lock(false)
+				defer lom.Unlock(false)
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeTrue())
 				Expect(lom.NumCopies()).To(Equal(2))
@@ -946,6 +967,8 @@ var _ = Describe("LOM", func() {
 				_ = prepareCopy(lom, mirrorFQNs[2])
 
 				// Sanity check for default object.
+				lom.Lock(false)
+				defer lom.Unlock(false)
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeTrue())
 				Expect(lom.NumCopies()).To(Equal(3))
