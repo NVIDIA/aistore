@@ -1937,6 +1937,51 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 	}
 }
 
+func TestRenameBucketWithBackend(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: cliBck})
+
+	var (
+		proxyURL   = tutils.RandomProxyURL()
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     "renamesrc",
+			Provider: cmn.ProviderAIS,
+		}
+		dstBck = cmn.Bck{
+			Name:     "bucketname",
+			Provider: cmn.ProviderAIS,
+		}
+	)
+
+	tutils.CreateFreshBucket(t, proxyURL, bck, cmn.BucketPropsToUpdate{BackendBck: &cmn.BckToUpdate{
+		Name:     api.String(cliBck.Name),
+		Provider: api.String(cliBck.Provider),
+	}})
+	defer tutils.DestroyBucket(t, proxyURL, dstBck)
+
+	srcProps, err := api.HeadBucket(baseParams, bck)
+	tassert.CheckFatal(t, err)
+
+	xactID, err := api.RenameBucket(baseParams, bck, dstBck)
+	tassert.CheckFatal(t, err)
+	err = tutils.WaitForXactionByID(xactID)
+	tassert.CheckFatal(t, err)
+
+	exists, err := api.DoesBucketExist(baseParams, cmn.QueryBcks(bck))
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, !exists, "source bucket shouldn't exist")
+
+	tutils.Logln("checking bucket props...")
+	dstProps, err := api.HeadBucket(baseParams, dstBck)
+	tassert.CheckFatal(t, err)
+
+	// Region might be set on rename.
+	srcProps.Extra.CloudRegion = ""
+	dstProps.Extra.CloudRegion = ""
+
+	tassert.Fatalf(t, srcProps.Equal(dstProps), "source and destination bucket props do not match: %v - %v", srcProps, dstProps)
+}
+
 func TestCopyBucket(t *testing.T) {
 	tests := []struct {
 		srcCloud         bool

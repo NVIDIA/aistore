@@ -721,7 +721,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	//
 	switch msg.Action {
 	case cmn.ActRenameLB:
-		if !bck.IsAIS() {
+		if bck.Provider != cmn.ProviderAIS || bck.IsRemoteAIS() {
 			p.invalmsghdlrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bck)
 			return
 		}
