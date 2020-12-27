@@ -1611,7 +1611,8 @@ func TestCloudMirror(t *testing.T) {
 	// list
 	objectList, err := api.ListObjects(baseParams, m.bck, nil, 0)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(objectList.Entries) == m.num, "insufficient number of objects in the Cloud bucket %s, required %d", m.bck, m.num)
+	tassert.Fatalf(t, len(objectList.Entries) == m.num,
+		"insufficient number of objects in the cloud bucket %s: need %d, got %d", m.bck, m.num, len(objectList.Entries))
 
 	smap := tutils.GetClusterMap(t, baseParams.URL)
 	{

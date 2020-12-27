@@ -523,7 +523,7 @@ func TestObjProps(t *testing.T) {
 				}
 				tassert.Errorf(
 					t, err != nil,
-					"Cloud bucket %s is %s, expecting set-props to fail", m.bck, s)
+					"Cloud bucket %s is %s - expecting set-props to fail", m.bck, s)
 			} else {
 				tassert.CheckFatal(t, err)
 			}

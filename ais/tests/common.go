@@ -291,7 +291,7 @@ func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
 
 	if evict {
-		tutils.Logln("evicting cloud bucket...")
+		tutils.Logf("evicting cloud bucket %s...\n", m.bck)
 		err := api.EvictCloudBucket(baseParams, m.bck)
 		tassert.CheckFatal(m.t, err)
 	}
