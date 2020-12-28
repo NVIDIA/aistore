@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -293,6 +294,49 @@ func (b Bck) String() string {
 
 func (b Bck) IsEmpty() bool { return b.Name == "" && b.Provider == "" && b.Ns == NsGlobal }
 
+// Bck => unique name (use ParseUname below to translate back)
+func (b Bck) MakeUname(objName string) string {
+	var (
+		nsUname = b.Ns.Uname()
+		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
+		buf     = make([]byte, 0, l)
+	)
+	buf = append(buf, b.Provider...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, nsUname...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, b.Name...)
+	buf = append(buf, filepath.Separator)
+	buf = append(buf, objName...)
+	return *(*string)(unsafe.Pointer(&buf))
+}
+
+// unique name => Bck (use MakeUname above to perform the reverse translation)
+func ParseUname(uname string) (b Bck, objName string) {
+	var prev, itemIdx int
+	for i := 0; i < len(uname); i++ {
+		if uname[i] != filepath.Separator {
+			continue
+		}
+
+		item := uname[prev:i]
+		switch itemIdx {
+		case 0:
+			b.Provider = item
+		case 1:
+			b.Ns = ParseNsUname(item)
+		case 2:
+			b.Name = item
+			objName = uname[i+1:]
+			return
+		}
+
+		itemIdx++
+		prev = i + 1
+	}
+	return
+}
+
 //
 // Is-Whats
 //
@@ -383,6 +427,15 @@ func AddBckToQuery(query url.Values, bck Bck) url.Values {
 		}
 		query.Set(URLParamNamespace, bck.Ns.Uname())
 	}
+	return query
+}
+
+func AddBckUnameToQuery(query url.Values, bck Bck, uparam string) url.Values {
+	if query == nil {
+		query = make(url.Values)
+	}
+	uname := bck.MakeUname("")
+	query.Set(uparam, uname)
 	return query
 }
 

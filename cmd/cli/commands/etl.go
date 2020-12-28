@@ -331,10 +331,12 @@ func etlBucketHandler(c *cli.Context) (err error) {
 	}
 
 	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, &cmn.Bck2BckMsg{
-		ID:     id,
-		Ext:    extMap,
-		Prefix: parseStrFlag(c, cpBckPrefixFlag),
-		DryRun: flagIsSet(c, cpBckDryRunFlag),
+		ID:  id,
+		Ext: extMap,
+		CopyBckMsg: cmn.CopyBckMsg{
+			Prefix: parseStrFlag(c, cpBckPrefixFlag),
+			DryRun: flagIsSet(c, cpBckDryRunFlag),
+		},
 	})
 
 	if err := handleETLHTTPError(err, id); err != nil {

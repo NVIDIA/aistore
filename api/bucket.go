@@ -200,16 +200,18 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 //   bucket, etc.
 // * Copying multiple buckets to the same destination bucket is also permitted.
 func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.CopyBckMsg) (xactID string, err error) {
-	msg := &cmn.CopyBckMsg{}
+	var msg *cmn.CopyBckMsg
 	if len(msgs) > 0 && msgs[0] != nil {
 		msg = msgs[0]
 	}
-	msg.BckTo = toBck
+	q := cmn.AddBckUnameToQuery(nil, fromBck, cmn.URLParamBucket) // aka cmn.URLParamBucketFrom
+	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, fromBck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Value: msg}),
+		Query:      q,
 	}, &xactID)
 	return
 }

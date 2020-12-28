@@ -36,7 +36,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodHead:
 		if len(apiItems) == 0 {
-			p.invalmsghdlr(w, r, "HEAD reuires a bucket or an object")
+			p.invalmsghdlr(w, r, "HEAD requires a bucket or an object")
 			return
 		}
 		if len(apiItems) == 1 {

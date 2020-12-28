@@ -748,23 +748,16 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		}
 		w.Write([]byte(xactID))
 	case cmn.ActCopyBucket, cmn.ActETLBucket:
-		if msg.Value == nil {
-			p.invalmsghdlr(w, r, "request body can't be empty", http.StatusBadRequest)
-			return
-		}
-
 		var (
 			internalMsg = &cmn.Bck2BckMsg{}
 			bckTo       *cluster.Bck
 		)
-
 		switch msg.Action {
 		case cmn.ActETLBucket:
 			if err := cmn.MorphMarshal(msg.Value, internalMsg); err != nil {
 				p.invalmsghdlr(w, r, "request body can't be empty", http.StatusBadRequest)
 				return
 			}
-
 			if internalMsg.ID == "" {
 				p.invalmsghdlr(w, r, etl.ErrMissingUUID.Error(), http.StatusBadRequest)
 				return
@@ -774,14 +767,15 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			if err = cmn.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
 				return
 			}
-			internalMsg.BckTo = cpyBckMsg.BckTo
 			internalMsg.DryRun = cpyBckMsg.DryRun
 			internalMsg.Prefix = cpyBckMsg.Prefix
 		}
 
-		// userBckTo is a bucket from a user - it means that it can be not initialized, missing provider, etc.
-		userBckTo := cluster.NewBckEmbed(internalMsg.BckTo)
-
+		userBckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
 		if bck.Equal(userBckTo, false, true) {
 			p.invalmsghdlrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bucket)
 			return
@@ -790,30 +784,24 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			bckToArgs = bckInitArgs{p: p, w: w, r: r, queryBck: userBckTo, perms: cmn.AccessSYNC}
 			errCode   int
 		)
-
 		if bckTo, errCode, err = bckToArgs.init(userBckTo.Name); err != nil && errCode != http.StatusNotFound {
 			p.invalmsghdlr(w, r, err.Error(), errCode)
 			return
-		} else if errCode == http.StatusNotFound && userBckTo.IsCloud() {
-			// If `userBckTo` is a cloud bucket and it doesn't exist, try registering cloud bucket
+		}
+		if errCode == http.StatusNotFound && userBckTo.IsCloud() {
+			// If userBckTo is a cloud bucket that doesn't exist (in the BMD) - try registering on the fly
 			if bckTo, err = bckToArgs.try(); err != nil {
 				return
 			}
 		}
-
 		if bckTo == nil {
 			// It is a non existing ais bucket.
 			bckTo = userBckTo
 		}
-
 		if bckTo.IsHTTP() {
-			p.invalmsghdlr(w, r, "copying to HTTP buckets not supported")
+			p.invalmsghdlrf(w, r, "cannot %s HTTP bucket %q - the operation is not supported", msg.Action, bucket)
 			return
 		}
-
-		// bckTo is initialized by proxy, should be send to targets instead of userBck.
-		internalMsg.BckTo = bckTo.Bck
-		msg.Value = internalMsg
 
 		glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
 
@@ -942,15 +930,8 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 	}
 
 	switch msg.Action {
-	case cmn.ActRecoverBck:
+	case cmn.ActRecoverBck: // TODO: add test & cli
 		p.recoverBuckets(w, r, msg)
-	case cmn.ActSyncLB:
-		if p.forwardCP(w, r, msg, "") {
-			return
-		}
-		bmd := p.owner.bmd.get()
-		msg := p.newAisMsg(msg, nil, bmd)
-		_ = p.metasyncer.sync(revsPair{bmd, msg})
 	case cmn.ActSummaryBucket:
 		args := bckInitArgs{w: w, r: r, p: p, perms: cmn.AccessBckHEAD, msg: msg}
 		bck, errCode, err := args.init("")

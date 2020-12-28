@@ -36,7 +36,6 @@ const (
 	ActRebalance      = "rebalance"
 	ActResilver       = "resilver"
 	ActLRU            = "lru"
-	ActSyncLB         = "synclb"
 	ActCreateLB       = "createlb"
 	ActDestroyLB      = "destroylb"
 	ActRenameLB       = "renamelb"
@@ -170,10 +169,15 @@ const (
 	URLParamWhat        = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
 	URLParamProps       = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 	URLParamCheckExists = "check_cached" // true: check if object exists
-	URLParamProvider    = "provider"     // cloud provider
-	URLParamNamespace   = "namespace"
-	URLParamPrefix      = "prefix" // prefix for list objects in a bucket
-	URLParamRegex       = "regex"  // dsort/downloader regex
+
+	URLParamProvider   = "provider" // cloud provider
+	URLParamNamespace  = "namespace"
+	URLParamBucket     = "bck"
+	URLParamBucketFrom = "bckfrom"
+	URLParamBucketTo   = "bckto"
+
+	URLParamPrefix = "prefix" // prefix for list objects in a bucket
+	URLParamRegex  = "regex"  // dsort/downloader regex
 	// internal use
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy

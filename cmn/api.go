@@ -88,14 +88,11 @@ type (
 	}
 
 	CopyBckMsg struct {
-		BckTo  Bck    `json:"bck_to"`
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
 		DryRun bool   `json:"dry_run"` // Don't perform any PUT
 	}
 
 	Bck2BckMsg struct {
-		BckTo Bck `json:"bck_to"`
-
 		// Resulting objects names will have this extension. Warning: if in a source bucket exist two objects with the
 		// same base name, but different extension, specifying this field might cause object overriding. This is because
 		// of resulting name conflict.
@@ -104,9 +101,7 @@ type (
 
 		ID string `json:"id,omitempty"` // optional, ETL only
 
-		// The same as CopyBckMsg
-		Prefix string `json:"prefix"`
-		DryRun bool   `json:"dry_run"`
+		CopyBckMsg
 	}
 )
 

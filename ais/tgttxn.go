@@ -50,7 +50,8 @@ type txnServerCtx struct {
 	msg        *aisMsg
 	callerName string
 	callerID   string
-	bck        *cluster.Bck
+	bck        *cluster.Bck // aka bckFrom
+	bckTo      *cluster.Bck
 	query      url.Values
 	t          *targetrunner
 }
@@ -454,8 +455,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bck
 // transferBucket //
 ////////////////////
 
-func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMsg,
-	dps ...cluster.LomReaderProvider) error {
+func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMsg, dps ...cluster.LomReaderProvider) error {
 	var dp cluster.LomReaderProvider
 	if len(dps) > 0 {
 		dp = dps[0]
@@ -467,7 +467,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 	switch c.phase {
 	case cmn.ActBegin:
 		var (
-			bckTo   = cluster.NewBckEmbed(bck2BckMsg.BckTo)
+			bckTo   = c.bckTo
 			bckFrom = c.bck
 			dm      *bundle.DataMover
 			config  = cmn.GCO.Get()
@@ -729,6 +729,10 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 		if c.bck, err = newBckFromQuery(bucket, query); err != nil {
 			return c, err
 		}
+	}
+	c.bckTo, err = newBckFromQueryUname(query, cmn.URLParamBucketTo)
+	if err != nil {
+		return c, err
 	}
 
 	// latency = (network) +- (clock drift)

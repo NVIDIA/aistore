@@ -84,7 +84,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	return t.writeMsgPack(w, r, resp.BckList, "list_objects")
 }
 
-func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) (ok bool) {
+func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *aisMsg) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.HeaderCallerID)
@@ -97,16 +97,14 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	ok = t.doAsync(w, r, actionMsg.Action, bck, &msg)
-	return
+	t.doAsync(w, r, actionMsg.Action, bck, &msg)
 }
 
 // asynchronous bucket request
 // - creates a new task that runs in background
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
-func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string,
-	bck *cluster.Bck, msg *cmn.BucketSummaryMsg) bool {
+func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) {
 	var (
 		query      = r.URL.Query()
 		taskAction = query.Get(cmn.URLParamTaskAction)
@@ -124,16 +122,16 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 			err = xreg.RenewBckSummary(ctx, t, bck, msg)
 		default:
 			t.invalmsghdlrf(w, r, "invalid action: %s", action)
-			return false
+			return
 		}
 
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error(), status)
-			return false
+			return
 		}
 
 		w.WriteHeader(http.StatusAccepted)
-		return true
+		return
 	}
 
 	xact := xreg.GetXact(msg.UUID)
@@ -145,13 +143,13 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		} else {
 			t.invalmsghdlr(w, r, s, http.StatusNotFound)
 		}
-		return false
+		return
 	}
 
 	// task still running
 	if !xact.Finished() {
 		w.WriteHeader(http.StatusAccepted)
-		return true
+		return
 	}
 	// task has finished
 	result, err := xact.Result()
@@ -161,13 +159,11 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		} else {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-		return false
+		return
 	}
 
 	if taskAction == cmn.TaskResult {
 		// return the final result only if it is requested explicitly
-		return t.writeJSON(w, r, result, "")
+		t.writeJSON(w, r, result, "")
 	}
-
-	return true
 }

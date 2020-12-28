@@ -571,9 +571,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if !t.bucketSummary(w, r, bck, msg) {
-				return
-			}
+			t.bucketSummary(w, r, bck, msg)
 		default:
 			t.invalmsghdlr(w, r, "url path is too short: bucket name is missing", http.StatusBadRequest)
 		}
@@ -636,9 +634,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("LIST: %s, %s", bucket, delta)
 		}
 	case cmn.ActSummaryBucket:
-		if !t.bucketSummary(w, r, bck, msg) {
-			return
-		}
+		t.bucketSummary(w, r, bck, msg)
 	default:
 		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}

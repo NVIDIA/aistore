@@ -902,8 +902,8 @@ func EvictLomCache(b *Bck) {
 		go func(cache *sync.Map) {
 			cache.Range(func(hkey, _ interface{}) bool {
 				uname := hkey.(string)
-				bck, _ := parseUname(uname)
-				if bck.Bck.Equal(b.Bck) {
+				bck, _ := cmn.ParseUname(uname)
+				if bck.Equal(b.Bck) {
 					cache.Delete(hkey)
 				}
 				return true
@@ -919,11 +919,12 @@ func EvictLomCache(b *Bck) {
 //
 func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
 	var (
-		bck, objName = parseUname(md.uname)
-		err          error
+		b, objName = cmn.ParseUname(md.uname)
+		bck        = NewBckEmbed(b)
+		err        error
 	)
-	lom = &LOM{ObjName: objName, bck: &bck}
-	bucketExists = bmd.Exists(&bck, md.bckID)
+	lom = &LOM{ObjName: objName, bck: bck}
+	bucketExists = bmd.Exists(bck, md.bckID)
 	if bucketExists {
 		lom.FQN, _, err = HrwFQN(lom.Bck(), fs.ObjectType, lom.ObjName)
 		if err != nil {

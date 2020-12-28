@@ -2205,7 +2205,7 @@ func TestCopyBucket(t *testing.T) {
 					t.Fatalf("list_objects: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)
 				}
 
-				tutils.Logf("checking equality of %d objects", expectedObjCount)
+				tutils.Logf("verifying that %d copied objects have identical props\n", expectedObjCount)
 				for _, a := range srcBckList.Entries {
 					var found bool
 					for _, b := range dstBckList.Entries {

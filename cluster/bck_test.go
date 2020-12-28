@@ -18,7 +18,7 @@ var _ = Describe("Bck", func() {
 				bck := NewBck(bckName, bckProvider, bckNs)
 				uname := bck.MakeUname(objName)
 
-				gotBck, gotObjName := parseUname(uname)
+				gotBck, gotObjName := cmn.ParseUname(uname)
 				Expect(gotBck.Name).To(Equal(bckName))
 				Expect(gotBck.Provider).To(Equal(bckProvider))
 				Expect(gotBck.Ns).To(Equal(bckNs))

@@ -74,11 +74,13 @@ func ETLObject(baseParams BaseParams, id string, bck cmn.Bck, objName string, w 
 
 func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2BckMsg) (xactID string, err error) {
 	baseParams.Method = http.MethodPost
-	bckMsg.BckTo = toBck
+	q := cmn.AddBckUnameToQuery(nil, fromBck, cmn.URLParamBucket) // aka cmn.URLParamBucketFrom
+	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBucket, Name: toBck.Name, Value: bckMsg}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBucket, Value: bckMsg}),
+		Query:      q,
 	}, &xactID)
 	return
 }

@@ -469,9 +469,6 @@ func (p *proxyrunner) _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 // copy-bucket/offline ETL:
 // { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
 func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
-	cmn.Assert(!bckTo.IsHTTP())
-	cmn.Assert(msg.Value != nil)
-
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
@@ -484,6 +481,8 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 		waitmsync = !dryRun
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
+	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
+
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
 	for res := range results {
 		if res.err != nil {

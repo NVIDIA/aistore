@@ -1750,6 +1750,23 @@ func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
 	return cluster.NewBck(bckName, provider, namespace), nil
 }
 
+func newBckFromQueryUname(query url.Values, uparam string) (*cluster.Bck, error) {
+	uname := query.Get(uparam)
+	if uname == "" {
+		return nil, nil
+	}
+	bck, objName := cmn.ParseUname(uname)
+	if objName != "" {
+		return nil, fmt.Errorf("bucket %s: unexpected non-empty object name %q", bck, objName)
+	}
+	provider, err := cmn.NormalizeProvider(bck.Provider)
+	if err != nil {
+		return nil, err
+	}
+	bck.Provider = provider
+	return cluster.NewBckEmbed(bck), nil
+}
+
 ////////////////////
 // aisMsg helpers //
 ////////////////////

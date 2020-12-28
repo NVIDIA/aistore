@@ -6,9 +6,7 @@ package cluster
 
 import (
 	"fmt"
-	"path/filepath"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -68,46 +66,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }
 func BackendBck(bck *Bck) *Bck     { return &Bck{Bck: bck.Props.BackendBck} }
 
-func parseUname(uname string) (b Bck, objName string) {
-	var prev, itemIdx int
-	for i := 0; i < len(uname); i++ {
-		if uname[i] != filepath.Separator {
-			continue
-		}
-
-		item := uname[prev:i]
-		switch itemIdx {
-		case 0:
-			b.Provider = item
-		case 1:
-			b.Ns = cmn.ParseNsUname(item)
-		case 2:
-			b.Name = item
-			objName = uname[i+1:]
-			return
-		}
-
-		itemIdx++
-		prev = i + 1
-	}
-	return
-}
-
-func (b *Bck) MakeUname(objName string) string {
-	var (
-		nsUname = b.Ns.Uname()
-		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
-		buf     = make([]byte, 0, l)
-	)
-	buf = append(buf, b.Provider...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, nsUname...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, b.Name...)
-	buf = append(buf, filepath.Separator)
-	buf = append(buf, objName...)
-	return *(*string)(unsafe.Pointer(&buf))
-}
+func (b *Bck) MakeUname(objName string) string { return b.Bck.MakeUname(objName) }
 
 func (b *Bck) MaskBID(i int64) uint64 {
 	if b.IsAIS() {
