@@ -114,11 +114,10 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-
 		if msg.Action == cmn.ActCopyBucket {
-			err = t.transferBucket(c, bck2BckMsg)
+			err = t.transferBucket(c, bck2BckMsg, nil /*LomReaderProvider*/)
 		} else {
-			err = t.etlBucket(c, bck2BckMsg)
+			err = t.etlBucket(c, bck2BckMsg) // calls t.transferBucket
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -354,12 +353,8 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 	}
 	switch c.phase {
 	case cmn.ActBegin:
-		var (
-			bckTo   *cluster.Bck
-			bckFrom = c.bck
-			err     error
-		)
-		if bckTo, err = t.validateBckRenTxn(bckFrom, c.msg); err != nil {
+		bckFrom, bckTo := c.bck, c.bckTo
+		if err := t.validateBckRenTxn(bckFrom, bckTo, c.msg); err != nil {
 			return err
 		}
 		nlpFrom := bckFrom.GetNameLockPair()
@@ -411,56 +406,43 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *targetrunner) validateBckRenTxn(bckFrom *cluster.Bck, msg *aisMsg) (bckTo *cluster.Bck, err error) {
-	var (
-		bTo               = &cmn.Bck{}
-		body              = cmn.MustMarshal(msg.Value)
-		availablePaths, _ = fs.Get()
-	)
-	if err = jsoniter.Unmarshal(body, bTo); err != nil {
-		return
-	}
+func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) error {
+	availablePaths, _ := fs.Get()
 	if cs := fs.GetCapStatus(); cs.Err != nil {
-		return nil, cs.Err
+		return cs.Err
 	}
-	if err = t.coExists(bckFrom, msg.Action); err != nil {
-		return
+	if err := t.coExists(bckFrom, msg.Action); err != nil {
+		return err
 	}
-	bckTo = cluster.NewBck(bTo.Name, bTo.Provider, bTo.Ns)
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return bckTo, cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
+		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
 	}
 	if _, present := bmd.Get(bckTo); present {
-		return bckTo, cmn.NewErrorBucketAlreadyExists(bckTo.Bck, t.si.String())
+		return cmn.NewErrorBucketAlreadyExists(bckTo.Bck, t.si.String())
 	}
 	for _, mpathInfo := range availablePaths {
 		path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
 		if err := fs.Access(path); err != nil {
 			if !os.IsNotExist(err) {
-				return bckTo, err
+				return err
 			}
 			continue
 		}
 		if names, empty, err := fs.IsDirEmpty(path); err != nil {
-			return bckTo, err
+			return err
 		} else if !empty {
-			return bckTo, fmt.Errorf("directory %q already exists and is not empty (%v...)", path, names)
+			return fmt.Errorf("directory %q already exists and is not empty (%v...)", path, names)
 		}
 	}
-	return
+	return nil
 }
 
 ////////////////////
 // transferBucket //
 ////////////////////
 
-func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMsg, dps ...cluster.LomReaderProvider) error {
-	var dp cluster.LomReaderProvider
-	if len(dps) > 0 {
-		dp = dps[0]
-	}
-
+func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMsg, dp cluster.LomReaderProvider) error {
 	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
 		return err
 	}

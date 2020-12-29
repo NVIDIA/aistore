@@ -725,22 +725,26 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			p.invalmsghdlrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bck)
 			return
 		}
-		bckFrom, bucketTo := bck, msg.Name
-		if bucket == bucketTo {
-			p.invalmsghdlrf(w, r, "cannot rename bucket %q as %q", bucket, bucket)
+		bckFrom := bck
+		bckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := cmn.ValidateBckName(bucketTo); err != nil {
+		if bckFrom.Name == bckTo.Name {
+			p.invalmsghdlrf(w, r, "cannot rename bucket %q as %q", bckFrom, bckTo)
+			return
+		}
+		if err := cmn.ValidateBckName(bckTo.Name); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		bckTo := cluster.NewBck(bucketTo, cmn.ProviderAIS, cmn.NsGlobal)
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
 			err := cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bucketTo)
+		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bckTo)
 		var xactID string
 		if xactID, err = p.renameBucket(bckFrom, bckTo, msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())

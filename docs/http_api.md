@@ -30,29 +30,29 @@ This command queries one of the AIS nodes (denoted as `G-or-T`) for its configur
 
 Notice the 4 (four) ubiquitous elements in the `curl` command line above:
 
-1. HTTP verb aka method, one of: `PUT`, `GET`, `HEAD`, `POST`, `DELETE`, or `PATCH`.
+1. **HTTP verb** aka method, one of: `PUT`, `GET`, `HEAD`, `POST`, `DELETE`, or `PATCH`.
 
 In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief summary of the standard HTTP verbs and their CRUD semantics, see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html).
 
-2. Hostname (or IPv4 address) and TCP port of one of the AIStore daemons.
+2. **Hostname** (or IPv4 address) and TCP port of one of the AIStore daemons.
 
 Most RESTful operations performed on an AIStore proxy/gateway will likely have a *clustered* scope. Exceptions may include querying proxy's own configuration via `?what=config`, and more.
 
-3. URL path: version of the REST API, RESTful *resource* that is operated upon, and possibly more forward-slash delimited specifiers.
+3. **URL path**: version of the REST API, RESTful *resource* that is operated upon, and possibly more forward-slash delimited specifiers.
 
 For example: /v1/cluster where `v1` is the currently supported API version and `cluster` is the (RESTful) resource. Other *resources* include:
 
 | RESTful resource | Description |
 | --- | ---|
 | `cluster` | cluster-wide control-plane operation |
-| `daemon` | control-plane request to update or query specific AIS daemon (proxy or target) |
-| `buckets` | create, destroy, rename and list objects, get bucket names, get bucket properties |
+| `daemon` (aka node) | control-plane request to update or query specific AIS daemon (proxy or target). In the documentation, the terms "daemon" and "node" are used interchangeably. |
+| `buckets` | create, destroy, rename, copy, transform (entire) buckets; list objects in a given bucket; get bucket names for a given provider (or all providers); get bucket properties |
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external resources (datasets, files) into cluster |
 
-4. Control message in the query string parameter, e.g. `?what=config`.
+4. **URL query**, e. g., `?what=config`. In particular, All API requests that operate on buckets carry the bucket(s) specification details in the query parameters of the corresponding URL. Those details may include [cloud provider](providers.md) and [namespace](providers.md#unified-global-namespace) where an empty cloud provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/api/bucket.go).
 
-> Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e.g., an entire cluster or a given daemon. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
+> Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e. g., an entire cluster or a given AIS node. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
 
 > For developers and first-time users: if you deployed AIS locally having followed [these instructions](../README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
 
@@ -71,14 +71,14 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Set AIS node configuration **via URL query** | PUT /v1/daemon/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](./configuration.md#runtime-configuration) |
 | Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](./configuration.md#runtime-configuration) |
 | Set cluster-wide configuration **via URL query** | PUT /v1/cluster/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](./configuration.md#runtime-configuration) |
-| Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-or-T/v1/daemon'` |
+| Shutdown a given ais node (target or proxy) | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-or-T/v1/daemon'` |
 | Shutdown cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-primary/v1/cluster'` |
 | Rebalance cluster | PUT {"action": "start", "value": {"kind": "rebalance"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "start", "value": {"kind": "rebalance"}}' 'http://G/v1/cluster'` |
 | Abort global (automated or manually started) rebalance (proxy) | PUT {"action": "stop", "value": {"kind": "rebalance"}} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "stop", "value": {"kind": "rebalance"}}' 'http://G/v1/cluster'` |
 | Create ais [bucket](bucket.md) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' 'http://G/v1/buckets/abc'` |
 | Destroy ais [bucket](bucket.md) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' 'http://G/v1/buckets/abc'` |
-| Rename ais [bucket](bucket.md) | POST {"action": "renamelb"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "to-name"}' 'http://G/v1/buckets/from-name'` |
-| Copy [bucket](bucket.md) | POST {"action": "copybck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "copybck", "value": {"bck_to": {"name": "to-name" }}}' 'http://G/v1/buckets/from-name'` |
+| Rename ais [bucket](bucket.md) | POST {"action": "renamelb"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb" }' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` |
+| Copy [bucket](bucket.md) | POST {"action": "copybck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "copybck", }}}' 'http://G/v1/buckets/from-name?bck=<bck>&bckto=<to-bck>'` |
 | Rename/move object (ais buckets only) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mybucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> |
 | Check if an object from a Cloud bucket *is cached*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` |
 | GET object | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject' -o myobject` <sup id="a1">[1](#ft1)</sup> |

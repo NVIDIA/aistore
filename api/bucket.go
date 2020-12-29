@@ -153,6 +153,9 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks, msg *cmn.Bu
 
 // CreateBucket sends a HTTP request to a proxy to create an AIS bucket with the given name.
 func CreateBucket(baseParams BaseParams, bck cmn.Bck, ops ...cmn.BucketPropsToUpdate) error {
+	if err := cmn.ValidateBckName(bck.Name); err != nil {
+		return err
+	}
 	if len(ops) > 1 {
 		return fmt.Errorf("only a single BucketPropsToUpdate parameter can be accepted")
 	}
@@ -200,6 +203,9 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 //   bucket, etc.
 // * Copying multiple buckets to the same destination bucket is also permitted.
 func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.CopyBckMsg) (xactID string, err error) {
+	if err = cmn.ValidateBckName(toBck.Name); err != nil {
+		return
+	}
 	var msg *cmn.CopyBckMsg
 	if len(msgs) > 0 && msgs[0] != nil {
 		msg = msgs[0]
@@ -216,13 +222,19 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.Copy
 	return
 }
 
-// RenameBucket changes the name of a bucket from `oldBck` to `newBck`.
-func RenameBucket(baseParams BaseParams, oldBck, newBck cmn.Bck) (xactID string, err error) {
+// RenameBucket renames fromBck as toBck.
+func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string, err error) {
+	if err = cmn.ValidateBckName(toBck.Name); err != nil {
+		return
+	}
 	baseParams.Method = http.MethodPost
+	q := cmn.AddBckUnameToQuery(nil, fromBck, cmn.URLParamBucket) // aka cmn.URLParamBucketFrom
+	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, oldBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBck.Name}),
+		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, fromBck.Name),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameLB}),
+		Query:      q,
 	}, &xactID)
 	return
 }

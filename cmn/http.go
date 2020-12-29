@@ -152,19 +152,6 @@ func PrependProtocol(url string, protocol ...string) string {
 	return proto + "://" + url
 }
 
-// RESTItems splits whole path into the items.
-func RESTItems(unescapedPath string) []string {
-	escaped := html.EscapeString(unescapedPath)
-	split := strings.Split(escaped, "/")
-	apiItems := split[:0] // filtering without allocation
-	for _, item := range split {
-		if item != "" { // omit empty
-			apiItems = append(apiItems, item)
-		}
-	}
-	return apiItems
-}
-
 // MatchRESTItems splits url path and matches the parts against specified `items`.
 // If `splitAfter` is true all items will be split, otherwise the
 // rest of the path will be split only to `itemsAfter` items.
