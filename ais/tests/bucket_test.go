@@ -1609,10 +1609,11 @@ func TestCloudMirror(t *testing.T) {
 	})
 
 	// list
-	objectList, err := api.ListObjects(baseParams, m.bck, nil, 0)
+	msg := &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
+	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(objectList.Entries) == m.num,
-		"insufficient number of objects in the cloud bucket %s: need %d, got %d", m.bck, m.num, len(objectList.Entries))
+		"wrong number of objects in the cloud bucket %s: need %d, got %d", m.bck, m.num, len(objectList.Entries))
 
 	smap := tutils.GetClusterMap(t, baseParams.URL)
 	{
@@ -1976,11 +1977,15 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	dstProps, err := api.HeadBucket(baseParams, dstBck)
 	tassert.CheckFatal(t, err)
 
-	// Region might be set on rename.
+	tassert.Fatalf(t, srcProps.Versioning.Enabled == dstProps.Versioning.Enabled,
+		"source and destination bucket versioning does not match: %t vs. %t, respectively",
+		srcProps.Versioning.Enabled, dstProps.Versioning.Enabled)
+
+	// aws region might be set upon rename
 	srcProps.Extra.CloudRegion = ""
 	dstProps.Extra.CloudRegion = ""
 
-	tassert.Fatalf(t, srcProps.Equal(dstProps), "source and destination bucket props do not match: %v - %v", srcProps, dstProps)
+	tassert.Fatalf(t, srcProps.Equal(dstProps), "source and destination bucket props do not match:\n%v\n%v", srcProps, dstProps)
 }
 
 func TestCopyBucket(t *testing.T) {

@@ -53,6 +53,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 	var (
 		bucketProps = cmn.DefaultAISBckProps()
 		nlp         = bck.GetNameLockPair()
+		bmd         = p.owner.bmd.get()
 	)
 
 	if bck.Props != nil {
@@ -65,13 +66,17 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		} else {
 			bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
 		}
+	} else if bck.HasBackendBck() {
+		backend := cluster.BackendBck(bck)
+		cloudProps, present := bmd.Get(backend)
+		debug.Assert(present)
+		bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // ditto
 	}
 
 	nlp.Lock()
 	defer nlp.Unlock()
 
 	// 1. try add
-	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bck); present {
 		return cmn.NewErrorBucketAlreadyExists(bck.Bck, p.si.String())
 	}
