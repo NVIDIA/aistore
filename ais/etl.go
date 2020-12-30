@@ -160,23 +160,16 @@ func (t *targetrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 // getObjectETL handles GET requests from ETL containers (K8s Pods).
 // getObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.URLPathETLObject)
-	if err != nil {
+	request := &apiRequest{after: 3, prefix: cmn.URLPathETLObject, bckIdx: 1}
+	if err := request.parse(w, r, t); err != nil {
+		return
+	}
+	if err := etl.CheckSecret(request.items[0]); err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var (
-		secret  = apiItems[0]
-		bucket  = apiItems[1]
-		objName = apiItems[2]
-	)
-
-	if err := etl.CheckSecret(secret); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	t.getObject(w, r, r.URL.Query(), bucket, objName)
+	t.getObject(w, r, r.URL.Query(), request.bck, request.items[2])
 }
 
 // HEAD /v1/etl/objects/<secret>/<bucket-name>/<object-name>
@@ -184,23 +177,16 @@ func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 // headObjectETL handles HEAD requests from ETL containers (K8s Pods).
 // headObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.URLPathETLObject)
-	if err != nil {
+	request := &apiRequest{after: 3, prefix: cmn.URLPathETLObject, bckIdx: 1}
+	if err := request.parse(w, r, t); err != nil {
+		return
+	}
+	if err := etl.CheckSecret(request.items[0]); err != nil {
+		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var (
-		secret  = apiItems[0]
-		bucket  = apiItems[1]
-		objName = apiItems[2]
-	)
-
-	if err := etl.CheckSecret(secret); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	t.headObject(w, r, r.URL.Query(), bucket, objName)
+	t.headObject(w, r, r.URL.Query(), request.bck, request.items[2])
 }
 
 ////////////////
