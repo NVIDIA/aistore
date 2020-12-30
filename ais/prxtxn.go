@@ -535,9 +535,14 @@ func (p *proxyrunner) _b2bBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 		return nil
 	}
 
-	cmn.Assert(!bckTo.IsRemote())
+	debug.Assert(bckTo.IsAIS())
 	bckFrom.Props = bprops.Clone()
-	bckTo.Props = bprops.Clone()
+	// duplicate bucket props - but only if the source is ais as well
+	if bckFrom.IsAIS() || bckFrom.IsRemoteAIS() {
+		bckTo.Props = bprops.Clone()
+	} else {
+		bckTo.Props = cmn.DefaultAISBckProps()
+	}
 	added := clone.add(bckTo, bckTo.Props)
 	cmn.Assert(added)
 	return nil

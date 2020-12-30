@@ -2169,21 +2169,25 @@ func TestCopyBucket(t *testing.T) {
 				if dstProps.Provider != cmn.ProviderAIS {
 					t.Fatalf("destination bucket does not seem to be 'ais': %s", dstProps.Provider)
 				}
-				// Clear providers to make sure that they will fail on different providers.
+				// Clear providers to compare the props across different ones
 				srcProps.Provider = ""
 				dstProps.Provider = ""
 
-				// If bucket existed before, we need to ensure that the bucket
-				// props were **not** copied over.
+				// If bucket existed before, ensure that the bucket props were **not** copied over.
 				if test.dstBckExist && srcProps.Equal(dstProps) {
 					t.Fatalf("source and destination bucket props match, even though they should not:\n%#v\n%#v",
 						srcProps, dstProps)
 				}
 
-				// If bucket did not exist before, we need to ensure that
-				// the bucket props match the source bucket props (except provider).
-				if !test.dstBckExist && !srcProps.Equal(dstProps) {
-					t.Fatalf("source and destination bucket props do not match:\n%#v\n%#v", srcProps, dstProps)
+				// When copying cloud => ais we create the destination ais bucket on the fly
+				// with the default props. In all other cases (including ais => ais) bucket props must match.
+				if !test.dstBckExist {
+					if test.srcCloud && !test.dstCloud {
+						// TODO: validate default props
+					} else if !srcProps.Equal(dstProps) {
+						t.Fatalf("source and destination bucket props do not match:\n%#v\n%#v",
+							srcProps, dstProps)
+					}
 				}
 			}
 
@@ -2218,7 +2222,7 @@ func TestCopyBucket(t *testing.T) {
 							found = true
 
 							if dstm.bck.IsAIS() {
-								tassert.Fatalf(t, b.Version == "1", "Expected object %q to have initial version, got %s", b.Name, b.Version)
+								tassert.Fatalf(t, b.Version == "1", "Expected object %q to have initial version, got %q", b.Name, b.Version)
 							} else if dstmProps.Versioning.Enabled {
 								tassert.Fatalf(t, b.Version != "", "Expected non-empty object %q version", b.Name)
 							}
