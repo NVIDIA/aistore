@@ -635,6 +635,7 @@ func (h *httprunner) tryLoadSmap() (_ *smapX, reliable bool) {
 
 func (h *httprunner) run() error {
 	config := cmn.GCO.Get()
+	testingEnv := config.TestingEnv()
 
 	// A wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
@@ -662,7 +663,12 @@ func (h *httprunner) run() error {
 		}
 
 		go func() {
-			addr := h.si.PublicNet.NodeIPAddr + ":" + h.si.PublicNet.DaemonPort
+			addr := ":" + h.si.PublicNet.DaemonPort
+			if testingEnv {
+				// On testing environment just listen on specified `ip:port`.
+				// On production env and K8S listen on `*:port`
+				addr = h.si.PublicNet.NodeIPAddr + addr
+			}
 			errCh <- h.netServ.pub.listenAndServe(addr, h.logger)
 		}()
 
@@ -671,7 +677,6 @@ func (h *httprunner) run() error {
 
 	var (
 		addr        string
-		testingEnv  = config.TestingEnv()
 		k8sDetected = k8s.Detect() == nil
 	)
 	if testingEnv && !k8sDetected {

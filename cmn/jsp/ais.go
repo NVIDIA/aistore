@@ -50,17 +50,13 @@ func LoadConfig(confPath string) (err error) {
 
 	differentIPs := config.Net.IPv4 != config.Net.IPv4IntraControl
 	differentPorts := config.Net.L4.Port != config.Net.L4.PortIntraControl
-	config.Net.UseIntraControl = false
-	if config.Net.IPv4IntraControl != "" && config.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts) {
-		config.Net.UseIntraControl = true
-	}
+	config.Net.UseIntraControl = config.Net.IPv4IntraControl != "" &&
+		config.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts)
 
 	differentIPs = config.Net.IPv4 != config.Net.IPv4IntraData
 	differentPorts = config.Net.L4.Port != config.Net.L4.PortIntraData
-	config.Net.UseIntraData = false
-	if config.Net.IPv4IntraData != "" && config.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts) {
-		config.Net.UseIntraData = true
-	}
+	config.Net.UseIntraData = config.Net.IPv4IntraData != "" &&
+		config.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts)
 
 	if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {
 		return fmt.Errorf("failed to set log level = %s, err: %s", config.Log.Level, err)
