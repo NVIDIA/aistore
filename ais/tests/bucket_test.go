@@ -929,7 +929,7 @@ func TestListObjects(t *testing.T) {
 
 			tutils.CreateFreshBucket(t, proxyURL, bck)
 
-			p := cmn.DefaultAISBckProps()
+			p := cmn.DefaultBckProps()
 
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {
@@ -1097,7 +1097,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				}
 				tutils.CreateFreshBucket(t, proxyURL, bck)
 
-				p := cmn.DefaultAISBckProps()
+				p := cmn.DefaultBckProps()
 				cksumType = p.Cksum.Type
 			}
 

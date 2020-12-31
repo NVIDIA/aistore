@@ -180,7 +180,7 @@ func getIPv4(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, err 
 }
 
 /////////////
-// HELPERS //
+// helpers //
 /////////////
 
 func reMirror(bprops, nprops *cmn.BucketProps) bool {

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -342,4 +343,42 @@ func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
 
 func hasEnoughBMDCopies() bool {
 	return len(fs.FindPersisted(fs.BmdPersistedFileName)) >= bmdCopies
+}
+
+//////////////////////////
+// default bucket props //
+//////////////////////////
+
+func defaultBckProps() *cmn.BucketProps {
+	c := cmn.GCO.Get()
+	debug.AssertNoErr(cmn.ValidateCksumType(c.Cksum.Type))
+	return cmn.DefaultBckProps(c)
+}
+
+func defaultCloudBckProps(header http.Header) (props *cmn.BucketProps) {
+	props = defaultBckProps()
+	props.Versioning.Enabled = false
+	return mergeCloudBckProps(props, header)
+}
+
+func mergeCloudBckProps(base *cmn.BucketProps, header http.Header) (props *cmn.BucketProps) {
+	cmn.Assert(len(header) > 0)
+	props = base.Clone()
+	props.Provider = header.Get(cmn.HeaderCloudProvider)
+	cmn.AssertNoErr(cmn.ValidateProvider(props.Provider))
+
+	if props.Provider == cmn.ProviderHTTP {
+		props.Extra.OrigURLBck = header.Get(cmn.HeaderOrigURLBck)
+	}
+
+	if region := header.Get(cmn.HeaderCloudRegion); region != "" {
+		props.Extra.CloudRegion = region
+	}
+
+	if verStr := header.Get(cmn.HeaderBucketVerEnabled); verStr != "" {
+		versioning, err := cmn.ParseBool(verStr)
+		cmn.AssertNoErr(err)
+		props.Versioning.Enabled = versioning
+	}
+	return props
 }

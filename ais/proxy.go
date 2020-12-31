@@ -894,7 +894,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		// make and validate nprops
-		bck.Props = cmn.DefaultAISBckProps()
+		bck.Props = defaultBckProps()
 		bck.Props.Provider = bck.Provider
 		bck.Props, err = p.makeNprops(bck, propsToUpdate, true /*creating*/)
 		if err != nil {
@@ -1218,7 +1218,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nprops := cmn.MergeCloudBckProps(bck.Props, cloudProps)
+	nprops := mergeCloudBckProps(bck.Props, cloudProps)
 	if nprops.Equal(bck.Props) {
 		p.bucketPropsToHdr(bck, w.Header())
 		return
@@ -1253,7 +1253,7 @@ func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 	if !present {
 		return cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
 	}
-	nprops := cmn.MergeCloudBckProps(bprops, ctx.cloudProps)
+	nprops := mergeCloudBckProps(bprops, ctx.cloudProps)
 	if nprops.Equal(bprops) {
 		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, bck)
 		ctx.terminate = true

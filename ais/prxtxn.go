@@ -51,7 +51,7 @@ type (
 // create-bucket: { check non-existence -- begin -- create locally -- metasync -- commit }
 func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHeader ...http.Header) error {
 	var (
-		bucketProps = cmn.DefaultAISBckProps()
+		bucketProps = defaultBckProps()
 		nlp         = bck.GetNameLockPair()
 		bmd         = p.owner.bmd.get()
 	)
@@ -60,7 +60,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		bucketProps = bck.Props
 	}
 	if len(cloudHeader) != 0 && len(cloudHeader[0]) > 0 {
-		cloudProps := cmn.DefaultCloudBckProps(cloudHeader[0])
+		cloudProps := defaultCloudBckProps(cloudHeader[0])
 		if bck.Props == nil {
 			bucketProps = cloudProps
 		} else {
@@ -275,9 +275,9 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 			if err != nil {
 				return "", err
 			}
-			nprops = cmn.DefaultCloudBckProps(cloudProps)
+			nprops = defaultCloudBckProps(cloudProps)
 		} else {
-			nprops = cmn.DefaultAISBckProps()
+			nprops = defaultBckProps()
 		}
 	default:
 		cmn.Assert(false)
@@ -537,11 +537,11 @@ func (p *proxyrunner) _b2bBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 
 	debug.Assert(bckTo.IsAIS())
 	bckFrom.Props = bprops.Clone()
-	// duplicate bucket props - but only if the source is ais as well
+	// replicate bucket props - but only if the source is ais as well
 	if bckFrom.IsAIS() || bckFrom.IsRemoteAIS() {
 		bckTo.Props = bprops.Clone()
 	} else {
-		bckTo.Props = cmn.DefaultAISBckProps()
+		bckTo.Props = defaultBckProps()
 	}
 	added := clone.add(bckTo, bckTo.Props)
 	cmn.Assert(added)

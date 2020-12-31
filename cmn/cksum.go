@@ -82,8 +82,11 @@ func SupportedChecksums() (types []string) {
 	return
 }
 
-func ValidateCksumType(ty string) (err error) {
-	if ty != "" && !checksums.Contains(ty) {
+func ValidateCksumType(ty string, emptyOK ...bool) (err error) {
+	if ty == "" && len(emptyOK) > 0 && emptyOK[0] {
+		return
+	}
+	if !checksums.Contains(ty) {
 		err = fmt.Errorf("invalid checksum type %q (expecting %v)", ty, SupportedChecksums())
 	}
 	return
@@ -94,7 +97,7 @@ func ValidateCksumType(ty string) (err error) {
 ///////////
 
 func NewCksum(ty, value string) *Cksum {
-	if err := ValidateCksumType(ty); err != nil {
+	if err := ValidateCksumType(ty, true /*empty OK*/); err != nil {
 		AssertMsg(false, err.Error())
 	}
 	if ty == "" {

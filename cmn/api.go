@@ -6,7 +6,6 @@ package cmn
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 	"strings"
 
@@ -388,12 +387,17 @@ func (c *ECConf) RequiredRestoreTargets() int {
 	return c.DataSlices
 }
 
-//
-// by default, bucket props inherit global config
-//
-func DefaultAISBckProps() *BucketProps {
-	c := GCO.Clone()
-	if c.Cksum.Type == "" {
+/////////////////
+// BucketProps //
+/////////////////
+
+// by default bucket props inherit global config
+func DefaultBckProps(cs ...*Config) *BucketProps {
+	var c *Config
+	if len(cs) > 0 {
+		c = cs[0]
+	} else { // only in tests
+		c = GCO.Get()
 		c.Cksum.Type = ChecksumXXHash
 	}
 	return &BucketProps{
@@ -405,38 +409,6 @@ func DefaultAISBckProps() *BucketProps {
 		EC:         c.EC,
 	}
 }
-
-func DefaultCloudBckProps(header http.Header) (props *BucketProps) {
-	props = DefaultAISBckProps()
-	props.Versioning.Enabled = false
-	return MergeCloudBckProps(props, header)
-}
-
-func MergeCloudBckProps(base *BucketProps, header http.Header) (props *BucketProps) {
-	Assert(len(header) > 0)
-	props = base.Clone()
-	props.Provider = header.Get(HeaderCloudProvider)
-	AssertNoErr(ValidateProvider(props.Provider))
-
-	if props.Provider == ProviderHTTP {
-		props.Extra.OrigURLBck = header.Get(HeaderOrigURLBck)
-	}
-
-	if region := header.Get(HeaderCloudRegion); region != "" {
-		props.Extra.CloudRegion = region
-	}
-
-	if verStr := header.Get(HeaderBucketVerEnabled); verStr != "" {
-		versioning, err := ParseBool(verStr)
-		AssertNoErr(err)
-		props.Versioning.Enabled = versioning
-	}
-	return props
-}
-
-/////////////////
-// BucketProps //
-/////////////////
 
 func (bp *BucketProps) Clone() *BucketProps {
 	to := *bp
@@ -497,10 +469,9 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val
 
-		// HACK: Some of the fields are present in `BucketProps` and not in
-		// `BucketPropsToUpdate`. Therefore if a user would like to change such field,
-		// `unknown field` would be returned in response. To make UX more pleasant we try
-		// to set the value first in `BucketProps` which should report `readonly` in such case.
+		// HACK: Some of the fields are present in `BucketProps` and not in `BucketPropsToUpdate`.
+		// Thus, if user wants to change such field, `unknown field` will be returned.
+		// To make UX more friendly we attempt to set the value in an empty `BucketProps` first.
 		if err := UpdateFieldValue(&BucketProps{}, name, value); err != nil {
 			return props, err
 		}

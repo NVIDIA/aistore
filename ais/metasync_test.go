@@ -102,8 +102,9 @@ func newPrimary() *proxyrunner {
 	config.Timeout.MaxKeepalive = 4 * time.Second
 	config.Client.Timeout = 10 * time.Second
 	config.Client.TimeoutLong = 10 * time.Second
+	config.Cksum.Type = cmn.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
-	cmn.GCO.SetConfigFile("/tmp/ais-tests/ais.config")
+	cmn.GCO.SetConfigPath("/tmp/ais-tests/ais.config")
 
 	p.client.data = &http.Client{}
 	p.client.control = &http.Client{}
@@ -129,6 +130,7 @@ func newSecondary(name string) *proxyrunner {
 	config.Keepalive.Proxy.IntervalStr = "as"
 	config.Timeout.CplaneOperation = 2 * time.Second
 	config.Timeout.MaxKeepalive = 4 * time.Second
+	config.Cksum.Type = cmn.ChecksumXXHash
 	cmn.GCO.CommitUpdate(config)
 
 	o := newBMDOwnerPrx(cmn.GCO.Get())

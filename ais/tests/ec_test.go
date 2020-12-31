@@ -2206,7 +2206,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	)
 	var (
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		cksumType  = cmn.DefaultAISBckProps().Cksum.Type
+		cksumType  = cmn.DefaultBckProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckReg)

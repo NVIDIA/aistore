@@ -1708,7 +1708,7 @@ func (h *httprunner) pollClusterStarted(timeout time.Duration) {
 
 func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	if bck.Props == nil {
-		bck.Props = cmn.DefaultCloudBckProps(hdr)
+		bck.Props = defaultCloudBckProps(hdr)
 	}
 	finalProps := bck.Props.Clone()
 	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {

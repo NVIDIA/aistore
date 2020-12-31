@@ -715,10 +715,7 @@ func (t *targetrunner) receiveSmap(newSmap *smapX, msg *aisMsg, caller string) (
 		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
 		return
 	}
-	if err = t.owner.smap.synchronize(t.si, newSmap); err != nil {
-		return
-	}
-	return
+	return t.owner.smap.synchronize(t.si, newSmap)
 }
 
 func (t *targetrunner) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {

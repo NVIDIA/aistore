@@ -909,7 +909,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-		p = cmn.DefaultAISBckProps()
+		p = cmn.DefaultBckProps()
 
 		objName = cmn.RandString(10)
 		link    = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
@@ -952,7 +952,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-		p = cmn.DefaultAISBckProps()
+		p = cmn.DefaultBckProps()
 
 		objName = cmn.RandString(10)
 		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/LICENSE"

@@ -1055,7 +1055,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)
-	conf := cmn.DefaultAISBckProps().Cksum
+	conf := cmn.DefaultBckProps().Cksum
 
 	tutils.PutRandObjs(proxyURL, bck, objPrefix, fileSize, numFiles, errCh, fileNameCh, conf.Type)
 	tassert.SelectErr(t, errCh, "put", false)

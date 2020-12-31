@@ -24,7 +24,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		wg         = &sync.WaitGroup{}
 		dir        = t.Name()
-		cksumType  = cmn.DefaultAISBckProps().Cksum.Type
+		cksumType  = cmn.DefaultBckProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck)

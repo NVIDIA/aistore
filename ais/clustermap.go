@@ -479,14 +479,15 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 }
 
 func (r *smapOwner) persist(newSmap *smapX) error {
-	confFile := cmn.GCO.GetConfigFile()
 	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
 
 	origURL := config.Proxy.PrimaryURL
 	config.Proxy.PrimaryURL = newSmap.Primary.PublicNet.DirectURL
-	if err := jsp.Save(confFile, config, jsp.Plain()); err != nil {
-		err = fmt.Errorf("failed writing config file %s, err: %v", confFile, err)
+	confPath := cmn.GCO.GetConfigPath()
+	if err := jsp.Save(cmn.GCO.GetConfigPath(), config, jsp.Plain()); err != nil {
+		err = fmt.Errorf("failed writing config file %s, err: %v", confPath, err)
+		// NOTE: not discarding (cmn.GCO.DiscardUpdate) config update
 		config.Proxy.PrimaryURL = origURL
 		return err
 	}

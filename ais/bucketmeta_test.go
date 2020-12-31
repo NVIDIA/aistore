@@ -30,16 +30,17 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 	BeforeEach(func() {
 		// Set path for proxy (it uses Confdir)
-		tmpCfg := cmn.GCO.BeginUpdate()
-		tmpCfg.Confdir = mpath
-		cmn.GCO.CommitUpdate(tmpCfg)
+		config := cmn.GCO.BeginUpdate()
+		config.Confdir = mpath
+		config.Cksum.Type = cmn.ChecksumXXHash
+		cmn.GCO.CommitUpdate(config)
 		cfg = cmn.GCO.Get()
 
 		bmd = newBucketMD()
 		for _, provider := range []string{cmn.ProviderAIS, cmn.ProviderAmazon} {
 			for i := 0; i < 10; i++ {
 				bck := cluster.NewBck(fmt.Sprintf("local%d", i), provider, cmn.NsGlobal)
-				bmd.add(bck, cmn.DefaultAISBckProps())
+				bmd.add(bck, defaultBckProps())
 			}
 		}
 	})
@@ -86,7 +87,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 							bck := cluster.NewBck("abc"+cmn.GenTie(), cmn.ProviderAIS, cmn.NsGlobal)
 
 							// add bucket and save
-							clone.add(bck, cmn.DefaultAISBckProps())
+							clone.add(bck, defaultBckProps())
 							err := jsp.Save(testpath, clone, opts)
 							Expect(err).NotTo(HaveOccurred())
 

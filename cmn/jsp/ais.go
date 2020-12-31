@@ -24,7 +24,7 @@ func MustLoadConfig(confPath string) {
 }
 
 func LoadConfig(confPath string) (err error) {
-	cmn.GCO.SetConfigFile(confPath)
+	cmn.GCO.SetConfigPath(confPath)
 
 	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
@@ -108,7 +108,7 @@ func SetConfigMany(nvmap cmn.SimpleKVs) (err error) {
 
 func SaveConfig(action string) (err error) {
 	conf := cmn.GCO.Get()
-	if err = Save(cmn.GCO.GetConfigFile(), conf, Options{}); err != nil {
+	if err = Save(cmn.GCO.GetConfigPath(), conf, Options{}); err != nil {
 		glog.Errorf("%s: failed to write, err: %v", action, err)
 	} else {
 		glog.Infof("Stored config (action=%s)", action)

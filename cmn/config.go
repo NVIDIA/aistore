@@ -71,37 +71,12 @@ type (
 )
 
 type (
-	// ConfigOwner is interface for interacting with config. For updating we
-	// introduce three functions: BeginUpdate, CommitUpdate and DiscardUpdate.
-	// These funcs should protect config from being updated simultaneously
-	// (update should work as transaction).
-	//
-	// Subscribe method should be used by services which require to be notified
-	// about any config changes.
-	ConfigOwner interface {
-		Get() *Config
-		Clone() *Config
-		BeginUpdate() *Config
-		CommitUpdate(config *Config)
-		DiscardUpdate()
-
-		Reg(key string, cl ConfigListener)
-		Unreg(key string)
-
-		SetConfigFile(path string)
-		GetConfigFile() string
-	}
-	// globalConfigOwner implements ConfigOwner interface. The implementation is
-	// protecting config only from concurrent updates but does not use CoW or other
-	// techniques which involves cloning and updating config. This might change when
-	// we will have use case for that - then Get and Put would need to be changed
-	// accordingly.
 	globalConfigOwner struct {
 		mtx       sync.Mutex // mutex for protecting updates of config
 		c         atomic.Pointer
 		lmtx      sync.Mutex // mutex for protecting listeners
 		listeners map[string]ConfigListener
-		confFile  string
+		confPath  atomic.Pointer
 	}
 	// ConfigListener is interface for listeners which require to be notified
 	// about config updates.
@@ -167,8 +142,8 @@ type (
 
 	MirrorConf struct {
 		Copies      int64 `json:"copies"`       // num local copies
-		Burst       int   `json:"burst_buffer"` // channel buffer size
 		UtilThresh  int64 `json:"util_thresh"`  // considered equivalent when below threshold
+		Burst       int   `json:"burst_buffer"` // channel buffer size
 		OptimizePUT bool  `json:"optimize_put"` // optimization objective
 		Enabled     bool  `json:"enabled"`      // will only generate local copies when set to true
 	}
@@ -426,8 +401,10 @@ type (
 	}
 )
 
-// interface guard
-var _ ConfigOwner = (*globalConfigOwner)(nil)
+// GCO stands for global config owner which is responsible for updating
+// and notifying listeners about any changes in the config. Config is loaded
+// at startup and then can be accessed/updated by other services.
+var GCO *globalConfigOwner
 
 var clientFeatureList = []struct {
 	name  string
@@ -440,22 +417,16 @@ var clientFeatureList = []struct {
 // globalConfigOwner //
 ///////////////////////
 
-// GCO stands for global config owner which is responsible for updating
-// and notifying listeners about any changes in the config. Config is loaded
-// at startup and then can be accessed/updated by other services.
-var GCO *globalConfigOwner
-
 func (gco *globalConfigOwner) Get() *Config {
 	return (*Config)(gco.c.Load())
 }
 
-func (gco *globalConfigOwner) Clone() *Config {
+// NOTE: CopyStruct is a shallow copy which is OK because Config has mostly values with read-only
+//       FSPaths and CloudConf being the only exceptions. May need a *proper* deep copy in the future.
+// NOTE: Cloning a large (and growing) structure may adversely affect performance.
+func (gco *globalConfigOwner) clone() *Config {
 	config := &Config{}
 
-	// FIXME: CopyStruct is actually shallow copy but because Config
-	// has only values (no pointers or slices, except FSPaths) it is
-	// deep copy. This may break in the future, so we need solution
-	// to make sure that we do *proper* deep copy with good performance.
 	CopyStruct(config, gco.Get())
 	return config
 }
@@ -464,47 +435,32 @@ func (gco *globalConfigOwner) Clone() *Config {
 // other update can happen when other transaction is in progress. Therefore,
 // we introduce locking mechanism which targets this problem.
 //
-// NOTE: BeginUpdate should be followed by CommitUpdate.
+// NOTE: BeginUpdate must be followed by CommitUpdate.
 func (gco *globalConfigOwner) BeginUpdate() *Config {
 	gco.mtx.Lock()
-	return gco.Clone()
+	return gco.clone()
 }
 
-// CommitUpdate ends transaction of updating config and notifies listeners
-// about changes in config.
-//
-// NOTE: CommitUpdate should be preceded by BeginUpdate.
+// CommitUpdate finalizes config update and notifies listeners.
 func (gco *globalConfigOwner) CommitUpdate(config *Config) {
 	oldConf := gco.Get()
-	GCO.c.Store(unsafe.Pointer(config))
-
-	// TODO: Notify listeners is protected by GCO lock to make sure
-	// that config updates are done in correct order. But it has
-	// performance impact and it needs to be revisited.
-	gco.notifyListeners(oldConf)
-
+	gco.c.Store(unsafe.Pointer(config))
 	gco.mtx.Unlock()
+
+	gco.notifyListeners(oldConf) // serializes via gco.lmtx
 }
 
-// CommitUpdate ends transaction but contrary to CommitUpdate it does not update
-// the config nor it notifies listeners.
-//
-// NOTE: CommitUpdate should be preceded by BeginUpdate.
+// DiscardUpdate discards commit updates.
 func (gco *globalConfigOwner) DiscardUpdate() {
 	gco.mtx.Unlock()
 }
 
-func (gco *globalConfigOwner) SetConfigFile(path string) {
-	gco.mtx.Lock()
-	gco.confFile = path
-	gco.mtx.Unlock()
+func (gco *globalConfigOwner) SetConfigPath(path string) {
+	gco.confPath.Store(unsafe.Pointer(&path))
 }
 
-func (gco *globalConfigOwner) GetConfigFile() (s string) {
-	gco.mtx.Lock()
-	s = gco.confFile
-	gco.mtx.Unlock()
-	return
+func (gco *globalConfigOwner) GetConfigPath() (s string) {
+	return *(*string)(gco.confPath.Load())
 }
 
 func (gco *globalConfigOwner) notifyListeners(oldConf *Config) {
