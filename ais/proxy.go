@@ -323,7 +323,7 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
 	if err != nil {
 		return
 	}
@@ -349,7 +349,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 // GET /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -378,7 +378,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 // PUT /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -442,7 +442,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 // DELETE /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -470,7 +470,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 // DELETE { action } /v1/buckets
 func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
 	if err != nil {
 		return
 	}
@@ -661,7 +661,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets)
 	if err != nil {
 		return
 	}
@@ -1133,7 +1133,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		msg   cmn.ActionMsg
 		query = r.URL.Query()
 	)
-	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -1194,7 +1194,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
 	if err != nil {
 		return
 	}
@@ -1271,7 +1271,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		bck           *cluster.Bck
 		msg           *cmn.ActionMsg
 		query         = r.URL.Query()
-		apiItems, err = p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+		apiItems, err = p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
 	)
 	if err != nil {
 		return
@@ -1322,7 +1322,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	var (
 		started       = time.Now()
-		apiItems, err = p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+		apiItems, err = p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	)
 	if err != nil {
 		return
@@ -1737,7 +1737,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 
 func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
 	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -1764,7 +1764,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 }
 
 func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Objects)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -1849,7 +1849,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 }
 
 func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Reverse)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathReverse)
 	if err != nil {
 		return
 	}
@@ -2000,7 +2000,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon)
 	if err != nil {
 		return
 	}
@@ -2093,7 +2093,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 
 // unregister
 func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Daemon)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon)
 	if err != nil {
 		return
 	}
@@ -2115,7 +2115,7 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 // register proxy
 func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon)
 	if err != nil {
 		return
 	}
@@ -2210,7 +2210,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		prepare bool
 		query   = r.URL.Query()
 	)
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Daemon)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathDaemon)
 	if err != nil {
 		return
 	}
@@ -2306,7 +2306,7 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 }
 
 func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster, cmn.Proxy)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterProxy)
 	if err != nil {
 		return
 	}
@@ -2655,7 +2655,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		keepalive, userRegister, selfRegister bool
 		nonElectable                          bool
 	)
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluster)
 	if err != nil {
 		return
 	}
@@ -2986,7 +2986,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 
 // unregister node
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster, cmn.Daemon)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterDaemon)
 	if err != nil {
 		return
 	}
@@ -3080,7 +3080,7 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 // '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathCluster)
 	if err != nil {
 		return
 	}

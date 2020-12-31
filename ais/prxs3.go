@@ -28,7 +28,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
 	cmn.ReparseQuery(r)
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.S3)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathS3)
 	if err != nil {
 		return
 	}

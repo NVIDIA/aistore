@@ -1103,8 +1103,8 @@ func (h *httprunner) bcastToIC(msg *aisMsg, wait bool) {
 
 // remove validated fields and return the resulting slice
 func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
-	splitAfter bool, items ...string) ([]string, error) {
-	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items...)
+	splitAfter bool, items []string) ([]string, error) {
+	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items)
 	if err != nil {
 		s := err.Error()
 		if _, file, line, ok := runtime.Caller(1); ok {

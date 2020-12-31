@@ -258,7 +258,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /notifs path")
 		return
 	}
-	apiItems, err := n.p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Notifs)
+	apiItems, err := n.p.checkRESTItems(w, r, 1, false, cmn.URLPathNotifs)
 	if err != nil {
 		return
 	}

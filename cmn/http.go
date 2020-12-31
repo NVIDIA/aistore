@@ -156,7 +156,7 @@ func PrependProtocol(url string, protocol ...string) string {
 // If `splitAfter` is true all items will be split, otherwise the
 // rest of the path will be split only to `itemsAfter` items.
 // Returns all items that follow the specified `items`.
-func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items ...string) ([]string, error) {
+func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items []string) ([]string, error) {
 	var split []string
 	escaped := html.EscapeString(unescapedPath)
 	if len(escaped) > 0 && escaped[0] == '/' {

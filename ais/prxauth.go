@@ -17,7 +17,7 @@ var errInvalidToken = errors.New("invalid token")
 
 func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &TokenList{}
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Tokens); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathTokens); err != nil {
 		return
 	}
 	if p.forwardCP(w, r, nil, "revoke token") {

@@ -38,7 +38,7 @@ func (t *targetrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Query, cmn.Init); err != nil {
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathQueryInit); err != nil {
 		return
 	}
 	var (
@@ -86,7 +86,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Query)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathQuery)
 	if err != nil {
 		return
 	}
@@ -110,7 +110,7 @@ func (t *targetrunner) httpquerygetworkertarget(w http.ResponseWriter, _ *http.R
 func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Request) {
 	var entries []*cmn.BucketEntry
 
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Query)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathQuery)
 	if err != nil {
 		return
 	}
@@ -154,7 +154,7 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 
 // v1/query/discard/handle/value
 func (t *targetrunner) httpqueryput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Query, cmn.Discard)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.URLPathQueryDiscard)
 	if err != nil {
 		return
 	}

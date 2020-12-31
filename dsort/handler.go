@@ -39,7 +39,7 @@ type response struct {
 
 // [METHOD] /v1/sort/...
 func ProxySortHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, cmn.Version, cmn.Sort)
+	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathdSort)
 	if err != nil {
 		return
 	}
@@ -288,7 +288,7 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	_, err := checkRESTItems(w, r, 0, cmn.Version, cmn.Sort, cmn.Abort)
+	_, err := checkRESTItems(w, r, 0, cmn.URLPathdSortAbort)
 	if err != nil {
 		return
 	}
@@ -324,7 +324,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	_, err := checkRESTItems(w, r, 0, cmn.Version, cmn.Sort)
+	_, err := checkRESTItems(w, r, 0, cmn.URLPathdSort)
 	if err != nil {
 		return
 	}
@@ -386,7 +386,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 
 // SortHandler is the handler called for the HTTP endpoint /v1/sort.
 func SortHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSort)
 	if err != nil {
 		return
 	}
@@ -422,7 +422,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Init)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortInit)
 	if err != nil {
 		return
 	}
@@ -459,7 +459,7 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Start)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortStart)
 	if err != nil {
 		return
 	}
@@ -515,7 +515,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		if !checkHTTPMethod(w, r, http.MethodPost) {
 			return
 		}
-		apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Shards)
+		apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortShards)
 		if err != nil {
 			return
 		}
@@ -565,7 +565,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		if !checkHTTPMethod(w, r, http.MethodPost) {
 			return
 		}
-		apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Records)
+		apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortRecords)
 		if err != nil {
 			return
 		}
@@ -637,7 +637,7 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Abort)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortAbort)
 	if err != nil {
 		return
 	}
@@ -662,7 +662,7 @@ func removeSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Remove)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortRemove)
 	if err != nil {
 		return
 	}
@@ -705,7 +705,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Metrics)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortMetrics)
 	if err != nil {
 		return
 	}
@@ -734,7 +734,7 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPut) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 2, cmn.Version, cmn.Sort, cmn.FinishedAck)
+	apiItems, err := checkRESTItems(w, r, 2, cmn.URLPathdSortAck)
 	if err != nil {
 		return
 	}
@@ -823,8 +823,8 @@ func checkHTTPMethod(w http.ResponseWriter, r *http.Request, expected string) bo
 	return true
 }
 
-func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items ...string) ([]string, error) {
-	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, true, items...)
+func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
+	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, true, items)
 	if err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return nil, err

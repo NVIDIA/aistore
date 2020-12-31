@@ -61,7 +61,7 @@ type (
 
 // [METHOD] /v1/vote
 func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathVote)
 	if err != nil {
 		return
 	}
@@ -80,7 +80,7 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/vote/init
 func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.VoteInit); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathVoteInit); err != nil {
 		return
 	}
 
@@ -295,7 +295,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cmn.StringSet {
 
 // [METHOD] /v1/vote
 func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathVote)
 	if err != nil {
 		return
 	}
@@ -370,7 +370,7 @@ func (h *httprunner) onPrimaryProxyFailure() {
 
 // GET /v1/vote/proxy
 func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Proxy); err != nil {
+	if _, err := h.checkRESTItems(w, r, 0, false, cmn.URLPathVoteProxy); err != nil {
 		return
 	}
 
@@ -447,7 +447,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/vote/result
 func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Voteres); err != nil {
+	if _, err := h.checkRESTItems(w, r, 0, false, cmn.URLPathVoteVoteres); err != nil {
 		return
 	}
 	msg := VoteResultMessage{}

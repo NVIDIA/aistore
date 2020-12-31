@@ -33,7 +33,7 @@ func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Query, cmn.Init); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryInit); err != nil {
 		return
 	}
 
@@ -80,7 +80,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Query)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathQuery)
 	if err != nil {
 		return
 	}
@@ -131,7 +131,7 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 
 func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	// get next query
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Query, cmn.Next); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryNext); err != nil {
 		return
 	}
 

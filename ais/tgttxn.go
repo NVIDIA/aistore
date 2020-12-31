@@ -67,7 +67,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Txn)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathTxn)
 	if err != nil {
 		return
 	}

@@ -159,7 +159,7 @@ func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon)
 	if err != nil {
 		return
 	}
@@ -368,7 +368,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 // register target
 // enable/disable mountpath
 func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon)
 	if err != nil {
 		return
 	}
@@ -409,7 +409,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 // unregister
 // remove mountpath
 func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Daemon)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon)
 	if err != nil {
 		return
 	}
@@ -1078,7 +1078,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &TokenList{}
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Tokens); err != nil {
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathTokens); err != nil {
 		return
 	}
 

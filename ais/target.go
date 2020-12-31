@@ -419,7 +419,7 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
 	if err != nil {
 		return
 	}
@@ -449,7 +449,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg           = &aisMsg{}
-		apiItems, err = t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+		apiItems, err = t.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
 	)
 	if err != nil {
 		return
@@ -539,7 +539,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets)
 	if err != nil {
 		return
 	}
@@ -633,7 +633,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		hdr         = w.Header()
 		query       = r.URL.Query()
 	)
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
 	if err != nil {
 		return
 	}
@@ -712,7 +712,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -807,7 +807,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -885,7 +885,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -963,7 +963,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			t.si, r.Method, r.RemoteAddr)
 		return
 	}
-	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -1088,7 +1088,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 
 // Returns a slice. Does not use GFN.
 func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.EC)
+	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.URLPathEC)
 	if err != nil {
 		return
 	}
@@ -1385,7 +1385,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 
 // TODO: unify with PromoteFile (refactor)
 func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
@@ -1439,7 +1439,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 
 func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	const fmtErr = "%s: %s failed: "
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathObjects)
 	if err != nil {
 		return
 	}
