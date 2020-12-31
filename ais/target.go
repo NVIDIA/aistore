@@ -329,7 +329,7 @@ func (t *targetrunner) initRecvHandlers() {
 		{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 		{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Xactions, h: t.xactHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Rebalance, h: t.rebManager.RespHandler, net: []string{cmn.NetworkIntraData}},
 		{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
