@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -72,10 +73,10 @@ func (m msgSortHelper) Less(i, j int) bool {
 }
 
 // serverTCPAddr takes a string in format of "http://ip:port" and returns its ip and port
-func serverTCPAddr(u string) *net.TCPAddr {
+func serverTCPAddr(u string) cluster.NetInfo {
 	s := strings.TrimPrefix(u, "http://")
 	addr, _ := net.ResolveTCPAddr("tcp", s)
-	return addr
+	return *cluster.NewNetInfo("http", addr.IP.String(), strconv.Itoa(addr.Port))
 }
 
 // newPrimary returns a proxy runner after initializing the fields that are needed by this test
@@ -87,7 +88,7 @@ func newPrimary() *proxyrunner {
 	)
 
 	p.owner.smap = newSmapOwner()
-	p.si = cluster.NewSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = cluster.NewSnode("primary", cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
 
 	smap.addProxy(p.si)
 	smap.Primary = p.si
@@ -118,7 +119,7 @@ func newPrimary() *proxyrunner {
 
 func newSecondary(name string) *proxyrunner {
 	p := &proxyrunner{}
-	p.si = cluster.NewSnode(name, httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = cluster.NewSnode(name, cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
 	p.owner.smap = newSmapOwner()
 	p.owner.smap.put(newSmap())
 	p.client.data = &http.Client{}
@@ -167,9 +168,9 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 	addrInfo := serverTCPAddr(ts.URL)
 	clone := primary.owner.smap.get().clone()
 	if s.isProxy {
-		clone.Pmap[id] = cluster.NewSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+		clone.Pmap[id] = cluster.NewSnode(id, cmn.Proxy, addrInfo, addrInfo, addrInfo)
 	} else {
-		clone.Tmap[id] = cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+		clone.Tmap[id] = cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo)
 	}
 	clone.Version++
 	primary.owner.smap.put(clone)
@@ -467,10 +468,11 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	var (
 		ch       = make(chan transportData, 2) // NOTE: Use 2 to avoid unbuffered channel, http handler can return.
 		id       = "p"
-		addrInfo = &net.TCPAddr{
-			IP:   net.ParseIP("127.0.0.1"),
-			Port: 53538, // the lucky port
-		}
+		addrInfo = *cluster.NewNetInfo(
+			httpProto,
+			"127.0.0.1",
+			"53538", // the lucky port
+		)
 	)
 
 	// handler for /v1/metasync
@@ -479,7 +481,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	})
 
 	clone := primary.owner.smap.get().clone()
-	clone.Pmap[id] = cluster.NewSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+	clone.Pmap[id] = cluster.NewSnode(id, cmn.Proxy, addrInfo, addrInfo, addrInfo)
 	clone.Version++
 	primary.owner.smap.put(clone)
 
@@ -572,9 +574,9 @@ func TestMetaSyncData(t *testing.T) {
 		addrInfo := serverTCPAddr(ts.URL)
 		clone := primary.owner.smap.get().clone()
 		if s.isProxy {
-			clone.Pmap[id] = cluster.NewSnode(id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+			clone.Pmap[id] = cluster.NewSnode(id, cmn.Proxy, addrInfo, addrInfo, addrInfo)
 		} else {
-			clone.Tmap[id] = cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+			clone.Tmap[id] = cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo)
 		}
 		clone.Version++
 		primary.owner.smap.put(clone)
@@ -703,7 +705,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		id := "t"
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
-		clone.addTarget(cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+		clone.addTarget(cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo))
 		primary.owner.smap.put(clone)
 		msg := primary.newAisMsgStr("", clone, nil)
 		wg1 := syncer.sync(revsPair{clone, msg})
@@ -747,7 +749,7 @@ func TestMetaSyncMembership(t *testing.T) {
 
 		id := "t1111"
 		addrInfo := serverTCPAddr(s1.URL)
-		di := cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+		di := cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo)
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
@@ -773,7 +775,7 @@ func TestMetaSyncMembership(t *testing.T) {
 
 		id := "t22222"
 		addrInfo := serverTCPAddr(s2.URL)
-		di := cluster.NewSnode(id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+		di := cluster.NewSnode(id, cmn.Target, addrInfo, addrInfo, addrInfo)
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
@@ -838,7 +840,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
-		clone.addProxy(cluster.NewSnode("p1", httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+		clone.addProxy(cluster.NewSnode("p1", cmn.Proxy, addrInfo, addrInfo, addrInfo))
 		primary.owner.smap.put(clone)
 
 		proxy1 := newSecondary("p1")

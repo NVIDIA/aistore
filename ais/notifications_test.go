@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -37,7 +36,7 @@ var _ = Describe("Notifications xaction test", func() {
 		mockNode = func(id, daeType string) *cluster.Snode {
 			server := discoverServerDefaultHandler(1, 1)
 			info := serverTCPAddr(server.URL)
-			return cluster.NewSnode(id, httpProto, daeType, info, &net.TCPAddr{}, &net.TCPAddr{})
+			return cluster.NewSnode(id, daeType, info, info, info)
 		}
 
 		getNodeMap = func(ids ...string) (snodes cluster.NodeMap) {

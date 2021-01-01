@@ -507,88 +507,76 @@ func newMuxers() cmn.HTTPMuxers {
 // initSI initializes this cluster.Snode
 func (h *httprunner) initSI(daemonType string) {
 	var (
-		s             string
-		config        = cmn.GCO.Get()
-		port          = config.Net.L4.Port
-		addrList, err = getLocalIPv4List()
+		s                                        string
+		config                                   = cmn.GCO.Get()
+		port                                     = config.Net.L4.PortStr
+		proto                                    = config.Net.HTTP.Proto
+		addrList, err                            = getLocalIPv4List()
+		pubAddr, intraControlAddr, intraDataAddr cluster.NetInfo
 	)
 	if err != nil {
 		cmn.ExitLogf("Failed to get local IP addr list, err: %v", err)
 	}
 
-	ipAddr, err := getIPv4(addrList, config.Net.IPv4)
+	pubAddr, err = getNetInfo(addrList, proto, config.Net.Hostname, port)
 	if err != nil {
 		cmn.ExitLogf("Failed to get PUBLIC IPv4/hostname: %v", err)
 	}
-	if config.Net.IPv4 != "" {
-		s = " (config: " + config.Net.IPv4 + ")"
+	if config.Net.Hostname != "" {
+		s = " (config: " + config.Net.Hostname + ")"
 	}
-	glog.Infof("PUBLIC (user) access: [%s:%d]%s", ipAddr, config.Net.L4.Port, s)
+	glog.Infof("PUBLIC (user) access: [%s]%s", pubAddr, s)
 
-	ipAddrIntraControl := net.IP{}
+	intraControlAddr = pubAddr
 	if config.Net.UseIntraControl {
-		ipAddrIntraControl, err = getIPv4(addrList, config.Net.IPv4IntraControl)
+		intraControlAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraControl, config.Net.L4.PortIntraControlStr)
 		if err != nil {
 			cmn.ExitLogf("Failed to get INTRA-CONTROL IPv4/hostname: %v", err)
 		}
 		s = ""
-		if config.Net.IPv4IntraControl != "" {
-			s = " (config: " + config.Net.IPv4IntraControl + ")"
+		if config.Net.HostnameIntraControl != "" {
+			s = " (config: " + config.Net.HostnameIntraControl + ")"
 		}
-		glog.Infof("INTRA-CONTROL access: [%s:%d]%s", ipAddrIntraControl, config.Net.L4.PortIntraControl, s)
+		glog.Infof("INTRA-CONTROL access: [%s]%s", intraControlAddr, s)
 	}
 
-	ipAddrIntraData := net.IP{}
+	intraDataAddr = pubAddr
 	if config.Net.UseIntraData {
-		ipAddrIntraData, err = getIPv4(addrList, config.Net.IPv4IntraData)
+		intraDataAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraData, config.Net.L4.PortIntraDataStr)
 		if err != nil {
 			cmn.ExitLogf("Failed to get INTRA-DATA IPv4/hostname: %v", err)
 		}
 		s = ""
-		if config.Net.IPv4IntraData != "" {
-			s = " (config: " + config.Net.IPv4IntraData + ")"
+		if config.Net.HostnameIntraData != "" {
+			s = " (config: " + config.Net.HostnameIntraData + ")"
 		}
-		glog.Infof("INTRA-DATA access: [%s:%d]%s", ipAddrIntraData, config.Net.L4.PortIntraData, s)
+		glog.Infof("INTRA-DATA access: [%s]%s", intraDataAddr, s)
 	}
 
-	mustDiffer(ipAddr, config.Net.L4.Port, true,
-		ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "pub/ctl")
-	mustDiffer(ipAddr, config.Net.L4.Port, true, ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.UseIntraData, "pub/data")
-	mustDiffer(ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.UseIntraData,
-		ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "ctl/data")
-
-	publicAddr := &net.TCPAddr{
-		IP:   ipAddr,
-		Port: port,
-	}
-	intraControlAddr := &net.TCPAddr{
-		IP:   ipAddrIntraControl,
-		Port: config.Net.L4.PortIntraControl,
-	}
-	intraDataAddr := &net.TCPAddr{
-		IP:   ipAddrIntraData,
-		Port: config.Net.L4.PortIntraData,
-	}
+	mustDiffer(pubAddr, config.Net.L4.Port, true,
+		intraControlAddr, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "pub/ctl")
+	mustDiffer(pubAddr, config.Net.L4.Port, true, intraDataAddr, config.Net.L4.PortIntraData, config.Net.UseIntraData, "pub/data")
+	mustDiffer(intraDataAddr, config.Net.L4.PortIntraData, config.Net.UseIntraData,
+		intraControlAddr, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "ctl/data")
 
 	daemonID := initDaemonID(daemonType, config)
 	h.name = daemonType
 	h.si = cluster.NewSnode(
 		daemonID,
-		config.Net.HTTP.Proto,
 		daemonType,
-		publicAddr,
+		pubAddr,
 		intraControlAddr,
 		intraDataAddr,
 	)
 	cmn.InitShortID(h.si.Digest())
 }
 
-func mustDiffer(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bool, tag string) {
+func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, port2 int, use2 bool, tag string) {
 	if !use1 || !use2 {
 		return
 	}
-	if string(ip1) == string(ip2) && port1 == port2 {
-		cmn.ExitLogf("%s: cannot use the same IP:port (%s:%d) for two networks", tag, string(ip1), port1)
+	if ip1.NodeIPAddr == ip2.NodeIPAddr && port1 == port2 {
+		cmn.ExitLogf("%s: cannot use the same IP:port (%s) for two networks", tag, ip1)
 	}
 }
 

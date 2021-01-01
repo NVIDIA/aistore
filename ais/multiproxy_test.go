@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,7 +38,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 		p       = &proxyrunner{}
 		tracker = stats.NewTrackerMock()
 	)
-	p.si = cluster.NewSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = cluster.NewSnode("primary", cmn.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
 	p.client.data = &http.Client{}
 	p.client.control = &http.Client{}
 
@@ -289,9 +288,9 @@ func TestDiscoverServers(t *testing.T) {
 				ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 				addrInfo := serverTCPAddr(ts.URL)
 				if s.isProxy {
-					discoverSmap.addProxy(cluster.NewSnode(s.id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+					discoverSmap.addProxy(cluster.NewSnode(s.id, cmn.Proxy, addrInfo, addrInfo, addrInfo))
 				} else {
-					discoverSmap.addTarget(cluster.NewSnode(s.id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
+					discoverSmap.addTarget(cluster.NewSnode(s.id, cmn.Target, addrInfo, addrInfo, addrInfo))
 				}
 			}
 			svm := primary.uncoverMeta(discoverSmap)

@@ -320,13 +320,13 @@ type (
 	}
 
 	NetConf struct {
-		IPv4             string   `json:"ipv4"`
-		IPv4IntraControl string   `json:"ipv4_intra_control"`
-		IPv4IntraData    string   `json:"ipv4_intra_data"`
-		L4               L4Conf   `json:"l4"`
-		HTTP             HTTPConf `json:"http"`
-		UseIntraControl  bool     `json:"-"`
-		UseIntraData     bool     `json:"-"`
+		Hostname             string   `json:"ipv4"`
+		HostnameIntraControl string   `json:"ipv4_intra_control"`
+		HostnameIntraData    string   `json:"ipv4_intra_data"`
+		L4                   L4Conf   `json:"l4"`
+		HTTP                 HTTPConf `json:"http"`
+		UseIntraControl      bool     `json:"-"`
+		UseIntraData         bool     `json:"-"`
 	}
 
 	L4Conf struct {
@@ -846,24 +846,24 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 		}
 	}
 
-	c.IPv4 = strings.ReplaceAll(c.IPv4, " ", "")
-	c.IPv4IntraControl = strings.ReplaceAll(c.IPv4IntraControl, " ", "")
-	c.IPv4IntraData = strings.ReplaceAll(c.IPv4IntraData, " ", "")
+	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
+	c.HostnameIntraControl = strings.ReplaceAll(c.HostnameIntraControl, " ", "")
+	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
 
-	if overlap, addr := ipv4ListsOverlap(c.IPv4, c.IPv4IntraControl); overlap {
-		return fmt.Errorf("public (%s) and intra-cluster control (%s) IPv4 lists overlap: %s",
-			c.IPv4, c.IPv4IntraControl, addr)
+	if overlap, addr := hostnameListsOverlap(c.Hostname, c.HostnameIntraControl); overlap {
+		return fmt.Errorf("public (%s) and intra-cluster control (%s) Hostname lists overlap: %s",
+			c.Hostname, c.HostnameIntraControl, addr)
 	}
-	if overlap, addr := ipv4ListsOverlap(c.IPv4, c.IPv4IntraData); overlap {
-		return fmt.Errorf("public (%s) and intra-cluster data (%s) IPv4 lists overlap: %s",
-			c.IPv4, c.IPv4IntraData, addr)
+	if overlap, addr := hostnameListsOverlap(c.Hostname, c.HostnameIntraData); overlap {
+		return fmt.Errorf("public (%s) and intra-cluster data (%s) Hostname lists overlap: %s",
+			c.Hostname, c.HostnameIntraData, addr)
 	}
-	if overlap, addr := ipv4ListsOverlap(c.IPv4IntraControl, c.IPv4IntraData); overlap {
-		if ipv4ListsEqual(c.IPv4IntraControl, c.IPv4IntraData) {
-			glog.Warningf("control and data share one intra-cluster network (%s)", c.IPv4IntraData)
+	if overlap, addr := hostnameListsOverlap(c.HostnameIntraControl, c.HostnameIntraData); overlap {
+		if ipv4ListsEqual(c.HostnameIntraControl, c.HostnameIntraData) {
+			glog.Warningf("control and data share one intra-cluster network (%s)", c.HostnameIntraData)
 		} else {
-			glog.Warningf("intra-cluster control (%s) and data (%s) IPv4 lists overlap: %s",
-				c.IPv4IntraControl, c.IPv4IntraData, addr)
+			glog.Warningf("intra-cluster control (%s) and data (%s) Hostname lists overlap: %s",
+				c.HostnameIntraControl, c.HostnameIntraData, addr)
 		}
 	}
 	if !c.HTTP.Chunked {
@@ -1092,9 +1092,9 @@ func ConfigPropList() []string {
 	return propList
 }
 
-// ipv4ListsOverlap checks if two comma-separated ipv4 address lists
+// hostnameListsOverlap checks if two comma-separated ipv4 address lists
 // contain at least one common ipv4 address
-func ipv4ListsOverlap(alist, blist string) (overlap bool, addr string) {
+func hostnameListsOverlap(alist, blist string) (overlap bool, addr string) {
 	if alist == "" || blist == "" {
 		return
 	}

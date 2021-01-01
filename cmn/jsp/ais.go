@@ -48,14 +48,14 @@ func LoadConfig(confPath string) (err error) {
 		glog.MaxSize = cmn.MiB
 	}
 
-	differentIPs := config.Net.IPv4 != config.Net.IPv4IntraControl
+	differentIPs := config.Net.Hostname != config.Net.HostnameIntraControl
 	differentPorts := config.Net.L4.Port != config.Net.L4.PortIntraControl
-	config.Net.UseIntraControl = config.Net.IPv4IntraControl != "" &&
+	config.Net.UseIntraControl = config.Net.HostnameIntraControl != "" &&
 		config.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts)
 
-	differentIPs = config.Net.IPv4 != config.Net.IPv4IntraData
+	differentIPs = config.Net.Hostname != config.Net.HostnameIntraData
 	differentPorts = config.Net.L4.Port != config.Net.L4.PortIntraData
-	config.Net.UseIntraData = config.Net.IPv4IntraData != "" &&
+	config.Net.UseIntraData = config.Net.HostnameIntraData != "" &&
 		config.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts)
 
 	if err = cmn.SetLogLevel(config, config.Log.Level); err != nil {

@@ -2724,8 +2724,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		p.invalmsghdlrf(w, r, "%s: failed to %s %s - invalid IPv4 %v", p.si, tag, nsi, nsi.PublicNet.NodeIPAddr)
+	if err := validateHostname(nsi.PublicNet.NodeIPAddr); err != nil {
+		p.invalmsghdlrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, tag, nsi, err)
 		return
 	}
 

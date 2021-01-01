@@ -113,28 +113,7 @@ func (f SnodeFlags) IsAnySet(flags SnodeFlags) bool {
 // Snode //
 ///////////
 
-func NewSnode(id, proto, daeType string, publicAddr, intraControlAddr, intraDataAddr *net.TCPAddr) (snode *Snode) {
-	publicNet := NetInfo{
-		NodeIPAddr: publicAddr.IP.String(),
-		DaemonPort: strconv.Itoa(publicAddr.Port),
-		DirectURL:  proto + "://" + publicAddr.String(),
-	}
-	intraControlNet := publicNet
-	if len(intraControlAddr.IP) > 0 {
-		intraControlNet = NetInfo{
-			NodeIPAddr: intraControlAddr.IP.String(),
-			DaemonPort: strconv.Itoa(intraControlAddr.Port),
-			DirectURL:  proto + "://" + intraControlAddr.String(),
-		}
-	}
-	intraDataNet := publicNet
-	if len(intraDataAddr.IP) > 0 {
-		intraDataNet = NetInfo{
-			NodeIPAddr: intraDataAddr.IP.String(),
-			DaemonPort: strconv.Itoa(intraDataAddr.Port),
-			DirectURL:  proto + "://" + intraDataAddr.String(),
-		}
-	}
+func NewSnode(id, daeType string, publicNet, intraControlNet, intraDataNet NetInfo, hostname ...string) (snode *Snode) {
 	snode = &Snode{
 		DaemonID:        id,
 		DaemonType:      daeType,
@@ -142,7 +121,7 @@ func NewSnode(id, proto, daeType string, publicAddr, intraControlAddr, intraData
 		IntraControlNet: intraControlNet,
 		IntraDataNet:    intraDataNet,
 	}
-	snode.SetName()
+	snode.setName()
 	snode.Digest()
 	return
 }
@@ -157,7 +136,7 @@ func (d *Snode) Digest() uint64 {
 func (d *Snode) ID() string   { return d.DaemonID }
 func (d *Snode) Type() string { return d.DaemonType }
 func (d *Snode) Name() string { return d.name }
-func (d *Snode) SetName() {
+func (d *Snode) setName() {
 	if d.IsProxy() {
 		d.name = "p[" + d.DaemonID + "]"
 	} else {
@@ -171,7 +150,7 @@ func (d *Snode) String() string {
 		return "<nil>"
 	}
 	if d.Name() == "" {
-		d.SetName()
+		d.setName()
 	}
 	return d.Name()
 }
@@ -262,6 +241,22 @@ func (d *Snode) IsTarget() bool { return d.DaemonType == cmn.Target }
 func (d *Snode) nonElectable() bool  { return d.Flags.IsSet(SnodeNonElectable) }
 func (d *Snode) inMaintenance() bool { return d.Flags.IsAnySet(SnodeMaintenanceMask) }
 func (d *Snode) isIC() bool          { return d.Flags.IsSet(SnodeIC) }
+
+//////////////////////
+//	  NetInfo       //
+//////////////////////
+
+func NewNetInfo(proto, hostname, port string) *NetInfo {
+	return &NetInfo{
+		NodeIPAddr: hostname,
+		DaemonPort: port,
+		DirectURL:  fmt.Sprintf("%s://%s:%s", proto, hostname, port),
+	}
+}
+
+func (ni *NetInfo) String() string {
+	return fmt.Sprintf("%s:%s", ni.NodeIPAddr, ni.DaemonPort)
+}
 
 //===============================================================
 //

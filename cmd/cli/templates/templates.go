@@ -135,9 +135,9 @@ const (
 		" Count:\t{{$obj.Count}}\n" +
 		" Instance:\t{{$obj.Instance}}\n"
 	NetConfTmpl = "\n{{$obj := .Net}}Network Config\n" +
-		" IPv4:\t{{$obj.IPv4}}\n" +
-		" IPv4 IntraControl:\t{{$obj.IPv4IntraControl}}\n" +
-		" IPv4 IntraData:\t{{$obj.IPv4IntraData}}\n\n" +
+		" Hostname:\t{{$obj.Hostname}}\n" +
+		" Hostname IntraControl:\t{{$obj.HostnameIntraControl}}\n" +
+		" Hostname IntraData:\t{{$obj.HostnameIntraData}}\n\n" +
 		" HTTP\n" +
 		" Protocol:\t{{$obj.HTTP.Proto}}\n" +
 		" Certificate:\t{{$obj.HTTP.Certificate}}\n" +

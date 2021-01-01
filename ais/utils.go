@@ -113,24 +113,34 @@ func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
 	return addrlist, nil
 }
 
-// selectConfiguredIPv4 returns the first IPv4 from a preconfigured IPv4 list that
+// selectConfiguredHostname returns the first Hostname from a preconfigured Hostname list that
 // matches any local unicast IPv4
-func selectConfiguredIPv4(addrlist []*localIPv4Info, configuredList []string) (ipv4addr string, err error) {
-	glog.Infof("Selecting one of the configured IPv4 addresses: %s...\n", configuredList)
-	localList := ""
+func selectConfiguredHostname(addrlist []*localIPv4Info, configuredList []string) (hostname string, err error) {
+	glog.Infof("Selecting one of the configured IPv4 addresses: %s...", configuredList)
 
-	for _, localaddr := range addrlist {
-		localList += " " + localaddr.ipv4
-		for _, ipv4 := range configuredList {
-			if localaddr.ipv4 == strings.TrimSpace(ipv4) {
-				glog.Warningf("Selected IPv4 %s from the configuration file\n", ipv4)
-				return ipv4, nil
+	var localList, ipv4 string
+	for i, host := range configuredList {
+		if net.ParseIP(host) != nil {
+			ipv4 = strings.TrimSpace(host)
+		} else if ip, err := getFQNIPv4(host); err == nil {
+			ipv4 = ip.String()
+		} else {
+			glog.Errorf("failed to parse hostname %q", host)
+			continue
+		}
+		for _, localaddr := range addrlist {
+			if i == 0 {
+				localList += " " + localaddr.ipv4
+			}
+			if localaddr.ipv4 == ipv4 {
+				glog.Warningf("Selected IPv4 %s from the configuration file", ipv4)
+				return host, nil
 			}
 		}
 	}
 
-	glog.Errorf("Configured IPv4 does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s\n", localList, configuredList)
-	return "", fmt.Errorf("configured IPv4 does not match any local one")
+	glog.Errorf("Configured Hostname does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s", localList, configuredList)
+	return "", fmt.Errorf("configured Hostname does not match any local one")
 }
 
 // detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a daemon to listen on it
@@ -158,25 +168,49 @@ func detectLocalIPv4(addrList []*localIPv4Info) (ip net.IP, err error) {
 	return ip, nil
 }
 
-// getIPv4 returns an IPv4 for proxy/target to listen on it.
-// 1. If there is an IPv4 in config - it tries to use it
-// 2. If config does not contain IPv4 - it chooses one of local IPv4s
-func getIPv4(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, err error) {
+// getNetInfo returns an Hostname for proxy/target to listen on it.
+// 1. If there is an Hostname in config - it tries to use it
+// 2. If config does not contain Hostname - it chooses one of local IPv4s
+func getNetInfo(addrList []*localIPv4Info, proto, configuredIPv4s, port string) (netInfo cluster.NetInfo, err error) {
+	var ip net.IP
 	if configuredIPv4s == "" {
-		return detectLocalIPv4(addrList)
+		ip, err = detectLocalIPv4(addrList)
+		if err != nil {
+			return netInfo, err
+		}
+		netInfo = *cluster.NewNetInfo(proto, ip.String(), port)
+		return
 	}
 
 	configuredList := strings.Split(configuredIPv4s, ",")
-	selectedIPv4, err := selectConfiguredIPv4(addrList, configuredList)
+	selHostname, err := selectConfiguredHostname(addrList, configuredList)
+	if err != nil {
+		return netInfo, err
+	}
+
+	netInfo = *cluster.NewNetInfo(proto, selHostname, port)
+	return
+}
+
+func getFQNIPv4(fqn string) (net.IP, error) {
+	ips, err := net.LookupIP(fqn)
 	if err != nil {
 		return nil, err
 	}
-
-	ip = net.ParseIP(selectedIPv4)
-	if ip == nil {
-		return nil, fmt.Errorf("failed to parse ip %s", selectedIPv4)
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			return ip, nil
+		}
 	}
-	return ip, nil
+	return nil, fmt.Errorf("failed to get IPv4 for FQN %s", fqn)
+}
+
+func validateHostname(hostname string) (err error) {
+	if net.ParseIP(hostname) != nil {
+		return
+	}
+	_, err = getFQNIPv4(hostname)
+	return
 }
 
 /////////////
