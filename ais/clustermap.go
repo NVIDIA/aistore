@@ -503,7 +503,8 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
 	r.Lock()
 	defer r.Unlock()
-	clone = r.get().clone()
+	ctx.smap = r.get()
+	clone = ctx.smap.clone()
 	if err = ctx.pre(ctx, clone); err != nil {
 		return
 	}

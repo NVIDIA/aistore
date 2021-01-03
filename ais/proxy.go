@@ -2273,7 +2273,6 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) {
 }
 
 func (p *proxyrunner) _becomePre(ctx *smapModifier, clone *smapX) error {
-	ctx.smap = p.owner.smap.get()
 	if !clone.isPresent(p.si) {
 		cmn.Assertf(false, "%s must always be present in the %s", p.si, clone.pp())
 	}
@@ -2890,9 +2889,8 @@ func (p *proxyrunner) updateAndDistribute(nsi *cluster.Snode, msg *cmn.ActionMsg
 }
 
 func (p *proxyrunner) _updPre(ctx *smapModifier, clone *smapX) error {
-	ctx.smap = p.owner.smap.get()
-	if !ctx.smap.isPrimary(p.si) {
-		return fmt.Errorf("%s is not primary(%s, %s): cannot add %s", p.si, ctx.smap.Primary, ctx.smap, ctx.nsi)
+	if !clone.isPrimary(p.si) {
+		return fmt.Errorf("%s is not primary [%s]: cannot add %s", p.si, clone.StringEx(), ctx.nsi)
 	}
 	ctx.exists = clone.putNode(ctx.nsi, ctx.flags)
 	if ctx.nsi.IsTarget() {
@@ -3016,38 +3014,31 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) (err error) {
-	ctx.smap = p.owner.smap.get()
+func (p *proxyrunner) _unregNodePre(ctx *smapModifier, clone *smapX) error {
+	const verb = "remove"
 	sid := ctx.sid
 	node := clone.GetNode(sid)
+	if !clone.isPrimary(p.si) {
+		return fmt.Errorf("%s is not primary [%s]: cannot %s %s", p.si, clone, verb, sid)
+	}
 	if node == nil {
-		err = &errNodeNotFound{"failed to unregister", sid, p.si, clone}
 		ctx.status = http.StatusNotFound
-		return err
+		return &errNodeNotFound{"failed to " + verb, sid, p.si, clone}
+	}
+	if !p.NodeStarted() {
+		ctx.status = http.StatusServiceUnavailable
+		return nil
 	}
 	if node.IsProxy() {
 		clone.delProxy(sid)
-		glog.Infof("unregistered %s (num proxies %d)", node, clone.CountProxies())
+		glog.Infof("%s %s (num proxies %d)", verb, node, clone.CountProxies())
 	} else {
 		clone.delTarget(sid)
-		glog.Infof("unregistered %s (num targets %d)", node, clone.CountTargets())
+		glog.Infof("%s %s (num targets %d)", verb, node, clone.CountTargets())
 	}
-
 	clone.staffIC()
-
-	if !p.NodeStarted() {
-		return
-	}
-
-	if isPrimary := clone.isPrimary(p.si); !isPrimary {
-		ctx.status = http.StatusInternalServerError
-		err = fmt.Errorf("%s: is not a primary", p.si)
-	}
-
-	// Remove reverse proxy entry for the node.
 	p.rproxy.nodes.Delete(ctx.sid)
-
-	return err
+	return nil
 }
 
 func (p *proxyrunner) _perfRebPost(ctx *smapModifier, clone *smapX) {
@@ -3167,6 +3158,9 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 }
 
 func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
+	if !clone.isPrimary(p.si) {
+		return fmt.Errorf("%s is not primary [%s]: cannot put in maintenance %s", p.si, clone.StringEx(), ctx.sid)
+	}
 	clone.setNodeFlags(ctx.sid, ctx.flags)
 	clone.staffIC()
 	return nil
@@ -3230,7 +3224,7 @@ updateRMD:
 	return
 }
 
-// Stops rebalance if needed, do cleanup, and get a node back to the cluster.
+// Stops rebalance if needed, do cleanup, and get the node back to the cluster.
 func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
 	ctx := &smapModifier{
 		pre:     p._cancelMaintPre,
@@ -3249,7 +3243,9 @@ func (p *proxyrunner) cancelMaintenance(msg *cmn.ActionMsg, opts *cmn.ActValDeco
 }
 
 func (p *proxyrunner) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
-	ctx.smap = p.owner.smap.get()
+	if !clone.isPrimary(p.si) {
+		return fmt.Errorf("%s is not primary [%s]: cannot cancel maintenance for %s", p.si, clone, ctx.sid)
+	}
 	clone.clearNodeFlags(ctx.sid, ctx.flags)
 	clone.staffIC()
 	return nil
