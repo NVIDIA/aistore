@@ -479,21 +479,23 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX) (err error) {
 }
 
 func (r *smapOwner) persist(newSmap *smapX) error {
-	config := cmn.GCO.BeginUpdate()
-	defer cmn.GCO.CommitUpdate(config)
-
-	origURL := config.Proxy.PrimaryURL
-	config.Proxy.PrimaryURL = newSmap.Primary.PublicNet.DirectURL
-	confPath := cmn.GCO.GetConfigPath()
-	if err := jsp.Save(cmn.GCO.GetConfigPath(), config, jsp.Plain()); err != nil {
-		err = fmt.Errorf("failed writing config file %s, err: %v", confPath, err)
-		// NOTE: not discarding (cmn.GCO.DiscardUpdate) config update
-		config.Proxy.PrimaryURL = origURL
-		return err
+	debug.AssertMutexLocked(&r.Mutex)
+	config := cmn.GCO.Get()
+	if newURL := newSmap.Primary.PublicNet.DirectURL; config.Proxy.PrimaryURL != newURL {
+		config = cmn.GCO.BeginUpdate() // clone
+		origURL := config.Proxy.PrimaryURL
+		config.Proxy.PrimaryURL = newURL
+		confPath := cmn.GCO.GetConfigPath()
+		if err := jsp.Save(confPath, config, jsp.Plain()); err != nil {
+			cmn.GCO.DiscardUpdate()
+			return fmt.Errorf("FATAL: failed writing config %s upon (%q != %q) change, err: %v",
+				confPath, origURL, newURL, err)
+		}
+		cmn.GCO.CommitUpdate(config)
 	}
-	smapPathName := filepath.Join(config.Confdir, smapFname)
-	if err := jsp.Save(smapPathName, newSmap, jsp.CCSign()); err != nil {
-		glog.Errorf("error writing Smap to %s: %v", smapPathName, err)
+	smapPath := filepath.Join(config.Confdir, smapFname)
+	if err := jsp.Save(smapPath, newSmap, jsp.CCSign()); err != nil {
+		glog.Errorf("FATAL: error writing %s => %q: %v", newSmap, smapPath, err)
 	}
 	return nil
 }
