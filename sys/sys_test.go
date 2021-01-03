@@ -25,21 +25,8 @@ func checkSkipOS(t *testing.T, os ...string) {
 
 func TestNumCPU(t *testing.T) {
 	checkSkipOS(t, "darwin")
-
-	numReal := runtime.NumCPU()
-	numVirt, _ := NumCPU()
-	numCont, err := ContainerNumCPU()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("Hardware CPUs: %d, Containerized: %d, calculated: %d\n", numReal, numCont, numVirt)
-	if numCont < 1 || numCont > numReal {
-		t.Errorf("Number of CPUs must be between 1 and %d, got %d", numReal, numCont)
-	}
-
-	if numCont > numVirt || numVirt < 1 {
-		t.Errorf("Number of CPUs(%d) must be greater than 0 and not less than number of CPUs containerized(%d)", numVirt, numCont)
+	if NumCPU() < 1 || NumCPU() > runtime.NumCPU() {
+		t.Errorf("Wrong number of CPUs %d (%d)", NumCPU(), runtime.NumCPU())
 	}
 }
 
@@ -55,11 +42,10 @@ func TestLimitMaxProc(t *testing.T) {
 	prev := runtime.GOMAXPROCS(0)
 	defer runtime.GOMAXPROCS(prev)
 
-	calc, limited := NumCPU()
-	UpdateMaxProcs()
+	ncpu := NumCPU()
+	SetMaxProcs()
 	curr := runtime.GOMAXPROCS(0)
-	tassert.Errorf(t, calc == curr, "Failed to set GOMAXPROCS to %d, current value is %d", calc, curr)
-	tassert.Errorf(t, !limited && curr == prev, "Failed to set GOMAXPROCS to %d, current value is %d", calc, curr)
+	tassert.Errorf(t, ncpu == curr, "Failed to set GOMAXPROCS to %d, current value is %d", ncpu, curr)
 }
 
 func TestMemoryStats(t *testing.T) {

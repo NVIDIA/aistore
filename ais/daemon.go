@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -202,19 +203,14 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	debug.Errorln("starting with debug asserts/logs")
 
 	containerized := sys.Containerized()
-	cpus, limited := sys.NumCPU()
-	memStat, _ := sys.Mem()
-	if limited {
-		glog.Infof("containerized=%t, number of CPUs is limited to %d", containerized, cpus)
-	} else {
-		glog.Infof("containerized=%t, using all %d CPUs", containerized, cpus)
-	}
+	cpus := sys.NumCPU()
+	glog.Infof("num CPUs(%d, %d), container %t", cpus, runtime.NumCPU(), containerized)
+	sys.SetMaxProcs()
+
+	memStat, err := sys.Mem()
+	debug.AssertNoErr(err)
 	glog.Infof("Memory total: %s, free: %s(actual free %s)",
 		cmn.B2S(int64(memStat.Total), 0), cmn.B2S(int64(memStat.Free), 0), cmn.B2S(int64(memStat.ActualFree), 0))
-
-	// Optimize GOMAXPROCS if the daemon is running inside a container with
-	// limited amount of memory and CPU.
-	sys.UpdateMaxProcs()
 
 	// NOTE: Daemon terminations get executed in the same exact order as initializations below.
 	daemon.rg = &rungroup{rs: make(map[string]cmn.Runner, 8)}

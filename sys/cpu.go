@@ -17,40 +17,37 @@ type LoadAvg struct {
 	One, Five, Fifteen float64
 }
 
-// NumCPU detects if the app is running inside a container and returns
-// the number of available CPUs (number of hardware CPU for host OS and
-// number of CPU allocated for the container), and if the CPU usage is limited
-func NumCPU() (cpus int, limited bool) {
-	hostCPU := runtime.NumCPU()
-	if !Containerized() {
-		return hostCPU, false
-	}
+var (
+	contCPUs      int
+	containerized bool
+)
 
-	cpus, err := ContainerNumCPU()
-	if err != nil {
-		cpus = hostCPU
+func init() {
+	contCPUs = runtime.NumCPU()
+	if containerized = isContainerized(); containerized {
+		if c, err := containerNumCPU(); err == nil {
+			contCPUs = c
+		} else {
+			glog.Error(err)
+		}
 	}
-
-	return cpus, hostCPU != cpus
+	cache = &procCache{procs: make(map[int]*ProcStats, 1)}
 }
 
-// UpdateMaxProcs sets the new value for GOMAXPROCS if CPU usage is limited
-// and is not overridden already by an environment variable
-func UpdateMaxProcs() {
-	// GOMAXPROCS is overridden - do nothing
+func Containerized() bool { return containerized }
+func NumCPU() int         { return contCPUs }
+
+// SetMaxProcs sets GOMAXPROCS = NumCPU unless already overridden via Go environment
+func SetMaxProcs() {
 	if val, exists := os.LookupEnv(maxProcsEnvVar); exists {
-		glog.Infof("GOMAXPROCS is overridden by environment variable: %s", val)
+		glog.Infof("GOMAXPROCS is already set via Go environment: %q", val)
 		return
 	}
-
-	curr := runtime.GOMAXPROCS(0)
-	calc, limited := NumCPU()
-	// do nothing is GOMAXPROCS is already equal or less than calculated
-	if !limited || curr <= calc {
-		glog.Infof("GOMAXPROCS value is OK: %d(%d)", curr, calc)
-		return
+	maxprocs := runtime.GOMAXPROCS(0)
+	ncpu := NumCPU()
+	glog.Infof("GOMAXPROCS %d, num CPUs %d", maxprocs, ncpu)
+	if maxprocs > ncpu {
+		glog.Infof("Reducing GOMAXPROCS to %d (num CPUs)", ncpu)
+		runtime.GOMAXPROCS(ncpu)
 	}
-
-	glog.Infof("Setting GOMAXPROCS to %d", calc)
-	runtime.GOMAXPROCS(calc)
 }

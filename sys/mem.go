@@ -21,9 +21,8 @@ type MemStat struct {
 // read container's stats, it returns host OS stats
 // NOTE: Swap stats is always host OS ones.
 func Mem() (MemStat, error) {
-	if !Containerized() {
+	if !containerized {
 		return HostMem()
 	}
-
 	return ContainerMem()
 }

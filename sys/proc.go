@@ -40,7 +40,7 @@ type (
 const cpuRefreshInterval = 1000
 
 // last values for requested processes to calculate CPU usage
-var cache = &procCache{procs: make(map[int]*ProcStats)}
+var cache *procCache
 
 // First call to ProcessStats always returns 0% CPU usage because
 // the process in not in the cache yet

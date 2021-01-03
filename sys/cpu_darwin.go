@@ -12,12 +12,10 @@ import (
 
 // Containerized returns true if the application is running
 // inside a container(docker/lxc/k8s)
-func Containerized() bool {
-	return false
-}
+func isContainerized() bool { return false }
 
 // ContainerNumCPU returns the approximate number of CPUs allocated for the container.
-func ContainerNumCPU() (int, error) {
+func containerNumCPU() (int, error) {
 	return 0, errors.New("cannot get container cpu stats")
 }
 
