@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -53,6 +55,9 @@ type targetKeepaliveRunner struct {
 type proxyKeepaliveRunner struct {
 	p *proxyrunner
 	keepalive
+	stoppedCh  chan struct{}
+	toRemoveCh chan string
+	latencyCh  chan time.Duration
 }
 
 type keepalive struct {
@@ -166,7 +171,7 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 		return
 	}
 	if smap.isPrimary(pkr.p.si) {
-		return pkr.pingAllOthers()
+		return pkr.updateSmap()
 	}
 	if !pkr.isTimeToPing(smap.Primary.ID()) {
 		return
@@ -178,123 +183,159 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 	return
 }
 
-// pingAllOthers pings in parallel all other nodes in the cluster.
-// All non-responding nodes get removed from the Smap and the resulting map is then metasync-ed.
-func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
-	t := time.Now().Unix()
-	if !pkr.primaryKeepaliveInProgress.CAS(0, t) {
-		glog.Infof("primary keepalive is already in progress...")
+// updateSmap pings all nodes in parallel. Non-responding nodes get removed from the Smap and
+// the resulting map is then metasync-ed.
+func (pkr *proxyKeepaliveRunner) updateSmap() (stopped bool) {
+	if !pkr.primaryKeepaliveInProgress.CAS(0, 1) {
+		glog.Infof("%s: primary keepalive is in progress...", pkr.p.si)
 		return
 	}
-	defer pkr.primaryKeepaliveInProgress.CAS(t, 0)
-
+	defer pkr.primaryKeepaliveInProgress.CAS(1, 0)
 	var (
-		smap       = pkr.p.owner.smap.get()
-		wg         = &sync.WaitGroup{}
-		daemonCnt  = smap.Count()
-		stoppedCh  = make(chan struct{}, daemonCnt)
-		toRemoveCh = make(chan string, daemonCnt)
-		latencyCh  = make(chan time.Duration, daemonCnt)
+		wg        cmn.WG
+		p         = pkr.p
+		smap      = p.owner.smap.get()
+		daemonCnt = smap.Count()
 	)
+	pkr.openCh(daemonCnt)
+	// limit parallelism
+	if daemonCnt > maxBcastParallel {
+		wg = cmn.NewLimitedWaitGroup(maxBcastParallel)
+	} else {
+		wg = &sync.WaitGroup{}
+	}
 	for _, daemons := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
-			if sid == pkr.p.si.ID() {
+			if sid == p.si.ID() {
 				continue
 			}
-			// Skip pinging other daemons until they time out.
+			// skipping
 			if !pkr.isTimeToPing(sid) {
 				continue
 			}
-			// Skip nodes under maintenance
 			if daemons.InMaintenance(si) {
 				continue
 			}
+			// pinging
 			wg.Add(1)
 			go func(si *cluster.Snode) {
-				if len(stoppedCh) > 0 {
-					wg.Done()
+				defer wg.Done()
+				if len(pkr.stoppedCh) > 0 {
 					return
 				}
 				ok, s, lat := pkr.ping(si)
 				if s {
-					stoppedCh <- struct{}{}
+					pkr.stoppedCh <- struct{}{}
 				}
 				if !ok {
-					toRemoveCh <- si.ID()
+					pkr.toRemoveCh <- si.ID()
 				}
 				if lat != cmn.DefaultTimeout {
-					latencyCh <- lat
+					pkr.latencyCh <- lat
 				}
-				wg.Done()
 			}(si)
 		}
 	}
 	wg.Wait()
-	close(stoppedCh)
-	close(toRemoveCh)
-	close(latencyCh)
-
-	pkr.statsMinMaxLat(latencyCh)
-
-	pkr.p.owner.smap.Lock()
-	newSmap := pkr.p.owner.smap.get()
-	if !newSmap.isPrimary(pkr.p.si) {
-		glog.Infoln("primary proxy changed while sending its keepalives," +
-			" not removing non-responding daemons from the smap this time")
-		pkr.p.owner.smap.Unlock()
-		return false
+	if stopped = len(pkr.stoppedCh) > 0; stopped {
+		pkr.closeCh()
+		return
 	}
-	if len(stoppedCh) > 0 {
-		pkr.p.owner.smap.Unlock()
-		return true
+	pkr.statsMinMaxLat(pkr.latencyCh)
+	if len(pkr.toRemoveCh) == 0 {
+		return
 	}
-	if len(toRemoveCh) == 0 {
-		pkr.p.owner.smap.Unlock()
-		return false
-	}
-	clone := newSmap.clone()
-	metaction := "keepalive: removing ["
-	for sid := range toRemoveCh {
-		metaction += "["
-		if clone.GetProxy(sid) != nil {
-			clone.delProxy(sid)
-			clone.staffIC()
-			metaction += cmn.Proxy
-		} else if clone.GetTarget(sid) != nil {
-			clone.delTarget(sid)
-			metaction += cmn.Target
+	ctx := &smapModifier{pre: pkr._pre, final: pkr._final}
+	err := p.owner.smap.modify(ctx)
+	if err != nil {
+		if ctx.msg != nil {
+			glog.Errorf("FATAL: %v", err)
 		} else {
-			metaction += "unknown"
-			glog.Warningf("%s: cannot remove node %s: not present in the %s; (old %s)", pkr.p.si, sid, newSmap, smap)
+			glog.Warning(err)
 		}
-		metaction += ": " + sid + "],"
+	}
+	return
+}
 
-		// Remove reverse proxy entry for the node.
-		pkr.p.rproxy.nodes.Delete(sid)
+func (pkr *proxyKeepaliveRunner) openCh(daemonCnt int) {
+	if pkr.stoppedCh == nil || cap(pkr.stoppedCh) < daemonCnt {
+		pkr.stoppedCh = make(chan struct{}, daemonCnt*2)
+		pkr.toRemoveCh = make(chan string, daemonCnt*2)
+		pkr.latencyCh = make(chan time.Duration, daemonCnt*2)
+	}
+	debug.Assert(len(pkr.stoppedCh) == 0)
+	debug.Assert(len(pkr.toRemoveCh) == 0)
+	debug.Assert(len(pkr.latencyCh) == 0)
+}
+
+func (pkr *proxyKeepaliveRunner) closeCh() {
+	close(pkr.stoppedCh)
+	close(pkr.toRemoveCh)
+	close(pkr.latencyCh)
+	pkr.stoppedCh, pkr.toRemoveCh, pkr.latencyCh = nil, nil, nil
+}
+
+func (pkr *proxyKeepaliveRunner) _pre(ctx *smapModifier, clone *smapX) error {
+	ctx.smap = pkr.p.owner.smap.get()
+	if !ctx.smap.isPrimary(pkr.p.si) {
+		return fmt.Errorf("%s: is not primary [%s]", pkr.p.si, ctx.smap.StringEx())
+	}
+	metaction := "keepalive: removing ["
+	cnt := 0
+loop:
+	for {
+		select {
+		case sid := <-pkr.toRemoveCh:
+			metaction += " ["
+			if clone.GetProxy(sid) != nil {
+				clone.delProxy(sid)
+				clone.staffIC()
+				metaction += cmn.Proxy
+				cnt++
+			} else if clone.GetTarget(sid) != nil {
+				clone.delTarget(sid)
+				metaction += cmn.Target
+				cnt++
+			} else {
+				metaction += unknownDaemonID
+				glog.Warningf("%s: %s not present in the %s (old %s)", pkr.p.si, sid, clone, ctx.smap)
+			}
+			metaction += ":" + sid + "] "
+
+			// Remove reverse proxy entry for the node.
+			pkr.p.rproxy.nodes.Delete(sid)
+		default:
+			break loop
+		}
 	}
 	metaction += "]"
-
-	pkr.p.owner.smap.put(clone)
-	if err := pkr.p.owner.smap.persist(clone); err != nil {
-		glog.Error(err)
+	if cnt == 0 {
+		return fmt.Errorf("%s: nothing to do [%s, %s]", pkr.p.si, ctx.smap.StringEx(), metaction)
 	}
+	ctx.msg = &cmn.ActionMsg{Value: metaction}
+	return nil
+}
 
-	msg := pkr.p.newAisMsgStr(metaction, clone, nil)
+func (pkr *proxyKeepaliveRunner) _final(ctx *smapModifier, clone *smapX) {
+	msg := pkr.p.newAisMsg(ctx.msg, clone, nil)
 	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
-
-	pkr.p.owner.smap.Unlock()
-	return
 }
 
 // min & max keepalive stats
 func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 	min, max := time.Hour, time.Duration(0)
-	for lat := range latencyCh {
-		if min > lat && lat != 0 {
-			min = lat
-		}
-		if max < lat {
-			max = lat
+loop:
+	for {
+		select {
+		case lat := <-latencyCh:
+			if min > lat && lat != 0 {
+				min = lat
+			}
+			if max < lat {
+				max = lat
+			}
+		default:
+			break loop
 		}
 	}
 	if min != time.Hour {

@@ -38,9 +38,9 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-const (
-	unknownDaemonID = "unknown"
-)
+const unknownDaemonID = "unknown"
+
+const maxBcastParallel = 10
 
 type (
 	// callResult contains HTTP response.
@@ -1264,7 +1264,6 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 // TODO: for the targets, validate and return maxVerBMD
 // NOTE: if `checkAll` is set to false, we stop making further requests once minPidConfirmations is achieved
 func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
-	const maxParallel = 10
 	var (
 		wg      cmn.WG
 		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
@@ -1277,8 +1276,8 @@ func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *cluster
 	maxCii.fillSmap(smap)
 	debug.Assert(maxCii.Smap.Primary.ID != "" && maxCii.Smap.Version > 0 && smap.isValid())
 retry:
-	if len(nodemap) > maxParallel {
-		wg = cmn.NewLimitedWaitGroup(maxParallel)
+	if len(nodemap) > maxBcastParallel {
+		wg = cmn.NewLimitedWaitGroup(maxBcastParallel)
 	} else {
 		wg = &sync.WaitGroup{}
 	}
@@ -1287,7 +1286,7 @@ retry:
 		if sid == h.si.ID() {
 			continue
 		}
-		if len(nodemap) > maxParallel {
+		if len(nodemap) > maxBcastParallel {
 			mu.RLock()
 			if len(checkAll) > 0 && !checkAll[1] && cnt >= minPidConfirmations {
 				mu.RUnlock()
