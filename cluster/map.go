@@ -113,7 +113,7 @@ func (f SnodeFlags) IsAnySet(flags SnodeFlags) bool {
 // Snode //
 ///////////
 
-func NewSnode(id, daeType string, publicNet, intraControlNet, intraDataNet NetInfo, hostname ...string) (snode *Snode) {
+func NewSnode(id, daeType string, publicNet, intraControlNet, intraDataNet NetInfo) (snode *Snode) {
 	snode = &Snode{
 		DaemonID:        id,
 		DaemonType:      daeType,

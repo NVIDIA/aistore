@@ -131,30 +131,30 @@ func (p *proxyrunner) Run() error {
 	// REST API: register proxy handlers and start listening
 	//
 	networkHandlers := []networkHandler{
-		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Reverse, h: p.reverseHandler, net: accessNetPublic},
 
 		// pubnet handlers: cluster must be started
-		{r: cmn.Buckets, h: p.bucketHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Objects, h: p.objectHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Query, h: p.queryHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.ETL, h: p.etlHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Sort, h: p.dsortHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Buckets, h: p.bucketHandler, net: accessNetPublic},
+		{r: cmn.Objects, h: p.objectHandler, net: accessNetPublic},
+		{r: cmn.Download, h: p.downloadHandler, net: accessNetPublic},
+		{r: cmn.Query, h: p.queryHandler, net: accessNetPublic},
+		{r: cmn.ETL, h: p.etlHandler, net: accessNetPublic},
+		{r: cmn.Sort, h: p.dsortHandler, net: accessNetPublic},
 
-		{r: cmn.IC, h: p.ic.handler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.IC, h: p.ic.handler, net: accessNetIntraControl},
+		{r: cmn.Daemon, h: p.daemonHandler, net: accessNetPublicControl},
+		{r: cmn.Cluster, h: p.clusterHandler, net: accessNetPublicControl},
+		{r: cmn.Tokens, h: p.tokenHandler, net: accessNetPublic},
 
-		{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Metasync, h: p.metasyncHandler, net: accessNetIntraControl},
+		{r: cmn.Health, h: p.healthHandler, net: accessNetIntraControl},
+		{r: cmn.Vote, h: p.voteHandler, net: accessNetIntraControl},
 
-		{r: cmn.Notifs, h: p.notifs.handler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Notifs, h: p.notifs.handler, net: accessNetIntraControl},
 
-		{r: "/" + cmn.S3, h: p.s3Handler, net: []string{cmn.NetworkPublic}},
+		{r: "/" + cmn.S3, h: p.s3Handler, net: accessNetPublic},
 
-		{r: "/", h: p.httpCloudHandler, net: []string{cmn.NetworkPublic}},
+		{r: "/", h: p.httpCloudHandler, net: accessNetPublic},
 	}
 
 	p.registerNetworkHandlers(networkHandlers)

@@ -20,6 +20,26 @@ import (
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
+const (
+	accessNetPublic = netAccess(1 << iota)
+	accessNetIntraControl
+	accessNetIntraData
+)
+
+var (
+	accessNetPublicControl = accessNetPublic | accessNetIntraControl
+	accessNetPublicData    = accessNetPublic | accessNetIntraData
+	accessControlData      = accessNetIntraControl | accessNetIntraData
+	accessNetAll           = accessNetPublic | accessNetIntraData | accessNetIntraControl
+)
+
+// Network access of handlers (Public, IntraControl, & IntraData)
+type netAccess int
+
+func (na netAccess) isSet(flag netAccess) bool {
+	return na&flag == flag
+}
+
 //
 // request validation helpers - TODO: optionally, check node IDs vs Smap
 //

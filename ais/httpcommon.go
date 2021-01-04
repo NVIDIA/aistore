@@ -78,7 +78,7 @@ type (
 	networkHandler struct {
 		r   string           // resource
 		h   http.HandlerFunc // handler
-		net []string
+		net netAccess        // handler network access
 	}
 
 	// SmapVoteMsg contains cluster-wide MD and a boolean representing whether or not a vote is currently in proress.
@@ -403,27 +403,38 @@ func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 		config = cmn.GCO.Get()
 	)
 	for _, nh := range networkHandlers {
-		if nh.r[0] == '/' { // Check if it's an absolute path.
+		var reg bool
+		if nh.r[0] == '/' { // absolute path
 			path = nh.r
 		} else {
 			path = cmn.JoinWords(cmn.Version, nh.r)
 		}
-		if cmn.StringInSlice(cmn.NetworkPublic, nh.net) {
+		cmn.Assert(nh.net != 0)
+		if nh.net.isSet(accessNetPublic) {
 			h.registerPublicNetHandler(path, nh.h)
-
-			if config.Net.UseIntraControl && cmn.StringInSlice(cmn.NetworkIntraControl, nh.net) {
-				h.registerIntraControlNetHandler(path, nh.h)
-			}
-			if config.Net.UseIntraData && cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
-				h.registerIntraDataNetHandler(path, nh.h)
-			}
-		} else if cmn.StringInSlice(cmn.NetworkIntraControl, nh.net) {
+			reg = true
+		}
+		if config.Net.UseIntraControl && nh.net.isSet(accessNetIntraControl) {
 			h.registerIntraControlNetHandler(path, nh.h)
-
-			if config.Net.UseIntraData && cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
-				h.registerIntraDataNetHandler(path, nh.h)
-			}
-		} else if cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
+			reg = true
+		}
+		if config.Net.UseIntraData && nh.net.isSet(accessNetIntraData) {
+			h.registerIntraDataNetHandler(path, nh.h)
+			reg = true
+		}
+		if reg {
+			continue
+		}
+		// none of the above
+		if !config.Net.UseIntraControl && !config.Net.UseIntraData {
+			// no intra-cluster networks: default to pub net
+			h.registerPublicNetHandler(path, nh.h)
+		} else if config.Net.UseIntraControl && nh.net.isSet(accessNetIntraData) {
+			// (not configured) data defaults to (configured) control
+			h.registerIntraControlNetHandler(path, nh.h)
+		} else {
+			cmn.Assert(config.Net.UseIntraData && nh.net.isSet(accessNetIntraControl))
+			// (not configured) control defaults to (configured) data
 			h.registerIntraDataNetHandler(path, nh.h)
 		}
 	}
@@ -482,7 +493,7 @@ func (h *httprunner) init(config *cmn.Config) {
 		muxers = newMuxers()
 		h.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0}
 	}
-	h.netServ.data = h.netServ.pub // by default, intra-data net is the same as public
+	h.netServ.data = h.netServ.control // by default, intra-data net is the same as intra-control
 	if config.Net.UseIntraData {
 		muxers = newMuxers()
 		h.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: bufsize}

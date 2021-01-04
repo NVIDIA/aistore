@@ -322,43 +322,26 @@ func (c clouds) initExt(t *targetrunner) (err error) {
 
 func (t *targetrunner) initRecvHandlers() {
 	networkHandlers := []networkHandler{
-		{
-			r: cmn.Buckets, h: t.bucketHandler,
-			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData},
-		},
-		{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
-		{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-		{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-		{r: cmn.Xactions, h: t.xactHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Rebalance, h: t.rebManager.RespHandler, net: []string{cmn.NetworkIntraData}},
-		{r: cmn.EC, h: t.ecHandler, net: []string{cmn.NetworkIntraData}},
-		{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
-		{r: cmn.Txn, h: t.txnHandler, net: []string{cmn.NetworkIntraControl}},
-		{
-			r: cmn.ObjStream, h: transport.RxAnyStream,
-			net: []string{cmn.NetworkPublic, cmn.NetworkIntraData, cmn.NetworkIntraControl},
-		},
-		{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Buckets, h: t.bucketHandler, net: accessNetAll},
+		{r: cmn.Objects, h: t.objectHandler, net: accessNetPublicData},
+		{r: cmn.Daemon, h: t.daemonHandler, net: accessNetPublicControl},
+		{r: cmn.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
+		{r: cmn.Health, h: t.healthHandler, net: accessNetPublicControl},
+		{r: cmn.Xactions, h: t.xactHandler, net: accessNetIntraControl},
+		{r: cmn.Rebalance, h: t.rebManager.RespHandler, net: accessNetIntraData},
+		{r: cmn.EC, h: t.ecHandler, net: accessNetIntraData},
+		{r: cmn.Vote, h: t.voteHandler, net: accessNetIntraControl},
+		{r: cmn.Txn, h: t.txnHandler, net: accessNetIntraControl},
+		{r: cmn.ObjStream, h: transport.RxAnyStream, net: accessNetAll},
+		{r: cmn.Tokens, h: t.tokenHandler, net: accessNetPublic},
 
-		{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
-		{
-			r: cmn.Sort, h: dsort.SortHandler,
-			net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData},
-		},
-		{
-			r: cmn.ETL, h: t.etlHandler,
-			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl},
-		},
+		{r: cmn.Download, h: t.downloadHandler, net: accessNetIntraControl},
+		{r: cmn.Sort, h: dsort.SortHandler, net: accessControlData},
+		{r: cmn.ETL, h: t.etlHandler, net: accessNetPublicControl},
+		{r: cmn.Query, h: t.queryHandler, net: accessNetPublicControl},
 
-		{r: cmn.Query, h: t.queryHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-
-		{r: "/" + cmn.S3, h: t.s3Handler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
-
-		{
-			r: "/", h: cmn.InvalidHandler,
-			net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData},
-		},
+		{r: "/" + cmn.S3, h: t.s3Handler, net: accessNetPublicData},
+		{r: "/", h: cmn.InvalidHandler, net: accessNetAll},
 	}
 	t.registerNetworkHandlers(networkHandlers)
 }
