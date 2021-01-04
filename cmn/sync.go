@@ -79,6 +79,10 @@ var (
 	_ WG = (*TimeoutGroup)(nil)
 )
 
+//////////////////
+// TimeoutGroup //
+//////////////////
+
 func NewTimeoutGroup() *TimeoutGroup {
 	return &TimeoutGroup{
 		fin: make(chan struct{}, 1),
@@ -136,6 +140,10 @@ func (tg *TimeoutGroup) Done() {
 	}
 }
 
+////////////
+// StopCh //
+////////////
+
 func NewStopCh() *StopCh {
 	return &StopCh{
 		ch: make(chan struct{}, 1),
@@ -151,6 +159,10 @@ func (sc *StopCh) Close() {
 		close(sc.ch)
 	})
 }
+
+///////////////
+// Semaphore //
+///////////////
 
 func NewSemaphore(n int) *Semaphore {
 	s := &Semaphore{s: make(chan struct{}, n)}
@@ -170,6 +182,10 @@ func NewDynSemaphore(n int) *DynSemaphore {
 	sema.c = sync.NewCond(&sema.mu)
 	return sema
 }
+
+//////////////////
+// DynSemaphore //
+//////////////////
 
 func (s *DynSemaphore) Size() int {
 	s.mu.Lock()
@@ -218,11 +234,15 @@ func (s *DynSemaphore) Release(cnts ...int) {
 	s.mu.Unlock()
 }
 
-func NewLimitedWaitGroup(n int) *LimitedWaitGroup {
-	return &LimitedWaitGroup{
-		wg:   &sync.WaitGroup{},
-		sema: NewDynSemaphore(n),
+//////////////////////
+// LimitedWaitGroup //
+//////////////////////
+
+func NewLimitedWaitGroup(n int, current ...int) WG {
+	if len(current) == 0 || n < current[0] {
+		return &LimitedWaitGroup{wg: &sync.WaitGroup{}, sema: NewDynSemaphore(n)}
 	}
+	return &sync.WaitGroup{}
 }
 
 func (wg *LimitedWaitGroup) Add(n int) {
@@ -238,6 +258,10 @@ func (wg *LimitedWaitGroup) Done() {
 func (wg *LimitedWaitGroup) Wait() {
 	wg.wg.Wait()
 }
+
+//////////////////
+// MultiSyncMap //
+//////////////////
 
 func (msm *MultiSyncMap) Get(idx int) *sync.Map {
 	Assert(idx >= 0 && idx < MultiSyncMapCount)

@@ -758,18 +758,16 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 //      ii) numLocalRecords - tracks the number of records in the current shardMeta each target has locally
 //
 //      The appropriate target is determined firstly by locality (i.e. the target with the most local records)
-//      and secondly (if there is a tie), by least load (i.e. the target with the least number of shard creation requests
-//      sent to it already).
+//      and secondly (if there is a tie), by least load
+//      (i.e. the target with the least number of shard creation requests sent to it already).
 func (m *Manager) distributeShardRecords(maxSize int64) error {
 	var (
 		shards []*extract.Shard
 		err    error
 
-		wg             = &sync.WaitGroup{}
 		shardsToTarget = make(map[*cluster.Snode][]*extract.Shard, m.smap.CountActiveTargets())
 		sendOrder      = make(map[string]map[string]*extract.Shard, m.smap.CountActiveTargets())
-
-		errCh = make(chan error, m.smap.CountActiveTargets())
+		errCh          = make(chan error, m.smap.CountActiveTargets())
 	)
 
 	for _, d := range m.smap.Tmap {
@@ -792,12 +790,11 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		return err
 	}
 
-	// TODO: Following heuristic doesn't seem to be working correctly in
-	// all cases. When there is not much shards at each disk (like 1-5)
-	// then it may happen that some target will have more shards than other
-	// targets and will "win" all output shards what will result in enormous
-	// skew and result in slow creation phase (single target will be
-	// responsible for creating all shards).
+	// TODO: The following heuristic doesn't seem to be working correctly in
+	// all cases. When there are ver few shards on each disk (e.g. <= 5)
+	// a target may end up having more shards than other
+	// targets and will "win" all output shards which will result in an enormous
+	// skew and slow creation phase (single target will be the bottleneck).
 	//
 	// if m.extractCreator.UsingCompression() {
 	// 	daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
@@ -844,6 +841,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 	m.recManager.Records.Drain()
 
+	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(shardsToTarget))
 	for si, s := range shardsToTarget {
 		wg.Add(1)
 		go func(si *cluster.Snode, s []*extract.Shard, order map[string]*extract.Shard) {

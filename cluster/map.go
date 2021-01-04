@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -23,6 +24,9 @@ const (
 	Proxies
 	AllNodes
 )
+
+// number of broadcasting goroutines <= cmn.NumCPU() * MaxBcastMultiplier
+const MaxBcastMultiplier = 2
 
 // enum: Snode flags
 const (
@@ -88,6 +92,8 @@ type (
 		Unreg(sl Slistener)
 	}
 )
+
+func MaxBcastParallel() int { return sys.NumCPU() * MaxBcastMultiplier }
 
 ////////////////
 // SnodeFlags //

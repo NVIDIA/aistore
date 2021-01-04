@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -1307,8 +1308,8 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	slice.meta = &metadata
 }
 
-// Fetches missing slices from targets that have not sent them yet.
-// Returns and error if it failed to get sufficient number of slices.
+// Fetches missing slices from targets that so far failed to send them.
+// Returns an error if unable to get sufficient number of slices.
 func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 	if obj.ready.Load() == objDone {
 		return nil
@@ -1327,9 +1328,10 @@ func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 		return nil
 	}
 
-	// receive all missing slices
-	wg := &sync.WaitGroup{}
+	// get missing slices
+	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(toRequest))
 	for sid, slice := range toRequest {
+		debug.Assert(reb.t.Snode().ID() != sid)
 		si := md.smap.Tmap[sid]
 		wg.Add(1)
 		go func(si *cluster.Snode, slice *sliceGetResp) {

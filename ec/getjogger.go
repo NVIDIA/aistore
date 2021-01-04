@@ -120,7 +120,8 @@ func (c *getJogger) ec(req *Request) {
 // * metadata - object's EC metadata
 // * nodes - targets that have metadata and replica - filled by requestMeta
 // * replicaCnt - total number of replicas including main one
-func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata, nodes map[string]*Metadata, replicaCnt int) error {
+func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata,
+	nodes map[string]*Metadata, replicaCnt int) error {
 	targets, err := cluster.HrwTargetList(lom.Uname(), c.parent.smap.Get(), replicaCnt)
 	if err != nil {
 		freeObject(reader)
@@ -168,7 +169,8 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
-			glog.Errorf("%s failed to send %s/%s to %v: %v", c.parent.t.Snode(), lom.Bck(), lom.ObjName, daemons, err)
+			glog.Errorf("%s failed to send %s/%s to %v: %v",
+				c.parent.t.Snode(), lom.Bck(), lom.ObjName, daemons, err)
 		}
 		freeObject(reader)
 		c.parent.DecPending()
@@ -215,7 +217,8 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		w.Free()
 	}
 	if glog.FastV(4, glog.SmoduleEC) {
-		glog.Infof("Found meta -> obj get %s/%s, writer found: %v", req.LOM.Bck(), req.LOM.ObjName, writer != nil)
+		glog.Infof("Found meta -> obj get %s/%s, writer found: %v",
+			req.LOM.Bck(), req.LOM.ObjName, writer != nil)
 	}
 
 	if writer == nil {
@@ -274,7 +277,8 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		debug.AssertNoErr(errRm)
 	}
 	if glog.FastV(4, glog.SmoduleEC) {
-		glog.Infof("Found meta -> obj get %s/%s, writer found: %v", req.LOM.Bck(), req.LOM.ObjName, writer != nil)
+		glog.Infof("Found meta -> obj get %s/%s, writer found: %v",
+			req.LOM.Bck(), req.LOM.ObjName, writer != nil)
 	}
 
 	if writer == nil {
@@ -312,13 +316,15 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 // Returns:
 // * []slice - a list of received slices in correct order (missing slices = nil)
 // * map[int]string - a map of slice locations: SliceID <-> DaemonID
-func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string]*Metadata, toDisk bool) ([]*slice, map[int]string, error) {
-	wgSlices := cmn.NewTimeoutGroup()
-	sliceCnt := meta.Data + meta.Parity
-	slices := make([]*slice, sliceCnt)
-	daemons := make([]string, 0, len(nodes)) // target to be requested for a slice
-	idToNode := make(map[int]string)         // which target what slice returned
-
+func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string]*Metadata,
+	toDisk bool) ([]*slice, map[int]string, error) {
+	var (
+		wgSlices = cmn.NewTimeoutGroup()
+		sliceCnt = meta.Data + meta.Parity
+		slices   = make([]*slice, sliceCnt)
+		daemons  = make([]string, 0, len(nodes)) // target to be requested for a slice
+		idToNode = make(map[int]string)          // which target what slice returned
+	)
 	for k, v := range nodes {
 		if v.SliceID < 1 || v.SliceID > sliceCnt {
 			glog.Warningf("Node %s has invalid slice ID %d", k, v.SliceID)
@@ -421,7 +427,8 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice, cksums 
 	return nil
 }
 
-func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGroup, errCh chan int, i int, sliceSize int64, objName string) {
+func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGroup, errCh chan int, i int,
+	sliceSize int64, objName string) {
 	defer wg.Done()
 
 	cksumType := recvCksm.Type()
@@ -464,9 +471,9 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		restored  = make([]*slice, sliceCnt)
 		cksums    = make([]*cmn.CksumHash, sliceCnt)
 		conf      = req.LOM.CksumConf()
+		cksmWg    = &sync.WaitGroup{}
+		cksmErrCh = make(chan int, sliceCnt)
 	)
-	cksmWg := &sync.WaitGroup{}
-	cksmErrCh := make(chan int, sliceCnt)
 
 	// allocate memory for reconstructed(missing) slices - EC requirement,
 	// and open existing slices for reading
@@ -485,7 +492,8 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 			}
 		}
 		if sl == nil || sl.writer == nil {
-			if err = noSliceWriter(req, writers, restored, cksums, conf.Type, idToNode, toDisk, i, sliceSize); err != nil {
+			err = noSliceWriter(req, writers, restored, cksums, conf.Type, idToNode, toDisk, i, sliceSize)
+			if err != nil {
 				break
 			}
 		} else {
@@ -529,7 +537,8 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	for i := range cksmErrCh {
 		// slice's checksum did not match, however we might be able to restore object anyway
 		glog.Warningf("Slice checksum mismatch for %s", req.LOM.ObjName)
-		if err := noSliceWriter(req, writers, restored, cksums, conf.Type, idToNode, toDisk, i, sliceSize); err != nil {
+		err := noSliceWriter(req, writers, restored, cksums, conf.Type, idToNode, toDisk, i, sliceSize)
+		if err != nil {
 			return restored, err
 		}
 		readers[i] = nil
@@ -760,7 +769,8 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 	// restore and save locally the main replica
 	restored, err := c.restoreMainObj(req, meta, slices, idToNode, toDisk)
 	if err != nil {
-		glog.Errorf("%s failed to restore main object %s/%s: %v", c.parent.t.Snode(), req.LOM.Bck(), req.LOM.ObjName, err)
+		glog.Errorf("%s failed to restore main object %s/%s: %v",
+			c.parent.t.Snode(), req.LOM.Bck(), req.LOM.ObjName, err)
 		freeWriters()
 		freeSlices(restored)
 		freeSlices(slices)
@@ -816,7 +826,8 @@ func (c *getJogger) restore(req *Request, toDisk bool) error {
 	}
 
 	if len(nodes) < meta.Data {
-		return fmt.Errorf("cannot restore: too many slices missing (found %d slices, need %d or more)", meta.Data, len(nodes))
+		return fmt.Errorf("cannot restore: too many slices missing (found %d slices, need %d or more)",
+			meta.Data, len(nodes))
 	}
 
 	return c.restoreEncoded(req, meta, nodes, toDisk)
@@ -825,13 +836,15 @@ func (c *getJogger) restore(req *Request, toDisk bool) error {
 // broadcast request for object's metadata. The function returns the list of
 // nodes(with their EC metadata) that have the lastest object version
 func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]*Metadata, err error) {
-	tmap := c.parent.smap.Get().Tmap
-	wg := &sync.WaitGroup{}
-	mtx := &sync.Mutex{}
-	metas := make(map[string]*Metadata, len(tmap))
-	chk := make(map[string]int, len(tmap))
-	chkMax := 0
-	chkVal := ""
+	var (
+		tmap   = c.parent.smap.Get().Tmap
+		wg     = cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(tmap))
+		mtx    = &sync.Mutex{}
+		metas  = make(map[string]*Metadata, len(tmap))
+		chk    = make(map[string]int, len(tmap))
+		chkVal string
+		chkMax int
+	)
 	for _, node := range tmap {
 		if node.ID() == c.parent.si.ID() {
 			continue
@@ -876,7 +889,8 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 			meta = v
 			nodes[k] = v
 		} else {
-			glog.Warningf("Hashes of target %s[slice id %d] mismatch: %s == %s", k, v.SliceID, chkVal, v.ObjCksum)
+			glog.Warningf("Hashes of target %s[slice id %d] mismatch: %s == %s",
+				k, v.SliceID, chkVal, v.ObjCksum)
 		}
 	}
 

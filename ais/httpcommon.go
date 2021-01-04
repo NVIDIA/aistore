@@ -1020,22 +1020,32 @@ func (h *httprunner) unicastToNode(si *cluster.Snode, bargs *bcastArgs, wg *sync
 
 // asynchronous variation of the `bcastToNodes` (above)
 func (h *httprunner) bcastToNodesAsync(bargs *bcastArgs) {
-	var cnt int
+	var sema *cmn.DynSemaphore
+	if bargs.nodeCount == 0 {
+		smap := h.owner.smap.get()
+		glog.Errorf("%s: node count is zero in [%s %s] broadcast, %s",
+			h.si, bargs.req.Method, bargs.req.Path, smap.StringEx())
+		return
+	}
+	if bargs.nodeCount > cluster.MaxBcastParallel() {
+		sema = cmn.NewDynSemaphore(cluster.MaxBcastParallel())
+	}
 	for _, nodeMap := range bargs.nodes {
 		for sid, si := range nodeMap {
 			if sid == h.si.ID() {
 				continue
 			}
-			cnt++
+			if sema != nil {
+				sema.Acquire()
+			}
 			go func(si *cluster.Snode) {
 				cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
 				cargs.req.Base = si.URL(bargs.network)
 				_ = h.call(cargs)
+				if sema != nil {
+					sema.Release()
+				}
 			}(si)
-		}
-		if cnt == 0 {
-			glog.Warningf("%s: node count is zero in [%s %s] broadcast",
-				h.si, bargs.req.Method, bargs.req.Path)
 		}
 	}
 }
@@ -1265,7 +1275,6 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 // NOTE: if `checkAll` is set to false, we stop making further requests once minPidConfirmations is achieved
 func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *clusterInfo, cnt int) {
 	var (
-		wg      cmn.WG
 		query   = url.Values{cmn.URLParamClusterInfo: []string{"true"}}
 		timeout = cmn.GCO.Get().Timeout.CplaneOperation
 		mu      = &sync.RWMutex{}
@@ -1276,17 +1285,13 @@ func (h *httprunner) bcastHealth(smap *smapX, checkAll ...bool) (maxCii *cluster
 	maxCii.fillSmap(smap)
 	debug.Assert(maxCii.Smap.Primary.ID != "" && maxCii.Smap.Version > 0 && smap.isValid())
 retry:
-	if len(nodemap) > maxBcastParallel {
-		wg = cmn.NewLimitedWaitGroup(maxBcastParallel)
-	} else {
-		wg = &sync.WaitGroup{}
-	}
-
+	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(nodemap))
 	for sid, si := range nodemap {
 		if sid == h.si.ID() {
 			continue
 		}
-		if len(nodemap) > maxBcastParallel {
+		// have enough confirmations?
+		if len(nodemap) > cluster.MaxBcastParallel() {
 			mu.RLock()
 			if len(checkAll) > 0 && !checkAll[1] && cnt >= minPidConfirmations {
 				mu.RUnlock()

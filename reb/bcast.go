@@ -7,7 +7,6 @@ package reb
 import (
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -144,10 +143,8 @@ func (reb *Manager) nodesNotInStage(md *rebArgs, stage uint32) int {
 
 // main method
 func (reb *Manager) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
-	var (
-		wg  = &sync.WaitGroup{}
-		cnt atomic.Int32
-	)
+	var cnt atomic.Int32
+	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(md.smap.Tmap))
 	for _, tsi := range md.smap.Tmap {
 		if tsi.ID() == reb.t.Snode().ID() {
 			continue
