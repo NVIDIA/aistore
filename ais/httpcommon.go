@@ -40,8 +40,6 @@ import (
 
 const unknownDaemonID = "unknown"
 
-const maxBcastParallel = 10
-
 type (
 	// callResult contains HTTP response.
 	callResult struct {

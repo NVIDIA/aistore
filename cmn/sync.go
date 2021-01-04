@@ -238,8 +238,9 @@ func (s *DynSemaphore) Release(cnts ...int) {
 // LimitedWaitGroup //
 //////////////////////
 
-func NewLimitedWaitGroup(n int, current ...int) WG {
-	if len(current) == 0 || n < current[0] {
+func NewLimitedWaitGroup(n int /*max*/, have ...int) WG {
+	if len(have) == 0 || n < have[0] {
+		// e.g. usage: no more than n goroutines in parallel
 		return &LimitedWaitGroup{wg: &sync.WaitGroup{}, sema: NewDynSemaphore(n)}
 	}
 	return &sync.WaitGroup{}

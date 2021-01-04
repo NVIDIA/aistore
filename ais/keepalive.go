@@ -192,18 +192,13 @@ func (pkr *proxyKeepaliveRunner) updateSmap() (stopped bool) {
 	}
 	defer pkr.primaryKeepaliveInProgress.CAS(1, 0)
 	var (
-		wg        cmn.WG
 		p         = pkr.p
 		smap      = p.owner.smap.get()
 		daemonCnt = smap.Count()
 	)
 	pkr.openCh(daemonCnt)
-	// limit parallelism
-	if daemonCnt > maxBcastParallel {
-		wg = cmn.NewLimitedWaitGroup(maxBcastParallel)
-	} else {
-		wg = &sync.WaitGroup{}
-	}
+	// limit parallelism, here and elsewhere
+	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), daemonCnt)
 	for _, daemons := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
 			if sid == p.si.ID() {
