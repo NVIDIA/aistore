@@ -188,6 +188,14 @@ type (
 		si       *cluster.Snode
 		from, to string
 	}
+	apiRequest struct {
+		prefix []string     // in: URL must start with these items
+		after  int          // in: the number of items after the prefix
+		bckIdx int          // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
+		msg    interface{}  // in/out: if not nil, Body is unmarshaled to the msg
+		items  []string     // out: URL items after the prefix
+		bck    *cluster.Bck // out: initialized bucket
+	}
 )
 
 var allHTTPverbs = []string{
@@ -374,6 +382,27 @@ func (h *httprunner) DataClient() *http.Client { return h.client.data }
 func (h *httprunner) Snode() *cluster.Snode    { return h.si }
 func (h *httprunner) Bowner() cluster.Bowner   { return h.owner.bmd }
 func (h *httprunner) Sowner() cluster.Sowner   { return h.owner.smap }
+
+func (h *httprunner) parseAPIRequest(w http.ResponseWriter, r *http.Request, args *apiRequest) (err error) {
+	debug.Assert(len(args.prefix) != 0)
+	args.items, err = h.checkRESTItems(w, r, args.after, false, args.prefix)
+	if err != nil {
+		return err
+	}
+	debug.Assert(len(args.items) > args.bckIdx)
+	bckName := args.items[args.bckIdx]
+	if bckName == cmn.AllBuckets {
+		bckName = ""
+	}
+	args.bck, err = newBckFromQuery(bckName, r.URL.Query())
+	if err == nil && args.msg != nil {
+		err = cmn.ReadJSON(w, r, args.msg)
+	}
+	if err != nil {
+		h.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+	}
+	return err
+}
 
 // usage: [API call => handler => ClusterStartedWithRetry ]
 func (h *httprunner) ClusterStartedWithRetry() bool {

@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/ais/cloud"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dbdriver"
 	"github.com/NVIDIA/aistore/dsort"
@@ -88,39 +87,10 @@ type (
 		}
 		regstate regstate // the state of being registered with the primary, can be (en/dis)abled via API
 	}
-	apiRequest struct {
-		prefix []string     // in: URL must start with these items
-		after  int          // in: the number of items after the prefix
-		bckIdx int          // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
-		msg    *aisMsg      // in/out: if not nil, Body is unmarshaled to the msg
-		items  []string     // out: URL items after the prefix
-		bck    *cluster.Bck // out: initialized bucket
-	}
 )
 
 // interface guard
 var _ cmn.Runner = (*targetrunner)(nil)
-
-////////////////
-// apiRequest //
-////////////////
-
-func (args *apiRequest) parse(w http.ResponseWriter, r *http.Request, t *targetrunner) (err error) {
-	debug.Assert(len(args.prefix) != 0)
-	args.items, err = t.checkRESTItems(w, r, args.after, false, args.prefix)
-	if err != nil {
-		return err
-	}
-	debug.Assert(len(args.items) > args.bckIdx)
-	args.bck, err = newBckFromQuery(args.items[args.bckIdx], r.URL.Query())
-	if err == nil && args.msg != nil {
-		err = cmn.ReadJSON(w, r, args.msg)
-	}
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-	}
-	return err
-}
 
 //////////////
 // base gfn //
@@ -447,11 +417,11 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
-	if err != nil {
+	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets}
+	if err := t.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
-	switch apiItems[0] {
+	switch request.items[0] {
 	case cmn.AllBuckets:
 		var (
 			query = r.URL.Query()
@@ -460,15 +430,10 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		if what == cmn.GetWhatBMD {
 			t.writeJSON(w, r, t.owner.bmd.get(), "get-what-bmd")
 		} else {
-			bck, err := newBckFromQuery("", query)
-			if err != nil {
-				t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-				return
-			}
-			t.listBuckets(w, r, cmn.QueryBcks(bck.Bck))
+			t.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
 		}
 	default:
-		t.invalmsghdlrf(w, r, "Invalid route /buckets/%s", apiItems[0])
+		t.invalmsghdlrf(w, r, "Invalid route /buckets/%s", request.items[0])
 	}
 }
 
@@ -481,7 +446,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request := &apiRequest{after: 1, prefix: cmn.URLPathBuckets}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 	if err := request.bck.Init(t.owner.bmd, t.si); err != nil {
@@ -577,7 +542,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	request := &apiRequest{prefix: cmn.URLPathBuckets, after: 1}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 
@@ -648,7 +613,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		request     = &apiRequest{after: 1, prefix: cmn.URLPathBuckets}
 		err         error
 	)
-	if err = request.parse(w, r, t); err != nil {
+	if err = t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 	if err = request.bck.Init(t.owner.bmd, t.si); err != nil {
@@ -732,7 +697,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			t.si, r.Method, r.RemoteAddr)
 		return
 	}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 
@@ -808,7 +773,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 	objName := request.items[1]
@@ -885,7 +850,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
 		return
 	}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 
@@ -955,7 +920,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			t.si, r.Method, r.RemoteAddr)
 		return
 	}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 	t.headObject(w, r, query, request.bck, request.items[1])
@@ -1070,7 +1035,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 // Returns a slice. Does not use GFN.
 func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	request := &apiRequest{after: 3, prefix: cmn.URLPathEC, bckIdx: 1}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 
@@ -1356,7 +1321,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 // TODO: unify with PromoteFile (refactor)
 func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	request := &apiRequest{after: 2, prefix: cmn.URLPathObjects}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 	lom := &cluster.LOM{ObjName: request.items[1]}
@@ -1405,7 +1370,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	const fmtErr = "%s: %s failed: "
 	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 

@@ -281,6 +281,16 @@ func (p *proxyrunner) Stop(err error) {
 //
 //==================================
 
+func (p *proxyrunner) parseAPIBckObj(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs, origURLBck ...string) (bck *cluster.Bck, objName string, err error) {
+	request := apiRequest{after: 2, prefix: cmn.URLPathObjects}
+	if err = p.parseAPIRequest(w, r, &request); err != nil {
+		return
+	}
+	bckArgs.queryBck = request.bck
+	bck, err = bckArgs.initAndTry(request.bck.Name, origURLBck...)
+	return bck, request.items[1], err
+}
+
 // verb /v1/buckets/
 func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStartedWithRetry() {
@@ -323,40 +333,28 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
-	if err != nil {
+	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets}
+	if err := p.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
 
-	switch apiItems[0] {
+	switch request.items[0] {
 	case cmn.AllBuckets:
 		if err := p.checkPermissions(r.Header, nil, cmn.AccessBckLIST); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		query := r.URL.Query()
-		bck, err := newBckFromQuery("", query)
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
-			return
-		}
-		p.listBuckets(w, r, cmn.QueryBcks(bck.Bck))
+		p.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
 	default:
-		p.invalmsghdlrf(w, r, "Invalid route /buckets/%s", apiItems[0])
+		p.invalmsghdlrf(w, r, "Invalid route /buckets/%s", request.items[0])
 	}
 }
 
 // GET /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
-	if err != nil {
-		return
-	}
-	bucket, objName := apiItems[0], apiItems[1]
-
 	bckArgs := bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessGET, tryOnlyRem: true}
-	bck, err := bckArgs.initAndTry(bucket, origURLBck...)
+	bck, objName, err := p.parseAPIBckObj(w, r, &bckArgs, origURLBck...)
 	if err != nil {
 		return
 	}
@@ -368,7 +366,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
@@ -378,19 +376,14 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 // PUT /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
-	if err != nil {
-		return
-	}
-
 	var (
-		si              *cluster.Snode
-		nodeID          string
-		smap            = p.owner.smap.get()
-		query           = r.URL.Query()
-		bucket, objName = apiItems[0], apiItems[1]
-		appendTy        = query.Get(cmn.URLParamAppendType)
-		perms           int
+		si       *cluster.Snode
+		nodeID   string
+		perms    int
+		err      error
+		smap     = p.owner.smap.get()
+		query    = r.URL.Query()
+		appendTy = query.Get(cmn.URLParamAppendType)
 	)
 	if appendTy == "" {
 		perms = cmn.AccessPUT
@@ -406,7 +399,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bckArgs := bckInitArgs{p: p, w: w, r: r, perms: perms, tryOnlyRem: true}
-	bck, err := bckArgs.initAndTry(bucket)
+	bck, objName, err := p.parseAPIBckObj(w, r, &bckArgs)
 	if err != nil {
 		return
 	}
@@ -427,7 +420,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s (append: %v)", r.Method, bucket, objName, si, appendTy != "")
+		glog.Infof("%s %s/%s => %s (append: %v)", r.Method, bck.Name, objName, si, appendTy != "")
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -442,13 +435,8 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 // DELETE /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
-	if err != nil {
-		return
-	}
-	bucket, objName := apiItems[0], apiItems[1]
 	bckArgs := bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessObjDELETE, tryOnlyRem: true}
-	bck, err := bckArgs.initAndTry(bucket)
+	bck, objName, err := p.parseAPIBckObj(w, r, &bckArgs)
 	if err != nil {
 		return
 	}
@@ -460,7 +448,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -470,30 +458,28 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 // DELETE { action } /v1/buckets
 func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
-	if err != nil {
-		return
-	}
-
-	msg := cmn.ActionMsg{}
-	if err := cmn.ReadJSON(w, r, &msg); err != nil {
+	var (
+		err     error
+		msg     = cmn.ActionMsg{}
+		request = &apiRequest{msg: &msg, after: 1, prefix: cmn.URLPathBuckets}
+	)
+	if err = p.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 
 	var (
-		bck     *cluster.Bck
+		bck     = request.bck
 		query   = r.URL.Query()
 		perms   = cmn.AccessBckDELETE
-		bucket  = apiItems[0]
 		errCode int
 	)
 	if msg.Action == cmn.ActDelete || msg.Action == cmn.ActEvictObjects {
 		perms = cmn.AccessObjDELETE
 	}
 
-	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, tryOnlyRem: true}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, tryOnlyRem: true, queryBck: bck}
 	if msg.Action == cmn.ActEvictCB {
-		bck, errCode, err = bckArgs.init(bucket)
+		bck, errCode, err = bckArgs.init(bck.Name)
 		if errCode == http.StatusNotFound {
 			// Cloud bucket not in BMD, ignore error
 			return
@@ -501,19 +487,19 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error(), errCode)
 		}
-	} else if bck, err = bckArgs.initAndTry(bucket); err != nil {
+	} else if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
 		return
 	}
 
 	switch msg.Action {
 	case cmn.ActEvictCB:
 		if bck.IsAIS() {
-			p.invalmsghdlrf(w, r, fmtNotCloud, bucket)
+			p.invalmsghdlrf(w, r, fmtNotCloud, bck.Name)
 			return
 		}
 		fallthrough // fallthrough
 	case cmn.ActDestroyLB:
-		if p.forwardCP(w, r, &msg, bucket) {
+		if p.forwardCP(w, r, &msg, bck.Name) {
 			return
 		}
 		if bck.IsRemoteAIS() {
@@ -531,11 +517,11 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		var xactID string
 		if msg.Action == cmn.ActEvictObjects && bck.IsAIS() {
-			p.invalmsghdlrf(w, r, fmtNotCloud, bucket)
+			p.invalmsghdlrf(w, r, fmtNotCloud, bck.Name)
 			return
 		}
 
-		if xactID, err = p.doListRange(http.MethodDelete, bucket, &msg, query); err != nil {
+		if xactID, err = p.doListRange(http.MethodDelete, bck.Name, &msg, query); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -1124,27 +1110,22 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 
 // POST { action } /v1/objects/bucket-name[/object-name]
 func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
-	var (
-		msg   cmn.ActionMsg
-		query = r.URL.Query()
-	)
-	apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathObjects)
-	if err != nil {
+	var msg cmn.ActionMsg
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
-	bucket := apiItems[0]
-	bck, err := newBckFromQuery(bucket, query)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects}
+	if msg.Action == cmn.ActRenameObject {
+		request.after = 2
+	}
+	if err := p.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 
 	// TODO: revisit versus cloud bucket not being present, see p.tryBckInit
-	if err = bck.Init(p.owner.bmd, p.si); err != nil {
+	bck := request.bck
+	if err := bck.Init(p.owner.bmd, p.si); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
@@ -1157,7 +1138,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, "%q is not supported for remote buckets (%s)", msg.Action, bck)
 			return
 		}
-		if err = bck.Allow(cmn.AccessObjRENAME); err != nil {
+		if err := bck.Allow(cmn.AccessObjRENAME); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -1165,14 +1146,14 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, "%q is not supported for erasure-coded buckets: %s", msg.Action, bck)
 			return
 		}
-		p.objRename(w, r, bck, &msg)
+		p.objRename(w, r, bck, request.items[1], &msg)
 		return
 	case cmn.ActPromote:
 		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessPROMOTE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		if err = bck.Allow(cmn.AccessPROMOTE); err != nil {
+		if err := bck.Allow(cmn.AccessPROMOTE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -1189,14 +1170,13 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
-	if err != nil {
+	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets}
+	if err := p.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
-	bucket := apiItems[0]
 
-	args := bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessBckHEAD, err: err, tryOnlyRem: true}
-	bck, err := args.initAndTry(bucket)
+	args := bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessBckHEAD, tryOnlyRem: true, queryBck: request.bck}
+	bck, err := args.initAndTry(request.bck.Name)
 	if err != nil {
 		return
 	}
@@ -1261,30 +1241,20 @@ func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 // PATCH /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	var (
+		err           error
 		propsToUpdate cmn.BucketPropsToUpdate
-		bucket        string
-		bck           *cluster.Bck
-		msg           *cmn.ActionMsg
-		query         = r.URL.Query()
-		apiItems, err = p.checkRESTItems(w, r, 1, false, cmn.URLPathBuckets)
+		msg           = &cmn.ActionMsg{Value: &propsToUpdate}
+		request       = &apiRequest{after: 1, prefix: cmn.URLPathBuckets, msg: &msg}
 	)
-	if err != nil {
-		return
-	}
-	bucket = apiItems[0]
-	if bck, err = newBckFromQuery(bucket, query); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+	if err = p.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 	if p.forwardCP(w, r, msg, "httpbckpatch") {
 		return
 	}
-	msg = &cmn.ActionMsg{Value: &propsToUpdate}
-	if err = cmn.ReadJSON(w, r, msg); err != nil {
-		return
-	}
 
-	args := bckInitArgs{p: p, w: w, r: r, queryBck: bck, err: err, msg: msg, skipBackend: true, tryOnlyRem: true}
+	bck := request.bck
+	args := bckInitArgs{p: p, w: w, r: r, queryBck: bck, msg: msg, skipBackend: true, tryOnlyRem: true}
 	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
@@ -1316,16 +1286,11 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	var (
-		started       = time.Now()
-		apiItems, err = p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
+		started = time.Now()
+		bckArgs = bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessObjHEAD, tryOnlyRem: true}
 	)
-	if err != nil {
-		return
-	}
-	bucket, objName := apiItems[0], apiItems[1]
 
-	bckArgs := bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessObjHEAD, tryOnlyRem: true}
-	bck, err := bckArgs.initAndTry(bucket, origURLBck...)
+	bck, objName, err := p.parseAPIBckObj(w, r, &bckArgs, origURLBck...)
 	if err != nil {
 		return
 	}
@@ -1337,7 +1302,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1730,13 +1695,8 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	return allEntries, nil
 }
 
-func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
+func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, msg *cmn.ActionMsg) {
 	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathObjects)
-	if err != nil {
-		return
-	}
-	objName := apiItems[1]
 	if objName == msg.Name {
 		p.invalmsghdlr(w, r, "the new and the current names are the same")
 		return
@@ -1759,11 +1719,6 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 }
 
 func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathObjects)
-	if err != nil {
-		return
-	}
-
 	promoteArgs := cmn.ActValPromote{}
 	if err := cmn.MorphMarshal(msg.Value, &promoteArgs); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1773,14 +1728,13 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	var (
 		started = time.Now()
 		smap    = p.owner.smap.get()
-		bucket  = apiItems[0]
 	)
 
 	// designated target ID
 	if promoteArgs.Target != "" {
 		tsi := smap.GetTarget(promoteArgs.Target)
 		if tsi == nil {
-			err = &errNodeNotFound{cmn.ActPromote + " failure", promoteArgs.Target, p.si, smap}
+			err := &errNodeNotFound{cmn.ActPromote + " failure", promoteArgs.Target, p.si, smap}
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -1796,7 +1750,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	// TODO -- FIXME: 2phase begin to check space, validate params, and check vs running xactions
 	//
 	query := cmn.AddBckToQuery(nil, bck.Bck)
-	results := p.callTargets(http.MethodPost, cmn.JoinWords(cmn.Version, cmn.Objects, bucket),
+	results := p.callTargets(http.MethodPost, cmn.JoinWords(cmn.Version, cmn.Objects, bck.Name),
 		cmn.MustMarshal(msg), query)
 
 	for res := range results {

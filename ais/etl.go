@@ -161,7 +161,7 @@ func (t *targetrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 // getObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	request := &apiRequest{after: 3, prefix: cmn.URLPathETLObject, bckIdx: 1}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 	if err := etl.CheckSecret(request.items[0]); err != nil {
@@ -178,7 +178,7 @@ func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 // headObjectETL validates the secret that was injected into a Pod during its initialization.
 func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
 	request := &apiRequest{after: 3, prefix: cmn.URLPathETLObject, bckIdx: 1}
-	if err := request.parse(w, r, t); err != nil {
+	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
 	if err := etl.CheckSecret(request.items[0]); err != nil {
