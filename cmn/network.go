@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	NetworkPublic       = "public"
-	NetworkIntraControl = "intra_control"
-	NetworkIntraData    = "intra_data"
+	NetworkPublic       = "PUBLIC"
+	NetworkIntraControl = "INTRA-CONTROL"
+	NetworkIntraData    = "INTRA-DATA"
 )
 
 var KnownNetworks = []string{NetworkPublic, NetworkIntraControl, NetworkIntraData}

@@ -158,7 +158,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	return &targetNodeMock{
 		daemonID: daemonID,
 		s: &http.Server{
-			Addr:    fmt.Sprintf("%s:%s", net.NodeIPAddr, net.DaemonPort),
+			Addr:    fmt.Sprintf("%s:%s", net.NodeHostname, net.DaemonPort),
 			Handler: http.NewServeMux(),
 		},
 		controlCh: make(chan error, 1),
@@ -235,9 +235,9 @@ func (tctx *testContext) setup() {
 	for i := 0; i < tctx.targetCnt; i++ {
 		targetPort := ports[i]
 		ni := cluster.NetInfo{
-			NodeIPAddr: testIP,
-			DaemonPort: fmt.Sprintf("%d", targetPort),
-			DirectURL:  fmt.Sprintf("http://%s:%d", testIP, targetPort),
+			NodeHostname: testIP,
+			DaemonPort:   fmt.Sprintf("%d", targetPort),
+			DirectURL:    fmt.Sprintf("http://%s:%d", testIP, targetPort),
 		}
 		di := &cluster.Snode{
 			DaemonID:        genNodeID(i),

@@ -81,8 +81,8 @@ func genObjURL(isSecure, isXML bool) (s string) {
 func genCURLCmdLine(resURL, proxyURL string, targets cluster.NodeMap) []string {
 	var noProxy []string
 	for _, t := range targets {
-		if !cmn.StringInSlice(t.PublicNet.NodeIPAddr, noProxy) {
-			noProxy = append(noProxy, t.PublicNet.NodeIPAddr)
+		if !cmn.StringInSlice(t.PublicNet.NodeHostname, noProxy) {
+			noProxy = append(noProxy, t.PublicNet.NodeHostname)
 		}
 	}
 	// TODO:  "--proxy-insecure" requires `curl` 7.58.0+ and is needed when we USE_HTTPS (see #885)

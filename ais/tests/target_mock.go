@@ -46,7 +46,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	mux.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Health), mocktgt.healthdlr)
 
 	target, _ := smap.GetRandTarget()
-	ip := target.PublicNet.NodeIPAddr
+	ip := target.PublicNet.NodeHostname
 
 	s := &http.Server{Addr: ip + ":" + mockTargetPort, Handler: mux}
 	go s.ListenAndServe()
@@ -73,9 +73,9 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 	for _, v := range smap.Tmap {
 		v.DaemonID = tutils.MockDaemonID
 		v.PublicNet = cluster.NetInfo{
-			NodeIPAddr: v.PublicNet.NodeIPAddr,
-			DaemonPort: mockTargetPort,
-			DirectURL:  "http://" + v.PublicNet.NodeIPAddr + ":" + mockTargetPort,
+			NodeHostname: v.PublicNet.NodeHostname,
+			DaemonPort:   mockTargetPort,
+			DirectURL:    "http://" + v.PublicNet.NodeHostname + ":" + mockTargetPort,
 		}
 		v.IntraControlNet = v.PublicNet
 		v.IntraDataNet = v.PublicNet

@@ -52,7 +52,7 @@ func (t *targetrunner) initHostIP() {
 		cmn.AssertNoErr(err)
 		extPort = portNum
 	}
-	t.si.PublicNet.NodeIPAddr = extAddr.String()
+	t.si.PublicNet.NodeHostname = extAddr.String()
 	t.si.PublicNet.DaemonPort = strconv.Itoa(extPort)
 	t.si.PublicNet.DirectURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
 	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetworkPublic))
@@ -1009,37 +1009,16 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 }
 
 // GET /v1/health (cmn.Health)
-// TODO: clusterInfo - see p.healthHandler
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		callerID = r.Header.Get(cmn.HeaderCallerID)
-		caller   = r.Header.Get(cmn.HeaderCallerName)
-		smap     = t.owner.smap.get()
-		query    = r.URL.Query()
-	)
-
-	// external (i.e. not intra-cluster) call
-	if callerID == "" && caller == "" {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: external health-ping from %s", t.si, r.RemoteAddr)
-		}
-		if !t.ClusterStarted() {
-			// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
-			// see also:
-			// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
-			w.WriteHeader(http.StatusServiceUnavailable)
-		}
-		return
-	} else if callerID == "" || caller == "" {
-		t.invalmsghdlrf(w, r, "%s: health-ping missing(%s, %s)", t.si, callerID, caller)
+	if t.healthByExternalWD(w, r) {
 		return
 	}
-
-	if !smap.containsID(callerID) {
-		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si, callerID, caller)
-	}
+	callerID := r.Header.Get(cmn.HeaderCallerID)
+	caller := r.Header.Get(cmn.HeaderCallerName)
+	smap := t.owner.smap.get()
 
 	// NOTE: internal use
+	query := r.URL.Query()
 	getCii := cmn.IsParseBool(query.Get(cmn.URLParamClusterInfo))
 	if getCii {
 		debug.Assert(query.Get(cmn.URLParamRebStatus) == "")

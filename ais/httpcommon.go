@@ -529,37 +529,37 @@ func (h *httprunner) initSI(daemonType string) {
 
 	pubAddr, err = getNetInfo(addrList, proto, config.Net.Hostname, port)
 	if err != nil {
-		cmn.ExitLogf("Failed to get PUBLIC IPv4/hostname: %v", err)
+		cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkPublic, err)
 	}
 	if config.Net.Hostname != "" {
 		s = " (config: " + config.Net.Hostname + ")"
 	}
-	glog.Infof("PUBLIC (user) access: [%s]%s", pubAddr, s)
+	glog.Infof("%s (user) access: [%s]%s", cmn.NetworkPublic, pubAddr, s)
 
 	intraControlAddr = pubAddr
 	if config.Net.UseIntraControl {
 		intraControlAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraControl, config.Net.L4.PortIntraControlStr)
 		if err != nil {
-			cmn.ExitLogf("Failed to get INTRA-CONTROL IPv4/hostname: %v", err)
+			cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraControl, err)
 		}
 		s = ""
 		if config.Net.HostnameIntraControl != "" {
 			s = " (config: " + config.Net.HostnameIntraControl + ")"
 		}
-		glog.Infof("INTRA-CONTROL access: [%s]%s", intraControlAddr, s)
+		glog.Infof("%s access: [%s]%s", cmn.NetworkIntraControl, intraControlAddr, s)
 	}
 
 	intraDataAddr = pubAddr
 	if config.Net.UseIntraData {
 		intraDataAddr, err = getNetInfo(addrList, proto, config.Net.HostnameIntraData, config.Net.L4.PortIntraDataStr)
 		if err != nil {
-			cmn.ExitLogf("Failed to get INTRA-DATA IPv4/hostname: %v", err)
+			cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkIntraData, err)
 		}
 		s = ""
 		if config.Net.HostnameIntraData != "" {
 			s = " (config: " + config.Net.HostnameIntraData + ")"
 		}
-		glog.Infof("INTRA-DATA access: [%s]%s", intraDataAddr, s)
+		glog.Infof("%s access: [%s]%s", cmn.NetworkIntraData, intraDataAddr, s)
 	}
 
 	mustDiffer(pubAddr, config.Net.L4.Port, true,
@@ -584,7 +584,7 @@ func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, 
 	if !use1 || !use2 {
 		return
 	}
-	if ip1.NodeIPAddr == ip2.NodeIPAddr && port1 == port2 {
+	if ip1.NodeHostname == ip2.NodeHostname && port1 == port2 {
 		cmn.ExitLogf("%s: cannot use the same IP:port (%s) for two networks", tag, ip1)
 	}
 }
@@ -647,14 +647,14 @@ func (h *httprunner) run() error {
 
 		if config.Net.UseIntraControl {
 			go func() {
-				addr := h.si.IntraControlNet.NodeIPAddr + ":" + h.si.IntraControlNet.DaemonPort
+				addr := h.si.IntraControlNet.TCPEndpoint()
 				errCh <- h.netServ.control.listenAndServe(addr, h.logger)
 			}()
 		}
 
 		if config.Net.UseIntraData {
 			go func() {
-				addr := h.si.IntraDataNet.NodeIPAddr + ":" + h.si.IntraDataNet.DaemonPort
+				addr := h.si.IntraDataNet.TCPEndpoint()
 				errCh <- h.netServ.data.listenAndServe(addr, h.logger)
 			}()
 		}
@@ -664,7 +664,7 @@ func (h *httprunner) run() error {
 			if testingEnv {
 				// On testing environment just listen on specified `ip:port`.
 				// On production env and K8S listen on `*:port`
-				addr = h.si.PublicNet.NodeIPAddr + addr
+				addr = h.si.PublicNet.NodeHostname + addr
 			}
 			errCh <- h.netServ.pub.listenAndServe(addr, h.logger)
 		}()
@@ -678,7 +678,7 @@ func (h *httprunner) run() error {
 	)
 	if testingEnv && !k8sDetected {
 		// On testing environment just listen on specified `ip:port`.
-		addr = h.si.PublicNet.NodeIPAddr + ":" + h.si.PublicNet.DaemonPort
+		addr = h.si.PublicNet.TCPEndpoint()
 	} else {
 		// When configured or in production env, when only public net is configured,
 		// listen on `*:port`.
@@ -1705,6 +1705,58 @@ func (h *httprunner) pollClusterStarted(timeout time.Duration) {
 			break
 		}
 	}
+}
+
+func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
+	if !h.NodeStarted() {
+		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
+		// see also:
+		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return true
+	}
+
+	callerID := r.Header.Get(cmn.HeaderCallerID)
+	caller := r.Header.Get(cmn.HeaderCallerName)
+	// external (i.e. not intra-cluster) call
+	if callerID == "" && caller == "" {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s: external health-ping from %s", h.si, r.RemoteAddr)
+		}
+		// TODO: establish the fact that we are healthy...
+		return true
+	}
+
+	debug.Assert(isIntraCall(r.Header))
+
+	// Intra cluster health ping
+	if !h.ensureIntraControl(w, r) {
+		return true
+	}
+
+	smap := h.owner.smap.get()
+	if !smap.containsID(callerID) {
+		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", h.si, callerID, caller)
+	}
+	return
+}
+
+// Determine if request is intra-control. For now, using the http.Server handling the request.
+// TODO: Add other checks based on request e.g. `r.RemoteAddr`
+func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request) (isIntra bool) {
+	// When `config.UseIntraControl` is `false`, intra-control net is same as public net.
+	if !cmn.GCO.Get().Net.UseIntraControl {
+		return true
+	}
+
+	intraAddr := h.si.IntraControlNet.TCPEndpoint()
+	srvAddr := r.Context().Value(http.ServerContextKey).(*http.Server).Addr
+	if srvAddr == intraAddr {
+		return true
+	}
+
+	h.invalmsghdlrf(w, r, "%s: expected %s request", h.si, cmn.NetworkIntraControl)
+	return
 }
 
 func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {

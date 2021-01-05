@@ -833,16 +833,16 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 
 	// Parse ports
 	if c.L4.Port, err = ParsePort(c.L4.PortStr); err != nil {
-		return fmt.Errorf("invalid public port specified: %v", err)
+		return fmt.Errorf("invalid %s port specified: %v", NetworkPublic, err)
 	}
 	if c.L4.PortIntraControlStr != "" {
 		if c.L4.PortIntraControl, err = ParsePort(c.L4.PortIntraControlStr); err != nil {
-			return fmt.Errorf("invalid intra control port specified: %v", err)
+			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraControl, err)
 		}
 	}
 	if c.L4.PortIntraDataStr != "" {
 		if c.L4.PortIntraData, err = ParsePort(c.L4.PortIntraDataStr); err != nil {
-			return fmt.Errorf("invalid intra data port specified: %v", err)
+			return fmt.Errorf("invalid %s port specified: %v", NetworkIntraData, err)
 		}
 	}
 

@@ -74,9 +74,9 @@ func joinNodeHandler(c *cli.Context) (err error) {
 	}
 
 	netInfo := cluster.NetInfo{
-		NodeIPAddr: socketAddrParts[0],
-		DaemonPort: socketAddrParts[1],
-		DirectURL:  prefix + socketAddr,
+		NodeHostname: socketAddrParts[0],
+		DaemonPort:   socketAddrParts[1],
+		DirectURL:    prefix + socketAddr,
 	}
 	nodeInfo := &cluster.Snode{
 		DaemonID:        daemonID,

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -53,9 +52,10 @@ type (
 
 	// Snode's networking info
 	NetInfo struct {
-		NodeIPAddr string `json:"node_ip_addr"`
-		DaemonPort string `json:"daemon_port"`
-		DirectURL  string `json:"direct_url"`
+		NodeHostname string `json:"node_ip_addr"`
+		DaemonPort   string `json:"daemon_port"`
+		DirectURL    string `json:"direct_url"`
+		tcpEndpoint  string
 	}
 
 	// Snode - a node (gateway or target) in a cluster
@@ -189,9 +189,9 @@ func (d *Snode) Equals(other *Snode) bool {
 		return false
 	}
 	return d.ID() == other.ID() && d.DaemonType == other.DaemonType &&
-		reflect.DeepEqual(d.PublicNet, other.PublicNet) &&
-		reflect.DeepEqual(d.IntraControlNet, other.IntraControlNet) &&
-		reflect.DeepEqual(d.IntraDataNet, other.IntraDataNet)
+		d.PublicNet.Equals(other.PublicNet) &&
+		d.IntraControlNet.Equals(other.IntraControlNet) &&
+		d.IntraDataNet.Equals(other.IntraDataNet)
 }
 
 func (d *Snode) Validate() error {
@@ -253,15 +253,30 @@ func (d *Snode) isIC() bool          { return d.Flags.IsSet(SnodeIC) }
 //////////////////////
 
 func NewNetInfo(proto, hostname, port string) *NetInfo {
+	tcpEndpoint := fmt.Sprintf("%s:%s", hostname, port)
 	return &NetInfo{
-		NodeIPAddr: hostname,
-		DaemonPort: port,
-		DirectURL:  fmt.Sprintf("%s://%s:%s", proto, hostname, port),
+		NodeHostname: hostname,
+		DaemonPort:   port,
+		DirectURL:    fmt.Sprintf("%s://%s", proto, tcpEndpoint),
+		tcpEndpoint:  tcpEndpoint,
 	}
 }
 
+func (ni *NetInfo) TCPEndpoint() string {
+	if ni.tcpEndpoint == "" {
+		ni.tcpEndpoint = fmt.Sprintf("%s:%s", ni.NodeHostname, ni.DaemonPort)
+	}
+	return ni.tcpEndpoint
+}
+
 func (ni *NetInfo) String() string {
-	return fmt.Sprintf("%s:%s", ni.NodeIPAddr, ni.DaemonPort)
+	return ni.TCPEndpoint()
+}
+
+func (ni *NetInfo) Equals(other NetInfo) bool {
+	return ni.NodeHostname == other.NodeHostname &&
+		ni.DaemonPort == other.DaemonPort &&
+		ni.DirectURL == other.DirectURL
 }
 
 //===============================================================

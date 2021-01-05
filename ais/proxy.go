@@ -159,12 +159,12 @@ func (p *proxyrunner) Run() error {
 
 	p.registerNetworkHandlers(networkHandlers)
 
-	glog.Infof("%s: [public net] listening on: %s", p.si, p.si.PublicNet.DirectURL)
+	glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetworkPublic, p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {
-		glog.Infof("%s: [intra control net] listening on: %s", p.si, p.si.IntraControlNet.DirectURL)
+		glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetworkIntraControl, p.si.IntraControlNet.DirectURL)
 	}
 	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
-		glog.Infof("%s: [intra data net] listening on: %s", p.si, p.si.IntraDataNet.DirectURL)
+		glog.Infof("%s: [%s net] listening on: %s", p.si, cmn.NetworkIntraData, p.si.IntraDataNet.DirectURL)
 	}
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, p.statsT)
@@ -631,13 +631,10 @@ func (p *proxyrunner) syncNewICOwners(smap, newSmap *smapX) {
 // GET /v1/health
 // TODO: split/separate ais-internal vs external calls
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.NodeStarted() {
-		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
-		// see also:
-		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
-		w.WriteHeader(http.StatusServiceUnavailable)
+	if p.healthByExternalWD(w, r) {
 		return
 	}
+
 	var (
 		smap    = p.owner.smap.get()
 		primary = smap != nil && smap.version() > 0 && smap.isPrimary(p.si)
@@ -2509,11 +2506,11 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 			if buf.Len() > 0 {
 				buf.WriteByte(',')
 			}
-			buf.WriteString(si.PublicNet.NodeIPAddr)
+			buf.WriteString(si.PublicNet.NodeHostname)
 			buf.WriteByte(',')
-			buf.WriteString(si.IntraControlNet.NodeIPAddr)
+			buf.WriteString(si.IntraControlNet.NodeHostname)
 			buf.WriteByte(',')
-			buf.WriteString(si.IntraDataNet.NodeIPAddr)
+			buf.WriteString(si.IntraDataNet.NodeHostname)
 		}
 		w.Write(buf.Bytes())
 	default:
@@ -2721,7 +2718,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := validateHostname(nsi.PublicNet.NodeIPAddr); err != nil {
+	if err := validateHostname(nsi.PublicNet.NodeHostname); err != nil {
 		p.invalmsghdlrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, tag, nsi, err)
 		return
 	}
@@ -2818,7 +2815,7 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 
 	if cmn.IsErrConnectionRefused(res.err) {
 		err = fmt.Errorf("failed to reach %s at %s:%s",
-			nsi, nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
+			nsi, nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort)
 	} else {
 		err = fmt.Errorf("%s: failed to %s %s: %v, %s",
 			p.si, tag, nsi, res.err, res.details)
