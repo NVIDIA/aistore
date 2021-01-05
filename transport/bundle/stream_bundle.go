@@ -276,21 +276,21 @@ func (sb *Streams) Resync() {
 		return
 	}
 
-	var old, new []cluster.NodeMap
+	var oldNodeMap, newNodeMap []cluster.NodeMap
 	switch sb.rxNodeType {
 	case cluster.Targets:
-		old = []cluster.NodeMap{sb.smap.Tmap}
-		new = []cluster.NodeMap{smap.Tmap}
+		oldNodeMap = []cluster.NodeMap{sb.smap.Tmap}
+		newNodeMap = []cluster.NodeMap{smap.Tmap}
 	case cluster.Proxies:
-		old = []cluster.NodeMap{sb.smap.Pmap}
-		new = []cluster.NodeMap{smap.Pmap}
+		oldNodeMap = []cluster.NodeMap{sb.smap.Pmap}
+		newNodeMap = []cluster.NodeMap{smap.Pmap}
 	case cluster.AllNodes:
-		old = []cluster.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
-		new = []cluster.NodeMap{smap.Tmap, smap.Pmap}
+		oldNodeMap = []cluster.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
+		newNodeMap = []cluster.NodeMap{smap.Tmap, smap.Pmap}
 	default:
 		cmn.Assert(false)
 	}
-	added, removed := cluster.NodeMapDelta(old, new)
+	added, removed := cluster.NodeMapDelta(oldNodeMap, newNodeMap)
 
 	obundle := sb.get()
 	l := len(added) - len(removed)

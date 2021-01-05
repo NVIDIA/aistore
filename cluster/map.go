@@ -559,18 +559,18 @@ func mapsEq(a, b NodeMap) bool {
 }
 
 // helper to find out NodeMap "delta" or "diff"
-func NodeMapDelta(old, new []NodeMap) (added, removed NodeMap) {
+func NodeMapDelta(oldNodeMap, newNodeMap []NodeMap) (added, removed NodeMap) {
 	added, removed = make(NodeMap), make(NodeMap)
-	for i, mold := range old {
-		mnew := new[i]
+	for i, mold := range oldNodeMap {
+		mnew := newNodeMap[i]
 		for id, si := range mnew {
 			if _, ok := mold[id]; !ok {
 				added[id] = si
 			}
 		}
 	}
-	for i, mold := range old {
-		mnew := new[i]
+	for i, mold := range oldNodeMap {
+		mnew := newNodeMap[i]
 		for id, si := range mold {
 			if _, ok := mnew[id]; !ok {
 				removed[id] = si
