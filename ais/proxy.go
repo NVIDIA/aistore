@@ -934,8 +934,6 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 	}
 
 	switch msg.Action {
-	case cmn.ActRecoverBck: // TODO: add test & cli
-		p.recoverBuckets(w, r, msg)
 	case cmn.ActSummaryBucket:
 		args := bckInitArgs{w: w, r: r, p: p, perms: cmn.AccessBckHEAD, msg: msg}
 		bck, errCode, err := args.init("")
@@ -3629,71 +3627,6 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 	}
 	si := res.v.(*cluster.Snode)
 	return !nsi.Equals(si)
-}
-
-// Upon user request to recover bucket metadata, primary:
-// 1. Broadcasts request to get target BMDs
-// 2. Sorts results by BMD version in a descending order
-// 3. Force=true: use BMD with highest version number as new BMD
-//    Force=false: use targets' BMD only if they are of the same version
-// 4. Set primary's BMD version to be greater than any target's one
-// 4. Metasync the merged BMD
-func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	var (
-		uuid         string
-		rbmd         *bucketMD
-		err          error
-		force, slowp bool
-	)
-	if p.forwardCP(w, r, msg, "recover-buckets") {
-		return
-	}
-	var (
-		path    = cmn.JoinWords(cmn.Version, cmn.Buckets, cmn.AllBuckets)
-		results = p.bcastToGroup(bcastArgs{
-			req:     cmn.ReqArgs{Method: http.MethodGet, Path: path},
-			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-			fv:      func() interface{} { return &bucketMD{} },
-		})
-		bmds = make(bmds, len(results))
-	)
-	for res := range results {
-		if res.err != nil {
-			glog.Errorf("%v (%d: %s)", res.err, res.status, res.details)
-			continue
-		}
-		bmd := res.v.(*bucketMD)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s from %s", bmd, res.si)
-		}
-		if rbmd == nil { // 1. init
-			uuid, rbmd = bmd.UUID, bmd
-		} else if uuid != bmd.UUID { // 2. slow path
-			slowp = true
-		} else if !slowp && rbmd.Version < bmd.Version { // 3. fast path max(version)
-			rbmd = bmd
-		}
-		bmds[res.si] = bmd
-	}
-	if slowp {
-		force = cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamForce))
-		if rbmd, err = resolveUUIDBMD(bmds); err != nil {
-			_, split := err.(*errBmdUUIDSplit)
-			if !force || errors.Is(err, errNoBMD) || split {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			if _, ok := err.(*errTgtBmdUUIDDiffer); ok {
-				glog.Error(err.Error())
-			}
-		}
-	}
-	rbmd.Version += 100
-
-	p.owner.bmd.Lock()
-	p.owner.bmd.put(rbmd)
-	_ = p.metasyncer.sync(revsPair{rbmd, p.newAisMsg(msg, nil, rbmd)})
-	p.owner.bmd.Unlock()
 }
 
 func (p *proxyrunner) canStartRebalance(skipConfigCheck ...bool) error {

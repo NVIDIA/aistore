@@ -72,7 +72,6 @@ const (
 	ActECRespond      = "ecresp"   // respond to other targets' EC requests
 	ActECEncode       = "ecencode" // erasure code a bucket
 	ActStartGFN       = "metasync-start-gfn"
-	ActRecoverBck     = "recoverbck"
 	ActAttach         = "attach"
 	ActDetach         = "detach"
 	// Node maintenance
