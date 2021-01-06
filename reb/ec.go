@@ -1265,6 +1265,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 		return
 	}
 	rq.Header.Add(cmn.HeaderCallerID, reb.t.Snode().ID())
+	rq.Header.Add(cmn.HeaderCallerName, reb.t.Snode().Name())
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cmn.Close
 		return
@@ -1292,6 +1293,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 		return
 	}
 	rq.Header.Add(cmn.HeaderCallerID, reb.t.Snode().ID())
+	rq.Header.Add(cmn.HeaderCallerName, reb.t.Snode().Name())
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cmn.Close
 		return

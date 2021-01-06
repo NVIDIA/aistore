@@ -1106,6 +1106,7 @@ func (t *targetrunner) enable() error {
 func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	header := make(http.Header)
 	header.Add(cmn.HeaderCallerID, t.Snode().ID())
+	header.Add(cmn.HeaderCallerName, t.Snode().Name())
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	args := callArgs{
@@ -1129,6 +1130,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	header := make(http.Header)
 	header.Add(cmn.HeaderCallerID, t.Snode().ID())
+	header.Add(cmn.HeaderCallerName, t.Snode().Name())
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
