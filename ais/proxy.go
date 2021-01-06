@@ -1088,7 +1088,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 			timeout: config.Timeout.MaxHostBusy + config.Timeout.MaxKeepalive,
 		}
 	)
-	results := p.bcastToGroup(args)
+	results := p.bcastGroup(args)
 	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
 	if err != nil {
 		return nil, "", err
@@ -1108,7 +1108,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	args.req.Query = q
 	args.fv = func() interface{} { return &cmn.BucketsSummaries{} }
 	summaries = make(cmn.BucketsSummaries, 0)
-	for result := range p.bcastToGroup(args) {
+	for result := range p.bcastGroup(args) {
 		if result.err != nil {
 			return nil, "", result.err
 		}
@@ -1619,7 +1619,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	}
 
 	// Combine the results.
-	for res := range p.bcastToGroup(args) {
+	for res := range p.bcastGroup(args) {
 		if res.err != nil {
 			return nil, res.err
 		}
@@ -1684,7 +1684,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	)
 
 	if smsg.NeedLocalMD() {
-		results = p.bcastToGroup(args)
+		results = p.bcastGroup(args)
 	} else {
 		nl, exists := p.notifs.entry(smsg.UUID)
 		// NOTE: We register a listobj xaction before starting the actual listing
@@ -1828,7 +1828,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 	nlb := xaction.NewXactNL(aisMsg.UUID, aisMsg.Action, &smap.Smap, nil)
 	nlb.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
-	results = p.bcastToGroup(bcastArgs{
+	results = p.bcastGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body},
 		smap:    smap,
 		timeout: timeout,
@@ -2546,7 +2546,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 
 func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
 	fetchResults := func(broadcastType int) (cmn.JSONRawMsgs, string) {
-		results := p.bcastToGroup(bcastArgs{
+		results := p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: r.Method,
 				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
@@ -2618,7 +2618,7 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 			return nil
 		}
 	}
-	results := p.bcastToGroup(bcastArgs{
+	results := p.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: r.Method,
 			Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),

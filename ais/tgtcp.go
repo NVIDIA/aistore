@@ -1132,7 +1132,7 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
-	res := t.bcastToGroup(bcastArgs{
+	res := t.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
 			Header: header,

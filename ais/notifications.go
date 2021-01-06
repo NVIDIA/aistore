@@ -389,7 +389,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 			nodes:   []cluster.NodeMap{nl.Notifiers()},
 		}
 		args.nodeCount = len(args.nodes[0])
-		n.p.bcastToNodesAsync(args)
+		n.p.bcastAsyncNodes(args)
 	}
 	nl.Callback(nl, time.Now().UnixNano())
 }
@@ -452,7 +452,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 	args.nodeCount = len(args.nodes[0])
 	debug.Assert(args.nodeCount > 0) // Ensure that there is at least one node to fetch.
 
-	results := n.p.bcastToNodes(args)
+	results := n.p.bcastNodes(args)
 	for res := range results {
 		if res.err == nil {
 			stats, finished, aborted, err := nl.UnmarshalStats(res.bytes)

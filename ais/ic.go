@@ -354,7 +354,7 @@ func (ic *ic) bcastListenIC(nl nl.NotifListener, smap *smapX) {
 		msg    = ic.p.newAisMsg(&actMsg, smap, nil)
 	)
 	cmn.Assert(nl.ActiveCount() > 0)
-	ic.p.bcastToIC(msg, false /*wait*/)
+	ic.p.bcastAsyncIC(msg)
 }
 
 func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {

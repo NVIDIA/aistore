@@ -351,7 +351,7 @@ outer:
 	if revsReqType == revsReqNotify {
 		to = cluster.Targets
 	}
-	res := y.p.bcastToGroup(bcastArgs{
+	res := y.p.bcastGroup(bcastArgs{
 		req:               cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
 		smap:              smap,
 		timeout:           config.Timeout.MaxKeepalive, // making exception for this critical op
@@ -434,7 +434,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 			nodes:     []cluster.NodeMap{refused},
 			nodeCount: len(refused),
 		}
-		res = y.p.bcastToNodes(&bargs)
+		res = y.p.bcastNodes(&bargs)
 	)
 	for r := range res {
 		if r.err == nil {
@@ -523,7 +523,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		}
 	)
 	defer body.Free()
-	res := y.p.bcastToNodes(&bargs)
+	res := y.p.bcastNodes(&bargs)
 	for r := range res {
 		if r.err == nil {
 			y.syncDone(r.si, pairs)

@@ -545,7 +545,7 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 			to:   cluster.AllNodes,
 			fv:   func() interface{} { return &SmapVoteMsg{} },
 		}
-		results = p.bcastToGroup(args)
+		results = p.bcastGroup(args)
 	)
 	done = true
 	for k := range bmds {

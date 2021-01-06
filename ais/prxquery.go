@@ -61,7 +61,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		smap:    smap,
 	}
 
-	for res := range p.bcastToGroup(args) {
+	for res := range p.bcastGroup(args) {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
 			return
@@ -153,7 +153,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		results = p.bcastToGroup(bcastArgs{
+		results = p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
 				Path:   cmn.JoinWords(cmn.Version, cmn.Query, cmn.Peek),

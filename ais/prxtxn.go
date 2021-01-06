@@ -782,7 +782,7 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) chan callResul
 		now := time.Now()
 		c.req.Query.Set(cmn.URLParamUnixTime, cmn.UnixNano2S(now.UnixNano()))
 	}
-	return c.p.bcastToGroup(bcastArgs{req: c.req, smap: c.smap, timeout: timeout})
+	return c.p.bcastGroup(bcastArgs{req: c.req, smap: c.smap, timeout: timeout})
 }
 
 // txn client context

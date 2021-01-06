@@ -854,7 +854,7 @@ func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte, kind string)
 		nodes:     []cluster.NodeMap{snodes},
 		nodeCount: len(snodes),
 	}
-	h.bcastToNodesAsync(&args)
+	h.bcastAsyncNodes(&args)
 }
 
 func (h *httprunner) callerNotifyFin(n cluster.Notif, err error) {
@@ -908,14 +908,14 @@ func (h *httprunner) notifDst(notif cluster.Notif) (nodes cluster.NodeMap) {
 // broadcast //
 ///////////////
 
-// _callGroup internal helper that transforms raw message parts into `bcastToGroup`.
+// _callGroup internal helper that transforms raw message parts into `bcastGroup`.
 func (h *httprunner) _callGroup(method, path string, body []byte, to int, query ...url.Values) chan callResult {
 	cmn.Assert(method != "" && path != "")
 	q := url.Values{}
 	if len(query) > 0 {
 		q = query[0]
 	}
-	return h.bcastToGroup(bcastArgs{
+	return h.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: method,
 			Path:   path,
@@ -937,14 +937,16 @@ func (h *httprunner) callAll(method, path string, body []byte, query ...url.Valu
 	return h._callGroup(method, path, body, cluster.AllNodes, query...)
 }
 
-// bcastToGroup broadcasts a message to specific group of nodes (targets, proxies, all).
-func (h *httprunner) bcastToGroup(args bcastArgs) chan callResult {
+// bcastGroup broadcasts a message to a specific group of nodes: targets, proxies, all.
+func (h *httprunner) bcastGroup(args bcastArgs) chan callResult {
 	if args.smap == nil {
 		args.smap = h.owner.smap.get()
 	}
+	present := args.smap.isPresent(h.si)
 	if args.network == "" {
 		args.network = cmn.NetworkIntraControl
 	}
+	debug.Assert(cmn.NetworkIsKnown(args.network))
 	if args.timeout == 0 {
 		args.timeout = cmn.GCO.Get().Timeout.CplaneOperation
 		cmn.Assert(args.timeout != 0)
@@ -954,30 +956,36 @@ func (h *httprunner) bcastToGroup(args bcastArgs) chan callResult {
 	case cluster.Targets:
 		args.nodes = []cluster.NodeMap{args.smap.Tmap}
 		args.nodeCount = len(args.smap.Tmap)
+		if present && h.si.IsTarget() {
+			args.nodeCount--
+		}
 	case cluster.Proxies:
 		args.nodes = []cluster.NodeMap{args.smap.Pmap}
 		args.nodeCount = len(args.smap.Pmap)
+		if present && h.si.IsProxy() {
+			args.nodeCount--
+		}
 	case cluster.AllNodes:
 		args.nodes = []cluster.NodeMap{args.smap.Pmap, args.smap.Tmap}
 		args.nodeCount = len(args.smap.Pmap) + len(args.smap.Tmap)
+		if present {
+			args.nodeCount--
+		}
 	default:
 		cmn.Assert(false)
 	}
-	if !cmn.NetworkIsKnown(args.network) {
-		cmn.Assertf(false, "unknown network %q", args.network)
-	}
-	return h.bcastToNodes(&args)
+	return h.bcastNodes(&args)
 }
 
-// bcastToNodes broadcasts a message to the specified destinations (`bargs.nodes`).
-// It then waits and collects all the responses. Note that when `bargs.req.BodyR`
-// is used it is expected to implement `cmn.ReadOpenCloser`.
-func (h *httprunner) bcastToNodes(bargs *bcastArgs) chan callResult {
+// bcastNodes broadcasts a message to the specified destinations (`bargs.nodes`).
+// It then waits and collects all the responses (compare with bcastAsyncNodes).
+// Note that, if specified, `bargs.req.BodyR` must implement `cmn.ReadOpenCloser`.
+func (h *httprunner) bcastNodes(bargs *bcastArgs) chan callResult {
 	var (
-		wg  = &sync.WaitGroup{}
 		ch  = make(chan callResult, bargs.nodeCount)
 		cnt int
 	)
+	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
 	for _, nodeMap := range bargs.nodes {
 		for sid, si := range nodeMap {
 			if sid == h.si.ID() {
@@ -986,20 +994,24 @@ func (h *httprunner) bcastToNodes(bargs *bcastArgs) chan callResult {
 			if !bargs.ignoreMaintenance && nodeMap.InMaintenance(si) {
 				continue
 			}
-			wg.Add(1)
 			cnt++
-			go h.unicastToNode(si, bargs, wg, ch)
+			wg.Add(1)
+			go func(si *cluster.Snode) {
+				h._call(si, bargs, ch)
+				wg.Done()
+			}(si)
 		}
 	}
 	wg.Wait()
 	close(ch)
 	if cnt == 0 {
-		glog.Warningf("%s: node count is zero in [%s %s] broadcast", h.si, bargs.req.Method, bargs.req.Path)
+		glog.Warningf("%s: node count is zero in [%s %s] broadcast",
+			h.si, bargs.req.Method, bargs.req.Path)
 	}
 	return ch
 }
 
-func (h *httprunner) unicastToNode(si *cluster.Snode, bargs *bcastArgs, wg *sync.WaitGroup, ch chan callResult) {
+func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, ch chan callResult) {
 	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
 	cargs.req.Base = si.URL(bargs.network)
 	if bargs.req.BodyR != nil {
@@ -1008,16 +1020,11 @@ func (h *httprunner) unicastToNode(si *cluster.Snode, bargs *bcastArgs, wg *sync
 	if bargs.fv != nil {
 		cargs.v = bargs.fv()
 	}
-	if wg != nil {
-		ch <- h.call(cargs)
-		wg.Done()
-	} else {
-		_ = h.call(cargs)
-	}
+	ch <- h.call(cargs)
 }
 
-// asynchronous variation of the `bcastToNodes` (above)
-func (h *httprunner) bcastToNodesAsync(bargs *bcastArgs) {
+// asynchronous variation of the `bcastNodes` (above)
+func (h *httprunner) bcastAsyncNodes(bargs *bcastArgs) {
 	var sema *cmn.DynSemaphore
 	if bargs.nodeCount == 0 {
 		smap := h.owner.smap.get()
@@ -1048,7 +1055,7 @@ func (h *httprunner) bcastToNodesAsync(bargs *bcastArgs) {
 	}
 }
 
-func (h *httprunner) bcastToIC(msg *aisMsg, wait bool) {
+func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 	var (
 		smap  = h.owner.smap.get()
 		bargs = bcastArgs{
@@ -1060,39 +1067,16 @@ func (h *httprunner) bcastToIC(msg *aisMsg, wait bool) {
 			network: cmn.NetworkIntraControl,
 			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
 		}
-		ch  chan callResult
-		wg  *sync.WaitGroup
-		cnt int
 	)
-	if wait {
-		wg = &sync.WaitGroup{}
-		ch = make(chan callResult, smap.ICCount())
-	}
 	for pid, psi := range smap.Pmap {
 		if !smap.IsIC(psi) || pid == h.si.ID() {
 			continue
 		}
-		if wait {
-			wg.Add(1)
-		}
-		cnt++
-		go h.unicastToNode(psi, &bargs, wg, ch)
+		go func(si *cluster.Snode) {
+			cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
+			_ = h.call(cargs)
+		}(psi)
 	}
-	if !wait {
-		return
-	}
-	wg.Wait()
-	close(ch)
-	if cnt == 0 {
-		glog.Errorf("%s: node count is zero in broadcast-to-IC, %s", h.si, smap.StrIC(h.si))
-	}
-	debug.Func(func() {
-		for res := range ch {
-			if res.err != nil {
-				glog.Error(res.err)
-			}
-		}
-	})
 }
 
 //////////////////////////////////

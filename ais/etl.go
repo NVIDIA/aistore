@@ -261,7 +261,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results := p.bcastToGroup(bcastArgs{
+	results := p.bcastGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)},
 		timeout: cmn.LongTimeout,
 	})
@@ -280,7 +280,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	// At least one `init` call has failed. Terminate all started ETL pods.
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
-	p.bcastToGroup(bcastArgs{
+	p.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
 			Path:   cmn.JoinWords(cmn.Version, cmn.ETL, cmn.ETLStop, msg.ID),
@@ -314,7 +314,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results := p.bcastToGroup(bcastArgs{
+	results := p.bcastGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)},
 		timeout: cmn.LongTimeout,
 	})
@@ -333,7 +333,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	// At least one `build` call has failed. Terminate all `build`s.
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
-	p.bcastToGroup(bcastArgs{
+	p.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
 			Path:   cmn.JoinWords(cmn.Version, cmn.ETL, cmn.ETLStop, msg.ID),
@@ -392,7 +392,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		close(results)
 	} else {
 		// all targets
-		results = p.bcastToGroup(bcastArgs{
+		results = p.bcastGroup(bcastArgs{
 			req:     cmn.ReqArgs{Method: http.MethodGet, Path: r.URL.Path},
 			timeout: cmn.DefaultTimeout,
 			fv:      func() interface{} { return &etl.PodLogsMsg{} },
@@ -421,7 +421,7 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
 		return
 	}
-	results := p.bcastToGroup(bcastArgs{
+	results := p.bcastGroup(bcastArgs{
 		req:     cmn.ReqArgs{Method: http.MethodDelete, Path: r.URL.Path},
 		timeout: cmn.LongTimeout,
 	})
