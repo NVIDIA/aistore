@@ -550,13 +550,21 @@ func (h *httprunner) initSI(daemonType string) {
 		port                                     = config.Net.L4.PortStr
 		proto                                    = config.Net.HTTP.Proto
 		addrList, err                            = getLocalIPv4List()
+		k8sDetected                              = k8s.Detect() == nil
 		pubAddr, intraControlAddr, intraDataAddr cluster.NetInfo
 	)
 	if err != nil {
 		cmn.ExitLogf("Failed to get local IP addr list, err: %v", err)
 	}
 
-	pubAddr, err = getNetInfo(addrList, proto, config.Net.Hostname, port)
+	// NOTE: In K8S deployment, public hostname could be LoadBalancer external IP, or a service DNS.
+	if k8sDetected && config.Net.Hostname != "" {
+		glog.Infof("detected K8S deployment, skipping hostname validation for %q", config.Net.Hostname)
+		pubAddr = *cluster.NewNetInfo(proto, config.Net.Hostname, port)
+	} else {
+		pubAddr, err = getNetInfo(addrList, proto, config.Net.Hostname, port)
+	}
+
 	if err != nil {
 		cmn.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetworkPublic, err)
 	}
