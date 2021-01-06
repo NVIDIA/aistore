@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/query"
 )
@@ -185,8 +186,13 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 
 	if len(result.Entries) > 0 {
 		last := result.Entries[len(result.Entries)-1]
-		discardResults := p.callTargets(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Query, cmn.Discard, msg.Handle, last.Name), nil)
-
+		discardResults := p.bcastGroup(bcastArgs{
+			req: cmn.ReqArgs{
+				Method: http.MethodPut,
+				Path:   cmn.JoinWords(cmn.Version, cmn.Query, cmn.Discard, msg.Handle, last.Name),
+			},
+			to: cluster.Targets,
+		})
 		for res := range discardResults {
 			if res.err != nil && res.status != http.StatusNotFound {
 				p.invalmsghdlr(w, r, res.err.Error())

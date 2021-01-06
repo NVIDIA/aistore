@@ -937,35 +937,6 @@ func (h *httprunner) notifDst(notif cluster.Notif) (nodes cluster.NodeMap) {
 // broadcast //
 ///////////////
 
-// _callGroup internal helper that transforms raw message parts into `bcastGroup`.
-func (h *httprunner) _callGroup(method, path string, body []byte, to int, query ...url.Values) chan callResult {
-	cmn.Assert(method != "" && path != "")
-	q := url.Values{}
-	if len(query) > 0 {
-		q = query[0]
-	}
-	return h.bcastGroup(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   path,
-			Body:   body,
-			Query:  q,
-		},
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
-		to:      to,
-	})
-}
-
-// callTargets neat one-liner method for sending a message to all targets.
-func (h *httprunner) callTargets(method, path string, body []byte, query ...url.Values) chan callResult {
-	return h._callGroup(method, path, body, cluster.Targets, query...)
-}
-
-// callAll neat one-liner method for sending a message to all nodes.
-func (h *httprunner) callAll(method, path string, body []byte, query ...url.Values) chan callResult {
-	return h._callGroup(method, path, body, cluster.AllNodes, query...)
-}
-
 // bcastGroup broadcasts a message to a specific group of nodes: targets, proxies, all.
 func (h *httprunner) bcastGroup(args bcastArgs) chan callResult {
 	if args.smap == nil {

@@ -239,7 +239,15 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 		q   = url.Values{}
 	)
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.ID())
-	results := p.callAll(http.MethodGet, cmn.JoinWords(cmn.Version, cmn.Vote, cmn.Proxy), cmn.MustMarshal(&msg), q)
+	results := p.bcastGroup(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Path:   cmn.JoinWords(cmn.Version, cmn.Vote, cmn.Proxy),
+			Body:   cmn.MustMarshal(&msg),
+			Query:  q,
+		},
+		to: cluster.AllNodes,
+	})
 	resCh := make(chan voteResult, len(results))
 	for res := range results {
 		if res.err != nil {
@@ -273,17 +281,24 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cmn.StringSet {
 				Initiator: p.si.ID(),
 			},
 		}
-		res = p.callAll(http.MethodPut, cmn.JoinWords(cmn.Version, cmn.Vote, cmn.Voteres), cmn.MustMarshal(msg))
 	)
-	for r := range res {
-		if r.err != nil {
+	results := p.bcastGroup(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodPut,
+			Path:   cmn.JoinWords(cmn.Version, cmn.Vote, cmn.Voteres),
+			Body:   cmn.MustMarshal(msg),
+		},
+		to: cluster.AllNodes,
+	})
+	for res := range results {
+		if res.err != nil {
 			glog.Warningf(
 				"Broadcast commit result for %s(%s) failed: %v",
-				r.si.ID(),
-				r.si.IntraControlNet.DirectURL,
-				r.err,
+				res.si.ID(),
+				res.si.IntraControlNet.DirectURL,
+				res.err,
 			)
-			errors.Add(r.si.ID())
+			errors.Add(res.si.ID())
 		}
 	}
 	return errors
