@@ -689,7 +689,6 @@ func (lom *LOM) Clone(fqn string) *LOM {
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
 func (lom *LOM) Hkey() (string, int) {
-	debug.Assert(lom.mpathDigest != 0)
 	return lom.md.uname, int(lom.mpathDigest & (cmn.MultiSyncMapCount - 1))
 }
 
@@ -700,9 +699,8 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 		if err != nil {
 			return
 		}
-		if parsedFQN.ContentType != fs.ObjectType {
-			debug.Assertf(parsedFQN.ContentType == fs.ObjectType, "use CT for non-objects[%s]: %s", parsedFQN.ContentType, lom.FQN)
-		}
+		debug.Assertf(parsedFQN.ContentType == fs.ObjectType,
+			"use CT for non-objects[%s]: %s", parsedFQN.ContentType, lom.FQN)
 		lom.mpathInfo = parsedFQN.MpathInfo
 		lom.mpathDigest = parsedFQN.Digest
 		if bck.Name == "" {
@@ -720,7 +718,8 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 		if bck.Ns.IsGlobal() {
 			bck.Ns = parsedFQN.Bck.Ns
 		} else if bck.Ns != parsedFQN.Bck.Ns {
-			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)", lom.FQN, bck.Ns, parsedFQN.Bck.Ns)
+			return fmt.Errorf("lom-init %s: namespace mismatch (%s != %s)",
+				lom.FQN, bck.Ns, parsedFQN.Bck.Ns)
 		}
 	}
 	bowner := T.Bowner()
