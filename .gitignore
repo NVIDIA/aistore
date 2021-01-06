@@ -75,6 +75,9 @@ venv.bak/
 .spyderproject
 .spyproject
 
+# Goland IntelliJ IDE
+.idea
+
 # Rope project settings
 .ropeproject
 

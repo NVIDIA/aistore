@@ -76,6 +76,10 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		return incorrectUsageMsg(c, "%q: missing object name", fullObjName)
 	}
 
+	if outFile == "" {
+		outFile = filepath.Base(object)
+	}
+
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
 		return objectCheckExists(c, bck, object)
@@ -94,6 +98,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 
 	if outFile == fileStdIO {
 		objArgs = api.GetObjectInput{Writer: os.Stdout, Header: hdr}
+		silent = true
 	} else {
 		var file *os.File
 		if file, err = os.Create(outFile); err != nil {
@@ -125,7 +130,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		return
 	}
 	if !silent {
-		fmt.Fprintf(c.App.ErrWriter, "%q has the size %s (%d B)\n", object, cmn.B2S(objLen, 2), objLen)
+		fmt.Fprintf(c.App.Writer, "GET %q from bucket %q as %q [%s]\n", object, bck, outFile, cmn.B2S(objLen, 2))
 	}
 	return
 }
@@ -384,6 +389,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName, cksumType string)
 			return err
 		}
 		fmt.Fprintf(c.App.Writer, "PUT %q into bucket %q\n", objName, bck)
+
 		return nil
 	}
 
@@ -493,7 +499,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		return fmt.Errorf("%v. Object not created", err)
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %q of size %d into bucket %q\n", objName, totalSize, bck)
+	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %q [%s] into bucket %q\n", objName, cmn.B2S(totalSize, 2), bck)
 
 	return nil
 }

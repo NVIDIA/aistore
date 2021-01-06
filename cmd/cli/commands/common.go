@@ -171,7 +171,7 @@ const (
 	bucketAndPropsArgument = "BUCKET_NAME [PROP_PREFIX]"
 
 	// Objects
-	getObjectArgument        = "BUCKET_NAME/OBJECT_NAME OUT_FILE"
+	getObjectArgument        = "BUCKET_NAME/OBJECT_NAME [OUT_FILE]"
 	putPromoteObjectArgument = "FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]"
 	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET_NAME/OBJECT_NAME"
 	objectArgument           = "BUCKET_NAME/OBJECT_NAME"

@@ -14,9 +14,9 @@
 
 ## GET object
 
-`ais get BUCKET_NAME/OBJECT_NAME OUT_FILE`
+`ais get BUCKET_NAME/OBJECT_NAME [OUT_FILE]`
 
-Get an object from a bucket.
+Get an object from a bucket.  If a local file of the same name exists, the local file will be overwritten without confirmation.
 
 ### Options
 
@@ -27,22 +27,33 @@ Get an object from a bucket.
 | `--checksum` | `bool` | Validate the checksum of the object | `false` |
 | `--is-cached` | `bool` | Check if the object is cached locally, without downloading it. | `false` |
 
-`OUT_FILE`: filename in already existing directory or `-` for `stdout`
+`OUT_FILE`: filename in an existing directory or `-` for `stdout`
 
 ### Examples
 
-#### Save object to local file
+#### Save object to local file with explicit file name
 
-Get `imagenet_train-000010.tgz` object from `imagenet` bucket and write it as `~/train-10.tgz` file.
+Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `~/train-10.tgz`.
 
 ```console
 $ ais get imagenet/imagenet_train-000010.tgz ~/train-10.tgz
-train-10.tgz has the size 946.8MiB (992791757 B)
+GET "imagenet_train-000010.tgz" from bucket "imagenet" as "/home/user/train-10.tgz" [946.8MiB]
+```
+
+#### Save object to local file with implicit file name
+
+If `OUT_FILE` is omitted, the local file name is implied from the object name.
+
+Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `imagenet_train-000010.tgz`.
+
+```console
+$ ais get imagenet/imagenet_train-000010.tgz
+GET "imagenet_train-000010.tgz" from bucket "imagenet" as "imagenet_train-000010.tgz" [946.8MiB]
 ```
 
 #### Get object and print it to standard output
 
-Get `imagenet_train-000010.tgz` object from `imagenet` cloud bucket and write it to standard output.
+Get the `imagenet_train-000010.tgz` object from the `imagenet` cloud bucket and write it to standard output.
 
 ```console
 $ ais get cloud://imagenet/imagenet_train-000010.tgz -
@@ -52,10 +63,12 @@ $ ais get cloud://imagenet/imagenet_train-000010.tgz -
 
 We say that "an object is cached" to indicate two separate things:
 
-* The object was originally downloaded from a Cloud bucket, bucket in a remote AIS cluster, or HTTP(s) based dataset;
+* The object was originally downloaded from a Cloud bucket, a bucket in a remote AIS cluster, or a HTTP(s) based dataset;
 * The object is stored in the AIS cluster.
 
-In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location. Being "cached" does not have any implications on object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
+In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go to the object's original location.
+Being "cached" does not have any implications on an object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored 
+with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
 
 The following example checks whether `imagenet_train-000010.tgz` is "cached" in the bucket `imagenet`:
 
@@ -66,7 +79,7 @@ Cached: true
 
 #### Read range
 
-Get contents of object `list.txt` from `texts` bucket starting from offset `1024` length `1024` and save it as `~/list.txt` file.
+Get the contents of object `list.txt` from `texts` bucket starting from offset `1024` length `1024` and save it as `~/list.txt` file.
 
 ```console
 $ ais get --offset 1024 --length 1024 texts/list.txt ~/list.txt
@@ -122,7 +135,9 @@ Supported properties:
 - `atime` - object's last access time
 - `copies` - the number of object replicas per target (empty if bucket mirroring is disabled)
 - `checksum` - object's checksum
-- `ec` - object's EC info (empty if EC is disabled for the bucket, if EC is enabled it looks like `DATA:PARITY[MODE]`, where `DATA` - the number of data slices, `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets, `encoded`  the object is erasure coded and other targets contains only encoded slices
+- `ec` - object's EC info (empty if EC is disabled for the bucket, if EC is enabled it looks like `DATA:PARITY[MODE]`, where `DATA` - the number of data slices, 
+      `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets, 
+      `encoded`  the object is erasure coded and other targets contains only encoded slices
 
 ### Examples
 
@@ -160,9 +175,12 @@ SIZE    VERSION EC
 
 `ais put -|FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
-Put a file, entire directory (of files) or content from STDIN (`-`) into the specified bucket.
-If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty, then shows all gathered info to the user and asks for confirmation to continue.
-Confirmation request can be disabled with the option `--yes` for use in scripts.
+Put a file, an entire directory of files, or content from STDIN (`-`) into the specified bucket. If an object of the same name exists,
+the object will be overwritten without confirmation.
+
+If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size and checks if the bucket is empty,
+then shows all gathered info to the user and asks for confirmation to continue. Confirmation request can be disabled with the option `--yes` for use in scripts.
+
 
 ### Options
 
@@ -604,10 +622,11 @@ Rename object from an ais bucket.
 
 `ais concat DIRNAME|FILENAME [DIRNAME|FILENAME...] BUCKET/OBJECT_NAME`
 
-Create an object in a bucket by concatenating provided files, keeping the order as in the arguments list.
-If directory provided, files within the directory are sorted by filename.
-For each file sends a separate request to the cluster.
-Supports recursive iteration through directories and wildcards in the same way as PUT operation does.
+Create an object in a bucket by concatenating the provided files in the order of the arguments provided.
+If an object of the same name exists, the object will be overwritten without confirmation.
+
+If a directory is provided, files within the directory are sent in lexical order of filename to the cluster for concatenation.
+Recursive iteration through directories and wildcards is supported in the same way as the  PUT operation.
 
 ### Options
 

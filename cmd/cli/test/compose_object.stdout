@@ -1,5 +1,5 @@
 "$BUCKET" bucket created
-COMPOSE "object.txt" of size 20 into bucket "$BUCKET"
+COMPOSE "object.txt" [20B] into bucket "$BUCKET"
 0123456789abcdefghi
-COMPOSE "object1.txt" of size 7 into bucket "$BUCKET"
+COMPOSE "object1.txt" [7B] into bucket "$BUCKET"
 012345
