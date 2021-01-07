@@ -5,11 +5,13 @@
 package s3_integration
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -30,9 +32,24 @@ func TestE2ES3(t *testing.T) {
 
 var _ = Describe("E2E AWS Compatibility Tests", func() {
 	var (
+		host   string
+		params string
+	)
+
+	if value := os.Getenv(cmn.EnvVars.UseHTTPS); cmn.IsParseBool(value) {
+		host = "https://localhost:8080/s3"
+		params = "--no-check-certificate"
+	} else {
+		host = "http://localhost:8080/s3"
+		params = "--no-ssl --no-check-certificate"
+	}
+
+	var (
 		entries []TableEntry
 
-		f        = &tutils.E2EFramework{}
+		f = &tutils.E2EFramework{
+			Vars: map[string]string{"HOST": host, "PARAMS": params},
+		}
 		files, _ = filepath.Glob("./*.in")
 	)
 

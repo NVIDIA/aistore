@@ -80,8 +80,11 @@ test:short:
 
 test:authn:
   stage: test-short
-  only:
-    - schedules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   variables:
     AUTH_ENABLED: "true"
     AUTHN_URL: "http://localhost:52001"
@@ -96,8 +99,11 @@ test:authn:
 
 test:https:
   stage: test-short
-  only:
-    - schedules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   variables:
     AIS_ENDPOINT: "https://localhost:8080"
     AIS_USE_HTTPS: "true"

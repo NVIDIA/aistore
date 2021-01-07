@@ -24,7 +24,8 @@ import (
 
 type (
 	E2EFramework struct {
-		Dir string
+		Dir  string
+		Vars map[string]string // Custom variables passed to input and output files.
 	}
 )
 
@@ -91,7 +92,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 
 		lastResult = ""
 		bucket     = strings.ToLower(cmn.RandString(10))
-		space      = regexp.MustCompile(`\s+`) // used to replace all whitespace with single spaces
+		space      = regexp.MustCompile(`\s+`) // Used to replace all whitespace with single spaces.
 		target     = randomTarget()
 		mountpath  = randomMountpath(target)
 
@@ -100,7 +101,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		cleanupFileName = fileName + ".cleanup"
 	)
 
-	// Create random file
+	// Create random file.
 	tmpFile, err := ioutil.TempFile("", "e2e-")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	object := tmpFile.Name()
@@ -114,6 +115,9 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		s = strings.ReplaceAll(s, "$RANDOM_MOUNTPATH", mountpath)
 		s = strings.ReplaceAll(s, "$DIR", f.Dir)
 		s = strings.ReplaceAll(s, "$RESULT", lastResult)
+		for k, v := range f.Vars {
+			s = strings.ReplaceAll(s, "$"+k, v)
+		}
 		return s
 	}
 
