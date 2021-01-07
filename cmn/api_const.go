@@ -165,9 +165,10 @@ const (
 // URL Query "?name1=val1&name2=..."
 const (
 	// user/app API
-	URLParamWhat        = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
-	URLParamProps       = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
-	URLParamCheckExists = "check_cached" // true: check if object exists
+	URLParamWhat            = "what"         // "smap" | "bmd" | "config" | "stats" | "xaction" ...
+	URLParamProps           = "props"        // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
+	URLParamCheckExists     = "check_cached" // true: check if object exists
+	URLParamHealthReadiness = "readiness"    // true: check if node can accept HTTP(S) requests
 
 	URLParamProvider   = "provider" // cloud provider
 	URLParamNamespace  = "namespace"

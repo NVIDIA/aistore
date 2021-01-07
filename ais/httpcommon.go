@@ -1736,9 +1736,18 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 	caller := r.Header.Get(cmn.HeaderCallerName)
 	// external (i.e. not intra-cluster) call
 	if callerID == "" && caller == "" {
+		readiness := cmn.IsParseBool(r.URL.Query().Get(cmn.URLParamHealthReadiness))
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: external health-ping from %s", h.si, r.RemoteAddr)
 		}
+
+		if !readiness && !h.ClusterStarted() {
+			// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
+			// see also:
+			// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+
 		// TODO: establish the fact that we are healthy...
 		return true
 	}

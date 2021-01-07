@@ -81,7 +81,7 @@ if ! $is_primary; then
     # immediately (and if it doesn't there's no point in proceeding past this point, anyway).
     #
     proxy_ok=false
-    d_url="http://${CLUSTERIP_PROXY_SERVICE_HOSTNAME}:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/health"
+    d_url="http://${CLUSTERIP_PROXY_SERVICE_HOSTNAME}:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/health?readiness=true"
     echo "Waiting for a 200 result on ${d_url}"
 
     start_time="$(date -u +%s)"

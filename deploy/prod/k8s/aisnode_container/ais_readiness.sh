@@ -1,7 +1,7 @@
 #!/bin/bash
 
 health_url="http://${CLUSTERIP_PROXY_SERVICE_HOSTNAME}:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/health"
-our_health_url="http://localhost:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/health"
+our_health_url="http://localhost:${CLUSTERIP_PROXY_SERVICE_PORT}/v1/health?readiness=true"
 
 #
 # If nothing answers with an smap on the clusterIP service then we're in early deployment
