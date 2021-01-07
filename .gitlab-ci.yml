@@ -186,7 +186,6 @@ test:aisloader:
 
 .test_kube_template: &test_kube_def
   variables:
-    AIS_ENDPOINT: "localhost:8080"
     NUM_TARGET: 1
     NUM_PROXY: 1
     BUCKET: "aws://ais-ci"

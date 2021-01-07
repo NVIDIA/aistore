@@ -100,22 +100,12 @@ test-env)
       exit 0
     fi
   fi
+
   if [[ -n ${KUBERNETES_SERVICE_HOST} ]]; then
     echo "AIStore running on Kubernetes..." >&2
-    if [[ "${AIS_ENDPOINT}" != "" ]]; then
-      ip=${AIS_ENDPOINT%:*} # extract IP from format IP:PORT
-      if [[ $(ping -c 1 ${ip} | grep '1 received') ]]; then
-        echo "AIStore connection to ${ip} is working..." >&2
-        exit 0
-      else
-        echo "Error connecting to ${ip}. Did you specify the correct address?" >&2
-        exit 1
-      fi
-    else
-      echo "Error missing environment variable: 'AIS_ENDPOINT=<IP>:<PORT>'" >&2
-      exit 1
-    fi
+    exit 0
   fi
+
   if [[ $(ps aux | grep -v -e 'grep' | grep bin/aisnode) ]]; then
     echo "AIStore running locally..." >&2
     exit 0
