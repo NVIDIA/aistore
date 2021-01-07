@@ -179,7 +179,7 @@ func (t *targetNodeMock) setHandlers(handlers map[string]http.HandlerFunc) {
 func (t *targetNodeMock) setup() {
 	// set default handlers
 	defaultHandlers := map[string]http.HandlerFunc{
-		cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Records) + "/": func(w http.ResponseWriter, r *http.Request) {
+		cmn.URLPathdSortRecords.S + "/": func(w http.ResponseWriter, r *http.Request) {
 			manager, _ := t.managers.Get(globalManagerUUID)
 			manager.incrementReceived()
 		},
@@ -360,7 +360,7 @@ var _ = Describe("Distributed Sort", func() {
 
 					for _, target := range tctx.targets {
 						handlers := map[string]http.HandlerFunc{
-							cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Records) + "/": recordsHandler(target.managers),
+							cmn.URLPathdSortRecords.S + "/": recordsHandler(target.managers),
 						}
 						target.setHandlers(handlers)
 					}

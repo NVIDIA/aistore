@@ -274,7 +274,7 @@ func TestQuerySingleWorkerNext(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 	err = api.DoHTTPRequest(api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Query, cmn.Next),
+		Path:       cmn.URLPathQueryNext.S,
 		Body:       cmn.MustMarshal(query.NextMsg{Handle: handle, Size: 10}),
 	}, buf)
 	tassert.CheckFatal(t, err)

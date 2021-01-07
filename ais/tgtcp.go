@@ -134,7 +134,7 @@ func (t *targetrunner) unregister(_ ...string) (int, error) {
 		si: smap.Primary,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.ID()),
+			Path:   cmn.JoinWords(cmn.URLPathClusterDaemon.S, t.si.ID()),
 		},
 		timeout: cmn.DefaultTimeout,
 	}
@@ -159,7 +159,7 @@ func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
@@ -368,7 +368,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 // register target
 // enable/disable mountpath
 func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
@@ -409,7 +409,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 // unregister
 // remove mountpath
 func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
@@ -850,7 +850,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	if renamed != "" {
 		q.Add(whatRenamedLB, renamed)
 	}
-	path := cmn.JoinWords(cmn.Version, cmn.Daemon)
+	path := cmn.URLPathDaemon.S
 	url := psi.URL(cmn.NetworkIntraControl)
 	timeout := cmn.GCO.Get().Timeout.CplaneOperation
 	args := callArgs{
@@ -1057,7 +1057,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &TokenList{}
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathTokens); err != nil {
+	if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathTokens.L); err != nil {
 		return
 	}
 
@@ -1115,7 +1115,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 			Method: http.MethodHead,
 			Header: header,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
-			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
+			Path:   cmn.JoinWords(cmn.URLPathObjects.S, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
@@ -1134,19 +1134,19 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
-	res := t.bcastGroup(bcastArgs{
+	results := t.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
 			Header: header,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, lom.BckName(), lom.ObjName),
+			Path:   cmn.JoinWords(cmn.URLPathObjects.S, lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
 		ignoreMaintenance: true,
 		smap:              smap,
 	})
-	for r := range res {
-		if r.err == nil {
-			return r.si
+	for res := range results {
+		if res.err == nil {
+			return res.si
 		}
 	}
 	return nil

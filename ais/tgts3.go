@@ -22,7 +22,7 @@ import (
 
 // PUT s3/bckName/objName
 func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathS3)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathS3.L)
 	if err != nil {
 		return
 	}

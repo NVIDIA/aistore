@@ -36,7 +36,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	downloaderXact := xact.(*downloader.Downloader)
 	switch r.Method {
 	case http.MethodPost:
-		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload); err != nil {
+		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {
 			return
 		}
 
@@ -99,7 +99,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}, dlJob)
 		response, statusCode, respErr = downloaderXact.Download(dlJob)
 	case http.MethodGet:
-		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload); err != nil {
+		if _, err := t.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {
 			return
 		}
 
@@ -126,7 +126,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			response, statusCode, respErr = downloaderXact.ListJobs(regex)
 		}
 	case http.MethodDelete:
-		items, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDownload)
+		items, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathDownload.L)
 		if err != nil {
 			return
 		}

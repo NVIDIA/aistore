@@ -218,7 +218,7 @@ func (t *targetrunner) _sendPUT(params cluster.SendToParams) error {
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   params.Tsi.URL(cmn.NetworkIntraData),
-		Path:   cmn.JoinWords(cmn.Version, cmn.Objects, params.BckTo.Name, params.ObjNameTo),
+		Path:   cmn.JoinWords(cmn.URLPathObjects.S, params.BckTo.Name, params.ObjNameTo),
 		Query:  query,
 		Header: hdr,
 		BodyR:  params.Reader,
@@ -451,7 +451,7 @@ func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error
 		req: cmn.ReqArgs{
 			Method: http.MethodGet,
 			Base:   si.URL(cmn.NetworkIntraData),
-			Path:   cmn.JoinWords(cmn.Version, cmn.Rebalance),
+			Path:   cmn.URLPathRebalance.S,
 			Query:  query,
 		},
 		timeout: cmn.DefaultTimeout,

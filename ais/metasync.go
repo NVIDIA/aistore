@@ -342,7 +342,7 @@ outer:
 
 	// step 3: b-cast
 	var (
-		urlPath = cmn.JoinWords(cmn.Version, cmn.Metasync)
+		urlPath = cmn.URLPathMetasync.S
 		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
 		to      = cluster.AllNodes
 	)
@@ -351,7 +351,7 @@ outer:
 	if revsReqType == revsReqNotify {
 		to = cluster.Targets
 	}
-	res := y.p.bcastGroup(bcastArgs{
+	results := y.p.bcastGroup(bcastArgs{
 		req:               cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
 		smap:              smap,
 		timeout:           config.Timeout.MaxKeepalive, // making exception for this critical op
@@ -360,20 +360,20 @@ outer:
 	})
 
 	// step 4: count failures and fill-in refused
-	for r := range res {
-		if r.err == nil {
+	for res := range results {
+		if res.err == nil {
 			if revsReqType == revsReqSync {
-				y.syncDone(r.si, pairsToSend)
+				y.syncDone(res.si, pairsToSend)
 			}
 			continue
 		}
-		glog.Warningf("%s: failed to sync %s, err: %v(%d)", y.p.si, r.si, r.err, r.status)
+		glog.Warningf("%s: failed to sync %s, err: %v(%d)", y.p.si, res.si, res.err, res.status)
 		// in addition to "connection-refused" always retry newTargetID - the joining one
-		if cmn.IsErrConnectionRefused(r.err) || cmn.StringInSlice(r.si.ID(), newTargetIDs) {
+		if cmn.IsErrConnectionRefused(res.err) || cmn.StringInSlice(res.si.ID(), newTargetIDs) {
 			if refused == nil {
 				refused = make(cluster.NodeMap, 2)
 			}
-			refused.Add(r.si)
+			refused.Add(res.si)
 		} else {
 			failedCnt++
 		}
@@ -426,24 +426,22 @@ func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 
 func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap,
 	pairs []revsPair, config *cmn.Config) {
-	var (
-		bargs = bcastArgs{
-			req:       cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
-			network:   cmn.NetworkIntraControl,
-			timeout:   config.Timeout.MaxKeepalive,
-			nodes:     []cluster.NodeMap{refused},
-			nodeCount: len(refused),
-		}
-		res = y.p.bcastNodes(&bargs)
-	)
-	for r := range res {
-		if r.err == nil {
-			delete(refused, r.si.ID())
-			y.syncDone(r.si, pairs)
-			glog.Infof("%s: handle-refused: sync-ed %s", y.p.si, r.si)
+	bargs := bcastArgs{
+		req:       cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
+		network:   cmn.NetworkIntraControl,
+		timeout:   config.Timeout.MaxKeepalive,
+		nodes:     []cluster.NodeMap{refused},
+		nodeCount: len(refused),
+	}
+	results := y.p.bcastNodes(&bargs)
+	for res := range results {
+		if res.err == nil {
+			delete(refused, res.si.ID())
+			y.syncDone(res.si, pairs)
+			glog.Infof("%s: handle-refused: sync-ed %s", y.p.si, res.si)
 		} else {
 			glog.Warningf("%s: handle-refused: failing to sync %s, err: %v (%d)",
-				y.p.si, r.si, r.err, r.status)
+				y.p.si, res.si, res.err, res.status)
 		}
 	}
 }
@@ -512,7 +510,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		pairs = append(pairs, revsPair{revs, msg})
 	}
 	var (
-		urlPath = cmn.JoinWords(cmn.Version, cmn.Metasync)
+		urlPath = cmn.URLPathMetasync.S
 		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
 		bargs   = bcastArgs{
 			req:       cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body},

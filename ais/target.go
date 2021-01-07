@@ -417,7 +417,7 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets}
+	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
 	if err := t.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
@@ -445,7 +445,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	request := &apiRequest{after: 1, prefix: cmn.URLPathBuckets}
+	request := &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
@@ -500,7 +500,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, msg *aisMsg) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
@@ -541,7 +541,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	request := &apiRequest{prefix: cmn.URLPathBuckets, after: 1}
+	request := &apiRequest{prefix: cmn.URLPathBuckets.L, after: 1}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
@@ -610,7 +610,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		ctx         = context.Background()
 		hdr         = w.Header()
 		query       = r.URL.Query()
-		request     = &apiRequest{after: 1, prefix: cmn.URLPathBuckets}
+		request     = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
 		err         error
 	)
 	if err = t.parseAPIRequest(w, r, request); err != nil {
@@ -689,7 +689,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		query    = r.URL.Query()
 		ptime    = isRedirect(query)
 		features = cmn.GCO.Get().Client.Features
-		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects}
+		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 
 	if !isIntraCall(r.Header) && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
@@ -765,7 +765,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	var (
 		query   = r.URL.Query()
 		ptime   string
-		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects}
+		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 
 	if ptime = isRedirect(query); ptime == "" && !isIntraPut(r.Header) {
@@ -840,7 +840,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		msg     aisMsg
 		evict   bool
 		query   = r.URL.Query()
-		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects}
+		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -913,7 +913,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		features = cmn.GCO.Get().Client.Features
 		query    = r.URL.Query()
-		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects}
+		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 	if isRedirect(query) == "" && !isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
 		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
@@ -1034,7 +1034,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 
 // Returns a slice. Does not use GFN.
 func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
-	request := &apiRequest{after: 3, prefix: cmn.URLPathEC, bckIdx: 1}
+	request := &apiRequest{after: 3, prefix: cmn.URLPathEC.L, bckIdx: 1}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
@@ -1320,7 +1320,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 
 // TODO: unify with PromoteFile (refactor)
 func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	request := &apiRequest{after: 2, prefix: cmn.URLPathObjects}
+	request := &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
@@ -1369,7 +1369,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 
 func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	const fmtErr = "%s: %s failed: "
-	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects}
+	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects.L}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}

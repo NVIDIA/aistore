@@ -98,10 +98,10 @@ func (a *authServ) registerHandler(path string, handler func(http.ResponseWriter
 }
 
 func (a *authServ) registerPublicHandlers() {
-	a.registerHandler(cmn.JoinWords(cmn.Version, cmn.Users), a.userHandler)
-	a.registerHandler(cmn.JoinWords(cmn.Version, cmn.Tokens), a.tokenHandler)
-	a.registerHandler(cmn.JoinWords(cmn.Version, cmn.Clusters), a.clusterHandler)
-	a.registerHandler(cmn.JoinWords(cmn.Version, cmn.Roles), a.roleHandler)
+	a.registerHandler(cmn.URLPathUsers.S, a.userHandler)
+	a.registerHandler(cmn.URLPathTokens.S, a.tokenHandler)
+	a.registerHandler(cmn.URLPathClusters.S, a.clusterHandler)
+	a.registerHandler(cmn.URLPathRoles.S, a.roleHandler)
 }
 
 func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +145,7 @@ func (a *authServ) clusterHandler(w http.ResponseWriter, r *http.Request) {
 
 // Deletes existing token, a.k.a log out
 func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
-	if _, err := checkRESTItems(w, r, 0, cmn.URLPathTokens); err != nil {
+	if _, err := checkRESTItems(w, r, 0, cmn.URLPathTokens.L); err != nil {
 		return
 	}
 
@@ -159,7 +159,7 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -175,7 +175,7 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
-	if apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathUsers); err != nil {
+	if apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathUsers.L); err != nil {
 		return
 	} else if len(apiItems) == 0 {
 		a.userAdd(w, r)
@@ -186,7 +186,7 @@ func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
 
 // Updates user credentials
 func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -236,7 +236,7 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 
 // Returns list of users (without superusers)
 func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
-	_, err := checkRESTItems(w, r, 0, cmn.URLPathUsers)
+	_, err := checkRESTItems(w, r, 0, cmn.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -280,7 +280,7 @@ func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) er
 func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	var err error
 
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -334,7 +334,7 @@ func (a *authServ) writeBytes(w http.ResponseWriter, jsbytes []byte, tag string)
 }
 
 func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
-	if _, err := checkRESTItems(w, r, 0, cmn.URLPathClusters); err != nil {
+	if _, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L); err != nil {
 		return
 	}
 	if err := a.checkAuthorization(w, r); err != nil {
@@ -354,7 +354,7 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathClusters)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -376,7 +376,7 @@ func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathClusters)
+	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -395,7 +395,7 @@ func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathClusters)
+	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -447,7 +447,7 @@ func (a *authServ) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpRoleDel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathRoles)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathRoles.L)
 	if err != nil {
 		return
 	}
@@ -463,7 +463,7 @@ func (a *authServ) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpRolePost(w http.ResponseWriter, r *http.Request) {
-	_, err := checkRESTItems(w, r, 0, cmn.URLPathRoles)
+	_, err := checkRESTItems(w, r, 0, cmn.URLPathRoles.L)
 	if err != nil {
 		return
 	}
@@ -484,7 +484,7 @@ func (a *authServ) httpRolePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathRoles)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathRoles.L)
 	if err != nil {
 		return
 	}

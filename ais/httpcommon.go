@@ -883,7 +883,7 @@ func (h *httprunner) call(args callArgs) (res callResult) {
 //
 
 func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte, kind string) {
-	path := cmn.JoinWords(cmn.Version, cmn.Notifs, kind)
+	path := cmn.JoinWords(cmn.URLPathNotifs.S, kind)
 	args := bcastArgs{
 		req:       cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: msgBody},
 		network:   cmn.NetworkIntraControl,
@@ -1069,7 +1069,7 @@ func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 		bargs = bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
-				Path:   cmn.JoinWords(cmn.Version, cmn.IC),
+				Path:   cmn.URLPathIC.S,
 				Body:   cmn.MustMarshal(msg),
 			},
 			network: cmn.NetworkIntraControl,
@@ -1247,7 +1247,7 @@ func (h *httprunner) invalmsghdlrf(w http.ResponseWriter, r *http.Request, forma
 
 func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) ([]byte, int, error) {
 	var (
-		path = cmn.JoinWords(cmn.Version, cmn.Health)
+		path = cmn.URLPathHealth.S
 		url  = si.URL(cmn.NetworkIntraControl)
 		args = callArgs{
 			si:      si,
@@ -1611,7 +1611,10 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res callResu
 
 func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration,
 	query url.Values, keepalive bool) (res callResult) {
-	regReq := nodeRegMeta{SI: h.si}
+	var (
+		path   string
+		regReq = nodeRegMeta{SI: h.si}
+	)
 	if h.si.IsTarget() && !keepalive {
 		regReq.BMD = h.owner.bmd.get()
 		regReq.Smap = h.owner.smap.get()
@@ -1619,11 +1622,10 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Dur
 		regReq.Reb = glob.Interrupted
 	}
 	info := cmn.MustMarshal(regReq)
-	path := cmn.JoinWords(cmn.Version, cmn.Cluster)
 	if keepalive {
-		path += cmn.JoinWords(cmn.Keepalive)
+		path = cmn.URLPathClusterKalive.S
 	} else {
-		path += cmn.JoinWords(cmn.AutoRegister)
+		path = cmn.URLPathClusterAutoReg.S
 	}
 	callArgs := callArgs{
 		si:      psi,

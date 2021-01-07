@@ -28,7 +28,7 @@ func GetMountpaths(baseParams BaseParams, node *cluster.Snode) (mpl *cmn.Mountpa
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Reverse, cmn.Daemon),
+		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}},
 		Header: http.Header{
 			cmn.HeaderNodeID:  []string{node.ID()},
@@ -42,7 +42,7 @@ func AddMountpath(baseParams BaseParams, node *cluster.Snode, mountpath string) 
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths),
+		Path:       cmn.JoinWords(cmn.URLPathReverseDaemon.S, cmn.Mountpaths),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mountpath}),
 		Header: http.Header{
 			cmn.HeaderNodeID:  []string{node.ID()},
@@ -55,7 +55,7 @@ func RemoveMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths),
+		Path:       cmn.JoinWords(cmn.URLPathReverseDaemon.S, cmn.Mountpaths),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mountpath}),
 		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
 	})
@@ -65,7 +65,7 @@ func EnableMountpath(baseParams BaseParams, node *cluster.Snode, mountpath strin
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths),
+		Path:       cmn.JoinWords(cmn.URLPathReverseDaemon.S, cmn.Mountpaths),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountpath}),
 		Header: http.Header{
 			cmn.HeaderNodeID:  []string{node.ID()},
@@ -78,7 +78,7 @@ func DisableMountpath(baseParams BaseParams, nodeID, mountpath string) error {
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.Mountpaths),
+		Path:       cmn.JoinWords(cmn.URLPathReverseDaemon.S, cmn.Mountpaths),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountpath}),
 		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
 	})
@@ -89,7 +89,7 @@ func GetDaemonConfig(baseParams BaseParams, nodeID string) (config *cmn.Config, 
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Reverse, cmn.Daemon),
+		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}},
 		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
 	}, &config)
@@ -105,7 +105,7 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Reverse, cmn.Daemon),
+		Path:       cmn.URLPathReverseDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDaemonStatus}},
 		Header:     http.Header{cmn.HeaderNodeID: []string{node.ID()}},
 	}, &daeInfo)
@@ -132,7 +132,7 @@ func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cmn.SimpleKVs) er
 	}
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Reverse, cmn.Daemon, cmn.ActSetConfig),
+		Path:       cmn.JoinWords(cmn.URLPathReverseDaemon.S, cmn.ActSetConfig),
 		Query:      query,
 		Header:     http.Header{cmn.HeaderNodeID: []string{nodeID}},
 	})

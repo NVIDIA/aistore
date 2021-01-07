@@ -161,7 +161,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum,
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   proxyURL,
-		Path:   cmn.JoinWords(cmn.Version, cmn.Objects, bck.Name, object),
+		Path:   cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
 		Query:  cmn.AddBckToQuery(nil, bck),
 		BodyR:  reader,
 	}
@@ -246,7 +246,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
-		Path:   cmn.JoinWords(cmn.Version, cmn.Objects, bck.Name, objName),
+		Path:   cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, objName),
 		Query:  query,
 		Header: hdr,
 	}
@@ -338,7 +338,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 func getConfig(server string) (httpLatencies, error) {
 	tctx := newTraceCtx()
 
-	url := server + cmn.JoinWords(cmn.Version, cmn.Daemon)
+	url := server + cmn.URLPathDaemon.S
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.URL.RawQuery = api.GetWhatRawQuery(cmn.GetWhatConfig, "")
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))

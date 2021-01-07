@@ -370,7 +370,7 @@ func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
 		si: si,
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
-			Path:   cmn.JoinWords(cmn.Version, cmn.IC),
+			Path:   cmn.URLPathIC.S,
 			Body:   cmn.MustMarshal(msg),
 		}, timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	},
@@ -397,7 +397,7 @@ func (ic *ic) syncICBundle() error {
 		si: si,
 		req: cmn.ReqArgs{
 			Method: http.MethodGet,
-			Path:   cmn.JoinWords(cmn.Version, cmn.IC),
+			Path:   cmn.URLPathIC.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatICBundle}},
 		},
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,

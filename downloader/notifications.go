@@ -54,7 +54,7 @@ func (nd *NotifDownloadListerner) QueryArgs() cmn.ReqArgs {
 	dlBody := DlAdminBody{
 		ID: nd.UUID(),
 	}
-	args.Path = cmn.JoinWords(cmn.Version, cmn.Download)
+	args.Path = cmn.URLPathDownload.S
 	args.Body = cmn.MustMarshal(dlBody)
 	return args
 }
@@ -64,7 +64,7 @@ func (nd *NotifDownloadListerner) AbortArgs() cmn.ReqArgs {
 	dlBody := DlAdminBody{
 		ID: nd.UUID(),
 	}
-	args.Path = cmn.JoinWords(cmn.Version, cmn.Download, cmn.Abort)
+	args.Path = cmn.URLPathDownloadAbort.S
 	args.Body = cmn.MustMarshal(dlBody)
 	return args
 }

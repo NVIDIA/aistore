@@ -1254,7 +1254,7 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if glog.FastV(4, glog.SmoduleReb) {
 		glog.Infof("Getting slice %d for %s via API", slice.sliceID, obj.objName)
 	}
-	path := cmn.JoinWords(cmn.Version, cmn.EC, ec.URLMeta, obj.bck.Name, obj.objName)
+	path := cmn.JoinWords(cmn.URLPathEC.S, ec.URLMeta, obj.bck.Name, obj.objName)
 	urlPath := si.URL(cmn.NetworkIntraData) + path
 
 	var (
@@ -1284,9 +1284,9 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 
 	// Second, get the slice
 	if slice.sliceID != 0 {
-		path = cmn.JoinWords(cmn.Version, cmn.EC, ec.URLCT, obj.bck.Name, obj.objName)
+		path = cmn.JoinWords(cmn.URLPathEC.S, ec.URLCT, obj.bck.Name, obj.objName)
 	} else {
-		path = cmn.JoinWords(cmn.Version, cmn.Objects, obj.bck.Name, obj.objName)
+		path = cmn.JoinWords(cmn.URLPathObjects.S, obj.bck.Name, obj.objName)
 	}
 	urlPath = si.URL(cmn.NetworkIntraData) + path
 	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {

@@ -179,7 +179,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if r.Method == http.MethodDelete {
-		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.URLPathDownload)
+		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.URLPathDownload.L)
 		if err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
@@ -222,7 +222,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		progressInterval = downloader.DownloadProgressInterval
 	)
 
-	if _, err = p.checkRESTItems(w, r, 0, false, cmn.URLPathDownload); err != nil {
+	if _, err = p.checkRESTItems(w, r, 0, false, cmn.URLPathDownload.L); err != nil {
 		return
 	}
 

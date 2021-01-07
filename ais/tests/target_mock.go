@@ -39,11 +39,11 @@ type MockRegRequest struct {
 func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *cluster.Smap) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Buckets), mocktgt.filehdlr)
-	mux.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Objects), mocktgt.filehdlr)
-	mux.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Daemon), mocktgt.daemonhdlr)
-	mux.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Vote), mocktgt.votehdlr)
-	mux.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Health), mocktgt.healthdlr)
+	mux.HandleFunc(cmn.URLPathBuckets.S, mocktgt.filehdlr)
+	mux.HandleFunc(cmn.URLPathObjects.S, mocktgt.filehdlr)
+	mux.HandleFunc(cmn.URLPathDaemon.S, mocktgt.daemonhdlr)
+	mux.HandleFunc(cmn.URLPathVote.S, mocktgt.votehdlr)
+	mux.HandleFunc(cmn.URLPathHealth.S, mocktgt.healthdlr)
 
 	target, _ := smap.GetRandTarget()
 	ip := target.PublicNet.NodeHostname
@@ -88,11 +88,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	baseParams.Method = http.MethodPost
-	err = api.DoHTTPRequest(api.ReqParams{
-		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.AutoRegister),
-		Body:       jsonDaemonInfo,
-	})
+	err = api.DoHTTPRequest(api.ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterAutoReg.S, Body: jsonDaemonInfo})
 	return err
 }
 

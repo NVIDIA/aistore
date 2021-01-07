@@ -83,18 +83,14 @@ func ReparseQuery(r *http.Request) {
 }
 
 // JoinWords uses forward slash to join any number of words into a single path.
-// The words are assumed not to be prefixed with slashes.
 // Returned path is prefixed with a slash.
 func JoinWords(words ...string) (path string) {
-	switch len(words) {
-	case 1:
-		path = "/" + words[0]
-	case 2:
-		path = "/" + words[0] + "/" + words[1]
-	default:
-		for _, s := range words {
-			path += "/" + s
-		}
+	path = words[0]
+	if path[:1] != "/" {
+		path = "/" + path
+	}
+	for _, s := range words[1:] {
+		path += "/" + s
 	}
 	return
 }

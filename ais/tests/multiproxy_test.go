@@ -683,7 +683,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		baseParams.Method = http.MethodPut
 		err = api.DoHTTPRequest(api.ReqParams{
 			BaseParams: baseParams,
-			Path:       cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.SyncSmap),
+			Path:       cmn.JoinWords(cmn.URLPathDaemon.S, cmn.SyncSmap),
 			Body:       jsonMap,
 		})
 		tassert.CheckFatal(t, err)
@@ -1293,7 +1293,7 @@ func networkFailurePrimary(t *testing.T) {
 	baseParams.Method = http.MethodPut
 	err = api.DoHTTPRequest(api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.Proxy, newPrimaryID),
+		Path:       cmn.JoinWords(cmn.URLPathDaemonProxy.S, newPrimaryID),
 		Query: url.Values{
 			cmn.URLParamForce:            {"true"},
 			cmn.URLParamPrimaryCandidate: {newPrimaryURL},

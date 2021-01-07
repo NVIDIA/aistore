@@ -476,7 +476,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	)
 
 	// handler for /v1/metasync
-	http.HandleFunc(cmn.JoinWords(cmn.Version, cmn.Metasync), func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(cmn.URLPathMetasync.S, func(w http.ResponseWriter, r *http.Request) {
 		ch <- transportData{true, id, 1}
 	})
 

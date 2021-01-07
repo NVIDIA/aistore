@@ -55,7 +55,7 @@ func (nxb *NotifXactListener) QueryArgs() cmn.ReqArgs {
 	args := cmn.ReqArgs{Method: http.MethodGet, Query: make(url.Values, 2)}
 	args.Query.Set(cmn.URLParamWhat, cmn.GetWhatXactStats)
 	args.Query.Set(cmn.URLParamUUID, nxb.UUID())
-	args.Path = cmn.JoinWords(cmn.Version, cmn.Xactions)
+	args.Path = cmn.URLPathXactions.S
 	return args
 }
 
@@ -68,7 +68,7 @@ func (nxb *NotifXactListener) AbortArgs() cmn.ReqArgs {
 	}
 	args := cmn.ReqArgs{Method: http.MethodPut}
 	args.Body = cmn.MustMarshal(msg)
-	args.Path = cmn.JoinWords(cmn.Version, cmn.Xactions)
+	args.Path = cmn.URLPathXactions.S
 	return args
 }
 

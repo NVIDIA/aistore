@@ -538,7 +538,7 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 
 		args = bcastArgs{
 			req: cmn.ReqArgs{
-				Path:  cmn.JoinWords(cmn.Version, cmn.Daemon),
+				Path:  cmn.URLPathDaemon.S,
 				Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmapVote}},
 			},
 			smap: bcastSmap,

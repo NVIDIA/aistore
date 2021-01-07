@@ -34,7 +34,7 @@ func InitQuery(baseParams BaseParams, objectsTemplate string, bck cmn.Bck, filte
 
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Query, cmn.Init),
+		Path:       cmn.URLPathQueryInit.S,
 		Body:       cmn.MustMarshal(initMsg),
 	}, &handle)
 	return handle, err
@@ -46,7 +46,7 @@ func NextQueryResults(baseParams BaseParams, handle string, size uint) ([]*cmn.B
 	baseParams.Method = http.MethodGet
 	err := DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Query, cmn.Next),
+		Path:       cmn.URLPathQueryNext.S,
 		Body:       cmn.MustMarshal(query.NextMsg{Handle: handle, Size: size}),
 	}, &objectsNames)
 
@@ -57,7 +57,7 @@ func QueryWorkerTarget(baseParams BaseParams, handle string, workerID uint) (dae
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Query, cmn.WorkerOwner),
+		Path:       cmn.URLPathQueryWorker.S,
 		Body:       cmn.MustMarshal(query.NextMsg{Handle: handle, WorkerID: workerID}),
 	}, &daemonID)
 	return

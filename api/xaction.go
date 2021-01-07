@@ -146,7 +146,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 	baseParams.Method = http.MethodPut
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
+		Path:       cmn.URLPathCluster.S,
 		Body:       cmn.MustMarshal(msg),
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	}, &id)
@@ -166,7 +166,7 @@ func AbortXaction(baseParams BaseParams, args XactReqArgs) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
+		Path:       cmn.URLPathCluster.S,
 		Body:       cmn.MustMarshal(msg),
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	})
@@ -195,7 +195,7 @@ func QueryXactionStats(baseParams BaseParams, args XactReqArgs) (xactStats Nodes
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
+		Path:       cmn.URLPathCluster.S,
 		Body:       cmn.MustMarshal(msg),
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.QueryXactStats}},
 	}, &xactStats)
@@ -217,7 +217,7 @@ func GetXactionStatus(baseParams BaseParams, args XactReqArgs) (status *nl.Notif
 	status = &nl.NotifStatus{}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
+		Path:       cmn.URLPathCluster.S,
 		Body:       cmn.MustMarshal(msg),
 		Query: url.Values{
 			cmn.URLParamWhat: []string{cmn.GetWhatStatus},
@@ -298,7 +298,7 @@ func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string,
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
+		Path:       cmn.JoinWords(cmn.URLPathBuckets.S, bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
 	}, &xactID)
 	return
@@ -316,7 +316,7 @@ func IsXactionIdle(baseParams BaseParams, args XactReqArgs) (idle bool, err erro
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster),
+		Path:       cmn.URLPathCluster.S,
 		Body:       cmn.MustMarshal(msg),
 		Query:      url.Values{cmn.URLParamWhat: []string{cmn.QueryXactStats}},
 	}, &xactStats)

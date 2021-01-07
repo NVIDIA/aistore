@@ -209,7 +209,7 @@ func RemoveNodeFromSmap(proxyURL, sid string) error {
 	baseParams.Method = http.MethodDelete
 	return api.DoHTTPRequest(api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.Daemon, sid),
+		Path:       cmn.JoinWords(cmn.URLPathClusterDaemon.S, sid),
 	})
 }
 
@@ -578,7 +578,7 @@ func GetDaemonStats(t *testing.T, u string) (stats map[string]interface{}) {
 	baseParams.Method = http.MethodGet
 	err := api.DoHTTPRequest(api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.Version, cmn.Daemon),
+		Path:       cmn.URLPathDaemon.S,
 		Query:      url.Values{cmn.URLParamWhat: {cmn.GetWhatStats}},
 	}, &stats)
 	tassert.CheckFatal(t, err)

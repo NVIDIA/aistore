@@ -34,7 +34,7 @@ func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryInit); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryInit.L); err != nil {
 		return
 	}
 
@@ -54,15 +54,15 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	args := bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Query, cmn.Init),
+			Path:   cmn.URLPathQueryInit.S,
 			Body:   cmn.MustMarshal(msg),
 			Header: header,
 		},
 		timeout: cmn.DefaultTimeout,
 		smap:    smap,
 	}
-
-	for res := range p.bcastGroup(args) {
+	results := p.bcastGroup(args)
+	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
 			return
@@ -81,7 +81,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathQuery)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathQuery.L)
 	if err != nil {
 		return
 	}
@@ -132,7 +132,7 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 
 func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	// get next query
-	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryNext); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathQueryNext.L); err != nil {
 		return
 	}
 
@@ -157,7 +157,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		results = p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Query, cmn.Peek),
+				Path:   cmn.URLPathQueryPeek.S,
 				Body:   cmn.MustMarshal(msg),
 				Header: map[string][]string{cmn.HeaderAccept: {cmn.ContentMsgPack}},
 			},
@@ -189,7 +189,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		discardResults := p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Query, cmn.Discard, msg.Handle, last.Name),
+				Path:   cmn.JoinWords(cmn.URLPathQueryDiscard.S, msg.Handle, last.Name),
 			},
 			to: cluster.Targets,
 		})

@@ -237,7 +237,7 @@ func (p *proxyrunner) unregisterSelf() (int, error) {
 		si: smap.Primary,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Cluster, cmn.Daemon, p.si.ID()),
+			Path:   cmn.JoinWords(cmn.URLPathClusterDaemon.S, p.si.ID()),
 		},
 		timeout: cmn.DefaultTimeout,
 	}
@@ -282,7 +282,7 @@ func (p *proxyrunner) Stop(err error) {
 //==================================
 
 func (p *proxyrunner) parseAPIBckObj(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs, origURLBck ...string) (bck *cluster.Bck, objName string, err error) {
-	request := apiRequest{after: 2, prefix: cmn.URLPathObjects}
+	request := apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	if err = p.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
@@ -333,7 +333,7 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets}
+	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
 	if err := p.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
@@ -461,7 +461,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		err     error
 		msg     = cmn.ActionMsg{}
-		request = &apiRequest{msg: &msg, after: 1, prefix: cmn.URLPathBuckets}
+		request = &apiRequest{msg: &msg, after: 1, prefix: cmn.URLPathBuckets.L}
 	)
 	if err = p.parseAPIRequest(w, r, request); err != nil {
 		return
@@ -644,7 +644,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
@@ -1066,7 +1066,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		args   = bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
+				Path:   cmn.JoinWords(cmn.URLPathBuckets.S, bck.Name),
 				Query:  q,
 				Body:   body,
 			},
@@ -1094,12 +1094,13 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	args.req.Query = q
 	args.fv = func() interface{} { return &cmn.BucketsSummaries{} }
 	summaries = make(cmn.BucketsSummaries, 0)
-	for result := range p.bcastGroup(args) {
-		if result.err != nil {
-			return nil, "", result.err
+	results = p.bcastGroup(args)
+	for res := range results {
+		if res.err != nil {
+			return nil, "", res.err
 		}
 
-		targetSummary := result.v.(*cmn.BucketsSummaries)
+		targetSummary := res.v.(*cmn.BucketsSummaries)
 		for _, bckSummary := range *targetSummary {
 			summaries = summaries.Aggregate(bckSummary)
 		}
@@ -1114,7 +1115,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
-	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects}
+	request := &apiRequest{after: 1, prefix: cmn.URLPathObjects.L}
 	if msg.Action == cmn.ActRenameObject {
 		request.after = 2
 	}
@@ -1170,7 +1171,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets}
+	request := apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
 	if err := p.parseAPIRequest(w, r, &request); err != nil {
 		return
 	}
@@ -1244,7 +1245,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		err           error
 		propsToUpdate cmn.BucketPropsToUpdate
 		msg           = &cmn.ActionMsg{Value: &propsToUpdate}
-		request       = &apiRequest{after: 1, prefix: cmn.URLPathBuckets, msg: &msg}
+		request       = &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L, msg: &msg}
 	)
 	if err = p.parseAPIRequest(w, r, request); err != nil {
 		return
@@ -1530,22 +1531,21 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
 func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
+	var (
+		aisMsg    *aisMsg
+		args      bcastArgs
+		entries   []*cmn.BucketEntry
+		results   chan callResult
+		smap      = p.owner.smap.get()
+		cacheID   = cacheReqID{bck: bck.Bck, prefix: smsg.Prefix}
+		token     = smsg.ContinuationToken
+		props     = smsg.PropsSet()
+		hasEnough bool
+	)
 	if smsg.PageSize == 0 {
 		smsg.PageSize = cmn.DefaultListPageSizeAIS
 	}
-
-	var (
-		aisMsg *aisMsg
-		args   bcastArgs
-		smap   = p.owner.smap.get()
-
-		hasEnough bool
-		entries   []*cmn.BucketEntry
-		cacheID   = cacheReqID{bck: bck.Bck, prefix: smsg.Prefix}
-		token     = smsg.ContinuationToken
-		pageSize  = smsg.PageSize
-		props     = smsg.PropsSet()
-	)
+	pageSize := smsg.PageSize
 
 	// TODO: Before checking cache and buffer we should check if there is another
 	//  request already in-flight that requests the same page as we do - if yes
@@ -1574,7 +1574,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	args = bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
+			Path:   cmn.JoinWords(cmn.URLPathBuckets.S, bck.Name),
 			Query:  cmn.AddBckToQuery(nil, bck.Bck),
 			Body:   cmn.MustMarshal(aisMsg),
 		},
@@ -1584,7 +1584,8 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	}
 
 	// Combine the results.
-	for res := range p.bcastGroup(args) {
+	results = p.bcastGroup(args)
+	for res := range results {
 		if res.err != nil {
 			return nil, res.err
 		}
@@ -1637,7 +1638,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		args   = bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name),
+				Path:   cmn.JoinWords(cmn.URLPathBuckets.S, bck.Name),
 				Query:  cmn.AddBckToQuery(nil, bck.Bck),
 				Body:   cmn.MustMarshal(aisMsg),
 			},
@@ -1753,7 +1754,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	results := p.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Objects, bck.Name),
+			Path:   cmn.JoinWords(cmn.URLPathObjects.S, bck.Name),
 			Body:   cmn.MustMarshal(msg),
 			Query:  query,
 		},
@@ -1777,7 +1778,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAisMsg(msg, smap, nil, cmn.GenUUID())
 		body   = cmn.MustMarshal(aisMsg)
-		path   = cmn.JoinWords(cmn.Version, cmn.Buckets, bucket)
+		path   = cmn.JoinWords(cmn.URLPathBuckets.S, bucket)
 	)
 	if wait {
 		timeout = cmn.GCO.Get().Client.ListObjects
@@ -1804,7 +1805,7 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 }
 
 func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathReverse)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathReverse.L)
 	if err != nil {
 		return
 	}
@@ -1955,7 +1956,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
@@ -2048,7 +2049,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 
 // unregister
 func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
@@ -2070,7 +2071,7 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 // register proxy
 func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
@@ -2097,7 +2098,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 		req = cmn.ReqArgs{
 			Method: http.MethodGet,
 			Base:   baseURL,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
+			Path:   cmn.URLPathDaemon.S,
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 		}
 		args = callArgs{req: req, timeout: cmn.DefaultTimeout, v: &smapX{}}
@@ -2165,7 +2166,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		prepare bool
 		query   = r.URL.Query()
 	)
-	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathDaemon)
+	apiItems, err := p.checkRESTItems(w, r, 2, false, cmn.URLPathDaemon.L)
 	if err != nil {
 		return
 	}
@@ -2261,7 +2262,7 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 }
 
 func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterProxy)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterProxy.L)
 	if err != nil {
 		return
 	}
@@ -2289,7 +2290,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	// (I.1) Prepare phase - inform other nodes.
-	urlPath := cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.Proxy, proxyid)
+	urlPath := cmn.JoinWords(cmn.URLPathDaemonProxy.S, proxyid)
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
 	results := p.bcastGroup(bcastArgs{
@@ -2403,7 +2404,7 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		q.Set(cmn.URLParamOrigURL, r.URL.String())
 		q.Set(cmn.URLParamProvider, cmn.ProviderHTTP)
-		r.URL.Path = cmn.JoinWords(cmn.Version, cmn.Objects, hbo.Bck.Name, hbo.ObjName)
+		r.URL.Path = cmn.JoinWords(cmn.URLPathObjects.S, hbo.Bck.Name, hbo.ObjName)
 		r.URL.RawQuery = q.Encode()
 		if r.Method == http.MethodGet {
 			p.httpobjget(w, r, hbo.OrigURLBck)
@@ -2448,7 +2449,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 			si: si,
 			req: cmn.ReqArgs{
 				Method: r.Method,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
+				Path:   cmn.URLPathDaemon.S,
 				Query:  query,
 			},
 			timeout: config.Timeout.CplaneOperation,
@@ -2503,7 +2504,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 	results := p.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodGet,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Xactions),
+			Path:   cmn.URLPathXactions.S,
 			Body:   body,
 			Query:  query,
 		},
@@ -2520,7 +2521,7 @@ func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request
 		results := p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: r.Method,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
+				Path:   cmn.URLPathDaemon.S,
 				Query:  r.URL.Query(),
 			},
 			timeout: cmn.GCO.Get().Client.Timeout,
@@ -2592,7 +2593,7 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 	results := p.bcastGroup(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: r.Method,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
+			Path:   cmn.URLPathDaemon.S,
 			Query:  r.URL.Query(),
 			Body:   body,
 		},
@@ -2621,7 +2622,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		keepalive, userRegister, selfRegister bool
 		nonElectable                          bool
 	)
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluster)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathCluster.L)
 	if err != nil {
 		return
 	}
@@ -2773,7 +2774,7 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 		si: nsi,
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
-			Path:   cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.UserRegister),
+			Path:   cmn.URLPathDaemonUserReg.S,
 			Body:   cmn.MustMarshal(meta),
 		},
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
@@ -2952,7 +2953,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi, osi *cluster.Snode, keepalive bool) b
 
 // unregister node
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterDaemon)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterDaemon.L)
 	if err != nil {
 		return
 	}
@@ -3046,7 +3047,7 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 // '{"action": cmn.ActRebalance}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathCluster)
+	apiItems, err := p.checkRESTItems(w, r, 0, true, cmn.URLPathCluster.L)
 	if err != nil {
 		return
 	}
@@ -3071,11 +3072,8 @@ func (p *proxyrunner) unregisterNode(msg *cmn.ActionMsg, si *cluster.Snode, skip
 	var (
 		timeoutCfg = cmn.GCO.Get().Timeout
 		args       = callArgs{
-			si: node,
-			req: cmn.ReqArgs{
-				Method: http.MethodDelete,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.Unregister),
-			},
+			si:      node,
+			req:     cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S},
 			timeout: timeoutCfg.CplaneOperation,
 		}
 	)
@@ -3249,7 +3247,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		results := p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
+				Path:   cmn.URLPathDaemon.S,
 				Body:   cmn.MustMarshal(msg),
 			},
 			to: cluster.AllNodes,
@@ -3264,10 +3262,10 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
-		p.bcastGroup(bcastArgs{
+		_ = p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
+				Path:   cmn.URLPathDaemon.S,
 				Body:   cmn.MustMarshal(msg),
 			},
 			to: cluster.AllNodes,
@@ -3305,7 +3303,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		results := p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Xactions),
+				Path:   cmn.URLPathXactions.S,
 				Body:   body,
 			},
 			to: cluster.Targets,
@@ -3359,7 +3357,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 					si: psi,
 					req: cmn.ReqArgs{
 						Method: http.MethodPut,
-						Path:   cmn.JoinWords(cmn.Version, cmn.Cluster),
+						Path:   cmn.URLPathCluster.S,
 						Body:   cmn.MustMarshal(msg),
 					}, timeout: cmn.LongTimeout,
 				},
@@ -3470,12 +3468,8 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			return
 		}
 		results := p.bcastGroup(bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPut,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon, cmn.ActSetConfig),
-				Query:  query,
-			},
-			to: cluster.AllNodes,
+			req: cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemonSetConf.S, Query: query},
+			to:  cluster.AllNodes,
 		})
 		for res := range results {
 			if res.err != nil {
@@ -3497,7 +3491,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		results := p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon, action),
+				Path:   cmn.JoinWords(cmn.URLPathDaemon.S, action),
 				Query:  query,
 			},
 			to: cluster.AllNodes,
@@ -3611,7 +3605,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 			si: osi,
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
-				Path:   cmn.JoinWords(cmn.Version, cmn.Daemon),
+				Path:   cmn.URLPathDaemon.S,
 				Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSnode}},
 			},
 			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
@@ -3690,7 +3684,7 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 	var (
 		tsi   *cluster.Snode
 		pname = p.si.String()
-		path  = cmn.JoinWords(cmn.Version, cmn.Buckets, bck.Name)
+		path  = cmn.JoinWords(cmn.URLPathBuckets.S, bck.Name)
 	)
 	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {
 		return

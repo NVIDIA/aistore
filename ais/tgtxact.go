@@ -25,7 +25,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		xactMsg xaction.XactReqMsg
 		bck     *cluster.Bck
 	)
-	if _, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathXactions); err != nil {
+	if _, err := t.checkRESTItems(w, r, 0, true, cmn.URLPathXactions.L); err != nil {
 		return
 	}
 	switch r.Method {

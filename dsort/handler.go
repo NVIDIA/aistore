@@ -39,7 +39,7 @@ type response struct {
 
 // [METHOD] /v1/sort/...
 func ProxySortHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathdSort)
+	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathdSort.L)
 	if err != nil {
 		return
 	}
@@ -129,7 +129,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 
 			glog.Errorf("[%s] start sort request failed to be broadcast, err: %s", managerUUID, resp.err.Error())
 
-			path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+			path := cmn.JoinWords(cmn.URLPathdSortAbort.S, managerUUID)
 			broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
 
 			s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d", resp.err.Error(), resp.statusCode)
@@ -154,7 +154,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("[%s] broadcasting init request to all targets", managerUUID)
 	}
-	path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Init, managerUUID)
+	path := cmn.JoinWords(cmn.URLPathdSortInit.S, managerUUID)
 	responses := broadcast(http.MethodPost, path, nil, b, ctx.smapOwner.Get().Tmap)
 	if err := checkResponses(responses); err != nil {
 		return
@@ -163,7 +163,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("[%s] broadcasting start request to all targets", managerUUID)
 	}
-	path = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Start, managerUUID)
+	path = cmn.JoinWords(cmn.URLPathdSortStart.S, managerUUID)
 	responses = broadcast(http.MethodPost, path, nil, nil, ctx.smapOwner.Get().Tmap)
 	if err := checkResponses(responses); err != nil {
 		return
@@ -201,7 +201,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targets := ctx.smapOwner.Get().Tmap
-	path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.List)
+	path := cmn.URLPathdSortList.S
 	responses := broadcast(http.MethodGet, path, query, nil, targets)
 
 	resultList := make([]*JobInfo, 0)
@@ -245,7 +245,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 		targets     = ctx.smapOwner.Get().Tmap
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
-		path        = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
+		path        = cmn.JoinWords(cmn.URLPathdSortMetrics.S, managerUUID)
 		responses   = broadcast(http.MethodGet, path, nil, nil, targets)
 	)
 
@@ -288,7 +288,7 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	_, err := checkRESTItems(w, r, 0, cmn.URLPathdSortAbort)
+	_, err := checkRESTItems(w, r, 0, cmn.URLPathdSortAbort.L)
 	if err != nil {
 		return
 	}
@@ -296,7 +296,7 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
-		path        = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+		path        = cmn.JoinWords(cmn.URLPathdSortAbort.S, managerUUID)
 		responses   = broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
 	)
 
@@ -324,7 +324,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	_, err := checkRESTItems(w, r, 0, cmn.URLPathdSort)
+	_, err := checkRESTItems(w, r, 0, cmn.URLPathdSort.L)
 	if err != nil {
 		return
 	}
@@ -333,7 +333,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		targets     = ctx.smapOwner.Get().Tmap
 		query       = r.URL.Query()
 		managerUUID = query.Get(cmn.URLParamUUID)
-		path        = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
+		path        = cmn.JoinWords(cmn.URLPathdSortMetrics.S, managerUUID)
 		responses   = broadcast(http.MethodGet, path, nil, nil, targets)
 	)
 
@@ -366,7 +366,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
-	path = cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Remove, managerUUID)
+	path = cmn.JoinWords(cmn.URLPathdSortRemove.S, managerUUID)
 	responses = broadcast(http.MethodDelete, path, nil, nil, targets)
 	failed := make([]string, 0)
 	for _, r := range responses {
@@ -386,7 +386,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 
 // SortHandler is the handler called for the HTTP endpoint /v1/sort.
 func SortHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSort)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSort.L)
 	if err != nil {
 		return
 	}
@@ -422,7 +422,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortInit)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortInit.L)
 	if err != nil {
 		return
 	}
@@ -459,7 +459,7 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortStart)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortStart.L)
 	if err != nil {
 		return
 	}
@@ -492,7 +492,7 @@ func (m *Manager) startDSort() {
 			}
 
 			glog.Warning("broadcasting abort to other targets")
-			path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.Abort, m.ManagerUUID)
+			path := cmn.JoinWords(cmn.URLPathdSortAbort.S, m.ManagerUUID)
 			broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap, ctx.node)
 		}
 	}
@@ -503,7 +503,7 @@ func (m *Manager) startDSort() {
 	}
 
 	glog.Info("broadcasting finished ack to other targets")
-	path := cmn.JoinWords(cmn.Version, cmn.Sort, cmn.FinishedAck, m.ManagerUUID, m.ctx.node.DaemonID)
+	path := cmn.JoinWords(cmn.URLPathdSortAck.S, m.ManagerUUID, m.ctx.node.DaemonID)
 	broadcast(http.MethodPut, path, nil, nil, ctx.smapOwner.Get().Tmap, ctx.node)
 }
 
@@ -515,7 +515,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		if !checkHTTPMethod(w, r, http.MethodPost) {
 			return
 		}
-		apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortShards)
+		apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortShards.L)
 		if err != nil {
 			return
 		}
@@ -565,7 +565,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		if !checkHTTPMethod(w, r, http.MethodPost) {
 			return
 		}
-		apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortRecords)
+		apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortRecords.L)
 		if err != nil {
 			return
 		}
@@ -637,7 +637,7 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortAbort)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortAbort.L)
 	if err != nil {
 		return
 	}
@@ -662,7 +662,7 @@ func removeSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortRemove)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortRemove.L)
 	if err != nil {
 		return
 	}
@@ -705,7 +705,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortMetrics)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.URLPathdSortMetrics.L)
 	if err != nil {
 		return
 	}
@@ -734,7 +734,7 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPut) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 2, cmn.URLPathdSortAck)
+	apiItems, err := checkRESTItems(w, r, 2, cmn.URLPathdSortAck.L)
 	if err != nil {
 		return
 	}
@@ -842,10 +842,9 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 
 	// Get memory stats from targets
 	var (
-		err  error
-		path = cmn.JoinWords(cmn.Version, cmn.Daemon)
-
-		totalAvailMemory  = uint64(0)
+		totalAvailMemory  uint64
+		err               error
+		path              = cmn.URLPathDaemon.S
 		moreThanThreshold = true
 	)
 
