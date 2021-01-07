@@ -320,9 +320,9 @@ type (
 	}
 
 	NetConf struct {
-		Hostname             string   `json:"ipv4"`
-		HostnameIntraControl string   `json:"ipv4_intra_control"`
-		HostnameIntraData    string   `json:"ipv4_intra_data"`
+		Hostname             string   `json:"hostname"`
+		HostnameIntraControl string   `json:"hostname_intra_control"`
+		HostnameIntraData    string   `json:"hostname_intra_data"`
 		L4                   L4Conf   `json:"l4"`
 		HTTP                 HTTPConf `json:"http"`
 		UseIntraControl      bool     `json:"-"`

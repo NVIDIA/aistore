@@ -109,9 +109,9 @@ AIS production deployment, in particular, requires careful consideration of at l
 
 with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respectively:
 
-* `ipv4`
-* `ipv4_intra_control`
-* `ipv4_intra_data`
+* `hostname`
+* `hostname_intra_control`
+* `hostname_intra_data`
 
 ## Assorted Tips
 

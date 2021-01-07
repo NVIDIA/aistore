@@ -1761,11 +1761,11 @@ components:
         net:
           type: object
           properties:
-            ipv4:
+            hostname:
               type: string
-            ipv4_intra_control:
+            hostname_intra_control:
               type: string
-            ipv4_intra_data:
+            hostname_intra_data:
               type: string
             l4:
               type: object

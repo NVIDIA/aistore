@@ -87,9 +87,9 @@
     "instance": 0
   },
   "net": {
-    "ipv4":               "127.0.1.0",
-    "ipv4_intra_control": "127.0.2.0",
-    "ipv4_intra_data":    "127.0.3.0",
+    "hostname":               "127.0.1.0",
+    "hostname_intra_control": "127.0.2.0",
+    "hostname_intra_data":    "127.0.3.0",
     "l4": {
       "proto":              "tcp",
       "port":	              "8080",
