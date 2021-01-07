@@ -147,7 +147,7 @@ func (p *proxyrunner) Run() error {
 		{r: cmn.Tokens, h: p.tokenHandler, net: accessNetPublic},
 
 		{r: cmn.Metasync, h: p.metasyncHandler, net: accessNetIntraControl},
-		{r: cmn.Health, h: p.healthHandler, net: accessNetIntraControl},
+		{r: cmn.Health, h: p.healthHandler, net: accessNetPublicControl},
 		{r: cmn.Vote, h: p.voteHandler, net: accessNetIntraControl},
 
 		{r: cmn.Notifs, h: p.notifs.handler, net: accessNetIntraControl},

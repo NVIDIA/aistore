@@ -24,9 +24,7 @@ const (
 	accessNetPublic = netAccess(1 << iota)
 	accessNetIntraControl
 	accessNetIntraData
-)
 
-var (
 	accessNetPublicControl = accessNetPublic | accessNetIntraControl
 	accessNetPublicData    = accessNetPublic | accessNetIntraData
 	accessControlData      = accessNetIntraControl | accessNetIntraData
