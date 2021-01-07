@@ -43,14 +43,14 @@ func UpdateUser(baseParams BaseParams, newUser *cmn.AuthUser) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathUsers.S, newUser.ID),
+		Path:       cmn.URLPathUsers.Join(newUser.ID),
 		Body:       msg,
 	})
 }
 
 func DeleteUser(baseParams BaseParams, userID string) error {
 	baseParams.Method = http.MethodDelete
-	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.JoinWords(cmn.URLPathUsers.S, userID)})
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathUsers.Join(userID)})
 }
 
 func LoginUser(baseParams BaseParams, userID, pass string) (token *AuthCreds, err error) {
@@ -58,7 +58,7 @@ func LoginUser(baseParams BaseParams, userID, pass string) (token *AuthCreds, er
 
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathUsers.S, userID),
+		Path:       cmn.URLPathUsers.Join(userID),
 		Body:       cmn.MustMarshal(loginRec{Password: pass}),
 	}, &token)
 	if err != nil {
@@ -82,7 +82,7 @@ func UpdateClusterAuthN(baseParams BaseParams, cluSpec cmn.AuthCluster) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathClusters.S, cluSpec.ID),
+		Path:       cmn.URLPathClusters.Join(cluSpec.ID),
 		Body:       msg,
 	})
 }
@@ -91,7 +91,7 @@ func UnregisterClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathClusters.S, spec.ID),
+		Path:       cmn.URLPathClusters.Join(spec.ID),
 	})
 }
 
@@ -155,6 +155,6 @@ func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathRoles.S, role),
+		Path:       cmn.URLPathRoles.Join(role),
 	})
 }

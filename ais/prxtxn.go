@@ -799,7 +799,7 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitms
 	if bck == nil {
 		c.path = cmn.URLPathTxn.S
 	} else {
-		c.path = cmn.JoinWords(cmn.URLPathTxn.S, bck.Name)
+		c.path = cmn.URLPathTxn.Join(bck.Name)
 		query = cmn.AddBckToQuery(query, bck.Bck)
 	}
 	config := cmn.GCO.Get()

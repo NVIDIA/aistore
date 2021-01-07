@@ -9,7 +9,7 @@ type URLPath struct {
 	S string
 }
 
-func urlpath(words ...string) URLPath { return URLPath{L: words, S: JoinWords(words...)} }
+func urlpath(words ...string) URLPath { return URLPath{L: words, S: JoinWords(words[0], words[1:]...)} }
 
 var (
 	URLPathS3 = urlpath(S3) // URLPath{[]string{S3}, S3}
@@ -84,3 +84,7 @@ var (
 	URLPathClusters = urlpath(Version, Clusters)
 	URLPathRoles    = urlpath(Version, Roles)
 )
+
+func (u URLPath) Join(words ...string) string {
+	return JoinWords(u.S, words...)
+}

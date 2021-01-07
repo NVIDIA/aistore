@@ -161,7 +161,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cmn.Cksum,
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   proxyURL,
-		Path:   cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
+		Path:   cmn.URLPathObjects.Join(bck.Name, object),
 		Query:  cmn.AddBckToQuery(nil, bck),
 		BodyR:  reader,
 	}
@@ -246,7 +246,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
-		Path:   cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, objName),
+		Path:   cmn.URLPathObjects.Join(bck.Name, objName),
 		Query:  query,
 		Header: hdr,
 	}

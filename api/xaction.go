@@ -298,7 +298,7 @@ func MakeNCopies(baseParams BaseParams, bck cmn.Bck, copies int) (xactID string,
 	baseParams.Method = http.MethodPost
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathBuckets.S, bck.Name),
+		Path:       cmn.URLPathBuckets.Join(bck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies}),
 	}, &xactID)
 	return

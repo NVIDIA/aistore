@@ -93,7 +93,7 @@ func HeadObject(baseParams BaseParams, bck cmn.Bck, object string, checkExists .
 
 	resp, err := doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
+		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      query,
 	}, nil)
 	if err != nil {
@@ -127,7 +127,7 @@ func DeleteObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
+		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
@@ -138,7 +138,7 @@ func EvictObject(baseParams BaseParams, bck cmn.Bck, object string) error {
 	actMsg := cmn.ActionMsg{Action: cmn.ActEvictObjects, Name: cmn.JoinWords(bck.Name, object)}
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
+		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Body:       cmn.MustMarshal(actMsg),
 	})
 }
@@ -163,7 +163,7 @@ func GetObject(baseParams BaseParams, bck cmn.Bck, object string, options ...Get
 	baseParams.Method = http.MethodGet
 	resp, err := doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
+		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      q,
 		Header:     hdr,
 	}, w)
@@ -190,7 +190,7 @@ func GetObjectReader(baseParams BaseParams, bck cmn.Bck, object string, options 
 	baseParams.Method = http.MethodGet
 	return doHTTPRequestGetRespReader(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
+		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      q,
 		Header:     hdr,
 	})
@@ -219,7 +219,7 @@ func GetObjectWithValidation(baseParams BaseParams, bck cmn.Bck, object string, 
 
 	resp, err := doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
+		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      q,
 		Header:     hdr,
 		Validate:   true,
@@ -255,7 +255,7 @@ func GetObjectWithResp(baseParams BaseParams, bck cmn.Bck, object string, option
 	baseParams.Method = http.MethodGet
 	resp, err := doHTTPRequestGetResp(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, object),
+		Path:       cmn.URLPathObjects.Join(bck.Name, object),
 		Query:      q,
 		Header:     hdr,
 	}, w)
@@ -274,7 +274,7 @@ func PutObject(args PutObjectArgs) (err error) {
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
-		Path:   cmn.JoinWords(cmn.URLPathObjects.S, args.Bck.Name, args.Object),
+		Path:   cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
 		Query:  query,
 		BodyR:  args.Reader,
 	}
@@ -328,7 +328,7 @@ func AppendObject(args AppendArgs) (handle string, err error) {
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,
-		Path:   cmn.JoinWords(cmn.URLPathObjects.S, args.Bck.Name, args.Object),
+		Path:   cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
 		Query:  query,
 		BodyR:  args.Reader,
 	}
@@ -377,7 +377,7 @@ func FlushObject(args FlushArgs) (err error) {
 	args.BaseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: args.BaseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, args.Bck.Name, args.Object),
+		Path:       cmn.URLPathObjects.Join(args.Bck.Name, args.Object),
 		Query:      query,
 		Header:     header,
 	})
@@ -391,7 +391,7 @@ func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) e
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, bck.Name, oldName),
+		Path:       cmn.URLPathObjects.Join(bck.Name, oldName),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameObject, Name: newName}),
 	})
 }
@@ -412,7 +412,7 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 	args.BaseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: args.BaseParams,
-		Path:       cmn.JoinWords(cmn.URLPathObjects.S, args.Bck.Name),
+		Path:       cmn.URLPathObjects.Join(args.Bck.Name),
 		Body:       cmn.MustMarshal(actMsg),
 		Query:      cmn.AddBckToQuery(nil, args.Bck),
 	})

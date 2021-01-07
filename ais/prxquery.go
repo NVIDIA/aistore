@@ -189,7 +189,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		discardResults := p.bcastGroup(bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
-				Path:   cmn.JoinWords(cmn.URLPathQueryDiscard.S, msg.Handle, last.Name),
+				Path:   cmn.URLPathQueryDiscard.Join(msg.Handle, last.Name),
 			},
 			to: cluster.Targets,
 		})

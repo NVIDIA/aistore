@@ -97,7 +97,7 @@ func SetPrimaryProxy(baseParams BaseParams, newPrimaryID string) error {
 	baseParams.Method = http.MethodPut
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathClusterProxy.S, newPrimaryID),
+		Path:       cmn.URLPathClusterProxy.Join(newPrimaryID),
 	})
 }
 

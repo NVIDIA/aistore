@@ -209,7 +209,7 @@ func RemoveNodeFromSmap(proxyURL, sid string) error {
 	baseParams.Method = http.MethodDelete
 	return api.DoHTTPRequest(api.ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathClusterDaemon.S, sid),
+		Path:       cmn.URLPathClusterDaemon.Join(sid),
 	})
 }
 

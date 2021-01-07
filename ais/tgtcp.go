@@ -134,7 +134,7 @@ func (t *targetrunner) unregister(_ ...string) (int, error) {
 		si: smap.Primary,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.JoinWords(cmn.URLPathClusterDaemon.S, t.si.ID()),
+			Path:   cmn.URLPathClusterDaemon.Join(t.si.ID()),
 		},
 		timeout: cmn.DefaultTimeout,
 	}
@@ -1115,7 +1115,7 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 			Method: http.MethodHead,
 			Header: header,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
-			Path:   cmn.JoinWords(cmn.URLPathObjects.S, lom.BckName(), lom.ObjName),
+			Path:   cmn.URLPathObjects.Join(lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
@@ -1138,7 +1138,7 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
 			Header: header,
-			Path:   cmn.JoinWords(cmn.URLPathObjects.S, lom.BckName(), lom.ObjName),
+			Path:   cmn.URLPathObjects.Join(lom.BckName(), lom.ObjName),
 			Query:  query,
 		},
 		ignoreMaintenance: true,

@@ -37,7 +37,7 @@ func ETLList(baseParams BaseParams) (list []etl.Info, err error) {
 
 func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.PodsLogsMsg, err error) {
 	baseParams.Method = http.MethodGet
-	path := cmn.JoinWords(cmn.URLPathETLLogs.S, id)
+	path := cmn.URLPathETLLogs.Join(id)
 	if len(targetID) > 0 && targetID[0] != "" {
 		path = cmn.JoinWords(path, targetID[0])
 	}
@@ -47,7 +47,7 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 
 func ETLStop(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
-	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.JoinWords(cmn.URLPathETLStop.S, id)})
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLStop.Join(id)})
 	return err
 }
 
@@ -68,7 +68,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2Bc
 	_ = cmn.AddBckUnameToQuery(q, toBck, cmn.URLParamBucketTo)
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
-		Path:       cmn.JoinWords(cmn.URLPathBuckets.S, fromBck.Name),
+		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
 		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBucket, Value: bckMsg}),
 		Query:      q,
 	}, &xactID)
