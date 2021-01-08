@@ -51,22 +51,23 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	args := bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.URLPathQueryInit.S,
-			Body:   cmn.MustMarshal(msg),
-			Header: header,
-		},
-		timeout: cmn.DefaultTimeout,
-		smap:    smap,
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{
+		Method: http.MethodPost,
+		Path:   cmn.URLPathQueryInit.S,
+		Body:   cmn.MustMarshal(msg),
+		Header: header,
 	}
+	args.timeout = cmn.DefaultTimeout
+	args.smap = smap
 	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
-		if res.err != nil {
-			p.invalmsghdlr(w, r, res.err.Error())
-			return
+		if res.err == nil {
+			continue
 		}
+		p.invalmsghdlr(w, r, res.err.Error())
+		return
 	}
 
 	nlq, err := query.NewQueryListener(handle, &smap.Smap, msg)
@@ -153,19 +154,18 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		results = p.bcastGroup(bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodGet,
-				Path:   cmn.URLPathQueryPeek.S,
-				Body:   cmn.MustMarshal(msg),
-				Header: map[string][]string{cmn.HeaderAccept: {cmn.ContentMsgPack}},
-			},
-			timeout: cmn.LongTimeout,
-			fv:      func() interface{} { return &cmn.BucketList{} },
-		})
-		lists = make([]*cmn.BucketList, 0, len(results))
-	)
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{
+		Method: http.MethodGet,
+		Path:   cmn.URLPathQueryPeek.S,
+		Body:   cmn.MustMarshal(msg),
+		Header: map[string][]string{cmn.HeaderAccept: {cmn.ContentMsgPack}},
+	}
+	args.timeout = cmn.LongTimeout
+	args.fv = func() interface{} { return &cmn.BucketList{} }
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
+	lists := make([]*cmn.BucketList, 0, len(results))
 	for res := range results {
 		if res.err != nil {
 			if res.status == http.StatusNotFound {
@@ -186,13 +186,14 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 
 	if len(result.Entries) > 0 {
 		last := result.Entries[len(result.Entries)-1]
-		discardResults := p.bcastGroup(bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPut,
-				Path:   cmn.URLPathQueryDiscard.Join(msg.Handle, last.Name),
-			},
-			to: cluster.Targets,
-		})
+		discardArgs := allocBcastArgs()
+		discardArgs.req = cmn.ReqArgs{
+			Method: http.MethodPut,
+			Path:   cmn.URLPathQueryDiscard.Join(msg.Handle, last.Name),
+		}
+		discardArgs.to = cluster.Targets
+		discardResults := p.bcastGroup(discardArgs)
+		freeBcastArgs(discardArgs)
 		for res := range discardResults {
 			if res.err != nil && res.status != http.StatusNotFound {
 				p.invalmsghdlr(w, r, res.err.Error())

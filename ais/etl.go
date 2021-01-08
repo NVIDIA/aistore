@@ -261,15 +261,17 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results := p.bcastGroup(bcastArgs{
-		req:     cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)},
-		timeout: cmn.LongTimeout,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)}
+	args.timeout = cmn.LongTimeout
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
-		if res.err != nil {
-			err = res.err
-			glog.Error(err)
+		if res.err == nil {
+			continue
 		}
+		err = res.err
+		glog.Error(err)
 	}
 	if err == nil {
 		// All init calls have succeeded, return UUID.
@@ -280,13 +282,11 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	// At least one `init` call has failed. Terminate all started ETL pods.
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
-	p.bcastGroup(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodDelete,
-			Path:   cmn.URLPathETLStop.Join(msg.ID),
-		},
-		timeout: cmn.LongTimeout,
-	})
+	argsTerm := allocBcastArgs()
+	argsTerm.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID)}
+	argsTerm.timeout = cmn.LongTimeout
+	p.bcastGroup(argsTerm)
+	freeBcastArgs(argsTerm)
 	p.invalmsghdlr(w, r, err.Error())
 }
 
@@ -314,15 +314,17 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results := p.bcastGroup(bcastArgs{
-		req:     cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)},
-		timeout: cmn.LongTimeout,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: cmn.MustMarshal(msg)}
+	args.timeout = cmn.LongTimeout
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
-		if res.err != nil {
-			err = res.err
-			glog.Error(err)
+		if res.err == nil {
+			continue
 		}
+		err = res.err
+		glog.Error(err)
 	}
 	if err == nil {
 		// All init calls have succeeded, return UUID.
@@ -333,13 +335,11 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	// At least one `build` call has failed. Terminate all `build`s.
 	// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 	//  or fail otherwise - ignore the failures).
-	p.bcastGroup(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodDelete,
-			Path:   cmn.URLPathETLStop.Join(msg.ID),
-		},
-		timeout: cmn.LongTimeout,
-	})
+	argsTerm := allocBcastArgs()
+	argsTerm.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathETLStop.Join(msg.ID)}
+	argsTerm.timeout = cmn.LongTimeout
+	p.bcastGroup(argsTerm)
+	freeBcastArgs(argsTerm)
 	p.invalmsghdlr(w, r, err.Error())
 }
 
@@ -368,7 +368,10 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
 		return
 	}
-	var results chan callResult
+	var (
+		results chan callResult
+		args    *bcastArgs
+	)
 	if len(apiItems) > 1 {
 		// specific target
 		var (
@@ -392,11 +395,12 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		close(results)
 	} else {
 		// all targets
-		results = p.bcastGroup(bcastArgs{
-			req:     cmn.ReqArgs{Method: http.MethodGet, Path: r.URL.Path},
-			timeout: cmn.DefaultTimeout,
-			fv:      func() interface{} { return &etl.PodLogsMsg{} },
-		})
+		args = allocBcastArgs()
+		args.req = cmn.ReqArgs{Method: http.MethodGet, Path: r.URL.Path}
+		args.timeout = cmn.DefaultTimeout
+		args.fv = func() interface{} { return &etl.PodLogsMsg{} }
+		results = p.bcastGroup(args)
+		freeBcastArgs(args)
 	}
 	logs := make(etl.PodsLogsMsg, 0, len(results))
 	for res := range results {
@@ -421,14 +425,16 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
 		return
 	}
-	results := p.bcastGroup(bcastArgs{
-		req:     cmn.ReqArgs{Method: http.MethodDelete, Path: r.URL.Path},
-		timeout: cmn.LongTimeout,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: r.URL.Path}
+	args.timeout = cmn.LongTimeout
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
-		if res.err != nil {
-			p.invalmsghdlr(w, r, res.err.Error())
-			return
+		if res.err == nil {
+			continue
 		}
+		p.invalmsghdlr(w, r, res.err.Error())
+		return
 	}
 }

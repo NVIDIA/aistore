@@ -1063,7 +1063,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg}, smap, nil)
 		body   = cmn.MustMarshal(aisMsg)
-		args   = bcastArgs{
+		args   = &bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
 				Path:   cmn.URLPathBuckets.Join(bck.Name),
@@ -1533,7 +1533,7 @@ func (p *proxyrunner) checkBckTaskResp(uuid string, results chan callResult) (al
 func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	var (
 		aisMsg    *aisMsg
-		args      bcastArgs
+		args      *bcastArgs
 		entries   []*cmn.BucketEntry
 		results   chan callResult
 		smap      = p.owner.smap.get()
@@ -1571,7 +1571,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
 
 	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
-	args = bcastArgs{
+	args = &bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
 			Path:   cmn.URLPathBuckets.Join(bck.Name),
@@ -1635,7 +1635,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		reqTimeout = cmn.GCO.Get().Client.ListObjects
 
 		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
-		args   = bcastArgs{
+		args   = &bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPost,
 				Path:   cmn.URLPathBuckets.Join(bck.Name),
@@ -1751,7 +1751,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	// TODO -- FIXME: 2phase begin to check space, validate params, and check vs running xactions
 	//
 	query := cmn.AddBckToQuery(nil, bck.Bck)
-	results := p.bcastGroup(bcastArgs{
+	results := p.bcastGroup(&bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPost,
 			Path:   cmn.URLPathObjects.Join(bck.Name),
@@ -1761,14 +1761,16 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		to: cluster.Targets,
 	})
 	for res := range results {
-		if res.err != nil {
-			p.invalmsghdlrf(w, r, res.err.Error())
-			return
+		if res.err == nil {
+			continue
 		}
+		p.invalmsghdlrf(w, r, res.err.Error())
+		return
 	}
 }
 
-func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) (xactID string, err error) {
+func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
+	query url.Values) (xactID string, err error) {
 	var (
 		timeout time.Duration
 		results chan callResult
@@ -1789,16 +1791,17 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg, que
 	nlb := xaction.NewXactNL(aisMsg.UUID, aisMsg.Action, &smap.Smap, nil)
 	nlb.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
-	results = p.bcastGroup(bcastArgs{
+	results = p.bcastGroup(&bcastArgs{
 		req:     cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body},
 		smap:    smap,
 		timeout: timeout,
 	})
 	for res := range results {
-		if res.err != nil {
-			err = fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)",
-				res.si, msg.Action, res.err, res.status, res.details)
+		if res.err == nil {
+			continue
 		}
+		err = fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)",
+			res.si, msg.Action, res.err, res.status, res.details)
 	}
 	xactID = aisMsg.UUID
 	return
@@ -2293,16 +2296,17 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	urlPath := cmn.URLPathDaemonProxy.Join(proxyid)
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
-	results := p.bcastGroup(bcastArgs{
+	results := p.bcastGroup(&bcastArgs{
 		req: cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q},
 		to:  cluster.AllNodes,
 	})
 	for res := range results {
-		if res.err != nil {
-			p.invalmsghdlrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase",
-				proxyid, res.err, res.si)
-			return
+		if res.err == nil {
+			continue
 		}
+		p.invalmsghdlrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase",
+			proxyid, res.err, res.si)
+		return
 	}
 
 	// (I.2) Prepare phase - local changes.
@@ -2318,19 +2322,20 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	// (II) Commit phase.
 	q.Set(cmn.URLParamPrepare, "false")
-	results = p.bcastGroup(bcastArgs{
+	results = p.bcastGroup(&bcastArgs{
 		req: cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q},
 		to:  cluster.AllNodes,
 	})
 	// TODO: retry
 	for res := range results {
-		if res.err != nil {
-			if res.si.ID() == proxyid {
-				cmn.ExitLogf("Commit phase failure: new primary %q returned err: %v", proxyid, res.err)
-			} else {
-				glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
-					res.si.ID(), res.err, proxyid)
-			}
+		if res.err == nil {
+			continue
+		}
+		if res.si.ID() == proxyid {
+			cmn.ExitLogf("Commit phase failure: new primary %q returned err: %v", proxyid, res.err)
+		} else {
+			glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
+				res.si.ID(), res.err, proxyid)
 		}
 	}
 }
@@ -2501,7 +2506,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
 		return
 	}
-	results := p.bcastGroup(bcastArgs{
+	results := p.bcastGroup(&bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodGet,
 			Path:   cmn.URLPathXactions.S,
@@ -2518,7 +2523,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 
 func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
 	fetchResults := func(broadcastType int) (cmn.JSONRawMsgs, string) {
-		results := p.bcastGroup(bcastArgs{
+		results := p.bcastGroup(&bcastArgs{
 			req: cmn.ReqArgs{
 				Method: r.Method,
 				Path:   cmn.URLPathDaemon.S,
@@ -2590,7 +2595,7 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 			return nil
 		}
 	}
-	results := p.bcastGroup(bcastArgs{
+	results := p.bcastGroup(&bcastArgs{
 		req: cmn.ReqArgs{
 			Method: r.Method,
 			Path:   cmn.URLPathDaemon.S,
@@ -3244,7 +3249,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		results := p.bcastGroup(bcastArgs{
+		results := p.bcastGroup(&bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
 				Path:   cmn.URLPathDaemon.S,
@@ -3253,16 +3258,17 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			to: cluster.AllNodes,
 		})
 		for res := range results {
-			if res.err != nil {
-				p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s",
-					msg.Action, msg.Name, value, res.details)
-				p.keepalive.onerr(err, res.status)
-				return
+			if res.err == nil {
+				continue
 			}
+			p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s",
+				msg.Action, msg.Name, value, res.details)
+			p.keepalive.onerr(err, res.status)
+			return
 		}
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
-		_ = p.bcastGroup(bcastArgs{
+		_ = p.bcastGroup(&bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
 				Path:   cmn.URLPathDaemon.S,
@@ -3300,7 +3306,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			xactMsg.ID = cmn.GenUUID()
 		}
 		body := cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
-		results := p.bcastGroup(bcastArgs{
+		results := p.bcastGroup(&bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
 				Path:   cmn.URLPathXactions.S,
@@ -3309,10 +3315,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			to: cluster.Targets,
 		})
 		for res := range results {
-			if res.err != nil {
-				p.invalmsghdlr(w, r, res.err.Error())
-				return
+			if res.err == nil {
+				continue
 			}
+			p.invalmsghdlr(w, r, res.err.Error())
+			return
 		}
 		if msg.Action == cmn.ActXactStart {
 			smap := p.owner.smap.get()
@@ -3467,16 +3474,17 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		results := p.bcastGroup(bcastArgs{
+		results := p.bcastGroup(&bcastArgs{
 			req: cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemonSetConf.S, Query: query},
 			to:  cluster.AllNodes,
 		})
 		for res := range results {
-			if res.err != nil {
-				p.invalmsghdlr(w, r, res.err.Error())
-				p.keepalive.onerr(res.err, res.status)
-				return
+			if res.err == nil {
+				continue
 			}
+			p.invalmsghdlr(w, r, res.err.Error())
+			p.keepalive.onerr(res.err, res.status)
+			return
 		}
 	case cmn.ActAttach, cmn.ActDetach:
 		what := query.Get(cmn.URLParamWhat)
@@ -3488,7 +3496,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
 		}
-		results := p.bcastGroup(bcastArgs{
+		results := p.bcastGroup(&bcastArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodPut,
 				Path:   cmn.URLPathDaemon.Join(action),
@@ -3501,11 +3509,12 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			glog.Error(err)
 		}
 		for res := range results {
-			if res.err != nil {
-				p.invalmsghdlr(w, r, res.err.Error())
-				p.keepalive.onerr(res.err, res.status)
-				return
+			if res.err == nil {
+				continue
 			}
+			p.invalmsghdlr(w, r, res.err.Error())
+			p.keepalive.onerr(res.err, res.status)
+			return
 		}
 	}
 }

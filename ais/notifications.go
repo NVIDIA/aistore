@@ -441,18 +441,16 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 		return
 	}
 
-	args := &bcastArgs{
-		network: cmn.NetworkIntraControl,
-		timeout: cmn.GCO.Get().Timeout.MaxHostBusy,
-	}
-
-	// nodes to fetch stats from
-	args.req = nl.QueryArgs()
+	args := allocBcastArgs()
+	args.network = cmn.NetworkIntraControl
+	args.timeout = cmn.GCO.Get().Timeout.MaxHostBusy
+	args.req = nl.QueryArgs() // nodes to fetch stats from
 	args.nodes = []cluster.NodeMap{nodesTardy}
 	args.nodeCount = len(args.nodes[0])
 	debug.Assert(args.nodeCount > 0) // Ensure that there is at least one node to fetch.
 
 	results := n.p.bcastNodes(args)
+	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
 			stats, finished, aborted, err := nl.UnmarshalStats(res.bytes)

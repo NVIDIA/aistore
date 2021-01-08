@@ -535,18 +535,17 @@ func (p *proxyrunner) uncoverMeta(bcastSmap *smapX) (svm SmapVoteMsg) {
 func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out SmapVoteMsg, done, slowp bool) {
 	var (
 		borigin, sorigin string
-
-		args = bcastArgs{
-			req: cmn.ReqArgs{
-				Path:  cmn.URLPathDaemon.S,
-				Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmapVote}},
-			},
-			smap: bcastSmap,
-			to:   cluster.AllNodes,
-			fv:   func() interface{} { return &SmapVoteMsg{} },
-		}
-		results = p.bcastGroup(args)
+		args             = allocBcastArgs()
 	)
+	args.req = cmn.ReqArgs{
+		Path:  cmn.URLPathDaemon.S,
+		Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmapVote}},
+	}
+	args.smap = bcastSmap
+	args.to = cluster.AllNodes
+	args.fv = func() interface{} { return &SmapVoteMsg{} }
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	done = true
 	for k := range bmds {
 		delete(bmds, k)

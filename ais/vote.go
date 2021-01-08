@@ -239,15 +239,16 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 		q   = url.Values{}
 	)
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.ID())
-	results := p.bcastGroup(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Path:   cmn.URLPathVoteProxy.S,
-			Body:   cmn.MustMarshal(&msg),
-			Query:  q,
-		},
-		to: cluster.AllNodes,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{
+		Method: http.MethodGet,
+		Path:   cmn.URLPathVoteProxy.S,
+		Body:   cmn.MustMarshal(&msg),
+		Query:  q,
+	}
+	args.to = cluster.AllNodes
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	resCh := make(chan voteResult, len(results))
 	for res := range results {
 		if res.err != nil {
@@ -282,14 +283,11 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cmn.StringSet {
 			},
 		}
 	)
-	results := p.bcastGroup(bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodPut,
-			Path:   cmn.URLPathVoteVoteres.S,
-			Body:   cmn.MustMarshal(msg),
-		},
-		to: cluster.AllNodes,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathVoteVoteres.S, Body: cmn.MustMarshal(msg)}
+	args.to = cluster.AllNodes
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
 		if res.err != nil {
 			glog.Warningf(

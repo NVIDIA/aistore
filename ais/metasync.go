@@ -351,13 +351,14 @@ outer:
 	if revsReqType == revsReqNotify {
 		to = cluster.Targets
 	}
-	results := y.p.bcastGroup(bcastArgs{
-		req:               cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
-		smap:              smap,
-		timeout:           config.Timeout.MaxKeepalive, // making exception for this critical op
-		to:                to,
-		ignoreMaintenance: true,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body}
+	args.smap = smap
+	args.timeout = config.Timeout.MaxKeepalive // making exception for this critical op
+	args.to = to
+	args.ignoreMaintenance = true
+	results := y.p.bcastGroup(args)
+	freeBcastArgs(args)
 
 	// step 4: count failures and fill-in refused
 	for res := range results {
@@ -426,14 +427,14 @@ func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 
 func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap,
 	pairs []revsPair, config *cmn.Config) {
-	bargs := bcastArgs{
-		req:       cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body},
-		network:   cmn.NetworkIntraControl,
-		timeout:   config.Timeout.MaxKeepalive,
-		nodes:     []cluster.NodeMap{refused},
-		nodeCount: len(refused),
-	}
-	results := y.p.bcastNodes(&bargs)
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: method, Path: urlPath, BodyR: body}
+	args.network = cmn.NetworkIntraControl
+	args.timeout = config.Timeout.MaxKeepalive
+	args.nodes = []cluster.NodeMap{refused}
+	args.nodeCount = len(refused)
+	results := y.p.bcastNodes(args)
+	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
 			delete(refused, res.si.ID())
@@ -512,16 +513,16 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	var (
 		urlPath = cmn.URLPathMetasync.S
 		body    = jsp.EncodeSGL(payload, jspMetasyncOpts)
-		bargs   = bcastArgs{
-			req:       cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body},
-			network:   cmn.NetworkIntraControl,
-			timeout:   cmn.GCO.Get().Timeout.MaxKeepalive,
-			nodes:     []cluster.NodeMap{pending},
-			nodeCount: len(pending),
-		}
+		args    = allocBcastArgs()
 	)
+	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
+	args.network = cmn.NetworkIntraControl
+	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
+	args.nodes = []cluster.NodeMap{pending}
+	args.nodeCount = len(pending)
 	defer body.Free()
-	res := y.p.bcastNodes(&bargs)
+	res := y.p.bcastNodes(args)
+	freeBcastArgs(args)
 	for r := range res {
 		if r.err == nil {
 			y.syncDone(r.si, pairs)

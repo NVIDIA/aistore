@@ -203,15 +203,37 @@ var allHTTPverbs = []string{
 	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
 }
 
+// BMD uuid errs
 var errNoBMD = errors.New("no bucket metadata")
 
-// BMD uuid errs
 func (e *errTgtBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errBmdUUIDSplit) Error() string     { return e.detail }
 func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errSmapUUIDDiffer) Error() string   { return e.detail }
 func (e *errNodeNotFound) Error() string {
 	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
+}
+
+///////////////////
+// bargsPool //
+///////////////////
+
+var (
+	bargsPool sync.Pool
+	bargs0    bcastArgs // to reset used ones
+)
+
+func allocBcastArgs() (a *bcastArgs) {
+	if v := bargsPool.Get(); v != nil {
+		a = v.(*bcastArgs)
+		return
+	}
+	return &bcastArgs{}
+}
+
+func freeBcastArgs(a *bcastArgs) {
+	*a = bargs0
+	bargsPool.Put(a)
 }
 
 //////////////////
@@ -946,7 +968,7 @@ func (h *httprunner) notifDst(notif cluster.Notif) (nodes cluster.NodeMap) {
 ///////////////
 
 // bcastGroup broadcasts a message to a specific group of nodes: targets, proxies, all.
-func (h *httprunner) bcastGroup(args bcastArgs) chan callResult {
+func (h *httprunner) bcastGroup(args *bcastArgs) chan callResult {
 	if args.smap == nil {
 		args.smap = h.owner.smap.get()
 	}
@@ -982,7 +1004,7 @@ func (h *httprunner) bcastGroup(args bcastArgs) chan callResult {
 	default:
 		cmn.Assert(false)
 	}
-	return h.bcastNodes(&args)
+	return h.bcastNodes(args)
 }
 
 // bcastNodes broadcasts a message to the specified destinations (`bargs.nodes`).

@@ -19,14 +19,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func (p *proxyrunner) broadcastDownloadRequest(method, path string, body []byte, query url.Values) chan callResult {
-	return p.bcastGroup(bcastArgs{
-		req:     cmn.ReqArgs{Method: method, Path: path, Body: body, Query: query},
-		timeout: cmn.GCO.Get().Timeout.MaxHostBusy,
-	})
-}
-
-func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *downloader.DlAdminBody) ([]byte, int, error) {
+func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
+	msg *downloader.DlAdminBody) ([]byte, int, error) {
 	var (
 		notFoundCnt int
 		err         error
@@ -55,26 +49,30 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 	}
 
 	var (
-		body      = cmn.MustMarshal(msg)
-		responses = p.broadcastDownloadRequest(method, path, body, url.Values{})
-		respCnt   = len(responses)
+		body = cmn.MustMarshal(msg)
+		args = allocBcastArgs()
 	)
+	args.req = cmn.ReqArgs{Method: method, Path: path, Body: body, Query: url.Values{}}
+	args.timeout = cmn.GCO.Get().Timeout.MaxHostBusy
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
+	respCnt := len(results)
 
 	if respCnt == 0 {
 		return nil, http.StatusBadRequest, cmn.NewNoNodesError(cmn.Target)
 	}
 
 	validResponses := make([]callResult, 0, respCnt)
-	for resp := range responses {
-		if resp.status == http.StatusOK {
-			validResponses = append(validResponses, resp)
+	for res := range results {
+		if res.status == http.StatusOK {
+			validResponses = append(validResponses, res)
 			continue
 		}
-		if resp.status != http.StatusNotFound {
-			return nil, resp.status, resp.err
+		if res.status != http.StatusNotFound {
+			return nil, res.status, res.err
 		}
 		notFoundCnt++
-		err = resp.err
+		err = res.err
 	}
 
 	if notFoundCnt == respCnt { // All responded with 404.
@@ -129,12 +127,16 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string, msg *do
 func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, body []byte) (errCode int, err error) {
 	query := r.URL.Query()
 	query.Set(cmn.URLParamUUID, id)
-
-	responses := p.broadcastDownloadRequest(http.MethodPost, r.URL.Path, body, query)
-	for resp := range responses {
-		if resp.err != nil {
-			return resp.status, resp.err
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body, Query: query}
+	args.timeout = cmn.GCO.Get().Timeout.MaxHostBusy
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
+	for res := range results {
+		if res.err == nil {
+			continue
 		}
+		return res.status, res.err
 	}
 	return http.StatusOK, nil
 }
@@ -227,7 +229,8 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if body, err = ioutil.ReadAll(r.Body); err != nil {
-		p.invalmsghdlrstatusf(w, r, http.StatusInternalServerError, "Error starting download: %v.", err.Error())
+		p.invalmsghdlrstatusf(w, r, http.StatusInternalServerError,
+			"Error starting download: %v.", err.Error())
 		return
 	}
 
@@ -239,7 +242,8 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		if dur, err := time.ParseDuration(dlBase.ProgressInterval); err == nil {
 			progressInterval = dur
 		} else {
-			p.invalmsghdlrf(w, r, "%s: invalid progress interval %q, err: %v", p.si, dlBase.ProgressInterval, err)
+			p.invalmsghdlrf(w, r, "%s: invalid progress interval %q, err: %v",
+				p.si, dlBase.ProgressInterval, err)
 			return
 		}
 	}
