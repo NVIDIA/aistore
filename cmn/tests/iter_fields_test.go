@@ -142,6 +142,8 @@ var _ = Describe("IterFields", func() {
 
 					"access":   api.AccessAttrs(1024),
 					"md_write": api.MDWritePolicy("never"),
+
+					"extra.hdfs.ref_directory": (*string)(nil),
 				},
 			),
 			Entry("check for omit tag",

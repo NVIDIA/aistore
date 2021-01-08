@@ -11,6 +11,7 @@ require (
 	github.com/NVIDIA/go-tfdata v0.3.1
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/aws/aws-sdk-go v1.34.33
+	github.com/colinmarc/hdfs/v2 v2.2.0
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-metro v0.0.0-20200812162917-85c65e2d0165 // indirect

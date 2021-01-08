@@ -160,6 +160,10 @@ type (
 	ExtraProps struct {
 		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
+		HDFS ExtraPropsHDFS `json:"hdfs,omitempty" list:"omitempty"`
+	}
+	ExtraToUpdate struct {
+		HDFS *ExtraPropsHDFSToUpdate `json:"hdfs"`
 	}
 
 	ExtraPropsAWS struct {
@@ -172,6 +176,14 @@ type (
 		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
 	}
 
+	ExtraPropsHDFS struct {
+		// Reference directory.
+		RefDirectory string `json:"ref_directory,omitempty"`
+	}
+	ExtraPropsHDFSToUpdate struct {
+		RefDirectory *string `json:"ref_directory"`
+	}
+
 	BucketPropsToUpdate struct {
 		BackendBck *BckToUpdate         `json:"backend_bck"`
 		Versioning *VersionConfToUpdate `json:"versioning"`
@@ -181,6 +193,7 @@ type (
 		EC         *ECConfToUpdate      `json:"ec"`
 		Access     *AccessAttrs         `json:"access,string"`
 		MDWrite    *MDWritePolicy       `json:"md_write"`
+		Extra      *ExtraToUpdate       `json:"extra"`
 	}
 
 	BckToUpdate struct {

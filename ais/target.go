@@ -304,10 +304,12 @@ func (c clouds) initExt(t *targetrunner) (err error) {
 		switch provider {
 		case cmn.ProviderAmazon:
 			c[provider], err = cloud.NewAWS(t)
-		case cmn.ProviderGoogle:
-			c[provider], err = cloud.NewGCP(t)
 		case cmn.ProviderAzure:
 			c[provider], err = cloud.NewAzure(t)
+		case cmn.ProviderGoogle:
+			c[provider], err = cloud.NewGCP(t)
+		case cmn.ProviderHDFS:
+			c[provider], err = cloud.NewHDFS(t)
 		default:
 			err = fmt.Errorf("unknown cloud provider: %q", provider)
 		}

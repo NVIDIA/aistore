@@ -140,6 +140,11 @@ type (
 	CloudConfAIS map[string][]string // cluster alias -> [urls...]
 	CloudInfoAIS map[string]*RemoteAISInfo
 
+	CloudConfHDFS struct {
+		Addresses []string `json:"addresses"`
+		User      string   `json:"user"`
+	}
+
 	MirrorConf struct {
 		Copies      int64 `json:"copies"`       // num local copies
 		UtilThresh  int64 `json:"util_thresh"`  // considered equivalent when below threshold
@@ -585,6 +590,17 @@ func (c *CloudConf) Validate(_ *Config) (err error) {
 				break
 			}
 			c.Conf[provider] = aisConf
+		case ProviderHDFS:
+			var hdfsConf CloudConfHDFS
+			if err := jsoniter.Unmarshal(b, &hdfsConf); err != nil {
+				return fmt.Errorf("invalid cloud specification: %v", err)
+			}
+			if len(hdfsConf.Addresses) == 0 {
+				return fmt.Errorf("no addresses provided to HDFS nodename")
+			}
+			// TODO: Validate addresses?
+			c.Conf[provider] = hdfsConf
+			c.setProvider(provider)
 		case "":
 			continue
 		default:
@@ -597,9 +613,8 @@ func (c *CloudConf) Validate(_ *Config) (err error) {
 func (c *CloudConf) setProvider(provider string) {
 	var ns Ns
 	switch provider {
-	case ProviderAmazon, ProviderGoogle, ProviderAzure:
+	case ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS:
 		ns = NsGlobal
-
 	default:
 		AssertMsg(false, "unknown cloud provider "+provider)
 	}

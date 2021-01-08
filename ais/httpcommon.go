@@ -1875,8 +1875,17 @@ func newBckFromQuery(bckName string, query url.Values) (*cluster.Bck, error) {
 	if err != nil {
 		return nil, err
 	}
-	namespace := cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
-	return cluster.NewBck(bckName, provider, namespace), nil
+	var (
+		namespace = cmn.ParseNsUname(query.Get(cmn.URLParamNamespace))
+		bck       = cluster.NewBck(bckName, provider, namespace)
+	)
+	if props := query.Get(cmn.URLParamBucketProps); props != "" {
+		v := &cmn.BucketProps{}
+		if err := jsoniter.Unmarshal([]byte(props), &v); err == nil {
+			bck.Props = v
+		}
+	}
+	return bck, nil
 }
 
 func newBckFromQueryUname(query url.Values, uparam string) (*cluster.Bck, error) {

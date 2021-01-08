@@ -17,12 +17,13 @@ import (
 
 // Cloud Provider enum
 const (
-	ProviderAmazon = "aws"
-	ProviderGoogle = "gcp"
 	ProviderAIS    = "ais"
+	ProviderAmazon = "aws"
 	ProviderAzure  = "azure"
+	ProviderGoogle = "gcp"
+	ProviderHDFS   = "hdfs"
 	ProviderHTTP   = "ht"
-	allProviders   = "ais, aws (s3://), gcp (gs://), azure (az://), ht://"
+	allProviders   = "ais, aws (s3://), gcp (gs://), azure (az://), hdfs://, ht://"
 
 	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
@@ -92,6 +93,7 @@ var (
 		ProviderGoogle,
 		ProviderAmazon,
 		ProviderAzure,
+		ProviderHDFS,
 		ProviderHTTP,
 	)
 )
@@ -366,12 +368,13 @@ func (b *Bck) RemoteBck() *Bck {
 	return b
 }
 
-func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() && !b.HasBackendBck() } // is local AIS cluster
-func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }                        // is remote AIS cluster
-func (b Bck) IsHTTP() bool      { return b.Provider == ProviderHTTP }                                          // is HTTP
+func (b Bck) IsAIS() bool       { return b.Provider == ProviderAIS && !b.Ns.IsRemote() && !b.HasBackendBck() }
+func (b Bck) IsRemoteAIS() bool { return b.Provider == ProviderAIS && b.Ns.IsRemote() }
+func (b Bck) IsHDFS() bool      { return b.Provider == ProviderHDFS }
+func (b Bck) IsHTTP() bool      { return b.Provider == ProviderHTTP }
 
 func (b Bck) IsRemote() bool {
-	return b.IsCloud() || b.IsRemoteAIS() || b.IsHTTP() || b.HasBackendBck()
+	return b.IsCloud() || b.IsRemoteAIS() || b.IsHDFS() || b.IsHTTP() || b.HasBackendBck()
 }
 
 func (b Bck) IsCloud() bool { // is 3rd party Cloud
@@ -396,6 +399,7 @@ func ValidateProvider(provider string) error {
 
 func (query QueryBcks) String() string     { return Bck(query).String() }
 func (query QueryBcks) IsAIS() bool        { return Bck(query).IsAIS() }
+func (query QueryBcks) IsHDFS() bool       { return Bck(query).IsHDFS() }
 func (query QueryBcks) IsRemoteAIS() bool  { return Bck(query).IsRemoteAIS() }
 func (query QueryBcks) Equal(bck Bck) bool { return Bck(query).Equal(bck) }
 func (query QueryBcks) Contains(other Bck) bool {

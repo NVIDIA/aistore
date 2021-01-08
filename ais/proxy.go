@@ -870,10 +870,14 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
+	if p.forwardCP(w, r, msg, bucket) {
+		return
+	}
 	if bck.Provider == "" {
 		bck.Provider = cmn.ProviderAIS
 	}
-	if p.forwardCP(w, r, msg, bucket) {
+	if bck.IsHDFS() && msg.Value == nil {
+		p.invalmsghdlr(w, r, "bucket prop 'extra.hdfs.ref_directory' must be specified when creating HDFS bucket")
 		return
 	}
 	if msg.Value != nil {
@@ -1440,7 +1444,8 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 
 func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query cmn.QueryBcks) {
 	bmd := p.owner.bmd.get()
-	if query.IsAIS() {
+	// HDFS doesn't support listing remote buckets (there are no remote buckets).
+	if query.IsAIS() || query.IsHDFS() {
 		bcks := p.selectBMDBuckets(bmd, query)
 		p.writeJSON(w, r, bcks, listBuckets)
 		return

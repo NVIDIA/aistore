@@ -30,6 +30,7 @@ var CloudHelpers = struct {
 	Google cloudFuncs
 	Amazon cloudFuncs
 	Azure  cloudFuncs
+	HDFS   cloudFuncs
 	HTTP   cloudFuncs
 }{
 	Google: cloudFuncs{
@@ -112,6 +113,16 @@ var CloudHelpers = struct {
 					return "", false
 				}
 				return hex.EncodeToString(decoded), true
+			case []byte:
+				return hex.EncodeToString(x), true
+			default:
+				panic(v)
+			}
+		},
+	},
+	HDFS: cloudFuncs{
+		EncodeCksum: func(v interface{}) (cksumValue string, isSet bool) {
+			switch x := v.(type) {
 			case []byte:
 				return hex.EncodeToString(x), true
 			default:

@@ -70,8 +70,9 @@ const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
 const (
 	SourceObjMD       = "source"
 	SourceAmazonObjMD = cmn.ProviderAmazon
-	SourceGoogleObjMD = cmn.ProviderGoogle
 	SourceAzureObjMD  = cmn.ProviderAzure
+	SourceGoogleObjMD = cmn.ProviderGoogle
+	SourceHDFSObjMD   = cmn.ProviderHDFS
 	SourceHTTPObjMD   = cmn.ProviderHTTP
 	SourceWebObjMD    = "web"
 
