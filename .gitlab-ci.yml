@@ -209,7 +209,6 @@ test:aisloader:
     BUCKET: "aws://ais-ci"
     AWS_REGION: "us-east-2"
   tags:
-    - ais
     - ais-kube
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
