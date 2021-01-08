@@ -33,6 +33,8 @@ variables:
 
 .test_long_template: &test_long_def
   stage: test-long
+  tags:
+    - ais
   timeout: 2h30m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -45,6 +47,8 @@ variables:
 
 build:linux:
   stage: build
+  tags:
+    - ais
   <<: *default_only_def
   script:
     - AIS_CLD_PROVIDERS="ais aws gcp azure" make node
@@ -56,6 +60,8 @@ build:linux:
 
 lint:linux:
   stage: build
+  tags:
+    - ais
   <<: *default_only_def
   script:
     - make lint
@@ -64,6 +70,8 @@ lint:linux:
 
 test:short:
   stage: test-short
+  tags:
+    - ais
   <<: *default_only_def
   except:
     variables:
@@ -80,6 +88,8 @@ test:short:
 
 test:authn:
   stage: test-short
+  tags:
+    - ais
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
@@ -99,6 +109,8 @@ test:authn:
 
 test:https:
   stage: test-short
+  tags:
+    - ais
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
@@ -155,6 +167,8 @@ test:cloud:gcp:
 
 test:soak:
   stage: test-long
+  tags:
+    - ais
   only:
     - schedules
   script:
@@ -164,6 +178,8 @@ test:soak:
 
 test:aisloader:
   stage: test-long
+  tags:
+    - ais
   only:
     - schedules
   script:
@@ -175,6 +191,8 @@ test:aisloader:
 # TODO: The job is for now disabled because it gets stuck on memsys benchmarks.
 #test:bench:
 #  stage: test-long
+#  tags:
+#    - ais
 #  only:
 #    - schedules
 #  script:
@@ -191,18 +209,19 @@ test:aisloader:
     BUCKET: "aws://ais-ci"
     AWS_REGION: "us-east-2"
   tags:
+    - ais
     - ais-kube
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
 
 test:kube-short:
   stage: test-short
+  <<: *test_kube_def
   only:
     - merge_requests
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
-  <<: *test_kube_def
   script:
     - export NUM_TARGET=3
     - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
@@ -213,13 +232,13 @@ test:kube-short:
 
 test:kube:
   stage: test-long
+  <<: *test_kube_def
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
-  <<: *test_kube_def
   script:
     - export NUM_TARGET=3
     - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
@@ -230,13 +249,13 @@ test:kube:
 
 test:kube-single-target:
   stage: test-long
+  <<: *test_kube_def
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
-  <<: *test_kube_def
   script:
     #  Do not set MINIKUBE_TESTING as we want to have a tests checking correctness with non-testing environment.
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
@@ -247,13 +266,13 @@ test:kube-single-target:
 
 test:kube-aisloader:
   stage: test-long
+  <<: *test_kube_def
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
-  <<: *test_kube_def
   script:
     - make aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
