@@ -224,16 +224,18 @@ func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, 
 		return
 	}
 	var errMsg bytes.Buffer
-	if !strings.Contains(msg, ".go, #") {
+	if !strings.Contains(msg, "stack: [") {
+		fmt.Fprint(&errMsg, "stack: [")
 		for i := 1; i < 5; i++ {
 			if _, file, line, ok := runtime.Caller(i); ok {
 				f := filepath.Base(file)
 				if i > 1 {
 					errMsg.WriteString(" <- ")
 				}
-				fmt.Fprintf(&errMsg, "[%s, #%d]", f, line)
+				fmt.Fprintf(&errMsg, "%s:%d", f, line)
 			}
 		}
+		fmt.Fprint(&errMsg, "]")
 	}
 	err.Trace = errMsg.String()
 	glog.Errorln(err.String())
