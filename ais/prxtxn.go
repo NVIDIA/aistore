@@ -94,11 +94,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 		if res.err == nil {
 			continue
 		}
-		glog.Errorf("Abort create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		return res.err
+		return c.bcastAbort(bck, res.err)
 	}
 
 	// 3. update BMD locally & metasync updated BMD
@@ -173,10 +169,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 			continue
 		}
 		// abort
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		err = res.err
+		err = c.bcastAbort(bck, res.err)
 		return
 	}
 
@@ -313,10 +306,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 			continue
 		}
 		// abort
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		err = res.err
+		err = c.bcastAbort(bck, res.err)
 		return
 	}
 
@@ -412,11 +402,7 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 		if res.err == nil {
 			continue
 		}
-		// abort
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		err = res.err
+		err = c.bcastAbort(bckFrom, res.err)
 		return
 	}
 
@@ -499,7 +485,8 @@ func (p *proxyrunner) _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 
 // copy-bucket/offline ETL:
 // { confirm existence -- begin -- conditional metasync -- start waiting for operation done -- commit }
-func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg, dryRun bool) (xactID string, err error) {
+func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionMsg,
+	dryRun bool) (xactID string, err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
@@ -521,11 +508,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 		if res.err == nil {
 			continue
 		}
-		// abort
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		err = res.err
+		err = c.bcastAbort(bckFrom, res.err)
 		return
 	}
 
@@ -647,11 +630,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		if res.err == nil {
 			continue
 		}
-		// abort
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		err = res.err
+		err = c.bcastAbort(bck, res.err)
 		return
 	}
 
@@ -727,19 +706,13 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 		if res.err == nil {
 			continue
 		}
-		// abort
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		err = res.err
+		err = c.bcastAbort(si, res.err, cmn.Target)
 		return
 	}
 
 	// 2. Put node under maintenance
 	if err = p.markMaintenance(msg, si); err != nil {
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
+		c.bcastAbort(si, err, cmn.Target)
 		return
 	}
 
@@ -786,11 +759,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 		if res.err == nil {
 			continue
 		}
-		glog.Errorf("Abort destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		return res.err
+		return c.bcastAbort(bck, res.err)
 	}
 
 	// 2. Distribute new BMD
@@ -804,11 +773,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	}
 	_, err := p.owner.bmd.modify(ctx)
 	if err != nil {
-		glog.Errorf("Abort destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, err)
-		argsAbr := allocBcastArgs()
-		_ = c.bcast(argsAbr, cmn.ActAbort, 0)
-		freeBcastArgs(argsAbr)
-		return err
+		return c.bcastAbort(bck, err)
 	}
 
 	// 3. Commit
@@ -848,6 +813,18 @@ func (c *txnClientCtx) bcast(args *bcastArgs, phase string, timeout time.Duratio
 	args.smap = c.smap
 	args.timeout = timeout
 	return c.p.bcastGroup(args)
+}
+
+func (c *txnClientCtx) bcastAbort(val fmt.Stringer, err error, key ...string) error {
+	k := "bucket"
+	if len(key) > 0 {
+		k = key[0]
+	}
+	glog.Errorf("Abort %q, %s %s, err: %v)", c.msg.Action, k, val, err)
+	args := allocBcastArgs()
+	_ = c.bcast(args, cmn.ActAbort, 0)
+	freeBcastArgs(args)
+	return err
 }
 
 // txn client context

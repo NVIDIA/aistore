@@ -275,11 +275,9 @@ func (p *proxyrunner) Stop(err error) {
 	p.httprunner.stop(err)
 }
 
-//==================================
-//
-// http /bucket and /objects handlers
-//
-//==================================
+////////////////////////////////////////
+// http /bucket and /objects handlers //
+////////////////////////////////////////
 
 func (p *proxyrunner) parseAPIBckObj(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs, origURLBck ...string) (bck *cluster.Bck, objName string, err error) {
 	request := apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
@@ -786,7 +784,8 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			bckTo = userBckTo
 		}
 		if bckTo.IsHTTP() {
-			p.invalmsghdlrf(w, r, "cannot %s HTTP bucket %q - the operation is not supported", msg.Action, bucket)
+			p.invalmsghdlrf(w, r, "cannot %s HTTP bucket %q - the operation is not supported",
+				msg.Action, bucket)
 			return
 		}
 
@@ -1058,22 +1057,19 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	var (
 		isNew, q = p.initAsyncQuery(bck, msg, cmn.GenUUID())
 		config   = cmn.GCO.Get()
+		smap     = p.owner.smap.get()
+		aisMsg   = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg}, smap, nil)
+		body     = cmn.MustMarshal(aisMsg)
+		args     = allocBcastArgs()
 	)
-	var (
-		smap   = p.owner.smap.get()
-		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg}, smap, nil)
-		body   = cmn.MustMarshal(aisMsg)
-		args   = &bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPost,
-				Path:   cmn.URLPathBuckets.Join(bck.Name),
-				Query:  q,
-				Body:   body,
-			},
-			smap:    smap,
-			timeout: config.Timeout.MaxHostBusy + config.Timeout.MaxKeepalive,
-		}
-	)
+	args.req = cmn.ReqArgs{
+		Method: http.MethodPost,
+		Path:   cmn.URLPathBuckets.Join(bck.Name),
+		Query:  q,
+		Body:   body,
+	}
+	args.smap = smap
+	args.timeout = config.Timeout.MaxHostBusy + config.Timeout.MaxKeepalive
 	results := p.bcastGroup(args)
 	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
 	if err != nil {
@@ -1095,6 +1091,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	args.fv = func() interface{} { return &cmn.BucketsSummaries{} }
 	summaries = make(cmn.BucketsSummaries, 0)
 	results = p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
 		if res.err != nil {
 			return nil, "", res.err
@@ -1316,7 +1313,8 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 //============================
 // forward control plane request to the current primary proxy
 // return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
-func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, s string, origBody ...[]byte) (forf bool) {
+func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg,
+	s string, origBody ...[]byte) (forf bool) {
 	var (
 		body []byte
 		smap = p.owner.smap.get()
@@ -1331,7 +1329,8 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		return true
 	}
 	if p.inPrimaryTransition.Load() {
-		p.invalmsghdlrstatusf(w, r, http.StatusServiceUnavailable, "%s is in transition, cannot process the request", p.si)
+		p.invalmsghdlrstatusf(w, r, http.StatusServiceUnavailable,
+			"%s is in transition, cannot process the request", p.si)
 		return true
 	}
 	if smap.isPrimary(p.si) {
@@ -1391,7 +1390,8 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck cmn.Bck) (err error) {
+func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg,
+	bck cmn.Bck) (err error) {
 	var (
 		remoteUUID = bck.Ns.UUID
 		query      = r.URL.Query()
@@ -1571,20 +1571,20 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	smsg.ContinuationToken = p.qm.b.last(smsg.UUID, token)
 
 	aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
-	args = &bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.URLPathBuckets.Join(bck.Name),
-			Query:  cmn.AddBckToQuery(nil, bck.Bck),
-			Body:   cmn.MustMarshal(aisMsg),
-		},
-		timeout: cmn.LongTimeout, // TODO: should it be `Client.ListObjects`?
-		smap:    smap,
-		fv:      func() interface{} { return &cmn.BucketList{} },
+	args = allocBcastArgs()
+	args.req = cmn.ReqArgs{
+		Method: http.MethodPost,
+		Path:   cmn.URLPathBuckets.Join(bck.Name),
+		Query:  cmn.AddBckToQuery(nil, bck.Bck),
+		Body:   cmn.MustMarshal(aisMsg),
 	}
+	args.timeout = cmn.LongTimeout // TODO: should it be `Client.ListObjects`?
+	args.smap = smap
+	args.fv = func() interface{} { return &cmn.BucketList{} }
 
 	// Combine the results.
 	results = p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
 		if res.err != nil {
 			return nil, res.err
@@ -1629,33 +1629,28 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	if smsg.StartAfter != "" {
 		return nil, fmt.Errorf("start after for cloud buckets is not yet supported")
 	}
-
 	var (
 		smap       = p.owner.smap.get()
 		reqTimeout = cmn.GCO.Get().Client.ListObjects
-
-		aisMsg = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
-		args   = &bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPost,
-				Path:   cmn.URLPathBuckets.Join(bck.Name),
-				Query:  cmn.AddBckToQuery(nil, bck.Bck),
-				Body:   cmn.MustMarshal(aisMsg),
-			},
-			timeout: reqTimeout,
-			smap:    smap,
-			fv:      func() interface{} { return &cmn.BucketList{} },
-		}
-		results chan callResult
+		aisMsg     = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
+		args       = allocBcastArgs()
+		results    chan callResult
 	)
-
+	args.req = cmn.ReqArgs{
+		Method: http.MethodPost,
+		Path:   cmn.URLPathBuckets.Join(bck.Name),
+		Query:  cmn.AddBckToQuery(nil, bck.Bck),
+		Body:   cmn.MustMarshal(aisMsg),
+	}
 	if smsg.NeedLocalMD() {
+		args.timeout = reqTimeout
+		args.smap = smap
+		args.fv = func() interface{} { return &cmn.BucketList{} }
 		results = p.bcastGroup(args)
 	} else {
 		nl, exists := p.notifs.entry(smsg.UUID)
 		// NOTE: We register a listobj xaction before starting the actual listing
 		cmn.Assert(exists)
-
 		for _, si := range nl.Notifiers() {
 			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout, v: &cmn.BucketList{}})
 			results = make(chan callResult, 1)
@@ -1664,7 +1659,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 			break
 		}
 	}
-
+	freeBcastArgs(args)
 	// Combine the results.
 	bckLists := make([]*cmn.BucketList, 0, len(results))
 	for res := range results {
@@ -1696,7 +1691,8 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 	return allEntries, nil
 }
 
-func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, msg *cmn.ActionMsg) {
+func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
+	objName string, msg *cmn.ActionMsg) {
 	started := time.Now()
 	if objName == msg.Name {
 		p.invalmsghdlr(w, r, "the new and the current names are the same")
@@ -1725,12 +1721,10 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	var (
 		started = time.Now()
 		smap    = p.owner.smap.get()
 	)
-
 	// designated target ID
 	if promoteArgs.Target != "" {
 		tsi := smap.GetTarget(promoteArgs.Target)
@@ -1739,7 +1733,6 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-
 		// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
 		redirectURL := p.redirectURL(r, tsi, started, cmn.NetworkIntraControl)
 		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1751,15 +1744,16 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	// TODO -- FIXME: 2phase begin to check space, validate params, and check vs running xactions
 	//
 	query := cmn.AddBckToQuery(nil, bck.Bck)
-	results := p.bcastGroup(&bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.URLPathObjects.Join(bck.Name),
-			Body:   cmn.MustMarshal(msg),
-			Query:  query,
-		},
-		to: cluster.Targets,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{
+		Method: http.MethodPost,
+		Path:   cmn.URLPathObjects.Join(bck.Name),
+		Body:   cmn.MustMarshal(msg),
+		Query:  query,
+	}
+	args.to = cluster.Targets
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
 			continue
@@ -1772,30 +1766,20 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
 	query url.Values) (xactID string, err error) {
 	var (
-		timeout time.Duration
-		results chan callResult
-		wait    bool
-	)
-	var (
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAisMsg(msg, smap, nil, cmn.GenUUID())
 		body   = cmn.MustMarshal(aisMsg)
 		path   = cmn.URLPathBuckets.Join(bucket)
 	)
-	if wait {
-		timeout = cmn.GCO.Get().Client.ListObjects
-	} else {
-		timeout = cmn.DefaultTimeout
-	}
-
 	nlb := xaction.NewXactNL(aisMsg.UUID, aisMsg.Action, &smap.Smap, nil)
 	nlb.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
-	results = p.bcastGroup(&bcastArgs{
-		req:     cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body},
-		smap:    smap,
-		timeout: timeout,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: method, Path: path, Query: query, Body: body}
+	args.smap = smap
+	args.timeout = cmn.DefaultTimeout // TODO: use cmn.GCO.Get().Client.ListObjects
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
 			continue
@@ -1848,11 +1832,9 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	p.reverseRequest(w, r, nodeID, parsedURL)
 }
 
-//======================
-//
-// http /daemon handlers
-//
-//======================
+///////////////////////////
+// http /daemon handlers //
+///////////////////////////
 
 // [METHOD] /v1/daemon
 func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
@@ -2296,10 +2278,11 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	urlPath := cmn.URLPathDaemonProxy.Join(proxyid)
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
-	results := p.bcastGroup(&bcastArgs{
-		req: cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q},
-		to:  cluster.AllNodes,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
+	args.to = cluster.AllNodes
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
 			continue
@@ -2322,10 +2305,11 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	// (II) Commit phase.
 	q.Set(cmn.URLParamPrepare, "false")
-	results = p.bcastGroup(&bcastArgs{
-		req: cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q},
-		to:  cluster.AllNodes,
-	})
+	args = allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
+	args.to = cluster.AllNodes
+	results = p.bcastGroup(args)
+	freeBcastArgs(args)
 	// TODO: retry
 	for res := range results {
 		if res.err == nil {
@@ -2340,11 +2324,9 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-//=======================
-//
-// http /cluster handlers
-//
-//=======================
+////////////////////////////
+// http /cluster handlers //
+////////////////////////////
 
 // [METHOD] /v1/cluster
 func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
@@ -2424,7 +2406,6 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 ///////////////////////////////////
 // query target states and stats //
 ///////////////////////////////////
-
 func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	var (
 		query = r.URL.Query()
@@ -2506,15 +2487,11 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
 		return
 	}
-	results := p.bcastGroup(&bcastArgs{
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Path:   cmn.URLPathXactions.S,
-			Body:   body,
-			Query:  query,
-		},
-		to: cluster.Targets,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPathXactions.S, Body: body, Query: query}
+	args.to = cluster.Targets
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	targetResults := p._queryResults(w, r, results)
 	if targetResults != nil {
 		p.writeJSON(w, r, targetResults, what)
@@ -2523,15 +2500,12 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 
 func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
 	fetchResults := func(broadcastType int) (cmn.JSONRawMsgs, string) {
-		results := p.bcastGroup(&bcastArgs{
-			req: cmn.ReqArgs{
-				Method: r.Method,
-				Path:   cmn.URLPathDaemon.S,
-				Query:  r.URL.Query(),
-			},
-			timeout: cmn.GCO.Get().Client.Timeout,
-			to:      broadcastType,
-		})
+		args := allocBcastArgs()
+		args.req = cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query()}
+		args.timeout = cmn.GCO.Get().Client.Timeout
+		args.to = broadcastType
+		results := p.bcastGroup(args)
+		freeBcastArgs(args)
 		sysInfoMap := make(cmn.JSONRawMsgs, len(results))
 		for res := range results {
 			if res.err != nil {
@@ -2595,15 +2569,11 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 			return nil
 		}
 	}
-	results := p.bcastGroup(&bcastArgs{
-		req: cmn.ReqArgs{
-			Method: r.Method,
-			Path:   cmn.URLPathDaemon.S,
-			Query:  r.URL.Query(),
-			Body:   body,
-		},
-		timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-	})
+	args := allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query(), Body: body}
+	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
 	return p._queryResults(w, r, results)
 }
 
@@ -3241,7 +3211,8 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			ok    bool
 		)
 		if value, ok = msg.Value.(string); !ok {
-			p.invalmsghdlrf(w, r, "%s: invalid value format (%+v, %T)", cmn.ActSetConfig, msg.Value, msg.Value)
+			p.invalmsghdlrf(w, r, "%s: invalid value format (%+v, %T)",
+				cmn.ActSetConfig, msg.Value, msg.Value)
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
@@ -3249,14 +3220,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		results := p.bcastGroup(&bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPut,
-				Path:   cmn.URLPathDaemon.S,
-				Body:   cmn.MustMarshal(msg),
-			},
-			to: cluster.AllNodes,
-		})
+		args := allocBcastArgs()
+		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: cmn.MustMarshal(msg)}
+		args.to = cluster.AllNodes
+		results := p.bcastGroup(args)
+		freeBcastArgs(args)
 		for res := range results {
 			if res.err == nil {
 				continue
@@ -3268,14 +3236,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
-		_ = p.bcastGroup(&bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPut,
-				Path:   cmn.URLPathDaemon.S,
-				Body:   cmn.MustMarshal(msg),
-			},
-			to: cluster.AllNodes,
-		})
+		args := allocBcastArgs()
+		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: cmn.MustMarshal(msg)}
+		args.to = cluster.AllNodes
+		_ = p.bcastGroup(args)
+		freeBcastArgs(args)
 
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
@@ -3306,14 +3271,11 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			xactMsg.ID = cmn.GenUUID()
 		}
 		body := cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
-		results := p.bcastGroup(&bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPut,
-				Path:   cmn.URLPathXactions.S,
-				Body:   body,
-			},
-			to: cluster.Targets,
-		})
+		args := allocBcastArgs()
+		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
+		args.to = cluster.Targets
+		results := p.bcastGroup(args)
+		freeBcastArgs(args)
 		for res := range results {
 			if res.err == nil {
 				continue
@@ -3474,10 +3436,11 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		results := p.bcastGroup(&bcastArgs{
-			req: cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemonSetConf.S, Query: query},
-			to:  cluster.AllNodes,
-		})
+		args := allocBcastArgs()
+		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemonSetConf.S, Query: query}
+		args.to = cluster.AllNodes
+		results := p.bcastGroup(args)
+		freeBcastArgs(args)
 		for res := range results {
 			if res.err == nil {
 				continue
@@ -3496,14 +3459,11 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
 		}
-		results := p.bcastGroup(&bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPut,
-				Path:   cmn.URLPathDaemon.Join(action),
-				Query:  query,
-			},
-			to: cluster.AllNodes,
-		})
+		args := allocBcastArgs()
+		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.Join(action), Query: query}
+		args.to = cluster.AllNodes
+		results := p.bcastGroup(args)
+		freeBcastArgs(args)
 		// NOTE: save this config unconditionally; metasync
 		if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", action, cmn.GetWhatRemoteAIS)); err != nil {
 			glog.Error(err)
