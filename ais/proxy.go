@@ -1060,8 +1060,8 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		smap     = p.owner.smap.get()
 		aisMsg   = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg}, smap, nil)
 		body     = cmn.MustMarshal(aisMsg)
-		args     = allocBcastArgs()
 	)
+	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{
 		Method: http.MethodPost,
 		Path:   cmn.URLPathBuckets.Join(bck.Name),
@@ -1073,12 +1073,14 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	results := p.bcastGroup(args)
 	allOK, _, err := p.checkBckTaskResp(msg.UUID, results)
 	if err != nil {
+		freeBcastArgs(args)
 		return nil, "", err
 	}
 
-	// some targets are still executing their tasks or it is request to start
-	// an async task. The proxy returns only uuid to a caller
+	// some targets are still executing their tasks, or it is the request to start
+	// an async task - return only uuid
 	if !allOK || isNew {
+		freeBcastArgs(args)
 		return nil, msg.UUID, nil
 	}
 
