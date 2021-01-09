@@ -48,6 +48,9 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
+	if fromBck.Provider != "" && !fromBck.IsAIS() {
+		return incorrectUsageMsg(c, "only AIS bucket can be a source")
+	}
 	toBck, err := parseBckURI(c, newBucketName)
 	if err != nil {
 		return err

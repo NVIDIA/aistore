@@ -1894,6 +1894,7 @@ func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string) erro
 		cmn.Assert(ok)
 	}
 	// detach
+	var errMsg string
 	if action == cmn.ActDetach {
 		for alias := range query {
 			if alias == cmn.URLParamWhat {
@@ -1903,6 +1904,9 @@ func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string) erro
 				changed = true
 				delete(aisConf, alias)
 			}
+		}
+		if !changed {
+			errMsg = "remote cluster does not exist"
 		}
 		goto rret
 	}
@@ -1926,10 +1930,13 @@ func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string) erro
 			}
 		}
 	}
-rret:
 	if !changed {
+		errMsg = "empty URL list"
+	}
+rret:
+	if errMsg != "" {
 		cmn.GCO.DiscardUpdate()
-		return fmt.Errorf("%s: request to %s remote cluster - nothing to do", h.si, action)
+		return fmt.Errorf("%s: %s remote cluster: %s", h.si, action, errMsg)
 	}
 	config.Cloud.ProviderConf(cmn.ProviderAIS, aisConf)
 	cmn.GCO.CommitUpdate(config)

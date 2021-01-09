@@ -865,7 +865,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errCode == http.StatusNotFound {
 			t.invalmsghdlrsilent(w, r,
-				fmt.Sprintf("object %s/%s doesn't exist", lom.Bck(), lom.ObjName),
+				fmt.Sprintf("object %s/%s doesn't exist", lom.Bck().Bck, lom.ObjName),
 				http.StatusNotFound,
 			)
 		} else {

@@ -259,14 +259,13 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 		return "", nil, missingArgumentsError(c, "attribute name-value pairs")
 	}
 
-	nvs, err = makePairs(kvs)
-	if err != nil {
+	if nvs, err = makePairs(kvs); err != nil {
 		return "", nil, err
 	}
 
 	for k := range nvs {
 		if !cmn.StringInSlice(k, propList) {
-			return "", nil, fmt.Errorf("invalid prop name %q(%+v)", k, nvs)
+			return "", nil, fmt.Errorf("invalid property name %q", k)
 		}
 	}
 

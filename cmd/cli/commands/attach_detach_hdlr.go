@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -78,6 +79,9 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
+	if alias == cmn.URLParamWhat {
+		return fmt.Errorf("cannot use %q as an alias", cmn.URLParamWhat)
+	}
 	if err = api.AttachRemoteAIS(defaultAPIParams, alias, url); err != nil {
 		return
 	}
@@ -114,7 +118,11 @@ func attachMountpathHandler(c *cli.Context) (err error) {
 	for nodeID, mountpath := range kvs {
 		si := smap.GetTarget(nodeID)
 		if si == nil {
-			return fmt.Errorf("daemon with ID (%s) does not exist", nodeID)
+			si = smap.GetProxy(nodeID)
+			if si == nil {
+				return fmt.Errorf("daemon %q does not exist", nodeID)
+			}
+			return fmt.Errorf("daemon %q is a proxy, run \"ais show cluster target\" to list targets", nodeID)
 		}
 		if err := api.AddMountpath(defaultAPIParams, si, mountpath); err != nil {
 			return err
