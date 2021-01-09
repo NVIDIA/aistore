@@ -264,6 +264,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 				err:      nil,
 			}
 		}
+		freeCallRes(res)
 	}
 
 	close(resCh)
@@ -289,15 +290,14 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cmn.StringSet {
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	for res := range results {
-		if res.err != nil {
-			glog.Warningf(
-				"Broadcast commit result for %s(%s) failed: %v",
-				res.si.ID(),
-				res.si.IntraControlNet.DirectURL,
-				res.err,
-			)
-			errors.Add(res.si.ID())
+		if res.err == nil {
+			freeCallRes(res)
+			continue
 		}
+		glog.Warningf("Broadcast commit result for %s(%s) failed: %v", res.si.ID(),
+			res.si.IntraControlNet.DirectURL, res.err)
+		errors.Add(res.si.ID())
+		freeCallRes(res)
 	}
 	return errors
 }
@@ -499,10 +499,9 @@ func (h *httprunner) _votedPrimary(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) error {
+func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) (err error) {
 	msg := VoteInitiationMessage{Request: *vr}
 	body := cmn.MustMarshal(&msg)
-
 	args := callArgs{
 		si: nextPrimaryProxy,
 		req: cmn.ReqArgs{
@@ -514,21 +513,26 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 		timeout: cmn.DefaultTimeout,
 	}
 	res := h.call(args)
-	if res.err != nil {
-		sleepTime := cmn.GCO.Get().Timeout.CplaneOperation
-		if cmn.IsErrConnectionRefused(res.err) {
-			for i := 0; i < 2; i++ {
-				time.Sleep(sleepTime)
-				res = h.call(args)
-				if res.err == nil {
-					break
-				}
-				sleepTime += sleepTime / 2
-			}
-		}
-		glog.Errorf("Failed to request election from next primary proxy: %v", res.err)
+	err = res.err
+	freeCallRes(res)
+	if err == nil {
+		return
 	}
-	return res.err
+	sleepTime := cmn.GCO.Get().Timeout.CplaneOperation
+	if cmn.IsErrConnectionRefused(err) {
+		for i := 0; i < 2; i++ {
+			time.Sleep(sleepTime)
+			res = h.call(args)
+			err = res.err
+			freeCallRes(res)
+			if err == nil {
+				break
+			}
+			sleepTime += sleepTime / 2
+		}
+	}
+	glog.Errorf("Failed to request election from next primary proxy: %v", res.err)
+	return
 }
 
 func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {

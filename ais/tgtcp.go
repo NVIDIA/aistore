@@ -69,17 +69,18 @@ func (t *targetrunner) initHostIP() {
 func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error) {
 	res := t.join(nil, primaryURLs...)
 	if res.err != nil {
-		return res.status, res.err
+		status, err = res.status, res.err
+		freeCallRes(res)
+		return
 	}
 	// not being sent at cluster startup and keepalive
 	if len(res.bytes) == 0 {
+		freeCallRes(res)
 		return
 	}
 
-	if err = t.applyRegMeta(res.bytes, ""); err != nil {
-		return
-	}
-
+	err = t.applyRegMeta(res.bytes, "")
+	freeCallRes(res)
 	return
 }
 
@@ -125,7 +126,7 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	return
 }
 
-func (t *targetrunner) unregister(_ ...string) (int, error) {
+func (t *targetrunner) unregister(_ ...string) (status int, err error) {
 	smap := t.owner.smap.get()
 	if smap == nil || smap.validate() != nil {
 		return 0, nil
@@ -139,7 +140,9 @@ func (t *targetrunner) unregister(_ ...string) (int, error) {
 		timeout: cmn.DefaultTimeout,
 	}
 	res := t.call(args)
-	return res.status, res.err
+	status, err = res.status, res.err
+	freeCallRes(res)
+	return
 }
 
 // [METHOD] /v1/daemon
@@ -863,15 +866,17 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 		time.Sleep(timeout / 2)
 		res = t.call(args)
 		if res.err != nil {
-			return fmt.Errorf("%s: failed to GET(%q), err: %v", t.si, what, res.err)
+			err = fmt.Errorf("%s: failed to GET(%q), err: %v", t.si, what, res.err)
+			freeCallRes(res)
+			return
 		}
 	}
 	err = jsoniter.Unmarshal(res.bytes, outStruct)
 	if err != nil {
-		return fmt.Errorf("%s: unexpected: failed to unmarshal GET(%q) response: %v", t.si, what, err)
+		err = fmt.Errorf("%s: unexpected: failed to unmarshal GET(%q) response: %v", t.si, what, err)
 	}
-
-	return nil
+	freeCallRes(res)
+	return
 }
 
 func (t *targetrunner) smapVersionFixup(r *http.Request) {
@@ -1147,8 +1152,11 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
-			return res.si
+			si := res.si
+			drainCallResults(res, results)
+			return si
 		}
+		freeCallRes(res)
 	}
 	return nil
 }

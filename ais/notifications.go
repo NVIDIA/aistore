@@ -456,6 +456,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 			stats, finished, aborted, err := nl.UnmarshalStats(res.bytes)
 			if err != nil {
 				glog.Errorf("%s: failed to parse stats from %s, err: %v", n.p.si, res.si, err)
+				freeCallRes(res)
 				continue
 			}
 			nl.Lock()
@@ -467,6 +468,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 		} else if res.status == http.StatusNotFound {
 			if mono.Since(nl.AddedTime()) < progressInterval {
 				// likely didn't start yet - skipping
+				freeCallRes(res)
 				continue
 			}
 			err := fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si)
@@ -476,6 +478,7 @@ func (n *notifs) syncStats(nl nl.NotifListener, dur ...time.Duration) {
 		} else if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si, res.err)
 		}
+		freeCallRes(res)
 	}
 
 	if done {

@@ -61,15 +61,17 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 	if respCnt == 0 {
 		return nil, http.StatusBadRequest, cmn.NewNoNodesError(cmn.Target)
 	}
-
-	validResponses := make([]callResult, 0, respCnt)
+	// TODO -- FIXME: freeCallRes, etc.
+	validResponses := make([]*callResult, 0, respCnt)
 	for res := range results {
 		if res.status == http.StatusOK {
 			validResponses = append(validResponses, res)
 			continue
 		}
 		if res.status != http.StatusNotFound {
-			return nil, res.status, res.err
+			status, err := res.status, res.err
+			drainCallResults(res, results)
+			return nil, status, err
 		}
 		notFoundCnt++
 		err = res.err
@@ -134,9 +136,12 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, 
 	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
+			freeCallRes(res)
 			continue
 		}
-		return res.status, res.err
+		errCode, err = res.status, res.err
+		drainCallResults(res, results)
+		return
 	}
 	return http.StatusOK, nil
 }

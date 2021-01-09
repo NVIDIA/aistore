@@ -64,9 +64,11 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
+			freeCallRes(res)
 			continue
 		}
 		p.invalmsghdlr(w, r, res.err.Error())
+		drainCallResults(res, results)
 		return
 	}
 
@@ -169,12 +171,15 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	for res := range results {
 		if res.err != nil {
 			if res.status == http.StatusNotFound {
+				freeCallRes(res)
 				continue
 			}
 			p.invalmsghdlr(w, r, res.err.Error(), res.status)
+			drainCallResults(res, results)
 			return
 		}
 		lists = append(lists, res.v.(*cmn.BucketList))
+		freeCallRes(res)
 	}
 
 	result := cmn.ConcatObjLists(lists, msg.Size)

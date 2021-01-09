@@ -442,7 +442,7 @@ func (t *targetrunner) DisableMountpath(mountpath, reason string) (disabled bool
 	return t.fsprg.disableMountpath(mountpath)
 }
 
-func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error) {
+func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, err error) {
 	// pull the data
 	query := url.Values{}
 	query.Set(cmn.URLParamRebData, "true")
@@ -457,5 +457,7 @@ func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) ([]byte, int, error
 		timeout: cmn.DefaultTimeout,
 	}
 	res := t.call(args)
-	return res.bytes, res.status, res.err
+	b, status, err = res.bytes, res.status, res.err
+	freeCallRes(res)
+	return
 }

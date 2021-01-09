@@ -268,10 +268,12 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
+			freeCallRes(res)
 			continue
 		}
 		err = res.err
 		glog.Error(err)
+		freeCallRes(res)
 	}
 	if err == nil {
 		// All init calls have succeeded, return UUID.
@@ -321,10 +323,12 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
+			freeCallRes(res)
 			continue
 		}
 		err = res.err
 		glog.Error(err)
+		freeCallRes(res)
 	}
 	if err == nil {
 		// All init calls have succeeded, return UUID.
@@ -369,7 +373,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		results chan callResult
+		results chanResults
 		args    *bcastArgs
 	)
 	if len(apiItems) > 1 {
@@ -382,7 +386,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, "unknown target %q", tid)
 			return
 		}
-		results = make(chan callResult, 1)
+		results = make(chanResults, 1)
 		results <- p.call(callArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
@@ -406,9 +410,11 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
+			drainCallResults(res, results)
 			return
 		}
 		logs = append(logs, *res.v.(*etl.PodLogsMsg))
+		freeCallRes(res)
 	}
 	sort.Sort(logs)
 	p.writeJSON(w, r, logs, "logs-ETL")
@@ -432,9 +438,11 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 	freeBcastArgs(args)
 	for res := range results {
 		if res.err == nil {
+			freeCallRes(res)
 			continue
 		}
 		p.invalmsghdlr(w, r, res.err.Error())
+		drainCallResults(res, results)
 		return
 	}
 }

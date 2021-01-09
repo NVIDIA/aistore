@@ -366,6 +366,7 @@ outer:
 			if revsReqType == revsReqSync {
 				y.syncDone(res.si, pairsToSend)
 			}
+			freeCallRes(res)
 			continue
 		}
 		glog.Warningf("%s: failed to sync %s, err: %v(%d)", y.p.si, res.si, res.err, res.status)
@@ -378,6 +379,7 @@ outer:
 		} else {
 			failedCnt++
 		}
+		freeCallRes(res)
 	}
 	// step 5: handle connection-refused right away
 	for i := 0; i < 4; i++ {
@@ -444,6 +446,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 			glog.Warningf("%s: handle-refused: failing to sync %s, err: %v (%d)",
 				y.p.si, res.si, res.err, res.status)
 		}
+		freeCallRes(res)
 	}
 }
 

@@ -52,6 +52,8 @@ type (
 		status  int
 	}
 
+	chanResults chan *callResult
+
 	// callArgs contains arguments for a peer-to-peer control plane call.
 	callArgs struct {
 		req     cmn.ReqArgs
@@ -214,13 +216,13 @@ func (e *errNodeNotFound) Error() string {
 	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
 }
 
-///////////////////
+///////////////
 // bargsPool //
-///////////////////
+///////////////
 
 var (
 	bargsPool sync.Pool
-	bargs0    bcastArgs // to reset used ones
+	bargs0    bcastArgs
 )
 
 func allocBcastArgs() (a *bcastArgs) {
@@ -234,6 +236,37 @@ func allocBcastArgs() (a *bcastArgs) {
 func freeBcastArgs(a *bcastArgs) {
 	*a = bargs0
 	bargsPool.Put(a)
+}
+
+/////////////////
+// callResPool //
+/////////////////
+
+var (
+	callResPool sync.Pool
+	callRes0    callResult
+)
+
+func allocCallRes() (a *callResult) {
+	if v := callResPool.Get(); v != nil {
+		a = v.(*callResult)
+		debug.Assert(a.si == nil)
+		return
+	}
+	return &callResult{}
+}
+
+func freeCallRes(a *callResult) {
+	debug.Assert(a != nil)
+	*a = callRes0
+	callResPool.Put(a)
+}
+
+func drainCallResults(res *callResult, results chanResults) {
+	freeCallRes(res)
+	for r := range results {
+		freeCallRes(r)
+	}
 }
 
 //////////////////
@@ -781,14 +814,14 @@ func (h *httprunner) stop(err error) {
 // intra-cluster IPC, control plane
 // call another target or a proxy; optionally, include a json-encoded body
 //
-func (h *httprunner) call(args callArgs) (res callResult) {
+func (h *httprunner) call(args callArgs) (res *callResult) {
 	var (
 		req    *http.Request
 		resp   *http.Response
 		client *http.Client
 		sid    = unknownDaemonID
 	)
-
+	res = allocCallRes()
 	if args.si != nil {
 		sid = args.si.ID()
 		res.si = args.si
@@ -968,7 +1001,7 @@ func (h *httprunner) notifDst(notif cluster.Notif) (nodes cluster.NodeMap) {
 ///////////////
 
 // bcastGroup broadcasts a message to a specific group of nodes: targets, proxies, all.
-func (h *httprunner) bcastGroup(args *bcastArgs) chan callResult {
+func (h *httprunner) bcastGroup(args *bcastArgs) chanResults {
 	if args.smap == nil {
 		args.smap = h.owner.smap.get()
 	}
@@ -1010,9 +1043,9 @@ func (h *httprunner) bcastGroup(args *bcastArgs) chan callResult {
 // bcastNodes broadcasts a message to the specified destinations (`bargs.nodes`).
 // It then waits and collects all the responses (compare with bcastAsyncNodes).
 // Note that, if specified, `bargs.req.BodyR` must implement `cmn.ReadOpenCloser`.
-func (h *httprunner) bcastNodes(bargs *bcastArgs) chan callResult {
+func (h *httprunner) bcastNodes(bargs *bcastArgs) chanResults {
 	var (
-		ch  = make(chan callResult, bargs.nodeCount)
+		ch  = make(chanResults, bargs.nodeCount)
 		cnt int
 	)
 	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
@@ -1041,7 +1074,7 @@ func (h *httprunner) bcastNodes(bargs *bcastArgs) chan callResult {
 	return ch
 }
 
-func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, ch chan callResult) {
+func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, ch chanResults) {
 	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
 	cargs.req.Base = si.URL(bargs.network)
 	if bargs.req.BodyR != nil {
@@ -1267,7 +1300,7 @@ func (h *httprunner) invalmsghdlrf(w http.ResponseWriter, r *http.Request, forma
 // health client //
 ///////////////////
 
-func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) ([]byte, int, error) {
+func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
 	var (
 		path = cmn.URLPathHealth.S
 		url  = si.URL(cmn.NetworkIntraControl)
@@ -1278,7 +1311,9 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 		}
 	)
 	res := h.call(args)
-	return res.bytes, res.status, res.err
+	b, status, err = res.bytes, res.status, res.err
+	freeCallRes(res)
+	return
 }
 
 // uses provided Smap and an extended version of the Health(clusterInfo) internal API
@@ -1560,7 +1595,7 @@ func (h *httprunner) extractRevokedTokenList(payload msPayload, caller string) (
 // - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
-func (h *httprunner) join(query url.Values, contactURLs ...string) (res callResult) {
+func (h *httprunner) join(query url.Values, contactURLs ...string) (res *callResult) {
 	var (
 		config                   = cmn.GCO.Get()
 		candidates               = make([]string, 0, 4+len(contactURLs))
@@ -1631,8 +1666,7 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res callResu
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration,
-	query url.Values, keepalive bool) (res callResult) {
+func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values, keepalive bool) *callResult {
 	var (
 		path   string
 		regReq = nodeRegMeta{SI: h.si}
@@ -1668,9 +1702,12 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 		if strings.Contains(res.err.Error(), ciePrefix) {
 			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
 		}
-		return res.status, res.err
+		status, err = res.status, res.err
+		freeCallRes(res)
+		return
 	}
 	debug.Assert(len(res.bytes) == 0)
+	freeCallRes(res)
 	return
 }
 
