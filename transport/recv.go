@@ -40,7 +40,6 @@ type (
 		hdr    ObjHdr
 		pdu    *rpdu
 		loghdr string
-		roff   atomic.Int64
 	}
 	handler struct {
 		trname      string
@@ -144,7 +143,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 				// err => err; EOF => (unsized => EOF, otherwise => nil)
 				h.rxObj(w, obj.hdr, obj, eofOK(err, unsized))
 				stats.Num.Inc()
-				stats.Size.Add(obj.roff.Load())
+				stats.Size.Add(obj.off)
 				if eofOK(err) == nil {
 					continue
 				}
@@ -294,15 +293,12 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	case nil:
 		if obj.off >= obj.Size() {
 			err = io.EOF
-			obj.roff.Store(obj.off)
 		}
 	case io.EOF:
-		obj.roff.Store(obj.off)
 		if obj.off != obj.Size() {
 			err = fmt.Errorf("sbr6 %s: premature eof %d != %s, err %w", obj.loghdr, obj.off, obj, err)
 		}
 	default:
-		obj.roff.Store(obj.off)
 		err = fmt.Errorf("sbr7 %s: off %d, obj %s, err %w", obj.loghdr, obj.off, obj, err)
 	}
 	return
@@ -345,7 +341,6 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 	}
 	if pdu.rlength() == 0 {
 		if pdu.last {
-			obj.roff.Store(obj.off)
 			err = io.EOF
 			if obj.IsUnsized() {
 				obj.hdr.ObjAttrs.Size = obj.off
