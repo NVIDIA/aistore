@@ -204,6 +204,7 @@ func (mgr *Manager) getBckXactsUnlocked(bckName string) *BckXacts {
 
 // A function to process command requests from other targets
 func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+	defer transport.FreeRecv(object)
 	if err != nil {
 		glog.Errorf("request failed: %v", err)
 		return
@@ -241,6 +242,7 @@ func (mgr *Manager) recvRequest(w http.ResponseWriter, hdr transport.ObjHdr, obj
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
 func (mgr *Manager) recvResponse(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+	defer transport.FreeRecv(object)
 	if err != nil {
 		glog.Errorf("receive failed: %v", err)
 		return

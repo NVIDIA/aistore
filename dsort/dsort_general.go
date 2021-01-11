@@ -490,6 +490,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.ReceiveObj {
 	}
 
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+		transport.FreeRecv(object)
 		req := remoteRequest{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 			ds.m.abort(fmt.Errorf("received damaged request: %s", err))
@@ -603,14 +604,12 @@ func (ds *dsorterGeneral) postExtraction() {
 func (ds *dsorterGeneral) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+		defer transport.FreeRecv(object)
 		if err != nil {
 			ds.m.abort(err)
 			return
 		}
-
-		defer func() {
-			cmn.DrainReader(object) // drain to prevent unnecessary stream errors
-		}()
+		defer cmn.DrainReader(object)
 
 		writer := ds.pullStreamWriter(hdr.ObjName)
 		if writer == nil { // was removed after timing out

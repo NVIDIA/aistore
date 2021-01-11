@@ -6,23 +6,59 @@
 package transport
 
 import (
+	"io"
 	"sync"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-/////////////////////
-// Obj pool (send) //
-/////////////////////
+//////////////
+// sendPool //
+//////////////
 
-var sendPool sync.Pool
+var (
+	sendPool sync.Pool
+	sobj0    Obj
+)
 
 func AllocSend() (obj *Obj) {
 	if v := sendPool.Get(); v != nil {
 		obj = v.(*Obj)
-		*obj = Obj{}
 	} else {
 		obj = &Obj{}
 	}
 	return
 }
 
-func FreeSend(obj *Obj) { sendPool.Put(obj) }
+func FreeSend(obj *Obj) { // <== sendobj & stream_bundle
+	*obj = sobj0
+	sendPool.Put(obj)
+}
+
+//////////////
+// recvPool //
+//////////////
+
+var (
+	recvPool sync.Pool
+	robj0    objReader
+)
+
+func allocRecv() (obj *objReader) {
+	if v := recvPool.Get(); v != nil {
+		obj = v.(*objReader)
+	} else {
+		obj = &objReader{}
+	}
+	return
+}
+
+func FreeRecv(object io.Reader) {
+	if object == nil {
+		return
+	}
+	obj, ok := object.(*objReader)
+	debug.Assert(ok && obj != nil)
+	*obj = robj0
+	recvPool.Put(obj)
+}

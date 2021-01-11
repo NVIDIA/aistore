@@ -61,7 +61,9 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 	if respCnt == 0 {
 		return nil, http.StatusBadRequest, cmn.NewNoNodesError(cmn.Target)
 	}
-	// TODO -- FIXME: freeCallRes, etc.
+	//
+	// TODO: rewrite as a single `for`, avoid allocation
+	//
 	validResponses := make([]*callResult, 0, respCnt)
 	for res := range results {
 		if res.status == http.StatusOK {
@@ -75,6 +77,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 		}
 		notFoundCnt++
 		err = res.err
+		freeCallRes(res)
 	}
 
 	if notFoundCnt == respCnt { // All responded with 404.

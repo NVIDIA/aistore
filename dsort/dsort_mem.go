@@ -558,14 +558,12 @@ func (ds *dsorterMem) postExtraction() {}
 
 func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+		defer transport.FreeRecv(object)
 		if err != nil {
 			ds.m.abort(err)
 			return
 		}
-
-		defer func() {
-			cmn.DrainReader(object) // drain to prevent unnecessary stream errors
-		}()
+		defer cmn.DrainReader(object)
 
 		unpacker := cmn.NewUnpacker(hdr.Opaque)
 		req := buildingShardInfo{}
@@ -585,14 +583,12 @@ func (ds *dsorterMem) makeRecvRequestFunc() transport.ReceiveObj {
 func (ds *dsorterMem) makeRecvResponseFunc() transport.ReceiveObj {
 	metrics := ds.m.Metrics.Creation
 	return func(w http.ResponseWriter, hdr transport.ObjHdr, object io.Reader, err error) {
+		defer transport.FreeRecv(object)
 		if err != nil {
 			ds.m.abort(err)
 			return
 		}
-
-		defer func() {
-			cmn.DrainReader(object) // drain to prevent unnecessary stream errors
-		}()
+		defer cmn.DrainReader(object)
 
 		req := RemoteResponse{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
