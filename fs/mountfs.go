@@ -7,6 +7,7 @@ package fs
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -613,11 +614,6 @@ func mountpathsCopy() (MPI, MPI) {
 // Remove removes mountpaths from the target's mountpaths. It searches
 // for the mountpath in `available` and, if not found, in `disabled`.
 func Remove(mpath string) (*MountpathInfo, error) {
-	var (
-		mp     *MountpathInfo
-		exists bool
-	)
-
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
@@ -629,30 +625,36 @@ func Remove(mpath string) (*MountpathInfo, error) {
 	// Clear daemonID xattr if set
 	RemoveXattr(mpath, daemonIDXattr)
 
-	availablePaths, disabledPaths := mountpathsCopy()
-	if mp, exists = availablePaths[cleanMpath]; !exists {
-		if mp, exists = disabledPaths[cleanMpath]; !exists {
+	var (
+		exists    bool
+		mpathInfo *MountpathInfo
+
+		availablePaths, disabledPaths = mountpathsCopy()
+	)
+	if mpathInfo, exists = availablePaths[cleanMpath]; !exists {
+		if mpathInfo, exists = disabledPaths[cleanMpath]; !exists {
 			return nil, fmt.Errorf("tried to remove non-existing mountpath: %v", mpath)
 		}
 
 		delete(disabledPaths, cleanMpath)
-		delete(mfs.fsIDs, mp.Fsid)
+		delete(mfs.fsIDs, mpathInfo.Fsid)
 		updatePaths(availablePaths, disabledPaths)
-		return mp, nil
+		return mpathInfo, nil
 	}
 
-	delete(availablePaths, cleanMpath)
 	mfs.ios.RemoveMpath(cleanMpath)
-	delete(mfs.fsIDs, mp.Fsid)
+	delete(availablePaths, cleanMpath)
+	delete(mfs.fsIDs, mpathInfo.Fsid)
 
-	if l := len(availablePaths); l == 0 {
-		glog.Errorf("removed the last available mountpath %s", mp)
+	if availCnt := len(availablePaths); availCnt == 0 {
+		glog.Errorf("removed the last available mountpath %s", mpathInfo)
 	} else {
-		glog.Infof("removed mountpath %s (%d remain(s) active)", mp, l)
+		glog.Infof("removed mountpath %s (%d remain(s) active)", mpathInfo, availCnt)
 	}
 
+	moveMarkers(availablePaths, mpathInfo)
 	updatePaths(availablePaths, disabledPaths)
-	return mp, nil
+	return mpathInfo, nil
 }
 
 // Enable enables previously disabled mountpath. enabled is set to
@@ -699,6 +701,7 @@ func Disable(mpath string) (disabledMpath *MountpathInfo, err error) {
 		disabledPaths[cleanMpath] = mpathInfo
 		mfs.ios.RemoveMpath(cleanMpath)
 		delete(availablePaths, cleanMpath)
+		moveMarkers(availablePaths, mpathInfo)
 		updatePaths(availablePaths, disabledPaths)
 		if l := len(availablePaths); l == 0 {
 			glog.Errorf("disabled the last available mountpath %s", mpathInfo)
@@ -812,6 +815,38 @@ func RenameBucketDirs(bckFrom, bckTo cmn.Bck) (err error) {
 		}
 	}
 	return
+}
+
+func moveMarkers(mpaths MPI, from *MountpathInfo) {
+	// We assume that the `from` path is no longer in available mountpaths
+	// (it was disabled or removed).
+	_, ok := mpaths[from.Path]
+	debug.Assert(!ok)
+
+	for _, mpath := range mpaths {
+		var (
+			fromPath = filepath.Join(from.Path, markersDirName)
+			fis, err = ioutil.ReadDir(fromPath)
+		)
+		if err != nil && !os.IsNotExist(err) {
+			glog.Errorf("Failed to read directory content (dir: %q, err: %v)", fromPath, err)
+		} else {
+			for _, fi := range fis {
+				debug.Assert(!fi.IsDir()) // Markers should be the files.
+
+				var (
+					fromPath = filepath.Join(from.Path, markersDirName, fi.Name())
+					toPath   = filepath.Join(mpath.Path, markersDirName, fi.Name())
+				)
+				if _, _, err := cmn.CopyFile(fromPath, toPath, nil, cmn.ChecksumNone); err != nil && !os.IsNotExist(err) {
+					glog.Errorf("Failed to move marker to another mountpath (from: %q, to: %q, err: %v)", fromPath, toPath, err)
+				}
+			}
+		}
+		break
+	}
+
+	from.ClearMDs()
 }
 
 // capacity management

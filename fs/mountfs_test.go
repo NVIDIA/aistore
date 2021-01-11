@@ -284,6 +284,45 @@ func TestMoveToTrash(t *testing.T) {
 	}
 }
 
+func TestMoveMarkers(t *testing.T) {
+	tests := []struct {
+		name string
+		f    func(string) (*fs.MountpathInfo, error)
+	}{
+		{name: "remove", f: fs.Remove},
+		{name: "disable", f: fs.Disable},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fs.Init()
+			fs.DisableFsIDCheck()
+
+			mpath := createMountpath(t)
+
+			err := fs.PersistMarker(fs.RebalanceMarker)
+			tassert.CheckFatal(t, err)
+
+			createMountpath(t)
+
+			exists := fs.MarkerExists(fs.RebalanceMarker)
+			tassert.Fatalf(t, exists, "marker does not exist")
+
+			_, err = test.f(mpath.Path)
+			tassert.CheckFatal(t, err)
+
+			exists = fs.MarkerExists(fs.RebalanceMarker)
+			tassert.Fatalf(t, exists, "marker does not exist")
+		})
+	}
+}
+
+func createMountpath(t *testing.T) *fs.MountpathInfo {
+	mpathDir := t.TempDir()
+	tutils.AddMpath(t, mpathDir)
+	mpaths, _ := fs.Get()
+	return mpaths[mpathDir]
+}
+
 func BenchmarkMakePathFQN(b *testing.B) {
 	var (
 		bck = cmn.Bck{

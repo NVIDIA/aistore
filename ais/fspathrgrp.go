@@ -107,7 +107,7 @@ func (g *fsprungroup) addMpathEvent(action string, mpath *fs.MountpathInfo) {
 		xreg.RenewMakeNCopies(g.t, "add-mp")
 	}()
 
-	g._persistMD()
+	g.redistributeMD()
 	g.checkEnable(action, mpath.Path)
 }
 
@@ -115,8 +115,7 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 
 	go mpath.EvictLomCache()
-	mpath.ClearMDs()
-	g._persistMD()
+	g.redistributeMD()
 
 	if g.checkZeroMountpaths(action) {
 		return
@@ -128,7 +127,7 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 	}()
 }
 
-func (g *fsprungroup) _persistMD() {
+func (g *fsprungroup) redistributeMD() {
 	if !hasEnoughBMDCopies() {
 		g.t.owner.bmd.Lock()
 		g.t.owner.bmd.persist()
