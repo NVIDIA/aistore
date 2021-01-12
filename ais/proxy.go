@@ -703,25 +703,32 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	//
 	switch msg.Action {
 	case cmn.ActRenameLB:
-		if bck.Provider != cmn.ProviderAIS || bck.IsRemoteAIS() {
-			p.invalmsghdlrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bck)
-			return
-		}
 		bckFrom := bck
 		bckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if bckFrom.IsRemote() {
+			p.invalmsghdlrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bckFrom)
+			return
+		}
+		if err := bckTo.Validate(); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		if bckTo.IsRemote() {
+			p.invalmsghdlrf(w, r, "destination bucket %q must be an AIS bucket", bckTo)
+			return
+		}
 		if bckFrom.Name == bckTo.Name {
 			p.invalmsghdlrf(w, r, "cannot rename bucket %q as %q", bckFrom, bckTo)
 			return
 		}
-		if err := cmn.ValidateBckName(bckTo.Name); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
+
+		bckFrom.Provider = cmn.ProviderAIS
 		bckTo.Provider = cmn.ProviderAIS
+
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
 			err := cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
 			p.invalmsghdlr(w, r, err.Error())
