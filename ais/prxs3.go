@@ -137,7 +137,7 @@ func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket st
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	msg := cmn.ActionMsg{Action: cmn.ActCreateLB}
+	msg := cmn.ActionMsg{Action: cmn.ActCreateBck}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
@@ -154,7 +154,7 @@ func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket st
 // TODO: AWS allows to delete bucket only if it is empty
 func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
-	msg := cmn.ActionMsg{Action: cmn.ActDestroyLB}
+	msg := cmn.ActionMsg{Action: cmn.ActDestroyBck}
 	if err := bck.Init(p.owner.bmd, p.si); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return

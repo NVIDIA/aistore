@@ -168,8 +168,8 @@ First, create an api instance `bucket_api = ais_client.api.bucket_api.BucketApi(
 | --- | --- | --- |
 | Get bucket names | `bucket_api.list_names()` <sup>[1](#ftb1)</sup>  | BucketNames |
 | List objects in bucket | `bucket_api.perform_operation('myS3bucket', openapi_params(openapi_actions.LISTOBJECTS, value=openapi_models.ObjectPropertiesRequestParams(props="size")))` <sup>[2](#ftb2)</sup> | ObjectPropertyList|
-| Create ais bucket (proxy) | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.CREATELB))` | ObjectPropertyList |
-| Destroy ais bucket (proxy) | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DESTROYLB))` | None |
+| Create bucket | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.CREATE_BCK))` | ObjectPropertyList |
+| Destroy bucket | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DESTROY_BCK))` | None |
 | Rename ais bucket (proxy) | `bucket_api.perform_operation('oldname', openapi_params(openapi_actions.RENAMELB, name='newname'))` | ObjectPropertyList |
 | [Evict](/docs/bucket.md#evict-bucket) cloud bucket (proxy) | `bucket_api.delete('myS3bucket', openapi_params(openapi_actions.EVICTCB))` | None |
 | Set bucket props (proxy) | `bucket_api.set_properties('mybucket', openapi_params(openapi_actions.SETPROPS, value=openapi_models.BucketProps(provider="ais", checksum=openapi_models.BucketPropsCksum(checksum="inherit"))))` | None |

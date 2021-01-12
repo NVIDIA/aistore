@@ -59,11 +59,6 @@ func mvBucketHandler(c *cli.Context) error {
 		return err
 	}
 
-	if err := validateLocalBuckets([]cmn.Bck{bck, newBck}, "moving"); err != nil {
-		return err
-	}
-
-	bck.Provider, newBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
 	if bck.Equal(newBck) {
 		return incorrectUsageMsg(c, "cannot mv %q as %q", bck, newBck)
 	}

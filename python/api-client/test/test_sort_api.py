@@ -40,7 +40,7 @@ class TestSortApi(unittest.TestCase):
         self.models = ais_client.models
 
         # Create local bucket
-        input_params = self.models.InputParameters(self.models.Actions.CREATELB)
+        input_params = self.models.InputParameters(self.models.Actions.CREATE_BCK)
         self.bucket.perform_operation(self.BUCKET_NAME, input_params)
 
         # Create and send tars
@@ -58,7 +58,7 @@ class TestSortApi(unittest.TestCase):
 
     def tearDown(self):
         # Delete bucket
-        input_params = self.models.InputParameters(self.models.Actions.DESTROYLB)
+        input_params = self.models.InputParameters(self.models.Actions.DESTROY_BCK)
         self.bucket.delete(self.BUCKET_NAME, input_params)
 
     def test_abort_sort(self):

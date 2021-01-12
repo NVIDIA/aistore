@@ -45,7 +45,7 @@ class TestBucketApi(unittest.TestCase):
         for object_name in self.created_objects:
             self.object.delete(self.BUCKET_NAME, object_name)
         log.info("Cleaning up all created local buckets.")
-        input_params = self.models.InputParameters(self.models.Actions.DESTROYLB)
+        input_params = self.models.InputParameters(self.models.Actions.DESTROY_BCK)
         for bucket_name in self.created_buckets:
             self.bucket.delete(bucket_name, input_params)
 
@@ -91,7 +91,7 @@ class TestBucketApi(unittest.TestCase):
         """
         bucket_name = self.__create_local_bucket()
         self.assertTrue(self.__check_if_local_bucket_exists(bucket_name), "Created bucket [%s] not in local buckets" % bucket_name)
-        input_params = self.models.InputParameters(self.models.Actions.DESTROYLB)
+        input_params = self.models.InputParameters(self.models.Actions.DESTROY_BCK)
         log.info("DELETE BUCKET [%s]", bucket_name)
         self.bucket.delete(bucket_name, input_params)
         self.assertFalse(self.__check_if_local_bucket_exists(bucket_name), "Deleted bucket [%s] in local buckets" % bucket_name)
@@ -269,7 +269,7 @@ class TestBucketApi(unittest.TestCase):
 
     def __create_local_bucket(self):
         bucket_name = uuid.uuid4().hex
-        input_params = self.models.InputParameters(self.models.Actions.CREATELB)
+        input_params = self.models.InputParameters(self.models.Actions.CREATE_BCK)
         log.info("Create local bucket [%s]", bucket_name)
         self.bucket.perform_operation(bucket_name, input_params)
         self.created_buckets.append(bucket_name)

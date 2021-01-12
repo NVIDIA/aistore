@@ -102,7 +102,7 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 	}
 
 	// Destroy and Rename are not permitted.
-	if args.queryBck.IsCloud() && args._requiresPermission(cmn.AccessBckDELETE) && args.msg.Action == cmn.ActDestroyLB {
+	if args.queryBck.IsCloud() && args._requiresPermission(cmn.AccessBckDELETE) && args.msg.Action == cmn.ActDestroyBck {
 		goto retErr
 	}
 
@@ -194,7 +194,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 	}
 	// from this point on it's the primary - lookup via random target and try bucket add to BMD
 	bck = args.queryBck
-	action := cmn.ActCreateLB
+	action := cmn.ActCreateBck
 
 	if bck.HasBackendBck() {
 		bck = cluster.BackendBck(bck)

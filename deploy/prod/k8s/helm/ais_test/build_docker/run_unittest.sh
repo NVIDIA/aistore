@@ -69,7 +69,7 @@ if [[ $rc != 0 ]]; then
     echo "$upload_test"
     exit 1
 else
-    echo "UPLOAD TEST SUCCEEDED!" 
+    echo "UPLOAD TEST SUCCEEDED!"
 fi
 echo
 
@@ -83,11 +83,11 @@ if [[ $rc != 0 ]];then
 else
     echo "LIST OBJECTS TEST SUCCEEDED!"
 fi
-echo 
+echo
 
 echo "Destroy the bucket: $bucket"
 rc=$(curl -X DELETE -s -w "%{http_code}\n" -H 'Content-Type: application/json' \
-	  -d '{"action": "destroylb" }' http://$proxy_endpoint:$proxy_port/v1/buckets/$bucket)
+	  -d '{"action": "destroy_bck" }' http://$proxy_endpoint:$proxy_port/v1/buckets/$bucket)
 if [[ $rc != 200 ]];then
     echo "ERROR: DELETE BUCKET TEST FAILED!" >&2
     exit 1
@@ -95,7 +95,7 @@ else
     echo "DELETE BUCKET TEST SUCCEEDED!"
 fi
 
-echo 
+echo
 
 echo "Get list of objects in bucket: $bucket.  Expect there is none"
 list_objects 400
@@ -106,6 +106,6 @@ if [[ $rc != 0 ]];then
 else
     echo "LIST OBJECTS FROM DESTROYED BUCKET TEST SUCCEEDED!"
 fi
-echo 
+echo
 
 exit 0

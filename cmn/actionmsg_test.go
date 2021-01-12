@@ -8,6 +8,7 @@ package cmn
 import (
 	"testing"
 
+	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -19,11 +20,10 @@ type actmsgTestConf struct {
 func testRawUnmarshal(t *testing.T, tc actmsgTestConf) {
 	t.Run(tc.action, func(t *testing.T) {
 		for _, val := range tc.vals {
-			acmsg := &ActionMsg{}
-			err := jsoniter.Unmarshal([]byte(val), &acmsg)
-			if err != nil {
-				t.Errorf("actionMsg unmarshaled failed for action: %s, val: %s, err: %v", tc.action, val, err)
-			}
+			msg := &ActionMsg{}
+			err := jsoniter.Unmarshal([]byte(val), &msg)
+			tassert.CheckError(t, err)
+			tassert.Errorf(t, tc.action == msg.Action, "actions do not match (%q vs %q)", tc.action, msg.Action)
 		}
 	})
 }
@@ -58,9 +58,9 @@ func TestActMsgRawUnmarshal(t *testing.T) {
 			},
 		},
 		{
-			action: ActCreateLB,
+			action: ActCreateBck,
 			vals: []string{
-				`{"action":"createlb","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
+				`{"action":"create_bck","value":{"checksum": {"type": "sha256"}, "mirror": {"enable": true}}}`,
 			},
 		},
 		{

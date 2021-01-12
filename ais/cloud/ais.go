@@ -281,6 +281,10 @@ ad:
 func (m *AisCloudProvider) Provider() string  { return cmn.ProviderAIS }
 func (m *AisCloudProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
 
+func (m *AisCloudProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+	return 0, nil
+}
+
 func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	m.mu.RLock()
 	remAis, ok := m.remote[uuid]

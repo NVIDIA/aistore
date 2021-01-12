@@ -168,7 +168,7 @@ func CreateBucket(baseParams BaseParams, bck cmn.Bck, ops ...cmn.BucketPropsToUp
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateLB, Value: value}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateBck, Value: value}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
@@ -179,7 +179,7 @@ func DestroyBucket(baseParams BaseParams, bck cmn.Bck) error {
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActDestroyLB}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActDestroyBck}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }

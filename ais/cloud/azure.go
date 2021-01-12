@@ -165,6 +165,10 @@ func (ap *azureProvider) Provider() string { return cmn.ProviderAzure }
 // https://docs.microsoft.com/en-us/connectors/azureblob/#general-limits
 func (ap *azureProvider) MaxPageSize() uint { return 5000 }
 
+func (ap *azureProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+	return creatingBucketNotSupportedErr(ap.Provider())
+}
+
 func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
 	var (
 		o          azblob.ListContainersSegmentOptions

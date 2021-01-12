@@ -48,7 +48,6 @@ const (
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 	fmtUnknownAct = "unexpected action message <- JSON [%v]"
 	fmtUnknownQue = "unexpected query [what=%s]"
-	fmtUnsupProv  = "cannot %s: unsupported provider %q"
 )
 
 type (
@@ -499,7 +498,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fallthrough // fallthrough
-	case cmn.ActDestroyLB:
+	case cmn.ActDestroyBck:
 		if p.forwardCP(w, r, &msg, bck.Name) {
 			return
 		}
@@ -681,8 +680,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 	}
-	// 3. createlb
-	if msg.Action == cmn.ActCreateLB {
+	if msg.Action == cmn.ActCreateBck {
 		p.hpostCreateBucket(w, r, msg, bck)
 		return
 	}
@@ -723,6 +721,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		bckTo.Provider = cmn.ProviderAIS
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
 			err := cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
 			p.invalmsghdlr(w, r, err.Error())
@@ -860,18 +859,16 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
-	if err = cmn.ValidateBckName(bucket); err != nil {
+	if err = bck.Validate(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if bck.Bck.Provider != "" && !bck.Bck.IsAIS() {
-		p.invalmsghdlrf(w, r, fmtUnsupProv, msg.Action, bck.Provider)
-		return
+	if bck.Provider == "" {
+		bck.Provider = cmn.ProviderAIS
 	}
 	if p.forwardCP(w, r, msg, bucket) {
 		return
 	}
-	bck.Provider = cmn.ProviderAIS
 	if msg.Value != nil {
 		propsToUpdate := cmn.BucketPropsToUpdate{}
 		if err := cmn.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
@@ -881,7 +878,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		// make and validate nprops
 		bck.Props = defaultBckProps()
 		bck.Props.Provider = bck.Provider
-		bck.Props, err = p.makeNprops(bck, propsToUpdate, true /*creating*/)
+		bck.Props, err = p.makeNewBckProps(bck, propsToUpdate, true /*creating*/)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return

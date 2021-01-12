@@ -8,9 +8,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
+
+func creatingBucketNotSupportedErr(provider string) (errCode int, err error) {
+	return http.StatusBadRequest, fmt.Errorf("creating bucket is not supported for %q provider", provider)
+}
 
 func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {
 	if v := ctx.Value(cmn.CtxReadWrapper); v != nil {

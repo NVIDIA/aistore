@@ -14,7 +14,7 @@ bucket_api = ais_client.BucketApi()
 ais_buckets = bucket_api.list_names().ais
 if bucket_name not in ais_buckets:
     print('Bucket "%s" does not exists, creating...' % bucket_name)
-    input_params = ais_client.InputParameters(ais_client.Actions.CREATELB)
+    input_params = ais_client.InputParameters(ais_client.Actions.CREATE_BCK)
     bucket_api.perform_operation(bucket_name, input_params)
 
 file_name = raw_input("Please enter the path to the CSV file containing the dataset to download: ")

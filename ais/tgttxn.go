@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -91,7 +92,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// 3. do
 	switch msg.Action {
-	case cmn.ActCreateLB, cmn.ActRegisterCB:
+	case cmn.ActCreateBck, cmn.ActRegisterCB:
 		debug.Infof("Starting transaction create-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 		if err = t.createBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -130,7 +131,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.startMaintenance(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-	case cmn.ActDestroyLB, cmn.ActEvictCB:
+	case cmn.ActDestroyBck, cmn.ActEvictCB:
 		debug.Infof("Starting transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 		if err = t.destroyBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -151,6 +152,11 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 		txn := newTxnCreateBucket(c)
 		if err := t.transactions.begin(txn); err != nil {
 			return err
+		}
+		if c.msg.Action == cmn.ActCreateBck && c.bck.IsRemote() {
+			if _, err := t.Cloud(c.bck).CreateBucket(context.Background(), c.bck); err != nil {
+				return err
+			}
 		}
 	case cmn.ActAbort:
 		t.transactions.find(c.uuid, cmn.ActAbort)

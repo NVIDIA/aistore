@@ -59,6 +59,11 @@ func (hp *httpProvider) client(u string) *http.Client {
 func (hp *httpProvider) Provider() string  { return cmn.ProviderHTTP }
 func (hp *httpProvider) MaxPageSize() uint { return 10000 }
 
+func (hp *httpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+	// TODO: We could support it.
+	return creatingBucketNotSupportedErr(hp.Provider())
+}
+
 func (hp *httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
 	debug.Assert(false)
 	return

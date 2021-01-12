@@ -703,16 +703,6 @@ func parseBckPropsFromContext(c *cli.Context) (props cmn.BucketPropsToUpdate, er
 	return
 }
 
-func validateLocalBuckets(buckets []cmn.Bck, operation string) error {
-	for _, bck := range buckets {
-		if bck.IsCloud() {
-			return fmt.Errorf("%s cloud buckets (%s) is not supported", operation, bck)
-		}
-		bck.Provider = cmn.ProviderAIS
-	}
-	return nil
-}
-
 func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	bucketNames := c.Args()
 	bcks := make([]cmn.Bck, 0, len(bucketNames))

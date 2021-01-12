@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "Creating bucket..."
-curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://172.50.0.2:8080/v1/buckets/mnist
+curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "create_bck"}' http://172.50.0.2:8080/v1/buckets/mnist
 
 echo "Downloading MNIST dataset into AIS cluster..."
 curl -v -H 'Content-Type: application/json' -d '{

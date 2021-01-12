@@ -90,10 +90,6 @@ func removeBucketHandler(c *cli.Context) (err error) {
 	if buckets, err = bucketsFromArgsOrEnv(c); err != nil {
 		return
 	}
-	if err := validateLocalBuckets(buckets, "removing"); err != nil {
-		return err
-	}
-
 	return destroyBuckets(c, buckets)
 }
 

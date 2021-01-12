@@ -100,6 +100,10 @@ func (awsp *awsProvider) Provider() string { return cmn.ProviderAmazon }
 // https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
 func (awsp *awsProvider) MaxPageSize() uint { return 1000 }
 
+func (awsp *awsProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+	return creatingBucketNotSupportedErr(awsp.Provider())
+}
+
 //////////////////
 // LIST OBJECTS //
 //////////////////

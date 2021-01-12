@@ -255,7 +255,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	switch msg.Action {
 	case cmn.ActSetBprops:
 		// make and validate new props
-		if nprops, err = p.makeNprops(bck, propsToUpdate); err != nil {
+		if nprops, err = p.makeNewBckProps(bck, propsToUpdate); err != nil {
 			return
 		}
 
@@ -353,7 +353,7 @@ func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error
 
 	if ctx.msg.Action == cmn.ActSetBprops {
 		bck.Props = bprops
-		ctx.setProps, err = p.makeNprops(bck, *ctx.propsToUpdate)
+		ctx.setProps, err = p.makeNewBckProps(bck, *ctx.propsToUpdate)
 		if err != nil {
 			return err
 		}
@@ -877,8 +877,8 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, pro
 	p.owner.bmd.modify(ctx)
 }
 
-// make and validate nprops
-func (p *proxyrunner) makeNprops(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate,
+// Make and validate new bucket props.
+func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate,
 	creating ...bool) (nprops *cmn.BucketProps, err error) {
 	var (
 		cfg    = cmn.GCO.Get()

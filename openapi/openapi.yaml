@@ -1191,7 +1191,7 @@ components:
             - $ref: '#/components/schemas/ObjectPropertiesRequestParams'
     Actions:
       type: string
-      enum: [shutdown, rebalance, resilver, lru, synclb, createlb, destroylb, renamelb, copybck, registercb, evictcb, setconfig, setbprops, resetbprops, listobj, summarybck, renameobj, promote, replicate, evictobj, delete, prefetch, download, regtarget, regproxy, unregtarget, unregproxy, newprimary, revoketoken, election, putcopies, makencopies, loadlomcache, ecget, ecput, ecresp, ecencode, metasync-start-gfn, recoverbck, task, enable, disable, add, remove, stop, start, persist]
+      enum: [shutdown, rebalance, resilver, lru, synclb, create_bck, destroy_bck, renamelb, copybck, registercb, evictcb, setconfig, setbprops, resetbprops, listobj, summarybck, renameobj, promote, replicate, evictobj, delete, prefetch, download, regtarget, regproxy, unregtarget, unregproxy, newprimary, revoketoken, election, putcopies, makencopies, loadlomcache, ecget, ecput, ecresp, ecencode, metasync-start-gfn, recoverbck, task, enable, disable, add, remove, stop, start, persist]
     ListParameters:
       properties:
         objnames:

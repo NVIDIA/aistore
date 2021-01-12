@@ -47,6 +47,7 @@ const (
 type CloudProvider interface {
 	Provider() string
 	MaxPageSize() uint
+
 	// GetObj fetches and finalizes the object from the cloud.
 	GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
 	GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cmn.Cksum, errCode int, err error)
@@ -54,6 +55,7 @@ type CloudProvider interface {
 	DeleteObj(ctx context.Context, lom *LOM) (errCode int, err error)
 	HeadObj(ctx context.Context, lom *LOM) (objMeta cmn.SimpleKVs, errCode int, err error)
 
+	CreateBucket(ctx context.Context, bck *Bck) (errCode int, err error)
 	HeadBucket(ctx context.Context, bck *Bck) (bckProps cmn.SimpleKVs, errCode int, err error)
 	ListObjects(ctx context.Context, bck *Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error)
 	ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error)

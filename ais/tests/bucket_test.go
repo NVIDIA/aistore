@@ -167,6 +167,20 @@ func TestCreateWithBucketProps(t *testing.T) {
 	validateBucketProps(t, propsToSet, p)
 }
 
+func TestCreateCloudBucket(t *testing.T) {
+	var (
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cliBck
+	)
+
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+
+	err := api.CreateBucket(baseParams, bck)
+	tassert.Fatalf(t, err != nil, "expected error")
+	tassert.Fatalf(t, strings.Contains(err.Error(), "not supported"), "should contain 'not supported' message")
+}
+
 func TestOverwriteLomCache(t *testing.T) {
 	for _, mdwrite := range []cmn.MDWritePolicy{cmn.WriteImmediate, cmn.WriteNever} {
 		name := string(mdwrite)

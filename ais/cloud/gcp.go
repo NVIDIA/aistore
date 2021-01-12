@@ -135,6 +135,10 @@ func (gcpp *gcpProvider) Provider() string { return cmn.ProviderGoogle }
 // https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
 func (gcpp *gcpProvider) MaxPageSize() uint { return 1000 }
 
+func (gcpp *gcpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+	return creatingBucketNotSupportedErr(gcpp.Provider())
+}
+
 //////////////////
 // LIST OBJECTS //
 //////////////////
