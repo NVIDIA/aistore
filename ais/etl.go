@@ -53,8 +53,10 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 			t.listETL(w, r)
 		case cmn.ETLLogs:
 			t.logsETL(w, r)
-		case cmn.ETLObject: // TODO: maybe it should be just a default
+		case cmn.ETLObject:
 			t.getObjectETL(w, r)
+		default:
+			t.invalmsghdlrf(w, r, "invalid GET path: %s", apiItems[0])
 		}
 	case r.Method == http.MethodHead:
 		t.headObjectETL(w, r)

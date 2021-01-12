@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +36,38 @@ func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error)
 		return nil, cmn.NewETLError(errCtx, "expected pod spec, got: %s", kind)
 	}
 	return pod, nil
+}
+
+func preparePodSpec(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *corev1.Pod, env map[string]string) (err error) {
+	// Override the name (add target's daemon ID and node ID to its name).
+	pod.SetName(k8s.CleanName(pod.GetName() + "-" + t.Snode().ID()))
+	errCtx.PodName = pod.GetName()
+
+	// The following combination of Affinity and Anti-Affinity allows one to
+	// achieve the following:
+	//  1. The ETL container is always scheduled on the target invoking it.
+	//  2. Not more than one ETL container with the same target, is scheduled on
+	//     the same node, at a given point of time.
+	if err = setTransformAffinity(errCtx, pod); err != nil {
+		return
+	}
+	if err = setTransformAntiAffinity(errCtx, pod); err != nil {
+		return
+	}
+
+	updatePodLabels(t, pod)
+	updateReadinessProbe(pod)
+	setPodEnvVariables(t, pod, env)
+	return
+}
+
+func createPodSpec(errCtx *cmn.ETLErrorContext, t cluster.Target, spec []byte, env map[string]string) (pod *corev1.Pod, orgName string, err error) {
+	if pod, err = ParsePodSpec(errCtx, spec); err != nil {
+		return
+	}
+	orgName = pod.GetName()
+	errCtx.ETLName = orgName
+	return pod, orgName, preparePodSpec(errCtx, t, pod, env)
 }
 
 func podTransformCommType(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) (string, error) {

@@ -179,6 +179,7 @@ func cleanupEntities(errCtx *cmn.ETLErrorContext, podName, svcName string) (err 
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred which should be passed further.
 func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETLErrorContext, podName, svcName string, err error) {
+	cmn.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
 	var (
 		pod             *corev1.Pod
 		svc             *corev1.Service
@@ -198,38 +199,11 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		UUID: msg.ID,
 	}
 
-	cmn.Assert(k8s.NodeName != "") // Corresponding 'if' done at the beginning of the request.
-
-	// TODO: Move below code into `createPodSpec`.
-
-	// Parse spec template.
-	if pod, err = ParsePodSpec(errCtx, msg.Spec); err != nil {
-		return
-	}
-	errCtx.ETLName = pod.GetName()
-	originalPodName = pod.GetName()
-
-	// Override the name (add target's daemon ID and node ID to its name).
-	pod.SetName(k8s.CleanName(pod.GetName() + "-" + t.Snode().ID()))
-	errCtx.PodName = pod.GetName()
-
-	// The following combination of Affinity and Anti-Affinity allows one to
-	// achieve the following:
-	//  1. The ETL container is always scheduled on the target invoking it.
-	//  2. Not more than one ETL container with the same target, is scheduled on
-	//     the same node, at a given point of time.
-	if err = setTransformAffinity(errCtx, pod); err != nil {
-		return
-	}
-	if err = setTransformAntiAffinity(errCtx, pod); err != nil {
+	// Parse spec template and fill Pod object with necessary fields.
+	if pod, originalPodName, err = createPodSpec(errCtx, t, msg.Spec, customEnv); err != nil {
 		return
 	}
 
-	updatePodLabels(t, pod)
-	updateReadinessProbe(pod)
-	setPodEnvVariables(t, pod, customEnv)
-
-	// Create service spec.
 	svc = createServiceSpec(pod)
 	errCtx.SvcName = svc.Name
 
@@ -265,7 +239,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	// Make sure we can access the pod via TCP socket address to ensure that
 	// it is accessible from target.
 	etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
-	if err = checkETLConnection(etlSocketAddr); err != nil {
+	if err = checkETLConnection(etlSocketAddr, pod.GetName()); err != nil {
 		err = cmn.NewETLError(errCtx, err.Error())
 		return
 	}
@@ -278,7 +252,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 		commType:       msg.CommType,
 		transformerURL: "http://" + etlSocketAddr,
 	})
-	// NOTE: communicator is put to registry only if the whole tryStart was successful.
+	// NOTE: Communicator is put to registry only if the whole tryStart was successful.
 	if err = reg.put(msg.ID, c); err != nil {
 		return
 	}
@@ -286,11 +260,11 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	return
 }
 
-func checkETLConnection(socketAddr string) error {
-	tfProbeInterval := cmn.GCO.Get().Timeout.MaxKeepalive
+func checkETLConnection(socketAddr, podName string) error {
+	probeInterval := cmn.GCO.Get().Timeout.MaxKeepalive
 	err := cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
 		Call: func() (int, error) {
-			conn, err := net.DialTimeout("tcp", socketAddr, tfProbeInterval)
+			conn, err := net.DialTimeout("tcp", socketAddr, probeInterval)
 			if err != nil {
 				return 0, err
 			}
@@ -300,10 +274,10 @@ func checkETLConnection(socketAddr string) error {
 		SoftErr: 10,
 		HardErr: 2,
 		Sleep:   3 * time.Second,
-		Action:  "dial POD at " + socketAddr,
+		Action:  fmt.Sprintf("dial POD %q at %s", podName, socketAddr),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to wait for ETL Service/Pod to respond, err: %v", err)
+		return fmt.Errorf("failed to wait for ETL Service/Pod %q to respond, err: %v", podName, err)
 	}
 	return nil
 }
