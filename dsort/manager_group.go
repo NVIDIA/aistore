@@ -55,7 +55,7 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 	if _, exists := mg.managers[managerUUID]; exists {
-		return nil, errors.Errorf("manager with given uuid %s already exists", managerUUID)
+		return nil, errors.Errorf("job %q already exists", managerUUID)
 	}
 	manager := &Manager{
 		ManagerUUID: managerUUID,

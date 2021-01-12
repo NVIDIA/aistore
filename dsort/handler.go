@@ -360,7 +360,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		seenOne = true
 	}
 	if !seenOne {
-		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 		return
 	}
@@ -467,7 +467,7 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 	managerUUID := apiItems[0]
 	dsortManager, exists := Managers.Get(managerUUID)
 	if !exists {
-		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 		return
 	}
@@ -522,7 +522,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		managerUUID := apiItems[0]
 		dsortManager, exists := managers.Get(managerUUID)
 		if !exists {
-			s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+			s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 			cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 			return
 		}
@@ -572,7 +572,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		managerUUID := apiItems[0]
 		dsortManager, exists := managers.Get(managerUUID)
 		if !exists {
-			s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+			s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 			cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 			return
 		}
@@ -645,12 +645,12 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	managerUUID := apiItems[0]
 	dsortManager, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
-		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 	if dsortManager.Metrics.Archived.Load() {
-		s := fmt.Sprintf("invalid request: %s job with uuid %s has already finished", cmn.DSortName, managerUUID)
+		s := fmt.Sprintf("invalid request: %s job %q has already finished", cmn.DSortName, managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusGone)
 		return
 	}
@@ -713,7 +713,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	managerUUID := apiItems[0]
 	dsortManager, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
-		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 		return
 	}
@@ -742,7 +742,7 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 	managerUUID, daemonID := apiItems[0], apiItems[1]
 	dsortManager, exists := Managers.Get(managerUUID)
 	if !exists {
-		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 		return
 	}
