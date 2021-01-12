@@ -554,9 +554,6 @@ func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
 	for i < ll {
 		if args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator) {
 			pairs := makeList(args[i], keyAndValueSeparator)
-			if pairs[1] == "" {
-				return nil, fmt.Errorf("no value for %q", pairs[0])
-			}
 			nvs[pairs[0]] = pairs[1]
 			i++
 		} else if i < ll-2 && args[i+1] == keyAndValueSeparator {

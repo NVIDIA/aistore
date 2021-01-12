@@ -102,7 +102,7 @@ func (aisCLI *AISCLI) runNTimes(input []string) error {
 	return nil
 }
 
-func (aisCLI *AISCLI) isUnreachableError(err error) bool {
+func isUnreachableError(err error) bool {
 	switch err := err.(type) {
 	case *cmn.HTTPError:
 		return cmn.IsUnreachable(err, err.Status)
@@ -128,7 +128,7 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 		}
 	)
 
-	if aisCLI.isUnreachableError(err) {
+	if isUnreachableError(err) {
 		return fmt.Errorf(
 			red("AIStore proxy unreachable at %s. You may need to update environment variable AIS_ENDPOINT"),
 			clusterURL)

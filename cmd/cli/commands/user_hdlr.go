@@ -50,21 +50,21 @@ var (
 							Usage:        "add a new user",
 							ArgsUsage:    addUserArgument,
 							Flags:        authFlags[subcmdAuthUser],
-							Action:       addUserHandler,
+							Action:       wrapAuthN(addUserHandler),
 							BashComplete: multiRoleCompletions,
 						},
 						{
 							Name:      subcmdAuthCluster,
 							Usage:     "register a new cluster",
 							ArgsUsage: addAuthClusterArgument,
-							Action:    addAuthClusterHandler,
+							Action:    wrapAuthN(addAuthClusterHandler),
 						},
 						{
 							Name:         subcmdAuthRole,
 							Usage:        "create a new role",
 							ArgsUsage:    addAuthRoleArgument,
 							Flags:        authFlags[flagsAuthRoleAdd],
-							Action:       addAuthRoleHandler,
+							Action:       wrapAuthN(addAuthRoleHandler),
 							BashComplete: roleCluPermCompletions,
 						},
 					},
@@ -77,21 +77,21 @@ var (
 							Name:         subcmdAuthUser,
 							Usage:        "remove an existing user",
 							ArgsUsage:    deleteUserArgument,
-							Action:       deleteUserHandler,
+							Action:       wrapAuthN(deleteUserHandler),
 							BashComplete: oneUserCompletions,
 						},
 						{
 							Name:         subcmdAuthCluster,
 							Usage:        "unregister a cluster",
 							ArgsUsage:    deleteAuthClusterArgument,
-							Action:       deleteAuthClusterHandler,
+							Action:       wrapAuthN(deleteAuthClusterHandler),
 							BashComplete: oneClusterCompletions,
 						},
 						{
 							Name:         subcmdAuthRole,
 							Usage:        "remove an existing role",
 							ArgsUsage:    deleteRoleArgument,
-							Action:       deleteRoleHandler,
+							Action:       wrapAuthN(deleteRoleHandler),
 							BashComplete: oneRoleCompletions,
 						},
 					},
@@ -103,14 +103,14 @@ var (
 							Name:      subcmdAuthCluster,
 							Usage:     "update registered cluster config",
 							ArgsUsage: addAuthClusterArgument,
-							Action:    updateAuthClusterHandler,
+							Action:    wrapAuthN(updateAuthClusterHandler),
 						},
 						{
 							Name:         subcmdAuthUser,
 							Usage:        "update an existing user",
 							ArgsUsage:    addUserArgument,
 							Flags:        authFlags[subcmdAuthUser],
-							Action:       updateUserHandler,
+							Action:       wrapAuthN(updateUserHandler),
 							BashComplete: multiRoleCompletions,
 						},
 					},
@@ -123,18 +123,18 @@ var (
 							Name:      subcmdAuthCluster,
 							Usage:     "show registered clusters",
 							ArgsUsage: showAuthClusterArgument,
-							Action:    showAuthClusterHandler,
+							Action:    wrapAuthN(showAuthClusterHandler),
 						},
 						{
 							Name:      subcmdAuthRole,
 							Usage:     "show existing user roles",
 							ArgsUsage: showAuthRoleArgument,
-							Action:    showAuthRoleHandler,
+							Action:    wrapAuthN(showAuthRoleHandler),
 						},
 						{
 							Name:   subcmdAuthUser,
 							Usage:  "show user list",
-							Action: showUserHandler,
+							Action: wrapAuthN(showUserHandler),
 						},
 					},
 				},
@@ -143,12 +143,12 @@ var (
 					Usage:     "log in with existing user credentials",
 					Flags:     authFlags[flagsAuthUserLogin],
 					ArgsUsage: userLoginArgument,
-					Action:    loginUserHandler,
+					Action:    wrapAuthN(loginUserHandler),
 				},
 				{
 					Name:   subcmdAuthLogout,
 					Usage:  "log out",
-					Action: logoutUserHandler,
+					Action: wrapAuthN(logoutUserHandler),
 				},
 			},
 		},
@@ -156,6 +156,23 @@ var (
 
 	loggedUserToken api.AuthCreds
 )
+
+// Use the function to wrap every AuthN handler that does API calls.
+// The function verifies that AuthN is up and running before doing the API call
+// and augments API errors if needed.
+func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
+	const authnUnreacable = "AuthN unreachable at %s. You may need to update AIS CLI configuration or environment variable %s"
+	return func(c *cli.Context) error {
+		if authnHTTPClient == nil {
+			return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
+		}
+		err := f(c)
+		if err != nil && isUnreachableError(err) {
+			err = fmt.Errorf(authnUnreacable, authParams.URL, authnServerURL)
+		}
+		return err
+	}
+}
 
 func readMasked(c *cli.Context, prompt string) string {
 	fmt.Fprintf(c.App.Writer, prompt+": ")
@@ -191,25 +208,16 @@ func cliAuthnUserPassword(c *cli.Context) string {
 }
 
 func updateUserHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	user := parseAuthUser(c)
 	return api.UpdateUser(authParams, user)
 }
 
 func addUserHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	user := parseAuthUser(c)
 	return api.AddUser(authParams, user)
 }
 
 func deleteUserHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	userName := c.Args().First()
 	if userName == "" {
 		return missingArgumentsError(c, "user name")
@@ -218,9 +226,6 @@ func deleteUserHandler(c *cli.Context) (err error) {
 }
 
 func deleteRoleHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	role := c.Args().Get(0)
 	if role == "" {
 		return missingArgumentsError(c, "role")
@@ -230,9 +235,6 @@ func deleteRoleHandler(c *cli.Context) (err error) {
 
 func loginUserHandler(c *cli.Context) (err error) {
 	const tokenSaveFailFmt = "successfully logged in, but failed to save token: %v"
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	name := cliAuthnUserName(c)
 	password := cliAuthnUserPassword(c)
 	token, err := api.LoginUser(authParams, name, password)
@@ -275,9 +277,6 @@ func logoutUserHandler(c *cli.Context) (err error) {
 }
 
 func addAuthClusterHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	cluSpec, err := parseClusterSpecs(c)
 	if err != nil {
 		return
@@ -286,9 +285,6 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 }
 
 func updateAuthClusterHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	cluSpec, err := parseClusterSpecs(c)
 	if err != nil {
 		return
@@ -298,9 +294,6 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 }
 
 func deleteAuthClusterHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	cid := c.Args().Get(0)
 	if cid == "" {
 		return missingArgumentsError(c, "cluster id")
@@ -310,9 +303,6 @@ func deleteAuthClusterHandler(c *cli.Context) (err error) {
 }
 
 func showAuthClusterHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	cluSpec := cmn.AuthCluster{
 		ID: c.Args().Get(0),
 	}
@@ -325,9 +315,6 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 }
 
 func showAuthRoleHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	list, err := api.GetRolesAuthN(authParams)
 	if err != nil {
 		return err
@@ -337,9 +324,6 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 }
 
 func showUserHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	list, err := api.GetUsersAuthN(authParams)
 	if err != nil {
 		return err
@@ -368,9 +352,6 @@ func parseAccess(acc string) (cmn.AccessAttrs, error) {
 }
 
 func addAuthRoleHandler(c *cli.Context) (err error) {
-	if authnHTTPClient == nil {
-		return fmt.Errorf("AuthN URL is not set") // nolint:golint // name of the service
-	}
 	args := c.Args()
 	role := args.First()
 	if role == "" {
