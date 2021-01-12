@@ -106,16 +106,16 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.setBucketProps(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-	case cmn.ActRenameLB:
+	case cmn.ActMoveBck:
 		if err = t.renameBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-	case cmn.ActCopyBucket, cmn.ActETLBucket:
+	case cmn.ActCopyBck, cmn.ActETLBck:
 		bck2BckMsg := &cmn.Bck2BckMsg{}
 		if err = cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-		if msg.Action == cmn.ActCopyBucket {
+		if msg.Action == cmn.ActCopyBck {
 			err = t.transferBucket(c, bck2BckMsg, nil /*LomReaderProvider*/)
 		} else {
 			err = t.etlBucket(c, bck2BckMsg) // calls t.transferBucket
@@ -473,7 +473,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		if err := t.validateTransferBckTxn(bckFrom, c.msg.Action); err != nil {
 			return err
 		}
-		if c.msg.Action == cmn.ActETLBucket {
+		if c.msg.Action == cmn.ActETLBck {
 			sizePDU = memsys.DefaultBufSize
 		}
 		// Reuse rebalance configuration to create a DM for copying objects.
@@ -766,7 +766,7 @@ func (t *targetrunner) coExists(bck *cluster.Bck, action string) (err error) {
 	} else if l.Xact != nil {
 		err = fmt.Errorf(fmterr, t.si, l.Xact, action, bck)
 	}
-	if ren := xreg.GetXactRunning(cmn.ActRenameLB); ren != nil {
+	if ren := xreg.GetXactRunning(cmn.ActMoveBck); ren != nil {
 		err = fmt.Errorf(fmterr, t.si, ren, action, bck)
 	}
 	return

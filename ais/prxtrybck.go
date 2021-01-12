@@ -106,7 +106,7 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 		goto retErr
 	}
 
-	if args._requiresPermission(cmn.AccessBckRENAME) {
+	if args._requiresPermission(cmn.AccessBckMove) {
 		goto retErr
 	}
 

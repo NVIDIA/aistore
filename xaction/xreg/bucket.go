@@ -267,7 +267,7 @@ func RenewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
 
 func (r *registry) renewBckRename(t cluster.Target, bckFrom, bckTo *cluster.Bck,
 	uuid string, rmdVersion int64, phase string) (cluster.Xact, error) {
-	return r.renewBucketXact(cmn.ActRenameLB, bckTo, XactArgs{
+	return r.renewBucketXact(cmn.ActMoveBck, bckTo, XactArgs{
 		T:     t,
 		UUID:  uuid,
 		Phase: phase,

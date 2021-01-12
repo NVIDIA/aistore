@@ -702,7 +702,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	// {action} on bucket
 	//
 	switch msg.Action {
-	case cmn.ActRenameLB:
+	case cmn.ActMoveBck:
 		bckFrom := bck
 		bckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
 		if err != nil {
@@ -741,13 +741,13 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		w.Write([]byte(xactID))
-	case cmn.ActCopyBucket, cmn.ActETLBucket:
+	case cmn.ActCopyBck, cmn.ActETLBck:
 		var (
 			internalMsg = &cmn.Bck2BckMsg{}
 			bckTo       *cluster.Bck
 		)
 		switch msg.Action {
-		case cmn.ActETLBucket:
+		case cmn.ActETLBck:
 			if err := cmn.MorphMarshal(msg.Value, internalMsg); err != nil {
 				p.invalmsghdlr(w, r, "request body can't be empty", http.StatusBadRequest)
 				return
@@ -756,7 +756,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 				p.invalmsghdlr(w, r, etl.ErrMissingUUID.Error(), http.StatusBadRequest)
 				return
 			}
-		case cmn.ActCopyBucket:
+		case cmn.ActCopyBck:
 			cpyBckMsg := &cmn.CopyBckMsg{}
 			if err = cmn.MorphMarshal(msg.Value, cpyBckMsg); err != nil {
 				return
@@ -1138,7 +1138,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRenameObject:
-		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjRENAME); err != nil {
+		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjMove); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -1146,7 +1146,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, "%q is not supported for remote buckets (%s)", msg.Action, bck)
 			return
 		}
-		if err := bck.Allow(cmn.AccessObjRENAME); err != nil {
+		if err := bck.Allow(cmn.AccessObjMove); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -1726,7 +1726,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("RENAME %s %s/%s => %s", r.Method, bck.Name, objName, si)
+		glog.Infof("%q %s/%s => %s", msg.Action, bck.Name, objName, si)
 	}
 
 	// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
@@ -1882,7 +1882,7 @@ func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 	ctx := &bmdModifier{
 		pre:   p._pendingRnPre,
 		final: p._syncBMDFinal,
-		msg:   &cmn.ActionMsg{Value: cmn.ActRenameLB},
+		msg:   &cmn.ActionMsg{Value: cmn.ActMoveBck},
 		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, cmn.ProviderAIS, cmn.NsGlobal)},
 	}
 

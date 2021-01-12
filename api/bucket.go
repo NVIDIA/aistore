@@ -217,7 +217,7 @@ func CopyBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, msgs ...*cmn.Copy
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Value: msg}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCopyBck, Value: msg}),
 		Query:      q,
 	}, &xactID)
 	return
@@ -234,7 +234,7 @@ func RenameBucket(baseParams BaseParams, fromBck, toBck cmn.Bck) (xactID string,
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActRenameLB}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActMoveBck}),
 		Query:      q,
 	}, &xactID)
 	return

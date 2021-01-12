@@ -40,9 +40,9 @@ const (
 	ActCreateBck = "create_bck"
 	// Destroys bucket and removes any connection to the resource.
 	ActDestroyBck = "destroy_bck"
-	ActRenameLB   = "renamelb"
-	ActCopyBucket = "copybck"
-	ActETLBucket  = "etlbck"
+	ActMoveBck    = "move_bck"
+	ActCopyBck    = "copybck"
+	ActETLBck     = "etlbck"
 	// Registers already existing cloud bucket into AIS.
 	ActRegisterCB = "registercb"
 	// Evicts cloud bucket (removes the local data).

@@ -61,7 +61,7 @@ func (p *BckRenameProvider) Start(bck cmn.Bck) error {
 	p.xact = newBckRename(p.uuid, p.Kind(), bck, p.t, p.args.BckFrom, p.args.BckTo, p.args.RebID)
 	return nil
 }
-func (*BckRenameProvider) Kind() string        { return cmn.ActRenameLB }
+func (*BckRenameProvider) Kind() string        { return cmn.ActMoveBck }
 func (p *BckRenameProvider) Get() cluster.Xact { return p.xact }
 func (p *BckRenameProvider) PreRenewHook(previousEntry xreg.BucketEntry) (keep bool, err error) {
 	if p.phase == cmn.ActBegin {

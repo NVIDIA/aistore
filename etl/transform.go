@@ -315,7 +315,7 @@ func Stop(t cluster.Target, id string) error {
 	}
 
 	// Abort any running offline ETLs.
-	xreg.AbortAll(cmn.ActETLBucket)
+	xreg.AbortAll(cmn.ActETLBck)
 
 	c, err := GetCommunicator(id)
 	if err != nil {

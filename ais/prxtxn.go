@@ -474,7 +474,7 @@ func (p *proxyrunner) _renameBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 
 	added := clone.add(bckTo, bckTo.Props)
 	cmn.Assert(added)
-	bckFrom.Props.Renamed = cmn.ActRenameLB
+	bckFrom.Props.Renamed = cmn.ActMoveBck
 	clone.set(bckFrom, bckFrom.Props)
 	return nil
 }

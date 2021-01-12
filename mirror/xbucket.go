@@ -28,8 +28,8 @@ type (
 )
 
 func init() {
-	xreg.RegisterBucketXact(&transferBckProvider{kind: cmn.ActCopyBucket})
-	xreg.RegisterBucketXact(&transferBckProvider{kind: cmn.ActETLBucket})
+	xreg.RegisterBucketXact(&transferBckProvider{kind: cmn.ActCopyBck})
+	xreg.RegisterBucketXact(&transferBckProvider{kind: cmn.ActETLBck})
 	xreg.RegisterBucketXact(&dirPromoteProvider{})
 	xreg.RegisterBucketXact(&mncProvider{})
 	xreg.RegisterBucketXact(&llcProvider{})

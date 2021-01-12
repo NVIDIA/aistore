@@ -148,7 +148,7 @@ func (r *registry) getLatest(flt XactFilter) BaseEntry {
 
 func CheckBucketsBusy() (cause BaseEntry) {
 	// These xactions have cluster-wide consequences: in general moving objects between targets.
-	busyXacts := []string{cmn.ActRenameLB, cmn.ActCopyBucket, cmn.ActETLBucket}
+	busyXacts := []string{cmn.ActMoveBck, cmn.ActCopyBck, cmn.ActETLBck}
 	for _, kind := range busyXacts {
 		if entry := GetRunning(XactFilter{Kind: kind}); entry != nil {
 			return cause

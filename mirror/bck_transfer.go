@@ -97,7 +97,7 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 	parallel := 0
 	// NOTE: Do not compete for disk when doing copy bucket. However, ETL `copyObject` callback does a transformation,
 	// so more time is spend on computation.
-	if kind == cmn.ActETLBucket {
+	if kind == cmn.ActETLBck {
 		parallel = etlBucketParallelCnt
 	}
 

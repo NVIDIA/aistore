@@ -1536,7 +1536,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	newICNode := smap.GetProxy(newICMemID)
 
 	baseParams = tutils.BaseAPIParams(newICNode.URL(cmn.NetworkPublic))
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket}
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBck}
 	_, err = api.GetXactionStatus(baseParams, xactArgs)
 	tassert.CheckError(t, err)
 
@@ -1590,7 +1590,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 
 	// Start any xaction and get ID.
 	xactID, err := api.CopyBucket(baseParams, src, dstBck)
-	xactArgs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBucket}
+	xactArgs := api.XactReqArgs{ID: xactID, Kind: cmn.ActCopyBck}
 
 	tassert.CheckFatal(t, err)
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)

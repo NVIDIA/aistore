@@ -69,7 +69,7 @@ func ETLBucket(baseParams BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2Bc
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(fromBck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBucket, Value: bckMsg}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActETLBck, Value: bckMsg}),
 		Query:      q,
 	}, &xactID)
 	return

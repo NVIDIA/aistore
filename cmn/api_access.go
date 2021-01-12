@@ -18,12 +18,12 @@ const (
 	AccessAPPEND
 	AccessDOWNLOAD
 	AccessObjDELETE
-	AccessObjRENAME
+	AccessObjMove
 	AccessPROMOTE
 	// bucket
 	AccessBckHEAD
 	AccessObjLIST
-	AccessBckRENAME
+	AccessBckMove
 	AccessPATCH
 	AccessMAKENCOPIES
 	AccessEC
@@ -41,7 +41,7 @@ const (
 	allowAllAccess       = ^uint64(0)
 	allowReadOnlyAccess  = AccessGET | AccessObjHEAD | AccessBckHEAD | AccessObjLIST
 	allowReadWriteAccess = allowReadOnlyAccess |
-		AccessPUT | AccessAPPEND | AccessDOWNLOAD | AccessObjDELETE | AccessObjRENAME
+		AccessPUT | AccessAPPEND | AccessDOWNLOAD | AccessObjDELETE | AccessObjMove
 	allowClusterAccess = allowAllAccess & (AccessBckCREATE - 1)
 
 	// Permission Operations
@@ -60,12 +60,12 @@ var accessOp = map[int]string{
 	AccessAPPEND:    "APPEND",
 	AccessDOWNLOAD:  "DOWNLOAD",
 	AccessObjDELETE: "DELETE-OBJECT",
-	AccessObjRENAME: "RENAME-OBJECT",
+	AccessObjMove:   "MOVE-OBJECT",
 	AccessPROMOTE:   "PROMOTE",
 	// bucket
 	AccessBckHEAD:     "HEAD-BUCKET",
 	AccessObjLIST:     "LIST-OBJECTS",
-	AccessBckRENAME:   "RENAME-BUCKET",
+	AccessBckMove:     "MOVE-BUCKET",
 	AccessPATCH:       "PATCH",
 	AccessMAKENCOPIES: "MAKE-NCOPIES",
 	AccessEC:          "EC",
@@ -106,8 +106,8 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AccessObjDELETE) {
 		accList = append(accList, accessOp[AccessObjDELETE])
 	}
-	if a.Has(AccessObjRENAME) {
-		accList = append(accList, accessOp[AccessObjRENAME])
+	if a.Has(AccessObjMove) {
+		accList = append(accList, accessOp[AccessObjMove])
 	}
 	if a.Has(AccessPROMOTE) {
 		accList = append(accList, accessOp[AccessPROMOTE])
@@ -119,8 +119,8 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AccessObjLIST) {
 		accList = append(accList, accessOp[AccessObjLIST])
 	}
-	if a.Has(AccessBckRENAME) {
-		accList = append(accList, accessOp[AccessBckRENAME])
+	if a.Has(AccessBckMove) {
+		accList = append(accList, accessOp[AccessBckMove])
 	}
 	if a.Has(AccessPATCH) {
 		accList = append(accList, accessOp[AccessPATCH])
