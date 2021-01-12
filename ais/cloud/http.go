@@ -64,39 +64,6 @@ func (hp *httpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (err
 	return creatingBucketNotSupportedErr(hp.Provider())
 }
 
-func (hp *httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
-	debug.Assert(false)
-	return
-}
-
-func (hp *httpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
-	debug.Assert(false)
-	return
-}
-
-func (hp *httpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (string, int, error) {
-	return "", http.StatusBadRequest, fmt.Errorf("%q provider doesn't support creating new objects", hp.Provider())
-}
-
-func (hp *httpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
-	return http.StatusBadRequest, fmt.Errorf("%q provider doesn't support deleting object", hp.Provider())
-}
-
-func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (string, error) {
-	origURL, ok := ctx.Value(cmn.CtxOriginalURL).(string)
-	if !ok || origURL == "" {
-		if bck.Props == nil {
-			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck.Bck)
-		}
-		origURL = bck.Props.Extra.OrigURLBck
-		debug.Assert(origURL != "")
-		if objName != "" {
-			origURL = cmn.JoinPath(bck.Props.Extra.OrigURLBck, objName) // see `cmn.URL2BckObj`
-		}
-	}
-	return origURL, nil
-}
-
 func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
 	// TODO: we should use `bck.RemoteBck()`.
 
@@ -131,6 +98,31 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	bckProps = make(cmn.SimpleKVs)
 	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderHTTP
 	return
+}
+
+func (hp *httpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+	debug.Assert(false)
+	return
+}
+
+func (hp *httpProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+	debug.Assert(false)
+	return
+}
+
+func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (string, error) {
+	origURL, ok := ctx.Value(cmn.CtxOriginalURL).(string)
+	if !ok || origURL == "" {
+		if bck.Props == nil {
+			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck.Bck)
+		}
+		origURL = bck.Props.Extra.OrigURLBck
+		debug.Assert(origURL != "")
+		if objName != "" {
+			origURL = cmn.JoinPath(bck.Props.Extra.OrigURLBck, objName) // see `cmn.URL2BckObj`
+		}
+	}
+	return origURL, nil
 }
 
 func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
@@ -225,4 +217,12 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	lom.SetCustomMD(customMD)
 	setSize(ctx, resp.ContentLength)
 	return wrapReader(ctx, resp.Body), nil, 0, nil
+}
+
+func (hp *httpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (string, int, error) {
+	return "", http.StatusBadRequest, fmt.Errorf("%q provider doesn't support creating new objects", hp.Provider())
+}
+
+func (hp *httpProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
+	return http.StatusBadRequest, fmt.Errorf("%q provider doesn't support deleting object", hp.Provider())
 }

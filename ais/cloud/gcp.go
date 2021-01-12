@@ -135,8 +135,39 @@ func (gcpp *gcpProvider) Provider() string { return cmn.ProviderGoogle }
 // https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
 func (gcpp *gcpProvider) MaxPageSize() uint { return 1000 }
 
+///////////////////
+// CREATE BUCKET //
+///////////////////
+
 func (gcpp *gcpProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr(gcpp.Provider())
+}
+
+/////////////////
+// HEAD BUCKET //
+/////////////////
+
+func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("head_bucket %s", bck.Name)
+	}
+
+	gcpClient, gctx, err := gcpp.createClient(ctx)
+	if err != nil {
+		return
+	}
+	cloudBck := bck.RemoteBck()
+	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(gctx)
+	if err != nil {
+		errCode, err = gcpp.gcpErrorToAISError(err, cloudBck)
+		return
+	}
+	bckProps = make(cmn.SimpleKVs)
+	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
+	// GCP always generates a versionid for an object even if versioning is disabled.
+	// So, return that we can detect versionid change on getobj etc
+	bckProps[cmn.HeaderBucketVerEnabled] = "true"
+	return
 }
 
 //////////////////
@@ -198,29 +229,6 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 		glog.Infof("[list_bucket] count %d", len(bckList.Entries))
 	}
 
-	return
-}
-
-func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("head_bucket %s", bck.Name)
-	}
-
-	gcpClient, gctx, err := gcpp.createClient(ctx)
-	if err != nil {
-		return
-	}
-	cloudBck := bck.RemoteBck()
-	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(gctx)
-	if err != nil {
-		errCode, err = gcpp.gcpErrorToAISError(err, cloudBck)
-		return
-	}
-	bckProps = make(cmn.SimpleKVs)
-	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
-	// GCP always generates a versionid for an object even if versioning is disabled.
-	// So, return that we can detect versionid change on getobj etc
-	bckProps[cmn.HeaderBucketVerEnabled] = "true"
 	return
 }
 
@@ -303,6 +311,31 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 // GET OBJECT //
 ////////////////
 
+func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+	reader, cksumToUse, errCode, err := gcpp.GetObjReader(ctx, lom)
+	if err != nil {
+		return errCode, err
+	}
+	params := cluster.PutObjectParams{
+		Tag:      fs.WorkfileColdget,
+		Reader:   reader,
+		RecvType: cluster.ColdGet,
+		Cksum:    cksumToUse,
+	}
+	err = gcpp.t.PutObject(lom, params)
+	if err != nil {
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("[get_object] %s", lom)
+	}
+	return
+}
+
+///////////////////////
+// GET OBJECT READER //
+///////////////////////
+
 func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
@@ -346,27 +379,6 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 	lom.SetCustomMD(customMD)
 	setSize(ctx, rc.Attrs.Size)
 	r = wrapReader(ctx, rc)
-	return
-}
-
-func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
-	reader, cksumToUse, errCode, err := gcpp.GetObjReader(ctx, lom)
-	if err != nil {
-		return errCode, err
-	}
-	params := cluster.PutObjectParams{
-		Tag:      fs.WorkfileColdget,
-		Reader:   reader,
-		RecvType: cluster.ColdGet,
-		Cksum:    cksumToUse,
-	}
-	err = gcpp.t.PutObject(lom, params)
-	if err != nil {
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[get_object] %s", lom)
-	}
 	return
 }
 

@@ -100,8 +100,75 @@ func (awsp *awsProvider) Provider() string { return cmn.ProviderAmazon }
 // https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
 func (awsp *awsProvider) MaxPageSize() uint { return 1000 }
 
+///////////////////
+// CREATE BUCKET //
+///////////////////
+
 func (awsp *awsProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr(awsp.Provider())
+}
+
+/////////////////
+// HEAD BUCKET //
+/////////////////
+
+func (awsp *awsProvider) getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
+	resp, err := svc.GetBucketLocation(&s3.GetBucketLocationInput{
+		Bucket: aws.String(bckName),
+	})
+	if err != nil {
+		return
+	}
+	region = aws.StringValue(resp.LocationConstraint)
+
+	// NOTE: AWS API returns empty region "only" for 'us-east-1`
+	if region == "" {
+		region = endpoints.UsEast1RegionID
+	}
+	return
+}
+
+func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+	var (
+		svc       *s3.S3
+		region    string
+		cloudBck  = bck.RemoteBck()
+		hasRegion bool
+	)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("[head_bucket] %s", cloudBck.Name)
+	}
+
+	// Since it's possible that the cloud bucket may not yet exist in the BMD,
+	// we must get the region manually and recreate S3 client.
+	svc, hasRegion, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "")
+	if !hasRegion {
+		if region, err = awsp.getBucketLocation(svc, cloudBck.Name); err != nil {
+			errCode, err = awsp.awsErrorToAISError(err, cloudBck)
+			return
+		}
+
+		// Create new svc with the region details.
+		svc, _, _ = awsp.newS3Client(sessConf{region: region}, "")
+	}
+
+	region = *svc.Config.Region
+	debug.Assert(region != "")
+
+	inputVersion := &s3.GetBucketVersioningInput{Bucket: aws.String(cloudBck.Name)}
+	result, err := svc.GetBucketVersioning(inputVersion)
+	if err != nil {
+		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
+		return
+	}
+
+	bckProps = make(cmn.SimpleKVs, 3)
+	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
+	bckProps[cmn.HeaderCloudRegion] = region
+	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
+		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
+	)
+	return
 }
 
 //////////////////
@@ -217,69 +284,6 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	return
 }
 
-/////////////////
-// HEAD BUCKET //
-/////////////////
-
-func (awsp *awsProvider) getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
-	resp, err := svc.GetBucketLocation(&s3.GetBucketLocationInput{
-		Bucket: aws.String(bckName),
-	})
-	if err != nil {
-		return
-	}
-	region = aws.StringValue(resp.LocationConstraint)
-
-	// NOTE: AWS API returns empty region "only" for 'us-east-1`
-	if region == "" {
-		region = endpoints.UsEast1RegionID
-	}
-	return
-}
-
-func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
-	var (
-		svc       *s3.S3
-		region    string
-		cloudBck  = bck.RemoteBck()
-		hasRegion bool
-	)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("[head_bucket] %s", cloudBck.Name)
-	}
-
-	// Since it's possible that the cloud bucket may not yet exist in the BMD,
-	// we must get the region manually and recreate S3 client.
-	svc, hasRegion, _ = awsp.newS3Client(sessConf{bck: cloudBck}, "")
-	if !hasRegion {
-		if region, err = awsp.getBucketLocation(svc, cloudBck.Name); err != nil {
-			errCode, err = awsp.awsErrorToAISError(err, cloudBck)
-			return
-		}
-
-		// Create new svc with the region details.
-		svc, _, _ = awsp.newS3Client(sessConf{region: region}, "")
-	}
-
-	region = *svc.Config.Region
-	debug.Assert(region != "")
-
-	inputVersion := &s3.GetBucketVersioningInput{Bucket: aws.String(cloudBck.Name)}
-	result, err := svc.GetBucketVersioning(inputVersion)
-	if err != nil {
-		errCode, err = awsp.awsErrorToAISError(err, cloudBck)
-		return
-	}
-
-	bckProps = make(cmn.SimpleKVs, 3)
-	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
-	bckProps[cmn.HeaderCloudRegion] = region
-	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
-		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
-	)
-	return
-}
-
 //////////////////
 // BUCKET NAMES //
 //////////////////
@@ -305,9 +309,9 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 	return
 }
 
-////////////////
+/////////////////
 // HEAD OBJECT //
-////////////////
+/////////////////
 
 func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	var (
@@ -369,9 +373,9 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	return
 }
 
-//////////////////
-// GetObjReader //
-/////////////////
+////////////////////
+// GET OBJ READER //
+////////////////////
 
 func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	var (

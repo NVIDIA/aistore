@@ -165,65 +165,17 @@ func (ap *azureProvider) Provider() string { return cmn.ProviderAzure }
 // https://docs.microsoft.com/en-us/connectors/azureblob/#general-limits
 func (ap *azureProvider) MaxPageSize() uint { return 5000 }
 
+///////////////////
+// CREATE BUCKET //
+///////////////////
+
 func (ap *azureProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
 	return creatingBucketNotSupportedErr(ap.Provider())
 }
 
-func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
-	var (
-		o          azblob.ListContainersSegmentOptions
-		marker     azblob.Marker
-		containers *azblob.ListContainersSegmentResponse
-	)
-	for marker.NotDone() {
-		containers, err = ap.s.ListContainersSegment(ctx, marker, o)
-		if err != nil {
-			errCode, err = ap.azureErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAzure}, "")
-			return
-		}
-
-		for idx := range containers.ContainerItems {
-			buckets = append(buckets, cmn.Bck{
-				Name:     containers.ContainerItems[idx].Name,
-				Provider: cmn.ProviderAzure,
-			})
-		}
-		marker = containers.NextMarker
-	}
-	return
-}
-
-// Delete looks complex because according to docs, it needs acquiring
-// an object beforehand and releasing the lease after
-func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
-	var (
-		cloudBck = lom.Bck().RemoteBck()
-		cntURL   = ap.s.NewContainerURL(lom.BckName())
-		blobURL  = cntURL.NewBlobURL(lom.ObjName)
-		cond     = azblob.ModifiedAccessConditions{}
-	)
-
-	acqResp, err := blobURL.AcquireLease(ctx, "", leaseTime, cond)
-	if err != nil {
-		return ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
-	}
-	if acqResp.StatusCode() >= http.StatusBadRequest {
-		return acqResp.StatusCode(), fmt.Errorf("failed to acquire %s/%s", cloudBck, lom.ObjName)
-	}
-
-	delCond := azblob.BlobAccessConditions{
-		LeaseAccessConditions: azblob.LeaseAccessConditions{LeaseID: acqResp.LeaseID()},
-	}
-	defer blobURL.ReleaseLease(ctx, acqResp.LeaseID(), cond)
-	delResp, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionInclude, delCond)
-	if err != nil {
-		return ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
-	}
-	if delResp.StatusCode() >= http.StatusBadRequest {
-		return delResp.StatusCode(), fmt.Errorf("failed to delete object %s/%s", cloudBck, lom.ObjName)
-	}
-	return http.StatusOK, nil
-}
+/////////////////
+// HEAD BUCKET //
+/////////////////
 
 func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
 	var (
@@ -243,6 +195,10 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	bckProps[cmn.HeaderBucketVerEnabled] = "true"
 	return bckProps, http.StatusOK, nil
 }
+
+//////////////////
+// LIST OBJECTS //
+//////////////////
 
 func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
@@ -303,6 +259,38 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	return
 }
 
+//////////////////
+// BUCKET NAMES //
+//////////////////
+
+func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+	var (
+		o          azblob.ListContainersSegmentOptions
+		marker     azblob.Marker
+		containers *azblob.ListContainersSegmentResponse
+	)
+	for marker.NotDone() {
+		containers, err = ap.s.ListContainersSegment(ctx, marker, o)
+		if err != nil {
+			errCode, err = ap.azureErrorToAISError(err, &cmn.Bck{Provider: cmn.ProviderAzure}, "")
+			return
+		}
+
+		for idx := range containers.ContainerItems {
+			buckets = append(buckets, cmn.Bck{
+				Name:     containers.ContainerItems[idx].Name,
+				Provider: cmn.ProviderAzure,
+			})
+		}
+		marker = containers.NextMarker
+	}
+	return
+}
+
+/////////////////
+// HEAD OBJECT //
+/////////////////
+
 func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	objMeta = make(cmn.SimpleKVs)
 	var (
@@ -335,6 +323,10 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	return
 }
 
+////////////////
+// GET OBJECT //
+////////////////
+
 func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	reader, cksumToUse, errCode, err := ap.GetObjReader(ctx, lom)
 	if err != nil {
@@ -355,6 +347,10 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 	}
 	return
 }
+
+////////////////////
+// GET OBJ READER //
+////////////////////
 
 func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	var (
@@ -405,6 +401,10 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	return wrapReader(ctx, resp.Body(retryOpts)), cksumToUse, 0, nil
 }
 
+////////////////
+// PUT OBJECT //
+////////////////
+
 func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
 	var (
 		leaseID  string
@@ -453,4 +453,40 @@ func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 		glog.Infof("[put_object] %s, version: %s", lom, version)
 	}
 	return version, http.StatusOK, nil
+}
+
+///////////////////
+// DELETE OBJECT //
+///////////////////
+
+// Delete looks complex because according to docs, it needs acquiring
+// an object beforehand and releasing the lease after
+func (ap *azureProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (int, error) {
+	var (
+		cloudBck = lom.Bck().RemoteBck()
+		cntURL   = ap.s.NewContainerURL(lom.BckName())
+		blobURL  = cntURL.NewBlobURL(lom.ObjName)
+		cond     = azblob.ModifiedAccessConditions{}
+	)
+
+	acqResp, err := blobURL.AcquireLease(ctx, "", leaseTime, cond)
+	if err != nil {
+		return ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
+	}
+	if acqResp.StatusCode() >= http.StatusBadRequest {
+		return acqResp.StatusCode(), fmt.Errorf("failed to acquire %s/%s", cloudBck, lom.ObjName)
+	}
+
+	delCond := azblob.BlobAccessConditions{
+		LeaseAccessConditions: azblob.LeaseAccessConditions{LeaseID: acqResp.LeaseID()},
+	}
+	defer blobURL.ReleaseLease(ctx, acqResp.LeaseID(), cond)
+	delResp, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionInclude, delCond)
+	if err != nil {
+		return ap.azureErrorToAISError(err, cloudBck, lom.ObjName)
+	}
+	if delResp.StatusCode() >= http.StatusBadRequest {
+		return delResp.StatusCode(), fmt.Errorf("failed to delete object %s/%s", cloudBck, lom.ObjName)
+	}
+	return http.StatusOK, nil
 }

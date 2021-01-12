@@ -274,17 +274,6 @@ ad:
 	return
 }
 
-////////////////////////////////
-// cluster.CloudProvider APIs //
-////////////////////////////////
-
-func (m *AisCloudProvider) Provider() string  { return cmn.ProviderAIS }
-func (m *AisCloudProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
-
-func (m *AisCloudProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
-	return 0, nil
-}
-
 func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	m.mu.RLock()
 	remAis, ok := m.remote[uuid]
@@ -300,6 +289,62 @@ func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	}
 	m.mu.RUnlock()
 	return remAis, nil
+}
+
+func (m *AisCloudProvider) try(remoteBck cmn.Bck, f func(bck cmn.Bck) error) (err error) {
+	remoteBck.Ns.UUID = ""
+
+	return cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+		Call:    func() (int, error) { return 0, f(remoteBck) },
+		IsFatal: func(err error) bool { _, ok := err.(*cmn.HTTPError); return ok },
+		SoftErr: aisCloudRetries + 1,
+		Sleep:   cmn.GCO.Get().Timeout.CplaneOperation,
+	})
+}
+
+func extractErrCode(e error) (int, error) {
+	if e == nil {
+		return http.StatusOK, nil
+	}
+	httpErr := &cmn.HTTPError{}
+	if errors.As(e, &httpErr) {
+		return httpErr.Status, httpErr
+	}
+	return http.StatusInternalServerError, e
+}
+
+////////////////////////////////
+// cluster.CloudProvider APIs //
+////////////////////////////////
+
+func (m *AisCloudProvider) Provider() string  { return cmn.ProviderAIS }
+func (m *AisCloudProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
+
+func (m *AisCloudProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+	return 0, nil
+}
+
+func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
+
+	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
+	if err != nil {
+		return nil, errCode, err
+	}
+	err = m.try(remoteBck.Bck, func(bck cmn.Bck) error {
+		p, err := api.HeadBucket(aisCluster.bp, bck)
+		if err != nil {
+			return err
+		}
+		bckProps = make(cmn.SimpleKVs)
+		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
+			bckProps[uniqueTag] = fmt.Sprintf("%v", field.Value())
+			return nil, false
+		})
+		return nil
+	})
+	errCode, err = extractErrCode(err)
+	return bckProps, errCode, err
 }
 
 func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
@@ -333,29 +378,6 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.B
 	}
 	errCode, err = extractErrCode(err)
 	return bckList, errCode, err
-}
-
-func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
-	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
-
-	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
-		return nil, errCode, err
-	}
-	err = m.try(remoteBck.Bck, func(bck cmn.Bck) error {
-		p, err := api.HeadBucket(aisCluster.bp, bck)
-		if err != nil {
-			return err
-		}
-		bckProps = make(cmn.SimpleKVs)
-		cmn.IterFields(p, func(uniqueTag string, field cmn.IterField) (e error, b bool) {
-			bckProps[uniqueTag] = fmt.Sprintf("%v", field.Value())
-			return nil, false
-		})
-		return nil
-	})
-	errCode, err = extractErrCode(err)
-	return bckProps, errCode, err
 }
 
 func (m *AisCloudProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (buckets cmn.BucketNames, err error) {
@@ -484,26 +506,4 @@ func (m *AisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (err
 		return api.DeleteObject(aisCluster.bp, bck, lom.ObjName)
 	})
 	return extractErrCode(err)
-}
-
-func (m *AisCloudProvider) try(remoteBck cmn.Bck, f func(bck cmn.Bck) error) (err error) {
-	remoteBck.Ns.UUID = ""
-
-	return cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
-		Call:    func() (int, error) { return 0, f(remoteBck) },
-		IsFatal: func(err error) bool { _, ok := err.(*cmn.HTTPError); return ok },
-		SoftErr: aisCloudRetries + 1,
-		Sleep:   cmn.GCO.Get().Timeout.CplaneOperation,
-	})
-}
-
-func extractErrCode(e error) (int, error) {
-	if e == nil {
-		return http.StatusOK, nil
-	}
-	httpErr := &cmn.HTTPError{}
-	if errors.As(e, &httpErr) {
-		return httpErr.Status, httpErr
-	}
-	return http.StatusInternalServerError, e
 }
