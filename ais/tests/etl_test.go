@@ -190,9 +190,6 @@ func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath
 	tassert.Errorf(t, same, "file contents after transformation differ")
 }
 
-// TODO: currently this test only tests scenario where all objects are PUT to
-//  the same target which they are currently stored on. That's because our
-//  minikube tests only run with a single target.
 func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
 	bckTo := cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 

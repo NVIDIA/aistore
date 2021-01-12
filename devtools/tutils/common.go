@@ -25,6 +25,7 @@ import (
 
 type SkipTestArgs struct {
 	Bck            cmn.Bck
+	MinTargets     int
 	RequiresRemote bool
 	RequiresAuth   bool
 	Long           bool
@@ -115,6 +116,12 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	if args.K8s {
 		if err := k8s.Detect(); err != nil {
 			tb.Skipf("%s requires Kubernetes", tb.Name())
+		}
+	}
+	if args.MinTargets > 0 {
+		smap := GetClusterMap(tb, GetPrimaryURL())
+		if smap.CountTargets() < args.MinTargets {
+			tb.Skipf("%s requires at least %d targets, %d present in smap", tb.Name(), args.MinTargets, smap.CountTargets())
 		}
 	}
 }

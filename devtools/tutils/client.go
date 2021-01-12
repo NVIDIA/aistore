@@ -592,8 +592,8 @@ func GetDaemonConfig(t *testing.T, daeID string) *cmn.Config {
 	return config
 }
 
-func GetClusterMap(t *testing.T, url string) (smap *cluster.Smap) {
-	smap, _ = waitForStartup(BaseAPIParams(url), t)
+func GetClusterMap(tb testing.TB, url string) (smap *cluster.Smap) {
+	smap, _ = waitForStartup(BaseAPIParams(url), tb)
 	return
 }
 
@@ -676,7 +676,7 @@ func CheckErrIsNotFound(t *testing.T, err error) {
 	)
 }
 
-func waitForStartup(baseParams api.BaseParams, ts ...*testing.T) (*cluster.Smap, error) {
+func waitForStartup(baseParams api.BaseParams, ts ...testing.TB) (*cluster.Smap, error) {
 	for {
 		smap, err := api.GetClusterMap(baseParams)
 		if err != nil {
