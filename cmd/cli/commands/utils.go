@@ -90,6 +90,11 @@ type (
 		Name  string
 		Value string
 	}
+
+	configItem struct {
+		Name  string
+		Value string
+	}
 )
 
 func isWebURL(url string) bool { return cmn.IsHTTP(url) || cmn.IsHTTPS(url) }
@@ -982,4 +987,15 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	bck.Provider = cmn.ProviderHTTP
 	bck.Name = cmn.OrigURLBck2Name(strURL)
 	return
+}
+
+func flattenConfig(cfg *cmn.Config, section string) []configItem {
+	flat := make([]configItem, 0, 40)
+	cmn.IterFields(cfg, func(tag string, field cmn.IterField) (error, bool) {
+		if section == "" || strings.HasPrefix(tag, section) {
+			flat = append(flat, configItem{tag, fmt.Sprintf("%v", field.Value())})
+		}
+		return nil, false
+	})
+	return flat
 }

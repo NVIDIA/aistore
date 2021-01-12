@@ -89,7 +89,7 @@ func suggestDaemon(what daemonKindCompletion) {
 }
 
 func suggestConfigSection() {
-	for k := range templates.ConfigSectionTmpl {
+	for _, k := range templates.ConfigSectionTmpl {
 		fmt.Println(k)
 	}
 }

@@ -183,16 +183,12 @@ func getDaemonConfig(c *cli.Context) error {
 		return err
 	}
 
-	template := templates.ConfigTmpl
-	if section != "" {
-		if t, ok := templates.ConfigSectionTmpl[section]; ok {
-			template = strings.TrimPrefix(t, "\n")
-		} else {
-			return fmt.Errorf("config section %q not found", section)
-		}
+	if useJSON {
+		return templates.DisplayOutput(body, c.App.Writer, "", useJSON)
 	}
 
-	return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
+	flat := flattenConfig(body, section)
+	return templates.DisplayOutput(flat, c.App.Writer, templates.DaemonConfTmpl, false)
 }
 
 // Sets config of specific daemon or cluster

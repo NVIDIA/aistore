@@ -68,135 +68,9 @@ const (
 	DiskStatsFullTmpl = DiskStatsHeader + DiskStatBodyTmpl
 
 	// Config
-	MirrorConfTmpl = "\n{{$obj := .Mirror}}Mirror Config\n" +
-		" Copies:\t{{$obj.Copies}}\n" +
-		" Burst:\t{{$obj.Burst}}\n" +
-		" Utilization Threshold:\t{{$obj.UtilThresh}}\n" +
-		" Optimize PUT:\t{{$obj.OptimizePUT}}\n" +
-		" Enabled:\t{{$obj.Enabled}}\n"
-	LogConfTmpl = "\n{{$obj := .Log}}Log Config\n" +
-		" Dir:\t{{$obj.Dir}}\n" +
-		" Level:\t{{$obj.Level}}\n" +
-		" Maximum Log File Size:\t{{$obj.MaxSize}}\n" +
-		" Maximum Total Size:\t{{$obj.MaxTotal}}\n"
-	PeriodConfTmpl = "\n{{$obj := .Periodic}}Period Config\n" +
-		" Stats Time:\t{{$obj.StatsTimeStr}}\n" +
-		" Retry Sync Time:\t{{$obj.RetrySyncTimeStr}}\n"
-	TimeoutConfTmpl = "\n{{$obj := .Timeout}}Timeout Config\n" +
-		" Max Keep Alive:\t{{$obj.MaxKeepaliveStr}}\n" +
-		" Control Plane Operation:\t{{$obj.CplaneOperationStr}}\n" +
-		" Max Host Busy:\t{{$obj.MaxHostBusyStr}}\n" +
-		" Send File Time:\t{{$obj.SendFileStr}}\n" +
-		" Startup Time:\t{{$obj.StartupStr}}\n"
-	ClientConfTmpl = "\n{{$obj := .Client}}Client Config\n" +
-		" Timeout:\t{{$obj.TimeoutStr}}\n" +
-		" Long Timeout:\t{{$obj.TimeoutLongStr}}\n" +
-		" List Time:\t{{$obj.ListObjectsStr}}\n" +
-		" Flags:\t{{FormatFeatureFlags $obj.Features}}\n"
-	ProxyConfTmpl = "\n{{$obj := .Proxy}}Proxy Config\n" +
-		" Non Electable:\t{{$obj.NonElectable}}\n" +
-		" Primary URL:\t{{$obj.PrimaryURL}}\n" +
-		" Original URL:\t{{$obj.OriginalURL}}\n" +
-		" Discovery URL:\t{{$obj.DiscoveryURL}}\n"
-	LRUConfTmpl = "\n{{$obj := .LRU}}LRU Config\n" +
-		" Low WM:\t{{$obj.LowWM}}\n" +
-		" High WM:\t{{$obj.HighWM}}\n" +
-		" Out-of-Space:\t{{$obj.OOS}}\n" +
-		" Don't Evict Time:\t{{$obj.DontEvictTimeStr}}\n" +
-		" Capacity Update Time:\t{{$obj.CapacityUpdTimeStr}}\n" +
-		" Enabled:\t{{$obj.Enabled}}\n"
-	DiskConfTmpl = "\n{{$obj := .Disk}}Disk Config\n" +
-		" Disk Utilization Low WM:\t{{$obj.DiskUtilLowWM}}\n" +
-		" Disk Utilization High WM:\t{{$obj.DiskUtilHighWM}}\n" +
-		" Disk Utilization Max WM:\t{{$obj.DiskUtilMaxWM}}\n" +
-		" IO Stats Time Long:\t{{$obj.IostatTimeLongStr}}\n" +
-		" IO Stats Time Short:\t{{$obj.IostatTimeShortStr}}\n"
-	RebalanceConfTmpl = "\n{{$obj := .Rebalance}}Rebalance Config\n" +
-		" Destination Retry Time:\t{{$obj.DestRetryTimeStr}}\n" +
-		" Enabled:\t{{$obj.Enabled}}\n" +
-		" Multiplier:\t{{$obj.Multiplier}}\n" +
-		" Compression:\t{{$obj.Compression}}\n"
-	CksumConfTmpl = "\n{{$obj := .Cksum}}Checksum Config\n" +
-		" Type:\t{{$obj.Type}}\n" +
-		" Validate On Cold Get:\t{{$obj.ValidateColdGet}}\n" +
-		" Validate On Warm Get:\t{{$obj.ValidateWarmGet}}\n" +
-		" Validate On Object Migration:\t{{$obj.ValidateObjMove}}\n" +
-		" Enable For Read Range:\t{{$obj.EnableReadRange}}\n"
-	VerConfTmpl = "\n{{$obj := .Versioning}}Version Config\n" +
-		" Enabled:\t{{$obj.Enabled}}\n" +
-		" Validate Warm Get:\t{{$obj.ValidateWarmGet}}\n"
-	FSpathsConfTmpl = "\nFile System Paths Config\n" +
-		"{{$obj := .FSpaths.Paths}}" +
-		"{{range $key, $val := $obj}}" +
-		"{{$key}}:\t{{$val}}\n" +
-		"{{end}}"
-	TestFSPConfTmpl = "\n{{$obj := .TestFSP}}Test File System Paths Config\n" +
-		" Root:\t{{$obj.Root}}\n" +
-		" Count:\t{{$obj.Count}}\n" +
-		" Instance:\t{{$obj.Instance}}\n"
-	NetConfTmpl = "\n{{$obj := .Net}}Network Config\n" +
-		" Hostname:\t{{$obj.Hostname}}\n" +
-		" Hostname IntraControl:\t{{$obj.HostnameIntraControl}}\n" +
-		" Hostname IntraData:\t{{$obj.HostnameIntraData}}\n\n" +
-		" HTTP\n" +
-		" Protocol:\t{{$obj.HTTP.Proto}}\n" +
-		" Certificate:\t{{$obj.HTTP.Certificate}}\n" +
-		" Key:\t{{$obj.HTTP.Key}}\n" +
-		" UseHTTPS:\t{{$obj.HTTP.UseHTTPS}}\n" +
-		" Chunked Transfer:\t{{$obj.HTTP.Chunked}}\n\n" +
-		" L4\n" +
-		" Protocol:\t{{$obj.L4.Proto}}\n" +
-		" Port:\t{{$obj.L4.PortStr}}\n" +
-		" IntraControl Port:\t{{$obj.L4.PortIntraControlStr}}\n" +
-		" IntraData Port:\t{{$obj.L4.PortIntraDataStr}}\n" +
-		" Send/Receive buffer size:\t{{$obj.L4.SndRcvBufSize}}\n"
-	FSHCConfTmpl = "\n{{$obj := .FSHC}}FSHC Config\n" +
-		" Enabled:\t{{$obj.Enabled}}\n" +
-		" Test File Count:\t{{$obj.TestFileCount}}\n" +
-		" Error Limit:\t{{$obj.ErrorLimit}}\n"
-	AuthConfTmpl = "\n{{$obj := .Auth}}Authentication Config\n" +
-		" Enabled:\t{{$obj.Enabled}}\n"
-	KeepaliveConfTmpl = "\n{{$obj := .Keepalive}}Keep Alive Tracker Config\n" +
-		" Retry Factor:{{$obj.RetryFactor}}\t  Timeout Factor:{{$obj.TimeoutFactor}}\n" +
-		" \tProxy\t \tTarget\n" +
-		" Interval: \t{{$obj.Proxy.IntervalStr}}\t \t{{$obj.Target.IntervalStr}}\n" +
-		" Name: \t{{$obj.Proxy.Name}}\t \t{{$obj.Target.Name}}\n" +
-		" Factor: \t{{$obj.Proxy.Factor}}\t \t{{$obj.Target.Factor}}\n"
-	DownloaderConfTmpl = "\n{{$obj := .Downloader}}Downloader Config\n" +
-		" Timeout: {{$obj.TimeoutStr}}\n"
-	DSortConfTmpl = "\n{{$obj := .DSort}}Distributed Sort Config\n" +
-		" Duplicated Records:\t{{$obj.DuplicatedRecords}}\n" +
-		" Missing Shards:\t{{$obj.MissingShards}}\n" +
-		" EKM Malformed Line:\t{{$obj.EKMMalformedLine}}\n" +
-		" EKM Missing Key:\t{{$obj.EKMMissingKey}}\n" +
-		" Call Timeout:\t{{$obj.CallTimeoutStr}}\n" +
-		" Compression:\t{{$obj.Compression}}\n"
-	CompressionTmpl = "\n{{$obj := .Compression}}Compression\n" +
-		" BlockSize:\t{{$obj.BlockMaxSize}}\n" +
-		" Checksum:\t{{$obj.Checksum}}\n"
-	ECTmpl = "\n{{$obj := .EC}}EC\n" +
-		" Enabled:\t{{$obj.Enabled}}\n" +
-		" Minimum object size for EC:\t{{$obj.ObjSizeLimit}}\n" +
-		" Number of data slices:\t{{$obj.DataSlices}}\n" +
-		" Number of parity slices:\t{{$obj.ParitySlices}}\n" +
-		" Rebalance batch size:\t{{$obj.BatchSize}}\n" +
-		" Compression options:\t{{$obj.Compression}}\n"
-	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Providers: {{ range $key := .Cloud.Providers}} {{$key}} {{end}}\n"
-
-	// hidden config sections: replication
-	// Application Config has this sections but /deploy/dev/local/aisnode_config.sh does not expose them
-	ReplicationConfTmpl = "\n{{$obj := .Replication}}Replication Config\n" +
-		" On Cold Get:\t{{$obj.OnColdGet}}\n" +
-		" On Put:\t{{$obj.OnPut}}\n" +
-		" On LRU Eviction:\t{{$obj.OnLRUEviction}}\n"
-
-	ConfigTmpl = GlobalConfTmpl +
-		MirrorConfTmpl + LogConfTmpl + ClientConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
-		ProxyConfTmpl + LRUConfTmpl + DiskConfTmpl + RebalanceConfTmpl +
-		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
-		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl +
-		DownloaderConfTmpl + DSortConfTmpl +
-		CompressionTmpl + ECTmpl
+	DaemonConfTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
+		"{{ $item.Name }}\t {{ $item.Value }}\n" +
+		"{{end}}\n"
 
 	BucketPropsSimpleTmpl = "PROPERTY\t VALUE\n" +
 		"{{range $p := . }}" +
@@ -463,30 +337,11 @@ func fmtObjStatus(obj *cmn.BucketEntry) string {
 	return "moved"
 }
 
-var ConfigSectionTmpl = map[string]string{
-	"global":               GlobalConfTmpl,
-	"mirror":               MirrorConfTmpl,
-	"log":                  LogConfTmpl,
-	"client":               ClientConfTmpl,
-	"periodic":             PeriodConfTmpl,
-	"timeout":              TimeoutConfTmpl,
-	"proxy":                ProxyConfTmpl,
-	"lru":                  LRUConfTmpl,
-	"disk":                 DiskConfTmpl,
-	"rebalance":            RebalanceConfTmpl,
-	"checksum":             CksumConfTmpl,
-	"versioning":           VerConfTmpl,
-	"fspath":               FSpathsConfTmpl,
-	"testfs":               TestFSPConfTmpl,
-	"network":              NetConfTmpl,
-	"fshc":                 FSHCConfTmpl,
-	"auth":                 AuthConfTmpl,
-	"keepalive":            KeepaliveConfTmpl,
-	"downloader":           DownloaderConfTmpl,
-	cmn.DSortNameLowercase: DSortConfTmpl,
-	"compression":          CompressionTmpl,
-	"ec":                   ECTmpl,
-	"replication":          ReplicationConfTmpl,
+var ConfigSectionTmpl = []string{
+	"global", "mirror", "log", "client", "periodic", "timeout", "proxy",
+	"lru", "disk", "rebalance", "checksum", "versioning", "fspath",
+	"testfs", "network", "fshc", "auth", "keepalive", "downloader",
+	cmn.DSortNameLowercase, "compression", "ec", "replication",
 }
 
 func fmtObjIsCached(obj *cmn.BucketEntry) string {
