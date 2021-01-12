@@ -259,24 +259,25 @@ shard-1.tar	16.00KiB	1
 
 Evict a cloud bucket. It also resets the properties of the bucket (if changed).
 
-## Rename a bucket
+## Move or Rename a bucket
 
-`ais rename bucket BUCKET_NAME NEW_BUCKET_NAME`
+`ais mv bucket BUCKET_NAME NEW_BUCKET_NAME`
 
-Rename an AIS bucket.
+Move (ie. rename) an AIS bucket. If the `NEW_BUCKET_NAME` already exists, the `mv` operation will not proceed.
 
-> Cloud bucket rename is not supported.
+
+> Cloud bucket move is not supported.
 
 ### Examples
 
-#### Rename AIS bucket
+#### Move AIS bucket
 
-Rename AIS bucket `bucket_name` to AIS bucket `new_bucket_name`.
+Move AIS bucket `bucket_name` to AIS bucket `new_bucket_name`.
 
 ```console
-$ ais rename bucket bucket_name new_bucket_name
-Renaming bucket "bucket_name" to "new_bucket_name" in progress.
-To check the status, run: ais show xaction renamelb new_bucket_name
+$ ais mv bucket bucket_name new_bucket_name
+Moving bucket "bucket_name" to "new_bucket_name" in progress.
+To check the status, run: ais show xaction mvlb new_bucket_name
 ```
 
 ## Copy bucket

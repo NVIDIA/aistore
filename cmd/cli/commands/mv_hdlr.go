@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This file provides commands to rename buckets and objects.
+// This file provides commands to move buckets and objects.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
@@ -14,30 +14,30 @@ import (
 )
 
 var (
-	renameCmdsFlags = map[string][]cli.Flag{
-		subcmdRenameBucket: {},
-		subcmdRenameObject: {},
+	mvCmdsFlags = map[string][]cli.Flag{
+		subcmdMvBucket: {},
+		subcmdMvObject: {},
 	}
 
-	renameCmds = []cli.Command{
+	mvCmds = []cli.Command{
 		{
-			Name:  commandRename,
-			Usage: "rename buckets and objects",
+			Name:  commandMv,
+			Usage: "move (rename) buckets and objects",
 			Subcommands: []cli.Command{
 				{
-					Name:         subcmdRenameBucket,
-					Usage:        "rename ais bucket",
+					Name:         subcmdMvBucket,
+					Usage:        "mv ais bucket",
 					ArgsUsage:    "BUCKET_NAME NEW_BUCKET_NAME",
-					Flags:        renameCmdsFlags[subcmdRenameBucket],
-					Action:       renameBucketHandler,
+					Flags:        mvCmdsFlags[subcmdMvBucket],
+					Action:       mvBucketHandler,
 					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.ProviderAIS),
 				},
 				{
-					Name:         subcmdRenameObject,
-					Usage:        "rename object in ais bucket",
+					Name:         subcmdMvObject,
+					Usage:        "mv object in ais bucket",
 					ArgsUsage:    "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME",
-					Flags:        renameCmdsFlags[subcmdRenameObject],
-					Action:       renameObjectHandler,
+					Flags:        mvCmdsFlags[subcmdMvObject],
+					Action:       mvObjectHandler,
 					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, true /* separator */, cmn.ProviderAIS),
 				},
 			},
@@ -45,7 +45,7 @@ var (
 	}
 )
 
-func renameBucketHandler(c *cli.Context) error {
+func mvBucketHandler(c *cli.Context) error {
 	bucketName, newBucketName, err := getOldNewBucketName(c)
 	if err != nil {
 		return err
@@ -59,19 +59,19 @@ func renameBucketHandler(c *cli.Context) error {
 		return err
 	}
 
-	if err := validateLocalBuckets([]cmn.Bck{bck, newBck}, "renaming"); err != nil {
+	if err := validateLocalBuckets([]cmn.Bck{bck, newBck}, "moving"); err != nil {
 		return err
 	}
 
 	bck.Provider, newBck.Provider = cmn.ProviderAIS, cmn.ProviderAIS
 	if bck.Equal(newBck) {
-		return incorrectUsageMsg(c, "cannot rename %q as %q", bck, newBck)
+		return incorrectUsageMsg(c, "cannot mv %q as %q", bck, newBck)
 	}
 
-	return renameBucket(c, bck, newBck)
+	return mvBucket(c, bck, newBck)
 }
 
-func renameObjectHandler(c *cli.Context) (err error) {
+func mvObjectHandler(c *cli.Context) (err error) {
 	if c.NArg() != 2 {
 		return incorrectUsageMsg(c, "invalid number of arguments")
 	}
@@ -115,6 +115,6 @@ func renameObjectHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%q renamed to %q\n", oldObj, newObj)
+	fmt.Fprintf(c.App.Writer, "%q moved to %q\n", oldObj, newObj)
 	return
 }

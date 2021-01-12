@@ -33,7 +33,7 @@ const (
 	commandPromote   = "promote"
 	commandPut       = "put"
 	commandRemove    = "rm"
-	commandRename    = "rename"
+	commandMv        = "mv"
 	commandSet       = "set"
 	commandSetCopies = "set-copies"
 	commandShow      = "show"
@@ -85,9 +85,9 @@ const (
 	// Create subcommands
 	subcmdCreateBucket = subcmdBucket
 
-	// Rename subcommands
-	subcmdRenameBucket = subcmdBucket
-	subcmdRenameObject = subcmdObject
+	// Mv subcommands
+	subcmdMvBucket = subcmdBucket
+	subcmdMvObject = subcmdObject
 
 	// Remove subcommands
 	subcmdRemoveBucket   = subcmdBucket

@@ -191,7 +191,7 @@ func (aisCLI *AISCLI) setupCommands() {
 	app.Commands = append(app.Commands, authCmds...)
 	app.Commands = append(app.Commands, listCmds...)
 	app.Commands = append(app.Commands, createCmds...)
-	app.Commands = append(app.Commands, renameCmds...)
+	app.Commands = append(app.Commands, mvCmds...)
 	app.Commands = append(app.Commands, removeCmds...)
 	app.Commands = append(app.Commands, copyCmds...)
 	app.Commands = append(app.Commands, setCmds...)

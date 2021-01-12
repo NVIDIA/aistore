@@ -13,7 +13,7 @@ Return commands containing the search word or synonym.
 
 ```command
 $ ais search object
-ais rename object
+ais mv object
 ais rm object
 ais show object
 

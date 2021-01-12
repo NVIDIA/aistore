@@ -9,7 +9,7 @@
 - [Evict objects](#evict-objects)
 - [Prefetch objects](#prefetch-objects)
 - [Preload objects](#preload-bucket)
-- [Rename object](#rename-object)
+- [Move object](#move-object)
 - [Concat objects](#concat-objects)
 
 ## GET object
@@ -612,11 +612,12 @@ Preload bucket's objects metadata into in-memory caches.
 $ ais start preload ais://bucket
 ```
 
-## Rename object
+## Move object
 
-`ais rename object BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME`
+`ais mv object BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME`
 
-Rename object from an ais bucket.
+Move (rename) an object within an ais bucket.  Moving objects from one bucket to another bucket is not supported.
+If the `NEW_OBJECT_NAME` already exists, it will be overwritten without confirmation.
 
 ## Concat objects
 

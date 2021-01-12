@@ -92,8 +92,8 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 	return nil
 }
 
-// Rename ais bucket
-func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
+// Mv ais bucket
+func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 	if _, err = headBucket(fromBck); err != nil {
 		return
 	}
@@ -101,7 +101,7 @@ func renameBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
 		return
 	}
 
-	msgFmt := "Renaming bucket %q to %q in progress.\nTo check the status, run: ais show xaction %s %s\n"
+	msgFmt := "Moving bucket %q to %q in progress.\nTo check the status, run: ais show xaction %s %s\n"
 	fmt.Fprintf(c.App.Writer, msgFmt, fromBck.Name, toBck.Name, cmn.ActRenameLB, toBck.Name)
 	return
 }
