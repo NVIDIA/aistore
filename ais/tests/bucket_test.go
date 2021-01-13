@@ -1995,9 +1995,9 @@ func TestRenameBucketWithBackend(t *testing.T) {
 		"source and destination bucket versioning does not match: %t vs. %t, respectively",
 		srcProps.Versioning.Enabled, dstProps.Versioning.Enabled)
 
-	// aws region might be set upon rename
-	srcProps.Extra.CloudRegion = ""
-	dstProps.Extra.CloudRegion = ""
+	// AWS region might be set upon rename.
+	srcProps.Extra.AWS.CloudRegion = ""
+	dstProps.Extra.AWS.CloudRegion = ""
 
 	tassert.Fatalf(t, srcProps.Equal(dstProps), "source and destination bucket props do not match:\n%v\n%v", srcProps, dstProps)
 }

@@ -128,6 +128,11 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 			continue
 		}
 
+		// If it's `interface{}` we must get concrete type.
+		if srcValField.Kind() == reflect.Interface && !srcValField.IsZero() {
+			srcValField = srcValField.Elem()
+		}
+
 		var dirtyField bool
 		if srcValField.Kind() != reflect.Struct {
 			// We require that not-omitted fields have JSON tag.

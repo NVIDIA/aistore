@@ -144,23 +144,34 @@ type (
 		Access AccessAttrs `json:"access,string"`
 
 		// Extra contains additional information which can depend on the provider.
-		Extra struct {
-			// [HTTP provider] Original URL prior to hashing.
-			OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
+		Extra ExtraProps `json:"extra,omitempty" list:"omitempty"`
 
-			// [AWS provider] Region where the cloud bucket is located.
-			CloudRegion string `json:"cloud_region,omitempty" list:"readonly"`
-		} `json:"extra,omitempty" list:"readonly"`
-
-		// unique bucket ID
+		// Unique bucket ID
 		BID uint64 `json:"bid,string" list:"omit"`
 
 		// Bucket creation time
 		Created int64 `json:"created,string" list:"readonly"`
 
-		// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
+		// Non-empty when the bucket has been renamed.
+		// TODO: Could be used for delayed deletion.
 		Renamed string `list:"omit"`
 	}
+
+	ExtraProps struct {
+		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
+		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
+	}
+
+	ExtraPropsAWS struct {
+		// Region where the cloud bucket is located.
+		CloudRegion string `json:"cloud_region,omitempty" list:"readonly"`
+	}
+
+	ExtraPropsHTTP struct {
+		// Original URL prior to hashing.
+		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
+	}
+
 	BucketPropsToUpdate struct {
 		BackendBck *BckToUpdate         `json:"backend_bck"`
 		Versioning *VersionConfToUpdate `json:"versioning"`
@@ -171,6 +182,7 @@ type (
 		Access     *AccessAttrs         `json:"access,string"`
 		MDWrite    *MDWritePolicy       `json:"md_write"`
 	}
+
 	BckToUpdate struct {
 		Name     *string `json:"name"`
 		Provider *string `json:"provider"`
@@ -192,6 +204,7 @@ type (
 		IsECCopy     bool             `list:"omit"`
 		Present      bool             `json:"present"`
 	}
+
 	ObjectCksumProps struct {
 		Type  string `json:"type"`
 		Value string `json:"value"`
@@ -391,7 +404,7 @@ func (c *ECConf) RequiredRestoreTargets() int {
 // BucketProps //
 /////////////////
 
-// by default bucket props inherit global config
+// By default bucket props inherit global config.
 func DefaultBckProps(cs ...*Config) *BucketProps {
 	var c *Config
 	if len(cs) > 0 {
@@ -408,6 +421,11 @@ func DefaultBckProps(cs ...*Config) *BucketProps {
 		Access:     AllAccess(),
 		EC:         c.EC,
 	}
+}
+
+func (bp *BucketProps) SetProvider(provider string) {
+	debug.AssertNoErr(ValidateProvider(provider))
+	bp.Provider = provider
 }
 
 func (bp *BucketProps) Clone() *BucketProps {
@@ -483,26 +501,6 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 	return
 }
 
-// Replace extension and add suffix if provided.
-func ObjNameFromBck2BckMsg(name string, msg *Bck2BckMsg) string {
-	if msg == nil {
-		return name
-	}
-	if msg.Ext != nil {
-		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
-			ext := name[:idx]
-			if replacement, exists := msg.Ext[ext]; exists {
-				name = name[:idx+1] + strings.TrimLeft(replacement, ".")
-			}
-		}
-	}
-	if msg.Prefix != "" {
-		name = msg.Prefix + name
-	}
-
-	return name
-}
-
 // Bucket properties include two types of information: storage configuration
 // and bucket access permissions. Depending on what set of properties a request
 // is going to modify, it requires different permissions. Changing storage
@@ -529,4 +527,24 @@ func (props *BucketPropsToUpdate) HasOnlyPermissions() bool {
 		props.LRU == nil &&
 		props.Mirror == nil &&
 		props.EC == nil
+}
+
+// Replace extension and add suffix if provided.
+func ObjNameFromBck2BckMsg(name string, msg *Bck2BckMsg) string {
+	if msg == nil {
+		return name
+	}
+	if msg.Ext != nil {
+		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
+			ext := name[:idx]
+			if replacement, exists := msg.Ext[ext]; exists {
+				name = name[:idx+1] + strings.TrimLeft(replacement, ".")
+			}
+		}
+	}
+	if msg.Prefix != "" {
+		name = msg.Prefix + name
+	}
+
+	return name
 }

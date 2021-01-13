@@ -116,10 +116,10 @@ func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (stri
 		if bck.Props == nil {
 			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck.Bck)
 		}
-		origURL = bck.Props.Extra.OrigURLBck
+		origURL = bck.Props.Extra.HTTP.OrigURLBck
 		debug.Assert(origURL != "")
 		if objName != "" {
-			origURL = cmn.JoinPath(bck.Props.Extra.OrigURLBck, objName) // see `cmn.URL2BckObj`
+			origURL = cmn.JoinPath(origURL, objName) // see `cmn.URL2BckObj`
 		}
 	}
 	return origURL, nil

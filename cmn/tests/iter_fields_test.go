@@ -51,6 +51,9 @@ var _ = Describe("IterFields", func() {
 					Cksum: cmn.CksumConf{
 						Type: cmn.ChecksumXXHash,
 					},
+					Extra: cmn.ExtraProps{
+						AWS: cmn.ExtraPropsAWS{CloudRegion: "us-central"},
+					},
 				},
 				map[string]interface{}{
 					"provider": cmn.ProviderAIS,
@@ -87,8 +90,7 @@ var _ = Describe("IterFields", func() {
 					"lru.dont_evict_time":   "",
 					"lru.capacity_upd_time": "",
 
-					"extra.original_url": "",
-					"extra.cloud_region": "",
+					"extra.aws.cloud_region": "us-central",
 
 					"access":   cmn.AccessAttrs(0),
 					"md_write": cmn.MDWritePolicy(""),

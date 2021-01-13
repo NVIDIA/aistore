@@ -122,13 +122,15 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	if _, present := m.Get(bck); present {
 		return false
 	}
-	m.Version++
-	bck.Props = p
-	p.Provider = bck.Provider
+
+	p.SetProvider(bck.Provider)
 	p.BID = bck.MaskBID(m.Version)
 	p.Created = time.Now().UnixNano()
+	bck.Props = p
 
 	m.Add(bck)
+	m.Version++
+
 	return true
 }
 
@@ -148,8 +150,9 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	}
 	cmn.Assert(prevProps.BID != 0)
 
+	p.SetProvider(bck.Provider)
 	p.BID = prevProps.BID
-	p.Provider = bck.Provider
+
 	m.Set(bck, p)
 	m.Version++
 }
@@ -364,15 +367,13 @@ func defaultCloudBckProps(header http.Header) (props *cmn.BucketProps) {
 func mergeCloudBckProps(base *cmn.BucketProps, header http.Header) (props *cmn.BucketProps) {
 	cmn.Assert(len(header) > 0)
 	props = base.Clone()
-	props.Provider = header.Get(cmn.HeaderCloudProvider)
-	cmn.AssertNoErr(cmn.ValidateProvider(props.Provider))
+	props.SetProvider(header.Get(cmn.HeaderCloudProvider))
 
-	if props.Provider == cmn.ProviderHTTP {
-		props.Extra.OrigURLBck = header.Get(cmn.HeaderOrigURLBck)
-	}
-
-	if region := header.Get(cmn.HeaderCloudRegion); region != "" {
-		props.Extra.CloudRegion = region
+	switch props.Provider {
+	case cmn.ProviderAmazon:
+		props.Extra.AWS.CloudRegion = header.Get(cmn.HeaderCloudRegion)
+	case cmn.ProviderHTTP:
+		props.Extra.HTTP.OrigURLBck = header.Get(cmn.HeaderOrigURLBck)
 	}
 
 	if verStr := header.Get(cmn.HeaderBucketVerEnabled); verStr != "" {

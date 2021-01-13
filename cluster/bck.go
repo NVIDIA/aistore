@@ -164,7 +164,7 @@ func (b *Bck) InitNoBackend(bowner Bowner, si *Snode) (err error) {
 		debug.Func(func() {
 			if present {
 				var (
-					origURL = b.Props.Extra.OrigURLBck
+					origURL = b.Props.Extra.HTTP.OrigURLBck
 					bckName = cmn.OrigURLBck2Name(origURL)
 				)
 				debug.Assertf(b.Name == bckName, "%s != %s; original_url: %s", b.Name, bckName, origURL)

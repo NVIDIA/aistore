@@ -882,16 +882,18 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		// make and validate nprops
+
+		// Make and validate new bucket props.
 		bck.Props = defaultBckProps()
-		bck.Props.Provider = bck.Provider
+		bck.Props.SetProvider(bck.Provider)
 		bck.Props, err = p.makeNewBckProps(bck, propsToUpdate, true /*creating*/)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+
 		if bck.HasBackendBck() {
-			// initialize backend
+			// Initialize backend bucket.
 			backend := cluster.BackendBck(bck)
 			if err = backend.InitNoBackend(p.owner.bmd, p.si); err != nil {
 				if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {

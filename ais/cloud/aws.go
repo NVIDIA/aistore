@@ -66,10 +66,14 @@ func (awsp *awsProvider) newS3Client(conf sessConf, tag string) (svc *s3.S3, reg
 	)
 
 	if conf.region != "" {
-		awsConf.Region = aws.String(conf.region)
 		regIsSet = true
+		awsConf.Region = aws.String(conf.region)
 	} else if conf.bck != nil {
-		if conf.bck.Props == nil || conf.bck.Props.Extra.CloudRegion == "" {
+		region := ""
+		if conf.bck.Props != nil {
+			region = conf.bck.Props.Extra.AWS.CloudRegion
+		}
+		if region == "" {
 			if tag != "" {
 				err = fmt.Errorf("%s: unknown region for bucket %s -- proceeding with default", tag, conf.bck)
 			}
@@ -77,7 +81,7 @@ func (awsp *awsProvider) newS3Client(conf sessConf, tag string) (svc *s3.S3, reg
 			return
 		}
 		regIsSet = true
-		awsConf.Region = aws.String(conf.bck.Props.Extra.CloudRegion)
+		awsConf.Region = aws.String(region)
 	}
 	svc = s3.New(sess, awsConf)
 	return

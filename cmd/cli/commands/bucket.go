@@ -494,7 +494,7 @@ func printBucketNames(c *cli.Context, bucketNames cmn.BucketNames, showHeaders b
 		for _, bck := range filtered {
 			if provider == cmn.ProviderHTTP {
 				if props, err := api.HeadBucket(defaultAPIParams, bck); err == nil {
-					fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.OrigURLBck)
+					fmt.Fprintf(c.App.Writer, "  %s (%s)\n", bck, props.Extra.HTTP.OrigURLBck)
 					continue
 				}
 			}
