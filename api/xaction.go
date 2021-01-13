@@ -76,6 +76,29 @@ func (xs NodesXactStat) BytesCount() (count int64) {
 	return
 }
 
+func (xs NodesXactStat) TotalRunningTime() time.Duration {
+	var (
+		start = time.Now()
+		end   time.Time
+
+		running = false
+	)
+	for _, stat := range xs {
+		running = running || stat.Running()
+		if stat.StartTime().Before(start) {
+			start = stat.StartTime()
+		}
+		if stat.EndTime().After(end) {
+			end = stat.EndTime()
+		}
+	}
+
+	if running {
+		end = time.Now()
+	}
+	return end.Sub(start)
+}
+
 func (xs NodesXactMultiStats) Running() bool {
 	for _, targetStats := range xs {
 		for _, xaction := range targetStats {

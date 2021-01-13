@@ -111,6 +111,7 @@ func etlInit(name, comm string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	pod, err := etl.ParsePodSpec(nil, spec)
 	if err != nil {
 		return "", err

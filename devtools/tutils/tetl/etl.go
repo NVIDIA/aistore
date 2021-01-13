@@ -17,6 +17,7 @@ import (
 const (
 	Tar2TF        = "tar2tf"
 	Echo          = "echo"
+	EchoGolang    = "echo-go"
 	Md5           = "md5"
 	Tar2tfFilters = "tar2tf-filters"
 	tar2tfFilter  = `
@@ -39,6 +40,7 @@ var (
 		Tar2TF:        "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
 		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
 		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/echo/pod.yaml",
+		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/go-echo/pod.yaml",
 	}
 
 	client = &http.Client{}

@@ -71,3 +71,49 @@ func TestETLTargetDown(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(etls) == 0, "expected ETLs to be stopped when a targets membership changed, got %v", etls)
 }
+
+func TestETLBigBucket(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+
+	var (
+		bckFrom = cmn.Bck{Name: "etlbig", Provider: cmn.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etlbigout-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+
+		m = ioContext{
+			t:         t,
+			num:       1_000_000,
+			fileSize:  5 * cmn.KiB, // 5Gib total
+			fixedSize: true,
+			bck:       bckFrom,
+		}
+	)
+
+	tutils.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cmn.B2S(int64(m.fileSize), 2))
+	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
+	defer tutils.DestroyBucket(t, proxyURL, bckFrom)
+	m.saveClusterState()
+
+	tutils.Logln("Putting objects to source bucket")
+	m.puts()
+
+	uuid, err := etlInit(tetl.EchoGolang, etl.RedirectCommType)
+	defer api.ETLStop(baseParams, uuid)
+	tassert.CheckFatal(t, err)
+
+	tutils.Logf("Start offline ETL %q\n", uuid)
+	defer tutils.DestroyBucket(t, proxyURL, bckTo)
+	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
+	tassert.CheckFatal(t, err)
+
+	tutils.Logln("Waiting for ETL to finish")
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: 30 * time.Minute}
+	_, err = api.WaitForXaction(baseParams, args, time.Minute)
+	tassert.CheckFatal(t, err)
+	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	tassert.CheckFatal(t, err)
+	tutils.Logf("ETL Bucket took %s\n", stats.TotalRunningTime())
+
+	list, err := api.ListObjects(baseParams, bckTo, nil, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(list.Entries) == m.num, "expected %d objects to be transformed, got %d", m.num, len(list.Entries))
+}
