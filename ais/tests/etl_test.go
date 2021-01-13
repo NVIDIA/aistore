@@ -482,3 +482,28 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid2))
 	}
 }
+
+func TestETLHealth(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+
+	// TODO: Find the root cause of the problem and make Minikube metrics-server report stats of all Pods.
+	t.Skipf("Minikube metrics-server does not fetch stats of Pods different than deployed by default.")
+
+	tutils.Logln("Starting ETL")
+	uuid, err := etlInit(tetl.Echo, etl.RedirectCommType)
+	tassert.CheckFatal(t, err)
+
+	defer func() {
+		tutils.Logf("Stop %q\n", uuid)
+		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
+	}()
+
+	healths, err := api.ETLHealth(baseParams, uuid)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(healths) > 0, "expected at least one health stat to be returned")
+
+	for _, health := range healths {
+		tassert.Errorf(t, health.CPU > 0.0, "[%s] expected CPU usage greater than 0", health.TargetID)
+		tassert.Errorf(t, health.Mem > 0, "[%s] expected memory usage greater than 0", health.TargetID)
+	}
+}

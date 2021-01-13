@@ -378,6 +378,26 @@ func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) 
 	}, nil
 }
 
+func PodHealth(t cluster.Target, etlID string) (stats *PodHealthMsg, err error) {
+	var (
+		c      Communicator
+		client k8s.Client
+	)
+	if c, err = GetCommunicator(etlID); err != nil {
+		return
+	}
+	if client, err = k8s.GetClient(); err != nil {
+		return
+	}
+
+	cpuUsed, memUsed, err := client.Health(c.PodName())
+	return &PodHealthMsg{
+		TargetID: t.Snode().ID(),
+		CPU:      cpuUsed,
+		Mem:      memUsed,
+	}, err
+}
+
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func setTransformAffinity(errCtx *cmn.ETLErrorContext, pod *corev1.Pod) error {
 	if pod.Spec.Affinity == nil {

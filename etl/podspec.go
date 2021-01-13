@@ -42,6 +42,7 @@ func preparePodSpec(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *corev1.P
 	// Override the name (add target's daemon ID and node ID to its name).
 	pod.SetName(k8s.CleanName(pod.GetName() + "-" + t.Snode().ID()))
 	errCtx.PodName = pod.GetName()
+	pod.APIVersion = "v1"
 
 	// The following combination of Affinity and Anti-Affinity allows one to
 	// achieve the following:

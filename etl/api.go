@@ -38,6 +38,14 @@ type (
 		Logs     []byte `json:"logs"`
 	}
 
+	PodsHealthMsg []*PodHealthMsg
+	// TODO: Extend with additional fields like Status.
+	PodHealthMsg struct {
+		TargetID string  `json:"target_id"`
+		CPU      float64 `json:"cpu"`
+		Mem      int64   `json:"mem"`
+	}
+
 	OfflineMsg struct {
 		ID     string `json:"id"`      // ETL ID
 		Prefix string `json:"prefix"`  // Prefix added to each resulting object.

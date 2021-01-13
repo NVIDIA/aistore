@@ -76,6 +76,7 @@ var (
 	URLPathETLStop   = urlpath(Version, ETL, ETLStop)
 	URLPathETLList   = urlpath(Version, ETL, ETLList)
 	URLPathETLLogs   = urlpath(Version, ETL, ETLLogs)
+	URLPathETLHealth = urlpath(Version, ETL, ETLHealth)
 	URLPathETLObject = urlpath(Version, ETL, ETLObject)
 	URLPathETLBuild  = urlpath(Version, ETL, ETLBuild)
 

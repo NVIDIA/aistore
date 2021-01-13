@@ -356,6 +356,7 @@ const (
 	ETLLogs   = "logs"
 	ETLObject = "object"
 	ETLStop   = Stop
+	ETLHealth = "health"
 )
 
 // enum: compression

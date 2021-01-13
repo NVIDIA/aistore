@@ -6,11 +6,13 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +20,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	tcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 type (
@@ -32,6 +36,7 @@ type (
 		Node(name string) (*corev1.Node, error)
 
 		Logs(podName string) ([]byte, error)
+		Health(podName string) (cpuCores float64, freeMem int64, err error)
 	}
 
 	// defaultClient implements Client interface.
@@ -40,11 +45,18 @@ type (
 		namespace string
 		err       error
 	}
+
+	metricsClient struct {
+		client *metrics.Clientset
+		err    error
+	}
 )
 
 var (
-	_clientOnce       sync.Once
-	_defaultK8sClient *defaultClient
+	_clientOnce           sync.Once
+	_metricsClientOnce    sync.Once
+	_defaultK8sClient     *defaultClient
+	_defaultMetricsClient *metricsClient
 )
 
 func (c *defaultClient) pods() tcorev1.PodInterface {
@@ -134,6 +146,42 @@ func (c *defaultClient) Logs(podName string) ([]byte, error) {
 	return ioutil.ReadAll(logStream)
 }
 
+func (c *defaultClient) Health(podName string) (cpuCores float64, freeMem int64, err error) {
+	var (
+		totalCPU, totalMem int64
+		fracCPU            float64
+	)
+
+	mc, err := getMetricsClient()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	ms, err := mc.MetricsV1beta1().PodMetricses(metav1.NamespaceDefault).Get(context.Background(), podName, metav1.GetOptions{})
+	if err != nil {
+		return 0, 0, err
+	}
+
+	for _, metric := range ms.Containers {
+		cpuNanoCores, ok := metric.Usage.Cpu().AsInt64()
+		if !ok {
+			cpuNanoCores = metric.Usage.Cpu().AsDec().UnscaledBig().Int64()
+		}
+		totalCPU += cpuNanoCores
+
+		memInt, ok := metric.Usage.Memory().AsInt64()
+		if !ok {
+			memInt = metric.Usage.Memory().AsDec().UnscaledBig().Int64()
+		}
+		totalMem += memInt
+	}
+
+	// Kubernetes reports CPU in nanocores.
+	// https://godoc.org/k8s.io/api/core/v1#ResourceName
+	fracCPU = float64(totalCPU) / float64(1_000_000_000)
+	return fracCPU, totalMem, nil
+}
+
 func GetClient() (Client, error) {
 	_clientOnce.Do(_initClient)
 	if _defaultK8sClient.err != nil {
@@ -156,6 +204,38 @@ func _initClient() {
 	_defaultK8sClient = &defaultClient{
 		namespace: _namespace(),
 		client:    client,
+	}
+}
+
+func getMetricsClient() (*metrics.Clientset, error) {
+	_metricsClientOnce.Do(_initMetricsClient)
+
+	if _defaultMetricsClient.err != nil {
+		return nil, _defaultMetricsClient.err
+	}
+	cmn.Assert(_defaultMetricsClient.client != nil)
+	return _defaultMetricsClient.client, nil
+}
+
+func _initMetricsClient() {
+	config, err := clientcmd.BuildConfigFromFlags("", "")
+	if err != nil {
+		_defaultMetricsClient = &metricsClient{
+			err: fmt.Errorf("failed to retrieve metrics client config; err: %v", err),
+		}
+		return
+	}
+
+	mc, err := metrics.NewForConfig(config)
+	if err != nil {
+		_defaultMetricsClient = &metricsClient{
+			err: fmt.Errorf("failed to create metrics client; err: %v", err),
+		}
+		return
+	}
+
+	_defaultMetricsClient = &metricsClient{
+		client: mc,
 	}
 }
 

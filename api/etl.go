@@ -45,6 +45,13 @@ func ETLLogs(baseParams BaseParams, id string, targetID ...string) (logs etl.Pod
 	return logs, err
 }
 
+func ETLHealth(params BaseParams, id string) (healths etl.PodsHealthMsg, err error) {
+	params.Method = http.MethodGet
+	path := cmn.URLPathETLHealth.Join(id)
+	err = DoHTTPRequest(ReqParams{BaseParams: params, Path: path}, &healths)
+	return healths, err
+}
+
 func ETLStop(baseParams BaseParams, id string) (err error) {
 	baseParams.Method = http.MethodDelete
 	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathETLStop.Join(id)})

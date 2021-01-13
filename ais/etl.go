@@ -55,6 +55,8 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 			t.logsETL(w, r)
 		case cmn.ETLObject:
 			t.getObjectETL(w, r)
+		case cmn.ETLHealth:
+			t.healthETL(w, r)
 		default:
 			t.invalmsghdlrf(w, r, "invalid GET path: %s", apiItems[0])
 		}
@@ -157,6 +159,20 @@ func (t *targetrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	t.writeJSON(w, r, logs, "logs-ETL")
 }
 
+func (t *targetrunner) healthETL(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathETLHealth.L)
+	if err != nil {
+		return
+	}
+
+	healthMsg, err := etl.PodHealth(t, apiItems[0])
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	t.writeJSON(w, r, healthMsg, "health-ETL")
+}
+
 // GET /v1/etl/objects/<secret>/<bucket-name>/<object-name>
 //
 // getObjectETL handles GET requests from ETL containers (K8s Pods).
@@ -226,6 +242,8 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 			p.listETL(w, r)
 		case cmn.ETLLogs:
 			p.logsETL(w, r)
+		case cmn.ETLHealth:
+			p.healthETL(w, r)
 		default:
 			p.invalmsghdlrf(w, r, "invalid GET path: %s", apiItems[0])
 		}
@@ -420,6 +438,43 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Sort(logs)
 	p.writeJSON(w, r, logs, "logs-ETL")
+}
+
+// GET /v1/etl/health/<uuid>
+func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathETLHealth.L)
+	if err != nil {
+		return
+	}
+	uuid := apiItems[0]
+	if uuid == "" {
+		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
+		return
+	}
+	var (
+		results chanResults
+		args    *bcastArgs
+	)
+
+	args = allocBcastArgs()
+	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: r.URL.Path}
+	args.timeout = cmn.DefaultTimeout
+	args.fv = func() interface{} { return &etl.PodHealthMsg{} }
+	results = p.bcastGroup(args)
+	freeBcastArgs(args)
+
+	healths := make(etl.PodsHealthMsg, 0, len(results))
+	for res := range results {
+		if res.err != nil {
+			p.invalmsghdlr(w, r, res.err.Error())
+			drainCallResults(res, results)
+			return
+		}
+		healths = append(healths, res.v.(*etl.PodHealthMsg))
+		freeCallRes(res)
+	}
+	sort.SliceStable(healths, func(i, j int) bool { return healths[i].TargetID < healths[j].TargetID })
+	p.writeJSON(w, r, healths, "health-ETL")
 }
 
 // DELETE /v1/etl/stop/<uuid>
