@@ -709,7 +709,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if bckFrom.IsRemote() {
+		if !bckFrom.IsAIS() && !bckFrom.HasBackendBck() {
 			p.invalmsghdlrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bckFrom)
 			return
 		}
