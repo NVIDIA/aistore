@@ -627,10 +627,9 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, request.bck, pid)
 	}
-	if request.bck.IsAIS() {
-		t.bucketPropsToHdr(request.bck, hdr)
-		return
-	}
+
+	cmn.Assert(!request.bck.IsAIS())
+
 	if request.bck.IsHTTP() {
 		originalURL := query.Get(cmn.URLParamOrigURL)
 		ctx = context.WithValue(ctx, cmn.CtxOriginalURL, originalURL)
@@ -653,12 +652,12 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		bucketProps = make(cmn.SimpleKVs)
 		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, request.bck, err, code)
+		bucketProps = make(cmn.SimpleKVs)
 		bucketProps[cmn.HeaderCloudProvider] = request.bck.Provider
 		// TODO: what about `HTTP` cloud?
 		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(request.bck.IsCloud())
-		bucketProps[cmn.HeaderRemoteAisOffline] = strconv.FormatBool(request.bck.IsRemoteAIS())
+		bucketProps[cmn.HeaderRemoteAISOffline] = strconv.FormatBool(request.bck.IsRemoteAIS())
 	}
 	for k, v := range bucketProps {
 		if k == cmn.HeaderBucketVerEnabled && request.bck.Props != nil {
@@ -669,7 +668,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 		hdr.Set(k, v)
 	}
-	t.bucketPropsToHdr(request.bck, hdr)
 }
 
 ///////////////////////

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -105,10 +106,8 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 		return
 	}
 
-	err = cmn.IterFields(p, func(tag string, field cmn.IterField) (error, bool) {
-		return field.SetValue(resp.Header.Get(tag), true /*force*/), false
-	}, cmn.IterOpts{OnlyRead: false})
-	return
+	err = jsoniter.Unmarshal([]byte(resp.Header.Get(cmn.HeaderBucketProps)), &p)
+	return p, err
 }
 
 // ListBuckets returns bucket names for the given provider. Provider takes one

@@ -1203,15 +1203,9 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nprops := mergeCloudBckProps(bck.Props, cloudProps)
-	if nprops.Equal(bck.Props) {
-		p.bucketPropsToHdr(bck, w.Header())
-		return
-	}
 	if p.forwardCP(w, r, nil, "httpheadbck") {
 		return
 	}
-	glog.Warningf("%s: Cloud bucket %s properties have changed, resynchronizing...", p.si, bck)
 
 	ctx := &bmdModifier{
 		pre:        p._bckHeadPre,

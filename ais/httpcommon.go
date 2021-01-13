@@ -1830,6 +1830,7 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	if bck.Props == nil {
 		bck.Props = defaultCloudBckProps(hdr)
 	}
+
 	finalProps := bck.Props.Clone()
 	cmn.IterFields(finalProps, func(fieldName string, field cmn.IterField) (error, bool) {
 		if fieldName == cmn.HeaderBucketVerEnabled {
@@ -1846,6 +1847,9 @@ func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 		hdr.Set(fieldName, fmt.Sprintf("%v", field.Value()))
 		return nil, false
 	})
+
+	props := string(cmn.MustMarshal(finalProps))
+	hdr.Set(cmn.HeaderBucketProps, props)
 }
 
 func (h *httprunner) selectBMDBuckets(bmd *bucketMD, query cmn.QueryBcks) cmn.BucketNames {

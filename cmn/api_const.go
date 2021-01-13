@@ -116,22 +116,21 @@ const (
 // - if a property is a root one, then the constant is just a lowercased property name
 // - if a property is nested, then its value is property's parent and property name separated with a dot
 const (
-	HeaderBackendBck         = "backend_bck"
-	HeaderBackendBckName     = HeaderBackendBck + ".name"
-	HeaderBackendBckProvider = HeaderBackendBck + "." + HeaderCloudProvider
-
-	HeaderOrigURLBck  = "orig_url_bck"     // see BucketProps.OrigURLBck
-	HeaderCloudRegion = "cloud_bck_region" // see BucketProps.CloudRegion
+	// bucket props
+	HeaderBucketProps       = "bucket_props"
+	HeaderOrigURLBck        = "original_url"       // see BucketProps.Extra.HTTP.OrigURLBck
+	HeaderCloudRegion       = "cloud_region"       // see BucketProps.Extra.AWS.CloudRegion
+	HeaderBucketVerEnabled  = "versioning.enabled" // Enable/disable object versioning in a bucket
+	HeaderBucketAccessAttrs = "access"             // Bucket access attributes
+	HeaderBucketCreated     = "created"            // Bucket creation time
 
 	HeaderCloudProvider    = "provider"           // ProviderAmazon et al. - see cmn/bucket.go
 	HeaderCloudOffline     = "cloud.offline"      // when accessing cached cloud bucket with no Cloud connectivity
-	HeaderRemoteAisOffline = "remote.ais.offline" // when accessing cached cloud bucket with no Cloud connectivity
+	HeaderRemoteAISOffline = "remote.ais.offline" // when accessing cached cloud bucket with no Cloud connectivity
 
-	// bucket props
-	HeaderBucketVerEnabled      = "versioning.enabled"           // Enable/disable object versioning in a bucket
-	HeaderBucketVerValidateWarm = "versioning.validate_warm_get" // Validate version on warm GET
-	HeaderBucketAccessAttrs     = "access"                       // Bucket access attributes
-	HeaderBucketCreated         = "created"                      // Bucket creation time
+	HeaderBackendBck         = "backend_bck"
+	HeaderBackendBckName     = HeaderBackendBck + ".name"
+	HeaderBackendBckProvider = HeaderBackendBck + "." + HeaderCloudProvider
 
 	// object meta
 	HeaderObjCksumType = "checksum.type"  // Checksum Type, one of SupportedChecksums()
