@@ -401,9 +401,9 @@ do:
 		capRead = true // set flag to avoid calling later
 		cs = fs.GetCapStatus()
 		if cs.OOS {
-			// immediate return for no space left to restore object
+			// Immediate return for no space left to restore object.
 			goi.lom.Unlock(false)
-			return http.StatusInternalServerError, cs.Err
+			return http.StatusInsufficientStorage, cs.Err
 		}
 	}
 
@@ -460,8 +460,9 @@ do:
 			cs = fs.GetCapStatus()
 		}
 		if cs.OOS {
-			// no space left to prefetch object
-			return http.StatusBadRequest, cs.Err
+			// No space left to prefetch object.
+			goi.lom.Unlock(false)
+			return http.StatusInsufficientStorage, cs.Err
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
 		if errCode, err := goi.t.GetCold(goi.ctx, goi.lom, cluster.GetCold); err != nil {
