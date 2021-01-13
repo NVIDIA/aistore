@@ -91,11 +91,6 @@ type (
 		Name  string
 		Value string
 	}
-
-	configItem struct {
-		Name  string
-		Value string
-	}
 )
 
 func isWebURL(url string) bool { return cmn.IsHTTP(url) || cmn.IsHTTPS(url) }
@@ -992,13 +987,28 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	return
 }
 
-func flattenConfig(cfg *cmn.Config, section string) []configItem {
-	flat := make([]configItem, 0, 40)
+func flattenConfig(cfg *cmn.Config, section string) []prop {
+	flat := make([]prop, 0, 40)
 	cmn.IterFields(cfg, func(tag string, field cmn.IterField) (error, bool) {
 		if section == "" || strings.HasPrefix(tag, section) {
-			flat = append(flat, configItem{tag, fmt.Sprintf("%v", field.Value())})
+			flat = append(flat, prop{tag, fmt.Sprintf("%v", field.Value())})
 		}
 		return nil, false
 	})
 	return flat
+}
+
+// First, request cluster's config from the primary node that contains
+// default Cksum type. Second, generate default list of properties.
+func defaultBckProps() (*cmn.BucketProps, error) {
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.Primary.ID())
+	if err != nil {
+		return nil, err
+	}
+	props := cmn.DefaultBckProps(cfg)
+	return props, nil
 }

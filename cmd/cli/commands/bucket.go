@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/fatih/color"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
 )
@@ -403,10 +404,18 @@ func showBucketProps(c *cli.Context) (err error) {
 	if flagIsSet(c, jsonFlag) {
 		return templates.DisplayOutput(p, c.App.Writer, "", true)
 	}
-	return printBckHeadTable(c, p, section)
+	defProps, err := defaultBckProps()
+	if err != nil {
+		return err
+	}
+	return printBckHeadTable(c, p, defProps, section)
 }
 
-func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) error {
+func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section string) error {
+	var (
+		defList []prop
+		colored = !flagIsSet(c, noColorFlag)
+	)
 	// List instead of map to keep properties in the same order always.
 	// All names are one word ones - for easier parsing.
 	propList, err := bckPropList(props, flagIsSet(c, verboseFlag))
@@ -420,6 +429,24 @@ func printBckHeadTable(c *cli.Context, props *cmn.BucketProps, section string) e
 			}
 		}
 		propList = tmpPropList
+	}
+
+	if colored {
+		defList, err = bckPropList(defProps, flagIsSet(c, verboseFlag))
+		cmn.AssertNoErr(err)
+		highlight := color.New(color.FgCyan).SprintfFunc()
+		for idx, p := range propList {
+			for _, def := range defList {
+				if def.Name != p.Name {
+					continue
+				}
+				if def.Value != p.Value {
+					p.Value = highlight(p.Value)
+					propList[idx] = p
+				}
+				break
+			}
+		}
 	}
 
 	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)
