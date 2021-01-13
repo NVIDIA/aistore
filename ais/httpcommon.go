@@ -893,9 +893,14 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 
 	// err == nil && bad status: resp.Body contains the error message
 	if res.status >= http.StatusBadRequest {
-		var b bytes.Buffer
-		b.ReadFrom(resp.Body)
-		res.err, _ = cmn.NewHTTPError(req, b.String(), res.status)
+		if args.req.Method == http.MethodHead {
+			msg := resp.Header.Get(cmn.HeaderError)
+			res.err, _ = cmn.NewHTTPError(req, msg, res.status)
+		} else {
+			var b bytes.Buffer
+			b.ReadFrom(resp.Body)
+			res.err, _ = cmn.NewHTTPError(req, b.String(), res.status)
+		}
 		res.details = res.err.Error()
 		return
 	}

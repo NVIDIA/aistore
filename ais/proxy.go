@@ -3690,9 +3690,8 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 		err = cmn.NewErrorRemoteBucketDoesNotExist(bck, pname)
 	} else if res.status == http.StatusGone {
 		err = cmn.NewErrorCloudBucketOffline(bck, pname)
-	} else if res.err != nil {
-		err = fmt.Errorf("%s: %s, target %s: %s", pname, bck, tsi, http.StatusText(res.status))
 	} else {
+		err = res.err
 		header = res.header
 	}
 	statusCode = res.status

@@ -36,6 +36,7 @@ const (
 	HeaderAccept                = "Accept"
 	HeaderLocation              = "Location"
 	HeaderETag                  = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+	HeaderError                 = "Header-Error"
 )
 
 // Ref: https://www.iana.org/assignments/media-types/media-types.xhtml
@@ -208,19 +209,19 @@ func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, e
 	}
 
 	err, _ := NewHTTPError(r, msg, status)
-	writeError(w, err, status)
+	writeError(w, r, err, status)
 }
 
 func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, status int, silent bool) {
 	err, isHTTPError := NewHTTPError(r, msg, status)
 
 	if silent {
-		writeError(w, err, status)
+		writeError(w, r, err, status)
 		return
 	}
 	if isHTTPError {
 		glog.Errorln(err.String())
-		writeError(w, err, status)
+		writeError(w, r, err, status)
 		return
 	}
 	var errMsg bytes.Buffer
@@ -239,17 +240,22 @@ func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, 
 	}
 	err.Trace = errMsg.String()
 	glog.Errorln(err.String())
-	writeError(w, err, status)
+	writeError(w, r, err, status)
 }
 
 // writeError is slightly updated `http.Error` to change `Content-Type` header.
 // Content type was adjusted to make sure that the caller is aware that we return
 // JSON error and not just a regular string message.
-func writeError(w http.ResponseWriter, err error, status int) {
+func writeError(w http.ResponseWriter, r *http.Request, err error, status int) {
 	w.Header().Set(HeaderContentType, ContentJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.WriteHeader(status)
-	fmt.Fprintln(w, err.Error())
+	if r.Method == http.MethodHead {
+		w.Header().Set(HeaderError, err.Error())
+		w.WriteHeader(status)
+	} else {
+		w.WriteHeader(status)
+		fmt.Fprintln(w, err.Error())
+	}
 }
 
 // InvalidHandlerDetailed writes detailed error (includes line and file) to response writer.

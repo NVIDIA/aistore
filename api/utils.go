@@ -83,6 +83,17 @@ func doHTTPRequestGetResp(reqParams ReqParams, v interface{}) (*wrappedResp, err
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if reqParams.BaseParams.Method == http.MethodHead {
+		msg := resp.Header.Get(cmn.HeaderError)
+		if msg != "" {
+			return nil, &cmn.HTTPError{
+				Status:  resp.StatusCode,
+				Method:  reqParams.BaseParams.Method,
+				Message: msg,
+				URLPath: reqParams.Path,
+			}
+		}
+	}
 	return readResp(reqParams, resp, v)
 }
 

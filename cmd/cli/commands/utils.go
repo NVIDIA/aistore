@@ -8,6 +8,7 @@ package commands
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -741,8 +742,10 @@ func headBucket(bck cmn.Bck) (p *cmn.BucketProps, err error) {
 	if httpErr, ok := err.(*cmn.HTTPError); ok {
 		if httpErr.Status == http.StatusNotFound {
 			err = fmt.Errorf("bucket %q does not exist", bck)
+		} else if httpErr.Message != "" {
+			err = errors.New(httpErr.Message)
 		} else {
-			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck, http.StatusText(httpErr.Status))
+			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck, httpErr.Message)
 		}
 	} else {
 		err = fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)

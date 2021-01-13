@@ -8,10 +8,12 @@ package cloud
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -87,16 +89,27 @@ func (awsp *awsProvider) newS3Client(conf sessConf, tag string) (svc *s3.S3, reg
 	return
 }
 
+// Original AWS error contains extra information that a caller does not need:
+//     status code: 400, request id: D918CB, host id: RJtDP0q8
+// The extra information starts from the second line of the message.
+func cleanError(awsError error) error {
+	msg := awsError.Error()
+	if idx := strings.Index(msg, "\n"); idx > 0 {
+		return errors.New(msg[:idx])
+	}
+	return awsError
+}
+
 func (awsp *awsProvider) awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		node := awsp.t.Snode().Name()
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
 			return reqErr.StatusCode(), cmn.NewErrorRemoteBucketDoesNotExist(*bck, node)
 		}
-		return reqErr.StatusCode(), awsError
+		return reqErr.StatusCode(), cleanError(awsError)
 	}
 
-	return http.StatusInternalServerError, awsError
+	return http.StatusInternalServerError, cleanError(awsError)
 }
 
 func (awsp *awsProvider) Provider() string { return cmn.ProviderAmazon }
