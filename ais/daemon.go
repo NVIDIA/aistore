@@ -182,11 +182,11 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 
 	// Examples overriding default configuration at a node startup via command line:
 	// 1) set client timeout to 13s and store the updated value on disk:
-	// $ aisnode -config=/etc/ais.json -role=target "-config_custom="client.client_timeout=13s"
+	// $ aisnode -config=/etc/ais.json -role=target -config_custom="client.client_timeout=13s"
 	//
 	// 2) same as above except that the new timeout will remain transient
 	//    (won't persist across restarts):
-	// $ aisnode -config=/etc/ais.json -role=target -transient=true "-config_custom="client.client_timeout=13s"
+	// $ aisnode -config=/etc/ais.json -role=target -transient=true -config_custom="client.client_timeout=13s"
 	if daemon.cli.confCustom != "" {
 		var (
 			nvmap = make(cmn.SimpleKVs, 10)
