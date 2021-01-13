@@ -1913,16 +1913,37 @@ func (h *httprunner) newAisMsg(actionMsg *cmn.ActionMsg, smap *smapX, bmd *bucke
 	return msg
 }
 
-func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string) error {
+func (h *httprunner) attachDetach(w http.ResponseWriter, r *http.Request, action string) (err error) {
+	var (
+		query = r.URL.Query()
+		what  = query.Get(cmn.URLParamWhat)
+	)
+	if what != cmn.GetWhatRemoteAIS {
+		err = fmt.Errorf(fmtUnknownQue, what)
+		h.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	config := cfgBeginUpdate()
+	if err = h.attachDetachRemoteAIS(query, action, config); err != nil {
+		cfgDiscardUpdate()
+		h.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if err = cfgCommitUpdate(config, action+": "+what); err != nil {
+		h.invalmsghdlr(w, r, err.Error())
+	}
+	return
+}
+
+func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string, config *cmn.Config) error {
 	var (
 		aisConf cmn.CloudConfAIS
-		config  = cmn.GCO.BeginUpdate()
+		errMsg  string
 		v, ok   = config.Cloud.ProviderConf(cmn.ProviderAIS)
 		changed bool
 	)
 	if !ok {
 		if action == cmn.ActDetach {
-			cmn.GCO.DiscardUpdate()
 			return fmt.Errorf("%s: remote cluster config is empty", h.si)
 		}
 		aisConf = make(cmn.CloudConfAIS)
@@ -1931,7 +1952,6 @@ func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string) erro
 		cmn.Assert(ok)
 	}
 	// detach
-	var errMsg string
 	if action == cmn.ActDetach {
 		for alias := range query {
 			if alias == cmn.URLParamWhat {
@@ -1954,7 +1974,6 @@ func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string) erro
 		}
 		for _, u := range urls {
 			if _, err := url.ParseRequestURI(u); err != nil {
-				cmn.GCO.DiscardUpdate()
 				return fmt.Errorf("%s: cannot attach remote cluster: %v", h.si, err)
 			}
 			changed = true
@@ -1972,11 +1991,9 @@ func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string) erro
 	}
 rret:
 	if errMsg != "" {
-		cmn.GCO.DiscardUpdate()
 		return fmt.Errorf("%s: %s remote cluster: %s", h.si, action, errMsg)
 	}
 	config.Cloud.ProviderConf(cmn.ProviderAIS, aisConf)
-	cmn.GCO.CommitUpdate(config)
 	return nil
 }
 

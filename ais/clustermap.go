@@ -482,16 +482,12 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 	debug.AssertMutexLocked(&r.Mutex)
 	config := cmn.GCO.Get()
 	if newURL := newSmap.Primary.PublicNet.DirectURL; config.Proxy.PrimaryURL != newURL {
-		config = cmn.GCO.BeginUpdate() // clone
-		origURL := config.Proxy.PrimaryURL
+		config = cfgBeginUpdate() // clone
+		detail := config.Proxy.PrimaryURL + " => " + newURL
 		config.Proxy.PrimaryURL = newURL
-		confPath := cmn.GCO.GetConfigPath()
-		if err := jsp.Save(confPath, config, jsp.Plain()); err != nil {
-			cmn.GCO.DiscardUpdate()
-			return fmt.Errorf("FATAL: failed writing config %s upon (%q != %q) change, err: %v",
-				confPath, origURL, newURL, err)
+		if err := cfgCommitUpdate(config, detail); err != nil {
+			return err
 		}
-		cmn.GCO.CommitUpdate(config)
 	}
 	smapPath := filepath.Join(config.Confdir, smapFname)
 	if err := jsp.Save(smapPath, newSmap, jsp.CCSign()); err != nil {

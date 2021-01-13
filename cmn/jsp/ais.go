@@ -17,19 +17,9 @@ import (
 // ais config //
 ////////////////
 
-func MustLoadConfig(confPath string) {
-	if err := LoadConfig(confPath); err != nil {
-		cmn.ExitLogf("%v", err)
-	}
-}
-
-func LoadConfig(confPath string) (err error) {
+func LoadConfig(confPath string, config *cmn.Config) (err error) {
 	cmn.GCO.SetConfigPath(confPath)
-
-	config := cmn.GCO.BeginUpdate()
-	defer cmn.GCO.CommitUpdate(config)
-
-	_, err = Load(confPath, &config, Options{})
+	_, err = Load(confPath, &config, Plain())
 	if err != nil {
 		return fmt.Errorf("failed to load config %q, err: %v", confPath, err)
 	}
@@ -37,8 +27,8 @@ func LoadConfig(confPath string) (err error) {
 		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}
 	glog.SetLogDir(config.Log.Dir)
-	if err := config.Validate(); err != nil {
-		return err
+	if err = config.Validate(); err != nil {
+		return
 	}
 
 	// glog rotate
@@ -67,56 +57,42 @@ func LoadConfig(confPath string) (err error) {
 	return
 }
 
-func SetConfigMany(nvmap cmn.SimpleKVs) (err error) {
+func SetConfig(nvmap cmn.SimpleKVs) error {
 	if len(nvmap) == 0 {
 		return errors.New("setConfig: empty nvmap")
 	}
-	var (
-		conf      = cmn.GCO.BeginUpdate()
-		transient = false
-	)
+	config := cmn.GCO.BeginUpdate()
+	transient, err := SetConfigInMem(nvmap, config)
+	if transient || err != nil {
+		cmn.GCO.DiscardUpdate()
+		return err
+	}
+	if !transient {
+		Save(cmn.GCO.GetConfigPath(), config, Plain())
+	}
+	cmn.GCO.CommitUpdate(config)
+	return nil
+}
+
+func SetConfigInMem(nvmap cmn.SimpleKVs, config *cmn.Config) (transient bool, err error) {
 	for name, value := range nvmap {
 		if name == cmn.ActTransient {
 			if transient, err = cmn.ParseBool(value); err != nil {
 				err = fmt.Errorf("invalid value set for %s, err: %v", name, err)
-				cmn.GCO.DiscardUpdate()
 				return
 			}
 		} else {
-			err := update(conf, name, value)
-			if err != nil {
-				cmn.GCO.DiscardUpdate()
-				return err
+			if err = update(config, name, value); err != nil {
+				return
 			}
 		}
-
 		glog.Infof("%s: %s=%s", cmn.ActSetConfig, name, value)
 	}
-
-	// Validate config after everything is set
-	if err := conf.Validate(); err != nil {
-		cmn.GCO.DiscardUpdate()
-		return err
-	}
-
-	cmn.GCO.CommitUpdate(conf)
-	if !transient {
-		_ = SaveConfig(cmn.ActSetConfig)
-	}
+	err = config.Validate()
 	return
 }
 
-func SaveConfig(action string) (err error) {
-	conf := cmn.GCO.Get()
-	if err = Save(cmn.GCO.GetConfigPath(), conf, Options{}); err != nil {
-		glog.Errorf("%s: failed to write, err: %v", action, err)
-	} else {
-		glog.Infof("Stored config (action=%s)", action)
-	}
-	return
-}
-
-func update(conf *cmn.Config, key, value string) (err error) {
+func update(config *cmn.Config, key, value string) (err error) {
 	switch key {
 	//
 	// 1. TOP LEVEL CONFIG
@@ -126,11 +102,11 @@ func update(conf *cmn.Config, key, value string) (err error) {
 			return fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
 		}
 	case "log_level", "log.level":
-		if err := cmn.SetLogLevel(conf, value); err != nil {
+		if err := cmn.SetLogLevel(config, value); err != nil {
 			return fmt.Errorf("failed to set log level = %s, err: %v", value, err)
 		}
 	default:
-		return cmn.UpdateFieldValue(conf, key, value)
+		return cmn.UpdateFieldValue(config, key, value)
 	}
 	return nil
 }

@@ -421,6 +421,10 @@ func (gco *globalConfigOwner) Get() *Config {
 	return (*Config)(gco.c.Load())
 }
 
+func (gco *globalConfigOwner) Put(config *Config) {
+	gco.c.Store(unsafe.Pointer(config))
+}
+
 // NOTE: CopyStruct is a shallow copy which is OK because Config has mostly values with read-only
 //       FSPaths and CloudConf being the only exceptions. May need a *proper* deep copy in the future.
 // NOTE: Cloning a large (and growing) structure may adversely affect performance.
@@ -436,12 +440,14 @@ func (gco *globalConfigOwner) clone() *Config {
 // we introduce locking mechanism which targets this problem.
 //
 // NOTE: BeginUpdate must be followed by CommitUpdate.
+// NOTE: `ais` package must use its own cfgBegin/Commit/DiscardUpdate functions
 func (gco *globalConfigOwner) BeginUpdate() *Config {
 	gco.mtx.Lock()
 	return gco.clone()
 }
 
 // CommitUpdate finalizes config update and notifies listeners.
+// NOTE: `ais` package must use its own cfgBegin/Commit/DiscardUpdate functions
 func (gco *globalConfigOwner) CommitUpdate(config *Config) {
 	oldConf := gco.Get()
 	gco.c.Store(unsafe.Pointer(config))

@@ -221,27 +221,11 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 			t.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActAttach, cmn.ActDetach:
-		var (
-			query  = r.URL.Query()
-			what   = query.Get(cmn.URLParamWhat)
-			action = apiItems[0]
-		)
-		if what != cmn.GetWhatRemoteAIS {
-			t.invalmsghdlrf(w, r, fmtUnknownQue, what)
+		action := apiItems[0]
+		if err := t.attachDetach(w, r, action); err != nil {
 			return
 		}
-		if err := t.attachDetachRemoteAIS(query, action); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		// NOTE: once validated, save this config unconditionally, and prior to attempting attachment(s)
-		// TODO: metasync
-		if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", action, cmn.GetWhatRemoteAIS)); err != nil {
-			glog.Error(err)
-		}
-		//
 		// NOTE: apply the entire config: add new and _refresh_ existing
-		//
 		aisConf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
 		cmn.Assert(ok)
 		aisCloud := t.cloud[cmn.ProviderAIS].(*cloud.AisCloudProvider)
@@ -251,7 +235,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 	}
 }
 
-func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) { return jsp.SetConfigMany(kvs) }
+func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) { return jsp.SetConfig(kvs) }
 
 func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apiItems []string) {
 	var (

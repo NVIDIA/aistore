@@ -151,7 +151,10 @@ func dryRunInit() {
 }
 
 func initDaemon(version, build string) (rmain cmn.Runner) {
-	var err error
+	var (
+		config cmn.Config
+		err    error
+	)
 	flag.Parse()
 	if daemon.cli.role != cmn.Proxy && daemon.cli.role != cmn.Target {
 		cmn.ExitLogf(
@@ -171,7 +174,11 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		str += "Usage: aisnode -role=<proxy|target> -config=</dir/config.json> ..."
 		cmn.ExitLogf(str)
 	}
-	jsp.MustLoadConfig(daemon.cli.confPath)
+
+	if err = jsp.LoadConfig(daemon.cli.confPath, &config); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+	cmn.GCO.Put(&config)
 
 	// even more config changes, e.g:
 	// -config=/etc/ais.json -role=target -persist=true -config_custom="client.timeout=13s,
@@ -188,12 +195,12 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 			}
 			nvmap[entry[0]] = entry[1]
 		}
-		if err := jsp.SetConfigMany(nvmap); err != nil {
-			cmn.ExitLogf("Failed to set config: %s", err)
+		if _, err := jsp.SetConfigInMem(nvmap, &config); err != nil {
+			cmn.ExitLogf("Failed to update config in memory: %v", err)
 		}
 	}
 	if !daemon.cli.transient {
-		if err := jsp.SaveConfig(cmn.ActTransient); err != nil {
+		if err = jsp.Save(cmn.GCO.GetConfigPath(), config, jsp.Plain()); err != nil {
 			cmn.ExitLogf("Failed to save config: %v", err)
 		}
 	}

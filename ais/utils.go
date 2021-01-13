@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -159,7 +160,8 @@ func selectConfiguredHostname(addrlist []*localIPv4Info, configuredList []string
 		}
 	}
 
-	glog.Errorf("Configured Hostname does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s", localList, configuredList)
+	glog.Errorf("Configured Hostname does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s",
+		localList, configuredList)
 	return "", fmt.Errorf("configured Hostname does not match any local one")
 }
 
@@ -230,6 +232,22 @@ func validateHostname(hostname string) (err error) {
 		return
 	}
 	_, err = getFQNIPv4(hostname)
+	return
+}
+
+////////////
+// config //
+////////////
+func cfgBeginUpdate() *cmn.Config { return cmn.GCO.BeginUpdate() }
+func cfgDiscardUpdate()           { cmn.GCO.DiscardUpdate() }
+
+func cfgCommitUpdate(config *cmn.Config, detail string) (err error) {
+	confPath := cmn.GCO.GetConfigPath()
+	if err = jsp.Save(confPath, config, jsp.Plain()); err != nil {
+		cmn.GCO.DiscardUpdate()
+		return fmt.Errorf("FATAL: failed writing config %s: %s, %v", confPath, detail, err)
+	}
+	cmn.GCO.CommitUpdate(config)
 	return
 }
 

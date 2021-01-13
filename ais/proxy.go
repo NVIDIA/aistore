@@ -1971,7 +1971,8 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(apiItems) > 0 {
-		switch apiItems[0] {
+		action := apiItems[0]
+		switch action {
 		case cmn.Proxy:
 			p.httpdaesetprimaryproxy(w, r)
 			return
@@ -1995,27 +1996,12 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				query = r.URL.Query()
 				kvs   = cmn.NewSimpleKVsFromQuery(query)
 			)
-			if err := jsp.SetConfigMany(kvs); err != nil {
+			if err := jsp.SetConfig(kvs); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
-				return
 			}
 			return
 		case cmn.ActAttach, cmn.ActDetach:
-			var (
-				query = r.URL.Query()
-				what  = query.Get(cmn.URLParamWhat)
-			)
-			if what != cmn.GetWhatRemoteAIS {
-				p.invalmsghdlr(w, r, fmt.Sprintf(fmtUnknownQue, what))
-				return
-			}
-			if err := p.attachDetachRemoteAIS(query, apiItems[0]); err != nil {
-				cmn.InvalidHandlerWithMsg(w, r, err.Error())
-				return
-			}
-			if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", cmn.ActAttach, cmn.GetWhatRemoteAIS)); err != nil {
-				glog.Error(err)
-			}
+			_ = p.attachDetach(w, r, action)
 			return
 		}
 	}
@@ -2038,7 +2024,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if err := jsp.SetConfigMany(kvs); err != nil {
+		if err := jsp.SetConfig(kvs); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3255,7 +3241,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if err := jsp.SetConfigMany(kvs); err != nil {
+		if err := jsp.SetConfig(kvs); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3474,7 +3460,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		p.httpclusetprimaryproxy(w, r)
 	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 		kvs := cmn.NewSimpleKVsFromQuery(query)
-		if err := jsp.SetConfigMany(kvs); err != nil {
+		if err := jsp.SetConfig(kvs); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3494,13 +3480,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			return
 		}
 	case cmn.ActAttach, cmn.ActDetach:
-		what := query.Get(cmn.URLParamWhat)
-		if what != cmn.GetWhatRemoteAIS {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf(fmtUnknownQue, what))
-			return
-		}
-		if err := p.attachDetachRemoteAIS(query, action); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		if err := p.attachDetach(w, r, action); err != nil {
 			return
 		}
 		args := allocBcastArgs()
@@ -3508,10 +3488,6 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		args.to = cluster.AllNodes
 		results := p.bcastGroup(args)
 		freeBcastArgs(args)
-		// NOTE: save this config unconditionally; metasync
-		if err := jsp.SaveConfig(fmt.Sprintf("%s(%s)", action, cmn.GetWhatRemoteAIS)); err != nil {
-			glog.Error(err)
-		}
 		for res := range results {
 			if res.err == nil {
 				freeCallRes(res)
