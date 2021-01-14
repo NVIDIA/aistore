@@ -558,7 +558,7 @@ func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
 		} else {
 			// last name without a value
 			if i == ll-1 {
-				return nil, fmt.Errorf("no value for %q", args[i])
+				return nil, fmt.Errorf("invalid key-value pair %q", args[i])
 			}
 			nvs[args[i]] = args[i+1]
 			i += 2
@@ -655,6 +655,9 @@ func listXactions(onlyStartable bool) []string {
 
 func isJSON(arg string) bool {
 	possibleJSON := arg
+	if possibleJSON == "" {
+		return false
+	}
 	if possibleJSON[0] == '\'' && possibleJSON[len(possibleJSON)-1] == '\'' {
 		possibleJSON = possibleJSON[1 : len(possibleJSON)-1]
 	}
