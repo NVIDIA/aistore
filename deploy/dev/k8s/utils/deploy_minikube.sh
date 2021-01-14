@@ -13,6 +13,9 @@ minikube_cpu=${MINIKUBE_CPU:-4}
 minikube_memory=${MINIKUBE_MEMORY:-8192}
 (minikube start --driver=docker --cpus ${minikube_cpu} --memory ${minikube_memory})
 
+# Deploy metrics-server for better observability.
+minikube addons enable metrics-server
+
 source utils/ais_minikube_setup.sh
 
 echo "Start local registry: (y/n) ?"
