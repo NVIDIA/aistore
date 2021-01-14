@@ -51,7 +51,7 @@ build:linux:
     - ais
   <<: *default_only_def
   script:
-    - AIS_CLD_PROVIDERS="ais aws gcp azure" make node
+    - AIS_CLD_PROVIDERS="ais aws azure gcp hdfs" make node
     - AIS_CLD_PROVIDERS="" MODE="" make node # build one node without debug assert (to see if it compiles)
     - make authn
     - make aisfs
@@ -79,8 +79,8 @@ test:short:
   timeout: 16m
   script:
     - make aisfs cli aisloader
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
-    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\n'
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
+    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
     - ais attach remote alias=http://127.0.0.1:11080 # attach to remote cluster
     - BUCKET="test" make test-short
     - FLAGS="--duration=10s" make test-aisloader
@@ -102,7 +102,7 @@ test:authn:
     AUTHN_SU_PASS: "admin"
   script:
     - make cli
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - ais auth login $AUTHN_SU_NAME -p $AUTHN_SU_PASS
     - BUCKET="test" RE="TestAuth" make test-run
     - ais auth logout
@@ -126,11 +126,11 @@ test:https:
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - make aisfs cli
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
-    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\n'
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
+    - DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n3\nn\nn\nn\nn\nn\n'
     - sleep 3
     - ais attach remote alias=https://127.0.0.1:11080 # attach to remote cluster
-    -  make test-short
+    - make test-short
 
 test:long:
   <<: *test_long_def
@@ -139,7 +139,7 @@ test:long:
     BUCKET: "test"
   script:
     - make cli
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - make test-long
 
 test:cloud:aws:
@@ -150,7 +150,7 @@ test:cloud:aws:
     AWS_REGION: "us-east-2"
   script:
     - make cli
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - make test-long
 
 test:cloud:gcp:
@@ -162,7 +162,7 @@ test:cloud:gcp:
   script:
     - make cli
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - make test-long
 
 test:soak:
@@ -173,7 +173,7 @@ test:soak:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - FLAGS="--short --rec-cycles=1" make test-soak
 
 test:aisloader:
@@ -184,7 +184,7 @@ test:aisloader:
     - schedules
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
 
@@ -223,7 +223,7 @@ test:kube-short:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   script:
     - export NUM_TARGET=3
-    - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
+    - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-short || status=$?
     - make kill
@@ -240,7 +240,7 @@ test:kube:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - export NUM_TARGET=3
-    - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
+    - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-run || status=$?
     - make kill
@@ -257,7 +257,7 @@ test:kube-single-target:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     #  Do not set MINIKUBE_TESTING as we want to have a tests checking correctness with non-testing environment.
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-run || status=$?
     - make kill
@@ -274,7 +274,7 @@ test:kube-aisloader:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - make aisloader
-    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; })
+    - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - sleep 10 # Give some time for the cluster to stabilize.
     - status=0
     - BUCKET="test" FLAGS="--duration=2m --etl" make test-aisloader || status=$?

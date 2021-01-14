@@ -94,6 +94,8 @@ Google Cloud Storage: (y/n) ?
 n
 Azure: (y/n) ?
 n
+HDFS: (y/n) ?
+n
 Would you like to create loopback mount points: (y/n) ?
 n
 Building aisnode: version=df24df77 providers=
@@ -102,7 +104,7 @@ Building aisnode: version=df24df77 providers=
 Or, you can run all the above in one shot non-interactively:
 
 ```console
-$ make kill deploy <<< $'10\n3\n2\nn\nn\nn\nn\n'
+$ make kill deploy <<< $'10\n3\n2\nn\nn\nn\nn\nn\n'
 ```
 
 > The example deploys 3 gateways and 10 targets, each with 2 local simulated filesystems.
@@ -140,7 +142,7 @@ $ openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 10
 2. Deploy cluster (4 targets, 1 gateway, 6 mountpaths, Google Cloud):
 
 ```console
-$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\n'
+$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\nn\nn\n'
 ```
 
 3. Run tests (both examples below list the names of buckets accessible for you in Google Cloud):

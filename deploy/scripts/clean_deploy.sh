@@ -5,7 +5,7 @@ set -e
 root_dir="$GOPATH/src/github.com/NVIDIA/aistore"
 
 # Default values
-cloud="n\nn\nn\n" # no cloud by default
+cloud="n\nn\nn\nn\n" # no cloud by default
 targets=5
 proxies=5
 next_tier=""
@@ -15,7 +15,7 @@ export AIS_NODE_FLAGS="-skip_startup"
 
 while (( "$#" )); do
   case "${1}" in
-    --cloud) cloud="y\ny\nn\n"; shift;;
+    --cloud) cloud="y\ny\nn\ny\n"; shift;;
     --dir) root_dir=$2; shift; shift;;
     --debug) export AIS_DEBUG=$2; shift; shift;;
     --tier) next_tier="true"; shift;;

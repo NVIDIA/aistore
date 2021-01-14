@@ -33,22 +33,29 @@ parse_cld_providers() {
   AIS_CLD_PROVIDERS=""
   echo "Select cloud providers:"
   echo "Amazon S3: (y/n) ?"
-  read -r CLD_AWS
-  is_boolean $CLD_AWS
+  read -r cld_aws
+  is_boolean "${cld_aws}"
   echo "Google Cloud Storage: (y/n) ?"
-  read -r CLD_GCP
-  is_boolean $CLD_GCP
+  read -r cld_gcp
+  is_boolean "${cld_gcp}"
   echo "Azure: (y/n) ?"
-  read -r CLD_AZURE
-  is_boolean $CLD_AZURE
-  if  [[ "$CLD_AWS" == "y" ]] ; then
+  read -r cld_azure
+  is_boolean "${cld_azure}"
+  echo "HDFS: (y/n) ?"
+  read -r cld_hdfs
+  is_boolean "${cld_hdfs}"
+
+  if  [[ "${cld_aws}" == "y" ]] ; then
     AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} aws"
   fi
-  if  [[ "$CLD_GCP" == "y" ]] ; then
+  if  [[ "${cld_gcp}" == "y" ]] ; then
     AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} gcp"
   fi
-  if  [[ "$CLD_AZURE" == "y" ]] ; then
+  if  [[ "${cld_azure}" == "y" ]] ; then
     AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} azure"
+  fi
+  if  [[ "${cld_hdfs}" == "y" ]] ; then
+    AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} hdfs"
   fi
 }
 
