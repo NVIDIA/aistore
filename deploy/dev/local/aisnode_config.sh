@@ -95,9 +95,9 @@ cat > $AIS_CONF_FILE <<EOL
 		"instance": ${INSTANCE:-0}
 	},
 	"net": {
-		"hostname":                 "${IPV4LIST}",
-		"hostname_intra_control":   "${IPV4LIST_INTRA_CONTROL}",
-		"hostname_intra_data":      "${IPV4LIST_INTRA_DATA}",
+		"hostname":                 "${HOSTNAME_LIST}",
+		"hostname_intra_control":   "${HOSTNAME_LIST_INTRA_CONTROL}",
+		"hostname_intra_data":      "${HOSTNAME_LIST_INTRA_DATA}",
 		"l4": {
 			"proto":              "tcp",
 			"port":               "${PORT:-8080}",

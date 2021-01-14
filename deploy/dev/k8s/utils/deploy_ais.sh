@@ -33,7 +33,7 @@ PRIMARY_PORT=8080
 HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"
 
 export AIS_PRIMARY_URL=$HOST_URL
-export IPV4LIST="$(minikube ip)"
+export HOSTNAME_LIST="$(minikube ip)"
 export AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}
 export TARGET_CNT=${TARGET_CNT}
 

@@ -36,7 +36,7 @@ spec:
       - export PORT=${PORT} &&
         export AIS_FS_PATHS="\"\"${AIS_FS_PATHS}\"\"" &&
         export AIS_PRIMARY_URL=${AIS_PRIMARY_URL} &&
-        export IPV4LIST=${IPV4LIST} &&
+        export HOSTNAME_LIST=${IPV4LIST} &&
         export TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT} &&
         export AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS}" &&
         export AIS_CONF_FILE=/etc/ais/ais.json &&
