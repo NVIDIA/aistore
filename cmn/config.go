@@ -19,6 +19,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -97,6 +98,7 @@ type (
 	//
 	// nolint:maligned // no performance critical code
 	Config struct {
+		role        string          `list:"omit"` // Proxy or Target
 		Confdir     string          `json:"confdir"`
 		Cloud       CloudConf       `json:"cloud"`
 		Mirror      MirrorConf      `json:"mirror"`
@@ -555,6 +557,11 @@ func (c *Config) Validate() error {
 	}, opts)
 }
 
+func (c *Config) SetRole(role string) {
+	debug.Assert(role == Target || role == Proxy)
+	c.role = role
+}
+
 // TestingEnv returns true if config is set to a development environment
 // where a single local filesystem is partitioned between all (locally running)
 // targets and is used for both local and Cloud buckets
@@ -979,7 +986,7 @@ func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
 	// Don't validate if testing environment
-	if contextConfig.TestingEnv() {
+	if contextConfig.TestingEnv() || contextConfig.role == Proxy {
 		return nil
 	}
 

@@ -17,12 +17,14 @@ import (
 // ais config //
 ////////////////
 
-func LoadConfig(confPath string, config *cmn.Config) (err error) {
+func LoadConfig(confPath, daeRole string, config *cmn.Config) (err error) {
 	cmn.GCO.SetConfigPath(confPath)
 	_, err = Load(confPath, &config, Plain())
 	if err != nil {
 		return fmt.Errorf("failed to load config %q, err: %v", confPath, err)
 	}
+	config.SetRole(daeRole)
+
 	if err = cmn.CreateDir(config.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 	}

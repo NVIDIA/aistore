@@ -175,7 +175,7 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 		cmn.ExitLogf(str)
 	}
 
-	if err = jsp.LoadConfig(daemon.cli.confPath, &config); err != nil {
+	if err = jsp.LoadConfig(daemon.cli.confPath, daemon.cli.role, &config); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	cmn.GCO.Put(&config)

@@ -90,7 +90,6 @@ func iterFields(prefix string, v interface{}, updf updateFunc, opts IterOpts) (d
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
 	}
-
 	for i := 0; i < srcVal.NumField(); i++ {
 		var (
 			srcTyField  = srcVal.Type().Field(i)
