@@ -154,6 +154,11 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 			return err
 		}
 		if c.msg.Action == cmn.ActCreateBck && c.bck.IsRemote() {
+			if c.msg.Value != nil {
+				if err := cmn.MorphMarshal(c.msg.Value, &c.bck.Props); err != nil {
+					return err
+				}
+			}
 			if _, err := t.Cloud(c.bck).CreateBucket(context.Background(), c.bck); err != nil {
 				return err
 			}

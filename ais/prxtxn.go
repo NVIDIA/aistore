@@ -841,9 +841,6 @@ func (p *proxyrunner) prepTxnClient(msg *cmn.ActionMsg, bck *cluster.Bck, waitms
 	} else {
 		c.path = cmn.URLPathTxn.Join(bck.Name)
 		query = cmn.AddBckToQuery(query, bck.Bck)
-		if msg.Action == cmn.ActCreateBck && bck.Props != nil {
-			query.Set(cmn.URLParamBucketProps, string(cmn.MustMarshal(bck.Props)))
-		}
 	}
 	config := cmn.GCO.Get()
 	c.timeout.netw = config.Timeout.MaxKeepalive

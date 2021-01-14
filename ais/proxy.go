@@ -912,6 +912,9 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 				}
 			}
 		}
+
+		// Send full props to the target. Required for HDFS provider.
+		msg.Value = bck.Props
 	}
 	if err := p.createBucket(msg, bck); err != nil {
 		errCode := http.StatusInternalServerError
