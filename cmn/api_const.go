@@ -66,7 +66,6 @@ const (
 	ActUnregTarget    = "unregtarget"
 	ActUnregProxy     = "unregproxy"
 	ActNewPrimary     = "newprimary"
-	ActRevokeToken    = "revoketoken"
 	ActElection       = "election"
 	ActPutCopies      = "putcopies"
 	ActMakeNCopies    = "makencopies"
@@ -75,7 +74,7 @@ const (
 	ActECPut          = "ecput"    // erasure encode objects
 	ActECRespond      = "ecresp"   // respond to other targets' EC requests
 	ActECEncode       = "ecencode" // erasure code a bucket
-	ActStartGFN       = "metasync-start-gfn"
+	ActStartGFN       = "metasync_start_gfn"
 	ActAttach         = "attach"
 	ActDetach         = "detach"
 	// Node maintenance
@@ -83,10 +82,10 @@ const (
 	ActStopMaintenance  = "stopmaintenance"  // cancel maintenance state
 	ActDecommission     = "decommission"     // start rebalance and remove node from Smap when it finishes
 	// IC
-	ActSendOwnershipTbl  = "ic-send-ownership-tbl"
-	ActListenToNotif     = "watch-xaction"
-	ActMergeOwnershipTbl = "merge-ownership-tbl"
-	ActRegGlobalXaction  = "reg-global-xaction"
+	ActSendOwnershipTbl  = "ic_send_ownership_tbl"
+	ActListenToNotif     = "watch_xaction"
+	ActMergeOwnershipTbl = "merge_ownership_tbl"
+	ActRegGlobalXaction  = "reg_global_xaction"
 )
 
 const (
@@ -173,18 +172,15 @@ const (
 	URLParamCheckExists     = "check_cached" // true: check if object exists
 	URLParamHealthReadiness = "readiness"    // true: check if node can accept HTTP(S) requests
 
-	URLParamProvider   = "provider" // cloud provider
-	URLParamNamespace  = "namespace"
-	URLParamBucket     = "bck"
-	URLParamBucketFrom = "bckfrom"
-	URLParamBucketTo   = "bckto"
+	URLParamProvider  = "provider" // cloud provider
+	URLParamNamespace = "namespace"
+	URLParamBucket    = "bck"
+	URLParamBucketTo  = "bck_to"
 
-	URLParamPrefix = "prefix" // prefix for list objects in a bucket
-	URLParamRegex  = "regex"  // dsort/downloader regex
+	URLParamRegex = "regex" // dsort/downloader regex
 	// internal use
 	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy
-	URLParamTargetID         = "tid" // target (daemon) ID
 	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy
 	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
@@ -218,7 +214,7 @@ const (
 	URLParamNotifyMe = "nft"
 
 	// HTTP bucket support
-	URLParamOrigURL = "origurl"
+	URLParamOrigURL = "original_url"
 )
 
 // enum: task action (cmn.URLParamTaskAction)
@@ -244,7 +240,7 @@ const (
 	GetWhatXactStats    = "getxstats" // stats(xaction-by-uuid)
 	QueryXactStats      = "qryxstats" // stats(all-matching-xactions)
 	GetWhatStatus       = "status"    // JTX status by uuid
-	GetWhatICBundle     = "ic-bundle"
+	GetWhatICBundle     = "ic_bundle"
 	GetWhatTargetIPs    = "target_ips"
 )
 
@@ -341,7 +337,7 @@ const (
 	Metrics     = "metrics"
 	Records     = "records"
 	Shards      = "shards"
-	FinishedAck = "finished-ack"
+	FinishedAck = "finished_ack"
 	List        = "list"
 	Remove      = "remove"
 	Next        = "next"
@@ -351,9 +347,6 @@ const (
 
 	// CLI
 	Target = "target"
-
-	// tar2tf
-	GetTargetObjects = "objects"
 
 	// ETL
 	ETL       = "etl"
