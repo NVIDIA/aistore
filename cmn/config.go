@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -598,7 +599,16 @@ func (c *CloudConf) Validate(_ *Config) (err error) {
 			if len(hdfsConf.Addresses) == 0 {
 				return fmt.Errorf("no addresses provided to HDFS nodename")
 			}
-			// TODO: Validate addresses?
+			for _, address := range hdfsConf.Addresses {
+				conn, err := net.DialTimeout("tcp", address, 5*time.Second)
+				if err != nil {
+					return fmt.Errorf(
+						"failed to dial %q HDFS address, check connectivity to the HDFS cluster, err: %v",
+						address, err,
+					)
+				}
+				conn.Close()
+			}
 			c.Conf[provider] = hdfsConf
 			c.setProvider(provider)
 		case "":
