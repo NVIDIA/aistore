@@ -31,6 +31,50 @@ const (
 	completeAllDaemons
 )
 
+var (
+	supportedBool = []string{"true", "false"}
+	propCmpls     = map[string][]string{
+		cmn.HeaderObjCksumType:                cmn.SupportedChecksums(),
+		"md_write":                            cmn.SupportedWritePolicy,
+		"ec.compression":                      cmn.SupportedCompression,
+		"compression.checksum":                cmn.SupportedCompression,
+		"rebalance.compression":               cmn.SupportedCompression,
+		"distributed_sort.compression":        cmn.SupportedCompression,
+		"distributed_sort.duplicated_records": cmn.SupportedReactions,
+		"distributed_sort.ekm_malformed_line": cmn.SupportedReactions,
+		"distributed_sort.ekm_missing_key":    cmn.SupportedReactions,
+		"distributed_sort.missing_shards":     cmn.SupportedReactions,
+		"auth.enabled":                        supportedBool,
+		"checksum.enabl_read_range":           supportedBool,
+		"checksum.validate_cold_get":          supportedBool,
+		"checksum.validate_warm_get":          supportedBool,
+		"checksum.validate_obj_move":          supportedBool,
+		"ec.enabled":                          supportedBool,
+		"fshc.enabled":                        supportedBool,
+		"lru.enabled":                         supportedBool,
+		"mirror.enabled":                      supportedBool,
+		"rebalance.enabled":                   supportedBool,
+		"versioning.enabled":                  supportedBool,
+		"replication.on_cold_get":             supportedBool,
+		"replication.on_lru_eviction":         supportedBool,
+		"replication.on_put":                  supportedBool,
+	}
+)
+
+func propValueCompletion(c *cli.Context) bool {
+	if c.NArg() == 0 {
+		return false
+	}
+	list, ok := propCmpls[c.Args()[c.NArg()-1]]
+	if !ok {
+		return false
+	}
+	for _, val := range list {
+		fmt.Println(val)
+	}
+	return true
+}
+
 func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		if c.Command.Name != subcmdDsort && c.NArg() >= 1 {
@@ -95,6 +139,9 @@ func suggestConfigSection() {
 }
 
 func suggestUpdatableConfig(c *cli.Context) {
+	if propValueCompletion(c) {
+		return
+	}
 	props := append(cmn.ConfigPropList(), cmn.ActTransient)
 	for _, prop := range props {
 		if !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
@@ -143,13 +190,7 @@ func bucketCompletions(args ...bckCompletionsOpts) cli.BashCompleteFunc {
 		}
 
 		if c.NArg() > firstBucketIdx && !multiple {
-			if c.Args()[c.NArg()-1] == cmn.HeaderObjCksumType {
-				checksums := cmn.SupportedChecksums()
-				for _, tag := range checksums {
-					if !cmn.AnyHasPrefixInSlice(tag, c.Args()) {
-						fmt.Println(tag)
-					}
-				}
+			if propValueCompletion(c) {
 				return
 			}
 			for _, f := range additionalCompletions {

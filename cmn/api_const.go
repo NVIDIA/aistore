@@ -389,3 +389,8 @@ const (
 
 	WriteDefault = MDWritePolicy("") // equivalent to immediate writing (WriteImmediate)
 )
+
+var (
+	SupportedWritePolicy = []string{string(WriteImmediate), string(WriteDelayed), string(WriteNever)}
+	SupportedCompression = []string{CompressNever, CompressAlways}
+)

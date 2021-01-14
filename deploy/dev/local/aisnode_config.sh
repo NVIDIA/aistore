@@ -151,7 +151,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"compression":           "${COMPRESSION:-never}",
 		"call_timeout":          "10m"
 	},
-	"md_write": "${MD_WITE:-}"
+	"md_write": "${MD_WRITE:-}"
 }
 EOL
 
