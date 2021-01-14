@@ -745,22 +745,30 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 	}
 }
 
-func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck) {
+func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objNames []string) {
 	tutils.Logf("Testing corner cases\n")
 
 	tests := []struct {
-		title    string
-		prefix   string
-		objCount int
+		title  string
+		prefix string
 	}{
-		{"Entire list (dir)", "dir", 5},
-		{"dir/", "dir/", 3},
-		{"dir1", "dir1", 2},
-		{"dir1/", "dir1/", 2},
+		{"Entire list (dir)", "dir"},
+		{"dir/", "dir/"},
+		{"dir1", "dir1"},
+		{"dir1/", "dir1/"},
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
+
+		objCount := 0
+		for _, objName := range objNames {
+			fullObjName := fmt.Sprintf("%s/%s", prefixDir, objName)
+			if strings.HasPrefix(fullObjName, p) {
+				objCount++
+			}
+		}
+
 		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		msg := &cmn.SelectMsg{Prefix: p}
 		objList, err := api.ListObjects(baseParams, bck, msg, 0)
@@ -769,9 +777,9 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck) {
 			return
 		}
 
-		if len(objList.Entries) != test.objCount {
+		if len(objList.Entries) != objCount {
 			t.Errorf("Expected number of objects with prefix %q is %d but found %d",
-				test.prefix, test.objCount, len(objList.Entries))
+				test.prefix, objCount, len(objList.Entries))
 			tutils.Logf("Objects returned:\n")
 			for id, oo := range objList.Entries {
 				tutils.Logf("    %d[%d]. %s\n", idx, id, oo.Name)
@@ -782,7 +790,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck) {
 
 func prefixLookup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
 	prefixLookupDefault(t, proxyURL, bck, fileNames)
-	prefixLookupCornerCases(t, proxyURL, bck)
+	prefixLookupCornerCases(t, proxyURL, bck, fileNames)
 }
 
 func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
