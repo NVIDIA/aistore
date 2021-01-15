@@ -58,7 +58,7 @@ func initProxyDaemonID(config *cmn.Config) (daemonID string) {
 }
 
 func writeProxyDID(config *cmn.Config, id string) error {
-	return ioutil.WriteFile(filepath.Join(config.Confdir, proxyIDFname), []byte(id), 0o644)
+	return ioutil.WriteFile(filepath.Join(config.Confdir, proxyIDFname), []byte(id), cmn.PermRWR)
 }
 
 func readProxyDaemonID(config *cmn.Config) string {

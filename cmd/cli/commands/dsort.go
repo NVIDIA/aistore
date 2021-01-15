@@ -94,7 +94,7 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 			Name:     name,
 			Uid:      os.Getuid(),
 			Gid:      os.Getgid(),
-			Mode:     0o664,
+			Mode:     int64(cmn.PermRWR),
 		}
 		if err := tw.WriteHeader(h); err != nil {
 			return err

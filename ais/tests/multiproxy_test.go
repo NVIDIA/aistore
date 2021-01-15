@@ -378,7 +378,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 	cfg.Net.L4.PortIntraControlStr = strconv.Itoa(cfg.Net.L4.PortIntraControl + portInc)
 	cfg.Net.L4.PortIntraDataStr = strconv.Itoa(cfg.Net.L4.PortIntraData + portInc)
 
-	err = os.MkdirAll(cfg.Confdir, 0o755)
+	err = os.MkdirAll(cfg.Confdir, cmn.PermRWXRX)
 	tassert.CheckFatal(t, err)
 	cfg.Log.Dir = logDir
 	cfg.TestFSP.Instance = instance
@@ -439,7 +439,7 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 
 	cfg := tutils.GetDaemonConfig(t, node.ID())
 	cfg.Confdir += suffName
-	err = os.MkdirAll(cfg.Confdir, 0o755)
+	err = os.MkdirAll(cfg.Confdir, cmn.PermRWXRX)
 	tassert.CheckFatal(t, err)
 	cfg.Log.Dir = logDir
 	cfg.TestFSP.Instance = instance

@@ -192,7 +192,7 @@ func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disa
 // putting objects it recreates the mountpath and does not fail
 func breakMountpath(t *testing.T, mpath, suffix string) {
 	os.Rename(mpath, mpath+suffix)
-	f, err := os.OpenFile(mpath, os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(mpath, os.O_CREATE|os.O_WRONLY, cmn.PermRWR)
 	if err != nil {
 		t.Errorf("Failed to create file: %v", err)
 	}

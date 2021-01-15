@@ -428,7 +428,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), 0o644)).To(BeNil())
+					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), cmn.PermRWR)).To(BeNil())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 				})
@@ -437,7 +437,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), 0o644)).To(BeNil())
+					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), cmn.PermRWR)).To(BeNil())
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 				})
 
@@ -507,7 +507,7 @@ var _ = Describe("LOM", func() {
 					lom := NewBasicLom(localFQN, tMock)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					err := ioutil.WriteFile(localFQN, []byte("wrong file"), 0o644)
+					err := ioutil.WriteFile(localFQN, []byte("wrong file"), cmn.PermRWR)
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())

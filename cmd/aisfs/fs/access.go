@@ -6,11 +6,13 @@ package fs
 
 import (
 	"os"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
-	FilePermissionBits      os.FileMode = 0o644
-	DirectoryPermissionBits os.FileMode = 0o755
+	FilePermissionBits      os.FileMode = cmn.PermRWR
+	DirectoryPermissionBits os.FileMode = cmn.PermRWXRX
 )
 
 type Owner struct {

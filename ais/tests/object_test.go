@@ -862,7 +862,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 	// Test when the contents of the file are changed
 	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
-	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0o644)
+	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
@@ -1074,7 +1074,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName := filepath.Join(objPrefix, <-fileNameCh)
 	fqn = findObjOnDisk(bck, objName)
 	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
-	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0o644)
+	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
 
@@ -1509,7 +1509,7 @@ func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {
 	)
 	tassert.CheckFatal(t, err)
 	off := rand.Int63n(fi.Size())
-	file, err := os.OpenFile(fqn, os.O_RDWR, 0o644)
+	file, err := os.OpenFile(fqn, os.O_RDWR, cmn.PermRWR)
 	tassert.CheckFatal(t, err)
 	_, err = file.Seek(off, 0)
 	tassert.CheckFatal(t, err)

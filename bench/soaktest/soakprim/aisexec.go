@@ -52,7 +52,7 @@ const (
 var aisloaderPath string
 
 func init() {
-	os.MkdirAll(soaktestDirname, 0o755)
+	os.MkdirAll(soaktestDirname, cmn.PermRWXRX)
 
 	// We expect the `aisloader` binary to be present in `$GOPATH/bin` directory.
 	aisloaderPath = filepath.Join(os.Getenv("GOPATH"), "bin", "aisloader")

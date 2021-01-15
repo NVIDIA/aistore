@@ -219,7 +219,7 @@ func (hp *hdfsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LO
 		}
 
 		// Create any missing directories.
-		if err = hp.c.MkdirAll(filepath.Dir(filePath), 0o755|os.ModeDir); err != nil {
+		if err = hp.c.MkdirAll(filepath.Dir(filePath), cmn.PermRWXRX|os.ModeDir); err != nil {
 			goto finish
 		}
 

@@ -879,7 +879,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			}
 			aoi.hi.partialCksum = cmn.NewCksumHash(aoi.lom.CksumConf().Type)
 		} else {
-			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0o644)
+			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, cmn.PermRWR)
 			if err != nil {
 				errCode = http.StatusInternalServerError
 				return

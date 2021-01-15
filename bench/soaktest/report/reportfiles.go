@@ -43,7 +43,7 @@ func InitReportFiles() {
 	dir := soakcmn.Params.ReportDir
 
 	if dir == "" {
-		err := os.MkdirAll(DefaultDir, 0o755)
+		err := os.MkdirAll(DefaultDir, cmn.PermRWXRX)
 		cmn.AssertNoErr(err)
 		dir = DefaultDir
 	} else {

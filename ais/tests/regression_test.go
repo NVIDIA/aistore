@@ -262,7 +262,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	objName := <-filenameCh
 	fqn := findObjOnDisk(bck, objName)
 	tutils.Logf("Corrupting file data[%s]: %s\n", objName, fqn)
-	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0o644)
+	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
 	_, err = api.GetObjectWithValidation(baseParams, bck, path.Join(subdir, objName))
 	if err == nil {

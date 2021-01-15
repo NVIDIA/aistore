@@ -50,7 +50,7 @@ const (
 	SizeofI16 = int(unsafe.Sizeof(uint16(0)))
 
 	configHomeEnvVar = "XDG_CONFIG_HOME" // https://wiki.archlinux.org/index.php/XDG_Base_Directory
-	configDirMode    = 0o755 | os.ModeDir
+	configDirMode    = PermRWXRX | os.ModeDir
 
 	assertMsg = "assertion failed"
 
@@ -63,6 +63,9 @@ const (
 
 	QuantityPercent = "percent"
 	QuantityBytes   = "bytes"
+
+	PermRWR   os.FileMode = 0o640
+	PermRWXRX os.FileMode = 0o750
 )
 
 var (
