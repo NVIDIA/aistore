@@ -206,8 +206,8 @@ test:aisloader:
   variables:
     NUM_TARGET: 1
     NUM_PROXY: 1
-    BUCKET: "aws://ais-ci"
-    AWS_REGION: "us-east-2"
+    BUCKET: "gs://ais-ci-kube"
+    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
   tags:
     - ais-kube
   before_script:

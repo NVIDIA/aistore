@@ -58,7 +58,7 @@ func (tc testConfig) Name() string {
 	return fmt.Sprintf("%s/%s/%s", tc.transformer, provider, strings.TrimSuffix(tc.comm, "://"))
 }
 
-// TODO: this should be a part of go-tfdata
+// TODO: This should be a part of go-tfdata.
 // This function is necessary, as the same TFRecords can be different byte-wise.
 // This is caused by the fact that order of TFExamples is can de different,
 // as well as ordering of elements of a single TFExample can be different.
