@@ -209,7 +209,6 @@ func (pc *pushComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64,
 // redirectComm //
 //////////////////
 
-// TODO: Make sure that it works with cloud, even when cold get by ETL transformer is required.
 func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
 	redirectURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)

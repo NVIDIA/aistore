@@ -6,6 +6,7 @@
 package integration
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -39,23 +40,23 @@ const (
 type (
 	filesEqualFunc func(f1, f2 string) (bool, error)
 
-	testConfig struct {
+	testObjConfig struct {
 		transformer string
 		comm        string
 		inPath      string         // optional
 		outPath     string         // optional
 		filesEqual  filesEqualFunc // optional
 		onlyLong    bool           // run only with long tests
-		cloud       bool           // run on a cloud bucket
+	}
+
+	testCloudObjConfig struct {
+		cached   bool
+		onlyLong bool
 	}
 )
 
-func (tc testConfig) Name() string {
-	provider := "local"
-	if tc.cloud {
-		provider = "cloud"
-	}
-	return fmt.Sprintf("%s/%s/%s", tc.transformer, provider, strings.TrimSuffix(tc.comm, "://"))
+func (tc testObjConfig) Name() string {
+	return fmt.Sprintf("%s/%s", tc.transformer, strings.TrimSuffix(tc.comm, "://"))
 }
 
 // TODO: This should be a part of go-tfdata.
@@ -121,14 +122,9 @@ func etlInit(name, comm string) (string, error) {
 	return api.ETLInit(baseParams, spec)
 }
 
-func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
-	bck := cmn.Bck{Name: "etl-test", Provider: cmn.ProviderAIS}
-	if cloud {
-		bck = cliBck
-	}
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Bck: bck, Long: onlyLong, Cloud: cloud})
-
+func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
 	var (
+		bck                    = cmn.Bck{Name: "etl-test", Provider: cmn.ProviderAIS}
 		testObjDir             = filepath.Join("data", "transformer", transformer)
 		inputFileName          = filepath.Join(testObjDir, "object.in")
 		expectedOutputFileName = filepath.Join(testObjDir, "object.out")
@@ -138,6 +134,8 @@ func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath
 
 		uuid string
 	)
+
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Bck: bck, Long: onlyLong})
 
 	if fEq == nil {
 		fEq = tutils.FilesEqual
@@ -149,25 +147,14 @@ func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath
 		expectedOutputFileName = outPath
 	}
 
-	if !cloud {
-		tutils.Logln("Creating bucket")
-		tutils.CreateFreshBucket(t, proxyURL, bck)
-	}
+	tutils.Logln("Creating bucket")
+	tutils.CreateFreshBucket(t, proxyURL, bck)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tutils.Logln("Putting object")
 	reader, err := readers.NewFileReaderFromFile(inputFileName, cmn.ChecksumNone)
 	tassert.CheckFatal(t, err)
-
-	if !cloud {
-		tutils.PutObject(t, bck, objName, reader)
-	} else {
-		tutils.PutObjectInCloudBucketWithoutCachingLocally(t, bck, objName, reader)
-		defer func() {
-			// Could bucket is not destroyed, remove created object instead.
-			err := api.DeleteObject(baseParams, bck, objName)
-			tassert.CheckError(t, err)
-		}()
-	}
+	tutils.PutObject(t, bck, objName, reader)
 
 	uuid, err = etlInit(transformer, comm)
 	tassert.CheckFatal(t, err)
@@ -188,6 +175,42 @@ func testETLObject(t *testing.T, onlyLong, cloud bool, comm, transformer, inPath
 	same, err := fEq(outputFileName, expectedOutputFileName)
 	tassert.CheckError(t, err)
 	tassert.Errorf(t, same, "file contents after transformation differ")
+}
+
+func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
+	// Always uses Echo transformation, as correctness of other transformations is checked in different tests.
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: onlyLong})
+
+	objName := fmt.Sprintf("%s-%s-object", uuid, cmn.RandString(5))
+	tutils.Logln("Putting object")
+	reader, err := readers.NewRandReader(cmn.KiB, cmn.ChecksumNone)
+	tassert.CheckFatal(t, err)
+
+	err = api.PutObject(api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bck:        cliBck,
+		Object:     objName,
+		Reader:     reader,
+	})
+	tassert.CheckFatal(t, err)
+
+	if !cached {
+		tutils.Logf("Evicting object %s\n", objName)
+		err := api.EvictObject(baseParams, cliBck, objName)
+		tassert.CheckFatal(t, err)
+	}
+
+	defer func() {
+		// Could bucket is not destroyed, remove created object instead.
+		err := api.DeleteObject(baseParams, cliBck, objName)
+		tassert.CheckError(t, err)
+	}()
+
+	bf := bytes.NewBuffer(nil)
+	tutils.Logf("Read %q\n", uuid)
+	err = api.ETLObject(baseParams, uuid, cliBck, objName, bf)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, bf.Len() == cmn.KiB, "Expected %d bytes, got %d", cmn.KiB, bf.Len())
 }
 
 func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
@@ -214,26 +237,58 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
 
 func TestETLObject(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
-	tests := []testConfig{
+	tests := []testObjConfig{
 		{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
 		{transformer: tetl.Echo, comm: etl.RevProxyCommType, onlyLong: true},
 		{transformer: tetl.Echo, comm: etl.PushCommType, onlyLong: true},
-		{tetl.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, true, false},
-		{tetl.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, true, false},
-		{tetl.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, true, false},
-		{tetl.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false, false},
-		{tetl.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false, false},
-		{tetl.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false, false},
-
-		// Cloud: only smoke tests to check if LOMs are loaded correctly.
-		{transformer: tetl.Echo, comm: etl.RedirectCommType, cloud: true},
-		{transformer: tetl.Echo, comm: etl.RevProxyCommType, cloud: true},
-		{transformer: tetl.Echo, comm: etl.PushCommType, cloud: true},
+		{tetl.Tar2TF, etl.RedirectCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tetl.Tar2TF, etl.RevProxyCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tetl.Tar2TF, etl.PushCommType, tar2tfIn, tar2tfOut, tfDataEqual, true},
+		{tetl.Tar2tfFilters, etl.RedirectCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{tetl.Tar2tfFilters, etl.RevProxyCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
+		{tetl.Tar2tfFilters, etl.PushCommType, tar2tfFiltersIn, tar2tfFiltersOut, tfDataEqual, false},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name(), func(t *testing.T) {
-			testETLObject(t, test.onlyLong, test.cloud, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
+			testETLObject(t, test.onlyLong, test.comm, test.transformer, test.inPath, test.outPath, test.filesEqual)
+		})
+	}
+}
+
+func TestETLObjectCloud(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Cloud: true})
+
+	// TODO: When a test is stable, make part of test cases onlyLong: true.
+	tcs := map[string][]*testCloudObjConfig{
+		etl.RedirectCommType: {
+			{cached: true, onlyLong: false},
+			{cached: false, onlyLong: false},
+		},
+		etl.RevProxyCommType: {
+			{cached: true, onlyLong: false},
+			{cached: false, onlyLong: false},
+		},
+		etl.PushCommType: {
+			{cached: true, onlyLong: false},
+			{cached: false, onlyLong: false},
+		},
+	}
+
+	for comm, configs := range tcs {
+		t.Run(t.Name()+"/"+comm, func(t *testing.T) {
+			uuid, err := etlInit(tetl.Echo, comm)
+			tassert.CheckFatal(t, err)
+			defer func() {
+				tutils.Logf("Stop %q\n", uuid)
+				tassert.CheckError(t, api.ETLStop(baseParams, uuid))
+			}()
+
+			for _, conf := range configs {
+				t.Run(fmt.Sprintf("%s/cached=%t", t.Name(), conf.cached), func(t *testing.T) {
+					testETLObjectCloud(t, uuid, conf.onlyLong, conf.cached)
+				})
+			}
 		})
 	}
 }
@@ -253,7 +308,7 @@ func TestETLBucket(t *testing.T) {
 			bck:       bck,
 		}
 
-		tests = []testConfig{
+		tests = []testObjConfig{
 			{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
 			{transformer: tetl.Md5, comm: etl.RevProxyCommType},
 			{transformer: tetl.Md5, comm: etl.PushCommType, onlyLong: true},
