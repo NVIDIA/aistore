@@ -129,7 +129,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 }
 
 func (lom *LOM) Persist(stores ...bool) (err error) {
-	if lom.WritePolicy() != cmn.WriteImmediate {
+	if !lom.WritePolicy().IsImmediate() {
 		lom.md.dirty = true
 		lom.ReCache(true)
 		return

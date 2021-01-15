@@ -313,7 +313,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		_, exclusive := lom.IsLocked()
 		return exclusive
 	})
-	if lom.WritePolicy() != cmn.WriteImmediate {
+	if !lom.WritePolicy().IsImmediate() {
 		lom.md.dirty = true
 		return nil
 	}

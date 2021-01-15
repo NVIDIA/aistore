@@ -380,8 +380,12 @@ const (
 // metadata write policy
 type MDWritePolicy string
 
+func (mdw MDWritePolicy) IsImmediate() bool { return mdw == WriteDefault || mdw == WriteImmediate }
+
 const (
-	WriteImmediate = MDWritePolicy("")        // immediate write (default)
-	WriteDelayed   = MDWritePolicy("delayed") // cache and flush when not accessed for a while (lom_cache_hk.go)
-	WriteNever     = MDWritePolicy("never")   // transient - in-memory only
+	WriteImmediate = MDWritePolicy("immediate") // immediate write (default)
+	WriteDelayed   = MDWritePolicy("delayed")   // cache and flush when not accessed for a while (lom_cache_hk.go)
+	WriteNever     = MDWritePolicy("never")     // transient - in-memory only
+
+	WriteDefault = MDWritePolicy("") // equivalent to immediate writing (WriteImmediate)
 )

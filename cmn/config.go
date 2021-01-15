@@ -736,7 +736,7 @@ func (c *MirrorConf) ValidateAsProps(args *ValidationArgs) error {
 }
 
 func (c MDWritePolicy) Validate(_ *Config) (err error) {
-	if c == WriteImmediate || c == WriteDelayed || c == WriteNever {
+	if c.IsImmediate() || c == WriteDelayed || c == WriteNever {
 		return
 	}
 	return fmt.Errorf("invalid md_write policy %q", c)
