@@ -47,11 +47,11 @@ Cloud-based and ais buckets support the same API with minor exceptions. Cloud bu
 [Cloud Provider](./providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster. For complete definition and details, please refer to the [Cloud Provider](./providers.md) document.
 
 Cloud provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values that include:
-
 * `ais` - for AIS buckets
 * `aws` or `s3` - for Amazon S3 buckets
-* `gcp` or `gs` - for Google Cloud Storage buckets
 * `azure` - for Microsoft Azure Blob Storage buckets
+* `gcp` or `gs` - for Google Cloud Storage buckets
+* `hdfs` - for Hadoop/HDFS clusters
 * `ht` - for HTTP(S) based datasets
 
 For API reference, please refer [to the RESTful API and examples](http_api.md).
@@ -65,16 +65,17 @@ The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy a
 
 New ais buckets must be given a unique name that does not duplicate any existing ais or cloud bucket.
 
-If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`. For details, see [S3 compatibility](/docs/s3compat.md#s3-compatibility).
+If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`.
+For details, see [S3 compatibility](/docs/s3compat.md#s3-compatibility).
 
 ### CLI examples: create, rename and, destroy ais bucket
 
-To create an ais bucket with the name 'myBucket', rename it to 'myBucket2' and delete it, run:
+To create an ais bucket with the name `yt8m`, rename it to `yt8m_extended` and delete it, run:
 
 ```console
-$ ais create bucket myBucket
-$ ais rename bucket ais://myBucket ais://myBucket2
-$ ais rm bucket ais://myBucket2
+$ ais create bucket yt8m
+$ ais mv bucket ais://yt8m ais://yt8m_extended
+$ ais rm bucket ais://yt8m_extended
 ```
 
 Please note that rename bucket is not an instant operation, especially if the bucket contains data. Follow the `rename` command tips to monitor when the operation completes.
@@ -86,53 +87,52 @@ AIS clusters can be attached to each other, thus forming a global (and globally 
 The following example creates an attachment between two clusters, lists all remote buckets, and then list objects in one of those remote buckets (see comments inline):
 
 ```console
-
-# attach remote AIS cluster and assign it an alias `teamZ` (for convenience and for future reference):
+$ # Attach remote AIS cluster and assign it an alias `teamZ` (for convenience and for future reference):
 $ ais attach remote teamZ=http://cluster.ais.org:51080
 Remote cluster (teamZ=http://cluster.ais.org:51080) successfully attached
-
-# the cluster at http://cluster.ais.org:51080 is now persistently attached:
+$
+$ # The cluster at http://cluster.ais.org:51080 is now persistently attached:
 $ ais show remote
 UUID      URL                            Alias     Primary      Smap   Targets  Online
 MCBgkFqp  http://cluster.ais.org:51080   teamZ     p[primary]   v317   10       yes
-
-# list all buckets in all remote clusters
-# notice the syntax: by convention, we use `@` to prefix remote cluster UUIDs, and so
-# `ais://@` translates as "AIS cloud provider, any remote cluster"
-
+$
+$ # List all buckets in all remote clusters
+$ # Notice the syntax: by convention, we use `@` to prefix remote cluster UUIDs, and so
+$ # `ais://@` translates as "AIS cloud provider, any remote cluster"
+$
 $ ais ls ais://@
 AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet
 	  ais://@MCBgkFqp/coco
 	  ais://@MCBgkFqp/imagenet-augmented
 	  ais://@MCBgkFqp/imagenet-inflated
-
-# list all buckets in the remote cluster with UUID = MCBgkFqp
-# notice again the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
-
+$
+$ # List all buckets in the remote cluster with UUID = MCBgkFqp
+$ # Notice again the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
+$
 $ ais ls ais://@MCBgkFqp
 AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet
 	  ais://@MCBgkFqp/coco
 	  ais://@MCBgkFqp/imagenet-augmented
 	  ais://@MCBgkFqp/imagenet-inflated
-
-# list all buckets with name matching the regex pattern "tes*"
+$
+$ # List all buckets with name matching the regex pattern "tes*"
 $ ais ls --regex "tes*"
 AWS Buckets (3)
   aws://test1
   aws://test2
   aws://test2
-
-# we can conveniently keep using our previously selected alias for the remote cluster -
-# the following lists selected remote bucket using the cluster's alias:
+$
+$ # We can conveniently keep using our previously selected alias for the remote cluster -
+$ # The following lists selected remote bucket using the cluster's alias:
 $ ais ls ais://@teamZ/imagenet-augmented
 NAME              SIZE
 train-001.tgz     153.52KiB
 train-002.tgz     136.44KiB
 ...
-
-# the same, but this time using the cluster's UUID:
+$
+$ # The same, but this time using the cluster's UUID:
 $ ais ls ais://@MCBgkFqp/imagenet-augmented
 NAME              SIZE
 train-001.tgz     153.52KiB
@@ -154,11 +154,11 @@ HEAD a bucket, list bucket objects, GET an object, and HEAD an object.
 The example shows accessing a private GCP bucket and a public GCP one without user authorization.
 
 ```console
-# Listing objects of a private bucket
+$ # Listing objects of a private bucket
 $ ais ls gs://ais-ic
-Failed to HEAD bucket "gcp://ais-ic": {"status":400,"message":"","method":"HEAD","url_path":"/v1/buckets/ais-ic","remote_addr":"","trace":""}
-
-# Listing a public bucket
+Bucket "gcp://ais-ic" does not exist
+$
+$ # Listing a public bucket
 $ ais ls gs://pub-images --limit 3
 NAME                         SIZE
 images-shard.ipynb           101.94KiB
@@ -217,7 +217,6 @@ AWS Buckets (1)
   aws://ais-test
 HTTP(S) Buckets (1)
   ht://ZDdhNTYxZTkyMzhkNjk3NA (http://storage.googleapis.com/minikube/)
-
 $ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
 NAME                                 SIZE
 minikube-0.6.iso.sha256	              65B
@@ -286,10 +285,9 @@ $ ais evict aws://abc
 So far, we have covered AIS and cloud buckets. These abstractions are sufficient for almost all use cases.  But there are times when we would like to download objects from an existing cloud bucket and then make use of the features available only for AIS buckets.
 
 One way of accomplishing that could be:
-
-* prefetch cloud objects
-* create AIS bucket
-* and then use the bucket-copying [API](http_api.md) or [CLI](/cmd/cli/resources/bucket.md) to copy over the objects from the cloud bucket to the newly created AIS bucket.
+1. Prefetch cloud objects.
+2. Create AIS bucket.
+3. Use the bucket-copying [API](http_api.md) or [CLI](/cmd/cli/resources/bucket.md) to copy over the objects from the cloud bucket to the newly created AIS bucket.
 
 However, the extra-copying involved may prove to be time and/or space consuming. Hence, AIS-supported capability to establish an **ad-hoc** 1-to-1 relationship between a given AIS bucket and an existing cloud (*backend*).
 
@@ -337,7 +335,7 @@ The full list of bucket properties are:
 
 | Bucket Property | JSON | Description | Fields |
 | --- | --- | --- | --- |
-| Provider | `provider` | "aws", "gcp" or "ais" | `"provider": "aws"/"gcp"/"ais"` |
+| Provider | `provider` | "ais", "aws", "azure", "gcp", "hdfs" or "ht" | `"provider": "ais"/"aws"/"azure"/"gcp"/"hdfs"/"ht"` |
 | Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
 | LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }` |
 | Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#n-way-mirror). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size.  `util_thresh` represents the threshold when utilizations are considered equivalent. `optimize_put` represents the optimization objective. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }` |
@@ -347,44 +345,31 @@ The full list of bucket properties are:
 | BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
 | Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
 
-`SetBucketProps` allows the following configurations to be changed:
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `ec.enabled` | bool | enables EC on the bucket |
-| `ec.data_slices` | int | number of data slices for EC |
-| `ec.parity_slices` | int | number of parity slices for EC |
-| `ec.objsize_limit` | int | below this size objects are replicated instead of EC'ed |
-| `ec.compression` | string | LZ4 compression parameters used when EC sends its fragments and replicas over network |
-| `mirror.enabled` | bool | enable local mirroring |
-| `mirror.copies` | int | number of local copies |
-| `mirror.util_thresh` | int | threshold when utilization are considered equivalent |
-
 ### CLI examples: listing and setting bucket properties
 
-1. List bucket properties:
+#### List bucket properties
 
 ```console
 $ ais show props mybucket
-```
-
-or, the same to get output in a (raw) JSON form:
-
-```console
+...
+$
+$ # Or, the same to get output in a (raw) JSON form:
 $ ais show props mybucket --json
+...
 ```
 
-2. Enable erasure coding on a bucket:
+#### Enable erasure coding on a bucket
 
 ```console
 $ ais set props mybucket ec.enabled=true
 ```
 
-3. Enable object versioning and then list updated bucket properties:
+#### Enable object versioning and then list updated bucket properties
 
 ```console
 $ ais set props mybucket versioning.enabled=true
 $ ais show props mybucket
+...
 ```
 
 ## Bucket Access Attributes
@@ -415,11 +400,11 @@ $ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "setbprop
 
 ## List Objects
 
-ListObjects API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor or a marker for the *next* page retrieval.
+ListObjects API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
 
 When using proxy cache (experimental) immutability of a bucket is assumed between subsequent ListObjects request.
-If a bucket has been updated after ListObjects request, a user should call ListObjectsInvalidateCache API to get
-correct ListObjects results. This is the temporary requirement and will be removed in next AIS versions.
+If a bucket has been updated after ListObjects request, a user should call ListObjectsInvalidateCache API to get correct ListObjects results.
+This is the temporary requirement and will be removed in next AIS versions.
 
 ### List Options
 
