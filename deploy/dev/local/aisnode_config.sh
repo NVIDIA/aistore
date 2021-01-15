@@ -1,9 +1,17 @@
+cloud_desc=()
+for cloud in ${AIS_CLD_PROVIDERS}; do
+  case $cloud in
+    aws)   cloud_desc+=('"aws":   {}') ;;
+    azure) cloud_desc+=('"azure": {}') ;;
+    gcp)   cloud_desc+=('"gcp":   {}') ;;
+    hdfs)  cloud_desc+=('"hdfs":  {"user": "root", "addresses": ["localhost:8020"]}') ;;
+  esac
+done
+
 cat > $AIS_CONF_FILE <<EOL
 {
 	"confdir": "${AIS_CONF_DIR}",
-  "cloud": {
-    $(for i in ${AIS_CLD_PROVIDERS};do echo -n "\"${i}\":{}", ;done | sed 's/,$//')
-  },
+	"cloud": {$(IFS=$','; echo "${cloud_desc[*]}")},
 	"mirror": {
 		"copies":       2,
 		"burst_buffer": 512,

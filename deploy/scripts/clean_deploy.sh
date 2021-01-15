@@ -5,7 +5,11 @@ set -e
 root_dir="$GOPATH/src/github.com/NVIDIA/aistore"
 
 # Default values
-cloud="n\nn\nn\nn\n" # no cloud by default
+aws_provider="n\n"
+azure_provider="n\n"
+gcp_provider="n\n"
+hdfs_provider="n\n"
+
 targets=5
 proxies=5
 next_tier=""
@@ -15,7 +19,11 @@ export AIS_NODE_FLAGS="-skip_startup"
 
 while (( "$#" )); do
   case "${1}" in
-    --cloud) cloud="y\ny\nn\ny\n"; shift;;
+    --aws)   aws_provider="y\n";   shift;;
+    --azure) azure_provider="y\n"; shift;;
+    --gcp)   gcp_provider="y\n";   shift;;
+    --hdfs)  hdfs_provider="y\n";  shift;;
+
     --dir) root_dir=$2; shift; shift;;
     --debug) export AIS_DEBUG=$2; shift; shift;;
     --tier) next_tier="true"; shift;;
@@ -37,7 +45,7 @@ pushd ${root_dir}
 make kill
 make clean
 
-echo -e "${targets}\n${proxies}\n5\n${cloud}\nn" | make deploy
+echo -e "${targets}\n${proxies}\n5\n${aws_provider}${gcp_provider}${azure_provider}${hdfs_provider}\nn" | make deploy
 
 make aisfs && make cli
 
