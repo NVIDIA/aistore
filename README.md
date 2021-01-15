@@ -172,7 +172,6 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 - [Package `memsys`](memsys/README.md)
 - [Package `transport`](transport/README.md)
 - [Package `dSort`](dsort/README.md)
-- [Package `openapi`](openapi/README.md)
 
 ## License
 

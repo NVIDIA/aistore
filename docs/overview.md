@@ -26,7 +26,7 @@ The rest of this document is structured as follows:
 - [dSort](#dsort)
 - [CLI](#cli)
 - [Python Client](#python-client)
-- [AIS Limitations](#ais-limitations)
+- [AIS no-limitations principle](#ais-no-limitations-principle)
 
 
 ## Block Diagrams
@@ -245,77 +245,12 @@ One salient feature of AIS CLI is its Bash style [auto-completions](../cmd/cli/R
 
 AIS CLI is currently quickly developing. For more information, please see the project's own [README](../cmd/cli/README.md).
 
-## Python Client
-
-AIStore provides an easy way to generate a python client package for simplified integration. The user can, after following a few simple steps, import the generated package and start communicating with AIS via its [RESTful API](http_api.md). The generated package will cover the entire functionality of the API.
-
-> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](../openapi/openapi.yaml).
-
-To get started with the python client package, you need to first generate the client package. These instructions can also be found [here](../openapi/README.md#how-to-generate-package).
-
-1. Obtain the latest openapi-generator jar by running the following command:
-
-```console
-$ wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.4/openapi-generator-cli-3.3.4.jar -O openapi-generator-cli.jar
-```
-
-2. Run the following commands:
-
-```console
-$ cd <path_to_repo>
-$ java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python/api-client/
-```
-
-3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
-
-4. Install required Python packages using `pip` and requirement files located in `python/api-client` directory:
-
-```console
-$ pip install -r python/api-client/requirements.txt
-$ pip install -r python/api-client/test-requirements.txt
-```
-
-These steps should produce the python client package, which will be located [here](../python/api-client).
-
-Should you have any difficulty generating the python client package with these instructions, please open a ticket, and we will provide further assistance.
-
-Once the package is generated, it can be installed as follows, these commands can also be found [here](../openapi/README.md#how-to-install).
-
-```console
-$ cd <path_to_repo>/python/api-client
-$ pip uninstall ais_client #uninstalls any previous versions
-$ pip install .
-```
-
-Now you're ready to import the package in python and use it to communicate with AIS.
-
-For example, this script will display a map of your AIS cluster.
-
-```python
-import ais_client
-# Some aliases for functions in the package
-openapi_models = ais_client.models
-openapi_params = openapi_models.InputParameters
-openapi_actions = openapi_models.Actions
-
-configuration = ais_client.Configuration()
-configuration.debug = False
-proxy_url = 'localhost:8080' #Change this to the ip of any proxy in your AIS cluster, ex: 172.50.0.2:8080
-configuration.host = 'http://%s/v1/' % proxy_url
-proxyClient = ais_client.ApiClient(configuration)
-
-daemon_api = ais_client.api.daemon_api.DaemonApi(proxyClient)
-print(daemon_api.get(openapi_models.GetWhat.SMAP))
-```
-
-There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](../openapi/README.md#how-to-use-package).
-
-## AIS Limitations
+## AIS no-limitations principle
 There are **no** designed-in limitations on the:
 
 * object sizes
 * total number of objects and buckets in AIS cluster
-* the number of objects in a single AIS bucket
-* numbers of gateways and storage targets in AIS cluster
+* number of objects in a single AIS bucket
+* numbers of gateways (proxies) and storage targets in AIS cluster
 
 Ultimately, the limit on object size may be imposed by a local filesystem of choice and a physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center. But as far as AIS itself, it does not impose any limitations whatsoever.
