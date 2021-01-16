@@ -98,7 +98,7 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 			templates.ClusterSummary
 		return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 	}
-	return fmt.Errorf(invalidDaemonMsg, daemonID)
+	return fmt.Errorf("%s is not a valid DAEMON_ID nor DAEMON_TYPE", daemonID)
 }
 
 // Displays the disk stats of a target
@@ -176,6 +176,14 @@ func getDaemonConfig(c *cli.Context) error {
 
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "daemon ID")
+	}
+
+	smap, err := api.GetClusterMap(defaultAPIParams)
+	if err != nil {
+		return err
+	}
+	if smap.GetNode(daemonID) == nil {
+		return fmt.Errorf("%s does not exist in the cluster (see 'ais show cluster')", daemonID)
 	}
 
 	body, err := api.GetDaemonConfig(defaultAPIParams, daemonID)

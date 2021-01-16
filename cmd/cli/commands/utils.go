@@ -43,9 +43,8 @@ const (
 	fileStdIO            = "-"
 
 	// Error messages
-	dockerErrMsgFmt  = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
-	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
-	invalidCmdMsg    = "invalid command name %q"
+	dockerErrMsgFmt = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
+	invalidCmdMsg   = "invalid command name %q"
 
 	gsHost = "storage.googleapis.com"
 	s3Host = "s3.amazonaws.com"
