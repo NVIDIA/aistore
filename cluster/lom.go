@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1016,17 +1017,20 @@ func (lom *LOM) Unlock(exclusive bool) {
 // create file
 //
 
-func (lom *LOM) CreateFile(fqn string) (*os.File, error) {
-	var (
-		mi  = lom.mpathInfo
-		dir = mi.MakePathBck(lom.Bck().Bck)
-	)
-	if _, err := os.Stat(dir); err != nil {
-		return nil, fmt.Errorf("failed to create %s: bucket directory %s %w", fqn, dir, err)
+func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
+	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cmn.PermRWR)
+	if err == nil || !os.IsNotExist(err) {
+		return
 	}
-	fh, err := cmn.CreateFile(fqn)
-	if err != nil {
-		return nil, fmt.Errorf("%s: failed to create %s: %w", lom, fqn, err)
+	// slow path
+	bdir := lom.mpathInfo.MakePathBck(lom.Bck().Bck)
+	if _, err = os.Stat(bdir); err != nil {
+		return nil, fmt.Errorf("%s: bucket directory %w", lom, err)
 	}
-	return fh, nil
+	fdir := filepath.Dir(fqn)
+	if err = cmn.CreateDir(fdir); err != nil {
+		return
+	}
+	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cmn.PermRWR)
+	return
 }
