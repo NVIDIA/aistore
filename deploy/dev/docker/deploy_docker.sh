@@ -69,9 +69,9 @@ save_env() {
     echo "PUB_SUBNET=${PUB_SUBNET}" >> ${TMP_ENV}
     echo "INT_CONTROL_SUBNET=${INT_CONTROL_SUBNET}" >> ${TMP_ENV}
     echo "INT_DATA_SUBNET=${INT_DATA_SUBNET}" >> ${TMP_ENV}
-    echo "HOSTNAME_LIST=${IPV4LIST}" >> ${TMP_ENV}
-    echo "HOSTNAME_LIST_INTRA_CONTROL=${IPV4LIST_INTRA_CONTROL}" >> ${TMP_ENV}
-    echo "HOSTNAME_LIST_INTRA_DATA=${IPV4LIST_INTRA_DATA}" >> ${TMP_ENV}
+    echo "HOSTNAME_LIST=${HOSTNAME_LIST}" >> ${TMP_ENV}
+    echo "HOSTNAME_LIST_INTRA_CONTROL=${HOSTNAME_LIST_INTRA_CONTROL}" >> ${TMP_ENV}
+    echo "HOSTNAME_LIST_INTRA_DATA=${HOSTNAME_LIST_INTRA_DATA}" >> ${TMP_ENV}
 }
 
 save_setup() {
@@ -431,24 +431,24 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export CLUSTER=${i}
 
     for j in $(seq 2 $(((TARGET_CNT + PROXY_CNT + 1) * CLUSTER_CNT))); do
-        HOSTNAME_LIST="${IPV4LIST}${PUB_NET}.$j,"
+        HOSTNAME_LIST="${HOSTNAME_LIST}${PUB_NET}.$j,"
     done
     if [ "$HOSTNAME_LIST" != "" ]; then
-        HOSTNAME_LIST=${IPV4LIST/%?/} # remove last ","
+        HOSTNAME_LIST=${HOSTNAME_LIST/%?/} # remove last ","
     fi
 
     if [ "${NETWORK}" = "multi" ]; then
         # HOSTNAME_LIST_INTRA
         for j in $(seq 2 $(((TARGET_CNT + PROXY_CNT + 1) * CLUSTER_CNT))); do
-            HOSTNAME_LIST_INTRA_CONTROL="${IPV4LIST_INTRA_CONTROL}${INT_CONTROL_NET}.$j,"
+            HOSTNAME_LIST_INTRA_CONTROL="${HOSTNAME_LIST_INTRA_CONTROL}${INT_CONTROL_NET}.$j,"
         done
-        HOSTNAME_LIST_INTRA_CONTROL=${IPV4LIST_INTRA_CONTROL/%?/} # remove last ","
+        HOSTNAME_LIST_INTRA_CONTROL=${HOSTNAME_LIST_INTRA_CONTROL/%?/} # remove last ","
 
         # HOSTNAME_LIST_INTRA_DATA
         for j in $(seq 2 $(((TARGET_CNT + PROXY_CNT + 1) * CLUSTER_CNT))); do
-            HOSTNAME_LIST_INTRA_DATA="${IPV4LIST_INTRA_DATA}${INT_DATA_NET}.$j,"
+            HOSTNAME_LIST_INTRA_DATA="${HOSTNAME_LIST_INTRA_DATA}${INT_DATA_NET}.$j,"
         done
-        HOSTNAME_LIST_INTRA_DATA=${IPV4LIST_INTRA_DATA/%?/} # remove last ","
+        HOSTNAME_LIST_INTRA_DATA=${HOSTNAME_LIST_INTRA_DATA/%?/} # remove last ","
     fi
 
     save_env
