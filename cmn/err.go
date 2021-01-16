@@ -96,6 +96,9 @@ type (
 		PodName string
 		SvcName string
 	}
+	SoftError struct {
+		what string
+	}
 )
 
 var (
@@ -118,6 +121,12 @@ func IsEOF(err error) bool {
 
 func IsErrAborted(err error) bool {
 	return errors.As(err, &AbortedError{})
+}
+
+// IsErrorSoft returns true if the error is not critical and can be
+// ignored in some cases(e.g, when `--force` is set)
+func IsErrSoft(err error) bool {
+	return errors.As(err, &SoftError{})
 }
 
 ////////////////////////
@@ -430,6 +439,9 @@ func (e *ETLError) WithContext(ctx *ETLErrorContext) *ETLError {
 		withETLName(ctx.ETLName).
 		withSvcName(ctx.SvcName)
 }
+
+func NewSoftError(what string) SoftError { return SoftError{what} }
+func (e SoftError) Error() string        { return e.what }
 
 ////////////////////////////
 // error grouping helpers //

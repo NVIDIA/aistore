@@ -198,6 +198,11 @@ func copyProps(src, dst interface{}) {
 	)
 
 	for i := 0; i < srcVal.NumField(); i++ {
+		copyTag, ok := srcVal.Type().Field(i).Tag.Lookup("copy")
+		if ok && copyTag == "skip" {
+			continue
+		}
+
 		var (
 			srcValField = srcVal.Field(i)
 			dstValField = dstVal.FieldByName(srcVal.Type().Field(i).Name)

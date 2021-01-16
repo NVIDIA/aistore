@@ -15,6 +15,7 @@ var (
 		subcmdCreateBucket: {
 			ignoreErrorFlag,
 			bucketPropsFlag,
+			forceFlag,
 		},
 	}
 
@@ -43,6 +44,7 @@ func createBucketHandler(c *cli.Context) (err error) {
 			return err
 		}
 		props = &propSingleBck
+		props.Force = flagIsSet(c, forceFlag)
 	}
 	buckets, err := bucketsFromArgsOrEnv(c)
 	if err != nil {

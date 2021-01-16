@@ -184,6 +184,9 @@ type (
 		RefDirectory *string `json:"ref_directory"`
 	}
 
+	// After parse and validation, BucketPropsToUpdate are copied to BucketProps.
+	// The struct may have extra fields that do not exist in BucketProps.
+	// Add tag 'copy:"skip"' to ignore those fields when copying values.
 	BucketPropsToUpdate struct {
 		BackendBck *BckToUpdate         `json:"backend_bck"`
 		Versioning *VersionConfToUpdate `json:"versioning"`
@@ -194,6 +197,7 @@ type (
 		Access     *AccessAttrs         `json:"access,string"`
 		MDWrite    *MDWritePolicy       `json:"md_write"`
 		Extra      *ExtraToUpdate       `json:"extra"`
+		Force      bool                 `json:"force" copy:"skip" list:"omit"`
 	}
 
 	BckToUpdate struct {
@@ -480,16 +484,21 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 
 	validationArgs := &ValidationArgs{TargetCnt: targetCnt}
 	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, bp.MDWrite}
+	var softErr error
 	for _, validator := range validators {
 		if err := validator.ValidateAsProps(validationArgs); err != nil {
-			return err
+			if IsErrSoft(err) {
+				softErr = err
+			} else {
+				return err
+			}
 		}
 	}
 
 	if bp.Mirror.Enabled && bp.EC.Enabled {
 		return fmt.Errorf("cannot enable mirroring and ec at the same time for the same bucket")
 	}
-	return nil
+	return softErr
 }
 
 func (bp *BucketProps) Apply(propsToUpdate BucketPropsToUpdate) {

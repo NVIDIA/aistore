@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"reflect"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -902,7 +901,9 @@ func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate cmn.Bucket
 		// TODO: Check if the `RefDirectory` does not overlap with other buckets.
 	}
 	if bprops.EC.Enabled && nprops.EC.Enabled {
-		if !reflect.DeepEqual(bprops.EC, nprops.EC) {
+		sameSlices := bprops.EC.DataSlices == nprops.EC.DataSlices && bprops.EC.ParitySlices == nprops.EC.ParitySlices
+		sameLimit := bprops.EC.ObjSizeLimit == nprops.EC.ObjSizeLimit
+		if !sameSlices || (!sameLimit && !propsToUpdate.Force) {
 			err = fmt.Errorf("%s: once enabled, EC configuration can be only disabled but cannot change", p.si)
 			return
 		}
@@ -932,6 +933,10 @@ func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate cmn.Bucket
 
 	targetCnt := p.owner.smap.Get().CountActiveTargets()
 	err = nprops.Validate(targetCnt)
+	if cmn.IsErrSoft(err) && propsToUpdate.Force {
+		glog.Warningf("Ignoring soft error: %v", err)
+		err = nil
+	}
 	return
 }
 

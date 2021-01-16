@@ -18,6 +18,7 @@ var (
 		subcmdSetConfig: {},
 		subcmdSetProps: {
 			resetFlag,
+			forceFlag,
 		},
 		subcmdSetPrimary: {},
 	}
@@ -82,6 +83,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
+	updateProps.Force = flagIsSet(c, forceFlag)
 
 	newProps := origProps.Clone()
 	newProps.Apply(updateProps)

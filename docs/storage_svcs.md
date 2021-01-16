@@ -124,6 +124,10 @@ Versioning      Disabled
 
 Once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
 
+Only option `ec.objsize_limit` can be changed if EC is enabled. Modifying this property requires `force` flag to be set.
+
+Note that after changing any EC option the cluster does not re-encode existing objects. The existing objects are rebuilt only after the objects are changed(rename, put new version etc).
+
 ## N-way mirror
 
 Yet another supported storage service is n-way mirroring providing for bucket-level data redundancy and data protection. The service makes sure that each object in a given distributed (local or Cloud) bucket has exactly **n** object replicas, where n is an arbitrary user-defined integer greater or equal 1.

@@ -767,16 +767,19 @@ func (c *ECConf) Validate(_ *Config) error {
 }
 
 func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
+	const insuffientNodes = "EC config (%d data, %d parity)slices requires at least %d targets (have %d)"
 	if !c.Enabled {
 		return nil
 	}
 	if err := c.Validate(nil); err != nil {
 		return err
 	}
-	if required := c.RequiredEncodeTargets(); args.TargetCnt < required {
-		return fmt.Errorf(
-			"EC config (%d data, %d parity)slices requires at least %d targets (have %d)",
-			c.DataSlices, c.ParitySlices, required, args.TargetCnt)
+	required := c.RequiredEncodeTargets()
+	if c.ParitySlices > args.TargetCnt {
+		return fmt.Errorf(insuffientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt)
+	}
+	if args.TargetCnt < required {
+		return NewSoftError(fmt.Sprintf(insuffientNodes, c.DataSlices, c.ParitySlices, required, args.TargetCnt))
 	}
 	return nil
 }
