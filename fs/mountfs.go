@@ -68,6 +68,11 @@ type (
 		// LOM caches
 		lomCaches cmn.MultiSyncMap
 
+		// bucket path cache
+		bpc struct {
+			sync.RWMutex
+			m map[uint64]string
+		}
 		// capacity
 		cmu      sync.RWMutex
 		capacity Capacity
@@ -134,6 +139,7 @@ func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *Mou
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, cmn.MLCG32),
 	}
+	mi.bpc.m = make(map[uint64]string, 16)
 	return mi
 }
 
@@ -270,11 +276,21 @@ func (mi *MountpathInfo) SetDaemonIDXattr(daeID string) error {
 // make-path methods
 
 func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int) (buf []byte) {
-	var (
-		nsLen, bckNameLen, ctLen int
-
-		provLen = 1 + 1 + len(bck.Provider)
-	)
+	var provLen, nsLen, bckNameLen, ctLen int
+	if contentType != "" {
+		debug.Assert(len(contentType) == contentTypeLen)
+		ctLen = 1 + 1 + contentTypeLen
+		if bck.Props != nil && bck.Props.BID != 0 {
+			mi.bpc.RLock()
+			bdir, ok := mi.bpc.m[bck.Props.BID]
+			mi.bpc.RUnlock()
+			if ok {
+				buf = make([]byte, 0, len(bdir)+ctLen+extra)
+				buf = append(buf, bdir...)
+				goto ct
+			}
+		}
+	}
 	if !bck.Ns.IsGlobal() {
 		nsLen = 1
 		if bck.Ns.IsRemote() {
@@ -285,12 +301,7 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 	if bck.Name != "" {
 		bckNameLen = 1 + len(bck.Name)
 	}
-	if contentType != "" {
-		cmn.Assert(bckNameLen > 0)
-		cmn.Assert(len(contentType) == contentTypeLen)
-		ctLen = 1 + 1 + contentTypeLen
-	}
-
+	provLen = 1 + 1 + len(bck.Provider)
 	buf = make([]byte, 0, len(mi.Path)+provLen+nsLen+bckNameLen+ctLen+extra)
 	buf = append(buf, mi.Path...)
 	buf = append(buf, filepath.Separator, prefProvider)
@@ -308,6 +319,7 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 		buf = append(buf, filepath.Separator)
 		buf = append(buf, bck.Name...)
 	}
+ct:
 	if ctLen > 0 {
 		buf = append(buf, filepath.Separator, prefCT)
 		buf = append(buf, contentType...)
@@ -316,25 +328,83 @@ func (mi *MountpathInfo) makePathBuf(bck cmn.Bck, contentType string, extra int)
 }
 
 func (mi *MountpathInfo) MakePathBck(bck cmn.Bck) string {
+	if bck.Props == nil {
+		buf := mi.makePathBuf(bck, "", 0)
+		return *(*string)(unsafe.Pointer(&buf))
+	}
+
+	bid := bck.Props.BID
+	debug.Assert(bid != 0)
+	mi.bpc.RLock()
+	dir, ok := mi.bpc.m[bid]
+	mi.bpc.RUnlock()
+	if ok {
+		return dir
+	}
 	buf := mi.makePathBuf(bck, "", 0)
-	return *(*string)(unsafe.Pointer(&buf))
+	dir = *(*string)(unsafe.Pointer(&buf))
+
+	mi.bpc.Lock()
+	mi.bpc.m[bid] = dir
+	mi.bpc.Unlock()
+	return dir
 }
 
 func (mi *MountpathInfo) MakePathCT(bck cmn.Bck, contentType string) string {
 	debug.AssertFunc(bck.Valid, bck)
-	cmn.Assert(contentType != "")
+	debug.Assert(contentType != "")
 	buf := mi.makePathBuf(bck, contentType, 0)
 	return *(*string)(unsafe.Pointer(&buf))
 }
 
 func (mi *MountpathInfo) MakePathFQN(bck cmn.Bck, contentType, objName string) string {
 	debug.AssertFunc(bck.Valid, bck)
-	cmn.Assert(contentType != "" && objName != "")
+	debug.Assert(contentType != "" && objName != "")
 	buf := mi.makePathBuf(bck, contentType, 1+len(objName))
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return *(*string)(unsafe.Pointer(&buf))
 }
+
+func (mi *MountpathInfo) makeDelPathBck(bck cmn.Bck, bid uint64) string {
+	mi.bpc.Lock()
+	dir, ok := mi.bpc.m[bid]
+	if ok {
+		delete(mi.bpc.m, bid)
+	}
+	mi.bpc.Unlock()
+	if !ok {
+		dir = mi.MakePathBck(bck)
+	}
+	return dir
+}
+
+// Creates all CT directories for a given (mountpath, bck) - NOTE handling of empty dirs
+func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
+	for contentType := range CSM.RegisteredContentTypes {
+		dir := mi.MakePathCT(bck, contentType)
+		if err := Access(dir); err == nil {
+			names, empty, errEmpty := IsDirEmpty(dir)
+			if errEmpty != nil {
+				return num, errEmpty
+			}
+			if !empty {
+				err = fmt.Errorf("bucket %s: directory %s already exists and is not empty (%v...)",
+					bck, dir, names)
+				if contentType != WorkfileType {
+					return num, err
+				}
+				glog.Warning(err)
+			}
+		} else if err := cmn.CreateDir(dir); err != nil {
+			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
+		}
+		num++
+	}
+	return num, nil
+}
+
+// available/used capacity
 
 func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capacity, err error) {
 	if !refresh {
@@ -362,32 +432,6 @@ func (mi *MountpathInfo) getCapacity(config *cmn.Config, refresh bool) (c Capaci
 	c = mi.capacity
 	mi.cmu.Unlock()
 	return
-}
-
-// Creates all CT directories for a given (mountpath, bck)
-// NOTE: notice handling of empty dirs
-func (mi *MountpathInfo) createBckDirs(bck cmn.Bck) (num int, err error) {
-	for contentType := range CSM.RegisteredContentTypes {
-		dir := mi.MakePathCT(bck, contentType)
-		if err := Access(dir); err == nil {
-			names, empty, errEmpty := IsDirEmpty(dir)
-			if errEmpty != nil {
-				return num, errEmpty
-			}
-			if !empty {
-				err = fmt.Errorf("bucket %s: directory %s already exists and is not empty (%v...)",
-					bck, dir, names)
-				if contentType != WorkfileType {
-					return num, err
-				}
-				glog.Warning(err)
-			}
-		} else if err := cmn.CreateDir(dir); err != nil {
-			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
-		}
-		num++
-	}
-	return num, nil
 }
 
 ///////////////
@@ -760,40 +804,30 @@ func CreateBuckets(op string, bcks ...cmn.Bck) (errs []error) {
 	return
 }
 
-func DestroyBuckets(op string, bcks ...cmn.Bck) error {
+func DestroyBucket(op string, bck cmn.Bck, bid uint64) error {
 	const destroyStr = "destroy-ais-bucket-dir"
-	var (
-		availablePaths, _  = Get()
-		totalDirs          = len(availablePaths) * len(bcks)
-		totalDestroyedDirs = 0
-	)
-	for _, mpathInfo := range availablePaths {
-		for _, bck := range bcks {
-			dir := mpathInfo.MakePathBck(bck)
-			if err := mpathInfo.MoveToTrash(dir); err != nil {
-				glog.Errorf("%s: failed to %s (dir: %q, err: %v)", op, destroyStr, dir, err)
-			} else {
-				totalDestroyedDirs++
-			}
+	var n int
+	availablePaths, _ := Get()
+	for _, mi := range availablePaths {
+		dir := mi.makeDelPathBck(bck, bid)
+		if err := mi.MoveToTrash(dir); err != nil {
+			glog.Errorf("%s: failed to %s (dir: %q, err: %v)", op, destroyStr, dir, err)
+		} else {
+			n++
 		}
 	}
-	if totalDestroyedDirs != totalDirs {
-		return fmt.Errorf("failed to destroy %d out of %d buckets' directories: %v",
-			totalDirs-totalDestroyedDirs, totalDirs, bcks)
-	}
-	if glog.FastV(4, glog.SmoduleFS) {
-		glog.Infof("%s: %s (buckets %v, num dirs %d)", op, destroyStr, bcks, totalDirs)
+	if count := len(availablePaths); n < count {
+		return fmt.Errorf("bucket %s: failed to destroy %d/%d dirs", bck, count-n, count)
 	}
 	return nil
 }
 
-func RenameBucketDirs(bckFrom, bckTo cmn.Bck) (err error) {
+func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo cmn.Bck) (err error) {
 	availablePaths, _ := Get()
 	renamed := make([]*MountpathInfo, 0, len(availablePaths))
-	for _, mpathInfo := range availablePaths {
-		fromPath := mpathInfo.MakePathBck(bckFrom)
-		toPath := mpathInfo.MakePathBck(bckTo)
-
+	for _, mi := range availablePaths {
+		fromPath := mi.makeDelPathBck(bckFrom, bidFrom)
+		toPath := mi.MakePathBck(bckTo)
 		// os.Rename fails when renaming to a directory which already exists.
 		// We should remove destination bucket directory before rename. It's reasonable to do so
 		// as all targets agreed to rename and rename was committed in BMD.
@@ -801,15 +835,15 @@ func RenameBucketDirs(bckFrom, bckTo cmn.Bck) (err error) {
 		if err = os.Rename(fromPath, toPath); err != nil {
 			break
 		}
-		renamed = append(renamed, mpathInfo)
+		renamed = append(renamed, mi)
 	}
 
 	if err == nil {
 		return
 	}
-	for _, mpathInfo := range renamed {
-		fromPath := mpathInfo.MakePathBck(bckTo)
-		toPath := mpathInfo.MakePathBck(bckFrom)
+	for _, mi := range renamed {
+		fromPath := mi.MakePathBck(bckTo)
+		toPath := mi.MakePathBck(bckFrom)
 		if erd := os.Rename(fromPath, toPath); erd != nil {
 			glog.Error(erd)
 		}

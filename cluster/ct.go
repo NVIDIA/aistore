@@ -24,15 +24,13 @@ type CT struct {
 }
 
 // interface guard
-var (
-	_ fs.PartsFQN = (*CT)(nil)
-)
+var _ fs.PartsFQN = (*CT)(nil)
 
 func (ct *CT) FQN() string                  { return ct.fqn }
 func (ct *CT) ObjectName() string           { return ct.objName }
 func (ct *CT) ContentType() string          { return ct.contentType }
 func (ct *CT) Bck() *Bck                    { return ct.bck }
-func (ct *CT) Bucket() cmn.Bck              { return ct.Bck().Bck }
+func (ct *CT) Bucket() cmn.Bck              { return ct.bck.Bucket() }
 func (ct *CT) MpathInfo() *fs.MountpathInfo { return ct.mpathInfo }
 
 // e.g.: generate workfile FQN from object FQN:
@@ -122,7 +120,7 @@ func (ct *CT) Make(toType string, pref ...string /*optional prefix*/) string {
 // save to workFQN; second, rename workFQN to ct.FQN. If unset, it writes
 // directly to ct.FQN
 func (ct *CT) Write(t Target, reader io.Reader, size int64, workFQN ...string) (err error) {
-	bdir := ct.mpathInfo.MakePathBck(ct.bck.Bck)
+	bdir := ct.mpathInfo.MakePathBck(ct.Bucket())
 	if err := fs.Access(bdir); err != nil {
 		return err
 	}

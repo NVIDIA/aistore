@@ -78,7 +78,7 @@ var _ = Describe("Mirror", func() {
 			// Make copy
 			lom.Lock(true)
 			defer lom.Unlock(true)
-			copyFQN := fs.CSM.FQN(&mi2, lom.Bck().Bck, fs.ObjectType, lom.ObjName)
+			copyFQN := mi2.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 			clone, err := lom.CopyObject(copyFQN, nil)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(expectedCopyFQN).To(BeARegularFile())

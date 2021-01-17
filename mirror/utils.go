@@ -77,9 +77,9 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 	//  While copying we may find out that some copies do not exist -
 	//  these copies will be removed and `NumCopies()` will decrease.
 	for lom.NumCopies() < copies {
-		if mpathInfo := findLeastUtilized(lom); mpathInfo != nil {
+		if mi := findLeastUtilized(lom); mi != nil {
 			var clone *cluster.LOM
-			copyFQN := fs.CSM.FQN(mpathInfo, lom.Bck().Bck, fs.ObjectType, lom.ObjName)
+			copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 			if clone, err = lom.CopyObject(copyFQN, buf); err != nil {
 				glog.Errorln(err)
 				return

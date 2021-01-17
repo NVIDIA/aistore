@@ -659,7 +659,7 @@ var _ = Describe("LOM", func() {
 			Expect(dst.Size()).To(BeEquivalentTo(testFileSize))
 
 			hrwLom := &cluster.LOM{ObjName: lom.ObjName}
-			Expect(hrwLom.Init(bck.Bck)).NotTo(HaveOccurred())
+			Expect(hrwLom.Init(bck.Bucket())).NotTo(HaveOccurred())
 			hrwLom.Uncache(false)
 
 			// Reload copy, to make sure it is fresh

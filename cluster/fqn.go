@@ -28,12 +28,10 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 }
 
 func HrwFQN(bck *Bck, contentType, objName string) (fqn string, digest uint64, err error) {
-	var (
-		mpathInfo *fs.MountpathInfo
-		uname     = bck.MakeUname(objName)
-	)
-	if mpathInfo, digest, err = HrwMpath(uname); err == nil {
-		fqn = fs.CSM.FQN(mpathInfo, bck.Bck, contentType, objName)
+	var mi *fs.MountpathInfo
+	uname := bck.MakeUname(objName)
+	if mi, digest, err = HrwMpath(uname); err == nil {
+		fqn = mi.MakePathFQN(bck.Bucket(), contentType, objName)
 	}
 	return
 }

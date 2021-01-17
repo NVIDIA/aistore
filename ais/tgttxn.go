@@ -401,7 +401,7 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 			return err // must not happen at commit time
 		}
 
-		err = fs.RenameBucketDirs(txnRenB.bckFrom.Bck, txnRenB.bckTo.Bck)
+		err = fs.RenameBucketDirs(txnRenB.bckFrom.Props.BID, txnRenB.bckFrom.Bck, txnRenB.bckTo.Bck)
 		if err != nil {
 			return err // ditto
 		}

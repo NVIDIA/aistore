@@ -117,9 +117,9 @@ func (lom *LOM) IsHRW() bool     { return lom.HrwFQN == lom.FQN } // subj to res
 
 func (lom *LOM) ObjectName() string           { return lom.ObjName }
 func (lom *LOM) Bck() *Bck                    { return lom.bck }
+func (lom *LOM) Bucket() cmn.Bck              { return lom.bck.Bucket() } // as fs.PartsFQN
 func (lom *LOM) BckName() string              { return lom.bck.Name }
 func (lom *LOM) Bprops() *cmn.BucketProps     { return lom.bck.Props }
-func (lom *LOM) Bucket() cmn.Bck              { return lom.bck.Bck }
 func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
 
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
@@ -285,8 +285,8 @@ func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 		return
 	}
 	availablePaths, _ := fs.Get()
-	for _, mpathInfo := range availablePaths {
-		copyFQN := fs.CSM.FQN(mpathInfo, lom.bck.Bck, fs.ObjectType, lom.ObjName)
+	for _, mi := range availablePaths {
+		copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
@@ -342,16 +342,16 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 
 	availablePaths, _ := fs.Get()
 	buf, slab := T.MMSA().Alloc()
-	for path, mpathInfo := range availablePaths {
+	for path, mi := range availablePaths {
 		if path == lom.mpathInfo.Path {
 			continue
 		}
-		fqn := fs.CSM.FQN(mpathInfo, lom.bck.Bck, fs.ObjectType, lom.ObjName)
+		fqn := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
 		src := lom.Clone(fqn)
-		if err := src.Init(lom.bck.Bck); err != nil {
+		if err := src.Init(lom.Bucket()); err != nil {
 			continue
 		}
 		if err := src.Load(false); err != nil {
@@ -734,7 +734,7 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 		if err != nil {
 			return
 		}
-		lom.FQN = fs.CSM.FQN(lom.mpathInfo, lom.bck.Bck, fs.ObjectType, lom.ObjName)
+		lom.FQN = lom.mpathInfo.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		lom.HrwFQN = lom.FQN
 	}
 	return
@@ -790,9 +790,9 @@ func (lom *LOM) checkBucket() error {
 	if !present { // bucket does not exist
 		node := T.Snode().String()
 		if lom.bck.IsRemote() {
-			return cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck, node)
+			return cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket(), node)
 		}
-		return cmn.NewErrorBucketDoesNotExist(lom.Bck().Bck, node)
+		return cmn.NewErrorBucketDoesNotExist(lom.Bucket(), node)
 	}
 	if lom.md.bckID == bprops.BID {
 		return nil // ok
@@ -1023,7 +1023,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 		return
 	}
 	// slow path
-	bdir := lom.mpathInfo.MakePathBck(lom.Bck().Bck)
+	bdir := lom.mpathInfo.MakePathBck(lom.Bucket())
 	if _, err = os.Stat(bdir); err != nil {
 		return nil, fmt.Errorf("%s: bucket directory %w", lom, err)
 	}

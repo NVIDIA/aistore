@@ -66,6 +66,11 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 func NewBckEmbed(bck cmn.Bck) *Bck { return &Bck{Bck: bck} }
 func BackendBck(bck *Bck) *Bck     { return &Bck{Bck: bck.Props.BackendBck} }
 
+func (b *Bck) Bucket() cmn.Bck {
+	b.Bck.Props = b.Props
+	return b.Bck
+}
+
 func (b *Bck) MakeUname(objName string) string { return b.Bck.MakeUname(objName) }
 
 func (b *Bck) MaskBID(i int64) uint64 {

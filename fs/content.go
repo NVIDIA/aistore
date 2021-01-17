@@ -93,7 +93,7 @@ func (f *ContentSpecMgr) GenContentFQN(parts PartsFQN, contentType, prefix strin
 		spec    = f.RegisteredContentTypes[contentType]
 		objName = spec.GenUniqueFQN(parts.ObjectName(), prefix)
 	)
-	return f.FQN(parts.MpathInfo(), parts.Bucket(), contentType, objName)
+	return parts.MpathInfo().MakePathFQN(parts.Bucket(), contentType, objName)
 }
 
 // FileSpec returns the specification/attributes and information about fqn. spec
@@ -119,10 +119,6 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 	resolver = spec
 	info = &ContentInfo{Dir: dir, Base: origBase, Old: old, Type: parsedFQN.ContentType}
 	return
-}
-
-func (f *ContentSpecMgr) FQN(mi *MountpathInfo, bck cmn.Bck, contentType, objName string) (fqn string) {
-	return mi.MakePathFQN(bck, contentType, objName)
 }
 
 func (f *ContentSpecMgr) PermToEvict(fqn string) (ok, isOld bool) {

@@ -653,7 +653,7 @@ func (t *targetrunner) _recvBMD(newBMD *bucketMD, msg *aisMsg, tag, caller strin
 			bcksToDelete = append(bcksToDelete, obck)
 			// TODO: revisit error handling.
 			// Consider performing DestroyBuckets asynchronously outside `bmd.Lock()`.
-			if err := fs.DestroyBuckets("recv-bmd-"+msg.Action, obck.Bck); err != nil {
+			if err := fs.DestroyBucket("recv-bmd-"+msg.Action, obck.Bck, obck.Props.BID); err != nil {
 				destroyErrs += "[" + err.Error() + "]"
 			}
 		}
