@@ -22,7 +22,7 @@ var examples = `
 1. Cleanup (i.e., empty) existing bucket:
 
 	$ aisloader -bucket=nvais -duration 0s -totalputsize=0 # by default cleanup=true
-	$ aisloader -bucket=nvais -provider=cloud -cleanup=true -duration 0s -totalputsize=0
+	$ aisloader -bucket=nvais -provider=aws -cleanup=true -duration 0s -totalputsize=0
 
 2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):
 
@@ -30,13 +30,13 @@ var examples = `
 
 3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
 
-	$ aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=cloud -cleanup=false
+	$ aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=aws -cleanup=false
 
 4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket.
    PUT will generate random object names and is limited by the 10GB total size.
    Cleanup is not disabled, which means that upon completion all generated objects will be deleted:
 
-	$ aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
+	$ aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -provider=aws -totalputsize=10G
 
 5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 

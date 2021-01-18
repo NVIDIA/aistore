@@ -60,8 +60,8 @@ $ ais create bucket ais://@Bghort1l/bucket_name --bucket-props='{"versioning": {
 #### Incorrect buckets creation
 
 ```console
-$ ais create bucket cloud://bucket_name
-Creating cloud buckets (cloud://bucket_name) is not supported
+$ ais create bucket aws://bucket_name
+Creating cloud buckets (aws://bucket_name) is not supported
 ```
 
 ## Delete bucket
@@ -112,8 +112,8 @@ $ ais rm bucket ais://@Bghort1l#ml/bucket_name
 Removing cloud buckets is not supported.
 
 ```console
-$ ais rm bucket cloud://bucket_name
-Removing cloud buckets (cloud://bucket_name) is not supported
+$ ais rm bucket aws://bucket_name
+Removing cloud buckets (aws://bucket_name) is not supported
 ```
 
 ## List bucket names
@@ -126,7 +126,7 @@ List all bucket names.
 
 List all bucket names matching the `ngn*` regex expression.
 
-`ais ls cloud://` or `ais ls ais://`
+`ais ls aws://` or `ais ls ais://`
 
 List all bucket names for the specific provider.
 
@@ -210,7 +210,7 @@ shard-1.tar	16.00KiB	1
 List objects in the cloud bucket `bucket_name`.
 
 ```console
-ais ls cloud://bucket_name
+ais ls aws://bucket_name
 NAME		SIZE		VERSION
 shard-0.tar	16.00KiB	1
 shard-1.tar	16.00KiB	1

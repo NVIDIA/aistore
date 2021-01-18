@@ -53,10 +53,10 @@ GET "imagenet_train-000010.tgz" from bucket "imagenet" as "imagenet_train-000010
 
 #### Get object and print it to standard output
 
-Get the `imagenet_train-000010.tgz` object from the `imagenet` cloud bucket and write it to standard output.
+Get the `imagenet_train-000010.tgz` object from the `imagenet` AWS bucket and write it to standard output.
 
 ```console
-$ ais get cloud://imagenet/imagenet_train-000010.tgz -
+$ ais get aws://imagenet/imagenet_train-000010.tgz -
 ```
 
 #### Check if object is cached
