@@ -101,7 +101,7 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) []JobInfo {
 }
 
 // Get gets manager with given mangerUUID. When manager with given uuid does not
-// exists and user requested persisted lookup, it looks for it in persistent
+// exist and user requested persisted lookup, it looks for it in persistent
 // storage and returns it if found. Returns false if does not exist, true
 // otherwise.
 func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {

@@ -41,7 +41,7 @@ type (
 	}
 
 	// randReader implements Reader.
-	// It doesn't not use a file or allocated memory as data backing.
+	// It doesn't use a file or allocated memory as data backing.
 	randReader struct {
 		seed   int64
 		rnd    *rand.Rand

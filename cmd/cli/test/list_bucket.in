@@ -6,6 +6,8 @@ ais ls $BUCKET_1 --props=name,size,version
 ais ls $BUCKET_1 --props=name,name,size,size,version
 ais ls $BUCKET_1 --props=all
 ais ls ais://$BUCKET_1/
+ais ls cloud://$BUCKET_1/ // FAIL "invalid cloud provider "cloud""
+ais ls aws://$BUCKET_1/ // FAIL "bucket "aws://$BUCKET_1" does not exist"
 ais ls gs:// // IGNORE
 ais ls s3:// // IGNORE
 ais ls aiss://$BUCKET_1 // FAIL "invalid cloud provider "aiss""

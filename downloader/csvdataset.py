@@ -13,7 +13,7 @@ if not bucket_name:
 bucket_api = ais_client.BucketApi()
 ais_buckets = bucket_api.list_names().ais
 if bucket_name not in ais_buckets:
-    print('Bucket "%s" does not exists, creating...' % bucket_name)
+    print('Bucket "%s" does not exist, creating...' % bucket_name)
     input_params = ais_client.InputParameters(ais_client.Actions.CREATE_BCK)
     bucket_api.perform_operation(bucket_name, input_params)
 

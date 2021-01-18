@@ -70,7 +70,7 @@ import (
 //   Step #1 - transferring existing CTs:
 //     - if full object does not exist, and this targets has a slice, the node
 //       sends slice to the "default" node to rebuild
-//     - if full object does not exists, and this node should have a slice by HRW,
+//     - if full object does not exist, and this node should have a slice by HRW,
 //       it starts waiting for a slice from "default" target
 //     - if this node is "default" and object does not exist, the node starts
 //       waiting all existing slices and add the object to 'rebuild' list

@@ -52,8 +52,8 @@ func UnregisterNode(ctx *Ctx, proxyURL string, args *cmn.ActValDecommision, time
 		return err
 	}
 
-	// If node does not exists in cluster we should not wait for map version
-	// sync because update will not be scheduled
+	// If node does not exist in cluster we should not wait for map version
+	// sync because update will not be scheduled.
 	if node != nil {
 		return WaitMapVersionSync(ctx, time.Now().Add(timeout), smap, smap.Version, cmn.NewStringSet(node.ID()))
 	}

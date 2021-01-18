@@ -500,7 +500,7 @@ func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request,
 	}
 	_, exists := p.owner.bmd.get().Get(bck)
 	if !exists {
-		p.invalmsghdlr(w, r, "bucket does not exists", http.StatusNotFound)
+		p.invalmsghdlr(w, r, "bucket does not exist", http.StatusNotFound)
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)

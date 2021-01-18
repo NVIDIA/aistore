@@ -315,7 +315,7 @@ func (mw *WriterMulti) Write(b []byte) (n int, err error) {
 // misc file and dir //
 ///////////////////////
 
-// CreateDir creates directory if does not exists. Does not return error when
+// CreateDir creates directory if does not exist. Does not return error when
 // directory already exists.
 func CreateDir(dir string) error {
 	return os.MkdirAll(dir, configDirMode)

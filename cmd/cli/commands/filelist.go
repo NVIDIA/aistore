@@ -123,7 +123,7 @@ func generateFileList(path, trimPrefix, appendPrefix string, recursive bool) ([]
 				return nil, fmt.Errorf("path %q is not a directory", path)
 			}
 		} else {
-			return nil, fmt.Errorf("path %q does not exists", path)
+			return nil, fmt.Errorf("path %q does not exist", path)
 		}
 	} else if info.IsDir() {
 		// the entire directory. Mask '*' is applied automatically

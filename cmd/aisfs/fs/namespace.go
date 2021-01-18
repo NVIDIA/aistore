@@ -152,7 +152,7 @@ func (ns *namespace) lookup(p string) (res EntryLookupResult, exists bool) {
 		return res, true
 	}
 
-	// If it does not exists we are not sure if it actually does not exist or
+	// If it does not exist we are not sure if it actually does not exist or
 	// just was not cached.
 	obj, exists, err := ns.bck.HeadObject(p)
 	if err != nil || !exists {
