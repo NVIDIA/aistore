@@ -45,12 +45,12 @@ pushd ${root_dir}
 make kill
 make clean
 
-echo -e "${targets}\n${proxies}\n5\n${aws_provider}${gcp_provider}${azure_provider}${hdfs_provider}\nn" | make deploy
+echo -e "${targets}\n${proxies}\n5\n${aws_provider}${gcp_provider}${azure_provider}${hdfs_provider}\nn\n" | make deploy
 
-make aisfs && make cli
+make aisfs cli
 
 if [[ -n ${next_tier} ]]; then
-  DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\n0'
+  DEPLOY_AS_NEXT_TIER="true" make deploy <<< $'1\n1\n2\nn\nn\nn\nn\nn\n'
   sleep 4
   if [[ -z ${AIS_USE_HTTPS} ]]; then
     ais attach remote alias=http://127.0.0.1:11080
