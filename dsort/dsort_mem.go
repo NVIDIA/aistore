@@ -383,7 +383,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 						defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
 						bck := cluster.NewBck(ds.m.rs.OutputBucket, ds.m.rs.OutputProvider, cmn.NsGlobal)
-						if err := bck.Init(ds.m.ctx.bmdOwner, ds.m.ctx.t.Snode()); err != nil {
+						if err := bck.Init(ds.m.ctx.bmdOwner); err != nil {
 							return err
 						}
 						toNode, err := cluster.HrwTarget(bck.MakeUname(shard.Name), ds.m.ctx.smapOwner.Get())

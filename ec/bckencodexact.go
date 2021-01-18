@@ -79,7 +79,7 @@ func NewXactBckEncode(bck cmn.Bck, t cluster.Target, uuid string) *XactBckEncode
 
 func (r *XactBckEncode) Run() {
 	bck := cluster.NewBckEmbed(r.bck) // TODO: Bucket should be already initialized.
-	if err := bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
+	if err := bck.Init(r.t.Bowner()); err != nil {
 		r.Finish(err)
 		return
 	}

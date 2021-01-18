@@ -24,15 +24,11 @@ type (
 		signal syscall.Signal
 	}
 
-	nodeBckPair struct {
-		node string
-		bck  Bck
-	}
-	ErrorBucketAlreadyExists      nodeBckPair
-	ErrorRemoteBucketDoesNotExist nodeBckPair
-	ErrorCloudBucketOffline       nodeBckPair
-	ErrorBucketDoesNotExist       nodeBckPair
-	ErrorBucketIsBusy             nodeBckPair
+	ErrorBucketAlreadyExists      struct{ bck Bck }
+	ErrorRemoteBucketDoesNotExist struct{ bck Bck }
+	ErrorCloudBucketOffline       struct{ bck Bck }
+	ErrorBucketDoesNotExist       struct{ bck Bck }
+	ErrorBucketIsBusy             struct{ bck Bck }
 
 	ErrorInvalidBucketProvider struct {
 		bck Bck
@@ -106,13 +102,6 @@ var (
 	ErrStartupTimeout = errors.New("startup timeout")
 	ErrForwarded      = errors.New("forwarded")
 )
-
-func _errBucket(msg, node string) string {
-	if node != "" {
-		return node + ": " + msg
-	}
-	return msg
-}
 
 // EOF (to accommodate unsized streaming)
 func IsEOF(err error) bool {
@@ -204,39 +193,39 @@ func (e *SignalError) Error() string               { return fmt.Sprintf("Signal 
 // https://tldp.org/LDP/abs/html/exitcodes.html
 func (e *SignalError) ExitCode() int { return 128 + int(e.signal) }
 
-func NewErrorBucketAlreadyExists(bck Bck, node string) *ErrorBucketAlreadyExists {
-	return &ErrorBucketAlreadyExists{node: node, bck: bck}
+func NewErrorBucketAlreadyExists(bck Bck) *ErrorBucketAlreadyExists {
+	return &ErrorBucketAlreadyExists{bck: bck}
 }
 
 func (e *ErrorBucketAlreadyExists) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %q already exists", e.bck), e.node)
+	return fmt.Sprintf("bucket %q already exists", e.bck)
 }
 
-func NewErrorRemoteBucketDoesNotExist(bck Bck, node string) *ErrorRemoteBucketDoesNotExist {
-	return &ErrorRemoteBucketDoesNotExist{node: node, bck: bck}
+func NewErrorRemoteBucketDoesNotExist(bck Bck) *ErrorRemoteBucketDoesNotExist {
+	return &ErrorRemoteBucketDoesNotExist{bck: bck}
 }
 
 func (e *ErrorRemoteBucketDoesNotExist) Error() string {
 	if e.bck.IsCloud() {
-		return _errBucket(fmt.Sprintf("cloud bucket %q does not exist", e.bck), e.node)
+		return fmt.Sprintf("cloud bucket %q does not exist", e.bck)
 	}
-	return _errBucket(fmt.Sprintf("remote ais bucket %q does not exist", e.bck), e.node)
+	return fmt.Sprintf("remote ais bucket %q does not exist", e.bck)
 }
 
-func NewErrorCloudBucketOffline(bck Bck, node string) *ErrorCloudBucketOffline {
-	return &ErrorCloudBucketOffline{node: node, bck: bck}
+func NewErrorCloudBucketOffline(bck Bck) *ErrorCloudBucketOffline {
+	return &ErrorCloudBucketOffline{bck: bck}
 }
 
 func (e *ErrorCloudBucketOffline) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %q is currently unreachable", e.bck), e.node)
+	return fmt.Sprintf("bucket %q is currently unreachable", e.bck)
 }
 
-func NewErrorBucketDoesNotExist(bck Bck, node string) *ErrorBucketDoesNotExist {
-	return &ErrorBucketDoesNotExist{node: node, bck: bck}
+func NewErrorBucketDoesNotExist(bck Bck) *ErrorBucketDoesNotExist {
+	return &ErrorBucketDoesNotExist{bck: bck}
 }
 
 func (e *ErrorBucketDoesNotExist) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %q does not exist", e.bck), e.node)
+	return fmt.Sprintf("bucket %q does not exist", e.bck)
 }
 
 func NewErrorInvalidBucketProvider(bck Bck, err error) *ErrorInvalidBucketProvider {
@@ -247,12 +236,12 @@ func (e *ErrorInvalidBucketProvider) Error() string {
 	return fmt.Sprintf("%v, bucket %s", e.err, e.bck)
 }
 
-func NewErrorBucketIsBusy(bck Bck, node string) *ErrorBucketIsBusy {
-	return &ErrorBucketIsBusy{node: node, bck: bck}
+func NewErrorBucketIsBusy(bck Bck) *ErrorBucketIsBusy {
+	return &ErrorBucketIsBusy{bck: bck}
 }
 
 func (e *ErrorBucketIsBusy) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %q is currently busy, please retry later", e.bck), e.node)
+	return fmt.Sprintf("bucket %q is currently busy, please retry later", e.bck)
 }
 
 func (e *errAccessDenied) String() string {

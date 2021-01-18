@@ -155,7 +155,7 @@ func (p *proxyrunner) putBckS3(w http.ResponseWriter, r *http.Request, bucket st
 func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
 	msg := cmn.ActionMsg{Action: cmn.ActDestroyBck}
-	if err := bck.Init(p.owner.bmd, p.si); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -181,7 +181,7 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
 	defer cmn.Close(r.Body)
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, p.si); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -220,7 +220,7 @@ func (p *proxyrunner) delMultipleObjs(w http.ResponseWriter, r *http.Request, bu
 // HEAD s3/bck-name
 func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, p.si); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -243,7 +243,7 @@ func (p *proxyrunner) headBckS3(w http.ResponseWriter, r *http.Request, bucket s
 // GET s3/bckName
 func (p *proxyrunner) bckListS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, nil); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -285,7 +285,7 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	bckSrc := cluster.NewBck(parts[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bckSrc.Init(p.owner.bmd, nil); err != nil {
+	if err := bckSrc.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -294,7 +294,7 @@ func (p *proxyrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	bckDst := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bckDst.Init(p.owner.bmd, nil); err != nil {
+	if err := bckDst.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -337,7 +337,7 @@ func s3Redirect(w http.ResponseWriter, url, bck string) {
 func (p *proxyrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, nil); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -380,7 +380,7 @@ func (p *proxyrunner) putObjS3(w http.ResponseWriter, r *http.Request, items []s
 func (p *proxyrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, nil); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -419,7 +419,7 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 	}
 	bucket, objName := items[0], path.Join(items[1:]...)
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, nil); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -444,7 +444,7 @@ func (p *proxyrunner) headObjS3(w http.ResponseWriter, r *http.Request, items []
 func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, nil); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -477,7 +477,7 @@ func (p *proxyrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []s
 // GET s3/bk-name?versioning
 func (p *proxyrunner) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, nil); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -494,7 +494,7 @@ func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(p.owner.bmd, nil); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}

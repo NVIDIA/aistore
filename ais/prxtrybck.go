@@ -55,9 +55,9 @@ func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err
 	}
 
 	if args.skipBackend {
-		err = bck.InitNoBackend(args.p.owner.bmd, args.p.si)
+		err = bck.InitNoBackend(args.p.owner.bmd)
 	} else {
-		err = bck.Init(args.p.owner.bmd, args.p.si)
+		err = bck.Init(args.p.owner.bmd)
 	}
 
 	if err != nil && cmn.IsErrBucketNought(err) {
@@ -237,7 +237,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 		}
 	}
 	// init the bucket after having successfully added it to the BMD
-	err = bck.Init(args.p.owner.bmd, args.p.si)
+	err = bck.Init(args.p.owner.bmd)
 	if err != nil {
 		err = fmt.Errorf("%s: unexpected failure to add remote %s, err: %v", args.p.si, bck, err)
 		errCode = http.StatusInternalServerError

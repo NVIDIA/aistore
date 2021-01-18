@@ -594,7 +594,7 @@ func (j *lruJ) allow() (ok bool, err error) {
 		bowner = j.ini.T.Bowner()
 		b      = cluster.NewBckEmbed(j.bck)
 	)
-	if err = b.Init(bowner, j.ini.T.Snode()); err != nil {
+	if err = b.Init(bowner); err != nil {
 		return
 	}
 	ok = b.Props.LRU.Enabled && b.Allow(cmn.AccessObjDELETE) == nil

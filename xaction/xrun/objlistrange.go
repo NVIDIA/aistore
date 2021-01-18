@@ -185,7 +185,7 @@ func (r *listRangeBase) iteratePrefix(args *xreg.DeletePrefetchArgs, smap *clust
 	)
 
 	bck := cluster.NewBckEmbed(r.Bck())
-	if err := bck.Init(r.t.Bowner(), r.t.Snode()); err != nil {
+	if err := bck.Init(r.t.Bowner()); err != nil {
 		return err
 	}
 

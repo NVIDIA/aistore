@@ -77,7 +77,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHe
 
 	// 1. try add
 	if _, present := bmd.Get(bck); present {
-		return cmn.NewErrorBucketAlreadyExists(bck.Bck, p.si.String())
+		return cmn.NewErrorBucketAlreadyExists(bck.Bck)
 	}
 
 	// 2. begin
@@ -136,7 +136,7 @@ func (p *proxyrunner) _createBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 func (p *proxyrunner) _destroyBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	bck := ctx.bcks[0]
 	if _, present := clone.Get(bck); !present {
-		return cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+		return cmn.NewErrorBucketDoesNotExist(bck.Bck)
 	}
 	deleted := clone.del(bck)
 	cmn.Assert(deleted)
@@ -153,7 +153,7 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bck); !present {
-		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck)
 		return
 	}
 
@@ -245,7 +245,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 	// 1. confirm existence
 	bprops, present := p.owner.bmd.get().Get(bck)
 	if !present {
-		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck)
 		return
 	}
 	bck.Props = bprops
@@ -378,11 +378,11 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	// 1. confirm existence & non-existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, p.si.String())
+		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck)
 		return
 	}
 	if _, present := bmd.Get(bckTo); present {
-		err = cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
+		err = cmn.NewErrorBucketAlreadyExists(bckTo.Bck)
 		return
 	}
 
@@ -485,7 +485,7 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, p.si.String())
+		err = cmn.NewErrorBucketDoesNotExist(bckFrom.Bck)
 		return
 	}
 
@@ -578,11 +578,7 @@ func parseECConf(value interface{}) (*cmn.ECConfToUpdate, error) {
 
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID string, err error) {
-	var (
-		pname = p.si.String()
-		nlp   = bck.GetNameLockPair()
-	)
-
+	nlp := bck.GetNameLockPair()
 	ecConf, err := parseECConf(msg.Value)
 	if err != nil {
 		return
@@ -594,7 +590,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	}
 
 	if !nlp.TryLock(cmn.GCO.Get().Timeout.CplaneOperation / 2) {
-		err = cmn.NewErrorBucketIsBusy(bck.Bck, pname)
+		err = cmn.NewErrorBucketIsBusy(bck.Bck)
 		return
 	}
 	defer nlp.Unlock()
@@ -602,7 +598,7 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 	// 1. confirm existence
 	props, present := p.owner.bmd.get().Get(bck)
 	if !present {
-		err = cmn.NewErrorBucketDoesNotExist(bck.Bck, pname)
+		err = cmn.NewErrorBucketDoesNotExist(bck.Bck)
 		return
 	}
 	if props.EC.Enabled {
@@ -927,7 +923,7 @@ func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate cmn.Bucket
 	remirror := reMirror(bprops, nprops)
 	reec := reEC(bprops, nprops, bck)
 	if len(creating) == 0 && remirror && reec {
-		err = cmn.NewErrorBucketIsBusy(bck.Bck, p.si.String())
+		err = cmn.NewErrorBucketIsBusy(bck.Bck)
 		return
 	}
 
@@ -952,7 +948,7 @@ func (p *proxyrunner) checkBackendBck(nprops *cmn.BucketProps) (err error) {
 		return
 	}
 	backend := cluster.NewBckEmbed(nprops.BackendBck)
-	if err = backend.InitNoBackend(p.owner.bmd, p.si); err != nil {
+	if err = backend.InitNoBackend(p.owner.bmd); err != nil {
 		return
 	}
 

@@ -190,7 +190,7 @@ func (t *targetrunner) _commitCreateDestroy(c *txnServerCtx) (err error) {
 /////////////////
 
 func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
-	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
 	switch c.phase {
@@ -201,7 +201,7 @@ func (t *targetrunner) makeNCopies(c *txnServerCtx) error {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
+			return cmn.NewErrorBucketIsBusy(c.bck.Bck)
 		}
 		txn := newTxnMakeNCopies(c, curCopies, newCopies)
 		if err := t.transactions.begin(txn); err != nil {
@@ -267,7 +267,7 @@ func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCo
 ////////////////////
 
 func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
-	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
 	switch c.phase {
@@ -281,7 +281,7 @@ func (t *targetrunner) setBucketProps(c *txnServerCtx) error {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
+			return cmn.NewErrorBucketIsBusy(c.bck.Bck)
 		}
 		txn := newTxnSetBucketProps(c, nprops)
 		if err := t.transactions.begin(txn); err != nil {
@@ -359,7 +359,7 @@ func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cm
 //////////////////
 
 func (t *targetrunner) renameBucket(c *txnServerCtx) error {
-	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
 	switch c.phase {
@@ -371,11 +371,11 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		nlpFrom := bckFrom.GetNameLockPair()
 		nlpTo := bckTo.GetNameLockPair()
 		if !nlpFrom.TryLock(c.timeout.netw / 4) {
-			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
+			return cmn.NewErrorBucketIsBusy(bckFrom.Bck)
 		}
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpFrom.Unlock()
-			return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
+			return cmn.NewErrorBucketIsBusy(bckTo.Bck)
 		}
 		txn := newTxnRenameBucket(c, bckFrom, bckTo)
 		if err := t.transactions.begin(txn); err != nil {
@@ -427,10 +427,10 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 	}
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
+		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck)
 	}
 	if _, present := bmd.Get(bckTo); present {
-		return cmn.NewErrorBucketAlreadyExists(bckTo.Bck, t.si.String())
+		return cmn.NewErrorBucketAlreadyExists(bckTo.Bck)
 	}
 	for _, mpathInfo := range availablePaths {
 		path := mpathInfo.MakePathCT(bckTo.Bck, fs.ObjectType)
@@ -454,7 +454,7 @@ func (t *targetrunner) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMs
 ////////////////////
 
 func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMsg, dp cluster.LomReaderProvider) error {
-	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
 	switch c.phase {
@@ -490,7 +490,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 		nlpFrom = bckFrom.GetNameLockPair()
 		if !nlpFrom.TryRLock(c.timeout.netw / 4) {
 			dm.UnregRecv()
-			return cmn.NewErrorBucketIsBusy(bckFrom.Bck, t.si.Name())
+			return cmn.NewErrorBucketIsBusy(bckFrom.Bck)
 		}
 
 		if !bck2BckMsg.DryRun {
@@ -498,7 +498,7 @@ func (t *targetrunner) transferBucket(c *txnServerCtx, bck2BckMsg *cmn.Bck2BckMs
 			if !nlpTo.TryLock(c.timeout.netw / 4) {
 				dm.UnregRecv()
 				nlpFrom.Unlock()
-				return cmn.NewErrorBucketIsBusy(bckTo.Bck, t.si.Name())
+				return cmn.NewErrorBucketIsBusy(bckTo.Bck)
 			}
 		}
 
@@ -553,7 +553,7 @@ func (t *targetrunner) validateTransferBckTxn(bckFrom *cluster.Bck, action strin
 	}
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck, t.si.String())
+		return cmn.NewErrorBucketDoesNotExist(bckFrom.Bck)
 	}
 	return nil
 }
@@ -585,7 +585,7 @@ func (t *targetrunner) etlBucket(c *txnServerCtx, msg *cmn.Bck2BckMsg) (err erro
 //////////////
 
 func (t *targetrunner) ecEncode(c *txnServerCtx) error {
-	if err := c.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return err
 	}
 	switch c.phase {
@@ -595,7 +595,7 @@ func (t *targetrunner) ecEncode(c *txnServerCtx) error {
 		}
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 4) {
-			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
+			return cmn.NewErrorBucketIsBusy(c.bck.Bck)
 		}
 
 		txn := newTxnECEncode(c, c.bck)
@@ -684,7 +684,7 @@ func (t *targetrunner) destroyBucket(c *txnServerCtx) error {
 	case cmn.ActBegin:
 		nlp := c.bck.GetNameLockPair()
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrorBucketIsBusy(c.bck.Bck, t.si.Name())
+			return cmn.NewErrorBucketIsBusy(c.bck.Bck)
 		}
 		txn := newTxnBckBase("dlb", *c.bck)
 		txn.fillFromCtx(c)

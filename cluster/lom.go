@@ -725,7 +725,7 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 	}
 	bowner := T.Bowner()
 	lom.bck = NewBckEmbed(bck)
-	if err = lom.bck.Init(bowner, T.Snode()); err != nil {
+	if err = lom.bck.Init(bowner); err != nil {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
@@ -788,11 +788,10 @@ func (lom *LOM) checkBucket() error {
 		bprops, present = bmd.Get(lom.bck)
 	)
 	if !present { // bucket does not exist
-		node := T.Snode().String()
 		if lom.bck.IsRemote() {
-			return cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket(), node)
+			return cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
 		}
-		return cmn.NewErrorBucketDoesNotExist(lom.Bucket(), node)
+		return cmn.NewErrorBucketDoesNotExist(lom.Bucket())
 	}
 	if lom.md.bckID == bprops.BID {
 		return nil // ok

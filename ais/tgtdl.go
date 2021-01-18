@@ -70,7 +70,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		bck := cluster.NewBckEmbed(dlBodyBase.Bck)
-		if err := bck.Init(t.Bowner(), t.Snode()); err != nil {
+		if err := bck.Init(t.Bowner()); err != nil {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}

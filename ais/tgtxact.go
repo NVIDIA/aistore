@@ -45,7 +45,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if xactMsg.Bck.Name != "" {
 			bck = cluster.NewBckEmbed(xactMsg.Bck)
-			if err := bck.Init(t.owner.bmd, t.si); err != nil {
+			if err := bck.Init(t.owner.bmd); err != nil {
 				t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 				return
 			}
@@ -65,7 +65,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if !xactMsg.Bck.IsEmpty() {
 			bck = cluster.NewBckEmbed(xactMsg.Bck)
-			if err := bck.Init(t.owner.bmd, t.si); err != nil {
+			if err := bck.Init(t.owner.bmd); err != nil {
 				t.invalmsghdlr(w, r, err.Error())
 				return
 			}

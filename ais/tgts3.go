@@ -55,7 +55,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 	}
 	bckSrc := cluster.NewBck(parts[0], cmn.ProviderAIS, cmn.NsGlobal)
 	objSrc := strings.Trim(parts[1], "/")
-	if err := bckSrc.Init(t.owner.bmd, nil); err != nil {
+	if err := bckSrc.Init(t.owner.bmd); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -75,7 +75,7 @@ func (t *targetrunner) copyObjS3(w http.ResponseWriter, r *http.Request, items [
 		return
 	}
 	bckDst := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bckDst.Init(t.owner.bmd, nil); err != nil {
+	if err := bckDst.Init(t.owner.bmd); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -106,7 +106,7 @@ func (t *targetrunner) directPutObjS3(w http.ResponseWriter, r *http.Request, it
 		return
 	}
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd, nil); err != nil {
+	if err := bck.Init(t.owner.bmd); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -159,7 +159,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	}
 	started := time.Now()
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd, nil); err != nil {
+	if err := bck.Init(t.owner.bmd); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -219,7 +219,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 	}
 	bucket, objName := items[0], path.Join(items[1:]...)
 	bck := cluster.NewBck(bucket, cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd, nil); err != nil {
+	if err := bck.Init(t.owner.bmd); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -259,7 +259,7 @@ func (t *targetrunner) headObjS3(w http.ResponseWriter, r *http.Request, items [
 // DEL s3/bckName/objName
 func (t *targetrunner) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bck := cluster.NewBck(items[0], cmn.ProviderAIS, cmn.NsGlobal)
-	if err := bck.Init(t.owner.bmd, nil); err != nil {
+	if err := bck.Init(t.owner.bmd); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

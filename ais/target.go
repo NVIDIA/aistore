@@ -451,10 +451,10 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
-	if err := request.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err := request.bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = request.bck.Init(t.owner.bmd, t.si)
+			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -516,10 +516,10 @@ func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, ms
 	} else {
 		bck, err = newBckFromQuery(apiItems[0], query)
 		if err != nil {
-			if err = bck.Init(t.owner.bmd, t.si); err != nil {
+			if err = bck.Init(t.owner.bmd); err != nil {
 				if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 					t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-					err = bck.Init(t.owner.bmd, t.si)
+					err = bck.Init(t.owner.bmd)
 				}
 			}
 		}
@@ -550,10 +550,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	t.ensureLatestSmap(msg, r)
 
-	if err := request.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err := request.bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = request.bck.Init(t.owner.bmd, t.si)
+			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -618,7 +618,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err = t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
-	if err = request.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err = request.bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -636,7 +636,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		originalURL := query.Get(cmn.URLParamOrigURL)
 		ctx = context.WithValue(ctx, cmn.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
-			err = cmn.NewErrorRemoteBucketDoesNotExist(request.bck.Bck, t.si.String())
+			err = cmn.NewErrorRemoteBucketDoesNotExist(request.bck.Bck)
 			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
 			return
 		}
@@ -646,7 +646,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
-				err = cmn.NewErrorRemoteBucketDoesNotExist(request.bck.Bck, t.si.String())
+				err = cmn.NewErrorRemoteBucketDoesNotExist(request.bck.Bck)
 				t.invalmsghdlrsilent(w, r, err.Error(), code)
 			} else {
 				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, request.bck, err)
@@ -1051,7 +1051,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 
 // Returns a CT's metadata.
 func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
-	if err := bck.Init(t.owner.bmd, t.si); err != nil {
+	if err := bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlrsilent(w, r, err.Error())
 			return
@@ -1400,10 +1400,10 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if err = request.bck.Init(t.owner.bmd, t.si); err != nil {
+	if err = request.bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
-			err = request.bck.Init(t.owner.bmd, t.si)
+			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())

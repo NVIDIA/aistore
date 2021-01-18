@@ -352,7 +352,7 @@ func (d *dispatcher) checkAborted() bool {
 // returns false if dispatcher encountered hard error, true otherwise
 func (d *dispatcher) blockingDispatchDownloadSingle(task *singleObjectTask) (ok bool, err error) {
 	bck := cluster.NewBckEmbed(task.job.Bck())
-	if err := bck.Init(d.parent.t.Bowner(), d.parent.t.Snode()); err != nil {
+	if err := bck.Init(d.parent.t.Bowner()); err != nil {
 		return true, err
 	}
 

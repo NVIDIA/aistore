@@ -367,7 +367,7 @@ func validateBckBID(t cluster.Target, bck cmn.Bck, bid uint64) error {
 		return nil
 	}
 	newBck := cluster.NewBckEmbed(bck)
-	err := newBck.Init(t.Bowner(), t.Snode())
+	err := newBck.Init(t.Bowner())
 	if err == nil && newBck.Props.BID != bid {
 		err = fmt.Errorf("bucket ID mismatch: local %d, sender %d", newBck.Props.BID, bid)
 	}

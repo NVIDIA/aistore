@@ -102,9 +102,8 @@ func cleanError(awsError error) error {
 
 func (awsp *awsProvider) awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
-		node := awsp.t.Snode().Name()
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return reqErr.StatusCode(), cmn.NewErrorRemoteBucketDoesNotExist(*bck, node)
+			return reqErr.StatusCode(), cmn.NewErrorRemoteBucketDoesNotExist(*bck)
 		}
 		return reqErr.StatusCode(), cleanError(awsError)
 	}

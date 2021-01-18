@@ -730,7 +730,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		bckTo.Provider = cmn.ProviderAIS
 
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
-			err := cmn.NewErrorBucketAlreadyExists(bckTo.Bck, p.si.String())
+			err := cmn.NewErrorBucketAlreadyExists(bckTo.Bck)
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -899,7 +899,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		if bck.HasBackendBck() {
 			// Initialize backend bucket.
 			backend := cluster.BackendBck(bck)
-			if err = backend.InitNoBackend(p.owner.bmd, p.si); err != nil {
+			if err = backend.InitNoBackend(p.owner.bmd); err != nil {
 				if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
 					p.invalmsghdlrf(w, r,
 						"cannot create %s: failing to initialize backend %s, err: %v",
@@ -1141,7 +1141,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: revisit versus cloud bucket not being present, see p.tryBckInit
 	bck := request.bck
-	if err := bck.Init(p.owner.bmd, p.si); err != nil {
+	if err := bck.Init(p.owner.bmd); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1237,7 +1237,7 @@ func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 		bprops, present = clone.Get(bck)
 	)
 	if !present {
-		return cmn.NewErrorBucketDoesNotExist(bck.Bck, p.si.String())
+		return cmn.NewErrorBucketDoesNotExist(bck.Bck)
 	}
 	nprops := mergeCloudBckProps(bprops, ctx.cloudProps)
 	if nprops.Equal(bprops) {
@@ -3677,9 +3677,8 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 
 func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
 	var (
-		tsi   *cluster.Snode
-		pname = p.si.String()
-		path  = cmn.URLPathBuckets.Join(bck.Name)
+		tsi  *cluster.Snode
+		path = cmn.URLPathBuckets.Join(bck.Name)
 	)
 	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {
 		return
@@ -3689,9 +3688,9 @@ func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Heade
 	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
 	res := p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
 	if res.status == http.StatusNotFound {
-		err = cmn.NewErrorRemoteBucketDoesNotExist(bck, pname)
+		err = cmn.NewErrorRemoteBucketDoesNotExist(bck)
 	} else if res.status == http.StatusGone {
-		err = cmn.NewErrorCloudBucketOffline(bck, pname)
+		err = cmn.NewErrorCloudBucketOffline(bck)
 	} else {
 		err = res.err
 		header = res.header

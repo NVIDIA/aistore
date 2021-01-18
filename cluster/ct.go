@@ -56,7 +56,7 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 		mpathInfo:   parsedFQN.MpathInfo,
 	}
 	if b != nil {
-		err = ct.bck.Init(b, nil)
+		err = ct.bck.Init(b)
 	}
 	return
 }
@@ -67,7 +67,7 @@ func NewCTFromBO(bckName, bckProvider, objName string, b Bowner, ctType ...strin
 		bck:     NewBck(bckName, bckProvider, cmn.NsGlobal),
 	}
 	if b != nil {
-		if err = ct.bck.Init(b, nil); err != nil {
+		if err = ct.bck.Init(b); err != nil {
 			return
 		}
 	}

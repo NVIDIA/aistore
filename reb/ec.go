@@ -428,7 +428,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Obj
 		bck      = cluster.NewBckEmbed(hdr.Bck)
 		needSave = req.md.SliceID == 0 // full object always saved
 	)
-	if err := bck.Init(reb.t.Bowner(), reb.t.Snode()); err != nil {
+	if err := bck.Init(reb.t.Bowner()); err != nil {
 		return err
 	}
 	uname := bck.MakeUname(hdr.ObjName)
@@ -648,7 +648,7 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 			// default must contain only "full" object
 			if ct.SliceID != 0 {
 				b := cluster.NewBckEmbed(ct.Bck)
-				if err := b.Init(reb.t.Bowner(), reb.t.Snode()); err != nil {
+				if err := b.Init(reb.t.Bowner()); err != nil {
 					reb.abortRebalance()
 					return nil
 				}
@@ -693,7 +693,7 @@ func (reb *Manager) detectBroken(md *rebArgs, res *globalCTList) {
 
 	for _, rebBck := range res.bcks {
 		bck := cluster.NewBck(rebBck.Name, rebBck.Provider, rebBck.Ns)
-		if err := bck.Init(bowner, reb.t.Snode()); err != nil {
+		if err := bck.Init(bowner); err != nil {
 			// bucket might be deleted while rebalancing - skip it
 			glog.Errorf("invalid bucket %s: %v", rebBck.Name, err)
 			delete(res.bcks, rebBck.Bck.String())
@@ -1827,7 +1827,7 @@ func (reb *Manager) rebuildAndSend(obj *rebObject) error {
 	}
 
 	bck := cluster.NewBckEmbed(obj.bck)
-	if err := bck.Init(reb.t.Bowner(), reb.t.Snode()); err != nil {
+	if err := bck.Init(reb.t.Bowner()); err != nil {
 		return err
 	}
 	conf := bck.CksumConf()
@@ -2042,7 +2042,7 @@ func (rr *globalCTList) addCT(md *rebArgs, ct *rebCT, tgt cluster.Target) error 
 	}
 
 	b := cluster.NewBckEmbed(ct.Bck)
-	if err := b.Init(tgt.Bowner(), tgt.Snode()); err != nil {
+	if err := b.Init(tgt.Bowner()); err != nil {
 		return err
 	}
 	obj, ok := bck.objs[ct.ObjName]
