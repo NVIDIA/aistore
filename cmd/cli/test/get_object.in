@@ -4,8 +4,8 @@ ais put $OBJECT_1.txt $BUCKET_1/object_1.txt
 rm -f $OBJECT_1.txt
 
 # Negative Testing
-ais get $BUCKET_2/object_1.txt $OBJECT_1.txt // FAIL "Bucket with name "$BUCKET_2" does not exist."
-ais get $BUCKET_1/object_2.txt $OBJECT_1.txt // FAIL "Object "$BUCKET_1/object_2.txt" does not exist."
+ais get $BUCKET_2/object_1.txt $OBJECT_1.txt // FAIL "bucket "$BUCKET_2" does not exist"
+ais get $BUCKET_1/object_2.txt $OBJECT_1.txt // FAIL "object "$BUCKET_1/object_2.txt" does not exist"
 ais get cloud://$BUCKET_1/object_1.txt $OBJECT_1.txt // FAIL
 
 # Positive Testing

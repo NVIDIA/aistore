@@ -1,7 +1,6 @@
 ais create bucket $BUCKET
 
-ais set props ais://$BUCKET backend_bck=ais://something // FAIL "backend bucket should point to cloud bucket"
-ais set props ais://$BUCKET backend_bck=cloud://something // FAIL "backend bucket should point to cloud bucket"
-ais set props ais://$BUCKET backend_bck=gcp:// // FAIL "backend bucket name should not be empty"
+ais set props ais://$BUCKET backend_bck=ais://something // FAIL "Backend bucket "ais://something" must be a cloud bucket"
+ais set props ais://$BUCKET backend_bck=gcp:// // FAIL "Invalid format "backend_bck.name" cannot be empty when "backend_bck.provider" is set"
 
 ais show props ais://$BUCKET backend_bck -v

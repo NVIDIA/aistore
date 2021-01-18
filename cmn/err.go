@@ -209,7 +209,7 @@ func NewErrorBucketAlreadyExists(bck Bck, node string) *ErrorBucketAlreadyExists
 }
 
 func (e *ErrorBucketAlreadyExists) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %s already exists", e.bck), e.node)
+	return _errBucket(fmt.Sprintf("bucket %q already exists", e.bck), e.node)
 }
 
 func NewErrorRemoteBucketDoesNotExist(bck Bck, node string) *ErrorRemoteBucketDoesNotExist {
@@ -218,9 +218,9 @@ func NewErrorRemoteBucketDoesNotExist(bck Bck, node string) *ErrorRemoteBucketDo
 
 func (e *ErrorRemoteBucketDoesNotExist) Error() string {
 	if e.bck.IsCloud() {
-		return _errBucket(fmt.Sprintf("cloud bucket %s does not exist", e.bck), e.node)
+		return _errBucket(fmt.Sprintf("cloud bucket %q does not exist", e.bck), e.node)
 	}
-	return _errBucket(fmt.Sprintf("remote ais bucket %s does not exist", e.bck), e.node)
+	return _errBucket(fmt.Sprintf("remote ais bucket %q does not exist", e.bck), e.node)
 }
 
 func NewErrorCloudBucketOffline(bck Bck, node string) *ErrorCloudBucketOffline {
@@ -228,7 +228,7 @@ func NewErrorCloudBucketOffline(bck Bck, node string) *ErrorCloudBucketOffline {
 }
 
 func (e *ErrorCloudBucketOffline) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %s is currently unreachable", e.bck), e.node)
+	return _errBucket(fmt.Sprintf("bucket %q is currently unreachable", e.bck), e.node)
 }
 
 func NewErrorBucketDoesNotExist(bck Bck, node string) *ErrorBucketDoesNotExist {
@@ -236,7 +236,7 @@ func NewErrorBucketDoesNotExist(bck Bck, node string) *ErrorBucketDoesNotExist {
 }
 
 func (e *ErrorBucketDoesNotExist) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %s does not exist", e.bck), e.node)
+	return _errBucket(fmt.Sprintf("bucket %q does not exist", e.bck), e.node)
 }
 
 func NewErrorInvalidBucketProvider(bck Bck, err error) *ErrorInvalidBucketProvider {
@@ -252,7 +252,7 @@ func NewErrorBucketIsBusy(bck Bck, node string) *ErrorBucketIsBusy {
 }
 
 func (e *ErrorBucketIsBusy) Error() string {
-	return _errBucket(fmt.Sprintf("bucket %s is currently busy, please retry later", e.bck), e.node)
+	return _errBucket(fmt.Sprintf("bucket %q is currently busy, please retry later", e.bck), e.node)
 }
 
 func (e *errAccessDenied) String() string {
@@ -271,8 +271,7 @@ func NewErrorCapacityExceeded(high int64, used int32, oos bool) *ErrorCapacityEx
 
 func (e *ErrorCapacityExceeded) Error() string {
 	if e.oos {
-		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths",
-			e.used)
+		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths", e.used)
 	}
 	return fmt.Sprintf("low on free space: used capacity %d%% exceeded high watermark(%d%%)", e.used, e.high)
 }

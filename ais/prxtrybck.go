@@ -116,7 +116,7 @@ retErr:
 	if args.msg != nil {
 		op = fmt.Sprintf("operation %q", args.msg.Action)
 	}
-	err = fmt.Errorf("%s is not supported by %s buckets (bucket=%s)", op, bckType, args.queryBck)
+	err = fmt.Errorf("%s is not supported by %s buckets %q", op, bckType, args.queryBck)
 	return
 }
 

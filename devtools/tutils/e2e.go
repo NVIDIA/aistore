@@ -162,7 +162,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			}
 			if strings.Contains(comment, "FAIL") {
 				expectFail = true
-				if strings.HasPrefix(comment, `"`) && strings.HasSuffix(comment, `"`) {
+				if strings.Count(comment, `"`) >= 2 {
 					firstIdx := strings.Index(comment, `"`)
 					lastIdx := strings.LastIndex(comment, `"`)
 					expectFailMsg = comment[firstIdx+1 : lastIdx]

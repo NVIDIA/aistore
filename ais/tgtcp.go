@@ -551,7 +551,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	if err := t.fsprg.removeMountpath(mountpath); err != nil {
-		t.invalmsghdlrf(w, r, "Could not remove mountpath, error: %s", err.Error())
+		t.invalmsghdlrf(w, r, err.Error())
 		return
 	}
 

@@ -1,12 +1,10 @@
 ais gen-shards --bucket $BUCKET_1 --ext .tar --template="tmp/shard-{0..9}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
 ais mv bucket $BUCKET_1/ $BUCKET_2/
 ais gen-shards --bucket $BUCKET_3 --ext .tar --template="tmp/shard-{0..9}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
-ais mv bucket $BUCKET_2/ $BUCKET_3/ // FAIL "bucket $BUCKET_3 already exists"
-ais mv bucket $BUCKET_2/ $BUCKET_2/ // FAIL "cannot mv $BUCKET_2 as $BUCKET_2 (same bucket name)"
+ais mv bucket $BUCKET_2/ $BUCKET_3/ // FAIL "bucket "ais://$BUCKET_3" already exists"
+ais mv bucket $BUCKET_2/ $BUCKET_2/ // FAIL "cannot mv "$BUCKET_2" as "$BUCKET_2""
 
 ais rm bucket $BUCKET_2
 ais rm bucket $BUCKET_3
 
-ais mv bucket cloud://bucket new_bucket // FAIL "Moving cloud buckets (cloud://bucket) is not supported"
-ais mv bucket bucket cloud://new_bucket // FAIL "Moving cloud buckets (cloud://new_bucket) is not supported"
-ais mv bucket aws://bucket new_bucket // FAIL "Moving cloud buckets (aws://bucket) is not supported"
+ais mv bucket az://bucket new_bucket // FAIL "bucket "azure://bucket" does not exist"

@@ -2,7 +2,7 @@ ais show bucket tmp // FAIL
 ais create bucket $BUCKET_1
 ais create bucket $BUCKET_2
 ais show bucket $BUCKET_1
-ais show bucket aiss://$BUCKET_1 // FAIL "Invalid bucket provider "aiss"."
+ais show bucket aiss://$BUCKET_1 // FAIL "invalid cloud provider "aiss""
 
 ais gen-shards --bucket $BUCKET_1 --ext .tar --template="tmp/shard-{0..149}" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
 ais gen-shards --bucket $BUCKET_2 --ext .tar --template="tmp/shard-{0..19}" --fcount 10 --fsize 1KB --conc 1 --cleanup // IGNORE
