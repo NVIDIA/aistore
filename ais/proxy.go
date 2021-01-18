@@ -1848,7 +1848,7 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	nodeURL := r.Header.Get(cmn.HeaderNodeURL)
 	if nodeURL == "" {
 		err = &errNodeNotFound{"cannot rproxy", nodeID, p.si, smap}
-		p.invalmsghdlr(w, r, err.Error())
+		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
 
