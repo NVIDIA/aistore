@@ -38,7 +38,7 @@ type bckInitArgs struct {
 /////////////////////////////////////////////
 
 // init initializes bucket and checks access permissions.
-func (args *bckInitArgs) init(bucket string, origURLBck ...string) (bck *cluster.Bck, errCode int, err error) {
+func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err error) {
 	if args.queryBck == nil {
 		query := args.r.URL.Query()
 		args.queryBck, err = newBckFromQuery(bucket, query)
@@ -141,7 +141,7 @@ func (args *bckInitArgs) _checkPermission(bck *cluster.Bck) (errCode int, err er
 // is set then `p.invalmsghdlr` is called so caller doesn't need to).
 func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *cluster.Bck, err error) {
 	var errCode int
-	bck, errCode, err = args.init(bucket, origURLBck...)
+	bck, errCode, err = args.init(bucket)
 	if err == nil {
 		return
 	}
@@ -157,7 +157,7 @@ func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *c
 	}
 
 	args.err = err
-	bck, err = args.try()
+	bck, err = args.try(origURLBck...)
 	return
 }
 
