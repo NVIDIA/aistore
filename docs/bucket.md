@@ -8,6 +8,9 @@
 - [Cloud Bucket](#cloud-bucket)
   - [Public Cloud Buckets](#public-cloud-buckets)
   - [Public HTTP(S) Datasets](#public-https-dataset)
+  - [HDFS Provider](#hdfs-provider)
+    - [Configuration](#configuration)
+    - [Usage](#usage)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Cloud Bucket](#evict-cloud-bucket)
 - [Backend Bucket](#backend-bucket)
@@ -244,6 +247,51 @@ $ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
 NAME                     SIZE
 minikube-0.6.iso.sha256  65B
 minikube-0.7.iso.sha256  65B
+```
+
+### HDFS Provider
+
+Hadoop and HDFS is well known and widely used software for distributed processing of large datasets using MapReduce model.
+For years, it has been considered as a standard for big data.
+
+#### Configuration
+
+Before we jump to functionalities, let's first focus on configuration.
+AIStore needs to know the address of NameNode server and the username for the requests.
+Important note here is that the NameNode and DataNode addresses must be accessible from the AIStore, otherwise the connection will fail.
+
+Example of HDFS provider configuration:
+```json
+"hdfs": {
+  "addresses": ["localhost:8020"],
+  "user": "root"
+}
+```
+
+#### Usage
+
+After the HDFS is set up, and the binary is built with HDFS provider support we can see everything in action.
+```console
+$ ais create bucket hdfs://yt8m --bucket-props="extra.hdfs.ref_directory=/part1/video"
+"hdfs://yt8m" bucket created
+$ ais ls hdfs://
+HDFS Buckets (1)
+  hdfs://yt8m
+$ ais put 1.mp4 hdfs://yt8m/1.mp4
+PUT "1.mp4" into bucket "hdfs://yt8m"
+$ ais ls hdfs://yt8m
+NAME	 SIZE
+1.mp4	 76.31KiB
+```
+
+The first thing to notice is `--bucket-props="extra.hdfs.ref_directory=/part1/video"`.
+Here we specify the **required** path the `hdfs://yt8m` bucket will refer to (the directory must exist on bucket creation).
+It means that when accessing object `hdfs://yt8m/1.mp4` the path will be resolved to `/part1/video/1.mp4` (`/part1/video` + `1.mp4`).
+
+It's also possible to fetch existing files from HDFS with simple GET operation:
+```console
+$ ais get hdfs://yt8m/2.mp4 2.mp4
+GET "2.mp4" from bucket "hdfs://yt8m" as "2.mp4" [76.31KiB]
 ```
 
 ### Prefetch/Evict Objects
