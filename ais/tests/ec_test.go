@@ -1942,7 +1942,7 @@ func TestECRebalance(t *testing.T) {
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data {
+			if o.smap.CountActiveTargets() <= test.parity+test.data+1 {
 				t.Skip("insufficient number of targets")
 			}
 			o.parityCnt = test.parity
