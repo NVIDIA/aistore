@@ -19,12 +19,12 @@ fi
 source utils/parse_fsparams.sh
 source utils/parse_cld.sh
 
-export DOCKER_IMAGE="aistore/aisnode:latest-ubuntu"
+export DOCKER_IMAGE="aistore/aisnode:latest"
 echo "Build and push to local registry: (y/n) ?"
 read -r build
 if [[ "$build" == "y" ]]; then
   echo "Building image..."
-  export DOCKER_IMAGE="localhost:5000/aisnode:latest-ubuntu"
+  export DOCKER_IMAGE="localhost:5000/aisnode:latest"
   sudo docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} -f Dockerfile-aisnode-ubuntu
   docker push ${DOCKER_IMAGE}
 fi
