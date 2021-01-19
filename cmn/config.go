@@ -921,7 +921,7 @@ func (c *ECConf) Validate(_ *Config) error {
 }
 
 func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
-	const insuffientNodes = "EC config (%d data, %d parity)slices requires at least %d targets (have %d)"
+	const insuffientNodes = "EC config (%d data, %d parity) slices requires at least %d targets (have %d)"
 	if !c.Enabled {
 		return nil
 	}

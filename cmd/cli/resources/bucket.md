@@ -419,7 +419,7 @@ lru.out_of_space	 95
 
 ## Set bucket props
 
-`ais set props BUCKET_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
+`ais set props [OPTIONS] BUCKET_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`
 
 Set bucket properties.
 For the available options, see [bucket-properties](../../../docs/bucket.md#properties-and-options).
@@ -433,13 +433,15 @@ If `--reset` flag is set, arguments are ignored and bucket properties are reset 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--reset` | `bool` | Reset bucket properties to original state | `false` |
+| `--force` | `bool` | Ignore non-critical errors | `false` |
 
 When JSON specification is not used, some properties support user-friendly aliases:
 
 | Property | Value alias | Description |
 | --- | --- | --- |
-| access | ro | Disables bucket modifications: denies PUT, DELETE, and ColdGET requests |
-| access | rw | Enables bucket modifications: allows PUT, DELETE, and ColdGET requests |
+| access | `ro` | Disables bucket modifications: denies PUT, DELETE, and ColdGET requests |
+| access | `rw` | Enables object modifications: allows PUT, DELETE, and ColdGET requests |
+| access | `su` | Enables full access: all `rw` permissions, bucket deletion, and changing bucket permissions |
 
 ### Examples
 
@@ -494,6 +496,61 @@ $ ais set props bucket_name backend_bck=none
 Bucket props successfully updated
 "backend_bck.name" set to:"" (was:"cloud_bucket")
 "backend_bck.provider" set to:"" (was:"gcp")
+```
+
+#### Ignore non-critical errors
+
+To create an erasure-encoded bucket or enable EC for an existing bucket, AIS requires at least `ec.data_slices + ec.parity_slices + 1` targets.
+At the same time, for small objects (size is less than `ec.objsize_limit`) it is sufficient to have only `ec.parity_slices + 1` targets.
+Option `--force` allows creating erasure-encoded buckets when the number of targets is not enough but the number exceeds `ec.parity_slices`.
+
+Note that if the number of targets is less than `ec.data_slices + ec.parity_slices + 1`, the cluster accepts only objects smaller than `ec.objsize_limit`.
+Bigger objects are rejected on PUT.
+
+In examples a cluster with 6 targets is used:
+
+```console
+$ # Creating a bucket
+$ ais create bucket ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4"
+Create bucket "ais://bck" failed: EC config (6 data, 4 parity) slices requires at least 11 targets (have 6)
+
+$ ais create bucket ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4" --force
+"ais://bck" bucket created
+
+$ # If the number of targets is less than or equal to ec.parity_slices even `--force` does not help
+
+$ ais set props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8
+EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show props BUCKET_NAME -v".
+
+$ ais set props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 8 --force
+EC config (6 data, 8 parity)slices requires at least 15 targets (have 6). To show bucket properties, run "ais show props BUCKET_NAME -v".
+
+$ # Use force to enable EC if the number of target is sufficient to keep `ec.parity_slices+1` replicas
+
+$ ais set props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4
+EC config (6 data, 8 parity)slices requires at least 11 targets (have 6). To show bucket properties, run "ais show props BUCKET_NAME -v".
+
+$ ais set props ais://bck ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force
+Bucket props successfully updated
+"ec.enabled" set to:"true" (was:"false")
+"ec.parity_slices" set to:"4" (was:"2")
+```
+
+Once erasure encoding is enabled for a bucket, the number of data and parity slices cannot be modified.
+The minimum object size `ec.objsize_limit` can be changed on the fly.
+To avoid accidental modification when EC for a bucket is enabled, the option `--force` must be used.
+
+```console
+$ ais set props ais://bck ec.enabled
+Bucket props successfully updated
+"ec.enabled" set to:"true" (was:"false")
+
+$ ais set props ais://bck ec.objsize_limit 320000
+P[dBbfp8080]: once enabled, EC configuration can be only disabled but cannot change. To show bucket properties, run "ais show props BUCKET_NAME -v".
+
+$ ais set props ais://bck ec.objsize_limit 320000 --force
+Bucket props successfully updated
+"ec.objsize_limit" set to:"320000" (was:"262144")
 ```
 
 #### Set bucket properties with JSON
