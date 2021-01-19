@@ -169,6 +169,19 @@ test:cloud:gcp:
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - make test-long
 
+test:cloud:hdfs:
+  image: aistore/ci:1.15-hdfs
+  <<: *test_long_def
+  variables:
+    NUM_PROXY: 6
+    BUCKET: "hdfs://ais-ci"
+  script:
+    - bash deploy/test/ci/setup_hdfs.sh
+    - make cli
+    - make deploy < <(printf "${NUM_TARGET}\n${NUM_PROXY}\n${FS_CNT}\nn\nn\nn\ny\nn\n")
+    - ais create bucket "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
+    - make test-long
+
 test:soak:
   stage: test-long
   tags:

@@ -16,7 +16,7 @@ RUN kubectl version --client
 # Cache some of the dependencies, by building binaries.
 # Also install the linter.
 # Then remove these binaries and source code, so they're not used during CI jobs.
-RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && \
+RUN git clone --depth=1 https://github.com/NVIDIA/aistore.git && cd aistore && \
     make && AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" make node && \
     make lint-update && \
     make clean && cd .. && rm -rf aistore

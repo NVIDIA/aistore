@@ -4,7 +4,7 @@ for cloud in ${AIS_BACKEND_PROVIDERS}; do
     aws)   cloud_desc+=('"aws":   {}') ;;
     azure) cloud_desc+=('"azure": {}') ;;
     gcp)   cloud_desc+=('"gcp":   {}') ;;
-    hdfs)  cloud_desc+=('"hdfs":  {"user": "root", "addresses": ["localhost:8020"]}') ;;
+    hdfs)  cloud_desc+=('"hdfs":  {"user": "root", "addresses": ["localhost:9000"]}') ;;
   esac
 done
 
