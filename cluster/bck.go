@@ -40,8 +40,6 @@ var bckLocker nameLocker
 func initBckLocker() {
 	bckLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	bckLocker.init()
-
-	initDumpNameLocks() // when built with debug
 }
 
 func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
