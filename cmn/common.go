@@ -524,6 +524,14 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	return m
 }
 
+func ParseHexOrUint(s string) (uint64, error) {
+	const hexPrefix = "0x"
+	if strings.HasPrefix(s, hexPrefix) {
+		return strconv.ParseUint(s[len(hexPrefix):], 16, 64)
+	}
+	return strconv.ParseUint(s, 10, 64)
+}
+
 //////////////////
 // DurationJSON //
 //////////////////

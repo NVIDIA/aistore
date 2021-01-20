@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,10 +22,6 @@ import (
 )
 
 const (
-	allBucketAccess       = "su"
-	readwriteBucketAccess = "rw"
-	readonlyBucketAccess  = "ro"
-
 	emptyOrigin = "none"
 
 	// max wait time for a function finishes before printing "Please wait"
@@ -290,39 +285,10 @@ func fetchSummaries(query cmn.QueryBcks, fast, cached bool) (summaries cmn.Bucke
 }
 
 // Replace user-friendly properties like:
-//  * `access=ro` with real values `access = GET | HEAD` (all numbers are
-//     passed to API as is).
 //  * `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
 //    `backend_bck.provider=gcp` so they match the expected fields in structs.
 //  * `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
-
-// TODO: support `allow` and `deny` verbs/operations on existing access permissions
-
-func reformatBucketProps(nvs cmn.SimpleKVs) (err error) {
-	if err = _reformatBackendProps(nvs); err != nil {
-		return
-	}
-
-	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
-		switch v {
-		case allBucketAccess:
-			nvs[cmn.HeaderBucketAccessAttrs] = cmn.AllAccess().String()
-		case readwriteBucketAccess:
-			nvs[cmn.HeaderBucketAccessAttrs] = cmn.ReadWriteAccess().String()
-		case readonlyBucketAccess:
-			nvs[cmn.HeaderBucketAccessAttrs] = cmn.ReadOnlyAccess().String()
-		default:
-			// arbitrary access-flags permutation - TODO validate vs cmn/api_access.go
-			if _, err := strconv.ParseUint(v, 10, 64); err != nil {
-				return fmt.Errorf("invalid bucket access %q, expecting uint64 or [%q, %q, %q]",
-					v, readonlyBucketAccess, readwriteBucketAccess, allBucketAccess)
-			}
-		}
-	}
-	return nil
-}
-
-func _reformatBackendProps(nvs cmn.SimpleKVs) (err error) {
+func reformatBackendProps(nvs cmn.SimpleKVs) (err error) {
 	var (
 		originBck cmn.Bck
 		v         string

@@ -667,6 +667,112 @@ func isJSON(arg string) bool {
 	return false
 }
 
+func parseBucketAccessValues(values []string, idx int) (access cmn.AccessAttrs, newIdx int, err error) {
+	var (
+		acc cmn.AccessAttrs
+		val uint64
+	)
+	if len(values) == 0 {
+		return access, idx, nil
+	}
+	// Case: `access GET,PUT`
+	if strings.Index(values[idx], ",") > 0 {
+		newIdx = idx + 1
+		for _, perm := range strings.Split(values[idx], ",") {
+			perm = strings.TrimSpace(perm)
+			if perm == "" {
+				continue
+			}
+			acc, err = cmn.StrToAccess(perm)
+			if err != nil {
+				return
+			}
+			access |= acc
+		}
+		return
+	}
+	for newIdx = idx; newIdx < len(values); {
+		// Case: `access 0x342`
+		val, err = cmn.ParseHexOrUint(values[newIdx])
+		if err == nil {
+			access |= cmn.AccessAttrs(val)
+			newIdx++
+			continue
+		}
+		// Case: `access HEAD`
+		acc, err = cmn.StrToAccess(values[newIdx])
+		if err != nil {
+			break
+		}
+		access |= acc
+		newIdx++
+	}
+	if idx == newIdx {
+		return 0, newIdx, err
+	}
+	return access, newIdx, nil
+}
+
+// TODO: support `allow` and `deny` verbs/operations on existing access permissions
+func makeBckPropPairs(values []string) (nvs cmn.SimpleKVs, err error) {
+	props := make([]string, 0, 20)
+	err = cmn.IterFields(&cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
+		props = append(props, tag)
+		return nil, false
+	})
+	if err != nil {
+		return
+	}
+
+	var (
+		access cmn.AccessAttrs
+		cmd    string
+	)
+	nvs = make(cmn.SimpleKVs)
+	for idx := 0; idx < len(values); {
+		pos := strings.Index(values[idx], "=")
+		if pos > 0 {
+			if cmd != "" {
+				return nil, fmt.Errorf("missing property %q value", cmd)
+			}
+			key := strings.TrimSpace(values[idx][:pos])
+			val := strings.TrimSpace(values[idx][pos+1:])
+			nvs[key] = val
+			cmd = ""
+			idx++
+			continue
+		}
+		isCmd := cmn.StringInSlice(values[idx], props)
+		if cmd != "" && isCmd {
+			return nil, fmt.Errorf("missing property %q value", cmd)
+		}
+		if cmd == "" && !isCmd {
+			return nil, fmt.Errorf("invalid property %q", values[idx])
+		}
+		if cmd != "" {
+			nvs[cmd] = values[idx]
+			idx++
+			cmd = ""
+			continue
+		}
+		cmd = values[idx]
+		idx++
+		if cmd == cmn.HeaderBucketAccessAttrs {
+			access, idx, err = parseBucketAccessValues(values, idx)
+			if err != nil {
+				return nil, err
+			}
+			nvs[cmd] = strconv.FormatUint(uint64(access), 10)
+			cmd = ""
+		}
+	}
+
+	if cmd != "" {
+		return nil, fmt.Errorf("missing property %q value", cmd)
+	}
+	return
+}
+
 func parseBckPropsFromContext(c *cli.Context) (props cmn.BucketPropsToUpdate, err error) {
 	propArgs := c.Args().Tail()
 
@@ -690,13 +796,13 @@ func parseBckPropsFromContext(c *cli.Context) (props cmn.BucketPropsToUpdate, er
 		return
 	}
 
-	// For setting bucket props via URL query string
-	nvs, err := makePairs(propArgs)
+	// For setting bucket props via key-value list
+	nvs, err := makeBckPropPairs(propArgs)
 	if err != nil {
 		return
 	}
 
-	if err = reformatBucketProps(nvs); err != nil {
+	if err = reformatBackendProps(nvs); err != nil {
 		return
 	}
 

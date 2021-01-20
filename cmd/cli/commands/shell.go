@@ -34,6 +34,7 @@ const (
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
+		cmn.HeaderBucketAccessAttrs:           cmn.SupportedPermissions(),
 		cmn.HeaderObjCksumType:                cmn.SupportedChecksums(),
 		"md_write":                            cmn.SupportedWritePolicy,
 		"ec.compression":                      cmn.SupportedCompression,
@@ -61,9 +62,46 @@ var (
 	}
 )
 
+// Returns true if the last argument is any of permission constants
+func lastValueIsAccess(c *cli.Context) bool {
+	if c.NArg() == 0 {
+		return false
+	}
+	lastArg := c.Args()[c.NArg()-1]
+	for _, access := range propCmpls[cmn.HeaderBucketAccessAttrs] {
+		if access == lastArg {
+			return true
+		}
+	}
+	return false
+}
+
+// Completes command line with not-yet-used permission constants
+func accessCompletions(c *cli.Context) bool {
+	typedList := c.Args()
+	printed := 0
+	for _, access := range propCmpls[cmn.HeaderBucketAccessAttrs] {
+		found := false
+		for _, typed := range typedList {
+			if access == typed {
+				found = true
+				break
+			}
+		}
+		if !found {
+			fmt.Println(access)
+		}
+	}
+	return printed == 0
+}
+
 func propValueCompletion(c *cli.Context) bool {
 	if c.NArg() == 0 {
 		return false
+	}
+	lastIsAccess := lastValueIsAccess(c)
+	if lastIsAccess {
+		return accessCompletions(c)
 	}
 	list, ok := propCmpls[c.Args()[c.NArg()-1]]
 	if !ok {
@@ -72,7 +110,7 @@ func propValueCompletion(c *cli.Context) bool {
 	for _, val := range list {
 		fmt.Println(val)
 	}
-	return true
+	return !lastIsAccess
 }
 
 func daemonCompletions(what daemonKindCompletion) cli.BashCompleteFunc {

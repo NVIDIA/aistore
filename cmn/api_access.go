@@ -47,6 +47,11 @@ const (
 	// Permission Operations
 	AllowAccess = "allow"
 	DenyAccess  = "deny"
+
+	// Compound permissions
+	AllowAllAccess       = "su"
+	AllowReadWriteAccess = "rw"
+	AllowReadOnlyAccess  = "ro"
 )
 
 type AccessAttrs uint64
@@ -75,6 +80,14 @@ var accessOp = map[int]string{
 	AccessBckPERMISSION: "SET-BUCKET-PERMISSIONS",
 	AccessBckCREATE:     "CREATE-BUCKET",
 	AccessADMIN:         "ADMIN",
+}
+
+func SupportedPermissions() []string {
+	accList := []string{"ro", "rw", "su"}
+	for _, v := range accessOp {
+		accList = append(accList, v)
+	}
+	return accList
 }
 
 func NoAccess() AccessAttrs                      { return 0 }
@@ -155,4 +168,29 @@ func ModifyAccess(aattr uint64, action string, bits uint64) (uint64, error) {
 		return 0, fmt.Errorf("unknown make-access action %q", action)
 	}
 	return aattr & (allowAllAccess ^ bits), nil
+}
+
+func StrToAccess(accessStr string) (access AccessAttrs, err error) {
+	switch accessStr {
+	case AllowReadOnlyAccess:
+		access |= ReadOnlyAccess()
+	case AllowReadWriteAccess:
+		access |= ReadWriteAccess()
+	case AllowAllAccess:
+		access |= AllAccess()
+	case "":
+		access |= NoAccess()
+	default:
+		found := false
+		for k, v := range accessOp {
+			if v == accessStr {
+				access |= AccessAttrs(k)
+				found = true
+			}
+		}
+		if !found {
+			err = fmt.Errorf("invalid access value: %q", accessStr)
+		}
+	}
+	return
 }
