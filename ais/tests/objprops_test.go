@@ -503,7 +503,7 @@ func TestObjProps(t *testing.T) {
 
 			if test.cloud {
 				m.bck = cliBck
-				tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
+				tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 			} else {
 				tutils.CreateFreshBucket(t, proxyURL, m.bck)
 			}
@@ -528,7 +528,7 @@ func TestObjProps(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			}
 			if test.cloud {
-				m.cloudPuts(test.evict)
+				m.remotePuts(test.evict)
 				defer api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
 						Enabled: api.Bool(defaultBckProp.Versioning.Enabled),

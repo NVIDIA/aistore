@@ -163,7 +163,7 @@ func TestNamespace(t *testing.T) {
 			)
 
 			tutils.CheckSkip(t, tutils.SkipTestArgs{
-				RequiresRemote: test.remote,
+				RequiresRemoteCluster: test.remote,
 			})
 
 			m1.init()
@@ -253,7 +253,7 @@ func TestNamespace(t *testing.T) {
 
 func TestRemoteWithAliasAndUUID(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{
-		RequiresRemote: true,
+		RequiresRemoteCluster: true,
 	})
 
 	// TODO: make it work
@@ -312,7 +312,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 
 func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{
-		RequiresRemote: true,
+		RequiresRemoteCluster: true,
 	})
 
 	// TODO: make it work

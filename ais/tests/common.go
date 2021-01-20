@@ -94,7 +94,7 @@ func (m *ioContext) init() {
 	}
 	m.stopCh = make(chan struct{})
 
-	if m.bck.IsCloud() {
+	if m.bck.IsRemote() {
 		// Remove unnecessary local objects.
 		tutils.EvictCloudBucket(m.t, m.proxyURL, m.bck)
 	}
@@ -103,7 +103,7 @@ func (m *ioContext) init() {
 
 func (m *ioContext) _cleanup() {
 	m.del()
-	if m.bck.IsCloud() {
+	if m.bck.IsRemote() {
 		// Ensure all local objects are removed.
 		tutils.EvictCloudBucket(m.t, m.proxyURL, m.bck)
 	}
@@ -168,7 +168,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 
 func (m *ioContext) puts(dontFail ...bool) int {
 	if !m.bck.IsAIS() {
-		m.cloudPuts(false /*evict*/)
+		m.remotePuts(false /*evict*/)
 		return m.num
 	}
 
@@ -198,28 +198,28 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	return len(errCh)
 }
 
-// cloudPuts by default cleanups the cloud bucket and puts fresh `m.num` objects
+// remotePuts by default cleanups the remote bucket and puts fresh `m.num` objects
 // into the bucket. If `override` parameter is set then the existing objects
 // are updated with new ones (new version and checksum).
-func (m *ioContext) cloudPuts(evict bool, overrides ...bool) {
+func (m *ioContext) remotePuts(evict bool, overrides ...bool) {
 	var override bool
 	if len(overrides) > 0 {
 		override = overrides[0]
 	}
 
 	if !override {
-		// Cleanup the cloud bucket.
+		// Cleanup the remote bucket.
 		m.del()
 		m.objNames = m.objNames[:0]
 	}
 
-	m._cloudFill(m.num, evict, override)
+	m._remoteFill(m.num, evict, override)
 }
 
-// cloudRefill calculates number of missing objects and refills the bucket.
+// remoteRefill calculates number of missing objects and refills the bucket.
 // It is expected that the number of missing objects is positive meaning that
-// some of the objects were removed before calling cloudRefill.
-func (m *ioContext) cloudRefill() {
+// some of the objects were removed before calling remoteRefill.
+func (m *ioContext) remoteRefill() {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
@@ -236,10 +236,10 @@ func (m *ioContext) cloudRefill() {
 	leftToFill := m.num - len(objList.Entries)
 	cmn.Assert(leftToFill > 0)
 
-	m._cloudFill(leftToFill, false /*evict*/, false /*override*/)
+	m._remoteFill(leftToFill, false /*evict*/, false /*override*/)
 }
 
-func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
+func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		errCh      = make(chan error, objCnt)
@@ -248,7 +248,7 @@ func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 	)
 
 	if !m.silent {
-		tutils.Logf("cloud PUT %d objects into bucket %s...\n", objCnt, m.bck)
+		tutils.Logf("remote PUT %d objects into bucket %s...\n", objCnt, m.bck)
 	}
 
 	p, err := api.HeadBucket(baseParams, m.bck)
@@ -258,7 +258,7 @@ func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 	if objPrefix == "" {
 		objPrefix = "copy"
 	}
-	objPrefix += "/cloud_"
+	objPrefix += "/remote_"
 	for i := 0; i < objCnt; i++ {
 		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
@@ -280,7 +280,7 @@ func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
-	tutils.Logln("cloud PUT done")
+	tutils.Logln("remote PUT done")
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
@@ -288,16 +288,16 @@ func (m *ioContext) _cloudFill(objCnt int, evict, override bool) {
 		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
 	}
 
-	tutils.Logf("cloud bucket %s: %d cached objects\n", m.bck, m.num)
+	tutils.Logf("remote bucket %s: %d cached objects\n", m.bck, m.num)
 
 	if evict {
-		tutils.Logf("evicting cloud bucket %s...\n", m.bck)
+		tutils.Logf("evicting remote bucket %s...\n", m.bck)
 		err := api.EvictCloudBucket(baseParams, m.bck)
 		tassert.CheckFatal(m.t, err)
 	}
 }
 
-func (m *ioContext) cloudPrefetch(prefetchCnt int) {
+func (m *ioContext) remotePrefetch(prefetchCnt int) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
@@ -306,7 +306,7 @@ func (m *ioContext) cloudPrefetch(prefetchCnt int) {
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
 
-	tutils.Logf("cloud PREFETCH %d objects...\n", prefetchCnt)
+	tutils.Logf("remote PREFETCH %d objects...\n", prefetchCnt)
 
 	wg := &sync.WaitGroup{}
 	for idx, obj := range objList.Entries {
@@ -586,21 +586,21 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
 		},
 		{
-			name: "cloud",
+			name: "remote",
 			bck:  cliBck,
 			skipArgs: tutils.SkipTestArgs{
-				Long:  true,
-				Cloud: true,
+				Long:      true,
+				RemoteBck: true,
 			},
 		},
 		{
-			name: "remote",
+			name: "remote_ais",
 			bck: cmn.Bck{
 				Name:     cmn.RandString(10),
 				Provider: cmn.ProviderAIS, Ns: cmn.Ns{UUID: tutils.RemoteCluster.UUID},
 			},
 			skipArgs: tutils.SkipTestArgs{
-				RequiresRemote: true,
+				RequiresRemoteCluster: true,
 			},
 		},
 		{
@@ -608,8 +608,8 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			bck:        cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
 			backendBck: cliBck,
 			skipArgs: tutils.SkipTestArgs{
-				Long:  true,
-				Cloud: true,
+				Long:      true,
+				RemoteBck: true,
 			},
 		},
 	}

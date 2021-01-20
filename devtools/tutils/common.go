@@ -24,13 +24,13 @@ import (
 )
 
 type SkipTestArgs struct {
-	Bck            cmn.Bck
-	MinTargets     int
-	RequiresRemote bool
-	RequiresAuth   bool
-	Long           bool
-	Cloud          bool
-	K8s            bool
+	Bck                   cmn.Bck
+	MinTargets            int
+	RequiresRemoteCluster bool
+	RequiresAuth          bool
+	Long                  bool
+	RemoteBck             bool
+	K8s                   bool
 }
 
 func prependTime(msg string) string {
@@ -98,7 +98,7 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 }
 
 func CheckSkip(tb testing.TB, args SkipTestArgs) {
-	if args.RequiresRemote && RemoteCluster.UUID == "" {
+	if args.RequiresRemoteCluster && RemoteCluster.UUID == "" {
 		tb.Skipf("%s requires remote cluster", tb.Name())
 	}
 	if args.RequiresAuth && AuthToken == "" {
@@ -107,10 +107,10 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	if args.Long && testing.Short() {
 		tb.Skipf("skipping %s in short mode", tb.Name())
 	}
-	if args.Cloud {
+	if args.RemoteBck {
 		proxyURL := GetPrimaryURL()
-		if !IsCloudBucket(tb, proxyURL, args.Bck) {
-			tb.Skipf("%s requires a Cloud bucket", tb.Name())
+		if !isRemoteBucket(tb, proxyURL, args.Bck) {
+			tb.Skipf("%s requires a remote bucket", tb.Name())
 		}
 	}
 	if args.K8s {
@@ -126,8 +126,8 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 	}
 }
 
-func IsCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
-	if !bck.IsCloud() {
+func isRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
+	if !bck.IsRemote() {
 		return false
 	}
 	baseParams := BaseAPIParams(proxyURL)

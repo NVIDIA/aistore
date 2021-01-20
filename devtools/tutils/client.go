@@ -165,8 +165,8 @@ func EvictCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	tassert.CheckFatal(tb, err)
 }
 
-func CleanupCloudBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
-	if !bck.IsCloud() {
+func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
+	if !bck.IsRemote() {
 		return
 	}
 

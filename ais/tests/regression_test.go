@@ -150,7 +150,7 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		prefix     = cmn.RandString(32)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	smap := tutils.GetClusterMap(t, proxyURL)
 	if smap.CountActiveTargets() == 1 {
@@ -684,10 +684,10 @@ func TestLRU(t *testing.T) {
 		}
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: m.bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	m.init()
-	m.cloudPuts(false /*evict*/)
+	m.remotePuts(false /*evict*/)
 
 	// Remember targets' watermarks
 	var (
@@ -776,7 +776,7 @@ func TestPrefetchList(t *testing.T) {
 		bck        = cliBck
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	// 1. Get keys to prefetch
 	n := int64(getMatchingKeys(t, proxyURL, bck, ".*", objCnt, objNamesCh))
@@ -879,7 +879,7 @@ func TestPrefetchRange(t *testing.T) {
 		bck                = cliBck
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	// 1. Parse arguments
 	pt, err := cmn.ParseBashTemplate(prefetchRange)

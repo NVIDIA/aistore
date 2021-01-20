@@ -1236,7 +1236,7 @@ func TestAtimeColdGet(t *testing.T) {
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 	api.DeleteObject(baseParams, bck, objectName)
 	defer api.DeleteObject(baseParams, bck, objectName)
 
@@ -1271,7 +1271,7 @@ func TestAtimePrefetch(t *testing.T) {
 		objs       = make([]string, 0, numObjs)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 	api.DeleteObject(baseParams, bck, objectName)
 	defer func() {
 		for _, obj := range objs {

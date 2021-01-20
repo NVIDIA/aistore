@@ -782,7 +782,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 		pattern:     "obj-rest-cloud-%04d",
 	}.init(t, proxyURL)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	for _, test := range ecTests {
 		t.Run(test.name, func(t *testing.T) {

@@ -107,13 +107,13 @@ func TestObjectInvalidName(t *testing.T) {
 	}
 }
 
-func TestCloudBucketObject(t *testing.T) {
+func TestRemoteBucketObject(t *testing.T) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		bck        = cliBck
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	tests := []struct {
 		ty     string
@@ -285,7 +285,7 @@ func TestAppendObject(t *testing.T) {
 	}
 }
 
-func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
+func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -293,16 +293,16 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 			Name:     cliBck.Name,
 			Provider: cmn.ProviderAIS,
 		}
-		bckCloud  = cliBck
-		fileName1 = "mytestobj1.txt"
-		fileName2 = "mytestobj2.txt"
-		objRange  = "mytestobj{1..2}.txt"
-		dataLocal = []byte("im local")
-		dataCloud = []byte("I'm from the cloud!")
-		files     = []string{fileName1, fileName2}
+		bckRemote  = cliBck
+		fileName1  = "mytestobj1.txt"
+		fileName2  = "mytestobj2.txt"
+		objRange   = "mytestobj{1..2}.txt"
+		dataLocal  = []byte("im local")
+		dataRemote = []byte("I'm from the cloud!")
+		files      = []string{fileName1, fileName2}
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bckCloud})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
 
 	putArgsLocal := api.PutObjectArgs{
 		BaseParams: baseParams,
@@ -311,11 +311,11 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		Reader:     readers.NewBytesReader(dataLocal),
 	}
 
-	putArgsCloud := api.PutObjectArgs{
+	putArgsRemote := api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        bckCloud,
+		Bck:        bckRemote,
 		Object:     fileName1,
-		Reader:     readers.NewBytesReader(dataCloud),
+		Reader:     readers.NewBytesReader(dataRemote),
 	}
 
 	// PUT/GET/DEL Without ais bucket
@@ -336,28 +336,28 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	}
 
 	tutils.Logf("PrefetchList %d\n", len(files))
-	prefetchListID, err := api.PrefetchList(baseParams, bckCloud, files)
+	prefetchListID, err := api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args := api.XactReqArgs{ID: prefetchListID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("PrefetchRange\n")
-	prefetchRangeID, err := api.PrefetchRange(baseParams, bckCloud, objRange)
+	prefetchRangeID, err := api.PrefetchRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: prefetchRangeID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("EvictList\n")
-	evictListID, err := api.EvictList(baseParams, bckCloud, files)
+	evictListID, err := api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: evictListID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("EvictRange\n")
-	evictRangeID, err := api.EvictRange(baseParams, bckCloud, objRange)
+	evictRangeID, err := api.EvictRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: evictRangeID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
@@ -373,10 +373,10 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	err = api.PutObject(putArgsLocal)
 	tassert.CheckFatal(t, err)
 
-	err = api.PutObject(putArgsCloud)
+	err = api.PutObject(putArgsRemote)
 	tassert.CheckFatal(t, err)
-	putArgsCloud.Object = fileName2
-	err = api.PutObject(putArgsCloud)
+	putArgsRemote.Object = fileName2
+	err = api.PutObject(putArgsRemote)
 	tassert.CheckFatal(t, err)
 
 	// Check ais bucket has 2 objects
@@ -387,13 +387,13 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
-	prefetchListID, err = api.PrefetchList(baseParams, bckCloud, files)
+	prefetchListID, err = api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: prefetchListID, Kind: cmn.ActPrefetch, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	evictListID, err = api.EvictList(baseParams, bckCloud, files)
+	evictListID, err = api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: evictListID, Kind: cmn.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
@@ -401,7 +401,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 
 	// Deleting from cloud bucket
 	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
-	deleteID, err := api.DeleteList(baseParams, bckCloud, files)
+	deleteID, err := api.DeleteList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = api.XactReqArgs{ID: deleteID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXaction(baseParams, args)
@@ -424,36 +424,36 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		t.Errorf("Local file %s not deleted", fileName2)
 	}
 
-	_, err = api.HeadObject(baseParams, bckCloud, fileName1)
+	_, err = api.HeadObject(baseParams, bckRemote, fileName1)
 	if err == nil {
-		t.Errorf("Cloud file %s not deleted", fileName1)
+		t.Errorf("remote file %s not deleted", fileName1)
 	}
-	_, err = api.HeadObject(baseParams, bckCloud, fileName2)
+	_, err = api.HeadObject(baseParams, bckRemote, fileName2)
 	if err == nil {
-		t.Errorf("Cloud file %s not deleted", fileName2)
+		t.Errorf("remote file %s not deleted", fileName2)
 	}
 }
 
-func Test_SameAISAndCloudBucketName(t *testing.T) {
+func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	var (
-		defLocalProps cmn.BucketPropsToUpdate
-		defCloudProps cmn.BucketPropsToUpdate
+		defLocalProps  cmn.BucketPropsToUpdate
+		defRemoteProps cmn.BucketPropsToUpdate
 
 		bckLocal = cmn.Bck{
 			Name:     cliBck.Name,
 			Provider: cmn.ProviderAIS,
 		}
-		bckCloud   = cliBck
+		bckRemote  = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		fileName   = "mytestobj1.txt"
 		dataLocal  = []byte("im local")
-		dataCloud  = []byte("I'm from the cloud!")
+		dataRemote = []byte("I'm from the cloud!")
 		msg        = &cmn.SelectMsg{Props: "size,status", Prefix: "my"}
 		found      = false
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bckCloud})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
 
 	tutils.CreateFreshBucket(t, proxyURL, bckLocal)
 
@@ -462,7 +462,7 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 			Type: api.String(cmn.ChecksumNone),
 		},
 	}
-	bucketPropsCloud := cmn.BucketPropsToUpdate{}
+	bucketPropsRemote := cmn.BucketPropsToUpdate{}
 
 	// Put
 	tutils.Logf("Putting object (%s) into ais bucket %s...\n", fileName, bckLocal)
@@ -478,25 +478,25 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckCloud)
+	tutils.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckRemote)
 	putArgs = api.PutObjectArgs{
 		BaseParams: baseParams,
-		Bck:        bckCloud,
+		Bck:        bckRemote,
 		Object:     fileName,
-		Reader:     readers.NewBytesReader(dataCloud),
+		Reader:     readers.NewBytesReader(dataRemote),
 	}
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	resCloud, err := api.ListObjects(baseParams, bckCloud, msg, 0)
+	resRemote, err := api.ListObjects(baseParams, bckRemote, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	if len(resLocal.Entries) != 1 {
 		t.Fatalf("Expected number of files in ais bucket (%s) does not match: expected %v, got %v",
-			bckCloud, 1, len(resLocal.Entries))
+			bckRemote, 1, len(resLocal.Entries))
 	}
 
-	for _, entry := range resCloud.Entries {
+	for _, entry := range resRemote.Entries {
 		if entry.Name == fileName {
 			found = true
 			break
@@ -504,22 +504,22 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	}
 
 	if !found {
-		t.Fatalf("File (%s) not found in cloud bucket (%s)", fileName, bckCloud)
+		t.Fatalf("File (%s) not found in cloud bucket (%s)", fileName, bckRemote)
 	}
 
 	// Get
 	lenLocal, err := api.GetObject(baseParams, bckLocal, fileName)
 	tassert.CheckFatal(t, err)
-	lenCloud, err := api.GetObject(baseParams, bckCloud, fileName)
+	lenRemote, err := api.GetObject(baseParams, bckRemote, fileName)
 	tassert.CheckFatal(t, err)
 
-	if lenLocal == lenCloud {
+	if lenLocal == lenRemote {
 		t.Errorf("Local file and cloud file have same size, expected: local (%v) cloud (%v) got: local (%v) cloud (%v)",
-			len(dataLocal), len(dataCloud), lenLocal, lenCloud)
+			len(dataLocal), len(dataRemote), lenLocal, lenRemote)
 	}
 
 	// Delete
-	err = api.DeleteObject(baseParams, bckCloud, fileName)
+	err = api.DeleteObject(baseParams, bckRemote, fileName)
 	tassert.CheckFatal(t, err)
 
 	lenLocal, err = api.GetObject(baseParams, bckLocal, fileName)
@@ -531,16 +531,16 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	}
 
 	// Check that cloud object is deleted using HeadObject
-	_, err = api.HeadObject(baseParams, bckCloud, fileName)
+	_, err = api.HeadObject(baseParams, bckRemote, fileName)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
-		t.Errorf("Cloud file %s not deleted", fileName)
+		t.Errorf("Remote file %s not deleted", fileName)
 	}
 
 	// Set Props Object
 	_, err = api.SetBucketProps(baseParams, bckLocal, bucketPropsLocal)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.SetBucketProps(baseParams, bckCloud, bucketPropsCloud)
+	_, err = api.SetBucketProps(baseParams, bckRemote, bucketPropsRemote)
 	tassert.CheckFatal(t, err)
 
 	// Validate ais bucket props are set
@@ -549,9 +549,9 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	validateBucketProps(t, bucketPropsLocal, localProps)
 
 	// Validate cloud bucket props are set
-	cloudProps, err := api.HeadBucket(baseParams, bckCloud)
+	cloudProps, err := api.HeadBucket(baseParams, bckRemote)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, bucketPropsCloud, cloudProps)
+	validateBucketProps(t, bucketPropsRemote, cloudProps)
 
 	// Reset ais bucket props and validate they are reset
 	_, err = api.ResetBucketProps(baseParams, bckLocal)
@@ -561,16 +561,16 @@ func Test_SameAISAndCloudBucketName(t *testing.T) {
 	validateBucketProps(t, defLocalProps, localProps)
 
 	// Check if cloud bucket props remain the same
-	cloudProps, err = api.HeadBucket(baseParams, bckCloud)
+	cloudProps, err = api.HeadBucket(baseParams, bckRemote)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, bucketPropsCloud, cloudProps)
+	validateBucketProps(t, bucketPropsRemote, cloudProps)
 
 	// Reset cloud bucket props
-	_, err = api.ResetBucketProps(baseParams, bckCloud)
+	_, err = api.ResetBucketProps(baseParams, bckRemote)
 	tassert.CheckFatal(t, err)
-	cloudProps, err = api.HeadBucket(baseParams, bckCloud)
+	cloudProps, err = api.HeadBucket(baseParams, bckRemote)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, defCloudProps, cloudProps)
+	validateBucketProps(t, defRemoteProps, cloudProps)
 
 	// Check if ais bucket props remain the same
 	localProps, err = api.HeadBucket(baseParams, bckLocal)
@@ -593,7 +593,7 @@ func Test_coldgetmd5(t *testing.T) {
 		propsToUpdate cmn.BucketPropsToUpdate
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	p, err := api.HeadBucket(baseParams, bck)
@@ -693,14 +693,14 @@ func TestHeadBucket(t *testing.T) {
 	validateBucketProps(t, bckPropsToUpdate, p)
 }
 
-func TestHeadCloudBucket(t *testing.T) {
+func TestHeadRemoteBucket(t *testing.T) {
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cliBck
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	bckPropsToUpdate := cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
@@ -800,7 +800,7 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.Select
 // NOTE: The following test can only work when running on a local setup
 // (targets are co-located with where this test is running from, because
 // it searches a local oldFileIfo system).
-func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
+func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	const (
 		fileSize  = 1024
 		numFiles  = 3
@@ -823,7 +823,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		bck   = cliBck
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
@@ -921,7 +921,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	close(fileNameCh)
 }
 
-func Test_evictCloudBucket(t *testing.T) {
+func Test_evictRemoteBucket(t *testing.T) {
 	const (
 		numPuts   = 5
 		objPrefix = "evictcb"
@@ -937,7 +937,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	defer func() {
 		// Cleanup
@@ -1345,7 +1345,7 @@ func Test_checksum(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, Cloud: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	// Get Current Config
 	p, err := api.HeadBucket(baseParams, bck)
@@ -1645,7 +1645,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					waitTimeout = 10 * time.Second
 				)
 
-				if bck.IsCloud() {
+				if bck.IsRemote() {
 					waitTimeout = 40 * time.Second
 				}
 

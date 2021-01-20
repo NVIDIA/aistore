@@ -257,7 +257,7 @@ func TestETLObject(t *testing.T) {
 }
 
 func TestETLObjectCloud(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Cloud: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, RemoteBck: true})
 
 	// TODO: When a test is stable, make part of test cases onlyLong: true.
 	tcs := map[string][]*testCloudObjConfig{
