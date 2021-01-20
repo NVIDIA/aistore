@@ -91,6 +91,7 @@ type (
 // global configuration
 //
 
+// TODO: try to remove duplication *Conf v/s *ToUpdate structs
 type (
 	// Naming convention for setting/getting the particular fields is defined as
 	// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
@@ -125,12 +126,38 @@ type (
 		Compression CompressionConf `json:"compression"`
 		MDWrite     MDWritePolicy   `json:"md_write"`
 	}
+
+	ConfigToUpdate struct {
+		Confdir     *string                  `json:"confdir"`
+		Mirror      *MirrorConfToUpdate      `json:"mirror"`
+		EC          *ECConfToUpdate          `json:"ec"`
+		Log         *LogConfToUpdate         `json:"log"`
+		Periodic    *PeriodConfToUpdate      `json:"periodic"`
+		Timeout     *TimeoutConfToUpdate     `json:"timeout"`
+		Client      *ClientConfToUpdate      `json:"client"`
+		LRU         *LRUConfToUpdate         `json:"lru"`
+		Disk        *DiskConfToUpdate        `json:"disk"`
+		Rebalance   *RebalanceConfToUpdate   `json:"rebalance"`
+		Replication *ReplicationConfToUpdate `json:"replication"`
+		Cksum       *CksumConfToUpdate       `json:"checksum"`
+		Versioning  *VersionConfToUpdate     `json:"versioning"`
+		Net         *NetConfToUpdate         `json:"net"`
+		FSHC        *FSHCConfToUpdate        `json:"fshc"`
+		Auth        *AuthConfToUpdate        `json:"auth"`
+		Keepalive   *KeepaliveConfToUpdate   `json:"keepalivetracker"`
+		Downloader  *DownloaderConfToUpdate  `json:"downloader"`
+		DSort       *DSortConfToUpdate       `json:"distributed_sort"`
+		Compression *CompressionConfToUpdate `json:"compression"`
+		MDWrite     *MDWritePolicy           `json:"md_write"`
+	}
+
 	BackendConf struct {
 		Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on backend provider
 
 		// 3rd party Cloud(s) -- set during validation
 		Providers map[string]Ns `json:"-"`
 	}
+
 	RemoteAISInfo struct {
 		URL     string `json:"url"`
 		Alias   string `json:"alias"`
@@ -183,6 +210,12 @@ type (
 		MaxSize  uint64 `json:"max_size"`  // size that triggers log rotation
 		MaxTotal uint64 `json:"max_total"` // max total size of all the logs in the log directory
 	}
+	LogConfToUpdate struct {
+		Dir      *string `json:"dir"`       // log directory
+		Level    *string `json:"level"`     // log level aka verbosity
+		MaxSize  *uint64 `json:"max_size"`  // size that triggers log rotation
+		MaxTotal *uint64 `json:"max_total"` // max total size of all the logs in the log directory
+	}
 	PeriodConf struct {
 		StatsTimeStr     string `json:"stats_time"`
 		RetrySyncTimeStr string `json:"retry_sync_time"`
@@ -192,6 +225,13 @@ type (
 		RetrySyncTime time.Duration `json:"-"`
 		NotifTime     time.Duration `json:"-"`
 	}
+
+	PeriodConfToUpdate struct {
+		StatsTimeStr     *string `json:"stats_time"`
+		RetrySyncTimeStr *string `json:"retry_sync_time"`
+		NotifTimeStr     *string `json:"notif_time"`
+	}
+
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
 		CplaneOperationStr string        `json:"cplane_operation"`
@@ -205,6 +245,14 @@ type (
 		SendFileStr        string        `json:"send_file_time"`
 		SendFile           time.Duration `json:"-"`
 	}
+	TimeoutConfToUpdate struct {
+		CplaneOperationStr *string `json:"cplane_operation"`
+		MaxKeepaliveStr    *string `json:"max_keepalive"`
+		MaxHostBusyStr     *string `json:"max_host_busy"`
+		StartupStr         *string `json:"startup_time"`
+		SendFileStr        *string `json:"send_file_time"`
+	}
+
 	ClientConf struct {
 		TimeoutStr     string        `json:"client_timeout"`
 		Timeout        time.Duration `json:"-"`
@@ -213,6 +261,12 @@ type (
 		ListObjectsStr string        `json:"list_timeout"`
 		ListObjects    time.Duration `json:"-"`
 		Features       FeatureFlags  `json:"features,string"`
+	}
+	ClientConfToUpdate struct {
+		TimeoutStr     *string       `json:"client_timeout"`
+		TimeoutLongStr *string       `json:"client_long_timeout"`
+		ListObjectsStr *string       `json:"list_timeout"`
+		Features       *FeatureFlags `json:"features,string"`
 	}
 	ProxyConf struct {
 		PrimaryURL   string `json:"primary_url"`
@@ -251,10 +305,12 @@ type (
 		Enabled bool `json:"enabled"`
 	}
 	LRUConfToUpdate struct {
-		LowWM   *int64 `json:"lowwm"`
-		HighWM  *int64 `json:"highwm"`
-		OOS     *int64 `json:"out_of_space"`
-		Enabled *bool  `json:"enabled"`
+		LowWM              *int64  `json:"lowwm"`
+		HighWM             *int64  `json:"highwm"`
+		OOS                *int64  `json:"out_of_space"`
+		DontEvictTimeStr   *string `json:"dont_evict_time"`
+		CapacityUpdTimeStr *string `json:"capacity_upd_time"`
+		Enabled            *bool   `json:"enabled"`
 	}
 	DiskConf struct {
 		DiskUtilLowWM   int64         `json:"disk_util_low_wm"`  // no throttling below
@@ -265,6 +321,13 @@ type (
 
 		IostatTimeLongStr  string `json:"iostat_time_long"`
 		IostatTimeShortStr string `json:"iostat_time_short"`
+	}
+	DiskConfToUpdate struct {
+		DiskUtilLowWM      *int64  `json:"disk_util_low_wm"`  // no throttling below
+		DiskUtilHighWM     *int64  `json:"disk_util_high_wm"` // throttle longer when above
+		DiskUtilMaxWM      *int64  `json:"disk_util_max_wm"`
+		IostatTimeLongStr  *string `json:"iostat_time_long"`
+		IostatTimeShortStr *string `json:"iostat_time_short"`
 	}
 	RebalanceConf struct {
 		DontRunTimeStr   string        `json:"dont_run_time"`
@@ -277,11 +340,28 @@ type (
 		Multiplier       uint8         `json:"multiplier"`      // stream-bundle-and-jogger multiplier
 		Enabled          bool          `json:"enabled"`         // true=auto-rebalance | manual rebalancing
 	}
+
+	RebalanceConfToUpdate struct {
+		DontRunTimeStr   *string `json:"dont_run_time"`
+		DestRetryTimeStr *string `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
+		QuiesceStr       *string `json:"quiescent"`       // max wait for no-obj before next stage/batch
+		Compression      *string `json:"compression"`     // see CompressAlways, etc. enum
+		Multiplier       *uint8  `json:"multiplier"`      // stream-bundle-and-jogger multiplier
+		Enabled          *bool   `json:"enabled"`         // true=auto-rebalance | manual rebalancing
+	}
+
 	ReplicationConf struct {
 		OnColdGet     bool `json:"on_cold_get"`     // object replication on cold GET request
 		OnPut         bool `json:"on_put"`          // object replication on PUT request
 		OnLRUEviction bool `json:"on_lru_eviction"` // object replication on LRU eviction
 	}
+
+	ReplicationConfToUpdate struct {
+		OnColdGet     *bool `json:"on_cold_get"`     // object replication on cold GET request
+		OnPut         *bool `json:"on_put"`          // object replication on PUT request
+		OnLRUEviction *bool `json:"on_lru_eviction"` // object replication on LRU eviction
+	}
+
 	CksumConf struct {
 		// Object checksum; ChecksumNone ("none") disables checksumming.
 		Type string `json:"type"`
@@ -317,6 +397,7 @@ type (
 		// Validate object version upon warm GET.
 		ValidateWarmGet bool `json:"validate_warm_get"`
 	}
+
 	VersionConfToUpdate struct {
 		Enabled         *bool `json:"enabled"`
 		ValidateWarmGet *bool `json:"validate_warm_get"`
@@ -327,7 +408,6 @@ type (
 		Count    int    `json:"count"`
 		Instance int    `json:"instance"`
 	}
-
 	NetConf struct {
 		Hostname             string   `json:"hostname"`
 		HostnameIntraControl string   `json:"hostname_intra_control"`
@@ -336,6 +416,10 @@ type (
 		HTTP                 HTTPConf `json:"http"`
 		UseIntraControl      bool     `json:"-"`
 		UseIntraData         bool     `json:"-"`
+	}
+	NetConfToUpdate struct {
+		L4   *L4ConfToUpdate   `json:"l4"`
+		HTTP *HTTPConfToUpdate `json:"http"`
 	}
 
 	L4Conf struct {
@@ -348,7 +432,13 @@ type (
 		PortIntraData       int    `json:"-"`                  // --/--
 		SndRcvBufSize       int    `json:"sndrcv_buf_size"`    // SO_RCVBUF and SO_SNDBUF
 	}
-
+	L4ConfToUpdate struct {
+		Proto               *string `json:"proto"`              // tcp, udp
+		PortStr             *string `json:"port"`               // listening port
+		PortIntraControlStr *string `json:"port_intra_control"` // listening port for intra control network
+		PortIntraDataStr    *string `json:"port_intra_data"`    // listening port for intra data network
+		SndRcvBufSize       *int    `json:"sndrcv_buf_size"`    // SO_RCVBUF and SO_SNDBUF
+	}
 	HTTPConf struct {
 		Proto       string `json:"-"`          // http or https (set depending on `UseHTTPS`)
 		Certificate string `json:"server_crt"` // HTTPS: openssl certificate
@@ -362,14 +452,32 @@ type (
 		SkipVerify bool `json:"skip_verify"`
 		Chunked    bool `json:"chunked_transfer"` // https://tools.ietf.org/html/rfc7230#page-36
 	}
+	HTTPConfToUpdate struct {
+		Certificate     *string `json:"server_crt"` // HTTPS: openssl certificate
+		Key             *string `json:"server_key"` // HTTPS: openssl key
+		WriteBufferSize *int    `json:"write_buffer_size"`
+		ReadBufferSize  *int    `json:"read_buffer_size"`
+		UseHTTPS        *bool   `json:"use_https"` // use HTTPS instead of HTTP
+		SkipVerify      *bool   `json:"skip_verify"`
+		Chunked         *bool   `json:"chunked_transfer"` // https://tools.ietf.org/html/rfc7230#page-36
+	}
 	FSHCConf struct {
 		TestFileCount int  `json:"test_files"`  // number of files to read/write
 		ErrorLimit    int  `json:"error_limit"` // exceeding err limit causes disabling mountpath
 		Enabled       bool `json:"enabled"`
 	}
+	FSHCConfToUpdate struct {
+		TestFileCount *int  `json:"test_files"`  // number of files to read/write
+		ErrorLimit    *int  `json:"error_limit"` // exceeding err limit causes disabling mountpath
+		Enabled       *bool `json:"enabled"`
+	}
 	AuthConf struct {
 		Secret  string `json:"secret"`
 		Enabled bool   `json:"enabled"`
+	}
+	AuthConfToUpdate struct {
+		Secret  *string `json:"secret"`
+		Enabled *bool   `json:"enabled"`
 	}
 	// config for one keepalive tracker
 	// all type of trackers share the same struct, not all fields are used by all trackers
@@ -379,16 +487,33 @@ type (
 		Name        string        `json:"name"`     // "heartbeat", "average"
 		Factor      uint8         `json:"factor"`   // only average
 	}
+	KeepaliveTrackerConfToUpdate struct {
+		IntervalStr *string `json:"interval"` // keepalive interval
+		Name        *string `json:"name"`     // "heartbeat", "average"
+		Factor      *uint8  `json:"factor"`   // only average
+	}
+
 	KeepaliveConf struct {
 		Proxy         KeepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
 		Target        KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
 		RetryFactor   uint8                `json:"retry_factor"`
 		TimeoutFactor uint8                `json:"timeout_factor"`
 	}
+
+	KeepaliveConfToUpdate struct {
+		Proxy         *KeepaliveTrackerConfToUpdate `json:"proxy"`  // how proxy tracks target keepalives
+		Target        *KeepaliveTrackerConfToUpdate `json:"target"` // how target tracks primary proxies keepalives
+		RetryFactor   *uint8                        `json:"retry_factor"`
+		TimeoutFactor *uint8                        `json:"timeout_factor"`
+	}
 	DownloaderConf struct {
 		TimeoutStr string        `json:"timeout"`
 		Timeout    time.Duration `json:"-"`
 	}
+	DownloaderConfToUpdate struct {
+		TimeoutStr *string `json:"timeout"`
+	}
+
 	DSortConf struct {
 		DuplicatedRecords   string        `json:"duplicated_records"`
 		MissingShards       string        `json:"missing_shards"`
@@ -400,6 +525,18 @@ type (
 		DSorterMemThreshold string        `json:"dsorter_mem_threshold"`
 		CallTimeout         time.Duration `json:"-"` // time to wait for other target
 	}
+
+	DSortConfToUpdate struct {
+		DuplicatedRecords   *string `json:"duplicated_records"`
+		MissingShards       *string `json:"missing_shards"`
+		EKMMalformedLine    *string `json:"ekm_malformed_line"`
+		EKMMissingKey       *string `json:"ekm_missing_key"`
+		DefaultMaxMemUsage  *string `json:"default_max_mem_usage"`
+		CallTimeoutStr      *string `json:"call_timeout"`
+		Compression         *string `json:"compression"`
+		DSorterMemThreshold *string `json:"dsorter_mem_threshold"`
+	}
+
 	FSPathsConf struct {
 		Paths StringSet `json:"paths,omitempty"`
 	}
@@ -407,6 +544,11 @@ type (
 	CompressionConf struct {
 		BlockMaxSize int  `json:"block_size"` // *uncompressed* block max size
 		Checksum     bool `json:"checksum"`   // true: checksum lz4 frames
+	}
+
+	CompressionConfToUpdate struct {
+		BlockMaxSize *int  `json:"block_size"`
+		Checksum     *bool `json:"checksum"`
 	}
 )
 
@@ -561,6 +703,11 @@ func (c *Config) Validate() error {
 func (c *Config) SetRole(role string) {
 	debug.Assert(role == Target || role == Proxy)
 	c.role = role
+}
+
+func (c *Config) Apply(updateConf ConfigToUpdate) error {
+	copyProps(updateConf, c)
+	return c.Validate()
 }
 
 // TestingEnv returns true if config is set to a development environment

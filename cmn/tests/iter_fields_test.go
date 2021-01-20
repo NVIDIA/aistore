@@ -135,10 +135,12 @@ var _ = Describe("IterFields", func() {
 					"checksum.validate_obj_move": (*bool)(nil),
 					"checksum.enable_read_range": (*bool)(nil),
 
-					"lru.enabled":      (*bool)(nil),
-					"lru.lowwm":        (*int64)(nil),
-					"lru.highwm":       (*int64)(nil),
-					"lru.out_of_space": (*int64)(nil),
+					"lru.enabled":           (*bool)(nil),
+					"lru.lowwm":             (*int64)(nil),
+					"lru.highwm":            (*int64)(nil),
+					"lru.dont_evict_time":   (*string)(nil),
+					"lru.capacity_upd_time": (*string)(nil),
+					"lru.out_of_space":      (*int64)(nil),
 
 					"access":   api.AccessAttrs(1024),
 					"md_write": api.MDWritePolicy("never"),
