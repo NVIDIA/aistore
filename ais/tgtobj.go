@@ -1002,13 +1002,14 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 		}
 	}
 
-	srcLOM.Lock(false)
+	exclusive := si.ID() == coi.t.si.ID() && !coi.DryRun
+	srcLOM.Lock(exclusive)
 	if err = srcLOM.Load(false); err != nil {
 		if !cmn.IsObjNotExist(err) {
 			err = fmt.Errorf("%s: err: %v", srcLOM, err)
 		}
 
-		srcLOM.Unlock(false)
+		srcLOM.Unlock(exclusive)
 		return
 	}
 
@@ -1024,7 +1025,8 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 			Locked:    true,
 			NoVersion: !srcLOM.Bck().Bck.Equal(coi.BckTo.Bck), // Don't include version when totally different object.
 		}
-		copied, _, err = coi.putRemote(srcLOM, params) // NOTE: srcLOM.Unlock inside
+		// NOTE: `srcLOM.Unlock(false)` inside.
+		copied, _, err = coi.putRemote(srcLOM, params)
 		return
 	}
 	if coi.DryRun {
@@ -1034,16 +1036,6 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 			return false, nil
 		}
 		return true, nil
-	}
-
-	if !srcLOM.TryUpgradeLock() {
-		// We haven't managed to upgrade the lock so we must do it slow way...
-		srcLOM.Unlock(false)
-		srcLOM.Lock(true)
-		if err = srcLOM.Load(false); err != nil {
-			srcLOM.Unlock(true)
-			return
-		}
 	}
 
 	// At this point we must have an exclusive lock for the object.
