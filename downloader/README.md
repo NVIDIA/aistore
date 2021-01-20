@@ -14,7 +14,7 @@ AIS cluster can be easily deployed on any commodity hardware, and AIS **download
 
 ## Features
 
-> By way of background, AIStore supports a number of [3rd party Cloud providers](/docs/providers.md) and utilizes the providers' SDKs to access the corresponding Clouds. For Amazon S3, that would be `aws-sdk-go` SDK, for Azure - `azure-storage-blob-go`, and so on. Each SDK can be **conditionally linked** into AIS executable - the decision (to link or not to link) is made prior to deployment.
+> By way of background, AIStore supports a number of [3rd party Backend providers](/docs/providers.md) and utilizes the providers' SDKs to access the corresponding Clouds. For Amazon S3, that would be `aws-sdk-go` SDK, for Azure - `azure-storage-blob-go`, and so on. Each SDK can be **conditionally linked** into AIS executable - the decision (to link or not to link) is made prior to deployment.
 
 This has a certain implication for the Downloader. Namely:
 

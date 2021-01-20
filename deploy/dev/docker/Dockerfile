@@ -57,7 +57,7 @@ RUN mkdir -p $GOPATH/src/github.com/NVIDIA && \
     cd $GOPATH/src/github.com/NVIDIA && \
     git clone https://github.com/NVIDIA/aistore.git && \
     cd ${GOPATH}/src/github.com/NVIDIA/aistore && \
-    AIS_CLD_PROVIDERS="ais aws azure gcp hdfs" make node
+    AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" make node
 
 
 WORKDIR "${GOPATH}/src/github.com/NVIDIA/aistore"

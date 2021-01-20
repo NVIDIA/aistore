@@ -16,9 +16,9 @@ ifdef GOBIN
 	BUILD_DEST = $(GOBIN)
 endif
 ifdef TAGS
-	BUILD_TAGS = "$(AIS_CLD_PROVIDERS) $(TAGS)"
+	BUILD_TAGS = "$(AIS_BACKEND_PROVIDERS) $(TAGS)"
 else
-	BUILD_TAGS = $(AIS_CLD_PROVIDERS)
+	BUILD_TAGS = $(AIS_BACKEND_PROVIDERS)
 endif
 
 # Profiling
@@ -76,7 +76,7 @@ $(call make-lazy,term-reset)
 all: node cli aisfs authn aisloader ## Build all main binaries
 
 node: ## Build 'aisnode' binary
-	@echo "Building aisnode: version=$(VERSION) providers=$(AIS_CLD_PROVIDERS) tags=$(BUILD_TAGS)"
+	@echo "Building aisnode: version=$(VERSION) providers=$(AIS_BACKEND_PROVIDERS) tags=$(BUILD_TAGS)"
 ifneq ($(strip $(GORACE)),)
 ifneq ($(findstring log_path,$(GORACE)),log_path)
 	@echo

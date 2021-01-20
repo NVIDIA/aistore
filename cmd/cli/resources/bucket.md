@@ -11,7 +11,7 @@ Create an ais bucket or buckets.
 #### Create AIS bucket
 
 Create buckets `bucket_name1` and `bucket_name2`, both with AIS provider.
-`bucket_name2`'s provider by default is set to `ais://`, see [bucket provider info](../README.md#bucket-provider).
+`bucket_name2`'s provider by default is set to `ais://`, see [backend provider info](../README.md#bucket-provider).
 
 ```console
 $ ais create bucket ais://bucket_name1 bucket_name2
@@ -177,7 +177,7 @@ List all objects contained in `BUCKET_NAME` bucket.
 #### With provider auto-detection
 
 List object names in the bucket `bucket_name`.
-Cloud provider is auto-detected.
+Backend provider is auto-detected.
 
 ```console
 $ ais ls bucket_name

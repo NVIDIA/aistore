@@ -17,7 +17,7 @@ usage() {
     echo "  -s or --single                          : use a single network"
     echo "  -t=NUM or --target=NUM                  : where NUM is the number of targets"
     echo "  -qs=AWS_DIR or --quickstart=AWS_DIR     : deploys a quickstart version of AIS with one proxy, one targe and one local file system"
-    echo "  -nocloud                                : to deploy AIS without any cloud provider"
+    echo "  -nocloud                                : to deploy AIS without any 3rd party backend provider"
     echo "  -grafana                                : starts Graphite and Grafana containers"
     echo "  -nodiskio=BOOL                          : run Dry-Run mode with disk IO is disabled (default = false)"
     echo "  -dryobjsize=SIZE                        : size of an object when a source is a 'fake' one."
@@ -56,7 +56,7 @@ save_env() {
     echo "" > ${TMP_ENV}
     echo "QUICK=${QUICK}" >> ${TMP_ENV}
     echo "TARGET_CNT=${TARGET_CNT:-1000}" >> ${TMP_ENV}
-    echo "AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS-}" >> ${TMP_ENV}
+    echo "AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS-}" >> ${TMP_ENV}
     echo "TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT}" >> ${TMP_ENV}
     echo "AIS_FS_PATHS=${AIS_FS_PATHS}" >> ${TMP_ENV}
 
@@ -82,7 +82,7 @@ save_setup() {
     echo "TARGET_CNT=$TARGET_CNT" >> ${SETUP_FILE}
     echo "NETWORK=${NETWORK}" >> ${SETUP_FILE}
 
-    echo "AIS_CLD_PROVIDERS=$AIS_CLD_PROVIDERS" >> ${SETUP_FILE}
+    echo "AIS_BACKEND_PROVIDERS=$AIS_BACKEND_PROVIDERS" >> ${SETUP_FILE}
 
     echo "DRYRUN"=$DRYRUN >> ${SETUP_FILE}
     echo "NODISKIO"=$NODISKIO >> ${SETUP_FILE}
@@ -150,7 +150,7 @@ if ! [ -x "$(command -v docker-compose)" ]; then
   exit 1
 fi
 
-AIS_CLD_PROVIDERS=""
+AIS_BACKEND_PROVIDERS=""
 CLUSTER_CNT=0
 PROXY_CNT=0
 TARGET_CNT=0
@@ -274,8 +274,8 @@ fi
 parse_cld_providers
 
 touch $LOCAL_AWS
-echo "Configured cloud providers: '${AIS_CLD_PROVIDERS}'"
-if [[ "${AIS_CLD_PROVIDERS}" == *aws* ]]; then
+echo "Configured backend providers: '${AIS_BACKEND_PROVIDERS}'"
+if [[ "${AIS_BACKEND_PROVIDERS}" == *aws* ]]; then
     echo "Enter the location of your AWS configuration and credentials files:"
     echo "Note: No input will result in using the default aws dir (~/.aws/)"
     read AWS_ENV
@@ -402,7 +402,7 @@ PORT_INTRA_CONTROL=9080
 PORT_INTRA_DATA=10080
 export PORT=51080
 export AIS_NO_DISK_IO=${NODISKIO}
-export AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}
+export AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}
 # Setting the IP addresses for the containers
 echo "Network type: ${NETWORK}"
 for ((i=0; i<${CLUSTER_CNT}; i++)); do

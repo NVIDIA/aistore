@@ -2,18 +2,22 @@
 
 | Term                                   | Definition                                                   |
 | -------------------------------------- | ------------------------------------------------------------ |
-| 3rd party cloud (aka *cloud provider*) | Supported object storage backends Amazon S3, Google Cloud, and Microsoft Azure with protocol prefixes `aws://` (or `s3://`), `gcp://` (or `gs://`), and `azure://` (`az://`), respectively. |
+| 3rd party Cloud-based object storage   | Supported object storages include Amazon S3, Google Cloud, and Microsoft Azure with protocol prefixes `aws://` (or `s3://`), `gcp://` (or `gs://`), and `azure://` (`az://`), respectively. |
 | HTTP(S) based dataset                  | That is, a dataset containing HTTP(S) accessible files that may or **may not** be stored in a vendor-supported Cloud storage. When used as HTTP Proxy (e. g., via `http_proxy=AIS_ENDPOINT`) and given vanilla HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) - reachable files all the while supporting the entire gamut of functionality including ETL. |
 | remote AIS cluster                     | Let's say, there are two deployed AIS clusters: A and B. And let's also say that you can access cluster directly A via any/all of its gateways' URLs. If B gets *attached* to A (as shown below) then B becomes transparently accessibly via A and we call B *remote*. |
 | unified global namespace               | By *attaching* multiple AIS clusters to each other, we effectively create a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters). This *attaching* and *detaching* can be done ad-hoc and at any time without disrupting or otherwise affecting operations of any individual cluster. |
 
 ## Introduction
 
-AIStore natively integrates with 3 (three) 3rd party Cloud storages:
+AIStore natively integrates with multiple 3rd party backends including:
 
 * [Amazon S3](https://aws.amazon.com/s3)
 * [Google Cloud Storage](https://cloud.google.com)
 * [Microsoft Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs)
+
+The full taxonomy of the supported backends is shown below (and note that AIS supports itself on the back as well):
+
+<img src="images/supported-backends.png" alt="Supported Backends" width="500">
 
 In each case, we use the vendor's own SDK/API to provide transparent access to Cloud storage with the additional capability of *persistently caching* all read data in the AIStore's [cloud buckets](bucket.md).
 
@@ -55,11 +59,11 @@ would all be stored in a single AIS bucket that would have a protocol prefix `ht
 WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. `curl ... --noproxy=$(curl -s G/v1/cluster?what=target_ips)`).
 If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
 
-## Supported Cloud Providers
+## Supported Backend Providers
 
-To reiterate, AIStore can be deployed as a fast tier in front of several storage backends. Supported *cloud providers* include: AIS (`ais`) itself, as well as AWS (`aws`), GCP (`gcp`), and Azure (`azure`), and all the respective S3, Google Cloud, and Azure compliant storages.
+To reiterate, AIStore can be deployed as a fast tier in front of several storage backends. Supported *backend providers* include: AIS (`ais`) itself, as well as AWS (`aws`), GCP (`gcp`), and Azure (`azure`), and all the respective S3, Google Cloud, and Azure compliant storages.
 
-In the AIS [CLI](/cmd/cli/README.md), we use protocol prefixes to designate any specific Cloud Provider:
+In the AIS [CLI](/cmd/cli/README.md), we use protocol prefixes to designate any specific Backend Provider:
 
 * `ais://` - for AIS
 * `aws://` or `s3://` interchangeably - for Amazon S3

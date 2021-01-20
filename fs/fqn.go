@@ -55,7 +55,7 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 
 		item := rel[prev:i]
 		switch itemIdx {
-		case 0: // cloud provider
+		case 0: // backend provider
 			if item[0] != prefProvider {
 				err = fmt.Errorf("invalid fqn %s: bad provider %q", fqn, item)
 				return

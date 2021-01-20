@@ -126,7 +126,7 @@ type (
 		MDWrite     MDWritePolicy   `json:"md_write"`
 	}
 	CloudConf struct {
-		Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on cloud provider
+		Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on backend provider
 
 		// 3rd party Cloud(s) -- set during validation
 		Providers map[string]Ns `json:"-"`
@@ -290,9 +290,10 @@ type (
 		// is checked after downloading it from remote (cloud) buckets.
 		ValidateColdGet bool `json:"validate_cold_get"`
 
-		// ValidateWarmGet: if enabled, the object's version (if in Cloud-based bucket)
-		// and checksum are checked. If either value fail to match, the object
-		// is removed from local storage.
+		// ValidateWarmGet: if enabled, the object's version (if exists) and checksum are checked.
+		// If either value fail to match, the object is removed from local storage.
+		// NOTE: object versioning is backend-specific and is may _not_ be supported by a given
+		//      (supported) backends - see docs for details.
 		ValidateWarmGet bool `json:"validate_warm_get"`
 
 		// ValidateObjMove determines if migrated objects should have their checksum validated.
@@ -633,7 +634,7 @@ func (c *CloudConf) setProvider(provider string) {
 	case ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS:
 		ns = NsGlobal
 	default:
-		AssertMsg(false, "unknown cloud provider "+provider)
+		AssertMsg(false, "unknown backend provider "+provider)
 	}
 	if c.Providers == nil {
 		c.Providers = map[string]Ns{}

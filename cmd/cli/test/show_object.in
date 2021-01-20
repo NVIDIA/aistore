@@ -9,4 +9,4 @@ ais show object $BUCKET_1/object_1.txt
 ais show object $BUCKET_1/object_1.txt --props=size,version
 ais show object $BUCKET_1/object_1.txt --props=all
 
-ais show object aiss://$BUCKET_1/object_1.txt // FAIL "invalid cloud provider "aiss""
+ais show object aiss://$BUCKET_1/object_1.txt // FAIL "invalid backend provider "aiss""

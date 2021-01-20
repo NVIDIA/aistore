@@ -1,6 +1,6 @@
 // +build hdfs
 
-// Package cloud contains implementation of various cloud providers.
+// Package cloud contains implementation of various backend providers.
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */

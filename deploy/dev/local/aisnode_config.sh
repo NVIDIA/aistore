@@ -1,5 +1,5 @@
 cloud_desc=()
-for cloud in ${AIS_CLD_PROVIDERS}; do
+for cloud in ${AIS_BACKEND_PROVIDERS}; do
   case $cloud in
     aws)   cloud_desc+=('"aws":   {}') ;;
     azure) cloud_desc+=('"azure": {}') ;;

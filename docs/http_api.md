@@ -4,7 +4,7 @@
 - [Notation](#notation)
 - [Overview](#overview)
 - [API Reference](#api-reference)
-- [Cloud Provider](#cloud-provider)
+- [Backend Provider](#bucket-provider)
 - [Querying information](#querying-information)
 - [Example: querying runtime statistics](#example-querying-runtime-statistics)
 - [ETL](#etl)
@@ -50,7 +50,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external resources (datasets, files) into cluster |
 
-4. **URL query**, e. g., `?what=config`. In particular, All API requests that operate on buckets carry the bucket(s) specification details in the query parameters of the corresponding URL. Those details may include [cloud provider](providers.md) and [namespace](providers.md#unified-global-namespace) where an empty cloud provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/api/bucket.go).
+4. **URL query**, e. g., `?what=config`. In particular, All API requests that operate on buckets carry the bucket(s) specification details in the query parameters of the corresponding URL. Those details may include [backend provider](providers.md) and [namespace](providers.md#unified-global-namespace) where an empty backend provider indicates an AIS bucket (with AIStore being, effectively, the default provider) while an empty namespace parameter translates as a global (default) namespace. For exact names of the bucket-specifying URL Query parameters, please refer to this [API source](/api/bucket.go).
 
 > Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e. g., an entire cluster or a given AIS node. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
 
@@ -126,18 +126,18 @@ ___
 
 <a name="ft8">8</a>: When putting the first part of an object, `handle` value must be empty string or omitted. On success, the first request returns an object handle. The subsequent `AppendObject` and `FlushObject` requests must pass the handle to the API calls. The object gets accessible and appears in a bucket only after `FlushObject` is done.
 
-### Cloud Provider
+### Backend Provider
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, or in another AIS cluster, or - the 3rd option - be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve all potential naming, and (arguably, more importantly) partition namespace with respect to both physical isolation and QoS, AIS introduces the concept of *provider*.
 
-* [Cloud Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+* [Backend Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
-> Cloud provider is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. For supported Cloud providers, please refer to the [Cloud Providers](./providers.md) and/or [Buckets: introduction and detailed overview](bucket.md) documents.
+> Backend provider is realized as an optional parameter across all AIStore APIs that handle access to user data and bucket configuration. The list (of those APIs) includes GET, PUT, DELETE and [Range/List](batch.md) operations. For supported backend providers, please refer to [Providers](./providers.md) and/or [Buckets: introduction and detailed overview](bucket.md) documents.
 
 Curl example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=ais'`
 
 For even more information, CLI examples, and the most recent updates, please see:
-- [Cloud Providers](./providers.md)
+- [Backend Providers](./providers.md)
 - [CLI: operations on buckets](/cmd/cli/resources/bucket.md)
 - [CLI: operations on objects](/cmd/cli/resources/object.md)
 - [On-Disk Layout](./on-disk-layout.md)

@@ -21,7 +21,7 @@ services:
       - AIS_NO_DISK_IO=${AIS_NO_DISK_IO}
       - PORT=${PORT}
       - AIS_PRIMARY_URL=http://${PRIMARY_IP}:${PORT}
-      - AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}
+      - AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}
     env_file:
       - /tmp/docker_ais/tmp.env
       - /tmp/docker_ais/aws.env
@@ -43,7 +43,7 @@ services:
       - AIS_NO_DISK_IO=${AIS_NO_DISK_IO}
       - PORT=${PORT}
       - AIS_PRIMARY_URL=http://${PRIMARY_IP}:${PORT}
-      - AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}
+      - AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}
     env_file:
       - /tmp/docker_ais/tmp.env
       - /tmp/docker_ais/aws.env

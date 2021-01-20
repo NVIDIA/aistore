@@ -33,7 +33,7 @@ var (
 func init() {
 	flag.StringVar(&url, "url", ProxyURL, "Proxy URL")
 	flag.StringVar(&bucket.Name, "bucket", "local_benchmark_bucket", "AWS or GCP bucket")
-	flag.StringVar(&bucket.Provider, "provider", "", "cloud provider")
+	flag.StringVar(&bucket.Provider, "provider", "", "backend provider")
 	flag.IntVar(&files, "files", 10, "Number of files to put")
 	flag.IntVar(&workers, "workers", 10, "Number of workers")
 	flag.Uint64Var(&filesize, "filesize", 1, "Size of files to put in KB")

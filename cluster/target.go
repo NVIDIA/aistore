@@ -103,7 +103,7 @@ type (
 		Locked    bool
 
 		// Defines if version should be removed in the destination object.
-		// If set to `true` receiver will use appropriate for bucket provider initial version.
+		// If set to `true` receiver will use appropriate for backend provider initial version.
 		NoVersion bool
 	}
 	PromoteFileParams struct {

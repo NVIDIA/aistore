@@ -175,7 +175,7 @@ func TestParseFQN(t *testing.T) {
 			"", "", true,
 		},
 		{
-			"empty cloud provider",
+			"empty backend provider",
 			tmpMpath + "/bucket/%ob/objname",
 			[]string{tmpMpath},
 			"",
@@ -183,7 +183,7 @@ func TestParseFQN(t *testing.T) {
 			"", "", true,
 		},
 		{
-			"invalid cloud provider (not prefixed with '@')",
+			"invalid backend provider (not prefixed with '@')",
 			tmpMpath + "/gcp/bucket/%ob/objname",
 			[]string{tmpMpath},
 			"",
@@ -191,7 +191,7 @@ func TestParseFQN(t *testing.T) {
 			"", "", true,
 		},
 		{
-			"invalid cloud provider (unknown)",
+			"invalid backend provider (unknown)",
 			tmpMpath + "/@unknown/bucket/%ob/objname",
 			[]string{tmpMpath},
 			"",
@@ -199,7 +199,7 @@ func TestParseFQN(t *testing.T) {
 			"", "", true,
 		},
 		{
-			"invalid cloud provider (cloud)",
+			"invalid backend provider (cloud)",
 			tmpMpath + "/@cloud/bucket/%ob/objname",
 			[]string{tmpMpath},
 			"",

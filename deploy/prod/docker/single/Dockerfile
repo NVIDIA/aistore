@@ -9,7 +9,7 @@ RUN apt-get --no-install-recommends -y install curl git build-essential coreutil
 # Clone and build latest aisnode.
 RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && \
     GOOS="linux" GOARCH="amd64" CGO_ENABLED=0 BUILD_FLAGS="-a -installsuffix cgo" \
-    AIS_CLD_PROVIDERS="ais aws gcp azure" make node
+    AIS_BACKEND_PROVIDERS="ais aws gcp azure" make node
 
 
 FROM alpine:3.11

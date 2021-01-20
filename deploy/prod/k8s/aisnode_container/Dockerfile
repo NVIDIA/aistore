@@ -12,7 +12,7 @@ ENV PATH="${GOPATH}/bin:${PATH}"
 RUN mkdir -p /go/src/github.com/NVIDIA/aistore
 WORKDIR /go/src/github.com/NVIDIA/aistore
 COPY . .
-RUN MODE=${mode} AIS_CLD_PROVIDERS="ais aws azure gcp hdfs" make node cli xmeta
+RUN MODE=${mode} AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" make node cli xmeta
 
 FROM ubuntu:18.04
 

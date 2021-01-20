@@ -172,7 +172,7 @@ const (
 	URLParamCheckExists     = "check_cached" // true: check if object exists
 	URLParamHealthReadiness = "readiness"    // true: check if node can accept HTTP(S) requests
 
-	URLParamProvider  = "provider" // cloud provider
+	URLParamProvider  = "provider" // backend provider
 	URLParamNamespace = "namespace"
 	URLParamBucket    = "bck"
 	URLParamBucketTo  = "bck_to"

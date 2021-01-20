@@ -1096,7 +1096,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 // so DP should tak any steps necessary to do so. It includes handling cold get, warm get etc.
 //
 // If destination bucket is remote bucket, copyReader will always create a cached copy of an object on one of the
-// targets as well as make put to the relevant cloud provider.
+// targets as well as make put to the relevant backend provider.
 // TODO: Make it possible to skip caching an object from a cloud bucket.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
 	cmn.Assert(coi.DP != nil)

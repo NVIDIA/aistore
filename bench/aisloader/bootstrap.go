@@ -9,15 +9,16 @@
 // For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
 
 // Examples:
-// 1. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
-//    aisloader -bucket=nvais -duration 0s -totalputsize=0
-//    aisloader -bucket=nvais -provider=cloud -cleanup=true -duration 0s -totalputsize=0
+// 1. Destroy existing ais bucket:
+//    a) aisloader -bucket=ais://abc -duration 0s -totalputsize=0
+//    Delete all objects in a given Cloud-based bucket:
+//    b) aisloader -bucket=aws://nvais -cleanup=true -duration 0s -totalputsize=0
 // 2. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
 //    aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=cloud -cleanup=false
 // 3. Time-based PUT into ais bucket, random objects names:
 //    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
-// 4. Mixed 30% PUT and 70% GET to/from Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
-//    aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
+// 4. Mixed 30% PUT and 70% GET to/from a Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
+//    aisloader -bucket=gs://nvgs -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
 // 5. PUT 2000 objects with names that look like hex({0..2000}{loaderid})
 //    aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
 // 6. Use random object names and loaderID for reporting stats

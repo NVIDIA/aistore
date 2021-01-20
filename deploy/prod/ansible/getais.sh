@@ -14,5 +14,5 @@ if [[ -n $1 ]]; then
     git checkout $1
 fi
 
-echo "Cloud provider(s) set to: ${AIS_CLD_PROVIDERS}"
+echo "Backend provider(s) set to: ${AIS_BACKEND_PROVIDERS}"
 make node

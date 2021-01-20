@@ -3,8 +3,8 @@ ais create bucket $BUCKET_1 $BUCKET_2
 for d1 in {0..4}; do for d2 in {0..100}; do mkdir -p /tmp/rdir/test$d1/$d2 && echo -n $RANDOM > /tmp/rdir/test$d1/$d2/test.txt; done; done
 ais put "/tmp/rdir/test{0..4}/{0..100}/test.txt" $BUCKET_1 -y // IGNORE
 
-ais cp bucket aiss://$BUCKET_1/ $BUCKET_2/ // FAIL "invalid cloud provider "aiss""
-ais cp bucket $BUCKET_1/ aiss://$BUCKET_2/ // FAIL "invalid cloud provider "aiss""
+ais cp bucket aiss://$BUCKET_1/ $BUCKET_2/ // FAIL "invalid backend provider "aiss""
+ais cp bucket $BUCKET_1/ aiss://$BUCKET_2/ // FAIL "invalid backend provider "aiss""
 ais cp bucket $BUCKET_1 $BUCKET_2
 
 ais wait xaction copybck $BUCKET_2

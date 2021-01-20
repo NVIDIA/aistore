@@ -85,7 +85,7 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | `input_format` | `string` | name template for input shard | yes | |
 | `output_format` | `string` | name template for output shard | yes | |
 | `bucket` | `string` | bucket where shards objects are stored | yes | |
-| `provider` | `string` | cloud provider (ais or cloud) | no | `"ais"` |
+| `provider` | `string` | backend provider (ais or cloud) | no | `"ais"` |
 | `output_bucket` | `string` | bucket where new output shards will be saved | no | same as `bucket` |
 | `output_provider` | `string` | determines whether the output bucket is ais or cloud | no | same as `provider` |
 | `description` | `string` | description of dSort job | no | `""` |

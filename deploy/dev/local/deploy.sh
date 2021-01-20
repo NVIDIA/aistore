@@ -108,7 +108,7 @@ read test_fspath_cnt
 is_number ${test_fspath_cnt}
 TEST_FSPATH_COUNT=${test_fspath_cnt}
 
-# If not specified, AIS_CLD_PROVIDERS will remain empty (or `0`) and
+# If not specified, AIS_BACKEND_PROVIDERS will remain empty (or `0`) and
 # aisnode build will include neither AWS ("aws") nor GCP ("gcp").
 
 
@@ -116,7 +116,7 @@ parse_cld_providers
 
 create_loopback_paths
 
-if ! AIS_CLD_PROVIDERS=${AIS_CLD_PROVIDERS}  make --no-print-directory -C ${AISTORE_DIR} node; then
+if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}  make --no-print-directory -C ${AISTORE_DIR} node; then
   print_error "failed to compile 'aisnode' binary"
 fi
 

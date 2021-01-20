@@ -111,8 +111,8 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 }
 
 // ListBuckets returns bucket names for the given provider. Provider takes one
-// of Cloud Provider enum names (see cmn/bucket.go). If provider is empty,
-// return all names. Otherwise, return cloud or ais bucket names.
+// of Backend Provider enum names (see cmn/bucket.go). If provider is empty,
+// return all names. Otherwise, return remote backend's or ais bucket names.
 func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketNames, error) {
 	var (
 		bucketNames = cmn.BucketNames{}
@@ -128,7 +128,7 @@ func ListBuckets(baseParams BaseParams, queryBcks cmn.QueryBcks) (cmn.BucketName
 	return bucketNames, nil
 }
 
-// GetBucketsSummaries returns bucket summaries for the specified bucket provider
+// GetBucketsSummaries returns bucket summaries for the specified backend provider
 // (and all bucket summaries for unspecified ("") provider).
 func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 	msg *cmn.BucketSummaryMsg) (cmn.BucketsSummaries, error) {
@@ -196,9 +196,9 @@ func DoesBucketExist(baseParams BaseParams, query cmn.QueryBcks) (bool, error) {
 // CopyBucket copies existing `fromBck` bucket to the destination `toBck` thus,
 // effectively, creating a copy of the `fromBck`.
 // * AIS will create `toBck` on the fly but only if the destination bucket does not
-//   exist and is provided by AIStore (note that Cloud-based `toBck` must exist
-//   for the copy operation to be successful)
-// * There are no limitations on copying buckets across Cloud providers:
+//   exist and _is_ provided by AIStore; 3rd party backend destination must exist -
+//   otherwise the copy operation won't be successful.
+// * There are no limitations on copying buckets across Backend providers:
 //   you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
 //   bucket, etc.
 // * Copying multiple buckets to the same destination bucket is also permitted.

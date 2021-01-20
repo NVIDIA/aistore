@@ -55,14 +55,14 @@ $ docker run \
 This starts AIS cluster with 3 disks (`/disk0`, `/disk1` and `/some/disk2`) with a sample configuration and exposes it on port `51080`.
 Important note is that disk paths must resolve to distinct and disjoint filesystems, otherwise target will complain about the incorrect setup.
 
-#### Cloud provider
+#### Backend provider
 
-To make the cluster work properly with cloud providers it is essential to set the environment variable `AIS_CLD_PROVIDERS`, a space separated list of supported provides, and pass the credentials to the docker image.
+To make the cluster work properly with backend providers it is essential to set the environment variable `AIS_BACKEND_PROVIDERS`, a space separated list of supported provides, and pass the credentials to the docker image.
 The easiest way to pass the credentials is to mount a volume and provide a path to config file as envvar:
  - AWS: `AWS_CONFIG_FILE`
  - GCP: `GOOGLE_APPLICATION_CREDENTIALS`
 
-When using `aws` cloud provider it is possible to explicitly pass the credentials with ([envvars](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html)) :
+When using `aws` backend provider it is possible to explicitly pass the credentials with ([envvars](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html)) :
  - `AWS_ACCESS_KEY_ID`
  - `AWS_SECRET_ACCESS_KEY`
  - `AWS_DEFAULT_REGION`
@@ -76,7 +76,7 @@ $ docker run \
     -e AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
     -e AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
     -e AWS_DEFAULT_REGION="us-west-2" \
-    -e AIS_CLD_PROVIDERS="aws" \
+    -e AIS_BACKEND_PROVIDERS="aws" \
     -v /disk0:/ais/disk0 \
     aistore/cluster-minimal:latest
 ```
@@ -89,7 +89,7 @@ $ docker run \
     -p 51080:51080 \
     -v <path_to_gcp_config>.json:/credentials/gcp.json \
     -e GOOGLE_APPLICATION_CREDENTIALS="/credentials/gcp.json" \
-    -e AIS_CLD_PROVIDERS="gcp" \
+    -e AIS_BACKEND_PROVIDERS="gcp" \
     -v /disk0:/ais/disk0 \
     aistore/cluster-minimal:latest
 ```

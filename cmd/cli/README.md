@@ -135,12 +135,12 @@ To add a new resource to a new command,
 
 ## Default flag and argument values via environment variables
 
-#### Cloud Provider
+#### Backend Provider
 
 Provider's syntax `[provider://]BUCKET_NAME` works across all commands. In other words, every command that supports `BUCKET_NAME` argument
 will also support the `[provider://]BUCKET_NAME` convention. For more details, please refer to each specific command's documentation.
 
-Supported cloud providers currently include: `ais` (AIStore), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform), and `azure` (Microsoft Azure).
+Supported backend providers currently include: `ais` (AIStore), `aws` (Amazon Web Services), `gcp` (Google Cloud Platform), and `azure` (Microsoft Azure).
 
 Additionally `provider://` syntax supports the following aliases (aka, protocol prefixes):
 
@@ -151,5 +151,5 @@ Additionally `provider://` syntax supports the following aliases (aka, protocol 
 
 > You can also use `[provider://]BUCKET_NAME` syntax to access non-Cloud - "vanilla" - HTTP(S) datasets. The corresponding protocol prefix is `ht://`.
 
-> See also: [Cloud Providers](/docs/providers.md)
+> See also: [Backend Providers](/docs/providers.md)
 > See also: [Buckets](/docs/bucket.md)

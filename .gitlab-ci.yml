@@ -52,8 +52,8 @@ build:linux:
   timeout: 5m
   <<: *default_only_def
   script:
-    - AIS_CLD_PROVIDERS="ais aws azure gcp hdfs" make node
-    - AIS_CLD_PROVIDERS="" MODE="" make node # build one node without debug assert (to see if it compiles)
+    - AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" make node
+    - AIS_BACKEND_PROVIDERS="" MODE="" make node # build one node without debug assert (to see if it compiles)
     - make authn
     - make aisfs
     - make cli

@@ -306,7 +306,7 @@ func startDownloadHandler(c *cli.Context) error {
 			return err
 		}
 		if _, ok := cfg.Cloud.Providers[source.cloud.bck.Provider]; ok {
-			// Cloud is configured to requested bucket provider.
+			// Cloud is configured to requested backend provider.
 			dlType = downloader.DlTypeCloud
 
 			p, err := api.HeadBucket(defaultAPIParams, basePayload.Bck)

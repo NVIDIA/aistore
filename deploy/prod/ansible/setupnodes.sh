@@ -42,5 +42,5 @@ mkdir -p "${GIT_NVIDIA}"
 cd "${GIT_NVIDIA}"
 git clone https://github.com/NVIDIA/aistore.git
 
-echo "Cloud provider(s) set to: ${AIS_CLD_PROVIDERS}"
+echo "Backend provider(s) set to: ${AIS_BACKEND_PROVIDERS}"
 cd aistore && make node

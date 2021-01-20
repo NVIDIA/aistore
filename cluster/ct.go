@@ -38,7 +38,7 @@ func (ct *CT) MpathInfo() *fs.MountpathInfo { return ct.mpathInfo }
 //  if err != nil { ... }
 //  fqn := ct.Make(fs.WorkfileType)
 //
-// e.g.: generate EC metafile FQN from bucket name, bucket provider and object name:
+// e.g.: generate EC metafile FQN from bucket name, backend provider and object name:
 //  ct, err := NewCTFromBO(bckName, bckProvider, objName, nil)
 //  if err != nil { ... }
 //  fqn := ct.Make(MetaType)

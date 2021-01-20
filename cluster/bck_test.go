@@ -49,7 +49,7 @@ var _ = Describe("Bck", func() {
 				"bck", cmn.ProviderGoogle, cmn.NsGlobal, "obj",
 			),
 			Entry(
-				"cloud provider",
+				"backend provider",
 				"bck", cmn.ProviderGoogle, cmn.NsGlobal, "obj",
 			),
 		)
@@ -97,12 +97,12 @@ var _ = Describe("Bck", func() {
 				NewBck("a", cmn.ProviderAzure, cmn.NsGlobal),
 			),
 			Entry(
-				"not matching Cloud providers #4",
+				"not matching Backend providers #4",
 				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
 				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
 			),
 			Entry(
-				"not matching Cloud providers #5",
+				"not matching Backend providers #5",
 				NewBck("a", cmn.ProviderGoogle, cmn.NsGlobal),
 				NewBck("a", cmn.ProviderAmazon, cmn.NsGlobal),
 			),

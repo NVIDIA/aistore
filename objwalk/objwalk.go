@@ -66,7 +66,7 @@ func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketL
 
 // CloudObjPage reads a page of objects in a cloud bucket. NOTE: if a request
 // wants cached object list, the function returns only local data without
-// talking to cloud provider.
+// talking to backend provider.
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
 func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {

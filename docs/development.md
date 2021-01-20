@@ -17,7 +17,7 @@ A cluster deployed in `debug` mode will produce a log like this:
 ```
 
 As this only enables general debug asserts and logs it is also possible to enable verbose logging per package.
-To do that deploy cluster with eg. `AIS_DEBUG="fs=4,reb=4"` what means that packages `fs` and `reb` will have logging level set to `4` (generally used for verbose logging). 
+To do that deploy cluster with eg. `AIS_DEBUG="fs=4,reb=4"` what means that packages `fs` and `reb` will have logging level set to `4` (generally used for verbose logging).
 
 ## Scripts
 
@@ -54,7 +54,7 @@ $ bash ./deploy/scripts/bootstrap.sh clean-deploy --cloud 2
 
 | Option | Description |
 | ------ | ----------- |
-| `--cloud PROVIDER` | Specifies a cloud provider (by default, cloud provider is disabled) |
+| `--cloud PROVIDER` | Specifies a backend provider (the default provider is AIS) |
 | `--tier` | Start AIS-behind-AIS cluster configuration |
 | `--https` | Start cluster with HTTPS enabled (*) |
 | `--debug PKG=LOG_LEVEL` | Change logging level of particular package(s) |

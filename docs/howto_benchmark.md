@@ -17,10 +17,11 @@ Following in this document are a few *easy* usage examples and dry-run instructi
 
 For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
 
-1. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
+1. Destroy existing ais bucket - the first example. Delete all objects in a given Cloud-based bucket - the second example:
 
 ```console
 $ aisloader -bucket=nvais -duration 0s -totalputsize=0
+$ aisloader -bucket=aws://nvais -cleanup=true -duration 0s -totalputsize=0
 ```
 
 2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):

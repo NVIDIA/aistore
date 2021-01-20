@@ -48,9 +48,9 @@ Most recently added capabilities include:
 - (**new**) When used as HTTP Proxy (e. g., via `http_proxy=AIS_ENDPOINT`) and given HTTP(S) URLs, AIStore will on the fly create a bucket to store and cache HTTP(S) - based resources;
 - and more - see https://github.com/NVIDIA/aistore/releases.
 
-In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Cloud providers](providers.md).
+In addition to AIS (native) REST API and CLI with extended capabilities to manipulate distributed content, AIStore also supports a growing list of [Backend providers](providers.md).
 
-Each specific capability is separately documented elsewhere. In particular, supported cloud providers and *unified global namespace* are described [here](providers.md).
+Each specific capability is separately documented elsewhere. In particular, supported backend providers and *unified global namespace* are described [here](providers.md).
 
 ## Design Philosophy
 
@@ -77,7 +77,7 @@ The diagram depicting AIS clustered node follows below, and makes the point that
 
 <img src="images/ais-host-20-block.png" alt="One AIS machine" width="400">
 
-AIS can be deployed as a self-contained standalone persistent storage cluster and as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. The built-in caching mechanism provides LRU replacement policy on a per-bucket basis while taking into account configurable high and low capacity watermarks (see [LRU](storage_svcs.md#lru) for details). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
+AIS can be deployed as a self-contained standalone persistent storage cluster or a fast tier in front of any of the supported backends including Amazon S3 and Google Cloud (GCP). The built-in caching mechanism provides LRU replacement policy on a per-bucket basis while taking into account configurable high and low capacity watermarks (see [LRU](storage_svcs.md#lru) for details). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
 
 If (compute + storage) rack is a *unit of deployment*, it may as well look as follows:
 
@@ -89,7 +89,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 ## Terminology
 
-* [Cloud Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+* [Backend Provider](./providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
 * [Unified Global Namespace](./providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
 

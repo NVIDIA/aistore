@@ -386,7 +386,7 @@ func FlushObject(args FlushArgs) (err error) {
 // RenameObject renames object name from `oldName` to `newName`. Works only
 // across single, specified bucket.
 //
-// FIXME: handle cloud provider - here and elsewhere
+// FIXME: handle backend provider - here and elsewhere
 func RenameObject(baseParams BaseParams, bck cmn.Bck, oldName, newName string) error {
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{

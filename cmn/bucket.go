@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// Cloud Provider enum
+// Backend Provider enum
 const (
 	ProviderAIS    = "ais"
 	ProviderAmazon = "aws"
@@ -85,7 +85,7 @@ var (
 	// no specific namespace was defined or provided by the user.
 	NsGlobal = Ns{}
 	// NsAnyRemote represents any remote cluster. As such, NsGlobalRemote applies
-	// exclusively to AIS (provider) given that other Cloud providers are remote by definition.
+	// exclusively to AIS (provider) given that other Backend providers are remote by definition.
 	NsAnyRemote = Ns{UUID: string(NsUUIDPrefix)}
 
 	Providers = NewStringSet(
@@ -394,7 +394,7 @@ func ValidateProvider(provider string) error {
 	if _, ok := Providers[provider]; ok {
 		return nil
 	}
-	return fmt.Errorf("invalid cloud provider %q: must be one of [%s]", provider, allProviders)
+	return fmt.Errorf("invalid backend provider %q: must be one of [%s]", provider, allProviders)
 }
 
 func (query QueryBcks) String() string     { return Bck(query).String() }

@@ -13,6 +13,6 @@ ais create bucket $BUCKET_2/ # should ignore slash
 ais create bucket $BUCKET_2 // FAIL "bucket "$BUCKET_2" already exists"
 ais rm bucket $BUCKET_2/ # should ignore slash
 ais create bucket ais://$BUCKET_3
-ais create bucket cloud://$BUCKET_3 // FAIL "invalid cloud provider "cloud""
+ais create bucket cloud://$BUCKET_3 // FAIL "invalid backend provider "cloud""
 
 ais create bucket ais://#ml/$BUCKET_1

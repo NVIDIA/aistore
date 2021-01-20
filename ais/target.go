@@ -311,7 +311,7 @@ func (c clouds) initExt(t *targetrunner) (err error) {
 		case cmn.ProviderHDFS:
 			c[provider], err = cloud.NewHDFS(t)
 		default:
-			err = fmt.Errorf("unknown cloud provider: %q", provider)
+			err = fmt.Errorf("unknown backend provider: %q", provider)
 		}
 		if err != nil {
 			return

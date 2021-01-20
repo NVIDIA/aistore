@@ -15,7 +15,7 @@
     2. Select a storage target as an HRW function of the `(cluster map, bucket, object)` triplet, where HRW stands for [Highest Random Weight](https://en.wikipedia.org/wiki/Rendezvous_hashing);
        note that since HRW is a consistent hashing mechanism, the output of the computation will be (consistently) the same for the same `(bucket, object)` pair and cluster configuration.
     3. Redirect the request to the selected target.
-3. The target parses the bucket and object from the (redirected) request and determines whether the bucket is an AIS bucket, or a Cloud-based bucket.
+3. The target parses the bucket and object from the (redirected) request and determines whether the bucket is an AIS bucket or provided by one of the supported 3rd party backends.
 4. The target then determines a `mountpath` (and therefore, a local filesystem) that will be used to perform the I/O operation.
    This time, the target computes HRW (configured mountpaths, bucket, object) on the input that, in addition to the same `(bucket, object)` pair includes all currently active/enabled mountpaths.
 5. Once the highest-randomly-weighted `mountpath` is selected, the target then forms a fully-qualified name to perform the local read/write operation.

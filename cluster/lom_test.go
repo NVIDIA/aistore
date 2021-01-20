@@ -97,7 +97,7 @@ var _ = Describe("LOM", func() {
 	)
 
 	BeforeEach(func() {
-		// Dummy cloud provider for tests involving cloud buckets
+		// Dummy backend provider for tests involving cloud buckets
 		config := cmn.GCO.BeginUpdate()
 		config.Cloud.Providers = map[string]cmn.Ns{
 			cmn.ProviderAmazon: cmn.NsGlobal,

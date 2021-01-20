@@ -1,11 +1,11 @@
 
 export LOCAL_AWS="/tmp/credentials"
 touch $LOCAL_AWS
-export AIS_CLD_PROVIDERS="" # See deploy.sh for more informations about empty AIS_CLD_PROVIDERS
+export AIS_BACKEND_PROVIDERS="" # See deploy.sh for more informations about empty AIS_BACKEND_PROVIDERS
 source ../utils.sh
 parse_cld_providers
 
-if [[ "${AIS_CLD_PROVIDERS}" == *aws* ]]; then
+if [[ "${AIS_BACKEND_PROVIDERS}" == *aws* ]]; then
     echo "Enter the location of your AWS configuration and credentials files:"
     echo "Note: No input will result in using the default AWS dir (~/.aws/)"
     read -r aws_env

@@ -30,8 +30,8 @@ run_cmd() {
 }
 
 parse_cld_providers() {
-  AIS_CLD_PROVIDERS=""
-  echo "Select cloud providers:"
+  AIS_BACKEND_PROVIDERS=""
+  echo "Select backend providers:"
   echo "Amazon S3: (y/n) ?"
   read -r cld_aws
   is_boolean "${cld_aws}"
@@ -46,16 +46,16 @@ parse_cld_providers() {
   is_boolean "${cld_hdfs}"
 
   if  [[ "${cld_aws}" == "y" ]] ; then
-    AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} aws"
+    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} aws"
   fi
   if  [[ "${cld_gcp}" == "y" ]] ; then
-    AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} gcp"
+    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} gcp"
   fi
   if  [[ "${cld_azure}" == "y" ]] ; then
-    AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} azure"
+    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} azure"
   fi
   if  [[ "${cld_hdfs}" == "y" ]] ; then
-    AIS_CLD_PROVIDERS="${AIS_CLD_PROVIDERS} hdfs"
+    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} hdfs"
   fi
 }
 

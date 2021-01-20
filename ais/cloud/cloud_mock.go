@@ -1,4 +1,4 @@
-// Package cloud contains implementation of various cloud providers.
+// Package cloud contains implementation of various backend providers.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
