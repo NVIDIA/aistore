@@ -1,8 +1,19 @@
 "$BUCKET_1" bucket created
 PUT "object_1.txt" into bucket "$BUCKET_1"
-NAME	SIZE		 CHECKSUM			 ATIME
-^ais://$BUCKET_1/object_1.txt 11B 05967d5390ac53b0 (.*)$
-SIZE	 VERSION
-11B	1
-NAME	SIZE		 CHECKSUM			 ATIME	 VERSION     CACHED	 COPIES  EC
-^ais://$BUCKET_1/object_1.txt 11B 05967d5390ac53b0 (.*) 1 yes 1 -$
+PROPERTY         VALUE
+^atime(.*)$
+checksum         05967d5390ac53b0
+name             ais://$BUCKET_1/object_1.txt
+size             11B
+PROPERTY         VALUE
+size             11B
+version          1
+PROPERTY         VALUE
+^atime(.*)$
+cached           yes
+checksum         05967d5390ac53b0
+copies           1
+ec               -
+name             ais://$BUCKET_1/object_1.txt
+size             11B
+version          1

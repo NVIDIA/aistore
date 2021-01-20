@@ -72,7 +72,7 @@ const (
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n"
 
-	BucketPropsSimpleTmpl = "PROPERTY\t VALUE\n" +
+	PropsSimpleTmpl = "PROPERTY\t VALUE\n" +
 		"{{range $p := . }}" +
 		"{{$p.Name}}\t {{$p.Value}}\n" +
 		"{{end}}"
@@ -221,13 +221,13 @@ var (
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
 		"FormatUnixNano":      func(t int64) string { return cmn.FormatUnixNano(t, "") },
-		"FormatEC":            fmtEC,
+		"FormatEC":            FmtEC,
 		"FormatDur":           fmtDuration,
 		"FormatObjStatus":     fmtObjStatus,
 		"FormatObjIsCached":   fmtObjIsCached,
 		"FormatDaemonID":      fmtDaemonID,
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
-		"FormatBool":          fmtBool,
+		"FormatBool":          FmtBool,
 		"JoinList":            fmtStringList,
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatFeatureFlags":  fmtFeatureFlags,
@@ -345,10 +345,11 @@ var ConfigSectionTmpl = []string{
 }
 
 func fmtObjIsCached(obj *cmn.BucketEntry) string {
-	return fmtBool(obj.CheckExists())
+	return FmtBool(obj.CheckExists())
 }
 
-func fmtBool(t bool) string {
+// FmtBool returns "yes" if true, else "no"
+func FmtBool(t bool) string {
 	if t {
 		return "yes"
 	}
@@ -363,7 +364,28 @@ func fmtTime(t time.Time) string {
 	return t.Format("01-02 15:04:05")
 }
 
-func fmtEC(data, parity int, isCopy bool) string {
+// FmtChecksum formats a checksum into a string, where nil becomes "-"
+func FmtChecksum(checksum string) string {
+	if checksum != "" {
+		return checksum
+	}
+	return "-"
+}
+
+// FmtCopies formats an int to a string, where 0 becomes "-"
+func FmtCopies(copies int) string {
+	if copies == 0 {
+		return "-"
+	}
+	return fmt.Sprint(copies)
+}
+
+// FmtEC formats EC data (DataSlices, ParitySlices, IsECCopy) into a
+// readable string for CLI, e.g. "1:2[encoded]"
+func FmtEC(data, parity int, isCopy bool) string {
+	if data == 0 {
+		return "-"
+	}
 	info := fmt.Sprintf("%d:%d", data, parity)
 	if isCopy {
 		info += "[replicated]"

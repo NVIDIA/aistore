@@ -147,8 +147,11 @@ Display default properties of object `list.txt` from bucket `texts`.
 
 ```console
 $ ais show object texts/list.txt
-CHECKSUM                SIZE    ATIME                   VERSION
-2d61e9b8b299c41f        7.63MiB 06 Jan 20 14:55 PST     1
+PROPERTY    VALUE
+checksum    2d61e9b8b299c41f
+size        7.63MiB
+atime       06 Jan 20 14:55 PST
+version     1
 ```
 
 #### Show all object properties
@@ -157,8 +160,15 @@ Display all properties of object `list.txt` from bucket `texts`.
 
 ```console
 $ ais show object texts/list.txt --props=all
-CHECKSUM		 SIZE		 ATIME			 VERSION	 CACHED	 COPIES	 EC
-2d61e9b8b299c41f         7.63MiB	 06 Jan 20 14:55 PST	 2		 yes	 1	 1:1[replicated]
+PROPERTY    VALUE
+name        provider://texts/list.txt
+checksum    2d61e9b8b299c41f
+size        7.63MiB
+atime       06 Jan 20 14:55 PST
+version     2
+cached      yes
+copies      1
+ec          1:1[replicated]
 ```
 
 #### Show selected object properties
@@ -166,9 +176,11 @@ CHECKSUM		 SIZE		 ATIME			 VERSION	 CACHED	 COPIES	 EC
 Show only selected (`size,version,ec`) properties.
 
 ```console
-$ ais show object --props size,version,ec texts/listx.txt`
-SIZE    VERSION EC
-7.63MiB 1       2:2[replicated]
+$ ais show object --props size,version,ec texts/listx.txt
+PROPERTY    VALUE
+size        7.63MiB
+version     1
+ec          2:2[replicated]
 ```
 
 ## PUT object

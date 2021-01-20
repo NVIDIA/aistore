@@ -271,7 +271,7 @@ func displayAllProps(c *cli.Context, summary cmn.BucketSummary, props *cmn.Bucke
 	}
 	propList = append(propList, bckProp...)
 
-	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)
+	return templates.DisplayOutput(propList, c.App.Writer, templates.PropsSimpleTmpl)
 }
 
 func showDisksHandler(c *cli.Context) (err error) {

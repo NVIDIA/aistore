@@ -657,54 +657,36 @@ func calcPutRefresh(c *cli.Context) time.Duration {
 	return refresh
 }
 
-func buildObjStatTemplate(props string, showHeaders bool) string {
-	var (
-		headSb, bodySb strings.Builder
-		propsList      = makeList(props)
-	)
-	for _, field := range propsList {
-		if _, ok := templates.ObjStatMap[field]; !ok {
-			// just skip invalid props for now - here a prop string
-			// from `bucket objects` can be used and how HEAD and LIST
-			// request have different set of properties
-			continue
-		}
-		headSb.WriteString(strings.ToUpper(field) + "\t ")
-		bodySb.WriteString(templates.ObjStatMap[field] + "\t ")
-	}
-	headSb.WriteString("\n")
-	bodySb.WriteString("\n")
-
-	if showHeaders {
-		return headSb.String() + bodySb.String()
-	}
-	return bodySb.String()
-}
-
 // Displays object properties
 func objectStats(c *cli.Context, bck cmn.Bck, object string) error {
 	var (
-		props     string
-		propsFlag []string
+		propsFlag     []string
+		selectedProps []string
 	)
-	if flagIsSet(c, objPropsFlag) {
-		propsFlag = strings.Split(parseStrFlag(c, objPropsFlag), ",")
-	}
-	// TODO: we should reuse `SelectMsg.AddProps` code.
-	if len(propsFlag) == 0 {
-		props = strings.Join(cmn.GetPropsDefault, ",")
-	} else if cmn.StringInSlice("all", propsFlag) {
-		props = strings.Join(cmn.GetPropsAll, ",")
-	} else {
-		props = strings.Join(propsFlag, ",")
-	}
 
-	tmpl := buildObjStatTemplate(props, !flagIsSet(c, noHeaderFlag))
 	objProps, err := api.HeadObject(defaultAPIParams, bck, object)
 	if err != nil {
 		return handleObjHeadError(err, bck, object)
 	}
-	return templates.DisplayOutput(objProps, c.App.Writer, tmpl, flagIsSet(c, jsonFlag))
+
+	if flagIsSet(c, jsonFlag) {
+		return templates.DisplayOutput(objProps, c.App.Writer, templates.PropsSimpleTmpl, true)
+	}
+
+	if flagIsSet(c, objPropsFlag) {
+		propsFlag = strings.Split(parseStrFlag(c, objPropsFlag), ",")
+	}
+
+	if len(propsFlag) == 0 {
+		selectedProps = cmn.GetPropsDefault
+	} else if cmn.StringInSlice("all", propsFlag) {
+		selectedProps = cmn.GetPropsAll
+	} else {
+		selectedProps = propsFlag
+	}
+
+	props := objectPropList(objProps, selectedProps)
+	return templates.DisplayOutput(props, c.App.Writer, templates.PropsSimpleTmpl)
 }
 
 // This function is needed to print a nice error message for the user

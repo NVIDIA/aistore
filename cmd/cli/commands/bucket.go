@@ -415,7 +415,7 @@ func printBckHeadTable(c *cli.Context, props, defProps *cmn.BucketProps, section
 		}
 	}
 
-	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)
+	return templates.DisplayOutput(propList, c.App.Writer, templates.PropsSimpleTmpl)
 }
 
 // Configure bucket as n-way mirror

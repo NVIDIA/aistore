@@ -141,6 +141,40 @@ func objectNameArgumentNotSupported(c *cli.Context, objectName string) error {
 	return incorrectUsageMsg(c, "object name %q argument not supported", objectName)
 }
 
+func objectPropList(props *cmn.ObjectProps, selection []string) (propList []prop) {
+	var propValue string
+
+	for _, currProp := range selection {
+		switch currProp {
+		case cmn.GetPropsName:
+			propValue = props.Bck.String() + "/" + props.Name
+		case cmn.GetPropsSize:
+			propValue = cmn.B2S(props.Size, 2)
+		case cmn.GetPropsChecksum:
+			propValue = templates.FmtChecksum(props.Checksum.Value)
+		case cmn.GetPropsAtime:
+			propValue = cmn.FormatUnixNano(props.Atime, "")
+		case cmn.GetPropsVersion:
+			propValue = props.Version
+		case cmn.GetPropsCached:
+			propValue = templates.FmtBool(props.Present)
+		case cmn.GetPropsCopies:
+			propValue = templates.FmtCopies(props.NumCopies)
+		case cmn.GetPropsEC:
+			propValue = templates.FmtEC(props.DataSlices, props.ParitySlices, props.IsECCopy)
+		default:
+			continue
+		}
+
+		propList = append(propList, prop{currProp, propValue})
+	}
+
+	sort.Slice(propList, func(i, j int) bool {
+		return propList[i].Name < propList[j].Name
+	})
+	return
+}
+
 func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 	cmn.Assert(len(missingArgs) > 0)
 	return &usageError{
