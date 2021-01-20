@@ -288,7 +288,12 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 	case cluster.PrefetchWait:
 		lom.Lock(true /*exclusive*/)
 	case cluster.GetCold:
-		lom.UpgradeLock() // One cold-GET at a time.
+		finished := lom.UpgradeLock()
+		if finished {
+			// The action was performed by some other goroutine and we don't need
+			// to do it again.
+			return 0, nil
+		}
 	default:
 		cmn.Assertf(false, "%v", ty)
 	}

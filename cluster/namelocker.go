@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // nameLocker is a 2-level structure utilized to lock objects of *any* kind
@@ -26,6 +26,12 @@ type (
 	lockInfo struct {
 		rc        int
 		exclusive bool
+		room      *waitingRoom
+	}
+	waitingRoom struct {
+		waiting  int  // Number of threads waiting in the room.
+		finished bool // Determines if the action for the waiting room has been finished.
+		cond     *sync.Cond
 	}
 )
 
@@ -41,14 +47,30 @@ const (
 
 func (nl nameLocker) init() {
 	for idx := 0; idx < len(nl); idx++ {
-		nlc := &nl[idx]
-		nlc.m = make(map[string]*lockInfo, initCapacity)
+		nl[idx].init()
+	}
+}
+
+func (li *lockInfo) notifyWaiters() {
+	if li.room != nil && li.room.waiting > 0 {
+		debug.Assert(li.rc >= li.room.waiting)
+		// `rc == waiting` means that this is the thread that did all the work and
+		// tries to unlock/downgrade the lock. In this case it should mark room as
+		// finished and start notification chain for the threads that are still waiting.
+		if li.rc == li.room.waiting {
+			li.room.finished = true
+		}
+		li.room.cond.Broadcast()
 	}
 }
 
 //
 // nlc
 //
+
+func (nlc *nlc) init() {
+	nlc.m = make(map[string]*lockInfo, initCapacity)
+}
 
 func (nlc *nlc) IsLocked(uname string) (rc int, exclusive bool) {
 	nlc.mu.Lock()
@@ -81,6 +103,12 @@ func (nlc *nlc) TryLock(uname string, exclusive bool) bool {
 	// rlock
 	if found {
 		if realInfo.exclusive {
+			nlc.mu.Unlock()
+			return false
+		}
+		// If there is someone waiting for the upgrade we cannot take a read lock
+		// to not starve it - the waiter has worse than us waiting for the exclusive.
+		if realInfo.room != nil && realInfo.room.waiting > 0 {
 			nlc.mu.Unlock()
 			return false
 		}
@@ -121,65 +149,63 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 	}
 }
 
-// NOTE: UpgradeLock() stays in the loop for as long as needed to acquire the exclusive lock.
-//
-// The implementation is intentionally simple as we currently don't need
-// cancellation (via context.Context), timeout, sync.Cond.
-func (nlc *nlc) UpgradeLock(uname string) {
-	if nlc.TryUpgradeLock(uname) {
-		return
+// BEWARE: `UpgradeLock` synchronizes correctly the threads which are waiting
+//  for **the same** action. Otherwise, there is still potential risk that one
+//  action will do something unexpected during `UpgradeLock` before next action
+//  which already checked conditions and is also waiting for the `UpgradeLock`.
+func (nlc *nlc) UpgradeLock(uname string) (finished bool) {
+	nlc.mu.Lock()
+	info, found := nlc.m[uname]
+	debug.Assert(found && !info.exclusive && info.rc > 0)
+	if info.rc == 1 {
+		info.rc = 0
+		info.exclusive = true
+		nlc.mu.Unlock()
+		return false
 	}
-	sleep := initPollInterval
-	for {
-		time.Sleep(sleep)
-		if nlc.TryUpgradeLock(uname) {
-			if glog.FastV(4, glog.SmoduleCluster) {
-				glog.Infof("TryUpgradeLock %s - success", uname)
-			}
-			return
-		}
-		if glog.FastV(4, glog.SmoduleCluster) {
-			glog.Infof("TryUpgradeLock %s - retrying...", uname)
-		}
-
-		sleep *= 2
-		if sleep > maxPollInterval {
-			sleep = maxPollInterval
+	if info.room == nil {
+		info.room = &waitingRoom{cond: sync.NewCond(&nlc.mu)}
+	}
+	info.room.waiting++
+	// Wait until all the readers are the waiting ones.
+	for info.rc != info.room.waiting {
+		info.room.cond.Wait()
+		// We have been awakened and the room is finished - remove us from waiting.
+		if info.room.finished {
+			info.room.waiting--
+			nlc.mu.Unlock()
+			return true
 		}
 	}
+	info.rc--
+	info.room.waiting--
+	info.exclusive = true
+	nlc.mu.Unlock()
+	return false
 }
 
 func (nlc *nlc) DowngradeLock(uname string) {
 	nlc.mu.Lock()
 	info, found := nlc.m[uname]
-	cmn.Assert(found && info.exclusive)
-	info.exclusive = false
+	debug.Assert(found && info.exclusive)
 	info.rc++
-	cmn.Assert(info.rc == 1)
+	info.exclusive = false
+	info.notifyWaiters()
 	nlc.mu.Unlock()
-}
-
-func (nlc *nlc) TryUpgradeLock(uname string) bool {
-	nlc.mu.Lock()
-	info, found := nlc.m[uname]
-	cmn.Assert(found && !info.exclusive && info.rc > 0)
-	if info.rc == 1 {
-		info.exclusive = true
-		info.rc = 0
-		nlc.mu.Unlock()
-		return true
-	}
-	nlc.mu.Unlock()
-	return false
 }
 
 func (nlc *nlc) Unlock(uname string, exclusive bool) {
 	nlc.mu.Lock()
 	info, found := nlc.m[uname]
-	cmn.Assert(found)
+	debug.Assert(found)
 	if exclusive {
-		cmn.Assert(info.exclusive)
-		delete(nlc.m, uname)
+		debug.Assert(info.exclusive)
+		if info.room != nil && info.room.waiting > 0 {
+			info.exclusive = false
+			info.notifyWaiters()
+		} else {
+			delete(nlc.m, uname)
+		}
 		nlc.mu.Unlock()
 		return
 	}
@@ -187,5 +213,6 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 	if info.rc == 0 {
 		delete(nlc.m, uname)
 	}
+	info.notifyWaiters()
 	nlc.mu.Unlock()
 }

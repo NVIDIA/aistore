@@ -980,12 +980,16 @@ func (lom *LOM) Lock(exclusive bool) {
 	nlc.Lock(lom.Uname(), exclusive)
 }
 
-func (lom *LOM) UpgradeLock() {
+// BEWARE: `UpgradeLock` synchronizes correctly the threads which are waiting
+//  for **the same** action. Otherwise, there is still potential risk that one
+//  action will do something unexpected during `UpgradeLock` before next action
+//  which already checked conditions and is also waiting for the `UpgradeLock`.
+func (lom *LOM) UpgradeLock() (finished bool) {
 	var (
 		_, idx = lom.Hkey()
 		nlc    = getLomLocker(idx)
 	)
-	nlc.UpgradeLock(lom.Uname())
+	return nlc.UpgradeLock(lom.Uname())
 }
 
 func (lom *LOM) DowngradeLock() {
@@ -994,14 +998,6 @@ func (lom *LOM) DowngradeLock() {
 		nlc    = getLomLocker(idx)
 	)
 	nlc.DowngradeLock(lom.Uname())
-}
-
-func (lom *LOM) TryUpgradeLock() bool {
-	var (
-		_, idx = lom.Hkey()
-		nlc    = getLomLocker(idx)
-	)
-	return nlc.TryUpgradeLock(lom.Uname())
 }
 
 func (lom *LOM) Unlock(exclusive bool) {

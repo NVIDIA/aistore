@@ -230,7 +230,7 @@ func (s *DynSemaphore) Release(cnts ...int) {
 	Assert(s.cur >= cnt)
 
 	s.cur -= cnt
-	s.c.Signal()
+	s.c.Broadcast()
 	s.mu.Unlock()
 }
 
