@@ -1203,7 +1203,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cloudProps, statusCode, err := p.headCloudBck(*bck.RemoteBck(), nil)
+	cloudProps, statusCode, err := p.headRemoteBck(*bck.RemoteBck(), nil)
 	if err != nil {
 		// TODO -- FIXME: decide what needs to be done when HEAD fails - changes to BMD
 		p.invalmsghdlr(w, r, err.Error(), statusCode)
@@ -3675,7 +3675,7 @@ func (p *proxyrunner) requiresRebalance(prev, cur *smapX) bool {
 	return false
 }
 
-func (p *proxyrunner) headCloudBck(bck cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
+func (p *proxyrunner) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
 	var (
 		tsi  *cluster.Snode
 		path = cmn.URLPathBuckets.Join(bck.Name)

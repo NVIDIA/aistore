@@ -280,7 +280,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 					bck.Bck, bck.BackendBck())
 				return
 			}
-			cloudProps, _, err := p.headCloudBck(bck.Bck, nil)
+			cloudProps, _, err := p.headRemoteBck(bck.Bck, nil)
 			if err != nil {
 				return "", err
 			}

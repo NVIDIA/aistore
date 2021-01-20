@@ -187,12 +187,20 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 		return
 	}
 
-	// forward maybe
+	// In case of HDFS if the bucket does not exist in BMD there is no point
+	// in checking if it exists remotely if we don't have `ref_directory`.
+	if args.queryBck.IsHDFS() {
+		err = cmn.NewErrorBucketDoesNotExist(args.queryBck.Bck)
+		errCode = http.StatusNotFound
+		return
+	}
+
 	if args.p.forwardCP(args.w, args.r, args.msg, "add-bucket", args.reqBody) {
 		err = cmn.ErrForwarded
 		return
 	}
-	// from this point on it's the primary - lookup via random target and try bucket add to BMD
+
+	// From this point on it's the primary - lookup via random target and try bucket add to BMD.
 	bck = args.queryBck
 	action := cmn.ActCreateBck
 
@@ -212,7 +220,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 		}
 	}
 
-	if args.queryBck.IsHTTP() {
+	if bck.IsHTTP() {
 		if len(origURLBck) > 0 {
 			cloudProps.Set(cmn.HeaderOrigURLBck, origURLBck[0])
 		} else if origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL); origURL != "" {
@@ -252,5 +260,5 @@ func (args *bckInitArgs) _lookup(bck *cluster.Bck) (header http.Header, statusCo
 		origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL)
 		q.Set(cmn.URLParamOrigURL, origURL)
 	}
-	return args.p.headCloudBck(bck.Bck, q)
+	return args.p.headRemoteBck(bck.Bck, q)
 }
