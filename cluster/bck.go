@@ -129,8 +129,7 @@ func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 // NOTE: most of the above applies to a backend bucket, if specified
 //
 func (b *Bck) Init(bowner Bowner) (err error) {
-	err = b.InitNoBackend(bowner)
-	if err != nil {
+	if err = b.InitNoBackend(bowner); err != nil {
 		return
 	}
 	if !b.HasBackendBck() {
@@ -141,11 +140,9 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 	backend.Props = nil
 
 	if !backend.IsCloud() {
-		err = fmt.Errorf("bucket %s: invalid backend %s (not a Cloud bucket)", b, backend)
-		return
+		return fmt.Errorf("bucket %s: invalid backend %s (not a Cloud bucket)", b, backend)
 	}
-	err = backend.Init(bowner)
-	if err == nil {
+	if err = backend.Init(bowner); err == nil {
 		cmn.Assert(!backend.HasBackendBck())
 	}
 	b.Props.BackendBck = backend.Bck
@@ -156,7 +153,7 @@ func (b *Bck) InitNoBackend(bowner Bowner) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
 		bmd.initBckAnyProvider(b)
-	} else if b.Bck.IsCloud() {
+	} else if b.IsCloud() {
 		debug.Assert(b.Ns == cmn.NsGlobal)
 		bmd.initBckCloudProvider(b)
 	} else if b.IsHTTP() {
@@ -171,6 +168,10 @@ func (b *Bck) InitNoBackend(bowner Bowner) (err error) {
 				debug.Assertf(b.Name == bckName, "%s != %s; original_url: %s", b.Name, bckName, origURL)
 			}
 		})
+	} else if b.IsHDFS() {
+		debug.Assert(b.Ns == cmn.NsGlobal)
+		present := bmd.initBckCloudProvider(b)
+		debug.Assert(!present || b.Props.Extra.HDFS.RefDirectory != "")
 	} else {
 		b.Props, _ = bmd.Get(b)
 	}

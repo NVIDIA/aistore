@@ -1155,13 +1155,14 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 }
 
 func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, errCode int, err error) {
-	// 3rd party cloud or remote ais
-	if _, ok := cfg.Cloud.Providers[query.Provider]; ok || query.IsRemoteAIS() {
+	_, ok := cfg.Cloud.Providers[query.Provider]
+	// HDFS doesn't support listing remote buckets (there are no remote buckets).
+	if (!ok && !query.IsRemoteAIS()) || query.IsHDFS() {
+		names = t.selectBMDBuckets(t.owner.bmd.get(), query)
+	} else {
 		bck := cluster.NewBck("", query.Provider, query.Ns)
 		names, errCode, err = t.Cloud(bck).ListBuckets(context.Background(), query)
 		sort.Sort(names)
-	} else { // BMD
-		names = t.selectBMDBuckets(t.owner.bmd.get(), query)
 	}
 	return
 }

@@ -176,9 +176,21 @@ func TestCreateRemoteBucket(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
-	err := api.CreateBucket(baseParams, bck)
-	tassert.Fatalf(t, err != nil, "expected error")
-	tassert.Fatalf(t, strings.Contains(err.Error(), "not supported"), "should contain 'not supported' message")
+	if bck.IsHDFS() {
+		hdfsBck := cmn.Bck{Provider: cmn.ProviderHDFS, Name: cmn.RandString(10)}
+		err := api.CreateBucket(baseParams, hdfsBck, cmn.BucketPropsToUpdate{
+			Extra: &cmn.ExtraToUpdate{
+				HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
+			},
+		})
+		tassert.CheckFatal(t, err)
+		err = api.DestroyBucket(baseParams, hdfsBck)
+		tassert.CheckFatal(t, err)
+	} else {
+		err := api.CreateBucket(baseParams, bck)
+		tassert.Fatalf(t, err != nil, "expected error")
+		tassert.Fatalf(t, strings.Contains(err.Error(), "not supported"), "should contain 'not supported' message")
+	}
 }
 
 func TestOverwriteLomCache(t *testing.T) {
@@ -470,13 +482,17 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 	m.puts()
 
 	tutils.Logf("Listing %q objects\n", m.bck)
-	msg := &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsVersion}
+	msg := &cmn.SelectMsg{Prefix: m.prefix}
+	msg.AddProps(cmn.GetPropsVersion, cmn.GetPropsSize)
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Checking %q object versions [total: %d]\n", m.bck, len(bckObjs.Entries))
 	for _, entry := range bckObjs.Entries {
-		tassert.Errorf(t, entry.Version != "", "Object %s does not have version", entry.Name)
+		tassert.Errorf(t, entry.Size != 0, "object %s does not have size", entry.Name)
+		if !m.bck.IsHDFS() {
+			tassert.Errorf(t, entry.Version != "", "object %s does not have version", entry.Name)
+		}
 	}
 }
 

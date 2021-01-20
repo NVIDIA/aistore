@@ -96,6 +96,15 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 		bckType = "http"
 	}
 
+	if args._requiresPermission(cmn.AccessBckMove) {
+		goto retErr
+	}
+
+	// HDFS buckets are allowed to be deleted.
+	if args.queryBck.IsHDFS() {
+		return
+	}
+
 	// HTTP buckets should fail on PUT and bucket rename operations
 	if args.queryBck.IsHTTP() && args._requiresPermission(cmn.AccessPUT) {
 		goto retErr
@@ -103,10 +112,6 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 
 	// Destroy and Rename are not permitted.
 	if args.queryBck.IsCloud() && args._requiresPermission(cmn.AccessBckDELETE) && args.msg.Action == cmn.ActDestroyBck {
-		goto retErr
-	}
-
-	if args._requiresPermission(cmn.AccessBckMove) {
 		goto retErr
 	}
 

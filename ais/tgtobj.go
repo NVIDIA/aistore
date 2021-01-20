@@ -180,10 +180,10 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	)
 	if bck.IsRemote() && poi.recvType == cluster.RegularPut {
 		var version string
-		if bck.IsCloud() || bck.IsHTTP() {
-			version, errCode, err = poi.putCloud()
-		} else {
+		if bck.IsRemoteAIS() {
 			version, errCode, err = poi.putRemoteAIS()
+		} else {
+			version, errCode, err = poi.putCloud()
 		}
 		if err != nil {
 			glog.Errorf("%s: PUT failed, err: %v", lom, err)

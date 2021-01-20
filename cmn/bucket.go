@@ -378,7 +378,7 @@ func (b Bck) IsRemote() bool {
 }
 
 func (b Bck) IsCloud() bool { // is 3rd party Cloud
-	if b.Provider == ProviderHTTP {
+	if b.Provider == ProviderHTTP || b.Provider == ProviderHDFS {
 		return false
 	}
 	if bck := b.BackendBck(); bck != nil {
