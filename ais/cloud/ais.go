@@ -70,11 +70,11 @@ func (r *remAisClust) String() string {
 // NOTE: this and the next method are part of the of the *extended* AIS cloud API
 //       in addition to the basic GetObj, et al.
 
-// apply new or updated (attach, detach) cmn.CloudConfAIS configuration
+// apply new or updated (attach, detach) cmn.BackendConfAIS configuration
 func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 	var (
 		cfg             = cmn.GCO.Get()
-		clusterConf, ok = v.(cmn.CloudConfAIS)
+		clusterConf, ok = v.(cmn.BackendConfAIS)
 	)
 	if !ok {
 		return fmt.Errorf("invalid ais cloud config (%+v, %T)", v, v)
@@ -112,7 +112,7 @@ func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 // At the same time a cluster may have registered both types of remote AIS
 // clusters(HTTP and HTTPS). So, the method must use both kind of clients and
 // select the correct one at the moment it sends a request.
-func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudInfoAIS) {
+func (m *AisCloudProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.BackendInfoAIS) {
 	var (
 		cfg         = cmn.GCO.Get()
 		httpClient  = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
@@ -122,7 +122,7 @@ func (m *AisCloudProvider) GetInfo(clusterConf cmn.CloudConfAIS) (cia cmn.CloudI
 			SkipVerify: cfg.Net.HTTP.SkipVerify,
 		})
 	)
-	cia = make(cmn.CloudInfoAIS, len(m.remote))
+	cia = make(cmn.BackendInfoAIS, len(m.remote))
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for uuid, remAis := range m.remote {

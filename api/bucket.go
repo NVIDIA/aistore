@@ -275,9 +275,9 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) 
 	return doListRangeRequest(baseParams, bck, cmn.ActEvictObjects, evictMsg)
 }
 
-// EvictCloudBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
+// EvictRemoteBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
 // - the operation results in eliminating all traces of the specified cloud bucket in the AIStore
-func EvictCloudBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) error {
+func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) error {
 	var q url.Values
 	if len(query) > 0 {
 		q = query[0]

@@ -29,7 +29,7 @@ run_cmd() {
   { set +x; } 2>/dev/null
 }
 
-parse_cld_providers() {
+parse_backend_providers() {
   AIS_BACKEND_PROVIDERS=""
   echo "Select backend providers:"
   echo "Amazon S3: (y/n) ?"

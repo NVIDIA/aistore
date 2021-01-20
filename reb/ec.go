@@ -219,7 +219,7 @@ func (reb *Manager) runECjoggers() {
 		go reb.jogEC(mpathInfo, bck, wg)
 	}
 
-	for _, provider := range cfg.Cloud.Providers {
+	for _, provider := range cfg.Backend.Providers {
 		for _, mpathInfo := range availablePaths {
 			bck := cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
 			wg.Add(1)

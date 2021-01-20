@@ -154,14 +154,14 @@ func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	}
 }
 
-func EvictCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
+func EvictRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	if !bck.IsCloud() {
 		return
 	}
 	if bck.HasBackendBck() {
 		bck = *bck.BackendBck()
 	}
-	err := api.EvictCloudBucket(BaseAPIParams(proxyURL), bck)
+	err := api.EvictRemoteBucket(BaseAPIParams(proxyURL), bck)
 	tassert.CheckFatal(tb, err)
 }
 
@@ -172,7 +172,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 
 	toDelete, err := ListObjectNames(proxyURL, bck, prefix, 0)
 	tassert.CheckFatal(t, err)
-	defer EvictCloudBucket(t, proxyURL, bck)
+	defer EvictRemoteBucket(t, proxyURL, bck)
 
 	if len(toDelete) == 0 {
 		return
@@ -342,7 +342,7 @@ func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, n
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET
-func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, object string, objContent cmn.ReadOpenCloser) {
+func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, object string, objContent cmn.ReadOpenCloser) {
 	baseParams := BaseAPIParams()
 
 	err := api.PutObject(api.PutObjectArgs{

@@ -35,9 +35,9 @@ type (
 var _ cluster.CloudProvider = (*hdfsProvider)(nil)
 
 func NewHDFS(t cluster.Target) (cluster.CloudProvider, error) {
-	providerConf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderHDFS)
+	providerConf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderHDFS)
 	cmn.Assert(ok)
-	hdfsConf := providerConf.(cmn.CloudConfHDFS)
+	hdfsConf := providerConf.(cmn.BackendConfHDFS)
 
 	client, err := hdfs.NewClient(hdfs.ClientOptions{
 		Addresses:           hdfsConf.Addresses,

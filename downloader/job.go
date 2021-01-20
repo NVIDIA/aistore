@@ -25,7 +25,7 @@ const (
 // interface guard
 var (
 	_ DlJob = (*sliceDlJob)(nil)
-	_ DlJob = (*cloudBucketDlJob)(nil)
+	_ DlJob = (*remoteBucketDlJob)(nil)
 	_ DlJob = (*rangeDlJob)(nil)
 )
 
@@ -100,7 +100,7 @@ type (
 		done  bool                  // true = the iterator is exhausted, nothing left to read
 	}
 
-	cloudBucketDlJob struct {
+	remoteBucketDlJob struct {
 		baseDlJob
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
@@ -247,13 +247,13 @@ func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects 
 	}, nil
 }
 
-func (j *cloudBucketDlJob) Len() int   { return -1 }
-func (j *cloudBucketDlJob) Sync() bool { return j.sync }
-func (j *cloudBucketDlJob) checkObj(objName string) bool {
+func (j *remoteBucketDlJob) Len() int   { return -1 }
+func (j *remoteBucketDlJob) Sync() bool { return j.sync }
+func (j *remoteBucketDlJob) checkObj(objName string) bool {
 	return strings.HasPrefix(objName, j.prefix) && strings.HasSuffix(objName, j.suffix)
 }
 
-func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
+func (j *remoteBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	if j.done {
 		return nil, false, nil
 	}
@@ -265,7 +265,7 @@ func (j *cloudBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
 
 // Reads the content of a cloud bucket page by page until any objects to
 // download found or the bucket list is over.
-func (j *cloudBucketDlJob) getNextObjs() error {
+func (j *remoteBucketDlJob) getNextObjs() error {
 	var (
 		sid   = j.t.Snode().ID()
 		smap  = j.t.Sowner().Get()
@@ -342,12 +342,12 @@ func (j *rangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newCloudBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlCloudBody, dlXact *Downloader) (*cloudBucketDlJob, error) {
+func newRemoteBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*remoteBucketDlJob, error) {
 	if !bck.IsCloud() {
 		return nil, errors.New("bucket download requires a cloud bucket")
 	}
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
-	job := &cloudBucketDlJob{
+	job := &remoteBucketDlJob{
 		baseDlJob: *base,
 		t:         t,
 		ctx:       ctx,

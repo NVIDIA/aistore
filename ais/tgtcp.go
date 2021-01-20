@@ -226,7 +226,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 			return
 		}
 		// NOTE: apply the entire config: add new and _refresh_ existing
-		aisConf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
+		aisConf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderAIS)
 		cmn.Assert(ok)
 		aisCloud := t.cloud[cmn.ProviderAIS].(*cloud.AisCloudProvider)
 		if err := aisCloud.Apply(aisConf, action); err != nil {
@@ -338,12 +338,12 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		diskStats := fs.GetSelectedDiskStats()
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case cmn.GetWhatRemoteAIS:
-		conf, ok := cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
+		conf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderAIS)
 		if !ok {
-			t.writeJSON(w, r, cmn.CloudInfoAIS{}, httpdaeWhat)
+			t.writeJSON(w, r, cmn.BackendInfoAIS{}, httpdaeWhat)
 			return
 		}
-		clusterConf, ok := conf.(cmn.CloudConfAIS)
+		clusterConf, ok := conf.(cmn.BackendConfAIS)
 		cmn.Assert(ok)
 		aisCloud := t.cloud[cmn.ProviderAIS].(*cloud.AisCloudProvider)
 		t.writeJSON(w, r, aisCloud.GetInfo(clusterConf), httpdaeWhat)

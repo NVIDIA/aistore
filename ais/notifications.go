@@ -697,7 +697,7 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 
 func isDLType(t string) bool {
 	return t == string(downloader.DlTypeMulti) ||
-		t == string(downloader.DlTypeCloud) ||
+		t == string(downloader.DlTypeBackend) ||
 		t == string(downloader.DlTypeSingle) ||
 		t == string(downloader.DlTypeRange)
 }

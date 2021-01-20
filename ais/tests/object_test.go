@@ -980,7 +980,7 @@ func Test_evictRemoteBucket(t *testing.T) {
 	if !bProps.Mirror.Enabled {
 		t.Fatalf("Test property hasn't changed")
 	}
-	err = api.EvictCloudBucket(baseParams, bck)
+	err = api.EvictRemoteBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
 	for _, fname := range filesList {

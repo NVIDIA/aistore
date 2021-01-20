@@ -1,6 +1,6 @@
 {
   "confdir": "/fake/conf/dir",
-  "cloud": {
+  "backend": {
     "ais": {
       "cluster-uuid": [
         "http://localhost:10080",

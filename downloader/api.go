@@ -19,10 +19,10 @@ import (
 )
 
 const (
-	DlTypeSingle DlType = "single"
-	DlTypeRange  DlType = "range"
-	DlTypeMulti  DlType = "multi"
-	DlTypeCloud  DlType = "cloud"
+	DlTypeSingle  DlType = "single"
+	DlTypeRange   DlType = "range"
+	DlTypeMulti   DlType = "multi"
+	DlTypeBackend DlType = "backend"
 
 	DownloadProgressInterval = 10 * time.Second
 )
@@ -410,22 +410,22 @@ func (b *DlMultiBody) String() string {
 	return fmt.Sprintf("bucket: %q", b.Bck)
 }
 
-// Cloud request
-type DlCloudBody struct {
+// Backend download request
+type DlBackendBody struct {
 	DlBase
 	Sync   bool   `json:"sync"`
 	Prefix string `json:"prefix"`
 	Suffix string `json:"suffix"`
 }
 
-func (b *DlCloudBody) Validate() error {
+func (b *DlBackendBody) Validate() error {
 	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (b *DlCloudBody) Describe() string {
+func (b *DlBackendBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}

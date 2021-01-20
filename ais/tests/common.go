@@ -96,7 +96,7 @@ func (m *ioContext) init() {
 
 	if m.bck.IsRemote() {
 		// Remove unnecessary local objects.
-		tutils.EvictCloudBucket(m.t, m.proxyURL, m.bck)
+		tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck)
 	}
 	m.t.Cleanup(m._cleanup)
 }
@@ -105,7 +105,7 @@ func (m *ioContext) _cleanup() {
 	m.del()
 	if m.bck.IsRemote() {
 		// Ensure all local objects are removed.
-		tutils.EvictCloudBucket(m.t, m.proxyURL, m.bck)
+		tutils.EvictRemoteBucket(m.t, m.proxyURL, m.bck)
 	}
 }
 
@@ -292,7 +292,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 
 	if evict {
 		tutils.Logf("evicting remote bucket %s...\n", m.bck)
-		err := api.EvictCloudBucket(baseParams, m.bck)
+		err := api.EvictRemoteBucket(baseParams, m.bck)
 		tassert.CheckFatal(m.t, err)
 	}
 }

@@ -298,38 +298,38 @@ func startDownloadHandler(c *cli.Context) error {
 		dlType = downloader.DlTypeMulti
 	} else if strings.Contains(source.link, "{") && strings.Contains(source.link, "}") {
 		dlType = downloader.DlTypeRange
-	} else if source.cloud.bck.IsEmpty() {
+	} else if source.backend.bck.IsEmpty() {
 		dlType = downloader.DlTypeSingle
 	} else {
 		cfg, err := getClusterConfig()
 		if err != nil {
 			return err
 		}
-		if _, ok := cfg.Cloud.Providers[source.cloud.bck.Provider]; ok {
+		if _, ok := cfg.Backend.Providers[source.backend.bck.Provider]; ok {
 			// Cloud is configured to requested backend provider.
-			dlType = downloader.DlTypeCloud
+			dlType = downloader.DlTypeBackend
 
 			p, err := api.HeadBucket(defaultAPIParams, basePayload.Bck)
 			if err != nil {
 				return err
 			}
-			if !p.BackendBck.Equal(source.cloud.bck) {
+			if !p.BackendBck.Equal(source.backend.bck) {
 				color.New(color.FgYellow).Fprintf(c.App.ErrWriter,
 					"Warning: bucket %q does not have Cloud bucket %q as its *backend* - proceeding to download anyway\n",
-					basePayload.Bck, source.cloud.bck,
+					basePayload.Bck, source.backend.bck,
 				)
 				dlType = downloader.DlTypeSingle
 			}
-		} else if source.cloud.prefix == "" {
+		} else if source.backend.prefix == "" {
 			return fmt.Errorf(
 				"cluster is not configured with %q provider: cannot download whole cloud bucket",
-				source.cloud.bck.Provider,
+				source.backend.bck.Provider,
 			)
 		} else {
 			if source.link == "" {
 				return fmt.Errorf(
 					"cluster is not configured with %q provider: cannot download bucket's objects",
-					source.cloud.bck.Provider,
+					source.backend.bck.Provider,
 				)
 			}
 			// If `prefix` is not empty then possibly it is just a single object
@@ -374,11 +374,11 @@ func startDownloadHandler(c *cli.Context) error {
 			Template: source.link,
 		}
 		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
-	case downloader.DlTypeCloud:
-		payload := downloader.DlCloudBody{
+	case downloader.DlTypeBackend:
+		payload := downloader.DlBackendBody{
 			DlBase: basePayload,
 			Sync:   flagIsSet(c, syncFlag),
-			Prefix: source.cloud.prefix,
+			Prefix: source.backend.prefix,
 		}
 		id, err = api.DownloadWithParam(defaultAPIParams, dlType, payload)
 	default:

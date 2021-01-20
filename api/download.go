@@ -68,7 +68,7 @@ func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, msg i
 }
 
 func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string, intervals ...time.Duration) (string, error) {
-	dlBody := downloader.DlCloudBody{
+	dlBody := downloader.DlBackendBody{
 		Prefix: prefix,
 		Suffix: suffix,
 	}
@@ -79,7 +79,7 @@ func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefi
 
 	dlBody.Bck = bck
 	dlBody.Description = description
-	return DownloadWithParam(baseParams, downloader.DlTypeCloud, dlBody)
+	return DownloadWithParam(baseParams, downloader.DlTypeBackend, dlBody)
 }
 
 func DownloadStatus(baseParams BaseParams, id string, onlyActiveTasks ...bool) (downloader.DlStatusResp, error) {

@@ -26,7 +26,7 @@ type (
 
 	ErrorBucketAlreadyExists      struct{ bck Bck }
 	ErrorRemoteBucketDoesNotExist struct{ bck Bck }
-	ErrorCloudBucketOffline       struct{ bck Bck }
+	ErrorRemoteBucketOffline      struct{ bck Bck }
 	ErrorBucketDoesNotExist       struct{ bck Bck }
 	ErrorBucketIsBusy             struct{ bck Bck }
 
@@ -212,11 +212,11 @@ func (e *ErrorRemoteBucketDoesNotExist) Error() string {
 	return fmt.Sprintf("remote ais bucket %q does not exist", e.bck)
 }
 
-func NewErrorCloudBucketOffline(bck Bck) *ErrorCloudBucketOffline {
-	return &ErrorCloudBucketOffline{bck: bck}
+func NewErrorRemoteBucketOffline(bck Bck) *ErrorRemoteBucketOffline {
+	return &ErrorRemoteBucketOffline{bck: bck}
 }
 
-func (e *ErrorCloudBucketOffline) Error() string {
+func (e *ErrorRemoteBucketOffline) Error() string {
 	return fmt.Sprintf("bucket %q is currently unreachable", e.bck)
 }
 
@@ -443,7 +443,7 @@ func IsErrBucketNought(err error) bool {
 	if _, ok := err.(*ErrorRemoteBucketDoesNotExist); ok {
 		return true
 	}
-	_, ok := err.(*ErrorCloudBucketOffline)
+	_, ok := err.(*ErrorRemoteBucketOffline)
 	return ok
 }
 

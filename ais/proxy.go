@@ -1409,7 +1409,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 		remoteUUID = bck.Ns.UUID
 		query      = r.URL.Query()
 
-		v, configured = cmn.GCO.Get().Cloud.ProviderConf(cmn.ProviderAIS)
+		v, configured = cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderAIS)
 	)
 
 	if !configured {
@@ -1418,7 +1418,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 		return err
 	}
 
-	aisConf := v.(cmn.CloudConfAIS)
+	aisConf := v.(cmn.BackendConfAIS)
 	urls, exists := aisConf[remoteUUID]
 	if !exists {
 		err = fmt.Errorf("remote UUID/alias (%s) not found", remoteUUID)
@@ -3690,7 +3690,7 @@ func (p *proxyrunner) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Head
 	if res.status == http.StatusNotFound {
 		err = cmn.NewErrorRemoteBucketDoesNotExist(bck)
 	} else if res.status == http.StatusGone {
-		err = cmn.NewErrorCloudBucketOffline(bck)
+		err = cmn.NewErrorRemoteBucketOffline(bck)
 	} else {
 		err = res.err
 		header = res.header

@@ -168,8 +168,9 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	if !bck.IsAIS() {
 		var ok bool
 		config := tutils.GetClusterConfig(t)
-		_, ok = config.Cloud.Providers[bck.Provider]
-		tassert.Errorf(t, ok, "invalid provider %s, expected to be in: %v", bck.Provider, config.Cloud.Providers)
+		_, ok = config.Backend.Providers[bck.Provider]
+		tassert.Errorf(t, ok, "invalid provider %s, expected to be in: %v",
+			bck.Provider, config.Backend.Providers)
 	}
 
 	metaCnt := 0
@@ -2139,7 +2140,7 @@ func init() {
 
 	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
-	config.Cloud = cfg.Cloud
+	config.Backend = cfg.Backend
 	cmn.GCO.CommitUpdate(config)
 
 	fs.Init()

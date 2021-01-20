@@ -275,14 +275,14 @@ func getClusterConfig() (*cmn.Config, error) {
 // Scheme
 //
 
-type dlSourceCloud struct {
+type dlSourceBackend struct {
 	bck    cmn.Bck
 	prefix string
 }
 
 type dlSource struct {
-	link  string
-	cloud dlSourceCloud
+	link    string
+	backend dlSourceBackend
 }
 
 // Replace protocol (gs://, s3://, az://) with proper GCP/AWS/Azure URL
@@ -293,7 +293,7 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	}
 
 	var (
-		cloudSource dlSourceCloud
+		cloudSource dlSourceBackend
 		scheme      = u.Scheme
 		host        = u.Host
 		fullPath    = u.Path
@@ -303,7 +303,7 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	// then <bucket> is considered a `Host` by `url.Parse`.
 	switch u.Scheme {
 	case cmn.GSScheme, cmn.ProviderGoogle:
-		cloudSource = dlSourceCloud{
+		cloudSource = dlSourceBackend{
 			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderGoogle},
 			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
@@ -312,7 +312,7 @@ func parseSource(rawURL string) (source dlSource, err error) {
 		host = gsHost
 		fullPath = path.Join(u.Host, fullPath)
 	case cmn.S3Scheme, cmn.ProviderAmazon:
-		cloudSource = dlSourceCloud{
+		cloudSource = dlSourceBackend{
 			bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAmazon},
 			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
@@ -325,7 +325,7 @@ func parseSource(rawURL string) (source dlSource, err error) {
 		//  `az://bucket/object` into Azure link without account name.
 		return dlSource{
 			link: "",
-			cloud: dlSourceCloud{
+			backend: dlSourceBackend{
 				bck:    cmn.Bck{Name: host, Provider: cmn.ProviderAzure},
 				prefix: strings.TrimPrefix(fullPath, "/"),
 			},
@@ -356,8 +356,8 @@ func parseSource(rawURL string) (source dlSource, err error) {
 	}
 	link, err := url.QueryUnescape(normalizedURL.String())
 	return dlSource{
-		link:  link,
-		cloud: cloudSource,
+		link:    link,
+		backend: cloudSource,
 	}, err
 }
 

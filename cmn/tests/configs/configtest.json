@@ -1,6 +1,6 @@
 {
   "confdir":       "/fake/conf/dir",
-  "cloud": {
+  "backend": {
     "gcp": {}
   },
   "mirror": {

@@ -140,7 +140,7 @@ func (r *registry) renewMakeNCopies(t cluster.Target, tag string) {
 		return false
 	})
 	// TODO: remote ais
-	for name, ns := range cfg.Cloud.Providers {
+	for name, ns := range cfg.Backend.Providers {
 		bmd.Range(&name, &ns, func(bck *cluster.Bck) bool {
 			if bck.Props.Mirror.Enabled {
 				xact, err := r.renewBckMakeNCopies(t, bck, tag, int(bck.Props.Mirror.Copies))

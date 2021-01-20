@@ -100,7 +100,7 @@ type (
 	Config struct {
 		role        string          `list:"omit"` // Proxy or Target
 		Confdir     string          `json:"confdir"`
-		Cloud       CloudConf       `json:"cloud"`
+		Backend     BackendConf     `json:"backend"`
 		Mirror      MirrorConf      `json:"mirror"`
 		EC          ECConf          `json:"ec"`
 		Log         LogConf         `json:"log"`
@@ -125,7 +125,7 @@ type (
 		Compression CompressionConf `json:"compression"`
 		MDWrite     MDWritePolicy   `json:"md_write"`
 	}
-	CloudConf struct {
+	BackendConf struct {
 		Conf map[string]interface{} `json:"conf,omitempty"` // implementation depends on backend provider
 
 		// 3rd party Cloud(s) -- set during validation
@@ -140,10 +140,10 @@ type (
 		Online  bool   `json:"online"`
 	}
 
-	CloudConfAIS map[string][]string // cluster alias -> [urls...]
-	CloudInfoAIS map[string]*RemoteAISInfo
+	BackendConfAIS map[string][]string // cluster alias -> [urls...]
+	BackendInfoAIS map[string]*RemoteAISInfo
 
-	CloudConfHDFS struct {
+	BackendConfHDFS struct {
 		Addresses []string `json:"addresses"`
 		User      string   `json:"user"`
 	}
@@ -435,7 +435,7 @@ func (gco *globalConfigOwner) Put(config *Config) {
 }
 
 // NOTE: CopyStruct is a shallow copy which is OK because Config has mostly values with read-only
-//       FSPaths and CloudConf being the only exceptions. May need a *proper* deep copy in the future.
+//       FSPaths and BackendConf being the only exceptions. May need a *proper* deep copy in the future.
 // NOTE: Cloning a large (and growing) structure may adversely affect performance.
 func (gco *globalConfigOwner) clone() *Config {
 	config := &Config{}
@@ -513,7 +513,7 @@ var (
 // NOTE: new validators must be run via Config.Validate() - see below
 // interface guard
 var (
-	_ Validator = (*CloudConf)(nil)
+	_ Validator = (*BackendConf)(nil)
 	_ Validator = (*CksumConf)(nil)
 	_ Validator = (*LRUConf)(nil)
 	_ Validator = (*MirrorConf)(nil)
@@ -536,8 +536,8 @@ var (
 	_ PropsValidator = (*MirrorConf)(nil)
 	_ PropsValidator = (*ECConf)(nil)
 
-	_ json.Marshaler   = (*CloudConf)(nil)
-	_ json.Unmarshaler = (*CloudConf)(nil)
+	_ json.Marshaler   = (*BackendConf)(nil)
+	_ json.Unmarshaler = (*BackendConf)(nil)
 	_ json.Marshaler   = (*FSPathsConf)(nil)
 	_ json.Unmarshaler = (*FSPathsConf)(nil)
 )
@@ -575,20 +575,20 @@ func validKeepaliveType(t string) bool {
 	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
 }
 
-func (c *CloudConf) UnmarshalJSON(data []byte) error {
+func (c *BackendConf) UnmarshalJSON(data []byte) error {
 	return jsoniter.Unmarshal(data, &c.Conf)
 }
 
-func (c *CloudConf) MarshalJSON() (data []byte, err error) {
+func (c *BackendConf) MarshalJSON() (data []byte, err error) {
 	return MustMarshal(c.Conf), nil
 }
 
-func (c *CloudConf) Validate(_ *Config) (err error) {
+func (c *BackendConf) Validate(_ *Config) (err error) {
 	for provider := range c.Conf {
 		b := MustMarshal(c.Conf[provider])
 		switch provider {
 		case ProviderAIS:
-			var aisConf CloudConfAIS
+			var aisConf BackendConfAIS
 			if err := jsoniter.Unmarshal(b, &aisConf); err != nil {
 				return fmt.Errorf("invalid cloud specification: %v", err)
 			}
@@ -600,7 +600,7 @@ func (c *CloudConf) Validate(_ *Config) (err error) {
 			}
 			c.Conf[provider] = aisConf
 		case ProviderHDFS:
-			var hdfsConf CloudConfHDFS
+			var hdfsConf BackendConfHDFS
 			if err := jsoniter.Unmarshal(b, &hdfsConf); err != nil {
 				return fmt.Errorf("invalid cloud specification: %v", err)
 			}
@@ -628,7 +628,7 @@ func (c *CloudConf) Validate(_ *Config) (err error) {
 	return nil
 }
 
-func (c *CloudConf) setProvider(provider string) {
+func (c *BackendConf) setProvider(provider string) {
 	var ns Ns
 	switch provider {
 	case ProviderAmazon, ProviderAzure, ProviderGoogle, ProviderHDFS:
@@ -642,7 +642,7 @@ func (c *CloudConf) setProvider(provider string) {
 	c.Providers[provider] = ns
 }
 
-func (c *CloudConf) ProviderConf(provider string, newConf ...interface{}) (conf interface{}, ok bool) {
+func (c *BackendConf) ProviderConf(provider string, newConf ...interface{}) (conf interface{}, ok bool) {
 	if len(newConf) > 0 {
 		c.Conf[provider] = newConf[0]
 	}

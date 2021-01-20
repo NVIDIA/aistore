@@ -185,10 +185,10 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSki
 	tassert.Errorf(t, (status.SkippedCnt == 1) == shouldBeSkipped, "expected object to be [skipped: %t]", shouldBeSkipped)
 }
 
-func downloadObjectRemote(t *testing.T, body downloader.DlCloudBody, expectedFinished, expectedSkipped int) {
+func downloadObjectRemote(t *testing.T, body downloader.DlBackendBody, expectedFinished, expectedSkipped int) {
 	baseParams := tutils.BaseAPIParams()
 	body.Description = generateDownloadDesc()
-	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeCloud, body)
+	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeBackend, body)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 2*time.Minute)
@@ -545,7 +545,7 @@ func TestDownloadRemote(t *testing.T) {
 			}
 
 			tutils.Logln("starting remote download...")
-			id, err := api.DownloadWithParam(baseParams, downloader.DlTypeCloud, downloader.DlCloudBody{
+			id, err := api.DownloadWithParam(baseParams, downloader.DlTypeBackend, downloader.DlBackendBody{
 				DlBase: downloader.DlBase{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
@@ -571,7 +571,7 @@ func TestDownloadRemote(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			tutils.Logln("starting remote download...")
-			id, err = api.DownloadWithParam(baseParams, downloader.DlTypeCloud, downloader.DlCloudBody{
+			id, err = api.DownloadWithParam(baseParams, downloader.DlTypeBackend, downloader.DlBackendBody{
 				DlBase: downloader.DlBase{
 					Bck:         test.dstBck,
 					Description: generateDownloadDesc(),
@@ -996,7 +996,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-		dlBody = downloader.DlCloudBody{
+		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
 		}
 		m = &ioContext{
@@ -1055,7 +1055,7 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-		dlBody = downloader.DlCloudBody{
+		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
 		}
 		m = &ioContext{
@@ -1092,7 +1092,7 @@ func TestDownloadSync(t *testing.T) {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 		}
-		dlBody = downloader.DlCloudBody{
+		dlBody = downloader.DlBackendBody{
 			DlBase: downloader.DlBase{Bck: bck},
 		}
 		m = &ioContext{

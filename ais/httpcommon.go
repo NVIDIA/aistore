@@ -1949,18 +1949,18 @@ func (h *httprunner) attachDetach(w http.ResponseWriter, r *http.Request, action
 
 func (h *httprunner) attachDetachRemoteAIS(query url.Values, action string, config *cmn.Config) error {
 	var (
-		aisConf cmn.CloudConfAIS
+		aisConf cmn.BackendConfAIS
 		errMsg  string
-		v, ok   = config.Cloud.ProviderConf(cmn.ProviderAIS)
+		v, ok   = config.Backend.ProviderConf(cmn.ProviderAIS)
 		changed bool
 	)
 	if !ok {
 		if action == cmn.ActDetach {
 			return fmt.Errorf("%s: remote cluster config is empty", h.si)
 		}
-		aisConf = make(cmn.CloudConfAIS)
+		aisConf = make(cmn.BackendConfAIS)
 	} else {
-		aisConf, ok = v.(cmn.CloudConfAIS)
+		aisConf, ok = v.(cmn.BackendConfAIS)
 		cmn.Assert(ok)
 	}
 	// detach
@@ -2005,7 +2005,7 @@ rret:
 	if errMsg != "" {
 		return fmt.Errorf("%s: %s remote cluster: %s", h.si, action, errMsg)
 	}
-	config.Cloud.ProviderConf(cmn.ProviderAIS, aisConf)
+	config.Backend.ProviderConf(cmn.ProviderAIS, aisConf)
 	return nil
 }
 

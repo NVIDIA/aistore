@@ -80,8 +80,8 @@ func normalizeObjName(objName string) (string, error) {
 
 func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *cluster.Bck, id string, dlb DlBody, dlXact *Downloader) (DlJob, error) {
 	switch dlb.Type {
-	case DlTypeCloud:
-		dp := &DlCloudBody{}
+	case DlTypeBackend:
+		dp := &DlBackendBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
 		if err != nil {
 			return nil, err
@@ -89,7 +89,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newCloudBucketDlJob(ctx, t, id, bck, dp, dlXact)
+		return newRemoteBucketDlJob(ctx, t, id, bck, dp, dlXact)
 
 	case DlTypeMulti:
 		dp := &DlMultiBody{}

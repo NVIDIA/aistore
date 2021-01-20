@@ -34,7 +34,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "gs://bucket/very/long/prefix-",
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket/very/long/prefix-",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
 					prefix: "very/long/prefix-",
 				},
@@ -44,7 +44,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "gcp://bucket",
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
 					prefix: "",
 				},
@@ -54,7 +54,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "gs://bucket/objname.tar",
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket/objname.tar",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
 					prefix: "objname.tar",
 				},
@@ -64,7 +64,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "gs://bucket/subfolder/objname.tar",
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket/subfolder/objname.tar",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
 					prefix: "subfolder/objname.tar",
 				},
@@ -92,7 +92,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "s3://bucket/very/long/prefix-",
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket/very/long/prefix-",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
 					prefix: "very/long/prefix-",
 				},
@@ -102,7 +102,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "aws://bucket",
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
 					prefix: "",
 				},
@@ -112,7 +112,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "s3://bucket/objname.tar",
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket/objname.tar",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
 					prefix: "objname.tar",
 				},
@@ -122,7 +122,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "s3://bucket/subfolder/objname.tar",
 			expected: dlSource{
 				link: "http://s3.amazonaws.com/bucket/subfolder/objname.tar",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAmazon},
 					prefix: "subfolder/objname.tar",
 				},
@@ -133,7 +133,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "az://bucket",
 			expected: dlSource{
 				link: "",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAzure},
 					prefix: "",
 				},
@@ -143,7 +143,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "azure://bucket/subfolder/objname.tar",
 			expected: dlSource{
 				link: "",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderAzure},
 					prefix: "subfolder/objname.tar",
 				},
@@ -163,7 +163,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			input: "gs://bucket/obj{00..10}.tgz",
 			expected: dlSource{
 				link: "https://storage.googleapis.com/bucket/obj{00..10}.tgz",
-				cloud: dlSourceCloud{
+				backend: dlSourceBackend{
 					bck:    cmn.Bck{Name: "bucket", Provider: cmn.ProviderGoogle},
 					prefix: "obj{00..10}.tgz",
 				},

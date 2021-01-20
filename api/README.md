@@ -270,7 +270,7 @@ Removes an ais bucket using its name as the identifier
 Error from AIStore in completing the request
 ___
 
-#### EvictCloudBucket
+#### EvictRemoteBucket
 Evicts a cloud bucket using its name as the identifier
 
 ##### Parameters
@@ -389,7 +389,7 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | httpClient | *http.Client       | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string             | URL of the proxy (gateway)                                                            |
 | Bucket     | string             | Name of the bucket storing the object                                                 |
-| Provider   | string             | "ais" (default, can be omitted) or one of the supported backend providers: "ais", "gcp", "aws", "azure", "http", "hdfs". |
+| Provider   | string             | "ais" (default, can be omitted) or one of the supported backend providers: "ais", "gcp", "aws", "azure", "hdfs". |
 | Object     | string             | Name of the object                                                                    |
 | Hash       | string             | Hash computed for the object                                                          |
 | Reader     | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
@@ -439,7 +439,7 @@ Deletes an object identified by the combination of its bucket and object name
 | proxyURL   | string       | URL of the proxy (gateway)                                                            |
 | bucket     | string       | Name of the bucket storing the object                                                 |
 | object     | string       | Name of the object to be replicated                                                   |
-| provider   | string       | "ais" (default, can be omitted) or one of the supported backend providers: "ais", "gcp", "aws", "azure", "http", "hdfs". |
+| provider   | string       | "ais" (default, can be omitted) or one of the supported backend providers: "ais", "gcp", "aws", "azure", "hdfs". |
 
 ##### Return
 Error from AIStore in completing the request

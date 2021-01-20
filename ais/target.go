@@ -285,7 +285,7 @@ func (c clouds) init(t *targetrunner) {
 	config := cmn.GCO.Get()
 	ais := cloud.NewAIS(t)
 	c[cmn.ProviderAIS] = ais // ais cloud is always present
-	if aisConf, ok := config.Cloud.ProviderConf(cmn.ProviderAIS); ok {
+	if aisConf, ok := config.Backend.ProviderConf(cmn.ProviderAIS); ok {
 		if err := ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
 		}
@@ -300,7 +300,7 @@ func (c clouds) init(t *targetrunner) {
 // 3rd part cloud: empty stubs unless populated via build tags
 func (c clouds) initExt(t *targetrunner) (err error) {
 	config := cmn.GCO.Get()
-	for provider := range config.Cloud.Providers {
+	for provider := range config.Backend.Providers {
 		switch provider {
 		case cmn.ProviderAmazon:
 			c[provider], err = cloud.NewAWS(t)
@@ -1155,7 +1155,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 }
 
 func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cmn.BucketNames, errCode int, err error) {
-	_, ok := cfg.Cloud.Providers[query.Provider]
+	_, ok := cfg.Backend.Providers[query.Provider]
 	// HDFS doesn't support listing remote buckets (there are no remote buckets).
 	if (!ok && !query.IsRemoteAIS()) || query.IsHDFS() {
 		names = t.selectBMDBuckets(t.owner.bmd.get(), query)

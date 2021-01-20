@@ -112,7 +112,7 @@ TEST_FSPATH_COUNT=${test_fspath_cnt}
 # aisnode build will include neither AWS ("aws") nor GCP ("gcp").
 
 
-parse_cld_providers
+parse_backend_providers
 
 create_loopback_paths
 

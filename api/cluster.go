@@ -70,7 +70,7 @@ func GetTargetDiskStats(baseParams BaseParams, targetID string) (diskStats map[s
 	return
 }
 
-func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.CloudInfoAIS, err error) {
+func GetRemoteAIS(baseParams BaseParams) (aisInfo cmn.BackendInfoAIS, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,

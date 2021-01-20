@@ -35,11 +35,11 @@ func (m *dummyCloudProvider) CreateBucket(ctx context.Context, bck *cluster.Bck)
 }
 
 func (m *dummyCloudProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
-	return cmn.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorCloudBucketOffline(bck.Bck)
+	return cmn.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketOffline(bck.Bck)
 }
 
 func (m *dummyCloudProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
-	return nil, http.StatusNotFound, cmn.NewErrorCloudBucketOffline(bck.Bck)
+	return nil, http.StatusNotFound, cmn.NewErrorRemoteBucketOffline(bck.Bck)
 }
 
 // The function must not fail - it should return empty list.
