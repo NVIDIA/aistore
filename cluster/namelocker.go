@@ -52,15 +52,23 @@ func (nl nameLocker) init() {
 }
 
 func (li *lockInfo) notifyWaiters() {
-	if li.room != nil && li.room.waiting > 0 {
-		debug.Assert(li.rc >= li.room.waiting)
-		// `rc == waiting` means that this is the thread that did all the work and
-		// tries to unlock/downgrade the lock. In this case it should mark room as
-		// finished and start notification chain for the threads that are still waiting.
-		if li.rc == li.room.waiting {
-			li.room.finished = true
-		}
+	if li.room == nil || li.room.waiting == 0 {
+		return
+	}
+	debug.Assert(li.rc >= li.room.waiting)
+	if li.room.finished {
+		// Job has been finished so we can wake up everybody else waiting.
 		li.room.cond.Broadcast()
+	} else {
+		// Wake up only one "job doer".
+		li.room.cond.Signal()
+	}
+}
+
+func (li *lockInfo) decWaiting() {
+	li.room.waiting--
+	if li.room.waiting == 0 {
+		li.room = nil // Clean room info.
 	}
 }
 
@@ -170,15 +178,18 @@ func (nlc *nlc) UpgradeLock(uname string) (finished bool) {
 	// Wait until all the readers are the waiting ones.
 	for info.rc != info.room.waiting {
 		info.room.cond.Wait()
+
 		// We have been awakened and the room is finished - remove us from waiting.
 		if info.room.finished {
-			info.room.waiting--
+			info.decWaiting()
 			nlc.mu.Unlock()
 			return true
 		}
 	}
+	// Already mark it finished but the other threads are asleep so they don't know.
+	info.room.finished = true
 	info.rc--
-	info.room.waiting--
+	info.decWaiting()
 	info.exclusive = true
 	nlc.mu.Unlock()
 	return false

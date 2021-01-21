@@ -27,6 +27,9 @@ func TestUpgradeLock(t *testing.T) {
 			)
 			n.init()
 
+			// Additional stray reader which forces the other to block on `UpgradeLock`.
+			n.Lock(uname, false)
+
 			sema.Acquire(threadCnt)
 			wg.Add(threadCnt)
 			for i := 0; i < threadCnt; i++ {
@@ -41,7 +44,11 @@ func TestUpgradeLock(t *testing.T) {
 						n.Unlock(uname, false)
 						return
 					}
+
+					// Imitate doing job.
 					counter.Inc()
+					time.Sleep(time.Second)
+
 					switch test {
 					case "downgrade":
 						n.DowngradeLock(uname)
@@ -54,12 +61,18 @@ func TestUpgradeLock(t *testing.T) {
 				}()
 			}
 
-			// Wait a while to make sure that all goroutines started and blocked on semaphore.
-			time.Sleep(time.Second)
+			// Make sure all other threads are past `n.Lock` and blocked on `sema.Acquire`.
+			time.Sleep(500 * time.Millisecond)
+
 			sema.Release(threadCnt)
+			// Wait a while to make sure that all goroutines started and blocked on `UpgradeLock`.
+			time.Sleep(500 * time.Millisecond)
+
+			// Should wake up one of the waiter which should start doing job.
+			n.Unlock(uname, false)
 
 			wg.Wait()
-			tassert.Fatalf(t, counter.Load() == 1, "counter should be equal to 1")
+			tassert.Fatalf(t, counter.Load() == 1, "counter should be equal to 1 (counter: %d)", counter.Load())
 		})
 	}
 }
