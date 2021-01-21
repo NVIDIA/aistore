@@ -56,7 +56,7 @@ func TestETLTar2TFS3(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	// PUT TAR to the cluster
 	f, err := readers.NewFileReaderFromFile(tarPath, cmn.ChecksumXXHash)
@@ -128,7 +128,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	// PUT TAR to the cluster
 	f, err := readers.NewFileReaderFromFile(tarPath, cmn.ChecksumXXHash)

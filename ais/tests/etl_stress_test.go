@@ -33,7 +33,7 @@ func TestETLTargetDown(t *testing.T) {
 	)
 
 	tutils.Logln("Preparing source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, bckFrom)
+	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	defer tutils.DestroyBucket(t, proxyURL, bckFrom)
 	m.saveClusterState()
 

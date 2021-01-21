@@ -96,8 +96,8 @@ var ecTests = []ecTest{
 	{"EC 2:2", 2, 2},
 }
 
-func defaultECBckProps(o *ecOptions) cmn.BucketPropsToUpdate {
-	return cmn.BucketPropsToUpdate{
+func defaultECBckProps(o *ecOptions) *cmn.BucketPropsToUpdate {
+	return &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
 			Enabled:      api.Bool(true),
 			ObjSizeLimit: api.Int64(ecObjLimit),
@@ -451,9 +451,9 @@ func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath
 	tassert.CheckFatal(t, err)
 }
 
-func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps cmn.BucketPropsToUpdate, o *ecOptions) {
+func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps *cmn.BucketPropsToUpdate, o *ecOptions) {
 	proxyURL := tutils.RandomProxyURL()
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		o.dataCnt, o.parityCnt, o.seed, o.concurrency)
@@ -461,7 +461,7 @@ func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, 
 	tassert.CheckFatal(t, err)
 }
 
-func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps cmn.BucketPropsToUpdate) {
+func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps *cmn.BucketPropsToUpdate) {
 	tutils.Logf("Changing EC %d:%d\n", *bckProps.EC.DataSlices, *bckProps.EC.ParitySlices)
 	_, err := api.SetBucketProps(baseParams, bck, bckProps)
 	tassert.CheckFatal(t, err)
@@ -545,9 +545,9 @@ func TestECChange(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	bucketProps := cmn.BucketPropsToUpdate{
+	bucketProps := &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
 			Enabled:      api.Bool(true),
 			ObjSizeLimit: api.Int64(ecObjLimit),
@@ -793,7 +793,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 			o.parityCnt = test.parity
 			o.dataCnt = test.data
 			setBucketECProps(t, baseParams, bck, defaultECBckProps(o))
-			defer api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+			defer api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 				EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 			})
 
@@ -1003,7 +1003,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	assertBucketSize(t, baseParams, bck, o.objCount)
 
 	// Disable EC, put normal files, check if were created properly
-	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
@@ -1026,7 +1026,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	assertBucketSize(t, baseParams, bck, o.objCount*2)
 
 	// Enable EC again, check if EC was started properly and creates files with EC correctly
-	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -1109,14 +1109,14 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	time.Sleep(time.Second)
 
 	tutils.Logf("Disabling EC for the bucket %s\n", bck)
-	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	time.Sleep(15 * time.Millisecond)
 	tutils.Logf("Enabling EC for the bucket %s\n", bck)
-	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -2078,7 +2078,7 @@ func TestECBucketEncode(t *testing.T) {
 		t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 	}
 
-	tutils.CreateFreshBucket(t, proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
 
 	m.puts()
 	if t.Failed() {
@@ -2093,7 +2093,7 @@ func TestECBucketEncode(t *testing.T) {
 	}
 
 	tutils.Logf("Enabling EC\n")
-	bckPropsToUpate := cmn.BucketPropsToUpdate{
+	bckPropsToUpate := &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
 			Enabled:      api.Bool(true),
 			ObjSizeLimit: api.Int64(1),
@@ -2210,7 +2210,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		cksumType  = cmn.DefaultBckProps().Cksum.Type
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bckReg)
+	tutils.CreateFreshBucket(t, proxyURL, bckReg, nil)
 	newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
 
 	// select a target that loses its mpath(simulate drive death),

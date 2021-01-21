@@ -890,7 +890,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		// Make and validate new bucket props.
 		bck.Props = defaultBckProps()
 		bck.Props.SetProvider(bck.Provider)
-		bck.Props, err = p.makeNewBckProps(bck, propsToUpdate, true /*creating*/)
+		bck.Props, err = p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
@@ -1285,7 +1285,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var xactID string
-	if xactID, err = p.setBucketProps(w, r, msg, bck, propsToUpdate); err != nil {
+	if xactID, err = p.setBucketProps(w, r, msg, bck, &propsToUpdate); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}

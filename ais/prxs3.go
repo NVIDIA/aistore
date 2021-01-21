@@ -514,7 +514,7 @@ func (p *proxyrunner) putBckVersioningS3(w http.ResponseWriter, r *http.Request,
 	propsToUpdate := cmn.BucketPropsToUpdate{
 		Versioning: &cmn.VersionConfToUpdate{Enabled: &enabled},
 	}
-	if _, err := p.setBucketProps(w, r, msg, bck, propsToUpdate); err != nil {
+	if _, err := p.setBucketProps(w, r, msg, bck, &propsToUpdate); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 	}
 }

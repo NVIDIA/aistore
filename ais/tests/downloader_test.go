@@ -436,7 +436,7 @@ func TestDownloadTimeout(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	body := downloader.DlSingleBody{
 		DlSingleObj: downloader.DlSingleObj{
@@ -508,7 +508,7 @@ func TestDownloadRemote(t *testing.T) {
 			clearDownloadList(t)
 
 			if test.dstBck.IsAIS() {
-				tutils.CreateFreshBucket(t, proxyURL, test.dstBck)
+				tutils.CreateFreshBucket(t, proxyURL, test.dstBck, nil)
 			}
 
 			tutils.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
@@ -623,7 +623,7 @@ func TestDownloadStatus(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, bck, nil)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, files)
 	tassert.CheckFatal(t, err)
@@ -667,7 +667,7 @@ func TestDownloadStatusError(t *testing.T) {
 	clearDownloadList(t)
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, files)
 	tassert.CheckFatal(t, err)
@@ -714,9 +714,9 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
@@ -755,9 +755,9 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
@@ -791,9 +791,9 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	_, err := api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
@@ -849,7 +849,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
 	}
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	id1, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
@@ -919,7 +919,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
@@ -963,7 +963,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
@@ -1011,7 +1011,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 	m.init()
 	m.remotePuts(false /*evict*/)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
 	downloadObjectRemote(t, dlBody, m.num, 0)
@@ -1034,7 +1034,7 @@ func TestDownloadSkipObject(t *testing.T) {
 		expectedVersion       = "1"
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
@@ -1070,7 +1070,7 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 	m.init()
 	m.remotePuts(false /*evict*/)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
@@ -1108,7 +1108,7 @@ func TestDownloadSync(t *testing.T) {
 	m.init()
 	m.remotePuts(false /*evict*/)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
 	tutils.Logln("1. initial sync of remote bucket...")
@@ -1169,7 +1169,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
@@ -1228,7 +1228,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
@@ -1318,7 +1318,7 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	id, err := api.DownloadWithParam(baseParams, downloader.DlTypeSingle, downloader.DlSingleBody{
 		DlBase: downloader.DlBase{

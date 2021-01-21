@@ -40,7 +40,7 @@ func TestQueryBck(t *testing.T) {
 		queryObjectNames = make(cmn.StringSet, numObjects-1)
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	putObjects := tutils.PutRR(t, baseParams, cmn.KiB, cmn.ChecksumNone, bck, "", numObjects)
 	sort.Strings(putObjects)
@@ -84,7 +84,7 @@ func TestQueryVersionFilter(t *testing.T) {
 		queryObjectNames = make(cmn.StringSet, numObjects-1)
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	objName := fmt.Sprintf("object-%d.txt", 0)
 	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
@@ -123,7 +123,7 @@ func TestQueryVersionAndAtime(t *testing.T) {
 		queryObjectNames = make(cmn.StringSet, numObjects-1)
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	objName := fmt.Sprintf("object-%d.txt", 0)
 	putRandomFile(t, baseParams, bck, objName, cmn.KiB)
@@ -168,7 +168,7 @@ func TestQueryWorkersTargets(t *testing.T) {
 		objName       = "object.txt"
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckError(t, err)
@@ -204,7 +204,7 @@ func TestQueryWorkersTargetDown(t *testing.T) {
 		objName       = "object.txt"
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckError(t, err)
@@ -257,7 +257,7 @@ func TestQuerySingleWorkerNext(t *testing.T) {
 	)
 
 	m.init()
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 

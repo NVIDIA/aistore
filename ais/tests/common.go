@@ -563,7 +563,7 @@ func (m *ioContext) setRandBucketProps() {
 	baseParams := tutils.BaseAPIParams()
 
 	// Set some weird bucket props to see if they were changed or not.
-	props := cmn.BucketPropsToUpdate{
+	props := &cmn.BucketPropsToUpdate{
 		LRU: &cmn.LRUConfToUpdate{
 			LowWM:  api.Int64(int64(rand.Intn(35) + 1)),
 			HighWM: api.Int64(int64(rand.Intn(15) + 40)),
@@ -625,7 +625,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			baseParams := tutils.BaseAPIParams()
 
 			if test.bck.IsAIS() || test.bck.IsRemoteAIS() {
-				err := api.CreateBucket(baseParams, test.bck)
+				err := api.CreateBucket(baseParams, test.bck, nil)
 				tassert.CheckFatal(t, err)
 
 				if !test.backendBck.IsEmpty() {

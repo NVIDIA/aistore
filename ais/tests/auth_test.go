@@ -43,7 +43,7 @@ func TestAuthObj(t *testing.T) {
 		}
 	)
 
-	err := api.CreateBucket(authBP, bck)
+	err := api.CreateBucket(authBP, bck, nil)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		err := api.DestroyBucket(authBP, bck)
@@ -71,10 +71,10 @@ func TestAuthBck(t *testing.T) {
 		}
 	)
 
-	err := api.CreateBucket(unAuthBP, bck)
+	err := api.CreateBucket(unAuthBP, bck, nil)
 	expectUnauthorized(t, err)
 
-	err = api.CreateBucket(authBP, bck)
+	err = api.CreateBucket(authBP, bck, nil)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		api.DestroyBucket(authBP, bck)

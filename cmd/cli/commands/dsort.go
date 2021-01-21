@@ -126,7 +126,7 @@ func setupBucket(c *cli.Context, bck cmn.Bck) error {
 	}
 
 	if !exists || cleanup {
-		if err := api.CreateBucket(defaultAPIParams, bck); err != nil {
+		if err := api.CreateBucket(defaultAPIParams, bck, nil); err != nil {
 			return err
 		}
 	}

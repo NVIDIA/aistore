@@ -50,8 +50,8 @@ func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn
 }
 
 // Creates new ais bucket
-func createBucket(c *cli.Context, bck cmn.Bck, props ...cmn.BucketPropsToUpdate) (err error) {
-	if err = api.CreateBucket(defaultAPIParams, bck, props...); err != nil {
+func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (err error) {
+	if err = api.CreateBucket(defaultAPIParams, bck, props); err != nil {
 		if herr, ok := err.(*cmn.HTTPError); ok {
 			if herr.Status == http.StatusConflict {
 				desc := fmt.Sprintf("Bucket %q already exists", bck)
@@ -327,7 +327,7 @@ validate:
 }
 
 // Sets bucket properties
-func setBucketProps(c *cli.Context, bck cmn.Bck, props cmn.BucketPropsToUpdate) (err error) {
+func setBucketProps(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (err error) {
 	if _, err = api.SetBucketProps(defaultAPIParams, bck, props); err != nil {
 		return
 	}

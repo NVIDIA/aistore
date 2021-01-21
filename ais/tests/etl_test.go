@@ -148,7 +148,7 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 	}
 
 	tutils.Logln("Creating bucket")
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	defer tutils.DestroyBucket(t, proxyURL, bck)
 
 	tutils.Logln("Putting object")
@@ -316,7 +316,7 @@ func TestETLBucket(t *testing.T) {
 	)
 
 	tutils.Logln("Preparing source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	m.init()
 
 	tutils.Logln("Putting objects to source bucket")
@@ -378,7 +378,7 @@ def transform(input_bytes: bytes) -> bytes:
 	)
 
 	tutils.Logln("Preparing source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
 
 	m.init()
 
@@ -419,7 +419,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	)
 
 	tutils.Logln("Preparing source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, bckFrom)
+	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
 	m.init()
 
 	tutils.Logln("Putting objects to source bucket")

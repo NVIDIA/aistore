@@ -43,7 +43,7 @@ func createBucketHandler(c *cli.Context) (err error) {
 		if err != nil {
 			return err
 		}
-		props = &propSingleBck
+		props = propSingleBck
 		props.Force = flagIsSet(c, forceFlag)
 	}
 	buckets, err := bucketsFromArgsOrEnv(c)
@@ -52,9 +52,9 @@ func createBucketHandler(c *cli.Context) (err error) {
 	}
 	for _, bck := range buckets {
 		if props != nil {
-			err = createBucket(c, bck, *props)
+			err = createBucket(c, bck, props)
 		} else {
-			err = createBucket(c, bck)
+			err = createBucket(c, bck, nil)
 		}
 		if err != nil {
 			return err

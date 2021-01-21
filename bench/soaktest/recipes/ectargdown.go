@@ -24,7 +24,7 @@ func recECTargetDown(rctx *soakprim.RecipeContext) {
 
 	conds.ExpBuckets = []string{"ec1", "b2"}
 	rctx.Pre(conds)
-	rctx.SetBucketProps("ec1", cmn.BucketPropsToUpdate{
+	rctx.SetBucketProps("ec1", &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
 			Enabled:      api.Bool(true),
 			ObjSizeLimit: api.Int64(1),

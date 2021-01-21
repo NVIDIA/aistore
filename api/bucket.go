@@ -42,7 +42,7 @@ type (
 
 // SetBucketProps sets the properties of a bucket.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props cmn.BucketPropsToUpdate, query ...url.Values) (string, error) {
+func SetBucketProps(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate, query ...url.Values) (string, error) {
 	b := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActSetBprops, Value: props})
 	return patchBucketProps(baseParams, bck, b, query...)
 }
@@ -152,22 +152,15 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 }
 
 // CreateBucket sends a HTTP request to a proxy to create an AIS bucket with the given name.
-func CreateBucket(baseParams BaseParams, bck cmn.Bck, ops ...cmn.BucketPropsToUpdate) error {
+func CreateBucket(baseParams BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) error {
 	if err := cmn.ValidateBckName(bck.Name); err != nil {
 		return err
-	}
-	if len(ops) > 1 {
-		return fmt.Errorf("only a single BucketPropsToUpdate parameter can be accepted")
-	}
-	var value interface{}
-	if len(ops) == 1 {
-		value = ops[0]
 	}
 	baseParams.Method = http.MethodPost
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateBck, Value: value}),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActCreateBck, Value: props}),
 		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }

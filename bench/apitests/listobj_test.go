@@ -38,7 +38,7 @@ func createAndFillBucket(b *testing.B, objCnt uint) cmn.Bck {
 		objCntPerWorker = int(objCnt) / workerCount
 	)
 
-	tutils.CreateFreshBucket(b, baseParams.URL, bck)
+	tutils.CreateFreshBucket(b, baseParams.URL, bck, nil)
 
 	// Iterations of PUT
 	for wid := uint(0); wid < workerCount; wid++ {

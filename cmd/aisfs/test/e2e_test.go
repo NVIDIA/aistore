@@ -66,7 +66,7 @@ var _ = Describe("E2E FUSE Tests", func() {
 		fuseDir, err = ioutil.TempDir("/tmp", "")
 		Expect(err).NotTo(HaveOccurred())
 
-		err = api.CreateBucket(baseParams, bck)
+		err = api.CreateBucket(baseParams, bck, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		out, err := exec.Command("aisfs", bck.Name, fuseDir).Output()

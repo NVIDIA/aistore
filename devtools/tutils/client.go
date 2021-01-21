@@ -134,10 +134,10 @@ func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
 }
 
 // CreateFreshBucket, destroys bucket if exists and creates new. The bucket is destroyed on test completion.
-func CreateFreshBucket(tb testing.TB, proxyURL string, bck cmn.Bck, ops ...cmn.BucketPropsToUpdate) {
+func CreateFreshBucket(tb testing.TB, proxyURL string, bck cmn.Bck, props *cmn.BucketPropsToUpdate) {
 	DestroyBucket(tb, proxyURL, bck)
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.CreateBucket(baseParams, bck, ops...)
+	err := api.CreateBucket(baseParams, bck, props)
 	tassert.CheckFatal(tb, err)
 	tb.Cleanup(func() {
 		DestroyBucket(tb, proxyURL, bck)
@@ -190,7 +190,7 @@ func SetBackendBck(t *testing.T, baseParams api.BaseParams, srcBck, dstBck cmn.B
 	p, err := api.HeadBucket(baseParams, dstBck) // We need to know real provider of the bucket
 	tassert.CheckFatal(t, err)
 
-	_, err = api.SetBucketProps(baseParams, srcBck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, srcBck, &cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(dstBck.Name),
 			Provider: api.String(p.Provider),

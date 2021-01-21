@@ -56,12 +56,12 @@ func (rctx *RecipeContext) MakeBucket(bucketname string) {
 	tag := rctx.startPrim("MakeBucket")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.CreateBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketname))
+		err := api.CreateBucket(soakcmn.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), nil)
 		cmn.AssertNoErr(err)
 	}()
 }
 
-func (rctx *RecipeContext) SetBucketProps(bucketname string, props cmn.BucketPropsToUpdate) {
+func (rctx *RecipeContext) SetBucketProps(bucketname string, props *cmn.BucketPropsToUpdate) {
 	tag := rctx.startPrim("SetBucketProps")
 	go func() {
 		defer rctx.finishPrim(tag)

@@ -497,11 +497,12 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 	return softErr
 }
 
-func (bp *BucketProps) Apply(propsToUpdate BucketPropsToUpdate) {
-	copyProps(propsToUpdate, bp)
+func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
+	copyProps(*propsToUpdate, bp)
 }
 
-func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error) {
+func NewBucketPropsToUpdate(nvs SimpleKVs) (props *BucketPropsToUpdate, err error) {
+	props = &BucketPropsToUpdate{}
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val
 
@@ -512,7 +513,7 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 			return props, err
 		}
 
-		if err := UpdateFieldValue(&props, name, value); err != nil {
+		if err := UpdateFieldValue(props, name, value); err != nil {
 			return props, err
 		}
 	}

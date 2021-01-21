@@ -81,7 +81,7 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 	if smap.CountActiveTargets() == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType, true)
 	tassert.SelectErr(t, errCh, "put", true)
@@ -249,7 +249,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
 	}
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
@@ -279,7 +279,7 @@ func TestRegressionBuckets(t *testing.T) {
 		proxyURL  = tutils.RandomProxyURL(t)
 		cksumType = cmn.DefaultBckProps().Cksum.Type
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck}, cksumType)
 }
 
@@ -301,7 +301,7 @@ func TestRenameBucket(t *testing.T) {
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
-			tutils.CreateFreshBucket(t, proxyURL, bck)
+			tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 			tutils.DestroyBucket(t, proxyURL, renamedBck) // cleanup post Ctrl-C etc.
 			defer tutils.DestroyBucket(t, proxyURL, renamedBck)
 
@@ -436,7 +436,7 @@ func TestRenameObjects(t *testing.T) {
 		cksumType = cmn.DefaultBckProps().Cksum.Type
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	tutils.PutRandObjs(proxyURL, bck, "", 0, numPuts, errCh, objsPutCh, cksumType)
 	tassert.SelectErr(t, errCh, "put", false)
@@ -534,7 +534,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	tutils.Logf("The cluster now has %d target(s)\n", smap.CountActiveTargets())
 
 	// Step 2: PUT objects into a newly created bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 	m.puts()
 
 	// Step 3: Start performing GET requests
@@ -1035,7 +1035,7 @@ func TestStressDeleteRange(t *testing.T) {
 		cksumType = cmn.DefaultBckProps().Cksum.Type
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	// 1. PUT
 	tutils.Logln("putting objects...")

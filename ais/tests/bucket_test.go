@@ -37,7 +37,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	err := api.CreateBucket(baseParams, bck)
+	err := api.CreateBucket(baseParams, bck, nil)
 	tassert.Fatalf(t, err != nil, "expected error")
 
 	_, err = api.GetObject(baseParams, bck, "nonexisting")
@@ -65,7 +65,7 @@ func Test_BucketNames(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	buckets, err := api.ListBuckets(baseParams, cmn.QueryBcks{})
 	tassert.CheckFatal(t, err)
@@ -129,7 +129,7 @@ func TestDefaultBucketProps(t *testing.T) {
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
 	})
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
@@ -150,7 +150,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 			Provider: cmn.ProviderAIS,
 		}
 	)
-	propsToSet := cmn.BucketPropsToUpdate{
+	propsToSet := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
 			Type:            api.String(cmn.ChecksumMD5),
 			ValidateWarmGet: api.Bool(true),
@@ -178,7 +178,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 
 	if bck.IsHDFS() {
 		hdfsBck := cmn.Bck{Provider: cmn.ProviderHDFS, Name: cmn.RandString(10)}
-		err := api.CreateBucket(baseParams, hdfsBck, cmn.BucketPropsToUpdate{
+		err := api.CreateBucket(baseParams, hdfsBck, &cmn.BucketPropsToUpdate{
 			Extra: &cmn.ExtraToUpdate{
 				HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: api.String("/")},
 			},
@@ -187,7 +187,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 		err = api.DestroyBucket(baseParams, hdfsBck)
 		tassert.CheckFatal(t, err)
 	} else {
-		err := api.CreateBucket(baseParams, bck)
+		err := api.CreateBucket(baseParams, bck, nil)
 		tassert.Fatalf(t, err != nil, "expected error")
 		tassert.Fatalf(t, strings.Contains(err.Error(), "not supported"), "should contain 'not supported' message")
 	}
@@ -231,7 +231,7 @@ func overwriteLomCache(mdwrite cmn.MDWritePolicy, t *testing.T) {
 		tassert.Fatalf(t, l >= 2, "%s has %d mountpaths, need at least 2", target, l)
 	}
 	tutils.Logf("Create %s(mirrored, md-write=never)\n", m.bck)
-	propsToSet := cmn.BucketPropsToUpdate{
+	propsToSet := &cmn.BucketPropsToUpdate{
 		Mirror:  &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 		MDWrite: api.MDWritePolicy(mdwrite),
 	}
@@ -301,11 +301,11 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 			m.init()
 
 			for i := 0; i < iterCount; i++ {
-				if err := api.CreateBucket(baseParams, m.bck); err != nil {
+				if err := api.CreateBucket(baseParams, m.bck, nil); err != nil {
 					return err
 				}
 				if rand.Intn(iterCount) == 0 { // just test couple times, no need to flood
-					if err := api.CreateBucket(baseParams, m.bck); err == nil {
+					if err := api.CreateBucket(baseParams, m.bck, nil); err == nil {
 						return fmt.Errorf("expected error to occur on bucket %q - create second time", m.bck)
 					}
 				}
@@ -348,12 +348,12 @@ func TestResetBucketProps(t *testing.T) {
 		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
 	})
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	defaultProps, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
-	propsToUpdate := cmn.BucketPropsToUpdate{
+	propsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
 			Type:            api.String(cmn.ChecksumNone),
 			ValidateWarmGet: api.Bool(true),
@@ -396,11 +396,11 @@ func TestSetInvalidBucketProps(t *testing.T) {
 
 		tests = []struct {
 			name  string
-			props cmn.BucketPropsToUpdate
+			props *cmn.BucketPropsToUpdate
 		}{
 			{
 				name: "humongous number of copies",
-				props: cmn.BucketPropsToUpdate{
+				props: &cmn.BucketPropsToUpdate{
 					Mirror: &cmn.MirrorConfToUpdate{
 						Enabled: api.Bool(true),
 						Copies:  api.Int64(120),
@@ -409,7 +409,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			},
 			{
 				name: "too many copies",
-				props: cmn.BucketPropsToUpdate{
+				props: &cmn.BucketPropsToUpdate{
 					Mirror: &cmn.MirrorConfToUpdate{
 						Enabled: api.Bool(true),
 						Copies:  api.Int64(12),
@@ -418,7 +418,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			},
 			{
 				name: "humongous number of slices",
-				props: cmn.BucketPropsToUpdate{
+				props: &cmn.BucketPropsToUpdate{
 					EC: &cmn.ECConfToUpdate{
 						Enabled:      api.Bool(true),
 						ParitySlices: api.Int(120),
@@ -427,7 +427,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			},
 			{
 				name: "too many slices",
-				props: cmn.BucketPropsToUpdate{
+				props: &cmn.BucketPropsToUpdate{
 					EC: &cmn.ECConfToUpdate{
 						Enabled:      api.Bool(true),
 						ParitySlices: api.Int(12),
@@ -436,7 +436,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			},
 			{
 				name: "enable both ec and mirroring",
-				props: cmn.BucketPropsToUpdate{
+				props: &cmn.BucketPropsToUpdate{
 					EC:     &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 					Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 				},
@@ -444,7 +444,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -957,7 +957,7 @@ func TestListObjects(t *testing.T) {
 				prefixes sync.Map
 			)
 
-			tutils.CreateFreshBucket(t, proxyURL, bck)
+			tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 			p := cmn.DefaultBckProps()
 
@@ -1125,7 +1125,7 @@ func TestListObjectsPrefix(t *testing.T) {
 					Name:     testBucketName,
 					Provider: provider,
 				}
-				tutils.CreateFreshBucket(t, proxyURL, bck)
+				tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 				p := cmn.DefaultBckProps()
 				cksumType = p.Cksum.Type
@@ -1241,7 +1241,7 @@ func TestListObjectsCache(t *testing.T) {
 
 	m.init()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 	m.puts()
 
 	for _, useCache := range []bool{true, false} {
@@ -1299,7 +1299,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(2)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	target := m.unregisterTarget()
 
@@ -1346,12 +1346,12 @@ func TestBucketSingleProp(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(3)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	tutils.Logf("Changing bucket %q properties...\n", m.bck)
 
 	// Enabling EC should set default value for number of slices if it is 0
-	_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -1368,13 +1368,13 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable EC first
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Enabling mirroring should set default value for number of copies if it is 0
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -1388,13 +1388,13 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable mirroring first
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Change a few more bucket properties
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
 			DataSlices:   api.Int(dataSlices),
 			ParitySlices: api.Int(paritySlices),
@@ -1404,7 +1404,7 @@ func TestBucketSingleProp(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Enable EC again
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckError(t, err)
@@ -1421,13 +1421,13 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable EC first
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Change mirroring threshold
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{UtilThresh: api.Int64(mirrorThreshold)},
 	},
 	)
@@ -1439,7 +1439,7 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Disable mirroring
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(false)},
 	})
 	tassert.CheckError(t, err)
@@ -1455,7 +1455,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 		Provider: cliBck.Provider,
 	}
 
-	_, err = api.SetBucketProps(baseParams, bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{Enabled: api.Bool(true)},
 	})
 	if err == nil {
@@ -1471,7 +1471,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 	var (
 		baseParams  = tutils.BaseAPIParams()
-		bucketProps = cmn.BucketPropsToUpdate{}
+		bucketProps = &cmn.BucketPropsToUpdate{}
 	)
 
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
@@ -1505,7 +1505,7 @@ func TestBucketInvalidName(t *testing.T) {
 			Name:     name,
 			Provider: cmn.ProviderAIS,
 		}
-		if err := api.CreateBucket(baseParams, bck); err == nil {
+		if err := api.CreateBucket(baseParams, bck, nil); err == nil {
 			tutils.DestroyBucket(t, proxyURL, bck)
 			t.Errorf("created bucket with invalid name %q", name)
 		}
@@ -1564,10 +1564,10 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		}
 	}
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 	{
 		baseParams := tutils.BaseAPIParams()
-		_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 			Mirror: &cmn.MirrorConfToUpdate{
 				Enabled: api.Bool(true),
 			},
@@ -1630,11 +1630,11 @@ func TestRemoteBucketMirror(t *testing.T) {
 	m.remotePuts(true /*evict*/)
 
 	// enable mirror
-	_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
-	defer api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	defer api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(false)},
 	})
 
@@ -1677,7 +1677,7 @@ func TestBucketReadOnly(t *testing.T) {
 		numGetsEachFile: 2,
 	}
 	m.init()
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 	baseParams := tutils.BaseAPIParams()
 
 	m.puts()
@@ -1689,7 +1689,7 @@ func TestBucketReadOnly(t *testing.T) {
 	// make bucket read-only
 	// NOTE: must allow PATCH - otherwise api.SetBucketProps a few lines down below won't work
 	aattrs := cmn.AccessRO | cmn.AccessPATCH
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)})
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)})
 	tassert.CheckFatal(t, err)
 
 	m.init()
@@ -1699,7 +1699,7 @@ func TestBucketReadOnly(t *testing.T) {
 	}
 
 	// restore write access
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{Access: api.AccessAttrs(p.Access)})
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(p.Access)})
 	tassert.CheckFatal(t, err)
 
 	// write some more and destroy
@@ -1727,7 +1727,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		tutils.DestroyBucket(t, m.proxyURL, dstBck)
 	}()
@@ -1782,7 +1782,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		// This bucket should be present.
 		tutils.DestroyBucket(t, m.proxyURL, dstBck)
@@ -1833,11 +1833,11 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(1)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	m.setRandBucketProps()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, tmpBck)
+	tutils.CreateFreshBucket(t, m.proxyURL, tmpBck, nil)
 
 	// Rename it
 	tutils.Logf("try rename %s => %s\n", m.bck, tmpBck)
@@ -1889,7 +1889,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		// This bucket should not be present (thus ignoring error) but
 		// try to delete in case something failed.
@@ -1988,10 +1988,11 @@ func TestRenameBucketWithBackend(t *testing.T) {
 		}
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck, cmn.BucketPropsToUpdate{BackendBck: &cmn.BckToUpdate{
-		Name:     api.String(cliBck.Name),
-		Provider: api.String(cliBck.Provider),
-	}})
+	tutils.CreateFreshBucket(t, proxyURL, bck,
+		&cmn.BucketPropsToUpdate{BackendBck: &cmn.BckToUpdate{
+			Name:     api.String(cliBck.Name),
+			Provider: api.String(cliBck.Provider),
+		}})
 	defer tutils.DestroyBucket(t, proxyURL, dstBck)
 
 	srcProps, err := api.HeadBucket(baseParams, bck)
@@ -2131,14 +2132,14 @@ func TestCopyBucket(t *testing.T) {
 			}
 
 			if bckTest.IsAIS() {
-				tutils.CreateFreshBucket(t, srcm.proxyURL, srcm.bck)
+				tutils.CreateFreshBucket(t, srcm.proxyURL, srcm.bck, nil)
 				srcm.setRandBucketProps()
 			}
 
 			if test.dstBckExist {
 				for _, dstm := range dstms {
 					if !dstm.bck.IsRemote() {
-						tutils.CreateFreshBucket(t, dstm.proxyURL, dstm.bck)
+						tutils.CreateFreshBucket(t, dstm.proxyURL, dstm.bck, nil)
 						dstm.setRandBucketProps()
 					}
 				}
@@ -2291,7 +2292,7 @@ func TestCopyBucketSimple(t *testing.T) {
 	}
 
 	tutils.Logln("Preparing a source bucket")
-	tutils.CreateFreshBucket(t, proxyURL, srcBck)
+	tutils.CreateFreshBucket(t, proxyURL, srcBck, nil)
 	m.init()
 
 	tutils.Logln("Putting objects to the source bucket")
@@ -2418,7 +2419,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
@@ -2498,7 +2499,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tutils.CreateFreshBucket(t, m.proxyURL, srcBck)
+	tutils.CreateFreshBucket(t, m.proxyURL, srcBck, nil)
 	defer func() {
 		tutils.DestroyBucket(t, m.proxyURL, dstBck1)
 		tutils.DestroyBucket(t, m.proxyURL, dstBck2)
@@ -2574,7 +2575,7 @@ func TestBackendBucket(t *testing.T) {
 
 	m.init()
 
-	tutils.CreateFreshBucket(t, proxyURL, aisBck)
+	tutils.CreateFreshBucket(t, proxyURL, aisBck, nil)
 
 	p, err := api.HeadBucket(baseParams, remoteBck)
 	tassert.CheckFatal(t, err)
@@ -2588,7 +2589,7 @@ func TestBackendBucket(t *testing.T) {
 	tassert.Fatalf(t, len(remoteObjList.Entries) > 0, "empty object list")
 
 	// Connect backend bucket to a aisBck
-	_, err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(remoteBck.Name),
 			Provider: api.String(remoteBck.Provider),
@@ -2633,7 +2634,7 @@ func TestBackendBucket(t *testing.T) {
 	)
 
 	// Disconnect backend bucket.
-	_, err = api.SetBucketProps(baseParams, aisBck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BucketPropsToUpdate{
 		BackendBck: &cmn.BckToUpdate{
 			Name:     api.String(""),
 			Provider: api.String(""),
@@ -2723,11 +2724,11 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	m.saveClusterState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	{
 		if mirrored {
-			_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					Type:            api.String(cksumType),
 					ValidateWarmGet: api.Bool(true),
@@ -2742,7 +2743,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			if m.smap.CountActiveTargets() < parityCnt+1 {
 				t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 			}
-			_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					Type:            api.String(cksumType),
 					ValidateWarmGet: api.Bool(true),
@@ -2756,7 +2757,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			})
 			tassert.CheckFatal(t, err)
 		} else {
-			_, err := api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					Type:            api.String(cksumType),
 					ValidateWarmGet: api.Bool(true),
@@ -2935,7 +2936,7 @@ func TestBucketListAndSummary(t *testing.T) {
 
 			expectedFiles := m.num
 			if bckTest.IsAIS() {
-				tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+				tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 				m.puts()
 			} else if bckTest.IsRemote() {
 				m.bck.Name = cliBck.Name

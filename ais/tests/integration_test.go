@@ -44,7 +44,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	m.expectTargets(2)
 
 	// Step 1.
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Step 2.
 	target := m.unregisterTarget()
@@ -95,7 +95,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	m.expectProxies(3)
 
 	// Step 1.
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Step 2.
 	target := m.unregisterTarget()
@@ -183,7 +183,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Step 2
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Step 3
 	m.puts()
@@ -246,7 +246,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Unregister target 0
 	tutils.Logf("Unregister target %s\n", targets[0].ID())
@@ -309,7 +309,7 @@ func TestAckRebalance(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(3)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	target := m.unregisterTarget()
 
@@ -338,7 +338,7 @@ func TestStressRebalance(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(4)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	for i := 1; i <= 3; i++ {
 		tutils.Logf("Iteration #%d ======\n", i)
@@ -435,7 +435,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Unregister target
 	target0, target1 := targets[0], targets[1]
@@ -513,7 +513,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(3)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	target := m.unregisterTarget()
 
@@ -559,7 +559,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(2)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Select a random target to disable one of its mountpaths,
 	// and another random target to unregister.
@@ -661,7 +661,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(1)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
@@ -725,7 +725,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(3)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	target := m.unregisterTarget(true /*force*/)
 
@@ -802,7 +802,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			tutils.CreateFreshBucket(t, m.proxyURL, bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, bck, nil)
 		}()
 	}
 	wg.Wait()
@@ -844,7 +844,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -884,7 +884,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.expectTargets(1)
 	target, _ := m.smap.GetRandTarget()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	if containers.DockerRunning() {
 		err := containers.DockerCreateMpathDir(0, newMountpath)
@@ -944,7 +944,7 @@ func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	defer func() {
 		if !containers.DockerRunning() {
@@ -1046,7 +1046,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1094,7 +1094,7 @@ func TestForwardCP(t *testing.T) {
 	origID, origURL := m.smap.Primary.ID(), m.smap.Primary.PublicNet.DirectURL
 	nextProxyID, nextProxyURL, _ := chooseNextProxy(m.smap)
 
-	tutils.CreateFreshBucket(t, nextProxyURL, m.bck)
+	tutils.CreateFreshBucket(t, nextProxyURL, m.bck, nil)
 	tutils.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)
 
 	// Step 3.
@@ -1134,7 +1134,7 @@ func TestAtimeRebalance(t *testing.T) {
 	m.saveClusterState()
 	m.expectTargets(2)
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	target := m.unregisterTarget()
 
@@ -1208,7 +1208,7 @@ func TestAtimeLocalGet(t *testing.T) {
 		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
@@ -1348,7 +1348,7 @@ func TestAtimeLocalPut(t *testing.T) {
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bck)
+	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	timeBeforePut := time.Now()
 	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bck: bck, Object: objectName, Reader: objectContent})
@@ -1381,7 +1381,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	target := m.unregisterTarget()
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	rebID := m.reregisterTarget(target)
 
@@ -1425,7 +1425,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -1462,7 +1462,7 @@ func TestRenewRebalance(t *testing.T) {
 	target := m.unregisterTarget()
 
 	// Step 2: Create an ais bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
@@ -1530,10 +1530,10 @@ func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	}
 
 	// Step 1: Create a local bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Step 2: Make the bucket redundant
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
 			Enabled: api.Bool(true),
 			Copies:  api.Int64(int64(copies)),
@@ -1590,10 +1590,10 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 	}
 
 	// Step 1: Create a local bucket
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	// Step 2: Make the bucket redundant
-	_, err = api.SetBucketProps(baseParams, m.bck, cmn.BucketPropsToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
 			Enabled: api.Bool(true),
 			Copies:  api.Int64(int64(mpathCount)),
@@ -1652,7 +1652,7 @@ func TestICRebalance(t *testing.T) {
 	m.proxyURL = psi.URL(cmn.NetworkPublic)
 	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 
@@ -1716,7 +1716,7 @@ func TestICDecommission(t *testing.T) {
 	tutils.Logf("Monitoring node: %s\n", psi)
 	icNode := tutils.GetICProxy(t, m.smap, psi.ID())
 
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	m.puts()
 

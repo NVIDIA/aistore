@@ -223,7 +223,7 @@ func (p *proxyrunner) _mirrorBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	)
 	cmn.Assert(present)
 	nprops := bprops.Clone()
-	nprops.Apply(*ctx.propsToUpdate)
+	nprops.Apply(ctx.propsToUpdate)
 	ctx.revertProps = &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
 			Copies:  &bprops.Mirror.Copies,
@@ -236,7 +236,7 @@ func (p *proxyrunner) _mirrorBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }
 func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck *cluster.Bck,
-	propsToUpdate cmn.BucketPropsToUpdate) (xactID string, err error) {
+	propsToUpdate *cmn.BucketPropsToUpdate) (xactID string, err error) {
 	var (
 		nprops *cmn.BucketProps   // complete version of bucket props containing propsToUpdate changes
 		nmsg   = &cmn.ActionMsg{} // with nprops
@@ -317,7 +317,7 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 		msg:           msg,
 		txnID:         c.uuid,
 		setProps:      nprops,
-		propsToUpdate: &propsToUpdate,
+		propsToUpdate: propsToUpdate,
 		bcks:          []*cluster.Bck{bck},
 	}
 	bmd, err := p.owner.bmd.modify(ctx)
@@ -352,7 +352,7 @@ func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error
 
 	if ctx.msg.Action == cmn.ActSetBprops {
 		bck.Props = bprops
-		ctx.setProps, err = p.makeNewBckProps(bck, *ctx.propsToUpdate)
+		ctx.setProps, err = p.makeNewBckProps(bck, ctx.propsToUpdate)
 		if err != nil {
 			return err
 		}
@@ -667,7 +667,7 @@ func (p *proxyrunner) _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) erro
 		return nil
 	}
 	nprops := bprops.Clone()
-	nprops.Apply(*ctx.propsToUpdate)
+	nprops.Apply(ctx.propsToUpdate)
 	clone.set(bck, nprops)
 	return nil
 }
@@ -873,7 +873,7 @@ func (p *proxyrunner) undoUpdateCopies(msg *cmn.ActionMsg, bck *cluster.Bck, pro
 }
 
 // Make and validate new bucket props.
-func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate cmn.BucketPropsToUpdate,
+func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate *cmn.BucketPropsToUpdate,
 	creating ...bool) (nprops *cmn.BucketProps, err error) {
 	var (
 		cfg    = cmn.GCO.Get()

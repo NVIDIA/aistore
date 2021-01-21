@@ -623,7 +623,7 @@ func TestDistributedSort(t *testing.T) {
 			m.expectTargets(3)
 
 			// Create ais bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -669,7 +669,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			df.init()
 
 			// Create local output bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBck)
+			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBck, nil)
 
 			tutils.Logln("starting distributed sort...")
 			rs := df.gen()
@@ -679,7 +679,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 
 			// Now destroy output bucket and create input bucket
 			tutils.DestroyBucket(t, m.proxyURL, df.outputBck)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			tutils.Logln("starting second distributed sort...")
 			if _, err := api.StartDSort(df.baseParams, rs); err == nil {
@@ -710,7 +710,7 @@ func TestDistributedSortWithEmptyBucket(t *testing.T) {
 			// Initialize ioContext
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 
@@ -753,10 +753,10 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 			// Create ais buckets
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			// Create local output bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBck)
+			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -790,7 +790,7 @@ func TestDistributedSortParallel(t *testing.T) {
 
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			wg := &sync.WaitGroup{}
 			for i := 0; i < dSortsCount; i++ {
@@ -821,7 +821,7 @@ func TestDistributedSortChain(t *testing.T) {
 
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			for i := 0; i < dSortsCount; i++ {
 				dispatchDSortJob(m, dsorterType, i)
@@ -850,7 +850,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -888,7 +888,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -932,7 +932,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -969,7 +969,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 
 	m.saveClusterState()
 	m.expectTargets(3)
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	df.init()
 	df.createInputShards()
@@ -1031,7 +1031,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 
 	m.saveClusterState()
 	m.expectTargets(3)
-	tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 	df.init()
 	df.createInputShards()
@@ -1095,7 +1095,7 @@ func TestDistributedSortZip(t *testing.T) {
 
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1136,7 +1136,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1201,7 +1201,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 
 					m.saveClusterState()
 					m.expectTargets(3)
-					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 					df.init()
 					df.createInputShards()
@@ -1256,7 +1256,7 @@ func TestDistributedSortAbort(t *testing.T) {
 
 			m.saveClusterState()
 			m.expectTargets(3)
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1298,7 +1298,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1346,7 +1346,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 
 			df.init()
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.createInputShards()
 
@@ -1452,7 +1452,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						tutils.WaitForRebalanceToComplete(t, df.baseParams)
 					}()
 
-					tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 					df.createInputShards()
 
@@ -1510,7 +1510,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 			target := m.unregisterTarget(true /*force*/)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.createInputShards()
 
@@ -1560,7 +1560,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1604,7 +1604,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 
@@ -1653,7 +1653,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1699,7 +1699,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			switch scope {
 			case scopeConfig:
@@ -1757,7 +1757,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			switch scope {
 			case scopeConfig:
@@ -1826,10 +1826,10 @@ func TestDistributedSortOrderFile(t *testing.T) {
 
 			df.init()
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			// Create local output bucket
-			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBck)
+			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBck, nil)
 
 			df.createInputShards()
 
@@ -1904,7 +1904,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1943,7 +1943,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -1985,7 +1985,7 @@ func TestDistributedSortWithLongerExt(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()
@@ -2027,7 +2027,7 @@ func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
 			m.saveClusterState()
 			m.expectTargets(3)
 
-			tutils.CreateFreshBucket(t, m.proxyURL, m.bck)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
 			df.init()
 			df.createInputShards()

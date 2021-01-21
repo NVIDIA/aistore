@@ -16,7 +16,7 @@ var _ = Describe("API", func() {
 	Describe("Apply", func() {
 		DescribeTable("should successfully apply all the props",
 			func(src cmn.BucketProps, props cmn.BucketPropsToUpdate, expect cmn.BucketProps) {
-				src.Apply(props)
+				src.Apply(&props)
 				Expect(src).To(Equal(expect))
 			},
 			Entry("non-nested field",

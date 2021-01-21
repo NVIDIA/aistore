@@ -170,9 +170,9 @@ func TestNamespace(t *testing.T) {
 			m2.init()
 
 			origBuckets := listAllBuckets(t, baseParams, test.remote)
-			err := api.CreateBucket(baseParams, m1.bck)
+			err := api.CreateBucket(baseParams, m1.bck, nil)
 			tassert.CheckFatal(t, err)
-			err = api.CreateBucket(baseParams, m2.bck)
+			err = api.CreateBucket(baseParams, m2.bck, nil)
 			tassert.CheckFatal(t, err)
 
 			defer func() {
@@ -281,7 +281,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 	m1.init()
 	m2.init()
 
-	err := api.CreateBucket(baseParams, m1.bck)
+	err := api.CreateBucket(baseParams, m1.bck, nil)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		err := api.DestroyBucket(baseParams, m1.bck)
@@ -332,7 +332,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 
 	m.init()
 
-	err := api.CreateBucket(baseParams, m.bck)
+	err := api.CreateBucket(baseParams, m.bck, nil)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		// Delete just in case something goes wrong (therefore ignoring error)

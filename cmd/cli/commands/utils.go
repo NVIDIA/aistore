@@ -773,7 +773,7 @@ func makeBckPropPairs(values []string) (nvs cmn.SimpleKVs, err error) {
 	return
 }
 
-func parseBckPropsFromContext(c *cli.Context) (props cmn.BucketPropsToUpdate, err error) {
+func parseBckPropsFromContext(c *cli.Context) (props *cmn.BucketPropsToUpdate, err error) {
 	propArgs := c.Args().Tail()
 
 	if c.Command.Name == subcmdBucket {

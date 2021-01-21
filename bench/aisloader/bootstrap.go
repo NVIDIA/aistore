@@ -610,7 +610,7 @@ func setupBucket(runParams *params) error {
 	}
 
 	if !exists {
-		if err := api.CreateBucket(runParams.bp, runParams.bck); err != nil {
+		if err := api.CreateBucket(runParams.bp, runParams.bck, nil); err != nil {
 			return fmt.Errorf("failed to create ais bucket %s, err = %s", runParams.bck, err)
 		}
 	}
@@ -644,7 +644,7 @@ func setupBucket(runParams *params) error {
 		change = true
 	}
 	if change {
-		if _, err = api.SetBucketProps(runParams.bp, runParams.bck, propsToUpdate); err != nil {
+		if _, err = api.SetBucketProps(runParams.bp, runParams.bck, &propsToUpdate); err != nil {
 			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bck, err)
 		}
 	}
