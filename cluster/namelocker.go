@@ -24,14 +24,14 @@ type (
 		m  map[string]*lockInfo
 	}
 	lockInfo struct {
+		room      *waitingRoom
 		rc        int
 		exclusive bool
-		room      *waitingRoom
 	}
 	waitingRoom struct {
+		cond     *sync.Cond
 		waiting  int  // Number of threads waiting in the room.
 		finished bool // Determines if the action for the waiting room has been finished.
-		cond     *sync.Cond
 	}
 )
 
