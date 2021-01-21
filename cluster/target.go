@@ -44,7 +44,7 @@ const (
 	GFNLocal
 )
 
-type CloudProvider interface {
+type BackendProvider interface {
 	Provider() string
 	MaxPageSize() uint
 
@@ -125,7 +125,7 @@ type Target interface {
 	SmallMMSA() *memsys.MMSA
 
 	// Cloud related functions.
-	Cloud(*Bck) CloudProvider
+	Backend(*Bck) BackendProvider
 	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, errCode int, err error)
 
 	// Object related functions.

@@ -195,7 +195,7 @@ func (r *listRangeBase) iteratePrefix(args *xreg.DeletePrefetchArgs, smap *clust
 			walk := objwalk.NewWalk(args.Ctx, r.t, bck, msg)
 			objList, err = walk.DefaultLocalObjPage(msg)
 		} else {
-			objList, _, err = r.t.Cloud(bck).ListObjects(args.Ctx, bck, msg)
+			objList, _, err = r.t.Backend(bck).ListObjects(args.Ctx, bck, msg)
 		}
 		if err != nil {
 			return err

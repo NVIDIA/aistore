@@ -1,8 +1,8 @@
-// Package cloud contains implementation of various backend providers.
+// Package backend contains implementation of various backend providers.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cloud
+package backend
 
 import (
 	"context"

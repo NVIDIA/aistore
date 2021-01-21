@@ -34,7 +34,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 	}
 
 	if !bck.IsAIS() && !msg.IsFlagSet(cmn.SelectCached) {
-		maxCloudPageSize := t.Cloud(bck).MaxPageSize()
+		maxCloudPageSize := t.Backend(bck).MaxPageSize()
 		if msg.PageSize == 0 {
 			msg.PageSize = maxCloudPageSize
 		} else if msg.PageSize > maxCloudPageSize {

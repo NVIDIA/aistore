@@ -1,10 +1,10 @@
 // +build azure
 
-// Package cloud contains implementation of various backend providers.
+// Package backend contains implementation of various backend providers.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cloud
+package backend
 
 import (
 	"context"
@@ -55,7 +55,7 @@ const (
 )
 
 // interface guard
-var _ cluster.CloudProvider = (*azureProvider)(nil)
+var _ cluster.BackendProvider = (*azureProvider)(nil)
 
 func azureProto() string {
 	proto := os.Getenv(azureProtoEnvVar)
@@ -115,7 +115,7 @@ func azureURL() string {
 
 // Only one authentication way is supported: with Shared Credentials that
 // requires Account name and key.
-func NewAzure(t cluster.Target) (cluster.CloudProvider, error) {
+func NewAzure(t cluster.Target) (cluster.BackendProvider, error) {
 	path := azureURL()
 	u, err := url.Parse(path)
 	if err != nil {

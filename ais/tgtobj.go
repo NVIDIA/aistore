@@ -243,7 +243,7 @@ func (poi *putObjInfo) putCloud() (version string, errCode int, err error) {
 		return
 	}
 
-	cloud := poi.t.Cloud(bck)
+	cloud := poi.t.Backend(bck)
 	customMD := cmn.SimpleKVs{
 		cluster.SourceObjMD: cloud.Provider(),
 	}
@@ -268,7 +268,7 @@ func (poi *putObjInfo) putRemoteAIS() (version string, errCode int, err error) {
 		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
 		return
 	}
-	version, errCode, err = poi.t.Cloud(bck).PutObj(poi.ctx, fh, lom)
+	version, errCode, err = poi.t.Backend(bck).PutObj(poi.ctx, fh, lom)
 	return
 }
 
@@ -1175,7 +1175,7 @@ func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo st
 		return false, 0, err
 	}
 
-	if _, _, err = coi.t.Cloud(coi.BckTo).PutObj(context.Background(), reader, dstLOM); err != nil {
+	if _, _, err = coi.t.Backend(coi.BckTo).PutObj(context.Background(), reader, dstLOM); err != nil {
 		return false, 0, err
 	}
 	return true, objMeta.Size(), nil

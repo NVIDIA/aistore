@@ -17,7 +17,7 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/ais/cloud"
+	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -45,7 +45,7 @@ func (t *targetrunner) MMSA() *memsys.MMSA          { return t.gmm }
 func (t *targetrunner) SmallMMSA() *memsys.MMSA     { return t.smm }
 func (t *targetrunner) DB() dbdriver.Driver         { return t.dbDriver }
 
-func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
+func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Bck.IsRemoteAIS() {
 		return t.cloud[cmn.ProviderAIS]
 	}
@@ -60,7 +60,7 @@ func (t *targetrunner) Cloud(bck *cluster.Bck) cluster.CloudProvider {
 	if ext, ok := t.cloud[providerName]; ok {
 		return ext
 	}
-	c, _ := cloud.NewDummyCloud(t)
+	c, _ := backend.NewDummyBackend(t)
 	return c
 }
 
@@ -298,7 +298,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 		cmn.Assertf(false, "%v", ty)
 	}
 
-	if errCode, err = t.Cloud(lom.Bck()).GetObj(ctx, lom); err != nil {
+	if errCode, err = t.Backend(lom.Bck()).GetObj(ctx, lom); err != nil {
 		lom.Unlock(true)
 		glog.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
 		return

@@ -58,7 +58,7 @@ func (*TargetMock) GetCold(ctx context.Context, lom *LOM, _ GetColdType) (int, e
 }
 func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)      { return nil, nil }
 func (*TargetMock) DB() dbdriver.Driver                                { return nil }
-func (*TargetMock) Cloud(_ *Bck) CloudProvider                         { return nil }
+func (*TargetMock) Backend(_ *Bck) BackendProvider                     { return nil }
 func (*TargetMock) StartTime() time.Time                               { return time.Now() }
 func (*TargetMock) GFN(_ GFNType) GFN                                  { return nil }
 func (*TargetMock) LookupRemoteSingle(_ *LOM, _ *Snode) bool           { return false }

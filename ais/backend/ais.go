@@ -1,8 +1,8 @@
-// Package cloud contains implementation of various backend providers.
+// Package backend contains implementation of various backend providers.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cloud
+package backend
 
 import (
 	"context"
@@ -25,39 +25,39 @@ const (
 )
 
 type (
-	remAisClust struct {
+	remAISCluster struct {
 		url  string
 		smap *cluster.Smap
-		m    *AisCloudProvider
+		m    *AISBackendProvider
 
 		uuid string
 		bp   api.BaseParams
 	}
-	AisCloudProvider struct {
+	AISBackendProvider struct {
 		t      cluster.Target
 		mu     *sync.RWMutex
-		remote map[string]*remAisClust // by UUID:  1 to 1
-		alias  map[string]string       // by alias: many to 1 UUID
+		remote map[string]*remAISCluster // by UUID:  1 to 1
+		alias  map[string]string         // by alias: many to 1 UUID
 	}
 )
 
 // interface guard
-var _ cluster.CloudProvider = (*AisCloudProvider)(nil)
+var _ cluster.BackendProvider = (*AISBackendProvider)(nil)
 
 // TODO - FIXME: review/refactor try{}
 // TODO: house-keep refreshing remote Smap
 // TODO: utilize m.remote[uuid].smap to load balance and retry disconnects
 
-func NewAIS(t cluster.Target) *AisCloudProvider {
-	return &AisCloudProvider{
+func NewAIS(t cluster.Target) *AISBackendProvider {
+	return &AISBackendProvider{
 		t:      t,
 		mu:     &sync.RWMutex{},
-		remote: make(map[string]*remAisClust),
+		remote: make(map[string]*remAISCluster),
 		alias:  make(map[string]string),
 	}
 }
 
-func (r *remAisClust) String() string {
+func (r *remAISCluster) String() string {
 	var aliases []string
 	for alias, uuid := range r.m.alias {
 		if uuid == r.smap.UUID {
@@ -71,7 +71,7 @@ func (r *remAisClust) String() string {
 //       in addition to the basic GetObj, et al.
 
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
-func (m *AisCloudProvider) Apply(v interface{}, action string) error {
+func (m *AISBackendProvider) Apply(v interface{}, action string) error {
 	var (
 		cfg             = cmn.GCO.Get()
 		clusterConf, ok = v.(cmn.BackendConfAIS)
@@ -95,7 +95,7 @@ func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 	}
 	// init and attach
 	for alias, clusterURLs := range clusterConf {
-		remAis := &remAisClust{}
+		remAis := &remAISCluster{}
 		if offline, err := remAis.init(alias, clusterURLs, cfg); err != nil { // and check connectivity
 			if offline {
 				continue
@@ -112,7 +112,7 @@ func (m *AisCloudProvider) Apply(v interface{}, action string) error {
 // At the same time a cluster may have registered both types of remote AIS
 // clusters(HTTP and HTTPS). So, the method must use both kind of clients and
 // select the correct one at the moment it sends a request.
-func (m *AisCloudProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.BackendInfoAIS) {
+func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.BackendInfoAIS) {
 	var (
 		cfg         = cmn.GCO.Get()
 		httpClient  = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout})
@@ -179,7 +179,7 @@ func (m *AisCloudProvider) GetInfo(clusterConf cmn.BackendConfAIS) (cia cmn.Back
 // same time. So, the method must use both kind of clients and select the
 // correct one at the moment it sends a request. First successful request
 // saves the good client for the future usage.
-func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (offline bool, err error) {
+func (r *remAISCluster) init(alias string, confURLs []string, cfg *cmn.Config) (offline bool, err error) {
 	var (
 		url           string
 		remSmap, smap *cluster.Smap
@@ -230,7 +230,7 @@ func (r *remAisClust) init(alias string, confURLs []string, cfg *cmn.Config) (of
 
 // NOTE: supporting remote attachments both by alias and by UUID interchangeably,
 //       with mappings: 1(uuid) to 1(cluster) and 1(alias) to 1(cluster)
-func (m *AisCloudProvider) add(newAis *remAisClust, newAlias string) (err error) {
+func (m *AISBackendProvider) add(newAis *remAISCluster, newAlias string) (err error) {
 	if remAis, ok := m.remote[newAlias]; ok {
 		return fmt.Errorf("cannot attach %s: alias %q is already in use as uuid for %s",
 			newAlias, newAlias, remAis)
@@ -274,7 +274,7 @@ ad:
 	return
 }
 
-func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
+func (m *AISBackendProvider) remoteCluster(uuid string) (*remAISCluster, error) {
 	m.mu.RLock()
 	remAis, ok := m.remote[uuid]
 	if !ok {
@@ -291,7 +291,7 @@ func (m *AisCloudProvider) remoteCluster(uuid string) (*remAisClust, error) {
 	return remAis, nil
 }
 
-func (m *AisCloudProvider) try(remoteBck cmn.Bck, f func(bck cmn.Bck) error) (err error) {
+func (m *AISBackendProvider) try(remoteBck cmn.Bck, f func(bck cmn.Bck) error) (err error) {
 	remoteBck.Ns.UUID = ""
 
 	return cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
@@ -314,17 +314,17 @@ func extractErrCode(e error) (int, error) {
 }
 
 ////////////////////////////////
-// cluster.CloudProvider APIs //
+// cluster.BackendProvider APIs //
 ////////////////////////////////
 
-func (m *AisCloudProvider) Provider() string  { return cmn.ProviderAIS }
-func (m *AisCloudProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
+func (m *AISBackendProvider) Provider() string  { return cmn.ProviderAIS }
+func (m *AISBackendProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
 
-func (m *AisCloudProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (m *AISBackendProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
 	return 0, nil
 }
 
-func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
 	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
@@ -347,7 +347,7 @@ func (m *AisCloudProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bc
 	return bckProps, errCode, err
 }
 
-func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (m *AISBackendProvider) ListObjects(ctx context.Context, remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	cmn.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
@@ -380,9 +380,9 @@ func (m *AisCloudProvider) ListObjects(ctx context.Context, remoteBck *cluster.B
 	return bckList, errCode, err
 }
 
-func (m *AisCloudProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (buckets cmn.BucketNames, err error) {
+func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) (buckets cmn.BucketNames, err error) {
 	var (
-		aisCluster  *remAisClust
+		aisCluster  *remAISCluster
 		remoteQuery = cmn.QueryBcks{Provider: cmn.ProviderAIS, Ns: cmn.Ns{Name: query.Ns.Name}}
 	)
 	if aisCluster, err = m.remoteCluster(uuid); err != nil {
@@ -403,7 +403,7 @@ func (m *AisCloudProvider) listBucketsCluster(uuid string, query cmn.QueryBcks) 
 	return
 }
 
-func (m *AisCloudProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+func (m *AISBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
 	if !query.Ns.IsAnyRemote() {
 		buckets, err = m.listBucketsCluster(query.Ns.UUID, query)
 	} else {
@@ -419,7 +419,7 @@ func (m *AisCloudProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks)
 	return
 }
 
-func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -437,7 +437,7 @@ func (m *AisCloudProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMe
 	return objMeta, errCode, err
 }
 
-func (m *AisCloudProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (m *AISBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -460,7 +460,7 @@ func (m *AisCloudProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCod
 	return
 }
 
-func (m *AisCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (m *AISBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -472,7 +472,7 @@ func (m *AisCloudProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (
 	return r, nil, errCode, err
 }
 
-func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
+func (m *AISBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
@@ -496,7 +496,7 @@ func (m *AisCloudProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster
 	return lom.Version(), errCode, err
 }
 
-func (m *AisCloudProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (m *AISBackendProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
 	remoteBck := lom.Bck().Bck
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {

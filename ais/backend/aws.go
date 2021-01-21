@@ -1,10 +1,10 @@
 // +build aws
 
-// Package cloud contains implementation of various backend providers.
+// Package backend contains implementation of various backend providers.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cloud
+package backend
 
 import (
 	"context"
@@ -45,9 +45,9 @@ type (
 )
 
 // interface guard
-var _ cluster.CloudProvider = (*awsProvider)(nil)
+var _ cluster.BackendProvider = (*awsProvider)(nil)
 
-func NewAWS(t cluster.Target) (cluster.CloudProvider, error) { return &awsProvider{t: t}, nil }
+func NewAWS(t cluster.Target) (cluster.BackendProvider, error) { return &awsProvider{t: t}, nil }
 
 // A session is created using default credentials from
 // configuration file in ~/.aws/credentials and environment variables

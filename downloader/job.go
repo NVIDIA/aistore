@@ -269,7 +269,7 @@ func (j *remoteBucketDlJob) getNextObjs() error {
 	var (
 		sid   = j.t.Snode().ID()
 		smap  = j.t.Sowner().Get()
-		cloud = j.t.Cloud(j.bck)
+		cloud = j.t.Backend(j.bck)
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {

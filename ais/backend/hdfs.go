@@ -1,10 +1,10 @@
 // +build hdfs
 
-// Package cloud contains implementation of various backend providers.
+// Package backend contains implementation of various backend providers.
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
-package cloud
+package backend
 
 import (
 	"context"
@@ -32,9 +32,9 @@ type (
 )
 
 // interface guard
-var _ cluster.CloudProvider = (*hdfsProvider)(nil)
+var _ cluster.BackendProvider = (*hdfsProvider)(nil)
 
-func NewHDFS(t cluster.Target) (cluster.CloudProvider, error) {
+func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
 	providerConf, ok := cmn.GCO.Get().Backend.ProviderConf(cmn.ProviderHDFS)
 	cmn.Assert(ok)
 	hdfsConf := providerConf.(cmn.BackendConfHDFS)

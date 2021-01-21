@@ -1,10 +1,10 @@
 // +build gcp
 
-// Package cloud contains implementation of various backend providers.
+// Package backend contains implementation of various backend providers.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cloud
+package backend
 
 import (
 	"context"
@@ -45,7 +45,7 @@ type (
 )
 
 // interface guard
-var _ cluster.CloudProvider = (*gcpProvider)(nil)
+var _ cluster.BackendProvider = (*gcpProvider)(nil)
 
 func readCredFile() (projectID string) {
 	credFile, err := os.Open(os.Getenv(credPathEnvVar))
@@ -61,7 +61,7 @@ func readCredFile() (projectID string) {
 	return
 }
 
-func NewGCP(t cluster.Target) (cluster.CloudProvider, error) {
+func NewGCP(t cluster.Target) (cluster.BackendProvider, error) {
 	var (
 		projectID     string
 		credProjectID = readCredFile()

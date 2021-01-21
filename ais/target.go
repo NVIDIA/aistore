@@ -19,7 +19,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/ais/cloud"
+	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -70,7 +70,7 @@ type (
 		timedLookup atomic.Bool
 		refCount    uint32
 	}
-	clouds map[string]cluster.CloudProvider
+	clouds map[string]cluster.BackendProvider
 	// main
 	targetrunner struct {
 		httprunner
@@ -283,7 +283,7 @@ func (t *targetrunner) Run() error {
 
 func (c clouds) init(t *targetrunner) {
 	config := cmn.GCO.Get()
-	ais := cloud.NewAIS(t)
+	ais := backend.NewAIS(t)
 	c[cmn.ProviderAIS] = ais // ais cloud is always present
 	if aisConf, ok := config.Backend.ProviderConf(cmn.ProviderAIS); ok {
 		if err := ais.Apply(aisConf, "init"); err != nil {
@@ -291,7 +291,7 @@ func (c clouds) init(t *targetrunner) {
 		}
 	}
 
-	c[cmn.ProviderHTTP], _ = cloud.NewHTTP(t, config)
+	c[cmn.ProviderHTTP], _ = backend.NewHTTP(t, config)
 	if err := c.initExt(t); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
@@ -303,13 +303,13 @@ func (c clouds) initExt(t *targetrunner) (err error) {
 	for provider := range config.Backend.Providers {
 		switch provider {
 		case cmn.ProviderAmazon:
-			c[provider], err = cloud.NewAWS(t)
+			c[provider], err = backend.NewAWS(t)
 		case cmn.ProviderAzure:
-			c[provider], err = cloud.NewAzure(t)
+			c[provider], err = backend.NewAzure(t)
 		case cmn.ProviderGoogle:
-			c[provider], err = cloud.NewGCP(t)
+			c[provider], err = backend.NewGCP(t)
 		case cmn.ProviderHDFS:
-			c[provider], err = cloud.NewHDFS(t)
+			c[provider], err = backend.NewHDFS(t)
 		default:
 			err = fmt.Errorf("unknown backend provider: %q", provider)
 		}
@@ -642,7 +642,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// + cloud
-	bucketProps, code, err = t.Cloud(request.bck).HeadBucket(ctx, request.bck)
+	bucketProps, code, err = t.Backend(request.bck).HeadBucket(ctx, request.bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
@@ -987,7 +987,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		}
 		lom.ToHTTPHdr(hdr)
 	} else {
-		objMeta, errCode, err := t.Cloud(lom.Bck()).HeadObj(context.Background(), lom)
+		objMeta, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: HEAD request failed, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errCode)
@@ -1110,7 +1110,7 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 // should be called only if the local copy exists
 func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, errCode int, err error) {
 	var objMeta cmn.SimpleKVs
-	objMeta, errCode, err = t.Cloud(lom.Bck()).HeadObj(ctx, lom)
+	objMeta, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return
@@ -1161,7 +1161,7 @@ func (t *targetrunner) _listBcks(query cmn.QueryBcks, cfg *cmn.Config) (names cm
 		names = t.selectBMDBuckets(t.owner.bmd.get(), query)
 	} else {
 		bck := cluster.NewBck("", query.Provider, query.Ns)
-		names, errCode, err = t.Cloud(bck).ListBuckets(context.Background(), query)
+		names, errCode, err = t.Backend(bck).ListBuckets(context.Background(), query)
 		sort.Sort(names)
 	}
 	return
@@ -1285,7 +1285,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 	}
 
 	if delFromCloud {
-		if errCode, err := t.Cloud(lom.Bck()).DeleteObj(ctx, lom); err != nil {
+		if errCode, err := t.Backend(lom.Bck()).DeleteObj(ctx, lom); err != nil {
 			cloudErr = err
 			cloudErrCode = errCode
 			t.statsT.Add(stats.DeleteCount, 1)

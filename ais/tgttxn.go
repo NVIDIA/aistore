@@ -159,7 +159,7 @@ func (t *targetrunner) createBucket(c *txnServerCtx) error {
 					return err
 				}
 			}
-			if _, err := t.Cloud(c.bck).CreateBucket(context.Background(), c.bck); err != nil {
+			if _, err := t.Backend(c.bck).CreateBucket(context.Background(), c.bck); err != nil {
 				return err
 			}
 		}

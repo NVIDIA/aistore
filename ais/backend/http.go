@@ -1,8 +1,8 @@
-// Package cloud contains implementation of various backend providers.
+// Package backend contains implementation of various backend providers.
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package cloud
+package backend
 
 import (
 	"context"
@@ -28,9 +28,9 @@ type (
 )
 
 // interface guard
-var _ cluster.CloudProvider = (*httpProvider)(nil)
+var _ cluster.BackendProvider = (*httpProvider)(nil)
 
-func NewHTTP(t cluster.Target, config *cmn.Config) (cluster.CloudProvider, error) {
+func NewHTTP(t cluster.Target, config *cmn.Config) (cluster.BackendProvider, error) {
 	hp := &httpProvider{t: t}
 	hp.httpClient = cmn.NewClient(cmn.TransportArgs{
 		Timeout:         config.Client.TimeoutLong,
