@@ -531,9 +531,9 @@ func updateLongRunParams(c *cli.Context) error {
 // Utility functions
 //
 
-// Users can pass in a delimiter separated list
-func makeList(list, delimiter string) []string {
-	cleanList := strings.Split(list, delimiter)
+// Users can pass in a comma-separated list
+func makeList(list string) []string {
+	cleanList := strings.Split(list, ",")
 	for ii, val := range cleanList {
 		cleanList[ii] = strings.TrimSpace(val)
 	}
@@ -549,7 +549,7 @@ func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
 	nvs = cmn.SimpleKVs{}
 	for i < ll {
 		if args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator) {
-			pairs := makeList(args[i], keyAndValueSeparator)
+			pairs := strings.SplitN(args[i], keyAndValueSeparator, 2)
 			nvs[pairs[0]] = pairs[1]
 			i++
 		} else if i < ll-2 && args[i+1] == keyAndValueSeparator {

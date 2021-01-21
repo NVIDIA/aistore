@@ -660,7 +660,7 @@ func calcPutRefresh(c *cli.Context) time.Duration {
 func buildObjStatTemplate(props string, showHeaders bool) string {
 	var (
 		headSb, bodySb strings.Builder
-		propsList      = makeList(props, ",")
+		propsList      = makeList(props)
 	)
 	for _, field := range propsList {
 		if _, ok := templates.ObjStatMap[field]; !ok {
@@ -733,7 +733,7 @@ func listOrRangeOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 // List handler
 func listOp(c *cli.Context, command string, bck cmn.Bck) (err error) {
 	var (
-		fileList = makeList(parseStrFlag(c, listFlag), ",")
+		fileList = makeList(parseStrFlag(c, listFlag))
 		xactID   string
 	)
 

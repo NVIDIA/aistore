@@ -498,7 +498,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	bckArgs := makeList(parseStrFlag(c, listBucketsFlag), ",")
+	bckArgs := makeList(parseStrFlag(c, listBucketsFlag))
 	buckets := make([]cmn.Bck, len(bckArgs))
 	for idx, bckArg := range bckArgs {
 		bck, err := parseBckURI(c, bckArg)

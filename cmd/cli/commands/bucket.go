@@ -501,7 +501,7 @@ func buildOutputTemplate(props string, showHeaders bool) string {
 		headSb strings.Builder
 		bodySb strings.Builder
 
-		propsList = makeList(props, ",")
+		propsList = makeList(props)
 	)
 
 	bodySb.WriteString("{{range $obj := .}}")

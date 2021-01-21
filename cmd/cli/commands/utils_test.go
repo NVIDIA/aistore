@@ -255,6 +255,10 @@ func TestMakePairs(t *testing.T) {
 			[]string{"key1=value1", "key2", "value2", "key3=value3"},
 			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"},
 		},
+		{
+			[]string{"key1=value11=value12", "key2", "value21=value22", "key3=value31=value32,value33=value34"},
+			map[string]string{"key1": "value11=value12", "key2": "value21=value22", "key3": "value31=value32,value33=value34"},
+		},
 	}
 
 	for _, test := range makePairsTest {
