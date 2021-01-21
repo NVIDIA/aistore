@@ -180,17 +180,15 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
-		var (
-			value string
-			ok    bool
-		)
-		if value, ok = msg.Value.(string); !ok {
-			t.invalmsghdlrf(w, r, "failed to parse action %q value: (%v, %T) not a string", cmn.ActSetConfig, msg.Value, msg.Value)
+		transient := cmn.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
+		toUpdate := &cmn.ConfigToUpdate{}
+		if err := cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
+			t.invalmsghdlrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
-		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if err := t.setConfig(kvs); err != nil {
+		if err := jsp.SetConfig(toUpdate, transient); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
+			return
 		}
 	case cmn.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
@@ -216,9 +214,18 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 	case cmn.Mountpaths:
 		t.handleMountpathReq(w, r)
 	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-		kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
-		if err := t.setConfig(kvs); err != nil {
+		var (
+			query     = r.URL.Query()
+			transient = cmn.IsParseBool(query.Get(cmn.ActTransient))
+			toUpdate  = &cmn.ConfigToUpdate{}
+		)
+		if err := toUpdate.FillFromQuery(query); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		if err := jsp.SetConfig(toUpdate, transient); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
 		}
 	case cmn.ActAttach, cmn.ActDetach:
 		action := apiItems[0]
@@ -234,8 +241,6 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 		}
 	}
 }
-
-func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) { return jsp.SetConfig(kvs) }
 
 func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apiItems []string) {
 	var (

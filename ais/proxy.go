@@ -1997,10 +1997,15 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			var (
-				query = r.URL.Query()
-				kvs   = cmn.NewSimpleKVsFromQuery(query)
+				query     = r.URL.Query()
+				transient = cmn.IsParseBool(query.Get(cmn.ActTransient))
+				toUpdate  = &cmn.ConfigToUpdate{}
 			)
-			if err := jsp.SetConfig(kvs); err != nil {
+			if err := toUpdate.FillFromQuery(query); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			if err := jsp.SetConfig(toUpdate, transient); err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 			}
 			return
@@ -2019,16 +2024,13 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
-		var (
-			value string
-			ok    bool
-		)
-		if value, ok = msg.Value.(string); !ok {
-			p.invalmsghdlr(w, r, "failed to parse ActionMsg value: not a string")
+		transient := cmn.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
+		toUpdate := &cmn.ConfigToUpdate{}
+		if err = cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
+			p.invalmsghdlrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
-		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if err := jsp.SetConfig(kvs); err != nil {
+		if err := jsp.SetConfig(toUpdate, transient); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3235,17 +3237,14 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	// handle the action
 	switch msg.Action {
 	case cmn.ActSetConfig:
-		var (
-			value string
-			ok    bool
-		)
-		if value, ok = msg.Value.(string); !ok {
-			p.invalmsghdlrf(w, r, "%s: invalid value format (%+v, %T)",
-				cmn.ActSetConfig, msg.Value, msg.Value)
+		transient := cmn.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
+		toUpdate := &cmn.ConfigToUpdate{}
+		if err := cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
+			p.invalmsghdlrf(w, r, "%s: failed to parse value, err: %v",
+				cmn.ActSetConfig, err)
 			return
 		}
-		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if err := jsp.SetConfig(kvs); err != nil {
+		if err := jsp.SetConfig(toUpdate, transient); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -3259,7 +3258,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 				freeCallRes(res)
 				continue
 			}
-			p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, res.details)
+			p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, msg.Value, res.details)
 			p.keepalive.onerr(err, res.status)
 			drainCallResults(res, results)
 			return
@@ -3463,8 +3462,13 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		// cluster-wide: designate a new primary proxy administratively
 		p.httpclusetprimaryproxy(w, r)
 	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-		kvs := cmn.NewSimpleKVsFromQuery(query)
-		if err := jsp.SetConfig(kvs); err != nil {
+		transient := cmn.IsParseBool(query.Get(cmn.ActTransient))
+		toUpdate := &cmn.ConfigToUpdate{}
+		if err := toUpdate.FillFromQuery(query); err != nil {
+			p.invalmsghdlrf(w, r, err.Error())
+			return
+		}
+		if err := jsp.SetConfig(toUpdate, transient); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}

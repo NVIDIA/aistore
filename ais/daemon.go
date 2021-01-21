@@ -189,17 +189,13 @@ func initDaemon(version, build string) (rmain cmn.Runner) {
 	// $ aisnode -config=/etc/ais.json -role=target -transient=true -config_custom="client.client_timeout=13s"
 	if daemon.cli.confCustom != "" {
 		var (
-			nvmap = make(cmn.SimpleKVs, 10)
-			kvs   = strings.Split(daemon.cli.confCustom, ",")
+			toUpdate = &cmn.ConfigToUpdate{}
+			kvs      = strings.Split(daemon.cli.confCustom, ",")
 		)
-		for _, kv := range kvs {
-			entry := strings.SplitN(kv, "=", 2)
-			if len(entry) != 2 {
-				cmn.ExitLogf("Failed to parse `-config_custom` flag (invalid entry: %q)", kv)
-			}
-			nvmap[entry[0]] = entry[1]
+		if err := toUpdate.FillFromKVS(kvs); err != nil {
+			cmn.ExitLogf(err.Error())
 		}
-		if _, err := jsp.SetConfigInMem(nvmap, &config); err != nil {
+		if err := jsp.SetConfigInMem(toUpdate, &config); err != nil {
 			cmn.ExitLogf("Failed to update config in memory: %v", err)
 		}
 	}

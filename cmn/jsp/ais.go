@@ -6,7 +6,6 @@
 package jsp
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -59,12 +58,9 @@ func LoadConfig(confPath, daeRole string, config *cmn.Config) (err error) {
 	return
 }
 
-func SetConfig(nvmap cmn.SimpleKVs) error {
-	if len(nvmap) == 0 {
-		return errors.New("setConfig: empty nvmap")
-	}
+func SetConfig(toUpdate *cmn.ConfigToUpdate, transient bool) error {
 	config := cmn.GCO.BeginUpdate()
-	transient, err := SetConfigInMem(nvmap, config)
+	err := SetConfigInMem(toUpdate, config)
 	if transient || err != nil {
 		cmn.GCO.DiscardUpdate()
 		return err
@@ -76,39 +72,18 @@ func SetConfig(nvmap cmn.SimpleKVs) error {
 	return nil
 }
 
-func SetConfigInMem(nvmap cmn.SimpleKVs, config *cmn.Config) (transient bool, err error) {
-	for name, value := range nvmap {
-		if name == cmn.ActTransient {
-			if transient, err = cmn.ParseBool(value); err != nil {
-				err = fmt.Errorf("invalid value set for %s, err: %v", name, err)
-				return
-			}
-		} else {
-			if err = update(config, name, value); err != nil {
-				return
-			}
+func SetConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config) (err error) {
+	config.Apply(*toUpdate)
+	if toUpdate.Vmodule != nil {
+		if err := cmn.SetGLogVModule(*toUpdate.Vmodule); err != nil {
+			return fmt.Errorf("failed to set vmodule = %s, err: %v", *toUpdate.Vmodule, err)
 		}
-		glog.Infof("%s: %s=%s", cmn.ActSetConfig, name, value)
+	}
+	if toUpdate.LogLevel != nil {
+		if err := cmn.SetLogLevel(config, *toUpdate.LogLevel); err != nil {
+			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.LogLevel, err)
+		}
 	}
 	err = config.Validate()
 	return
-}
-
-func update(config *cmn.Config, key, value string) (err error) {
-	switch key {
-	//
-	// 1. TOP LEVEL CONFIG
-	//
-	case "vmodule":
-		if err := cmn.SetGLogVModule(value); err != nil {
-			return fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
-		}
-	case "log_level", "log.level":
-		if err := cmn.SetLogLevel(config, value); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", value, err)
-		}
-	default:
-		return cmn.UpdateFieldValue(config, key, value)
-	}
-	return nil
 }

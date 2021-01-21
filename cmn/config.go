@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -149,6 +150,10 @@ type (
 		DSort       *DSortConfToUpdate       `json:"distributed_sort"`
 		Compression *CompressionConfToUpdate `json:"compression"`
 		MDWrite     *MDWritePolicy           `json:"md_write"`
+
+		// Logging
+		LogLevel *string `json:"log_level" copy:"skip"`
+		Vmodule  *string `json:"vmodule" copy:"skip"`
 	}
 
 	BackendConf struct {
@@ -245,6 +250,7 @@ type (
 		SendFileStr        string        `json:"send_file_time"`
 		SendFile           time.Duration `json:"-"`
 	}
+
 	TimeoutConfToUpdate struct {
 		CplaneOperationStr *string `json:"cplane_operation"`
 		MaxKeepaliveStr    *string `json:"max_keepalive"`
@@ -1237,6 +1243,51 @@ func (cflags FeatureFlags) Describe() string {
 		s += flag.name
 	}
 	return s
+}
+
+///////////////////////////
+//    ConfigToUpdate     //
+//////////////////////////
+
+// FillFromQuery populates ConfigToUpdate from URL query values
+func (ctu *ConfigToUpdate) FillFromQuery(query url.Values) error {
+	var anyExists bool
+	for key := range query {
+		if key == ActTransient {
+			continue
+		}
+		anyExists = true
+		name, value := strings.ToLower(key), query.Get(key)
+		if name == "log.level" {
+			ctu.LogLevel = &value
+			continue
+		}
+
+		if err := UpdateFieldValue(ctu, name, value); err != nil {
+			return err
+		}
+	}
+
+	if !anyExists {
+		return fmt.Errorf("no properties to update")
+	}
+	return nil
+}
+
+// FillFromKVS populates `ConfigToUpdate` from key value pairs of the form `key=value`
+func (ctu *ConfigToUpdate) FillFromKVS(kvs []string) (err error) {
+	const format = "failed to parse `-config_custom` flag (invalid entry: %q)"
+	for _, kv := range kvs {
+		entry := strings.SplitN(kv, "=", 2)
+		if len(entry) != 2 {
+			return fmt.Errorf(format, kv)
+		}
+		name, value := entry[0], entry[1]
+		if err := UpdateFieldValue(ctu, name, value); err != nil {
+			return fmt.Errorf(format, kv)
+		}
+	}
+	return
 }
 
 //
