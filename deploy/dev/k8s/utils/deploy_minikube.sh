@@ -23,3 +23,16 @@ read -r local_registry
 if [[ "$local_registry" == "y" ]]; then
   source utils/minikube_registry.sh
 fi
+
+echo "Deploy metrics collection (Prometheus operator): (y/n) ?"
+read -r metrics
+if [[ "$metrics" == "y" ]]; then
+  # See https://github.com/prometheus-operator/kube-prometheus/
+  tmpdir=$(mktemp -d)
+  pushd $tmpdir
+  git clone https://github.com/prometheus-operator/kube-prometheus.git && \
+  kubectl create -f kube-prometheus/manifests/setup && \
+  kubectl create -f kube-prometheus/manifests && \
+  popd $tmpdir
+  rm -rf $tmpdir
+fi

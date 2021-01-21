@@ -56,7 +56,7 @@ git log | head -5
 # Setting up minikube for the running kubernetes based tests.
 pushd deploy/dev/k8s
 # To disable minikube setup comment the following line
-{ echo n; } | ./utils/deploy_minikube.sh
+{ echo n; echo n; } | ./utils/deploy_minikube.sh
 popd
 
 # Running kubernetes based tests
