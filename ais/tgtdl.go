@@ -74,11 +74,6 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := bck.Allow(cmn.AccessSYNC); err != nil {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
-			return
-		}
-
 		dlJob, err := downloader.ParseStartDownloadRequest(ctx, t, bck, uuid, dlb, downloaderXact)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())

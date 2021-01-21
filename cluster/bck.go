@@ -198,10 +198,10 @@ func (b *Bck) VersionConf() cmn.VersionConf {
 //
 // access perms
 //
-func (b *Bck) Allow(bit int) error { return b.checkAccess(bit) }
+func (b *Bck) Allow(bit cmn.AccessAttrs) error { return b.checkAccess(bit) }
 
-func (b *Bck) checkAccess(bit int) (err error) {
-	if b.Props.Access.Has(cmn.AccessAttrs(bit)) {
+func (b *Bck) checkAccess(bit cmn.AccessAttrs) (err error) {
+	if b.Props.Access.Has(bit) {
 		return
 	}
 	op := cmn.AccessOp(bit)

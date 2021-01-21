@@ -159,7 +159,7 @@ func (p *proxyrunner) delBckS3(w http.ResponseWriter, r *http.Request, bucket st
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
-	if err := bck.Allow(cmn.AccessBckDELETE); err != nil {
+	if err := bck.Allow(cmn.AccessDestroyBucket); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 		return
 	}

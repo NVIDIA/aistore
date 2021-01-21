@@ -20,13 +20,13 @@ const (
 
 type (
 	XactDescriptor struct {
-		Type       string // XactTypeGlobal, etc. - enum above
-		Access     int    // Access required by xact (see: cmn.Access*)
-		Startable  bool   // determines if this xaction can be started via API
-		Metasync   bool   // true: changes and metasyncs cluster-wide meta
-		Owned      bool   // true: JTX-owned
-		RefreshCap bool   // true: refresh capacity stats upon completion
-		Mountpath  bool   // true: mountpath-traversing (jogger-based) xaction
+		Type       string          // XactTypeGlobal, etc. - enum above
+		Access     cmn.AccessAttrs // Access required by xact (see: cmn.Access*)
+		Startable  bool            // determines if this xaction can be started via API
+		Metasync   bool            // true: changes and metasyncs cluster-wide meta
+		Owned      bool            // true: JTX-owned
+		RefreshCap bool            // true: refresh capacity stats upon completion
+		Mountpath  bool            // true: mountpath-traversing (jogger-based) xaction
 	}
 
 	XactReqMsg struct {
@@ -77,16 +77,16 @@ var XactsDtor = map[string]XactDescriptor{
 	cmn.ActECGet:          {Type: XactTypeBck, Startable: false},
 	cmn.ActECPut:          {Type: XactTypeBck, Startable: false},
 	cmn.ActECRespond:      {Type: XactTypeBck, Startable: false},
-	cmn.ActMakeNCopies:    {Type: XactTypeBck, Access: cmn.AccessMAKENCOPIES, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActMakeNCopies:    {Type: XactTypeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
 	cmn.ActPutCopies:      {Type: XactTypeBck, Startable: false},
-	cmn.ActMoveBck:        {Type: XactTypeBck, Access: cmn.AccessBckMove, Startable: false, Metasync: true, Owned: false, Mountpath: true},
-	cmn.ActCopyBck:        {Type: XactTypeBck, Access: cmn.AccessGET, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActETLBck:         {Type: XactTypeBck, Access: cmn.AccessGET, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
-	cmn.ActECEncode:       {Type: XactTypeBck, Access: cmn.AccessEC, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActMoveBck:        {Type: XactTypeBck, Access: cmn.AccessMoveBucket, Startable: false, Metasync: true, Owned: false, Mountpath: true},
+	cmn.ActCopyBck:        {Type: XactTypeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActETLBck:         {Type: XactTypeBck, Access: cmn.AccessRW, Startable: false, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
+	cmn.ActECEncode:       {Type: XactTypeBck, Access: cmn.AccessRW, Startable: true, Metasync: true, Owned: false, RefreshCap: true, Mountpath: true},
 	cmn.ActEvictObjects:   {Type: XactTypeBck, Access: cmn.AccessObjDELETE, Startable: false, Mountpath: true},
 	cmn.ActDelete:         {Type: XactTypeBck, Access: cmn.AccessObjDELETE, Startable: false, Mountpath: true},
 	cmn.ActLoadLomCache:   {Type: XactTypeBck, Startable: true, Mountpath: true},
-	cmn.ActPrefetch:       {Type: XactTypeBck, Access: cmn.AccessSYNC, Startable: true},
+	cmn.ActPrefetch:       {Type: XactTypeBck, Access: cmn.AccessRW, Startable: true},
 	cmn.ActPromote:        {Type: XactTypeBck, Access: cmn.AccessPROMOTE, Startable: false, RefreshCap: true},
 	cmn.ActQueryObjects:   {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},
 	cmn.ActListObjects:    {Type: XactTypeBck, Access: cmn.AccessObjLIST, Startable: false, Metasync: false, Owned: true},

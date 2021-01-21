@@ -339,13 +339,13 @@ func showUserHandler(c *cli.Context) (err error) {
 func parseAccess(acc string) (cmn.AccessAttrs, error) {
 	switch acc {
 	case "admin":
-		return cmn.AllAccess(), nil
+		return cmn.AccessAll, nil
 	case "rw":
-		return cmn.ReadWriteAccess(), nil
+		return cmn.AccessRW, nil
 	case "ro":
-		return cmn.ReadOnlyAccess(), nil
+		return cmn.AccessRO, nil
 	case "no":
-		return cmn.NoAccess(), nil
+		return cmn.AccessNone, nil
 	default:
 		return 0, fmt.Errorf("invalid access %s", acc)
 	}

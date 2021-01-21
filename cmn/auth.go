@@ -75,8 +75,8 @@ func (tk *AuthToken) CheckPermissions(clusterID string, bck *Bck, perms AccessAt
 		return nil
 	}
 	debug.AssertMsg(perms != 0, "Empty permissions requested")
-	cluPerms := perms & AccessAttrs(allowClusterAccess)
-	objPerms := perms ^ AccessAttrs(allowClusterAccess)
+	cluPerms := perms & AccessCluster
+	objPerms := perms &^ AccessCluster
 	// Cluster-wide permissions requested
 	hasPerms := true
 	if cluPerms != 0 {

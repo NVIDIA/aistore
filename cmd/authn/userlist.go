@@ -54,9 +54,9 @@ var (
 		desc   string
 		perms  cmn.AccessAttrs
 	}{
-		{cmn.AuthClusterOwnerRole, "Full access to cluster %s", cmn.AllAccess()},
-		{cmn.AuthBucketOwnerRole, "Full access to buckets of cluster %s", cmn.ReadWriteAccess()},
-		{cmn.AuthGuestRole, "Read-only access to buckets of cluster %s", cmn.ReadOnlyAccess()},
+		{cmn.AuthClusterOwnerRole, "Full access to cluster %s", cmn.AccessAll},
+		{cmn.AuthBucketOwnerRole, "Full access to buckets of cluster %s", cmn.AccessRW},
+		{cmn.AuthGuestRole, "Read-only access to buckets of cluster %s", cmn.AccessRO},
 	}
 )
 

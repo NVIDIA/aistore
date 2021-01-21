@@ -80,7 +80,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: true},
-					Access: cmn.AllAccess(),
+					Access: cmn.AccessAll,
 				},
 			),
 			cluster.NewBck(
@@ -88,7 +88,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cmn.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: false},
-					Access: cmn.AllAccess(),
+					Access: cmn.AccessAll,
 				},
 			),
 		)

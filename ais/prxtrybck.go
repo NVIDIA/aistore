@@ -26,7 +26,7 @@ type bckInitArgs struct {
 	err      error
 	msg      *cmn.ActionMsg
 
-	perms int // access bits eg. cmn.AccessGET, cmn.AccessPATCH etc.
+	perms cmn.AccessAttrs // cmn.AccessGET, cmn.AccessPATCH etc.
 
 	skipBackend bool // initialize bucket `bck.InitNoBackend`
 	tryOnlyRem  bool // try only creating remote bucket
@@ -96,7 +96,7 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 		bckType = "http"
 	}
 
-	if args._requiresPermission(cmn.AccessBckMove) {
+	if args._requiresPermission(cmn.AccessMoveBucket) {
 		goto retErr
 	}
 
@@ -110,8 +110,8 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 		goto retErr
 	}
 
-	// Destroy and Rename are not permitted.
-	if args.queryBck.IsCloud() && args._requiresPermission(cmn.AccessBckDELETE) && args.msg.Action == cmn.ActDestroyBck {
+	// Destroy and Rename/Move are not permitted.
+	if args.queryBck.IsCloud() && args._requiresPermission(cmn.AccessDestroyBucket) && args.msg.Action == cmn.ActDestroyBck {
 		goto retErr
 	}
 
@@ -125,12 +125,12 @@ retErr:
 	return
 }
 
-func (args *bckInitArgs) _requiresPermission(perm int) bool {
+func (args *bckInitArgs) _requiresPermission(perm cmn.AccessAttrs) bool {
 	return (args.perms & perm) == perm
 }
 
 func (args *bckInitArgs) _checkPermission(bck *cluster.Bck) (errCode int, err error) {
-	if err = args.p.checkPermissions(args.r.Header, &bck.Bck, cmn.AccessAttrs(args.perms)); err != nil {
+	if err = args.p.checkPermissions(args.r.Header, &bck.Bck, args.perms); err != nil {
 		errCode = http.StatusUnauthorized
 		return
 	}

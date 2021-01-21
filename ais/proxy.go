@@ -340,7 +340,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 	switch request.items[0] {
 	case cmn.AllBuckets:
-		if err := p.checkPermissions(r.Header, nil, cmn.AccessBckLIST); err != nil {
+		if err := p.checkPermissions(r.Header, nil, cmn.AccessListBuckets); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -379,7 +379,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	var (
 		si       *cluster.Snode
 		nodeID   string
-		perms    int
+		perms    cmn.AccessAttrs
 		err      error
 		smap     = p.owner.smap.get()
 		query    = r.URL.Query()
@@ -470,7 +470,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		bck     = request.bck
 		query   = r.URL.Query()
-		perms   = cmn.AccessBckDELETE
+		perms   = cmn.AccessDestroyBucket
 		errCode int
 	)
 	if msg.Action == cmn.ActDelete || msg.Action == cmn.ActEvictObjects {
@@ -775,7 +775,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			return
 		}
 		var (
-			bckToArgs = bckInitArgs{p: p, w: w, r: r, queryBck: userBckTo, perms: cmn.AccessSYNC}
+			bckToArgs = bckInitArgs{p: p, w: w, r: r, queryBck: userBckTo, perms: cmn.AccessPUT}
 			errCode   int
 		)
 		if bckTo, errCode, err = bckToArgs.init(userBckTo.Name); err != nil && errCode != http.StatusNotFound {
@@ -809,7 +809,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		w.Write([]byte(xactID))
 	case cmn.ActRegisterCB:
 		// TODO: choose the best permission
-		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessBckCREATE); err != nil {
+		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessCreateBucket); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -861,7 +861,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck *cluster.Bck) {
 	bucket := bck.Name
-	err := p.checkPermissions(r.Header, nil, cmn.AccessBckCREATE)
+	err := p.checkPermissions(r.Header, nil, cmn.AccessCreateBucket)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
@@ -926,7 +926,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 }
 
 func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	if err := p.checkPermissions(r.Header, nil, cmn.AccessBckLIST); err != nil {
+	if err := p.checkPermissions(r.Header, nil, cmn.AccessListBuckets); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -1147,7 +1147,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRenameObject:
-		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjMove); err != nil {
+		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjMOVE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -1155,7 +1155,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, "%q is not supported for remote buckets (%s)", msg.Action, bck)
 			return
 		}
-		if err := bck.Allow(cmn.AccessObjMove); err != nil {
+		if err := bck.Allow(cmn.AccessObjMOVE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -1270,17 +1270,15 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	permsToCheck := propsToUpdate.PermsToCheck()
+	permsToCheck := cmn.AccessPATCH
+	if propsToUpdate.Access != nil {
+		permsToCheck |= cmn.AccessBckSetACL
+	}
 	if err := p.checkPermissions(r.Header, &bck.Bck, permsToCheck); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
-	if !propsToUpdate.HasOnlyPermissions() {
-		if err := bck.Allow(cmn.AccessPATCH); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
-			return
-		}
-	}
+
 	if err = p.checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -2388,7 +2386,7 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO: separate permissions for dsort? xactions?
-	if err := p.checkPermissions(r.Header, nil, cmn.AccessADMIN); err != nil {
+	if err := p.checkPermissions(r.Header, nil, cmn.AccessAdmin); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}

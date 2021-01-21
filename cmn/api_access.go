@@ -10,77 +10,80 @@ import (
 	"strings"
 )
 
-const (
-	// object
-	AccessGET = 1 << iota
-	AccessObjHEAD
-	AccessPUT
-	AccessAPPEND
-	AccessDOWNLOAD
-	AccessObjDELETE
-	AccessObjMove
-	AccessPROMOTE
-	// bucket
-	AccessBckHEAD
-	AccessObjLIST
-	AccessBckMove
-	AccessPATCH
-	AccessMAKENCOPIES
-	AccessEC
-	AccessSYNC
-	AccessBckDELETE
-	AccessBckPERMISSION
-	// cluster
-	AccessBckCREATE
-	AccessBckLIST
-	AccessADMIN
-	// must be the last one
-	AccessMax
-
-	// Permissions
-	allowAllAccess       = ^uint64(0)
-	allowReadOnlyAccess  = AccessGET | AccessObjHEAD | AccessBckHEAD | AccessObjLIST
-	allowReadWriteAccess = allowReadOnlyAccess |
-		AccessPUT | AccessAPPEND | AccessDOWNLOAD | AccessObjDELETE | AccessObjMove
-	allowClusterAccess = allowAllAccess & (AccessBckCREATE - 1)
-
-	// Permission Operations
-	AllowAccess = "allow"
-	DenyAccess  = "deny"
-
-	// Compound permissions
-	AllowAllAccess       = "su"
-	AllowReadWriteAccess = "rw"
-	AllowReadOnlyAccess  = "ro"
-)
-
 type AccessAttrs uint64
 
+// ACL aka access permissions
+const (
+	// object level
+	AccessGET     = AccessAttrs(1) << iota
+	AccessObjHEAD // get object props
+	AccessPUT
+	AccessAPPEND
+	AccessObjDELETE
+	AccessObjMOVE
+	AccessPROMOTE
+	// bucket metadata
+	AccessBckHEAD   // get bucket props and ACL
+	AccessObjLIST   // list objects in a bucket
+	AccessPATCH     // set bucket props
+	AccessBckSetACL // set bucket permissions
+	// cluster level
+	AccessListBuckets
+	AccessCreateBucket
+	AccessDestroyBucket
+	AccessMoveBucket
+	AccessAdmin
+	// note: must be the last one
+	AccessMax
+)
+
 // access => operation
-var accessOp = map[int]string{
+var accessOp = map[AccessAttrs]string{
 	// object
 	AccessGET:       "GET",
 	AccessObjHEAD:   "HEAD-OBJECT",
 	AccessPUT:       "PUT",
 	AccessAPPEND:    "APPEND",
-	AccessDOWNLOAD:  "DOWNLOAD",
 	AccessObjDELETE: "DELETE-OBJECT",
-	AccessObjMove:   "MOVE-OBJECT",
+	AccessObjMOVE:   "MOVE-OBJECT",
 	AccessPROMOTE:   "PROMOTE",
 	// bucket
-	AccessBckHEAD:     "HEAD-BUCKET",
-	AccessObjLIST:     "LIST-OBJECTS",
-	AccessBckMove:     "MOVE-BUCKET",
-	AccessPATCH:       "PATCH",
-	AccessMAKENCOPIES: "MAKE-NCOPIES",
-	AccessEC:          "EC",
-	AccessSYNC:        "SYNC-BUCKET",
-	AccessBckDELETE:   "DELETE-BUCKET",
+	AccessBckHEAD:   "HEAD-BUCKET",
+	AccessObjLIST:   "LIST-OBJECTS",
+	AccessPATCH:     "PATCH",
+	AccessBckSetACL: "SET-BUCKET-ACL",
 	// cluster
-	AccessBckPERMISSION: "SET-BUCKET-PERMISSIONS",
-	AccessBckCREATE:     "CREATE-BUCKET",
-	AccessADMIN:         "ADMIN",
+	AccessListBuckets:   "LIST-BUCKETS",
+	AccessCreateBucket:  "CREATE-BUCKET",
+	AccessDestroyBucket: "DESTROY-BUCKET",
+	AccessMoveBucket:    "MOVE-BUCKET",
+	AccessAdmin:         "ADMIN",
 }
+
+// derived (convenience) constants
+const (
+	// encompasses all ACEs, current and future
+	AccessAll      = AccessAttrs(^uint64(0))
+	AllowAllAccess = "su"
+
+	// read-only and read-write access to bucket
+	AccessRO             = AccessGET | AccessObjHEAD | AccessBckHEAD | AccessObjLIST
+	AllowReadOnlyAccess  = "ro"
+	AccessRW             = AccessRO | AccessPUT | AccessAPPEND | AccessObjDELETE | AccessObjMOVE
+	AllowReadWriteAccess = "rw"
+
+	AccessNone = AccessAttrs(0)
+
+	// permission to perform cluster-level ops
+	AccessCluster = AccessListBuckets | AccessCreateBucket | AccessDestroyBucket | AccessMoveBucket |
+		AccessAdmin
+)
+
+// verbs
+const (
+	AllowAccess = "allow"
+	DenyAccess  = "deny"
+)
 
 func SupportedPermissions() []string {
 	accList := []string{"ro", "rw", "su"}
@@ -90,12 +93,9 @@ func SupportedPermissions() []string {
 	return accList
 }
 
-func NoAccess() AccessAttrs                      { return 0 }
-func AllAccess() AccessAttrs                     { return AccessAttrs(allowAllAccess) }
-func ReadOnlyAccess() AccessAttrs                { return allowReadOnlyAccess }
-func ReadWriteAccess() AccessAttrs               { return allowReadWriteAccess }
 func (a AccessAttrs) Has(perms AccessAttrs) bool { return a&perms == perms }
 func (a AccessAttrs) String() string             { return strconv.FormatUint(uint64(a), 10) }
+
 func (a AccessAttrs) Describe() string {
 	if a == 0 {
 		return "No access"
@@ -113,14 +113,11 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AccessAPPEND) {
 		accList = append(accList, accessOp[AccessAPPEND])
 	}
-	if a.Has(AccessDOWNLOAD) {
-		accList = append(accList, accessOp[AccessDOWNLOAD])
-	}
 	if a.Has(AccessObjDELETE) {
 		accList = append(accList, accessOp[AccessObjDELETE])
 	}
-	if a.Has(AccessObjMove) {
-		accList = append(accList, accessOp[AccessObjMove])
+	if a.Has(AccessObjMOVE) {
+		accList = append(accList, accessOp[AccessObjMOVE])
 	}
 	if a.Has(AccessPROMOTE) {
 		accList = append(accList, accessOp[AccessPROMOTE])
@@ -132,59 +129,43 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AccessObjLIST) {
 		accList = append(accList, accessOp[AccessObjLIST])
 	}
-	if a.Has(AccessBckMove) {
-		accList = append(accList, accessOp[AccessBckMove])
+	if a.Has(AccessMoveBucket) {
+		accList = append(accList, accessOp[AccessMoveBucket])
 	}
 	if a.Has(AccessPATCH) {
 		accList = append(accList, accessOp[AccessPATCH])
 	}
-	if a.Has(AccessMAKENCOPIES) {
-		accList = append(accList, accessOp[AccessMAKENCOPIES])
+	if a.Has(AccessDestroyBucket) {
+		accList = append(accList, accessOp[AccessDestroyBucket])
 	}
-	if a.Has(AccessSYNC) {
-		accList = append(accList, accessOp[AccessSYNC])
-	}
-	if a.Has(AccessBckDELETE) {
-		accList = append(accList, accessOp[AccessBckDELETE])
-	}
-	if a.Has(AccessBckPERMISSION) {
-		accList = append(accList, accessOp[AccessBckPERMISSION])
+	if a.Has(AccessBckSetACL) {
+		accList = append(accList, accessOp[AccessBckSetACL])
 	}
 	return strings.Join(accList, ",")
 }
 
-func AccessOp(access int) string {
+func AccessOp(access AccessAttrs) string {
 	if s, ok := accessOp[access]; ok {
 		return s
 	}
 	return "<unknown access>"
 }
 
-func ModifyAccess(aattr uint64, action string, bits uint64) (uint64, error) {
-	if action == AllowAccess {
-		return aattr | bits, nil
-	}
-	if action != DenyAccess {
-		return 0, fmt.Errorf("unknown make-access action %q", action)
-	}
-	return aattr & (allowAllAccess ^ bits), nil
-}
-
 func StrToAccess(accessStr string) (access AccessAttrs, err error) {
 	switch accessStr {
 	case AllowReadOnlyAccess:
-		access |= ReadOnlyAccess()
+		access |= AccessRO
 	case AllowReadWriteAccess:
-		access |= ReadWriteAccess()
+		access |= AccessRW
 	case AllowAllAccess:
-		access |= AllAccess()
+		access = AccessAll
 	case "":
-		access |= NoAccess()
+		access = AccessNone
 	default:
 		found := false
 		for k, v := range accessOp {
 			if v == accessStr {
-				access |= AccessAttrs(k)
+				access |= k
 				found = true
 			}
 		}

@@ -435,7 +435,7 @@ func DefaultBckProps(cs ...*Config) *BucketProps {
 		LRU:        c.LRU,
 		Mirror:     c.Mirror,
 		Versioning: c.Versioning,
-		Access:     AllAccess(),
+		Access:     AccessAll,
 		EC:         c.EC,
 	}
 }
@@ -517,34 +517,6 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props BucketPropsToUpdate, err error
 		}
 	}
 	return
-}
-
-// Bucket properties include two types of information: storage configuration
-// and bucket access permissions. Depending on what set of properties a request
-// is going to modify, it requires different permissions. Changing storage
-// configuration requires PATCH access allowed for a bucket. Changing bucket
-// access permissions requires a user to have sufficient permissions.
-func (props *BucketPropsToUpdate) PermsToCheck() AccessAttrs {
-	var perms AccessAttrs = AccessPATCH
-	if props.HasOnlyPermissions() {
-		perms = AccessBckPERMISSION
-	} else if props.Access != nil {
-		perms = AccessPATCH | AccessBckPERMISSION
-	}
-	return perms
-}
-
-// A request that contains only new `Access` permissions is a special case:
-// bucket access permission are ignored, only user permissions are checked.
-// See `BucketPropsToUpdate.PermToCheck`.
-func (props *BucketPropsToUpdate) HasOnlyPermissions() bool {
-	return props.Access != nil &&
-		props.BackendBck == nil &&
-		props.Versioning == nil &&
-		props.Cksum == nil &&
-		props.LRU == nil &&
-		props.Mirror == nil &&
-		props.EC == nil
 }
 
 // Replace extension and add suffix if provided.

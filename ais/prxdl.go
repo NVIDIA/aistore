@@ -155,7 +155,7 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if err := p.checkPermissions(r.Header, nil, cmn.AccessDOWNLOAD); err != nil {
+	if err := p.checkPermissions(r.Header, nil, cmn.AccessRW); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -285,7 +285,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 		return
 	}
 	bck := cluster.NewBckEmbed(dlBase.Bck)
-	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, queryBck: bck, perms: cmn.AccessDOWNLOAD}
+	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, queryBck: bck, perms: cmn.AccessRW}
 	if _, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
