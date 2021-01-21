@@ -498,12 +498,24 @@ func TestETLHealth(t *testing.T) {
 		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
 	}()
 
-	healths, err := api.ETLHealth(baseParams, uuid)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(healths) > 0, "expected at least one health stat to be returned")
+	var (
+		deadline = time.Now().Add(time.Minute)
+		healths  etl.PodsHealthMsg
+	)
+
+	// It might take some time for metrics to be available.
+	for {
+		if time.Now().After(deadline) {
+			t.Fatal("Timeout waiting for successful health response")
+		}
+
+		healths, err = api.ETLHealth(baseParams, uuid)
+		if err == nil && len(healths) > 0 {
+			break
+		}
+	}
 
 	for _, health := range healths {
-		tassert.Errorf(t, health.CPU > 0.0, "[%s] expected CPU usage greater than 0", health.TargetID)
-		tassert.Errorf(t, health.Mem > 0, "[%s] expected memory usage greater than 0", health.TargetID)
+		tassert.Errorf(t, health.CPU > 0.0 || health.Mem > 0, "[%s] expected non empty health info, got %v", health.TargetID, health)
 	}
 }
