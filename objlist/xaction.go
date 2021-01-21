@@ -55,7 +55,7 @@ type (
 		nextToken  string                // continuation token returned by Cloud to get the next page
 		walkWg     sync.WaitGroup        // to wait until walk finishes
 		walkDone   bool                  // true: done walking or Cloud returned all objects
-		fromRemote bool                  // whether to request remote data (Cloud/Remote/Backend)
+		fromRemote bool                  // whether to request remote data
 	}
 
 	Resp struct {
@@ -272,9 +272,9 @@ func (r *Xact) isPageCached(marker string, cnt uint) bool {
 	return idx+cnt < uint(len(r.lastPage))
 }
 
-func (r *Xact) nextPageCloud() error {
+func (r *Xact) nextPageRemote() error {
 	walk := objwalk.NewWalk(r.walkCtx(), r.t, r.bck, r.msg)
-	bckList, err := walk.CloudObjPage()
+	bckList, err := walk.RemoteObjPage()
 	if err != nil {
 		r.nextToken = ""
 		return err
@@ -347,11 +347,11 @@ func (r *Xact) genNextPage(token string, cnt uint) error {
 	}
 
 	// Due to impossibility of getting object name from continuation token,
-	// in case of Cloud, a target keeps only the entire last sent page.
+	// in case of remote bucket, a target keeps only the entire last sent page.
 	// The page is replaced with a new one when a client asks for next page.
 	if r.fromRemote {
 		r.token = token
-		return r.nextPageCloud()
+		return r.nextPageRemote()
 	}
 
 	if r.token > token {

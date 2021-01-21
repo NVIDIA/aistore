@@ -290,9 +290,22 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	tutils.Logf("remote bucket %s: %d cached objects\n", m.bck, m.num)
 
 	if evict {
-		tutils.Logf("evicting remote bucket %s...\n", m.bck)
-		err := api.EvictRemoteBucket(baseParams, m.bck)
-		tassert.CheckFatal(m.t, err)
+		// TODO: This should be just single `EvictRemoteBucket`.
+		if m.bck.IsCloud() {
+			tutils.Logf("evicting cloud bucket %s...\n", m.bck)
+			err := api.EvictRemoteBucket(baseParams, m.bck)
+			tassert.CheckFatal(m.t, err)
+		} else if m.bck.IsHDFS() {
+			objNames := make([]string, 0, len(objList.Entries))
+			for _, obj := range objList.Entries {
+				objNames = append(objNames, obj.Name)
+			}
+			tutils.Logf("evicting HDFS bucket %s...\n", m.bck)
+			xactID, err := api.EvictList(baseParams, m.bck, objNames)
+			tassert.CheckFatal(m.t, err)
+			_, err = api.WaitForXaction(baseParams, api.XactReqArgs{ID: xactID})
+			tassert.CheckFatal(m.t, err)
+		}
 	}
 }
 
@@ -640,6 +653,9 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 				test.skipArgs.Bck = test.bck
 			} else {
 				test.skipArgs.Bck = test.backendBck
+				if !test.backendBck.IsCloud() {
+					t.Skip("backend bucket is required to be a cloud bucket")
+				}
 			}
 			tutils.CheckSkip(t, test.skipArgs)
 

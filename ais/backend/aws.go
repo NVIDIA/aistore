@@ -128,22 +128,6 @@ func (awsp *awsProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (er
 // HEAD BUCKET //
 /////////////////
 
-func (awsp *awsProvider) getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
-	resp, err := svc.GetBucketLocation(&s3.GetBucketLocationInput{
-		Bucket: aws.String(bckName),
-	})
-	if err != nil {
-		return
-	}
-	region = aws.StringValue(resp.LocationConstraint)
-
-	// NOTE: AWS API returns empty region "only" for 'us-east-1`
-	if region == "" {
-		region = endpoints.UsEast1RegionID
-	}
-	return
-}
-
 func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
 	var (
 		svc       *s3.S3
@@ -184,6 +168,22 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
 		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
 	)
+	return
+}
+
+func (awsp *awsProvider) getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
+	resp, err := svc.GetBucketLocation(&s3.GetBucketLocationInput{
+		Bucket: aws.String(bckName),
+	})
+	if err != nil {
+		return
+	}
+	region = aws.StringValue(resp.LocationConstraint)
+
+	// NOTE: AWS API returns empty region "only" for 'us-east-1`
+	if region == "" {
+		region = endpoints.UsEast1RegionID
+	}
 	return
 }
 

@@ -377,15 +377,12 @@ func (b Bck) IsRemote() bool {
 	return b.IsCloud() || b.IsRemoteAIS() || b.IsHDFS() || b.IsHTTP() || b.HasBackendBck()
 }
 
-func (b Bck) IsCloud() bool { // is 3rd party Cloud
-	if b.Provider == ProviderHTTP || b.Provider == ProviderHDFS {
-		return false
-	}
+func (b Bck) IsCloud() bool {
 	if bck := b.BackendBck(); bck != nil {
-		debug.Assert(bck.IsCloud()) // currently, backend is always Cloud
+		debug.Assert(bck.IsCloud()) // Currently, backend bucket is always cloud.
 		return bck.IsCloud()
 	}
-	return b.Provider != ProviderAIS && ValidateProvider(b.Provider) == nil
+	return b.Provider == ProviderAmazon || b.Provider == ProviderAzure || b.Provider == ProviderGoogle
 }
 
 func (b Bck) HasProvider() bool { return ValidateProvider(b.Provider) == nil }

@@ -894,6 +894,7 @@ func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate *cmn.Bucke
 			err = fmt.Errorf("reference directory must be set for a bucket with HDFS provider")
 			return
 		}
+		nprops.Versioning.Enabled = false
 		// TODO: Check if the `RefDirectory` does not overlap with other buckets.
 	}
 	if bprops.EC.Enabled && nprops.EC.Enabled {

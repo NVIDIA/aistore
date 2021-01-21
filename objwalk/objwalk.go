@@ -64,12 +64,12 @@ func LocalObjPage(xact *query.ObjectsListingXact, objectsCnt uint) (*cmn.BucketL
 	return list, nil
 }
 
-// CloudObjPage reads a page of objects in a cloud bucket. NOTE: if a request
+// RemoteObjPage reads a page of objects in a cloud bucket. NOTE: if a request
 // wants cached object list, the function returns only local data without
 // talking to backend provider.
 // After reading cloud object list, the function fills it with information
 // that is available only locally(copies, targetURL etc).
-func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
+func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 	if w.msg.IsFlagSet(cmn.SelectCached) {
 		return w.DefaultLocalObjPage(w.msg)
 	}

@@ -177,7 +177,7 @@ func (t *bckSummaryTask) Run() {
 					if bck.IsAIS() {
 						list, err = walk.DefaultLocalObjPage(smsg)
 					} else {
-						list, err = walk.CloudObjPage()
+						list, err = walk.RemoteObjPage()
 					}
 					if err != nil {
 						errCh <- err
