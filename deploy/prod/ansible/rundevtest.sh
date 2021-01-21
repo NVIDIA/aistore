@@ -55,18 +55,16 @@ git log | head -5
 
 # Setting up minikube for the running kubernetes based tests.
 pushd deploy/dev/k8s
-# To disable minikube setup comment the following line
-{ echo n; echo n; } | ./utils/deploy_minikube.sh
+echo "Deploying Minikube"
+{ echo y; echo n; } | ./utils/deploy_minikube.sh
+echo "Deploying AIS on Minikube"
+{ echo 1; echo 1; echo 1; echo 3; echo n; echo n; echo n; echo n; echo n; echo n; } | ./utils/deploy_ais.sh
+echo "AIS on Minikube deployed"
 popd
 
 # Running kubernetes based tests
-# TODO: This requirement can be removed once we do not need single transformer per target.
-# We use this because minikube is a 1-node kubernetes cluster
-# and with pod anti-affinities (for enabling single transformer per target at a time) it would
-# cause failures with pods getting stuck in `Pending` state.
-deploy 1 1 3 n n n n n
 echo "----- RUNNING K8S TESTS -----"
-BUCKET=test RE="TestETL" make test-run
+AIS_ENDPOINT="$(minikube ip):8080" BUCKET=test RE="TestETL" make test-run
 exit_code=$?
 result=$((result + exit_code))
 echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"

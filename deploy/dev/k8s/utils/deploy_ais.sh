@@ -25,7 +25,7 @@ read -r build
 if [[ "$build" == "y" ]]; then
   echo "Building image..."
   export DOCKER_IMAGE="localhost:5000/aisnode:minikube"
-  sudo docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} -f Dockerfile-aisnode-ubuntu
+  docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} -f Dockerfile-aisnode-ubuntu
   docker push ${DOCKER_IMAGE}
 fi
 

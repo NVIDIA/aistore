@@ -111,6 +111,11 @@ test-env)
     exit 0
   fi
 
+  if [[ $(curl -s -X GET $AIS_ENDPOINT/v1/daemon?what=smap) ]]; then
+    echo "AIStore detected on $AIS_ENDPOINT"
+    exit 0
+  fi
+
   echo "AIStore is not running, this causes some tests to fail! (to run, see: https://github.com/NVIDIA/aistore#local-non-containerized)" >&2
   echo -n "continue? [y/N] " >&2 && read ans && [[ ${ans:-N} =~ ^y(es)?$ ]]
   exit $?
