@@ -256,6 +256,9 @@ minikube-0.7.iso.sha256  65B
 Hadoop and HDFS is well known and widely used software for distributed processing of large datasets using MapReduce model.
 For years, it has been considered as a standard for big data.
 
+HDFS backend provider is a way to access files contained inside the HDFS cluster from AIStore.
+Here we will talk about standard configuration and usages (see also [full tutorial on HDFS provider](/docs/tutorials/various/hdfs_backend.md)).
+
 #### Configuration
 
 Before we jump to functionalities, let's first focus on configuration.
@@ -271,6 +274,10 @@ Example of HDFS provider configuration:
 }
 ```
 
+* `user` specifies which HDFS user the client will act as.
+* `addresses` specifies the namenode(s) to connect to.
+* `use_datanode_hostname` specifies whether the client should connect to the datanodes via hostname (which is useful in multi-homed setups) or IP address, which may be required if DNS isn't available.
+
 #### Usage
 
 After the HDFS is set up, and the binary is built with HDFS provider support we can see everything in action.
@@ -285,17 +292,13 @@ PUT "1.mp4" into bucket "hdfs://yt8m"
 $ ais ls hdfs://yt8m
 NAME	 SIZE
 1.mp4	 76.31KiB
+$ ais get hdfs://yt8m/1.mp4 video.mp4
+GET "1.mp4" from bucket "hdfs://yt8m" as "video.mp4" [76.31KiB]
 ```
 
 The first thing to notice is `--bucket-props="extra.hdfs.ref_directory=/part1/video"`.
 Here we specify the **required** path the `hdfs://yt8m` bucket will refer to (the directory must exist on bucket creation).
 It means that when accessing object `hdfs://yt8m/1.mp4` the path will be resolved to `/part1/video/1.mp4` (`/part1/video` + `1.mp4`).
-
-It's also possible to fetch existing files from HDFS with simple GET operation:
-```console
-$ ais get hdfs://yt8m/2.mp4 2.mp4
-GET "2.mp4" from bucket "hdfs://yt8m" as "2.mp4" [76.31KiB]
-```
 
 ### Prefetch/Evict Objects
 
