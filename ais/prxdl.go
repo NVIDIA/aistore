@@ -155,10 +155,6 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if err := p.checkPermissions(r.Header, nil, cmn.AccessRW); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
-		return
-	}
 	switch r.Method {
 	case http.MethodGet, http.MethodDelete:
 		p.httpDownloadAdmin(w, r)

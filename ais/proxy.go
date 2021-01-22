@@ -340,7 +340,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 	switch request.items[0] {
 	case cmn.AllBuckets:
-		if err := p.checkPermissions(r.Header, nil, cmn.AccessListBuckets); err != nil {
+		if err := p.checkACL(r.Header, nil, cmn.AccessListBuckets); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -809,7 +809,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		w.Write([]byte(xactID))
 	case cmn.ActRegisterCB:
 		// TODO: choose the best permission
-		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessCreateBucket); err != nil {
+		if err := p.checkACL(r.Header, nil, cmn.AccessCreateBucket); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -861,7 +861,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, bck *cluster.Bck) {
 	bucket := bck.Name
-	err := p.checkPermissions(r.Header, nil, cmn.AccessCreateBucket)
+	err := p.checkACL(r.Header, nil, cmn.AccessCreateBucket)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
@@ -926,7 +926,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 }
 
 func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	if err := p.checkPermissions(r.Header, nil, cmn.AccessListBuckets); err != nil {
+	if err := p.checkACL(r.Header, nil, cmn.AccessListBuckets); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -1147,16 +1147,12 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRenameObject:
-		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessObjMOVE); err != nil {
+		if err := p.checkACL(r.Header, bck, cmn.AccessObjMOVE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}
 		if bck.IsRemote() {
 			p.invalmsghdlrf(w, r, "%q is not supported for remote buckets (%s)", msg.Action, bck)
-			return
-		}
-		if err := bck.Allow(cmn.AccessObjMOVE); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
 		if bck.Props.EC.Enabled {
@@ -1166,12 +1162,8 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		p.objRename(w, r, bck, request.items[1], &msg)
 		return
 	case cmn.ActPromote:
-		if err := p.checkPermissions(r.Header, &bck.Bck, cmn.AccessPROMOTE); err != nil {
+		if err := p.checkACL(r.Header, bck, cmn.AccessPROMOTE); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
-			return
-		}
-		if err := bck.Allow(cmn.AccessPROMOTE); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
 		if !filepath.IsAbs(msg.Name) {
@@ -1192,7 +1184,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args := bckInitArgs{p: p, w: w, r: r, perms: cmn.AccessBckHEAD, tryOnlyRem: true, queryBck: request.bck}
+	args := bckInitArgs{p: p, w: w, r: r, tryOnlyRem: true, queryBck: request.bck}
 	bck, err := args.initAndTry(request.bck.Name)
 	if err != nil {
 		return
@@ -1274,7 +1266,7 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	if propsToUpdate.Access != nil {
 		permsToCheck |= cmn.AccessBckSetACL
 	}
-	if err := p.checkPermissions(r.Header, &bck.Bck, permsToCheck); err != nil {
+	if err := p.checkACL(r.Header, bck, permsToCheck); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -2386,7 +2378,7 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO: separate permissions for dsort? xactions?
-	if err := p.checkPermissions(r.Header, nil, cmn.AccessAdmin); err != nil {
+	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}

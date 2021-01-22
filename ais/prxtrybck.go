@@ -81,7 +81,7 @@ func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err
 		}
 		args.perms = xactDtor.Access
 	}
-	errCode, err = args._checkPermission(bck)
+	errCode, err = args._checkACL(bck)
 	return
 }
 
@@ -129,15 +129,11 @@ func (args *bckInitArgs) _requiresPermission(perm cmn.AccessAttrs) bool {
 	return (args.perms & perm) == perm
 }
 
-func (args *bckInitArgs) _checkPermission(bck *cluster.Bck) (errCode int, err error) {
-	if err = args.p.checkPermissions(args.r.Header, &bck.Bck, args.perms); err != nil {
-		errCode = http.StatusUnauthorized
-		return
-	}
-
-	if err = bck.Allow(args.perms); err != nil {
+func (args *bckInitArgs) _checkACL(bck *cluster.Bck) (errCode int, err error) {
+	if err = args.p.checkACL(args.r.Header, bck, args.perms); err != nil {
 		errCode = http.StatusForbidden
 	}
+
 	return
 }
 

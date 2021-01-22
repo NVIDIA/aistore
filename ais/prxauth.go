@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -53,18 +54,48 @@ func (p *proxyrunner) validateToken(hdr http.Header) (*cmn.AuthToken, error) {
 	return auth, nil
 }
 
-func (p *proxyrunner) checkPermissions(hdr http.Header, bck *cmn.Bck, perms cmn.AccessAttrs) error {
+// When AuthN is on, accessing a bucket requires two permissions:
+//   - access to the bucket is granted to a user
+//   - bucket ACL allows the required operation
+//   Exception: a superuser can always PATCH the bucket/Set ACL
+// If AuthN is off, only bucket permissions are checked.
+//   Exceptions:
+//   - read-only access to a bucket is always granted
+//   - PATCH cannot be forbidden
+func (p *proxyrunner) checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.AccessAttrs) error {
 	if isIntraCall(hdr) {
 		return nil
 	}
-	cfg := cmn.GCO.Get()
-	if !cfg.Auth.Enabled {
+	var (
+		token *cmn.AuthToken
+		cfg   = cmn.GCO.Get()
+	)
+	if cfg.Auth.Enabled {
+		token, err := p.validateToken(hdr)
+		if err != nil {
+			return err
+		}
+		uid := p.owner.smap.Get().UUID
+		if err := token.CheckPermissions(uid, &bck.Bck, ace); err != nil {
+			return err
+		}
+	}
+	if bck == nil {
+		// cluster ACL like create/list buckets, node management etc
 		return nil
 	}
-	token, err := p.validateToken(hdr)
-	if err != nil {
-		return err
+	if !cfg.Auth.Enabled || token.IsAdmin {
+		// PATCH and ACL are always allowed in two cases:
+		// - a user is a superuser
+		// - AuthN is disabled
+		ace &^= (cmn.AccessPATCH | cmn.AccessBckSetACL)
 	}
-	uid := p.owner.smap.Get().UUID
-	return token.CheckPermissions(uid, bck, perms)
+	if ace == 0 {
+		return nil
+	}
+	if !cfg.Auth.Enabled {
+		// Without AuthN, read-only access is always OK
+		ace &^= cmn.AccessRO
+	}
+	return bck.Allow(ace)
 }
