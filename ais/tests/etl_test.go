@@ -486,9 +486,6 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 func TestETLHealth(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 
-	// TODO: Find the root cause of the problem and make Minikube metrics-server report stats of all Pods.
-	t.Skipf("Minikube metrics-server does not fetch stats of Pods different than deployed by default.")
-
 	tutils.Logln("Starting ETL")
 	uuid, err := etlInit(tetl.Echo, etl.RedirectCommType)
 	tassert.CheckFatal(t, err)
@@ -513,6 +510,8 @@ func TestETLHealth(t *testing.T) {
 		if err == nil && len(healths) > 0 {
 			break
 		}
+
+		time.Sleep(10 * time.Second)
 	}
 
 	for _, health := range healths {

@@ -27,9 +27,10 @@ if [[ "$metrics" == "y" ]]; then
   # See https://github.com/prometheus-operator/kube-prometheus/
   tmpdir=$(mktemp -d)
   pushd $tmpdir
-  git clone https://github.com/prometheus-operator/kube-prometheus.git && \
-  kubectl create -f kube-prometheus/manifests/setup && \
-  kubectl create -f kube-prometheus/manifests && \
+  git clone https://github.com/prometheus-operator/kube-prometheus.git
+  # Kubectl returns error when resources already exist...
+  kubectl apply -f kube-prometheus/manifests/setup
+  kubectl apply -f kube-prometheus/manifests
   popd $tmpdir
   rm -rf $tmpdir
 fi

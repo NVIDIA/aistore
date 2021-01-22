@@ -56,7 +56,7 @@ git log | head -5
 # Setting up minikube for the running kubernetes based tests.
 pushd deploy/dev/k8s
 echo "Deploying Minikube"
-{ echo y; echo n; } | ./utils/deploy_minikube.sh
+{ echo y; echo y; } | ./utils/deploy_minikube.sh
 echo "Deploying AIS on Minikube"
 { echo 1; echo 1; echo 1; echo 3; echo n; echo n; echo n; echo n; echo n; echo n; } | ./utils/deploy_ais.sh
 echo "AIS on Minikube deployed"
