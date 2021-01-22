@@ -24,7 +24,7 @@ var (
 	copyCmds = []cli.Command{
 		{
 			Name:  commandCopy,
-			Usage: "copy buckets and objects in the cluster",
+			Usage: "copy buckets in the cluster",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdCopyBucket,
