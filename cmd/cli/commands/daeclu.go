@@ -269,6 +269,11 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 }
 
 func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {
+	var (
+		latestAborted  bool = false
+		latestFinished bool = false
+	)
+
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
@@ -319,15 +324,22 @@ func showRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duratio
 				if prevID != "" && sts.stats.ID() != prevID {
 					break
 				}
+				latestAborted = latestAborted || sts.stats.AbortedX
+				latestFinished = latestFinished || !sts.stats.EndTime().IsZero()
 				displayRebStats(tw, sts)
 			}
 			prevID = sts.stats.ID()
 		}
 		tw.Flush()
 
-		if rebStats.Finished() {
-			fmt.Fprintln(c.App.Writer, "\nRebalance completed.")
-			break
+		if !flagIsSet(c, allXactionsFlag) {
+			if latestFinished && latestAborted {
+				fmt.Fprintln(c.App.Writer, "\nRebalance aborted.")
+				break
+			} else if latestFinished {
+				fmt.Fprintln(c.App.Writer, "\nRebalance completed.")
+				break
+			}
 		}
 
 		if !keepMonitoring {
