@@ -38,7 +38,6 @@ const (
 
 var cliBck cmn.Bck
 
-// nolint:maligned // no performance critical code
 type ioContext struct {
 	t                   *testing.T
 	smap                *cluster.Smap
@@ -47,7 +46,6 @@ type ioContext struct {
 	objNames            []string
 	bck                 cmn.Bck
 	fileSize            uint64
-	fixedSize           bool
 	numGetErrs          atomic.Uint64
 	proxyURL            string
 	prefix              string
@@ -58,6 +56,7 @@ type ioContext struct {
 	numGetsEachFile     int
 	getErrIsFatal       bool
 	silent              bool
+	fixedSize           bool
 }
 
 func (m *ioContext) saveClusterState() {
@@ -580,6 +579,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 		bck        cmn.Bck
 		backendBck cmn.Bck
 		skipArgs   tutils.SkipTestArgs
+		props      *cmn.BucketPropsToUpdate
 	}{
 		{
 			name: "local",
@@ -612,6 +612,27 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 				RemoteBck: true,
 			},
 		},
+		{
+			name: "local_3_copies",
+			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
+			props: &cmn.BucketPropsToUpdate{
+				Mirror: &cmn.MirrorConfToUpdate{
+					Enabled: api.Bool(true),
+					Copies:  api.Int64(3),
+				},
+			},
+		},
+		{
+			name: "local_ec_2_2",
+			bck:  cmn.Bck{Name: cmn.RandString(10), Provider: cmn.ProviderAIS},
+			props: &cmn.BucketPropsToUpdate{
+				EC: &cmn.ECConfToUpdate{
+					DataSlices:   api.Int(2),
+					ParitySlices: api.Int(2),
+					ObjSizeLimit: api.Int64(0),
+				},
+			},
+		},
 	}
 	for _, test := range tests { // nolint:gocritic // no performance critical code
 		t.Run(test.name, func(t *testing.T) {
@@ -624,8 +645,21 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 
 			baseParams := tutils.BaseAPIParams()
 
+			if test.props != nil && test.props.Mirror != nil {
+				skip := tutils.SkipTestArgs{
+					MinMountpaths: int(*test.props.Mirror.Copies),
+				}
+				tutils.CheckSkip(t, skip)
+			}
+			if test.props != nil && test.props.EC != nil {
+				skip := tutils.SkipTestArgs{
+					MinTargets: *test.props.EC.DataSlices + *test.props.EC.ParitySlices + 1,
+				}
+				tutils.CheckSkip(t, skip)
+			}
+
 			if test.bck.IsAIS() || test.bck.IsRemoteAIS() {
-				err := api.CreateBucket(baseParams, test.bck, nil)
+				err := api.CreateBucket(baseParams, test.bck, test.props)
 				tassert.CheckFatal(t, err)
 
 				if !test.backendBck.IsEmpty() {

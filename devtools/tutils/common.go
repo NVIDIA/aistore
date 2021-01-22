@@ -26,6 +26,7 @@ import (
 type SkipTestArgs struct {
 	Bck                   cmn.Bck
 	MinTargets            int
+	MinMountpaths         int
 	RequiresRemoteCluster bool
 	RequiresAuth          bool
 	Long                  bool
@@ -98,6 +99,7 @@ func GenerateNonexistentBucketName(prefix string, baseParams api.BaseParams) (st
 }
 
 func CheckSkip(tb testing.TB, args SkipTestArgs) {
+	var smap *cluster.Smap
 	if args.RequiresRemoteCluster && RemoteCluster.UUID == "" {
 		tb.Skipf("%s requires remote cluster", tb.Name())
 	}
@@ -118,10 +120,22 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 			tb.Skipf("%s requires Kubernetes", tb.Name())
 		}
 	}
+	if args.MinTargets > 0 || args.MinMountpaths > 0 {
+		smap = GetClusterMap(tb, GetPrimaryURL())
+	}
 	if args.MinTargets > 0 {
-		smap := GetClusterMap(tb, GetPrimaryURL())
 		if smap.CountTargets() < args.MinTargets {
-			tb.Skipf("%s requires at least %d targets, %d present in smap", tb.Name(), args.MinTargets, smap.CountTargets())
+			tb.Skipf("%s requires at least %d targets (have %d)",
+				tb.Name(), args.MinTargets, smap.CountTargets())
+		}
+	}
+	if args.MinMountpaths > 0 {
+		targets := smap.Tmap.ActiveNodes()
+		proxyURL := GetPrimaryURL()
+		baseParams := BaseAPIParams(proxyURL)
+		mpList, _ := api.GetMountpaths(baseParams, targets[0])
+		if l := len(mpList.Available); l < args.MinMountpaths {
+			tb.Skipf("%s requires at least %d mountpaths (have %d)", tb.Name(), args.MinMountpaths, l)
 		}
 	}
 }

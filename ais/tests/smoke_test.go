@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	objSizes = [3]int64{128 * cmn.KiB, 192 * cmn.KiB, 256 * cmn.KiB}
+	objSizes = [3]int64{3 * cmn.KiB, 19 * cmn.KiB, 77 * cmn.KiB}
 	ratios   = [5]float32{0, 0.25, 0.50, 0.75, 1} // #gets / #puts
 )
 

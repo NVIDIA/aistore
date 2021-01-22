@@ -747,7 +747,7 @@ func TestListObjectsProps(t *testing.T) {
 				if bck.IsAIS() {
 					tassert.Errorf(t, entry.Version != "", "version is not set")
 				}
-				tassert.Errorf(t, entry.Copies == 1, "copies is not set")
+				tassert.Errorf(t, entry.Copies > 0, "copies is not set")
 
 				tassert.Errorf(t, entry.Size == 0, "size is set")
 				tassert.Errorf(t, entry.Atime == "", "atime is set")
@@ -1551,18 +1551,9 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 	m.saveClusterState()
 
-	{
-		targets := m.smap.Tmap.ActiveNodes()
-		baseParams := tutils.BaseAPIParams()
-		mpList, err := api.GetMountpaths(baseParams, targets[0])
-		tassert.CheckFatal(t, err)
-
-		l := len(mpList.Available)
-		max := cmn.Max(numCopies...) + 1
-		if l < max {
-			t.Skipf("test %q requires at least %d mountpaths (target %s has %d)", t.Name(), max, targets[0], l)
-		}
-	}
+	max := cmn.Max(numCopies...) + 1
+	skip := tutils.SkipTestArgs{MinMountpaths: max}
+	tutils.CheckSkip(t, skip)
 
 	tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 	{
@@ -1648,17 +1639,7 @@ func TestRemoteBucketMirror(t *testing.T) {
 		m.bck, m.num, len(objectList.Entries),
 	)
 
-	smap := tutils.GetClusterMap(t, baseParams.URL)
-	{
-		target, _ := smap.GetRandTarget()
-		mpList, err := api.GetMountpaths(baseParams, target)
-		tassert.CheckFatal(t, err)
-
-		numps := len(mpList.Available)
-		if numps < 4 {
-			t.Skipf("test %q requires at least 4 mountpaths (target %s has %d)", t.Name(), target.ID(), numps)
-		}
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{MinMountpaths: 4})
 
 	// cold GET - causes local mirroring
 	m.remotePrefetch(m.num)
