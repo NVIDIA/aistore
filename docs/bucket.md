@@ -264,9 +264,10 @@ Important note here is that the NameNode and DataNode addresses must be accessib
 
 Example of HDFS provider configuration:
 ```json
-"hdfs": {
+{
+  "user": "root",
   "addresses": ["localhost:8020"],
-  "user": "root"
+  "use_datanode_hostname": false
 }
 ```
 

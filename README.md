@@ -56,7 +56,7 @@ AIStore supports numerous deployment options covering a spectrum from a single-l
 
 | Deployment option | Targeted audience and objective |
 | --- | ---|
-| [Local playground](docs/getting_started.md#local-playground-and-development-deployment) | AIS developers and development, Linux or Mac OS |
+| [Local playground](docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
 | [Easy automated GCP/GKE deployment](docs/getting_started.md#cloud-deployment) | Developers, first-time users, AI researchers |
 | [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided (documented, automated) via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
@@ -126,7 +126,7 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 ## Guides and References
 
 - [AIS Overview](docs/overview.md)
-- [Playbooks](docs/playbooks/README.md)
+- [Tutorials](docs/tutorials/README.md)
 - [Videos](docs/videos.md)
 - [CLI](cmd/cli/README.md)
   - [Create, destroy, list, and other operations on buckets](cmd/cli/resources/bucket.md)

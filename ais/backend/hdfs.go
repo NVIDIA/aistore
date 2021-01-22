@@ -42,7 +42,7 @@ func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
 	client, err := hdfs.NewClient(hdfs.ClientOptions{
 		Addresses:           hdfsConf.Addresses,
 		User:                hdfsConf.User,
-		UseDatanodeHostname: false,
+		UseDatanodeHostname: hdfsConf.UseDatanodeHostname,
 	})
 	if err != nil {
 		return nil, err

@@ -403,7 +403,7 @@ func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cmn.SimpleKVs) []byte {
 		num = len(md)
 	)
 	for k, v := range md {
-		cmn.Assert(k != "" && v != "")
+		cmn.Assert(k != "")
 		i++
 		buf = mm.Append(buf, k)
 		buf = mm.Append(buf, customMDSepa)

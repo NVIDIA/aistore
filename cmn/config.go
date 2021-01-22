@@ -176,8 +176,9 @@ type (
 	BackendInfoAIS map[string]*RemoteAISInfo
 
 	BackendConfHDFS struct {
-		Addresses []string `json:"addresses"`
-		User      string   `json:"user"`
+		Addresses           []string `json:"addresses"`
+		User                string   `json:"user"`
+		UseDatanodeHostname bool     `json:"use_datanode_hostname"`
 	}
 
 	MirrorConf struct {
