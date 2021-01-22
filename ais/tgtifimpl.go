@@ -282,16 +282,31 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 	switch ty {
 	case cluster.Prefetch:
 		if !lom.TryLock(true) {
-			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
+			glog.Warningf("[prefetch] cold GET race, skipping (lom: %s)", lom)
 			return 0, cmn.ErrSkip
 		}
 	case cluster.PrefetchWait:
 		lom.Lock(true /*exclusive*/)
 	case cluster.GetCold:
-		finished := lom.UpgradeLock()
-		if finished {
+		for lom.UpgradeLock() {
 			// The action was performed by some other goroutine and we don't need
-			// to do it again.
+			// to do it again. But we need to ensure that the operation was successful.
+			if err := lom.Load(false); err != nil {
+				if cmn.IsErrObjNought(err) {
+					// Try to get `UpgradeLock` again and retry getting object.
+					glog.Errorf("[get_cold] Object was supposed to be downloaded but doesn't exists, retrying (fqn: %q, err: %v)", lom.FQN, err)
+					continue
+				}
+				return http.StatusBadRequest, err
+			}
+			if vchanged, errCode, err := t.CheckCloudVersion(ctx, lom); err != nil {
+				return errCode, err
+			} else if vchanged {
+				// Need to re-download the object as the version has changed.
+				glog.Errorf("[get_cold] Backend provider has newer version of the object (fqn: %q)", lom.FQN)
+				continue
+			}
+			// Object exists and version is up-to-date.
 			return 0, nil
 		}
 	default:
@@ -300,7 +315,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 
 	if errCode, err = t.Backend(lom.Bck()).GetObj(ctx, lom); err != nil {
 		lom.Unlock(true)
-		glog.Errorf("%s: GET failed %d, err: %v", lom, errCode, err)
+		glog.Errorf("[get_cold] Remote object get failed (lom: %s, err_code: %d, err: %v)", lom, errCode, err)
 		return
 	}
 
