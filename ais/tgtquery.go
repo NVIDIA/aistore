@@ -170,5 +170,5 @@ func (t *targetrunner) httpqueryput(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) queryDoesntExist(w http.ResponseWriter, r *http.Request, handle string) {
-	t.invalmsghdlrsilent(w, r, t.Snode().String()+" handle "+handle+" not found", http.StatusNotFound)
+	t.invalmsghdlrsilent(w, r, t.Sname()+" handle "+handle+" not found", http.StatusNotFound)
 }

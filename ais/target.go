@@ -1255,7 +1255,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		if xputlrep == nil {
 			return
 		}
-		err = xputlrep.(*mirror.XactPut).Repl(lom)
+		err = xputlrep.(*mirror.XactPut).Repl(lom.LIF())
 		if xaction.IsErrXactExpired(err) {
 			break
 		}

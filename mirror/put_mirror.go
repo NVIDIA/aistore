@@ -5,6 +5,7 @@
 package mirror
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -37,8 +38,9 @@ type (
 		xaction.XactDemandBase
 		// runtime
 		workers *mpather.WorkerGroup
-		workCh  chan *cluster.LOM
+		workCh  chan cluster.LIF
 		// init
+		bmd     *cluster.BMD
 		mirror  cmn.MirrorConf
 		total   atomic.Int64
 		dropped int64
@@ -55,7 +57,7 @@ func (*putMirrorProvider) New(args xreg.XactArgs) xreg.BucketEntry {
 func (p *putMirrorProvider) Start(_ cmn.Bck) error {
 	slab, err := p.t.MMSA().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	cmn.AssertNoErr(err)
-	xact, err := RunXactPut(p.lom, slab)
+	xact, err := runXactPut(p.lom, slab, p.t)
 	if err != nil {
 		glog.Error(err)
 		return err
@@ -66,24 +68,21 @@ func (p *putMirrorProvider) Start(_ cmn.Bck) error {
 func (*putMirrorProvider) Kind() string        { return cmn.ActPutCopies }
 func (p *putMirrorProvider) Get() cluster.Xact { return p.xact }
 
-//
-// public methods
-//
-
-func RunXactPut(lom *cluster.LOM, slab *memsys.Slab) (r *XactPut, err error) {
-	var (
-		availablePaths, _ = fs.Get()
-		mpathCount        = len(availablePaths)
-	)
-	if mpathCount < 2 {
-		return nil, fmt.Errorf("number of mountpaths (%d) is insufficient for local mirroring, exiting", mpathCount)
-	}
-
+// main
+func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactPut, err error) {
 	mirror := *lom.MirrorConf()
+	if !mirror.Enabled {
+		return nil, errors.New("mirroring disabled, nothing to do")
+	}
+	if err = fs.ValidateNCopies(t.Sname(), int(mirror.Copies)); err != nil {
+		return
+	}
+	bmd := t.Bowner().Get()
 	r = &XactPut{
 		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bck().Bck),
 		mirror:         mirror,
-		workCh:         make(chan *cluster.LOM, mirror.Burst),
+		workCh:         make(chan cluster.LIF, mirror.Burst),
+		bmd:            bmd,
 		workers: mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
 			Slab:      slab,
 			QueueSize: mirror.Burst,
@@ -93,7 +92,6 @@ func RunXactPut(lom *cluster.LOM, slab *memsys.Slab) (r *XactPut, err error) {
 					glog.Error(err)
 				} else {
 					r.ObjectsAdd(int64(copies))
-					r.BytesAdd(lom.Size() * int64(copies))
 				}
 				r.DecPending() // to support action renewal on-demand
 			},
@@ -113,8 +111,12 @@ func (r *XactPut) Run() {
 
 	for {
 		select {
-		case src := <-r.workCh:
-			lom := src.Clone(src.FQN)
+		case lif := <-r.workCh:
+			lom, err := lif.LOM(r.bmd)
+			if err != nil {
+				r.Finish(err)
+				return
+			}
 			if err := lom.Load(); err != nil {
 				glog.Error(err)
 				break
@@ -129,15 +131,16 @@ func (r *XactPut) Run() {
 		case <-r.ChanAbort():
 			if err := r.stop(); err != nil {
 				r.Finish(err)
+			} else {
+				r.Finish(cmn.NewAbortedError(r.String()))
 			}
-			r.Finish(cmn.NewAbortedError(r.String()))
 			return
 		}
 	}
 }
 
 // main method: replicate a given locally stored object
-func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
+func (r *XactPut) Repl(lif cluster.LIF) (err error) {
 	if r.Finished() {
 		err = xaction.NewErrXactExpired("Cannot replicate: " + r.String())
 		return
@@ -158,7 +161,7 @@ func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 		}
 	}
 	r.IncPending() // ref-count via base to support on-demand action
-	r.workCh <- lom
+	r.workCh <- lif
 
 	// [throttle]
 	// a bit of back-pressure when approaching the fixed boundary

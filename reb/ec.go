@@ -324,7 +324,7 @@ func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
 	// transmit
 	var (
 		req = pushReq{
-			daemonID: reb.t.Snode().ID(),
+			daemonID: reb.t.SID(),
 			stage:    rebStageECRepair,
 			rebID:    reb.rebID.Load(),
 			md:       ct.meta,
@@ -376,7 +376,7 @@ func (reb *Manager) sendFromReader(reader cmn.ReadOpenCloser,
 	var (
 		newMeta = *ct.meta // copy of meta (flat struct of primitive types)
 		req     = pushReq{
-			daemonID: reb.t.Snode().ID(),
+			daemonID: reb.t.SID(),
 			stage:    rebStageECRepair,
 			rebID:    reb.rebID.Load(),
 			md:       &newMeta,
@@ -439,7 +439,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Obj
 		if err != nil {
 			return err
 		}
-		needSave = tgt.ID() != reb.t.Snode().ID()
+		needSave = tgt.ID() != reb.t.SID()
 	}
 	if !needSave {
 		return nil
@@ -564,7 +564,7 @@ func (reb *Manager) receiveCT(req *pushReq, hdr transport.ObjHdr, reader io.Read
 	var (
 		smap = (*cluster.Smap)(reb.smap.Load())
 		tsi  = smap.GetTarget(req.daemonID)
-		ack  = &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.Snode().ID()}
+		ack  = &ecAck{sliceID: uint16(sliceID), daemonID: reb.t.SID()}
 	)
 	hdr.Opaque = ack.NewPack(nil)
 	hdr.ObjAttrs.Size = 0
@@ -635,7 +635,7 @@ func (reb *Manager) mergeCTs(md *rebArgs) *globalCTList {
 	}
 
 	// process all received CTs
-	localDaemon := reb.t.Snode().ID()
+	localDaemon := reb.t.SID()
 	for sid := range md.smap.Tmap {
 		local := sid == localDaemon
 		ctList, ok := reb.ec.nodeData(sid)
@@ -833,7 +833,7 @@ func (reb *Manager) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	id := reb.t.Snode().ID()
+	id := reb.t.SID()
 	rec := &rebCT{
 		Bck:          ct.Bucket(),
 		ObjName:      ct.ObjectName(),
@@ -873,18 +873,18 @@ func (reb *Manager) exchange(md *rebArgs) error {
 		sleep   = config.Timeout.MaxKeepalive // delay between retries
 	)
 	for _, node := range md.smap.Tmap {
-		if node.ID() == reb.t.Snode().ID() {
+		if node.ID() == reb.t.SID() {
 			continue
 		}
 		sendTo = append(sendTo, node)
 	}
-	cts, ok := reb.ec.nodeData(reb.t.Snode().ID())
+	cts, ok := reb.ec.nodeData(reb.t.SID())
 	if !ok {
 		cts = emptyCT // no data collected for the target, send empty notification
 	}
 	var (
 		req = pushReq{
-			daemonID: reb.t.Snode().ID(),
+			daemonID: reb.t.SID(),
 			stage:    rebStageECNamespace,
 			rebID:    rebID,
 		}
@@ -1014,7 +1014,7 @@ func (reb *Manager) resilverCT() error {
 
 // Fills object properties with props that must be calculated locally
 func (reb *Manager) calcLocalProps(bck *cluster.Bck, obj *rebObject, smap *cluster.Smap, ecConfig *cmn.ECConf) (err error) {
-	localDaemon := reb.t.Snode().ID()
+	localDaemon := reb.t.SID()
 	cts := obj.newest()
 	cmn.Assert(len(cts) != 0) // cannot happen
 	mainSlice := cts[0]
@@ -1128,7 +1128,7 @@ func uniqueWaitID(bck cmn.Bck, objName string) string {
 func (reb *Manager) shouldSkipObj(obj *rebObject) bool {
 	anyOnMain := obj.mainHasAny && obj.mainSliceID == 0
 	noOnSecondary := !obj.hasCT && !obj.isMain
-	notSender := obj.sender != nil && obj.isECCopy && obj.sender.ID() != reb.t.Snode().ID() && !obj.isMain
+	notSender := obj.sender != nil && obj.isECCopy && obj.sender.ID() != reb.t.SID() && !obj.isMain
 	skip := anyOnMain || noOnSecondary || notSender
 	if skip && bool(glog.FastV(4, glog.SmoduleReb)) {
 		glog.Infof("#0 SKIP %s - main has it: %v - %v -%v", obj.uid, anyOnMain, noOnSecondary, notSender)
@@ -1165,11 +1165,11 @@ func (reb *Manager) shouldSendSlice(obj *rebObject) (hasSlice, shouldSend bool) 
 	}
 	// First check if this target in the first 'dataSliceCount' slices.
 	// Skip the first target in list for it is the main one.
-	tgtIndex := reb.targetIndex(reb.t.Snode().ID(), obj)
+	tgtIndex := reb.targetIndex(reb.t.SID(), obj)
 	shouldSend = tgtIndex >= 0 && tgtIndex < int(obj.dataSlices)
 	hasSlice = obj.hasCT && !obj.isMain && !obj.isECCopy && !obj.fullObjFound
 	if hasSlice && (bool(glog.FastV(4, glog.SmoduleReb))) {
-		locSlice := obj.locCT[reb.t.Snode().ID()]
+		locSlice := obj.locCT[reb.t.SID()]
 		glog.Infof("should send: %s[%d - %d] - %d : %v / %v", obj.uid, locSlice.SliceID, obj.sliceSize, tgtIndex,
 			hasSlice, shouldSend)
 	}
@@ -1179,7 +1179,7 @@ func (reb *Manager) shouldSendSlice(obj *rebObject) (hasSlice, shouldSend bool) 
 // true if the object is not replicated, and this target has full object, and the
 // target is not the default target, and default target does not have full object
 func (reb *Manager) hasFullObjMisplaced(obj *rebObject) bool {
-	locCT, ok := obj.locCT[reb.t.Snode().ID()]
+	locCT, ok := obj.locCT[reb.t.SID()]
 	return ok && !obj.isECCopy && !obj.isMain && locCT.SliceID == 0 &&
 		(!obj.mainHasAny || obj.mainSliceID != 0)
 }
@@ -1188,7 +1188,7 @@ func (reb *Manager) hasFullObjMisplaced(obj *rebObject) bool {
 // If destination is not defined the target sends its data to "default by HRW" target
 func (reb *Manager) sendLocalData(md *rebArgs, obj *rebObject, si ...*cluster.Snode) error {
 	reb.laterx.Store(true)
-	ct, ok := obj.locCT[reb.t.Snode().ID()]
+	ct, ok := obj.locCT[reb.t.SID()]
 	cmn.Assert(ok)
 	var target *cluster.Snode
 	if len(si) != 0 {
@@ -1211,12 +1211,12 @@ func (reb *Manager) sendLocalReplica(md *rebArgs, obj *rebObject) error {
 		glog.Infof("%s object %s sender %s", reb.t.Snode(), obj.uid, obj.sender)
 	}
 	// Another node should send replicas, do noting
-	if obj.sender.DaemonID != reb.t.Snode().ID() {
+	if obj.sender.DaemonID != reb.t.SID() {
 		return nil
 	}
 
 	sendTo := md.smap.Tmap[obj.mainDaemon]
-	ct, ok := obj.locCT[reb.t.Snode().ID()]
+	ct, ok := obj.locCT[reb.t.SID()]
 	cmn.Assert(ok)
 	if err := reb.sendFromDisk(ct, sendTo); err != nil {
 		return fmt.Errorf("failed to send %s: %v", ct.ObjName, err)
@@ -1264,8 +1264,8 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
 		return
 	}
-	rq.Header.Add(cmn.HeaderCallerID, reb.t.Snode().ID())
-	rq.Header.Add(cmn.HeaderCallerName, reb.t.Snode().Name())
+	rq.Header.Add(cmn.HeaderCallerID, reb.t.SID())
+	rq.Header.Add(cmn.HeaderCallerName, reb.t.Sname())
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cmn.Close
 		return
@@ -1292,8 +1292,8 @@ func (reb *Manager) getCT(si *cluster.Snode, obj *rebObject, slice *sliceGetResp
 	if rq, slice.err = http.NewRequest(http.MethodGet, urlPath, nil); slice.err != nil {
 		return
 	}
-	rq.Header.Add(cmn.HeaderCallerID, reb.t.Snode().ID())
-	rq.Header.Add(cmn.HeaderCallerName, reb.t.Snode().Name())
+	rq.Header.Add(cmn.HeaderCallerID, reb.t.SID())
+	rq.Header.Add(cmn.HeaderCallerName, reb.t.Sname())
 	rq.URL.RawQuery = qMeta.Encode()
 	if resp, slice.err = reb.ecClient.Do(rq); slice.err != nil { // nolint:bodyclose // closed inside cmn.Close
 		return
@@ -1333,7 +1333,7 @@ func (reb *Manager) reRequestObj(md *rebArgs, obj *rebObject) error {
 	// get missing slices
 	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(toRequest))
 	for sid, slice := range toRequest {
-		debug.Assert(reb.t.Snode().ID() != sid)
+		debug.Assert(reb.t.SID() != sid)
 		si := md.smap.Tmap[sid]
 		wg.Add(1)
 		go func(si *cluster.Snode, slice *sliceGetResp) {
@@ -1416,7 +1416,7 @@ func (reb *Manager) allNodesCompletedBatch(md *rebArgs) bool {
 	reb.stages.mtx.Lock()
 	smap := md.smap.Tmap
 	for _, si := range smap {
-		if si.ID() == reb.t.Snode().ID() {
+		if si.ID() == reb.t.SID() {
 			// local target is always in the stage
 			cnt++
 			continue
@@ -1532,7 +1532,7 @@ func (reb *Manager) finalizeBatch(md *rebArgs) error {
 	reb.changeStage(rebStageECBatch, reb.stages.currBatch.Load())
 	// wait for all targets to finish sending/receiving
 	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infof("%s waiting for ALL batch %d DONE", reb.t.Snode().ID(), reb.stages.currBatch.Load())
+		glog.Infof("%s waiting for ALL batch %d DONE", reb.t.SID(), reb.stages.currBatch.Load())
 	}
 	if aborted := reb.waitEvent(md, reb.allNodesCompletedBatch); aborted {
 		return cmn.NewAbortedError("finalize batch - wait nodes to complete")
@@ -1763,7 +1763,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 			Bck:          obj.bck,
 			ObjName:      obj.objName,
 			ObjSize:      sliceMD.Size,
-			DaemonID:     reb.t.Snode().ID(),
+			DaemonID:     reb.t.SID(),
 			SliceID:      int16(sliceID),
 			DataSlices:   int16(ecMD.Data),
 			ParitySlices: int16(ecMD.Parity),

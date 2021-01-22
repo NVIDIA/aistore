@@ -40,7 +40,7 @@ func ParsePodSpec(errCtx *cmn.ETLErrorContext, spec []byte) (*corev1.Pod, error)
 
 func preparePodSpec(errCtx *cmn.ETLErrorContext, t cluster.Target, pod *corev1.Pod, env map[string]string) (err error) {
 	// Override the name (add target's daemon ID and node ID to its name).
-	pod.SetName(k8s.CleanName(pod.GetName() + "-" + t.Snode().ID()))
+	pod.SetName(k8s.CleanName(pod.GetName() + "-" + t.SID()))
 	errCtx.PodName = pod.GetName()
 	pod.APIVersion = "v1"
 

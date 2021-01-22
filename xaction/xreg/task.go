@@ -123,7 +123,7 @@ func (t *bckSummaryTask) Run() {
 
 	// Check if we are the target that needs to list cloud bucket (we only want
 	// single target to do it).
-	shouldListCB := t.msg.Cached || (si.ID() == t.t.Snode().ID() && !t.msg.Cached)
+	shouldListCB := t.msg.Cached || (si.ID() == t.t.SID() && !t.msg.Cached)
 
 	for _, bck := range buckets {
 		go func(bck *cluster.Bck) {

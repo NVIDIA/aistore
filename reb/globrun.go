@@ -269,7 +269,7 @@ func (reb *Manager) runEC(md *rebArgs) error {
 		return err
 	}
 
-	glog.Infof("[%s] RebalanceEC done", reb.t.Snode().ID())
+	glog.Infof("[%s] RebalanceEC done", reb.t.SID())
 	return nil
 }
 
@@ -507,7 +507,7 @@ func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ask rebalance manager the list of all local slices
-	if slices, ok := reb.ec.nodeData(reb.t.Snode().ID()); ok {
+	if slices, ok := reb.ec.nodeData(reb.t.SID()); ok {
 		if err := cmn.WriteJSON(w, slices); err != nil {
 			glog.Errorf("Failed to send data to %s", caller)
 		}
@@ -606,7 +606,7 @@ func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if err != nil {
 		return err
 	}
-	if tsi.ID() == t.Snode().ID() {
+	if tsi.ID() == t.SID() {
 		return nil
 	}
 
@@ -675,7 +675,7 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 	}
 	// transmit
 	var (
-		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.Snode().ID()}
+		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.SID()}
 		mm     = rj.m.t.SmallMMSA()
 		opaque = ack.NewPack(mm)
 		o      = transport.AllocSend()

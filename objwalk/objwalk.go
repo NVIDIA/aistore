@@ -84,7 +84,7 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 
 	var (
 		localURL        = w.t.Snode().URL(cmn.NetworkPublic)
-		localID         = w.t.Snode().ID()
+		localID         = w.t.SID()
 		smap            = w.t.Sowner().Get()
 		postCallback, _ = w.ctx.Value(walkinfo.CtxPostCallbackKey).(walkinfo.PostCallbackFunc)
 

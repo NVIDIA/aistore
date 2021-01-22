@@ -5,10 +5,12 @@
 package cluster
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // interface to Get current BMD instance
@@ -32,6 +34,8 @@ type (
 		Providers Providers `json:"providers"`      // (provider, namespace, bucket) hierarchy
 	}
 )
+
+var errBucketIDMismatch = errors.New("bucket ID mismatch")
 
 func (m *BMD) String() string {
 	if m == nil {
@@ -84,6 +88,21 @@ func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
 		p, present = buckets[bck.Name]
 	}
 	return
+}
+
+func (m *BMD) Check(bck *Bck, bckID uint64) error {
+	debug.Assert(bckID != 0)
+	bprops, present := m.Get(bck)
+	if !present {
+		if bck.IsRemote() {
+			return cmn.NewErrorRemoteBucketDoesNotExist(bck.Bucket())
+		}
+		return cmn.NewErrorBucketDoesNotExist(bck.Bucket())
+	}
+	if bckID == bprops.BID {
+		return nil // ok
+	}
+	return errBucketIDMismatch
 }
 
 func (m *BMD) Del(bck *Bck) (deleted bool) {

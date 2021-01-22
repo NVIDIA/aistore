@@ -267,7 +267,7 @@ func (j *remoteBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
 // download found or the bucket list is over.
 func (j *remoteBucketDlJob) getNextObjs() error {
 	var (
-		sid   = j.t.Snode().ID()
+		sid   = j.t.SID()
 		smap  = j.t.Sowner().Get()
 		cloud = j.t.Backend(j.bck)
 	)
@@ -320,7 +320,7 @@ func (j *rangeDlJob) genNext() ([]dlObj, bool, error) {
 func (j *rangeDlJob) getNextObjs() error {
 	var (
 		smap = j.t.Sowner().Get()
-		sid  = j.t.Snode().ID()
+		sid  = j.t.SID()
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {
@@ -361,7 +361,7 @@ func newRemoteBucketDlJob(ctx context.Context, t cluster.Target, id string, bck 
 func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
 	var (
 		smap = t.Sowner().Get()
-		sid  = t.Snode().ID()
+		sid  = t.SID()
 		iter = pt.Iter()
 		si   *cluster.Snode
 	)

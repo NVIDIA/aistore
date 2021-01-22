@@ -1099,8 +1099,8 @@ func (t *targetrunner) enable() error {
 // lookupRemoteSingle sends the message to the given target to see if it has the specific object.
 func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	header := make(http.Header)
-	header.Add(cmn.HeaderCallerID, t.Snode().ID())
-	header.Add(cmn.HeaderCallerName, t.Snode().Name())
+	header.Add(cmn.HeaderCallerID, t.SID())
+	header.Add(cmn.HeaderCallerName, t.Sname())
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	args := callArgs{
@@ -1123,8 +1123,8 @@ func (t *targetrunner) LookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) 
 // have the specific object.
 func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	header := make(http.Header)
-	header.Add(cmn.HeaderCallerID, t.Snode().ID())
-	header.Add(cmn.HeaderCallerName, t.Snode().Name())
+	header.Add(cmn.HeaderCallerID, t.SID())
+	header.Add(cmn.HeaderCallerName, t.Sname())
 	query := make(url.Values)
 	query.Set(cmn.URLParamSilent, "true")
 	query.Set(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced

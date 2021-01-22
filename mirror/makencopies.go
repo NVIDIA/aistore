@@ -17,10 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
-const (
-	MaxNCopies = 16 // validation
-)
-
 type (
 	mncProvider struct {
 		xreg.BaseBckEntry
@@ -72,11 +68,10 @@ func newXactMNC(bck cmn.Bck, t cluster.Target, slab *memsys.Slab, id string, cop
 }
 
 func (r *xactMNC) Run() {
-	if err := ValidateNCopies(r.Target().Snode().Name(), r.copies); err != nil {
+	if err := fs.ValidateNCopies(r.Target().Sname(), r.copies); err != nil {
 		r.Finish(err)
 		return
 	}
-
 	r.xactBckBase.runJoggers()
 	glog.Infoln(r.String(), "copies=", r.copies)
 	err := r.xactBckBase.waitDone()
@@ -109,21 +104,6 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
 			return cmn.NewAbortedErrorDetails(what, cs.Err.Error())
 		}
-	}
-	return nil
-}
-
-func ValidateNCopies(prefix string, copies int) error {
-	if _, err := checkI64Range(int64(copies), 1, MaxNCopies); err != nil {
-		return fmt.Errorf("number of copies (%d) %s", copies, err.Error())
-	}
-	availablePaths, _ := fs.Get()
-	mpathCount := len(availablePaths)
-	if mpathCount == 0 {
-		return fmt.Errorf("%s: %s", prefix, cmn.NoMountpaths)
-	}
-	if copies > mpathCount {
-		return fmt.Errorf("%s: number of copies (%d) exceeds the number of mountpaths (%d)", prefix, copies, mpathCount)
 	}
 	return nil
 }

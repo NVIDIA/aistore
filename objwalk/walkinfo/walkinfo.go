@@ -201,7 +201,7 @@ func (wi *WalkInfo) Callback(fqn string, de fs.DirEntry) (*cmn.BucketEntry, erro
 		if err != nil {
 			return nil, err
 		}
-		if wi.t.Snode().ID() != si.ID() {
+		if wi.t.SID() != si.ID() {
 			objStatus = cmn.ObjStatusMoved
 		}
 	}

@@ -124,7 +124,7 @@ func (r *ObjectsListingXact) startFromTemplate() {
 			return
 		}
 
-		if si.ID() != r.t.Snode().ID() {
+		if si.ID() != r.t.SID() {
 			continue
 		}
 
@@ -167,7 +167,7 @@ func (r *ObjectsListingXact) startFromBck() {
 			// TODO: should we handle it somehow?
 			return
 		}
-		if si.ID() != r.t.Snode().ID() {
+		if si.ID() != r.t.SID() {
 			// We are not the target which should list the cloud objects.
 			return
 		}

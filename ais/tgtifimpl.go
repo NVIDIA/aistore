@@ -40,6 +40,8 @@ import (
 // interface guard
 var _ cluster.Target = (*targetrunner)(nil)
 
+func (t *targetrunner) Sname() string               { return t.si.String() }
+func (t *targetrunner) SID() string                 { return t.si.ID() }
 func (t *targetrunner) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *targetrunner) MMSA() *memsys.MMSA          { return t.gmm }
 func (t *targetrunner) SmallMMSA() *memsys.MMSA     { return t.smm }

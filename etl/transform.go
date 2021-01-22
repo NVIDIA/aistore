@@ -130,7 +130,7 @@ func (e *Aborter) ListenSmapChanged() {
 
 		if !newSmap.CompareTargets(e.currentSmap) {
 			glog.Warning(cmn.NewETLError(&cmn.ETLErrorContext{
-				TID:  e.t.Snode().DaemonID,
+				TID:  e.t.SID(),
 				UUID: e.uuid,
 			}, "targets have changed, aborting..."))
 			// Stop will unregister `e` from smap listeners.
@@ -195,7 +195,7 @@ func tryStart(t cluster.Target, msg InitMsg, opts ...StartOpts) (errCtx *cmn.ETL
 	}
 
 	errCtx = &cmn.ETLErrorContext{
-		TID:  t.Snode().DaemonID,
+		TID:  t.SID(),
 		UUID: msg.ID,
 	}
 
@@ -310,7 +310,7 @@ func createServiceSpec(pod *corev1.Pod) *corev1.Service {
 // It unregisters ETL smap listener.
 func Stop(t cluster.Target, id string) error {
 	errCtx := &cmn.ETLErrorContext{
-		TID:  t.Snode().DaemonID,
+		TID:  t.SID(),
 		UUID: id,
 	}
 
@@ -373,7 +373,7 @@ func PodLogs(t cluster.Target, transformID string) (logs PodLogsMsg, err error) 
 		return logs, err
 	}
 	return PodLogsMsg{
-		TargetID: t.Snode().ID(),
+		TargetID: t.SID(),
 		Logs:     b,
 	}, nil
 }
@@ -392,7 +392,7 @@ func PodHealth(t cluster.Target, etlID string) (stats *PodHealthMsg, err error) 
 
 	cpuUsed, memUsed, err := client.Health(c.PodName())
 	return &PodHealthMsg{
-		TargetID: t.Snode().ID(),
+		TargetID: t.SID(),
 		CPU:      cpuUsed,
 		Mem:      memUsed,
 	}, err
@@ -475,7 +475,7 @@ func updatePodLabels(t cluster.Target, pod *corev1.Pod) {
 	pod.Labels[appLabel] = "ais"
 	pod.Labels[podNameLabel] = pod.GetName()
 	pod.Labels[podNodeLabel] = k8s.NodeName
-	pod.Labels[podTargetLabel] = t.Snode().ID()
+	pod.Labels[podTargetLabel] = t.SID()
 	pod.Labels[appK8sNameLabel] = "etl"
 	pod.Labels[appK8sComponentLabel] = "server"
 }

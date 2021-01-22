@@ -60,7 +60,11 @@ type (
 		ObjName     string            // object name in the bucket
 		HrwFQN      string            // (misplaced?)
 	}
-
+	// LOM In Flight (LIF)
+	LIF struct {
+		Uname string
+		BID   uint64
+	}
 	ObjectFilter func(*LOM) bool
 )
 
@@ -92,9 +96,34 @@ func initLomLocker() {
 	maxLmeta.Store(xattrMaxSize)
 }
 
-//
-// LOM public methods
-//
+/////////
+// LIF //
+/////////
+
+// LIF => LOF with a check for bucket existence
+func (lif *LIF) LOM(bmd *BMD) (lom *LOM, err error) {
+	b, objName := cmn.ParseUname(lif.Uname)
+	lom = &LOM{ObjName: objName}
+	if err = lom.Init(b); err != nil {
+		return
+	}
+	if bprops := lom.Bprops(); bprops == nil {
+		err = cmn.NewObjDefunctError(lom.String(), 0, lif.BID)
+	} else if bprops.BID != lif.BID {
+		err = cmn.NewObjDefunctError(lom.String(), bprops.BID, lif.BID)
+	}
+	return
+}
+
+func (lom *LOM) LIF() (lif LIF) {
+	debug.Assert(lom.md.uname != "")
+	debug.Assert(lom.Bprops() != nil && lom.Bprops().BID != 0)
+	return LIF{lom.md.uname, lom.Bprops().BID}
+}
+
+/////////
+// LOM //
+/////////
 
 func (lom *LOM) Uname() string                { return lom.md.uname }
 func (lom *LOM) Size() int64                  { return lom.md.size }
@@ -754,6 +783,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.mpathInfo.LomCache(idx)
+		bmd       = T.Bowner().Get()
 		add       = true // default: cache it
 	)
 	if len(adds) > 0 {
@@ -762,7 +792,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	if md, ok := cache.Load(hkey); ok { // fast path
 		lmeta := md.(*lmeta)
 		lom.md = *lmeta
-		err = lom.checkBucket()
+		err = lom._checkBucket(bmd)
 		return
 	}
 	err = lom.FromFS() // slow path
@@ -771,7 +801,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 			return
 		}
 		lom.md.bckID = lom.Bprops().BID
-		err = lom.checkBucket()
+		err = lom._checkBucket(bmd)
 		if err == nil && add {
 			md := &lmeta{}
 			*md = lom.md
@@ -781,23 +811,13 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	return
 }
 
-func (lom *LOM) checkBucket() error {
-	debug.Assert(lom.loaded()) // cannot check bucket without first calling lom.Load()
-	var (
-		bmd             = T.Bowner().Get()
-		bprops, present = bmd.Get(lom.bck)
-	)
-	if !present { // bucket does not exist
-		if lom.bck.IsRemote() {
-			return cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
-		}
-		return cmn.NewErrorBucketDoesNotExist(lom.Bucket())
+func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
+	debug.Assert(lom.loaded())
+	err = bmd.Check(lom.bck, lom.md.bckID)
+	if err == errBucketIDMismatch {
+		err = cmn.NewObjDefunctError(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 	}
-	if lom.md.bckID == bprops.BID {
-		return nil // ok
-	}
-	lom.Uncache(true /*delDirty*/)
-	return cmn.NewObjDefunctError(lom.String(), lom.md.bckID, lom.bck.Props.BID)
+	return
 }
 
 func (lom *LOM) ReCache(store bool) {
@@ -911,27 +931,6 @@ func EvictLomCache(b *Bck) {
 		}(cache)
 	}
 	wg.Wait()
-}
-
-//
-// static helpers
-//
-func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, bucketExists bool) {
-	var (
-		b, objName = cmn.ParseUname(md.uname)
-		bck        = NewBckEmbed(b)
-		err        error
-	)
-	lom = &LOM{ObjName: objName, bck: bck}
-	bucketExists = bmd.Exists(bck, md.bckID)
-	if bucketExists {
-		lom.FQN, _, err = HrwFQN(lom.Bck(), fs.ObjectType, lom.ObjName)
-		if err != nil {
-			glog.Errorf("%s: hrw err: %v", lom, err)
-			bucketExists = false
-		}
-	}
-	return
 }
 
 func lomCaches() []*sync.Map {

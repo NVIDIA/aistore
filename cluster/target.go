@@ -33,7 +33,8 @@ const (
 	ColdGet
 	Migrated
 
-	// Error if lock is not available to be acquired immediately. Otherwise acquire, create an object, release the lock.
+	// Error if lock is not available to be acquired immediately.
+	// Otherwise acquire, create an object, release the lock.
 	Prefetch GetColdType = iota
 	// Wait until a lock is acquired, create an object, release the lock.
 	PrefetchWait
@@ -116,9 +117,24 @@ type (
 	}
 )
 
-// NOTE: For implementations, please refer to `ais/tgtifimpl.go` and `ais/httpcommon.go`.
+type Node interface {
+	Snode() *Snode
+	Bowner() Bowner
+	Sowner() Sowner
+
+	ClusterStarted() bool
+	NodeStarted() bool
+	NodeStartedTime() time.Time
+
+	DataClient() *http.Client
+}
+
+// For implementations, please refer to `ais/tgtifimpl.go` and `ais/httpcommon.go`.
 type Target interface {
 	Node
+	// convenience methods (shortcuts)
+	Sname() string
+	SID() string
 
 	// Memory related functions.
 	MMSA() *memsys.MMSA

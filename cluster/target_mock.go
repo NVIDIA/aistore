@@ -31,6 +31,8 @@ func NewTargetMock(bo Bowner) *TargetMock {
 	return t
 }
 
+func (*TargetMock) Sname() string                                    { return "" }
+func (*TargetMock) SID() string                                      { return "" }
 func (*TargetMock) Snode() *Snode                                    { return nil }
 func (*TargetMock) ClusterStarted() bool                             { return true }
 func (*TargetMock) NodeStarted() bool                                { return true }

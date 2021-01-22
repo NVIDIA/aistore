@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -107,4 +108,17 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 		}
 	}
 	return nil, true, nil
+}
+
+func ValidateNCopies(tname string, copies int) (err error) {
+	if copies < 1 || copies > cmn.MaxNumCopies {
+		return fmt.Errorf("%s: invalid num copies %d, must be in [1, %d] range",
+			tname, copies, cmn.MaxNumCopies)
+	}
+	availablePaths, _ := Get()
+	if num := len(availablePaths); num < copies {
+		return fmt.Errorf("%s: number of copies (%d) exceeds the number of mountpaths (%d)",
+			tname, copies, num)
+	}
+	return nil
 }

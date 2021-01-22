@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -245,7 +244,7 @@ func (t *targetrunner) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCo
 	curCopies = bck.Props.Mirror.Copies
 	newCopies, err = t.parseNCopies(msg.Value)
 	if err == nil {
-		err = mirror.ValidateNCopies(t.si.Name(), int(newCopies))
+		err = fs.ValidateNCopies(t.si.Name(), int(newCopies))
 	}
 	// NOTE: #791 "limited coexistence" here and elsewhere
 	if err == nil {

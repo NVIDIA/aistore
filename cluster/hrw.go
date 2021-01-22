@@ -5,7 +5,6 @@
 package cluster
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -184,7 +183,7 @@ func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
 		availablePaths, _ = fs.Get()
 	)
 	if len(availablePaths) == 0 {
-		err = errors.New(cmn.NoMountpaths)
+		err = fs.ErrNoMountpaths
 		return
 	}
 	digest = xxhash.ChecksumString64S(uname, cmn.MLCG32)

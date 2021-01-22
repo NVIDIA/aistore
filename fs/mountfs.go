@@ -47,6 +47,8 @@ const (
 var (
 	mfs      *MountedFS
 	mpathsRR sync.Map
+
+	ErrNoMountpaths = errors.New("no mountpaths")
 )
 
 // Terminology:
@@ -898,7 +900,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 		c                 Capacity
 	)
 	if len(availablePaths) == 0 {
-		err = errors.New(cmn.NoMountpaths)
+		err = ErrNoMountpaths
 		return
 	}
 	if config == nil {

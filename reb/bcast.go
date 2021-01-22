@@ -124,7 +124,7 @@ func (reb *Manager) nodesNotInStage(md *rebArgs, stage uint32) int {
 	count := 0
 	reb.stages.mtx.Lock()
 	for _, si := range md.smap.Tmap {
-		if si.ID() == reb.t.Snode().ID() {
+		if si.ID() == reb.t.SID() {
 			continue
 		}
 		if !reb.stages.isInStageBatchUnlocked(si, stage, 0) {
@@ -146,7 +146,7 @@ func (reb *Manager) bcast(md *rebArgs, cb syncCallback) (errCnt int) {
 	var cnt atomic.Int32
 	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(md.smap.Tmap))
 	for _, tsi := range md.smap.Tmap {
-		if tsi.ID() == reb.t.Snode().ID() {
+		if tsi.ID() == reb.t.SID() {
 			continue
 		}
 		wg.Add(1)
@@ -262,7 +262,7 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		//
 		var w4me bool // true: this target is waiting for ACKs from me
 		for tid := range status.Tmap {
-			if tid == reb.t.Snode().ID() {
+			if tid == reb.t.SID() {
 				glog.Infof("%s: keep wack <= %s[%s]", logHdr, tsi, stages[status.Stage])
 				w4me = true
 				break
@@ -460,7 +460,7 @@ func (reb *Manager) nodesQuiescent(md *rebArgs) bool {
 	quiescent := true
 	locStage := reb.stages.stage.Load()
 	for _, si := range md.smap.Tmap {
-		if si.ID() == reb.t.Snode().ID() && !reb.isQuiescent() {
+		if si.ID() == reb.t.SID() && !reb.isQuiescent() {
 			quiescent = false
 			break
 		}

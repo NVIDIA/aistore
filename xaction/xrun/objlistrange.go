@@ -157,7 +157,7 @@ func (r *listRangeBase) iterateRange(args *xreg.DeletePrefetchArgs, cb objCallba
 func (r *listRangeBase) iterateTemplate(args *xreg.DeletePrefetchArgs, smap *cluster.Smap, pt *cmn.ParsedTemplate, cb objCallback) error {
 	var (
 		getNext = pt.Iter()
-		sid     = r.t.Snode().ID()
+		sid     = r.t.SID()
 	)
 	for objName, hasNext := getNext(); !r.Aborted() && hasNext; objName, hasNext = getNext() {
 		if r.Aborted() {
@@ -180,7 +180,7 @@ func (r *listRangeBase) iterateTemplate(args *xreg.DeletePrefetchArgs, smap *clu
 func (r *listRangeBase) iteratePrefix(args *xreg.DeletePrefetchArgs, smap *cluster.Smap, prefix string, cb objCallback) error {
 	var (
 		objList *cmn.BucketList
-		sid     = r.t.Snode().ID()
+		sid     = r.t.SID()
 		err     error
 	)
 
@@ -236,7 +236,7 @@ func (r *listRangeBase) iteratePrefix(args *xreg.DeletePrefetchArgs, smap *clust
 func (r *listRangeBase) iterateList(args *xreg.DeletePrefetchArgs, listMsg *cmn.ListMsg, cb objCallback) error {
 	var (
 		smap = r.t.Sowner().Get()
-		sid  = r.t.Snode().ID()
+		sid  = r.t.SID()
 	)
 	for _, obj := range listMsg.ObjNames {
 		if r.Aborted() {

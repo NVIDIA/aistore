@@ -24,7 +24,7 @@ var errInvalidTarget = errors.New("invalid target")
 func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]dlObj, error) {
 	var (
 		smap = t.Sowner().Get()
-		sid  = t.Snode().ID()
+		sid  = t.SID()
 	)
 
 	objs := make([]dlObj, 0, len(objects))

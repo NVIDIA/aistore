@@ -88,7 +88,8 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 				return true
 			}
 			if mdTime > 0 && md.atime != md.atimefs {
-				if lom, bucketExists := lomFromLmeta(md, bmd); bucketExists {
+				lif := LIF{md.uname, md.bckID}
+				if lom, err := lif.LOM(bmd); err == nil {
 					lom.flushCold(md, atime)
 				}
 			}

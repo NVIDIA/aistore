@@ -55,7 +55,6 @@ const (
 	assertMsg = "assertion failed"
 
 	DoesNotExist = "does not exist"
-	NoMountpaths = "no mountpaths"
 
 	// NOTE: Taken from cloud.google.com/go/storage/storage.go (userAgent).
 	GcsUA      = "gcloud-golang-storage/20151204"
@@ -66,6 +65,8 @@ const (
 
 	PermRWR   os.FileMode = 0o640
 	PermRWXRX os.FileMode = 0o750
+
+	MaxNumCopies = 16
 )
 
 var (

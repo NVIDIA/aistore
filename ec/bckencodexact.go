@@ -133,7 +133,7 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 	}
 
 	// An object replica - skip EC.
-	if r.t.Snode().ID() != si.ID() {
+	if r.t.SID() != si.ID() {
 		return nil
 	}
 

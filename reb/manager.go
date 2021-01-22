@@ -277,7 +277,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		var (
-			ack = &regularAck{rebID: reb.RebID(), daemonID: reb.t.Snode().ID()}
+			ack = &regularAck{rebID: reb.RebID(), daemonID: reb.t.SID()}
 			mm  = reb.t.SmallMMSA()
 		)
 		hdr.Opaque = ack.NewPack(mm)
@@ -360,7 +360,7 @@ func (reb *Manager) changeStage(newStage uint32, batchID int64) {
 	reb.stages.stage.Store(newStage)
 	var (
 		req = pushReq{
-			daemonID: reb.t.Snode().DaemonID, stage: newStage,
+			daemonID: reb.t.SID(), stage: newStage,
 			rebID: reb.rebID.Load(), batch: int(batchID),
 		}
 		hdr = transport.ObjHdr{}
@@ -557,7 +557,7 @@ func (reb *Manager) abortRebalance() {
 	xreb.Abort()
 	var (
 		req = pushReq{
-			daemonID: reb.t.Snode().DaemonID,
+			daemonID: reb.t.SID(),
 			rebID:    reb.RebID(),
 			stage:    rebStageAbort,
 		}
