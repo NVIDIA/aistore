@@ -432,7 +432,7 @@ do:
 	if !coldGet && goi.lom.Bck().IsRemote() {
 		if goi.lom.Version() != "" && goi.lom.VersionConf().ValidateWarmGet {
 			goi.lom.Unlock(false)
-			if coldGet, errCode, err = goi.t.CheckCloudVersion(goi.ctx, goi.lom); err != nil {
+			if coldGet, errCode, err = goi.t.CheckRemoteVersion(goi.ctx, goi.lom); err != nil {
 				goi.lom.Uncache(true /*delDirty*/)
 				return
 			}

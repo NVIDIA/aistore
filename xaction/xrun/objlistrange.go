@@ -102,7 +102,7 @@ func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string
 		return nil
 	}
 	if !coldGet && lom.Version() != "" && lom.VersionConf().ValidateWarmGet {
-		if coldGet, _, err = r.t.CheckCloudVersion(args.Ctx, lom); err != nil {
+		if coldGet, _, err = r.t.CheckRemoteVersion(args.Ctx, lom); err != nil {
 			return err
 		}
 	}

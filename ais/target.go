@@ -1106,18 +1106,19 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 // supporting methods
 //
 
-// checkCloudVersion returns (vchanged=) true if object versions differ between Cloud and local cache;
-// should be called only if the local copy exists
-func (t *targetrunner) CheckCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, errCode int, err error) {
+// CheckRemoteVersion sets `vchanged` to true if object versions differ between
+// remote object and local cache.
+// NOTE: Should be called only if the local copy exists.
+func (t *targetrunner) CheckRemoteVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, errCode int, err error) {
 	var objMeta cmn.SimpleKVs
 	objMeta, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return
 	}
-	if cloudVersion, ok := objMeta[cmn.HeaderObjVersion]; ok {
-		if lom.Version() != cloudVersion {
-			glog.Infof("%s: version changed from %s to %s", lom, lom.Version(), cloudVersion)
+	if remoteVersion, ok := objMeta[cmn.HeaderObjVersion]; ok {
+		if lom.Version() != remoteVersion {
+			glog.Infof("%s: version changed from %s to %s", lom, lom.Version(), remoteVersion)
 			vchanged = true
 		}
 	}

@@ -68,6 +68,6 @@ func (*TargetMock) Health(si *Snode, timeout time.Duration, query url.Values) ([
 	return nil, 0, nil
 }
 
-func (*TargetMock) CheckCloudVersion(ctx context.Context, lom *LOM) (bool, int, error) {
+func (*TargetMock) CheckRemoteVersion(ctx context.Context, lom *LOM) (bool, int, error) {
 	return false, 0, nil
 }

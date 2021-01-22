@@ -299,7 +299,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 				}
 				return http.StatusBadRequest, err
 			}
-			if vchanged, errCode, err := t.CheckCloudVersion(ctx, lom); err != nil {
+			if vchanged, errCode, err := t.CheckRemoteVersion(ctx, lom); err != nil {
 				return errCode, err
 			} else if vchanged {
 				// Need to re-download the object as the version has changed.

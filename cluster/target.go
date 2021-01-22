@@ -124,9 +124,9 @@ type Target interface {
 	MMSA() *memsys.MMSA
 	SmallMMSA() *memsys.MMSA
 
-	// Cloud related functions.
+	// Backend provider(s) related functions.
 	Backend(*Bck) BackendProvider
-	CheckCloudVersion(ctx context.Context, lom *LOM) (vchanged bool, errCode int, err error)
+	CheckRemoteVersion(ctx context.Context, lom *LOM) (vchanged bool, errCode int, err error)
 
 	// Object related functions.
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
