@@ -12,13 +12,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
@@ -116,10 +116,18 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 		}
 	}
 	if args.K8s {
-		if err := k8s.Detect(); err != nil {
-			tb.Skipf("%s requires Kubernetes", tb.Name())
+		// NOTE: The test suite doesn't have to be deployed on K8s, the cluster has to be.
+		_, err := api.ETLList(BaseAPIParams(GetPrimaryURL()))
+		// HACK: Check based on error message. Unfortunately, there is no relevant HTTP code.
+		if err != nil {
+			if strings.Contains(err.Error(), "requires Kubernetes") {
+				tb.Skipf("%s requires Kubernetes", tb.Name())
+			} else {
+				tb.Fatalf("Unrecognized error upon checking K8s deployment; err: %v", err)
+			}
 		}
 	}
+
 	if args.MinTargets > 0 || args.MinMountpaths > 0 {
 		smap = GetClusterMap(tb, GetPrimaryURL())
 	}
