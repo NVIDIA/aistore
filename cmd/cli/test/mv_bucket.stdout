@@ -1,4 +1,6 @@
-Moving bucket "$BUCKET_1" to "$BUCKET_2" in progress.
-To check the status, run: ais show xaction move_bck $BUCKET_2
-"$BUCKET_2" bucket destroyed
+Bucket rename operation ("$BUCKET_1" => "$BUCKET_2") is in progress...
+Bucket rename operation succeeded.
+Bucket rename operation ("$BUCKET_2" => "$BUCKET_1") is in progress.
+To check the status, run: ais show xaction move_bck $BUCKET_1
+"$BUCKET_1" bucket destroyed
 "$BUCKET_3" bucket destroyed

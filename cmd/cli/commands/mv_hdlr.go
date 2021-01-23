@@ -15,7 +15,7 @@ import (
 
 var (
 	mvCmdsFlags = map[string][]cli.Flag{
-		subcmdMvBucket: {},
+		subcmdMvBucket: {waitFlag},
 		subcmdMvObject: {},
 	}
 

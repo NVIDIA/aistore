@@ -1155,3 +1155,16 @@ func defaultBckProps() (*cmn.BucketProps, error) {
 	props := cmn.DefaultBckProps(cfg)
 	return props, nil
 }
+
+// Wait for an Xaction to complete, and print if it aborted
+func waitForXactionCompletion(defaultAPIParams api.BaseParams, args api.XactReqArgs, refreshIntervals ...time.Duration) (err error) {
+	status, err := api.WaitForXaction(defaultAPIParams, args, refreshIntervals...)
+	if err != nil {
+		return err
+	}
+	if status.Aborted() {
+		return fmt.Errorf("xaction with UUID %q was aborted", status.UUID)
+	}
+
+	return nil
+}

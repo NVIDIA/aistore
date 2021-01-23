@@ -26,6 +26,11 @@ const (
 
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = 10 * time.Second
+
+	fmtXactFailed      = "%s operation (%q => %q) failed!\n"
+	fmtXactSucceeded   = "%s operation succeeded.\n"
+	fmtXactStarted     = "%s operation (%q => %q) is in progress...\n"
+	fmtXactStatusCheck = "%s operation (%q => %q) is in progress.\nTo check the status, run: ais show xaction %s %s\n"
 )
 
 func validateBucket(c *cli.Context, bck cmn.Bck, tag string, optional bool) (cmn.Bck, *cmn.BucketProps, error) {
@@ -90,32 +95,51 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 
 // Mv ais bucket
 func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) (err error) {
+	const operation string = "Bucket rename"
+	var xactID string
+
 	if _, err = headBucket(fromBck); err != nil {
 		return
 	}
-	if _, err = api.RenameBucket(defaultAPIParams, fromBck, toBck); err != nil {
+
+	if xactID, err = api.RenameBucket(defaultAPIParams, fromBck, toBck); err != nil {
 		return
 	}
 
-	msgFmt := "Moving bucket %q to %q in progress.\nTo check the status, run: ais show xaction %s %s\n"
-	fmt.Fprintf(c.App.Writer, msgFmt, fromBck.Name, toBck.Name, cmn.ActMoveBck, toBck.Name)
+	if !flagIsSet(c, waitFlag) {
+		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck.Name, toBck.Name, cmn.ActMoveBck, toBck.Name)
+		return
+	}
+
+	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck.Name, toBck.Name)
+	if err = waitForXactionCompletion(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
+		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck.Name, toBck.Name)
+	} else {
+		fmt.Fprintf(c.App.Writer, fmtXactSucceeded, operation)
+	}
 	return
 }
 
 // Copy ais bucket
 func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *cmn.CopyBckMsg) (err error) {
+	const operation string = "Bucket copy"
 	var xactID string
+
 	if xactID, err = api.CopyBucket(defaultAPIParams, fromBck, toBck, msg); err != nil {
 		return
 	}
 
-	if flagIsSet(c, waitFlag) {
-		_, err = api.WaitForXaction(defaultAPIParams, api.XactReqArgs{ID: xactID})
+	if !flagIsSet(c, waitFlag) {
+		fmt.Fprintf(c.App.Writer, fmtXactStatusCheck, operation, fromBck.Name, toBck.Name, cmn.ActCopyBck, toBck.Name)
 		return
 	}
 
-	msgFmt := "Copying bucket %q to %q in progress.\nTo check the status, run: ais show xaction %s %s\n"
-	fmt.Fprintf(c.App.Writer, msgFmt, fromBck.Name, toBck.Name, cmn.ActCopyBck, toBck.Name)
+	fmt.Fprintf(c.App.Writer, fmtXactStarted, operation, fromBck.Name, toBck.Name)
+	if err = waitForXactionCompletion(defaultAPIParams, api.XactReqArgs{ID: xactID}); err != nil {
+		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck.Name, toBck.Name)
+	} else {
+		fmt.Fprintf(c.App.Writer, fmtXactSucceeded, operation)
+	}
 	return
 }
 
