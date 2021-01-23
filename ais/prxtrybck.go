@@ -87,7 +87,7 @@ func (args *bckInitArgs) init(bucket string) (bck *cluster.Bck, errCode int, err
 
 // TODO -- FIXME: A hack to check permissions specific to providers. Should automatically check based on providers.
 func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
-	if args.queryBck.IsAIS() {
+	if !args.queryBck.IsRemote() {
 		return
 	}
 

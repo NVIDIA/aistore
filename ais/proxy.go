@@ -1183,7 +1183,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args := bckInitArgs{p: p, w: w, r: r, tryOnlyRem: true, queryBck: request.bck}
+	args := bckInitArgs{p: p, w: w, r: r, tryOnlyRem: true, queryBck: request.bck, perms: cmn.AccessBckHEAD}
 	bck, err := args.initAndTry(request.bck.Name)
 	if err != nil {
 		return
@@ -1256,17 +1256,12 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bck := request.bck
-	args := bckInitArgs{p: p, w: w, r: r, queryBck: bck, msg: msg, skipBackend: true, tryOnlyRem: true}
-	if bck, err = args.initAndTry(bck.Name); err != nil {
-		return
-	}
-
-	permsToCheck := cmn.AccessPATCH
+	perms := cmn.AccessPATCH
 	if propsToUpdate.Access != nil {
-		permsToCheck |= cmn.AccessBckSetACL
+		perms |= cmn.AccessBckSetACL
 	}
-	if err := p.checkACL(r.Header, bck, permsToCheck); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+	args := bckInitArgs{p: p, w: w, r: r, queryBck: bck, msg: msg, skipBackend: true, tryOnlyRem: true, perms: perms}
+	if bck, err = args.initAndTry(bck.Name); err != nil {
 		return
 	}
 
@@ -2376,12 +2371,33 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	// TODO: separate permissions for dsort? xactions?
 	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
-	dsort.ProxySortHandler(w, r)
+
+	apiItems, err := cmn.MatchRESTItems(r.URL.Path, 0, true, cmn.URLPathdSort.L)
+	if err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		p.proxyStartSortHandler(w, r)
+	case http.MethodGet:
+		dsort.ProxyGetHandler(w, r)
+	case http.MethodDelete:
+		if len(apiItems) == 1 && apiItems[0] == cmn.Abort {
+			dsort.ProxyAbortSortHandler(w, r)
+		} else if len(apiItems) == 0 {
+			dsort.ProxyRemoveSortHandler(w, r)
+		} else {
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid request %s", apiItems[0]))
+		}
+	default:
+		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid request %s", apiItems[0]))
+	}
 }
 
 // http reverse-proxy handler, to handle unmodified requests

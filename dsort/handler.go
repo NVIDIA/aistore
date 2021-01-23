@@ -37,75 +37,15 @@ type response struct {
 ///// PROXY //////
 //////////////////
 
-// [METHOD] /v1/sort/...
-func ProxySortHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathdSort.L)
-	if err != nil {
-		return
-	}
-
-	switch r.Method {
-	case http.MethodPost:
-		proxyStartSortHandler(w, r)
-	case http.MethodGet:
-		proxyGetHandler(w, r)
-	case http.MethodDelete:
-		if len(apiItems) == 1 && apiItems[0] == cmn.Abort {
-			proxyAbortSortHandler(w, r)
-		} else if len(apiItems) == 0 {
-			proxyRemoveSortHandler(w, r)
-		} else {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid request %s", apiItems[0]))
-		}
-	default:
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid request %s", apiItems[0]))
-	}
-}
-
 // POST /v1/sort
-func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
-	if !checkHTTPMethod(w, r, http.MethodPost) {
-		return
-	}
-	rs := &RequestSpec{}
-	if cmn.ReadJSON(w, r, &rs) != nil {
-		return
-	}
-	parsedRS, err := rs.Parse()
-	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
-		return
-	}
+func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *ParsedRequestSpec) {
+	var err error
 	parsedRS.TargetOrderSalt = []byte(time.Now().Format("15:04:05.000000"))
 
 	// TODO: handle case when bucket was removed during dSort job - this should
 	// stop whole operation. Maybe some listeners as we have on smap change?
 	// This would also be helpful for Downloader (in the middle of downloading
 	// large file the bucket can be easily deleted).
-
-	bck := cluster.NewBck(parsedRS.Bucket, parsedRS.Provider, cmn.NsGlobal)
-	if err = bck.Init(ctx.bmdOwner); err != nil { // TODO: ctx.t.Snode()
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
-		return
-	}
-	if err := bck.Allow(cmn.AccessObjLIST); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusForbidden)
-		return
-	}
-	if err := bck.Allow(cmn.AccessGET); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusForbidden)
-		return
-	}
-
-	bck = cluster.NewBck(parsedRS.OutputBucket, parsedRS.OutputProvider, cmn.NsGlobal)
-	if err = bck.Init(ctx.bmdOwner); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
-		return
-	}
-	if err = bck.Allow(cmn.AccessPUT); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusForbidden)
-		return
-	}
 
 	parsedRS.DSorterType, err = determineDSorterType(parsedRS)
 	if err != nil {
@@ -173,7 +113,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /v1/sort
-func proxyGetHandler(w http.ResponseWriter, r *http.Request) {
+func ProxyGetHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
@@ -284,7 +224,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /v1/sort/abort
-func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
+func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
@@ -320,7 +260,7 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /v1/sort
-func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
+func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
