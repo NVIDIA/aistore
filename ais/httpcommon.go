@@ -1828,7 +1828,7 @@ func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request) 
 
 func (h *httprunner) bucketPropsToHdr(bck *cluster.Bck, hdr http.Header) {
 	if bck.Props == nil {
-		bck.Props = defaultCloudBckProps(hdr)
+		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
 	}
 
 	finalProps := bck.Props.Clone()

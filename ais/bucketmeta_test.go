@@ -6,6 +6,7 @@ package ais
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -39,8 +40,16 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		bmd = newBucketMD()
 		for _, provider := range []string{cmn.ProviderAIS, cmn.ProviderAmazon} {
 			for i := 0; i < 10; i++ {
-				bck := cluster.NewBck(fmt.Sprintf("local%d", i), provider, cmn.NsGlobal)
-				bmd.add(bck, defaultBckProps())
+				var hdr http.Header
+				if provider != cmn.ProviderAIS {
+					hdr = http.Header{cmn.HeaderCloudProvider: []string{provider}}
+				}
+
+				var (
+					bck   = cluster.NewBck(fmt.Sprintf("bucket_%d", i), provider, cmn.NsGlobal)
+					props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
+				)
+				bmd.add(bck, props)
 			}
 		}
 	})
@@ -73,7 +82,6 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 			It(fmt.Sprintf("should save and load bmd using jsp methods for %s", node), func() {
 				bowner.init()
 				bmd := bowner.get()
-				clone := bmd
 				for _, signature := range []bool{false, true} {
 					for _, compression := range []bool{false, true} {
 						for _, checksum := range []bool{false, true} {
@@ -82,16 +90,15 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 								Checksum:    checksum,
 								Signature:   signature,
 							}
-							// clone clone
-							clone := clone.clone()
+							clone := bmd.clone()
 							bck := cluster.NewBck("abc"+cmn.GenTie(), cmn.ProviderAIS, cmn.NsGlobal)
 
-							// add bucket and save
-							clone.add(bck, defaultBckProps())
+							// Add bucket and save.
+							clone.add(bck, defaultBckProps(bckPropsArgs{bck: bck}))
 							err := jsp.Save(testpath, clone, opts)
 							Expect(err).NotTo(HaveOccurred())
 
-							// load elsewhere and check
+							// Load elsewhere and check.
 							loaded := newBucketMD()
 							_, err = jsp.Load(testpath, loaded, opts)
 							Expect(err).NotTo(HaveOccurred())

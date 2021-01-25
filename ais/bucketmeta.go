@@ -352,23 +352,44 @@ func hasEnoughBMDCopies() bool {
 // default bucket props //
 //////////////////////////
 
-func defaultBckProps() *cmn.BucketProps {
-	c := cmn.GCO.Get()
+type bckPropsArgs struct {
+	bck *cluster.Bck // Base bucket for determining default bucket props.
+	hdr http.Header  // Header with remote bucket properties.
+}
+
+func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
+	var (
+		c     = cmn.GCO.Get()
+		props = cmn.DefaultBckProps(c)
+	)
+	debug.Assert(args.bck != nil)
 	debug.AssertNoErr(cmn.ValidateCksumType(c.Cksum.Type))
-	return cmn.DefaultBckProps(c)
+	props.SetProvider(args.bck.Provider)
+
+	if args.bck.IsAIS() || args.bck.IsRemoteAIS() {
+		debug.Assert(args.hdr == nil)
+	} else if args.bck.IsCloud() || args.bck.IsHTTP() {
+		debug.Assert(args.hdr != nil)
+		props.Versioning.Enabled = false
+		props = mergeRemoteBckProps(props, args.hdr)
+	} else if args.bck.IsHDFS() {
+		props.Versioning.Enabled = false
+		if args.hdr != nil {
+			props = mergeRemoteBckProps(props, args.hdr)
+		}
+		// Preserve HDFS related information.
+		props.Extra.HDFS = args.bck.Props.Extra.HDFS
+	} else {
+		cmn.Assert(false)
+	}
+
+	// For debugging purposes we can set large value - we don't need to be precise here.
+	debug.AssertNoErr(props.Validate(1000 /*targetCnt*/))
+	return props
 }
 
-func defaultCloudBckProps(header http.Header) (props *cmn.BucketProps) {
-	props = defaultBckProps()
-	props.Versioning.Enabled = false
-	return mergeCloudBckProps(props, header)
-}
-
-func mergeCloudBckProps(base *cmn.BucketProps, header http.Header) (props *cmn.BucketProps) {
+func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.BucketProps {
 	cmn.Assert(len(header) > 0)
-	props = base.Clone()
-	props.SetProvider(header.Get(cmn.HeaderCloudProvider))
-
 	switch props.Provider {
 	case cmn.ProviderAmazon:
 		props.Extra.AWS.CloudRegion = header.Get(cmn.HeaderCloudRegion)

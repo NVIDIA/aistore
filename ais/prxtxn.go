@@ -48,28 +48,33 @@ type (
 //   					concrete transaction, etc.
 
 // create-bucket: { check non-existence -- begin -- create locally -- metasync -- commit }
-func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, cloudHeader ...http.Header) error {
+func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteHeader ...http.Header) error {
 	var (
-		bucketProps = defaultBckProps()
-		nlp         = bck.GetNameLockPair()
-		bmd         = p.owner.bmd.get()
+		bucketProps *cmn.BucketProps
+
+		nlp = bck.GetNameLockPair()
+		bmd = p.owner.bmd.get()
 	)
 
 	if bck.Props != nil {
 		bucketProps = bck.Props
 	}
-	if len(cloudHeader) != 0 && len(cloudHeader[0]) > 0 {
-		cloudProps := defaultCloudBckProps(cloudHeader[0])
-		if bck.Props == nil {
-			bucketProps = cloudProps
+	if len(remoteHeader) != 0 && len(remoteHeader[0]) > 0 {
+		remoteProps := defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHeader[0]})
+		if bucketProps == nil {
+			bucketProps = remoteProps
 		} else {
-			bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
+			bucketProps.Versioning.Enabled = remoteProps.Versioning.Enabled // always takes precedence
 		}
-	} else if bck.HasBackendBck() {
+	}
+	if bucketProps == nil {
+		bucketProps = defaultBckProps(bckPropsArgs{bck: bck})
+	}
+	if bck.HasBackendBck() {
 		backend := cluster.BackendBck(bck)
 		cloudProps, present := bmd.Get(backend)
 		debug.Assert(present)
-		bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // ditto
+		bucketProps.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
 	}
 
 	nlp.Lock()
@@ -274,31 +279,19 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 			return
 		}
 	case cmn.ActResetBprops:
-		if bck.IsCloud() {
+		var remoteBckProps http.Header
+		if bck.IsRemote() {
 			if bck.HasBackendBck() {
 				err = fmt.Errorf("%q has backend %q - detach it prior to resetting the props",
 					bck.Bck, bck.BackendBck())
 				return
 			}
-			cloudProps, _, err := p.headRemoteBck(bck.Bck, nil)
+			remoteBckProps, _, err = p.headRemoteBck(bck.Bck, nil)
 			if err != nil {
 				return "", err
 			}
-			nprops = defaultCloudBckProps(cloudProps)
-		} else if bck.IsHDFS() {
-			// FIXME: This should be done differently - one function for setting
-			//  default bucket props.
-			cloudProps, _, err := p.headRemoteBck(bck.Bck, nil)
-			if err != nil {
-				return "", err
-			}
-			nprops = defaultCloudBckProps(cloudProps)
-			// Preserve the reference directory - without it the HDFS is dangling.
-			nprops.Extra.HDFS.RefDirectory = bck.Props.Extra.HDFS.RefDirectory
-		} else {
-			nprops = defaultBckProps()
-			nprops.SetProvider(bck.Provider)
 		}
+		nprops = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteBckProps})
 	default:
 		cmn.Assert(false)
 	}
@@ -569,7 +562,7 @@ func (p *proxyrunner) _b2bBMDPre(ctx *bmdModifier, clone *bucketMD) error {
 	if bckFrom.IsAIS() || bckFrom.IsRemoteAIS() {
 		bckTo.Props = bprops.Clone()
 	} else {
-		bckTo.Props = defaultBckProps()
+		bckTo.Props = defaultBckProps(bckPropsArgs{bck: bckTo})
 	}
 	added := clone.add(bckTo, bckTo.Props)
 	cmn.Assert(added)

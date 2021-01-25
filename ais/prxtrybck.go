@@ -175,7 +175,6 @@ func (args *bckInitArgs) try(origURLBck ...string) (bck *cluster.Bck, err error)
 //
 
 func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode int, err error) {
-	var cloudProps http.Header
 	if args.err != nil && !cmn.IsErrBucketNought(args.err) {
 		err = args.err
 		errCode = http.StatusBadRequest
@@ -213,9 +212,10 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 		glog.Warningf("%s: bucket %q doesn't exist, proceeding to create", args.p.si, args.queryBck.Bck)
 	}
 
+	var remoteProps http.Header
 	if bck.IsCloud() || bck.IsHTTP() {
 		action = cmn.ActRegisterCB
-		if cloudProps, errCode, err = args._lookup(bck); err != nil {
+		if remoteProps, errCode, err = args._lookup(bck); err != nil {
 			bck = nil
 			return
 		}
@@ -223,23 +223,23 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 
 	if bck.IsHTTP() {
 		if len(origURLBck) > 0 {
-			cloudProps.Set(cmn.HeaderOrigURLBck, origURLBck[0])
+			remoteProps.Set(cmn.HeaderOrigURLBck, origURLBck[0])
 		} else if origURL := args.r.URL.Query().Get(cmn.URLParamOrigURL); origURL != "" {
 			hbo, err := cmn.NewHTTPObjPath(origURL)
 			if err != nil {
 				errCode = http.StatusBadRequest
 				return bck, errCode, err
 			}
-			cloudProps.Set(cmn.HeaderOrigURLBck, hbo.OrigURLBck)
+			remoteProps.Set(cmn.HeaderOrigURLBck, hbo.OrigURLBck)
 		} else {
 			err = fmt.Errorf("failed to initialize bucket %q: missing HTTP URL", args.queryBck)
 			errCode = http.StatusBadRequest
 			return
 		}
-		debug.Assert(cloudProps.Get(cmn.HeaderOrigURLBck) != "")
+		debug.Assert(remoteProps.Get(cmn.HeaderOrigURLBck) != "")
 	}
 
-	if err = args.p.createBucket(&cmn.ActionMsg{Action: action}, bck, cloudProps); err != nil {
+	if err = args.p.createBucket(&cmn.ActionMsg{Action: action}, bck, remoteProps); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			errCode = http.StatusConflict
 			return

@@ -877,7 +877,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		bck.Provider = cmn.ProviderAIS
 	}
 	if bck.IsHDFS() && msg.Value == nil {
-		p.invalmsghdlr(w, r, "bucket prop 'extra.hdfs.ref_directory' must be specified when creating HDFS bucket")
+		p.invalmsghdlr(w, r, "bucket property 'extra.hdfs.ref_directory' must be specified when creating HDFS bucket")
 		return
 	}
 	if msg.Value != nil {
@@ -888,8 +888,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		}
 
 		// Make and validate new bucket props.
-		bck.Props = defaultBckProps()
-		bck.Props.SetProvider(bck.Provider)
+		bck.Props = defaultBckProps(bckPropsArgs{bck: bck})
 		bck.Props, err = p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
@@ -1231,7 +1230,7 @@ func (p *proxyrunner) _bckHeadPre(ctx *bmdModifier, clone *bucketMD) error {
 	if !present {
 		return cmn.NewErrorBucketDoesNotExist(bck.Bck)
 	}
-	nprops := mergeCloudBckProps(bprops, ctx.cloudProps)
+	nprops := mergeRemoteBckProps(bprops, ctx.cloudProps)
 	if nprops.Equal(bprops) {
 		glog.Warningf("%s: Cloud bucket %s properties are already in-sync, nothing to do", p.si, bck)
 		ctx.terminate = true
