@@ -336,10 +336,12 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 // GET OBJECT READER //
 ///////////////////////
 
-func (gcpp *gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
+	lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
-		errCode, err = gcpp.gcpErrorToAISError(err, &lom.Bck().Bck)
+		bck := lom.Bucket()
+		errCode, err = gcpp.gcpErrorToAISError(err, &bck)
 		return nil, nil, errCode, err
 	}
 	var (

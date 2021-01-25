@@ -413,7 +413,7 @@ do:
 		doubleCheck, errCode, err = goi.tryRestoreObject()
 		if doubleCheck && err != nil {
 			lom2 := &cluster.LOM{ObjName: goi.lom.ObjName}
-			er2 := lom2.Init(goi.lom.Bck().Bck)
+			er2 := lom2.Init(goi.lom.Bucket())
 			if er2 == nil {
 				er2 = lom2.Load()
 				if er2 == nil {
@@ -647,7 +647,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	header.Add(cmn.HeaderCallerName, goi.t.Sname())
 	query := url.Values{}
 	query.Set(cmn.URLParamIsGFNRequest, "true")
-	query = cmn.AddBckToQuery(query, lom.Bck().Bck)
+	query = cmn.AddBckToQuery(query, lom.Bucket())
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
@@ -1023,7 +1023,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 			Tsi:       si,
 			DM:        coi.DM,
 			Locked:    true,
-			NoVersion: !srcLOM.Bck().Bck.Equal(coi.BckTo.Bck), // Don't include version when totally different object.
+			NoVersion: !srcLOM.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
 		}
 		// NOTE: `srcLOM.Unlock(false)` inside.
 		copied, _, err = coi.putRemote(srcLOM, params)
@@ -1032,7 +1032,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 	if coi.DryRun {
 		defer srcLOM.Unlock(false)
 		// TODO: replace with something similar to srcLOM.FQN == dst.FQN, but dstBck might not exist.
-		if srcLOM.Bck().Bck.Equal(coi.BckTo.Bck) && srcLOM.ObjName == objNameTo {
+		if srcLOM.Bucket().Equal(coi.BckTo.Bck) && srcLOM.ObjName == objNameTo {
 			return false, nil
 		}
 		return true, nil
@@ -1109,7 +1109,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 			ObjNameTo: objNameTo,
 			Tsi:       si,
 			DM:        coi.DM,
-			NoVersion: !lom.Bck().Bck.Equal(coi.BckTo.Bck),
+			NoVersion: !lom.Bucket().Equal(coi.BckTo.Bck),
 		}
 		return coi.putRemote(lom, params)
 	}
@@ -1123,7 +1123,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	if err = dst.Init(coi.BckTo.Bck); err != nil {
 		return
 	}
-	if lom.Bck().Bck.Equal(coi.BckTo.Bck) {
+	if lom.Bucket().Equal(coi.BckTo.Bck) {
 		dst.SetVersion(lom.Version())
 	}
 

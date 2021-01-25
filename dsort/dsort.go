@@ -423,7 +423,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		cksumType, cksumValue := lom.Cksum().Get()
 		o := transport.AllocSend()
 		o.Hdr = transport.ObjHdr{
-			Bck:     lom.Bck().Bck,
+			Bck:     lom.Bucket(),
 			ObjName: shardName,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       lom.Size(),

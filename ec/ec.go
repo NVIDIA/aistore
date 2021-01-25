@@ -430,13 +430,13 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) er
 		cksumHdr := cmn.NewCksum(args.CksumType, args.CksumValue)
 		if !lom.Cksum().Equal(cksumHdr) {
 			return fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/md %s",
-				lom.Bck().Bck, lom.ObjName, lom.Version(), cksumHdr, lom.Cksum())
+				lom.Bucket(), lom.ObjName, lom.Version(), cksumHdr, lom.Cksum())
 		}
 	}
 	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
 	err = ctMeta.Write(t, bytes.NewReader(args.MD), -1)
 	if err == nil {
-		err = validateBckBID(t, lom.Bck().Bck, args.BID)
+		err = validateBckBID(t, lom.Bucket(), args.BID)
 	}
 
 	if err != nil {

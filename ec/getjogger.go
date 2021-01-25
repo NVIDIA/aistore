@@ -372,7 +372,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	mm := c.parent.t.SmallMMSA()
 	request := iReq.NewPack(mm)
 	hdr := transport.ObjHdr{
-		Bck:     req.LOM.Bck().Bck,
+		Bck:     req.LOM.Bucket(),
 		ObjName: req.LOM.ObjName,
 		Opaque:  request,
 	}
@@ -852,7 +852,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		wg.Add(1)
 		go func(si *cluster.Snode) {
 			defer wg.Done()
-			md, err := requestECMeta(req.LOM.Bck().Bck, req.LOM.ObjName, si, c.client)
+			md, err := requestECMeta(req.LOM.Bucket(), req.LOM.ObjName, si, c.client)
 			if err != nil {
 				if glog.FastV(4, glog.SmoduleEC) {
 					glog.Infof("No EC meta %s from %s: %v", req.LOM.ObjName, si, err)

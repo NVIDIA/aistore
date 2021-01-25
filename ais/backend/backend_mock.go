@@ -48,11 +48,11 @@ func (m *dummyBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryB
 }
 
 func (m *dummyBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
-	return cmn.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck)
+	return cmn.SimpleKVs{}, http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
 }
 
 func (m *dummyBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
-	return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck)
+	return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
 }
 
 func (m *dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
@@ -60,9 +60,9 @@ func (m *dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LO
 }
 
 func (m *dummyBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
-	return "", http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck)
+	return "", http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
 }
 
 func (m *dummyBackendProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
-	return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bck().Bck)
+	return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
 }

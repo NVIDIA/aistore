@@ -278,7 +278,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
 // * writer - an opened writer that will receive the replica/slice/meta
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.ObjHdr{
-		Bck:     lom.Bck().Bck,
+		Bck:     lom.Bucket(),
 		ObjName: lom.ObjName,
 		Opaque:  request,
 	}
@@ -378,7 +378,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
 	}
 	hdr := transport.ObjHdr{
-		Bck:      lom.Bck().Bck,
+		Bck:      lom.Bucket(),
 		ObjName:  lom.ObjName,
 		ObjAttrs: objAttrs,
 		Opaque:   putData,

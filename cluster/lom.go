@@ -429,7 +429,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		}
 	}
 
-	if !dst.Bck().Bck.Equal(lom.Bck().Bck) {
+	if !dst.Bucket().Equal(lom.Bucket()) {
 		// The copy will be in a new bucket - completely separate object. Hence, we have to set initial version.
 		dst.SetVersion(lomInitialVersion)
 	}

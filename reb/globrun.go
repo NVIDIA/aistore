@@ -681,7 +681,7 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 		o      = transport.AllocSend()
 	)
 	o.Hdr = transport.ObjHdr{
-		Bck:     lom.Bck().Bck,
+		Bck:     lom.Bucket(),
 		ObjName: lom.ObjName,
 		Opaque:  opaque,
 		ObjAttrs: transport.ObjectAttrs{

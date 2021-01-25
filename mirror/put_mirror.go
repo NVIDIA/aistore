@@ -79,7 +79,7 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	}
 	bmd := t.Bowner().Get()
 	r = &XactPut{
-		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bck().Bck),
+		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bucket()),
 		mirror:         mirror,
 		workCh:         make(chan cluster.LIF, mirror.Burst),
 		bmd:            bmd,

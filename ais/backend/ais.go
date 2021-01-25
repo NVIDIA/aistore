@@ -420,7 +420,7 @@ func (m *AISBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryBck
 }
 
 func (m *AISBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
-	remoteBck := lom.Bck().Bck
+	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return nil, errCode, err
@@ -438,7 +438,7 @@ func (m *AISBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (obj
 }
 
 func (m *AISBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
-	remoteBck := lom.Bck().Bck
+	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return errCode, err
@@ -461,7 +461,7 @@ func (m *AISBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errC
 }
 
 func (m *AISBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
-	remoteBck := lom.Bck().Bck
+	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return nil, nil, errCode, err
@@ -473,7 +473,7 @@ func (m *AISBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM)
 }
 
 func (m *AISBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
-	remoteBck := lom.Bck().Bck
+	remoteBck := lom.Bucket()
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -497,7 +497,7 @@ func (m *AISBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *clust
 }
 
 func (m *AISBackendProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
-	remoteBck := lom.Bck().Bck
+	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return errCode, err
