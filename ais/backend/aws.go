@@ -91,13 +91,24 @@ func (awsp *awsProvider) newS3Client(conf sessConf, tag string) (svc *s3.S3, reg
 
 // Original AWS error contains extra information that a caller does not need:
 //     status code: 400, request id: D918CB, host id: RJtDP0q8
-// The extra information starts from the second line of the message.
+// The extra information starts from the new line (`\n`) and tab (`\t`) of the message.
+// At the same time we want to preserve original error which starts with `\ncaused by:`.
+// See more `aws-sdk-go/aws/awserr/types.go:12` (`SprintError`).
 func cleanError(awsError error) error {
-	msg := awsError.Error()
-	if idx := strings.Index(msg, "\n"); idx > 0 {
-		return errors.New(msg[:idx])
+	var (
+		msg    string
+		errMsg = awsError.Error()
+	)
+	// Strip extra information...
+	if idx := strings.Index(errMsg, "\n\t"); idx > 0 {
+		msg = errMsg[:idx]
 	}
-	return awsError
+	// ...but preserve original error information.
+	if idx := strings.Index(errMsg, "\ncaused"); idx > 0 {
+		// `idx+1` because we want to remove `\n`.
+		msg += " (" + errMsg[idx+1:] + ")"
+	}
+	return errors.New(msg)
 }
 
 func (awsp *awsProvider) awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
