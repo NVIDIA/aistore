@@ -167,7 +167,11 @@ func (t *targetrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 
 	healthMsg, err := etl.PodHealth(t, apiItems[0])
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		if _, ok := err.(*cmn.NotFoundError); ok {
+			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+		} else {
+			t.invalmsghdlr(w, r, err.Error())
+		}
 		return
 	}
 	t.writeJSON(w, r, healthMsg, "health-ETL")

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
@@ -159,6 +160,9 @@ func (c *defaultClient) Health(podName string) (cpuCores float64, freeMem int64,
 
 	ms, err := mc.MetricsV1beta1().PodMetricses(metav1.NamespaceDefault).Get(context.Background(), podName, metav1.GetOptions{})
 	if err != nil {
+		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.Status().Reason == metav1.StatusReasonNotFound {
+			err = cmn.NewNotFoundError("metrics for pod %q", podName)
+		}
 		return 0, 0, err
 	}
 

@@ -8,6 +8,7 @@ package integration
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -496,21 +497,31 @@ func TestETLHealth(t *testing.T) {
 	}()
 
 	var (
-		deadline = time.Now().Add(time.Minute)
+		start    = time.Now()
+		deadline = start.Add(2 * time.Minute)
 		healths  etl.PodsHealthMsg
 	)
 
 	// It might take some time for metrics to be available.
 	for {
-		if time.Now().After(deadline) {
+		now := time.Now()
+		if now.After(deadline) {
 			t.Fatal("Timeout waiting for successful health response")
 		}
 
 		healths, err = api.ETLHealth(baseParams, uuid)
-		if err == nil && len(healths) > 0 {
-			break
+		if err == nil {
+			if len(healths) > 0 {
+				tutils.Logf("Successfully received metrics after %s\n", now.Sub(start))
+				break
+			}
+			tutils.Logln("Unexpected empty health messages without error, retrying...")
+			continue
 		}
 
+		httpErr, ok := err.(*cmn.HTTPError)
+		tassert.Fatalf(t, ok && httpErr.Status == http.StatusNotFound, "Unexpected error %v, expected 404", err)
+		tutils.Logf("ETL %q not found in metrics, retrying...\n", uuid)
 		time.Sleep(10 * time.Second)
 	}
 
