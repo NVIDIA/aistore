@@ -52,19 +52,20 @@ type (
 		dirty    bool
 	}
 	LOM struct {
-		md          lmeta             // local meta
+		md          lmeta             // local persistent metadata
 		bck         *Bck              // bucket
 		mpathInfo   *fs.MountpathInfo // object's mountpath
 		mpathDigest uint64            // mountpath's digest
 		FQN         string            // fqn
 		ObjName     string            // object name in the bucket
-		HrwFQN      string            // (misplaced?)
+		HrwFQN      string            // => main replica (misplaced?)
 	}
 	// LOM In Flight (LIF)
 	LIF struct {
 		Uname string
 		BID   uint64
 	}
+
 	ObjectFilter func(*LOM) bool
 )
 
@@ -94,6 +95,32 @@ func initLomLocker() {
 	lomLocker = make(nameLocker, cmn.MultiSyncMapCount)
 	lomLocker.init()
 	maxLmeta.Store(xattrMaxSize)
+}
+
+/////////////
+// lomPool //
+/////////////
+
+var (
+	lomPool sync.Pool
+	lom0    LOM
+)
+
+func AllocLOM(objName, fqn string) (lom *LOM) {
+	debug.Assert(objName == "" || fqn == "")
+	if v := lomPool.Get(); v != nil {
+		lom = v.(*LOM)
+	} else {
+		lom = &LOM{}
+	}
+	lom.ObjName, lom.FQN = objName, fqn
+	return
+}
+
+func FreeLOM(lom *LOM) {
+	debug.Assert(lom.ObjName != "" || lom.FQN != "")
+	*lom = lom0
+	lomPool.Put(lom)
 }
 
 /////////
@@ -193,8 +220,8 @@ func (lom *LOM) FromHTTPHdr(hdr http.Header) {
 	}
 }
 
-////////////////////////////
-// LOCAL COPY MANAGEMENT //
+///////////////////////////
+// local copy management //
 ///////////////////////////
 
 func (lom *LOM) _whingeCopy() (yes bool) {
@@ -224,8 +251,7 @@ func (lom *LOM) NumCopies() int {
 	return len(lom.md.copies)
 }
 
-// GetCopies returns all copies
-// NOTE: that copies include self
+// GetCopies returns all copies (NOTE that copies include self)
 // NOTE: caller must take a lock
 func (lom *LOM) GetCopies() fs.MPI {
 	debug.AssertFunc(func() bool {
@@ -368,7 +394,6 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		lom.Unlock(true)
 		return true // nothing to do
 	}
-
 	availablePaths, _ := fs.Get()
 	buf, slab := T.MMSA().Alloc()
 	for path, mi := range availablePaths {
@@ -379,23 +404,33 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
-		src := lom.Clone(fqn)
-		if err := src.Init(lom.Bucket()); err != nil {
-			continue
-		}
-		if err := src.Load(false); err != nil {
-			continue
-		}
-		// restore at default location
-		dst, err := src.CopyObject(lom.FQN, buf)
+		dst, err := lom._restore(fqn, buf)
 		if err == nil {
 			lom.md = dst.md
 			exists = true
+			FreeLOM(dst)
 			break
+		}
+		if dst != nil {
+			FreeLOM(dst)
 		}
 	}
 	lom.Unlock(true)
 	slab.Free(buf)
+	return
+}
+
+func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
+	src := lom.Clone(fqn)
+	defer FreeLOM(src)
+	if err = src.Init(lom.Bucket()); err != nil {
+		return
+	}
+	if err = src.Load(false); err != nil {
+		return
+	}
+	// restore at default location
+	dst, err = src.CopyObject(lom.FQN, buf)
 	return
 }
 
@@ -693,9 +728,10 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err er
 	return
 }
 
-// NOTE: Clone performs a shallow copy of the LOM.
+// NOTE: Clone shallow-copies LOM to be further initialized (lom.Init) for a given replica
+//       (mountpath/FQN)
 func (lom *LOM) Clone(fqn string) *LOM {
-	dst := &LOM{}
+	dst := AllocLOM("", fqn)
 	*dst = *lom
 	dst.md = lom.md
 	dst.FQN = fqn

@@ -154,9 +154,8 @@ func (t *targetrunner) sendTo(lom *cluster.LOM, params cluster.SendToParams) err
 	debug.Assert(params.HdrMeta != nil)
 
 	if params.HdrMeta.Size() < -1 {
-		return fmt.Errorf("[%s/%s] content length of %d not supported, -1 or greater required", lom.BckName(), lom.ObjName, params.HdrMeta.Size())
+		return fmt.Errorf("%s: invalid content length %d", lom, params.HdrMeta.Size())
 	}
-
 	if params.DM != nil {
 		return _sendObjDM(lom, params)
 	}
@@ -256,7 +255,8 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
 //   the AIS cluster (by performing a cold GET if need be).
 // - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //   replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams, localOnly bool) (copied bool, size int64, err error) {
+func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams,
+	localOnly bool) (copied bool, size int64, err error) {
 	var (
 		coi = &copyObjInfo{
 			CopyObjectParams: params,
@@ -338,7 +338,7 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 
 // TODO: unify with ActRenameObject (refactor)
 func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *cluster.LOM, err error) {
-	lom := &cluster.LOM{ObjName: params.ObjName}
+	lom := cluster.AllocLOM(params.ObjName, "")
 	if err = lom.Init(params.Bck.Bck); err != nil {
 		return
 	}
@@ -432,6 +432,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 				return
 			}
 			lom.SetCksum(cksum.Clone())
+			cluster.FreeLOM(clone)
 		}
 	}
 	if params.Cksum != nil && cksum != nil {

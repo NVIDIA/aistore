@@ -1041,7 +1041,8 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 	// At this point we must have an exclusive lock for the object.
 	defer srcLOM.Unlock(true)
 
-	dst := &cluster.LOM{ObjName: objNameTo}
+	dst := cluster.AllocLOM(objNameTo, "")
+	defer cluster.FreeLOM(dst)
 	err = dst.Init(coi.BckTo.Bck)
 	if err != nil {
 		return
@@ -1066,13 +1067,15 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 		return
 	}
 
-	if dst, err = srcLOM.CopyObject(dst.FQN, coi.Buf); err == nil {
+	dst2, err2 := srcLOM.CopyObject(dst.FQN, coi.Buf)
+	if err2 == nil {
 		copied = true
 		if coi.finalize {
-			coi.t.putMirror(dst)
+			coi.t.putMirror(dst2)
 		}
 	}
-
+	err = err2
+	cluster.FreeLOM(dst2)
 	return
 }
 
@@ -1119,7 +1122,8 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 		return coi.dryRunCopyReader(lom)
 	}
 
-	dst := &cluster.LOM{ObjName: objNameTo}
+	dst := cluster.AllocLOM(objNameTo, "")
+	defer cluster.FreeLOM(dst)
 	if err = dst.Init(coi.BckTo.Bck); err != nil {
 		return
 	}
@@ -1169,7 +1173,8 @@ func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo st
 		cleanUp()
 	}()
 
-	dstLOM := &cluster.LOM{ObjName: objNameTo}
+	dstLOM := cluster.AllocLOM(objNameTo, "")
+	defer cluster.FreeLOM(dstLOM)
 	// Cloud bucket has to exist, so it has to be in BMD.
 	if err := dstLOM.Init(coi.BckTo.Bck); err != nil {
 		return false, 0, err

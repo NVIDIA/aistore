@@ -935,7 +935,10 @@ func (reb *Manager) resilverSlice(fromFQN, toFQN string, buf []byte) error {
 }
 
 func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
-	lom := &cluster.LOM{FQN: fromFQN}
+	var clone *cluster.LOM
+	lom := cluster.AllocLOM("", fromFQN)
+	defer cluster.FreeLOM(lom)
+
 	err := lom.Init(fromMpath.Bck)
 	if err == nil {
 		err = lom.Load()
@@ -946,8 +949,9 @@ func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string
 
 	lom.Lock(true)
 	lom.Uncache(true /*delDirty*/)
-	_, err = lom.CopyObject(toFQN, buf)
+	clone, err = lom.CopyObject(toFQN, buf)
 	lom.Unlock(true)
+	cluster.FreeLOM(clone)
 	if err != nil {
 		reb.t.FSHC(err, fromFQN)
 		reb.t.FSHC(err, toFQN)
@@ -1782,7 +1786,8 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 }
 
 func (reb *Manager) restoreObject(obj *rebObject, objMD *ec.Metadata, src io.Reader) (err error) {
-	lom := &cluster.LOM{ObjName: obj.objName}
+	lom := cluster.AllocLOM(obj.objName, "")
+	defer cluster.FreeLOM(lom)
 	if err := lom.Init(obj.bck); err != nil {
 		return err
 	}

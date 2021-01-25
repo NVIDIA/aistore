@@ -315,7 +315,7 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	req := &Request{
 		Action:  ActSplit,
 		IsCopy:  IsECCopy(lom.Size(), &lom.Bprops().EC),
-		LOM:     lom,
+		LOM:     lom.Clone(lom.FQN), // TODO -- FIXME: revisit
 		rebuild: len(cb) != 0,
 	}
 	if len(cb) != 0 {
@@ -359,8 +359,8 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	req := &Request{
 		Action: ActRestore,
-		LOM:    lom,
-		ErrCh:  make(chan error), // unbuffered
+		LOM:    lom.Clone(lom.FQN), // TODO -- FIXME: revisit
+		ErrCh:  make(chan error),   // unbuffered
 	}
 
 	mgr.RestoreBckGetXact(lom.Bck()).Decode(req)

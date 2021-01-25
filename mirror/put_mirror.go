@@ -94,6 +94,7 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 					r.ObjectsAdd(int64(copies))
 				}
 				r.DecPending() // to support action renewal on-demand
+				cluster.FreeLOM(lom)
 			},
 		}),
 	}

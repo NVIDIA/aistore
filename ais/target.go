@@ -714,14 +714,13 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		started      = time.Now()
 	)
 
-	// TODO: return TCP RST here and elsewhere
-
 	if ptime != "" {
 		if redelta := requestLatency(started, ptime); redelta != 0 {
 			t.statsT.Add(stats.GetRedirLatency, redelta)
 		}
 	}
-	lom := &cluster.LOM{ObjName: objName}
+	lom := cluster.AllocLOM(objName, "")
+	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
@@ -791,7 +790,9 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	lom := &cluster.LOM{ObjName: objName}
+	lom := cluster.AllocLOM(objName, "")
+	defer cluster.FreeLOM(lom)
+
 	if err := lom.Init(request.bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
@@ -855,7 +856,8 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	evict = msg.Action == cmn.ActEvictObjects
-	lom := &cluster.LOM{ObjName: request.items[1]}
+	lom := cluster.AllocLOM(request.items[1], "")
+	defer cluster.FreeLOM(lom)
 	if err := lom.Init(request.bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -941,7 +943,8 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		invalidHandler = t.invalmsghdlrsilent
 	}
 
-	lom := &cluster.LOM{ObjName: objName}
+	lom := cluster.AllocLOM(objName, "")
+	defer cluster.FreeLOM(lom)
 	if err = lom.Init(bck.Bck); err != nil {
 		invalidHandler(w, r, err.Error())
 		return
@@ -1070,7 +1073,8 @@ func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, bc
 }
 
 func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
-	lom := &cluster.LOM{ObjName: objName}
+	lom := cluster.AllocLOM(objName, "")
+	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
 			t.BMDVersionFixup(r, cmn.Bck{}, true /* sleep */)
@@ -1326,7 +1330,8 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
-	lom := &cluster.LOM{ObjName: request.items[1]}
+	lom := cluster.AllocLOM(request.items[1], "")
+	defer cluster.FreeLOM(lom)
 	if err := lom.Init(request.bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return

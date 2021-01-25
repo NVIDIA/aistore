@@ -72,12 +72,11 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 			copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 			if clone, err = lom.CopyObject(copyFQN, buf); err != nil {
 				glog.Errorln(err)
+				cluster.FreeLOM(clone)
 				return
 			}
 			size += lom.Size()
-			if glog.FastV(4, glog.SmoduleMirror) {
-				glog.Infof("copied %s=>%s", lom, clone)
-			}
+			cluster.FreeLOM(clone)
 		} else {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return

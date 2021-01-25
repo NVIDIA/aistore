@@ -617,10 +617,6 @@ func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		rj.m.filterGFN.Delete(uname) // it will not be used anymore
 		return nil
 	}
-
-	if err := lom.Load(); err != nil {
-		return err
-	}
 	if rj.sema == nil { // rebalance.multiplier == 1
 		err = rj.send(lom, tsi, true /*addAck*/)
 	} else { // // rebalance.multiplier > 1
