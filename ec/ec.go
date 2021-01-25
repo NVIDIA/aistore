@@ -140,9 +140,9 @@ const (
 type (
 	// request - structure to request an object to be EC'ed or restored
 	Request struct {
-		LOM      *cluster.LOM // object info
-		Action   string       // what to do with the object (see Act* consts)
-		ErrCh    chan error   // for final EC result
+		LIF      cluster.LIF // object info
+		Action   string      // what to do with the object (see Act* consts)
+		ErrCh    chan error  // for final EC result
 		Callback cluster.OnFinishObj
 
 		putTime time.Time // time when the object is put into main queue

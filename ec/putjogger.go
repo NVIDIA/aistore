@@ -60,19 +60,27 @@ func (c *putJogger) freeResources() {
 }
 
 func (c *putJogger) processRequest(req *Request) {
-	ecConf := req.LOM.Bprops().EC
+	lom, err := req.LIF.LOM(c.parent.t.Bowner().Get())
+	defer cluster.FreeLOM(lom)
+	if err == nil {
+		lom.Load()
+	}
+	if lom.Bprops() == nil {
+		return
+	}
+	ecConf := lom.Bprops().EC
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
-	memRequired := req.LOM.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+	memRequired := lom.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 	c.toDisk = useDisk(memRequired)
 	req.tm = time.Now()
-	err := c.ec(req)
+	err = c.ec(req, lom)
 	// In case of everything is OK, a transport bundle calls `DecPending`
 	// on finishing transferring all the data
-	if err != nil {
+	if err != nil || req.Action == ActDelete {
 		c.parent.DecPending()
 	}
 	if req.Callback != nil {
-		req.Callback(req.LOM, err)
+		req.Callback(lom, err)
 	}
 }
 
@@ -118,18 +126,17 @@ func (c *putJogger) stop() {
 }
 
 // starts EC process
-func (c *putJogger) ec(req *Request) error {
+func (c *putJogger) ec(req *Request, lom *cluster.LOM) error {
 	var (
 		err error
 		act = "encoding"
 	)
-
 	switch req.Action {
 	case ActSplit:
-		err = c.encode(req)
+		err = c.encode(req, lom)
 		c.parent.stats.updateEncodeTime(time.Since(req.tm), err != nil)
 	case ActDelete:
-		err = c.cleanup(req)
+		err = c.cleanup(lom)
 		act = "cleaning up"
 		c.parent.stats.updateDeleteTime(time.Since(req.tm), err != nil)
 	default:
@@ -137,8 +144,8 @@ func (c *putJogger) ec(req *Request) error {
 	}
 
 	if err != nil {
-		glog.Errorf("Error %s object [%s/%s], fqn: %q, err: %v",
-			act, req.LOM.Bck(), req.LOM.ObjName, req.LOM.FQN, err)
+		glog.Errorf("Error %s object %s, fqn: %q, err: %v",
+			act, lom, lom.FQN, err)
 	}
 
 	if req.ErrCh != nil {
@@ -152,19 +159,19 @@ func (c *putJogger) ec(req *Request) error {
 }
 
 // calculates and stores data and parity slices
-func (c *putJogger) encode(req *Request) error {
-	if glog.FastV(4, glog.SmoduleEC) {
-		glog.Infof("Encoding %q...", req.LOM.FQN)
-	}
+func (c *putJogger) encode(req *Request, lom *cluster.LOM) error {
 	var (
 		cksumValue, cksumType string
-		ecConf                = req.LOM.Bprops().EC
+		ecConf                = lom.Bprops().EC
 	)
-	if req.LOM.Cksum() != nil {
-		cksumType, cksumValue = req.LOM.Cksum().Get()
+	if glog.FastV(4, glog.SmoduleEC) {
+		glog.Infof("Encoding %q...", lom.FQN)
+	}
+	if lom.Cksum() != nil {
+		cksumType, cksumValue = lom.Cksum().Get()
 	}
 	meta := &Metadata{
-		Size:      req.LOM.Size(),
+		Size:      lom.Size(),
 		Data:      ecConf.DataSlices,
 		Parity:    ecConf.ParitySlices,
 		IsCopy:    req.IsCopy,
@@ -181,33 +188,33 @@ func (c *putJogger) encode(req *Request) error {
 	}
 	targetCnt := len(c.parent.smap.Get().Tmap)
 	if targetCnt < reqTargets {
-		return fmt.Errorf("object %s/%s requires %d targets to encode, only %d found",
-			req.LOM.Bck(), req.LOM.ObjName, reqTargets, targetCnt)
+		return fmt.Errorf("object %s requires %d targets to encode, only %d found",
+			lom, reqTargets, targetCnt)
 	}
 
 	// Save metadata before encoding the object
-	ctMeta := cluster.NewCTFromLOM(req.LOM, MetaType)
+	ctMeta := cluster.NewCTFromLOM(lom, MetaType)
 	metaBuf := bytes.NewReader(meta.Marshal())
 	if err := ctMeta.Write(c.parent.t, metaBuf, -1); err != nil {
 		return err
 	}
 
 	c.parent.ObjectsInc()
-	c.parent.BytesAdd(req.LOM.Size())
+	c.parent.BytesAdd(lom.Size())
 
 	// if an object is small just make `parity` copies
 	if meta.IsCopy {
-		if err := c.createCopies(req, meta); err != nil {
-			c.cleanup(req)
+		if err := c.createCopies(lom, meta); err != nil {
+			c.cleanup(lom)
 			return err
 		}
 		return nil
 	}
 
 	// big object is erasure encoded
-	if slices, err := c.sendSlices(req, meta); err != nil {
+	if slices, err := c.sendSlices(lom, meta); err != nil {
 		freeSlices(slices)
-		c.cleanup(req)
+		c.cleanup(lom)
 		return err
 	}
 	return nil
@@ -223,10 +230,10 @@ func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ unsa
 // a client has deleted the main object and requested to cleanup all its
 // replicas and slices
 // Just remove local metafile if it exists and broadcast the request to all
-func (c *putJogger) cleanup(req *Request) error {
-	fqnMeta, _, err := cluster.HrwFQN(req.LOM.Bck(), MetaType, req.LOM.ObjName)
+func (c *putJogger) cleanup(lom *cluster.LOM) error {
+	fqnMeta, _, err := cluster.HrwFQN(lom.Bck(), MetaType, lom.ObjName)
 	if err != nil {
-		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bck(), req.LOM.ObjName, err)
+		glog.Errorf("Failed to get path for metadata of %s: %v", lom, err)
 		return nil
 	}
 
@@ -236,20 +243,20 @@ func (c *putJogger) cleanup(req *Request) error {
 	}
 
 	mm := c.parent.t.SmallMMSA()
-	request := c.parent.newIntraReq(reqDel, nil, req.LOM.Bck()).NewPack(mm)
+	request := c.parent.newIntraReq(reqDel, nil, lom.Bck()).NewPack(mm)
 	o := transport.AllocSend()
-	o.Hdr = transport.ObjHdr{Bck: req.LOM.Bucket(), ObjName: req.LOM.ObjName, Opaque: request}
+	o.Hdr = transport.ObjHdr{Bck: lom.Bucket(), ObjName: lom.ObjName, Opaque: request}
 	o.Callback = c.ctSendCallback
 	return c.parent.mgr.req().Send(o, nil)
 }
 
 // Sends object replicas to targets that must have replicas after the client
 // uploads the main replica
-func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
-	copies := req.LOM.Bprops().EC.ParitySlices
+func (c *putJogger) createCopies(lom *cluster.LOM, metadata *Metadata) error {
+	copies := lom.Bprops().EC.ParitySlices
 
 	// generate a list of target to send the replica (all excluding this one)
-	targets, err := cluster.HrwTargetList(req.LOM.Uname(), c.parent.smap.Get(), copies+1)
+	targets, err := cluster.HrwTargetList(lom.Uname(), c.parent.smap.Get(), copies+1)
 	if err != nil {
 		return err
 	}
@@ -257,7 +264,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 
 	// Because object encoding is called after the main replica is saved to
 	// disk it needs to read it from the local storage
-	fh, err := cmn.NewFileHandle(req.LOM.FQN)
+	fh, err := cmn.NewFileHandle(lom.FQN)
 	if err != nil {
 		return err
 	}
@@ -276,11 +283,11 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	}
 	src := &dataSource{
 		reader:   fh,
-		size:     req.LOM.Size(),
+		size:     lom.Size(),
 		metadata: metadata,
 		reqType:  reqPut,
 	}
-	err = c.parent.writeRemote(nodes, req.LOM, src, cb)
+	err = c.parent.writeRemote(nodes, lom, src, cb)
 
 	return err
 }
@@ -465,17 +472,17 @@ func generateSlicesToDisk(lom *cluster.LOM, dataSlices, paritySlices int) (cmn.R
 }
 
 // copies the constructed EC slices to remote targets
-// * req - original request
+// * lom - original object
 // * meta - EC metadata
 // Returns:
 // * list of all slices, sent to targets
-func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
-	ecConf := req.LOM.Bprops().EC
+func (c *putJogger) sendSlices(lom *cluster.LOM, meta *Metadata) ([]*slice, error) {
+	ecConf := lom.Bprops().EC
 	totalCnt := ecConf.ParitySlices + ecConf.DataSlices
 
 	// totalCnt+1: first node gets the full object, other totalCnt nodes
 	// gets a slice each
-	targets, err := cluster.HrwTargetList(req.LOM.Uname(), c.parent.smap.Get(), totalCnt+1)
+	targets, err := cluster.HrwTargetList(lom.Uname(), c.parent.smap.Get(), totalCnt+1)
 	if err != nil {
 		return nil, err
 	}
@@ -486,9 +493,9 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		slices    []*slice
 	)
 	if c.toDisk {
-		objReader, slices, err = generateSlicesToDisk(req.LOM, ecConf.DataSlices, ecConf.ParitySlices)
+		objReader, slices, err = generateSlicesToDisk(lom, ecConf.DataSlices, ecConf.ParitySlices)
 	} else {
-		objReader, slices, err = generateSlicesToMemory(req.LOM, ecConf.DataSlices, ecConf.ParitySlices)
+		objReader, slices, err = generateSlicesToMemory(lom, ecConf.DataSlices, ecConf.ParitySlices)
 	}
 
 	if err != nil {
@@ -498,7 +505,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 	}
 
 	mainObj := &slice{refCnt: *atomic.NewInt32(int32(ecConf.DataSlices)), obj: objReader}
-	sliceSize := SliceSize(req.LOM.Size(), ecConf.DataSlices)
+	sliceSize := SliceSize(lom.Size(), ecConf.DataSlices)
 	sliceCnt := cmn.Min(totalCnt, len(targets)-1)
 	counter := atomic.NewInt32(int32(sliceCnt))
 
@@ -553,7 +560,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		mcopy := &Metadata{}
 		cmn.CopyStruct(mcopy, meta)
 		mcopy.SliceID = i + 1
-		mcopy.ObjVersion = req.LOM.Version()
+		mcopy.ObjVersion = lom.Version()
 		if mcopy.SliceID != 0 && slices[i].cksum != nil {
 			mcopy.CksumType, mcopy.CksumValue = slices[i].cksum.Get()
 		}
@@ -579,8 +586,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		}
 
 		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target
-		lom := *req.LOM
-		return c.parent.writeRemote([]string{targets[i+1].ID()}, &lom, src, sentCB)
+		return c.parent.writeRemote([]string{targets[i+1].ID()}, lom, src, sentCB)
 	}
 
 	// Send as many as possible to be able to restore the object later.
@@ -597,10 +603,10 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			s = "s"
 		}
 		glog.Errorf("Error while copying %d slice%s (with parity=%d) for %q: %v",
-			ecConf.DataSlices, s, ecConf.ParitySlices, req.LOM.FQN, err)
+			ecConf.DataSlices, s, ecConf.ParitySlices, lom.FQN, err)
 	} else if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("EC created %d slices (with %d parity) for %q: %v",
-			ecConf.DataSlices, ecConf.ParitySlices, req.LOM.FQN, err)
+			ecConf.DataSlices, ecConf.ParitySlices, lom.FQN, err)
 	}
 
 	return slices, nil

@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	requestBufSizeGlobal = 140
 	requestBufSizeFS     = 70
 	requestBufSizeEncode = 16
 	maxBgJobsPerJogger   = 32
@@ -43,9 +42,7 @@ type (
 
 	xactReqBase struct {
 		mpathReqCh chan mpathReq // notify about mountpath changes
-		ecCh       chan *Request // to request object encoding
-
-		controlCh chan RequestsControlMsg
+		controlCh  chan RequestsControlMsg
 
 		rejectReq atomic.Bool // marker if EC requests should be rejected
 	}
@@ -65,7 +62,6 @@ type (
 func newXactReqECBase() xactReqBase {
 	return xactReqBase{
 		mpathReqCh: make(chan mpathReq, 1),
-		ecCh:       make(chan *Request, requestBufSizeGlobal),
 		controlCh:  make(chan RequestsControlMsg, 8),
 	}
 }
@@ -293,7 +289,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.regWriter(uname, sw)
 
 	if glog.FastV(4, glog.SmoduleEC) {
-		glog.Infof("Requesting object %s/%s from %s", lom.Bck(), lom.ObjName, daemonID)
+		glog.Infof("Requesting object %s from %s", lom, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, nil, nil, true); err != nil {
 		r.unregWriter(uname)
@@ -307,7 +303,10 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.unregWriter(uname)
 	lom.Uncache(true)
 	if glog.FastV(4, glog.SmoduleEC) {
-		glog.Infof("Received object %s/%s from %s", lom.Bck(), lom.ObjName, daemonID)
+		glog.Infof("Received object %s from %s", lom, daemonID)
+	}
+	if lom.Version() == "" && sw.version != "" {
+		lom.SetVersion(sw.version)
 	}
 	return sw.n, nil
 }
@@ -413,7 +412,7 @@ func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transpor
 	buf, slab := mm.Alloc()
 	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
 	writer.cksum = cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
-	if writer.version != "" && objAttrs.Version != "" {
+	if writer.version == "" && objAttrs.Version != "" {
 		writer.version = objAttrs.Version
 	}
 

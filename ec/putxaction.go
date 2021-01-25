@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
@@ -88,6 +89,46 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 	}
 }
 
+func (r *XactPut) Do(req *Request, lom *cluster.LOM) error {
+	switch req.Action {
+	case ActSplit:
+		r.stats.updateEncode(lom.Size())
+	case ActDelete:
+		r.stats.updateDelete()
+	default:
+		return fmt.Errorf("invalid request's action %s for putxaction", req.Action)
+	}
+	return r.dispatchReqest(req, lom)
+}
+
+func (r *XactPut) dispatchReqest(req *Request, lom *cluster.LOM) error {
+	r.IncPending()
+	if !r.ecRequestsEnabled() {
+		r.DecPending()
+		err := fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
+		if req.ErrCh != nil {
+			req.ErrCh <- err
+			close(req.ErrCh)
+		}
+		return err
+	}
+
+	debug.Assert(req.Action == ActDelete || req.Action == ActSplit)
+
+	jogger, ok := r.putJoggers[lom.MpathInfo().Path]
+	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
+	if glog.FastV(4, glog.SmoduleEC) {
+		glog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)
+	}
+	if req.rebuild {
+		jogger.xactCh <- req
+	} else {
+		r.stats.updateQueue(len(jogger.putCh))
+		jogger.putCh <- req
+	}
+	return nil
+}
+
 func (r *XactPut) Run() {
 	glog.Infoln(r.String())
 
@@ -122,16 +163,6 @@ func (r *XactPut) Run() {
 					glog.Info(s)
 				}
 			}
-		case req := <-r.ecCh:
-			switch req.Action {
-			case ActSplit:
-				r.stats.updateEncode(req.LOM.Size())
-			case ActDelete:
-				r.stats.updateDelete()
-			default:
-				glog.Errorf("Invalid request's action %s for putxaction", req.Action)
-			}
-			r.dispatchRequest(req)
 		case <-r.IdleTimer():
 			// It's OK not to notify ecmanager, it'll just have stopped xact in a map.
 			r.stop()
@@ -144,18 +175,8 @@ func (r *XactPut) Run() {
 			cmn.Assert(msg.Action == ActClearRequests)
 
 			r.setEcRequestsDisabled()
-
-			// Drain pending bucket's EC requests, return them with an error.
-			// NOTE: loop can't be replaced with channel range, as the channel is never closed.
-			for {
-				select {
-				case req := <-r.ecCh:
-					r.abortECRequestWhenDisabled(req)
-				default:
-					r.stop()
-					return
-				}
-			}
+			r.stop()
+			return
 		case <-r.ChanAbort():
 			r.stop()
 			return
@@ -184,59 +205,29 @@ func (r *XactPut) stop() {
 }
 
 // Encode schedules FQN for erasure coding process
-func (r *XactPut) Encode(req *Request) {
+func (r *XactPut) Encode(req *Request, lom *cluster.LOM) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
-	if glog.FastV(4, glog.SmoduleEC) {
-		glog.Infof("ECXAction for bucket %s (queue = %d): encode object %s",
-			r.bck, len(r.ecCh), req.LOM.Uname())
+	if err := r.Do(req, lom); err != nil {
+		glog.Errorf("Failed to encode %s: %v", lom, err)
 	}
-
-	r.dispatchDecodingRequest(req)
 }
 
 // Cleanup deletes all object slices or copies after the main object is removed
-func (r *XactPut) Cleanup(req *Request) {
+func (r *XactPut) Cleanup(req *Request, lom *cluster.LOM) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
 
-	r.dispatchDecodingRequest(req)
+	r.dispatchDecodingRequest(req, lom)
 }
 
-func (r *XactPut) dispatchDecodingRequest(req *Request) {
+func (r *XactPut) dispatchDecodingRequest(req *Request, lom *cluster.LOM) {
 	if !r.ecRequestsEnabled() {
 		r.abortECRequestWhenDisabled(req)
 		return
 	}
 
-	r.ecCh <- req
-}
-
-func (r *XactPut) dispatchRequest(req *Request) {
-	r.IncPending()
-
-	if !r.ecRequestsEnabled() {
-		if req.ErrCh != nil {
-			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bck)
-			close(req.ErrCh)
-		}
-		r.DecPending()
-		return
-	}
-
-	cmn.Assert(req.Action == ActDelete || req.Action == ActSplit)
-
-	jogger, ok := r.putJoggers[req.LOM.MpathInfo().Path]
-	cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
-	if glog.FastV(4, glog.SmoduleEC) {
-		glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.putCh), req.LOM.Uname())
-	}
-	if req.rebuild {
-		jogger.xactCh <- req
-	} else {
-		r.stats.updateQueue(len(jogger.putCh))
-		jogger.putCh <- req
-	}
+	r.dispatchReqest(req, lom)
 }
 
 type ExtECPutStats struct {

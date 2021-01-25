@@ -315,14 +315,14 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	req := &Request{
 		Action:  ActSplit,
 		IsCopy:  IsECCopy(lom.Size(), &lom.Bprops().EC),
-		LOM:     lom.Clone(lom.FQN), // TODO -- FIXME: revisit
+		LIF:     lom.LIF(),
 		rebuild: len(cb) != 0,
 	}
 	if len(cb) != 0 {
 		req.Callback = cb[0]
 	}
 
-	mgr.RestoreBckPutXact(lom.Bck()).Encode(req)
+	mgr.RestoreBckPutXact(lom.Bck()).Encode(req, lom)
 
 	return nil
 }
@@ -335,10 +335,10 @@ func (mgr *Manager) CleanupObject(lom *cluster.LOM) {
 	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	req := &Request{
 		Action: ActDelete,
-		LOM:    lom.Clone(lom.FQN), // TODO: revisit
+		LIF:    lom.LIF(),
 	}
 
-	mgr.RestoreBckPutXact(lom.Bck()).Cleanup(req)
+	mgr.RestoreBckPutXact(lom.Bck()).Cleanup(req, lom)
 }
 
 func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
@@ -359,11 +359,11 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	req := &Request{
 		Action: ActRestore,
-		LOM:    lom.Clone(lom.FQN), // TODO -- FIXME: revisit
-		ErrCh:  make(chan error),   // unbuffered
+		LIF:    lom.LIF(),
+		ErrCh:  make(chan error), // unbuffered
 	}
 
-	mgr.RestoreBckGetXact(lom.Bck()).Decode(req)
+	mgr.RestoreBckGetXact(lom.Bck()).Decode(req, lom)
 
 	// wait for EC completes restoring the object
 	return <-req.ErrCh
