@@ -66,6 +66,8 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 		} else {
 			bucketProps.Versioning.Enabled = remoteProps.Versioning.Enabled // always takes precedence
 		}
+	} else if bck.IsCloud() || bck.IsHTTP() {
+		return fmt.Errorf("creating a bucket for any of the cloud or HTTP providers is not supported")
 	}
 	if bucketProps == nil {
 		bucketProps = defaultBckProps(bckPropsArgs{bck: bck})
