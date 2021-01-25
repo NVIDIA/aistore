@@ -224,7 +224,6 @@ test:aisloader:
 .test_kube_template: &test_kube_def
   tags:
     - ais-kube
-  timeout: 30m
   variables:
     NUM_TARGET: 1
     NUM_PROXY: 1
@@ -236,6 +235,7 @@ test:aisloader:
 test:kube-short:
   stage: test-short
   <<: *test_kube_def
+  timeout: 30m
   only:
     - merge_requests
   except:
@@ -252,6 +252,7 @@ test:kube-short:
 test:kube:
   stage: test-long
   <<: *test_kube_def
+  timeout: 1h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
@@ -269,6 +270,7 @@ test:kube:
 test:kube-single-target:
   stage: test-long
   <<: *test_kube_def
+  timeout: 1h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
@@ -286,6 +288,7 @@ test:kube-single-target:
 test:kube-aisloader:
   stage: test-long
   <<: *test_kube_def
+  timeout: 15m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
