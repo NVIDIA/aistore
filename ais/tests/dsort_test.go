@@ -1434,10 +1434,13 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						}
 					}
 
-					defer func() {
+					t.Cleanup(func() {
+						// Wait for any resilver that might be still running.
+						tutils.WaitForRebalanceToComplete(t, df.baseParams)
+
 						for target, mpath := range mountpaths {
 							if adding {
-								tutils.Logf("removing mountpath %q to %s...\n", mpath, target.ID())
+								tutils.Logf("removing mountpath %q from %s...\n", mpath, target.ID())
 								err := api.RemoveMountpath(df.baseParams, target.ID(), mpath)
 								tassert.CheckError(t, err)
 								err = os.RemoveAll(mpath)
@@ -1450,7 +1453,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						}
 
 						tutils.WaitForRebalanceToComplete(t, df.baseParams)
-					}()
+					})
 
 					tutils.CreateFreshBucket(t, m.proxyURL, m.bck, nil)
 
@@ -1477,7 +1480,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckError(t, err)
 
-					df.checkMetrics(true /* expectAbort */)
+					df.checkMetrics(true /*expectAbort*/)
 				})
 			}
 		},
