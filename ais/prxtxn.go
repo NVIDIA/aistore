@@ -285,8 +285,19 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 				return "", err
 			}
 			nprops = defaultCloudBckProps(cloudProps)
+		} else if bck.IsHDFS() {
+			// FIXME: This should be done differently - one function for setting
+			//  default bucket props.
+			cloudProps, _, err := p.headRemoteBck(bck.Bck, nil)
+			if err != nil {
+				return "", err
+			}
+			nprops = defaultCloudBckProps(cloudProps)
+			// Preserve the reference directory - without it the HDFS is dangling.
+			nprops.Extra.HDFS.RefDirectory = bck.Props.Extra.HDFS.RefDirectory
 		} else {
 			nprops = defaultBckProps()
+			nprops.SetProvider(bck.Provider)
 		}
 	default:
 		cmn.Assert(false)
@@ -361,6 +372,10 @@ func (p *proxyrunner) _setPropsPre(ctx *bmdModifier, clone *bucketMD) (err error
 		if err := p.checkBackendBck(ctx.setProps); err != nil {
 			return err
 		}
+	} else {
+		targetCnt := p.owner.smap.Get().CountActiveTargets()
+		debug.Assert(ctx.setProps != nil)
+		debug.AssertNoErr(ctx.setProps.Validate(targetCnt))
 	}
 
 	ctx.needReMirror = reMirror(bprops, ctx.setProps)
@@ -890,10 +905,6 @@ func (p *proxyrunner) makeNewBckProps(bck *cluster.Bck, propsToUpdate *cmn.Bucke
 			return
 		}
 	} else if bck.IsHDFS() {
-		if nprops.Extra.HDFS.RefDirectory == "" {
-			err = fmt.Errorf("reference directory must be set for a bucket with HDFS provider")
-			return
-		}
 		nprops.Versioning.Enabled = false
 		// TODO: Check if the `RefDirectory` does not overlap with other buckets.
 	}

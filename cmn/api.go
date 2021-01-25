@@ -417,6 +417,20 @@ func (c *ECConf) RequiredRestoreTargets() int {
 	return c.DataSlices
 }
 
+func (c *ExtraProps) ValidateAsProps(args *ValidationArgs) error {
+	switch args.Provider {
+	case ProviderHDFS:
+		if c.HDFS.RefDirectory == "" {
+			return fmt.Errorf("reference directory must be set for a bucket with HDFS provider")
+		}
+	case ProviderHTTP:
+		if c.HTTP.OrigURLBck == "" {
+			return fmt.Errorf("original bucket URL must be set for a bucket with HTTP provider")
+		}
+	}
+	return nil
+}
+
 /////////////////
 // BucketProps //
 /////////////////
@@ -478,9 +492,11 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 		}
 	}
 
-	validationArgs := &ValidationArgs{TargetCnt: targetCnt}
-	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, bp.MDWrite}
-	var softErr error
+	var (
+		softErr        error
+		validationArgs = &ValidationArgs{Provider: bp.Provider, TargetCnt: targetCnt}
+		validators     = []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC, &bp.Extra, bp.MDWrite}
+	)
 	for _, validator := range validators {
 		if err := validator.ValidateAsProps(validationArgs); err != nil {
 			if IsErrSoft(err) {

@@ -61,7 +61,8 @@ const (
 
 type (
 	ValidationArgs struct {
-		TargetCnt int // for EC
+		Provider  string // For ExtraProps.
+		TargetCnt int    // For EC.
 	}
 
 	Validator interface {
