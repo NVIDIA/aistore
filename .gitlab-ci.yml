@@ -243,7 +243,7 @@ test:kube-short:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
   script:
     - export NUM_TARGET=3
-    - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
+    - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-short || status=$?
     - make kill
@@ -261,7 +261,7 @@ test:kube:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - export NUM_TARGET=3
-    - MINIKUBE_TESTING="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
+    - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-run || status=$?
     - make kill
@@ -278,7 +278,7 @@ test:kube-single-target:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
-    #  Do not set MINIKUBE_TESTING as we want to have a tests checking correctness with non-testing environment.
+    #  Do not set ONE_NODE_MANY_ETLS as we want to have a tests checking correctness with non-testing environment.
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-run || status=$?

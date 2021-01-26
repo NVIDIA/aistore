@@ -52,8 +52,8 @@ else
 	LDFLAGS = -ldflags "-w -s -X 'main.version=$(VERSION)' -X 'main.build=$(BUILD)'"
 endif
 
-ifdef MINIKUBE_TESTING
-    BUILD_TAGS += minikubetesting
+ifdef ONE_NODE_MANY_ETLS
+    BUILD_TAGS += onenodemanyetls
 endif
 
 ifdef AIS_DEBUG

@@ -1,4 +1,4 @@
-// +build !minikubetesting
+// +build !onenodemanyetls
 
 // Package k8s provides utilities for communicating with Kubernetes cluster.
 /*
@@ -6,4 +6,4 @@
  */
 package k8s
 
-const MinikubeTesting = false
+const AllowOneNodeManyETLs = false
