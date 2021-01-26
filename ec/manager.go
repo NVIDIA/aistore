@@ -335,7 +335,7 @@ func (mgr *Manager) CleanupObject(lom *cluster.LOM) {
 	cmn.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
 	req := &Request{
 		Action: ActDelete,
-		LOM:    lom,
+		LOM:    lom.Clone(lom.FQN), // TODO: revisit
 	}
 
 	mgr.RestoreBckPutXact(lom.Bck()).Cleanup(req)
