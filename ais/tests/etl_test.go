@@ -470,16 +470,14 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 		t.Skip("Requires a single-node single-target deployment")
 	}
 
-	uuid1, err := etlInit("echo", "hrev://")
+	uuid1, err := etlInit(tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
-	if uuid1 != "" {
-		defer func() {
-			tutils.Logf("Stop %q\n", uuid1)
-			tassert.CheckFatal(t, api.ETLStop(baseParams, uuid1))
-		}()
-	}
+	defer func() {
+		tutils.Logf("Stop %q\n", uuid1)
+		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid1))
+	}()
 
-	uuid2, err := etlInit("md5", "hrev://")
+	uuid2, err := etlInit(tetl.Md5, etl.RevProxyCommType)
 	tassert.Errorf(t, err != nil, "expected err to occur")
 	if uuid2 != "" {
 		tutils.Logf("Stop %q\n", uuid2)
@@ -531,4 +529,17 @@ func TestETLHealth(t *testing.T) {
 	for _, health := range healths {
 		tassert.Errorf(t, health.CPU > 0.0 || health.Mem > 0, "[%s] expected non empty health info, got %v", health.TargetID, health)
 	}
+}
+
+func TestETLList(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+
+	uuid, err := etlInit(tetl.Echo, etl.RevProxyCommType)
+	tassert.CheckFatal(t, err)
+	defer api.ETLStop(baseParams, uuid)
+
+	list, err := api.ETLList(baseParams)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(list) == 1, "expected exactly one ETL to be listed, got %d", len(list))
+	tassert.Fatalf(t, list[0].ID == uuid, "expected uuid to be %q, got %q", uuid, list[0].ID)
 }

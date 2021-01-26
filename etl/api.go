@@ -28,7 +28,8 @@ type (
 		WaitTimeout cmn.DurationJSON `json:"wait_timeout"`
 	}
 
-	Info struct {
+	InfoList []Info
+	Info     struct {
 		ID string `json:"id"`
 	}
 
@@ -77,3 +78,7 @@ func (m BuildMsg) Validate() error {
 func (p PodsLogsMsg) Len() int           { return len(p) }
 func (p PodsLogsMsg) Less(i, j int) bool { return p[i].TargetID < p[j].TargetID }
 func (p PodsLogsMsg) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+func (il InfoList) Len() int           { return len(il) }
+func (il InfoList) Less(i, j int) bool { return il[i].ID < il[j].ID }
+func (il InfoList) Swap(i, j int)      { il[i], il[j] = il[j], il[i] }

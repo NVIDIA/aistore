@@ -7,8 +7,8 @@ package ais
 import (
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"sort"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -376,13 +376,51 @@ func (p *proxyrunner) listETL(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.checkRESTItems(w, r, 0, false, cmn.URLPathETLList.L); err != nil {
 		return
 	}
-	si, err := p.Sowner().Get().GetRandTarget()
+	etls, err := p.listETLs()
 	if err != nil {
-		p.invalmsghdlrf(w, r, "failed to pick random target, err: %v", err)
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	redirectURL := p.redirectURL(r, si, time.Now(), cmn.NetworkIntraData)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	p.writeJSON(w, r, etls, "list-etl")
+}
+
+func (p *proxyrunner) listETLs() (infoList etl.InfoList, err error) {
+	var (
+		args = allocBcastArgs()
+		etls *etl.InfoList
+	)
+	args.req = cmn.ReqArgs{Method: http.MethodGet, Path: cmn.URLPathETLList.S}
+	args.timeout = cmn.DefaultTimeout
+	args.fv = func() interface{} { return &etl.InfoList{} }
+	results := p.bcastGroup(args)
+	freeBcastArgs(args)
+
+	for res := range results {
+		if res.err != nil {
+			err = res.err
+			drainCallResults(res, results)
+			return nil, err
+		}
+
+		if etls == nil {
+			etls = res.v.(*etl.InfoList)
+			sort.Sort(etls)
+		} else {
+			another := res.v.(*etl.InfoList)
+			sort.Sort(another)
+			if !reflect.DeepEqual(etls, another) {
+				// TODO: Should we return an error to a user?
+				// Or stop mismatching ETLs and return internal server error?
+				glog.Warningf("Targets returned different ETLs: %v vs %v", etls, another)
+			}
+		}
+		freeCallRes(res)
+	}
+
+	if etls == nil {
+		etls = &etl.InfoList{}
+	}
+	return *etls, err
 }
 
 // GET /v1/etl/logs/<uuid>[/<target_id>]
