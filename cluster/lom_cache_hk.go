@@ -89,9 +89,11 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 			}
 			if mdTime > 0 && md.atime != md.atimefs {
 				lif := LIF{md.uname, md.bckID}
-				if lom, err := lif.LOM(bmd); err == nil {
+				lom, err := lif.LOM(bmd)
+				if err == nil {
 					lom.flushCold(md, atime)
 				}
+				FreeLOM(lom)
 			}
 			cache.Delete(hkey)
 			evictedCnt++

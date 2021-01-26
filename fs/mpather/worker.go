@@ -19,38 +19,34 @@ import (
 type (
 	WorkerGroupOpts struct {
 		Callback  func(lom *cluster.LOM, buf []byte)
-		QueueSize int
 		Slab      *memsys.Slab
+		BMD       *cluster.BMD
+		QueueSize int
 	}
 
-	// WorkerGroup starts worker per mountpath which can receive tasks (*cluster.LOM).
-	// When a task is received then it's scheduled to corresponding mountpath worker
-	// which executes a specified callback on the received LOM.
+	// WorkerGroup starts one worker per mountpath; each worker receives (*cluster.LOM) tasks
+	// and executes the specified callback.
 	WorkerGroup struct {
 		wg      *errgroup.Group
 		workers map[string]*worker
 	}
-
 	worker struct {
 		opts      *WorkerGroupOpts
 		mpathInfo *fs.MountpathInfo
-		workCh    chan *cluster.LOM
+		workCh    chan cluster.LIF
 		stopCh    *cmn.StopCh
 	}
 )
 
 func NewWorkerGroup(opts *WorkerGroupOpts) *WorkerGroup {
-	debug.Assert(opts.QueueSize > 0) // For now we expect buffered channels.
-
 	var (
 		mpaths, _ = fs.Get()
 		workers   = make(map[string]*worker, len(mpaths))
 	)
-
+	debug.Assert(opts.QueueSize > 0) // expect buffered channels
 	for _, mpathInfo := range mpaths {
 		workers[mpathInfo.Path] = newWorker(opts, mpathInfo)
 	}
-
 	return &WorkerGroup{
 		wg:      &errgroup.Group{},
 		workers: workers,
@@ -64,12 +60,11 @@ func (wg *WorkerGroup) Run() {
 }
 
 func (wg *WorkerGroup) Do(lom *cluster.LOM) bool {
-	path := lom.MpathInfo().Path
-	if worker, ok := wg.workers[path]; ok {
-		worker.workCh <- lom
-		return true
+	worker, ok := wg.workers[lom.MpathInfo().Path]
+	if ok {
+		worker.workCh <- lom.LIF()
 	}
-	return false
+	return ok
 }
 
 // Stop aborts all the workers. It should be called after we are sure no more
@@ -86,25 +81,30 @@ func newWorker(opts *WorkerGroupOpts, mpathInfo *fs.MountpathInfo) *worker {
 	return &worker{
 		opts:      opts,
 		mpathInfo: mpathInfo,
-		workCh:    make(chan *cluster.LOM, opts.QueueSize),
+		workCh:    make(chan cluster.LIF, opts.QueueSize),
 		stopCh:    cmn.NewStopCh(),
 	}
 }
 
 func (w *worker) work() error {
-	glog.Infof("%s started", w)
-
 	var buf []byte
+	glog.Infof("%s started", w)
 	if w.opts.Slab != nil {
 		buf = w.opts.Slab.Alloc()
 		defer w.opts.Slab.Free(buf)
 	}
-
 	for {
 		select {
-		case src := <-w.workCh:
-			lom := src.Clone(src.FQN)
-			w.opts.Callback(lom, buf)
+		case lif := <-w.workCh:
+			lom, err := lif.LOM(w.opts.BMD)
+			if err == nil {
+				err = lom.Load()
+			}
+			if err == nil {
+				w.opts.Callback(lom, buf)
+			} else {
+				cluster.FreeLOM(lom)
+			}
 		case <-w.stopCh.Listen(): // Worker has been aborted.
 			close(w.workCh)
 
@@ -126,7 +126,7 @@ func (w *worker) abort() int {
 
 func (w *worker) String() string { return fmt.Sprintf("worker %q", w.mpathInfo.Path) }
 
-func drainWorkCh(workCh chan *cluster.LOM) (n int) {
+func drainWorkCh(workCh chan cluster.LIF) (n int) {
 	for {
 		select {
 		case <-workCh:

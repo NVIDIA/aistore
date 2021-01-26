@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -40,7 +41,6 @@ type (
 		workers *mpather.WorkerGroup
 		workCh  chan cluster.LIF
 		// init
-		bmd     *cluster.BMD
 		mirror  cmn.MirrorConf
 		total   atomic.Int64
 		dropped int64
@@ -77,54 +77,43 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	if err = fs.ValidateNCopies(t.Sname(), int(mirror.Copies)); err != nil {
 		return
 	}
-	bmd := t.Bowner().Get()
 	r = &XactPut{
 		XactDemandBase: *xaction.NewXactDemandBaseBck(cmn.ActPutCopies, lom.Bucket()),
 		mirror:         mirror,
 		workCh:         make(chan cluster.LIF, mirror.Burst),
-		bmd:            bmd,
-		workers: mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
-			Slab:      slab,
-			QueueSize: mirror.Burst,
-			Callback: func(lom *cluster.LOM, buf []byte) {
-				copies := int(lom.Bprops().Mirror.Copies)
-				if _, err := addCopies(lom, copies, buf); err != nil {
-					glog.Error(err)
-				} else {
-					r.ObjectsAdd(int64(copies))
-				}
-				r.DecPending() // to support action renewal on-demand
-				cluster.FreeLOM(lom)
-			},
-		}),
 	}
 	r.InitIdle()
 
+	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
+		Callback:  r.workCb,
+		Slab:      slab,
+		BMD:       t.Bowner().Get(),
+		QueueSize: mirror.Burst,
+	})
 	// Run
 	go r.Run()
 	return
 }
 
+// mpather/worker callback (one worker per mountpath)
+func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
+	copies := int(lom.Bprops().Mirror.Copies)
+	if _, err := addCopies(lom, copies, buf); err != nil {
+		glog.Error(err)
+	} else {
+		r.ObjectsAdd(int64(copies))
+	}
+	r.DecPending() // to support action renewal on-demand
+	cluster.FreeLOM(lom)
+}
+
+// control logic: stop and idle timer
+// (LOMs get dispatched directly to workers)
 func (r *XactPut) Run() {
 	glog.Infoln(r.String())
-
 	r.workers.Run()
-
 	for {
 		select {
-		case lif := <-r.workCh:
-			lom, err := lif.LOM(r.bmd)
-			if err != nil {
-				r.Finish(err)
-				return
-			}
-			if err := lom.Load(); err != nil {
-				glog.Error(err)
-				break
-			}
-			if ok := r.workers.Do(lom); !ok {
-				glog.Errorf("failed to get post with path: %s", lom)
-			}
 		case <-r.IdleTimer():
 			err := r.stop()
 			r.Finish(err)
@@ -140,8 +129,8 @@ func (r *XactPut) Run() {
 	}
 }
 
-// main method: replicate a given locally stored object
-func (r *XactPut) Repl(lif cluster.LIF) (err error) {
+// main method: replicate onto a given (and different) mountpath
+func (r *XactPut) Repl(lom *cluster.LOM) (err error) {
 	if r.Finished() {
 		err = xaction.NewErrXactExpired("Cannot replicate: " + r.String())
 		return
@@ -162,7 +151,12 @@ func (r *XactPut) Repl(lif cluster.LIF) (err error) {
 		}
 	}
 	r.IncPending() // ref-count via base to support on-demand action
-	r.workCh <- lif
+
+	if ok := r.workers.Do(lom); !ok {
+		err = fmt.Errorf("%s: failed to post %s work", r, lom)
+		debug.AssertNoErr(err)
+		return
+	}
 
 	// [throttle]
 	// a bit of back-pressure when approaching the fixed boundary

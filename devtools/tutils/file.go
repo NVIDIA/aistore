@@ -241,7 +241,10 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 			Name:     cmn.RandString(10),
 			Provider: cmn.ProviderAIS,
 			Ns:       cmn.NsGlobal,
-			Props:    &cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+			Props: &cmn.BucketProps{
+				Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
+				BID:   0xa5b6e7d8,
+			},
 		}
 		bmd   = cluster.NewBaseBownerMock(cluster.NewBckEmbed(bck))
 		tMock cluster.Target
