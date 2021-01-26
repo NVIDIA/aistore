@@ -353,8 +353,9 @@ func hasEnoughBMDCopies() bool {
 //////////////////////////
 
 type bckPropsArgs struct {
-	bck *cluster.Bck // Base bucket for determining default bucket props.
-	hdr http.Header  // Header with remote bucket properties.
+	bck          *cluster.Bck // Base bucket for determining default bucket props.
+	hdr          http.Header  // Header with remote bucket properties.
+	skipValidate bool
 }
 
 func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
@@ -366,7 +367,7 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 	debug.AssertNoErr(cmn.ValidateCksumType(c.Cksum.Type))
 	props.SetProvider(args.bck.Provider)
 
-	if args.bck.IsAIS() || args.bck.IsRemoteAIS() {
+	if args.bck.IsAIS() || args.bck.IsRemoteAIS() || args.bck.HasBackendBck() {
 		debug.Assert(args.hdr == nil)
 	} else if args.bck.IsCloud() || args.bck.IsHTTP() {
 		debug.Assert(args.hdr != nil)
@@ -378,13 +379,17 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 			props = mergeRemoteBckProps(props, args.hdr)
 		}
 		// Preserve HDFS related information.
-		props.Extra.HDFS = args.bck.Props.Extra.HDFS
+		if args.bck.Props != nil {
+			props.Extra.HDFS = args.bck.Props.Extra.HDFS
+		}
 	} else {
 		cmn.Assert(false)
 	}
 
-	// For debugging purposes we can set large value - we don't need to be precise here.
-	debug.AssertNoErr(props.Validate(1000 /*targetCnt*/))
+	if !args.skipValidate {
+		// For debugging purposes we can set large value - we don't need to be precise here.
+		debug.AssertNoErr(props.Validate(1000 /*targetCnt*/))
+	}
 	return props
 }
 
