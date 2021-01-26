@@ -372,10 +372,12 @@ def transform(input_bytes: bytes) -> bytes:
 			name     string
 			code     string
 			deps     string
+			runtime  string
 			onlyLong bool
 		}{
-			{name: "simple", code: md5, deps: "", onlyLong: false},
-			{name: "with_deps", code: numpy, deps: numpyDeps, onlyLong: true},
+			{name: "simple_python2", code: md5, deps: "", runtime: runtime.Python2, onlyLong: false},
+			{name: "simple_python3", code: md5, deps: "", runtime: runtime.Python3, onlyLong: false},
+			{name: "with_deps_python3", code: numpy, deps: numpyDeps, runtime: runtime.Python3, onlyLong: true},
 		}
 	)
 
@@ -394,7 +396,7 @@ def transform(input_bytes: bytes) -> bytes:
 			uuid, err := api.ETLBuild(baseParams, etl.BuildMsg{
 				Code:        []byte(test.code),
 				Deps:        []byte(test.deps),
-				Runtime:     runtime.Python3,
+				Runtime:     test.runtime,
 				WaitTimeout: cmn.DurationJSON(5 * time.Minute),
 			})
 			tassert.CheckFatal(t, err)
