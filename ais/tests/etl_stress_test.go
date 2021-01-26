@@ -14,7 +14,45 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/devtools/tutils/tetl"
 	"github.com/NVIDIA/aistore/etl"
+	"github.com/NVIDIA/aistore/etl/runtime"
 )
+
+func TestETLConnectionError(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+
+	// ETL should survive occasional failures and successfully transform all objects.
+	const timeoutFunc = `
+import random, requests
+
+def transform(input_bytes):
+	if random.randint(0,20) == 0:
+		raise requests.exceptions.ConnectionError("fake connection error")
+
+	return input_bytes
+`
+
+	m := ioContext{
+		t:        t,
+		num:      1000,
+		fileSize: cmn.KiB,
+		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: cmn.ProviderAIS},
+	}
+
+	tutils.Logln("Preparing source bucket")
+	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+
+	m.init()
+	tutils.Logln("Putting objects to source bucket")
+	m.puts()
+
+	uuid, err := api.ETLBuild(baseParams, etl.BuildMsg{
+		Code:        []byte(timeoutFunc),
+		Runtime:     runtime.Python3,
+		WaitTimeout: cmn.DurationJSON(5 * time.Minute),
+	})
+	tassert.CheckFatal(t, err)
+	testETLBucket(t, uuid, m.bck, m.num)
+}
 
 func TestETLTargetDown(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true, MinTargets: 2})
