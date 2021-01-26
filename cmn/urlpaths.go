@@ -73,12 +73,12 @@ var (
 
 	URLPathETL       = urlpath(Version, ETL)
 	URLPathETLInit   = urlpath(Version, ETL, ETLInit)
+	URLPathETLBuild  = urlpath(Version, ETL, ETLBuild)
 	URLPathETLStop   = urlpath(Version, ETL, ETLStop)
 	URLPathETLList   = urlpath(Version, ETL, ETLList)
 	URLPathETLLogs   = urlpath(Version, ETL, ETLLogs)
 	URLPathETLHealth = urlpath(Version, ETL, ETLHealth)
 	URLPathETLObject = urlpath(Version, ETL, ETLObject)
-	URLPathETLBuild  = urlpath(Version, ETL, ETLBuild)
 
 	URLPathTokens   = urlpath(Version, Tokens) // authn
 	URLPathUsers    = urlpath(Version, Users)

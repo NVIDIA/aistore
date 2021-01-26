@@ -252,7 +252,7 @@ test:kube-short:
 test:kube:
   stage: test-long
   <<: *test_kube_def
-  timeout: 1h
+  timeout: 2h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
@@ -270,7 +270,7 @@ test:kube:
 test:kube-single-target:
   stage: test-long
   <<: *test_kube_def
-  timeout: 1h
+  timeout: 2h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
