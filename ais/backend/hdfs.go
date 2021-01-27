@@ -166,7 +166,8 @@ func (hp *hdfsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *
 		errCode, err = hp.hdfsErrorToAISError(err)
 		return nil, errCode, err
 	}
-	if len(bckList.Entries) > 0 {
+	// Set continuation token only if we reached the page size.
+	if uint(len(bckList.Entries)) >= msg.PageSize {
 		bckList.ContinuationToken = bckList.Entries[len(bckList.Entries)-1].Name
 	}
 	return bckList, 0, nil
