@@ -47,6 +47,9 @@ func NewHDFS(t cluster.Target) (cluster.BackendProvider, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, err := client.StatFs(); err != nil {
+		return nil, fmt.Errorf("failed to stat filesystem (try to check connectivity with the HDFS cluster) err: %v", err)
+	}
 	return &hdfsProvider{t: t, c: client}, nil
 }
 

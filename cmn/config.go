@@ -760,18 +760,30 @@ func (c *BackendConf) Validate(_ *Config) (err error) {
 				return fmt.Errorf("invalid cloud specification: %v", err)
 			}
 			if len(hdfsConf.Addresses) == 0 {
-				return fmt.Errorf("no addresses provided to HDFS nodename")
+				return fmt.Errorf("no addresses provided to HDFS NameNode")
 			}
+
+			// Check connectivity and filter out non-reachable addresses.
+			reachableAddrs := hdfsConf.Addresses[:0]
 			for _, address := range hdfsConf.Addresses {
 				conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 				if err != nil {
-					return fmt.Errorf(
-						"failed to dial %q HDFS address, check connectivity to the HDFS cluster, err: %v",
+					glog.Warningf(
+						"Failed to dial %q HDFS address, check connectivity to the HDFS cluster, err: %v",
 						address, err,
 					)
+					continue
 				}
 				conn.Close()
+				reachableAddrs = append(reachableAddrs, address)
 			}
+			hdfsConf.Addresses = reachableAddrs
+
+			// Re-check if there is any address reachable.
+			if len(hdfsConf.Addresses) == 0 {
+				return fmt.Errorf("no address provided to HDFS NameNode is reachable")
+			}
+
 			c.Conf[provider] = hdfsConf
 			c.setProvider(provider)
 		case "":
