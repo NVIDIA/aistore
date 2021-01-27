@@ -1137,7 +1137,7 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 			continue
 		}
 
-		if smap.InMaintenance(snode) {
+		if smap.PresentInMaint(snode) {
 			skipped++
 			continue
 		}

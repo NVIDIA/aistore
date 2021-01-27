@@ -64,15 +64,17 @@ type (
 
 	// bcastArgs contains arguments for an intra-cluster broadcast call.
 	bcastArgs struct {
-		req               cmn.ReqArgs        // http args
+		req               cmn.ReqArgs        // h.call args
 		network           string             // one of the cmn.KnownNetworks
-		timeout           time.Duration      // timeout
-		fv                func() interface{} // optional; returns value to be unmarshalled (see `callArgs.v`)
-		nodes             []cluster.NodeMap  // broadcast destinations
+		timeout           time.Duration      // call timeout
+		fv                func() interface{} // optional; returns marshaled msg (see `callArgs.v`)
+		nodes             []cluster.NodeMap  // broadcast destinations - map(s)
+		selected          cluster.Nodes      // broadcast destinations - slice of selected few
 		smap              *smapX             // Smap to use
-		to                int                // enumerated alternative to nodes (above)
-		nodeCount         int                // greater or equal destination count
+		to                int                // (all targets, all proxies, all nodes) enum
+		nodeCount         int                // m.b. greater or equal destination count
 		ignoreMaintenance bool               // do not skip nodes under maintenance
+		async             bool               // ignore results
 	}
 
 	networkHandler struct {
@@ -234,7 +236,11 @@ func allocBcastArgs() (a *bcastArgs) {
 }
 
 func freeBcastArgs(a *bcastArgs) {
+	sel := a.selected
 	*a = bargs0
+	if sel != nil {
+		a.selected = sel[:0]
+	}
 	bargsPool.Put(a)
 }
 
@@ -814,6 +820,21 @@ func (h *httprunner) stop(err error) {
 // intra-cluster IPC, control plane
 // call another target or a proxy; optionally, include a json-encoded body
 //
+func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, ch chanResults) {
+	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
+	cargs.req.Base = si.URL(bargs.network)
+	if bargs.req.BodyR != nil {
+		cargs.req.BodyR, _ = bargs.req.BodyR.(cmn.ReadOpenCloser).Open()
+	}
+	if bargs.fv != nil {
+		cargs.v = bargs.fv()
+	}
+	res := h.call(cargs)
+	if ch != nil {
+		ch <- res
+	}
+}
+
 func (h *httprunner) call(args callArgs) (res *callResult) {
 	var (
 		req    *http.Request
@@ -942,18 +963,6 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 // intra-cluster IPC, control plane: notify another node
 //
 
-func (h *httprunner) notify(snodes cluster.NodeMap, msgBody []byte, kind string) {
-	path := cmn.URLPathNotifs.Join(kind)
-	args := bcastArgs{
-		req:       cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: msgBody},
-		network:   cmn.NetworkIntraControl,
-		timeout:   cmn.DefaultTimeout,
-		nodes:     []cluster.NodeMap{snodes},
-		nodeCount: len(snodes),
-	}
-	h.bcastAsyncNodes(&args)
-}
-
 func (h *httprunner) callerNotifyFin(n cluster.Notif, err error) {
 	h.callerNotify(n, err, cmn.Finished)
 }
@@ -963,42 +972,48 @@ func (h *httprunner) callerNotifyProgress(n cluster.Notif) {
 }
 
 func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
-	cmn.Assert(kind == cmn.Progress || kind == cmn.Finished)
-	msg := n.ToNotifMsg()
+	var (
+		smap  = h.owner.smap.get()
+		dsts  = n.Subscribers()
+		msg   = n.ToNotifMsg()
+		args  = allocBcastArgs()
+		nodes = args.selected
+	)
+	debug.Assert(kind == cmn.Progress || kind == cmn.Finished)
+	if len(dsts) == 1 && dsts[0] == equalIC {
+		for pid, psi := range smap.Pmap {
+			if smap.IsIC(psi) && pid != h.si.ID() && !smap.Pmap.InMaintenance(psi) {
+				nodes = append(nodes, psi)
+			}
+		}
+	} else {
+		for _, dst := range dsts {
+			debug.Assert(dst != equalIC)
+			if si := smap.GetNodeNotMaint(dst); si != nil {
+				nodes = append(nodes, si)
+			} else {
+				glog.Error(&errNodeNotFound{"failed to notify", dst, h.si, smap})
+			}
+		}
+	}
 	if err != nil {
 		msg.ErrMsg = err.Error()
 	}
 	msg.NodeID = h.si.ID()
-	nodes := h.notifDst(n)
-	h.notify(nodes, cmn.MustMarshal(&msg), kind)
-}
-
-// TODO: optimize avoid allocating a new NodeMap
-func (h *httprunner) notifDst(notif cluster.Notif) (nodes cluster.NodeMap) {
-	var (
-		smap = h.owner.smap.get()
-		dsts = notif.Subscribers()
-	)
-	if len(dsts) == 1 && dsts[0] == equalIC {
-		nodes = make(cluster.NodeMap, smap.DefaultICSize())
-		for pid, psi := range smap.Pmap {
-			if smap.IsIC(psi) && pid != h.si.ID() {
-				nodes.Add(psi)
-			}
-		}
+	if len(nodes) == 0 {
+		glog.Errorf("%s: have no nodes to send notification %s", h.si, &msg)
 		return
 	}
-	nodes = make(cluster.NodeMap, len(dsts))
-	for _, dst := range dsts {
-		debug.Assert(dst != equalIC)
-		if si := smap.GetNode(dst); si != nil {
-			nodes.Add(si)
-		} else {
-			err := &errNodeNotFound{"failed to notify", dst, h.si, smap}
-			glog.Error(err)
-		}
-	}
-	return
+
+	path := cmn.URLPathNotifs.Join(kind)
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: path, Body: cmn.MustMarshal(&msg)}
+	args.network = cmn.NetworkIntraControl
+	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
+	args.selected = nodes
+	args.nodeCount = len(nodes)
+	args.async = true
+	h.bcastNodes(args)
+	freeBcastArgs(args)
 }
 
 ///////////////
@@ -1049,80 +1064,46 @@ func (h *httprunner) bcastGroup(args *bcastArgs) chanResults {
 // It then waits and collects all the responses (compare with bcastAsyncNodes).
 // Note that, if specified, `bargs.req.BodyR` must implement `cmn.ReadOpenCloser`.
 func (h *httprunner) bcastNodes(bargs *bcastArgs) chanResults {
-	var (
-		ch  = make(chanResults, bargs.nodeCount)
-		cnt int
-	)
+	var ch chanResults
+	if !bargs.async {
+		ch = make(chanResults, bargs.nodeCount)
+	}
 	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
-	for _, nodeMap := range bargs.nodes {
-		for sid, si := range nodeMap {
-			if sid == h.si.ID() {
-				continue
+	f1 := func(si *cluster.Snode) {
+		h._call(si, bargs, ch)
+		wg.Done()
+	}
+	if bargs.nodes != nil {
+		debug.Assert(len(bargs.selected) == 0)
+		for _, nodeMap := range bargs.nodes {
+			for _, si := range nodeMap {
+				if si.ID() == h.si.ID() {
+					continue
+				}
+				if !bargs.ignoreMaintenance && nodeMap.InMaintenance(si) {
+					continue
+				}
+				wg.Add(1)
+				go f1(si)
 			}
-			if !bargs.ignoreMaintenance && nodeMap.InMaintenance(si) {
-				continue
-			}
-			cnt++
+		}
+	} else {
+		debug.Assert(len(bargs.selected) > 0)
+		for _, si := range bargs.selected {
+			debug.Assert(si.ID() != h.si.ID())
+			debug.Assert(h.owner.smap.get().GetNodeNotMaint(si.ID()) != nil)
 			wg.Add(1)
-			go func(si *cluster.Snode) {
-				h._call(si, bargs, ch)
-				wg.Done()
-			}(si)
+			go f1(si)
 		}
 	}
 	wg.Wait()
-	close(ch)
-	if cnt == 0 {
-		glog.Warningf("%s: node count is zero in [%s %s] broadcast",
-			h.si, bargs.req.Method, bargs.req.Path)
+	if !bargs.async {
+		close(ch)
 	}
 	return ch
 }
 
-func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, ch chanResults) {
-	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
-	cargs.req.Base = si.URL(bargs.network)
-	if bargs.req.BodyR != nil {
-		cargs.req.BodyR, _ = bargs.req.BodyR.(cmn.ReadOpenCloser).Open()
-	}
-	if bargs.fv != nil {
-		cargs.v = bargs.fv()
-	}
-	ch <- h.call(cargs)
-}
-
-// asynchronous variation of the `bcastNodes` (above)
-func (h *httprunner) bcastAsyncNodes(bargs *bcastArgs) {
-	var sema *cmn.DynSemaphore
-	if bargs.nodeCount == 0 {
-		smap := h.owner.smap.get()
-		glog.Errorf("%s: node count is zero in [%s %s] broadcast, %s",
-			h.si, bargs.req.Method, bargs.req.Path, smap.StringEx())
-		return
-	}
-	if bargs.nodeCount > cluster.MaxBcastParallel() {
-		sema = cmn.NewDynSemaphore(cluster.MaxBcastParallel())
-	}
-	for _, nodeMap := range bargs.nodes {
-		for sid, si := range nodeMap {
-			if sid == h.si.ID() {
-				continue
-			}
-			if sema != nil {
-				sema.Acquire()
-			}
-			go func(si *cluster.Snode) {
-				cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
-				cargs.req.Base = si.URL(bargs.network)
-				_ = h.call(cargs)
-				if sema != nil {
-					sema.Release()
-				}
-			}(si)
-		}
-	}
-}
-
+// TODO -- FIXME: remove; use bcastNodes
 func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 	var (
 		smap  = h.owner.smap.get()

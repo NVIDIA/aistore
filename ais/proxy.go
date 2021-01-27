@@ -2265,18 +2265,16 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyid)
 	if psi == nil {
-		p.invalmsghdlrf(w, r, "new primary proxy %s not present in the %s", proxyid, smap.pp())
+		p.invalmsghdlrf(w, r, "new primary proxy %s is not present in the %s", proxyid, smap.StringEx())
 		return
 	}
-
 	if proxyid == p.si.ID() {
 		cmn.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
-		glog.Warningf("Request to set primary = %s = self: nothing to do", proxyid)
+		glog.Warningf("Request to set primary to %s(self) - nothing to do", proxyid)
 		return
 	}
-
-	if smap.InMaintenance(psi) {
-		p.invalmsghdlrf(w, r, "cannot set new primary, node %q under maintenance", psi)
+	if smap.PresentInMaint(psi) {
+		p.invalmsghdlrf(w, r, "cannot set new primary: %s is under maintenance", psi)
 		return
 	}
 
@@ -3387,13 +3385,12 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 			return
 		}
-		if smap.InMaintenance(si) {
-			p.invalmsghdlrf(w, r, "Node %q already in maintenance state", opts.DaemonID)
+		if smap.PresentInMaint(si) {
+			p.invalmsghdlrf(w, r, "Node %q is already in maintenance", opts.DaemonID)
 			return
 		}
-
 		if p.si.Equals(si) {
-			p.invalmsghdlrf(w, r, "Node %q is primary, cannot perform %s", opts.DaemonID, msg.Action)
+			p.invalmsghdlrf(w, r, "Node %q is primary, cannot perform %q", opts.DaemonID, msg.Action)
 			return
 		}
 
@@ -3418,11 +3415,10 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 			return
 		}
-		if !smap.InMaintenance(si) {
+		if !smap.PresentInMaint(si) {
 			p.invalmsghdlrf(w, r, "Node %q is not under maintenance", opts.DaemonID)
 			return
 		}
-
 		rebID, err := p.cancelMaintenance(msg, &opts)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())

@@ -771,7 +771,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	)
 
 	for _, d := range m.smap.Tmap {
-		if m.smap.InMaintenance(d) {
+		if m.smap.PresentInMaint(d) {
 			continue
 		}
 		shardsToTarget[d] = nil

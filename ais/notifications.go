@@ -382,14 +382,15 @@ func (n *notifs) done(nl nl.NotifListener) {
 		config := cmn.GCO.Get()
 		// NOTE: we accept finished notifications even after
 		// `nl` is aborted. Handle locks carefully.
-		args := &bcastArgs{
-			req:     nl.AbortArgs(),
-			network: cmn.NetworkIntraControl,
-			timeout: config.Timeout.MaxKeepalive,
-			nodes:   []cluster.NodeMap{nl.Notifiers()},
-		}
+		args := allocBcastArgs()
+		args.req = nl.AbortArgs()
+		args.network = cmn.NetworkIntraControl
+		args.timeout = config.Timeout.MaxKeepalive
+		args.nodes = []cluster.NodeMap{nl.Notifiers()}
 		args.nodeCount = len(args.nodes[0])
-		n.p.bcastAsyncNodes(args)
+		args.async = true
+		n.p.bcastNodes(args)
+		freeBcastArgs(args)
 	}
 	nl.Callback(nl, time.Now().UnixNano())
 }
@@ -528,10 +529,10 @@ func (n *notifs) ListenSmapChanged() {
 	)
 	for uuid, nl := range n.nls.m {
 		nl.RLock()
-		for id := range nl.ActiveNotifiers() {
-			if node := smap.GetNode(id); node == nil || smap.InMaintenance(node) {
+		for sid := range nl.ActiveNotifiers() {
+			if node := smap.GetNodeNotMaint(sid); node == nil {
 				remnl[uuid] = nl
-				remid[uuid] = id
+				remid[uuid] = sid
 				break
 			}
 		}

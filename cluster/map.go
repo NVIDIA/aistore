@@ -467,13 +467,21 @@ func (m *Smap) NonElectable(psi *Snode) (ok bool) {
 	return node != nil && node.nonElectable()
 }
 
-func (m *Smap) InMaintenance(psi *Snode) (ok bool) {
-	node := m.GetNode(psi.ID())
+// not nil when present and _not_ in maintenance (compare w/ PresentInMaint)
+func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
+	si = m.GetNode(sid)
+	if si != nil && si.inMaintenance() {
+		si = nil
+	}
+	return
+}
+
+// true when present and in maintenance (compare w/ GetNodeNotMaint)
+func (m *Smap) PresentInMaint(si *Snode) (ok bool) {
+	node := m.GetNode(si.ID())
 	return node != nil && node.inMaintenance()
 }
 
-// Method is used when comparing one SMap to another ones, so
-// it cannot be replaced with single `psi.isIC()` call
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
 	node := m.GetProxy(psi.ID())
 	return node != nil && node.isIC()
