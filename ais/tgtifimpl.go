@@ -13,7 +13,6 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -110,19 +109,6 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 		Xact:      xlru,
 	})
 	lru.Run(&ini) // Blocking call.
-}
-
-// slight variation vs t.httpobjget()
-func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Time) error {
-	goi := &getObjInfo{
-		started: started,
-		t:       t,
-		lom:     lom,
-		w:       w,
-		ctx:     context.Background(),
-	}
-	_, err := goi.getObject()
-	return err
 }
 
 // slight variation vs t.doPut() above

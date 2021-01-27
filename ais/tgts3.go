@@ -204,12 +204,13 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize},
 	}
 	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
-	if errCode, err := goi.getObject(); err != nil {
-		if cmn.IsErrConnectionReset(err) {
+	if sent, errCode, err := goi.getObject(); err != nil {
+		if sent {
+			// Cannot send error message at this point so we just glog.
 			glog.Errorf("GET %s: %v", lom, err)
-		} else {
-			t.invalmsghdlr(w, r, err.Error(), errCode)
+			return
 		}
+		t.invalmsghdlr(w, r, err.Error(), errCode)
 	}
 }
 

@@ -750,12 +750,13 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		originalURL := query.Get(cmn.URLParamOrigURL)
 		goi.ctx = context.WithValue(goi.ctx, cmn.CtxOriginalURL, originalURL)
 	}
-	if errCode, err := goi.getObject(); err != nil {
-		if cmn.IsErrConnectionReset(err) {
+	if sent, errCode, err := goi.getObject(); err != nil {
+		if sent {
+			// Cannot send error message at this point so we just glog.
 			glog.Errorf("GET %s: %v", lom, err)
-		} else {
-			t.invalmsghdlr(w, r, err.Error(), errCode)
+			return
 		}
+		t.invalmsghdlr(w, r, err.Error(), errCode)
 	}
 }
 

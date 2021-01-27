@@ -6,7 +6,6 @@ package cluster
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -31,22 +30,21 @@ func NewTargetMock(bo Bowner) *TargetMock {
 	return t
 }
 
-func (*TargetMock) Sname() string                                    { return "" }
-func (*TargetMock) SID() string                                      { return "" }
-func (*TargetMock) Snode() *Snode                                    { return nil }
-func (*TargetMock) ClusterStarted() bool                             { return true }
-func (*TargetMock) NodeStarted() bool                                { return true }
-func (*TargetMock) DataClient() *http.Client                         { return http.DefaultClient }
-func (*TargetMock) NodeStartedTime() time.Time                       { return time.Now() }
-func (*TargetMock) RunLRU(_ string, _ bool, _ ...cmn.Bck)            {}
-func (t *TargetMock) Bowner() Bowner                                 { return t.BO }
-func (*TargetMock) Sowner() Sowner                                   { return nil }
-func (*TargetMock) FSHC(_ error, _ string)                           {}
-func (*TargetMock) MMSA() *memsys.MMSA                               { return memsys.DefaultPageMM() }
-func (*TargetMock) SmallMMSA() *memsys.MMSA                          { return memsys.DefaultSmallMM() }
-func (*TargetMock) PutObject(_ *LOM, _ PutObjectParams) error        { return nil }
-func (*TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error { return nil }
-func (*TargetMock) EvictObject(_ *LOM) error                         { return nil }
+func (*TargetMock) Sname() string                             { return "" }
+func (*TargetMock) SID() string                               { return "" }
+func (*TargetMock) Snode() *Snode                             { return nil }
+func (*TargetMock) ClusterStarted() bool                      { return true }
+func (*TargetMock) NodeStarted() bool                         { return true }
+func (*TargetMock) DataClient() *http.Client                  { return http.DefaultClient }
+func (*TargetMock) NodeStartedTime() time.Time                { return time.Now() }
+func (*TargetMock) RunLRU(_ string, _ bool, _ ...cmn.Bck)     {}
+func (t *TargetMock) Bowner() Bowner                          { return t.BO }
+func (*TargetMock) Sowner() Sowner                            { return nil }
+func (*TargetMock) FSHC(_ error, _ string)                    {}
+func (*TargetMock) MMSA() *memsys.MMSA                        { return memsys.DefaultPageMM() }
+func (*TargetMock) SmallMMSA() *memsys.MMSA                   { return memsys.DefaultSmallMM() }
+func (*TargetMock) PutObject(_ *LOM, _ PutObjectParams) error { return nil }
+func (*TargetMock) EvictObject(_ *LOM) error                  { return nil }
 func (*TargetMock) DeleteObject(ctx context.Context, lom *LOM, evict bool) (int, error) {
 	return 0, nil
 }
@@ -61,7 +59,6 @@ func (*TargetMock) GetCold(ctx context.Context, lom *LOM, _ GetColdType) (int, e
 func (*TargetMock) PromoteFile(_ PromoteFileParams) (*LOM, error)      { return nil, nil }
 func (*TargetMock) DB() dbdriver.Driver                                { return nil }
 func (*TargetMock) Backend(_ *Bck) BackendProvider                     { return nil }
-func (*TargetMock) StartTime() time.Time                               { return time.Now() }
 func (*TargetMock) GFN(_ GFNType) GFN                                  { return nil }
 func (*TargetMock) LookupRemoteSingle(_ *LOM, _ *Snode) bool           { return false }
 func (*TargetMock) RebalanceNamespace(_ *Snode) ([]byte, int, error)   { return nil, 0, nil }

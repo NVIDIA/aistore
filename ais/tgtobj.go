@@ -379,7 +379,7 @@ write:
 // GET OBJECT //
 ////////////////
 
-func (goi *getObjInfo) getObject() (errCode int, err error) {
+func (goi *getObjInfo) getObject() (sent bool, errCode int, err error) {
 	var (
 		cs                                            fs.CapStatus
 		doubleCheck, retry, retried, coldGet, capRead bool
@@ -396,14 +396,14 @@ do:
 		coldGet = cmn.IsObjNotExist(err)
 		if !coldGet {
 			goi.lom.Unlock(false)
-			return http.StatusInternalServerError, err
+			return sent, http.StatusInternalServerError, err
 		}
 		capRead = true // set flag to avoid calling later
 		cs = fs.GetCapStatus()
 		if cs.OOS {
 			// Immediate return for no space left to restore object.
 			goi.lom.Unlock(false)
-			return http.StatusInsufficientStorage, cs.Err
+			return sent, http.StatusInsufficientStorage, cs.Err
 		}
 	}
 
@@ -462,18 +462,18 @@ do:
 		if cs.OOS {
 			// No space left to prefetch object.
 			goi.lom.Unlock(false)
-			return http.StatusInsufficientStorage, cs.Err
+			return sent, http.StatusInsufficientStorage, cs.Err
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
 		if errCode, err := goi.t.GetCold(goi.ctx, goi.lom, cluster.GetCold); err != nil {
-			return errCode, err
+			return sent, errCode, err
 		}
 		goi.t.putMirror(goi.lom)
 	}
 
 	// 4. get locally and stream back
 get:
-	retry, errCode, err = goi.finalize(coldGet)
+	retry, sent, errCode, err = goi.finalize(coldGet)
 	if retry && !retried {
 		glog.Warningf("GET %s: uncaching and retrying...", goi.lom)
 		retried = true
@@ -684,7 +684,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	return
 }
 
-func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {
+func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, err error) {
 	var (
 		file    *os.File
 		sgl     *memsys.SGL
@@ -758,14 +758,14 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			if err == cmn.ErrNoOverlap {
 				hdr.Set(cmn.HeaderContentRange, fmt.Sprintf("%s*/%d", cmn.HeaderContentRangeValPrefix, size))
 			}
-			return false, http.StatusRequestedRangeNotSatisfiable, err
+			return false, sent, http.StatusRequestedRangeNotSatisfiable, err
 		}
 
 		if len(ranges) > 0 {
 			if len(ranges) > 1 {
 				err = fmt.Errorf("multi-range is not supported")
 				errCode = http.StatusRequestedRangeNotSatisfiable
-				return false, errCode, err
+				return false, sent, errCode, err
 			}
 			r = &ranges[0]
 
@@ -819,16 +819,15 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		}
 	}
 
+	sent = true // At this point we mark the object as sent, regardless of the outcome.
 	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
 		if cmn.IsErrConnectionReset(err) {
 			return
 		}
 		goi.t.fsErr(err, fqn)
-		err = fmt.Errorf("failed to GET %s, err: %w", fqn, err)
-		errCode = http.StatusInternalServerError
 		goi.t.statsT.Add(stats.ErrGetCount, 1)
-		return
+		return retry, sent, http.StatusInternalServerError, fmt.Errorf("failed to GET %s, err: %w", fqn, err)
 	}
 
 	// GFN: atime must be already set

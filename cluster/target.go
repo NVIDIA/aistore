@@ -145,7 +145,6 @@ type Target interface {
 	CheckRemoteVersion(ctx context.Context, lom *LOM) (vchanged bool, errCode int, err error)
 
 	// Object related functions.
-	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(lom *LOM, params PutObjectParams) (err error)
 	EvictObject(lom *LOM) error
 	DeleteObject(ctx context.Context, lom *LOM, evict bool) (errCode int, err error)
