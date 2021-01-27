@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
@@ -122,9 +121,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 // TODO: Run only with long tests when the test is stable.
 func TestMaintenanceMD(t *testing.T) {
 	// NOTE: This function requires local deployment as it checks local file system for VMDs.
-	if k8s.Detect() == nil {
-		t.Skip("skipping in kubernetes")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	if containers.DockerRunning() {
 		t.Skip("skipping in docker")
 	}

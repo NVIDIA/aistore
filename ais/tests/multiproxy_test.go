@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
-	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
@@ -156,9 +155,7 @@ func nodeCrashRestoreDifferentIP(t *testing.T) {
 
 func killRestoreDiffIP(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
-	if k8s.Detect() == nil {
-		t.Skip("skipping in kubernetes")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	if containers.DockerRunning() {
 		t.Skip("skipping in docker")
 	}
@@ -345,9 +342,7 @@ func addNodeDuplicateDaemonID(t *testing.T) {
 // TODO: add test for target that tries to join with duplicate DaemonID and contains user-data
 func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
-	if k8s.Detect() == nil {
-		t.Skip("skipping in kubernetes")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	if containers.DockerRunning() {
 		t.Skip("skipping in docker")
 	}
@@ -410,9 +405,7 @@ func addNodeDuplicateIP(t *testing.T) {
 // NOTE: Test assumes that the randomly chosen node is healthy (i.e. doesn't terminate or restart)
 func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
-	if k8s.Detect() == nil {
-		t.Skip("skipping in kubernetes")
-	}
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 	if containers.DockerRunning() {
 		t.Skip("skipping in docker")
 	}
