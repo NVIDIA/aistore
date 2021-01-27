@@ -49,6 +49,8 @@ const (
 	rebStageAbort // one of targets aborts the rebalancing (never set, only sent)
 )
 
+const maxWackTargets = 4
+
 type (
 	syncCallback func(tsi *cluster.Snode, md *rebArgs) (ok bool)
 	joggerBase   struct {
@@ -67,8 +69,8 @@ type (
 		lomacks     [cmn.MultiSyncMapCount]*lomAcks
 		awaiting    struct {
 			mu      sync.Mutex
-			targets cluster.NodeMap // targets for which we are waiting for
-			ts      int64           // last time we have recomputed
+			targets cluster.Nodes // targets for which we are waiting for
+			ts      int64         // last time we have recomputed
 		}
 		semaCh     *cmn.Semaphore
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats

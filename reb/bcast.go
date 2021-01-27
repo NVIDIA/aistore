@@ -21,17 +21,17 @@ import (
 
 type (
 	Status struct {
-		Tmap        cluster.NodeMap         `json:"tmap"`                // targets I'm waiting for ACKs from
+		Targets     cluster.Nodes           `json:"targets"`             // targets I'm waiting for ACKs from
 		SmapVersion int64                   `json:"smap_version,string"` // current Smap version (via smapOwner)
 		RebVersion  int64                   `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		RebID       int64                   `json:"reb_id,string"`       // rebalance ID
-		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`         // objects and sizes transmitted/received by this reb oper
-		BatchCurr   int                     `json:"batch_curr"`          // the current batch ID processing by EC rebalance
-		BatchLast   int                     `json:"batch_last"`          // the last batch ID to be processed by EC rebalance
+		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`         // objects and sizes sent/recv-ed
+		BatchCurr   int                     `json:"batch_curr"`          // current EC batch ID
+		BatchLast   int                     `json:"batch_last"`          // final EC batch ID to be processed
 		Stage       uint32                  `json:"stage"`               // the current stage - see enum above
 		Aborted     bool                    `json:"aborted"`             // aborted?
 		Running     bool                    `json:"running"`             // running?
-		Quiescent   bool                    `json:"quiescent"`           // transport queue is empty
+		Quiescent   bool                    `json:"quiescent"`           // true when queue is empty
 	}
 )
 
@@ -42,7 +42,7 @@ type (
 // via GET /v1/health (cmn.Health)
 func (reb *Manager) RebStatus(status *Status) {
 	var (
-		targets    cluster.NodeMap
+		targets    cluster.Nodes
 		config     = cmn.GCO.Get()
 		sleepRetry = cmn.KeepaliveRetryDuration(config)
 		rsmap      = (*cluster.Smap)(reb.smap.Load())
@@ -86,26 +86,28 @@ func (reb *Manager) RebStatus(status *Status) {
 	}
 
 	reb.awaiting.mu.Lock()
-	status.Tmap, targets = reb.awaiting.targets, reb.awaiting.targets
+	status.Targets, targets = reb.awaiting.targets, reb.awaiting.targets
 	now := mono.NanoTime()
-	if mono.Since(reb.awaiting.ts) < sleepRetry {
-		reb.awaiting.mu.Unlock()
-		return
+	if rsmap == nil || time.Duration(now-reb.awaiting.ts) < sleepRetry {
+		goto ret
 	}
 	reb.awaiting.ts = now
-	for tid := range reb.awaiting.targets {
-		delete(reb.awaiting.targets, tid)
-	}
-	max := rsmap.CountTargets() - 1
+	reb.awaiting.targets = reb.awaiting.targets[:0]
 	for _, lomAck := range reb.lomAcks() {
 		lomAck.mu.Lock()
+	nack:
 		for _, lom := range lomAck.q {
 			tsi, err := cluster.HrwTarget(lom.Uname(), rsmap)
 			if err != nil {
 				continue
 			}
-			targets[tsi.ID()] = tsi
-			if len(targets) >= max {
+			for _, si := range targets {
+				if si.ID() == tsi.ID() {
+					continue nack
+				}
+			}
+			targets = append(targets, tsi)
+			if len(targets) >= maxWackTargets { // limit reporting
 				lomAck.mu.Unlock()
 				goto ret
 			}
@@ -261,8 +263,8 @@ func (reb *Manager) waitFinExtended(tsi *cluster.Snode, md *rebArgs) (ok bool) {
 		// tsi in rebStageWaitAck
 		//
 		var w4me bool // true: this target is waiting for ACKs from me
-		for tid := range status.Tmap {
-			if tid == reb.t.SID() {
+		for _, si := range status.Targets {
+			if si.ID() == reb.t.SID() {
 				glog.Infof("%s: keep wack <= %s[%s]", logHdr, tsi, stages[status.Stage])
 				w4me = true
 				break

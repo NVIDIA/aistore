@@ -226,7 +226,11 @@ func (reb *Manager) rebInit(md *rebArgs, notif *xaction.NotifXact) bool {
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
 	reb.beginStreams()
-	reb.awaiting.targets = make(cluster.NodeMap, md.smap.CountTargets()-1)
+	if reb.awaiting.targets == nil {
+		reb.awaiting.targets = make(cluster.Nodes, 0, maxWackTargets)
+	} else {
+		reb.awaiting.targets = reb.awaiting.targets[:0]
+	}
 	acks := reb.lomAcks()
 	for i := 0; i < len(acks); i++ { // init lom acks
 		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]*cluster.LOM, 64)}
