@@ -1482,6 +1482,7 @@ func resetBucketProps(proxyURL string, bck cmn.Bck, t *testing.T) {
 	}
 }
 
+// TODO: replace with new initMountpaths and fs.WalkBck
 func findObjOnDisk(bck cmn.Bck, objName string) string {
 	var fqn string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {

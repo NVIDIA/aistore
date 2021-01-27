@@ -83,6 +83,7 @@ func (c *getJogger) ec(req *Request) {
 		}
 		restore := func(req *Request, toDisk bool, cb func(error)) {
 			lom, err := req.LIF.LOM(c.parent.t.Bowner().Get())
+			defer cluster.FreeLOM(lom)
 			if err == nil {
 				err = lom.Load()
 				if os.IsNotExist(err) {
@@ -93,18 +94,17 @@ func (c *getJogger) ec(req *Request) {
 				if cb != nil {
 					cb(err)
 				}
-				cluster.FreeLOM(lom)
 				c.parent.DecPending()
 				return
 			}
 			err = c.restore(lom, toDisk)
 			c.parent.stats.updateDecodeTime(time.Since(req.tm), err != nil)
-			cluster.FreeLOM(lom)
 			if cb != nil {
 				cb(err)
 			}
 			if err == nil {
 				c.parent.stats.updateObjTime(time.Since(req.putTime))
+				err = lom.Persist(true)
 			}
 			<-c.sema
 			// In case of everything is OK, a transport bundle calls `DecPending`

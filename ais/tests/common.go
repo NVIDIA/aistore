@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/fs"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -864,5 +865,19 @@ func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []strin
 		tutils.Logf("Failed to DEL: %s\n", e)
 		t.Fail()
 	default:
+	}
+}
+
+func initMountpaths(t *testing.T, proxyURL string) {
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	fs.Init()
+	fs.DisableFsIDCheck()
+	smap := tutils.GetClusterMap(t, proxyURL)
+	for _, target := range smap.Tmap {
+		mpathList, err := api.GetMountpaths(baseParams, target)
+		tassert.CheckFatal(t, err)
+		for _, mpath := range mpathList.Available {
+			fs.Add(mpath, target.ID())
+		}
 	}
 }

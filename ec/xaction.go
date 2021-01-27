@@ -308,6 +308,9 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	if lom.Version() == "" && sw.version != "" {
 		lom.SetVersion(sw.version)
 	}
+	if (lom.Cksum() == nil || lom.Cksum().Type() != cmn.ChecksumNone) && sw.cksum != nil && sw.cksum.Type() != cmn.ChecksumNone {
+		lom.SetCksum(sw.cksum)
+	}
 	return sw.n, nil
 }
 

@@ -37,6 +37,7 @@ const (
 var gcsObjJSON = strings.ReplaceAll(gcsObjXML, "/", "%2F")
 
 // search for the full path of cached object
+// TODO: replace with initMountpaths and fs.WalkBck
 func pathForCached() string {
 	var fpath string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
