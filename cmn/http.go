@@ -104,10 +104,10 @@ type (
 var ErrNoOverlap = errors.New("invalid range: failed to overlap")
 
 // Eg: Bad Request: Bucket abc does not appear to be local or does not exist:
-//   DELETE /v1/buckets/abc from 127.0.0.1:54064| ([httpcommon.go, #840] <- [proxy.go, #484] <- [proxy.go, #264])
+//   DELETE /v1/buckets/abc from 127.0.0.1:54064 (stack: [httpcommon.go:840 <- proxy.go:484 <- proxy.go:264])
 func (e *HTTPError) String() string {
 	return http.StatusText(e.Status) + ": " + e.Message + ": " +
-		e.Method + " " + e.URLPath + " from " + e.RemoteAddr + "| (" + e.Trace + ")"
+		e.Method + " " + e.URLPath + " from " + e.RemoteAddr + " (" + e.Trace + ")"
 }
 
 // Implements error interface
