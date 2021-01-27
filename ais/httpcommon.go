@@ -1103,29 +1103,28 @@ func (h *httprunner) bcastNodes(bargs *bcastArgs) chanResults {
 	return ch
 }
 
-// TODO -- FIXME: remove; use bcastNodes
 func (h *httprunner) bcastAsyncIC(msg *aisMsg) {
 	var (
-		smap  = h.owner.smap.get()
-		bargs = bcastArgs{
-			req: cmn.ReqArgs{
-				Method: http.MethodPost,
-				Path:   cmn.URLPathIC.S,
-				Body:   cmn.MustMarshal(msg),
-			},
-			network: cmn.NetworkIntraControl,
-			timeout: cmn.GCO.Get().Timeout.MaxKeepalive,
-		}
+		wg   = &sync.WaitGroup{}
+		smap = h.owner.smap.get()
+		args = allocBcastArgs()
 	)
+	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathIC.S, Body: cmn.MustMarshal(msg)}
+	args.network = cmn.NetworkIntraControl
+	args.timeout = cmn.GCO.Get().Timeout.MaxKeepalive
 	for pid, psi := range smap.Pmap {
-		if !smap.IsIC(psi) || pid == h.si.ID() {
+		if pid == h.si.ID() || !smap.IsIC(psi) || smap.GetNodeNotMaint(pid) == nil {
 			continue
 		}
+		wg.Add(1)
 		go func(si *cluster.Snode) {
-			cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
+			cargs := callArgs{si: si, req: args.req, timeout: args.timeout}
 			_ = h.call(cargs)
+			wg.Done()
 		}(psi)
 	}
+	wg.Wait()
+	freeBcastArgs(args)
 }
 
 //////////////////////////////////
