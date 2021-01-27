@@ -111,7 +111,7 @@ test-env)
     exit 0
   fi
 
-  if [[ $(curl -s -X GET $AIS_ENDPOINT/v1/daemon?what=smap) ]]; then
+  if curl -s -X GET "${AIS_ENDPOINT}/v1/health?readiness=true"; then
     echo "AIStore detected on $AIS_ENDPOINT"
     exit 0
   fi
