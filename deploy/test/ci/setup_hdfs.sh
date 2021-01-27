@@ -14,12 +14,12 @@ Pin: release o=Cloudera, l=Cloudera
 Pin-Priority: 501
 EOF
 
-sudo apt-get update
+apt-get update
 
 CONF_AUTHENTICATION="simple"
 
-sudo mkdir -p /etc/hadoop/conf.gohdfs
-sudo tee /etc/hadoop/conf.gohdfs/core-site.xml <<EOF
+mkdir -p /etc/hadoop/conf.gohdfs
+tee /etc/hadoop/conf.gohdfs/core-site.xml <<EOF
 <configuration>
   <property>
     <name>fs.defaultFS</name>
@@ -32,7 +32,7 @@ sudo tee /etc/hadoop/conf.gohdfs/core-site.xml <<EOF
 </configuration>
 EOF
 
-sudo tee /etc/hadoop/conf.gohdfs/hdfs-site.xml <<EOF
+tee /etc/hadoop/conf.gohdfs/hdfs-site.xml <<EOF
 <configuration>
   <property>
     <name>dfs.namenode.name.dir</name>
@@ -41,6 +41,10 @@ sudo tee /etc/hadoop/conf.gohdfs/hdfs-site.xml <<EOF
   <property>
     <name>dfs.datanode.data.dir</name>
     <value>/opt/hdfs/data</value>
+  </property>
+  <property>
+   <name>dfs.permissions.enabled</name>
+   <value>false</value>
   </property>
   <property>
    <name>dfs.permissions.superusergroup</name>
@@ -61,11 +65,11 @@ sudo tee /etc/hadoop/conf.gohdfs/hdfs-site.xml <<EOF
 </configuration>
 EOF
 
-sudo update-alternatives --install /etc/hadoop/conf hadoop-conf /etc/hadoop/conf.gohdfs 99
-sudo apt-get install -y --no-install-recommends --allow-unauthenticated hadoop-hdfs-namenode hadoop-hdfs-datanode
+update-alternatives --install /etc/hadoop/conf hadoop-conf /etc/hadoop/conf.gohdfs 99
+apt-get install -y --no-install-recommends --allow-unauthenticated hadoop-hdfs-namenode hadoop-hdfs-datanode
 
-sudo mkdir -p /opt/hdfs/data /opt/hdfs/name
-sudo chown -R hdfs:hdfs /opt/hdfs
+mkdir -p /opt/hdfs/data /opt/hdfs/name
+chown -R hdfs:hdfs /opt/hdfs
 sudo -u hdfs hdfs namenode -format -nonInteractive
 
 sudo service hadoop-hdfs-datanode restart
