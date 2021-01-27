@@ -22,10 +22,16 @@ func TestETLConnectionError(t *testing.T) {
 
 	// ETL should survive occasional failures and successfully transform all objects.
 	const timeoutFunc = `
-import random, requests
+import random, requests, hashlib
+
+failures = {}
 
 def transform(input_bytes):
-	if random.randint(0,20) == 0:
+	md5 = hashlib.md5(input_bytes).hexdigest()
+	failures_cnt = failures.get(md5, 0)
+	# Fail at most 2 times, otherwise ETL will be stopped.
+	if random.randint(0,50) == 0 and failures_cnt < 2:
+		failures[md5] = failures_cnt + 1
 		raise requests.exceptions.ConnectionError("fake connection error")
 
 	return input_bytes
@@ -33,7 +39,7 @@ def transform(input_bytes):
 
 	m := ioContext{
 		t:        t,
-		num:      1000,
+		num:      10_000,
 		fileSize: cmn.KiB,
 		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: cmn.ProviderAIS},
 	}
@@ -51,7 +57,7 @@ def transform(input_bytes):
 		WaitTimeout: cmn.DurationJSON(5 * time.Minute),
 	})
 	tassert.CheckFatal(t, err)
-	testETLBucket(t, uuid, m.bck, m.num)
+	testETLBucket(t, uuid, m.bck, m.num, 5*time.Minute)
 }
 
 func TestETLTargetDown(t *testing.T) {

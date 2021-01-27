@@ -215,7 +215,7 @@ func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
 	tassert.Errorf(t, bf.Len() == cmn.KiB, "Expected %d bytes, got %d", cmn.KiB, bf.Len())
 }
 
-func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
+func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, timeout time.Duration) {
 	bckTo := cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 
 	defer func() {
@@ -228,7 +228,7 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int) {
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: time.Minute}
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: timeout}
 	_, err = api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -331,7 +331,7 @@ func TestETLBucket(t *testing.T) {
 			uuid, err := etlInit(test.transformer, test.comm)
 			tassert.CheckFatal(t, err)
 
-			testETLBucket(t, uuid, bck, objCnt)
+			testETLBucket(t, uuid, bck, objCnt, time.Minute)
 		})
 	}
 }
@@ -401,7 +401,7 @@ def transform(input_bytes: bytes) -> bytes:
 			})
 			tassert.CheckFatal(t, err)
 
-			testETLBucket(t, uuid, m.bck, m.num)
+			testETLBucket(t, uuid, m.bck, m.num, time.Minute)
 		})
 	}
 }
