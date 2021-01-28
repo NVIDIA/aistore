@@ -623,10 +623,14 @@ gfn:
 
 	// restore from existing EC slices if possible
 	if ecErr := ec.ECM.RestoreObject(goi.lom); ecErr == nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: EC-recovered %s", tname, goi.lom)
+		if ecErr = goi.lom.Load(true); ecErr == nil {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s: EC-recovered %s", tname, goi.lom)
+			}
+			return
 		}
-		return
+		debug.AssertNoErr(ecErr)
+		err = fmt.Errorf("%s: failed to load EC-recovered %s: %v", tname, goi.lom, ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
 		err = fmt.Errorf("%s: failed to EC-recover %s: %v", tname, goi.lom, ecErr)
 	}
