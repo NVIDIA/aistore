@@ -5,12 +5,30 @@
 package tassert
 
 import (
+	"fmt"
+	"runtime"
 	"runtime/debug"
+	"sync"
 	"testing"
 )
 
+var (
+	fatalities = make(map[string]struct{})
+	mu         sync.Mutex
+)
+
 func CheckFatal(tb testing.TB, err error) {
-	if err != nil {
+	if err == nil {
+		return
+	}
+	mu.Lock()
+	if _, ok := fatalities[tb.Name()]; ok {
+		mu.Unlock()
+		fmt.Printf("--- %s: duplicate CheckFatal\n", tb.Name()) // see #1057
+		runtime.Goexit()
+	} else {
+		fatalities[tb.Name()] = struct{}{}
+		mu.Unlock()
 		debug.PrintStack()
 		tb.Fatal(err.Error())
 	}
