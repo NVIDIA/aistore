@@ -178,3 +178,15 @@ func Health(baseParams BaseParams) error {
 	baseParams.Method = http.MethodGet
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathHealth.S})
 }
+
+// ShutdownCluster shuts down the whole cluster
+func ShutdownCluster(baseParams BaseParams) error {
+	msg := cmn.ActionMsg{Action: cmn.ActShutdown}
+	baseParams.Method = http.MethodPut
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.URLPathCluster.S,
+		Body:       cmn.MustMarshal(msg),
+	})
+	return err
+}

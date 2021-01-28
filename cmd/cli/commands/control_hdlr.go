@@ -124,6 +124,11 @@ var (
 					Action:       stopDsortHandler,
 					BashComplete: dsortIDRunningCompletions,
 				},
+				{
+					Name:   subcmdStopCluster,
+					Usage:  "shuts down the cluster",
+					Action: shutdownClusterHandler,
+				},
 			},
 		},
 	}
@@ -517,5 +522,14 @@ func startLRUHandler(c *cli.Context) (err error) {
 	}
 
 	fmt.Fprintf(c.App.Writer, "Started %s %q, %s\n", cmn.ActLRU, id, xactProgressMsg(id))
+	return
+}
+
+func shutdownClusterHandler(c *cli.Context) (err error) {
+	if err := api.ShutdownCluster(defaultAPIParams); err != nil {
+		return err
+	}
+
+	fmt.Fprint(c.App.Writer, "All nodes in the cluster are being shut down.\n")
 	return
 }

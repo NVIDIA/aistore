@@ -108,6 +108,7 @@ const (
 	subcmdStopXaction  = subcmdXaction
 	subcmdStopDsort    = subcmdDsort
 	subcmdStopDownload = subcmdDownload
+	subcmdStopCluster  = subcmdCluster
 
 	// Set subcommand
 	subcmdSetConfig  = subcmdConfig
