@@ -14,6 +14,15 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+func GetProxyReadiness(params BaseParams) error {
+	params.Method = http.MethodGet
+	return DoHTTPRequest(ReqParams{
+		BaseParams: params,
+		Path:       cmn.URLPathHealth.S,
+		Query:      url.Values{cmn.URLParamHealthReadiness: []string{"true"}},
+	})
+}
+
 // GetClusterMap retrieves AIStore cluster map.
 func GetClusterMap(baseParams BaseParams) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet

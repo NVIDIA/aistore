@@ -65,6 +65,9 @@ for i in $(seq 0 $((TARGET_CNT-1))); do
   envsubst < kube_templates/aistarget_deployment.yml | kubectl create -f -
 done
 
+echo "Waiting for the targets to be ready..."
+kubectl wait --for="condition=ready" --timeout=2m pods -l type=aistarget
+
 echo "Would you like to deploy datascience stack? (y/n) ?"
 read -r ds_stack
 if  [[ "$ds_stack" == "y" ]]; then
@@ -86,4 +89,4 @@ kubectl get pods -o wide
 echo "Done."
 echo ""
 echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
-echo "export AIS_ENDPOINT=\"http://$(minikube ip):8080\""
+echo "export AIS_ENDPOINT=\"http://${ais_endpoint}\""

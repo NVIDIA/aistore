@@ -90,12 +90,17 @@ func init() {
 }
 
 func initProxyURL() {
-	// Gets the fields from the .env file from which the docker was deployed
-	envVars := cmn.ParseEnvVariables(dockerEnvFile)
-	// Host IP and port of primary cluster
-	primaryHostIP, port := envVars["PRIMARY_HOST_IP"], envVars["PORT"]
+	var (
+		// Gets the fields from the .env file from which the docker was deployed
+		envVars = cmn.ParseEnvVariables(dockerEnvFile)
+		// Host IP and port of primary cluster
+		primaryHostIP, port = envVars["PRIMARY_HOST_IP"], envVars["PORT"]
+
+		primary *cluster.Snode
+	)
 
 	proxyURLReadOnly = proxyURL
+
 	if containers.DockerRunning() {
 		proxyURLReadOnly = "http://" + primaryHostIP + ":" + port
 	}
@@ -109,12 +114,28 @@ func initProxyURL() {
 		proxyURLReadOnly = cliAISURL
 	}
 
-	// Primary proxy can change if proxy tests are run and
-	// no new cluster is re-deployed before each test.
-	// Finds who is the current primary proxy.
-	primary, err := GetPrimaryProxy(proxyURLReadOnly)
+	// Discover if a proxy is ready to accept requests.
+	err := cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+		Call:    func() (int, error) { return 0, GetProxyReadiness(proxyURLReadOnly) },
+		SoftErr: 5,
+		HardErr: 5,
+		Sleep:   5 * time.Second,
+		Action:  fmt.Sprintf("check proxy readiness at %s", proxyURLReadOnly),
+	})
 	if err != nil {
-		fmt.Printf("Failed to reach primary proxy at %s\n", proxyURLReadOnly)
+		err = fmt.Errorf("failed to successfully check readiness of a proxy at %s; err %v", proxyURLReadOnly, err)
+	}
+
+	if err == nil {
+		// Primary proxy can change if proxy tests are run and
+		// no new cluster is re-deployed before each test.
+		// Finds who is the current primary proxy.
+		if primary, err = GetPrimaryProxy(proxyURLReadOnly); err != nil {
+			err = fmt.Errorf("failed to get primary proxy info from %s; err %v", proxyURLReadOnly, err)
+		}
+	}
+
+	if err != nil {
 		fmt.Printf("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
 		fmt.Println("Environment variables:")
 		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.Endpoint, os.Getenv(cmn.EnvVars.Endpoint))

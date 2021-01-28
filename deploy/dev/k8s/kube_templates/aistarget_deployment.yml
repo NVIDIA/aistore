@@ -10,6 +10,19 @@ spec:
   - name: aisnode
     image: ${DOCKER_IMAGE}
     imagePullPolicy: Always
+    livenessProbe:
+      httpGet:
+        path: /v1/health?readiness
+        port: ${PORT}
+      initialDelaySeconds: 20
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /v1/health
+        port: ${PORT}
+      initialDelaySeconds: 20
+      failureThreshold: 5
+      periodSeconds: 10
     securityContext:
       # Required for hostport to operate, or implement a full pod security policy
       privileged: true

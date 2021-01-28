@@ -14,7 +14,14 @@ spec:
       httpGet:
         path: /v1/health
         port: ${PORT}
+      initialDelaySeconds: 60
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /v1/health?readiness=true # Don't require the whole cluster to be ready
+        port: ${PORT}
       initialDelaySeconds: 20
+      failureThreshold: 5
       periodSeconds: 10
     env:
       - name: K8S_NODE_NAME

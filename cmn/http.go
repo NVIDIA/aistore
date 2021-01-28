@@ -558,7 +558,7 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 	}
 
 	sleep := args.Sleep
-	for i, j, k := uint(0), uint(0), uint(1); ; k++ {
+	for hardErrCnt, softErrCnt, iter := uint(0), uint(0), uint(1); ; iter++ {
 		var status int
 		if status, err = args.Call(); err == nil {
 			return
@@ -568,17 +568,17 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 		}
 
 		if !args.NoLog {
-			glog.Errorf("%sFailed to %s, err: %v (iter: %d, status code: %d)", callerStr, args.Action, err, k, status)
+			glog.Errorf("%sFailed to %s, err: %v (iter: %d, status code: %d)", callerStr, args.Action, err, iter, status)
 		}
 		if IsErrConnectionRefused(err) || IsErrConnectionReset(err) {
-			j++
+			softErrCnt++
 		} else {
-			i++
+			hardErrCnt++
 		}
-		if args.BackOff && k > 1 {
+		if args.BackOff && iter > 1 {
 			sleep = MinDuration(sleep+(args.Sleep/2), config.Timeout.MaxKeepalive)
 		}
-		if i > args.HardErr || j > args.SoftErr {
+		if hardErrCnt > args.HardErr || softErrCnt > args.SoftErr {
 			break
 		}
 		time.Sleep(sleep)
