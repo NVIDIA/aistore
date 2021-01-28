@@ -16,7 +16,7 @@ const (
 )
 
 type (
-	cloudFuncs struct {
+	backendFuncs struct {
 		EncodeVersion func(v interface{}) (version string, isSet bool)
 		EncodeCksum   func(v interface{}) (cksumValue string, isSet bool)
 	}
@@ -26,14 +26,14 @@ func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "" && *version != "null"
 }
 
-var CloudHelpers = struct {
-	Amazon cloudFuncs
-	Azure  cloudFuncs
-	Google cloudFuncs
-	HDFS   cloudFuncs
-	HTTP   cloudFuncs
+var BackendHelpers = struct {
+	Amazon backendFuncs
+	Azure  backendFuncs
+	Google backendFuncs
+	HDFS   backendFuncs
+	HTTP   backendFuncs
 }{
-	Amazon: cloudFuncs{
+	Amazon: backendFuncs{
 		EncodeVersion: func(v interface{}) (string, bool) {
 			switch x := v.(type) {
 			case *string:
@@ -64,7 +64,7 @@ var CloudHelpers = struct {
 			}
 		},
 	},
-	Azure: cloudFuncs{
+	Azure: backendFuncs{
 		EncodeVersion: func(v interface{}) (string, bool) {
 			switch x := v.(type) {
 			case string:
@@ -89,7 +89,7 @@ var CloudHelpers = struct {
 			}
 		},
 	},
-	Google: cloudFuncs{
+	Google: backendFuncs{
 		EncodeVersion: func(v interface{}) (string, bool) {
 			switch x := v.(type) {
 			case string:
@@ -120,7 +120,7 @@ var CloudHelpers = struct {
 			}
 		},
 	},
-	HDFS: cloudFuncs{
+	HDFS: backendFuncs{
 		EncodeCksum: func(v interface{}) (cksumValue string, isSet bool) {
 			switch x := v.(type) {
 			case []byte:
@@ -130,7 +130,7 @@ var CloudHelpers = struct {
 			}
 		},
 	},
-	HTTP: cloudFuncs{
+	HTTP: backendFuncs{
 		EncodeVersion: func(v interface{}) (string, bool) {
 			switch x := v.(type) {
 			case string:

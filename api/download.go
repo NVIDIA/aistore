@@ -67,7 +67,7 @@ func DownloadMulti(baseParams BaseParams, description string, bck cmn.Bck, msg i
 	return DownloadWithParam(baseParams, downloader.DlTypeMulti, dlBody)
 }
 
-func DownloadCloud(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string, intervals ...time.Duration) (string, error) {
+func DownloadBackend(baseParams BaseParams, description string, bck cmn.Bck, prefix, suffix string, intervals ...time.Duration) (string, error) {
 	dlBody := downloader.DlBackendBody{
 		Prefix: prefix,
 		Suffix: suffix,

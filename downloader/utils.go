@@ -58,8 +58,8 @@ func makeDlObj(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link s
 	return dlObj{
 		objName: objName,
 		// Make sure that link contains protocol (absence of protocol can result in errors).
-		link:      cmn.PrependProtocol(link),
-		fromCloud: link == "",
+		link:       cmn.PrependProtocol(link),
+		fromRemote: link == "",
 	}, nil
 }
 
@@ -89,7 +89,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newRemoteBucketDlJob(ctx, t, id, bck, dp, dlXact)
+		return newBackendDlJob(ctx, t, id, bck, dp, dlXact)
 	case DlTypeMulti:
 		dp := &DlMultiBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -121,7 +121,7 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 		}
 		return newSingleDlJob(t, id, bck, dp, dlXact)
 	default:
-		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
+		return nil, errors.New("input does not match any of the supported formats (single, range, multi, backend)")
 	}
 }
 
@@ -157,7 +157,7 @@ func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 	cmn.AssertNoErr(err)
 
 	if cmn.IsGoogleStorageURL(u) || cmn.IsGoogleAPIURL(u) {
-		h := cmn.CloudHelpers.Google
+		h := cmn.BackendHelpers.Google
 		roi.md = make(cmn.SimpleKVs, 3)
 		roi.md[cluster.SourceObjMD] = cluster.SourceGoogleObjMD
 		if v, ok := h.EncodeVersion(resp.Header.Get(gsVersionHeader)); ok {
@@ -176,7 +176,7 @@ func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 			}
 		}
 	} else if cmn.IsS3URL(link) {
-		h := cmn.CloudHelpers.Amazon
+		h := cmn.BackendHelpers.Amazon
 		roi.md = make(cmn.SimpleKVs, 3)
 		roi.md[cluster.SourceObjMD] = cluster.SourceAmazonObjMD
 		if v, ok := h.EncodeVersion(resp.Header.Get(s3VersionHeader)); ok {
@@ -186,7 +186,7 @@ func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 			roi.md[cluster.MD5ObjMD] = v
 		}
 	} else if cmn.IsAzureURL(u) {
-		h := cmn.CloudHelpers.Azure
+		h := cmn.BackendHelpers.Azure
 		roi.md = make(cmn.SimpleKVs, 1)
 		roi.md[cluster.SourceObjMD] = cluster.SourceAzureObjMD
 		if v, ok := h.EncodeVersion(resp.Header.Get(azVersionHeader)); ok {
@@ -205,7 +205,7 @@ func roiFromLink(link string, resp *http.Response) (roi remoteObjInfo) {
 
 func parseGoogleCksumHeader(hdr []string) cmn.SimpleKVs {
 	var (
-		h      = cmn.CloudHelpers.Google
+		h      = cmn.BackendHelpers.Google
 		cksums = make(cmn.SimpleKVs, 2)
 	)
 	for _, v := range hdr {
@@ -236,7 +236,7 @@ func headLink(link string) (*http.Response, error) {
 
 func roiFromObjMeta(objMeta cmn.SimpleKVs) (roi remoteObjInfo) {
 	roi.md = make(cmn.SimpleKVs, 2)
-	switch objMeta[cmn.HeaderCloudProvider] {
+	switch objMeta[cmn.HeaderBackendProvider] {
 	case cmn.ProviderGoogle:
 		roi.md[cluster.SourceObjMD] = cluster.SourceGoogleObjMD
 	case cmn.ProviderAmazon:
@@ -287,11 +287,11 @@ func compareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	_, localMDPresent := src.GetCustomMD(cluster.SourceObjMD)
 	remoteSource := roi.md[cluster.SourceObjMD]
 	if !localMDPresent {
-		// Source is present only on the remote object. But if it's the cloud
-		// object it will have version set to cloud version. Therefore, we can
+		// Source is present only on the remote object. But if it's the remote
+		// object it will have version set to remote version. Therefore, we can
 		// try to compare it.
 		switch remoteSource {
-		case cluster.SourceGoogleObjMD, cluster.SourceAmazonObjMD, cluster.SourceAzureObjMD:
+		case cluster.SourceAmazonObjMD, cluster.SourceAzureObjMD, cluster.SourceGoogleObjMD:
 			if src.Version() == roi.md[cluster.VersionObjMD] {
 				return true, nil
 			}

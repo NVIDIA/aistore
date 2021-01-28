@@ -25,15 +25,15 @@ const (
 // interface guard
 var (
 	_ DlJob = (*sliceDlJob)(nil)
-	_ DlJob = (*remoteBucketDlJob)(nil)
+	_ DlJob = (*backendDlJob)(nil)
 	_ DlJob = (*rangeDlJob)(nil)
 )
 
 type (
 	dlObj struct {
-		objName   string
-		link      string
-		fromCloud bool
+		objName    string
+		link       string
+		fromRemote bool
 	}
 
 	DlJob interface {
@@ -100,7 +100,7 @@ type (
 		done  bool                  // true = the iterator is exhausted, nothing left to read
 	}
 
-	remoteBucketDlJob struct {
+	backendDlJob struct {
 		baseDlJob
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
@@ -247,13 +247,13 @@ func newSliceDlJob(t cluster.Target, bck *cluster.Bck, base *baseDlJob, objects 
 	}, nil
 }
 
-func (j *remoteBucketDlJob) Len() int   { return -1 }
-func (j *remoteBucketDlJob) Sync() bool { return j.sync }
-func (j *remoteBucketDlJob) checkObj(objName string) bool {
+func (j *backendDlJob) Len() int   { return -1 }
+func (j *backendDlJob) Sync() bool { return j.sync }
+func (j *backendDlJob) checkObj(objName string) bool {
 	return strings.HasPrefix(objName, j.prefix) && strings.HasSuffix(objName, j.suffix)
 }
 
-func (j *remoteBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
+func (j *backendDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	if j.done {
 		return nil, false, nil
 	}
@@ -263,22 +263,22 @@ func (j *remoteBucketDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	return j.objs, true, nil
 }
 
-// Reads the content of a cloud bucket page by page until any objects to
+// Reads the content of a remote bucket page by page until any objects to
 // download found or the bucket list is over.
-func (j *remoteBucketDlJob) getNextObjs() error {
+func (j *backendDlJob) getNextObjs() error {
 	var (
-		sid   = j.t.SID()
-		smap  = j.t.Sowner().Get()
-		cloud = j.t.Backend(j.bck)
+		sid     = j.t.SID()
+		smap    = j.t.Sowner().Get()
+		backend = j.t.Backend(j.bck)
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {
 		msg := &cmn.SelectMsg{
 			Prefix:            j.prefix,
 			ContinuationToken: j.continuationToken,
-			PageSize:          cloud.MaxPageSize(),
+			PageSize:          backend.MaxPageSize(),
 		}
-		bckList, _, err := cloud.ListObjects(j.ctx, j.bck, msg)
+		bckList, _, err := backend.ListObjects(j.ctx, j.bck, msg)
 		if err != nil {
 			return err
 		}
@@ -342,14 +342,14 @@ func (j *rangeDlJob) getNextObjs() error {
 	return nil
 }
 
-func newRemoteBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*remoteBucketDlJob, error) {
+func newBackendDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*backendDlJob, error) {
 	if !bck.IsRemote() {
 		return nil, errors.New("bucket download requires a remote bucket")
 	} else if bck.IsHTTP() {
 		return nil, errors.New("bucket download does not support HTTP buckets")
 	}
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
-	job := &remoteBucketDlJob{
+	job := &backendDlJob{
 		baseDlJob: *base,
 		t:         t,
 		ctx:       ctx,

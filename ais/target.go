@@ -656,10 +656,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 		glog.Warningf("%s: bucket %s, err: %v(%d)", t.si, request.bck, err, code)
 		bucketProps = make(cmn.SimpleKVs)
-		bucketProps[cmn.HeaderCloudProvider] = request.bck.Provider
-		// TODO: what about `HTTP` cloud?
-		bucketProps[cmn.HeaderCloudOffline] = strconv.FormatBool(request.bck.IsCloud())
-		bucketProps[cmn.HeaderRemoteAISOffline] = strconv.FormatBool(request.bck.IsRemoteAIS())
+		bucketProps[cmn.HeaderBackendProvider] = request.bck.Provider
+		bucketProps[cmn.HeaderRemoteOffline] = strconv.FormatBool(request.bck.IsRemote())
 	}
 	for k, v := range bucketProps {
 		if k == cmn.HeaderBucketVerEnabled && request.bck.Props != nil {

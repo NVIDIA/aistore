@@ -174,7 +174,7 @@ func (awsp *awsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 	}
 
 	bckProps = make(cmn.SimpleKVs, 3)
-	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
+	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderAmazon
 	bckProps[cmn.HeaderCloudRegion] = region
 	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
 		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
@@ -207,7 +207,7 @@ func (awsp *awsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 
 	var (
 		svc      *s3.S3
-		h        = cmn.CloudHelpers.Amazon
+		h        = cmn.BackendHelpers.Amazon
 		cloudBck = bck.RemoteBck()
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -343,7 +343,7 @@ func (awsp *awsProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (
 func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	var (
 		svc      *s3.S3
-		h        = cmn.CloudHelpers.Amazon
+		h        = cmn.BackendHelpers.Amazon
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, _, err = awsp.newS3Client(sessConf{bck: cloudBck}, "[head_object]")
@@ -360,7 +360,7 @@ func (awsp *awsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		return
 	}
 	objMeta = make(cmn.SimpleKVs, 3)
-	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
+	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderAmazon
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(*headOutput.ContentLength, 10)
 	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
 		objMeta[cmn.HeaderObjVersion] = v
@@ -408,7 +408,7 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 	var (
 		svc      *s3.S3
 		cksum    *cmn.Cksum
-		h        = cmn.CloudHelpers.Amazon
+		h        = cmn.BackendHelpers.Amazon
 		cloudBck = lom.Bck().RemoteBck()
 	)
 
@@ -459,7 +459,7 @@ func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	var (
 		svc                   *s3.S3
 		uploadOutput          *s3manager.UploadOutput
-		h                     = cmn.CloudHelpers.Amazon
+		h                     = cmn.BackendHelpers.Amazon
 		cksumType, cksumValue = lom.Cksum().Get()
 		cloudBck              = lom.Bck().RemoteBck()
 		md                    = make(map[string]*string, 2)

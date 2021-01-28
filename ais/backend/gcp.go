@@ -163,7 +163,7 @@ func (gcpp *gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		return
 	}
 	bckProps = make(cmn.SimpleKVs)
-	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
+	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
 	bckProps[cmn.HeaderBucketVerEnabled] = "true"
@@ -182,7 +182,7 @@ func (gcpp *gcpProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	msg.PageSize = calcPageSize(msg.PageSize, gcpp.MaxPageSize())
 	var (
 		query    *storage.Query
-		h        = cmn.CloudHelpers.Google
+		h        = cmn.BackendHelpers.Google
 		cloudBck = bck.RemoteBck()
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -281,7 +281,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		return
 	}
 	var (
-		h        = cmn.CloudHelpers.Google
+		h        = cmn.BackendHelpers.Google
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(gctx)
@@ -290,7 +290,7 @@ func (gcpp *gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		return
 	}
 	objMeta = make(cmn.SimpleKVs)
-	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
+	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderGoogle
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(attrs.Size, 10)
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		objMeta[cmn.HeaderObjVersion] = v
@@ -345,7 +345,7 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
 		return nil, nil, errCode, err
 	}
 	var (
-		h        = cmn.CloudHelpers.Google
+		h        = cmn.BackendHelpers.Google
 		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
@@ -395,7 +395,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	}
 
 	var (
-		h        = cmn.CloudHelpers.Google
+		h        = cmn.BackendHelpers.Google
 		cloudBck = lom.Bck().RemoteBck()
 		md       = make(cmn.SimpleKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)

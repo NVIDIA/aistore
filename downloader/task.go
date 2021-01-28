@@ -75,8 +75,8 @@ func (t *singleObjectTask) download() {
 
 	t.started.Store(time.Now())
 	lom.SetAtimeUnix(t.started.Load().UnixNano())
-	if t.obj.fromCloud {
-		err = t.downloadCloud(lom)
+	if t.obj.fromRemote {
+		err = t.downloadRemote(lom)
 	} else {
 		err = t.downloadLocal(lom)
 	}
@@ -202,8 +202,8 @@ func (t *singleObjectTask) reset() {
 	t.currentSize.Store(0)
 }
 
-func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) error {
-	// Set custom context values (used by `ais/cloud/*`).
+func (t *singleObjectTask) downloadRemote(lom *cluster.LOM) error {
+	// Set custom context values (used by `ais/backend/*`).
 	ctx, cancel := context.WithTimeout(t.downloadCtx, t.initialTimeout())
 	defer cancel()
 	wrapReader := func(r io.ReadCloser) io.ReadCloser { return t.wrapReader(ctx, r) }
@@ -245,7 +245,7 @@ func (t *singleObjectTask) persist() {
 
 func (t *singleObjectTask) id() string { return t.job.ID() }
 func (t *singleObjectTask) uid() string {
-	return fmt.Sprintf("%s|%s|%s|%v", t.obj.link, t.job.Bck(), t.obj.objName, t.obj.fromCloud)
+	return fmt.Sprintf("%s|%s|%s|%v", t.obj.link, t.job.Bck(), t.obj.objName, t.obj.fromRemote)
 }
 
 func (t *singleObjectTask) ToTaskDlInfo() TaskDlInfo {
@@ -264,7 +264,7 @@ func (t *singleObjectTask) ToTaskDlInfo() TaskDlInfo {
 
 func (t *singleObjectTask) String() (str string) {
 	return fmt.Sprintf(
-		"{id: %q, obj_name: %q, link: %q, from_cloud: %v, bucket: %q}",
-		t.id(), t.obj.objName, t.obj.link, t.obj.fromCloud, t.job.Bck(),
+		"{id: %q, obj_name: %q, link: %q, from_remote: %v, bucket: %q}",
+		t.id(), t.obj.objName, t.obj.link, t.obj.fromRemote, t.job.Bck(),
 	)
 }

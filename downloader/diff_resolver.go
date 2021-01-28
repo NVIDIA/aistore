@@ -22,7 +22,7 @@ const (
 type (
 	DiffResolverCtx interface {
 		CompareObjects(*cluster.LOM, *DstElement) (bool, error)
-		IsObjFromCloud(*cluster.LOM) (bool, error)
+		IsObjFromRemote(*cluster.LOM) (bool, error)
 	}
 
 	defaultDiffResolverCtx struct{}
@@ -39,7 +39,7 @@ type (
 		stopped atomic.Bool
 	}
 
-	CloudResource struct {
+	BackendResource struct {
 		ObjName string
 	}
 
@@ -92,7 +92,7 @@ func (dr *DiffResolver) Start() {
 				}
 				dst, dstOk = <-dr.dstCh
 			} else if !dstOk || (srcOk && src.ObjName < dst.ObjName) {
-				cloud, err := dr.ctx.IsObjFromCloud(src)
+				remote, err := dr.ctx.IsObjFromRemote(src)
 				if err != nil {
 					dr.resultCh <- DiffResolverResult{
 						Action: DiffResolverErr,
@@ -102,8 +102,8 @@ func (dr *DiffResolver) Start() {
 					}
 					return
 				}
-				if cloud {
-					cmn.Assert(!dstOk || dst.Link == "") // destination must be cloud as well
+				if remote {
+					cmn.Assert(!dstOk || dst.Link == "") // destination must be remote as well
 					dr.resultCh <- DiffResolverResult{
 						Action: DiffResolverDelete,
 						Src:    src,
@@ -159,7 +159,7 @@ func (dr *DiffResolver) CloseSrc() { close(dr.srcCh) }
 func (dr *DiffResolver) PushDst(v interface{}) {
 	var d *DstElement
 	switch x := v.(type) {
-	case *CloudResource:
+	case *BackendResource:
 		d = &DstElement{
 			ObjName: x.ObjName,
 		}
@@ -203,7 +203,7 @@ func (*defaultDiffResolverCtx) CompareObjects(src *cluster.LOM, dst *DstElement)
 	return compareObjects(src, dst)
 }
 
-func (*defaultDiffResolverCtx) IsObjFromCloud(src *cluster.LOM) (bool, error) {
+func (*defaultDiffResolverCtx) IsObjFromRemote(src *cluster.LOM) (bool, error) {
 	if err := src.Load(); err != nil {
 		if cmn.IsObjNotExist(err) {
 			return false, nil

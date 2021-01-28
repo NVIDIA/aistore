@@ -102,7 +102,7 @@ func (hp *hdfsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	}
 
 	bckProps = make(cmn.SimpleKVs)
-	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderHDFS
+	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderHDFS
 	bckProps[cmn.HeaderBucketVerEnabled] = "false"
 	return
 }
@@ -114,7 +114,7 @@ func (hp *hdfsProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 func (hp *hdfsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
 
-	h := cmn.CloudHelpers.HDFS
+	h := cmn.BackendHelpers.HDFS
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, msg.PageSize)}
 	err = hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
@@ -203,7 +203,7 @@ func (hp *hdfsProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 	}
 
 	objMeta = make(cmn.SimpleKVs, 2)
-	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderHDFS
+	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderHDFS
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(fr.Stat().Size(), 10)
 	objMeta[cluster.VersionObjMD] = ""
 

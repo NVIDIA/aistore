@@ -14,15 +14,15 @@ import (
 )
 
 const (
-	fromCloudFQN = "cloud"
+	fromRemoteFQN = "remote"
 )
 
 type (
 	mockDiffResolverCtx struct{}
 
 	obj struct {
-		name  string
-		cloud bool
+		name   string
+		remote bool
 	}
 
 	testCase struct {
@@ -37,8 +37,8 @@ func (*mockDiffResolverCtx) CompareObjects(*cluster.LOM, *downloader.DstElement)
 	return true, nil
 }
 
-func (*mockDiffResolverCtx) IsObjFromCloud(lom *cluster.LOM) (bool, error) {
-	return lom.FQN == fromCloudFQN, nil
+func (*mockDiffResolverCtx) IsObjFromRemote(lom *cluster.LOM) (bool, error) {
+	return lom.FQN == fromRemoteFQN, nil
 }
 
 func TestDiffResolver(t *testing.T) {
@@ -111,7 +111,7 @@ func TestDiffResolver(t *testing.T) {
 		},
 		{
 			name: "all_delete",
-			src:  []obj{{name: "a", cloud: true}, {name: "b", cloud: true}},
+			src:  []obj{{name: "a", remote: true}, {name: "b", remote: true}},
 			dst:  []obj{},
 			expected: []downloader.DiffResolverResult{
 				{Action: downloader.DiffResolverDelete},
@@ -121,7 +121,7 @@ func TestDiffResolver(t *testing.T) {
 		},
 		{
 			name: "mixed_send_delete",
-			src:  []obj{{name: "a"}, {name: "b", cloud: true}, {name: "c"}, {name: "d", cloud: true}},
+			src:  []obj{{name: "a"}, {name: "b", remote: true}, {name: "c"}, {name: "d", remote: true}},
 			dst:  []obj{},
 			expected: []downloader.DiffResolverResult{
 				{Action: downloader.DiffResolverSend},
@@ -133,7 +133,7 @@ func TestDiffResolver(t *testing.T) {
 		},
 		{
 			name: "all_skip_then_all_recv",
-			src:  []obj{{name: "a", cloud: true}, {name: "b", cloud: true}},
+			src:  []obj{{name: "a", remote: true}, {name: "b", remote: true}},
 			dst:  []obj{{name: "a"}, {name: "b"}, {name: "c"}, {name: "d"}},
 			expected: []downloader.DiffResolverResult{
 				{Action: downloader.DiffResolverSkip},
@@ -152,14 +152,14 @@ func TestDiffResolver(t *testing.T) {
 			dr.Start()
 			for _, s := range test.src {
 				lom := &cluster.LOM{ObjName: s.name}
-				if s.cloud {
-					lom.FQN = fromCloudFQN
+				if s.remote {
+					lom.FQN = fromRemoteFQN
 				}
 				dr.PushSrc(lom)
 			}
 			dr.CloseSrc()
 			for _, d := range test.dst {
-				dr.PushDst(&downloader.CloudResource{ObjName: d.name})
+				dr.PushDst(&downloader.BackendResource{ObjName: d.name})
 			}
 			dr.CloseDst()
 

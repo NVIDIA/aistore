@@ -21,7 +21,7 @@ import (
 )
 
 // Dispatcher serves as middle layer between receiving download requests
-// and serving them to joggers which actually download objects from a cloud.
+// and serving them to joggers which actually download objects from a remote bucket.
 
 type (
 	dispatcher struct {
@@ -239,7 +239,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 						Link:    obj.link,
 					})
 				} else {
-					diffResolver.PushDst(&CloudResource{
+					diffResolver.PushDst(&BackendResource{
 						ObjName: obj.objName,
 					})
 				}
@@ -257,17 +257,17 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 			var obj dlObj
 			if dst := result.Dst; dst != nil {
 				obj = dlObj{
-					objName:   dst.ObjName,
-					link:      dst.Link,
-					fromCloud: dst.Link == "",
+					objName:    dst.ObjName,
+					link:       dst.Link,
+					fromRemote: dst.Link == "",
 				}
 			} else {
 				src := result.Src
 				cmn.Assert(result.Action == DiffResolverDelete)
 				obj = dlObj{
-					objName:   src.ObjName,
-					link:      "",
-					fromCloud: true,
+					objName:    src.ObjName,
+					link:       "",
+					fromRemote: true,
 				}
 			}
 

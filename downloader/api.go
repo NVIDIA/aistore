@@ -220,9 +220,9 @@ func (b *DlBase) Validate() error {
 }
 
 type DlSingleObj struct {
-	ObjName   string `json:"object_name"`
-	Link      string `json:"link"`
-	FromCloud bool   `json:"from_cloud"`
+	ObjName    string `json:"object_name"`
+	Link       string `json:"link"`
+	FromRemote bool   `json:"from_remote"`
 }
 
 func (b *DlSingleObj) Validate() error {
@@ -233,7 +233,7 @@ func (b *DlSingleObj) Validate() error {
 		}
 		b.ObjName = objName
 	}
-	if b.Link == "" && !b.FromCloud {
+	if b.Link == "" && !b.FromRemote {
 		return errors.New("missing 'link' in the request body")
 	}
 	if b.ObjName == "" {
@@ -429,5 +429,5 @@ func (b *DlBackendBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}
-	return fmt.Sprintf("cloud prefetch -> %s", b.Bck)
+	return fmt.Sprintf("remote bucket prefetch -> %s", b.Bck)
 }

@@ -42,7 +42,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 			for i := 0; i < 10; i++ {
 				var hdr http.Header
 				if provider != cmn.ProviderAIS {
-					hdr = http.Header{cmn.HeaderCloudProvider: []string{provider}}
+					hdr = http.Header{cmn.HeaderBackendProvider: []string{provider}}
 				}
 
 				var (

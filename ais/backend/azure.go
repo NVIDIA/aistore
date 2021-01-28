@@ -191,7 +191,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 		return bckProps, resp.StatusCode(), fmt.Errorf("failed to read bucket %q props", cloudBck.Name)
 	}
 	bckProps = make(cmn.SimpleKVs, 2)
-	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAzure
+	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderAzure
 	bckProps[cmn.HeaderBucketVerEnabled] = "true"
 	return bckProps, http.StatusOK, nil
 }
@@ -204,7 +204,7 @@ func (ap *azureProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg 
 	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
 
 	var (
-		h        = cmn.CloudHelpers.Azure
+		h        = cmn.BackendHelpers.Azure
 		cloudBck = bck.RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		marker   = azblob.Marker{}
@@ -294,7 +294,7 @@ func (ap *azureProvider) ListBuckets(ctx context.Context, _ cmn.QueryBcks) (buck
 func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	objMeta = make(cmn.SimpleKVs)
 	var (
-		h        = cmn.CloudHelpers.Azure
+		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
@@ -308,7 +308,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta
 		return objMeta, resp.StatusCode(), fmt.Errorf("failed to get object props %s/%s", cloudBck, lom.ObjName)
 	}
 	objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength(), 10)
-	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAzure
+	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderAzure
 	// Simulate object versioning:
 	// Azure provider does not have real versioning, but it has ETag.
 	if v, ok := h.EncodeVersion(string(resp.ETag())); ok {
@@ -354,7 +354,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode 
 
 func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	var (
-		h        = cmn.CloudHelpers.Azure
+		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
@@ -408,7 +408,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
 	var (
 		leaseID  string
-		h        = cmn.CloudHelpers.Azure
+		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlockBlobURL(lom.ObjName)

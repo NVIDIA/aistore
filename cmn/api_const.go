@@ -123,13 +123,12 @@ const (
 	HeaderBucketAccessAttrs = "access"             // Bucket access attributes
 	HeaderBucketCreated     = "created"            // Bucket creation time
 
-	HeaderCloudProvider    = "provider"           // ProviderAmazon et al. - see cmn/bucket.go
-	HeaderCloudOffline     = "cloud.offline"      // when accessing cached cloud bucket with no Cloud connectivity
-	HeaderRemoteAISOffline = "remote.ais.offline" // when accessing cached cloud bucket with no Cloud connectivity
+	HeaderBackendProvider = "provider"       // ProviderAmazon et al. - see cmn/bucket.go
+	HeaderRemoteOffline   = "remote.offline" // when accessing cached remote bucket with no backend connectivity
 
 	HeaderBackendBck         = "backend_bck"
 	HeaderBackendBckName     = HeaderBackendBck + ".name"
-	HeaderBackendBckProvider = HeaderBackendBck + "." + HeaderCloudProvider
+	HeaderBackendBckProvider = HeaderBackendBck + "." + HeaderBackendProvider
 
 	// object meta
 	HeaderObjCksumType = "checksum.type"  // Checksum Type, one of SupportedChecksums()

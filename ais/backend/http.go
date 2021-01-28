@@ -96,7 +96,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	resp.Body.Close()
 
 	bckProps = make(cmn.SimpleKVs)
-	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderHTTP
+	bckProps[cmn.HeaderBackendProvider] = cmn.ProviderHTTP
 	return
 }
 
@@ -127,7 +127,7 @@ func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (stri
 
 func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	var (
-		h   = cmn.CloudHelpers.HTTP
+		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
 	)
 
@@ -147,7 +147,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta 
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 	objMeta = make(cmn.SimpleKVs, 2)
-	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderHTTP
+	objMeta[cmn.HeaderBackendProvider] = cmn.ProviderHTTP
 	if resp.ContentLength >= 0 {
 		objMeta[cmn.HeaderObjSize] = strconv.FormatInt(resp.ContentLength, 10)
 	}
@@ -183,7 +183,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode i
 
 func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	var (
-		h   = cmn.CloudHelpers.HTTP
+		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
 	)
 
