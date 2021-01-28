@@ -353,15 +353,15 @@ func hasEnoughBMDCopies() bool {
 //////////////////////////
 
 type bckPropsArgs struct {
-	bck          *cluster.Bck // Base bucket for determining default bucket props.
-	hdr          http.Header  // Header with remote bucket properties.
-	skipValidate bool
+	bck *cluster.Bck // Base bucket for determining default bucket props.
+	hdr http.Header  // Header with remote bucket properties.
 }
 
 func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 	var (
-		c     = cmn.GCO.Get()
-		props = cmn.DefaultBckProps(c)
+		skipValidate bool
+		c            = cmn.GCO.Get()
+		props        = cmn.DefaultBckProps(c)
 	)
 	debug.Assert(args.bck != nil)
 	debug.AssertNoErr(cmn.ValidateCksumType(c.Cksum.Type))
@@ -381,12 +381,16 @@ func defaultBckProps(args bckPropsArgs) *cmn.BucketProps {
 		// Preserve HDFS related information.
 		if args.bck.Props != nil {
 			props.Extra.HDFS = args.bck.Props.Extra.HDFS
+		} else {
+			// Since the original bucket does not have the HDFS related info,
+			// the validate will fail so we must skip.
+			skipValidate = true
 		}
 	} else {
 		cmn.Assert(false)
 	}
 
-	if !args.skipValidate {
+	if !skipValidate {
 		// For debugging purposes we can set large value - we don't need to be precise here.
 		debug.AssertNoErr(props.Validate(1000 /*targetCnt*/))
 	}

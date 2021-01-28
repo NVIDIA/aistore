@@ -888,7 +888,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		}
 
 		// Make and validate new bucket props.
-		bck.Props = defaultBckProps(bckPropsArgs{bck: bck, skipValidate: true})
+		bck.Props = defaultBckProps(bckPropsArgs{bck: bck})
 		bck.Props, err = p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
