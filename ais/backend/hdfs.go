@@ -127,8 +127,14 @@ func (hp *hdfsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *
 			return skipDir(fi)
 		}
 		objName := strings.TrimPrefix(strings.TrimPrefix(path, bck.Props.Extra.HDFS.RefDirectory), string(filepath.Separator))
-		if !strings.HasPrefix(objName, msg.Prefix) {
-			return skipDir(fi)
+		if msg.Prefix != "" {
+			if fi.IsDir() {
+				if !cmn.DirNameContainsPrefix(objName, msg.Prefix) {
+					return skipDir(fi)
+				}
+			} else if cmn.ObjNameContainsPrefix(objName, msg.Prefix) {
+				return skipDir(fi)
+			}
 		}
 		if msg.ContinuationToken != "" && objName <= msg.ContinuationToken {
 			return nil
@@ -151,6 +157,7 @@ func (hp *hdfsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *
 			if err != nil {
 				return err
 			}
+			defer fr.Close()
 			cksum, err := fr.Checksum()
 			if err != nil {
 				return err

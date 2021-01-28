@@ -100,10 +100,7 @@ func (wi *WalkInfo) ProcessDir(fqn string) error {
 		return nil
 	}
 
-	// every directory has to either:
-	// - be contained in prefix (for levels lower than prefix: prefix="abcd/def", directory="abcd")
-	// - or include prefix (for levels deeper than prefix: prefix="a/", directory="a/b")
-	if wi.prefix != "" && !(strings.HasPrefix(wi.prefix, ct.ObjectName()) || strings.HasPrefix(ct.ObjectName(), wi.prefix)) {
+	if !cmn.DirNameContainsPrefix(ct.ObjectName(), wi.prefix) {
 		return filepath.SkipDir
 	}
 
@@ -127,7 +124,7 @@ func (wi *WalkInfo) SetObjectFilter(f cluster.ObjectFilter) {
 //  - this target responses getobj request for the object
 func (wi *WalkInfo) lsObject(lom *cluster.LOM, objStatus uint16) *cmn.BucketEntry {
 	objName := lom.ObjName
-	if wi.prefix != "" && !strings.HasPrefix(objName, wi.prefix) {
+	if !cmn.ObjNameContainsPrefix(objName, wi.prefix) {
 		return nil
 	}
 	if wi.Marker != "" && cmn.TokenIncludesObject(wi.Marker, objName) {

@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"sort"
+	"strings"
 )
 
 func SortBckEntries(bckEntries []*BucketEntry) {
@@ -136,4 +137,22 @@ func MergeObjLists(lists []*BucketList, maxSize uint) (objs *BucketList) {
 	bckList.Entries, _ = deduplicateBckEntries(bckList.Entries, maxSize)
 	bckList.ContinuationToken = contiunationToken
 	return bckList
+}
+
+// Returns true if given `token` includes given object name.
+// `token` includes an object name iff the object name would
+// be included in response having given continuation token.
+func TokenIncludesObject(token, objName string) bool {
+	return strings.Compare(token, objName) >= 0
+}
+
+func DirNameContainsPrefix(dirPath, prefix string) bool {
+	// Every directory has to either:
+	// - be contained in prefix (for levels lower than prefix: prefix="abcd/def", directory="abcd")
+	// - include prefix (for levels deeper than prefix: prefix="a/", directory="a/b")
+	return prefix == "" || (strings.HasPrefix(prefix, dirPath) || strings.HasPrefix(dirPath, prefix))
+}
+
+func ObjNameContainsPrefix(objName, prefix string) bool {
+	return prefix == "" || strings.HasPrefix(objName, prefix)
 }
