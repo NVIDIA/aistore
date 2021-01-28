@@ -343,8 +343,10 @@ func (j *rangeDlJob) getNextObjs() error {
 }
 
 func newRemoteBucketDlJob(ctx context.Context, t cluster.Target, id string, bck *cluster.Bck, payload *DlBackendBody, dlXact *Downloader) (*remoteBucketDlJob, error) {
-	if !bck.IsCloud() {
-		return nil, errors.New("bucket download requires a cloud bucket")
+	if !bck.IsRemote() {
+		return nil, errors.New("bucket download requires a remote bucket")
+	} else if bck.IsHTTP() {
+		return nil, errors.New("bucket download does not support HTTP buckets")
 	}
 	base := newBaseDlJob(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, dlXact)
 	job := &remoteBucketDlJob{

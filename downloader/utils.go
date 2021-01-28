@@ -90,7 +90,6 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 			return nil, err
 		}
 		return newRemoteBucketDlJob(ctx, t, id, bck, dp, dlXact)
-
 	case DlTypeMulti:
 		dp := &DlMultiBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -101,7 +100,6 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 			return nil, err
 		}
 		return newMultiDlJob(t, id, bck, dp, dlXact)
-
 	case DlTypeRange:
 		dp := &DlRangeBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -112,7 +110,6 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 			return nil, err
 		}
 		return newRangeDlJob(t, id, bck, dp, dlXact)
-
 	case DlTypeSingle:
 		dp := &DlSingleBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -123,7 +120,6 @@ func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *clust
 			return nil, err
 		}
 		return newSingleDlJob(t, id, bck, dp, dlXact)
-
 	default:
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
 	}
