@@ -127,7 +127,7 @@ Currently, `ais rm node` requires option `--mode=`(administrative operation) to 
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--mode` | `string` | The type of administrative operation to temporarily (`start-maintenance`, `stop-maintenance`) or permanently (`decommission`) remove a node from the cluster. One of: `start-maintenance`, `stop-maintenance`, `decommission` | n/a |
+| `--mode` | `string` | The type of administrative operation to temporarily (`start-maintenance`, `stop-maintenance`) or permanently (`decommission`, `shutdown`) remove a node from the cluster. One of: `start-maintenance`, `stop-maintenance`, `decommission`, `shutdown` | n/a |
 | `--no-rebalance` | `bool` | By default, `ais rm node --mode=...` triggers a global cluster-wide rebalance. The `--no-rebalance` flag disables automatic rebalance thus providing for the administrative option to rebalance the cluster manually at a later time. BEWARE: advanced usage only! | `false` |
 
 Further, the `--mode` values are:
@@ -135,6 +135,7 @@ Further, the `--mode` values are:
 - `start-maintenance` - put a given node in maintenance mode. The operation results in cluster gradually transitioning to operating without the specified node (which is labeled `maintenance` in the cluster map).
 - `stop-maintenance` - take a node out of maintenance.
 - `decommission` - permanently remove a node from the cluster. While rebalance is running, the node still exists in the cluster map labeled `decommission`.
+- `shutdown` - decommission a node, then shut down its aisnode instance.
 
 ### Examples
 

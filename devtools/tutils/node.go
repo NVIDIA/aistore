@@ -156,7 +156,7 @@ func GetICProxy(t testing.TB, smap *cluster.Smap, ignoreID string) *cluster.Snod
 //
 // It returns the smap which satisfies those requirements.
 // NOTE: Upon successful return from this function cluster state might have already changed.
-func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int) (*cluster.Smap, error) {
+func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int, syncIgnoreIDs ...string) (*cluster.Smap, error) {
 	var (
 		lastVersion                               int64
 		smapChangeDeadline, timeStart, opDeadline time.Time
@@ -213,7 +213,10 @@ func WaitForClusterState(proxyURL, reason string, origVersion int64, proxyCnt, t
 					proxyID = p.ID()
 				}
 			}
-			err = WaitMapVersionSync(smapChangeDeadline, syncedSmap, origVersion, cmn.NewStringSet(MockDaemonID, proxyID))
+
+			idsToIgnore := cmn.NewStringSet(MockDaemonID, proxyID)
+			idsToIgnore.Add(syncIgnoreIDs...)
+			err = WaitMapVersionSync(smapChangeDeadline, syncedSmap, origVersion, idsToIgnore)
 			if err != nil {
 				return nil, err
 			}
@@ -312,6 +315,32 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 			err = fmt.Errorf("failed to kill -9 process pid=%s at port %s", pid, port)
 		}
 	}
+	return
+}
+
+func ShutdownNode(t *testing.T, baseParams api.BaseParams, node *cluster.Snode) (cmd RestoreCmd, err error) {
+	restoreNodesOnce.Do(func() {
+		initNodeCmd()
+	})
+
+	var (
+		daemonID = node.ID()
+		port     = node.PublicNet.DaemonPort
+	)
+	cmd.Node = node
+	if containers.DockerRunning() {
+		Logf("Stopping container %s\n", daemonID)
+		err := containers.StopContainer(daemonID)
+		return cmd, err
+	}
+
+	_, cmd.Cmd, cmd.Args, err = getProcess(port)
+	if err != nil {
+		return
+	}
+
+	actValue := &cmn.ActValDecommision{DaemonID: daemonID}
+	_, err = api.ShutdownNode(baseParams, actValue)
 	return
 }
 

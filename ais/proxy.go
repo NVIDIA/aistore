@@ -3072,6 +3072,15 @@ func (p *proxyrunner) unregisterNode(msg *cmn.ActionMsg, si *cluster.Snode, skip
 			timeout: timeoutCfg.CplaneOperation,
 		}
 	)
+
+	if msg.Action == cmn.ActShutdownNode {
+		args.req = cmn.ReqArgs{
+			Method: http.MethodPut,
+			Path:   cmn.URLPathDaemon.S,
+			Body:   cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown}),
+		}
+	}
+
 	for i := 0; i < 3; /*retries*/ i++ {
 		res := p.call(args)
 		if res.err == nil {
@@ -3099,7 +3108,7 @@ func (p *proxyrunner) unregisterNode(msg *cmn.ActionMsg, si *cluster.Snode, skip
 func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
 	var flags cluster.SnodeFlags
 	switch msg.Action {
-	case cmn.ActDecommission:
+	case cmn.ActDecommission, cmn.ActShutdownNode:
 		flags = cluster.SnodeDecomission
 	case cmn.ActStartMaintenance:
 		flags = cluster.SnodeMaintenance
@@ -3136,6 +3145,7 @@ func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionM
 	}
 	if _, err := p.unregisterNode(msg, si, true /*skipReb*/); err != nil {
 		glog.Errorf("Failed to remove node (%s) after rebalance, err: %v", si, err)
+		return
 	}
 }
 
@@ -3165,7 +3175,7 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode)
 
 updateRMD:
 	var cb nl.NotifCallback
-	if msg.Action == cmn.ActDecommission {
+	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 		cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
 	}
 	rmdCtx := &rmdModifier{
@@ -3356,12 +3366,16 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			}
 			break
 		}
-	case cmn.ActStartMaintenance, cmn.ActDecommission:
+	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode:
 		var (
 			rebID xaction.RebID
 			smap  = p.owner.smap.get()
 			opts  cmn.ActValDecommision
 		)
+		if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+			return
+		}
 		if err = cmn.MorphMarshal(msg.Value, &opts); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return

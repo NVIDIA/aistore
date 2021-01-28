@@ -58,6 +58,7 @@ const (
 	maintenanceModeStart        = "start-maintenance"
 	maintenanceModeStop         = "stop-maintenance"
 	maintenanceModeDecommission = "decommission"
+	maintenanceModeShutdown     = "shutdown"
 )
 
 var (

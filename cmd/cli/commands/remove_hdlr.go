@@ -24,6 +24,7 @@ var (
 		subcmdRemoveNode: {
 			maintenanceModeFlag,
 			noRebalanceFlag,
+			forceFlag,
 		},
 		subcmdRemoveDownload: {
 			allJobsFlag,
@@ -166,6 +167,8 @@ func removeNodeHandler(c *cli.Context) (err error) {
 		id, err = api.StopMaintenance(defaultAPIParams, actValue)
 	case maintenanceModeDecommission:
 		id, err = api.Decommission(defaultAPIParams, actValue)
+	case maintenanceModeShutdown:
+		id, err = api.ShutdownNode(defaultAPIParams, actValue)
 	default:
 		err = incorrectUsageMsg(c, "invalid mode %q: must be one of %s, %s, and %s",
 			mode, maintenanceModeStart, maintenanceModeStop, maintenanceModeDecommission)
@@ -178,6 +181,8 @@ func removeNodeHandler(c *cli.Context) (err error) {
 		fmt.Fprintf(c.App.Writer, "Node %q maintenance stopped\n", sid)
 	} else if mode == maintenanceModeDecommission && skipRebalance {
 		fmt.Fprintf(c.App.Writer, "Node %q removed from the cluster\n", sid)
+	} else if mode == maintenanceModeShutdown {
+		fmt.Fprintf(c.App.Writer, "Node %q is being shut down\n", sid)
 	} else {
 		fmt.Fprintf(c.App.Writer, "Node %q is under maintenance\n", sid)
 	}

@@ -126,7 +126,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.ecEncode(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-	case cmn.ActStartMaintenance, cmn.ActDecommission:
+	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode:
 		if err = t.startMaintenance(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}

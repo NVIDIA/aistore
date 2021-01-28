@@ -363,7 +363,7 @@ var (
 	// Maintenance
 	maintenanceModeFlag = cli.StringFlag{
 		Name: "mode", Required: true,
-		Usage: "node maintenance mode: start-maintenance, stop-maintenance, decommission",
+		Usage: "node maintenance mode: start-maintenance, stop-maintenance, decommission, shutdown",
 	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",

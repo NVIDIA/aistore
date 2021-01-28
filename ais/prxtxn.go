@@ -688,7 +688,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
 	if si.IsProxy() {
 		p.markMaintenance(msg, si)
-		if msg.Action == cmn.ActDecommission {
+		if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 			_, err = p.unregisterNode(msg, si, true /*skipReb*/)
 		}
 		return
@@ -718,7 +718,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 
 	// 3. Commit
 	// NOTE: Call only the target being decommissioned, on all other targets commit phase is a null operation.
-	if msg.Action == cmn.ActDecommission {
+	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 		c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 		res := p.call(callArgs{si: si, req: c.req, timeout: c.commitTimeout(waitmsync)})
 		if res.err != nil {

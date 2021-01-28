@@ -77,6 +77,7 @@ const (
 	ActStartMaintenance = "startmaintenance" // put into maintenance state
 	ActStopMaintenance  = "stopmaintenance"  // cancel maintenance state
 	ActDecommission     = "decommission"     // start rebalance and remove node from Smap when it finishes
+	ActShutdownNode     = "shutdown_node"    // shutdown a specific node
 	// IC
 	ActSendOwnershipTbl  = "ic_send_ownership_tbl"
 	ActListenToNotif     = "watch_xaction"

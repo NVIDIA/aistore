@@ -190,3 +190,14 @@ func ShutdownCluster(baseParams BaseParams) error {
 	})
 	return err
 }
+
+// ShutdownNode shuts down a specific node
+func ShutdownNode(baseParams BaseParams, actValue *cmn.ActValDecommision) (id string, err error) {
+	msg := cmn.ActionMsg{
+		Action: cmn.ActShutdownNode,
+		Value:  actValue,
+	}
+	baseParams.Method = http.MethodPut
+	err = DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)}, &id)
+	return id, err
+}

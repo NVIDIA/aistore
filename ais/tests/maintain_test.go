@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/devtools/tutils"
@@ -294,4 +295,56 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	rebID, _ = tutils.RestoreTarget(t, proxyURL, tsi)
 	restored = true
 	tutils.WaitForRebalanceByID(t, baseParams, rebID, time.Minute)
+}
+
+func TestNodeShutdown(t *testing.T) {
+	for _, ty := range []string{cmn.Proxy, cmn.Target} {
+		t.Run(ty, func(t *testing.T) {
+			testNodeShutdown(t, ty)
+		})
+	}
+}
+
+func testNodeShutdown(t *testing.T, nodeType string) {
+	var (
+		proxyURL = tutils.GetPrimaryURL()
+		smap     = tutils.GetClusterMap(t, proxyURL)
+		node     *cluster.Snode
+		err      error
+		pdc, tdc int
+
+		origProxyCnt    = smap.CountActiveProxies()
+		origTargetCount = smap.CountActiveTargets()
+		origSmapVer     = smap.Version
+	)
+
+	if nodeType == cmn.Proxy {
+		node, err = smap.GetRandProxy(true)
+		pdc = 1
+	} else {
+		node, err = smap.GetRandTarget()
+		tdc = 1
+	}
+	tassert.CheckFatal(t, err)
+
+	// 1. Shutdown a random node
+	cmd, err := tutils.ShutdownNode(t, baseParams, node)
+	tassert.CheckFatal(t, err)
+	if nodeType == cmn.Target {
+		tutils.WaitForRebalanceToComplete(t, baseParams)
+	}
+
+	// 2. Make sure the node has been shut down
+	_, err = tutils.WaitForClusterState(proxyURL, "shutdown node", smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.DaemonID)
+	tassert.CheckError(t, err)
+
+	// 3. Start node again
+	err = tutils.RestoreNode(cmd, false, nodeType)
+	tassert.CheckError(t, err)
+
+	_, err = tutils.WaitForClusterState(proxyURL, "restart node", origSmapVer, origProxyCnt, origTargetCount)
+	tassert.CheckFatal(t, err)
+	if nodeType == cmn.Target {
+		tutils.WaitForRebalanceToComplete(t, baseParams)
+	}
 }

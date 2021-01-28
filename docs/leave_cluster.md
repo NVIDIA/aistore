@@ -72,6 +72,15 @@ $ ais rm node 59262t8087 --mode=decommission --no-rebalance
 Node "59262t8087" removed from the cluster
 ```
 
+To also shutdown the node (i.e. stop running aisnode), set `mode` to `shutdown`.
+If the node is a target, the node will be shut down after the rebalance has finished. Otherwise if the node is a proxy, the node will shut down immediately.
+
+```console
+$ ais rm node 59262t8087 --mode=shutdown
+Node "59262t8087" is being shut down
+Started rebalance "g1", use 'ais show xaction g1' to monitor progress
+```
+
 Note that removing a node with rebalance disabled can be interrupted. If a node is removed by mistake, you have to join it manually with `ais join` command.
 
 ### Interrupt node removal
