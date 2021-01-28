@@ -31,6 +31,6 @@ if [[ "$metrics" == "y" ]]; then
   # Kubectl returns error when resources already exist...
   kubectl apply -f kube-prometheus/manifests/setup
   kubectl apply -f kube-prometheus/manifests
-  popd $tmpdir
+  popd
   rm -rf $tmpdir
 fi
