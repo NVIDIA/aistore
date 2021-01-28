@@ -42,6 +42,7 @@ func init() {
 			URL:               aisURL,
 			DefaultAISHost:    aisURL,
 			DefaultDockerHost: fmt.Sprintf(urlFmt, proto, defaultDockerIP, defaultAISPort),
+			SkipVerifyCrt:     cmn.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt)),
 		},
 		Timeout: TimeoutConfig{
 			TCPTimeoutStr:  "60s",
@@ -65,6 +66,7 @@ type ClusterConfig struct {
 	URL               string `json:"url"`
 	DefaultAISHost    string `json:"default_ais_host"`
 	DefaultDockerHost string `json:"default_docker_host"`
+	SkipVerifyCrt     bool   `json:"skip_verify_crt"`
 }
 
 type TimeoutConfig struct {

@@ -19,7 +19,8 @@ const configDirName = fs.Name
 
 var defaultConfig = Config{
 	Cluster: ClusterConfig{
-		URL: "http://127.0.0.1:8080",
+		URL:           "http://127.0.0.1:8080",
+		SkipVerifyCrt: cmn.IsParseBool(os.Getenv(cmn.EnvVars.SkipVerifyCrt)),
 	},
 	Timeout: TimeoutConfig{
 		TCPTimeoutStr:  "60s",
@@ -55,7 +56,8 @@ type (
 	}
 
 	ClusterConfig struct {
-		URL string `json:"url"`
+		URL           string `json:"url"`
+		SkipVerifyCrt bool   `json:"skip_verify_crt"`
 	}
 
 	TimeoutConfig struct {
@@ -109,6 +111,7 @@ func (c *Config) validate() (err error) {
 
 func (c *Config) writeTo(srvCfg *fs.ServerConfig) {
 	memoryLimit, _ := cmn.S2B(c.MemoryLimit)
+	srvCfg.SkipVerifyCrt = c.Cluster.SkipVerifyCrt
 	srvCfg.TCPTimeout = c.Timeout.TCPTimeout
 	srvCfg.HTTPTimeout = c.Timeout.HTTPTimeout
 	srvCfg.SyncInterval.Store(c.Periodic.SyncInterval)

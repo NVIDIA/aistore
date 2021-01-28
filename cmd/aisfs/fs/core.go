@@ -54,8 +54,9 @@ type (
 		MountPath string
 
 		// Cluster
-		AISURL     string
-		BucketName string
+		AISURL        string
+		BucketName    string
+		SkipVerifyCrt bool
 
 		// Access
 		Owner *Owner
@@ -112,7 +113,7 @@ func NewAISFileSystemServer(cfg *ServerConfig, errLog *log.Logger) (srv fuse.Ser
 		DialTimeout: cfg.TCPTimeout,
 		Timeout:     cfg.HTTPTimeout,
 		UseHTTPS:    cmn.IsHTTPS(cfg.AISURL),
-		SkipVerify:  true, // TODO: trust all servers for now
+		SkipVerify:  cfg.SkipVerifyCrt,
 
 		IdleConnsPerHost: 100,
 		MaxIdleConns:     100,

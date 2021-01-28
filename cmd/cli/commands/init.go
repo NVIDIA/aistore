@@ -36,7 +36,7 @@ func initClusterParams() {
 		DialTimeout: cfg.Timeout.TCPTimeout,
 		Timeout:     cfg.Timeout.HTTPTimeout,
 		UseHTTPS:    cmn.IsHTTPS(clusterURL),
-		SkipVerify:  true, // TODO: trust all servers for now
+		SkipVerify:  cfg.Cluster.SkipVerifyCrt,
 
 		IdleConnsPerHost: 100,
 		MaxIdleConns:     100,
@@ -47,7 +47,7 @@ func initClusterParams() {
 			DialTimeout: cfg.Timeout.TCPTimeout,
 			Timeout:     cfg.Timeout.HTTPTimeout,
 			UseHTTPS:    cmn.IsHTTPS(authnURL),
-			SkipVerify:  true, // TODO: trust all servers for now
+			SkipVerify:  cfg.Cluster.SkipVerifyCrt,
 		})
 
 		authParams = api.BaseParams{
