@@ -141,8 +141,8 @@ func TestETLBigBucket(t *testing.T) {
 	m.puts()
 
 	uuid, err := etlInit(tetl.EchoGolang, etl.RedirectCommType)
-	defer api.ETLStop(baseParams, uuid)
 	tassert.CheckFatal(t, err)
+	defer api.ETLStop(baseParams, uuid)
 
 	tutils.Logf("Start offline ETL %q\n", uuid)
 	defer tutils.DestroyBucket(t, proxyURL, bckTo)
