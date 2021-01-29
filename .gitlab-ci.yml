@@ -10,7 +10,7 @@ variables:
   MODE: debug # run tests with debug asserts
   NUM_TARGET: 5
   NUM_PROXY: 5
-  FS_CNT: 4
+  FS_CNT: 6
 
 
 # Templates
@@ -260,7 +260,7 @@ test:kube:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
-    - export NUM_TARGET=3
+    - export NUM_TARGET=5
     - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - status=0
     - RE="TestETL" make test-run || status=$?
