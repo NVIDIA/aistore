@@ -195,23 +195,25 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 	}
 
 	objSize = lom.Size()
-	goi := &getObjInfo{
-		started: started,
-		t:       t,
-		lom:     lom,
-		w:       w,
-		ctx:     context.Background(),
-		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize},
+	goi := allocGetObjInfo()
+	{ // nolint:gocritic // readability
+		goi.started = started
+		goi.t = t
+		goi.lom = lom
+		goi.w = w
+		goi.ctx = context.Background()
+		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: objSize}
 	}
 	s3compat.SetHeaderFromLOM(w.Header(), lom, objSize)
 	if sent, errCode, err := goi.getObject(); err != nil {
 		if sent {
 			// Cannot send error message at this point so we just glog.
 			glog.Errorf("GET %s: %v", lom, err)
-			return
+		} else {
+			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
-		t.invalmsghdlr(w, r, err.Error(), errCode)
 	}
+	freeGetObjInfo(goi)
 }
 
 // HEAD s3/bckName/objName

@@ -17,6 +17,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -1250,4 +1251,55 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 	}
 	// Return the size of sent object (not a size after transformation).
 	return true, lom.Size(), nil
+}
+
+///////////////
+// mem pools //
+///////////////
+
+var (
+	goiPool, poiPool, coiPool sync.Pool
+
+	goi0 getObjInfo
+	poi0 putObjInfo
+	coi0 copyObjInfo
+)
+
+func allocGetObjInfo() (a *getObjInfo) {
+	if v := goiPool.Get(); v != nil {
+		a = v.(*getObjInfo)
+		return
+	}
+	return &getObjInfo{}
+}
+
+func freeGetObjInfo(a *getObjInfo) {
+	*a = goi0
+	goiPool.Put(a)
+}
+
+func allocPutObjInfo() (a *putObjInfo) {
+	if v := poiPool.Get(); v != nil {
+		a = v.(*putObjInfo)
+		return
+	}
+	return &putObjInfo{}
+}
+
+func freePutObjInfo(a *putObjInfo) {
+	*a = poi0
+	poiPool.Put(a)
+}
+
+func allocCopyObjInfo() (a *copyObjInfo) {
+	if v := coiPool.Get(); v != nil {
+		a = v.(*copyObjInfo)
+		return
+	}
+	return &copyObjInfo{}
+}
+
+func freeCopyObjInfo(a *copyObjInfo) {
+	*a = coi0
+	coiPool.Put(a)
 }

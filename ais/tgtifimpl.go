@@ -115,20 +115,22 @@ func (t *targetrunner) RunLRU(id string, force bool, bcks ...cmn.Bck) {
 func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParams) error {
 	debug.Assert(params.Tag != "")
 	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, params.Tag)
-	poi := &putObjInfo{
-		t:        t,
-		lom:      lom,
-		r:        params.Reader,
-		workFQN:  workFQN,
-		ctx:      context.Background(),
-		started:  params.Started,
-		recvType: params.RecvType,
-		skipEC:   params.SkipEncode,
+	poi := allocPutObjInfo()
+	{ // nolint:gocritic // readability
+		poi.t = t
+		poi.lom = lom
+		poi.r = params.Reader
+		poi.workFQN = workFQN
+		poi.ctx = context.Background()
+		poi.started = params.Started
+		poi.recvType = params.RecvType
+		poi.skipEC = params.SkipEncode
 	}
 	if poi.recvType != cluster.RegularPut {
 		poi.cksumToUse = params.Cksum
 	}
 	_, err := poi.putObject()
+	freePutObjInfo(poi)
 	return err
 }
 
@@ -243,25 +245,23 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
 //   replica gets created in the cloud bucket of _this_ AIS cluster.
 func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams,
 	localOnly bool) (copied bool, size int64, err error) {
-	var (
-		coi = &copyObjInfo{
-			CopyObjectParams: params,
-			t:                t,
-			uncache:          false,
-			finalize:         false,
-			localOnly:        localOnly,
-		}
-
-		objNameTo = lom.ObjName
-	)
+	objNameTo := lom.ObjName
+	coi := allocCopyObjInfo()
+	{ // nolint:gocritic // readability
+		coi.CopyObjectParams = params
+		coi.t = t
+		coi.uncache = false
+		coi.finalize = false
+		coi.localOnly = localOnly
+	}
 	if params.ObjNameTo != "" {
 		objNameTo = params.ObjNameTo
 	}
 	if params.DP != nil {
 		return coi.copyReader(lom, objNameTo)
 	}
-
 	copied, err = coi.copyObject(lom, objNameTo)
+	freeCopyObjInfo(coi)
 	return copied, lom.Size(), err
 }
 
@@ -342,12 +342,12 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 			glog.Infof("Attempt to promote %q => (lom: %q, target_id: %s)", params.SrcFQN, lom, si.ID())
 		}
 		lom.FQN = params.SrcFQN
-		var (
-			coi        = &copyObjInfo{t: t}
-			sendParams = cluster.SendToParams{ObjNameTo: lom.ObjName, Tsi: si}
-		)
+		coi := allocCopyObjInfo()
+		coi.t = t
 		coi.BckTo = lom.Bck()
+		sendParams := cluster.SendToParams{ObjNameTo: lom.ObjName, Tsi: si}
 		_, _, err = coi.putRemote(lom, sendParams)
+		freeCopyObjInfo(coi)
 		if err == nil && !params.KeepOrig {
 			if err := cmn.RemoveFile(params.SrcFQN); err != nil {
 				glog.Errorf("[promote] Failed to remove source file %q, err: %v", params.SrcFQN, err)

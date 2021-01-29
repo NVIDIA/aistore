@@ -734,15 +734,16 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		t.doETL(w, r, query.Get(cmn.URLParamUUID), bck, objName)
 		return
 	}
-	goi := &getObjInfo{
-		started: started,
-		t:       t,
-		lom:     lom,
-		w:       w,
-		ctx:     context.Background(),
-		ranges:  cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: 0},
-		isGFN:   isGFNRequest,
-		chunked: config.Net.HTTP.Chunked,
+	goi := allocGetObjInfo()
+	{ // nolint:gocritic // readability
+		goi.started = started
+		goi.t = t
+		goi.lom = lom
+		goi.w = w
+		goi.ctx = context.Background()
+		goi.ranges = cmn.RangesQuery{Range: r.Header.Get(cmn.HeaderRange), Size: 0}
+		goi.isGFN = isGFNRequest
+		goi.chunked = config.Net.HTTP.Chunked
 	}
 	if bck.IsHTTP() {
 		originalURL := query.Get(cmn.URLParamOrigURL)
@@ -752,10 +753,11 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		if sent {
 			// Cannot send error message at this point so we just glog.
 			glog.Errorf("GET %s: %v", lom, err)
-			return
+		} else {
+			t.invalmsghdlr(w, r, err.Error(), errCode)
 		}
-		t.invalmsghdlr(w, r, err.Error(), errCode)
 	}
+	freeGetObjInfo(goi)
 }
 
 // PUT /v1/objects/bucket-name/object-name
@@ -1218,14 +1220,15 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		recvType   = r.URL.Query().Get(cmn.URLParamRecvType)
 	)
 	lom.FromHTTPHdr(header) // TODO: check that values parsed here are not coming from the user
-	poi := &putObjInfo{
-		started:    started,
-		t:          t,
-		lom:        lom,
-		r:          r.Body,
-		cksumToUse: cmn.NewCksum(cksumType, cksumValue),
-		ctx:        context.Background(),
-		workFQN:    fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut),
+	poi := allocPutObjInfo()
+	{ // nolint:gocritic // readability
+		poi.started = started
+		poi.t = t
+		poi.lom = lom
+		poi.r = r.Body
+		poi.cksumToUse = cmn.NewCksum(cksumType, cksumValue)
+		poi.ctx = context.Background()
+		poi.workFQN = fs.CSM.GenContentFQN(lom, fs.WorkfileType, fs.WorkfilePut)
 	}
 	if recvType != "" {
 		n, err := strconv.Atoi(recvType)
@@ -1240,7 +1243,9 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 			poi.size = size
 		}
 	}
-	return poi.putObject()
+	errCode, err = poi.putObject()
+	freePutObjInfo(poi)
+	return
 }
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {
@@ -1345,17 +1350,16 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		return
 	}
 	buf, slab := t.gmm.Alloc()
-	coi := &copyObjInfo{
-		CopyObjectParams: cluster.CopyObjectParams{
-			BckTo: lom.Bck(),
-			Buf:   buf,
-		},
-		t:         t,
-		localOnly: false,
-		finalize:  true,
+	coi := allocCopyObjInfo()
+	{ // nolint:gocritic // readability
+		coi.CopyObjectParams = cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}
+		coi.t = t
+		coi.localOnly = false
+		coi.finalize = true
 	}
 	copied, err := coi.copyObject(lom, msg.Name /* new object name */)
 	slab.Free(buf)
+	freeCopyObjInfo(coi)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
