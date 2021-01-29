@@ -1136,13 +1136,8 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 	splitAfter bool, items []string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items)
 	if err != nil {
-		s := err.Error()
-		if _, file, line, ok := runtime.Caller(1); ok {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-		h.invalmsghdlr(w, r, s, http.StatusBadRequest)
-		return nil, errors.New(s)
+		h.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		return nil, err
 	}
 
 	return items, nil
