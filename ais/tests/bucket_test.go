@@ -1674,10 +1674,8 @@ func TestBucketReadOnly(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	m.init()
-	nerr := m.puts(true /* don't fail */)
-	if nerr != m.num {
-		t.Fatalf("num failed PUTs %d, expecting %d", nerr, m.num)
-	}
+	m.puts(true /*ignoreErr*/)
+	tassert.Fatalf(t, m.numPutErrs == m.num, "num failed PUTs %d, expecting %d", m.numPutErrs, m.num)
 
 	// restore write access
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(p.Access)})
@@ -1685,10 +1683,8 @@ func TestBucketReadOnly(t *testing.T) {
 
 	// write some more and destroy
 	m.init()
-	nerr = m.puts(true /* don't fail */)
-	if nerr != 0 {
-		t.Fatalf("num failed PUTs %d, expecting 0 (zero)", nerr)
-	}
+	m.puts(true /*ignoreErr*/)
+	tassert.Fatalf(t, m.numPutErrs == 0, "num failed PUTs %d, expecting 0 (zero)", m.numPutErrs)
 }
 
 func TestRenameBucketEmpty(t *testing.T) {

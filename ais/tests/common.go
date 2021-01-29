@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -52,7 +51,6 @@ type ioContext struct {
 	objNames            []string
 	bck                 cmn.Bck
 	fileSize            uint64
-	numGetErrs          atomic.Uint64
 	proxyURL            string
 	prefix              string
 	otherTasksToTrigger int
@@ -63,6 +61,9 @@ type ioContext struct {
 	getErrIsFatal       bool
 	silent              bool
 	fixedSize           bool
+
+	numGetErrs atomic.Uint64
+	numPutErrs int
 }
 
 func (m *ioContext) saveClusterState() {
@@ -171,16 +172,14 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	}
 }
 
-func (m *ioContext) puts(dontFail ...bool) int {
+func (m *ioContext) puts(ignoreErrs ...bool) {
 	if !m.bck.IsAIS() {
 		m.remotePuts(false /*evict*/)
-		return m.num
+		return
 	}
 
 	var (
 		objPrefix  = "some_prefix"
-		filenameCh = make(chan string, m.num)
-		errCh      = make(chan error, m.num)
 		baseParams = tutils.BaseAPIParams(m.proxyURL)
 	)
 
@@ -190,17 +189,23 @@ func (m *ioContext) puts(dontFail ...bool) int {
 	if !m.silent {
 		tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bck)
 	}
-	tutils.PutRandObjs(m.proxyURL, m.bck, objPrefix, m.fileSize, m.num, errCh, filenameCh, p.Cksum.Type, m.fixedSize)
-	if len(dontFail) == 0 {
-		tassert.SelectErr(m.t, errCh, "put", false)
+
+	var ignoreErr bool
+	if len(ignoreErrs) > 0 {
+		ignoreErr = ignoreErrs[0]
 	}
-	close(filenameCh)
-	close(errCh)
-	m.objNames = m.objNames[:0]
-	for f := range filenameCh {
-		m.objNames = append(m.objNames, path.Join(objPrefix, f))
-	}
-	return len(errCh)
+
+	m.objNames, m.numPutErrs = tutils.PutRandObjsV2(m.t, tutils.PutObjectsArgs{
+		ProxyURL:  m.proxyURL,
+		Bck:       m.bck,
+		ObjPath:   objPrefix,
+		ObjCnt:    m.num,
+		ObjSize:   m.fileSize,
+		FixedSize: m.fixedSize,
+		CksumType: p.Cksum.Type,
+		WorkerCnt: 0, // TODO: Should we set something custom?
+		IgnoreErr: ignoreErr,
+	})
 }
 
 // remotePuts by default cleanups the remote bucket and puts fresh `m.num` objects

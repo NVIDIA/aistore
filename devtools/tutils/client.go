@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -23,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 	"github.com/NVIDIA/aistore/stats"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -343,6 +345,86 @@ func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, n
 		objList = append(objList, fname)
 	}
 	PutObjsFromList(proxyURL, bck, objPath, objSize, objList, errCh, objsPutCh, cksumType, fixedSize...)
+}
+
+// nolint:maligned // no performance critical code
+type PutObjectsArgs struct {
+	ProxyURL string
+
+	Bck       cmn.Bck
+	ObjPath   string
+	ObjCnt    int
+	ObjSize   uint64
+	FixedSize bool
+	CksumType string
+
+	WorkerCnt int
+	IgnoreErr bool
+}
+
+func PutRandObjsV2(t *testing.T, args PutObjectsArgs) ([]string, int) {
+	var (
+		errCnt = atomic.NewInt32(0)
+		putCnt = atomic.NewInt32(0)
+
+		workerCnt  = 40 // Default worker count.
+		group      = &errgroup.Group{}
+		objNames   = make([]string, 0, args.ObjCnt)
+		baseParams = BaseAPIParams(args.ProxyURL)
+	)
+
+	if args.WorkerCnt > 0 {
+		workerCnt = args.WorkerCnt
+	}
+	workerCnt = cmn.Min(workerCnt, args.ObjCnt)
+
+	for i := 0; i < args.ObjCnt; i++ {
+		objNames = append(objNames, path.Join(args.ObjPath, cmn.RandString(16)))
+	}
+	chunkSize := (len(objNames) + workerCnt - 1) / workerCnt
+	for i := 0; i < len(objNames); i += chunkSize {
+		group.Go(func(start, end int) func() error {
+			return func() error {
+				for _, objName := range objNames[start:end] {
+					size := args.ObjSize
+					if size == 0 { // Size not specified so generate something.
+						size = uint64(cmn.NowRand().Intn(cmn.KiB)+1) * cmn.KiB
+					} else if !args.FixedSize { // Randomize object size.
+						size += uint64(rand.Int63n(cmn.KiB))
+					}
+
+					reader, err := readers.NewRandReader(int64(size), args.CksumType)
+					cmn.AssertNoErr(err)
+
+					// We could PUT while creating files, but that makes it
+					// begin all the puts immediately (because creating random files is fast
+					// compared to the list objects call that getRandomFiles does)
+					err = api.PutObject(api.PutObjectArgs{
+						BaseParams: baseParams,
+						Bck:        args.Bck,
+						Object:     objName,
+						Cksum:      reader.Cksum(),
+						Reader:     reader,
+						Size:       size,
+					})
+					putCnt.Inc()
+					if err != nil {
+						if args.IgnoreErr {
+							errCnt.Inc()
+							return nil
+						}
+						return err
+					}
+				}
+				return nil
+			}
+		}(i, cmn.Min(i+chunkSize, len(objNames))))
+	}
+
+	err := group.Wait()
+	tassert.CheckFatal(t, err)
+	cmn.Assert(len(objNames) == int(putCnt.Load()))
+	return objNames, int(errCnt.Load())
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET
