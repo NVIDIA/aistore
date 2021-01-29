@@ -132,7 +132,7 @@ func (hp *hdfsProvider) ListObjects(ctx context.Context, bck *cluster.Bck, msg *
 				if !cmn.DirNameContainsPrefix(objName, msg.Prefix) {
 					return skipDir(fi)
 				}
-			} else if cmn.ObjNameContainsPrefix(objName, msg.Prefix) {
+			} else if !cmn.ObjNameContainsPrefix(objName, msg.Prefix) {
 				return skipDir(fi)
 			}
 		}
