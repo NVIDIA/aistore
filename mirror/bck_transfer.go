@@ -109,6 +109,7 @@ func NewXactTransferBck(id, kind string, bckFrom, bckTo *cluster.Bck, t cluster.
 		Slab:     slab,
 		Throttle: true,
 		Parallel: parallel,
+		DoLoad:   mpather.Load,
 	})
 
 	return xact

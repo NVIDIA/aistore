@@ -57,7 +57,7 @@ def transform(input_bytes):
 		WaitTimeout: cmn.DurationJSON(5 * time.Minute),
 	})
 	tassert.CheckFatal(t, err)
-	testETLBucket(t, uuid, m.bck, m.num, 5*time.Minute)
+	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
 }
 
 func TestETLTargetDown(t *testing.T) {

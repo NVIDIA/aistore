@@ -1153,7 +1153,8 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	if err := coi.t.PutObject(dst, params); err != nil {
 		return false, 0, err
 	}
-	return true, dst.Size(), err
+
+	return true, lom.Size(), err
 }
 
 // nolint:unused // This function might become useful if we decide to introduce copying an object directly to a cloud.
@@ -1247,5 +1248,6 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 	if err := coi.t.sendTo(lom, params); err != nil {
 		return false, 0, err
 	}
-	return true, params.HdrMeta.Size(), nil
+	// Return the size of sent object (not a size after transformation).
+	return true, lom.Size(), nil
 }

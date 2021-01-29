@@ -215,7 +215,7 @@ func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
 	tassert.Errorf(t, bf.Len() == cmn.KiB, "Expected %d bytes, got %d", cmn.KiB, bf.Len())
 }
 
-func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, timeout time.Duration) {
+func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
 	bckTo := cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 
 	defer func() {
@@ -235,6 +235,16 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, timeo
 	list, err := api.ListObjects(baseParams, bckTo, nil, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
+	checkETLStats(t, xactID, objCnt, fileSize*uint64(objCnt))
+}
+
+// NOTE: BytesCount references number of bytes *before* the transformation.
+func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedBytesCnt uint64) {
+	stats, err := api.GetXactionStatsByID(baseParams, xactID)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, stats.ObjCount() == int64(expectedObjCnt), "stats expected to return %d objects, got %d", expectedObjCnt, stats.ObjCount())
+	// If expectedBytesCnt == 0 don't check it as we don't now the precise size.
+	tassert.Errorf(t, expectedBytesCnt == 0 || uint64(stats.BytesCount()) == expectedBytesCnt, "stats expected to return %d bytes, got %d", expectedBytesCnt, stats.BytesCount())
 }
 
 func TestETLObject(t *testing.T) {
@@ -331,7 +341,7 @@ func TestETLBucket(t *testing.T) {
 			uuid, err := etlInit(test.transformer, test.comm)
 			tassert.CheckFatal(t, err)
 
-			testETLBucket(t, uuid, bck, objCnt, time.Minute)
+			testETLBucket(t, uuid, bck, objCnt, m.fileSize, time.Minute)
 		})
 	}
 }
@@ -401,7 +411,7 @@ def transform(input_bytes: bytes) -> bytes:
 			})
 			tassert.CheckFatal(t, err)
 
-			testETLBucket(t, uuid, m.bck, m.num, time.Minute)
+			testETLBucket(t, uuid, m.bck, m.num, m.fileSize, time.Minute)
 		})
 	}
 }
@@ -450,12 +460,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, exists == false, "expected destination bucket to not be created")
 
-	stats, err := api.GetXactionStatsByID(baseParams, xactID)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, stats.ObjCount() == int64(objCnt), "dry run stats expected to return %d objects, got %d",
-		objCnt, stats.ObjCount())
-	expectedBytesCnt := int64(m.fileSize * uint64(objCnt))
-	tassert.Errorf(t, stats.BytesCount() == expectedBytesCnt, "dry run stats expected to return %d bytes, got %d", expectedBytesCnt, stats.BytesCount())
+	checkETLStats(t, xactID, m.num, uint64(m.num*int(m.fileSize)))
 }
 
 func TestETLSingleTransformerAtATime(t *testing.T) {
