@@ -774,6 +774,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		useDisks   = []bool{false, true}
 	)
 
 	o := ecOptions{
@@ -785,32 +786,46 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 	initMountpaths(t, proxyURL)
+	if testing.Short() {
+		useDisks = []bool{false}
+	}
 
-	for _, test := range ecTests {
-		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data {
-				t.Skip("insufficient number of targets")
-			}
-			o.parityCnt = test.parity
-			o.dataCnt = test.data
-			setBucketECProps(t, baseParams, bck, defaultECBckProps(o))
-			defer api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
-				EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+	for _, useDisk := range useDisks {
+		for _, test := range ecTests {
+			testName := fmt.Sprintf("%s/disk_only/%t", test.name, useDisk)
+			t.Run(testName, func(t *testing.T) {
+				if useDisk {
+					tutils.SetClusterConfig(t, cmn.SimpleKVs{
+						"ec.disk_only": fmt.Sprintf("%t", useDisk),
+					})
+					defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
+						"ec.disk_only": "false",
+					})
+				}
+				if o.smap.CountActiveTargets() <= test.parity+test.data {
+					t.Skip("insufficient number of targets")
+				}
+				o.parityCnt = test.parity
+				o.dataCnt = test.data
+				setBucketECProps(t, baseParams, bck, defaultECBckProps(o))
+				defer api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
+					EC: &cmn.ECConfToUpdate{Enabled: api.Bool(false)},
+				})
+
+				wg := sync.WaitGroup{}
+
+				defer clearAllECObjects(t, bck, true, o)
+				wg.Add(o.objCount)
+				for i := 0; i < o.objCount; i++ {
+					objName := fmt.Sprintf(o.pattern, i)
+					go func(i int) {
+						defer wg.Done()
+						createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
+					}(i)
+				}
+				wg.Wait()
 			})
-
-			wg := sync.WaitGroup{}
-
-			wg.Add(o.objCount)
-			for i := 0; i < o.objCount; i++ {
-				objName := fmt.Sprintf(o.pattern, i)
-				go func(i int) {
-					defer wg.Done()
-					createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
-				}(i)
-			}
-			wg.Wait()
-			defer clearAllECObjects(t, bck, true, o)
-		})
+		}
 	}
 }
 
@@ -828,6 +843,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		}
 		proxyURL   = tutils.RandomProxyURL()
 		baseParams = tutils.BaseAPIParams(proxyURL)
+		useDisks   = []bool{false, true}
 	)
 
 	o := ecOptions{
@@ -837,28 +853,42 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		pattern:     "obj-rest-%04d",
 		silent:      testing.Short(),
 	}.init(t, proxyURL)
-
 	initMountpaths(t, proxyURL)
-	for _, test := range ecTests {
-		t.Run(test.name, func(t *testing.T) {
-			if o.smap.CountActiveTargets() <= test.parity+test.data {
-				t.Skip("insufficient number of targets")
-			}
-			o.parityCnt = test.parity
-			o.dataCnt = test.data
-			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+	if testing.Short() {
+		useDisks = []bool{false}
+	}
 
-			wg := sync.WaitGroup{}
-			wg.Add(o.objCount)
-			for i := 0; i < o.objCount; i++ {
-				go func(objName string, i int) {
-					defer wg.Done()
-					createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
-				}(fmt.Sprintf(o.pattern, i), i)
-			}
-			wg.Wait()
-			assertBucketSize(t, baseParams, bck, o.objCount)
-		})
+	for _, useDisk := range useDisks {
+		for _, test := range ecTests {
+			testName := fmt.Sprintf("%s/disk_only/%t", test.name, useDisk)
+			t.Run(testName, func(t *testing.T) {
+				if useDisk {
+					tutils.SetClusterConfig(t, cmn.SimpleKVs{
+						"ec.disk_only": fmt.Sprintf("%t", useDisk),
+					})
+					defer tutils.SetClusterConfig(t, cmn.SimpleKVs{
+						"ec.disk_only": "false",
+					})
+				}
+				if o.smap.CountActiveTargets() <= test.parity+test.data {
+					t.Skip("insufficient number of targets")
+				}
+				o.parityCnt = test.parity
+				o.dataCnt = test.data
+				newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+
+				wg := sync.WaitGroup{}
+				wg.Add(o.objCount)
+				for i := 0; i < o.objCount; i++ {
+					go func(objName string, i int) {
+						defer wg.Done()
+						createDamageRestoreECFile(t, baseParams, bck, objName, i, o)
+					}(fmt.Sprintf(o.pattern, i), i)
+				}
+				wg.Wait()
+				assertBucketSize(t, baseParams, bck, o.objCount)
+			})
+		}
 	}
 }
 

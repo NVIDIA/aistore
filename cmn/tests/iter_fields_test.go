@@ -73,6 +73,7 @@ var _ = Describe("IterFields", func() {
 					"ec.batch_size":    32,
 					"ec.objsize_limit": int64(0),
 					"ec.compression":   "",
+					"ec.disk_only":     false,
 
 					"versioning.enabled":           false,
 					"versioning.validate_warm_get": false,
@@ -125,6 +126,7 @@ var _ = Describe("IterFields", func() {
 					"ec.data_slices":   (*int)(nil),
 					"ec.objsize_limit": (*int64)(nil),
 					"ec.compression":   (*string)(nil),
+					"ec.disk_only":     (*bool)(nil),
 
 					"versioning.enabled":           (*bool)(nil),
 					"versioning.validate_warm_get": (*bool)(nil),

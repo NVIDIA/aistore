@@ -92,7 +92,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `rebalance.dont_run_time` | `0m` | Period after start during which we should **not** start rebalance on new target registration |
 | `rebalance.dest_retry_time` | `2m` | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | `rebalance.multiplier` | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
-| `rebalance.quiescent` | `20s` | Rebalace moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
+| `rebalance.quiescent` | `20s` | Rebalance moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
 | `timeout.send_file_time` | `5m` | Timeout for sending/receiving an object from another target in the same cluster |
 | `timeout.max_host_busy` | `20s` | Maximum latency of control-plane operations that may involve receiving new bucket metadata and associated processing |
 | `client.client_timeout` | `10s` | Default client timeout |
@@ -123,6 +123,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `ec.batch_size` | `64` | Represents the number of misplaced and broken objects(with missing EC parts) processed by EC rebalance in a singe batch (in the range [4, 256]). Increasing the batch size improves rebalance time but requires more memory |
 | `ec.objsize_limit` | `262144` | Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated |
 | `ec.compression` | `"never"` | LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
+| `ec.disk_only` | `false` | If true, EC uses local drives for all operations. If false, EC automatically chooses between memory and local drives depending on the current memory load |
 | `compression.block_size` | `262144` | Maximum data block size used by LZ4, greater values may increase compression ration but requires more memory. Value is one of 64KB, 256KB(AIS default), 1MB, and 4MB |
 
 ## Startup override

@@ -274,6 +274,9 @@ func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
 // returns whether EC must use disk instead of keeping everything in memory.
 // Depends on available free memory and size of an object to process
 func useDisk(objSize int64) bool {
+	if cmn.GCO.Get().EC.DiskOnly {
+		return true
+	}
 	switch mm.MemPressure() {
 	case memsys.OOM, memsys.MemPressureExtreme:
 		return true

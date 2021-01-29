@@ -203,6 +203,7 @@ type (
 		ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
 		BatchSize    int    `json:"batch_size"`    // Batch size for EC rebalance
 		Enabled      bool   `json:"enabled"`       // EC is enabled
+		DiskOnly     bool   `json:"disk_only"`     // if true, EC does not use SGL - data goes directly to drives
 	}
 	ECConfToUpdate struct {
 		Enabled      *bool   `json:"enabled"`
@@ -210,6 +211,7 @@ type (
 		DataSlices   *int    `json:"data_slices"`
 		ParitySlices *int    `json:"parity_slices"`
 		Compression  *string `json:"compression"`
+		DiskOnly     *bool   `json:"disk_only"`
 	}
 	LogConf struct {
 		Dir      string `json:"dir"`       // log directory
