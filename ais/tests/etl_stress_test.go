@@ -5,6 +5,7 @@
 package integration
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -130,6 +131,8 @@ func TestETLBigBucket(t *testing.T) {
 			fixedSize: true,
 			bck:       bckFrom,
 		}
+
+		etlDoneCh = cmn.NewStopCh()
 	)
 
 	tutils.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cmn.B2S(int64(m.fileSize), 2))
@@ -138,6 +141,7 @@ func TestETLBigBucket(t *testing.T) {
 	m.saveClusterState()
 
 	tutils.Logln("Putting objects to source bucket")
+
 	m.puts()
 
 	uuid, err := etlInit(tetl.EchoGolang, etl.RedirectCommType)
@@ -148,10 +152,33 @@ func TestETLBigBucket(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, bckTo)
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
 	tassert.CheckFatal(t, err)
+	xactStart := time.Now()
+
+	go func() {
+		etlTicker := time.NewTicker(2 * time.Minute)
+		defer etlTicker.Stop()
+		for {
+			select {
+			case <-etlTicker.C:
+				// Check number of objects transformed.
+				stats, err := api.GetXactionStatsByID(baseParams, xactID)
+				if err != nil {
+					tutils.Logf("Failed to get xaction stats; err %v\n", err)
+					continue
+				}
+				bps := float64(stats.BytesCount()) / time.Since(xactStart).Seconds()
+				bpsStr := fmt.Sprintf("%s/s", cmn.B2S(int64(bps), 2))
+				tutils.Logf("ETL %q already transformed %d/%d objects (%s) (%s)\n", xactID, stats.ObjCount(), m.num, cmn.B2S(stats.BytesCount(), 2), bpsStr)
+			case <-etlDoneCh.Listen():
+				return
+			}
+		}
+	}()
 
 	tutils.Logln("Waiting for ETL to finish")
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: 30 * time.Minute}
-	_, err = api.WaitForXaction(baseParams, args, time.Minute)
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: 30 * time.Minute /* total timeout */}
+	_, err = api.WaitForXaction(baseParams, args, time.Minute /* refresh interval */)
+	etlDoneCh.Close()
 	tassert.CheckFatal(t, err)
 	stats, err := api.GetXactionStatsByID(baseParams, xactID)
 	tassert.CheckFatal(t, err)
