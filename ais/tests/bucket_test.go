@@ -2815,6 +2815,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		return
 	}
 
+	initMountpaths(t, proxyURL)
 	// corrupt random and read again
 	{
 		i := rand.Intn(len(bckObjs.Entries))

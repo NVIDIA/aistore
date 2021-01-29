@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,33 +34,6 @@ const (
 
 // reformat object name from XML to JSON API requirements
 var gcsObjJSON = strings.ReplaceAll(gcsObjXML, "/", "%2F")
-
-// search for the full path of cached object
-// TODO: replace with initMountpaths and fs.WalkBck
-func pathForCached() string {
-	var fpath string
-	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if fpath != "" {
-			return filepath.SkipDir
-		}
-		if err != nil || info == nil {
-			return nil
-		}
-
-		// TODO -- FIXME - avoid hardcoded on-disk layout
-		if info.IsDir() || !strings.Contains(path, cmn.ProviderHTTP+"/") {
-			return nil
-		}
-
-		if strings.HasSuffix(path, gcsFilename) {
-			fpath = path
-			return filepath.SkipDir
-		}
-		return nil
-	}
-	filepath.Walk(rootDir, fsWalkFunc)
-	return fpath
-}
 
 // generate URL to request object from GCS
 func genObjURL(isSecure, isXML bool) (s string) {
@@ -115,35 +87,39 @@ func extractSpeed(out []byte) int64 {
 
 func TestRProxyGCS(t *testing.T) {
 	var (
-		resURL   = genObjURL(false, true)
-		proxyURL = tutils.GetPrimaryURL()
-		smap     = tutils.GetClusterMap(t, proxyURL)
+		resURL     = genObjURL(false, true)
+		proxyURL   = tutils.GetPrimaryURL()
+		smap       = tutils.GetClusterMap(t, proxyURL)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	if cmn.IsHTTPS(proxyURL) {
 		t.Skip("test doesn't work for HTTPS")
 	}
 
+	initMountpaths(t, proxyURL)
 	// look for leftovers and cleanup if found
-	pathCached := pathForCached()
-	if pathCached != "" {
-		tutils.Logf("Found in cache: %s. Removing...\n", pathCached)
-		os.Remove(pathCached)
-	}
 	os.Remove(gcsTmpFile)
+	bck := cmn.Bck{Provider: cmn.ProviderHTTP}
+	queryBck := cmn.QueryBcks(bck)
+	bckList, err := api.ListBuckets(baseParams, queryBck)
+	tassert.CheckFatal(t, err)
+
 	cmdline := genCURLCmdLine(resURL, proxyURL, smap.Tmap)
 	tutils.Logf("First time download via XML API: %s\n", cmdline)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
+	defer os.Remove(gcsTmpFile)
 	tutils.Logln(string(out))
 	tassert.CheckFatal(t, err)
 
-	pathCached = pathForCached()
-	tassert.Fatalf(t, pathCached != "", "object was not cached")
+	bckListNew, err := api.ListBuckets(baseParams, queryBck)
+	tassert.CheckFatal(t, err)
+	bck, err = detectNewBucket(bckList, bckListNew)
+	tassert.CheckFatal(t, err)
+	defer tutils.DestroyBucket(t, proxyURL, bck)
 
-	defer func() {
-		os.Remove(gcsTmpFile)
-		os.Remove(pathCached)
-	}()
+	pathCached := findObjOnDisk(bck, gcsFilename)
+	tassert.Fatalf(t, pathCached != "", "object was not cached")
 
 	tutils.Logf("Cached at: %q\n", pathCached)
 	speedCold := extractSpeed(out)
@@ -168,6 +144,11 @@ func TestRProxyGCS(t *testing.T) {
 		speedHTTPS := extractSpeed(out)
 		tassert.Fatalf(t, speedHTTPS != 0, "Failed to detect speed for HTTPS download")
 
+		bckListNew, err = api.ListBuckets(baseParams, queryBck)
+		tassert.CheckFatal(t, err)
+		bckHTTPS, err := detectNewBucket(bckList, bckListNew)
+		tassert.CheckFatal(t, err)
+		defer tutils.DestroyBucket(t, proxyURL, bckHTTPS)
 
 		tutils.Logf("Check via JSON API\n")
 		cmdline = genCURLCmdLine(false, false, proxyURL, smap.Tmap)

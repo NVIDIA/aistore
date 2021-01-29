@@ -5,9 +5,11 @@
 package integration
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -37,7 +39,10 @@ const (
 	workerCnt = 10
 )
 
-var cliBck cmn.Bck
+var (
+	cliBck         cmn.Bck
+	errObjectFound = errors.New("found") // to interrupt fs.Walk when object found
+)
 
 type ioContext struct {
 	t                   *testing.T
@@ -880,4 +885,52 @@ func initMountpaths(t *testing.T, proxyURL string) {
 			fs.Add(mpath, target.ID())
 		}
 	}
+}
+
+func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
+	fsWalkFunc := func(path string, de fs.DirEntry) error {
+		if fqn != "" {
+			return filepath.SkipDir
+		}
+		if de.IsDir() {
+			return nil
+		}
+
+		ct, err := cluster.NewCTFromFQN(path, nil)
+		if err != nil {
+			return nil
+		}
+		if ct.ObjectName() == objName {
+			fqn = path
+			return errObjectFound
+		}
+		return nil
+	}
+
+	fs.WalkBck(&fs.WalkBckOptions{
+		Options: fs.Options{
+			Bck:         bck,
+			CTs:         []string{fs.ObjectType},
+			ErrCallback: nil,
+			Callback:    fsWalkFunc,
+			Sorted:      true, // false is unsupported and asserts
+		},
+	})
+	return fqn
+}
+
+func detectNewBucket(oldList, newList cmn.BucketNames) (cmn.Bck, error) {
+	for _, nbck := range newList {
+		found := false
+		for _, obck := range oldList {
+			if obck.Name == nbck.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nbck, nil
+		}
+	}
+	return cmn.Bck{}, fmt.Errorf("new bucket is not found (old: %d buckets, new: %d buckets)", len(oldList), len(newList))
 }

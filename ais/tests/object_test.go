@@ -829,6 +829,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 
+	initMountpaths(t, proxyURL)
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 	cksumType := p.Cksum.Type
@@ -1054,6 +1055,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires write access to xattrs, doesn't work with docker", t.Name()))
 	}
 
+	initMountpaths(t, proxyURL)
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 	conf := cmn.DefaultBckProps().Cksum
 
@@ -1135,6 +1137,7 @@ func TestRangeRead(t *testing.T) {
 		fileSize  = 5271
 		objPrefix = "range_get"
 	)
+	initMountpaths(t, tutils.RandomProxyURL(t))
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
@@ -1480,26 +1483,6 @@ func resetBucketProps(proxyURL string, bck cmn.Bck, t *testing.T) {
 	if _, err := api.ResetBucketProps(baseParams, bck); err != nil {
 		t.Errorf("bucket: %s props not reset, err: %v", bck, err)
 	}
-}
-
-// TODO: replace with new initMountpaths and fs.WalkBck
-func findObjOnDisk(bck cmn.Bck, objName string) string {
-	var fqn string
-	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if tutils.IsTrashDir(path) {
-			return filepath.SkipDir
-		}
-		// TODO -- FIXME - avoid hardcoded on-disk layout `/%ob`
-		if strings.Contains(path, "/%") && !strings.Contains(path, "/%ob") {
-			return filepath.SkipDir
-		}
-		if strings.HasSuffix(path, "/"+objName) && strings.Contains(path, "/"+bck.Name+"/") {
-			fqn = path
-		}
-		return nil
-	}
-	filepath.Walk(rootDir, fsWalkFunc)
-	return fqn
 }
 
 func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {

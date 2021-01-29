@@ -249,6 +249,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
 	}
 
+	initMountpaths(t, proxyURL)
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
 	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType)
@@ -260,7 +261,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	// NOTE: The following tests can only work when running on a local setup.
 	//  The test assumes that it is run on the same machine as targets are (the test searches a local file system).
 	objName := <-filenameCh
-	fqn := findObjOnDisk(bck, objName)
+	fqn := findObjOnDisk(bck, subdir+"/"+objName)
 	tutils.Logf("Corrupting file data[%s]: %s\n", objName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
