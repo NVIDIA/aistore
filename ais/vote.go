@@ -250,7 +250,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	resCh := make(chan voteResult, len(results))
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			resCh <- voteResult{
 				yes:      false,
@@ -264,9 +264,8 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 				err:      nil,
 			}
 		}
-		freeCallRes(res)
 	}
-
+	freeCallResults(results)
 	close(resCh)
 	return resCh
 }
@@ -289,16 +288,14 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cmn.StringSet {
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
-		glog.Warningf("Broadcast commit result for %s(%s) failed: %v", res.si.ID(),
-			res.si.IntraControlNet.DirectURL, res.err)
+		glog.Warningf("%s: failed to confirm election with %s: %v", p.si, res.si, res.err)
 		errors.Add(res.si.ID())
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	return errors
 }
 
@@ -514,7 +511,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 	}
 	res := h.call(args)
 	err = res.err
-	freeCallRes(res)
+	_freeCallRes(res)
 	if err == nil {
 		return
 	}
@@ -524,7 +521,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 			time.Sleep(sleepTime)
 			res = h.call(args)
 			err = res.err
-			freeCallRes(res)
+			_freeCallRes(res)
 			if err == nil {
 				break
 			}

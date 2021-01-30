@@ -55,31 +55,26 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method, path string,
 	args.req = cmn.ReqArgs{Method: method, Path: path, Body: body, Query: url.Values{}}
 	args.timeout = cmn.GCO.Get().Timeout.MaxHostBusy
 	results := p.bcastGroup(args)
+	defer freeCallResults(results)
 	freeBcastArgs(args)
 	respCnt := len(results)
 
 	if respCnt == 0 {
 		return nil, http.StatusBadRequest, cmn.NewNoNodesError(cmn.Target)
 	}
-	//
-	// TODO: rewrite as a single `for`, avoid allocation
-	//
-	validResponses := make([]*callResult, 0, respCnt)
-	for res := range results {
+	validResponses := make([]*callResult, 0, respCnt) // TODO: avoid allocation
+	for _, res := range results {
 		if res.status == http.StatusOK {
 			validResponses = append(validResponses, res)
 			continue
 		}
 		if res.status != http.StatusNotFound {
 			status, err := res.status, res.err
-			drainCallResults(res, results)
 			return nil, status, err
 		}
 		notFoundCnt++
 		err = res.err
-		freeCallRes(res)
 	}
-
 	if notFoundCnt == respCnt { // All responded with 404.
 		return nil, http.StatusNotFound, err
 	}
@@ -136,14 +131,13 @@ func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string, 
 	args.req = cmn.ReqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body, Query: query}
 	args.timeout = cmn.GCO.Get().Timeout.MaxHostBusy
 	results := p.bcastGroup(args)
+	defer freeCallResults(results)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		errCode, err = res.status, res.err
-		drainCallResults(res, results)
 		return
 	}
 	return http.StatusOK, nil

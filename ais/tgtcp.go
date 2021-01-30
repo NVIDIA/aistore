@@ -68,19 +68,16 @@ func (t *targetrunner) initHostIP() {
 
 func (t *targetrunner) joinCluster(primaryURLs ...string) (status int, err error) {
 	res := t.join(nil, primaryURLs...)
+	defer _freeCallRes(res)
 	if res.err != nil {
 		status, err = res.status, res.err
-		freeCallRes(res)
 		return
 	}
 	// not being sent at cluster startup and keepalive
 	if len(res.bytes) == 0 {
-		freeCallRes(res)
 		return
 	}
-
 	err = t.applyRegMeta(res.bytes, "")
-	freeCallRes(res)
 	return
 }
 
@@ -141,7 +138,7 @@ func (t *targetrunner) unregister(_ ...string) (status int, err error) {
 	}
 	res := t.call(args)
 	status, err = res.status, res.err
-	freeCallRes(res)
+	_freeCallRes(res)
 	return
 }
 
@@ -851,12 +848,12 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 		timeout: timeout,
 	}
 	res := t.call(args)
+	defer _freeCallRes(res)
 	if res.err != nil {
 		time.Sleep(timeout / 2)
 		res = t.call(args)
 		if res.err != nil {
 			err = fmt.Errorf("%s: failed to GET(%q), err: %v", t.si, what, res.err)
-			freeCallRes(res)
 			return
 		}
 	}
@@ -864,7 +861,6 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	if err != nil {
 		err = fmt.Errorf("%s: unexpected: failed to unmarshal GET(%q) response: %v", t.si, what, err)
 	}
-	freeCallRes(res)
 	return
 }
 
@@ -1139,13 +1135,13 @@ func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.S
 	args.smap = smap
 	results := t.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
 			si := res.si
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return si
 		}
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	return nil
 }

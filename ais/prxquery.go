@@ -62,15 +62,15 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	args.smap = smap
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		p.invalmsghdlr(w, r, res.err.Error())
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 
 	nlq, err := query.NewQueryListener(handle, &smap.Smap, msg)
 	if err != nil {
@@ -168,19 +168,18 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 	lists := make([]*cmn.BucketList, 0, len(results))
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			if res.status == http.StatusNotFound {
-				freeCallRes(res)
 				continue
 			}
 			p.invalmsghdlr(w, r, res.err.Error(), res.status)
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return
 		}
 		lists = append(lists, res.v.(*cmn.BucketList))
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 
 	result := cmn.ConcatObjLists(lists, msg.Size)
 	if len(result.Entries) == 0 {
@@ -199,7 +198,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		discardArgs.to = cluster.Targets
 		discardResults := p.bcastGroup(discardArgs)
 		freeBcastArgs(discardArgs)
-		for res := range discardResults {
+		for _, res := range discardResults {
 			if res.err != nil && res.status != http.StatusNotFound {
 				p.invalmsghdlr(w, r, res.err.Error())
 				return

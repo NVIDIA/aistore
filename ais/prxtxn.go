@@ -95,15 +95,15 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 	)
 	debug.Infof("Begin create-bucket (msg: %v, bck: %s)", msg, bck)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for res := range results {
+	for _, res := range results {
 		err := res.err
 		if err == nil {
-			freeCallRes(res)
 			continue
 		}
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return c.bcastAbort(bck, err)
 	}
+	freeCallResults(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -121,17 +121,17 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, remoteH
 	// 4. commit
 	debug.Infof("Commit create-bucket (msg: %v, bck: %s)", msg, bck)
 	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		glog.Errorf("Failed to commit create-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 		p.undoCreateBucket(msg, bck)
 		err := res.err
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return err
 	}
+	freeCallResults(results)
 	return nil
 }
 
@@ -171,15 +171,15 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = c.bcastAbort(bck, res.err)
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	mirrorEnabled := copies > 1
@@ -209,17 +209,17 @@ func (p *proxyrunner) makeNCopies(msg *cmn.ActionMsg, bck *cluster.Bck) (xactID 
 
 	// 5. commit
 	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		glog.Error(res.err) // commit must go thru
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
 		err = res.err
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 	xactID = c.uuid
 	return
 }
@@ -306,15 +306,15 @@ func (p *proxyrunner) setBucketProps(w http.ResponseWriter, r *http.Request, msg
 		c         = p.prepTxnClient(nmsg, bck, waitmsync)
 	)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = c.bcastAbort(bck, res.err)
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -404,15 +404,15 @@ func (p *proxyrunner) renameBucket(bckFrom, bckTo *cluster.Bck, msg *cmn.ActionM
 	)
 	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = c.bcastAbort(bckFrom, res.err)
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	bmdCtx := &bmdModifier{
@@ -508,15 +508,15 @@ func (p *proxyrunner) bucketToBucketTxn(bckFrom, bckTo *cluster.Bck, msg *cmn.Ac
 	_ = cmn.AddBckUnameToQuery(c.req.Query, bckTo.Bck, cmn.URLParamBucketTo)
 
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = c.bcastAbort(bckFrom, res.err)
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	if !dryRun {
@@ -624,15 +624,15 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 		c         = p.prepTxnClient(msg, bck, waitmsync)
 	)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = c.bcastAbort(bck, res.err)
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 
 	// 3. update BMD locally & metasync updated BMD
 	ctx := &bmdModifier{
@@ -654,16 +654,16 @@ func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (xactID str
 
 	// 6. commit
 	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		glog.Error(res.err)
 		err = res.err
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 	xactID = c.uuid
 	return
 }
@@ -700,15 +700,15 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 		c         = p.prepTxnClient(msg, nil, waitmsync)
 	)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = c.bcastAbort(si, res.err, cmn.Target)
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 
 	// 2. Put node under maintenance
 	if err = p.markMaintenance(msg, si); err != nil {
@@ -753,15 +753,15 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	)
 	debug.Infof("Begin destroy-bucket (msg: %v, bck: %s)", msg, bck)
 	results := c.bcast(cmn.ActBegin, c.timeout.netw)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err := c.bcastAbort(bck, res.err)
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return err
 	}
+	freeCallResults(results)
 
 	// 2. Distribute new BMD
 	ctx := &bmdModifier{
@@ -780,17 +780,16 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error 
 	// 3. Commit
 	debug.Infof("Commit destroy-bucket (msg: %v, bck: %s)", msg, bck)
 	results = c.bcast(cmn.ActCommit, c.commitTimeout(waitmsync))
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		glog.Errorf("Failed to commit destroy-bucket (msg: %v, bck: %s, err: %v)", msg, bck, res.err)
 		err := res.err
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return err
 	}
-
+	freeCallResults(results)
 	return nil
 }
 
@@ -805,7 +804,7 @@ func (c *txnClientCtx) commitTimeout(waitmsync bool) time.Duration {
 	return c.timeout.netw
 }
 
-func (c *txnClientCtx) bcast(phase string, timeout time.Duration) chanResults {
+func (c *txnClientCtx) bcast(phase string, timeout time.Duration) sliceResults {
 	c.req.Path = cmn.JoinWords(c.path, phase)
 	if phase != cmn.ActAbort {
 		now := time.Now()

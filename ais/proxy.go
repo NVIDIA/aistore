@@ -187,19 +187,16 @@ func (p *proxyrunner) joinCluster(primaryURLs ...string) (status int, err error)
 		query = url.Values{cmn.URLParamNonElectable: []string{"true"}}
 	}
 	res := p.join(query, primaryURLs...)
+	defer _freeCallRes(res)
 	if res.err != nil {
 		status, err = res.status, res.err
-		freeCallRes(res)
 		return
 	}
 	// not being sent at cluster startup and keepalive
 	if len(res.bytes) == 0 {
-		freeCallRes(res)
 		return
 	}
-
 	err = p.applyRegMeta(res.bytes, "")
-	freeCallRes(res)
 	return
 }
 
@@ -243,7 +240,7 @@ func (p *proxyrunner) unregisterSelf() (status int, err error) {
 	}
 	res := p.call(args)
 	status, err = res.status, res.err
-	freeCallRes(res)
+	_freeCallRes(res)
 	return
 }
 
@@ -1107,20 +1104,18 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	summaries = make(cmn.BucketsSummaries, 0)
 	results = p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			err = res.err
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return nil, "", err
 		}
-
 		targetSummary := res.v.(*cmn.BucketsSummaries)
 		for _, bckSummary := range *targetSummary {
 			summaries = summaries.Aggregate(bckSummary)
 		}
-		freeCallRes(res)
 	}
-
+	freeCallResults(results)
 	return summaries, "", nil
 }
 
@@ -1500,29 +1495,28 @@ func (p *proxyrunner) initAsyncQuery(bck *cluster.Bck, msg *cmn.BucketSummaryMsg
 	return isNew, q
 }
 
-func (p *proxyrunner) checkBckTaskResp(uuid string, results chanResults) (allOK bool, status int, err error) {
+func (p *proxyrunner) checkBckTaskResp(uuid string, results sliceResults) (allOK bool, status int, err error) {
 	// check response codes of all targets
 	// Target that has completed its async task returns 200, and 202 otherwise
 	allOK = true
 	allNotFound := true
-	for res := range results {
+	for _, res := range results {
 		if res.status == http.StatusNotFound {
-			freeCallRes(res)
 			continue
 		}
 		allNotFound = false
 		if res.err != nil {
 			allOK, status, err = false, res.status, res.err
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return
 		}
 		if res.status != http.StatusOK {
 			allOK = false
 			status = res.status
-			drainCallResults(res, results)
 			break
 		}
 	}
+	freeCallResults(results)
 	if allNotFound {
 		err = fmt.Errorf("task %s %s", uuid, cmn.DoesNotExist)
 	}
@@ -1537,7 +1531,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 		aisMsg    *aisMsg
 		args      *bcastArgs
 		entries   []*cmn.BucketEntry
-		results   chanResults
+		results   sliceResults
 		smap      = p.owner.smap.get()
 		cacheID   = cacheReqID{bck: bck.Bck, prefix: smsg.Prefix}
 		token     = smsg.ContinuationToken
@@ -1587,16 +1581,16 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	// Combine the results.
 	results = p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			err = res.err
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return nil, err
 		}
 		objList := res.v.(*cmn.BucketList)
 		p.qm.b.set(smsg.UUID, res.si.ID(), objList.Entries, pageSize)
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	entries, hasEnough = p.qm.b.get(smsg.UUID, token, pageSize)
 	cmn.Assert(hasEnough)
 
@@ -1639,7 +1633,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		reqTimeout = cmn.GCO.Get().Client.ListObjects
 		aisMsg     = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &smsg}, smap, nil)
 		args       = allocBcastArgs()
-		results    chanResults
+		results    sliceResults
 	)
 	args.req = cmn.ReqArgs{
 		Method: http.MethodPost,
@@ -1658,28 +1652,26 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		cmn.Assert(exists)
 		for _, si := range nl.Notifiers() {
 			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout, v: &cmn.BucketList{}})
-			results = make(chanResults, 1)
-			results <- res
-			close(results)
+			results = make(sliceResults, 1)
+			results[0] = res
 			break
 		}
 	}
 	freeBcastArgs(args)
 	// Combine the results.
 	bckLists := make([]*cmn.BucketList, 0, len(results))
-	for res := range results {
+	for _, res := range results {
 		if res.status == http.StatusNotFound { // TODO -- FIXME
-			freeCallRes(res)
 			continue
 		}
 		if res.err != nil {
 			err = res.err
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return nil, err
 		}
 		bckLists = append(bckLists, res.v.(*cmn.BucketList))
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 
 	// Maximum objects in the final result page. Take all objects in
 	// case of Cloud and no limit is set by a user.
@@ -1763,15 +1755,14 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	args.to = cluster.Targets
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		p.invalmsghdlrf(w, r, res.err.Error())
-		drainCallResults(res, results)
-		return
+		break
 	}
+	freeCallResults(results)
 }
 
 func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
@@ -1791,15 +1782,14 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
 	args.timeout = cmn.DefaultTimeout // TODO: use cmn.GCO.Get().Client.ListObjects
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)",
 			res.si, msg.Action, res.err, res.status, res.details)
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	xactID = aisMsg.UUID
 	return
 }
@@ -2088,20 +2078,18 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 			Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
 		}
 		args = callArgs{req: req, timeout: cmn.DefaultTimeout, v: &smapX{}}
-		res  = p.call(args)
 	)
+	res := p.call(args)
+	defer _freeCallRes(res)
 	if res.err != nil {
 		err = fmt.Errorf("failed to get Smap from %s: %v", baseURL, res.err)
-		freeCallRes(res)
 		return
 	}
 	smap = res.v.(*smapX)
 	if err := smap.validate(); err != nil {
 		err = fmt.Errorf("%s: invalid %s from %s: %v", p.si, smap, baseURL, err)
-		freeCallRes(res)
 		return nil, err
 	}
-	freeCallRes(res)
 	return
 }
 
@@ -2287,16 +2275,16 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	args.to = cluster.AllNodes
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		p.invalmsghdlrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase",
 			proxyid, res.err, res.si)
-		drainCallResults(res, results)
+		freeCallResults(results)
 		return
 	}
+	freeCallResults(results)
 
 	// (I.2) Prepare phase - local changes.
 	p.inPrimaryTransition.Store(true)
@@ -2316,10 +2304,8 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	args.to = cluster.AllNodes
 	results = p.bcastGroup(args)
 	freeBcastArgs(args)
-	// TODO: retry
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		if res.si.ID() == proxyid {
@@ -2328,8 +2314,8 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 			glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
 				res.si.ID(), res.err, proxyid)
 		}
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 }
 
 ////////////////////////////
@@ -2536,15 +2522,15 @@ func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request
 		results := p.bcastGroup(args)
 		freeBcastArgs(args)
 		sysInfoMap := make(cmn.JSONRawMsgs, len(results))
-		for res := range results {
+		for _, res := range results {
 			if res.err != nil {
 				details := res.details
-				drainCallResults(res, results)
+				freeCallResults(results)
 				return nil, details
 			}
 			sysInfoMap[res.si.ID()] = res.bytes
-			freeCallRes(res)
 		}
+		freeCallResults(results)
 		return sysInfoMap, ""
 	}
 
@@ -2609,17 +2595,17 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 	return p._queryResults(w, r, results)
 }
 
-func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, results chanResults) cmn.JSONRawMsgs {
+func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, results sliceResults) cmn.JSONRawMsgs {
 	targetResults := make(cmn.JSONRawMsgs, len(results))
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.details)
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return nil
 		}
 		targetResults[res.si.ID()] = res.bytes
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	return targetResults
 }
 
@@ -3256,16 +3242,16 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		args.to = cluster.AllNodes
 		results := p.bcastGroup(args)
 		freeBcastArgs(args)
-		for res := range results {
+		for _, res := range results {
 			if res.err == nil {
-				freeCallRes(res)
 				continue
 			}
 			p.invalmsghdlrf(w, r, "%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, msg.Value, res.details)
 			p.keepalive.onerr(err, res.status)
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return
 		}
+		freeCallResults(results)
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		args := allocBcastArgs()
@@ -3308,15 +3294,15 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		args.to = cluster.Targets
 		results := p.bcastGroup(args)
 		freeBcastArgs(args)
-		for res := range results {
+		for _, res := range results {
 			if res.err == nil {
-				freeCallRes(res)
 				continue
 			}
 			p.invalmsghdlr(w, r, res.err.Error())
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return
 		}
+		freeCallResults(results)
 		if msg.Action == cmn.ActXactStart {
 			smap := p.owner.smap.get()
 			nl := xaction.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
@@ -3478,16 +3464,16 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		args.to = cluster.AllNodes
 		results := p.bcastGroup(args)
 		freeBcastArgs(args)
-		for res := range results {
+		for _, res := range results {
 			if res.err == nil {
-				freeCallRes(res)
 				continue
 			}
 			p.invalmsghdlr(w, r, res.err.Error())
 			p.keepalive.onerr(res.err, res.status)
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return
 		}
+		freeCallResults(results)
 	case cmn.ActAttach, cmn.ActDetach:
 		if err := p.attachDetach(w, r, action); err != nil {
 			return
@@ -3497,16 +3483,16 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		args.to = cluster.AllNodes
 		results := p.bcastGroup(args)
 		freeBcastArgs(args)
-		for res := range results {
+		for _, res := range results {
 			if res.err == nil {
-				freeCallRes(res)
 				continue
 			}
 			p.invalmsghdlr(w, r, res.err.Error())
 			p.keepalive.onerr(res.err, res.status)
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return
 		}
+		freeCallResults(results)
 	}
 }
 

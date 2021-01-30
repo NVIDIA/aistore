@@ -290,15 +290,14 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = res.err
 		glog.Error(err)
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	if err == nil {
 		// All init calls have succeeded, return UUID.
 		w.Write([]byte(msg.ID))
@@ -345,15 +344,14 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		err = res.err
 		glog.Error(err)
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	if err == nil {
 		// All init calls have succeeded, return UUID.
 		w.Write([]byte(msg.ID))
@@ -395,10 +393,10 @@ func (p *proxyrunner) listETLs() (infoList etl.InfoList, err error) {
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
 
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			err = res.err
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return nil, err
 		}
 
@@ -414,8 +412,8 @@ func (p *proxyrunner) listETLs() (infoList etl.InfoList, err error) {
 				glog.Warningf("Targets returned different ETLs: %v vs %v", etls, another)
 			}
 		}
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 
 	if etls == nil {
 		etls = &etl.InfoList{}
@@ -435,7 +433,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		results chanResults
+		results sliceResults
 		args    *bcastArgs
 	)
 	if len(apiItems) > 1 {
@@ -448,8 +446,8 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlrf(w, r, "unknown target %q", tid)
 			return
 		}
-		results = make(chanResults, 1)
-		results <- p.call(callArgs{
+		results = make(sliceResults, 1)
+		results[0] = p.call(callArgs{
 			req: cmn.ReqArgs{
 				Method: http.MethodGet,
 				Path:   cmn.URLPathETLLogs.Join(uuid),
@@ -458,7 +456,6 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 			timeout: cmn.DefaultTimeout,
 			v:       &etl.PodLogsMsg{},
 		})
-		close(results)
 	} else {
 		// all targets
 		args = allocBcastArgs()
@@ -469,15 +466,15 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 		freeBcastArgs(args)
 	}
 	logs := make(etl.PodsLogsMsg, 0, len(results))
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return
 		}
 		logs = append(logs, *res.v.(*etl.PodLogsMsg))
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	sort.Sort(logs)
 	p.writeJSON(w, r, logs, "logs-ETL")
 }
@@ -494,7 +491,7 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		results chanResults
+		results sliceResults
 		args    *bcastArgs
 	)
 
@@ -506,15 +503,15 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	freeBcastArgs(args)
 
 	healths := make(etl.PodsHealthMsg, 0, len(results))
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.err.Error())
-			drainCallResults(res, results)
+			freeCallResults(results)
 			return
 		}
 		healths = append(healths, res.v.(*etl.PodHealthMsg))
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	sort.SliceStable(healths, func(i, j int) bool { return healths[i].TargetID < healths[j].TargetID })
 	p.writeJSON(w, r, healths, "health-ETL")
 }
@@ -535,13 +532,12 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 	args.timeout = cmn.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
-			freeCallRes(res)
 			continue
 		}
 		p.invalmsghdlr(w, r, res.err.Error())
-		drainCallResults(res, results)
-		return
+		break
 	}
+	freeCallResults(results)
 }

@@ -467,6 +467,6 @@ func (t *targetrunner) RebalanceNamespace(si *cluster.Snode) (b []byte, status i
 	}
 	res := t.call(args)
 	b, status, err = res.bytes, res.status, res.err
-	freeCallRes(res)
+	_freeCallRes(res)
 	return
 }

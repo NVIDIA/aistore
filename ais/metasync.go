@@ -361,12 +361,11 @@ outer:
 	freeBcastArgs(args)
 
 	// step 4: count failures and fill-in refused
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
 			if revsReqType == revsReqSync {
 				y.syncDone(res.si, pairsToSend)
 			}
-			freeCallRes(res)
 			continue
 		}
 		glog.Warningf("%s: failed to sync %s, err: %v(%d)", y.p.si, res.si, res.err, res.status)
@@ -379,8 +378,8 @@ outer:
 		} else {
 			failedCnt++
 		}
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	// step 5: handle connection-refused right away
 	for i := 0; i < 4; i++ {
 		if len(refused) == 0 {
@@ -437,7 +436,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 	args.nodeCount = len(refused)
 	results := y.p.bcastNodes(args)
 	freeBcastArgs(args)
-	for res := range results {
+	for _, res := range results {
 		if res.err == nil {
 			delete(refused, res.si.ID())
 			y.syncDone(res.si, pairs)
@@ -446,8 +445,8 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 			glog.Warningf("%s: handle-refused: failing to sync %s, err: %v (%d)",
 				y.p.si, res.si, res.err, res.status)
 		}
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 }
 
 // pending (map), if requested, contains only those daemons that need
@@ -524,18 +523,19 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	args.nodes = []cluster.NodeMap{pending}
 	args.nodeCount = len(pending)
 	defer body.Free()
-	res := y.p.bcastNodes(args)
+	results := y.p.bcastNodes(args)
 	freeBcastArgs(args)
-	for r := range res {
-		if r.err == nil {
-			y.syncDone(r.si, pairs)
-			glog.Infof("%s: handle-pending: sync-ed %s", y.p.si, r.si)
+	for _, res := range results {
+		if res.err == nil {
+			y.syncDone(res.si, pairs)
+			glog.Infof("%s: handle-pending: sync-ed %s", y.p.si, res.si)
 		} else {
 			failedCnt++
 			glog.Warningf("%s: handle-pending: failing to sync %s, err: %v (%d)",
-				y.p.si, r.si, r.err, r.status)
+				y.p.si, res.si, res.err, res.status)
 		}
 	}
+	freeCallResults(results)
 	return
 }
 

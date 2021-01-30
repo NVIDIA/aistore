@@ -553,10 +553,9 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 	for k := range smaps {
 		delete(smaps, k)
 	}
-	for res := range results {
+	for _, res := range results {
 		if res.err != nil {
 			done = false
-			freeCallRes(res)
 			continue
 		}
 		svm, ok := res.v.(*SmapVoteMsg)
@@ -586,7 +585,6 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 			glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si, s)
 			out.Smap, out.BMD, out.RMD = nil, nil, nil // zero-out as unusable
 			done = false
-			drainCallResults(res, results)
 			break
 		}
 		if svm.Smap != nil && svm.Smap.version() > 0 {
@@ -605,8 +603,8 @@ func (p *proxyrunner) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out
 		if smaps != nil && svm.Smap != nil && svm.Smap.version() > 0 {
 			smaps[res.si] = svm.Smap
 		}
-		freeCallRes(res)
 	}
+	freeCallResults(results)
 	return
 }
 

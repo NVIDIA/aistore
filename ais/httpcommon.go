@@ -52,7 +52,7 @@ type (
 		status  int
 	}
 
-	chanResults chan *callResult
+	sliceResults []*callResult
 
 	// callArgs contains arguments for a peer-to-peer control plane call.
 	callArgs struct {
@@ -244,11 +244,12 @@ func freeBcastArgs(a *bcastArgs) {
 	bargsPool.Put(a)
 }
 
-/////////////////
-// callResPool //
-/////////////////
+///////////////////////
+// call result pools //
+///////////////////////
 
 var (
+	resultsPool sync.Pool
 	callResPool sync.Pool
 	callRes0    callResult
 )
@@ -262,17 +263,26 @@ func allocCallRes() (a *callResult) {
 	return &callResult{}
 }
 
-func freeCallRes(a *callResult) {
-	debug.Assert(a != nil)
-	*a = callRes0
-	callResPool.Put(a)
+func _freeCallRes(res *callResult) {
+	*res = callRes0
+	callResPool.Put(res)
 }
 
-func drainCallResults(res *callResult, results chanResults) {
-	freeCallRes(res)
-	for r := range results {
-		freeCallRes(r)
+func allocSliceRes() sliceResults {
+	if v := resultsPool.Get(); v != nil {
+		a := v.(*sliceResults)
+		return *a
 	}
+	return make(sliceResults, 0, 8) // TODO: num-nodes
+}
+
+func freeCallResults(results sliceResults) {
+	for _, res := range results {
+		*res = callRes0
+		callResPool.Put(res)
+	}
+	results = results[:0]
+	resultsPool.Put(&results)
 }
 
 //////////////////
@@ -820,7 +830,7 @@ func (h *httprunner) stop(err error) {
 // intra-cluster IPC, control plane
 // call another target or a proxy; optionally, include a json-encoded body
 //
-func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, ch chanResults) {
+func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs) (res *callResult) {
 	cargs := callArgs{si: si, req: bargs.req, timeout: bargs.timeout}
 	cargs.req.Base = si.URL(bargs.network)
 	if bargs.req.BodyR != nil {
@@ -829,10 +839,7 @@ func (h *httprunner) _call(si *cluster.Snode, bargs *bcastArgs, ch chanResults) 
 	if bargs.fv != nil {
 		cargs.v = bargs.fv()
 	}
-	res := h.call(cargs)
-	if ch != nil {
-		ch <- res
-	}
+	return h.call(cargs)
 }
 
 func (h *httprunner) call(args callArgs) (res *callResult) {
@@ -1021,7 +1028,7 @@ func (h *httprunner) callerNotify(n cluster.Notif, err error, kind string) {
 ///////////////
 
 // bcastGroup broadcasts a message to a specific group of nodes: targets, proxies, all.
-func (h *httprunner) bcastGroup(args *bcastArgs) chanResults {
+func (h *httprunner) bcastGroup(args *bcastArgs) sliceResults {
 	if args.smap == nil {
 		args.smap = h.owner.smap.get()
 	}
@@ -1063,14 +1070,22 @@ func (h *httprunner) bcastGroup(args *bcastArgs) chanResults {
 // bcastNodes broadcasts a message to the specified destinations (`bargs.nodes`).
 // It then waits and collects all the responses (compare with bcastAsyncNodes).
 // Note that, if specified, `bargs.req.BodyR` must implement `cmn.ReadOpenCloser`.
-func (h *httprunner) bcastNodes(bargs *bcastArgs) chanResults {
-	var ch chanResults
+func (h *httprunner) bcastNodes(bargs *bcastArgs) sliceResults {
+	var (
+		ch sliceResults
+		mu sync.Mutex
+		wg = cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
+	)
 	if !bargs.async {
-		ch = make(chanResults, bargs.nodeCount)
+		ch = allocSliceRes()
 	}
-	wg := cmn.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
 	f1 := func(si *cluster.Snode) {
-		h._call(si, bargs, ch)
+		res := h._call(si, bargs)
+		if !bargs.async {
+			mu.Lock()
+			ch = append(ch, res)
+			mu.Unlock()
+		}
 		wg.Done()
 	}
 	if bargs.nodes != nil {
@@ -1097,9 +1112,6 @@ func (h *httprunner) bcastNodes(bargs *bcastArgs) chanResults {
 		}
 	}
 	wg.Wait()
-	if !bargs.async {
-		close(ch)
-	}
 	return ch
 }
 
@@ -1292,7 +1304,7 @@ func (h *httprunner) Health(si *cluster.Snode, timeout time.Duration, query url.
 	)
 	res := h.call(args)
 	b, status, err = res.bytes, res.status, res.err
-	freeCallRes(res)
+	_freeCallRes(res)
 	return
 }
 
@@ -1683,11 +1695,11 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 			cmn.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
 		}
 		status, err = res.status, res.err
-		freeCallRes(res)
+		_freeCallRes(res)
 		return
 	}
 	debug.Assert(len(res.bytes) == 0)
-	freeCallRes(res)
+	_freeCallRes(res)
 	return
 }
 
