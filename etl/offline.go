@@ -32,7 +32,7 @@ var (
 	_ cmn.ObjHeaderMetaProvider = (*objMeta)(nil)
 )
 
-func (om *objMeta) Size() int64          { return om.size }
+func (om *objMeta) Size(_ ...bool) int64 { return om.size }
 func (om *objMeta) Cksum() *cmn.Cksum    { return om.cksum }
 func (om *objMeta) Version() string      { return om.version }
 func (om *objMeta) AtimeUnix() int64     { return om.atime }

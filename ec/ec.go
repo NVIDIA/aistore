@@ -425,7 +425,7 @@ func LomFromHeader(t cluster.Target, hdr transport.ObjHdr) (*cluster.LOM, error)
 
 // Saves replica and its metafile
 func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) error {
-	err := WriteObject(t, lom, args.Reader, lom.Size(), args.CksumType)
+	err := WriteObject(t, lom, args.Reader, lom.Size(true), args.CksumType)
 	if err != nil {
 		return err
 	}

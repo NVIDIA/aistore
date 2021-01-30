@@ -131,12 +131,15 @@ func (c *getJogger) ec(req *Request) {
 // the final step of replica restoration process: the main target detects which
 // nodes do not have replicas and copy it to them
 // * bucket/objName - object path
-// * reader - replica content to sent to remote targets
+// * reader - replica content to send to remote targets
 // * metadata - object's EC metadata
 // * nodes - targets that have metadata and replica - filled by requestMeta
 // * replicaCnt - total number of replicas including main one
 func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata,
 	nodes map[string]*Metadata, replicaCnt int) error {
+	if err := lom.Load(); err != nil {
+		return err
+	}
 	targets, err := cluster.HrwTargetList(lom.Uname(), c.parent.smap.Get(), replicaCnt)
 	if err != nil {
 		freeObject(reader)
@@ -190,7 +193,6 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 		freeObject(reader)
 		c.parent.DecPending()
 	}
-
 	src := &dataSource{
 		reader:   srcReader,
 		size:     lom.Size(),

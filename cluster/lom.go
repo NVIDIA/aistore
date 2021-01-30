@@ -152,9 +152,15 @@ func (lom *LOM) LIF() (lif LIF) {
 // LOM //
 /////////
 
+// special a) when a new version is being created b) for usage in unit tests
+func (lom *LOM) Size(special ...bool) int64 {
+	debug.Assert(len(special) > 0 || lom.loaded())
+	return lom.md.size
+}
+
+func (lom *LOM) SetSize(size int64) { lom.md.size = size }
+
 func (lom *LOM) Uname() string                { return lom.md.uname }
-func (lom *LOM) Size() int64                  { return lom.md.size }
-func (lom *LOM) SetSize(size int64)           { lom.md.size = size }
 func (lom *LOM) Version() string              { return lom.md.version }
 func (lom *LOM) SetVersion(ver string)        { lom.md.version = ver }
 func (lom *LOM) Cksum() *cmn.Cksum            { return lom.md.cksum }
@@ -195,7 +201,11 @@ func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
 // see also: transport.FromHdrProvider()
 func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
-	return cmn.ToHTTPHdr(lom, hdr)
+	cmn.ToHTTPHdr(lom, hdr)
+	if n := lom.md.size; n > 0 {
+		hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(n, 10))
+	}
+	return hdr
 }
 
 func (lom *LOM) FromHTTPHdr(hdr http.Header) {
@@ -805,15 +815,6 @@ func (lom *LOM) Init(bck cmn.Bck) (err error) {
 	return
 }
 
-func (lom *LOM) IsLoaded() (ok bool) {
-	var (
-		hkey, idx = lom.Hkey()
-		cache     = lom.mpathInfo.LomCache(idx)
-	)
-	_, ok = cache.Load(hkey)
-	return
-}
-
 func (lom *LOM) Load(adds ...bool) (err error) {
 	// fast path
 	var (
@@ -868,6 +869,7 @@ func (lom *LOM) ReCache(store bool) {
 	if store {
 		*md = lom.md
 		md.bckID = lom.Bprops().BID
+		lom.md.bckID = md.bckID
 		debug.Assert(md.bckID != 0)
 		cache.Store(hkey, md)
 	}

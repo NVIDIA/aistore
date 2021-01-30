@@ -488,7 +488,7 @@ func (m *AISBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *clust
 			Object:     lom.ObjName,
 			Cksum:      lom.Cksum(),
 			Reader:     fh,
-			Size:       uint64(lom.Size()),
+			Size:       uint64(lom.Size(true)),
 		}
 		return api.PutObject(args)
 	})

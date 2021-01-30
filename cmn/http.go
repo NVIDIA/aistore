@@ -503,10 +503,6 @@ func ToHTTPHdr(meta ObjHeaderMetaProvider, hdrs ...http.Header) (hdr http.Header
 	} else {
 		hdr = hdrs[0]
 	}
-
-	if meta.Size() > 0 {
-		hdr.Set(HeaderContentLength, strconv.FormatInt(meta.Size(), 10))
-	}
 	if !meta.Cksum().IsEmpty() {
 		ty, val := meta.Cksum().Get()
 		hdr.Set(HeaderObjCksumType, ty)

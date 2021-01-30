@@ -364,7 +364,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 				Started: beforeCreation,
 			}
 			err = m.ctx.t.PutObject(lom, params)
-			n = lom.Size()
+			n = lom.Size(true)
 		} else {
 			n, err = io.Copy(ioutil.Discard, r)
 		}

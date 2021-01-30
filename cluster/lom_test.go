@@ -536,7 +536,7 @@ var _ = Describe("LOM", func() {
 					Expect(lom2.FromFS()).ToNot(HaveOccurred())
 					Expect(lom2.Cksum()).To(BeEquivalentTo(lom1.Cksum()))
 					Expect(lom2.Version()).To(BeEquivalentTo(lom1.Version()))
-					Expect(lom2.Size()).To(BeEquivalentTo(testFileSize))
+					Expect(lom2.Size(true)).To(BeEquivalentTo(testFileSize))
 					Expect(time.Unix(0, lom2.AtimeUnix()).After(startTime)).To(BeTrue())
 				})
 			})

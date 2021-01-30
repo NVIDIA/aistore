@@ -70,7 +70,7 @@ func (c *putJogger) processRequest(req *Request) {
 	}
 	ecConf := lom.Bprops().EC
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
-	memRequired := lom.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+	memRequired := lom.Size(true) * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 	c.toDisk = useDisk(memRequired)
 	req.tm = time.Now()
 	err = c.ec(req, lom)

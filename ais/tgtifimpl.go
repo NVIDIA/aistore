@@ -140,14 +140,17 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 func (t *targetrunner) sendTo(lom *cluster.LOM, params cluster.SendToParams) error {
 	debug.Assert(!t.Snode().Equals(params.Tsi))
 	debug.Assert(params.HdrMeta != nil)
-
-	if params.HdrMeta.Size() < -1 {
-		return fmt.Errorf("%s: invalid content length %d", lom, params.HdrMeta.Size())
-	}
+	// TODO -- FIXME: lom-in-flight sizing here and elsewhere
+	debug.Func(func() {
+		if params.HdrMeta != lom {
+			size := params.HdrMeta.Size()
+			debug.Assertf(size > 0 || size == -1, "size=%d", size)
+		}
+	})
 	if params.DM != nil {
 		return _sendObjDM(lom, params)
 	}
-	err := t._sendPUT(params)
+	err := t._sendPUT(lom, params)
 	if params.Locked {
 		lom.Unlock(false)
 	}
@@ -195,13 +198,21 @@ func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
 }
 
 // _sendPUT requires params.HdrMeta not to be nil.
-func (t *targetrunner) _sendPUT(params cluster.SendToParams) error {
-	cmn.Assert(params.HdrMeta != nil)
+func (t *targetrunner) _sendPUT(lom *cluster.LOM, params cluster.SendToParams) error {
 	var (
+		hdr   http.Header
 		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
-		hdr   = cmn.ToHTTPHdr(params.HdrMeta)
 	)
-
+	debug.Assert(params.HdrMeta != nil)
+	if params.HdrMeta == lom {
+		hdr = make(http.Header, 4)
+		lom.ToHTTPHdr(hdr)
+	} else {
+		hdr = cmn.ToHTTPHdr(params.HdrMeta)
+		if size := params.HdrMeta.Size(); size > 0 {
+			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
+		}
+	}
 	hdr.Set(cmn.HeaderPutterID, t.si.ID())
 	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))
 	reqArgs := cmn.ReqArgs{
@@ -262,7 +273,7 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 	}
 	copied, err = coi.copyObject(lom, objNameTo)
 	freeCopyObjInfo(coi)
-	return copied, lom.Size(), err
+	return copied, lom.Size(true), err
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize).
@@ -346,7 +357,7 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		coi.t = t
 		coi.BckTo = lom.Bck()
 		sendParams := cluster.SendToParams{ObjNameTo: lom.ObjName, Tsi: si}
-		_, _, err = coi.putRemote(lom, sendParams)
+		_, err = coi.putRemote(lom, sendParams)
 		freeCopyObjInfo(coi)
 		if err == nil && !params.KeepOrig {
 			if err := cmn.RemoveFile(params.SrcFQN); err != nil {

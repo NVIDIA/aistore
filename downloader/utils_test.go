@@ -61,7 +61,6 @@ func TestCompareObject(t *testing.T) {
 	}
 	src.SetSize(10)
 	src.SetCustomMD(customMD)
-
 	equal, err := compareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")

@@ -6,7 +6,7 @@ package cmn
 
 type (
 	ObjHeaderMetaProvider interface {
-		Size() int64
+		Size(special ...bool) int64
 		Cksum() *Cksum
 		Version() string
 		AtimeUnix() int64
@@ -19,11 +19,11 @@ type (
 	}
 )
 
-func (m *HdrMetaCustomVersion) Size() int64         { return m.provider.Size() }
-func (m *HdrMetaCustomVersion) Cksum() *Cksum       { return m.provider.Cksum() }
-func (m *HdrMetaCustomVersion) AtimeUnix() int64    { return m.provider.AtimeUnix() }
-func (m *HdrMetaCustomVersion) CustomMD() SimpleKVs { return m.provider.CustomMD() }
-func (m *HdrMetaCustomVersion) Version() string     { return m.version }
+func (m *HdrMetaCustomVersion) Size(_ ...bool) int64 { return m.provider.Size() }
+func (m *HdrMetaCustomVersion) Cksum() *Cksum        { return m.provider.Cksum() }
+func (m *HdrMetaCustomVersion) AtimeUnix() int64     { return m.provider.AtimeUnix() }
+func (m *HdrMetaCustomVersion) CustomMD() SimpleKVs  { return m.provider.CustomMD() }
+func (m *HdrMetaCustomVersion) Version() string      { return m.version }
 
 func NewHdrMetaCustomVersion(provider ObjHeaderMetaProvider, version string) *HdrMetaCustomVersion {
 	return &HdrMetaCustomVersion{

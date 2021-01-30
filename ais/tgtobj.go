@@ -624,13 +624,14 @@ gfn:
 
 	// restore from existing EC slices if possible
 	if ecErr := ec.ECM.RestoreObject(goi.lom); ecErr == nil {
-		if ecErr = goi.lom.Load(true); ecErr == nil {
+		ecErr = goi.lom.Load(true)
+		debug.AssertNoErr(ecErr)
+		if ecErr == nil {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s: EC-recovered %s", tname, goi.lom)
 			}
 			return
 		}
-		debug.AssertNoErr(ecErr)
 		err = fmt.Errorf("%s: failed to load EC-recovered %s: %v", tname, goi.lom, ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
 		err = fmt.Errorf("%s: failed to EC-recover %s: %v", tname, goi.lom, ecErr)
@@ -1030,7 +1031,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 			NoVersion: !srcLOM.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
 		}
 		// NOTE: `srcLOM.Unlock(false)` inside.
-		copied, _, err = coi.putRemote(srcLOM, params)
+		copied, err = coi.putRemote(srcLOM, params)
 		return
 	}
 	if coi.DryRun {
@@ -1098,27 +1099,30 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 // targets as well as make put to the relevant backend provider.
 // TODO: Make it possible to skip caching an object from a cloud bucket.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
-	cmn.Assert(coi.DP != nil)
-
 	var (
-		si = coi.t.si
-
 		reader  cmn.ReadOpenCloser
 		cleanUp func()
+		si      = coi.t.si
 	)
-
+	debug.Assert(coi.DP != nil)
 	if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
 	}
-
 	if si.ID() != coi.t.si.ID() {
+		if err = lom.Load(); err != nil {
+			return
+		}
 		params := cluster.SendToParams{
 			ObjNameTo: objNameTo,
 			Tsi:       si,
 			DM:        coi.DM,
 			NoVersion: !lom.Bucket().Equal(coi.BckTo.Bck),
 		}
-		return coi.putRemote(lom, params)
+		copied, err = coi.putRemote(lom, params)
+		if err == nil {
+			size = lom.Size()
+		}
+		return
 	}
 
 	// DryRun: just get a reader and discard it. Init on dstLOM would cause and error as dstBck doesn't exist.
@@ -1214,31 +1218,31 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (copied bool, size in
 }
 
 // PUT object onto designated target
-func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (copied bool, size int64, err error) {
+func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (copied bool, err error) {
 	if coi.DP == nil {
 		if coi.DryRun {
 			if params.Locked {
 				lom.Unlock(false)
 			}
-			return true, lom.Size(), nil
+			return true, nil
 		}
 
 		var file *cmn.FileHandle // Closed by `SendTo()`
 		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
-			return false, 0, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
+			return false, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
 		}
 		params.Reader = file
 		params.HdrMeta = lom
 	} else {
 		var cleanUp func()
 		if params.Reader, params.HdrMeta, cleanUp, err = coi.DP.Reader(lom); err != nil {
-			return false, 0, err
+			return false, err
 		}
 		defer cleanUp()
 		if coi.DryRun {
-			written, err := io.Copy(ioutil.Discard, params.Reader)
+			_, err := io.Copy(ioutil.Discard, params.Reader)
 			cmn.Close(params.Reader)
-			return err == nil, written, err
+			return err == nil, err
 		}
 	}
 	debug.Assert(params.HdrMeta != nil)
@@ -1246,11 +1250,8 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 		params.HdrMeta = cmn.NewHdrMetaCustomVersion(params.HdrMeta, "")
 	}
 	params.BckTo = coi.BckTo
-	if err := coi.t.sendTo(lom, params); err != nil {
-		return false, 0, err
-	}
-	// Return the size of sent object (not a size after transformation).
-	return true, lom.Size(), nil
+	err = coi.t.sendTo(lom, params)
+	return err == nil, err
 }
 
 ///////////////

@@ -280,7 +280,7 @@ func compareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
 		roi = roiFromObjMeta(objMeta)
 	}
 
-	if roi.size != 0 && roi.size != src.Size() {
+	if roi.size != 0 && roi.size != src.Size(true) {
 		return false, nil
 	}
 
