@@ -943,6 +943,7 @@ func (lom *LOM) Remove() (err error) {
 			glog.Error(err)
 		}
 	}
+	lom.md.bckID = 0
 	return
 }
 

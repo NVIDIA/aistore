@@ -1314,7 +1314,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 			cmn.Assert(lom.Bck().IsRemote())
 			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
-				stats.NamedVal64{Name: stats.LruEvictSize, Value: lom.Size()},
+				stats.NamedVal64{Name: stats.LruEvictSize, Value: lom.Size(true /*not loaded*/)},
 			)
 		}
 	}

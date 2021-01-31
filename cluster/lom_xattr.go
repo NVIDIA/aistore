@@ -143,6 +143,7 @@ func (lom *LOM) Persist(stores ...bool) (err error) {
 			store = stores[0]
 		}
 		lom.ReCache(store)
+		lom.md.bckID = lom.Bprops().BID
 	}
 	mm.Free(buf)
 	return

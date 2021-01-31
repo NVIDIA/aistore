@@ -468,8 +468,8 @@ func (j *lruJ) evict() (size int64, err error) {
 	for h.Len() > 0 && j.totalSize > 0 {
 		lom := heap.Pop(h).(*cluster.LOM)
 		if j.evictObj(lom) {
-			bevicted += lom.Size()
-			size += lom.Size()
+			bevicted += lom.Size(true /*not loaded*/)
+			size += lom.Size(true)
 			fevicted++
 			if capCheck, err = j.postRemove(capCheck, lom); err != nil {
 				return
@@ -484,8 +484,8 @@ func (j *lruJ) evict() (size int64, err error) {
 }
 
 func (j *lruJ) postRemove(prev int64, lom *cluster.LOM) (capCheck int64, err error) {
-	j.totalSize -= lom.Size()
-	capCheck = prev + lom.Size()
+	j.totalSize -= lom.Size(true /*not loaded*/)
+	capCheck = prev + lom.Size(true)
 	if err = j.yieldTerm(); err != nil {
 		return
 	}

@@ -64,7 +64,7 @@ func (r *evictDelete) doObjEvictDelete(args *xreg.DeletePrefetchArgs, objName st
 		return err
 	}
 	r.ObjectsInc()
-	r.BytesAdd(lom.Size())
+	r.BytesAdd(lom.Size(true)) /*not loaded*/
 	return nil
 }
 
