@@ -238,10 +238,10 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params cluster.SendToParams) e
 	return nil
 }
 
-func (t *targetrunner) EvictObject(lom *cluster.LOM) error {
+func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 	ctx := context.Background()
-	_, err := t.DeleteObject(ctx, lom, true /*evict*/)
-	return err
+	errCode, err = t.DeleteObject(ctx, lom, true /*evict*/)
+	return
 }
 
 // CopyObject creates a replica of an object (the `lom` argument) in accordance with the

@@ -1276,41 +1276,41 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 
 func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict bool) (int, error) {
 	var (
-		cloudErr     error
-		cloudErrCode int
-		errRet       error
-		delFromAIS   bool
+		aisErr, bckndErr         error
+		bckndErrCode, aisErrCode int
+		delFromAIS, delFromBcknd bool
 	)
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := lom.Bck().IsRemote() && !evict
+	delFromBcknd = lom.Bck().IsRemote() && !evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsObjNotExist(err) {
 		return 0, err
-	} else if !delFromCloud && cmn.IsObjNotExist(err) {
-		return http.StatusNotFound, err
+	} else {
+		aisErrCode = http.StatusNotFound
+		if !delFromBcknd {
+			return http.StatusNotFound, err
+		}
 	}
 
-	if delFromCloud {
-		if errCode, err := t.Backend(lom.Bck()).DeleteObj(ctx, lom); err != nil {
-			cloudErr = err
-			cloudErrCode = errCode
+	if delFromBcknd {
+		bckndErrCode, bckndErr = t.Backend(lom.Bck()).DeleteObj(ctx, lom)
+		if bckndErr == nil {
 			t.statsT.Add(stats.DeleteCount, 1)
 		}
 	}
 	if delFromAIS {
-		errRet = lom.Remove()
-		if errRet != nil {
-			if !os.IsNotExist(errRet) {
-				if cloudErr != nil {
-					glog.Errorf("%s: failed to delete from cloud: %v", lom, cloudErr)
+		aisErr = lom.Remove()
+		if aisErr != nil {
+			if !os.IsNotExist(aisErr) {
+				if bckndErr != nil {
+					glog.Errorf("failed to delete %s from %s: %v", lom, lom.Bck(), bckndErr)
 				}
-				return 0, errRet
+				return 0, aisErr
 			}
-		}
-		if evict {
+		} else if evict {
 			cmn.Assert(lom.Bck().IsRemote())
 			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
@@ -1318,10 +1318,10 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 			)
 		}
 	}
-	if cloudErr != nil {
-		return cloudErrCode, cloudErr
+	if bckndErr != nil {
+		return bckndErrCode, bckndErr
 	}
-	return 0, errRet
+	return aisErrCode, aisErr
 }
 
 ///////////////////

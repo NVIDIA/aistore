@@ -291,7 +291,7 @@ func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 
 			if result.Action == DiffResolverDelete {
 				cmn.Assert(job.Sync())
-				if err := d.parent.t.EvictObject(result.Src); err != nil {
+				if _, err := d.parent.t.EvictObject(result.Src); err != nil {
 					t.markFailed(err.Error())
 				} else {
 					dlStore.incFinished(job.ID())

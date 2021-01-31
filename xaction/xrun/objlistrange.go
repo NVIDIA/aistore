@@ -6,6 +6,7 @@ package xrun
 
 import (
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -46,27 +47,20 @@ func parseTemplate(template string) (cmn.ParsedTemplate, error) {
 // Evict/Delete/Prefect
 //
 
-func (r *evictDelete) objDelete(args *xreg.DeletePrefetchArgs, lom *cluster.LOM) (err error) {
-	_, err = r.t.DeleteObject(args.Ctx, lom, args.Evict)
-	return
-}
-
 func (r *evictDelete) doObjEvictDelete(args *xreg.DeletePrefetchArgs, objName string) error {
 	lom := &cluster.LOM{ObjName: objName}
-	err := lom.Init(r.Bck())
-	if err != nil {
+	if err := lom.Init(r.Bck()); err != nil {
 		glog.Error(err)
 		return nil
 	}
-	err = r.objDelete(args, lom)
+	errCode, err := r.t.DeleteObject(args.Ctx, lom, args.Evict)
+	if errCode == http.StatusNotFound {
+		return nil
+	}
 	if err != nil {
-		if cmn.IsObjNotExist(err) {
+		if cmn.IsObjNotExist(err) || cmn.IsStatusNotFound(err) {
 			return nil
 		}
-		if cmn.IsStatusNotFound(err) {
-			return nil
-		}
-
 		return err
 	}
 	r.ObjectsInc()
