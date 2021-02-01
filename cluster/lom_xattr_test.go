@@ -58,6 +58,7 @@ var _ = Describe("LOM Xattributes", func() {
 		copyMpathInfo = available[copyMpath]
 
 		tMock = cluster.NewTargetMock(bmdMock)
+		cluster.Init(tMock)
 	})
 
 	AfterEach(func() {
@@ -85,13 +86,13 @@ var _ = Describe("LOM Xattributes", func() {
 			}
 
 			for _, fqn := range fqns {
-				_ = filePut(fqn, testFileSize, tMock)
+				_ = filePut(fqn, testFileSize)
 			}
 		})
 
 		Describe("Persist", func() {
 			It("should save correct meta to disk", func() {
-				lom := filePut(localFQN, testFileSize, tMock)
+				lom := filePut(localFQN, testFileSize)
 				lom.Lock(true)
 				defer lom.Unlock(true)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
@@ -113,7 +114,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache(false)
 
-				newLom := NewBasicLom(localFQN, tMock)
+				newLom := NewBasicLom(localFQN)
 				err = newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
@@ -125,7 +126,7 @@ var _ = Describe("LOM Xattributes", func() {
 			})
 
 			It("should _not_ save meta to disk", func() {
-				lom := filePut(cachedFQN, testFileSize, tMock)
+				lom := filePut(cachedFQN, testFileSize)
 				lom.Lock(true)
 				defer lom.Unlock(true)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
@@ -151,7 +152,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				lom.Uncache(false)
 
-				newLom := NewBasicLom(cachedFQN, tMock)
+				newLom := NewBasicLom(cachedFQN)
 				err = newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
@@ -163,7 +164,7 @@ var _ = Describe("LOM Xattributes", func() {
 			})
 
 			It("should copy object with meta in memory", func() {
-				lom := filePut(cachedFQN, testFileSize, tMock)
+				lom := filePut(cachedFQN, testFileSize)
 				lom.Lock(true)
 				defer lom.Unlock(true)
 				cksumHash, err := lom.ComputeCksum()
@@ -208,7 +209,7 @@ var _ = Describe("LOM Xattributes", func() {
 			})
 
 			It("should override old values", func() {
-				lom := filePut(localFQN, testFileSize, tMock)
+				lom := filePut(localFQN, testFileSize)
 				lom.Lock(true)
 				defer lom.Unlock(true)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
@@ -230,7 +231,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache(false)
 
-				newLom := NewBasicLom(localFQN, tMock)
+				newLom := NewBasicLom(localFQN)
 				err = newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
@@ -243,8 +244,8 @@ var _ = Describe("LOM Xattributes", func() {
 		Describe("LoadMetaFromFS", func() {
 			It("should read fresh meta from fs", func() {
 				createTestFile(localFQN, testFileSize)
-				lom1 := NewBasicLom(localFQN, tMock)
-				lom2 := NewBasicLom(localFQN, tMock)
+				lom1 := NewBasicLom(localFQN)
+				lom2 := NewBasicLom(localFQN)
 				lom1.Lock(true)
 				defer lom1.Unlock(true)
 				lom1.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
@@ -267,7 +268,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				BeforeEach(func() {
 					createTestFile(localFQN, testFileSize)
-					lom = NewBasicLom(localFQN, tMock)
+					lom = NewBasicLom(localFQN)
 					lom.Lock(true)
 					defer lom.Unlock(true)
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))

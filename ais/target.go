@@ -1302,6 +1302,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 		}
 	}
 	if delFromAIS {
+		size := lom.Size()
 		aisErr = lom.Remove()
 		if aisErr != nil {
 			if !os.IsNotExist(aisErr) {
@@ -1314,7 +1315,7 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 			cmn.Assert(lom.Bck().IsRemote())
 			t.statsT.AddMany(
 				stats.NamedVal64{Name: stats.LruEvictCount, Value: 1},
-				stats.NamedVal64{Name: stats.LruEvictSize, Value: lom.Size(true /*not loaded*/)},
+				stats.NamedVal64{Name: stats.LruEvictSize, Value: size},
 			)
 		}
 	}
