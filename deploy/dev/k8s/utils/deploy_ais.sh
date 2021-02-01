@@ -61,6 +61,10 @@ echo "Starting target deployment..."
 for i in $(seq 0 $((TARGET_CNT-1))); do
   export POD_NAME="ais-target-${i}"
   export PORT=$((9090+i))
+  export TARGET_POS_NUM=$i
+  # Prepare directory for target's hostpath
+  (minikube ssh "sudo mkdir -p /tmp/${TARGET_POS_NUM}")
+
   ([[ $(kubectl get pods | grep -c "${POD_NAME}") -gt 0 ]] && kubectl delete pods ${POD_NAME}) || true
   envsubst < kube_templates/aistarget_deployment.yml | kubectl create -f -
 done
@@ -89,4 +93,4 @@ kubectl get pods -o wide
 echo "Done."
 echo ""
 echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
-echo "export AIS_ENDPOINT=\"http://${ais_endpoint}\""
+echo "export AIS_ENDPOINT=\"http://${minikube ip}:8080\""

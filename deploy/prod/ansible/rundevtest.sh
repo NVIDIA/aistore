@@ -59,7 +59,7 @@ echo "Deploying Minikube"
 { echo y; echo y; } | ./utils/deploy_minikube.sh
 echo "Deploying AIS on Minikube"
 # NOTE: 6 x n (4 remote providers + local registry + datascience stack)
-{ echo 1; echo 1; echo 1; echo 3; echo n; echo n; echo n; echo n; echo y; echo n; } | ./utils/deploy_ais.sh
+{ echo 5; echo 1; echo 1; echo 6; echo n; echo n; echo n; echo n; echo y; echo n; } | ./utils/deploy_ais.sh
 echo "AIS on Minikube deployed"
 popd
 

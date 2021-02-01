@@ -67,5 +67,5 @@ spec:
         type: Directory
     - name: ais-log
       hostPath:
-        path: /tmp
+        path: /tmp/${TARGET_POS_NUM}
         type: Directory
