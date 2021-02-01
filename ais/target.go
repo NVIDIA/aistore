@@ -717,7 +717,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 			t.statsT.Add(stats.GetRedirLatency, redelta)
 		}
 	}
-	lom := cluster.AllocLOM(objName, "")
+	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
@@ -791,7 +791,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	lom := cluster.AllocLOM(objName, "")
+	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 
 	if err := lom.Init(request.bck.Bck); err != nil {
@@ -857,7 +857,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	evict = msg.Action == cmn.ActEvictObjects
-	lom := cluster.AllocLOM(request.items[1], "")
+	lom := cluster.AllocLOM(request.items[1])
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(request.bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -944,7 +944,7 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 		invalidHandler = t.invalmsghdlrsilent
 	}
 
-	lom := cluster.AllocLOM(objName, "")
+	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err = lom.Init(bck.Bck); err != nil {
 		invalidHandler(w, r, err.Error())
@@ -1074,7 +1074,7 @@ func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, bc
 }
 
 func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
-	lom := cluster.AllocLOM(objName, "")
+	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); ok {
@@ -1335,7 +1335,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	if err := t.parseAPIRequest(w, r, request); err != nil {
 		return
 	}
-	lom := cluster.AllocLOM(request.items[1], "")
+	lom := cluster.AllocLOM(request.items[1])
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(request.bck.Bck); err != nil {
 		t.invalmsghdlr(w, r, err.Error())

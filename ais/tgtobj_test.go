@@ -97,7 +97,7 @@ func BenchmarkObjPut(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
-			lom := cluster.AllocLOM("objname", "")
+			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
 			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
@@ -144,7 +144,7 @@ func BenchmarkObjAppend(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
-			lom := cluster.AllocLOM("objname", "")
+			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
 			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {
@@ -209,7 +209,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			benchName += "-chunked"
 		}
 		b.Run(benchName, func(b *testing.B) {
-			lom := cluster.AllocLOM("objname", "")
+			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
 			err := lom.Init(cmn.Bck{Name: testBucket, Provider: cmn.ProviderAIS, Ns: cmn.NsGlobal})
 			if err != nil {

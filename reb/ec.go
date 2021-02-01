@@ -461,6 +461,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Obj
 			}
 			err = ec.WriteReplicaAndMeta(reb.t, lom, args)
 		}
+		cluster.FreeLOM(lom)
 	}
 	return err
 }
@@ -936,7 +937,7 @@ func (reb *Manager) resilverSlice(fromFQN, toFQN string, buf []byte) error {
 
 func (reb *Manager) resilverObject(fromMpath fs.ParsedFQN, fromFQN, toFQN string, buf []byte) error {
 	var clone *cluster.LOM
-	lom := cluster.AllocLOM("", fromFQN)
+	lom := cluster.AllocLOMbyFQN(fromFQN)
 	defer cluster.FreeLOM(lom)
 
 	err := lom.Init(fromMpath.Bck)
@@ -1786,7 +1787,7 @@ func (reb *Manager) rebuildFromSlices(obj *rebObject, conf *cmn.CksumConf) (err 
 }
 
 func (reb *Manager) restoreObject(obj *rebObject, objMD *ec.Metadata, src io.Reader) (err error) {
-	lom := cluster.AllocLOM(obj.objName, "")
+	lom := cluster.AllocLOM(obj.objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(obj.bck); err != nil {
 		return err

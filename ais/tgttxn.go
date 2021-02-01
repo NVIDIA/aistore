@@ -798,7 +798,7 @@ func (c *txnServerCtx) recvObjDM(w http.ResponseWriter, hdr transport.ObjHdr, ob
 		return
 	}
 	defer cmn.DrainReader(objReader)
-	lom := cluster.AllocLOM(hdr.ObjName, "")
+	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)

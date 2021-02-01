@@ -59,7 +59,8 @@ type (
 )
 
 func (t *singleObjectTask) download() {
-	lom := &cluster.LOM{ObjName: t.obj.objName}
+	lom := cluster.AllocLOM(t.obj.objName)
+	defer cluster.FreeLOM(lom)
 	err := lom.Init(t.job.Bck())
 	if err == nil {
 		err = lom.Load()

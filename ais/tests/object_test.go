@@ -816,7 +816,11 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		bmdMock    = cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				testBucketName, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}},
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 0x9922a73b},
+			),
+			cluster.NewBck(
+				cliBck.Name, cliBck.Provider, cmn.NsGlobal,
+				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 0xa73b9f11},
 			),
 		)
 		tMock = cluster.NewTargetMock(bmdMock)

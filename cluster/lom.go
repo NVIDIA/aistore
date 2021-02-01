@@ -106,14 +106,25 @@ var (
 	lom0    LOM
 )
 
-func AllocLOM(objName, fqn string) (lom *LOM) {
-	debug.Assert(objName == "" || fqn == "")
+func AllocLOM(objName string) (lom *LOM) {
+	lom = _allocLOM()
+	lom.ObjName = objName
+	return
+}
+
+func AllocLOMbyFQN(fqn string) (lom *LOM) {
+	debug.Assert(strings.Contains(fqn, "/"))
+	lom = _allocLOM()
+	lom.FQN = fqn
+	return
+}
+
+func _allocLOM() (lom *LOM) {
 	if v := lomPool.Get(); v != nil {
 		lom = v.(*LOM)
 	} else {
 		lom = &LOM{}
 	}
-	lom.ObjName, lom.FQN = objName, fqn
 	return
 }
 
@@ -130,7 +141,7 @@ func FreeLOM(lom *LOM) {
 // LIF => LOF with a check for bucket existence
 func (lif *LIF) LOM(bmd *BMD) (lom *LOM, err error) {
 	b, objName := cmn.ParseUname(lif.Uname)
-	lom = AllocLOM(objName, "")
+	lom = AllocLOM(objName)
 	if err = lom.Init(b); err != nil {
 		return
 	}
@@ -743,7 +754,7 @@ func (lom *LOM) ComputeCksum(cksumTypes ...string) (cksum *cmn.CksumHash, err er
 // NOTE: Clone shallow-copies LOM to be further initialized (lom.Init) for a given replica
 //       (mountpath/FQN)
 func (lom *LOM) Clone(fqn string) *LOM {
-	dst := AllocLOM("", fqn)
+	dst := AllocLOMbyFQN(fqn)
 	*dst = *lom
 	dst.md = lom.md
 	dst.FQN = fqn

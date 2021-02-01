@@ -229,7 +229,7 @@ func (reb *Manager) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unp
 	}
 	tsid := ack.daemonID // the sender
 	// Rx
-	lom := cluster.AllocLOM(hdr.ObjName, "")
+	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)
@@ -445,7 +445,7 @@ func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cmn.ByteUnpac
 		return
 	}
 
-	lom := cluster.AllocLOM(hdr.ObjName, "")
+	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(hdr.Bck); err != nil {
 		glog.Error(err)

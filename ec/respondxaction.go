@@ -208,6 +208,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 				}
 				err = WriteReplicaAndMeta(r.t, lom, args)
 			}
+			cluster.FreeLOM(lom)
 		}
 		if err != nil {
 			cmn.DrainReader(object)

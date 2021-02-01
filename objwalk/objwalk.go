@@ -73,28 +73,23 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 	if w.msg.IsFlagSet(cmn.SelectCached) {
 		return w.DefaultLocalObjPage(w.msg)
 	}
-
 	msg := &cmn.SelectMsg{}
 	*msg = *w.msg
-
 	objList, _, err := w.t.Backend(w.bck).ListObjects(w.ctx, w.bck, msg)
 	if err != nil {
 		return nil, err
 	}
-
 	var (
 		localURL        = w.t.Snode().URL(cmn.NetworkPublic)
 		localID         = w.t.SID()
 		smap            = w.t.Sowner().Get()
 		postCallback, _ = w.ctx.Value(walkinfo.CtxPostCallbackKey).(walkinfo.PostCallbackFunc)
-
-		needURL     = w.msg.WantProp(cmn.GetTargetURL)
-		needAtime   = w.msg.WantProp(cmn.GetPropsAtime)
-		needCksum   = w.msg.WantProp(cmn.GetPropsChecksum)
-		needVersion = w.msg.WantProp(cmn.GetPropsVersion)
-		needCopies  = w.msg.WantProp(cmn.GetPropsCopies)
+		needURL         = w.msg.WantProp(cmn.GetTargetURL)
+		needAtime       = w.msg.WantProp(cmn.GetPropsAtime)
+		needCksum       = w.msg.WantProp(cmn.GetPropsChecksum)
+		needVersion     = w.msg.WantProp(cmn.GetPropsVersion)
+		needCopies      = w.msg.WantProp(cmn.GetPropsCopies)
 	)
-
 	for _, e := range objList.Entries {
 		si, _ := cluster.HrwTarget(w.bck.MakeUname(e.Name), smap)
 		if si.ID() != localID {
@@ -104,17 +99,18 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 		if needURL {
 			e.TargetURL = localURL
 		}
-		lom := &cluster.LOM{ObjName: e.Name}
+		lom := cluster.AllocLOM(e.Name)
 		if err := lom.Init(w.bck.Bck); err != nil {
+			cluster.FreeLOM(lom)
 			if cmn.IsErrBucketNought(err) {
 				return nil, err
 			}
 			continue
 		}
 		if err := lom.Load(); err != nil {
+			cluster.FreeLOM(lom)
 			continue
 		}
-
 		e.SetExists()
 		if needAtime {
 			if lom.AtimeUnix() < 0 {
@@ -134,10 +130,10 @@ func (w *Walk) RemoteObjPage() (*cmn.BucketList, error) {
 		if needCopies {
 			e.Copies = int16(lom.NumCopies())
 		}
-
 		if postCallback != nil {
 			postCallback(lom)
 		}
+		cluster.FreeLOM(lom)
 	}
 
 	return objList, nil
