@@ -735,7 +735,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 		return
 	}
 	goi := allocGetObjInfo()
-	{ // nolint:gocritic // readability
+	{
 		goi.started = started
 		goi.t = t
 		goi.lom = lom
@@ -1221,7 +1221,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 	)
 	lom.FromHTTPHdr(header) // TODO: check that values parsed here are not coming from the user
 	poi := allocPutObjInfo()
-	{ // nolint:gocritic // readability
+	{
 		poi.started = started
 		poi.t = t
 		poi.lom = lom
@@ -1351,7 +1351,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 	buf, slab := t.gmm.Alloc()
 	coi := allocCopyObjInfo()
-	{ // nolint:gocritic // readability
+	{
 		coi.CopyObjectParams = cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}
 		coi.t = t
 		coi.localOnly = false

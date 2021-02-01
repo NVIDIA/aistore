@@ -116,7 +116,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	debug.Assert(params.Tag != "")
 	workFQN := fs.CSM.GenContentFQN(lom, fs.WorkfileType, params.Tag)
 	poi := allocPutObjInfo()
-	{ // nolint:gocritic // readability
+	{
 		poi.t = t
 		poi.lom = lom
 		poi.r = params.Reader
@@ -258,7 +258,7 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 	localOnly bool) (copied bool, size int64, err error) {
 	objNameTo := lom.ObjName
 	coi := allocCopyObjInfo()
-	{ // nolint:gocritic // readability
+	{
 		coi.CopyObjectParams = params
 		coi.t = t
 		coi.uncache = false

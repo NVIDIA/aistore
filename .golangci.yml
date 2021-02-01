@@ -133,6 +133,9 @@ issues:
     - linters: staticcheck
       text: "SA3000: TestMain should call os.Exit to set exit code" # This is not true for Go1.15.
 
+    - linters: gocritic
+      text: "block doesn't have definitions" # Sometimes blocks are useful for better readability.
+
   # Set to 0 to disable limit
   max-same-issues: 0
   max-per-linter: 0

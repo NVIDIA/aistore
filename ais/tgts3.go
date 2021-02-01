@@ -196,7 +196,7 @@ func (t *targetrunner) getObjS3(w http.ResponseWriter, r *http.Request, items []
 
 	objSize = lom.Size()
 	goi := allocGetObjInfo()
-	{ // nolint:gocritic // readability
+	{
 		goi.started = started
 		goi.t = t
 		goi.lom = lom
