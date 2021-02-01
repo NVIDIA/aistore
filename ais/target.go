@@ -1276,28 +1276,28 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 
 func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict bool) (int, error) {
 	var (
-		aisErr, bckndErr         error
-		bckndErrCode, aisErrCode int
-		delFromAIS, delFromBcknd bool
+		aisErr, backendErr         error
+		aisErrCode, backendErrCode int
+		delFromAIS, delFromBackend bool
 	)
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromBcknd = lom.Bck().IsRemote() && !evict
+	delFromBackend = lom.Bck().IsRemote() && !evict
 	if err := lom.Load(false); err == nil {
 		delFromAIS = true
 	} else if !cmn.IsObjNotExist(err) {
 		return 0, err
 	} else {
 		aisErrCode = http.StatusNotFound
-		if !delFromBcknd {
+		if !delFromBackend {
 			return http.StatusNotFound, err
 		}
 	}
 
-	if delFromBcknd {
-		bckndErrCode, bckndErr = t.Backend(lom.Bck()).DeleteObj(ctx, lom)
-		if bckndErr == nil {
+	if delFromBackend {
+		backendErrCode, backendErr = t.Backend(lom.Bck()).DeleteObj(ctx, lom)
+		if backendErr == nil {
 			t.statsT.Add(stats.DeleteCount, 1)
 		}
 	}
@@ -1305,8 +1305,8 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 		aisErr = lom.Remove()
 		if aisErr != nil {
 			if !os.IsNotExist(aisErr) {
-				if bckndErr != nil {
-					glog.Errorf("failed to delete %s from %s: %v", lom, lom.Bck(), bckndErr)
+				if backendErr != nil {
+					glog.Errorf("failed to delete %s from %s: %v", lom, lom.Bck(), backendErr)
 				}
 				return 0, aisErr
 			}
@@ -1318,8 +1318,8 @@ func (t *targetrunner) DeleteObject(ctx context.Context, lom *cluster.LOM, evict
 			)
 		}
 	}
-	if bckndErr != nil {
-		return bckndErrCode, bckndErr
+	if backendErr != nil {
+		return backendErrCode, backendErr
 	}
 	return aisErrCode, aisErr
 }
