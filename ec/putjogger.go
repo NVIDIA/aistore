@@ -63,14 +63,14 @@ func (c *putJogger) processRequest(req *Request) {
 	lom, err := req.LIF.LOM(c.parent.t.Bowner().Get())
 	defer cluster.FreeLOM(lom)
 	if err == nil {
-		lom.Load()
+		err = lom.Load()
 	}
-	if lom.Bprops() == nil {
+	if err != nil {
 		return
 	}
 	ecConf := lom.Bprops().EC
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
-	memRequired := lom.Size(true) * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+	memRequired := lom.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 	c.toDisk = useDisk(memRequired)
 	req.tm = time.Now()
 	err = c.ec(req, lom)
