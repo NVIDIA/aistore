@@ -118,7 +118,8 @@ func TestETLTargetDown(t *testing.T) {
 }
 
 func TestETLBigBucket(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	// The test takes a lot of time if it's run against a single target deployment.
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true, MinTargets: 2})
 
 	var (
 		bckFrom = cmn.Bck{Name: "etlbig", Provider: cmn.ProviderAIS}
