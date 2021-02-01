@@ -541,6 +541,7 @@ func TestDownloadRemote(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			if test.dstBck.IsAIS() {
+				tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: test.srcBck})
 				tutils.SetBackendBck(t, baseParams, test.dstBck, test.srcBck)
 			}
 
@@ -589,9 +590,7 @@ func TestDownloadRemote(t *testing.T) {
 
 			resp, err := api.DownloadStatus(baseParams, id)
 			tassert.CheckFatal(t, err)
-			if !resp.Aborted {
-				t.Errorf("canceled remote download %v not marked", id)
-			}
+			tassert.Errorf(t, resp.Aborted, "canceled remote download %v not marked", id)
 
 			checkDownloadList(t, 2)
 		})
@@ -1006,7 +1005,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 		}
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.init()
 	m.remotePuts(false /*evict*/)
@@ -1065,13 +1064,12 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 		}
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.init()
 	m.remotePuts(false /*evict*/)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-
 	tutils.SetBackendBck(t, baseParams, bck, m.bck)
 
 	downloadObjectRemote(t, dlBody, m.num, 0)
@@ -1103,7 +1101,7 @@ func TestDownloadSync(t *testing.T) {
 		objsToDelete = 4
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.init()
 	m.remotePuts(false /*evict*/)

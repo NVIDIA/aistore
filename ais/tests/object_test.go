@@ -922,7 +922,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	close(fileNameCh)
 }
 
-func Test_evictRemoteBucket(t *testing.T) {
+func TestEvictRemoteBucket(t *testing.T) {
 	const (
 		numPuts   = 5
 		objPrefix = "evictcb"
@@ -938,7 +938,9 @@ func Test_evictRemoteBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+	// TODO: This only works for cloud buckets because `EvictBucket` removes
+	//  bucket from BMD (see #1050 for more info).
+	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: bck})
 
 	defer func() {
 		// Cleanup
@@ -965,9 +967,8 @@ func Test_evictRemoteBucket(t *testing.T) {
 	}
 	getFromObjList(proxyURL, bck, errCh, filesList, false)
 	for _, fname := range filesList {
-		if exists := tutils.CheckObjExists(proxyURL, bck, fname); !exists {
-			t.Fatalf("Object not cached: %s", fname)
-		}
+		exists := tutils.CheckObjExists(proxyURL, bck, fname)
+		tassert.Fatalf(t, exists, "object not cached: %s", fname)
 	}
 
 	// Test property, mirror is disabled for cloud bucket that hasn't been accessed,
@@ -976,24 +977,21 @@ func Test_evictRemoteBucket(t *testing.T) {
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
+
 	bProps, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
-	if !bProps.Mirror.Enabled {
-		t.Fatalf("Test property hasn't changed")
-	}
+	tassert.Fatalf(t, bProps.Mirror.Enabled, "test property hasn't changed")
+
 	err = api.EvictRemoteBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
 	for _, fname := range filesList {
-		if exists := tutils.CheckObjExists(proxyURL, bck, fname); exists {
-			t.Errorf("%s remains cached", fname)
-		}
+		exists := tutils.CheckObjExists(proxyURL, bck, fname)
+		tassert.Errorf(t, !exists, "object remains cached: %s", fname)
 	}
 	bProps, err = api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
-	if bProps.Mirror.Enabled {
-		t.Fatalf("Test property not reset ")
-	}
+	tassert.Fatalf(t, !bProps.Mirror.Enabled, "test property not reset")
 }
 
 func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, objName, fqn string,

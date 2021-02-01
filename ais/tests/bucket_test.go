@@ -1950,7 +1950,7 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 }
 
 func TestRenameBucketWithBackend(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: cliBck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: cliBck})
 
 	var (
 		proxyURL   = tutils.RandomProxyURL()
@@ -1988,9 +1988,11 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	dstProps, err := api.HeadBucket(baseParams, dstBck)
 	tassert.CheckFatal(t, err)
 
-	tassert.Fatalf(t, srcProps.Versioning.Enabled == dstProps.Versioning.Enabled,
+	tassert.Fatalf(
+		t, srcProps.Versioning.Enabled == dstProps.Versioning.Enabled,
 		"source and destination bucket versioning does not match: %t vs. %t, respectively",
-		srcProps.Versioning.Enabled, dstProps.Versioning.Enabled)
+		srcProps.Versioning.Enabled, dstProps.Versioning.Enabled,
+	)
 
 	// AWS region might be set upon rename.
 	srcProps.Extra.AWS.CloudRegion = ""
@@ -2548,7 +2550,7 @@ func TestBackendBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: remoteBck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: remoteBck})
 
 	m.init()
 

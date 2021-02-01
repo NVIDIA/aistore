@@ -31,6 +31,7 @@ type SkipTestArgs struct {
 	RequiresAuth          bool
 	Long                  bool
 	RemoteBck             bool
+	CloudBck              bool
 	K8s                   bool
 }
 
@@ -115,6 +116,12 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 			tb.Skipf("%s requires a remote bucket", tb.Name())
 		}
 	}
+	if args.CloudBck {
+		proxyURL := GetPrimaryURL()
+		if !isCloudBucket(tb, proxyURL, args.Bck) {
+			tb.Skipf("%s requires a cloud bucket", tb.Name())
+		}
+	}
 	if args.K8s {
 		// NOTE: The test suite doesn't have to be deployed on K8s, the cluster has to be.
 		_, err := api.ETLList(BaseAPIParams(GetPrimaryURL()))
@@ -150,6 +157,16 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 
 func isRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	if !bck.IsRemote() {
+		return false
+	}
+	baseParams := BaseAPIParams(proxyURL)
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck))
+	tassert.CheckFatal(tb, err)
+	return bcks.Contains(cmn.QueryBcks(bck))
+}
+
+func isCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
+	if !bck.IsCloud() {
 		return false
 	}
 	baseParams := BaseAPIParams(proxyURL)
