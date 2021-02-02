@@ -2008,13 +2008,14 @@ func TestCopyBucket(t *testing.T) {
 		dstBckExist      bool // determines if destination bucket exists before copy or not
 		dstBckHasObjects bool // determines if destination bucket contains any objects before copy or not
 		multipleDests    bool // determines if there are multiple destinations to which objects are copied
+		onlyLong         bool
 	}{
 		// ais -> ais
 		{srcRemote: false, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: false},
-		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: false, multipleDests: false},
-		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: false},
-		{srcRemote: false, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
-		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: false, multipleDests: false, onlyLong: true},
+		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: false, onlyLong: true},
+		{srcRemote: false, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true, onlyLong: true},
+		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true, onlyLong: true},
 
 		// remote -> ais
 		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false},
@@ -2051,6 +2052,7 @@ func TestCopyBucket(t *testing.T) {
 		}
 
 		t.Run(testName, func(t *testing.T) {
+			tutils.CheckSkip(t, tutils.SkipTestArgs{Long: test.onlyLong})
 			var (
 				srcBckList *cmn.BucketList
 
@@ -2252,7 +2254,6 @@ func TestCopyBucket(t *testing.T) {
 	}
 }
 
-// TODO: make some of those long-only, after they are considered stable.
 func TestCopyBucketSimple(t *testing.T) {
 	var (
 		srcBck = cmn.Bck{Name: "cpybck_src", Provider: cmn.ProviderAIS}
@@ -2330,6 +2331,7 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	var (
 		cpyPrefix = "cpyprefix" + cmn.RandString(5)
 		dstBck    = cmn.Bck{Name: "cpybck_dst", Provider: cmn.ProviderAIS}
@@ -2352,6 +2354,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
 	dstBck := cmn.Bck{Name: "cpybck_dst" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 
 	xactID, err := api.CopyBucket(baseParams, srcBck, dstBck, &cmn.CopyBckMsg{DryRun: true})
