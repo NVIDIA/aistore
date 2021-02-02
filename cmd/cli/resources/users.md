@@ -140,10 +140,13 @@ To forbid using the token from any application, the token must be revoked manual
 
 ## Register new cluster
 
-`ais auth add cluster CLUSTER_ID [ALIAS] URL [URL..]`
+`ais auth add cluster [ALIAS] [URL...]`
 
-Register the cluster by its ID and assign the list of URLs for sending notifications.
-A user may assign an alias to the cluster for convenience: AuthN commands accepts both ID and Alias in requests.
+If URL is omitted, CLI registers a cluster using its URL from CLI configuration or `AIS_ENDPOINT` variable.
+When URL list is defined, CLI tries to connect the cluster using the first URL from the list.
+
+Register the cluster and assign the list of URLs for sending notifications.
+A user may assign an alias to the cluster for convenience: AuthN commands accepts both cluster ID and Alias in requests.
 Alias must be a unique name.  Alias is an arbitrary name, but it should not start with `http`.
 In this case CLI treats the alias as the first URL.
 
@@ -155,7 +158,7 @@ See full example in [List registered clusters](#list-registered-clusters).
 
 ## Update existing cluster
 
-`ais auth update cluster CLUSTER_ID [ALIAS] URL [URL..]`
+`ais auth update cluster CLUSTER_ID [ALIAS] URL [URL...]`
 
 Replaces the list of URLs or changes alias for an existing cluster.
 
@@ -173,10 +176,10 @@ Display the list of the cluster that subscribe to AuthN notifications.
 
 ```console
 # register a cluster without an alias
-$ ais auth add cluster 2xs35th89 http://172.0.10.10 http://10.0.10.10
+$ ais auth add cluster http://172.0.10.10 http://10.0.10.10
 
-# register a cluster with an alias
-$ ais auth add cluster 78df35690 srv1 http://172.0.10.50
+# register a cluster with an alias and default URL
+$ ais auth add cluster srv1
 
 # check the list of the clusters
 $ ais auth show cluster

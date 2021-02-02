@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
@@ -199,21 +200,21 @@ func cliAuthnUserName(c *cli.Context) string {
 	return name
 }
 
-func cliAuthnUserPassword(c *cli.Context) string {
+func cliAuthnUserPassword(c *cli.Context, omitEmpty bool) string {
 	pass := parseStrFlag(c, passwordFlag)
-	if pass == "" {
+	if pass == "" && !omitEmpty {
 		pass = readMasked(c, "User password")
 	}
 	return pass
 }
 
 func updateUserHandler(c *cli.Context) (err error) {
-	user := parseAuthUser(c)
+	user := parseAuthUser(c, true)
 	return api.UpdateUser(authParams, user)
 }
 
 func addUserHandler(c *cli.Context) (err error) {
-	user := parseAuthUser(c)
+	user := parseAuthUser(c, false)
 	return api.AddUser(authParams, user)
 }
 
@@ -236,7 +237,7 @@ func deleteRoleHandler(c *cli.Context) (err error) {
 func loginUserHandler(c *cli.Context) (err error) {
 	const tokenSaveFailFmt = "successfully logged in, but failed to save token: %v"
 	name := cliAuthnUserName(c)
-	password := cliAuthnUserPassword(c)
+	password := cliAuthnUserPassword(c, false)
 	token, err := api.LoginUser(authParams, name, password)
 	if err != nil {
 		return err
@@ -281,6 +282,25 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
+	var smap *cluster.Smap
+	if len(cluSpec.URLs) == 0 {
+		smap, err = api.GetClusterMap(defaultAPIParams)
+		cluSpec.URLs = append(cluSpec.URLs, clusterURL)
+	} else {
+		baseParams := api.BaseParams{
+			Client: defaultHTTPClient,
+			URL:    cluSpec.URLs[0],
+			Token:  loggedUserToken.Token,
+		}
+		smap, err = api.GetClusterMap(baseParams)
+		if err != nil {
+			err = fmt.Errorf("could not connect cluster %q", cluSpec.URLs[0])
+		}
+	}
+	if err != nil {
+		return err
+	}
+	cluSpec.ID = smap.UUID
 	return api.RegisterClusterAuthN(authParams, cluSpec)
 }
 
@@ -381,9 +401,9 @@ func addAuthRoleHandler(c *cli.Context) (err error) {
 	return api.AddRoleAuthN(authParams, rInfo)
 }
 
-func parseAuthUser(c *cli.Context) *cmn.AuthUser {
+func parseAuthUser(c *cli.Context, omitEmpty bool) *cmn.AuthUser {
 	username := cliAuthnUserName(c)
-	userpass := cliAuthnUserPassword(c)
+	userpass := cliAuthnUserPassword(c, omitEmpty)
 	roles := c.Args().Tail()
 	user := &cmn.AuthUser{
 		ID:       username,
@@ -394,30 +414,18 @@ func parseAuthUser(c *cli.Context) *cmn.AuthUser {
 }
 
 func parseClusterSpecs(c *cli.Context) (cluSpec cmn.AuthCluster, err error) {
-	cid := c.Args().Get(0)
-	if cid == "" {
-		err = missingArgumentsError(c, "cluster id")
-	}
-	urlList := make([]string, 0)
-	alias := c.Args().Get(1)
-	if strings.HasPrefix(alias, "http") {
-		urlList = append(urlList, alias)
-		alias = ""
-	}
-	for idx := 2; idx < c.NArg(); idx++ {
-		url := c.Args().Get(idx)
-		if strings.HasPrefix(url, "-") {
-			break
+	cluSpec.URLs = make([]string, 0, 1)
+	for idx := 0; idx < c.NArg(); idx++ {
+		arg := c.Args().Get(idx)
+		if strings.HasPrefix(arg, "http:") || strings.HasPrefix(arg, "https:") {
+			cluSpec.URLs = append(cluSpec.URLs, arg)
+			continue
 		}
-		if !strings.HasPrefix(url, "http") {
-			err = fmt.Errorf("URL %q does not contain protocol", url)
+		if cluSpec.Alias != "" {
+			err := fmt.Errorf("either invalid URL or duplicated alias %q", arg)
+			return cluSpec, err
 		}
-		urlList = append(urlList, url)
+		cluSpec.Alias = arg
 	}
-	cluSpec = cmn.AuthCluster{
-		ID:    cid,
-		Alias: alias,
-		URLs:  urlList,
-	}
-	return
+	return cluSpec, nil
 }
