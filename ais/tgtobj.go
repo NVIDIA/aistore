@@ -1162,39 +1162,6 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	return true, lom.Size(), err
 }
 
-// nolint:unused // This function might become useful if we decide to introduce copying an object directly to a cloud.
-//
-// Provider, without intermediate object caching on a target.
-func (coi *copyObjInfo) copyReaderDirectlyToCloud(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
-	cmn.Assert(coi.BckTo.IsRemote())
-	var (
-		reader  io.ReadCloser
-		objMeta cmn.ObjHeaderMetaProvider
-		cleanUp func()
-	)
-
-	if reader, objMeta, cleanUp, err = coi.DP.Reader(lom); err != nil {
-		return false, 0, err
-	}
-
-	defer func() {
-		reader.Close()
-		cleanUp()
-	}()
-
-	dstLOM := cluster.AllocLOM(objNameTo)
-	defer cluster.FreeLOM(dstLOM)
-	// Cloud bucket has to exist, so it has to be in BMD.
-	if err := dstLOM.Init(coi.BckTo.Bck); err != nil {
-		return false, 0, err
-	}
-
-	if _, _, err = coi.t.Backend(coi.BckTo).PutObj(context.Background(), reader, dstLOM); err != nil {
-		return false, 0, err
-	}
-	return true, objMeta.Size(), nil
-}
-
 func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (copied bool, size int64, err error) {
 	cmn.Assert(coi.DryRun)
 	cmn.Assert(coi.DP != nil)
