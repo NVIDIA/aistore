@@ -416,6 +416,11 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		lom.Lock(false)
 		defer lom.Unlock(false)
 
+		// Need to make sure that the object is still there.
+		if err := lom.Load(); err != nil {
+			return err
+		}
+
 		if lom.Size() <= 0 {
 			goto exit
 		}
