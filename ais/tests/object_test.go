@@ -811,20 +811,17 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		errCh      = make(chan error, numFiles*5)
 		fileNameCh = make(chan string, numFiles)
 		objNames   = make([]string, 0, numFiles)
+
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bmdMock    = cluster.NewBaseBownerMock(
-			cluster.NewBck(
-				testBucketName, cmn.ProviderAIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 0x9922a73b},
-			),
+		bck        = cliBck
+
+		_ = cluster.NewTargetMock(cluster.NewBaseBownerMock(
 			cluster.NewBck(
 				cliBck.Name, cliBck.Provider, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 0xa73b9f11},
 			),
-		)
-		tMock = cluster.NewTargetMock(bmdMock)
-		bck   = cliBck
+		))
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
@@ -847,9 +844,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 	// GET
 	_, err = api.GetObjectWithValidation(baseParams, bck, objName)
-	if err != nil {
-		t.Errorf("GET(cloud bucket). Error: [%v]", err)
-	}
+	tassert.CheckError(t, err)
 
 	if !p.Cksum.ValidateWarmGet {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
@@ -879,7 +874,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	oldFileInfo, _ = os.Stat(fqn)
 
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
+	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234"))
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
@@ -899,7 +894,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	}
 
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 
 	_, err = api.GetObject(baseParams, bck, objName)
@@ -1039,18 +1034,17 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{
-			Name:     cmn.RandString(15),
 			Provider: cmn.ProviderAIS,
+			Name:     cmn.RandString(15),
 			Props:    &cmn.BucketProps{BID: 2},
 		}
-		bmdMock = cluster.NewBaseBownerMock(
+		_ = cluster.NewTargetMock(cluster.NewBaseBownerMock(
 			cluster.NewBck(
-				testBucketName, cmn.ProviderAIS, cmn.NsGlobal,
+				bck.Name, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 1},
 			),
 			cluster.NewBckEmbed(bck),
-		)
-		tMock = cluster.NewTargetMock(bmdMock)
+		))
 	)
 
 	if containers.DockerRunning() {
@@ -1086,7 +1080,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName = filepath.Join(objPrefix, <-fileNameCh)
 	fqn = findObjOnDisk(bck, objName)
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
 
@@ -1105,7 +1099,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 	_, err = api.GetObject(baseParams, bck, objName)
 	if err != nil {

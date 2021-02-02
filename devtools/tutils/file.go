@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -27,8 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 )
-
-var trashPattern = "/" + fs.TrashDir + "/"
 
 type (
 	FileContent struct {
@@ -170,7 +167,7 @@ func RandomObjDir(dirLen, maxDepth int) (dir string) {
 	return
 }
 
-func SetXattrCksum(fqn string, bck cmn.Bck, cksum *cmn.Cksum, t cluster.Target) error {
+func SetXattrCksum(fqn string, bck cmn.Bck, cksum *cmn.Cksum) error {
 	lom := &cluster.LOM{FQN: fqn}
 	_ = lom.Init(bck)
 	_ = lom.LoadMetaFromFS()
@@ -259,8 +256,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	_ = fs.CSM.RegisterContentType(ec.SliceType, &ec.SliceSpec{})
 	_ = fs.CSM.RegisterContentType(ec.MetaType, &ec.MetaSpec{})
 
-	dir, err := ioutil.TempDir("/tmp", "")
-	tassert.CheckFatal(t, err)
+	dir := t.TempDir()
 
 	for i := 0; i < desc.MountpathsCnt; i++ {
 		mpath, err := ioutil.TempDir(dir, "")
@@ -360,10 +356,6 @@ func AssertMountpathCount(t *testing.T, availableCount, disabledCount int) {
 			len(disabledMountpaths), disabledCount,
 		)
 	}
-}
-
-func IsTrashDir(path string) bool {
-	return strings.Contains(path, trashPattern)
 }
 
 func FilesEqual(file1, file2 string) (bool, error) {
