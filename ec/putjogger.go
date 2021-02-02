@@ -60,18 +60,22 @@ func (c *putJogger) freeResources() {
 }
 
 func (c *putJogger) processRequest(req *Request) {
+	var memRequired int64
 	lom, err := req.LIF.LOM(c.parent.t.Bowner().Get())
 	defer cluster.FreeLOM(lom)
-	if err == nil {
-		err = lom.Load()
-	}
 	if err != nil {
 		return
 	}
-	ecConf := lom.Bprops().EC
+	if req.Action == ActSplit {
+		if err = lom.Load(); err != nil {
+			return
+		}
+		ecConf := lom.Bprops().EC
+		memRequired = lom.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+		c.toDisk = useDisk(memRequired)
+	}
+
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
-	memRequired := lom.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
-	c.toDisk = useDisk(memRequired)
 	req.tm = time.Now()
 	err = c.ec(req, lom)
 	// In case of everything is OK, a transport bundle calls `DecPending`
