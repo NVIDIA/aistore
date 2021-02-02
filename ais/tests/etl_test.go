@@ -249,6 +249,8 @@ func checkETLStats(t *testing.T, xactID string, expectedObjCnt int, expectedByte
 
 func TestETLObject(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
+
 	tests := []testObjConfig{
 		{transformer: tetl.Echo, comm: etl.RedirectCommType, onlyLong: true},
 		{transformer: tetl.Echo, comm: etl.RevProxyCommType, onlyLong: true},
@@ -270,6 +272,7 @@ func TestETLObject(t *testing.T) {
 
 func TestETLObjectCloud(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, RemoteBck: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	// TODO: When a test is stable, make part of test cases onlyLong: true.
 	tcs := map[string][]*testCloudObjConfig{
@@ -307,6 +310,7 @@ func TestETLObjectCloud(t *testing.T) {
 
 func TestETLBucket(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	var (
 		bck    = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
@@ -348,6 +352,7 @@ func TestETLBucket(t *testing.T) {
 
 func TestETLBuild(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	const (
 		md5 = `
@@ -418,6 +423,8 @@ def transform(input_bytes: bytes) -> bytes:
 
 func TestETLBucketDryRun(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
+
 	var (
 		bckFrom = cmn.Bck{Name: "etloffline", Provider: cmn.ProviderAIS}
 		bckTo   = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
@@ -465,6 +472,8 @@ func TestETLBucketDryRun(t *testing.T) {
 
 func TestETLSingleTransformerAtATime(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
+
 	output, err := exec.Command("bash", "-c", "kubectl get nodes | grep Ready | wc -l").CombinedOutput()
 	tassert.CheckFatal(t, err)
 	if strings.Trim(string(output), "\n") != "1" {
@@ -491,7 +500,8 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 }
 
 func TestETLHealth(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	tutils.Logln("Starting ETL")
 	uuid, err := etlInit(tetl.Echo, etl.RedirectCommType)

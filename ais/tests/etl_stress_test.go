@@ -19,7 +19,8 @@ import (
 )
 
 func TestETLConnectionError(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	// ETL should survive occasional failures and successfully transform all objects.
 	const timeoutFunc = `
@@ -61,60 +62,119 @@ def transform(input_bytes):
 	testETLBucket(t, uuid, m.bck, m.num, 0 /*skip bytes check*/, 5*time.Minute)
 }
 
+func TestETLBucketAbort(t *testing.T) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
+
+	m := &ioContext{
+		t:         t,
+		num:       1000,
+		fileSize:  512,
+		fixedSize: true,
+	}
+
+	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: 30 * time.Second}
+	err := api.WaitForXactionToStart(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	tutils.Logln("Aborting ETL xaction")
+	err = api.AbortXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+	etlWaitForAborted(t, xactID)
+	etls, err := api.ETLList(baseParams)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(etls) == 1, "expected exactly 1 etl running, got %+v", etls)
+}
+
 func TestETLTargetDown(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true, MinTargets: 2})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, MinTargets: 2, Long: true})
+	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
+	m := &ioContext{
+		t:         t,
+		num:       10000,
+		fileSize:  512,
+		fixedSize: true,
+	}
+	xactID := etlPrepareAndStart(t, m, tetl.Echo, etl.RedirectCommType)
+
+	tutils.Logln("Waiting for ETL to process a few objects")
+	time.Sleep(5 * time.Second)
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: time.Minute}
+	err := api.WaitForXactionToStart(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	tutils.Logln("Unregistering a target")
+	unregistered := m.unregisterTarget()
+	t.Cleanup(func() { m.reregisterTarget(unregistered) })
+
+	etlWaitForAborted(t, xactID)
+	etlWaitForContainersStopped(t)
+}
+
+func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID string) {
 	var (
-		bckFrom = cmn.Bck{Name: "etltargetdown", Provider: cmn.ProviderAIS}
-		bckTo   = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
-
-		m = ioContext{
-			t:         t,
-			num:       10000,
-			fileSize:  512,
-			fixedSize: true,
-			bck:       bckFrom,
-		}
+		bckFrom = cmn.Bck{Name: "etl-in-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+		bckTo   = cmn.Bck{Name: "etl-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 	)
 
-	tutils.Logln("Preparing source bucket")
+	m.bck = bckFrom
+
+	tutils.Logf("Preparing source bucket %q\n", bckFrom.String())
 	tutils.CreateFreshBucket(t, proxyURL, bckFrom, nil)
-	defer tutils.DestroyBucket(t, proxyURL, bckFrom)
 	m.saveClusterState()
 
 	tutils.Logln("Putting objects to source bucket")
 	m.puts()
 
-	uuid, err := etlInit(tetl.Echo, etl.RedirectCommType)
+	uuid, err := etlInit(name, comm)
 	tassert.CheckFatal(t, err)
+	tutils.Logf("ETL init successful (%q)\n", uuid)
+	t.Cleanup(func() {
+		tutils.Logf("Stopping ETL %q\n", uuid)
+		api.ETLStop(baseParams, uuid)
+		tutils.Logf("ETL %q stopped\n", uuid)
+	})
 
-	tutils.Logf("Start offline ETL %q\n", uuid)
-	defer tutils.DestroyBucket(t, proxyURL, bckTo)
-	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
+	tutils.Logf("Start offline ETL %q => %q\n", uuid, bckTo.String())
+	t.Cleanup(func() {
+		tutils.Logf("Destroy bucket %q\n", bckTo.String())
+		tutils.DestroyBucket(t, proxyURL, bckTo)
+		tutils.Logf("Destroy bucket successful\n")
+	})
+	xactID, err = api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
 	tassert.CheckFatal(t, err)
+	return
+}
 
-	tutils.Logf("Waiting for ETL to process a few objects")
-	time.Sleep(5 * time.Second)
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: time.Minute}
-	err = api.WaitForXactionToStart(baseParams, args)
-	tassert.CheckFatal(t, err)
+func etlWaitForAborted(t *testing.T, xactID string) {
+	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: 30 * time.Second}
 
-	tutils.Logf("Unregistering a target")
-	unregistered := m.unregisterTarget()
-	defer m.reregisterTarget(unregistered)
-
-	tutils.Logf("Waiting for ETL to be aborted")
-	args = api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: 30 * time.Second}
+	tutils.Logln("Waiting for ETL xaction to be aborted...")
 	status, err := api.WaitForXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, status.Aborted(), "expected etl bucket to be aborted")
+	tassert.Fatalf(t, status.Aborted(), "expected ETL bucket to be aborted")
+	tutils.Logln("ETL xaction aborted successfully")
+}
 
-	// Give some time for ETLs to be stopped.
-	time.Sleep(20 * time.Second)
-
-	etls, err := api.ETLList(baseParams)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(etls) == 0, "expected ETLs to be stopped when a targets membership changed, got %v", etls)
+func etlWaitForContainersStopped(t *testing.T) {
+	tutils.Logln("Waiting for ETL containers to be stopped...")
+	var (
+		etls         etl.InfoList
+		stopDeadline = time.Now().Add(20 * time.Second)
+		interval     = 2 * time.Second
+	)
+	for time.Now().Before(stopDeadline) {
+		etls = tutils.ETLRunningContainers(t, baseParams)
+		if len(etls) == 0 {
+			tutils.Logln("ETL containers stopped successfully")
+			return
+		}
+		tutils.Logf("ETLs %+v still running, waiting %s... \n", etls, interval)
+		time.Sleep(interval)
+	}
+	tassert.Fatalf(t, len(etls) == 0, "expected all ETLs to be stopped, got %+v", etls)
 }
 
 func TestETLBigBucket(t *testing.T) {
@@ -180,6 +240,7 @@ def transform(input_bytes):
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			tutils.ETLCheckNoRunningContainers(t, baseParams)
 			var (
 				uuid string
 				err  error
