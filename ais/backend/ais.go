@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -473,22 +474,41 @@ func (m *AISBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM)
 }
 
 func (m *AISBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
-	remoteBck := lom.Bucket()
+	var (
+		retried   bool
+		fi        os.FileInfo
+		remoteBck = lom.Bucket()
+	)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
 		return "", errCode, err
 	}
+
 	fh, ok := r.(*cmn.FileHandle) // `PutObject` closes file handle.
-	cmn.Assert(ok)                // HTTP redirect requires Open().
+	cmn.Assert(ok)
+
+	fi, err = fh.Stat()
+	if err != nil {
+		return "", errCode, err
+	}
+
 	err = m.try(remoteBck, func(bck cmn.Bck) error {
+		var roc cmn.ReadOpenCloser
+		if !retried {
+			roc = fh
+			retried = true // On next iteration we need to re-open the `fh`.
+		} else if roc, err = fh.Open(); err != nil {
+			return err
+		}
+
 		args := api.PutObjectArgs{
 			BaseParams: aisCluster.bp,
 			Bck:        bck,
 			Object:     lom.ObjName,
 			Cksum:      lom.Cksum(),
-			Reader:     fh,
-			Size:       uint64(lom.Size(true)),
+			Reader:     roc,
+			Size:       uint64(fi.Size()),
 		}
 		return api.PutObject(args)
 	})
