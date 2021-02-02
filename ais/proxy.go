@@ -475,7 +475,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: &msg, perms: perms, tryOnlyRem: true, queryBck: bck}
-	if msg.Action == cmn.ActEvictCB {
+	if msg.Action == cmn.ActEvictRemoteBck {
 		bck, errCode, err = bckArgs.init(bck.Name)
 		if errCode == http.StatusNotFound {
 			// Cloud bucket not in BMD, ignore error
@@ -489,7 +489,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msg.Action {
-	case cmn.ActEvictCB:
+	case cmn.ActEvictRemoteBck:
 		if bck.IsAIS() {
 			p.invalmsghdlrf(w, r, fmtNotCloud, bck.Name)
 			return
@@ -804,7 +804,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		}
 
 		w.Write([]byte(xactID))
-	case cmn.ActRegisterCB:
+	case cmn.ActAddRemoteBck:
 		// TODO: choose the best permission
 		if err := p.checkACL(r.Header, nil, cmn.AccessCreateBucket); err != nil {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
@@ -835,7 +835,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		p.listObjects(w, r, bck, msg, begin)
 	case cmn.ActInvalListCache:
 		p.qm.c.invalidate(bck.Bck)
-	case cmn.ActSummaryBucket:
+	case cmn.ActSummaryBck:
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
 		var xactID string
@@ -928,7 +928,7 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 	}
 
 	switch msg.Action {
-	case cmn.ActSummaryBucket:
+	case cmn.ActSummaryBck:
 		args := bckInitArgs{w: w, r: r, p: p, perms: cmn.AccessBckHEAD, msg: msg}
 		bck, errCode, err := args.init("")
 
@@ -1070,7 +1070,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 		isNew, q = p.initAsyncQuery(bck, msg, cmn.GenUUID())
 		config   = cmn.GCO.Get()
 		smap     = p.owner.smap.get()
-		aisMsg   = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg}, smap, nil)
+		aisMsg   = p.newAisMsg(&cmn.ActionMsg{Action: cmn.ActSummaryBck, Value: msg}, smap, nil)
 		body     = cmn.MustMarshal(aisMsg)
 	)
 	args := allocBcastArgs()

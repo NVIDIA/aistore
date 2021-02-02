@@ -91,7 +91,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// 3. do
 	switch msg.Action {
-	case cmn.ActCreateBck, cmn.ActRegisterCB:
+	case cmn.ActCreateBck, cmn.ActAddRemoteBck:
 		debug.Infof("Starting transaction create-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 		if err = t.createBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -130,7 +130,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 		if err = t.startMaintenance(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-	case cmn.ActDestroyBck, cmn.ActEvictCB:
+	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
 		debug.Infof("Starting transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 		if err = t.destroyBucket(c); err != nil {
 			t.invalmsghdlr(w, r, err.Error())

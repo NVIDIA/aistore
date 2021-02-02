@@ -118,7 +118,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		)
 
 		switch action {
-		case cmn.ActSummaryBucket:
+		case cmn.ActSummaryBck:
 			err = xreg.RenewBckSummary(ctx, t, bck, msg)
 		default:
 			t.invalmsghdlrf(w, r, "invalid action: %s", action)

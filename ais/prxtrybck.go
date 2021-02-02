@@ -214,7 +214,7 @@ func (args *bckInitArgs) _try(origURLBck ...string) (bck *cluster.Bck, errCode i
 
 	var remoteProps http.Header
 	if bck.IsCloud() || bck.IsHTTP() {
-		action = cmn.ActRegisterCB
+		action = cmn.ActAddRemoteBck
 		if remoteProps, errCode, err = args._lookup(bck); err != nil {
 			bck = nil
 			return

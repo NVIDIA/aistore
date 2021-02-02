@@ -32,21 +32,17 @@ const (
 // ActionMsg.Action
 // includes Xaction.Kind == ActionMsg.Action (when the action is asynchronous)
 const (
-	ActShutdown  = "shutdown"
-	ActRebalance = "rebalance"
-	ActResilver  = "resilver"
-	ActLRU       = "lru"
-	// Creates bucket and possibly associates it with some resource.
-	ActCreateBck = "create_bck"
-	// Destroys bucket and removes any connection to the resource.
-	ActDestroyBck = "destroy_bck"
-	ActMoveBck    = "move_bck"
-	ActCopyBck    = "copybck"
-	ActETLBck     = "etlbck"
-	// Registers already existing cloud bucket into AIS.
-	ActRegisterCB = "registercb"
-	// Evicts cloud bucket (removes the local data).
-	ActEvictCB        = "evictcb"
+	ActShutdown       = "shutdown"
+	ActRebalance      = "rebalance"
+	ActResilver       = "resilver"
+	ActLRU            = "lru"
+	ActCreateBck      = "create_bck"
+	ActDestroyBck     = "destroy_bck"     // Destroy bucket data and metadata
+	ActAddRemoteBck   = "add_remotebck"   // Register (existing) remote bucket into AIS
+	ActEvictRemoteBck = "evict_remotebck" // Evict remote bucket's data; TODO cleanup BMD as well
+	ActMoveBck        = "move_bck"
+	ActCopyBck        = "copybck"
+	ActETLBck         = "etlbck"
 	ActSetConfig      = "setconfig"
 	ActSetBprops      = "setbprops"
 	ActResetBprops    = "resetbprops"
@@ -54,7 +50,7 @@ const (
 	ActListObjects    = "listobj"
 	ActQueryObjects   = "queryobj"
 	ActInvalListCache = "invallistobjcache"
-	ActSummaryBucket  = "summarybck"
+	ActSummaryBck     = "summarybck"
 	ActRenameObject   = "renameobj"
 	ActPromote        = "promote"
 	ActEvictObjects   = "evictobj"

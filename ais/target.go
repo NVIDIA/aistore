@@ -538,7 +538,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if msg.Action == cmn.ActSummaryBucket {
+	if msg.Action == cmn.ActSummaryBck {
 		t.httpbcksummary(w, r, msg)
 		return
 	}

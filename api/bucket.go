@@ -144,7 +144,7 @@ func GetBucketsSummaries(baseParams BaseParams, query cmn.QueryBcks,
 		Query:      cmn.AddBckToQuery(nil, cmn.Bck(query)),
 	}
 	var summaries cmn.BucketsSummaries
-	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBucket, msg, &summaries); err != nil {
+	if err := waitForAsyncReqComplete(reqParams, cmn.ActSummaryBck, msg, &summaries); err != nil {
 		return nil, err
 	}
 	sort.Sort(summaries)
@@ -270,18 +270,13 @@ func EvictRange(baseParams BaseParams, bck cmn.Bck, rng string) (string, error) 
 
 // EvictRemoteBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
 // - the operation results in eliminating all traces of the specified cloud bucket in the AIStore
-func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) error {
-	var q url.Values
-	if len(query) > 0 {
-		q = query[0]
-	}
-
+func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck) error {
 	baseParams.Method = http.MethodDelete
 	return DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathBuckets.Join(bck.Name),
-		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictCB}),
-		Query:      cmn.AddBckToQuery(q, bck),
+		Body:       cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActEvictRemoteBck}),
+		Query:      cmn.AddBckToQuery(nil, bck),
 	})
 }
 
@@ -296,7 +291,7 @@ func EvictRemoteBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) 
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
 func waitForAsyncReqComplete(reqParams ReqParams, action string, msg *cmn.BucketSummaryMsg, v interface{}) error {
-	cmn.Assert(action == cmn.ActSummaryBucket)
+	cmn.Assert(action == cmn.ActSummaryBck)
 	var (
 		uuid   string
 		sleep  = initialPollInterval
