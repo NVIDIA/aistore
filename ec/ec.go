@@ -347,7 +347,7 @@ func requestECMeta(bck cmn.Bck, objName string, si *cluster.Snode, client *http.
 }
 
 // Saves the main replica to local drives
-func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64, cksumType string) error {
+func WriteObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64) error {
 	if size > 0 {
 		reader = io.LimitReader(reader, size)
 	}
@@ -425,7 +425,7 @@ func LomFromHeader(t cluster.Target, hdr transport.ObjHdr) (*cluster.LOM, error)
 
 // Saves replica and its metafile
 func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) error {
-	err := WriteObject(t, lom, args.Reader, lom.Size(true), args.CksumType)
+	err := WriteObject(t, lom, args.Reader, lom.Size(true))
 	if err != nil {
 		return err
 	}
