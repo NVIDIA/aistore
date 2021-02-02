@@ -67,16 +67,22 @@ func (p *proxyrunner) checkACL(hdr http.Header, bck *cluster.Bck, ace cmn.Access
 		return nil
 	}
 	var (
-		token *cmn.AuthToken
-		cfg   = cmn.GCO.Get()
+		token  *cmn.AuthToken
+		cfg    = cmn.GCO.Get()
+		bucket *cmn.Bck
+		err    error
 	)
 	if cfg.Auth.Enabled {
-		token, err := p.validateToken(hdr)
+		token, err = p.validateToken(hdr)
 		if err != nil {
 			return err
 		}
 		uid := p.owner.smap.Get().UUID
-		if err := token.CheckPermissions(uid, &bck.Bck, ace); err != nil {
+
+		if bck != nil {
+			bucket = &bck.Bck
+		}
+		if err := token.CheckPermissions(uid, bucket, ace); err != nil {
 			return err
 		}
 	}

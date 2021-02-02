@@ -8,7 +8,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -41,8 +44,19 @@ func updateLogOptions() error {
 	return nil
 }
 
+func installSignalHandler() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-c
+		os.Exit(0)
+	}()
+}
+
 func main() {
 	fmt.Printf("version: %s | build_time: %s\n", version, build)
+
+	installSignalHandler()
 
 	var err error
 
