@@ -370,7 +370,7 @@ func countObjects(t cluster.Target, pt cmn.ParsedTemplate, dir string, bck *clus
 
 	for link, ok := iter(); ok; link, ok = iter() {
 		name := path.Join(dir, path.Base(link))
-		name, err = normalizeObjName(name)
+		name, err = NormalizeObjName(name)
 		if err != nil {
 			return
 		}

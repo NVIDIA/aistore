@@ -42,7 +42,7 @@ func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cmn.SimpleKVs) ([]d
 }
 
 func makeDlObj(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link string) (dlObj, error) {
-	objName, err := normalizeObjName(objName)
+	objName, err := NormalizeObjName(objName)
 	if err != nil {
 		return dlObj{}, err
 	}
@@ -65,7 +65,7 @@ func makeDlObj(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link s
 
 // Removes everything that goes after '?', eg. "?query=key..." so it will not
 // be part of final object name.
-func normalizeObjName(objName string) (string, error) {
+func NormalizeObjName(objName string) (string, error) {
 	u, err := url.Parse(objName)
 	if err != nil {
 		return "", nil
@@ -261,7 +261,7 @@ func roiFromObjMeta(objMeta cmn.SimpleKVs) (roi remoteObjInfo) {
 	return
 }
 
-func compareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
+func CompareObjects(src *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	var roi remoteObjInfo
 	if dst.Link != "" {
 		resp, err := headLink(dst.Link)

@@ -200,7 +200,7 @@ func (*defaultDiffResolverCtx) CompareObjects(src *cluster.LOM, dst *DstElement)
 		}
 		return false, err
 	}
-	return compareObjects(src, dst)
+	return CompareObjects(src, dst)
 }
 
 func (*defaultDiffResolverCtx) IsObjFromRemote(src *cluster.LOM) (bool, error) {

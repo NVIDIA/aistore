@@ -2,17 +2,17 @@
 /*
  * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
  */
-package downloader
+package downloader_test
 
 import (
-	"io"
-	"io/ioutil"
-	"net/http"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 func TestNormalizeObjName(t *testing.T) {
@@ -30,28 +30,24 @@ func TestNormalizeObjName(t *testing.T) {
 	}
 
 	for _, test := range normalizeObjTests {
-		actual, err := normalizeObjName(test.objName)
+		actual, err := downloader.NormalizeObjName(test.objName)
 		if err != nil {
 			t.Errorf("Unexpected error while normalizing %s: %v", test.objName, err)
 		}
 
 		if actual != test.expected {
-			t.Errorf("normalizeObjName(%s) expected: %s, got: %s", test.objName, test.expected, actual)
+			t.Errorf("NormalizeObjName(%s) expected: %s, got: %s", test.objName, test.expected, actual)
 		}
 	}
 }
 
 func TestCompareObject(t *testing.T) {
 	var (
-		err error
-		dst = &DstElement{
+		src = prepareObject(t)
+		dst = &downloader.DstElement{
 			Link: "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
 		}
-		src = &cluster.LOM{}
 	)
-
-	src.FQN, err = downloadObject(dst.Link)
-	tassert.CheckFatal(t, err)
 
 	// Modify local object to contain invalid (meta)data.
 	customMD := cmn.SimpleKVs{
@@ -61,42 +57,42 @@ func TestCompareObject(t *testing.T) {
 	}
 	src.SetSize(10)
 	src.SetCustomMD(customMD)
-	equal, err := compareObjects(src, dst)
+	equal, err := downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after size update.
 	src.SetSize(65)
-	equal, err = compareObjects(src, dst)
+	equal, err = downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Check that objects are still not equal after version update.
 	customMD[cluster.VersionObjMD] = "1503349750687573"
-	equal, err = compareObjects(src, dst)
+	equal, err = downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !equal, "expected the objects not to be equal")
 
 	// Finally, check if the objects are equal once we set all the metadata correctly.
 	customMD[cluster.CRC32CObjMD] = "30a991bd"
-	equal, err = compareObjects(src, dst)
+	equal, err = downloader.CompareObjects(src, dst)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, equal, "expected the objects to be equal")
 }
 
-func downloadObject(link string) (string, error) {
-	resp, err := http.Get(link)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	f, err := ioutil.TempFile("", "")
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, resp.Body)
-	return f.Name(), err
+func prepareObject(t *testing.T) *cluster.LOM {
+	out := tutils.PrepareObjects(t, tutils.ObjectsDesc{
+		CTs: []tutils.ContentTypeDesc{{
+			Type:       fs.ObjectType,
+			ContentCnt: 1,
+		}},
+		MountpathsCnt: 1,
+		ObjectSize:    1024,
+	})
+	lom := &cluster.LOM{FQN: out.FQNs[fs.ObjectType][0]}
+	err := lom.Init(out.Bck)
+	tassert.CheckFatal(t, err)
+	err = lom.Load()
+	tassert.CheckFatal(t, err)
+	return lom
 }
