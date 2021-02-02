@@ -150,7 +150,7 @@ func (r *XactTransferBck) copyObject(lom *cluster.LOM, buf []byte) error {
 	)
 
 	// TODO: If dry-run show to-be-copied objects.
-	copied, size, err := r.Target().CopyObject(lom, params, false /*localOnly*/)
+	size, err := r.Target().CopyObject(lom, params, false /*localOnly*/)
 	if err != nil {
 		if cmn.IsErrOOS(err) {
 			what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())
@@ -159,10 +159,8 @@ func (r *XactTransferBck) copyObject(lom *cluster.LOM, buf []byte) error {
 		return err
 	}
 
-	if copied {
-		r.ObjectsInc()
-		r.BytesAdd(size)
-	}
+	r.ObjectsInc()
+	r.BytesAdd(size)
 
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		what := fmt.Sprintf("%s(%q)", r.Kind(), r.ID())

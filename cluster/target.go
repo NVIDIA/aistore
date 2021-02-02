@@ -148,7 +148,7 @@ type Target interface {
 	PutObject(lom *LOM, params PutObjectParams) (err error)
 	EvictObject(lom *LOM) (errCode int, err error)
 	DeleteObject(ctx context.Context, lom *LOM, evict bool) (errCode int, err error)
-	CopyObject(lom *LOM, params CopyObjectParams, localOnly bool) (bool, int64, error)
+	CopyObject(lom *LOM, params CopyObjectParams, localOnly bool) (int64, error)
 	GetCold(ctx context.Context, lom *LOM, getType GetColdType) (errCode int, err error)
 	PromoteFile(params PromoteFileParams) (lom *LOM, err error)
 	LookupRemoteSingle(lom *LOM, si *Snode) bool

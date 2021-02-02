@@ -1358,20 +1358,19 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		coi.localOnly = false
 		coi.finalize = true
 	}
-	copied, err := coi.copyObject(lom, msg.Name /* new object name */)
+	_, err := coi.copyObject(lom, msg.Name /* new object name */)
 	slab.Free(buf)
 	freeCopyObjInfo(coi)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if copied {
-		lom.Lock(true)
-		if err = lom.Remove(); err != nil {
-			glog.Warningf("%s: failed to delete renamed object source %s: %v", t.si, lom, err)
-		}
-		lom.Unlock(true)
+
+	lom.Lock(true)
+	if err = lom.Remove(); err != nil {
+		glog.Warningf("%s: failed to delete renamed object source %s: %v", t.si, lom, err)
 	}
+	lom.Unlock(true)
 }
 
 ///////////////////////////////////////

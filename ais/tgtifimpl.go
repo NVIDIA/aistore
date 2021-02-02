@@ -255,7 +255,7 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 // - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //   replica gets created in the cloud bucket of _this_ AIS cluster.
 func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams,
-	localOnly bool) (copied bool, size int64, err error) {
+	localOnly bool) (size int64, err error) {
 	objNameTo := lom.ObjName
 	coi := allocCopyObjInfo()
 	{
@@ -271,9 +271,8 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 	if params.DP != nil {
 		return coi.copyReader(lom, objNameTo)
 	}
-	copied, err = coi.copyObject(lom, objNameTo)
-	freeCopyObjInfo(coi)
-	return copied, lom.Size(true), err
+	defer freeCopyObjInfo(coi)
+	return coi.copyObject(lom, objNameTo)
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize).

@@ -987,14 +987,13 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cmn.CksumHash) s
 // COPY OBJECT //
 /////////////////
 
-func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copied bool, err error) {
+func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size int64, err error) {
 	cmn.Assert(coi.DP == nil)
 
 	if srcLOM.Bck().IsRemote() || coi.BckTo.IsRemote() {
 		// There will be no logic to create local copies etc, we can simply use copyReader
 		coi.DP = &cluster.LomReader{}
-		copied, _, err = coi.copyReader(srcLOM, objNameTo)
-		return copied, err
+		return coi.copyReader(srcLOM, objNameTo)
 	}
 
 	// Local bucket to local bucket copying.
@@ -1031,16 +1030,15 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 			NoVersion: !srcLOM.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
 		}
 		// NOTE: `srcLOM.Unlock(false)` inside.
-		copied, err = coi.putRemote(srcLOM, params)
-		return
+		return coi.putRemote(srcLOM, params)
 	}
 	if coi.DryRun {
 		defer srcLOM.Unlock(false)
 		// TODO: replace with something similar to srcLOM.FQN == dst.FQN, but dstBck might not exist.
 		if srcLOM.Bucket().Equal(coi.BckTo.Bck) && srcLOM.ObjName == objNameTo {
-			return false, nil
+			return 0, nil
 		}
-		return true, nil
+		return srcLOM.Size(), nil
 	}
 
 	// At this point we must have an exclusive lock for the object.
@@ -1074,7 +1072,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 
 	dst2, err2 := srcLOM.CopyObject(dst.FQN, coi.Buf)
 	if err2 == nil {
-		copied = true
+		size = srcLOM.Size()
 		if coi.finalize {
 			coi.t.putMirror(dst2)
 		}
@@ -1098,7 +1096,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (copie
 // If destination bucket is remote bucket, copyReader will always create a cached copy of an object on one of the
 // targets as well as make put to the relevant backend provider.
 // TODO: Make it possible to skip caching an object from a cloud bucket.
-func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied bool, size int64, err error) {
+func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	var (
 		reader  cmn.ReadOpenCloser
 		cleanUp func()
@@ -1108,21 +1106,19 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
 	}
+
+	if err = lom.Load(); err != nil {
+		return
+	}
+
 	if si.ID() != coi.t.si.ID() {
-		if err = lom.Load(); err != nil {
-			return
-		}
 		params := cluster.SendToParams{
 			ObjNameTo: objNameTo,
 			Tsi:       si,
 			DM:        coi.DM,
 			NoVersion: !lom.Bucket().Equal(coi.BckTo.Bck),
 		}
-		copied, err = coi.putRemote(lom, params)
-		if err == nil {
-			size = lom.Size()
-		}
-		return
+		return coi.putRemote(lom, params)
 	}
 
 	// DryRun: just get a reader and discard it. Init on dstLOM would cause and error as dstBck doesn't exist.
@@ -1140,7 +1136,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 	}
 
 	if reader, _, cleanUp, err = coi.DP.Reader(lom); err != nil {
-		return false, 0, err
+		return 0, err
 	}
 	defer cleanUp()
 
@@ -1156,13 +1152,13 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (copied b
 		RecvType: recvType,
 	}
 	if err := coi.t.PutObject(dst, params); err != nil {
-		return false, 0, err
+		return 0, err
 	}
 
-	return true, lom.Size(), err
+	return lom.Size(), nil
 }
 
-func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (copied bool, size int64, err error) {
+func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
 	cmn.Assert(coi.DryRun)
 	cmn.Assert(coi.DP != nil)
 
@@ -1172,7 +1168,7 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (copied bool, size in
 	)
 
 	if reader, _, cleanUp, err = coi.DP.Reader(lom); err != nil {
-		return false, 0, err
+		return 0, err
 	}
 
 	defer func() {
@@ -1180,45 +1176,52 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (copied bool, size in
 		cleanUp()
 	}()
 
-	written, err := io.Copy(ioutil.Discard, reader)
-	return err == nil, written, err
+	return io.Copy(ioutil.Discard, reader)
 }
 
 // PUT object onto designated target
-func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (copied bool, err error) {
+func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (size int64, err error) {
 	if coi.DP == nil {
 		if coi.DryRun {
 			if params.Locked {
-				lom.Unlock(false)
+				defer lom.Unlock(false)
 			}
-			return true, nil
+			debug.Assert(lom.Loaded())
+			return lom.Size(), nil
 		}
 
 		var file *cmn.FileHandle // Closed by `SendTo()`
 		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
-			return false, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
+			return 0, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
+		}
+		fi, err := file.Stat()
+		if err != nil {
+			return 0, fmt.Errorf("failed to stat %s, err %v", lom.FQN, err)
 		}
 		params.Reader = file
 		params.HdrMeta = lom
+		size = fi.Size()
 	} else {
 		var cleanUp func()
 		if params.Reader, params.HdrMeta, cleanUp, err = coi.DP.Reader(lom); err != nil {
-			return false, err
+			return 0, err
 		}
 		defer cleanUp()
 		if coi.DryRun {
-			_, err := io.Copy(ioutil.Discard, params.Reader)
+			n, err := io.Copy(ioutil.Discard, params.Reader)
 			cmn.Close(params.Reader)
-			return err == nil, err
+			return n, err
 		}
+		// NOTE: Return number of input bytes, as resulting number of bytes might be unknown.
+		debug.Assert(lom.Loaded())
+		size = lom.Size()
 	}
 	debug.Assert(params.HdrMeta != nil)
 	if params.NoVersion {
 		params.HdrMeta = cmn.NewHdrMetaCustomVersion(params.HdrMeta, "")
 	}
 	params.BckTo = coi.BckTo
-	err = coi.t.sendTo(lom, params)
-	return err == nil, err
+	return size, coi.t.sendTo(lom, params)
 }
 
 ///////////////

@@ -172,11 +172,9 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 		}
 	}
 	params := cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}
-	copied, _, err := rj.t.CopyObject(lom, params, true /*localOnly*/)
-	if err != nil || !copied {
-		if err != nil {
-			glog.Errorf("%s: %v", lom, err)
-		}
+	size, err := rj.t.CopyObject(lom, params, true /*localOnly*/)
+	if err != nil {
+		glog.Errorf("%s: %v", lom, err)
 		// EC: Cleanup new copy of the metafile.
 		if metaNewPath != "" {
 			if err = os.Remove(metaNewPath); err != nil {
@@ -192,9 +190,8 @@ func (rj *joggerCtx) moveObject(lom *cluster.LOM, buf []byte) {
 		}
 	}
 
-	rj.xact.BytesAdd(lom.Size())
+	rj.xact.BytesAdd(size)
 	rj.xact.ObjectsInc()
-
 	// NOTE: Rely on LRU to remove "misplaced".
 }
 
