@@ -103,7 +103,6 @@ type (
 		cluster.CopyObjectParams
 		t         *targetrunner
 		localOnly bool // copy locally with no HRW=>target
-		uncache   bool // uncache the source
 		finalize  bool // copies and EC (as in poi.finalize())
 	}
 )
@@ -1015,10 +1014,6 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size 
 
 		srcLOM.Unlock(exclusive)
 		return
-	}
-
-	if coi.uncache {
-		defer srcLOM.Uncache(false /*delDirty*/)
 	}
 
 	if si.ID() != coi.t.si.ID() {

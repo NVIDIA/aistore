@@ -261,7 +261,6 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 	{
 		coi.CopyObjectParams = params
 		coi.t = t
-		coi.uncache = false
 		coi.finalize = false
 		coi.localOnly = localOnly
 	}
