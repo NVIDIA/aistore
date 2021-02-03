@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
@@ -121,7 +122,17 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 	case http.MethodPut:
 		p, err := api.HeadBucket(md.baseParams, md.bck)
 		tassert.CheckFatal(md.t, err)
-		tutils.PutObjsFromList(md.proxyURL, md.bck, fshcDir, uint64(md.fileSize), objList, nil, nil, p.Cksum.Type)
+		for _, objName := range objList {
+			r, _ := readers.NewRandReader(md.fileSize, p.Cksum.Type)
+			err := api.PutObject(api.PutObjectArgs{
+				BaseParams: md.baseParams,
+				Bck:        md.bck,
+				Object:     path.Join(fshcDir, objName),
+				Reader:     r,
+				Size:       uint64(md.fileSize),
+			})
+			tassert.CheckFatal(md.t, err)
+		}
 	case http.MethodGet:
 		for _, objName := range objList {
 			// GetObject must fail - so no error checking
@@ -277,8 +288,14 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 
 			switch op {
 			case "PUT":
-				fileList := []string{fname}
-				tutils.PutObjsFromList(proxyURL, bck, fshcDir, fileSize, fileList, errCh, objsPutCh, p.Cksum.Type)
+				r, _ := readers.NewRandReader(fileSize, p.Cksum.Type)
+				api.PutObject(api.PutObjectArgs{
+					BaseParams: baseParams,
+					Bck:        bck,
+					Object:     path.Join(fshcDir, fname),
+					Reader:     r,
+					Size:       fileSize,
+				})
 			case "GET":
 				api.GetObject(baseParams, bck, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)

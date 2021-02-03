@@ -2249,13 +2249,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 }
 
 func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, bckEC cmn.Bck) {
-	const (
-		fileSize = 32 * cmn.KiB
-	)
-	var (
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		cksumType  = cmn.DefaultBckProps().Cksum.Type
-	)
+	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	tutils.CreateFreshBucket(t, proxyURL, bckReg, nil)
 	newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
@@ -2294,15 +2288,14 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 		t.FailNow()
 	}
 
-	// fill regular bucket
-	rpattern := "obj-reg-chk-%04d"
-	fileList := make([]string, 0, o.objCount)
-	for i := 0; i < o.objCount; i++ {
-		fileList = append(fileList, fmt.Sprintf(rpattern, i))
-	}
-	errCh := make(chan error, len(fileList))
-	objsPutCh := make(chan string, len(fileList))
-	tutils.PutObjsFromList(proxyURL, bckReg, ecTestDir, fileSize, fileList, errCh, objsPutCh, cksumType)
+	_, _, err = tutils.PutRandObjs(tutils.PutObjectsArgs{
+		ProxyURL: proxyURL,
+		Bck:      bckReg,
+		ObjPath:  ecTestDir,
+		ObjCnt:   o.objCount,
+		ObjSize:  fileSize,
+	})
+	tassert.CheckFatal(t, err)
 
 	msg := &cmn.SelectMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, 0)

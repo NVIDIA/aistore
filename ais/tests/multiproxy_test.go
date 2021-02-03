@@ -1642,38 +1642,20 @@ func icStressCachedXactions(t *testing.T) {
 	t.Skip("IC and notifications are temporarily disabled for list-objects")
 
 	var (
-		bck = cmn.Bck{
-			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+		m = ioContext{
+			t:        t,
+			num:      5000,
+			fileSize: cmn.KiB,
 		}
 
-		proxyURL          = tutils.GetPrimaryURL()
-		baseParams        = tutils.BaseAPIParams(proxyURL)
-		smap              = tutils.GetClusterMap(t, proxyURL)
-		numObjs           = 5000
-		objSize    uint64 = cmn.KiB
-
-		errCh     = make(chan error, numObjs*5)
-		objsPutCh = make(chan string, numObjs)
-		objList   = make([]string, 0, numObjs)
-
+		proxyURL        = tutils.GetPrimaryURL()
+		baseParams      = tutils.BaseAPIParams(proxyURL)
+		smap            = tutils.GetClusterMap(t, proxyURL)
 		numListObjXacts = 20 // number of list obj xactions to run in parallel
 	)
 
-	// 1. Populate a bucket required for copy xactions
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-
-	p, err := api.HeadBucket(baseParams, bck)
-	tassert.CheckFatal(t, err)
-
-	for i := 0; i < numObjs; i++ {
-		fname := fmt.Sprintf("%04d", i)
-		objList = append(objList, fname)
-	}
-
-	tutils.PutObjsFromList(proxyURL, bck, "", objSize, objList, errCh, objsPutCh, p.Cksum.Type)
-	tassert.SelectErr(t, errCh, "put", true /* fatal - if PUT does not work then it makes no sense to continue */)
-	close(objsPutCh)
+	m.init()
+	m.puts()
 
 	// 2. Kill and restore random IC members in background
 	stopCh := cmn.NewStopCh()
@@ -1687,7 +1669,7 @@ func icStressCachedXactions(t *testing.T) {
 	}()
 
 	// 3. Start multiple list obj range operation in background
-	wg := startListObjRange(t, baseParams, bck, numListObjXacts, numObjs, 500, 10)
+	wg := startListObjRange(t, baseParams, m.bck, numListObjXacts, m.num, 500, 10)
 	wg.Wait()
 }
 

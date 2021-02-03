@@ -1076,12 +1076,6 @@ func TestListObjects(t *testing.T) {
 }
 
 func TestListObjectsPrefix(t *testing.T) {
-	const (
-		fileSize = 1024
-		numFiles = 30
-		prefix   = "some_prefix"
-	)
-
 	var (
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
@@ -1094,12 +1088,10 @@ func TestListObjectsPrefix(t *testing.T) {
 
 	for _, provider := range providers {
 		t.Run(provider, func(t *testing.T) {
+			const objCnt = 30
 			var (
-				bck        cmn.Bck
-				errCh      = make(chan error, numFiles*5)
-				filesPutCh = make(chan string, numFiles)
-				cksumType  string
 				customPage = true
+				bck        cmn.Bck
 			)
 			bckTest := cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}
 			if bckTest.IsRemote() {
@@ -1109,48 +1101,43 @@ func TestListObjectsPrefix(t *testing.T) {
 
 				bckProp, err := api.HeadBucket(baseParams, bck)
 				tassert.CheckFatal(t, err)
-				cksumType = bckProp.Cksum.Type
 				customPage = bckProp.Provider != cmn.ProviderAzure
 
 				tutils.Logf("Cleaning up the remote bucket %s\n", bck)
-				msg := &cmn.SelectMsg{Prefix: prefix}
-				bckList, err := api.ListObjects(baseParams, bck, msg, 0)
+				bckList, err := api.ListObjects(baseParams, bck, nil, 0)
 				tassert.CheckFatal(t, err)
 				for _, entry := range bckList.Entries {
 					err := tutils.Del(proxyURL, bck, entry.Name, nil, nil, false /*silent*/)
 					tassert.CheckFatal(t, err)
 				}
 			} else {
-				bck = cmn.Bck{
-					Name:     testBucketName,
-					Provider: provider,
-				}
+				bck = cmn.Bck{Name: testBucketName, Provider: provider}
 				tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-
-				p := cmn.DefaultBckProps()
-				cksumType = p.Cksum.Type
 			}
 
-			tutils.Logf("Create a list of %d objects\n", numFiles)
+			objNames := make([]string, 0, objCnt)
 
-			fileList := make([]string, 0, numFiles)
-			for i := 0; i < numFiles; i++ {
-				fname := fmt.Sprintf("obj%d", i+1)
-				fileList = append(fileList, fname)
-			}
-
-			tutils.PutObjsFromList(proxyURL, bck, prefix, fileSize, fileList, errCh, filesPutCh, cksumType)
-			defer func() {
-				// Cleanup objects created by the test
-				for _, fname := range fileList {
-					err := tutils.Del(proxyURL, bck, prefix+"/"+fname, nil, nil, true /*silent*/)
+			t.Cleanup(func() {
+				for _, objName := range objNames {
+					err := tutils.Del(proxyURL, bck, objName, nil, nil, true /*silent*/)
 					tassert.CheckError(t, err)
 				}
-			}()
+			})
 
-			close(filesPutCh)
-			tassert.SelectErr(t, errCh, "put", true /*fatal*/)
-			close(errCh)
+			for i := 0; i < objCnt; i++ {
+				objName := fmt.Sprintf("prefix/obj%d", i+1)
+				objNames = append(objNames, objName)
+
+				r, _ := readers.NewRandReader(fileSize, cmn.ChecksumNone)
+				err := api.PutObject(api.PutObjectArgs{
+					BaseParams: baseParams,
+					Bck:        bck,
+					Object:     objName,
+					Reader:     r,
+					Size:       fileSize,
+				})
+				tassert.CheckFatal(t, err)
+			}
 
 			tests := []struct {
 				name     string
@@ -1161,44 +1148,44 @@ func TestListObjectsPrefix(t *testing.T) {
 			}{
 				{
 					"full_list_default_pageSize_no_limit",
-					prefix, 0, 0,
-					numFiles,
+					"prefix", 0, 0,
+					objCnt,
 				},
 				{
 					"full_list_small_pageSize_no_limit",
-					prefix, numFiles / 7, 0,
-					numFiles,
+					"prefix", objCnt / 7, 0,
+					objCnt,
 				},
 				{
 					"full_list_limited",
-					prefix, 0, 8,
+					"prefix", 0, 8,
 					8,
 				},
 				{
 					"full_list_prefixed",
-					prefix + "/obj1", 0, 0,
+					"prefix/obj1", 0, 0,
 					11, // obj1 and obj10..obj19
 				},
 				{
 					"full_list_overlimited_prefixed",
-					prefix + "/obj1", 0, 20,
+					"prefix/obj1", 0, 20,
 					11, // obj1 and obj10..obj19
 				},
 				{
 					"full_list_limited_prefixed",
-					prefix + "/obj1", 0, 2,
+					"prefix/obj1", 0, 2,
 					2, // obj1 and obj10
 				},
 				{
 					"empty_list_prefixed",
-					prefix + "/nothing", 0, 0,
+					"prefix/nothing", 0, 0,
 					0,
 				},
 			}
 
 			for _, test := range tests {
 				if test.pageSize != 0 && !customPage {
-					tutils.Logf("Bucket %s does not support custom paging. Skipping\n", bck.Name)
+					tutils.Logf("Bucket %s does not support custom paging, skipping...\n", bck)
 					continue
 				}
 				t.Run(test.name, func(t *testing.T) {

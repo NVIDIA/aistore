@@ -18,7 +18,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -724,13 +723,6 @@ func TestHeadNonexistentBucket(t *testing.T) {
 	}
 }
 
-func deleteFiles(proxyURL string, bck cmn.Bck, keynames <-chan string, wg *sync.WaitGroup, errCh chan error) {
-	defer wg.Done()
-	for keyname := range keynames {
-		tutils.Del(proxyURL, bck, keyname, nil, errCh, true)
-	}
-}
-
 func getMatchingKeys(t *testing.T, proxyURL string, bck cmn.Bck, regexMatch string,
 	objCnt int, keynameCh chan string) int {
 	reslist := testListObjects(t, proxyURL, bck, nil)
@@ -1412,9 +1404,8 @@ func TestPutObjectWithChecksum(t *testing.T) {
 
 func TestOperationsWithRanges(t *testing.T) {
 	const (
-		commonPrefix = "tst" // Object full name: <bucket>/<commonPrefix>/<a-####|b-####>
-		objCnt       = 50    // NOTE: Must by positive multiple of 10.
-		objSize      = cmn.KiB
+		objCnt  = 50 // NOTE: Must by positive multiple of 10.
+		objSize = cmn.KiB
 	)
 	proxyURL := tutils.RandomProxyURL(t)
 
@@ -1426,21 +1417,27 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 
 				var (
-					errCh     = make(chan error, objCnt*5)
-					objsPutCh = make(chan string, objCnt)
 					objList   = make([]string, 0, objCnt)
 					cksumType = bck.Props.Cksum.Type
 				)
 
 				for i := 0; i < objCnt/2; i++ {
 					objList = append(objList,
-						fmt.Sprintf("a-%04d", i),
-						fmt.Sprintf("b-%04d", i),
+						fmt.Sprintf("test/a-%04d", i),
+						fmt.Sprintf("test/b-%04d", i),
 					)
 				}
-				tutils.PutObjsFromList(proxyURL, bck.Bck, commonPrefix, objSize, objList, errCh, objsPutCh, cksumType)
-				tassert.SelectErr(t, errCh, "put", true /*errIsFatal*/)
-				close(objsPutCh)
+				for _, objName := range objList {
+					r, _ := readers.NewRandReader(objSize, cksumType)
+					err := api.PutObject(api.PutObjectArgs{
+						BaseParams: baseParams,
+						Bck:        bck.Bck,
+						Object:     objName,
+						Reader:     r,
+						Size:       objSize,
+					})
+					tassert.CheckFatal(t, err)
+				}
 
 				tests := []struct {
 					// Title to print out while testing.
@@ -1457,22 +1454,22 @@ func TestOperationsWithRanges(t *testing.T) {
 					},
 					{
 						"Trying to delete/evict objects out of range",
-						commonPrefix + "/a-" + fmt.Sprintf("{%d..%d}", objCnt+10, objCnt+110),
+						"test/a-" + fmt.Sprintf("{%d..%d}", objCnt+10, objCnt+110),
 						0,
 					},
 					{
 						fmt.Sprintf("Deleting/Evicting %d objects with prefix 'a-'", objCnt/10),
-						commonPrefix + "/a-" + fmt.Sprintf("{%04d..%04d}", (objCnt-objCnt/5)/2, objCnt/2),
+						"test/a-" + fmt.Sprintf("{%04d..%04d}", (objCnt-objCnt/5)/2, objCnt/2),
 						objCnt / 10,
 					},
 					{
 						fmt.Sprintf("Deleting/Evicting %d objects (short range)", objCnt/5),
-						commonPrefix + "/b-" + fmt.Sprintf("{%04d..%04d}", 1, objCnt/5),
+						"test/b-" + fmt.Sprintf("{%04d..%04d}", 1, objCnt/5),
 						objCnt / 5,
 					},
 					{
 						"Deleting/Evicting objects with empty range",
-						commonPrefix + "/b-",
+						"test/b-",
 						objCnt/2 - objCnt/5,
 					},
 				}
@@ -1494,7 +1491,7 @@ func TestOperationsWithRanges(t *testing.T) {
 						err    error
 						xactID string
 						kind   string
-						msg    = &cmn.SelectMsg{Prefix: commonPrefix + "/"}
+						msg    = &cmn.SelectMsg{Prefix: "test/"}
 					)
 					if evict {
 						xactID, err = api.EvictRange(baseParams, bck.Bck, test.rangeStr)
@@ -1527,37 +1524,15 @@ func TestOperationsWithRanges(t *testing.T) {
 					tutils.Logf("  %d objects have been deleted/evicted\n", test.delta)
 				}
 
-				msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
+				msg := &cmn.SelectMsg{Prefix: "test/"}
 				bckList, err := api.ListObjects(baseParams, bck.Bck, msg, 0)
 				tassert.CheckFatal(t, err)
 
 				tutils.Logf("Cleaning up remaining objects...\n")
-				// channel per worker to pass the keyname
-				nameChans := make([]chan string, workerCnt)
-				for i := 0; i < workerCnt; i++ {
-					// Allow a bunch of messages at a time to be written asynchronously to a channel
-					nameChans[i] = make(chan string, 100)
+				for _, obj := range bckList.Entries {
+					err := tutils.Del(proxyURL, bck.Bck, obj.Name, nil, nil, true /*silent*/)
+					tassert.CheckError(t, err)
 				}
-				// Start the worker pools
-				wg := &sync.WaitGroup{}
-				// Get the workers started
-				for i := 0; i < workerCnt; i++ {
-					wg.Add(1)
-					go deleteFiles(proxyURL, bck.Bck, nameChans[i], wg, errCh)
-				}
-				num := 0
-				for _, entry := range bckList.Entries {
-					nameChans[num%workerCnt] <- entry.Name
-					num++
-				}
-
-				// Close the channels after the reading is done
-				for i := 0; i < workerCnt; i++ {
-					close(nameChans[i])
-				}
-
-				wg.Wait()
-				tassert.SelectErr(t, errCh, "delete", false)
 			})
 		}
 	})
