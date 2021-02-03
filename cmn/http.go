@@ -508,9 +508,6 @@ func ToHTTPHdr(meta ObjHeaderMetaProvider, hdrs ...http.Header) (hdr http.Header
 		hdr.Set(HeaderObjCksumType, ty)
 		hdr.Set(HeaderObjCksumVal, val)
 	}
-	if meta.Version() != "" {
-		hdr.Set(HeaderObjVersion, meta.Version())
-	}
 	if meta.AtimeUnix() != 0 {
 		hdr.Set(HeaderObjAtime, UnixNano2S(meta.AtimeUnix()))
 	}

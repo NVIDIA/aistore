@@ -212,6 +212,9 @@ func (t *targetrunner) _sendPUT(lom *cluster.LOM, params cluster.SendToParams) e
 		if size := params.HdrMeta.Size(); size > 0 {
 			hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(size, 10))
 		}
+		if version := params.HdrMeta.Version(); version != "" {
+			hdr.Set(cmn.HeaderObjVersion, version)
+		}
 	}
 	hdr.Set(cmn.HeaderPutterID, t.si.ID())
 	query.Set(cmn.URLParamRecvType, strconv.Itoa(int(cluster.Migrated)))

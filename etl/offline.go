@@ -32,11 +32,11 @@ var (
 	_ cmn.ObjHeaderMetaProvider = (*objMeta)(nil)
 )
 
-func (om *objMeta) Size(_ ...bool) int64 { return om.size }
-func (om *objMeta) Cksum() *cmn.Cksum    { return om.cksum }
-func (om *objMeta) Version() string      { return om.version }
-func (om *objMeta) AtimeUnix() int64     { return om.atime }
-func (*objMeta) CustomMD() cmn.SimpleKVs { return nil }
+func (om *objMeta) Size(_ ...bool) int64     { return om.size }
+func (om *objMeta) Version(_ ...bool) string { return om.version }
+func (om *objMeta) Cksum() *cmn.Cksum        { return om.cksum }
+func (om *objMeta) AtimeUnix() int64         { return om.atime }
+func (*objMeta) CustomMD() cmn.SimpleKVs     { return nil }
 
 func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 	comm, err := GetCommunicator(msg.ID)
@@ -63,11 +63,7 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn
 		return 0, err
 	}
 
-	// Try repeating relatively many times, as ETL bucket is long operation, and should not be disturbed by possible
-	// network issues.
-	//
-	// TODO: We should check if ETL pod is healthy. If not, maybe we should wait some more time for it to become healthy
-	//  again.
+	// TODO: check if ETL pod is healthy and wait some more if not (yet)
 	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
 		Call:    call,
 		Action:  "etl-obj-" + lom.Uname(),

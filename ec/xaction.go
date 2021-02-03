@@ -274,13 +274,13 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr,
 //		name, it puts the data to its writer and notifies when download is done
 // * request - request to send
 // * writer - an opened writer that will receive the replica/slice/meta
-func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
+func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte,
+	writer io.Writer) (int64, error) {
 	hdr := transport.ObjHdr{
 		Bck:     lom.Bucket(),
 		ObjName: lom.ObjName,
 		Opaque:  request,
 	}
-
 	sw := &slice{
 		writer: writer,
 		wg:     cmn.NewTimeoutGroup(),
@@ -303,16 +303,17 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		return 0, fmt.Errorf("timed out waiting for %s is read", uname)
 	}
 	r.unregWriter(uname)
-	lom.Uncache(true)
+
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Received object %s from %s", lom, daemonID)
 	}
-	if lom.Version() == "" && sw.version != "" {
+	if sw.version != "" {
 		lom.SetVersion(sw.version)
 	}
-	if (lom.Cksum() == nil || lom.Cksum().Type() != cmn.ChecksumNone) && sw.cksum != nil && sw.cksum.Type() != cmn.ChecksumNone {
+	if sw.cksum != nil && sw.cksum.Type() != cmn.ChecksumNone {
 		lom.SetCksum(sw.cksum)
 	}
+	lom.Uncache(true)
 	return sw.n, nil
 }
 

@@ -169,10 +169,13 @@ func (lom *LOM) Size(special ...bool) int64 {
 	return lom.md.size
 }
 
-func (lom *LOM) SetSize(size int64) { lom.md.size = size }
+func (lom *LOM) Version(special ...bool) string {
+	debug.Assert(len(special) > 0 || lom.Loaded())
+	return lom.md.version
+}
 
 func (lom *LOM) Uname() string                { return lom.md.uname }
-func (lom *LOM) Version() string              { return lom.md.version }
+func (lom *LOM) SetSize(size int64)           { lom.md.size = size }
 func (lom *LOM) SetVersion(ver string)        { lom.md.version = ver }
 func (lom *LOM) Cksum() *cmn.Cksum            { return lom.md.cksum }
 func (lom *LOM) SetCksum(cksum *cmn.Cksum)    { lom.md.cksum = cksum }
@@ -217,6 +220,9 @@ func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
 	cmn.ToHTTPHdr(lom, hdr)
 	if n := lom.md.size; n > 0 {
 		hdr.Set(cmn.HeaderContentLength, strconv.FormatInt(n, 10))
+	}
+	if v := lom.md.version; v != "" {
+		hdr.Set(cmn.HeaderObjVersion, v)
 	}
 	return hdr
 }
@@ -584,14 +590,14 @@ func (lom *LOM) _string(b string) string {
 
 // increment ais LOM's version
 func (lom *LOM) IncVersion() error {
-	cmn.Assert(lom.Bck().IsAIS())
-	if lom.Version() == "" {
+	debug.Assert(lom.Bck().IsAIS())
+	if lom.md.version == "" {
 		lom.SetVersion(lomInitialVersion)
 		return nil
 	}
-	ver, err := strconv.Atoi(lom.Version())
+	ver, err := strconv.Atoi(lom.md.version)
 	if err != nil {
-		return fmt.Errorf("failed to increase version, expected number, err: %v", err)
+		return fmt.Errorf("%s: failed to inc version, err: %v", lom, err)
 	}
 	lom.SetVersion(strconv.Itoa(ver + 1))
 	return nil

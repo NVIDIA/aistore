@@ -150,13 +150,14 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(hrwLom.Init(localBck)).NotTo(HaveOccurred())
 				hrwLom.Uncache(false)
 
+				ver := lom.Version()
 				lom.Uncache(false)
 
 				newLom := NewBasicLom(cachedFQN)
 				err = newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
-				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
+				Expect(ver).To(BeEquivalentTo(newLom.Version()))
 				Expect(lom.GetCopies()).To(HaveLen(3))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
 				Expect(lom.CustomMD()).To(HaveLen(3))
@@ -258,7 +259,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(lom1.Cksum()).To(BeEquivalentTo(lom2.Cksum()))
-				Expect(lom1.Version()).To(BeEquivalentTo(lom2.Version()))
+				Expect(lom1.Version(true)).To(BeEquivalentTo(lom2.Version(true)))
 				Expect(lom1.GetCopies()).To(HaveLen(3))
 				Expect(lom1.GetCopies()).To(BeEquivalentTo(lom2.GetCopies()))
 			})

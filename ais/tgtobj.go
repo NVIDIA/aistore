@@ -177,7 +177,9 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	var (
 		lom = poi.lom
 		bck = lom.Bck()
+		bmd = poi.t.owner.bmd.Get()
 	)
+	// remote versioning
 	if bck.IsRemote() && poi.recvType == cluster.RegularPut {
 		var version string
 		if bck.IsRemoteAIS() {
@@ -186,49 +188,47 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 			version, errCode, err = poi.putCloud()
 		}
 		if err != nil {
-			glog.Errorf("%s: PUT failed, err: %v", lom, err)
+			glog.Errorf("PUT %s: %v", lom, err)
 			return
 		}
 		if lom.VersionConf().Enabled {
 			lom.SetVersion(version)
 		}
 	}
-
-	// Check if bucket was destroyed while PUT was in the progress.
-	var (
-		bmd        = poi.t.owner.bmd.Get()
-		_, present = bmd.Get(bck)
-	)
-	if !present {
-		err = fmt.Errorf("%s: PUT failed, bucket %s does not exist", lom, bck)
+	if _, present := bmd.Get(bck); !present {
+		err = fmt.Errorf("PUT %s: bucket %s does not exist", lom, bck)
 		errCode = http.StatusBadRequest
 		return
 	}
-
 	if poi.recvType == cluster.ColdGet {
-		ok := lom.TryLock(true)
-		cmn.Assert(!ok) // On cold get we should always be protected by lock.
+		debug.Assert(!lom.TryLock(true)) // cold GET: caller must take a lock
 	} else {
 		lom.Lock(true)
 		defer lom.Unlock(true)
 	}
-
-	if bck.IsAIS() && lom.VersionConf().Enabled && (poi.recvType == cluster.RegularPut || lom.Version() == "") {
-		if err = lom.IncVersion(); err != nil {
-			return
+	// ais versioning
+	if bck.IsAIS() && lom.VersionConf().Enabled {
+		// NOTE: the caller is expected to load it and get the current version, if exists
+		if poi.recvType == cluster.RegularPut || lom.Version(true) == "" {
+			if err = lom.IncVersion(); err != nil {
+				return
+			}
 		}
 	}
-	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
-		return 0, fmt.Errorf("rename failed => %s: %w", lom, err)
+	if err = cmn.Rename(poi.workFQN, lom.FQN); err != nil {
+		err = fmt.Errorf("PUT %s: failed to rename: %w", lom, err)
+		return
 	}
-
-	lom.Uncache(true /*delDirty*/)
 	if lom.HasCopies() {
-		if err = lom.DelAllCopies(); err != nil {
-			return
+		// TODO: recover
+		if errdc := lom.DelAllCopies(); errdc != nil {
+			glog.Errorf("PUT %s: failed to delete old copies [%v], proceeding to PUT anyway...", lom, errdc)
 		}
 	}
 	err = lom.Persist(true)
+	if err != nil {
+		lom.Uncache(true /*delDirty*/)
+	}
 	return
 }
 
@@ -1206,7 +1206,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 			cmn.Close(params.Reader)
 			return n, err
 		}
-		// NOTE: Return number of input bytes, as resulting number of bytes might be unknown.
+		// NOTE: return the current size as resulting (transformed) size may not be known.
 		size = lom.Size()
 	}
 	debug.Assert(params.HdrMeta != nil)

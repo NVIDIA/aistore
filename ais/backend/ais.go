@@ -444,7 +444,8 @@ func (m *AISBackendProvider) GetObj(_ context.Context, lom *cluster.LOM) (errCod
 	return extractErrCode(err)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum,
+	errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -462,7 +463,6 @@ func (m *AISBackendProvider) PutObj(_ context.Context, r io.Reader, lom *cluster
 	if err != nil {
 		return "", errCode, err
 	}
-
 	var (
 		bck  = prepareBck(lom.Bucket())
 		args = api.PutObjectArgs{
@@ -478,7 +478,8 @@ func (m *AISBackendProvider) PutObj(_ context.Context, r io.Reader, lom *cluster
 		errCode, err = extractErrCode(err)
 		return "", errCode, err
 	}
-	return lom.Version(), 0, nil
+	// NOTE: the caller is expected to load it and get the current version, if exists
+	return lom.Version(true), 0, nil
 }
 
 func (m *AISBackendProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
