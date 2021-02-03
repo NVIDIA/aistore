@@ -59,6 +59,7 @@ type BackendProvider interface {
 	// GetObj fetches and finalizes the object from the cloud.
 	GetObj(ctx context.Context, lom *LOM) (errCode int, err error)
 	GetObjReader(ctx context.Context, lom *LOM) (r io.ReadCloser, expectedCksum *cmn.Cksum, errCode int, err error)
+	// PutObj sends object to the backend.
 	PutObj(ctx context.Context, r io.Reader, lom *LOM) (version string, errCode int, err error)
 	DeleteObj(ctx context.Context, lom *LOM) (errCode int, err error)
 }

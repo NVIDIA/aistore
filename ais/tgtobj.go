@@ -237,9 +237,9 @@ func (poi *putObjInfo) putCloud() (version string, errCode int, err error) {
 		lom = poi.lom
 		bck = lom.Bck()
 	)
-	file, errOpen := os.Open(poi.workFQN)
-	if errOpen != nil {
-		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
+	file, err := os.Open(poi.workFQN)
+	if err != nil {
+		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, err)
 		return
 	}
 

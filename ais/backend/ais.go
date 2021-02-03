@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -309,11 +308,11 @@ func extractErrCode(e error) (int, error) {
 func (m *AISBackendProvider) Provider() string  { return cmn.ProviderAIS }
 func (m *AISBackendProvider) MaxPageSize() uint { return cmn.DefaultListPageSizeAIS }
 
-func (m *AISBackendProvider) CreateBucket(ctx context.Context, bck *cluster.Bck) (errCode int, err error) {
+func (m *AISBackendProvider) CreateBucket(_ context.Context, _ *cluster.Bck) (errCode int, err error) {
 	return 0, nil
 }
 
-func (m *AISBackendProvider) HeadBucket(ctx context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *cluster.Bck) (bckProps cmn.SimpleKVs, errCode int, err error) {
 	debug.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
@@ -335,7 +334,7 @@ func (m *AISBackendProvider) HeadBucket(ctx context.Context, remoteBck *cluster.
 	return bckProps, 0, nil
 }
 
-func (m *AISBackendProvider) ListObjects(ctx context.Context, remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
+func (m *AISBackendProvider) ListObjects(_ context.Context, remoteBck *cluster.Bck, msg *cmn.SelectMsg) (bckList *cmn.BucketList, errCode int, err error) {
 	debug.Assert(remoteBck.Provider == cmn.ProviderAIS)
 
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
@@ -387,7 +386,7 @@ func (m *AISBackendProvider) listBucketsCluster(uuid string, query cmn.QueryBcks
 	return buckets, nil
 }
 
-func (m *AISBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
+func (m *AISBackendProvider) ListBuckets(_ context.Context, query cmn.QueryBcks) (buckets cmn.BucketNames, errCode int, err error) {
 	if !query.Ns.IsAnyRemote() {
 		buckets, err = m.listBucketsCluster(query.Ns.UUID, query)
 	} else {
@@ -403,7 +402,7 @@ func (m *AISBackendProvider) ListBuckets(ctx context.Context, query cmn.QueryBck
 	return
 }
 
-func (m *AISBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadObj(_ context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -423,7 +422,7 @@ func (m *AISBackendProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (obj
 	return objMeta, 0, nil
 }
 
-func (m *AISBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (m *AISBackendProvider) GetObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -445,7 +444,7 @@ func (m *AISBackendProvider) GetObj(ctx context.Context, lom *cluster.LOM) (errC
 	return extractErrCode(err)
 }
 
-func (m *AISBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
+func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cmn.Cksum, errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
@@ -457,21 +456,9 @@ func (m *AISBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LOM)
 	return r, nil, errCode, err
 }
 
-func (m *AISBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
-	var (
-		fi        os.FileInfo
-		remoteBck = lom.Bucket()
-	)
-
+func (m *AISBackendProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
+	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
-	if err != nil {
-		return "", errCode, err
-	}
-
-	fh, ok := r.(*cmn.FileHandle) // `PutObject` closes file handle.
-	cmn.Assert(ok)
-
-	fi, err = fh.Stat()
 	if err != nil {
 		return "", errCode, err
 	}
@@ -483,11 +470,10 @@ func (m *AISBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *clust
 			Bck:        bck,
 			Object:     lom.ObjName,
 			Cksum:      lom.Cksum(),
-			Reader:     fh,
-			Size:       uint64(fi.Size()),
+			Reader:     r.(cmn.ReadOpenCloser),
+			Size:       uint64(lom.Size(true)), // It's special because it's still workfile.
 		}
 	)
-
 	if err = api.PutObject(args); err != nil {
 		errCode, err = extractErrCode(err)
 		return "", errCode, err
@@ -495,7 +481,7 @@ func (m *AISBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *clust
 	return lom.Version(), 0, nil
 }
 
-func (m *AISBackendProvider) DeleteObj(ctx context.Context, lom *cluster.LOM) (errCode int, err error) {
+func (m *AISBackendProvider) DeleteObj(_ context.Context, lom *cluster.LOM) (errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
