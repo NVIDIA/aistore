@@ -334,19 +334,6 @@ func PutObjsFromList(proxyURL string, bck cmn.Bck, objPath string, objSize uint6
 	wg.Wait()
 }
 
-func PutRandObjs(proxyURL string, bck cmn.Bck, objPath string, objSize uint64, numPuts int, errCh chan error,
-	objsPutCh chan string, cksumType string, fixedSize ...bool) {
-	var (
-		fNameLen = 16
-		objList  = make([]string, 0, numPuts)
-	)
-	for i := 0; i < numPuts; i++ {
-		fname := cmn.RandString(fNameLen)
-		objList = append(objList, fname)
-	}
-	PutObjsFromList(proxyURL, bck, objPath, objSize, objList, errCh, objsPutCh, cksumType, fixedSize...)
-}
-
 // nolint:maligned // no performance critical code
 type PutObjectsArgs struct {
 	ProxyURL string
@@ -362,7 +349,7 @@ type PutObjectsArgs struct {
 	IgnoreErr bool
 }
 
-func PutRandObjsV2(t *testing.T, args PutObjectsArgs) ([]string, int) {
+func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	var (
 		errCnt = atomic.NewInt32(0)
 		putCnt = atomic.NewInt32(0)
@@ -422,9 +409,8 @@ func PutRandObjsV2(t *testing.T, args PutObjectsArgs) ([]string, int) {
 	}
 
 	err := group.Wait()
-	tassert.CheckFatal(t, err)
 	cmn.Assert(len(objNames) == int(putCnt.Load()))
-	return objNames, int(errCnt.Load())
+	return objNames, int(errCnt.Load()), err
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET

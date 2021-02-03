@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -580,33 +579,38 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 func Test_coldgetmd5(t *testing.T) {
 	var (
-		numPuts   = 5
-		objPrefix = "coldgetmd5"
-
-		filesPutCh    = make(chan string, numPuts)
-		filesList     = make([]string, 0, 100)
-		errCh         = make(chan error, 100)
-		wg            = &sync.WaitGroup{}
-		bck           = cliBck
-		totalSize     = int64(numPuts * largeFileSize)
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      5,
+			fileSize: largeFileSize,
+		}
+		totalSize     = int64(uint64(m.num) * m.fileSize)
 		proxyURL      = tutils.RandomProxyURL(t)
 		propsToUpdate *cmn.BucketPropsToUpdate
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+
+	m.saveClusterState()
 
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
-	cksumType := p.Cksum.Type
 
-	tutils.PutRandObjs(proxyURL, bck, objPrefix, largeFileSize, numPuts, errCh, filesPutCh, cksumType)
-	tassert.SelectErr(t, errCh, "put", true)
-	close(filesPutCh) // to exit for-range
-	for fname := range filesPutCh {
-		filesList = append(filesList, filepath.Join(objPrefix, fname))
-	}
-	tutils.EvictObjects(t, proxyURL, bck, filesList)
+	t.Cleanup(func() {
+		propsToUpdate = &cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
+			},
+		}
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
+		tassert.CheckError(t, err)
+		m.del()
+	})
+
+	m.remotePuts(true /*evict*/)
+
 	// Disable Cold Get Validation
 	if p.Cksum.ValidateColdGet {
 		propsToUpdate = &cmn.BucketPropsToUpdate{
@@ -614,54 +618,29 @@ func Test_coldgetmd5(t *testing.T) {
 				ValidateColdGet: api.Bool(false),
 			},
 		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
-	start := time.Now()
-	getFromObjList(proxyURL, bck, errCh, filesList, false)
-	curr := time.Now()
-	duration := curr.Sub(start)
-	if t.Failed() {
-		goto cleanup
-	}
-	tutils.Logf("GET %s without MD5 validation: %v\n", cmn.B2S(totalSize, 0), duration)
-	tassert.SelectErr(t, errCh, "get", false)
-	tutils.EvictObjects(t, proxyURL, bck, filesList)
 
-	// Enable Cold Get Validation
+	start := time.Now()
+	m.gets(false /*withValidation*/)
+	tutils.Logf("GET %s without MD5 validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+
+	err = api.EvictRemoteBucket(baseParams, m.bck)
+	tassert.CheckFatal(t, err)
+
+	// Enable cold get validation.
 	propsToUpdate = &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
 			ValidateColdGet: api.Bool(true),
 		},
 	}
-	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 	tassert.CheckFatal(t, err)
 
-	if t.Failed() {
-		goto cleanup
-	}
 	start = time.Now()
-	getFromObjList(proxyURL, bck, errCh, filesList, true)
-	curr = time.Now()
-	duration = curr.Sub(start)
-	tutils.Logf("GET %s with MD5 validation:    %v\n", cmn.B2S(totalSize, 0), duration)
-	tassert.SelectErr(t, errCh, "get", false)
-cleanup:
-	propsToUpdate = &cmn.BucketPropsToUpdate{
-		Cksum: &cmn.CksumConfToUpdate{
-			ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
-		},
-	}
-	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
-
-	tassert.CheckFatal(t, err)
-	for _, fn := range filesList {
-		wg.Add(1)
-		go tutils.Del(proxyURL, bck, fn, wg, errCh, !testing.Verbose())
-	}
-	wg.Wait()
-	tassert.SelectErr(t, errCh, "delete", false)
-	close(errCh)
+	m.gets(true /*withValidation*/)
+	tutils.Logf("GET %s with MD5 validation:    %v\n", cmn.B2S(totalSize, 0), time.Since(start))
 }
 
 func TestHeadBucket(t *testing.T) {
@@ -713,7 +692,7 @@ func TestHeadRemoteBucket(t *testing.T) {
 	}
 	_, err := api.SetBucketProps(baseParams, bck, bckPropsToUpdate)
 	tassert.CheckFatal(t, err)
-	defer resetBucketProps(proxyURL, bck, t)
+	defer resetBucketProps(t, proxyURL, bck)
 
 	p, err := api.HeadBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
@@ -801,49 +780,52 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *cmn.Select
 // (targets are co-located with where this test is running from, because
 // it searches a local oldFileIfo system).
 func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
-	const (
-		fileSize  = 1024
-		numFiles  = 3
-		objPrefix = "cksum_cb"
-	)
-
 	var (
-		errCh      = make(chan error, numFiles*5)
-		fileNameCh = make(chan string, numFiles)
-		objNames   = make([]string, 0, numFiles)
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      3,
+			fileSize: cmn.KiB,
+		}
 
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cliBck
-
-		_ = cluster.NewTargetMock(cluster.NewBaseBownerMock(
+		_          = cluster.NewTargetMock(cluster.NewBaseBownerMock(
 			cluster.NewBck(
-				cliBck.Name, cliBck.Provider, cmn.NsGlobal,
+				m.bck.Name, m.bck.Provider, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 0xa73b9f11},
 			),
 		))
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
+	m.init()
+
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 
 	initMountpaths(t, proxyURL)
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
-	cksumType := p.Cksum.Type
 
-	tutils.Logf("Creating %d objects\n", numFiles)
-	tutils.PutRandObjs(proxyURL, bck, objPrefix, fileSize, numFiles, errCh, fileNameCh, cksumType)
-	tassert.SelectErr(t, errCh, "put", false)
+	m.puts()
 
-	objName := filepath.Join(objPrefix, <-fileNameCh)
-	objNames = append(objNames, objName)
+	t.Cleanup(func() {
+		propsToUpdate := &cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type:            api.String(p.Cksum.Type),
+				ValidateWarmGet: api.Bool(p.Cksum.ValidateWarmGet),
+			},
+		}
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
+		tassert.CheckError(t, err)
+		m.del()
+	})
 
-	// GET
-	_, err = api.GetObjectWithValidation(baseParams, bck, objName)
+	objName := m.objNames[0]
+	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName)
 	tassert.CheckError(t, err)
 
 	if !p.Cksum.ValidateWarmGet {
@@ -852,11 +834,11 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 				ValidateWarmGet: api.Bool(true),
 			},
 		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 
-	fqn := findObjOnDisk(bck, objName)
+	fqn := findObjOnDisk(m.bck, objName)
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ := os.Stat(fqn)
 
@@ -867,21 +849,19 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
 	// Test when the xxHash of the file is changed
-	objName = filepath.Join(objPrefix, <-fileNameCh)
-	objNames = append(objNames, objName)
-	fqn = findObjOnDisk(bck, objName)
+	objName = m.objNames[1]
+	fqn = findObjOnDisk(m.bck, objName)
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
 
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234"))
+	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234"))
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
 	// Test for no checksum algo
-	objName = filepath.Join(objPrefix, <-fileNameCh)
-	objNames = append(objNames, objName)
-	fqn = findObjOnDisk(bck, objName)
+	objName = m.objNames[2]
+	fqn = findObjOnDisk(m.bck, objName)
 
 	if p.Cksum.Type != cmn.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
@@ -889,106 +869,62 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 				Type: api.String(cmn.ChecksumNone),
 			},
 		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
+	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
 
-	_, err = api.GetObject(baseParams, bck, objName)
+	_, err = api.GetObject(baseParams, m.bck, objName)
 	tassert.Errorf(t, err == nil, "A GET on an object when checksum algo is none should pass. Error: %v", err)
-
-	// Restore old config
-	propsToUpdate := &cmn.BucketPropsToUpdate{
-		Cksum: &cmn.CksumConfToUpdate{
-			Type:            api.String(p.Cksum.Type),
-			ValidateWarmGet: api.Bool(p.Cksum.ValidateWarmGet),
-		},
-	}
-	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
-	tassert.CheckFatal(t, err)
-
-	wg := &sync.WaitGroup{}
-	for _, objName := range objNames {
-		wg.Add(1)
-		go tutils.Del(proxyURL, bck, objName, wg, errCh, !testing.Verbose())
-	}
-	wg.Wait()
-	tassert.SelectErr(t, errCh, "delete", false)
-	close(errCh)
-	close(fileNameCh)
 }
 
 func TestEvictRemoteBucket(t *testing.T) {
-	const (
-		numPuts   = 5
-		objPrefix = "evictcb"
-	)
-
 	var (
-		filesPutCh = make(chan string, numPuts)
-		filesList  = make([]string, 0, 100)
-		errCh      = make(chan error, 100)
-		wg         = &sync.WaitGroup{}
-		bck        = cliBck
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      5,
+			fileSize: largeFileSize,
+		}
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	// TODO: This only works for cloud buckets because `EvictBucket` removes
 	//  bucket from BMD (see #1050 for more info).
-	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
-	defer func() {
-		// Cleanup
-		for _, fn := range filesList {
-			wg.Add(1)
-			go tutils.Del(proxyURL, bck, fn, wg, errCh, !testing.Verbose())
-		}
-		wg.Wait()
-		tassert.SelectErr(t, errCh, "delete", false)
-		close(errCh)
+	m.saveClusterState()
 
-		resetBucketProps(proxyURL, bck, t)
-	}()
+	t.Cleanup(func() {
+		m.del()
+		resetBucketProps(t, proxyURL, m.bck)
+	})
 
-	p, err := api.HeadBucket(baseParams, bck)
-	tassert.CheckFatal(t, err)
-	cksumType := p.Cksum.Type
-
-	tutils.PutRandObjs(proxyURL, bck, objPrefix, largeFileSize, numPuts, errCh, filesPutCh, cksumType)
-	tassert.SelectErr(t, errCh, "put", false)
-	close(filesPutCh) // to exit for-range
-	for fname := range filesPutCh {
-		filesList = append(filesList, filepath.Join(objPrefix, fname))
-	}
-	getFromObjList(proxyURL, bck, errCh, filesList, false)
-	for _, fname := range filesList {
-		exists := tutils.CheckObjExists(proxyURL, bck, fname)
-		tassert.Fatalf(t, exists, "object not cached: %s", fname)
-	}
+	m.remotePuts(false /*evict*/)
 
 	// Test property, mirror is disabled for cloud bucket that hasn't been accessed,
 	// even if system config says otherwise
-	_, err = api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
+	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
 
-	bProps, err := api.HeadBucket(baseParams, bck)
+	bProps, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, bProps.Mirror.Enabled, "test property hasn't changed")
 
-	err = api.EvictRemoteBucket(baseParams, bck)
+	err = api.EvictRemoteBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
-	for _, fname := range filesList {
-		exists := tutils.CheckObjExists(proxyURL, bck, fname)
-		tassert.Errorf(t, !exists, "object remains cached: %s", fname)
+	for _, objName := range m.objNames {
+		exists := tutils.CheckObjExists(proxyURL, m.bck, objName)
+		tassert.Errorf(t, !exists, "object remains cached: %s", objName)
 	}
-	bProps, err = api.HeadBucket(baseParams, bck)
+	bProps, err = api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, !bProps.Mirror.Enabled, "test property not reset")
 }
@@ -1019,95 +955,87 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, objN
 // (targets are co-located with where this test is running from, because
 // it searches a local file system)
 func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
-	const (
-		fileSize  = 1024
-		objPrefix = "cksum_lb"
-	)
-
 	var (
-		fqn string
-		err error
+		m = ioContext{
+			t: t,
+			bck: cmn.Bck{
+				Provider: cmn.ProviderAIS,
+				Name:     cmn.RandString(15),
+				Props:    &cmn.BucketProps{BID: 2},
+			},
+			num:      3,
+			fileSize: cmn.KiB,
+		}
 
-		numFiles   = 3
-		fileNameCh = make(chan string, numFiles)
-		errCh      = make(chan error, 100)
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Provider: cmn.ProviderAIS,
-			Name:     cmn.RandString(15),
-			Props:    &cmn.BucketProps{BID: 2},
-		}
-		_ = cluster.NewTargetMock(cluster.NewBaseBownerMock(
+		_          = cluster.NewTargetMock(cluster.NewBaseBownerMock(
 			cluster.NewBck(
-				bck.Name, cmn.ProviderAIS, cmn.NsGlobal,
+				m.bck.Name, cmn.ProviderAIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash}, BID: 1},
 			),
-			cluster.NewBckEmbed(bck),
+			cluster.NewBckEmbed(m.bck),
 		))
+		cksumConf = cmn.DefaultBckProps().Cksum
 	)
+
+	m.init()
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires write access to xattrs, doesn't work with docker", t.Name()))
 	}
 
 	initMountpaths(t, proxyURL)
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-	conf := cmn.DefaultBckProps().Cksum
 
-	tutils.PutRandObjs(proxyURL, bck, objPrefix, fileSize, numFiles, errCh, fileNameCh, conf.Type)
-	tassert.SelectErr(t, errCh, "put", false)
+	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
 
-	if !conf.ValidateWarmGet {
+	m.puts()
+
+	if !cksumConf.ValidateWarmGet {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
 				ValidateWarmGet: api.Bool(true),
 			},
 		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err := api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 
 	// Test changing the file content.
-	objName := filepath.Join(objPrefix, <-fileNameCh)
-	fqn = findObjOnDisk(bck, objName)
+	objName := m.objNames[0]
+	fqn := findObjOnDisk(m.bck, objName)
 	tutils.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
-	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cmn.PermRWR)
+	err := ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
-	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
+	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
 
 	// Test changing the file xattr.
-	objName = filepath.Join(objPrefix, <-fileNameCh)
-	fqn = findObjOnDisk(bck, objName)
+	objName = m.objNames[1]
+	fqn = findObjOnDisk(m.bck, objName)
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
+	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
-	executeTwoGETsForChecksumValidation(proxyURL, bck, objName, t)
+	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
 
 	// Test for none checksum algorithm.
-	objName = filepath.Join(objPrefix, <-fileNameCh)
-	fqn = findObjOnDisk(bck, objName)
+	objName = m.objNames[2]
+	fqn = findObjOnDisk(m.bck, objName)
 
-	if conf.Type != cmn.ChecksumNone {
+	if cksumConf.Type != cmn.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
 				Type: api.String(cmn.ChecksumNone),
 			},
 		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
 
 	tutils.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tutils.SetXattrCksum(fqn, bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
+	err = tutils.SetXattrCksum(fqn, m.bck, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"))
 	tassert.CheckError(t, err)
-	_, err = api.GetObject(baseParams, bck, objName)
-	if err != nil {
-		t.Error("A GET on an object when checksum algo is none should pass")
-	}
-
-	close(errCh)
-	close(fileNameCh)
+	_, err = api.GetObject(baseParams, m.bck, objName)
+	tassert.CheckError(t, err)
 }
 
 func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName string, t *testing.T) {
@@ -1128,41 +1056,35 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 }
 
 func TestRangeRead(t *testing.T) {
-	const (
-		numFiles  = 1
-		fileSize  = 5271
-		objPrefix = "range_get"
-	)
 	initMountpaths(t, tutils.RandomProxyURL(t))
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		var (
-			fileNameCh = make(chan string, numFiles)
-			errCh      = make(chan error, numFiles)
+			m = ioContext{
+				t:         t,
+				bck:       bck.Bck,
+				num:       1,
+				fileSize:  5271,
+				fixedSize: true,
+			}
 			proxyURL   = tutils.RandomProxyURL(t)
 			baseParams = tutils.BaseAPIParams(proxyURL)
 			cksumProps = bck.CksumConf()
 		)
 
-		tutils.PutRandObjs(proxyURL, bck.Bck, objPrefix, fileSize, numFiles,
-			errCh, fileNameCh, cksumProps.Type, true)
-		tassert.SelectErr(t, errCh, "put", true)
-
-		objName := filepath.Join(objPrefix, <-fileNameCh)
+		m.init()
+		m.puts()
+		objName := m.objNames[0]
 
 		defer func() {
 			tutils.Logln("Cleaning up...")
-			err := api.DeleteObject(baseParams, bck.Bck, objName)
-			tassert.CheckError(t, err)
 			propsToUpdate := &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
 					EnableReadRange: api.Bool(cksumProps.EnableReadRange),
 				},
 			}
-			_, err = api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
-			close(errCh)
-			close(fileNameCh)
-			tassert.CheckFatal(t, err)
+			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
+			tassert.CheckError(t, err)
 		}()
 
 		tutils.Logln("Testing valid cases.")
@@ -1176,7 +1098,7 @@ func TestRangeRead(t *testing.T) {
 			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, objName, true)
+		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, m.fileSize, objName, true)
 
 		// Validate only range checksum is being returned
 		if !cksumProps.EnableReadRange {
@@ -1188,20 +1110,20 @@ func TestRangeRead(t *testing.T) {
 			_, err := api.SetBucketProps(baseParams, bck.Bck, propsToUpdate)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, fileSize, objName, false)
+		testValidCases(t, proxyURL, bck.Bck, cksumProps.Type, m.fileSize, objName, false)
 
 		tutils.Logln("Testing valid cases (query).")
 		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1", 1)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0-", fileSize)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10-", fileSize-10)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", fileSize), fileSize)
-		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", fileSize+2), fileSize)
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0-", int64(m.fileSize))
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=10-", int64(m.fileSize-10))
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize), int64(m.fileSize))
+		verifyValidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=-%d", m.fileSize+2), int64(m.fileSize))
 
 		tutils.Logln("Testing invalid cases (query).")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "potatoes=0-1")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes")
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-", fileSize+1))
-		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-%d", fileSize+1, fileSize+2))
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-", m.fileSize+1))
+		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, fmt.Sprintf("bytes=%d-%d", m.fileSize+1, m.fileSize+2))
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=0--1")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=1-0")
 		verifyInvalidRangesQuery(t, proxyURL, bck.Bck, objName, "bytes=-1-0")
@@ -1328,140 +1250,77 @@ func verifyInvalidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objNam
 
 func Test_checksum(t *testing.T) {
 	var (
-		start, curr   time.Time
-		duration      time.Duration
-		propsToUpdate *cmn.BucketPropsToUpdate
-
-		numPuts   = 5
-		objPrefix = cmn.RandString(5)
-		bck       = cliBck
-
-		filesPutCh = make(chan string, numPuts)
-		filesList  = make([]string, 0, numPuts)
-		errCh      = make(chan error, numPuts*2)
-		totalSize  = int64(numPuts * largeFileSize)
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      5,
+			fileSize: largeFileSize,
+		}
+		totalSize  = int64(uint64(m.num) * m.fileSize)
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
 
-	// Get Current Config
-	p, err := api.HeadBucket(baseParams, bck)
+	p, err := api.HeadBucket(baseParams, m.bck)
 	tassert.CheckFatal(t, err)
 
-	tutils.PutRandObjs(proxyURL, bck, objPrefix, largeFileSize, numPuts, errCh, filesPutCh, p.Cksum.Type)
-	tassert.SelectErr(t, errCh, "put", true)
-	close(filesPutCh) // to exit for-range
-	for fname := range filesPutCh {
-		filesList = append(filesList, filepath.Join(objPrefix, fname))
-	}
-	// Delete it from cache.
-	tutils.EvictObjects(t, proxyURL, bck, filesList)
-	// Disable checkum
+	t.Cleanup(func() {
+		propsToUpdate := &cmn.BucketPropsToUpdate{
+			Cksum: &cmn.CksumConfToUpdate{
+				Type:            api.String(p.Cksum.Type),
+				ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
+			},
+		}
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
+		tassert.CheckError(t, err)
+		m.del()
+	})
+
+	m.remotePuts(true /*evict*/)
+
+	// Disable checkum.
 	if p.Cksum.Type != cmn.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
 				Type: api.String(cmn.ChecksumNone),
 			},
 		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
-	if t.Failed() {
-		goto cleanup
-	}
-	// Disable Cold Get Validation
+
+	// Disable cold get validation.
 	if p.Cksum.ValidateColdGet {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
 				ValidateColdGet: api.Bool(false),
 			},
 		}
-		_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 		tassert.CheckFatal(t, err)
 	}
-	if t.Failed() {
-		goto cleanup
-	}
-	start = time.Now()
-	getFromObjList(proxyURL, bck, errCh, filesList, false)
-	curr = time.Now()
-	duration = curr.Sub(start)
-	if t.Failed() {
-		goto cleanup
-	}
-	tutils.Logf("GET %s without any checksum validation: %v\n", cmn.B2S(totalSize, 0), duration)
-	tassert.SelectErr(t, errCh, "get", false)
-	tutils.EvictObjects(t, proxyURL, bck, filesList)
 
-	propsToUpdate = &cmn.BucketPropsToUpdate{
+	start := time.Now()
+	m.gets(false /*withValidate*/)
+	tutils.Logf("GET %s without any checksum validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
+
+	err = api.EvictRemoteBucket(baseParams, m.bck)
+	tassert.CheckFatal(t, err)
+
+	propsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
 			Type:            api.String(cmn.ChecksumXXHash),
 			ValidateColdGet: api.Bool(true),
 		},
 	}
-	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
 	tassert.CheckFatal(t, err)
-	if t.Failed() {
-		goto cleanup
-	}
 
 	start = time.Now()
-	getFromObjList(proxyURL, bck, errCh, filesList, true)
-	curr = time.Now()
-	duration = curr.Sub(start)
-	tutils.Logf("GET %s and validate checksum: %v\n", cmn.B2S(totalSize, 0), duration)
-	tassert.SelectErr(t, errCh, "get", false)
-cleanup:
-	deleteFromFileList(proxyURL, bck, errCh, filesList)
-	tassert.SelectErr(t, errCh, "delete", false)
-	close(errCh)
-	// restore old config
-	propsToUpdate = &cmn.BucketPropsToUpdate{
-		Cksum: &cmn.CksumConfToUpdate{
-			Type:            api.String(p.Cksum.Type),
-			ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
-		},
-	}
-	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
-	tassert.CheckFatal(t, err)
-}
-
-// deleteFromFileList requires that errCh be twice the size of len(filesList) as each
-// file can produce upwards of two errors.
-func deleteFromFileList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []string) {
-	wg := &sync.WaitGroup{}
-	// Delete local file and objects from bucket
-	for _, fn := range filesList {
-		wg.Add(1)
-		go tutils.Del(proxyURL, bck, fn, wg, errCh, true)
-	}
-
-	wg.Wait()
-}
-
-func getFromObjList(proxyURL string, bck cmn.Bck, errCh chan error, filesList []string, validate bool) {
-	getsGroup := &sync.WaitGroup{}
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	for i := 0; i < len(filesList); i++ {
-		if filesList[i] != "" {
-			getsGroup.Add(1)
-			go func(i int) {
-				var err error
-				if validate {
-					_, err = api.GetObjectWithValidation(baseParams, bck, filesList[i])
-				} else {
-					_, err = api.GetObject(baseParams, bck, filesList[i])
-				}
-				if err != nil {
-					errCh <- err
-				}
-				getsGroup.Done()
-			}(i)
-		}
-	}
-	getsGroup.Wait()
+	m.gets(true /*withValidate*/)
+	tutils.Logf("GET %s and validate checksum: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
 }
 
 func validateBucketProps(t *testing.T, expected *cmn.BucketPropsToUpdate, actual *cmn.BucketProps) {
@@ -1474,11 +1333,10 @@ func validateBucketProps(t *testing.T, expected *cmn.BucketPropsToUpdate, actual
 	}
 }
 
-func resetBucketProps(proxyURL string, bck cmn.Bck, t *testing.T) {
+func resetBucketProps(t *testing.T, proxyURL string, bck cmn.Bck) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	if _, err := api.ResetBucketProps(baseParams, bck); err != nil {
-		t.Errorf("bucket: %s props not reset, err: %v", bck, err)
-	}
+	_, err := api.ResetBucketProps(baseParams, bck)
+	tassert.CheckError(t, err)
 }
 
 func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {

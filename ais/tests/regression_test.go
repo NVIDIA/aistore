@@ -60,43 +60,36 @@ var (
 )
 
 func TestLocalListObjectsGetTargetURL(t *testing.T) {
-	const (
-		num      = 1000
-		filesize = 1024
-	)
 	var (
-		filenameCh = make(chan string, num)
-		errCh      = make(chan error, num)
-		targets    = make(map[string]struct{})
-		bck        = cmn.Bck{
-			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+		m = ioContext{
+			t:         t,
+			num:       1000,
+			fileSize:  cmn.KiB,
+			fixedSize: true,
 		}
+
+		targets    = make(map[string]struct{})
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		cksumType  = cmn.DefaultBckProps().Cksum.Type
-		subdir     = cmn.RandString(10)
+		smap       = tutils.GetClusterMap(t, proxyURL)
 	)
-	smap := tutils.GetClusterMap(t, proxyURL)
-	if smap.CountActiveTargets() == 1 {
-		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
-	}
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType, true)
-	tassert.SelectErr(t, errCh, "put", true)
-	close(filenameCh)
-	close(errCh)
+	m.saveClusterState()
+	m.expectTargets(1)
+
+	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+
+	m.puts()
 
 	msg := &cmn.SelectMsg{Props: cmn.GetTargetURL}
-	bl, err := api.ListObjects(baseParams, bck, msg, num)
+	bl, err := api.ListObjects(baseParams, m.bck, msg, uint(m.num))
 	tassert.CheckFatal(t, err)
 
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
 	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": "0"})
 
-	if len(bl.Entries) != num {
-		t.Errorf("Expected %d bucket list entries, found %d\n", num, len(bl.Entries))
+	if len(bl.Entries) != m.num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(bl.Entries))
 	}
 
 	for _, e := range bl.Entries {
@@ -107,10 +100,10 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 			targets[e.TargetURL] = struct{}{}
 		}
 		baseParams := tutils.BaseAPIParams(e.TargetURL)
-		l, err := api.GetObject(baseParams, bck, e.Name)
+		l, err := api.GetObject(baseParams, m.bck, e.Name)
 		tassert.CheckFatal(t, err)
-		if uint64(l) != filesize {
-			t.Errorf("Expected filesize: %d, actual filesize: %d\n", filesize, l)
+		if uint64(l) != m.fileSize {
+			t.Errorf("Expected filesize: %d, actual filesize: %d\n", m.fileSize, l)
 		}
 	}
 
@@ -120,11 +113,11 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.Props = ""
-	bl, err = api.ListObjects(baseParams, bck, msg, num)
+	bl, err = api.ListObjects(baseParams, m.bck, msg, uint(m.num))
 	tassert.CheckFatal(t, err)
 
-	if len(bl.Entries) != num {
-		t.Errorf("Expected %d bucket list entries, found %d\n", num, len(bl.Entries))
+	if len(bl.Entries) != m.num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(bl.Entries))
 	}
 
 	for _, e := range bl.Entries {
@@ -135,59 +128,39 @@ func TestLocalListObjectsGetTargetURL(t *testing.T) {
 }
 
 func TestCloudListObjectsGetTargetURL(t *testing.T) {
-	const (
-		numberOfFiles = 100
-		fileSize      = 1024
-	)
-
 	var (
-		fileNameCh = make(chan string, numberOfFiles)
-		errCh      = make(chan error, numberOfFiles)
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      100,
+			fileSize: cmn.KiB,
+		}
 		targets    = make(map[string]struct{})
 		bck        = cliBck
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		prefix     = cmn.RandString(32)
 	)
 
 	tutils.CheckSkip(t, tutils.SkipTestArgs{RemoteBck: true, Bck: bck})
 
-	smap := tutils.GetClusterMap(t, proxyURL)
-	if smap.CountActiveTargets() == 1 {
-		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
-	}
-	p, err := api.HeadBucket(baseParams, bck)
-	tassert.CheckFatal(t, err)
-	cksumType := p.Cksum.Type
+	m.saveClusterState()
+	m.expectTargets(2)
 
-	tutils.PutRandObjs(proxyURL, bck, prefix, fileSize, numberOfFiles, errCh, fileNameCh, cksumType, true)
-	tassert.SelectErr(t, errCh, "put", true)
-	close(fileNameCh)
-	close(errCh)
-	defer func() {
-		files := make([]string, numberOfFiles)
-		for i := 0; i < numberOfFiles; i++ {
-			files[i] = path.Join(prefix, <-fileNameCh)
-		}
-		xactID, err := api.DeleteList(baseParams, bck, files)
-		if err != nil {
-			t.Errorf("Failed to delete objects from bucket %s, err: %v", bck, err)
-		}
-		args := api.XactReqArgs{ID: xactID, Kind: cmn.ActDelete, Timeout: rebalanceTimeout}
-		_, err = api.WaitForXaction(baseParams, args)
-		tassert.CheckFatal(t, err)
-	}()
+	m.puts()
 
-	listObjectsMsg := &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetTargetURL}
+	t.Cleanup(func() {
+		m.del()
+	})
+
+	listObjectsMsg := &cmn.SelectMsg{Props: cmn.GetTargetURL}
 	bucketList, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
 	tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": strconv.FormatUint(cmn.FeatureDirectAccess, 10)})
 	defer tutils.SetClusterConfig(t, cmn.SimpleKVs{"client.features": "0"})
 
-	if len(bucketList.Entries) != numberOfFiles {
-		t.Errorf("Number of entries in bucket list [%d] must be equal to [%d].\n",
-			len(bucketList.Entries), numberOfFiles)
+	if len(bucketList.Entries) != m.num {
+		t.Errorf("Number of entries in bucket list [%d] must be equal to [%d]", len(bucketList.Entries), m.num)
 	}
 
 	for _, object := range bucketList.Entries {
@@ -206,9 +179,8 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	}
 
 	// The objects should have been distributed to all targets
-	if smap.CountActiveTargets() != len(targets) {
-		t.Errorf("Expected %d different target URLs, actual: %d different target URLs",
-			smap.CountActiveTargets(), len(targets))
+	if m.originalTargetCount != len(targets) {
+		t.Errorf("Expected %d different target URLs, actual: %d different target URLs", m.originalTargetCount, len(targets))
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
@@ -216,8 +188,8 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 	bucketList, err = api.ListObjects(baseParams, bck, listObjectsMsg, 0)
 	tassert.CheckFatal(t, err)
 
-	if len(bucketList.Entries) != numberOfFiles {
-		t.Errorf("Expected %d bucket list entries, found %d\n", numberOfFiles, len(bucketList.Entries))
+	if len(bucketList.Entries) != m.num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", m.num, len(bucketList.Entries))
 	}
 
 	for _, object := range bucketList.Entries {
@@ -231,44 +203,37 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 // 2. Corrupt the file
 // 3. GET file
 func TestGetCorruptFileAfterPut(t *testing.T) {
-	const filesize = 1024
 	var (
-		num        = 2
-		filenameCh = make(chan string, num)
-		errCh      = make(chan error, 100)
-		bck        = cmn.Bck{
-			Name:     testBucketName,
-			Provider: cmn.ProviderAIS,
+		m = ioContext{
+			t:        t,
+			num:      1,
+			fileSize: cmn.KiB,
 		}
+
 		proxyURL   = tutils.RandomProxyURL(t)
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		cksumType  = cmn.DefaultBckProps().Cksum.Type
-		subdir     = cmn.RandString(10)
 	)
+
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
 	}
 
+	m.init()
 	initMountpaths(t, proxyURL)
-	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	tutils.PutRandObjs(proxyURL, bck, subdir, filesize, num, errCh, filenameCh, cksumType)
-	tassert.SelectErr(t, errCh, "put", false)
-	close(filenameCh)
-	close(errCh)
+	tutils.CreateFreshBucket(t, proxyURL, m.bck, nil)
+
+	m.puts()
 
 	// Test corrupting the file contents.
-	// NOTE: The following tests can only work when running on a local setup.
-	//  The test assumes that it is run on the same machine as targets are (the test searches a local file system).
-	objName := <-filenameCh
-	fqn := findObjOnDisk(bck, subdir+"/"+objName)
-	tutils.Logf("Corrupting file data[%s]: %s\n", objName, fqn)
+	objName := m.objNames[0]
+	fqn := findObjOnDisk(m.bck, objName)
+	tutils.Logf("Corrupting object data %q: %s\n", objName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), cmn.PermRWR)
 	tassert.CheckFatal(t, err)
-	_, err = api.GetObjectWithValidation(baseParams, bck, path.Join(subdir, objName))
-	if err == nil {
-		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
-	}
+
+	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName)
+	tassert.Errorf(t, err != nil, "error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 }
 
 func TestRegressionBuckets(t *testing.T) {
@@ -277,11 +242,10 @@ func TestRegressionBuckets(t *testing.T) {
 			Name:     testBucketName,
 			Provider: cmn.ProviderAIS,
 		}
-		proxyURL  = tutils.RandomProxyURL(t)
-		cksumType = cmn.DefaultBckProps().Cksum.Type
+		proxyURL = tutils.RandomProxyURL(t)
 	)
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
-	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck}, cksumType)
+	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck})
 }
 
 func TestRenameBucket(t *testing.T) {
@@ -298,7 +262,6 @@ func TestRenameBucket(t *testing.T) {
 			Name:     bck.Name + "_" + cmn.GenTie(),
 			Provider: cmn.ProviderAIS,
 		}
-		cksumType = cmn.DefaultBckProps().Cksum.Type
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
@@ -313,7 +276,7 @@ func TestRenameBucket(t *testing.T) {
 				bck: bck, renamedBck: renamedBck,
 				numBuckets: len(bcks), rename: true, wait: wait,
 			}
-			doBucketRegressionTest(t, proxyURL, regData, cksumType)
+			doBucketRegressionTest(t, proxyURL, regData)
 		})
 	}
 }
@@ -322,61 +285,46 @@ func TestRenameBucket(t *testing.T) {
 // doBucketRe*
 //
 
-func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, cksumType string) {
-	const filesize = 1024
+func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
 	var (
-		numPuts    = 2036
-		filesPutCh = make(chan string, numPuts)
-		errCh      = make(chan error, numPuts)
-		bck        = rtd.bck
+		m = ioContext{
+			t:        t,
+			bck:      rtd.bck,
+			num:      2036,
+			fileSize: cmn.KiB,
+		}
 		baseParams = tutils.BaseAPIParams(proxyURL)
-		subdir     = cmn.RandString(10)
 	)
 
-	tutils.PutRandObjs(proxyURL, rtd.bck, subdir, filesize, numPuts, errCh, filesPutCh, cksumType)
-	close(filesPutCh)
-	filesPut := make([]string, 0, len(filesPutCh))
-	for fname := range filesPutCh {
-		filesPut = append(filesPut, fname)
-	}
-	tassert.SelectErr(t, errCh, "put", true)
+	m.init()
+	m.puts()
+
 	if rtd.rename {
-		// NOTE: Rename bucket fails when rebalance or resilver is running.
-		// Ensure rebalance or resilver isn't running before performing a rename
+		// Rename bucket fails when rebalance or resilver is running.
+		// Ensure rebalance or resilver isn't running before performing a rename.
 		tutils.WaitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
 		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
 		tassert.CheckFatal(t, err)
-		tutils.Logf("Renamed %s(numobjs=%d) => %s\n", rtd.bck, numPuts, rtd.renamedBck)
+
+		tutils.Logf("Renamed %s (obj_cnt: %d) => %s\n", rtd.bck, m.num, rtd.renamedBck)
 		if rtd.wait {
-			postRenameWaitAndCheck(t, baseParams, rtd, numPuts, filesPut)
+			postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames)
 		}
-		bck = rtd.renamedBck
+		m.bck = rtd.renamedBck
 	}
-	del := func() {
-		tutils.Logf("Deleting %d objects from %s\n", len(filesPut), bck)
-		wg := cmn.NewLimitedWaitGroup(16)
-		for _, fname := range filesPut {
-			wg.Add(1)
-			go func(fn string) {
-				defer wg.Done()
-				tutils.Del(proxyURL, bck, path.Join(subdir, fn), nil, errCh, true /*silent*/)
-			}(fname)
-		}
-		wg.Wait()
-		tassert.SelectErr(t, errCh, "delete", true)
-		close(errCh)
-	}
-	getRandomFiles(proxyURL, bck, numPuts, subdir+"/", t, errCh)
-	tassert.SelectErr(t, errCh, "get", false)
+
+	m.gets()
+
 	if !rtd.rename || rtd.wait {
-		del()
+		m.del()
 	} else {
-		postRenameWaitAndCheck(t, baseParams, rtd, numPuts, filesPut)
-		del()
+		postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames)
+		m.del()
 	}
 }
 
-func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, filesPutCh []string) {
+func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string) {
 	xactArgs := api.XactReqArgs{Kind: cmn.ActMoveBck, Bck: rtd.renamedBck, Timeout: rebalanceTimeout}
 	_, err := api.WaitForXaction(baseParams, xactArgs)
 	tassert.CheckFatal(t, err)
@@ -411,7 +359,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 		unique[base] = true
 	}
 	if len(unique) != numPuts {
-		for _, name := range filesPutCh {
+		for _, name := range objNames {
 			if _, ok := unique[name]; !ok {
 				tutils.Logf("not found: %s\n", name)
 			}
@@ -423,46 +371,44 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 
 func TestRenameObjects(t *testing.T) {
 	var (
-		renameStr    = "rename"
-		numPuts      = 1000
-		objsPutCh    = make(chan string, numPuts)
-		errCh        = make(chan error, 2*numPuts)
-		newBaseNames = make([]string, 0, numPuts) // new basenames
-		proxyURL     = tutils.RandomProxyURL(t)
-		baseParams   = tutils.BaseAPIParams(proxyURL)
-		bck          = cmn.Bck{
+		renameStr  = "rename"
+		proxyURL   = tutils.RandomProxyURL(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
 			Name:     t.Name(),
 			Provider: cmn.ProviderAIS,
 		}
-		cksumType = cmn.DefaultBckProps().Cksum.Type
 	)
 
 	tutils.CreateFreshBucket(t, proxyURL, bck, nil)
 
-	tutils.PutRandObjs(proxyURL, bck, "", 0, numPuts, errCh, objsPutCh, cksumType)
-	tassert.SelectErr(t, errCh, "put", false)
-	close(objsPutCh)
-	i := 0
-	for objName := range objsPutCh {
+	objNames, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
+		ProxyURL:  proxyURL,
+		Bck:       bck,
+		ObjCnt:    100,
+		CksumType: cmn.DefaultBckProps().Cksum.Type,
+	})
+	tassert.CheckFatal(t, err)
+
+	newObjNames := make([]string, 0, len(objNames))
+	for i, objName := range objNames {
 		newObjName := path.Join(renameStr, objName) + ".renamed" // objName fqn
-		newBaseNames = append(newBaseNames, newObjName)
-		if err := api.RenameObject(baseParams, bck, objName, newObjName); err != nil {
-			t.Fatalf("Failed to rename object from %s => %s, err: %v", objName, newObjName, err)
-		}
+		newObjNames = append(newObjNames, newObjName)
+
+		err := api.RenameObject(baseParams, bck, objName, newObjName)
+		tassert.CheckFatal(t, err)
+
 		i++
 		if i%50 == 0 {
 			tutils.Logf("Renamed %s => %s\n", objName, newObjName)
 		}
 	}
 
-	// get renamed objects
-	for _, newObjName := range newBaseNames {
+	// Check that renamed objects exist.
+	for _, newObjName := range newObjNames {
 		_, err := api.GetObject(baseParams, bck, newObjName)
-		if err != nil {
-			errCh <- err
-		}
+		tassert.CheckError(t, err)
 	}
-	tassert.SelectErr(t, errCh, "get", false)
 }
 
 func TestObjectPrefix(t *testing.T) {

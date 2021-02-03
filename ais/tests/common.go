@@ -195,7 +195,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		ignoreErr = ignoreErrs[0]
 	}
 
-	m.objNames, m.numPutErrs = tutils.PutRandObjsV2(m.t, tutils.PutObjectsArgs{
+	m.objNames, m.numPutErrs, err = tutils.PutRandObjs(tutils.PutObjectsArgs{
 		ProxyURL:  m.proxyURL,
 		Bck:       m.bck,
 		ObjPath:   objPrefix,
@@ -206,6 +206,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		WorkerCnt: 0, // TODO: Should we set something custom?
 		IgnoreErr: ignoreErr,
 	})
+	tassert.CheckFatal(m.t, err)
 }
 
 // remotePuts by default cleanups the remote bucket and puts fresh `m.num` objects
@@ -385,9 +386,16 @@ func (m *ioContext) del(cnt ...int) {
 	wg.Wait()
 }
 
-func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int) {
-	objName := m.objNames[idx%len(m.objNames)]
-	_, err := api.GetObject(baseParams, m.bck, objName)
+func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, validate bool) {
+	var (
+		err     error
+		objName = m.objNames[idx%len(m.objNames)]
+	)
+	if validate {
+		_, err = api.GetObjectWithValidation(baseParams, m.bck, objName)
+	} else {
+		_, err = api.GetObject(baseParams, m.bck, objName)
+	}
 	if err != nil {
 		if m.getErrIsFatal {
 			m.t.Error(err)
@@ -413,12 +421,17 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int) {
 	}
 }
 
-func (m *ioContext) gets() {
+func (m *ioContext) gets(withValidation ...bool) {
 	var (
 		baseParams = tutils.BaseAPIParams()
 		totalGets  = m.num * m.numGetsEachFile
 		wg         = cmn.NewLimitedWaitGroup(50)
+		validate   bool
 	)
+
+	if len(withValidation) > 0 {
+		validate = withValidation[0]
+	}
 
 	if !m.silent {
 		if m.numGetsEachFile == 1 {
@@ -432,7 +445,7 @@ func (m *ioContext) gets() {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			m.get(baseParams, idx, totalGets)
+			m.get(baseParams, idx, totalGets, validate)
 		}(i)
 	}
 	wg.Wait()
@@ -453,7 +466,7 @@ func (m *ioContext) getsUntilStop() {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
-				m.get(baseParams, idx, 0)
+				m.get(baseParams, idx, 0, false /*validate*/)
 			}(idx)
 			idx++
 			if idx%5000 == 0 {

@@ -6,7 +6,6 @@ package integration
 
 import (
 	"fmt"
-	"path"
 	"strconv"
 	"sync"
 	"testing"
@@ -326,33 +325,25 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 }
 
 func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType string) {
-	const (
-		objCountToTest = 15
-		fileSize       = cmn.KiB
-	)
 	var (
-		filesPutCh = make(chan string, objCountToTest)
-		filesList  = make(map[string]string, objCountToTest)
-		errCh      = make(chan error, objCountToTest)
-		numPuts    = objCountToTest
-		versionDir = "versionid"
-		proxyURL   = tutils.RandomProxyURL()
+		m = ioContext{
+			t:        t,
+			bck:      bck,
+			num:      15,
+			fileSize: cmn.KiB,
+		}
+		proxyURL = tutils.RandomProxyURL()
 	)
 
-	// Create a few objects
-	tutils.Logf("Creating %d objects...\n", numPuts)
-	tutils.PutRandObjs(proxyURL, bck, versionDir, fileSize, numPuts, errCh, filesPutCh, cksumType)
-	tassert.SelectErr(t, errCh, "put", false)
-	close(filesPutCh)
-	close(errCh)
-	for fname := range filesPutCh {
-		if fname != "" {
-			filesList[path.Join(versionDir, fname)] = ""
-		}
-	}
+	m.init()
+	m.puts()
 
-	// Read object versions
-	msg := &cmn.SelectMsg{Prefix: versionDir}
+	t.Cleanup(func() {
+		m.del()
+	})
+
+	// Read object versions.
+	msg := &cmn.SelectMsg{}
 	msg.AddProps(cmn.GetPropsVersion, cmn.GetPropsAtime, cmn.GetPropsStatus)
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
@@ -361,10 +352,8 @@ func propsTestCore(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType str
 	}
 
 	// PUT objects must have all properties set: atime, cached, version
+	filesList := make(map[string]string)
 	for _, m := range reslist.Entries {
-		if _, ok := filesList[m.Name]; !ok {
-			continue
-		}
 		tutils.Logf("Initial version %s - %v\n", m.Name, m.Version)
 
 		if !m.CheckExists() && bck.IsRemote() {

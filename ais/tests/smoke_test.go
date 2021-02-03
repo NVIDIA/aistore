@@ -7,7 +7,6 @@ package integration
 import (
 	"fmt"
 	"math/rand"
-	"path"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/devtools/tutils"
+	"github.com/NVIDIA/go-tfdata/test/tassert"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -51,7 +52,7 @@ func TestSmoke(t *testing.T) {
 		errCh := make(chan error, cnt)
 		for file := range fp {
 			wg.Add(1)
-			go tutils.Del(proxyURL, bck.Bck, path.Join(objPrefix, file), wg, errCh, true)
+			go tutils.Del(proxyURL, bck.Bck, file, wg, errCh, true)
 		}
 		wg.Wait()
 		select {
@@ -62,58 +63,57 @@ func TestSmoke(t *testing.T) {
 	})
 }
 
-func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objPrefix string, objSize int64, ratio float32, cksumType string, filesPutCh chan string) {
+func oneSmoke(t *testing.T, proxyURL string, bck cmn.Bck, objPrefix string, objSize int64, ratio float32, cksumType string, objNameCh chan string) {
 	var (
-		nGet  = int(float32(workerCnt) * ratio)
-		nPut  = workerCnt - nGet
-		errCh = make(chan error, 100)
-		wg    = &sync.WaitGroup{}
+		objCnt = 40
+		nGet   = int(float32(workerCnt) * ratio)
+		nPut   = workerCnt - nGet
+		wg     = &errgroup.Group{}
 	)
 
 	for i := 0; i < workerCnt; i++ {
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				tutils.PutRandObjs(proxyURL, bck, objPrefix, uint64(objSize), 40, errCh, filesPutCh, cksumType)
-			}()
+			wg.Go(func() error {
+				objNames, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
+					ProxyURL:  proxyURL,
+					Bck:       bck,
+					ObjPath:   objPrefix,
+					ObjCnt:    objCnt,
+					ObjSize:   uint64(objSize),
+					CksumType: cksumType,
+				})
+				for _, objName := range objNames {
+					objNameCh <- objName
+				}
+				return err
+			})
 			nPut--
 		} else {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				getRandomFiles(proxyURL, bck, 40, objPrefix+"/", t, errCh)
-			}()
+			wg.Go(func() error {
+				return getRandomFiles(proxyURL, bck, objCnt, objPrefix+"/")
+			})
 			nGet--
 		}
 	}
-	wg.Wait()
-	select {
-	case err := <-errCh:
-		t.Error(err)
-	default:
-	}
+	err := wg.Wait()
+	tassert.CheckError(t, err)
 }
 
-func getRandomFiles(proxyURL string, bck cmn.Bck, numGets int, prefix string, t *testing.T, errCh chan error) {
+func getRandomFiles(proxyURL string, bck cmn.Bck, numGets int, prefix string) error {
 	var (
 		src        = rand.NewSource(time.Now().UnixNano())
 		random     = rand.New(src)
-		getsGroup  = &sync.WaitGroup{}
+		wg         = &errgroup.Group{}
 		msg        = &cmn.SelectMsg{Prefix: prefix}
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	items, err := api.ListObjects(baseParams, bck, msg, 0)
 	if err != nil {
-		errCh <- err
-		t.Error(err)
-		return
+		return err
 	}
 	if len(items.Entries) == 0 {
-		errCh <- fmt.Errorf("list_objects %s: is empty - no entries", bck)
-		// not considered a failure
-		return
+		return fmt.Errorf("list_objects %s: is empty - no entries", bck)
 	}
 	files := make([]string, 0)
 	for _, it := range items.Entries {
@@ -122,17 +122,11 @@ func getRandomFiles(proxyURL string, bck cmn.Bck, numGets int, prefix string, t 
 
 	for i := 0; i < numGets; i++ {
 		keyname := files[random.Intn(len(files))]
-		getsGroup.Add(1)
-		go func() {
-			defer getsGroup.Done()
-
+		wg.Go(func() error {
 			baseParams := tutils.BaseAPIParams(proxyURL)
 			_, err := api.GetObject(baseParams, bck, keyname)
-			if err != nil {
-				errCh <- err
-			}
-		}()
+			return err
+		})
 	}
-
-	getsGroup.Wait()
+	return wg.Wait()
 }

@@ -38,16 +38,17 @@ var (
 	}
 )
 
-func fillBucket(b *testing.B, proxyURL string, bck cmn.Bck, objSize uint64, objCount int) {
-	var (
-		filenameCh = make(chan string, objCount)
-		errCh      = make(chan error, objCount)
-	)
+func fillBucket(tb testing.TB, proxyURL string, bck cmn.Bck, objSize uint64, objCount int) {
 	tutils.Logf("PUT %d objects of size %d into bucket %s...\n", objCount, objSize, bck)
-	tutils.PutRandObjs(proxyURL, bck, "", objSize, objCount, errCh, filenameCh, cmn.ChecksumXXHash, true)
-	close(filenameCh)
-	close(errCh)
-	tassert.SelectErr(b, errCh, "put", true)
+	_, _, err := tutils.PutRandObjs(tutils.PutObjectsArgs{
+		ProxyURL:  proxyURL,
+		Bck:       bck,
+		ObjCnt:    objCount,
+		ObjSize:   objSize,
+		FixedSize: true,
+		CksumType: cmn.ChecksumXXHash,
+	})
+	tassert.CheckFatal(tb, err)
 }
 
 func BenchmarkECEncode(b *testing.B) {
