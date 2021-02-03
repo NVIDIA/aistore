@@ -69,6 +69,36 @@ var (
 	ErrInvalidToken  = errors.New("invalid token")
 )
 
+func (tk *AuthToken) aclForCluster(clusterID string) (perms AccessAttrs, ok bool) {
+	for _, pm := range tk.Clusters {
+		if pm.ID == clusterID {
+			return pm.Access, true
+		}
+	}
+	return 0, false
+}
+
+func (tk *AuthToken) aclForBucket(clusterID string, bck *Bck) (perms AccessAttrs, ok bool) {
+	for _, b := range tk.Buckets {
+		tbBck := b.Bck
+		if tbBck.Ns.UUID != clusterID {
+			continue
+		}
+		// For AuthN all buckets are external, so they have UUIDs. To correctly
+		// compare with local bucket, token's bucket should be fixed.
+		tbBck.Ns.UUID = ""
+		if b.Bck.Equal(*bck) {
+			return b.Access, true
+		}
+	}
+	return 0, false
+}
+
+// A user has two-level permissions: cluster-wide and on per bucket basis.
+// To be able to access data, a user must have either permission. This
+// allows creating users, e.g, with read-only access to the entire cluster,
+// and read-write access to a single bucket.
+// Per-bucket ACL overrides cluster-wide one.
 func (tk *AuthToken) CheckPermissions(clusterID string, bck *Bck, perms AccessAttrs) error {
 	if tk.IsAdmin {
 		return nil
@@ -76,43 +106,34 @@ func (tk *AuthToken) CheckPermissions(clusterID string, bck *Bck, perms AccessAt
 	debug.AssertMsg(perms != 0, "Empty permissions requested")
 	cluPerms := perms & AccessCluster
 	objPerms := perms &^ AccessCluster
-	// Cluster-wide permissions requested
-	hasPerms := true
+	cluACL, cluOk := tk.aclForCluster(clusterID)
 	if cluPerms != 0 {
-		debug.AssertMsg(clusterID != "", "Requested cluster permissions without cluster ID")
-		hasPerms = false
-		for _, pm := range tk.Clusters {
-			if pm.ID != clusterID {
-				continue
-			}
-			hasPerms = pm.Access.Has(cluPerms)
-			break
+		// Cluster-wide permissions requested
+		if !cluOk {
+			return ErrNoPermissions
 		}
-	}
-	if !hasPerms {
-		return ErrNoPermissions
+		debug.AssertMsg(clusterID != "", "Requested cluster permissions without cluster ID")
+		if !cluACL.Has(cluPerms) {
+			return ErrNoPermissions
+		}
 	}
 	if objPerms == 0 {
 		return nil
 	}
 
 	// Check only bucket specific permissions.
-	// For AuthN all buckets are external, so they have UUIDs. To correctly
-	// compare with local bucket, token's bucket should be fixed.
-	debug.AssertMsg(bck != nil, "Requested bucket permissions without bucket name")
-	for _, b := range tk.Buckets {
-		tbBck := b.Bck
-		if tbBck.Ns.UUID == clusterID {
-			tbBck.Ns.UUID = ""
+	debug.AssertMsg(bck != nil, "Requested bucket permissions without bucket")
+	bckACL, bckOk := tk.aclForBucket(clusterID, bck)
+	if bckOk {
+		if bckACL.Has(objPerms) {
+			return nil
 		}
-		if b.Bck.Equal(*bck) {
-			if b.Access.Has(perms) {
-				return nil
-			}
-			return ErrNoPermissions
-		}
+		return ErrNoPermissions
 	}
-	return ErrNoPermissions
+	if !cluOk || !cluACL.Has(objPerms) {
+		return ErrNoPermissions
+	}
+	return nil
 }
 
 func (uInfo *AuthUser) IsAdmin() bool {

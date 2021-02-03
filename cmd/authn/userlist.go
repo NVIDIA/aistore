@@ -355,6 +355,17 @@ func (m *userManager) issueToken(userID, pwd string, ttl ...time.Duration) (stri
 		return tInfo.Token, nil
 	}
 
+	// update ACLs with roles's ones
+	for _, role := range uInfo.Roles {
+		rInfo := &cmn.AuthRole{}
+		err := m.db.Get(rolesCollection, role, rInfo)
+		if err != nil {
+			continue
+		}
+		uInfo.Clusters = cmn.MergeClusterACLs(uInfo.Clusters, rInfo.Clusters)
+		uInfo.Buckets = cmn.MergeBckACLs(uInfo.Buckets, rInfo.Buckets)
+	}
+
 	// generate token
 	issued := time.Now()
 	expDelta := conf.Auth.ExpirePeriod
