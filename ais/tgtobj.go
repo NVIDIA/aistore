@@ -1181,7 +1181,6 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 			if params.Locked {
 				defer lom.Unlock(false)
 			}
-			debug.Assert(lom.Loaded())
 			return lom.Size(), nil
 		}
 
@@ -1208,7 +1207,6 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 			return n, err
 		}
 		// NOTE: Return number of input bytes, as resulting number of bytes might be unknown.
-		debug.Assert(lom.Loaded())
 		size = lom.Size()
 	}
 	debug.Assert(params.HdrMeta != nil)
