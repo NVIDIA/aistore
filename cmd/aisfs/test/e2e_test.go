@@ -23,6 +23,7 @@ import (
 )
 
 func TestE2E(t *testing.T) {
+	tutils.InitLocalCluster()
 	cmd := exec.Command("which", "aisfs")
 	if err := cmd.Run(); err != nil {
 		t.Skip("'aisfs' binary not found")

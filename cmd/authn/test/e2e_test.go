@@ -21,6 +21,7 @@ import (
 var authnURL string
 
 func TestAuthE2E(t *testing.T) {
+	tutils.InitLocalCluster()
 	cmd := exec.Command("which", "ais")
 	if err := cmd.Run(); err != nil {
 		t.Skip("'ais' binary not found")

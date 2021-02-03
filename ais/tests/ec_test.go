@@ -2167,7 +2167,7 @@ func TestECBucketEncode(t *testing.T) {
 	//
 }
 
-func init() {
+func initEC() {
 	proxyURL := tutils.GetPrimaryURL()
 	primary, err := tutils.GetPrimaryProxy(proxyURL)
 	if err != nil {

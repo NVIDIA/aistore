@@ -23,13 +23,13 @@ import (
 )
 
 const (
-	registerTimeout = time.Minute * 2
-	bucketTimeout   = time.Minute
+	defaultProxyURL = "http://localhost:8080"      // the url for the cluster's proxy (local)
+	dockerEnvFile   = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 )
 
 const (
-	proxyURL      = "http://localhost:8080"      // the url for the cluster's proxy (local)
-	dockerEnvFile = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
+	registerTimeout = time.Minute * 2
+	bucketTimeout   = time.Minute
 )
 
 type (
@@ -39,11 +39,20 @@ type (
 		Cmd  string
 		Args []string
 	}
+	ClusterType string
+)
+
+// Cluster type used for test
+const (
+	ClusterTypeLocal  ClusterType = "local"
+	ClusterTypeDocker ClusterType = "docker"
+	ClusterTypeK8s    ClusterType = "k8s"
 )
 
 var (
 	proxyURLReadOnly string          // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
 	pmapReadOnly     cluster.NodeMap // initial proxy map - it is read-only variable
+	testClusterType  ClusterType     // AIS cluster type - it is read-only variable
 
 	restoreNodesOnce sync.Once             // Ensures that the initialization happens only once.
 	restoreNodes     map[string]RestoreCmd // initial proxy and target nodes => command to restore them
@@ -70,7 +79,6 @@ var (
 func init() {
 	MMSA = memsys.DefaultPageMM()
 	envURL := os.Getenv(cmn.EnvVars.Endpoint)
-
 	// Since tests do not have access to cluster configuration, the tests
 	// detect client type by the primary proxy URL passed by a user.
 	// Certificate check is always disabled.
@@ -82,27 +90,26 @@ func init() {
 		Client: HTTPClient,
 		Log:    Logf,
 	}
-
-	initProxyURL()
-	initPmap()
-	initRemoteCluster()
-	initAuthToken()
 }
 
-func initProxyURL() {
+// InitLocalCluster inits tutils with AIS cluster:
+//  1. deployed locally using `make deploy` command and accessible @ localhost:8080 or
+//  2. cluster deployed on local docker environment or
+//  3. provided as `AIS_ENDPOINT` environment variable
+func InitLocalCluster() {
 	var (
 		// Gets the fields from the .env file from which the docker was deployed
 		envVars = cmn.ParseEnvVariables(dockerEnvFile)
 		// Host IP and port of primary cluster
 		primaryHostIP, port = envVars["PRIMARY_HOST_IP"], envVars["PORT"]
 
-		primary *cluster.Snode
+		clusterType = ClusterTypeLocal
+		proxyURL    = defaultProxyURL
 	)
 
-	proxyURLReadOnly = proxyURL
-
 	if containers.DockerRunning() {
-		proxyURLReadOnly = "http://" + primaryHostIP + ":" + port
+		clusterType = ClusterTypeDocker
+		proxyURL = "http://" + primaryHostIP + ":" + port
 	}
 
 	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
@@ -111,30 +118,10 @@ func initProxyURL() {
 		if !strings.HasPrefix(cliAISURL, "http") {
 			cliAISURL = "http://" + cliAISURL
 		}
-		proxyURLReadOnly = cliAISURL
+		proxyURL = cliAISURL
 	}
 
-	// Discover if a proxy is ready to accept requests.
-	err := cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
-		Call:    func() (int, error) { return 0, GetProxyReadiness(proxyURLReadOnly) },
-		SoftErr: 5,
-		HardErr: 5,
-		Sleep:   5 * time.Second,
-		Action:  fmt.Sprintf("check proxy readiness at %s", proxyURLReadOnly),
-	})
-	if err != nil {
-		err = fmt.Errorf("failed to successfully check readiness of a proxy at %s; err %v", proxyURLReadOnly, err)
-	}
-
-	if err == nil {
-		// Primary proxy can change if proxy tests are run and
-		// no new cluster is re-deployed before each test.
-		// Finds who is the current primary proxy.
-		if primary, err = GetPrimaryProxy(proxyURLReadOnly); err != nil {
-			err = fmt.Errorf("failed to get primary proxy info from %s; err %v", proxyURLReadOnly, err)
-		}
-	}
-
+	err := InitCluster(proxyURL, clusterType)
 	if err != nil {
 		fmt.Printf("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
 		fmt.Println("Environment variables:")
@@ -150,7 +137,52 @@ func initProxyURL() {
 		}
 		cmn.Exitf("")
 	}
+}
+
+// InitCluster initializes the environement necessary for testing against an AIS cluster.
+// IMPORTANT: If cluster is not initialize all the utils requesting the AIS cluster will fail.
+func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
+	proxyURLReadOnly = proxyURL
+	testClusterType = clusterType
+	if err = initProxyURL(); err != nil {
+		return
+	}
+	initPmap()
+	initRemoteCluster()
+	initAuthToken()
+	return
+}
+
+func initProxyURL() (err error) {
+	// Discover if a proxy is ready to accept requests.
+	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+		Call:    func() (int, error) { return 0, GetProxyReadiness(proxyURLReadOnly) },
+		SoftErr: 5,
+		HardErr: 5,
+		Sleep:   5 * time.Second,
+		Action:  fmt.Sprintf("check proxy readiness at %s", proxyURLReadOnly),
+	})
+	if err != nil {
+		err = fmt.Errorf("failed to successfully check readiness of a proxy at %s; err %v", proxyURLReadOnly, err)
+		return
+	}
+
+	if testClusterType == ClusterTypeK8s {
+		// For kubernetes cluster, we use LoadBalancer service to expose the proxies.
+		// `proxyURLReadOnly` will point to LoadBalancer service, and we need not get primary URL.
+		return
+	}
+
+	// Primary proxy can change if proxy tests are run and
+	// no new cluster is re-deployed before each test.
+	// Finds who is the current primary proxy.
+	primary, err := GetPrimaryProxy(proxyURLReadOnly)
+	if err != nil {
+		err = fmt.Errorf("failed to get primary proxy info from %s; err %v", proxyURLReadOnly, err)
+		return err
+	}
 	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
+	return
 }
 
 func initPmap() {

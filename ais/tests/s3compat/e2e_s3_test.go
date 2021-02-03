@@ -20,6 +20,7 @@ import (
 )
 
 func TestE2ES3(t *testing.T) {
+	tutils.InitLocalCluster()
 	cmd := exec.Command("which", "s3cmd")
 	if err := cmd.Run(); err != nil {
 		t.Skip("'s3cmd' binary not found")

@@ -18,6 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 )
 
+var (
+	proxyURL   string
+	baseParams api.BaseParams
+)
+
 func setBucket() (bck cmn.Bck, err error) {
 	var (
 		bucket   = os.Getenv("BUCKET")
@@ -93,9 +98,17 @@ func waitForCluster() error {
 	return nil
 }
 
+func initTestEnv() {
+	tutils.InitLocalCluster()
+	proxyURL = tutils.RandomProxyURL()
+	baseParams = tutils.BaseAPIParams(proxyURL)
+	initEC()
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
+	initTestEnv()
 	var err error
 	if cliBck, err = setBucket(); err == nil {
 		err = waitForCluster()

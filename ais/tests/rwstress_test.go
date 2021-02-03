@@ -36,12 +36,10 @@ func generateRandomNames(fileCount int) {
 }
 
 var (
-	proxyURL   = tutils.RandomProxyURL()
-	baseParams = tutils.BaseAPIParams(proxyURL)
-	fileNames  []string
-	numLoops   int
-	numFiles   int
-	opFuncMap  = map[string]func(string, string, cmn.Bck) opRes{
+	fileNames []string
+	numLoops  int
+	numFiles  int
+	opFuncMap = map[string]func(string, string, cmn.Bck) opRes{
 		http.MethodPut:    opPut,
 		http.MethodGet:    opGet,
 		http.MethodDelete: opDelete,
