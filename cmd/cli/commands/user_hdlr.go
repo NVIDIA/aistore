@@ -309,6 +309,28 @@ func updateAuthClusterHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
+	if cluSpec.Alias == "" && cluSpec.ID == "" {
+		return missingArgumentsError(c, "cluster ID")
+	}
+	list, err := api.GetClusterAuthN(authParams, cluSpec)
+	if err != nil {
+		return err
+	}
+	if cluSpec.ID == "" {
+		for _, cluster := range list {
+			if cluSpec.Alias == cluster.ID {
+				cluSpec.ID = cluSpec.Alias
+				break
+			}
+			if cluSpec.Alias == cluster.Alias {
+				cluSpec.ID = cluster.ID
+				break
+			}
+		}
+	}
+	if cluSpec.ID == "" {
+		return fmt.Errorf("cluster %q not found", cluSpec.Alias)
+	}
 
 	return api.UpdateClusterAuthN(authParams, cluSpec)
 }

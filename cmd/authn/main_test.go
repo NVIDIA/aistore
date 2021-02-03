@@ -127,14 +127,16 @@ func TestManager(t *testing.T) {
 
 func TestToken(t *testing.T) {
 	var (
-		err   error
-		token string
+		err    error
+		token  string
+		secret = conf.Auth.Secret
 	)
 
 	driver := dbdriver.NewDBMock()
 	mgr, err := newUserManager(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
+	defer deleteUsers(mgr, false, t)
 
 	// correct user creds
 	shortExpiration := 2 * time.Second
@@ -142,16 +144,12 @@ func TestToken(t *testing.T) {
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
-	info, err := mgr.userByToken(token)
+	info, err := cmn.DecryptToken(token, secret)
 	if err != nil {
-		t.Errorf("Failed to get user by token %v: %v", token, err)
+		t.Fatalf("Failed to decript token %v: %v", token, err)
 	}
-	if info == nil || info.ID != users[1] {
-		if info == nil {
-			t.Errorf("No user returned for token %v", token)
-		} else {
-			t.Errorf("Invalid user %s returned for token %v", info.ID, token)
-		}
+	if info.UserID != users[1] {
+		t.Errorf("Invalid user %s returned for token of %s", info.UserID, users[1])
 	}
 
 	// incorrect user creds
@@ -162,35 +160,11 @@ func TestToken(t *testing.T) {
 
 	// expired token test
 	time.Sleep(shortExpiration)
-	_, err = mgr.tokenByUser(users[1])
-	if err != nil {
-		t.Errorf("No token found for %s", users[1])
+	_, err = cmn.DecryptToken(token, secret)
+	if err == nil {
+		t.Fatalf("Token must be expired: %s", token)
 	}
-	info, err = mgr.userByToken(token)
-	if info != nil || err == nil {
-		t.Errorf("Token %s expected to be expired[%p]: %v", token, info, err)
-	} else if err != errTokenExpired {
+	if err != cmn.ErrTokenExpired {
 		t.Errorf("Invalid error(must be 'token expired'): %v", err)
 	}
-
-	// revoke token test
-	token, err = mgr.issueToken(users[1], passs[1])
-	if err == nil {
-		_, err = mgr.userByToken(token)
-	}
-	if err != nil {
-		t.Errorf("Failed to test revoking token %v", err)
-	} else {
-		mgr.revokeToken(token)
-		info, err = mgr.userByToken(token)
-		if info != nil {
-			t.Errorf("Some user returned by revoken token %s: %s", token, info.ID)
-		} else if err == nil {
-			t.Error("No error for revoked token")
-		} else if err != errTokenNotFound {
-			t.Errorf("Invalid error: %v", err)
-		}
-	}
-
-	deleteUsers(mgr, false, t)
 }

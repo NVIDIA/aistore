@@ -67,6 +67,7 @@ type (
 var (
 	ErrNoPermissions = errors.New("insufficient permissions")
 	ErrInvalidToken  = errors.New("invalid token")
+	ErrTokenExpired  = errors.New("token expired")
 )
 
 func (tk *AuthToken) aclForCluster(clusterID string) (perms AccessAttrs, ok bool) {
@@ -197,6 +198,9 @@ func DecryptToken(tokenStr, secret string) (*AuthToken, error) {
 	tInfo := &AuthToken{}
 	if err := MorphMarshal(claims, tInfo); err != nil {
 		return nil, ErrInvalidToken
+	}
+	if tInfo.Expires.Before(time.Now()) {
+		return nil, ErrTokenExpired
 	}
 	return tInfo, nil
 }

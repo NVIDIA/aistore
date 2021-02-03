@@ -24,7 +24,6 @@ const (
 	authDB             = "authn.db"
 	usersCollection    = "user"
 	rolesCollection    = "role"
-	tokensCollection   = "token"
 	revokedCollection  = "revoked"
 	clustersCollection = "cluster"
 
@@ -46,8 +45,6 @@ type (
 
 var (
 	errInvalidCredentials = errors.New("invalid credentials")
-	errTokenNotFound      = errors.New("token not found")
-	errTokenExpired       = errors.New("token expired")
 
 	predefinedRoles = []struct {
 		prefix string
@@ -208,20 +205,7 @@ func (m *userManager) delUser(userID string) error {
 	if userID == adminID {
 		return errors.New("cannot remove built-in administrator account")
 	}
-	token := &cmn.AuthToken{}
-	errToken := m.db.Get(tokensCollection, userID, token)
-	err := m.db.Delete(usersCollection, userID)
-	if err != nil {
-		return err
-	}
-
-	if errToken == nil {
-		go m.broadcastRevoked(token.Token)
-		_ = m.db.Delete(tokensCollection, userID)
-		err = m.db.SetString(revokedCollection, token.Token, userID)
-	}
-
-	return err
+	return m.db.Delete(usersCollection, userID)
 }
 
 // Unregister an existing cluster
@@ -349,12 +333,6 @@ func (m *userManager) issueToken(userID, pwd string, ttl ...time.Duration) (stri
 		return "", errInvalidCredentials
 	}
 
-	tInfo := &cmn.AuthToken{}
-	err = m.db.Get(tokensCollection, userID, tInfo)
-	if err == nil && tInfo.Expires.After(time.Now()) {
-		return tInfo.Token, nil
-	}
-
 	// update ACLs with roles's ones
 	for _, role := range uInfo.Roles {
 		rInfo := &cmn.AuthRole{}
@@ -400,14 +378,6 @@ func (m *userManager) issueToken(userID, pwd string, ttl ...time.Duration) (stri
 	if err != nil {
 		return "", fmt.Errorf("failed to generate token: %v", err)
 	}
-
-	// TODO: multiple tokens per user
-	tInfo = &cmn.AuthToken{
-		UserID:  userID,
-		Expires: expires,
-		Token:   tokenString,
-	}
-	err = m.db.Set(tokensCollection, userID, tInfo)
 	return tokenString, err
 }
 
@@ -422,39 +392,7 @@ func (m *userManager) revokeToken(token string) error {
 	// send the token in all case to allow an admin to revoke
 	// an existing token even after cluster restart
 	go m.broadcastRevoked(token)
-
-	uInfo, err := m.userByToken(token)
-	if err == nil {
-		if err := m.db.Delete(tokensCollection, uInfo.ID); err != nil {
-			glog.Errorf("Failed to clean up token for %s", uInfo.ID)
-		}
-	}
-
 	return nil
-}
-
-func (m *userManager) userByToken(token string) (*cmn.AuthUser, error) {
-	recs, err := m.db.GetAll(tokensCollection, "")
-	if err != nil {
-		return nil, err
-	}
-	for uid, tkn := range recs {
-		tInfo := &cmn.AuthToken{}
-		err := jsoniter.Unmarshal([]byte(tkn), tInfo)
-		cmn.AssertNoErr(err)
-		if token != tInfo.Token {
-			continue
-		}
-		if tInfo.Expires.Before(time.Now()) {
-			// autocleanup expired tokens
-			_ = m.db.Delete(tokensCollection, uid)
-			return nil, errTokenExpired
-		}
-		uInfo := &cmn.AuthUser{}
-		err = m.db.Get(usersCollection, uid, uInfo)
-		return uInfo, err
-	}
-	return nil, errTokenNotFound
 }
 
 func (m *userManager) userList() (map[string]*cmn.AuthUser, error) {
@@ -470,12 +408,6 @@ func (m *userManager) userList() (map[string]*cmn.AuthUser, error) {
 		users[uInfo.ID] = uInfo
 	}
 	return users, nil
-}
-
-func (m *userManager) tokenByUser(userID string) (*cmn.AuthToken, error) {
-	tInfo := &cmn.AuthToken{}
-	err := m.db.Get(tokensCollection, userID, tInfo)
-	return tInfo, err
 }
 
 func (m *userManager) roleList() ([]*cmn.AuthRole, error) {
