@@ -37,7 +37,7 @@ variables:
     - ais
   timeout: 2h30m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -94,7 +94,7 @@ test:authn:
     - ais
   timeout: 20m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -116,7 +116,7 @@ test:https:
     - ais
   timeout: 20m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -254,7 +254,7 @@ test:kube:
   <<: *test_kube_def
   timeout: 2h
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -272,7 +272,7 @@ test:kube-single-target:
   <<: *test_kube_def
   timeout: 2h
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -290,7 +290,7 @@ test:kube-aisloader:
   <<: *test_kube_def
   timeout: 15m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
