@@ -63,6 +63,8 @@ echo "Deploying AIS on Minikube"
 echo "AIS on Minikube deployed"
 popd
 
+kubectl logs -f -l 'type in (aisproxy,aistarget)' & # Send to background, don't show ETL logs.
+
 # Running kubernetes based tests
 echo "----- RUNNING K8S TESTS -----"
 AIS_ENDPOINT="$(minikube ip):8080" BUCKET=test RE="TestETL" make test-run

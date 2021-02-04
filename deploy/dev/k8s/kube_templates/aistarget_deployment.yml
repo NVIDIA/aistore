@@ -3,6 +3,7 @@ kind: Pod
 metadata:
   name: ${POD_NAME}
   labels:
+    app: ais
     type: aistarget
 spec:
   hostNetwork: true
@@ -56,7 +57,7 @@ spec:
         export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
         export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
         source /etc/ais/aisnode_config.sh &&
-        aisnode -config=/etc/ais/ais.json -role=target -alsologtostderr=true;
+        aisnode -config=/etc/ais/ais.json -role=target -stderrthreshold=1;
   volumes:
     - name: aws-credentials
       secret:

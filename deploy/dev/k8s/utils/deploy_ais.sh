@@ -93,4 +93,4 @@ kubectl get pods -o wide
 echo "Done."
 echo ""
 echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
-echo "export AIS_ENDPOINT=\"http://${minikube ip}:8080\""
+echo "export AIS_ENDPOINT=\"http://$(minikube ip):8080\""
