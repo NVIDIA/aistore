@@ -1350,6 +1350,10 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlrf(w, r, "%s: cannot rename erasure-coded object %s", t.si, lom)
 		return
 	}
+	if msg.Name == lom.ObjName {
+		t.invalmsghdlrf(w, r, "%s: cannot rename/move object %s onto itself", t.si, lom)
+		return
+	}
 	buf, slab := t.gmm.Alloc()
 	coi := allocCopyObjInfo()
 	{
@@ -1365,10 +1369,10 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
+	// TODO: combine copy+delete under a single write lock
 	lom.Lock(true)
 	if err = lom.Remove(); err != nil {
-		glog.Warningf("%s: failed to delete renamed object source %s: %v", t.si, lom, err)
+		glog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t.si, lom, msg.Name, err)
 	}
 	lom.Unlock(true)
 }

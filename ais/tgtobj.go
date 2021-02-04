@@ -987,13 +987,12 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cmn.CksumHash) s
 // COPY OBJECT //
 /////////////////
 
-func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size int64, err error) {
-	cmn.Assert(coi.DP == nil)
-
-	if srcLOM.Bck().IsRemote() || coi.BckTo.IsRemote() {
+func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int64, err error) {
+	debug.Assert(coi.DP == nil)
+	if src.Bck().IsRemote() || coi.BckTo.IsRemote() {
 		// There will be no logic to create local copies etc, we can simply use copyReader
 		coi.DP = &cluster.LomReader{}
-		return coi.copyReader(srcLOM, objNameTo)
+		return coi.copyReader(src, objNameTo)
 	}
 	si := coi.t.si
 	if !coi.localOnly {
@@ -1002,62 +1001,69 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size 
 			return
 		}
 	}
-	exclusive := si.ID() == coi.t.si.ID() && !coi.DryRun
-	srcLOM.Lock(exclusive)
-	if err = srcLOM.Load(false); err != nil {
-		if !cmn.IsObjNotExist(err) {
-			err = fmt.Errorf("%s: err: %v", srcLOM, err)
-		}
-
-		srcLOM.Unlock(exclusive)
-		return
-	}
+	// remote copy
 	if si.ID() != coi.t.si.ID() {
+		src.Lock(false)
+		if err = src.Load(false); err != nil {
+			if !cmn.IsObjNotExist(err) {
+				err = fmt.Errorf("%s: err: %v", src, err)
+			}
+			src.Unlock(false)
+			return
+		}
 		params := cluster.SendToParams{
 			ObjNameTo: objNameTo,
 			Tsi:       si,
 			DM:        coi.DM,
 			RLocked:   true,
-			NoVersion: !srcLOM.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
+			NoVersion: !src.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
 		}
-		return coi.putRemote(srcLOM, params)
+		return coi.putRemote(src, params) // r-unlocks inside
 	}
+	// dry-run
 	if coi.DryRun {
-		defer srcLOM.Unlock(false)
-		// TODO: replace with something similar to srcLOM.FQN == dst.FQN, but dstBck might not exist.
-		if srcLOM.Bucket().Equal(coi.BckTo.Bck) && srcLOM.ObjName == objNameTo {
+		// TODO: replace with something similar to src.FQN == dst.FQN, but dstBck might not exist.
+		if src.Bucket().Equal(coi.BckTo.Bck) && src.ObjName == objNameTo {
 			return 0, nil
 		}
-		return srcLOM.Size(), nil
+		return src.Size(), nil
 	}
-
-	defer srcLOM.Unlock(true)
+	// local copy
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
 	err = dst.Init(coi.BckTo.Bck)
 	if err != nil {
 		return
 	}
+	if src.FQN == dst.FQN { // resilvering with a single mountpath?
+		return
+	}
 
-	// Lock destination for writing if the destination has a different uname.
-	if srcLOM.Uname() != dst.Uname() {
+	exclusive := src.Uname() == dst.Uname()
+	src.Lock(exclusive)
+	defer src.Unlock(exclusive)
+	if err = src.Load(false); err != nil {
+		if !cmn.IsObjNotExist(err) {
+			err = fmt.Errorf("%s: err: %v", src, err)
+		}
+		return
+	}
+
+	// unless overwriting the source w-lock the destination (see `exclusive`)
+	if src.Uname() != dst.Uname() {
 		dst.Lock(true)
 		defer dst.Unlock(true)
-	}
-	// Resilvering with a single mountpath.
-	if srcLOM.FQN == dst.FQN {
-		return
-	}
-	if err = dst.Load(false); err == nil {
-		if srcLOM.Cksum().Equal(dst.Cksum()) {
+		if err = dst.Load(false); err == nil {
+			if src.Cksum().Equal(dst.Cksum()) {
+				return
+			}
+		} else if cmn.IsErrBucketNought(err) {
 			return
 		}
-	} else if cmn.IsErrBucketNought(err) {
-		return
 	}
-	dst2, err2 := srcLOM.CopyObject(dst.FQN, coi.Buf)
+	dst2, err2 := src.CopyObject(dst.FQN, coi.Buf)
 	if err2 == nil {
-		size = srcLOM.Size()
+		size = src.Size()
 		if coi.finalize {
 			coi.t.putMirror(dst2)
 		}
