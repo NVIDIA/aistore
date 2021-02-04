@@ -158,3 +158,13 @@ func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 		Path:       cmn.URLPathRoles.Join(role),
 	})
 }
+
+func RevokeToken(baseParams BaseParams, token string) error {
+	baseParams.Method = http.MethodDelete
+	msg := &AuthCreds{Token: token}
+	return DoHTTPRequest(ReqParams{
+		Body:       cmn.MustMarshal(msg),
+		BaseParams: baseParams,
+		Path:       cmn.URLPathTokens.S,
+	})
+}

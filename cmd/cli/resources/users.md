@@ -1,4 +1,13 @@
-# User Account and Access management
+## Table of contents
+
+- [User Account and Access management](#user-account-and-access-management)
+- [Token management](#token-management)
+	- [Generate a token for CLI](#generate-a-token-for-cli)
+	- [Generate a token to a file](#generate-a-token-to-a-file)
+	- [Revoke a token](#revoke-a-token)
+- [Command List](#command-list)
+
+## User Account and Access management
 
 [AuthN](/docs/authn.md) is AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
 
@@ -13,8 +22,7 @@ CLI automatically saves the received token to user's configuration directory and
 
 When a token is revoked, AuthN notifies registered clusters, so they update their blacklists.
 
-## Getting a token
-
+## Token management
 
 ### Generate a token for CLI
 
@@ -37,25 +45,37 @@ It results in that the regular requests use the last generated token for all req
 But when the user needs to modify any AuthN data, the user executes CLI with optional path to the admin token.
 
 ```console
-# generate a token and save to a given location
+$ # generate a token and save to a given location
 $ ais auth login -p admin --file ./admin.token admin
 Token saved to ./admin.token
 
-# log in as a regular user
+$ # log in as a regular user
 $ ais auth login -p pass user
 Token(/home/ubuntu/.config/ais/auth.token):
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1Z...
 
-# create bucket as a regular user
+$ # create bucket as a regular user
 $ ais create bucket ais://bck1
 
 # removing a user requres admin's token, pass path to the token to CLI
 $ AUTHN_TOKEN_FILE=./admin.token ais auth rm user tmpUser1
 ```
 
+### Revoke a token
+
+When a user's token is compromised, the tokens should be revoked:
+
+```console
+$ # pass the token in command line
+$ ais auth rm token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1Z...
+
+$ # read the token from a file created by AIS CLI
+$ ais auth rm token -f /home/user/user.token
+```
+
 ## Command List
 
-## Register new user
+### Register new user
 
 `ais auth add user [-p USER_PASS] USER_NAME [ROLE [ROLE...]]`
 
@@ -77,7 +97,7 @@ user1   -
 user2   PowerUser
 ```
 
-## Update user
+### Update user
 
 `ais auth update user [-p USER_PASS] USER_NAME [ROLE [ROLE...]]`
 
@@ -85,13 +105,13 @@ Updates user password and list of roles. If role list is omitted, the current
 user role remains unchanged.
 Changing role for built-in account `admin` is forbidden.
 
-## Unregister existing user
+### Unregister existing user
 
 `ais auth rm user USER_NAME`
 
 Remove an existing user. The built-in account `admin` cannot be removed.
 
-## List registered users
+### List registered users
 
 `ais auth show user`
 
@@ -105,7 +125,7 @@ user1   Guest-clu1,Guest-clu2
 user2   PowerUser-clu1
 ```
 
-## List existing roles
+### List existing roles
 
 `ais auth show role`
 
@@ -120,7 +140,7 @@ Guest           Read-only access to buckets
 PowerUser       Full access to cluster
 ```
 
-## Log in to AIS cluster
+### Log in to AIS cluster
 
 `ais auth login [-p USER_PASS] USER_NAME`
 
@@ -130,14 +150,14 @@ Next CLI runs automatically load and use the token for every request to AIS clus
 The saved token can be used by other applications, like `curl`.
 Please see [AuthN documentation](/docs/authn.md) to read how to use AuthN API directly.
 
-## Log out
+### Log out
 
 `ais auth logout`
 
 Erase user's token from a local machine. The token is not revoked, so it can be used by any application until it expires.
 To forbid using the token from any application, the token must be revoked manually in addition to logging out.
 
-## Register new cluster
+### Register new cluster
 
 `ais auth add cluster [ALIAS] [URL...]`
 
@@ -155,19 +175,19 @@ Please note that the role names include cluster's alias if it was defined. If al
 
 See full example in [List registered clusters](#list-registered-clusters).
 
-## Update existing cluster
+### Update existing cluster
 
 `ais auth update cluster CLUSTER_ID [ALIAS] URL [URL...]`
 
 Replaces the list of URLs or changes alias for an existing cluster.
 
-## Unregister existing cluster
+### Unregister existing cluster
 
 `ais auth rm cluster CLUSTER_ID`
 
 Remove the existing cluster from notification list.
 
-## List registered clusters
+### List registered clusters
 
 `ais auth show cluster`
 

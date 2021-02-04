@@ -7,6 +7,7 @@ package commands
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -27,15 +29,17 @@ const (
 	authnServerURL = "AUTHN_URL"
 	authnTokenPath = "AUTHN_TOKEN_FILE"
 
-	flagsAuthUserLogin = "user_login"
-	flagsAuthRoleAdd   = "role_add"
+	flagsAuthUserLogin   = "user_login"
+	flagsAuthRoleAdd     = "role_add"
+	flagsAuthRevokeToken = "revoke_token"
 )
 
 var (
 	authFlags = map[string][]cli.Flag{
-		flagsAuthUserLogin: {tokenFileFlag, passwordFlag},
-		subcmdAuthUser:     {passwordFlag},
-		flagsAuthRoleAdd:   {descriptionFlag},
+		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag},
+		subcmdAuthUser:       {passwordFlag},
+		flagsAuthRoleAdd:     {descriptionFlag},
+		flagsAuthRevokeToken: {tokenFileFlag},
 	}
 	authCmds = []cli.Command{
 		{
@@ -94,6 +98,13 @@ var (
 							ArgsUsage:    deleteRoleArgument,
 							Action:       wrapAuthN(deleteRoleHandler),
 							BashComplete: oneRoleCompletions,
+						},
+						{
+							Name:      subcmdAuthToken,
+							Usage:     "revoke an authorization token",
+							Flags:     authFlags[flagsAuthRevokeToken],
+							ArgsUsage: deleteTokenArgument,
+							Action:    wrapAuthN(revokeTokenHandler),
 						},
 					},
 				},
@@ -450,4 +461,27 @@ func parseClusterSpecs(c *cli.Context) (cluSpec cmn.AuthCluster, err error) {
 		cluSpec.Alias = arg
 	}
 	return cluSpec, nil
+}
+
+func revokeTokenHandler(c *cli.Context) (err error) {
+	token := c.Args().Get(0)
+	tokenFile := parseStrFlag(c, tokenFileFlag)
+	if token != "" && tokenFile != "" {
+		return fmt.Errorf("defined either a token or token filename")
+	}
+	if tokenFile != "" {
+		bt, err := ioutil.ReadFile(tokenFile)
+		if err != nil {
+			return err
+		}
+		creds := &api.AuthCreds{}
+		if err = jsoniter.Unmarshal(bt, creds); err != nil {
+			return fmt.Errorf("invalid token file format")
+		}
+		token = creds.Token
+	}
+	if token == "" {
+		return missingArgumentsError(c, "token or token filename")
+	}
+	return api.RevokeToken(authParams, token)
 }

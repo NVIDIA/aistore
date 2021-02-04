@@ -140,6 +140,7 @@ const (
 	subcmdAuthUser    = "user"
 	subcmdAuthRole    = "role"
 	subcmdAuthCluster = "cluster"
+	subcmdAuthToken   = "token"
 
 	// Warm up subcommands
 	subcmdPreload = "preload"
@@ -208,6 +209,7 @@ const (
 	showAuthRoleArgument      = "[ROLE]"
 	addAuthRoleArgument       = "ROLE [CLUSTER_ID PERMISSION ...]"
 	deleteRoleArgument        = "ROLE"
+	deleteTokenArgument       = "TOKEN | TOKEN_FILE"
 
 	// Search
 	searchArgument = "KEYWORD [KEYWORD...]"
@@ -329,7 +331,7 @@ var (
 	checksumFlags    = getCksumFlags()
 
 	// AuthN
-	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "save token to file"}
+	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 
 	// Copy Bucket

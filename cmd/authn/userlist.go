@@ -197,6 +197,8 @@ func (m *userManager) addCluster(info *cmn.AuthCluster) error {
 		return err
 	}
 	m.createRolesForCluster(info)
+
+	go m.syncTokenList(info)
 	return nil
 }
 
@@ -393,6 +395,36 @@ func (m *userManager) revokeToken(token string) error {
 	// an existing token even after cluster restart
 	go m.broadcastRevoked(token)
 	return nil
+}
+
+// Create a list of non-expired and valid revoked tokens.
+// Obsolete and invalid tokens are removed from the database.
+func (m *userManager) generateRevokedTokenList() ([]string, error) {
+	tokens, err := m.db.List(revokedCollection, "")
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	revokeList := make([]string, 0)
+	for _, t := range tokens {
+		token, err := cmn.DecryptToken(t, conf.Auth.Secret)
+		shortInfo := t
+		if len(t) > 32 {
+			shortInfo = t[len(t)-32:]
+		}
+		if err != nil {
+			glog.Infof("removing invalid token: %s", shortInfo)
+			m.db.Delete(revokedCollection, t)
+			continue
+		}
+		if token.Expires.Before(now) {
+			glog.Infof("removing expired token: %s", shortInfo)
+			m.db.Delete(revokedCollection, t)
+			continue
+		}
+		revokeList = append(revokeList, t)
+	}
+	return revokeList, nil
 }
 
 func (m *userManager) userList() (map[string]*cmn.AuthUser, error) {

@@ -155,6 +155,12 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, err := cmn.DecryptToken(msg.Token, conf.Auth.Secret)
+	if err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+
 	a.users.revokeToken(msg.Token)
 }
 

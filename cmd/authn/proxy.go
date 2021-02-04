@@ -50,6 +50,28 @@ func (m *userManager) broadcast(method, path string, body []byte) {
 	wg.Wait()
 }
 
+// Send valid and non-expired revoked token list to a cluster.
+func (m *userManager) syncTokenList(cluster *cmn.AuthCluster) {
+	tokenList, err := m.generateRevokedTokenList()
+	if err != nil {
+		glog.Errorf("failed to sync token list with %q: %v", cluster.ID, err)
+		return
+	}
+	if len(tokenList) == 0 {
+		return
+	}
+	body := cmn.MustMarshal(ais.TokenList{Tokens: tokenList})
+	for _, u := range cluster.URLs {
+		if err = m.proxyRequest(http.MethodDelete, u, cmn.Tokens, body); err == nil {
+			break
+		}
+		err = fmt.Errorf("failed to sync revoked tokens with %q: %v", cluster.ID, err)
+	}
+	if err != nil {
+		glog.Error(err)
+	}
+}
+
 // Generic function to send everything to a proxy
 func (m *userManager) proxyRequest(method, proxyURL, path string, injson []byte) error {
 	startRequest := time.Now()
