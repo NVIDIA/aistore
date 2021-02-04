@@ -77,6 +77,8 @@ func loadLogLevel() {
 	}
 }
 
+func Enabled() bool { return true }
+
 func Errorln(a ...interface{}) {
 	if len(a) == 1 {
 		glog.ErrorDepth(1, "[DEBUG] ", a[0])

@@ -94,9 +94,15 @@ type (
 		HardErr uint // How many retries on any other error.
 		Sleep   time.Duration
 
-		NoLog   bool // Determine if we should stop logging errors.
-		BackOff bool // If requests should be retried less and less often.
+		BackOff   bool // If requests should be retried less and less often.
+		Verbosity int  // Determine the verbosity level.
 	}
+)
+
+const (
+	CallWithRetryLogVerbose = iota
+	CallWithRetryLogQuiet
+	CallWithRetryLogOff
 )
 
 // ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
@@ -550,18 +556,24 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 		args.Action = "call"
 	}
 
-	sleep := args.Sleep
-	for hardErrCnt, softErrCnt, iter := uint(0), uint(0), uint(1); ; iter++ {
+	var (
+		sleep                        = args.Sleep
+		hardErrCnt, softErrCnt, iter uint
+	)
+	for hardErrCnt, softErrCnt, iter = uint(0), uint(0), uint(1); ; iter++ {
 		var status int
 		if status, err = args.Call(); err == nil {
+			if args.Verbosity < CallWithRetryLogOff && (hardErrCnt > 0 || softErrCnt > 0) {
+				glog.Warningf("%s Successful %s, after errors (softErr: %d, hardErr: %d, last err: %v)", callerStr, args.Action, softErrCnt, hardErrCnt, err)
+			}
 			return
 		}
 		if args.IsFatal != nil && args.IsFatal(err) {
 			return
 		}
 
-		if !args.NoLog {
-			glog.Errorf("%sFailed to %s, err: %v (iter: %d, status code: %d)", callerStr, args.Action, err, iter, status)
+		if args.Verbosity < CallWithRetryLogQuiet {
+			glog.Errorf("%s Failed to %s, err: %v (iter: %d, status code: %d)", callerStr, args.Action, err, iter, status)
 		}
 		if IsErrConnectionRefused(err) || IsErrConnectionReset(err) {
 			softErrCnt++
@@ -575,6 +587,11 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 			break
 		}
 		time.Sleep(sleep)
+	}
+
+	// Just print once summary of the errors. No need to repeat the log for Verbose setting.
+	if args.Verbosity == CallWithRetryLogQuiet {
+		glog.Errorf("%sFailed to %s (softErr: %d, hardErr: %d, last err: %v)", callerStr, args.Action, softErrCnt, hardErrCnt, err)
 	}
 	return
 }

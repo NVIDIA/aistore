@@ -131,11 +131,11 @@ func doHTTPRequestGetHTTPResp(reqParams ReqParams) (resp *http.Response, err err
 	}
 
 	err = cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
-		Call:    call,
-		NoLog:   true,
-		SoftErr: httpMaxRetries,
-		Sleep:   httpRetrySleep,
-		BackOff: true,
+		Call:      call,
+		Verbosity: cmn.CallWithRetryLogOff,
+		SoftErr:   httpMaxRetries,
+		Sleep:     httpRetrySleep,
+		BackOff:   true,
 	})
 
 	if err != nil {

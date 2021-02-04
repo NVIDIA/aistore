@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/etl/runtime"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -105,25 +104,6 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 	return core.NewTFRecordReader(f).ReadAllExamples()
 }
 
-func etlInit(name, comm string) (string, error) {
-	tutils.Logln("Reading template")
-	spec, err := tetl.GetTransformYaml(name)
-	if err != nil {
-		return "", err
-	}
-
-	pod, err := etl.ParsePodSpec(nil, spec)
-	if err != nil {
-		return "", err
-	}
-	if comm != "" {
-		pod.Annotations["communication_type"] = comm
-	}
-	spec, _ = jsoniter.Marshal(pod)
-	tutils.Logln("Init ETL")
-	return api.ETLInit(baseParams, spec)
-}
-
 func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPath string, fEq filesEqualFunc) {
 	var (
 		bck                    = cmn.Bck{Name: "etl-test", Provider: cmn.ProviderAIS}
@@ -158,7 +138,7 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 	tassert.CheckFatal(t, err)
 	tutils.PutObject(t, bck, objName, reader)
 
-	uuid, err = etlInit(transformer, comm)
+	uuid, err = tetl.Init(baseParams, transformer, comm)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		tutils.Logf("Stop %q\n", uuid)
@@ -215,21 +195,19 @@ func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
 	tassert.Errorf(t, bf.Len() == cmn.KiB, "Expected %d bytes, got %d", cmn.KiB, bf.Len())
 }
 
+// Responsible for cleaning ETL xaction, ETL containers, destination bucket.
 func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
 	bckTo := cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
-
-	defer func() {
-		tutils.Logf("Stop %q\n", uuid)
-		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
+	t.Cleanup(func() {
+		tetl.StopETL(baseParams, uuid)
 		tutils.DestroyBucket(t, proxyURL, bckTo)
-	}()
+	})
 
 	tutils.Logf("Start offline ETL %q\n", uuid)
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
 	tassert.CheckFatal(t, err)
 
-	args := api.XactReqArgs{ID: xactID, Kind: cmn.ActETLBck, Timeout: timeout}
-	_, err = api.WaitForXaction(baseParams, args)
+	err = tetl.WaitForFinished(baseParams, xactID, timeout)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(baseParams, bckTo, nil, 0)
@@ -292,12 +270,9 @@ func TestETLObjectCloud(t *testing.T) {
 
 	for comm, configs := range tcs {
 		t.Run(t.Name()+"/"+comm, func(t *testing.T) {
-			uuid, err := etlInit(tetl.Echo, comm)
+			uuid, err := tetl.Init(baseParams, tetl.Echo, comm)
 			tassert.CheckFatal(t, err)
-			defer func() {
-				tutils.Logf("Stop %q\n", uuid)
-				tassert.CheckError(t, api.ETLStop(baseParams, uuid))
-			}()
+			t.Cleanup(func() { tetl.StopETL(baseParams, uuid) })
 
 			for _, conf := range configs {
 				t.Run(fmt.Sprintf("%s/cached=%t", t.Name(), conf.cached), func(t *testing.T) {
@@ -342,7 +317,7 @@ func TestETLBucket(t *testing.T) {
 		t.Run(test.Name(), func(t *testing.T) {
 			tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: test.onlyLong})
 
-			uuid, err := etlInit(test.transformer, test.comm)
+			uuid, err := tetl.Init(baseParams, test.transformer, test.comm)
 			tassert.CheckFatal(t, err)
 
 			testETLBucket(t, uuid, bck, objCnt, m.fileSize, time.Minute)
@@ -446,7 +421,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tutils.Logln("Putting objects to source bucket")
 	m.puts()
 
-	uuid, err := etlInit(tetl.Echo, etl.RevProxyCommType)
+	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
@@ -484,14 +459,14 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 		t.Skip("Requires a single-node single-target deployment")
 	}
 
-	uuid1, err := etlInit(tetl.Echo, etl.RevProxyCommType)
+	uuid1, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		tutils.Logf("Stop %q\n", uuid1)
 		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid1))
 	}()
 
-	uuid2, err := etlInit(tetl.Md5, etl.RevProxyCommType)
+	uuid2, err := tetl.Init(baseParams, tetl.Md5, etl.RevProxyCommType)
 	tassert.Errorf(t, err != nil, "expected err to occur")
 	if uuid2 != "" {
 		tutils.Logf("Stop %q\n", uuid2)
@@ -504,7 +479,7 @@ func TestETLHealth(t *testing.T) {
 	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	tutils.Logln("Starting ETL")
-	uuid, err := etlInit(tetl.Echo, etl.RedirectCommType)
+	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RedirectCommType)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
@@ -549,7 +524,7 @@ func TestETLHealth(t *testing.T) {
 func TestETLList(t *testing.T) {
 	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
 
-	uuid, err := etlInit(tetl.Echo, etl.RevProxyCommType)
+	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
 	defer api.ETLStop(baseParams, uuid)
 
