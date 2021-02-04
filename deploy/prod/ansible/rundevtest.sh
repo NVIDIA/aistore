@@ -59,11 +59,13 @@ echo "Deploying Minikube"
 { echo y; echo y; } | ./utils/deploy_minikube.sh
 echo "Deploying AIS on Minikube"
 # NOTE: 6 x n (4 remote providers + local registry + datascience stack)
-{ echo 5; echo 1; echo 1; echo 6; echo n; echo n; echo n; echo n; echo y; echo n; } | ./utils/deploy_ais.sh
+target_cnt=5
+proxy_cnt=1
+{ echo $target_cnt; echo $proxy_cnt; echo 1; echo 6; echo n; echo n; echo n; echo n; echo y; echo n; } | ./utils/deploy_ais.sh
 echo "AIS on Minikube deployed"
 popd
 
-kubectl logs -f -l 'type in (aisproxy,aistarget)' & # Send to background, don't show ETL logs.
+kubectl logs -f --max-log-requests $(( target_cnt + proxy_cnt )) -l 'type in (aisproxy,aistarget)' & # Send to background, don't show ETL logs.
 
 # Running kubernetes based tests
 echo "----- RUNNING K8S TESTS -----"
