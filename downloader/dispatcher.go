@@ -104,7 +104,9 @@ Loop:
 		}
 	}
 	d.stop()
-	return group.Wait()
+	err = group.Wait()
+	d.parent.Finish(err)
+	return err
 }
 
 // stop running joggers

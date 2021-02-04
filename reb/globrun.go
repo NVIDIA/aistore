@@ -458,11 +458,6 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 	reb.endStreams(err)
 	reb.filterGFN.Reset()
 
-	if !reb.xact().Finished() {
-		reb.xact().Finish(nil)
-	} else {
-		glog.Infoln(reb.xact().String())
-	}
 	{
 		status := &Status{}
 		reb.RebStatus(status)
@@ -484,6 +479,12 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 		glog.Infof("global reb (g%d) in state %s: finished", md.id, stages[rebStageDone])
 	}
 	reb.semaCh.Release()
+
+	if !reb.xact().Finished() {
+		reb.xact().Finish(nil)
+	} else {
+		glog.Infoln(reb.xact().String())
+	}
 }
 
 func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {

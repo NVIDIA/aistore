@@ -186,11 +186,11 @@ func (r *Xact) stopWalk() {
 
 func (r *Xact) stop() {
 	r.XactDemandBase.Stop()
-	r.Finish(nil)
 	r.stopCh.Close()
 	// NOTE: Not closing `r.workCh` as it potentially could result in "sending on closed channel" panic.
 	close(r.respCh)
 	r.stopWalk()
+	r.Finish(nil)
 }
 
 func (r *Xact) dispatchRequest() *Resp {

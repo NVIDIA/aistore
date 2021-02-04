@@ -205,16 +205,14 @@ func (xact *XactBase) Abort() {
 		glog.Infof("already aborted: " + xact.String())
 		return
 	}
-	xact._setEndTime(cmn.NewAbortedError(xact.String()))
 	close(xact.abrt)
 	glog.Infof("ABORT: " + xact.String())
 }
 
 func (xact *XactBase) Finish(err error) {
-	if xact.Aborted() {
-		return
+	if xact.eutime.Load() == 0 {
+		xact._setEndTime(err)
 	}
-	xact._setEndTime(err)
 }
 
 func (xact *XactBase) Result() (interface{}, error) {
