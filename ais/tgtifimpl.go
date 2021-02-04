@@ -7,13 +7,10 @@ package ais
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
-	"sync"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
@@ -27,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
@@ -134,70 +130,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 	return err
 }
 
-// Send params.Reader to a given target directly.
-// `params.HdrMeta` should be populated with content length, checksum, version, atime.
-// `params.Reader` is closed always, even on errors.
-func (t *targetrunner) sendTo(lom *cluster.LOM, params cluster.SendToParams) error {
-	debug.Assert(!t.Snode().Equals(params.Tsi))
-	debug.Assert(params.HdrMeta != nil)
-	// TODO -- FIXME: lom-in-flight sizing here and elsewhere
-	debug.Func(func() {
-		if params.HdrMeta != lom {
-			size := params.HdrMeta.Size()
-			debug.Assertf(size > 0 || size == -1, "size=%d", size)
-		}
-	})
-	if params.DM != nil {
-		return _sendObjDM(lom, params)
-	}
-	err := t._sendPUT(lom, params)
-	if params.Locked {
-		lom.Unlock(false)
-	}
-	return err
-}
-
-//
-// streaming send/receive via bundle.DataMover
-//
-
-// _sendObjDM requires params.HdrMeta not to be nil. Even though it uses
-// transport the whole function is synchronous as callers expect that the reader
-// will be sent when function finishes.
-func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) error {
-	cmn.Assert(params.HdrMeta != nil)
-	var (
-		wg = &sync.WaitGroup{}
-		o  = transport.AllocSend()
-		cb = func(_ transport.ObjHdr, _ io.ReadCloser, lomptr unsafe.Pointer, err error) {
-			lom = (*cluster.LOM)(lomptr)
-			if params.Locked {
-				lom.Unlock(false)
-			}
-			if err != nil {
-				glog.Errorf("failed to send %s => %s @ %s, err: %v", lom, params.BckTo, params.Tsi, err)
-			}
-			wg.Done()
-		}
-	)
-
-	wg.Add(1)
-
-	o.Hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
-	o.Callback = cb
-	o.CmplPtr = unsafe.Pointer(lom)
-	if err := params.DM.Send(o, params.Reader, params.Tsi); err != nil {
-		if params.Locked {
-			lom.Unlock(false)
-		}
-		glog.Error(err)
-		return err
-	}
-	wg.Wait()
-	return nil
-}
-
-// _sendPUT requires params.HdrMeta not to be nil.
+// PUT(lom) => destination-target
 func (t *targetrunner) _sendPUT(lom *cluster.LOM, params cluster.SendToParams) error {
 	var (
 		hdr   http.Header

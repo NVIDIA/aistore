@@ -102,11 +102,8 @@ type (
 		Tsi       *Snode
 		DM        DataMover
 		HdrMeta   cmn.ObjHeaderMetaProvider
-		Locked    bool
-
-		// Defines if version should be removed in the destination object.
-		// If set to `true` receiver will use appropriate for backend provider initial version.
-		NoVersion bool
+		RLocked   bool
+		NoVersion bool // whether to reset object's version at the destination
 	}
 	PromoteFileParams struct {
 		SrcFQN    string

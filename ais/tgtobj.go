@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -28,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -368,9 +370,8 @@ write:
 		cksums.store.Finalize()
 		poi.lom.SetCksum(&cksums.store.Cksum)
 	}
-
 	if err = file.Close(); err != nil {
-		return fmt.Errorf("failed to close received file %s, err: %w", poi.workFQN, err)
+		return fmt.Errorf("failed to close received %s: %w", poi.workFQN, err)
 	}
 	return nil
 }
@@ -743,7 +744,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry, sent bool, errCode int, er
 			retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
 		} else {
 			goi.t.fsErr(err, fqn)
-			err = fmt.Errorf("%s: err: %w", goi.lom, err)
+			err = fmt.Errorf("%s: %w", goi.lom, err)
 			errCode = http.StatusInternalServerError
 		}
 		return
@@ -994,9 +995,6 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size 
 		coi.DP = &cluster.LomReader{}
 		return coi.copyReader(srcLOM, objNameTo)
 	}
-
-	// Local bucket to local bucket copying.
-
 	si := coi.t.si
 	if !coi.localOnly {
 		smap := coi.t.owner.smap.Get()
@@ -1004,7 +1002,6 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size 
 			return
 		}
 	}
-
 	exclusive := si.ID() == coi.t.si.ID() && !coi.DryRun
 	srcLOM.Lock(exclusive)
 	if err = srcLOM.Load(false); err != nil {
@@ -1015,16 +1012,14 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size 
 		srcLOM.Unlock(exclusive)
 		return
 	}
-
 	if si.ID() != coi.t.si.ID() {
 		params := cluster.SendToParams{
 			ObjNameTo: objNameTo,
 			Tsi:       si,
 			DM:        coi.DM,
-			Locked:    true,
+			RLocked:   true,
 			NoVersion: !srcLOM.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
 		}
-		// NOTE: `srcLOM.Unlock(false)` inside.
 		return coi.putRemote(srcLOM, params)
 	}
 	if coi.DryRun {
@@ -1036,9 +1031,7 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size 
 		return srcLOM.Size(), nil
 	}
 
-	// At this point we must have an exclusive lock for the object.
 	defer srcLOM.Unlock(true)
-
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
 	err = dst.Init(coi.BckTo.Bck)
@@ -1051,12 +1044,10 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size 
 		dst.Lock(true)
 		defer dst.Unlock(true)
 	}
-
 	// Resilvering with a single mountpath.
 	if srcLOM.FQN == dst.FQN {
 		return
 	}
-
 	if err = dst.Load(false); err == nil {
 		if srcLOM.Cksum().Equal(dst.Cksum()) {
 			return
@@ -1064,7 +1055,6 @@ func (coi *copyObjInfo) copyObject(srcLOM *cluster.LOM, objNameTo string) (size 
 	} else if cmn.IsErrBucketNought(err) {
 		return
 	}
-
 	dst2, err2 := srcLOM.CopyObject(dst.FQN, coi.Buf)
 	if err2 == nil {
 		size = srcLOM.Size()
@@ -1111,7 +1101,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 			ObjNameTo: objNameTo,
 			Tsi:       si,
 			DM:        coi.DM,
-			NoVersion: !lom.Bucket().Equal(coi.BckTo.Bck),
+			NoVersion: !lom.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
 		}
 		return coi.putRemote(lom, params)
 	}
@@ -1177,20 +1167,19 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 // PUT object onto designated target
 func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (size int64, err error) {
 	if coi.DP == nil {
+		var file *cmn.FileHandle
 		if coi.DryRun {
-			if params.Locked {
+			if params.RLocked {
 				defer lom.Unlock(false)
 			}
 			return lom.Size(), nil
 		}
-
-		var file *cmn.FileHandle // Closed by `SendTo()`
 		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
-			return 0, fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
+			return 0, fmt.Errorf("failed to open %s: %w", lom.FQN, err)
 		}
 		fi, err := file.Stat()
 		if err != nil {
-			return 0, fmt.Errorf("failed to stat %s, err %v", lom.FQN, err)
+			return 0, fmt.Errorf("failed to stat %s: %w", lom.FQN, err)
 		}
 		params.Reader = file
 		params.HdrMeta = lom
@@ -1198,13 +1187,13 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 	} else {
 		var cleanUp func()
 		if params.Reader, params.HdrMeta, cleanUp, err = coi.DP.Reader(lom); err != nil {
-			return 0, err
+			return
 		}
 		defer cleanUp()
 		if coi.DryRun {
-			n, err := io.Copy(ioutil.Discard, params.Reader)
+			size, err = io.Copy(ioutil.Discard, params.Reader)
 			cmn.Close(params.Reader)
-			return n, err
+			return
 		}
 		// NOTE: return the current size as resulting (transformed) size may not be known.
 		size = lom.Size()
@@ -1214,7 +1203,40 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 		params.HdrMeta = cmn.NewHdrMetaCustomVersion(params.HdrMeta, "")
 	}
 	params.BckTo = coi.BckTo
-	return size, coi.t.sendTo(lom, params)
+	// either stream
+	if params.DM != nil {
+		err = _sendObjDM(lom.Clone(lom.FQN) /*free in the callback below*/, params)
+		return
+	}
+	// or PUT
+	err = coi.t._sendPUT(lom, params)
+	if params.RLocked {
+		lom.Unlock(false)
+	}
+	return
+}
+
+// streaming send via bundle.DataMover
+func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) (err error) {
+	o := transport.AllocSend()
+	o.Hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
+	o.CmplPtr = unsafe.Pointer(lom)
+	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, lomptr unsafe.Pointer, _ error) {
+		_freeLptr(lomptr, params.RLocked)
+	}
+	err = params.DM.Send(o, params.Reader, params.Tsi)
+	if err != nil {
+		_freeLptr(unsafe.Pointer(lom), params.RLocked)
+	}
+	return
+}
+
+func _freeLptr(lomptr unsafe.Pointer, locked bool) {
+	lom := (*cluster.LOM)(lomptr)
+	if locked {
+		lom.Unlock(false)
+	}
+	cluster.FreeLOM(lom)
 }
 
 ///////////////
