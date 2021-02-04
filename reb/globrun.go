@@ -558,61 +558,66 @@ func (rj *rebalanceJogger) jog(mpathInfo *fs.MountpathInfo) {
 	}
 }
 
+// send completion
 func (rj *rebalanceJogger) objSentCallback(hdr transport.ObjHdr, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
-	var (
-		lom = (*cluster.LOM)(lomptr)
-		t   = rj.m.t
-	)
 	rj.m.inQueue.Dec()
-	lom.Unlock(false) // NOTE: can unlock now
+
+	lom := (*cluster.LOM)(lomptr)
+	lom.Unlock(false)
 
 	rj.m.t.SmallMMSA().Free(hdr.Opaque)
-
 	if err != nil {
-		glog.Errorf("%s: failed to send o[%s/%s], err: %v", t.Snode(), hdr.Bck, hdr.ObjName, err)
+		si := rj.m.t.Snode()
+		glog.Errorf("%s: failed to send o[%s/%s], err: %v", si, hdr.Bck, hdr.ObjName, err)
 		return
 	}
 	rj.m.statTracker.AddMany(
 		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
-		stats.NamedVal64{Name: stats.RebTxSize, Value: hdr.ObjAttrs.Size})
+		stats.NamedVal64{Name: stats.RebTxSize, Value: hdr.ObjAttrs.Size},
+	)
 }
 
 func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
-	var (
-		lom *cluster.LOM
-		tsi *cluster.Snode
-		t   = rj.m.t
-	)
 	if rj.xreb.Aborted() || rj.xreb.Finished() {
 		return cmn.NewAbortedErrorDetails("traversal", rj.xreb.String())
 	}
 	if de.IsDir() {
 		return nil
 	}
-	lom = &cluster.LOM{FQN: fqn}
+	lom := cluster.AllocLOMbyFQN(fqn) // NOTE: free on error or via (send => ... => delLomAck) path
+	err = rj._lwalk(lom)
+	if err != nil {
+		cluster.FreeLOM(lom)
+		if err == cmn.ErrSkip {
+			err = nil
+		}
+	}
+	return
+}
+
+func (rj *rebalanceJogger) _lwalk(lom *cluster.LOM) (err error) {
+	var (
+		tsi *cluster.Snode
+		t   = rj.m.t
+	)
 	err = lom.Init(cmn.Bck{})
 	if err != nil {
 		if cmn.IsErrBucketLevel(err) {
 			return err
 		}
-		if glog.FastV(4, glog.SmoduleReb) {
-			glog.Warningf("%s, err %s - skipping...", lom, err)
-		}
-		return nil
+		return cmn.ErrSkip
 	}
 
-	// Skip a bucket with EC.Enabled - it is a job for EC rebalance
+	// skip EC.Enabled bucket - the job for EC rebalance
 	if lom.Bck().Props.EC.Enabled {
 		return filepath.SkipDir
 	}
-
-	// Rebalance, maybe
 	tsi, err = cluster.HrwTarget(lom.Uname(), rj.smap)
 	if err != nil {
 		return err
 	}
 	if tsi.ID() == t.SID() {
-		return nil
+		return cmn.ErrSkip
 	}
 
 	// skip objects that were already sent via GFN (due to probabilistic filtering
@@ -620,15 +625,16 @@ func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	uname := []byte(lom.Uname())
 	if rj.m.filterGFN.Lookup(uname) {
 		rj.m.filterGFN.Delete(uname) // it will not be used anymore
-		return nil
+		return cmn.ErrSkip
 	}
-	if rj.sema == nil { // rebalance.multiplier == 1
+	if rj.sema == nil {
 		err = rj.send(lom, tsi, true /*addAck*/)
-	} else { // // rebalance.multiplier > 1
+	} else { // rebalance.multiplier > 1
 		rj.sema.Acquire()
 		go func() {
 			defer rj.sema.Release()
 			if err := rj.send(lom, tsi, true /*addAck*/); err != nil {
+				cluster.FreeLOM(lom)
 				glog.Error(err)
 			}
 		}()
@@ -638,23 +644,15 @@ func (rj *rebalanceJogger) walk(fqn string, de fs.DirEntry) (err error) {
 
 func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck bool) (err error) {
 	var (
-		file                  *cmn.FileHandle
-		cksum                 *cmn.Cksum
-		cksumType, cksumValue string
+		file  *cmn.FileHandle
+		cksum *cmn.Cksum
 	)
-	lom.Lock(false) // NOTE: unlock in objSentCallback() unless err
+	lom.Lock(false)
 	defer func() {
-		if err == nil {
-			return
-		}
-		lom.Unlock(false)
 		if err != nil {
-			if glog.FastV(4, glog.SmoduleReb) {
-				glog.Errorf("%s, err: %v", lom, err)
-			}
+			lom.Unlock(false)
 		}
 	}()
-
 	err = lom.Load(false)
 	if err != nil {
 		return
@@ -666,12 +664,12 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 	if cksum, err = lom.ComputeCksumIfMissing(); err != nil {
 		return
 	}
-	cksumType, cksumValue = cksum.Get()
+	cksumType, cksumValue := cksum.Get()
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		return
 	}
 	if addAck {
-		// cache it as pending-acknowledgement (optimistically - see objSentCallback)
+		// pending ACK (optimistically - see objSentCallback)
 		rj.m.addLomAck(lom)
 	}
 	// transmit
@@ -694,7 +692,6 @@ func (rj *rebalanceJogger) send(lom *cluster.LOM, tsi *cluster.Snode, addAck boo
 		},
 	}
 	o.Callback, o.CmplPtr = rj.objSentCallback, unsafe.Pointer(lom)
-
 	rj.m.inQueue.Inc()
 	if err = rj.m.dm.Send(o, file, tsi); err != nil {
 		rj.m.inQueue.Dec()

@@ -291,77 +291,86 @@ func (reb *Manager) ecFixGlobal(md *rebArgs) error {
 
 // Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) error {
+func (reb *Manager) sendFromDisk(ct *rebCT, target *cluster.Snode) (err error) {
 	var (
-		lom *cluster.LOM
-		fqn = ct.realFQN
+		lom       *cluster.LOM
+		parsedFQN fs.ParsedFQN
+		fh        *cmn.FileHandle
+		fqn       = ct.realFQN
 	)
-	cmn.Assert(ct.meta != nil)
+	debug.Assert(ct.meta != nil)
 	if ct.hrwFQN != "" {
 		fqn = ct.hrwFQN
 	}
-	parsedFQN, _, err := cluster.ResolveFQN(fqn)
-	if err != nil {
-		return err
+	if parsedFQN, _, err = cluster.ResolveFQN(fqn); err != nil {
+		return
 	}
 	if parsedFQN.ContentType == fs.ObjectType {
-		lom = &cluster.LOM{ObjName: parsedFQN.ObjName}
-		if err := lom.Init(ct.Bck); err != nil {
-			return err
+		lom = cluster.AllocLOM(parsedFQN.ObjName)
+		if err = lom.Init(ct.Bck); err != nil {
+			cluster.FreeLOM(lom)
+			return
 		}
-		if err := lom.Load(false); err != nil {
-			return err
+		lom.Lock(false)
+		if err = lom.Load(false); err != nil {
+			goto reterr
 		}
 	} else {
-		lom = nil // sending slice
+		lom = nil // sending slice; TODO: rlock
 	}
 	// open
-	fh, err := cmn.NewFileHandle(fqn)
-	if err != nil {
-		return err
+	if fh, err = cmn.NewFileHandle(fqn); err != nil {
+		goto reterr
 	}
-
 	// transmit
-	var (
-		req = pushReq{
-			daemonID: reb.t.SID(),
-			stage:    rebStageECRepair,
-			rebID:    reb.rebID.Load(),
-			md:       ct.meta,
+	{
+		req := pushReq{daemonID: reb.t.SID(), stage: rebStageECRepair, rebID: reb.rebID.Load(), md: ct.meta}
+		o := transport.AllocSend()
+		o.Hdr = transport.ObjHdr{
+			Bck:      ct.Bck,
+			ObjName:  ct.ObjName,
+			ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
 		}
-		o = transport.AllocSend()
-	)
-	o.Hdr = transport.ObjHdr{
-		Bck:      ct.Bck,
-		ObjName:  ct.ObjName,
-		ObjAttrs: transport.ObjectAttrs{Size: ct.ObjSize},
+		if lom != nil {
+			o.Hdr.ObjAttrs.Atime = lom.AtimeUnix()
+			o.Hdr.ObjAttrs.Version = lom.Version()
+			if cksum := lom.Cksum(); cksum != nil {
+				o.Hdr.ObjAttrs.CksumType, o.Hdr.ObjAttrs.CksumValue = cksum.Get()
+			}
+		}
+		if ct.SliceID != 0 {
+			o.Hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
+		}
+		reb.ec.onAir.Inc()
+		o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
+		o.Callback = reb.transportECCB
+		o.CmplPtr = unsafe.Pointer(lom)
+		if err = reb.dm.Send(o, fh, target); err != nil {
+			reb.ec.onAir.Dec()
+			err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
+			goto reterr
+		}
+		reb.statTracker.AddMany(
+			stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
+			stats.NamedVal64{Name: stats.RebTxSize, Value: o.Hdr.ObjAttrs.Size},
+		)
 	}
+	return
+reterr:
 	if lom != nil {
-		o.Hdr.ObjAttrs.Atime = lom.AtimeUnix()
-		o.Hdr.ObjAttrs.Version = lom.Version()
-		if cksum := lom.Cksum(); cksum != nil {
-			o.Hdr.ObjAttrs.CksumType, o.Hdr.ObjAttrs.CksumValue = cksum.Get()
-		}
+		lom.Unlock(false)
+		cluster.FreeLOM(lom)
 	}
-	if ct.SliceID != 0 {
-		o.Hdr.ObjAttrs.Size = ec.SliceSize(ct.ObjSize, int(ct.DataSlices))
-	}
-	reb.ec.onAir.Inc()
-	o.Hdr.Opaque = req.NewPack(nil, rebMsgEC)
-	o.Callback = reb.transportECCB
-	if err := reb.dm.Send(o, fh, target); err != nil {
-		reb.ec.onAir.Dec()
-		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
-	}
-	reb.statTracker.AddMany(
-		stats.NamedVal64{Name: stats.RebTxCount, Value: 1},
-		stats.NamedVal64{Name: stats.RebTxSize, Value: o.Hdr.ObjAttrs.Size},
-	)
-	return nil
+	return
 }
 
-// Track the number of sent CTs
-func (reb *Manager) transportECCB(hdr transport.ObjHdr, reader io.ReadCloser, _ unsafe.Pointer, _ error) {
+// send completion
+func (reb *Manager) transportECCB(hdr transport.ObjHdr, reader io.ReadCloser, lomptr unsafe.Pointer, _ error) {
+	lom := (*cluster.LOM)(lomptr)
+	if lom != nil {
+		lom.Unlock(false)
+		cluster.FreeLOM(lom)
+	}
 	reb.ec.onAir.Dec()
 }
 

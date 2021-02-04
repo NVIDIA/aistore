@@ -154,12 +154,13 @@ func (reb *Manager) registerRecv() {
 	reb.semaCh = cmn.NewSemaphore(1)
 }
 
-func (reb *Manager) RebID() int64           { return reb.rebID.Load() }
-func (reb *Manager) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
-
+func (reb *Manager) RebID() int64                              { return reb.rebID.Load() }
+func (reb *Manager) FilterAdd(uname []byte)                    { reb.filterGFN.Insert(uname) }
 func (reb *Manager) xact() *xrun.Rebalance                     { return (*xrun.Rebalance)(reb.xreb.Load()) }
 func (reb *Manager) setXact(xact *xrun.Rebalance)              { reb.xreb.Store(unsafe.Pointer(xact)) }
 func (reb *Manager) lomAcks() *[cmn.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
+
+// TODO: lomAck.q[lom.Uname()] = lom.Bprops().BID and, subsequently, LIF => LOM reinit
 func (reb *Manager) addLomAck(lom *cluster.LOM) {
 	_, idx := lom.Hkey()
 	lomAck := reb.lomAcks()[idx]
@@ -172,7 +173,10 @@ func (reb *Manager) delLomAck(lom *cluster.LOM) {
 	_, idx := lom.Hkey()
 	lomAck := reb.lomAcks()[idx]
 	lomAck.mu.Lock()
-	delete(lomAck.q, lom.Uname())
+	if lomOrig, ok := lomAck.q[lom.Uname()]; ok {
+		delete(lomAck.q, lom.Uname())
+		cluster.FreeLOM(lomOrig) // NOTE: free the original (pending) LOM
+	}
 	lomAck.mu.Unlock()
 }
 
@@ -454,14 +458,12 @@ func (reb *Manager) recvRegularAck(hdr transport.ObjHdr, unpacker *cmn.ByteUnpac
 	if glog.FastV(5, glog.SmoduleReb) {
 		glog.Infof("%s: ack from %s on %s", reb.t.Snode(), string(hdr.Opaque), lom)
 	}
-	reb.delLomAck(lom)
-
-	// TODO: configurable delay - postponed or manual object deletion
 	lom.Lock(true)
 	if err := lom.Remove(); err != nil {
 		glog.Errorf("%s: error removing %s, err: %v", reb.t.Snode(), lom, err)
 	}
 	lom.Unlock(true)
+	reb.delLomAck(lom)
 }
 
 func (reb *Manager) recvAck(w http.ResponseWriter, hdr transport.ObjHdr, _ io.Reader, err error) {

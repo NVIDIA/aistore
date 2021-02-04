@@ -109,7 +109,7 @@ func (r *prefetch) prefetchMissing(args *xreg.DeletePrefetchArgs, objName string
 	// negatve Now() for correct processing the LOM while housekeeping
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	if _, err = r.t.GetCold(args.Ctx, lom, cluster.Prefetch); err != nil {
-		if !errors.Is(err, cmn.ErrSkip) {
+		if err != cmn.ErrSkip {
 			return err
 		}
 		return nil
