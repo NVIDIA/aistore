@@ -293,6 +293,10 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 						size += uint64(rand.Int63n(cmn.KiB))
 					}
 
+					if args.CksumType == "" {
+						args.CksumType = cmn.ChecksumNone
+					}
+
 					reader, err := readers.NewRandReader(int64(size), args.CksumType)
 					cmn.AssertNoErr(err)
 

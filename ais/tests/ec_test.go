@@ -2289,11 +2289,12 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	}
 
 	_, _, err = tutils.PutRandObjs(tutils.PutObjectsArgs{
-		ProxyURL: proxyURL,
-		Bck:      bckReg,
-		ObjPath:  ecTestDir,
-		ObjCnt:   o.objCount,
-		ObjSize:  fileSize,
+		ProxyURL:  proxyURL,
+		Bck:       bckReg,
+		ObjPath:   ecTestDir,
+		ObjCnt:    o.objCount,
+		ObjSize:   fileSize,
+		CksumType: cmn.DefaultBckProps().Cksum.Type,
 	})
 	tassert.CheckFatal(t, err)
 
