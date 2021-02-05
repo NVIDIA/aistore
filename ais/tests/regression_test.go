@@ -173,8 +173,8 @@ func TestCloudListObjectsGetTargetURL(t *testing.T) {
 		baseParams := tutils.BaseAPIParams(object.TargetURL)
 		objectSize, err := api.GetObject(baseParams, bck, object.Name)
 		tassert.CheckFatal(t, err)
-		if uint64(objectSize) != fileSize {
-			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", fileSize, objectSize)
+		if uint64(objectSize) != m.fileSize {
+			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", m.fileSize, objectSize)
 		}
 	}
 
