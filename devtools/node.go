@@ -92,7 +92,7 @@ func WaitMapVersionSync(ctx *Ctx, timeout time.Time, smap *cluster.Smap, prevVer
 			return err
 		}
 
-		if err == nil && daemonSmap.Version > prevVersion {
+		if err == nil && daemonSmap.Version > prevVersion && daemonSmap.Version >= smap.Version {
 			idsToIgnore.Add(sid)
 			*smap = *daemonSmap // update smap for newer version
 			continue
