@@ -419,20 +419,7 @@ func (obj *Obj) SetPrc(n int) {
 func (hdr *ObjHdr) IsLast() bool       { return hdr.ObjAttrs.Size == lastMarker }
 func (hdr *ObjHdr) IsUnsized() bool    { return hdr.ObjAttrs.Size == SizeUnknown }
 func (hdr *ObjHdr) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.IsLast() }
-
-func (hdr *ObjHdr) ObjSize() int64 { return hdr.ObjAttrs.Size }
-
-func (hdr *ObjHdr) FromHdrProvider(meta cmn.ObjHeaderMetaProvider, objName string, bck cmn.Bck, opaque []byte) {
-	hdr.Bck = bck
-	hdr.ObjName = objName
-	hdr.Opaque = opaque
-	hdr.ObjAttrs.Size = meta.Size()
-	hdr.ObjAttrs.Atime = meta.AtimeUnix()
-	if meta.Cksum() != nil {
-		hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = meta.Cksum().Get()
-	}
-	hdr.ObjAttrs.Version = meta.Version()
-}
+func (hdr *ObjHdr) ObjSize() int64     { return hdr.ObjAttrs.Size }
 
 ///////////
 // Stats //

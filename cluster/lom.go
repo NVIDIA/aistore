@@ -165,12 +165,12 @@ func (lom *LOM) LIF() (lif LIF) {
 
 // special a) when a new version is being created b) for usage in unit tests
 func (lom *LOM) Size(special ...bool) int64 {
-	debug.Assert(len(special) > 0 || lom.Loaded())
+	debug.Assert(len(special) > 0 || lom.loaded())
 	return lom.md.size
 }
 
 func (lom *LOM) Version(special ...bool) string {
-	debug.Assert(len(special) > 0 || lom.Loaded())
+	debug.Assert(len(special) > 0 || lom.loaded())
 	return lom.md.version
 }
 
@@ -211,11 +211,8 @@ func (lom *LOM) WritePolicy() (p cmn.MDWritePolicy) {
 	return
 }
 
-// Loaded determines if the `lom` was loaded from the disk (`Load` was called).
-// NOTE: Should be only used for asserts or in tests.
-func (lom *LOM) Loaded() bool { return lom.md.bckID != 0 }
+func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
-// see also: transport.FromHdrProvider()
 func (lom *LOM) ToHTTPHdr(hdr http.Header) http.Header {
 	cmn.ToHTTPHdr(lom, hdr)
 	if n := lom.md.size; n > 0 {
@@ -570,7 +567,7 @@ func (lom *LOM) _string(b string) string {
 			s += " " + lom.md.cksum.String()
 		}
 	}
-	if lom.Loaded() {
+	if lom.loaded() {
 		if lom.IsCopy() {
 			a += "(copy)"
 		} else if !lom.IsHRW() {
@@ -868,7 +865,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 }
 
 func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
-	debug.Assert(lom.Loaded())
+	debug.Assert(lom.loaded())
 	err = bmd.Check(lom.bck, lom.md.bckID)
 	if err == errBucketIDMismatch {
 		err = cmn.NewObjDefunctError(lom.String(), lom.md.bckID, lom.bck.Props.BID)

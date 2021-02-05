@@ -131,7 +131,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 }
 
 // PUT(lom) => destination-target
-func (t *targetrunner) _sendPUT(lom *cluster.LOM, params cluster.SendToParams) error {
+func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) error {
 	var (
 		hdr   http.Header
 		query = cmn.AddBckToQuery(nil, params.BckTo.Bck)
@@ -190,12 +190,12 @@ func (t *targetrunner) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 //   the AIS cluster (by performing a cold GET if need be).
 // - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //   replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectParams,
-	localOnly bool) (size int64, err error) {
+func (t *targetrunner) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, localOnly bool) (size int64,
+	err error) {
 	objNameTo := lom.ObjName
 	coi := allocCopyObjInfo()
 	{
-		coi.CopyObjectParams = params
+		coi.CopyObjectParams = *params
 		coi.t = t
 		coi.finalize = false
 		coi.localOnly = localOnly
@@ -206,8 +206,9 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, params cluster.CopyObjectPar
 	if params.DP != nil {
 		return coi.copyReader(lom, objNameTo)
 	}
-	defer freeCopyObjInfo(coi)
-	return coi.copyObject(lom, objNameTo)
+	size, err = coi.copyObject(lom, objNameTo)
+	freeCopyObjInfo(coi)
+	return
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize).
@@ -290,8 +291,11 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		coi := allocCopyObjInfo()
 		coi.t = t
 		coi.BckTo = lom.Bck()
-		sendParams := cluster.SendToParams{ObjNameTo: lom.ObjName, Tsi: si}
+		sendParams := allocSendParams()
+		sendParams.ObjNameTo = lom.ObjName
+		sendParams.Tsi = si
 		_, err = coi.putRemote(lom, sendParams)
+		freeSendParams(sendParams)
 		freeCopyObjInfo(coi)
 		if err == nil && !params.KeepOrig {
 			if err := cmn.RemoveFile(params.SrcFQN); err != nil {

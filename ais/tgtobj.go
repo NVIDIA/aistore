@@ -107,6 +107,8 @@ type (
 		localOnly bool // copy locally with no HRW=>target
 		finalize  bool // copies and EC (as in poi.finalize())
 	}
+
+	_tylc bool
 )
 
 ////////////////
@@ -1011,14 +1013,17 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 			src.Unlock(false)
 			return
 		}
-		params := cluster.SendToParams{
-			ObjNameTo: objNameTo,
-			Tsi:       si,
-			DM:        coi.DM,
-			RLocked:   true,
-			NoVersion: !src.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
+		params := allocSendParams()
+		{
+			params.ObjNameTo = objNameTo
+			params.Tsi = si
+			params.DM = coi.DM
+			params.RLocked = true
+			params.NoVersion = !src.Bucket().Equal(coi.BckTo.Bck) // no versioning when buckets differ
 		}
-		return coi.putRemote(src, params) // r-unlocks inside
+		size, err = coi.putRemote(src, params) // r-unlocks inside
+		freeSendParams(params)
+		return
 	}
 	// dry-run
 	if coi.DryRun {
@@ -1103,13 +1108,16 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	}
 
 	if si.ID() != coi.t.si.ID() {
-		params := cluster.SendToParams{
-			ObjNameTo: objNameTo,
-			Tsi:       si,
-			DM:        coi.DM,
-			NoVersion: !lom.Bucket().Equal(coi.BckTo.Bck), // no versioning when buckets differ
+		params := allocSendParams()
+		{
+			params.ObjNameTo = objNameTo
+			params.Tsi = si
+			params.DM = coi.DM
+			params.NoVersion = !lom.Bucket().Equal(coi.BckTo.Bck) // no versioning when buckets differ
 		}
-		return coi.putRemote(lom, params)
+		size, err = coi.putRemote(lom, params)
+		freeSendParams(params)
+		return
 	}
 
 	// DryRun: just get a reader and discard it. Init on dstLOM would cause and error as dstBck doesn't exist.
@@ -1171,7 +1179,7 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 }
 
 // PUT object onto designated target
-func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams) (size int64, err error) {
+func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams) (size int64, err error) {
 	if coi.DP == nil {
 		var file *cmn.FileHandle
 		if coi.DryRun {
@@ -1211,7 +1219,7 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 	params.BckTo = coi.BckTo
 	// either stream
 	if params.DM != nil {
-		err = _sendObjDM(lom.Clone(lom.FQN) /*free in the callback below*/, params)
+		err = _sendObjDM(lom.Clone(lom.FQN), params) // free clone in the lc.cleanup
 		return
 	}
 	// or PUT
@@ -1223,23 +1231,32 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params cluster.SendToParams)
 }
 
 // streaming send via bundle.DataMover
-func _sendObjDM(lom *cluster.LOM, params cluster.SendToParams) (err error) {
+func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) (err error) {
 	o := transport.AllocSend()
-	o.Hdr.FromHdrProvider(params.HdrMeta, params.ObjNameTo, params.BckTo.Bck, nil)
-	o.CmplPtr = unsafe.Pointer(lom)
-	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, lomptr unsafe.Pointer, _ error) {
-		_freeLptr(lomptr, params.RLocked)
+	hdr, meta := &o.Hdr, params.HdrMeta
+	{
+		hdr.Bck = params.BckTo.Bck
+		hdr.ObjName = params.ObjNameTo
+		hdr.ObjAttrs.Size = meta.Size()
+		hdr.ObjAttrs.Atime = meta.AtimeUnix()
+		if cksum := meta.Cksum(); cksum != nil {
+			hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue = cksum.Get()
+		}
+		hdr.ObjAttrs.Version = meta.Version()
 	}
+	o.CmplPtr = unsafe.Pointer(lom)
+	lc := _tylc(params.RLocked)
+	o.Callback = lc.cleanup
 	err = params.DM.Send(o, params.Reader, params.Tsi)
 	if err != nil {
-		_freeLptr(unsafe.Pointer(lom), params.RLocked)
+		lc.cleanup(transport.ObjHdr{}, nil, unsafe.Pointer(lom), nil)
 	}
 	return
 }
 
-func _freeLptr(lomptr unsafe.Pointer, locked bool) {
+func (lc _tylc) cleanup(_ transport.ObjHdr, _ io.ReadCloser, lomptr unsafe.Pointer, _ error) {
 	lom := (*cluster.LOM)(lomptr)
-	if locked {
+	if lc {
 		lom.Unlock(false)
 	}
 	cluster.FreeLOM(lom)
@@ -1250,11 +1267,12 @@ func _freeLptr(lomptr unsafe.Pointer, locked bool) {
 ///////////////
 
 var (
-	goiPool, poiPool, coiPool sync.Pool
+	goiPool, poiPool, coiPool, sndPool sync.Pool
 
 	goi0 getObjInfo
 	poi0 putObjInfo
 	coi0 copyObjInfo
+	snd0 cluster.SendToParams
 )
 
 func allocGetObjInfo() (a *getObjInfo) {
@@ -1294,4 +1312,17 @@ func allocCopyObjInfo() (a *copyObjInfo) {
 func freeCopyObjInfo(a *copyObjInfo) {
 	*a = coi0
 	coiPool.Put(a)
+}
+
+func allocSendParams() (a *cluster.SendToParams) {
+	if v := sndPool.Get(); v != nil {
+		a = v.(*cluster.SendToParams)
+		return
+	}
+	return &cluster.SendToParams{}
+}
+
+func freeSendParams(a *cluster.SendToParams) {
+	*a = snd0
+	sndPool.Put(a)
 }

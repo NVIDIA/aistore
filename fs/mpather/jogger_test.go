@@ -44,7 +44,6 @@ func TestJoggerGroup(t *testing.T) {
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
-			tassert.Errorf(t, !lom.Loaded(), "expected LOM to not be loaded")
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counter.Inc()
 			return nil
@@ -90,7 +89,6 @@ func TestJoggerGroupParallel(t *testing.T) {
 		CTs:  []string{fs.ObjectType},
 		Slab: slab,
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
-			tassert.Errorf(t, !lom.Loaded(), "expected LOM to not be loaded")
 			b := bytes.NewBuffer(buf[:0])
 			_, err = b.WriteString(lom.FQN)
 			tassert.CheckFatal(t, err)
@@ -286,7 +284,6 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 		Bck: out.Bck,
 		CTs: cts,
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
-			tassert.Errorf(t, !lom.Loaded(), "expected LOM to not be loaded")
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counters[fs.ObjectType].Inc()
 			return nil
