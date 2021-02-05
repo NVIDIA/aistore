@@ -141,6 +141,9 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AccessBckSetACL) {
 		accList = append(accList, accessOp[AccessBckSetACL])
 	}
+	if a.Has(AccessAdmin) {
+		accList = append(accList, accessOp[AccessAdmin])
+	}
 	return strings.Join(accList, ",")
 }
 

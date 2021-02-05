@@ -30,8 +30,10 @@ const (
 	authnTokenPath = "AUTHN_TOKEN_FILE"
 
 	flagsAuthUserLogin   = "user_login"
+	flagsAuthUserShow    = "user_show"
 	flagsAuthRoleAdd     = "role_add"
 	flagsAuthRevokeToken = "revoke_token"
+	flagsAuthRoleShow    = "role_show"
 )
 
 var (
@@ -40,6 +42,8 @@ var (
 		subcmdAuthUser:       {passwordFlag},
 		flagsAuthRoleAdd:     {descriptionFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
+		flagsAuthUserShow:    {verboseFlag},
+		flagsAuthRoleShow:    {verboseFlag},
 	}
 	authCmds = []cli.Command{
 		{
@@ -138,15 +142,19 @@ var (
 							Action:    wrapAuthN(showAuthClusterHandler),
 						},
 						{
-							Name:      subcmdAuthRole,
-							Usage:     "show existing user roles",
-							ArgsUsage: showAuthRoleArgument,
-							Action:    wrapAuthN(showAuthRoleHandler),
+							Name:         subcmdAuthRole,
+							Usage:        "show existing user roles",
+							ArgsUsage:    showAuthRoleArgument,
+							Flags:        authFlags[flagsAuthRoleShow],
+							Action:       wrapAuthN(showAuthRoleHandler),
+							BashComplete: oneRoleCompletions,
 						},
 						{
-							Name:   subcmdAuthUser,
-							Usage:  "show user list",
-							Action: wrapAuthN(showUserHandler),
+							Name:      subcmdAuthUser,
+							Usage:     "show user list or user details",
+							Flags:     authFlags[flagsAuthUserShow],
+							ArgsUsage: showUserListArgument,
+							Action:    wrapAuthN(showUserHandler),
 						},
 					},
 				},
@@ -368,21 +376,49 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 }
 
 func showAuthRoleHandler(c *cli.Context) (err error) {
-	list, err := api.GetRolesAuthN(authParams)
+	roleID := c.Args().First()
+	if roleID == "" {
+		list, err := api.GetRolesAuthN(authParams)
+		if err != nil {
+			return err
+		}
+
+		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl)
+	}
+
+	rInfo, err := api.GetRoleAuthN(authParams, roleID)
 	if err != nil {
 		return err
 	}
 
-	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNRoleTmpl)
+	if !flagIsSet(c, verboseFlag) {
+		return templates.DisplayOutput([]*cmn.AuthRole{rInfo}, c.App.Writer, templates.AuthNRoleTmpl)
+	}
+
+	return templates.DisplayOutput(rInfo, c.App.Writer, templates.AuthNRoleVerboseTmpl)
 }
 
 func showUserHandler(c *cli.Context) (err error) {
-	list, err := api.GetUsersAuthN(authParams)
+	userID := c.Args().First()
+	if userID == "" {
+		list, err := api.GetUsersAuthN(authParams)
+		if err != nil {
+			return err
+		}
+
+		return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl)
+	}
+
+	uInfo, err := api.GetUserAuthN(authParams, userID)
 	if err != nil {
 		return err
 	}
 
-	return templates.DisplayOutput(list, c.App.Writer, templates.AuthNUserTmpl)
+	if !flagIsSet(c, verboseFlag) {
+		return templates.DisplayOutput([]*cmn.AuthUser{uInfo}, c.App.Writer, templates.AuthNUserTmpl)
+	}
+
+	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl)
 }
 
 // TODO: it is a basic parser for permissions.

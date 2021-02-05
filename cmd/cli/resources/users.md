@@ -113,7 +113,7 @@ Remove an existing user. The built-in account `admin` cannot be removed.
 
 ### List registered users
 
-`ais auth show user`
+`ais auth show user [USER [-v]]`
 
 Displays the list of registered users.
 
@@ -125,9 +125,24 @@ user1   Guest-clu1,Guest-clu2
 user2   PowerUser-clu1
 ```
 
+By default, the user is displayed in short mode.
+Option `-v` prints detailed info:
+
+```console
+$ ais auth show user user1
+NAME    ROLES
+user1   Guest-clu
+
+$ ais auth show user user1 -v
+Name            test
+Roles           Guest-local
+CLUSTER ID      ALIAS   PERMISSIONS
+k5zAzdhbr       clu     GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS
+```
+
 ### List existing roles
 
-`ais auth show role`
+`ais auth show role [ROLE [-v]]`
 
 Displays existing roles in alphabetical order.
 
@@ -138,6 +153,21 @@ Admin           AuthN administrator
 BucketOwner     Full access to buckets
 Guest           Read-only access to buckets
 PowerUser       Full access to cluster
+```
+
+By default, the role is displayed in short mode.
+Option `-v` prints detailed info:
+
+```console
+$ ais auth show role Guest-clu
+ROLE            DESCRIPTION
+Guest-clu       Read-only access to buckets of cluster k5zAzdhbr[local]
+
+$ ais auth show role Guest-clu -v
+Role            Guest-local
+Description     Read-only access to buckets of cluster k5zAzdhbr[local]
+CLUSTER ID      ALIAS   PERMISSIONS
+k5zAzdhbr       local   GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS
 ```
 
 ### Log in to AIS cluster

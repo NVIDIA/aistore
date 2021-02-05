@@ -274,6 +274,15 @@ func (m *userManager) updateRole(role string, updateReq *cmn.AuthRole) error {
 	return m.db.Set(rolesCollection, role, rInfo)
 }
 
+func (m *userManager) lookupRole(roleID string) (*cmn.AuthRole, error) {
+	rInfo := &cmn.AuthRole{}
+	err := m.db.Get(rolesCollection, roleID, rInfo)
+	if err != nil {
+		return nil, err
+	}
+	return rInfo, nil
+}
+
 func (m *userManager) updateCluster(cluID string, info *cmn.AuthCluster) error {
 	if info.ID == "" {
 		return errors.New("cluster ID is undefined")
@@ -425,6 +434,27 @@ func (m *userManager) generateRevokedTokenList() ([]string, error) {
 		revokeList = append(revokeList, t)
 	}
 	return revokeList, nil
+}
+
+func (m *userManager) lookupUser(userID string) (*cmn.AuthUser, error) {
+	uInfo := &cmn.AuthUser{}
+	err := m.db.Get(usersCollection, userID, uInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	// update ACLs with roles's ones
+	for _, role := range uInfo.Roles {
+		rInfo := &cmn.AuthRole{}
+		err := m.db.Get(rolesCollection, role, rInfo)
+		if err != nil {
+			continue
+		}
+		uInfo.Clusters = cmn.MergeClusterACLs(uInfo.Clusters, rInfo.Clusters)
+		uInfo.Buckets = cmn.MergeBckACLs(uInfo.Buckets, rInfo.Buckets)
+	}
+
+	return uInfo, nil
 }
 
 func (m *userManager) userList() (map[string]*cmn.AuthUser, error) {

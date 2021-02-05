@@ -242,18 +242,46 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 
 // Returns list of users (without superusers)
 func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
-	_, err := checkRESTItems(w, r, 0, cmn.URLPathUsers.L)
+	items, err := checkRESTItems(w, r, 0, cmn.URLPathUsers.L)
 	if err != nil {
 		return
 	}
 
-	var users map[string]*cmn.AuthUser
-	if users, err = a.users.userList(); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+	if len(items) > 1 {
+		cmn.InvalidHandlerWithMsg(w, r, "invalid request")
 		return
 	}
 
-	a.writeJSON(w, users, "list users")
+	var users map[string]*cmn.AuthUser
+	if len(items) == 0 {
+		if users, err = a.users.userList(); err != nil {
+			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			return
+		}
+		for _, uInfo := range users {
+			uInfo.Password = ""
+		}
+		a.writeJSON(w, users, "list users")
+		return
+	}
+
+	uInfo, err := a.users.lookupUser(items[0])
+	if err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+	uInfo.Password = ""
+	clusters, err := a.users.clusterList()
+	if err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+	for _, clu := range uInfo.Clusters {
+		if cInfo, ok := clusters[clu.ID]; ok {
+			clu.Alias = cInfo.Alias
+		}
+	}
+	a.writeJSON(w, uInfo, "user info")
 }
 
 // Checks if the request header contains super-user credentials and they are
@@ -444,12 +472,41 @@ func (a *authServ) roleHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpRoleGet(w http.ResponseWriter, r *http.Request) {
-	roles, err := a.users.roleList()
+	apiItems, err := checkRESTItems(w, r, 0, cmn.URLPathRoles.L)
+	if err != nil {
+		return
+	}
+	if len(apiItems) > 1 {
+		cmn.InvalidHandlerWithMsg(w, r, "invalid request")
+		return
+	}
+
+	if len(apiItems) == 0 {
+		roles, err := a.users.roleList()
+		if err != nil {
+			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			return
+		}
+		a.writeJSON(w, roles, "rolelist")
+		return
+	}
+
+	role, err := a.users.lookupRole(apiItems[0])
 	if err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
-	a.writeJSON(w, roles, "rolelist")
+	clusters, err := a.users.clusterList()
+	if err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+	for _, clu := range role.Clusters {
+		if cInfo, ok := clusters[clu.ID]; ok {
+			clu.Alias = cInfo.Alias
+		}
+	}
+	a.writeJSON(w, role, "role")
 }
 
 func (a *authServ) httpRoleDel(w http.ResponseWriter, r *http.Request) {

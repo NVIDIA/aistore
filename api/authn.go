@@ -115,6 +115,19 @@ func GetClusterAuthN(baseParams BaseParams, spec cmn.AuthCluster) ([]*cmn.AuthCl
 	return rec, err
 }
 
+func GetRoleAuthN(baseParams BaseParams, roleID string) (*cmn.AuthRole, error) {
+	if roleID == "" {
+		return nil, errors.New("missing role ID")
+	}
+	rInfo := &cmn.AuthRole{}
+	baseParams.Method = http.MethodGet
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.JoinWords(cmn.URLPathRoles.S, roleID),
+	}, &rInfo)
+	return rInfo, err
+}
+
 func GetRolesAuthN(baseParams BaseParams) ([]*cmn.AuthRole, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPathRoles.S
@@ -143,6 +156,19 @@ func GetUsersAuthN(baseParams BaseParams) ([]*cmn.AuthUser, error) {
 	sort.Slice(list, less)
 
 	return list, err
+}
+
+func GetUserAuthN(baseParams BaseParams, userID string) (*cmn.AuthUser, error) {
+	if userID == "" {
+		return nil, errors.New("missing user ID")
+	}
+	uInfo := &cmn.AuthUser{}
+	baseParams.Method = http.MethodGet
+	err := DoHTTPRequest(ReqParams{
+		BaseParams: baseParams,
+		Path:       cmn.JoinWords(cmn.URLPathUsers.S, userID),
+	}, &uInfo)
+	return uInfo, err
 }
 
 func AddRoleAuthN(baseParams BaseParams, roleSpec *cmn.AuthRole) error {

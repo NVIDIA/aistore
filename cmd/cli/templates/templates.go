@@ -161,6 +161,35 @@ const (
 		"{{ $user.ID }}\t{{ JoinList $user.Roles }}\n" +
 		"{{end}}"
 
+	AuthNUserVerboseTmpl = "Name\t{{ .ID }}\n" +
+		"Roles\t{{ JoinList .Roles }}\n" +
+		"{{ if ne (len .Clusters) 0 }}" +
+		"CLUSTER ID\tALIAS\tPERMISSIONS\n" +
+		"{{ range $clu := .Clusters}}" +
+		"{{ $clu.ID}}\t{{ $clu.Alias }}\t{{ FormatACL $clu.Access }}\n" +
+		"{{end}}{{end}}" +
+		"{{ if ne (len .Buckets) 0 }}" +
+		"BUCKET\tPERMISSIONS\n" +
+		"{{ range $bck := .Buckets}}" +
+		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
+		"{{end}}{{end}}"
+
+	AuthNRoleVerboseTmpl = "Role\t{{ .Name }}\n" +
+		"Description\t{{ .Desc }}\n" +
+		"{{ if ne (len .Roles) 0 }}" +
+		"Roles\t{{ JoinList .Roles }}\n" +
+		"{{ end }}" +
+		"{{ if ne (len .Clusters) 0 }}" +
+		"CLUSTER ID\tALIAS\tPERMISSIONS\n" +
+		"{{ range $clu := .Clusters}}" +
+		"{{ $clu.ID}}\t{{ $clu.Alias }}\t{{ FormatACL $clu.Access }}\n" +
+		"{{end}}{{end}}" +
+		"{{ if ne (len .Buckets) 0 }}" +
+		"BUCKET\tPERMISSIONS\n" +
+		"{{ range $bck := .Buckets}}" +
+		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
+		"{{end}}{{end}}"
+
 	// Command `search`
 	SearchTmpl = "{{ JoinListNL . }}\n"
 
@@ -232,6 +261,7 @@ var (
 		"JoinListNL":          func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatFeatureFlags":  fmtFeatureFlags,
 		"Deployments":         func(h DaemonStatusTemplateHelper) string { return strings.Join(h.Deployments().Keys(), ",") },
+		"FormatACL":           fmtACL,
 	}
 
 	HelpTemplateFuncMap = template.FuncMap{
@@ -478,4 +508,11 @@ func (h *DaemonStatusTemplateHelper) Deployments() cmn.StringSet {
 	p := daemonsDeployments(h.Pmap)
 	p.Add(daemonsDeployments(h.Tmap).Keys()...)
 	return p
+}
+
+func fmtACL(acl cmn.AccessAttrs) string {
+	if acl == 0 {
+		return "-"
+	}
+	return acl.Describe()
 }

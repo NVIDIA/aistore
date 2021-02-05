@@ -207,6 +207,7 @@ const (
 	deleteAuthClusterArgument = "CLUSTER_ID"
 	showAuthClusterArgument   = "[CLUSTER_ID]"
 	showAuthRoleArgument      = "[ROLE]"
+	showUserListArgument      = "[USER_NAME]"
 	addAuthRoleArgument       = "ROLE [CLUSTER_ID PERMISSION ...]"
 	deleteRoleArgument        = "ROLE"
 	deleteTokenArgument       = "TOKEN | TOKEN_FILE"
