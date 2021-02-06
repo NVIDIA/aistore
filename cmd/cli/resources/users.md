@@ -140,6 +140,32 @@ CLUSTER ID      ALIAS   PERMISSIONS
 k5zAzdhbr       clu     GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS
 ```
 
+### Add a new role
+
+`ais auth add role CLUSTER_ID PERMISSION [PERMISSION...]`
+
+Creates a role and grants the list of permissions to the cluster.
+`CLUSTER_ID` is either cluster ID or cluster alias.
+`PERMISSION` can be a single compound permission(one of `ro`, `rw`, `su`) or a specific access permission.
+
+```console
+$ # create a role with read-write access to cluster data
+$ ais auth add role rwRole clusterOne rw
+$ ais auth show role rwRole -v
+Role            rwRole
+Description
+CLUSTER ID      ALIAS        PERMISSIONS
+k5zAzdhbr       clusterOne   GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,HEAD-BUCKET,LIST-OBJECTS
+
+$ # grant specific permission to a role
+$ ais auth add role specRole clusterOne GET HEAD-BUCKET LIST-OBJECT
+$ ais auth show role specRole -v
+Role            specRole
+Description
+CLUSTER ID      ALIAS        PERMISSIONS
+k5zAzdhbr       clusterOne   GET,HEAD-BUCKET,LIST-OBJECTS
+```
+
 ### List existing roles
 
 `ais auth show role [ROLE [-v]]`

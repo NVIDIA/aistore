@@ -421,51 +421,61 @@ func showUserHandler(c *cli.Context) (err error) {
 	return templates.DisplayOutput(uInfo, c.App.Writer, templates.AuthNUserVerboseTmpl)
 }
 
-// TODO: it is a basic parser for permissions.
-// Need better one that supports parsing specific permissions, not only
-// these three predefined ones. After the accurate pareser is implemeneted
-// the function will move to cmn/api_access.go
-func parseAccess(acc string) (cmn.AccessAttrs, error) {
-	switch acc {
-	case "admin":
-		return cmn.AccessAll, nil
-	case "rw":
-		return cmn.AccessRW, nil
-	case "ro":
-		return cmn.AccessRO, nil
-	case "no":
-		return cmn.AccessNone, nil
-	default:
-		return 0, fmt.Errorf("invalid access %s", acc)
-	}
-}
-
 func addAuthRoleHandler(c *cli.Context) (err error) {
 	args := c.Args()
 	role := args.First()
 	if role == "" {
 		return missingArgumentsError(c, "role name")
 	}
-	kvs := args.Tail()
-	cluList, err := makePairs(kvs)
+	if c.NArg() < 2 {
+		return missingArgumentsError(c, "cluster ID")
+	} else if c.NArg() < 3 {
+		return missingArgumentsError(c, "permissions")
+	}
+
+	cluster := args.Get(1)
+	alias := ""
+	cluList, err := api.GetClusterAuthN(authParams, cmn.AuthCluster{})
 	if err != nil {
-		return err
+		return
+	}
+	found := false
+	for _, clu := range cluList {
+		if cluster == clu.Alias {
+			alias = cluster
+			cluster = clu.ID
+			found = true
+			break
+		}
+		if cluster == clu.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("cluster %q not found", cluster)
+	}
+
+	perms := cmn.AccessNone
+	for i := 2; i < c.NArg(); i++ {
+		p, err := cmn.StrToAccess(args.Get(i))
+		if err != nil {
+			return err
+		}
+		perms |= p
+	}
+
+	cluPerms := []*cmn.AuthCluster{
+		{
+			ID:     cluster,
+			Alias:  alias,
+			Access: perms,
+		},
 	}
 	rInfo := &cmn.AuthRole{
-		Name: role,
-		Desc: parseStrFlag(c, descriptionFlag),
-	}
-	if len(cluList) != 0 {
-		cluPerms := make([]*cmn.AuthCluster, 0, len(cluList))
-		for k, v := range cluList {
-			access, err := parseAccess(v)
-			if err != nil {
-				return err
-			}
-			ac := &cmn.AuthCluster{ID: k, Access: access}
-			cluPerms = append(cluPerms, ac)
-		}
-		rInfo.Clusters = cluPerms
+		Name:     role,
+		Desc:     parseStrFlag(c, descriptionFlag),
+		Clusters: cluPerms,
 	}
 	return api.AddRoleAuthN(authParams, rInfo)
 }

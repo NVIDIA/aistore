@@ -471,18 +471,6 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 	}
 }
 
-func isClusterID(cluList []*cmn.AuthCluster, id string) bool {
-	if id == "" {
-		return false
-	}
-	for _, clu := range cluList {
-		if clu.ID == id || clu.Alias == id {
-			return true
-		}
-	}
-	return false
-}
-
 func roleCluPermCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		return
@@ -494,11 +482,8 @@ func roleCluPermCompletions(c *cli.Context) {
 	}
 
 	args := c.Args()
-	last := c.Args().Get(c.NArg() - 1)
-	if isClusterID(cluList, last) {
-		for _, perm := range []string{"no", "ro", "rw", "admin"} {
-			fmt.Println(perm)
-		}
+	if c.NArg() > 1 {
+		accessCompletions(c)
 		return
 	}
 	for _, clu := range cluList {
