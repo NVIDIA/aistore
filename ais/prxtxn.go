@@ -737,6 +737,36 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	return
 }
 
+// Put a node under maintenance
+func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) error {
+	var flags cluster.SnodeFlags
+	switch msg.Action {
+	case cmn.ActDecommission, cmn.ActShutdownNode:
+		flags = cluster.SnodeDecomission
+	case cmn.ActStartMaintenance:
+		flags = cluster.SnodeMaintenance
+	default:
+		return fmt.Errorf("invalid action: %s", msg.Action)
+	}
+	ctx := &smapModifier{
+		pre:   p._markMaint,
+		final: p._syncFinal,
+		sid:   si.ID(),
+		flags: flags,
+		msg:   msg,
+	}
+	return p.owner.smap.modify(ctx)
+}
+
+func (p *proxyrunner) _markMaint(ctx *smapModifier, clone *smapX) error {
+	if !clone.isPrimary(p.si) {
+		return fmt.Errorf("%s is not primary [%s]: cannot put in maintenance %s", p.si, clone.StringEx(), ctx.sid)
+	}
+	clone.setNodeFlags(ctx.sid, ctx.flags)
+	clone.staffIC()
+	return nil
+}
+
 // destroy bucket: { begin -- commit }
 func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	nlp := bck.GetNameLockPair()

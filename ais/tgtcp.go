@@ -198,7 +198,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 	switch apiItems[0] {
 	case cmn.Proxy:
 		// PUT /v1/daemon/proxy/newprimaryproxyid
-		t.httpdaesetprimaryproxy(w, r, apiItems)
+		t.daeSetPrimary(w, r, apiItems)
 	case cmn.SyncSmap:
 		newsmap := &smapX{}
 		if cmn.ReadJSON(w, r, newsmap) != nil {
@@ -239,7 +239,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 	}
 }
 
-func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apiItems []string) {
+func (t *targetrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems []string) {
 	var (
 		err     error
 		prepare bool
