@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -38,7 +39,7 @@ const (
 
 var (
 	authFlags = map[string][]cli.Flag{
-		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag},
+		flagsAuthUserLogin:   {tokenFileFlag, passwordFlag, expireFlag},
 		subcmdAuthUser:       {passwordFlag},
 		flagsAuthRoleAdd:     {descriptionFlag},
 		flagsAuthRevokeToken: {tokenFileFlag},
@@ -174,7 +175,7 @@ var (
 		},
 	}
 
-	loggedUserToken api.AuthCreds
+	loggedUserToken cmn.TokenMsg
 )
 
 // Use the function to wrap every AuthN handler that does API calls.
@@ -255,9 +256,15 @@ func deleteRoleHandler(c *cli.Context) (err error) {
 
 func loginUserHandler(c *cli.Context) (err error) {
 	const tokenSaveFailFmt = "successfully logged in, but failed to save token: %v"
-	name := cliAuthnUserName(c)
-	password := cliAuthnUserPassword(c, false)
-	token, err := api.LoginUser(authParams, name, password)
+	var (
+		expireIn *time.Duration
+		name     = cliAuthnUserName(c)
+		password = cliAuthnUserPassword(c, false)
+	)
+	if flagIsSet(c, expireFlag) {
+		expireIn = api.Duration(parseDurationFlag(c, expireFlag))
+	}
+	token, err := api.LoginUser(authParams, name, password, expireIn)
 	if err != nil {
 		return err
 	}
@@ -520,7 +527,7 @@ func revokeTokenHandler(c *cli.Context) (err error) {
 		if err != nil {
 			return err
 		}
-		creds := &api.AuthCreds{}
+		creds := &cmn.TokenMsg{}
 		if err = jsoniter.Unmarshal(bt, creds); err != nil {
 			return fmt.Errorf("invalid token file format")
 		}

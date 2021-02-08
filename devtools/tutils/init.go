@@ -230,7 +230,7 @@ func initAuthToken() {
 	cmn.AssertNoErr(err)
 	tokenPath := filepath.Join(home, ".ais", "token")
 
-	var token api.AuthCreds
+	var token cmn.TokenMsg
 	jsp.Load(tokenPath, &token, jsp.Plain())
 
 	AuthToken = token.Token

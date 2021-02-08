@@ -9,9 +9,10 @@
 
 ## User Account and Access management
 
-[AuthN](/docs/authn.md) is AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
+[AuthN](/docs/authn.md) is an AIS authorization server that can be deployed to manage user access to one or more AIS clusters.
 
-All commands (except `logout`) send requests to AuthN URL defined in AIS CLI configuration file. Configuration can be overridden with environment variable `AUTHN_URL`, e.g., `AUTHN_URL=http://10.0.0.20:52001 ais auth add ...`.
+All commands (except `logout`) send requests to AuthN URL defined in the AIS CLI configuration file.
+Configuration can be overridden with environment variable `AUTHN_URL`, e.g., `AUTHN_URL=http://10.0.0.20:52001 ais auth add ...`.
 
 The CLI provides an easy way to manage users and to grant and revoke access permissions.
 Only users with `Admin` role can manage AuthN server.
@@ -26,8 +27,8 @@ When a token is revoked, AuthN notifies registered clusters, so they update thei
 
 ### Generate a token for CLI
 
-After successful login, CLI saves the generated token to user's configuration directory for the future use and automatically passed it with every request to AuthN.
-For convenience, CLI prints out the generated token so it can be copied and used with other clients.
+After successful login, the CLI saves the generated token to the user's configuration directory for future use and automatically passes it with every request to AuthN.
+For convenience, the CLI prints out the generated token so it can be copied and used with other clients.
 
 ```console
 $ ais auth login -p admin admin
@@ -37,27 +38,27 @@ eyJhbGciOiJIUuI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiZThwaXJlcyI6IjIwMjAtMDY
 
 ### Generate a token to a file
 
-CLI supports loading a token from a custom location.
-One possible usage is imitating Linux `sudo` command.
-First, a user logs in as an Admin and saves the token to some location.
-Second, the user logs in as a regular user with default options.
-It results in that the regular requests use the last generated token for all requests.
-But when the user needs to modify any AuthN data, the user executes CLI with optional path to the admin token.
+The CLI supports loading a token from a custom location.
+One possible usage is imitating the Linux `sudo` command.
+First, a user logs into the AIStore cluster as an Admin and saves the token to some location.
+Second, the user logs into AIStore as a regular user with default options.
+The regular user's requests would then use that user's last generated token for all requests.
+Then, when elevated privileges are needed, the user can specifying the path to the admin token.
 
 ```console
-$ # generate a token and save to a given location
+$ # Generate a token and save it to a given location
 $ ais auth login -p admin --file ./admin.token admin
 Token saved to ./admin.token
 
-$ # log in as a regular user
+$ # Log in as a regular user
 $ ais auth login -p pass user
 Token(/home/ubuntu/.config/ais/auth.token):
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1Z...
 
-$ # create bucket as a regular user
+$ # Create bucket as a regular user
 $ ais create bucket ais://bck1
 
-# removing a user requres admin's token, pass path to the token to CLI
+$ # Removing a user requires admin's token, pass a path to the token to CLI
 $ AUTHN_TOKEN_FILE=./admin.token ais auth rm user tmpUser1
 ```
 
@@ -66,10 +67,10 @@ $ AUTHN_TOKEN_FILE=./admin.token ais auth rm user tmpUser1
 When a user's token is compromised, the tokens should be revoked:
 
 ```console
-$ # pass the token in command line
+$ # Pass the token in the command line
 $ ais auth rm token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1Z...
 
-$ # read the token from a file created by AIS CLI
+$ # Read the token from a file created by AIS CLI
 $ ais auth rm token -f /home/user/user.token
 ```
 
@@ -81,9 +82,9 @@ $ ais auth rm token -f /home/user/user.token
 
 Register the user and assign the list of roles to the user.
 
-If the role is omitted, the new user does not have any permissions. It may be useful for
-case: a user needs an access to one or few buckets. Instead of creating a new role just
-for the user, register a user with empty role and grant permissions to the required buckets.
+If the role is omitted, the new user does not have any permissions. It may be useful in
+case a user needs access to one or a few buckets. Instead of creating a new role just
+for the user, register a user with an empty role and grant permissions to the required buckets.
 
 **Examples:**
 
@@ -101,9 +102,9 @@ user2   PowerUser
 
 `ais auth update user [-p USER_PASS] USER_NAME [ROLE [ROLE...]]`
 
-Updates user password and list of roles. If role list is omitted, the current
+Updates user password and list of roles. If the role list is omitted, the current
 user role remains unchanged.
-Changing role for built-in account `admin` is forbidden.
+Changing the role for the built-in account `admin` is forbidden.
 
 ### Unregister existing user
 
@@ -149,7 +150,7 @@ Creates a role and grants the list of permissions to the cluster.
 `PERMISSION` can be a single compound permission(one of `ro`, `rw`, `su`) or a specific access permission.
 
 ```console
-$ # create a role with read-write access to cluster data
+$ # Create a role with read-write access to cluster data
 $ ais auth add role rwRole clusterOne rw
 $ ais auth show role rwRole -v
 Role            rwRole
@@ -157,7 +158,7 @@ Description
 CLUSTER ID      ALIAS        PERMISSIONS
 k5zAzdhbr       clusterOne   GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,HEAD-BUCKET,LIST-OBJECTS
 
-$ # grant specific permission to a role
+$ # Grant specific permission to a role
 $ ais auth add role specRole clusterOne GET HEAD-BUCKET LIST-OBJECT
 $ ais auth show role specRole -v
 Role            specRole
@@ -198,19 +199,30 @@ k5zAzdhbr       local   GET,HEAD-OBJECT,HEAD-BUCKET,LIST-OBJECTS
 
 ### Log in to AIS cluster
 
-`ais auth login [-p USER_PASS] USER_NAME`
+`ais auth login [-p USER_PASS] USER_NAME [--expire EXPIRATION_TIME]`
 
 Issue a token for a user.
-After successful login, user's token is saved to CLI configuration directory (usually it is `~/.config/ais/`) with a filename `auth.token`.
-Next CLI runs automatically load and use the token for every request to AIS cluster.
+After successful login, the user's token is saved to CLI configuration directory (typically `~/.config/ais/`) with a filename `auth.token`.
+Subsequent `ais` commands automatically load and use the token for requests to the AIS cluster.
 The saved token can be used by other applications, like `curl`.
 Please see [AuthN documentation](/docs/authn.md) to read how to use AuthN API directly.
+
+By default, the AuthN token expiration is 24 hours.
+Use option `-e` or `--expire` to generate a token with custom expiration time.
+
+```console
+$ # Generate a token that expires in 5 hours
+$ ais auth login -p password username -e 5h
+
+$ # Generate a token that never expires
+$ ais auth login -p password username -e 0
+```
 
 ### Log out
 
 `ais auth logout`
 
-Erase user's token from a local machine. The token is not revoked, so it can be used by any application until it expires.
+Delete the user's token from a local machine. The token is not revoked, so it can be used by any application until it expires.
 To forbid using the token from any application, the token must be revoked manually in addition to logging out.
 
 ### Register new cluster
@@ -218,16 +230,16 @@ To forbid using the token from any application, the token must be revoked manual
 `ais auth add cluster [ALIAS] [URL...]`
 
 If URL is omitted, CLI registers a cluster using its URL from CLI configuration or `AIS_ENDPOINT` variable.
-When URL list is defined, CLI tries to connect the cluster using the first URL from the list.
+When the URL list is defined, CLI tries to connect the cluster using the first URL from the list.
 
 Register the cluster and assign the list of URLs for sending notifications.
-A user may assign an alias to the cluster for convenience: AuthN commands accepts both cluster ID and Alias in requests.
+A user may assign an alias to the cluster for convenience: AuthN commands accepts both cluster ID and alias in requests.
 Alias must be a unique name.  Alias is an arbitrary name, but it should not start with `http`.
-In this case CLI treats the alias as the first URL.
+In this case, CLI treats the alias as the URL.
 
 On successful cluster registration, AuthN automatically creates a few predefined unique roles for the cluster: with full access,
 read-write access to all its buckets, and read-only access to the cluster.
-Please note that the role names include cluster's alias if it was defined. If alias is omitted, AuthN adds cluster ID to role name.
+Please note that the role names include cluster's alias if it was defined. If the alias is omitted, AuthN adds cluster ID to a role name.
 
 See full example in [List registered clusters](#list-registered-clusters).
 
@@ -241,7 +253,7 @@ Replaces the list of URLs or changes alias for an existing cluster.
 
 `ais auth rm cluster CLUSTER_ID`
 
-Remove the existing cluster from notification list.
+Remove the existing cluster from the notification list.
 
 ### List registered clusters
 

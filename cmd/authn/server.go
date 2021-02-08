@@ -15,23 +15,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// a message to generate token
-// POST: <version>/<pathUsers>/<username>
-//		Body: <loginMsg>
-//	Returns: <tokenMsg>
-type loginMsg struct {
-	Password string `json:"password"`
-}
-
-// a message to test token validity and to revoke existing token
-// check: GET <version>/<pathTokens>
-//		Body: <tokenMsg>
-// revoke: DEL <version>/<pathTokens>
-//		Body: <tokenMsg>
-type tokenMsg struct {
-	Token string `json:"token"`
-}
-
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, true, items)
 	if err != nil {
@@ -149,7 +132,7 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := &tokenMsg{}
+	msg := &cmn.TokenMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil || msg.Token == "" {
 		glog.Errorf("Failed to read request: %v\n", err)
 		return
@@ -319,7 +302,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := &loginMsg{}
+	msg := &cmn.LoginMsg{}
 	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
 		return
@@ -336,7 +319,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("User: %s, pass: %s\n", userID, pass)
 	}
 
-	tokenString, err := a.users.issueToken(userID, pass)
+	tokenString, err := a.users.issueToken(userID, pass, msg.ExpiresIn)
 	if err != nil {
 		glog.Errorf("Failed to generate token: %v\n", err)
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)

@@ -615,6 +615,10 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
 	if len(apiItems) == 0 {
 		p.cluputJSON(w, r)
 	} else {

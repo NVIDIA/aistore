@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
@@ -17,14 +18,6 @@ type (
 	AuthnSpec struct {
 		AdminName     string
 		AdminPassword string
-	}
-
-	loginRec struct {
-		Password string `json:"password"`
-	}
-
-	AuthCreds struct {
-		Token string `json:"token"`
 	}
 )
 
@@ -53,13 +46,17 @@ func DeleteUser(baseParams BaseParams, userID string) error {
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathUsers.Join(userID)})
 }
 
-func LoginUser(baseParams BaseParams, userID, pass string) (token *AuthCreds, err error) {
+// Authorize a user and return a user token in case of success.
+// The token expires in `expire` time. If `expire` is `nil` the expiration
+// time is set by AuthN (default AuthN expiration time is 24 hours)
+func LoginUser(baseParams BaseParams, userID, pass string, expire *time.Duration) (token *cmn.TokenMsg, err error) {
 	baseParams.Method = http.MethodPost
 
+	rec := cmn.LoginMsg{Password: pass, ExpiresIn: expire}
 	err = DoHTTPRequest(ReqParams{
 		BaseParams: baseParams,
 		Path:       cmn.URLPathUsers.Join(userID),
-		Body:       cmn.MustMarshal(loginRec{Password: pass}),
+		Body:       cmn.MustMarshal(rec),
 	}, &token)
 	if err != nil {
 		return nil, err
@@ -187,7 +184,7 @@ func DeleteRoleAuthN(baseParams BaseParams, role string) error {
 
 func RevokeToken(baseParams BaseParams, token string) error {
 	baseParams.Method = http.MethodDelete
-	msg := &AuthCreds{Token: token}
+	msg := &cmn.TokenMsg{Token: token}
 	return DoHTTPRequest(ReqParams{
 		Body:       cmn.MustMarshal(msg),
 		BaseParams: baseParams,

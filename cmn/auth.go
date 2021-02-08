@@ -62,6 +62,15 @@ type (
 	AuthClusterList struct {
 		Clusters map[string]*AuthCluster `json:"clusters,omitempty"`
 	}
+
+	LoginMsg struct {
+		Password  string         `json:"password"`
+		ExpiresIn *time.Duration `json:"expires_in"`
+	}
+
+	TokenMsg struct {
+		Token string `json:"token"`
+	}
 )
 
 var (

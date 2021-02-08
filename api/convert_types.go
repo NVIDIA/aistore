@@ -5,6 +5,8 @@
 package api
 
 import (
+	"time"
+
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -34,5 +36,10 @@ func AccessAttrs(v cmn.AccessAttrs) *cmn.AccessAttrs {
 }
 
 func MDWritePolicy(v cmn.MDWritePolicy) *cmn.MDWritePolicy {
+	return &v
+}
+
+// Duration returns a pointer to the time duration value passed in.
+func Duration(v time.Duration) *time.Duration {
 	return &v
 }

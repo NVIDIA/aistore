@@ -93,7 +93,7 @@ func testUserDelete(mgr *userManager, t *testing.T) {
 		t.Errorf("Expected %d users but found %d", len(users)+2, len(srvUsers))
 	}
 
-	token, err := mgr.issueToken(username, userpass)
+	token, err := mgr.issueToken(username, userpass, nil)
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", username, err)
 	}
@@ -107,7 +107,7 @@ func testUserDelete(mgr *userManager, t *testing.T) {
 	if len(srvUsers) != len(users)+1 {
 		t.Errorf("Expected %d users but found %d", len(users)+1, len(srvUsers))
 	}
-	token, err = mgr.issueToken(username, userpass)
+	token, err = mgr.issueToken(username, userpass, nil)
 	if err == nil {
 		t.Errorf("Token issued for deleted user  %s: %v", username, token)
 	} else if err != errInvalidCredentials {
@@ -140,7 +140,7 @@ func TestToken(t *testing.T) {
 
 	// correct user creds
 	shortExpiration := 2 * time.Second
-	token, err = mgr.issueToken(users[1], passs[1], shortExpiration)
+	token, err = mgr.issueToken(users[1], passs[1], &shortExpiration)
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
@@ -153,7 +153,7 @@ func TestToken(t *testing.T) {
 	}
 
 	// incorrect user creds
-	tokenInval, err := mgr.issueToken(users[1], passs[0])
+	tokenInval, err := mgr.issueToken(users[1], passs[0], nil)
 	if tokenInval != "" || err == nil {
 		t.Errorf("Some token generated for incorrect user creds: %v", tokenInval)
 	}

@@ -328,7 +328,7 @@ func (m *userManager) fixClusterIDs(lst []*cmn.AuthCluster) {
 // already generated and is not expired yet the existing token is returned.
 // Token includes user ID, permissions, and token expiration time.
 // If a new token was generated then it sends the proxy a new valid token list
-func (m *userManager) issueToken(userID, pwd string, ttl ...time.Duration) (string, error) {
+func (m *userManager) issueToken(userID, pwd string, ttl *time.Duration) (string, error) {
 	var (
 		err     error
 		expires time.Time
@@ -358,8 +358,8 @@ func (m *userManager) issueToken(userID, pwd string, ttl ...time.Duration) (stri
 	// generate token
 	issued := time.Now()
 	expDelta := conf.Auth.ExpirePeriod
-	if len(ttl) != 0 {
-		expDelta = ttl[0]
+	if ttl != nil {
+		expDelta = *ttl
 	}
 	if expDelta == 0 {
 		expDelta = foreverTokenTime

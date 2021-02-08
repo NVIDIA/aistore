@@ -334,6 +334,10 @@ var (
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
+	expireFlag    = cli.DurationFlag{
+		Name:  "expire,e",
+		Usage: "token expiration time, '0' - for never-expiring token. Default expiration time is 24 hours",
+	}
 
 	// Copy Bucket
 	cpBckDryRunFlag = cli.BoolFlag{

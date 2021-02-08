@@ -18,7 +18,10 @@
 
 ## Overview
 
-AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details. Currently, we only support hash-based message authentication (HMAC) using SHA256 hash.
+AIStore Authentication Server (AuthN) provides token-based secure access to AIStore.
+It employs the [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects.
+Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
+Currently, we only support hash-based message authentication (HMAC) using SHA256 hash.
 
 AuthN is a standalone server that manages users and tokens. If AuthN is enabled on a cluster,
 a client must request a token from AuthN and put it into HTTP headers of every request to the cluster.
@@ -37,7 +40,7 @@ A workflow for the case when a token is revoked and only one cluster is register
 
 <img src="images/token_revoke.png" alt="Revoke token workflow">
 
-AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as HTTP server listening on port 52001.
+AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as an HTTP server listening on port 52001.
 If you enable HTTPS access, make sure that the configuration file options `server_crt` and `server_key` point to the correct SSL certificate and key.
 
 
@@ -50,7 +53,7 @@ Environment variables used by the deployment script to setup AuthN server:
 | AIS_SECRET_KEY | `aBitLongSecretKey` | A secret key to sign tokens |
 | AUTH_ENABLED | `false` | Set it to `true` to enable AuthN server and token-based access in AIStore proxy |
 | AUTHN_PORT | `52001` | Port on which AuthN listens to requests |
-| AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 that means "no expiration time" |
+| AUTHN_TTL | `24h` | A token expiration time. Can be set to 0 which means "no expiration time" |
 
 All variables can be set at AIStore cluster deployment.
 Example of starting a cluster with AuthN enabled:
@@ -61,9 +64,11 @@ $ AUTH_ENABLED=true make deploy
 
 Note: don't forget to change the default secret key used to sign tokens before starting the deployment process.
 
-To change AuthN settings after deployment, modify the server's configuration file and restart the server. If you change the server's secret key make sure to modify AIStore proxy configuration as well.
+To change AuthN settings after deployment, modify the server's configuration file and restart the server.
+If you change the server's secret key, make sure to modify AIStore proxy configuration as well.
 
-At start AuthN checks user list. If it is empty, AuthN creates a default user that can access to everything: user ID is `admin` and password is `admin`. Do not forget to change the user's password for security reasons.
+At start, AuthN checks the user list. If it is empty, AuthN creates a default user that can access everything:
+user ID is `admin` and password is `admin`. Do not forget to change the user's password for security reasons.
 
 ### Notation
 
@@ -86,8 +91,25 @@ In this README:
 By default, AIStore deployment currently does not launch the AuthN server.
 To start AuthN manually, perform the following steps:
 
-- Change AIStore proxy configuration to enable token-based access: look for `{"auth": { "enabled": false } }` in proxy configuration file and replace `false` with `true`. Restart the proxy to apply changes
 - Start authn server: <path_to_ais_binaries>/authn -config=<path_to_config_dir>/authn.json. Path to config directory is set at the time of cluster deployment and it is the same as the directory for AIStore proxies and targets
+- Update AIS CLI configuration file: change AuthN URL. Alternatively, prepend AuthN URL to every CLI command that uses `auth` subcommand: `AUTHN_URL=http://10.10.1.190:52001 ais auth COMMAND`
+- Change AIStore cluster configuration to enable token-based access and use the same secret as AuthN uses:
+
+```console
+$ # Change the secret
+$ ais set config auth.secret SECRET
+
+$ # Enable cluster-wide authorization
+$ ais set config auth.enabled true
+
+$ # Register the cluster at AuthN to receive AuthN messages (e.g, revoked token list)
+$ # ais auth add cluster CLUSTER_ALIAS CLUSTER-URL-LIST
+$ ais auth add cluster mainCluster http://10.10.1.70:50001 http://10.10.1.71:50001
+
+$ # Calling AuthN without modifying CLI configuration
+$ # Assuming AuthN listens at http://10.10.1.190:52001
+$ AUTHN_URL=http://10.10.1.190:52001 ais auth add cluster mainCluster http://10.10.1.70:50001 http://10.10.1.71:50001
+```
 
 ### Using Kubernetes secrets
 
@@ -118,7 +140,7 @@ spec:
 In the example above the values in all-capitals are the names of the environment
 variables that AuthN looks for. All other values are arbitrary.
 
-When AuthN pod starts, it loads its configuration from local file, and then
+When AuthN pod starts, it loads its configuration from the local file, and then
 overrides secret values with ones from the pod's description.
 
 ## Rest API
@@ -144,21 +166,35 @@ For curl, it is an argument `-H 'Authorization: Bearer token'`.
 AIStore proxies and targets require a valid token in a request header - but only if AuthN is enabled.
 Every token includes all the information needed by a node:
 
-- UserID (username)
+- User name
 - User ACL
 - Time when the token expires
 
-A proxy validated the token. The token must not be expired and it must not be in the blacklist.
-The blacklist is a list of revoked tokens. AuthN broadcast the revoked token when it is added to AuthN.
+A proxy validates the token. The token must not be expired and it must not be on the blacklist (the list of revoked tokens).
+AuthN broadcasts the revoked token when it is added to AuthN.
 When AuthN registers a new cluster, it sends to the cluster the entire list of revoked tokens.
 Periodically the list is cleaned up: expired and invalid tokens are removed.
 
-Generating a token for data access does not require a token.
-Users must provide their correct names and passwords to get tokens.
+Generating a token for data access requires correct user name and password.
 Token expiration time is 24 hours by default.
-To change default expiration time, modify`expiration_time` in the configuration file.
+Modify `expiration_time` in the configuration file to change default expiration time.
 
-A generated token is returned as a JSON formatted message. Example: `{"token": "issued_token"}`.
+To issue single token with custom expiration time, pass optional expiration duration in the request.
+Example: generate a token that expires in 5 hours. API:
+
+```
+POST {"password": "password", "expires_in": 18000000000000} /v1/users/usename
+````
+
+CLI:
+
+```console
+$ ais auth login -p password usename -e 5h
+```
+
+Pass a zero value `"expires_in": 0` to generate a never-expired token.
+
+AuthN return the generated token in as a JSON formatted message. Example: `{"token": "issued_token"}`.
 
 Call revoke token API to forcefully invalidate a token before it expires.
 
@@ -172,7 +208,7 @@ Call revoke token API to forcefully invalidate a token before it expires.
 When a cluster is registered, an arbitrary alias can be assigned for the cluster.
 CLI supports both cluster's ID and cluster's alias in commands.
 The alias is used to create default roles for a just registered cluster.
-If a cluster does not have an alias, the role names contain cluster's ID.
+If a cluster does not have an alias, the role names contain cluster ID.
 
 | Operation | HTTP Action | Example |
 |---|---|---|
@@ -187,6 +223,7 @@ If a cluster does not have an alias, the role names contain cluster's ID.
 | Operation | HTTP Action | Example |
 |---|---|---|
 | Get a list of roles | GET /v1/roles | curl -X GET AUTHSRV/v1/roles |
+| Get a role | GET /v1/roles/ROLE_ID | curl -X GET AUTHSRV/v1/roles/ROLE_ID |
 | Create a new role | POST /v1/roles {"name": "rolename", "desc": "description", "clusters": ["clusterid": permissions]} | curl -X AUTHSRV/v1/roles '{"name": "rolename", "desc": "description", "clusters": ["clusterid": permissions]}' |
 | Update an existing role | PUT /v1/roles/role-name {"desc": "description", "clusters": ["clusterid": permissions]} | curl -X PUT AUTHSRV/v1/roles '{"desc": "description", "clusters": ["clusterid": permissions]}' |
 | Delete a role | DELETE /v1/roles/role-name | curl -X DELETE AUTHSRV/v1/roles/role-name |
@@ -196,6 +233,7 @@ If a cluster does not have an alias, the role names contain cluster's ID.
 | Operation | HTTP Action | Example |
 |---|---|---|
 | Get a list of users | GET /v1/users | curl -X GET AUTHSRV/v1/users |
+| Get a users | GET /v1/users/USER_ID | curl -X GET AUTHSRV/v1/users/USER_ID |
 | Add a user | POST {"id": "username", "password": "pass", "roles": ["CluOne-owner", "CluTwo-readonly"]} /v1/users | curl -X POST AUTHSRV/v1/users -d '{"id": "username", "password":"pass", "roles": ["CluOne-owner", "CluTwo-readonly"]}' -H 'Content-Type: application/json' |
 | Update an existing user| PUT {"password": "pass", "roles": ["CluOne-owner", "CluTwo-readonly"]} /v1/users/user-id | curl -X PUT AUTHSRV/v1/users/user-id -d '{"password":"pass", "roles": ["CluOne-owner", "CluTwo-readonly"]}' -H 'Content-Type: application/json' |
 | Delete a user | DELETE /v1/users/username | curl -X DELETE AUTHSRV/v1/users/username |
