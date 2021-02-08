@@ -238,7 +238,7 @@ func (bo *bmdOwnerPrx) persist() {
 	}
 }
 
-func (bo *bmdOwnerPrx) _runPre(ctx *bmdModifier) (clone *bucketMD, err error) {
+func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 	bo.Lock()
 	defer bo.Unlock()
 	clone = bo.get().clone()
@@ -250,8 +250,7 @@ func (bo *bmdOwnerPrx) _runPre(ctx *bmdModifier) (clone *bucketMD, err error) {
 }
 
 func (bo *bmdOwnerPrx) modify(ctx *bmdModifier) (clone *bucketMD, err error) {
-	clone, err = bo._runPre(ctx)
-	if err != nil {
+	if clone, err = bo._pre(ctx); err != nil || ctx.terminate {
 		return
 	}
 	if ctx.final != nil {
