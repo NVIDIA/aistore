@@ -101,6 +101,8 @@ var (
 	ErrSkip           = errors.New("skip")
 	ErrStartupTimeout = errors.New("startup timeout")
 	ErrForwarded      = errors.New("forwarded")
+
+	ErrETLMissingUUID = errors.New("ETL UUID can't be empty")
 )
 
 // EOF (to accommodate unsized streaming)

@@ -41,7 +41,7 @@ var etlCmds = []cli.Command{
 					depsFileFlag,
 					runtimeFlag,
 					waitTimeoutFlag,
-					etlUID,
+					etlUUID,
 				},
 				Action: etlBuildHandler,
 			},
@@ -82,6 +82,7 @@ var etlCmds = []cli.Command{
 					cpBckPrefixFlag,
 					cpBckDryRunFlag,
 					waitFlag,
+					etlBucketRequestTimeout,
 				},
 				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
 			},
@@ -153,7 +154,7 @@ func etlBuildHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%s flag cannot be empty", fromFileFlag.Name)
 	}
 
-	msg.ID = parseStrFlag(c, etlUID)
+	msg.ID = parseStrFlag(c, etlUUID)
 	if msg.ID != "" {
 		if err = cmn.ValidateID(msg.ID); err != nil {
 			return
@@ -321,24 +322,27 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("cannot ETL bucket %q onto itself", fromBck)
 	}
 
-	var extMap cmn.SimpleKVs
-	if flagIsSet(c, etlExtFlag) {
-		mapStr := parseStrFlag(c, etlExtFlag)
-		extMap = make(cmn.SimpleKVs, 1)
-		if err = jsoniter.UnmarshalFromString(mapStr, &extMap); err != nil {
-			return fmt.Errorf("couldn't parse ext flag: %s", err.Error())
-		}
-	}
-
-	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, &cmn.Bck2BckMsg{
-		ID:  id,
-		Ext: extMap,
+	msg := &cmn.Bck2BckMsg{
+		ID: id,
 		CopyBckMsg: cmn.CopyBckMsg{
 			Prefix: parseStrFlag(c, cpBckPrefixFlag),
 			DryRun: flagIsSet(c, cpBckDryRunFlag),
 		},
-	})
+	}
 
+	if flagIsSet(c, etlExtFlag) {
+		mapStr := parseStrFlag(c, etlExtFlag)
+		extMap := make(cmn.SimpleKVs, 1)
+		if err = jsoniter.UnmarshalFromString(mapStr, &extMap); err != nil {
+			return fmt.Errorf("couldn't parse ext flag: %s", err.Error())
+		}
+		msg.Ext = extMap
+	}
+	if flagIsSet(c, etlBucketRequestTimeout) {
+		msg.RequestTimeoutStr = etlBucketRequestTimeout.Value.String()
+	}
+
+	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, msg)
 	if err := handleETLHTTPError(err, id); err != nil {
 		return err
 	}

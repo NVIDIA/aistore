@@ -550,7 +550,7 @@ func (t *targetrunner) etlBucket(c *txnServerCtx, msg *cmn.Bck2BckMsg) (err erro
 		return err
 	}
 	if msg.ID == "" {
-		return etl.ErrMissingUUID
+		return cmn.ErrETLMissingUUID
 	}
 	var dp cluster.LomReaderProvider
 

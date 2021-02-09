@@ -325,8 +325,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 		}
 	}
 	for !pdu.done {
-		_, err = pdu.readFrom()
-		if err != nil {
+		if _, err = pdu.readFrom(); err != nil {
 			err = fmt.Errorf("sbr8 %s: failed to receive PDU, err %w, obj %s", obj.loghdr, err, obj)
 			break
 		}

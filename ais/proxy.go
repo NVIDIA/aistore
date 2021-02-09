@@ -28,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/dsort"
-	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -755,8 +754,8 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 				p.invalmsghdlr(w, r, "request body can't be empty", http.StatusBadRequest)
 				return
 			}
-			if internalMsg.ID == "" {
-				p.invalmsghdlr(w, r, etl.ErrMissingUUID.Error(), http.StatusBadRequest)
+			if err := internalMsg.Validate(); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
 		case cmn.ActCopyBck:

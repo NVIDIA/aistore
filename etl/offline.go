@@ -21,8 +21,9 @@ type (
 	}
 
 	OfflineDataProvider struct {
-		bckMsg *cmn.Bck2BckMsg
-		comm   Communicator
+		bckMsg         *cmn.Bck2BckMsg
+		comm           Communicator
+		requestTimeout time.Duration
 	}
 )
 
@@ -43,23 +44,29 @@ func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return &OfflineDataProvider{
+	pr := &OfflineDataProvider{
 		bckMsg: msg,
 		comm:   comm,
-	}, nil
+	}
+
+	if msg.RequestTimeoutStr != "" {
+		pr.requestTimeout, err = time.ParseDuration(msg.RequestTimeoutStr)
+	}
+
+	return pr, err
 }
 
 // Returns reader resulting from lom ETL transformation.
 func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, func(), error) {
 	var (
-		body   io.ReadCloser
-		length int64
-		err    error
+		body    io.ReadCloser
+		length  int64
+		err     error
+		cleanup = func() {}
 	)
 
 	call := func() (int, error) {
-		body, length, err = dp.comm.Get(lom.Bck(), lom.ObjName)
+		body, cleanup, length, err = dp.comm.Get(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err
 	}
 
@@ -71,11 +78,11 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn
 		HardErr:   2,
 		Sleep:     50 * time.Millisecond,
 		BackOff:   true,
-		Verbosity: cmn.CallWithRetryLogQuiet,
+		Verbosity: cmn.CallWithRetryLogVerbose,
 	})
 
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, cleanup, err
 	}
 
 	om := &objMeta{
@@ -84,5 +91,5 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn
 		cksum:   cmn.NoneCksum, // TODO: Revisit and check if possible to have a checksum.
 		atime:   lom.AtimeUnix(),
 	}
-	return cmn.NopOpener(body), om, func() {}, nil
+	return cmn.NopOpener(body), om, cleanup, nil
 }

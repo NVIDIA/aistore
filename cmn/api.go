@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -98,7 +99,8 @@ type (
 		// TODO: this field might not be required when transformation on subset (template) of bucket is supported.
 		Ext SimpleKVs `json:"ext"`
 
-		ID string `json:"id,omitempty"` // optional, ETL only
+		ID                string `json:"id,omitempty"`              // optional, ETL only
+		RequestTimeoutStr string `json:"request_timeout,omitempty"` // optional, ETL only
 
 		CopyBckMsg
 	}
@@ -534,6 +536,19 @@ func NewBucketPropsToUpdate(nvs SimpleKVs) (props *BucketPropsToUpdate, err erro
 		}
 	}
 	return
+}
+
+func (msg *Bck2BckMsg) Validate() error {
+	if msg.ID == "" {
+		return ErrETLMissingUUID
+	}
+
+	if msg.RequestTimeoutStr != "" {
+		if _, err := time.ParseDuration(msg.RequestTimeoutStr); err != nil {
+			return fmt.Errorf("failed to parse request_timeout; err: %v", err)
+		}
+	}
+	return nil
 }
 
 // Replace extension and add suffix if provided.

@@ -194,14 +194,17 @@ func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
 
 // Responsible for cleaning ETL xaction, ETL containers, destination bucket.
 func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
-	bckTo := cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+	var (
+		bckTo          = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
+		requestTimeout = 30 * time.Second
+	)
 	t.Cleanup(func() {
 		tetl.StopETL(t, baseParams, uuid)
 		tutils.DestroyBucket(t, proxyURL, bckTo)
 	})
 
 	tutils.Logf("Start offline ETL %q\n", uuid)
-	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
+	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, RequestTimeoutStr: requestTimeout.String()})
 	tassert.CheckFatal(t, err)
 
 	err = tetl.WaitForFinished(baseParams, xactID, timeout)

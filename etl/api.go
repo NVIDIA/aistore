@@ -5,7 +5,6 @@
 package etl
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -59,8 +58,6 @@ type (
 		Ext string `json:"ext"`
 	}
 )
-
-var ErrMissingUUID = errors.New("ETL UUID can't be empty")
 
 func (m BuildMsg) Validate() error {
 	if len(m.Code) == 0 {

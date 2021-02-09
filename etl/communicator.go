@@ -12,6 +12,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -42,7 +43,7 @@ type (
 		// Get() is driven by `OfflineDataProvider` - not to confuse with
 		// GET requests from users (such as training models and apps)
 		// to perform on-the-fly transformation.
-		Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error)
+		Get(bck *cluster.Bck, objName string, ts ...time.Duration) (io.ReadCloser, func(), int64, error)
 	}
 
 	commArgs struct {
@@ -132,51 +133,66 @@ func (c baseComm) SvcName() string { return c.podName /*pod name is same as serv
 // pushComm //
 //////////////
 
-func (pc *pushComm) doRequest(bck *cluster.Bck, objName string) (resp *http.Response, err error) {
+func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Duration) (resp *http.Response, cleanup func(), err error) {
 	lom := cluster.AllocLOM(objName)
+	cleanup = func() {}
+
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
-	resp, err = pc.tryDoRequest(lom)
+	resp, cleanup, err = pc.tryDoRequest(lom, ts...)
 	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
 		_, err = pc.t.GetCold(context.Background(), lom, cluster.PrefetchWait)
 		if err != nil {
-			return nil, err
+			return nil, cleanup, err
 		}
-		resp, err = pc.tryDoRequest(lom)
+		resp, cleanup, err = pc.tryDoRequest(lom, ts...)
 	}
 	return
 }
 
-func (pc *pushComm) tryDoRequest(lom *cluster.LOM) (*http.Response, error) {
+func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (*http.Response, func(), error) {
+	cleanup := func() {}
 	lom.Lock(false)
 	defer lom.Unlock(false)
+
 	if err := lom.Load(); err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
 	// `fh` is closed by Do(req).
 	fh, err := cmn.NewFileHandle(lom.FQN)
 	if err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
-	req, err := http.NewRequest(http.MethodPut, pc.transformerURL, fh)
+
+	var req *http.Request
+	if len(ts) > 0 && ts[0] != 0 {
+		var ctx context.Context
+		ctx, cleanup = context.WithTimeout(context.Background(), ts[0])
+		req, err = http.NewRequestWithContext(ctx, http.MethodPut, pc.transformerURL, fh)
+	} else {
+		req, err = http.NewRequest(http.MethodPut, pc.transformerURL, fh)
+	}
+
 	if err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
 	req.ContentLength = lom.Size()
 	req.Header.Set(cmn.HeaderContentType, cmn.ContentBinary)
-	return pc.t.DataClient().Do(req)
+	resp, err := pc.t.DataClient().Do(req)
+	return resp, cleanup, err
 }
 
 func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	var (
-		size      int64
-		resp, err = pc.doRequest(bck, objName)
+		size               int64
+		resp, cleanup, err = pc.doRequest(bck, objName)
 	)
+	defer cleanup()
 	if err != nil {
 		return err
 	}
@@ -200,9 +216,10 @@ func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck,
 	return nil
 }
 
-func (pc *pushComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
-	resp, err := pc.doRequest(bck, objName)
-	return handleResp(resp, err)
+func (pc *pushComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (io.ReadCloser, func(), int64, error) {
+	resp, cleanup, err := pc.doRequest(bck, objName, ts...)
+	r, code, err := handleResp(resp, err)
+	return r, cleanup, code, err
 }
 
 //////////////////
@@ -215,10 +232,11 @@ func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 	return nil
 }
 
-func (rc *redirectComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
+func (rc *redirectComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (io.ReadCloser, func(), int64, error) {
 	etlURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
-	resp, err := rc.t.DataClient().Get(etlURL)
-	return handleResp(resp, err)
+	resp, cleanup, err := getWithTimeout(rc.t.DataClient(), etlURL, ts...)
+	r, code, err := handleResp(resp, err)
+	return r, cleanup, code, err
 }
 
 //////////////////
@@ -231,10 +249,11 @@ func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 	return nil
 }
 
-func (pc *revProxyComm) Get(bck *cluster.Bck, objName string) (io.ReadCloser, int64, error) {
+func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (io.ReadCloser, func(), int64, error) {
 	etlURL := cmn.JoinPath(pc.transformerURL, transformerPath(bck, objName))
-	resp, err := pc.t.DataClient().Get(etlURL)
-	return handleResp(resp, err)
+	resp, cleanup, err := getWithTimeout(pc.t.DataClient(), etlURL, ts...)
+	r, code, err := handleResp(resp, err)
+	return r, cleanup, code, err
 }
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
@@ -260,4 +279,26 @@ func handleResp(resp *http.Response, err error) (io.ReadCloser, int64, error) {
 		return nil, 0, err
 	}
 	return resp.Body, resp.ContentLength, nil
+}
+
+func getWithTimeout(client *http.Client, url string, ts ...time.Duration) (*http.Response, func(), error) {
+	var (
+		req     *http.Request
+		err     error
+		ctx     context.Context
+		cleanup = func() {}
+	)
+
+	if len(ts) > 0 && ts[0] != 0 {
+		ctx, cleanup = context.WithTimeout(context.Background(), ts[0])
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	} else {
+		req, err = http.NewRequest(http.MethodGet, url, nil)
+	}
+
+	if err != nil {
+		return nil, cleanup, err
+	}
+	resp, err := client.Do(req)
+	return resp, cleanup, err
 }
