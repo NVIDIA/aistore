@@ -130,8 +130,6 @@ def transform(input_bytes):
 		bckFrom = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etlbig"}
 		bckTo   = cmn.Bck{Provider: cmn.ProviderAIS, Name: "etlbigout-" + cmn.RandString(5)}
 
-		etlDoneCh = cmn.NewStopCh()
-
 		m = ioContext{
 			t:         t,
 			num:       200_000,
@@ -183,6 +181,8 @@ def transform(input_bytes):
 			var (
 				uuid string
 				err  error
+
+				etlDoneCh = cmn.NewStopCh()
 			)
 			switch test.ty {
 			case cmn.ETLInit:
