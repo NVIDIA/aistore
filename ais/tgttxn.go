@@ -58,7 +58,6 @@ type txnServerCtx struct {
 
 // verb /v1/txn
 func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. check
 	if r.Method != http.MethodPost {
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /txn path")
 		return
@@ -73,71 +72,54 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var bucket, phase string
 	switch len(apiItems) {
-	case 1:
-		// Global transaction
+	case 1: // Global transaction.
 		phase = apiItems[0]
-	case 2:
-		// Bucket-based transaction
+	case 2: // Bucket-based transaction.
 		bucket, phase = apiItems[0], apiItems[1]
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid /txn path")
 		return
 	}
-	// 2. gather all context
 	c, err := t.prepTxnServer(r, msg, bucket, phase)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// 3. do
 	switch msg.Action {
 	case cmn.ActCreateBck, cmn.ActAddRemoteBck:
 		debug.Infof("Starting transaction create-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
-		if err = t.createBucket(c); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-		}
+		err = t.createBucket(c)
 		debug.Infof("Finished transaction create-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 	case cmn.ActMakeNCopies:
-		if err = t.makeNCopies(c); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-		}
+		err = t.makeNCopies(c)
 	case cmn.ActSetBprops, cmn.ActResetBprops:
-		if err = t.setBucketProps(c); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-		}
+		err = t.setBucketProps(c)
 	case cmn.ActMoveBck:
-		if err = t.renameBucket(c); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-		}
+		err = t.renameBucket(c)
 	case cmn.ActCopyBck, cmn.ActETLBck:
 		bck2BckMsg := &cmn.Bck2BckMsg{}
-		if err = cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
+		if err := cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
+			return
 		}
 		if msg.Action == cmn.ActCopyBck {
-			err = t.transferBucket(c, bck2BckMsg, nil /*LomReaderProvider*/)
+			err = t.transferBucket(c, bck2BckMsg, nil)
 		} else {
-			err = t.etlBucket(c, bck2BckMsg) // calls t.transferBucket
-		}
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			err = t.etlBucket(c, bck2BckMsg) // Calls `t.transferBucket` internally.
 		}
 	case cmn.ActECEncode:
-		if err = t.ecEncode(c); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-		}
+		err = t.ecEncode(c)
 	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode:
-		if err = t.startMaintenance(c); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-		}
+		err = t.startMaintenance(c)
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
 		debug.Infof("Starting transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
-		if err = t.destroyBucket(c); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-		}
+		err = t.destroyBucket(c)
 		debug.Infof("Finished transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
 	default:
 		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+	}
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 	}
 }
 
