@@ -220,6 +220,9 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, results sliceResults) cmn.JSONRawMsgs {
 	targetResults := make(cmn.JSONRawMsgs, len(results))
 	for _, res := range results {
+		if res.status == http.StatusNotFound {
+			continue
+		}
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.details)
 			freeCallResults(results)
@@ -228,6 +231,10 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 		targetResults[res.si.ID()] = res.bytes
 	}
 	freeCallResults(results)
+	if len(targetResults) == 0 {
+		p.invalmsghdlr(w, r, "xaction not found", http.StatusNotFound)
+		return nil
+	}
 	return targetResults
 }
 
@@ -693,26 +700,19 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if msg.Action == cmn.ActXactStart && xactMsg.Kind == cmn.ActRebalance {
-		if err := p.canStartRebalance(true /*skip config*/); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+	if msg.Action == cmn.ActXactStart {
+		if xactMsg.Kind == cmn.ActRebalance {
+			p.rebalanceCluster(w, r)
 			return
 		}
-		rmdCtx := &rmdModifier{
-			pre: func(_ *rmdModifier, clone *rebMD) {
-				clone.inc()
-			},
-			final: p._syncRMDFinal,
-			msg:   &cmn.ActionMsg{Action: cmn.ActRebalance},
-			smap:  p.owner.smap.get(),
+
+		xactMsg.ID = cmn.GenUUID() // all other xact starts need an id
+		if xactMsg.Kind == cmn.ActResilver && xactMsg.Node != "" {
+			p.resilverOne(w, r, msg, xactMsg)
+			return
 		}
-		rmdClone := p.owner.rmd.modify(rmdCtx)
-		w.Write([]byte(xaction.RebID(rmdClone.version()).String()))
-		return
 	}
-	if msg.Action == cmn.ActXactStart {
-		xactMsg.ID = cmn.GenUUID()
-	}
+
 	body := cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathXactions.S, Body: body}
@@ -734,6 +734,53 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 		p.ic.registerEqual(regIC{smap: smap, nl: nl})
 		w.Write([]byte(xactMsg.ID))
 	}
+}
+
+func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
+	if err := p.canStartRebalance(true /*skip config*/); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	rmdCtx := &rmdModifier{
+		pre: func(_ *rmdModifier, clone *rebMD) {
+			clone.inc()
+		},
+		final: p._syncRMDFinal,
+		msg:   &cmn.ActionMsg{Action: cmn.ActRebalance},
+		smap:  p.owner.smap.get(),
+	}
+	rmdClone := p.owner.rmd.modify(rmdCtx)
+	w.Write([]byte(xaction.RebID(rmdClone.version()).String()))
+}
+
+func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
+	msg *cmn.ActionMsg, xactMsg xaction.XactReqMsg) {
+	smap := p.owner.smap.get()
+	si := smap.GetTarget(xactMsg.Node)
+	if si == nil {
+		p.invalmsghdlrf(w, r, "cannot resilver %v: node must exist and be a target", si)
+		return
+	}
+
+	body := cmn.MustMarshal(cmn.ActionMsg{Action: msg.Action, Value: xactMsg})
+	res := p.call(
+		callArgs{
+			si: si,
+			req: cmn.ReqArgs{
+				Method: http.MethodPut,
+				Path:   cmn.URLPathXactions.S,
+				Body:   body,
+			},
+		},
+	)
+	if res.err != nil {
+		p.invalmsghdlr(w, r, res.err.Error())
+		return
+	}
+
+	nl := xaction.NewXactNL(xactMsg.ID, xactMsg.Kind, &smap.Smap, nil)
+	p.ic.registerEqual(regIC{smap: smap, nl: nl})
+	w.Write([]byte(xactMsg.ID))
 }
 
 func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {

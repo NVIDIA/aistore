@@ -1761,3 +1761,28 @@ func TestICDecommission(t *testing.T) {
 		m.smap.Version, m.smap.CountProxies(), m.smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 }
+
+func TestSingleResilver(t *testing.T) {
+	m := ioContext{t: t}
+	m.saveClusterState()
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	// Select a random target
+	target, _ := m.smap.GetRandTarget()
+
+	// Start resilvering just on the target
+	args := api.XactReqArgs{Kind: cmn.ActResilver, Node: target.DaemonID}
+	id, err := api.StartXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	// Wait for resilver
+	args = api.XactReqArgs{ID: id, Kind: cmn.ActResilver, Timeout: rebalanceTimeout}
+	_, err = api.WaitForXaction(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	// Make sure other nodes were not resilvered
+	args = api.XactReqArgs{ID: id}
+	xactStats, err := api.QueryXactionStats(baseParams, args)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(xactStats) == 1, "expected only 1 resilver")
+}

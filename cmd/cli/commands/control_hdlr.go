@@ -166,20 +166,37 @@ func xactionCmds() cli.Commands {
 }
 
 func startXactionHandler(c *cli.Context) (err error) {
+	var (
+		bck cmn.Bck
+		sid string
+	)
+
 	xactKind := c.Command.Name
 	if xaction.IsTypeBck(xactKind) && c.NArg() == 0 {
 		return missingArgumentsError(c, bucketArgument)
 	}
 
-	bck, err := parseBckURI(c, c.Args().First())
-	if err != nil {
-		return err
+	if xactKind == cmn.ActResilver && c.NArg() > 0 {
+		smap, err := api.GetClusterMap(defaultAPIParams)
+		if err != nil {
+			return err
+		}
+		sid = c.Args().First()
+
+		if node := smap.GetTarget(sid); node == nil {
+			return fmt.Errorf("node %q is not a target. Run 'ais show cluster target' to see a list of all targets", sid)
+		}
+	} else {
+		bck, err = parseBckURI(c, c.Args().First())
+		if err != nil {
+			return err
+		}
 	}
 
-	return startXaction(c, xactKind, bck)
+	return startXaction(c, xactKind, bck, sid)
 }
 
-func startXaction(c *cli.Context, xactKind string, bck cmn.Bck) (err error) {
+func startXaction(c *cli.Context, xactKind string, bck cmn.Bck, sid string) (err error) {
 	if xaction.IsTypeBck(xactKind) {
 		if bck, _, err = validateBucket(c, bck, "", false); err != nil {
 			return err
@@ -188,7 +205,7 @@ func startXaction(c *cli.Context, xactKind string, bck cmn.Bck) (err error) {
 
 	var (
 		id       string
-		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck}
+		xactArgs = api.XactReqArgs{Kind: xactKind, Bck: bck, Node: sid}
 	)
 
 	if id, err = api.StartXaction(defaultAPIParams, xactArgs); err != nil {

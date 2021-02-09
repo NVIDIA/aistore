@@ -112,6 +112,20 @@ As stated, mountpath removal can be done administratively (via API) or be trigge
 Irrespectively of the original cause, mountpath-level events activate resilver that in many ways performs the same set of steps as the rebalance.
 The one salient difference is that all object migrations are local (and, therefore, relatively fast(er)).
 
+### CLI Usage
+
+Resilvering can be started on the whole cluster, or on a specific node.
+Similar to rebalance operations, you can monitor the progress of resilver operations using 
+`ais show xaction`.
+
+```console
+$ ais start resilver # all targets will be resilvered
+Started resilver "NGxmOthtE", use 'ais show xaction NGxmOthtE' to monitor progress
+
+$ ais start resilver BUQOt8086  # resilver a single node
+Started resilver "NGxmOthtE", use 'ais show xaction NGxmOthtE' to monitor progress
+```
+
 ## IO Performance
 
 During rebalancing, response latency and overall cluster throughput may substantially degrade.

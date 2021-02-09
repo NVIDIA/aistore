@@ -162,7 +162,7 @@ func loadLomCacheHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	return startXaction(c, cmn.ActLoadLomCache, bck)
+	return startXaction(c, cmn.ActLoadLomCache, bck, "")
 }
 
 func evictHandler(c *cli.Context) (err error) {

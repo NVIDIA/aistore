@@ -34,6 +34,7 @@ type (
 	XactReqArgs struct {
 		ID      string
 		Kind    string    // Xaction kind, see: cmn.XactsDtor
+		Node    string    // Optional
 		Bck     cmn.Bck   // Optional bucket
 		Buckets []cmn.Bck // Optional: Xaction on list of buckets
 		Timeout time.Duration
@@ -154,6 +155,7 @@ func StartXaction(baseParams BaseParams, args XactReqArgs) (id string, err error
 	xactMsg := xaction.XactReqMsg{
 		Kind: args.Kind,
 		Bck:  args.Bck,
+		Node: args.Node,
 	}
 
 	if args.Buckets != nil {
