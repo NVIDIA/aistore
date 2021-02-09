@@ -686,14 +686,6 @@ func (p *proxyrunner) _updatePropsBMDPre(ctx *bmdModifier, clone *bucketMD) erro
 // maintenance: { begin -- enable GFN -- commit -- start rebalance }
 func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	opts *cmn.ActValDecommision) (rebID xaction.RebID, err error) {
-	if si.IsProxy() {
-		p.markMaintenance(msg, si)
-		if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
-			_, err = p.unregisterNode(msg, si, true /*skipReb*/)
-		}
-		return
-	}
-
 	// 1. begin
 	var (
 		waitmsync = false
@@ -717,13 +709,14 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	}
 
 	// 3. Commit
-	// NOTE: Call only the target being decommissioned, on all other targets commit phase is a null operation.
+	// NOTE: Call only the target that's being decommissioned (commit is a no-op for the rest)
 	if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 		c.req.Path = cmn.JoinWords(c.path, cmn.ActCommit)
 		res := p.call(callArgs{si: si, req: c.req, timeout: c.commitTimeout(waitmsync)})
-		if res.err != nil {
-			glog.Error(res.err)
-			err = res.err
+		err = res.err
+		_freeCallRes(res)
+		if err != nil {
+			glog.Error(err)
 			return
 		}
 	}
@@ -732,7 +725,7 @@ func (p *proxyrunner) startMaintenance(si *cluster.Snode, msg *cmn.ActionMsg,
 	if !opts.SkipRebalance {
 		return p.finalizeMaintenance(msg, si)
 	} else if msg.Action == cmn.ActDecommission {
-		_, err = p.unregisterNode(msg, si, true /*skipReb*/)
+		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
 	}
 	return
 }
@@ -746,7 +739,7 @@ func (p *proxyrunner) markMaintenance(msg *cmn.ActionMsg, si *cluster.Snode) err
 	case cmn.ActStartMaintenance:
 		flags = cluster.SnodeMaintenance
 	default:
-		return fmt.Errorf("invalid action: %s", msg.Action)
+		debug.AssertMsg(false, "invalid action: "+msg.Action)
 	}
 	ctx := &smapModifier{
 		pre:   p._markMaint,

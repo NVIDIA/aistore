@@ -72,17 +72,15 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		args := callArgs{
-			si: si,
-			req: cmn.ReqArgs{
-				Method: r.Method,
-				Path:   cmn.URLPathDaemon.S,
-				Query:  query,
-			},
+			si:      si,
+			req:     cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: query},
 			timeout: config.Timeout.CplaneOperation,
 		}
 		res := p.call(args)
-		if res.err != nil {
-			p.invalmsghdlr(w, r, res.err.Error())
+		er := res.err
+		_freeCallRes(res)
+		if er != nil {
+			p.invalmsghdlr(w, r, er.Error())
 			return
 		}
 		// TODO: switch to writeJSON
@@ -373,42 +371,32 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	go p.updateAndDistribute(nsi, msg, flags)
 }
 
+// join(node) => cluster via API
 func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode int, err error) {
 	var (
 		smap = p.owner.smap.get()
 		bmd  = p.owner.bmd.get()
 		meta = &nodeRegMeta{smap, bmd, p.si, false}
+		body = cmn.MustMarshal(meta)
 	)
-
-	//
-	// join(node) => cluster via API
-	//
 	if glog.FastV(3, glog.SmoduleAIS) {
 		glog.Infof("%s: %s %s => (%s)", p.si, tag, nsi, smap.StringEx())
 	}
-
-	// send the joining node the current BMD and Smap as well
 	args := callArgs{
-		si: nsi,
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.URLPathDaemonUserReg.S,
-			Body:   cmn.MustMarshal(meta),
-		},
+		si:      nsi,
+		req:     cmn.ReqArgs{Method: http.MethodPost, Path: cmn.URLPathDaemonUserReg.S, Body: body},
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	}
-
 	res := p.call(args)
+	defer _freeCallRes(res)
 	if res.err == nil {
 		return
 	}
-
 	if cmn.IsErrConnectionRefused(res.err) {
 		err = fmt.Errorf("failed to reach %s at %s:%s",
 			nsi, nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort)
 	} else {
-		err = fmt.Errorf("%s: failed to %s %s: %v, %s",
-			p.si, tag, nsi, res.err, res.details)
+		err = fmt.Errorf("%s: failed to %s %s: %v, %s", p.si, tag, nsi, res.err, res.details)
 	}
 	errCode = res.status
 	return
@@ -759,15 +747,13 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 	}
 	dst := smap.GetProxy(dstID)
 	if dst == nil {
-		p.invalmsghdlrf(w, r, "%s: unknown proxy node - p[%s]", p.si, dstID)
+		p.invalmsghdlrf(w, r, "%s: unknown proxy node p[%s]", p.si, dstID)
 		return
 	}
-
 	if !smap.IsIC(dst) {
 		p.invalmsghdlrf(w, r, "%s: not an IC member", dst)
 		return
 	}
-
 	if smap.IsIC(p.si) && !p.si.Equals(dst) {
 		// node has older version than dst node handle locally
 		if err := p.ic.sendOwnershipTbl(dst); err != nil {
@@ -775,23 +761,21 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 		}
 		return
 	}
+	// forward
+	args := callArgs{
+		req:     cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)},
+		timeout: cmn.DefaultTimeout,
+	}
 	for pid, psi := range smap.Pmap {
 		if !smap.IsIC(psi) || pid == dstID {
 			continue
 		}
-		result := p.call(
-			callArgs{
-				si: psi,
-				req: cmn.ReqArgs{
-					Method: http.MethodPut,
-					Path:   cmn.URLPathCluster.S,
-					Body:   cmn.MustMarshal(msg),
-				}, timeout: cmn.LongTimeout,
-			},
-		)
-		if result.err != nil {
-			p.invalmsghdlr(w, r, result.err.Error())
+		args.si = psi
+		res := p.call(args)
+		if res.err != nil {
+			p.invalmsghdlr(w, r, res.err.Error())
 		}
+		_freeCallRes(res)
 		break
 	}
 }
@@ -799,8 +783,8 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 // gracefully remove node via cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode
 func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	var (
-		smap = p.owner.smap.get()
 		opts cmn.ActValDecommision
+		smap = p.owner.smap.get()
 	)
 	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
@@ -823,9 +807,24 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 		p.invalmsghdlrf(w, r, "Node %q is primary, cannot perform %q", opts.DaemonID, msg.Action)
 		return
 	}
+	// proxy
+	if si.IsProxy() {
+		if err := p.markMaintenance(msg, si); err != nil {
+			p.invalmsghdlrf(w, r, "Failed to %s %s: %v", msg.Action, si, err)
+			return
+		}
+		if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
+			errCode, err := p.callRmSelf(msg, si, true /*skipReb*/)
+			if err != nil {
+				p.invalmsghdlrstatusf(w, r, errCode, "Failed to %s %s: %v", msg.Action, si, err)
+			}
+		}
+		return
+	}
+	// target
 	rebID, err := p.startMaintenance(si, msg, &opts)
 	if err != nil {
-		p.invalmsghdlrf(w, r, "Failed to %s node %s: %v", msg.Action, opts.DaemonID, err)
+		p.invalmsghdlrf(w, r, "Failed to %s %s: %v", msg.Action, si, err)
 		return
 	}
 	if rebID != 0 {
@@ -911,9 +910,8 @@ func (p *proxyrunner) removeAfterRebalance(nl nl.NotifListener, msg *cmn.ActionM
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Rebalance(%s) finished. Removing node %s", nl.UUID(), si)
 	}
-	if _, err := p.unregisterNode(msg, si, true /*skipReb*/); err != nil {
+	if _, err := p.callRmSelf(msg, si, true /*skipReb*/); err != nil {
 		glog.Errorf("Failed to remove node (%s) after rebalance, err: %v", si, err)
-		return
 	}
 }
 
@@ -935,7 +933,7 @@ func (p *proxyrunner) finalizeMaintenance(msg *cmn.ActionMsg, si *cluster.Snode)
 		return
 	}
 	if msg.Action == cmn.ActDecommission {
-		_, err = p.unregisterNode(msg, si, true /*skipReb*/)
+		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
 		return
 	}
 	err = nil
@@ -1120,51 +1118,48 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, sid) {
 		return
 	}
-	errCode, err := p.unregisterNode(msg, node, false /*skipReb*/)
+	errCode, err := p.callRmSelf(msg, node, false /*skipReb*/)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), errCode)
 	}
 }
 
-func (p *proxyrunner) unregisterNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
-	smap := p.owner.smap.get()
-	node := smap.GetNode(si.ID())
+// Ask the node (`si`) to permanently or temporarily remove itself from the cluster, in
+// accordance with the specific `msg.Action` (that we also enumerate and assert below).
+func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
+	const retries = 2
+	var (
+		smap    = p.owner.smap.get()
+		node    = smap.GetNode(si.ID())
+		timeout = cmn.GCO.Get().Timeout.CplaneOperation
+		args    = callArgs{si: node, timeout: timeout}
+	)
 	if node == nil {
 		err = &errNodeNotFound{"cannot unregister", si.ID(), p.si, smap}
 		return http.StatusNotFound, err
 	}
-
-	// Synchronously call the node to inform it that it no longer is part of
-	// the cluster. The node should stop sending keepalive messages (that could
-	// potentially reregister it back into the cluster).
-	var (
-		timeoutCfg = cmn.GCO.Get().Timeout
-		args       = callArgs{
-			si:      node,
-			req:     cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S},
-			timeout: timeoutCfg.CplaneOperation,
-		}
-	)
-
-	if msg.Action == cmn.ActShutdownNode {
-		args.req = cmn.ReqArgs{
-			Method: http.MethodPut,
-			Path:   cmn.URLPathDaemon.S,
-			Body:   cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown}),
-		}
+	switch msg.Action {
+	case cmn.ActShutdownNode:
+		body := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
+		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
+	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActUnregTarget, cmn.ActUnregProxy:
+		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S}
+	default:
+		debug.AssertMsg(false, "invalid action: "+msg.Action)
 	}
-
-	for i := 0; i < 3; /*retries*/ i++ {
+	glog.Infof("%s: removing node %s via %q", p.si, node, msg.Action)
+	for i := 0; i < retries; i++ {
 		res := p.call(args)
-		if res.err == nil {
+		er, d := res.err, res.details
+		_freeCallRes(res)
+		if er == nil {
 			break
 		}
-		glog.Warningf("%s that is being unregistered failed to respond back: %v, %s",
-			node, res.err, res.details)
-		time.Sleep(timeoutCfg.CplaneOperation / 2)
+		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]",
+			p.si, node, msg.Action, er, d)
+		time.Sleep(timeout / 2)
 	}
-
-	// NOTE: "failure to respond back" may have legitimate reasons - proceeeding even when all retries fail
+	// NOTE: proceeeding anyway even if all retries fail
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
 		post:    p._perfRebPost,

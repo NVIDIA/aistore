@@ -1647,8 +1647,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 		results = p.bcastGroup(args)
 	} else {
 		nl, exists := p.notifs.entry(smsg.UUID)
-		// NOTE: We register a listobj xaction before starting the actual listing
-		cmn.Assert(exists)
+		debug.Assert(exists) // NOTE: we register listobj xaction before starting to list
 		for _, si := range nl.Notifiers() {
 			res := p.call(callArgs{si: si, req: args.req, timeout: reqTimeout, v: &cmn.BucketList{}})
 			results = make(sliceResults, 1)
@@ -2425,6 +2424,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi, nsi *cluster.Snode) bool {
 		}
 		res = p.call(args)
 	)
+	defer _freeCallRes(res)
 	if res.err != nil {
 		return false
 	}
@@ -2504,6 +2504,7 @@ func (p *proxyrunner) headRemoteBck(bck cmn.Bck, q url.Values) (header http.Head
 
 	req := cmn.ReqArgs{Method: http.MethodHead, Base: tsi.URL(cmn.NetworkIntraData), Path: path, Query: q}
 	res := p.call(callArgs{si: tsi, req: req, timeout: cmn.DefaultTimeout})
+	defer _freeCallRes(res)
 	if res.status == http.StatusNotFound {
 		err = cmn.NewErrorRemoteBucketDoesNotExist(bck)
 	} else if res.status == http.StatusGone {
