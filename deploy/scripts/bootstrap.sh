@@ -7,6 +7,12 @@ run_tests() {
     re_val="-run=${RE}"
   fi
 
+  if [[ -z "$TESTS_DIR" ]]; then
+    tests_dir_val="${AISTORE_DIR}/..."
+  else
+    tests_dir_val="${AISTORE_DIR}/${TESTS_DIR}"
+  fi
+
   timeout_val="2h"
   if [[ -n "$SHORT" ]]; then
     short_val="-short"
@@ -15,7 +21,7 @@ run_tests() {
 
   failed_tests=$(
     BUCKET=${BUCKET} AIS_ENDPOINT=${AIS_ENDPOINT} \
-      go test -v -p 1 -tags debug -parallel 4 -count 1 -timeout "${timeout_val}" ${short_val} ${re_val} "${AISTORE_DIR}/..." 2>&1 \
+      go test -v -p 1 -tags debug -parallel 4 -count 1 -timeout "${timeout_val}" ${short_val} ${re_val} ${tests_dir_val} 2>&1 \
     | tee -a /dev/stderr \
     | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$"; \
     exit ${PIPESTATUS[0]} # Exit with the status of the first command in the pipe(line).

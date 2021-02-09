@@ -245,7 +245,7 @@ test:kube-short:
     - export NUM_TARGET=3
     - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - status=0
-    - RE="TestETL" make test-short || status=$?
+    - RE="TestETL" TESTS_DIR="ais/tests" make test-short || status=$?
     - make kill
     - exit $status # TODO: hack to prevent pod hangs on failures
 
