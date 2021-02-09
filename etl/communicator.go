@@ -150,7 +150,6 @@ func (pc *pushComm) doRequest(bck *cluster.Bck, objName string) (resp *http.Resp
 	return
 }
 
-// TODO: Make it work with cloud, including not cached objects.
 func (pc *pushComm) tryDoRequest(lom *cluster.LOM) (*http.Response, error) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
