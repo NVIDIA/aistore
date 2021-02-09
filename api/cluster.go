@@ -122,6 +122,17 @@ func SetClusterConfig(baseParams BaseParams, nvs cmn.SimpleKVs) error {
 	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathClusterSetConf.S, Query: q})
 }
 
+// SetClusterConfigUsingMsg sets the cluster-wide configuration
+// using the `cmn.ConfigToUpdate` parameter provided.
+func SetClusterConfigUsingMsg(baseParams BaseParams, configToUpdate *cmn.ConfigToUpdate) error {
+	msg := cmn.ActionMsg{
+		Action: cmn.ActSetConfig,
+		Value:  configToUpdate,
+	}
+	baseParams.Method = http.MethodPut
+	return DoHTTPRequest(ReqParams{BaseParams: baseParams, Path: cmn.URLPathCluster.S, Body: cmn.MustMarshal(msg)})
+}
+
 func AttachRemoteAIS(baseParams BaseParams, alias, u string) error {
 	q := make(url.Values)
 	q.Set(cmn.URLParamWhat, cmn.GetWhatRemoteAIS)
