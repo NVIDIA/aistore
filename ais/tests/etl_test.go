@@ -140,10 +140,7 @@ func testETLObject(t *testing.T, onlyLong bool, comm, transformer, inPath, outPa
 
 	uuid, err = tetl.Init(baseParams, transformer, comm)
 	tassert.CheckFatal(t, err)
-	defer func() {
-		tutils.Logf("Stop %q\n", uuid)
-		tassert.CheckError(t, api.ETLStop(baseParams, uuid))
-	}()
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	fho, err := cmn.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)
@@ -199,7 +196,7 @@ func testETLObjectCloud(t *testing.T, uuid string, onlyLong, cached bool) {
 func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileSize uint64, timeout time.Duration) {
 	bckTo := cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 	t.Cleanup(func() {
-		tetl.StopETL(baseParams, uuid)
+		tetl.StopETL(t, baseParams, uuid)
 		tutils.DestroyBucket(t, proxyURL, bckTo)
 	})
 
@@ -272,7 +269,7 @@ func TestETLObjectCloud(t *testing.T) {
 		t.Run(t.Name()+"/"+comm, func(t *testing.T) {
 			uuid, err := tetl.Init(baseParams, tetl.Echo, comm)
 			tassert.CheckFatal(t, err)
-			t.Cleanup(func() { tetl.StopETL(baseParams, uuid) })
+			t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 			for _, conf := range configs {
 				t.Run(fmt.Sprintf("%s/cached=%t", t.Name(), conf.cached), func(t *testing.T) {
@@ -423,11 +420,7 @@ func TestETLBucketDryRun(t *testing.T) {
 
 	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
-
-	defer func() {
-		tutils.Logf("Stop %q\n", uuid)
-		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
-	}()
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	tutils.Logf("Start offline ETL %q\n", uuid)
 	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo,
@@ -461,16 +454,12 @@ func TestETLSingleTransformerAtATime(t *testing.T) {
 
 	uuid1, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
-	defer func() {
-		tutils.Logf("Stop %q\n", uuid1)
-		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid1))
-	}()
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid1) })
 
 	uuid2, err := tetl.Init(baseParams, tetl.Md5, etl.RevProxyCommType)
 	tassert.Errorf(t, err != nil, "expected err to occur")
 	if uuid2 != "" {
-		tutils.Logf("Stop %q\n", uuid2)
-		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid2))
+		tetl.StopETL(t, baseParams, uuid2)
 	}
 }
 
@@ -481,11 +470,7 @@ func TestETLHealth(t *testing.T) {
 	tutils.Logln("Starting ETL")
 	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RedirectCommType)
 	tassert.CheckFatal(t, err)
-
-	defer func() {
-		tutils.Logf("Stop %q\n", uuid)
-		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
-	}()
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	var (
 		start    = time.Now()
@@ -526,7 +511,7 @@ func TestETLList(t *testing.T) {
 
 	uuid, err := tetl.Init(baseParams, tetl.Echo, etl.RevProxyCommType)
 	tassert.CheckFatal(t, err)
-	defer api.ETLStop(baseParams, uuid)
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	list, err := api.ETLList(baseParams)
 	tassert.CheckFatal(t, err)

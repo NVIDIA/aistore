@@ -194,7 +194,7 @@ def transform(input_bytes):
 			}
 			tassert.CheckFatal(t, err)
 			t.Cleanup(func() {
-				tetl.StopETL(baseParams, uuid)
+				tetl.StopETL(t, baseParams, uuid, true)
 				tetl.WaitForContainersStopped(t, baseParams)
 			})
 
@@ -241,7 +241,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 	tassert.CheckFatal(t, err)
 	tutils.Logf("ETL init successful (%q)\n", etlID)
 	t.Cleanup(func() {
-		tetl.StopETL(baseParams, etlID)
+		tetl.StopETL(t, baseParams, etlID)
 	})
 
 	tutils.Logf("Start offline ETL %q => %q\n", etlID, bckTo.String())

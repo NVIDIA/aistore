@@ -72,9 +72,7 @@ func TestETLTar2TFS3(t *testing.T) {
 	defer api.DeleteObject(baseParams, bck, tarObjName)
 
 	uuid := startTar2TfTransformer(t)
-	defer func() {
-		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
-	}()
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 	// GET TFRecord from TAR
 	outFileBuffer := bytes.NewBuffer(nil)
 
@@ -143,9 +141,7 @@ func TestETLTar2TFRanges(t *testing.T) {
 	tassert.CheckFatal(t, api.PutObject(putArgs))
 
 	uuid := startTar2TfTransformer(t)
-	defer func() {
-		tassert.CheckFatal(t, api.ETLStop(baseParams, uuid))
-	}()
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	// This is to mimic external S3 clients like Tensorflow
 	bck.Provider = ""

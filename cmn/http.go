@@ -559,15 +559,19 @@ func NetworkCallWithRetry(args *CallWithRetryArgs) (err error) {
 	var (
 		sleep                        = args.Sleep
 		hardErrCnt, softErrCnt, iter uint
+		nonEmptyErr                  error
 	)
 	for hardErrCnt, softErrCnt, iter = uint(0), uint(0), uint(1); ; iter++ {
 		var status int
 		if status, err = args.Call(); err == nil {
 			if args.Verbosity < CallWithRetryLogOff && (hardErrCnt > 0 || softErrCnt > 0) {
-				glog.Warningf("%s Successful %s, after errors (softErr: %d, hardErr: %d, last err: %v)", callerStr, args.Action, softErrCnt, hardErrCnt, err)
+				glog.Warningf(
+					"%s Successful %s, after errors (softErr: %d, hardErr: %d, last err: %v)",
+					callerStr, args.Action, softErrCnt, hardErrCnt, nonEmptyErr)
 			}
 			return
 		}
+		nonEmptyErr = err
 		if args.IsFatal != nil && args.IsFatal(err) {
 			return
 		}
