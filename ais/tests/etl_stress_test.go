@@ -182,7 +182,8 @@ def transform(input_bytes):
 				uuid string
 				err  error
 
-				etlDoneCh = cmn.NewStopCh()
+				etlDoneCh      = cmn.NewStopCh()
+				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
 			case cmn.ETLInit:
@@ -199,7 +200,7 @@ def transform(input_bytes):
 			})
 
 			tutils.Logf("Start offline ETL %q\n", uuid)
-			xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid})
+			xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, RequestTimeoutStr: requestTimeout.String()})
 			tassert.CheckFatal(t, err)
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 
