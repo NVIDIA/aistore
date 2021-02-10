@@ -229,6 +229,36 @@ func (s *slice) release() {
 	}
 }
 
+func (s *slice) reopenReader() (reader cmn.ReadOpenCloser, err error) {
+	if s.reader != nil {
+		var rc io.ReadCloser
+		reader = s.reader
+		switch r := reader.(type) {
+		case *memsys.Reader:
+			_, err = r.Seek(0, io.SeekStart)
+		case *cmn.SectionHandle:
+			rc, err = r.Open()
+			if err == nil {
+				reader = rc.(cmn.ReadOpenCloser)
+			}
+		default:
+			err = fmt.Errorf("unsupported reader type: %T", s.reader)
+			debug.Assertf(false, "unsupported reader type: %T", s.reader)
+		}
+		return reader, err
+	}
+
+	if sgl, ok := s.obj.(*memsys.SGL); ok {
+		reader = memsys.NewReader(sgl)
+	} else if s.workFQN != "" {
+		reader, err = cmn.NewFileHandle(s.workFQN)
+	} else {
+		err = fmt.Errorf("unsupported obj type: %T", s.obj)
+		debug.Assertf(false, "unsupported obj type: %T", s.obj)
+	}
+	return reader, err
+}
+
 var (
 	mm *memsys.MMSA // memory manager and slab/SGL allocator
 
