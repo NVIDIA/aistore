@@ -150,7 +150,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 // 3. PUT large amounts of objects into ais bucket
 // 4. Get the objects while simultaneously registering the target
 func TestGetAndRestoreInParallel(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		m = ioContext{
@@ -1634,7 +1634,7 @@ func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
 // 2. Start changing the primary proxy
 // 3. IC must survive and rebalance must finish
 func TestICRebalance(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		m = ioContext{
@@ -1697,7 +1697,7 @@ func TestICRebalance(t *testing.T) {
 // 2. Start changing the primary proxy
 // 3. IC must survive, rebalance must finish, and the target must be gone
 func TestICDecommission(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
 
 	var (
 		err error

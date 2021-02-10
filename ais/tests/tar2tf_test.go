@@ -38,7 +38,7 @@ func startTar2TfTransformer(t *testing.T) (uuid string) {
 }
 
 func TestETLTar2TFS3(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 
 	const (
 		tarObjName   = "small-mnist-3.tar"
@@ -99,7 +99,7 @@ func TestETLTar2TFS3(t *testing.T) {
 
 func TestETLTar2TFRanges(t *testing.T) {
 	// TestETLTar2TFS3 already runs in short tests, no need for short here as well.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
 
 	type testCase struct {
 		start, end int64

@@ -554,7 +554,7 @@ func TestFSAddMPathRestartNode(t *testing.T) {
 }
 
 func TestFSDisableMpathRestart(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{Long: true, RequiredDeployment: tutils.ClusterTypeLocal})
 	var (
 		target *cluster.Snode
 

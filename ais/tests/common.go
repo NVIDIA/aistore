@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils"
 	"github.com/NVIDIA/aistore/devtools/tutils/readers"
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
+	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -41,6 +42,7 @@ const (
 var (
 	cliBck         cmn.Bck
 	errObjectFound = errors.New("found") // to interrupt fs.Walk when object found
+	fsOnce         sync.Once
 )
 
 type ioContext struct {
@@ -891,7 +893,32 @@ func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []strin
 	}
 }
 
+func initFS() {
+	proxyURL := tutils.GetPrimaryURL()
+	primary, err := tutils.GetPrimaryProxy(proxyURL)
+	if err != nil {
+		tutils.Logf("ERROR: %v", err)
+	}
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	cfg, err := api.GetDaemonConfig(baseParams, primary.ID())
+	if err != nil {
+		tutils.Logf("ERROR: %v", err)
+	}
+
+	config := cmn.GCO.BeginUpdate()
+	config.TestFSP.Count = 1
+	config.Backend = cfg.Backend
+	cmn.GCO.CommitUpdate(config)
+
+	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
+	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	_ = fs.CSM.RegisterContentType(ec.SliceType, &ec.SliceSpec{})
+	_ = fs.CSM.RegisterContentType(ec.MetaType, &ec.MetaSpec{})
+}
+
 func initMountpaths(t *testing.T, proxyURL string) {
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeLocal})
+	fsOnce.Do(initFS)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	fs.Init()
 	fs.DisableFsIDCheck()

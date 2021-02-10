@@ -7,9 +7,11 @@ package tutils
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -23,8 +25,12 @@ import (
 	"github.com/NVIDIA/aistore/devtools/tutils/tassert"
 )
 
+// TODO: remove hardcoding, should be same as `proxyIDFname` from `ais` package.
+const proxyIDFname = ".ais.proxy_id"
+
 type SkipTestArgs struct {
 	Bck                   cmn.Bck
+	RequiredDeployment    ClusterType
 	MinTargets            int
 	MinMountpaths         int
 	RequiresRemoteCluster bool
@@ -33,6 +39,7 @@ type SkipTestArgs struct {
 	RemoteBck             bool
 	CloudBck              bool
 	K8s                   bool
+	Local                 bool
 }
 
 func prependTime(msg string) string {
@@ -122,16 +129,20 @@ func CheckSkip(tb testing.TB, args SkipTestArgs) {
 			tb.Skipf("%s requires a cloud bucket", tb.Name())
 		}
 	}
-	if args.K8s {
+	if args.RequiredDeployment == ClusterTypeK8s {
 		// NOTE: The test suite doesn't have to be deployed on K8s, the cluster has to be.
-		_, err := api.ETLList(BaseAPIParams(GetPrimaryURL()))
-		// HACK: Check based on error message. Unfortunately, there is no relevant HTTP code.
+		isK8s, err := isClusterK8s()
 		if err != nil {
-			if strings.Contains(err.Error(), "requires Kubernetes") {
-				tb.Skipf("%s requires Kubernetes", tb.Name())
-			} else {
-				tb.Fatalf("Unrecognized error upon checking K8s deployment; err: %v", err)
-			}
+			tb.Fatalf("Unrecognized error upon checking K8s deployment; err: %v", err)
+		}
+		if !isK8s {
+			tb.Skipf("%s requires Kubernetes", tb.Name())
+		}
+	} else if args.RequiredDeployment == ClusterTypeLocal {
+		isLocal, err := isClusterLocal()
+		tassert.CheckFatal(tb, err)
+		if !isLocal {
+			tb.Skipf("%s requires local deployment", tb.Name())
 		}
 	}
 
@@ -214,4 +225,42 @@ func NewClientWithProxy(proxyURL string) *http.Client {
 		Transport: transport,
 		Timeout:   transportArgs.Timeout,
 	}
+}
+
+func isClusterK8s() (isK8s bool, err error) {
+	// NOTE: The test suite doesn't have to be deployed on K8s, the cluster has to be.
+	_, err = api.ETLList(BaseAPIParams(GetPrimaryURL()))
+	isK8s = err == nil
+	// HACK: Check based on error message. Unfortunately, there is no relevant HTTP code.
+	if err != nil && strings.Contains(err.Error(), "requires Kubernetes") {
+		err = nil
+	}
+	return
+}
+
+func isClusterLocal() (isLocal bool, err error) {
+	var (
+		primaryURL = GetPrimaryURL()
+		smap       *cluster.Smap
+		baseParams = BaseAPIParams(primaryURL)
+		config     *cmn.Config
+		fileData   []byte
+	)
+	if smap, err = api.GetClusterMap(baseParams); err != nil {
+		return
+	}
+	primaryID := smap.Primary.ID()
+	if config, err = api.GetDaemonConfig(baseParams, primaryID); err != nil {
+		return
+	}
+	fileData, err = ioutil.ReadFile(path.Join(config.Confdir, proxyIDFname))
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		return
+	}
+
+	isLocal = strings.TrimSpace(string(fileData)) == primaryID
+	return
 }

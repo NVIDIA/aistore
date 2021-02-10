@@ -122,7 +122,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 // TODO: Run only with long tests when the test is stable.
 func TestMaintenanceMD(t *testing.T) {
 	// NOTE: This function requires local deployment as it checks local file system for VMDs.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s})
 	if containers.DockerRunning() {
 		t.Skip("skipping in docker")
 	}

@@ -2167,47 +2167,6 @@ func TestECBucketEncode(t *testing.T) {
 	//
 }
 
-func initEC() {
-	proxyURL := tutils.GetPrimaryURL()
-	primary, err := tutils.GetPrimaryProxy(proxyURL)
-	if err != nil {
-		tutils.Logf("ERROR: %v", err)
-	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	cfg, err := api.GetDaemonConfig(baseParams, primary.ID())
-	if err != nil {
-		tutils.Logf("ERROR: %v", err)
-	}
-
-	smap, err := api.GetClusterMap(baseParams)
-	if err != nil {
-		tutils.Logf("ERROR: %v", err)
-	}
-
-	config := cmn.GCO.BeginUpdate()
-	config.TestFSP.Count = 1
-	config.Backend = cfg.Backend
-	cmn.GCO.CommitUpdate(config)
-
-	fs.Init()
-	fs.DisableFsIDCheck()
-
-	for _, target := range smap.Tmap {
-		mpathList, err := api.GetMountpaths(baseParams, target)
-		if err != nil {
-			tutils.Logf("ERROR: %v", err)
-		}
-		for _, path := range mpathList.Available {
-			fs.Add(path, target.ID())
-		}
-	}
-
-	_ = fs.CSM.RegisterContentType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterContentType(fs.WorkfileType, &fs.WorkfileContentResolver{})
-	_ = fs.CSM.RegisterContentType(ec.SliceType, &ec.SliceSpec{})
-	_ = fs.CSM.RegisterContentType(ec.MetaType, &ec.MetaSpec{})
-}
-
 // Creates two buckets (with EC enabled and disabled), fill them with data,
 // and then runs two parallel rebalances
 func TestECAndRegularRebalance(t *testing.T) {

@@ -102,7 +102,6 @@ func initTestEnv() {
 	tutils.InitLocalCluster()
 	proxyURL = tutils.RandomProxyURL()
 	baseParams = tutils.BaseAPIParams(proxyURL)
-	initEC()
 }
 
 func TestMain(m *testing.M) {

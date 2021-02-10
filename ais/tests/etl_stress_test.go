@@ -18,7 +18,7 @@ import (
 )
 
 func TestETLConnectionError(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
 	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	// ETL should survive occasional failures and successfully transform all objects.
@@ -62,7 +62,7 @@ def transform(input_bytes):
 }
 
 func TestETLBucketAbort(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true})
 	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	m := &ioContext{
@@ -89,7 +89,7 @@ func TestETLBucketAbort(t *testing.T) {
 }
 
 func TestETLTargetDown(t *testing.T) {
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, MinTargets: 2, Long: true})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, MinTargets: 2, Long: true})
 	tutils.ETLCheckNoRunningContainers(t, baseParams)
 
 	m := &ioContext{
@@ -119,7 +119,7 @@ func TestETLTargetDown(t *testing.T) {
 
 func TestETLBigBucket(t *testing.T) {
 	// The test takes a lot of time if it's run against a single target deployment.
-	tutils.CheckSkip(t, tutils.SkipTestArgs{K8s: true, Long: true, MinTargets: 2})
+	tutils.CheckSkip(t, tutils.SkipTestArgs{RequiredDeployment: tutils.ClusterTypeK8s, Long: true, MinTargets: 2})
 
 	const echoPythonTransform = `
 def transform(input_bytes):
