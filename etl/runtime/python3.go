@@ -22,6 +22,7 @@ spec:
   containers:
     - name: server
       image: aistore/runtime_python:3
+      imagePullPolicy: Always
       ports:
         - name: default
           containerPort: 80
@@ -45,6 +46,7 @@ spec:
   initContainers:
     - name: server-deps
       image: aistore/runtime_python:3
+      imagePullPolicy: Always
       command:
         - 'sh'
         - '-c'
