@@ -348,12 +348,16 @@ func (t *targetrunner) initRecvHandlers() {
 
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", t.Name(), err)
+	f := glog.Infof
+	if err != nil {
+		f = glog.Warningf
+	}
+	f("Stopping %s, err: %v", t.si, err)
 	xreg.AbortAll()
-	if t.netServ.pub.s != nil {
+	if t.netServ.pub.s != nil && err != errShutdown {
 		t.unregister() // ignore errors
 	}
-	t.httprunner.stop(err)
+	t.httprunner.stop()
 }
 
 func (t *targetrunner) checkRestarted() {

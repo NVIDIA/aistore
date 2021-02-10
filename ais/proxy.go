@@ -243,16 +243,23 @@ func (p *proxyrunner) unregisterSelf() (status int, err error) {
 	return
 }
 
-// stop gracefully
+// stop proxy runner and return => rungroup.run
 func (p *proxyrunner) Stop(err error) {
 	var (
+		s         string
 		smap      = p.owner.smap.get()
 		isPrimary = smap.isPrimary(p.si)
+		f         = glog.Infof
 	)
+	if isPrimary {
+		s = " (primary)"
+	}
+	if err != nil {
+		f = glog.Warningf
+	}
+	f("Stopping %s%s, err: %v", p.si, s, err)
 
-	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.Name(), p.si, isPrimary, err)
 	xreg.AbortAll()
-
 	if isPrimary {
 		// Give targets and non-primary proxies some time to unregister.
 		version := smap.version()
@@ -264,13 +271,13 @@ func (p *proxyrunner) Stop(err error) {
 			}
 			version = v
 		}
-	} else if smap.isValid() {
-		if _, err := p.unregisterSelf(); err != nil {
-			glog.Warningf("Failed to unregister when terminating, err: %v", err)
+	} else if smap.isValid() && err != errShutdown {
+		if _, errUnreg := p.unregisterSelf(); errUnreg != nil {
+			glog.Warningf("Failed to unregister when terminating, err: %v", errUnreg)
 		}
 	}
 
-	p.httprunner.stop(err)
+	p.httprunner.stop()
 }
 
 ////////////////////////////////////////
@@ -1950,57 +1957,23 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
 		return
 	}
+	// urlpath-based actions
 	if len(apiItems) > 0 {
 		action := apiItems[0]
-		switch action {
-		case cmn.Proxy:
-			p.daeSetPrimary(w, r)
-			return
-		case cmn.SyncSmap:
-			newsmap := &smapX{}
-			if cmn.ReadJSON(w, r, newsmap) != nil {
-				return
-			}
-			if err := newsmap.validate(); err != nil {
-				p.invalmsghdlrf(w, r, "%s: invalid %s: %v", p.si, newsmap, err)
-				return
-			}
-			if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
-				p.invalmsghdlrf(w, r, "failed to synch %s: %v", newsmap, err)
-				return
-			}
-			glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)
-			return
-		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-			var (
-				query     = r.URL.Query()
-				transient = cmn.IsParseBool(query.Get(cmn.ActTransient))
-				toUpdate  = &cmn.ConfigToUpdate{}
-			)
-			if err := toUpdate.FillFromQuery(query); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			if err := jsp.SetConfig(toUpdate, transient); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-			}
-			return
-		case cmn.ActAttach, cmn.ActDetach:
-			_ = p.attachDetach(w, r, action)
-			return
-		}
+		p.daePathAction(w, r, action)
+		return
 	}
-
-	//
-	// other PUT /daemon actions
-	//
-	var msg cmn.ActionMsg
+	// message-based actions
+	var (
+		msg   cmn.ActionMsg
+		query = r.URL.Query()
+	)
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
-		transient := cmn.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
+		transient := cmn.IsParseBool(query.Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err = cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
 			p.invalmsghdlrf(w, r, "failed to parse configuration to update, err: %v", err)
@@ -2011,17 +1984,57 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActShutdown:
-		var (
-			query = r.URL.Query()
-			force = cmn.IsParseBool(query.Get(cmn.URLParamForce))
-		)
-		if p.owner.smap.get().isPrimary(p.si) && !force {
-			p.invalmsghdlrf(w, r, "cannot shutdown primary proxy without %s=true query parameter", cmn.URLParamForce)
+		smap := p.owner.smap.get()
+		isPrimary := smap.isPrimary(p.si)
+		if !isPrimary {
+			p.Stop(errShutdown)
+			return
+		}
+		force := cmn.IsParseBool(query.Get(cmn.URLParamForce))
+		if !force {
+			p.invalmsghdlrf(w, r, "cannot shutdown primary %s (see documentation and consider %s=true option)",
+				p.si, cmn.URLParamForce)
 			return
 		}
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
 		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+	}
+}
+
+func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, action string) {
+	switch action {
+	case cmn.Proxy:
+		p.daeSetPrimary(w, r)
+	case cmn.SyncSmap:
+		newsmap := &smapX{}
+		if cmn.ReadJSON(w, r, newsmap) != nil {
+			return
+		}
+		if err := newsmap.validate(); err != nil {
+			p.invalmsghdlrf(w, r, "%s: invalid %s: %v", p.si, newsmap, err)
+			return
+		}
+		if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
+			p.invalmsghdlrf(w, r, "failed to synch %s: %v", newsmap, err)
+			return
+		}
+		glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)
+	case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
+		var (
+			query     = r.URL.Query()
+			transient = cmn.IsParseBool(query.Get(cmn.ActTransient))
+			toUpdate  = &cmn.ConfigToUpdate{}
+		)
+		if err := toUpdate.FillFromQuery(query); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		if err := jsp.SetConfig(toUpdate, transient); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
+	case cmn.ActAttach, cmn.ActDetach:
+		_ = p.attachDetach(w, r, action)
 	}
 }
 

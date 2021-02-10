@@ -207,6 +207,8 @@ var allHTTPverbs = []string{
 	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
 }
 
+var errShutdown = errors.New(cmn.ActShutdown)
+
 // BMD uuid errs
 var errNoBMD = errors.New("no bucket metadata")
 
@@ -795,18 +797,16 @@ func (h *httprunner) run() error {
 	return h.netServ.pub.listenAndServe(addr, h.logger)
 }
 
-// stop gracefully
-func (h *httprunner) stop(err error) {
-	config := cmn.GCO.Get()
-	glog.Infof("Stopping %s, err: %v", h.Name(), err)
-
+// terminate http server(s) and exit => rungroup.run
+func (h *httprunner) stop() {
+	glog.Warningln("Shutting down HTTP...")
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		h.netServ.pub.shutdown()
 		wg.Done()
 	}()
-
+	config := cmn.GCO.Get()
 	if config.Net.UseIntraControl {
 		wg.Add(1)
 		go func() {
@@ -814,7 +814,6 @@ func (h *httprunner) stop(err error) {
 			wg.Done()
 		}()
 	}
-
 	if config.Net.UseIntraData {
 		wg.Add(1)
 		go func() {
@@ -822,7 +821,6 @@ func (h *httprunner) stop(err error) {
 			wg.Done()
 		}()
 	}
-
 	wg.Wait()
 }
 
