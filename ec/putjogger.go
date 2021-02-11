@@ -62,7 +62,16 @@ var (
 	errSliceSendFailed = errors.New("failed to send slice")
 )
 
-func newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
+func allocCtx() (ctx *encodeCtx) {
+	if v := encCtxPool.Get(); v != nil {
+		ctx = v.(*encodeCtx)
+	} else {
+		ctx = &encodeCtx{}
+	}
+	return
+}
+
+func (c *putJogger) newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
 	ctx = allocCtx()
 	ctx.lom = lom
 	ctx.dataSlices = lom.Bprops().EC.DataSlices
@@ -78,16 +87,7 @@ func newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
 	return ctx, err
 }
 
-func allocCtx() (ctx *encodeCtx) {
-	if v := encCtxPool.Get(); v != nil {
-		ctx = v.(*encodeCtx)
-	} else {
-		ctx = &encodeCtx{}
-	}
-	return
-}
-
-func freeCtx(ctx *encodeCtx) {
+func (c *putJogger) freeCtx(ctx *encodeCtx) {
 	*ctx = emptyCtx
 	encCtxPool.Put(ctx)
 }
@@ -264,8 +264,8 @@ func (c *putJogger) encode(req *Request, lom *cluster.LOM) error {
 	c.parent.ObjectsInc()
 	c.parent.BytesAdd(lom.Size())
 
-	ctx, err := newCtx(lom, meta)
-	defer freeCtx(ctx)
+	ctx, err := c.newCtx(lom, meta)
+	defer c.freeCtx(ctx)
 	if err != nil {
 		return err
 	}

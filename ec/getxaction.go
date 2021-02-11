@@ -34,8 +34,6 @@ type (
 		xactReqBase
 		getJoggers map[string]*getJogger // mountpath joggers for GET
 	}
-
-	bgProcess = func(req *Request, toDisk bool, cb func(error))
 )
 
 // interface guard
@@ -129,8 +127,6 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 		client: client,
 		workCh: make(chan *Request, requestBufSizeFS),
 		stopCh: make(chan struct{}, 1),
-		jobs:   make(map[uint64]bgProcess, 4),
-		sema:   make(chan struct{}, maxBgJobsPerJogger),
 	}
 }
 

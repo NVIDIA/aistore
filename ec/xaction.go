@@ -23,7 +23,6 @@ import (
 const (
 	requestBufSizeFS     = 70
 	requestBufSizeEncode = 16
-	maxBgJobsPerJogger   = 32
 )
 
 type (
