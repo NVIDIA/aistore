@@ -123,25 +123,6 @@ func (t *targetrunner) applyRegMeta(body []byte, caller string) (err error) {
 	return
 }
 
-func (t *targetrunner) unregister(_ ...string) (status int, err error) {
-	smap := t.owner.smap.get()
-	if smap == nil || smap.validate() != nil {
-		return 0, nil
-	}
-	args := callArgs{
-		si: smap.Primary,
-		req: cmn.ReqArgs{
-			Method: http.MethodDelete,
-			Path:   cmn.URLPathClusterDaemon.Join(t.si.ID()),
-		},
-		timeout: cmn.DefaultTimeout,
-	}
-	res := t.call(args)
-	status, err = res.status, res.err
-	_freeCallRes(res)
-	return
-}
-
 // [METHOD] /v1/daemon
 func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -1067,7 +1048,7 @@ func (t *targetrunner) disable() error {
 		return nil
 	}
 	glog.Infof("Disabling %s", t.si)
-	if err := t.withRetry(t.unregister, "unregister", false /* backoff */); err != nil {
+	if err := t.unregisterSelf(false); err != nil {
 		return err
 	}
 	t.regstate.disabled = true

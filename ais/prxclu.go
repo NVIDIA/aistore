@@ -582,7 +582,6 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 		aisMsg = p.newAisMsg(ctx.msg, clone, nil)
 		pairs  = []revsPair{{clone, aisMsg}}
 	)
-
 	if ctx.rmd != nil {
 		nl := xaction.NewXactNL(xaction.RebID(ctx.rmd.version()).String(),
 			cmn.ActRebalance, &clone.Smap, nil)
@@ -592,7 +591,6 @@ func (p *proxyrunner) _syncFinal(ctx *smapModifier, clone *smapX) {
 		cmn.AssertNoErr(err)
 		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
-
 	_ = p.metasyncer.sync(pairs...)
 }
 
@@ -1140,7 +1138,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 // DELET /v1/cluster - self-unregister //
 /////////////////////////////////////////
 
-// TODO: disallow external calls (the method exists to support `unregister`ing by node members)
+const testInitiatedRm = "test-initiated-removal" // see TODO below
 
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathClusterDaemon.L)
@@ -1148,7 +1146,6 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		msg  *cmn.ActionMsg
 		sid  = apiItems[0]
 		smap = p.owner.smap.get()
 		node = smap.GetNode(sid)
@@ -1158,14 +1155,21 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		return
 	}
-	msg = &cmn.ActionMsg{Action: cmn.ActUnregTarget}
-	if node.IsProxy() {
-		msg = &cmn.ActionMsg{Action: cmn.ActUnregProxy}
-	}
-	if p.forwardCP(w, r, msg, sid) {
+	if p.forwardCP(w, r, nil, sid) {
 		return
 	}
-	errCode, err := p.callRmSelf(msg, node, false /*skipReb*/)
+	var errCode int
+	if isIntraCall(r.Header) {
+		if cid := r.Header.Get(cmn.HeaderCallerID); cid == sid {
+			errCode, err = p.unregNode(&cmn.ActionMsg{Action: "self-initiated-removal"}, node, false /*skipReb*/)
+		} else {
+			err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)
+		}
+	} else {
+		// TODO: phase-out tutils.RemoveNodeFromSmap (currently the only user)
+		//       and disallow external calls altogether
+		errCode, err = p.callRmSelf(&cmn.ActionMsg{Action: testInitiatedRm}, node, false /*skipReb*/)
+	}
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), errCode)
 	}
@@ -1182,14 +1186,14 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		args    = callArgs{si: node, timeout: timeout}
 	)
 	if node == nil {
-		err = &errNodeNotFound{"cannot unregister", si.ID(), p.si, smap}
+		err = &errNodeNotFound{fmt.Sprintf("cannot %q", msg.Action), si.ID(), p.si, smap}
 		return http.StatusNotFound, err
 	}
 	switch msg.Action {
 	case cmn.ActShutdownNode:
 		body := cmn.MustMarshal(cmn.ActionMsg{Action: cmn.ActShutdown})
 		args.req = cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPathDaemon.S, Body: body}
-	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActUnregTarget, cmn.ActUnregProxy:
+	case cmn.ActStartMaintenance, cmn.ActDecommission, testInitiatedRm:
 		args.req = cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathDaemonUnreg.S}
 	default:
 		debug.AssertMsg(false, "invalid action: "+msg.Action)
@@ -1207,6 +1211,10 @@ func (p *proxyrunner) callRmSelf(msg *cmn.ActionMsg, si *cluster.Snode, skipReb 
 		time.Sleep(timeout / 2)
 	}
 	// NOTE: proceeeding anyway even if all retries fail
+	return p.unregNode(msg, si, skipReb)
+}
+
+func (p *proxyrunner) unregNode(msg *cmn.ActionMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
 		post:    p._perfRebPost,

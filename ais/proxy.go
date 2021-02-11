@@ -224,21 +224,6 @@ func (p *proxyrunner) applyRegMeta(body []byte, caller string) (err error) {
 	} else {
 		glog.Infof("%s: synch %s", p.si, regMeta.Smap)
 	}
-
-	return
-}
-
-func (p *proxyrunner) unregisterSelf() (status int, err error) {
-	smap := p.owner.smap.get()
-	cmn.Assert(smap.isValid())
-	args := callArgs{
-		si:      smap.Primary,
-		req:     cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathClusterDaemon.Join(p.si.ID())},
-		timeout: cmn.DefaultTimeout,
-	}
-	res := p.call(args)
-	status, err = res.status, res.err
-	_freeCallRes(res)
 	return
 }
 
@@ -271,12 +256,12 @@ func (p *proxyrunner) Stop(err error) {
 			version = v
 		}
 	} else if smap.isValid() && err != errShutdown {
-		if _, errUnreg := p.unregisterSelf(); errUnreg != nil {
-			glog.Warningf("Failed to unregister when terminating, err: %v", errUnreg)
-		}
+		_ = p.unregisterSelf(true)
 	}
-
-	p.httprunner.stop()
+	go func() {
+		time.Sleep(time.Second) // TODO: make it synchronous
+		p.httprunner.stop()
+	}()
 }
 
 ////////////////////////////////////////

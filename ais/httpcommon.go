@@ -1652,7 +1652,6 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res *callRes
 	if res.err == nil {
 		glog.Infof("%s: joined cluster via %s", h.si, primaryURL)
 	}
-
 	return
 }
 
@@ -1701,32 +1700,6 @@ func (h *httprunner) sendKeepalive(timeout time.Duration) (status int, err error
 	return
 }
 
-// NOTE: default retry policy for ops like join-cluster et al.
-func (h *httprunner) withRetry(call func(arg ...string) (int, error), action string, backoff bool, arg ...string) (err error) {
-	config := cmn.GCO.Get()
-	retryArgs := cmn.CallWithRetryArgs{
-		Call: func() (int, error) {
-			return call(arg...)
-		},
-		IsFatal: func(err error) bool {
-			return strings.Contains(err.Error(), ciePrefix)
-		},
-		Action:  action,
-		Caller:  h.si.String(),
-		HardErr: 1,
-		SoftErr: 2,
-	}
-
-	if backoff {
-		retryArgs.Sleep = config.Timeout.CplaneOperation / 2
-		retryArgs.HardErr = 2
-		retryArgs.SoftErr = 4
-		retryArgs.BackOff = true
-	}
-
-	return cmn.NetworkCallWithRetry(&retryArgs)
-}
-
 func (h *httprunner) getPrimaryURLAndSI() (url string, psi *cluster.Snode) {
 	smap := h.owner.smap.get()
 	if smap.validate() != nil {
@@ -1748,6 +1721,30 @@ func (h *httprunner) pollClusterStarted(timeout time.Duration) {
 			break
 		}
 	}
+}
+
+func (h *httprunner) unregisterSelf(ignoreErr bool) (err error) {
+	var status int
+	smap := h.owner.smap.get()
+	if smap == nil || smap.validate() != nil {
+		return
+	}
+	args := callArgs{
+		si:      smap.Primary,
+		req:     cmn.ReqArgs{Method: http.MethodDelete, Path: cmn.URLPathClusterDaemon.Join(h.si.ID())},
+		timeout: cmn.DefaultTimeout,
+	}
+	res := h.call(args)
+	status, err = res.status, res.err
+	if err != nil {
+		f := glog.Errorf
+		if ignoreErr {
+			f = glog.Warningf
+		}
+		f("%s: failed to unreg self, err: %v(%d)", h.si, err, status)
+	}
+	_freeCallRes(res)
+	return
 }
 
 func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) (responded bool) {

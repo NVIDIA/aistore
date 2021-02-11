@@ -59,8 +59,6 @@ const (
 	ActDownload       = "download"
 	ActRegTarget      = "regtarget"
 	ActRegProxy       = "regproxy"
-	ActUnregTarget    = "unregtarget"
-	ActUnregProxy     = "unregproxy"
 	ActNewPrimary     = "newprimary"
 	ActElection       = "election"
 	ActPutCopies      = "putcopies"

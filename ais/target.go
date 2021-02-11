@@ -355,7 +355,7 @@ func (t *targetrunner) Stop(err error) {
 	f("Stopping %s, err: %v", t.si, err)
 	xreg.AbortAll()
 	if t.netServ.pub.s != nil && err != errShutdown {
-		t.unregister() // ignore errors
+		t.unregisterSelf(true)
 	}
 	t.httprunner.stop()
 }
