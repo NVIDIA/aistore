@@ -199,7 +199,9 @@ func Walk(opts *Options) error {
 					err = err1
 				}
 			} else {
-				glog.Error(err1)
+				if err1 != context.Canceled {
+					glog.Error(err1)
+				}
 				err = err1
 			}
 		}

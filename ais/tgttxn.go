@@ -87,9 +87,11 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActCreateBck, cmn.ActAddRemoteBck:
-		debug.Infof("Starting transaction create-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
+		debug.Infof("Starting transaction create-bucket (ts: %d, phase: %s, uuid: %s)",
+			mono.NanoTime(), c.phase, c.uuid)
 		err = t.createBucket(c)
-		debug.Infof("Finished transaction create-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
+		debug.Infof("Finished transaction create-bucket (ts: %d, phase: %s, uuid: %s)",
+			mono.NanoTime(), c.phase, c.uuid)
 	case cmn.ActMakeNCopies:
 		err = t.makeNCopies(c)
 	case cmn.ActSetBprops, cmn.ActResetBprops:
@@ -112,9 +114,11 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode:
 		err = t.startMaintenance(c)
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
-		debug.Infof("Starting transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
+		debug.Infof("Starting transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)",
+			mono.NanoTime(), c.phase, c.uuid)
 		err = t.destroyBucket(c)
-		debug.Infof("Finished transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)", mono.NanoTime(), c.phase, c.uuid)
+		debug.Infof("Finished transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)",
+			mono.NanoTime(), c.phase, c.uuid)
 	default:
 		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
 	}
@@ -321,7 +325,7 @@ func (t *targetrunner) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cm
 	if nprops.Mirror.Enabled {
 		mpathCount := fs.NumAvail()
 		if int(nprops.Mirror.Copies) > mpathCount {
-			err = fmt.Errorf("%s: number of mountpaths %d is insufficient to configure %s as a %d-way mirror",
+			err = fmt.Errorf("%s: not enough mountpaths (%d) to configure %s as %d-way mirror",
 				t.si, mpathCount, bck, nprops.Mirror.Copies)
 			return
 		}

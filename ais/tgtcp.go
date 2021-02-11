@@ -296,14 +296,15 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		t.writeJSON(w, r, &mpList, httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
-		tstats := t.statsT.(*stats.Trunner)
-
-		var rebStats *stats.RebalanceTargetStats
+		var (
+			rebStats *stats.RebalanceTargetStats
+			tstats   = t.statsT.(*stats.Trunner)
+		)
 		if entry := xreg.GetLatest(xreg.XactFilter{Kind: cmn.ActRebalance}); entry != nil {
+			var ok bool
 			if xact := entry.Get(); xact != nil {
-				var ok bool
 				rebStats, ok = xact.Stats().(*stats.RebalanceTargetStats)
-				cmn.Assert(ok)
+				debug.Assert(ok)
 			}
 		}
 		msg := &stats.DaemonStatus{
@@ -315,7 +316,6 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			TStatus:     &stats.TargetStatus{RebalanceStats: rebStats},
 			DeployedOn:  deploymentType(),
 		}
-
 		t.writeJSON(w, r, msg, httpdaeWhat)
 	case cmn.GetWhatDiskStats:
 		diskStats := fs.GetSelectedDiskStats()

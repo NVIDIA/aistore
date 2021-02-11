@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xaction"
 )
@@ -148,7 +149,7 @@ func (r *registry) getLatest(flt XactFilter) BaseEntry {
 
 func CheckBucketsBusy() (cause BaseEntry) {
 	// These xactions have cluster-wide consequences: in general moving objects between targets.
-	busyXacts := []string{cmn.ActMoveBck, cmn.ActCopyBck, cmn.ActETLBck}
+	busyXacts := []string{cmn.ActMoveBck, cmn.ActCopyBck, cmn.ActETLBck, cmn.ActECEncode}
 	for _, kind := range busyXacts {
 		if entry := GetRunning(XactFilter{Kind: kind}); entry != nil {
 			return cause
@@ -271,29 +272,30 @@ func newRegistryEntries() *registryEntries {
 
 func (e *registryEntries) findUnlocked(flt XactFilter) BaseEntry {
 	if flt.OnlyRunning == nil {
-		// Loop in reverse to search for the latest (there is great chance
-		// that searched xaction at the end rather at the beginning).
+		// walk in reverse as there is a greater chance
+		// the one we are looking for is at the end
 		for idx := len(e.entries) - 1; idx >= 0; idx-- {
 			entry := e.entries[idx]
 			if matchEntry(entry, flt) {
 				return entry
 			}
 		}
-	} else {
-		cmn.AssertMsg(flt.Kind == "" || xaction.IsValid(flt.Kind), flt.Kind)
-		finishedCnt := 0
-		for _, entry := range e.active {
-			if entry.Get().Finished() {
-				finishedCnt++
-				continue
-			}
-			if matchEntry(entry, flt) {
-				return entry
-			}
+		return nil
+	}
+	var finishedCnt int
+	debug.AssertMsg(flt.Kind == "" || xaction.IsValid(flt.Kind), flt.Kind)
+	for _, entry := range e.active {
+		if entry.Get().Finished() {
+			finishedCnt++
+			continue
 		}
-		if finishedCnt > hkFinishedCntThreshold {
-			go e.housekeepActive()
+		if matchEntry(entry, flt) {
+			return entry
 		}
+	}
+	// TODO: prevent back to back calls
+	if finishedCnt > hkFinishedCntThreshold {
+		go e.housekeepActive()
 	}
 	return nil
 }
@@ -369,19 +371,19 @@ func (e *registryEntries) len() int {
 }
 
 func (r *registry) abort(args abortArgs) {
-	wg := &sync.WaitGroup{}
 	r.entries.forEach(func(entry BaseEntry) bool {
 		xact := entry.Get()
 		if xact.Finished() {
 			return true
 		}
-
 		abort := false
 		if args.mountpaths {
+			debug.AssertMsg(args.ty == "", args.ty)
 			if xaction.IsMountpath(xact.Kind()) {
 				abort = true
 			}
 		} else if len(args.bcks) > 0 {
+			debug.AssertMsg(args.ty == "", args.ty)
 			for _, bck := range args.bcks {
 				if bck.Bck.Equal(xact.Bck()) {
 					abort = true
@@ -389,22 +391,13 @@ func (r *registry) abort(args abortArgs) {
 				}
 			}
 		} else if args.all {
-			abort = true
-			if args.ty != "" && args.ty != xaction.XactsDtor[xact.Kind()].Type {
-				abort = false
-			}
+			abort = args.ty == "" || args.ty == xaction.XactsDtor[xact.Kind()].Type
 		}
-
 		if abort {
-			wg.Add(1)
-			go func() {
-				xact.Abort()
-				wg.Done()
-			}()
+			xact.Abort()
 		}
 		return true
 	})
-	wg.Wait()
 }
 
 func (r *registry) matchingXactsStats(match func(xact cluster.Xact) bool) []cluster.XactStats {

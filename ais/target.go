@@ -354,10 +354,7 @@ func (t *targetrunner) Stop(err error) {
 	}
 	f("Stopping %s, err: %v", t.si, err)
 	xreg.AbortAll()
-	if t.netServ.pub.s != nil && err != errShutdown {
-		t.unregisterSelf(true)
-	}
-	t.httprunner.stop()
+	t.httprunner.stop(t.netServ.pub.s != nil && err != errShutdown /*rm from Smap*/)
 }
 
 func (t *targetrunner) checkRestarted() {

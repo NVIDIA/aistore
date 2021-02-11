@@ -242,26 +242,8 @@ func (p *proxyrunner) Stop(err error) {
 		f = glog.Warningf
 	}
 	f("Stopping %s%s, err: %v", p.si, s, err)
-
 	xreg.AbortAll()
-	if isPrimary {
-		// Give targets and non-primary proxies some time to unregister.
-		version := smap.version()
-		for i := 0; i < 20; i++ {
-			time.Sleep(time.Second)
-			v := p.owner.smap.get().version()
-			if version == v {
-				break
-			}
-			version = v
-		}
-	} else if smap.isValid() && err != errShutdown {
-		_ = p.unregisterSelf(true)
-	}
-	go func() {
-		time.Sleep(time.Second) // TODO: make it synchronous
-		p.httprunner.stop()
-	}()
+	p.httprunner.stop(!isPrimary && smap.isValid() && err != errShutdown /* rm from Smap*/)
 }
 
 ////////////////////////////////////////

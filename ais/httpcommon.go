@@ -797,31 +797,38 @@ func (h *httprunner) run() error {
 	return h.netServ.pub.listenAndServe(addr, h.logger)
 }
 
-// terminate http server(s) and exit => rungroup.run
-func (h *httprunner) stop() {
-	glog.Warningln("Shutting down HTTP...")
+// remove self from Smap (if required), terminate http, and wait (w/ timeout)
+// for running xactions to abort
+func (h *httprunner) stop(rmFromSmap bool) {
+	if rmFromSmap {
+		h.unregisterSelf(true)
+	}
+	glog.Warningln("Shutting down HTTP")
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
+		time.Sleep(time.Second / 2)
 		h.netServ.pub.shutdown()
+		config := cmn.GCO.Get()
+		if config.Net.UseIntraControl {
+			h.netServ.control.shutdown()
+		}
+		if config.Net.UseIntraData {
+			h.netServ.data.shutdown()
+		}
 		wg.Done()
 	}()
-	config := cmn.GCO.Get()
-	if config.Net.UseIntraControl {
-		wg.Add(1)
-		go func() {
-			h.netServ.control.shutdown()
-			wg.Done()
-		}()
+	entry := xreg.GetRunning(xreg.XactFilter{})
+	if entry != nil {
+		time.Sleep(time.Second)
+		entry = xreg.GetRunning(xreg.XactFilter{})
+		if entry != nil {
+			glog.Warningf("Timed out waiting for %q to finish aborting", entry.Kind())
+		}
 	}
-	if config.Net.UseIntraData {
-		wg.Add(1)
-		go func() {
-			h.netServ.data.shutdown()
-			wg.Done()
-		}()
+	if h.si.IsTarget() {
+		wg.Wait()
 	}
-	wg.Wait()
 }
 
 //
