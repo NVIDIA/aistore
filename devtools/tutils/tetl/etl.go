@@ -103,13 +103,12 @@ func GetTransformYaml(name string) ([]byte, error) {
 	return []byte(specStr), nil
 }
 
-// TODO: Remove printETLLogs argument once TestETLBigBucket is stable.
-func StopETL(t *testing.T, baseParams api.BaseParams, etlID string, printETLLogs ...bool) {
-	if t.Failed() || (len(printETLLogs) > 0 && printETLLogs[0]) {
+func StopETL(t *testing.T, baseParams api.BaseParams, etlID string) {
+	if t.Failed() {
 		tutils.Logln("Fetching logs from ETL containers")
 		if logMsgs, err := api.ETLLogs(baseParams, etlID); err == nil {
 			for _, msg := range logMsgs {
-				tutils.Logf("%s: %s\n", msg.TargetID, string(msg.Logs))
+				tutils.Logf("%s\n", msg.String(10*cmn.KiB))
 			}
 		} else {
 			tutils.Logf("Error retrieving logs; err %v\n", err)

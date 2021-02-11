@@ -78,7 +78,7 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn
 		HardErr:   2,
 		Sleep:     50 * time.Millisecond,
 		BackOff:   true,
-		Verbosity: cmn.CallWithRetryLogVerbose,
+		Verbosity: cmn.CallWithRetryLogQuiet,
 	})
 
 	if err != nil {

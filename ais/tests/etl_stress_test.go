@@ -195,7 +195,7 @@ def transform(input_bytes):
 			}
 			tassert.CheckFatal(t, err)
 			t.Cleanup(func() {
-				tetl.StopETL(t, baseParams, uuid, true)
+				tetl.StopETL(t, baseParams, uuid)
 				tetl.WaitForContainersStopped(t, baseParams)
 			})
 

@@ -76,6 +76,21 @@ func (p PodsLogsMsg) Len() int           { return len(p) }
 func (p PodsLogsMsg) Less(i, j int) bool { return p[i].TargetID < p[j].TargetID }
 func (p PodsLogsMsg) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
+func (p *PodLogsMsg) String(maxLen ...int) string {
+	msg := string(p.Logs)
+	orgLen := len(msg)
+
+	if len(maxLen) > 0 && maxLen[0] > 0 && maxLen[0] < len(msg) {
+		msg = msg[:maxLen[0]]
+	}
+
+	str := fmt.Sprintf("Target ID: %s; Logs:\n%s", p.TargetID, msg)
+	if len(msg) < orgLen {
+		str += fmt.Sprintf("\nand %d bytes more...", orgLen-len(msg))
+	}
+	return str
+}
+
 func (il InfoList) Len() int           { return len(il) }
 func (il InfoList) Less(i, j int) bool { return il[i].ID < il[j].ID }
 func (il InfoList) Swap(i, j int)      { il[i], il[j] = il[j], il[i] }
