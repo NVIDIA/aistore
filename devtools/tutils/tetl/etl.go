@@ -65,7 +65,16 @@ func GetTransformYaml(name string) ([]byte, error) {
 		return nil, err
 	}
 
-	resp, err := client.Get(links[name])
+	var resp *http.Response
+	// Retry in case github in unavailable to fulfill the request for a moment.
+	err := cmn.NetworkCallWithRetry(&cmn.CallWithRetryArgs{
+		Call: func() (code int, err error) {
+			resp, err = client.Get(links[name]) // nolint:bodyclose // closed after returning from NetworkCallWithRetry().
+			return
+		},
+		SoftErr: 3,
+		HardErr: 1,
+	})
 	if err != nil {
 		return nil, err
 	}
