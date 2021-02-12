@@ -37,10 +37,10 @@ variables:
     - ais
   timeout: 2h30m
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   <<: *gather_logs_def
 
 # Stages
@@ -94,10 +94,10 @@ test:authn:
     - ais
   timeout: 20m
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   variables:
     AUTH_ENABLED: "true"
     AUTHN_URL: "http://localhost:52001"
@@ -116,10 +116,10 @@ test:https:
     - ais
   timeout: 20m
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   variables:
     AIS_ENDPOINT: "https://localhost:8080"
     AIS_USE_HTTPS: "true"
@@ -254,11 +254,11 @@ test:kube:
   <<: *test_kube_def
   timeout: 2h
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - export NUM_TARGET=5
     - ONE_NODE_MANY_ETLS="1" make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
@@ -272,11 +272,11 @@ test:kube-single-target:
   <<: *test_kube_def
   timeout: 2h
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     #  Do not set ONE_NODE_MANY_ETLS as we want to have a tests checking correctness with non-testing environment.
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
@@ -290,11 +290,11 @@ test:kube-aisloader:
   <<: *test_kube_def
   timeout: 15m
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*kube-ci.*/' # Add more labels if needed in the future
   script:
     - make aisloader
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
