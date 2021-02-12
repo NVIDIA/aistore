@@ -455,7 +455,9 @@ func (awsp *awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r 
 // PUT OBJECT //
 ////////////////
 
-func (awsp *awsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
+func (awsp *awsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+	defer cmn.Close(r)
+
 	var (
 		svc                   *s3.S3
 		uploadOutput          *s3manager.UploadOutput

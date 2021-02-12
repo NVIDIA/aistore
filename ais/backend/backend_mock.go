@@ -59,7 +59,7 @@ func (m *dummyBackendProvider) GetObjReader(ctx context.Context, lom *cluster.LO
 	return nil, nil, 0, nil
 }
 
-func (m *dummyBackendProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
+func (m *dummyBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	return "", http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(lom.Bucket())
 }
 

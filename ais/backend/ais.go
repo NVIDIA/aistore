@@ -457,10 +457,11 @@ func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (
 	return r, nil, errCode, err
 }
 
-func (m *AISBackendProvider) PutObj(_ context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
+func (m *AISBackendProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	remoteBck := lom.Bucket()
 	aisCluster, err := m.remoteCluster(remoteBck.Ns.UUID)
 	if err != nil {
+		cmn.Close(r)
 		return "", errCode, err
 	}
 	var (

@@ -388,9 +388,10 @@ func (gcpp *gcpProvider) GetObjReader(ctx context.Context,
 // PUT OBJECT //
 ////////////////
 
-func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
+func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	gcpClient, gctx, err := gcpp.createClient(ctx)
 	if err != nil {
+		cmn.Close(r)
 		return
 	}
 
@@ -408,6 +409,7 @@ func (gcpp *gcpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.L
 	buf, slab := gcpp.t.MMSA().Alloc()
 	written, err := io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
+	cmn.Close(r)
 	if err != nil {
 		return
 	}

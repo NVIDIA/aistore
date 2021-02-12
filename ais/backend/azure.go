@@ -405,7 +405,9 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 // PUT OBJECT //
 ////////////////
 
-func (ap *azureProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
+func (ap *azureProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
+	defer cmn.Close(r)
+
 	var (
 		leaseID  string
 		h        = cmn.BackendHelpers.Azure

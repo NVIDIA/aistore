@@ -219,7 +219,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	return wrapReader(ctx, resp.Body), nil, 0, nil
 }
 
-func (hp *httpProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (string, int, error) {
+func (hp *httpProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (string, int, error) {
 	return "", http.StatusBadRequest, fmt.Errorf("%q provider doesn't support creating new objects", hp.Provider())
 }
 

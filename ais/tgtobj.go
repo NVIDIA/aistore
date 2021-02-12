@@ -186,11 +186,7 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	// remote versioning
 	if bck.IsRemote() && poi.recvType == cluster.RegularPut {
 		var version string
-		if bck.IsRemoteAIS() {
-			version, errCode, err = poi.putRemoteAIS()
-		} else {
-			version, errCode, err = poi.putCloud()
-		}
+		version, errCode, err = poi.putRemote()
 		if err != nil {
 			glog.Errorf("PUT %s: %v", lom, err)
 			return
@@ -236,43 +232,25 @@ func (poi *putObjInfo) tryFinalize() (errCode int, err error) {
 	return
 }
 
-func (poi *putObjInfo) putCloud() (version string, errCode int, err error) {
+func (poi *putObjInfo) putRemote() (version string, errCode int, err error) {
 	var (
-		lom = poi.lom
-		bck = lom.Bck()
+		lom     = poi.lom
+		backend = poi.t.Backend(lom.Bck())
 	)
-	file, err := os.Open(poi.workFQN)
+	fh, err := cmn.NewFileHandle(poi.workFQN)
 	if err != nil {
 		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, err)
 		return
 	}
 
-	cloud := poi.t.Backend(bck)
-	customMD := cmn.SimpleKVs{
-		cluster.SourceObjMD: cloud.Provider(),
+	version, errCode, err = backend.PutObj(poi.ctx, fh, lom)
+	if !lom.Bck().IsRemoteAIS() {
+		customMD := cmn.SimpleKVs{cluster.SourceObjMD: backend.Provider()}
+		if version != "" {
+			customMD[cluster.VersionObjMD] = version
+		}
+		lom.SetCustomMD(customMD)
 	}
-
-	version, errCode, err = cloud.PutObj(poi.ctx, file, lom)
-	if version != "" {
-		customMD[cluster.VersionObjMD] = version
-	}
-	lom.SetCustomMD(customMD)
-	cmn.Close(file)
-	return
-}
-
-func (poi *putObjInfo) putRemoteAIS() (version string, errCode int, err error) {
-	var (
-		lom = poi.lom
-		bck = lom.Bck()
-	)
-	cmn.Assert(bck.IsRemoteAIS())
-	fh, errOpen := cmn.NewFileHandle(poi.workFQN) // Closed by `PutObj`.
-	if errOpen != nil {
-		err = fmt.Errorf("failed to open %s err: %w", poi.workFQN, errOpen)
-		return
-	}
-	version, errCode, err = poi.t.Backend(bck).PutObj(poi.ctx, fh, lom)
 	return
 }
 

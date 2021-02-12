@@ -269,7 +269,7 @@ func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 // PUT OBJECT //
 ////////////////
 
-func (hp *hdfsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, errCode int, err error) {
+func (hp *hdfsProvider) PutObj(ctx context.Context, r io.ReadCloser, lom *cluster.LOM) (version string, errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fw, err := hp.c.Create(filePath)
 	if err != nil {
@@ -297,6 +297,8 @@ func (hp *hdfsProvider) PutObj(ctx context.Context, r io.Reader, lom *cluster.LO
 	err = fw.Close()
 
 finish:
+	cmn.Close(r)
+
 	// TODO: Cleanup if there was an error during `c.Create` or `io.Copy`. We need
 	//  to remove directories and file.
 	if err != nil {
