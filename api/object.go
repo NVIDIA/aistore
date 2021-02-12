@@ -421,6 +421,8 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 // DoReqWithRetry makes `client.Do` request and retries it when got "Broken Pipe"
 // or "Connection Refused" error.
 //
+// This function always closes the `reqArgs.BodR`, even in case of error.
+//
 // Should be used for PUT requests as it puts reader into a request.
 func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error),
 	reqArgs cmn.ReqArgs) (resp *http.Response, err error) {
@@ -431,6 +433,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 	)
 	reader := reqArgs.BodyR.(cmn.ReadOpenCloser)
 	if req, err = newRequest(reqArgs); err != nil {
+		cmn.Close(reader)
 		return
 	}
 	if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {
@@ -449,7 +452,7 @@ func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.R
 		reqArgs.BodyR = r
 
 		if req, err = newRequest(reqArgs); err != nil {
-			r.Close()
+			cmn.Close(reader)
 			return
 		}
 		if resp, err = client.Do(req); !shouldRetryHTTP(err, resp) {
