@@ -200,8 +200,7 @@ def transform(input_bytes):
 			})
 
 			tutils.Logf("Start offline ETL %q\n", uuid)
-			xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, RequestTimeoutStr: requestTimeout.String()})
-			tassert.CheckFatal(t, err)
+			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, RequestTimeoutStr: requestTimeout.String()})
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 
 			tutils.Logln("Waiting for ETL to finish")
@@ -246,11 +245,5 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, name, comm string) (xactID s
 	})
 
 	tutils.Logf("Start offline ETL %q => %q\n", etlID, bckTo.String())
-	xactID, err = api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: etlID})
-	tassert.CheckFatal(t, err)
-	t.Cleanup(func() {
-		tutils.DestroyBucket(t, proxyURL, bckTo)
-		tutils.Logf("Bucket %q destroyed\n", bckTo.String())
-	})
-	return
+	return tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: etlID})
 }

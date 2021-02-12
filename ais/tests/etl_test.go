@@ -198,16 +198,12 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 		bckTo          = cmn.Bck{Name: "etloffline-out-" + cmn.RandString(5), Provider: cmn.ProviderAIS}
 		requestTimeout = 30 * time.Second
 	)
-	t.Cleanup(func() {
-		tetl.StopETL(t, baseParams, uuid)
-		tutils.DestroyBucket(t, proxyURL, bckTo)
-	})
+	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	tutils.Logf("Start offline ETL %q\n", uuid)
-	xactID, err := api.ETLBucket(baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, RequestTimeoutStr: requestTimeout.String()})
-	tassert.CheckFatal(t, err)
+	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, RequestTimeoutStr: requestTimeout.String()})
 
-	err = tetl.WaitForFinished(baseParams, xactID, timeout)
+	err := tetl.WaitForFinished(baseParams, xactID, timeout)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(baseParams, bckTo, nil, 0)

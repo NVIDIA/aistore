@@ -233,3 +233,12 @@ func Init(baseParams api.BaseParams, name, comm string) (string, error) {
 	tutils.Logln("Init ETL")
 	return api.ETLInit(baseParams, spec)
 }
+
+func ETLBucket(t *testing.T, baseParams api.BaseParams, fromBck, toBck cmn.Bck, bckMsg *cmn.Bck2BckMsg) string {
+	xactID, err := api.ETLBucket(baseParams, fromBck, toBck, bckMsg)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		tutils.DestroyBucket(t, baseParams.URL, toBck)
+	})
+	return xactID
+}
