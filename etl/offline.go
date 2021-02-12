@@ -5,7 +5,6 @@
 package etl
 
 import (
-	"io"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -57,16 +56,14 @@ func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 }
 
 // Returns reader resulting from lom ETL transformation.
-func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, func(), error) {
+func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn.ObjHeaderMetaProvider, error) {
 	var (
-		body    io.ReadCloser
-		length  int64
-		err     error
-		cleanup = func() {}
+		r   cmn.ReadCloseSizer
+		err error
 	)
 
 	call := func() (int, error) {
-		body, cleanup, length, err = dp.comm.Get(lom.Bck(), lom.ObjName, dp.requestTimeout)
+		r, err = dp.comm.Get(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err
 	}
 
@@ -80,16 +77,15 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cmn.ReadOpenCloser, cmn
 		BackOff:   true,
 		Verbosity: cmn.CallWithRetryLogQuiet,
 	})
-
 	if err != nil {
-		return nil, nil, cleanup, err
+		return nil, nil, err
 	}
 
 	om := &objMeta{
-		size:    length,
+		size:    r.Size(),
 		version: "",            // Object after ETL is a new object with a new version.
 		cksum:   cmn.NoneCksum, // TODO: Revisit and check if possible to have a checksum.
 		atime:   lom.AtimeUnix(),
 	}
-	return cmn.NopOpener(body), om, cleanup, nil
+	return cmn.NopOpener(r), om, nil
 }

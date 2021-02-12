@@ -31,10 +31,36 @@ type (
 		io.Writer
 		io.WriterAt
 	}
-	// ReadSizer is the interface that adds Size method to the basic reader.
+	// ReadSizer is the interface that adds Size method to io.Reader.
 	ReadSizer interface {
 		io.Reader
 		Size() int64
+	}
+	// ReadCloseSizer is the interface that adds Size method to io.ReadCloser.
+	ReadCloseSizer interface {
+		io.ReadCloser
+		Size() int64
+	}
+	// ReadOpenCloseSizer is the interface that adds Size method to ReadOpenCloser.
+	ReadOpenCloseSizer interface {
+		ReadOpenCloser
+		Size() int64
+	}
+	sizedReader struct {
+		io.Reader
+		size int64
+	}
+	sizedRC struct {
+		io.ReadCloser
+		size int64
+	}
+	deferRCS struct {
+		ReadCloseSizer
+		c func()
+	}
+	deferROC struct {
+		ReadOpenCloser
+		c func()
 	}
 	CallbackROC struct {
 		roc          ReadOpenCloser
@@ -72,11 +98,7 @@ type (
 		b []byte
 		*bytes.Reader
 	}
-	// SizedReader is simple struct which implements ReadSizer interface.
-	SizedReader struct {
-		io.Reader
-		size int64
-	}
+
 	nopOpener   struct{ io.ReadCloser }
 	WriterMulti struct{ writers []io.Writer }
 
@@ -91,7 +113,7 @@ var (
 	_ io.Reader      = (*nopReader)(nil)
 	_ ReadOpenCloser = (*FileHandle)(nil)
 	_ ReadOpenCloser = (*CallbackROC)(nil)
-	_ ReadSizer      = (*SizedReader)(nil)
+	_ ReadSizer      = (*sizedReader)(nil)
 	_ ReadOpenCloser = (*SectionHandle)(nil)
 	_ ReadOpenCloser = (*FileSectionHandle)(nil)
 	_ ReadOpenCloser = (*nopOpener)(nil)
@@ -165,16 +187,44 @@ func (f *FileHandle) Open() (ReadOpenCloser, error) {
 	return NewFileHandle(f.fqn)
 }
 
-/////////////////
-// SizedReader //
-/////////////////
+////////////
+// Sized* //
+////////////
 
-func NewSizedReader(r io.Reader, size int64) *SizedReader {
-	return &SizedReader{r, size}
+func NewSizedReader(r io.Reader, size int64) ReadSizer { return &sizedReader{r, size} }
+func (f *sizedReader) Size() int64                     { return f.size }
+
+func NewSizedRC(r io.ReadCloser, size int64) ReadCloseSizer { return &sizedRC{r, size} }
+func (f *sizedRC) Size() int64                              { return f.size }
+
+////////////
+// Defer* //
+////////////
+
+func NewDeferROC(r ReadOpenCloser, c func()) ReadOpenCloser {
+	if c == nil {
+		return r
+	}
+	return &deferROC{r, c}
 }
 
-func (f *SizedReader) Size() int64 {
-	return f.size
+func (r *deferROC) Close() error {
+	err := r.ReadOpenCloser.Close()
+	r.c()
+	return err
+}
+
+func NewDeferRCS(r ReadCloseSizer, c func()) ReadCloseSizer {
+	if c == nil {
+		return r
+	}
+	return &deferRCS{r, c}
+}
+
+func (r *deferRCS) Close() error {
+	err := r.ReadCloseSizer.Close()
+	r.c()
+	return err
 }
 
 /////////////////

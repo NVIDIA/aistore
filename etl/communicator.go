@@ -6,18 +6,15 @@ package etl
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -43,7 +40,7 @@ type (
 		// Get() is driven by `OfflineDataProvider` - not to confuse with
 		// GET requests from users (such as training models and apps)
 		// to perform on-the-fly transformation.
-		Get(bck *cluster.Bck, objName string, ts ...time.Duration) (io.ReadCloser, func(), int64, error)
+		Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cmn.ReadCloseSizer, error)
 	}
 
 	commArgs struct {
@@ -133,42 +130,44 @@ func (c baseComm) SvcName() string { return c.podName /*pod name is same as serv
 // pushComm //
 //////////////
 
-func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Duration) (resp *http.Response, cleanup func(), err error) {
+func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, ts ...time.Duration) (r cmn.ReadCloseSizer, err error) {
 	lom := cluster.AllocLOM(objName)
-	cleanup = func() {}
 
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(bck.Bck); err != nil {
-		return nil, cleanup, err
+		return nil, err
 	}
 
-	resp, cleanup, err = pc.tryDoRequest(lom, ts...)
+	r, err = pc.tryDoRequest(lom, ts...)
 	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
 		_, err = pc.t.GetCold(context.Background(), lom, cluster.PrefetchWait)
 		if err != nil {
-			return nil, cleanup, err
+			return nil, err
 		}
-		resp, cleanup, err = pc.tryDoRequest(lom, ts...)
+		r, err = pc.tryDoRequest(lom, ts...)
 	}
 	return
 }
 
-func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (*http.Response, func(), error) {
-	cleanup := func() {}
+func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (cmn.ReadCloseSizer, error) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
 	if err := lom.Load(); err != nil {
-		return nil, cleanup, err
+		return nil, err
 	}
 
 	// `fh` is closed by Do(req).
 	fh, err := cmn.NewFileHandle(lom.FQN)
 	if err != nil {
-		return nil, cleanup, err
+		return nil, err
 	}
 
-	var req *http.Request
+	var (
+		req     *http.Request
+		resp    *http.Response
+		cleanup func()
+	)
 	if len(ts) > 0 && ts[0] != 0 {
 		var ctx context.Context
 		ctx, cleanup = context.WithTimeout(context.Background(), ts[0])
@@ -176,50 +175,43 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, ts ...time.Duration) (*http.R
 	} else {
 		req, err = http.NewRequest(http.MethodPut, pc.transformerURL, fh)
 	}
-
 	if err != nil {
-		return nil, cleanup, err
+		goto finish
 	}
 
 	req.ContentLength = lom.Size()
 	req.Header.Set(cmn.HeaderContentType, cmn.ContentBinary)
-	resp, err := pc.t.DataClient().Do(req)
-	return resp, cleanup, err
+	resp, err = pc.t.DataClient().Do(req) // nolint:bodyclose // Closed by the caller.
+finish:
+	if err != nil {
+		if cleanup != nil {
+			cleanup()
+		}
+		return nil, err
+	}
+	return cmn.NewDeferRCS(cmn.NewSizedRC(resp.Body, resp.ContentLength), cleanup), nil
 }
 
 func (pc *pushComm) Do(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
 	var (
-		size               int64
-		resp, cleanup, err = pc.doRequest(bck, objName)
+		size   int64
+		r, err = pc.doRequest(bck, objName)
 	)
-	defer cleanup()
 	if err != nil {
 		return err
 	}
-	if contentLength := resp.Header.Get(cmn.HeaderContentLength); contentLength != "" {
-		size, err = strconv.ParseInt(contentLength, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid Content-Length %q", contentLength)
-		}
-		w.Header().Set(cmn.HeaderContentLength, contentLength)
-	} else {
+	defer r.Close()
+	if size = r.Size(); size < 0 {
 		size = memsys.DefaultBufSize // TODO -- FIXME: track the average
 	}
 	buf, slab := pc.mem.Alloc(size)
-	_, err = io.CopyBuffer(w, resp.Body, buf)
+	_, err = io.CopyBuffer(w, r, buf)
 	slab.Free(buf)
-	erc := resp.Body.Close()
-	debug.AssertNoErr(erc)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
-func (pc *pushComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (io.ReadCloser, func(), int64, error) {
-	resp, cleanup, err := pc.doRequest(bck, objName, ts...)
-	r, code, err := handleResp(resp, err)
-	return r, cleanup, code, err
+func (pc *pushComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cmn.ReadCloseSizer, error) {
+	return pc.doRequest(bck, objName, ts...)
 }
 
 //////////////////
@@ -232,11 +224,9 @@ func (rc *redirectComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 	return nil
 }
 
-func (rc *redirectComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (io.ReadCloser, func(), int64, error) {
+func (rc *redirectComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cmn.ReadCloseSizer, error) {
 	etlURL := cmn.JoinPath(rc.transformerURL, transformerPath(bck, objName))
-	resp, cleanup, err := getWithTimeout(rc.t.DataClient(), etlURL, ts...)
-	r, code, err := handleResp(resp, err)
-	return r, cleanup, code, err
+	return getWithTimeout(rc.t.DataClient(), etlURL, ts...)
 }
 
 //////////////////
@@ -249,11 +239,9 @@ func (pc *revProxyComm) Do(w http.ResponseWriter, r *http.Request, bck *cluster.
 	return nil
 }
 
-func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (io.ReadCloser, func(), int64, error) {
+func (pc *revProxyComm) Get(bck *cluster.Bck, objName string, ts ...time.Duration) (cmn.ReadCloseSizer, error) {
 	etlURL := cmn.JoinPath(pc.transformerURL, transformerPath(bck, objName))
-	resp, cleanup, err := getWithTimeout(pc.t.DataClient(), etlURL, ts...)
-	r, code, err := handleResp(resp, err)
-	return r, cleanup, code, err
+	return getWithTimeout(pc.t.DataClient(), etlURL, ts...)
 }
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
@@ -274,31 +262,30 @@ func transformerPath(bck *cluster.Bck, objName string) string {
 	return cmn.JoinWords(bck.Name, objName)
 }
 
-func handleResp(resp *http.Response, err error) (io.ReadCloser, int64, error) {
-	if err != nil {
-		return nil, 0, err
-	}
-	return resp.Body, resp.ContentLength, nil
-}
-
-func getWithTimeout(client *http.Client, url string, ts ...time.Duration) (*http.Response, func(), error) {
+func getWithTimeout(client *http.Client, url string, ts ...time.Duration) (r cmn.ReadCloseSizer, err error) {
 	var (
 		req     *http.Request
-		err     error
-		ctx     context.Context
-		cleanup = func() {}
+		resp    *http.Response
+		cleanup func()
 	)
-
 	if len(ts) > 0 && ts[0] != 0 {
+		var ctx context.Context
 		ctx, cleanup = context.WithTimeout(context.Background(), ts[0])
 		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	} else {
 		req, err = http.NewRequest(http.MethodGet, url, nil)
 	}
-
 	if err != nil {
-		return nil, cleanup, err
+		goto finish
 	}
-	resp, err := client.Do(req)
-	return resp, cleanup, err
+	resp, err = client.Do(req) // nolint:bodyclose // Closed by the caller.
+finish:
+	if err != nil {
+		if cleanup != nil {
+			cleanup()
+		}
+		return nil, err
+	}
+	r = cmn.NewDeferRCS(cmn.NewSizedRC(resp.Body, resp.ContentLength), cleanup)
+	return r, nil
 }

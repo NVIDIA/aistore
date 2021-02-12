@@ -1072,9 +1072,8 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 // TODO: Make it possible to skip caching an object from a cloud bucket.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	var (
-		reader  cmn.ReadOpenCloser
-		cleanUp func()
-		si      = coi.t.si
+		reader cmn.ReadOpenCloser
+		si     = coi.t.si
 	)
 	debug.Assert(coi.DP != nil)
 	if si, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
@@ -1112,10 +1111,9 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		dst.SetVersion(lom.Version())
 	}
 
-	if reader, _, cleanUp, err = coi.DP.Reader(lom); err != nil {
+	if reader, _, err = coi.DP.Reader(lom); err != nil {
 		return 0, err
 	}
-	defer cleanUp()
 
 	// Set the correct recvType: some transactions must update the object
 	// in the Cloud(if destination is a Cloud bucket).
@@ -1139,20 +1137,11 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 	cmn.Assert(coi.DryRun)
 	cmn.Assert(coi.DP != nil)
 
-	var (
-		reader  io.ReadCloser
-		cleanUp func()
-	)
-
-	if reader, _, cleanUp, err = coi.DP.Reader(lom); err != nil {
+	var reader io.ReadCloser
+	if reader, _, err = coi.DP.Reader(lom); err != nil {
 		return 0, err
 	}
-
-	defer func() {
-		reader.Close()
-		cleanUp()
-	}()
-
+	defer reader.Close()
 	return io.Copy(ioutil.Discard, reader)
 }
 
@@ -1177,11 +1166,9 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 		params.HdrMeta = lom
 		size = fi.Size()
 	} else {
-		var cleanUp func()
-		if params.Reader, params.HdrMeta, cleanUp, err = coi.DP.Reader(lom); err != nil {
+		if params.Reader, params.HdrMeta, err = coi.DP.Reader(lom); err != nil {
 			return
 		}
-		defer cleanUp()
 		if coi.DryRun {
 			size, err = io.Copy(ioutil.Discard, params.Reader)
 			cmn.Close(params.Reader)
