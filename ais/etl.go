@@ -43,7 +43,7 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.ETLBuild:
 			t.buildETL(w, r)
 		default:
-			t.writeErrf(w, r, "invalid POST path: %s", apiItems[0])
+			t.writeErrURL(w, r)
 		}
 	case r.Method == http.MethodGet:
 		apiItems, err := t.checkRESTItems(w, r, 1, true, cmn.URLPathETL.L)
@@ -61,14 +61,14 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.ETLHealth:
 			t.healthETL(w, r)
 		default:
-			t.writeErrf(w, r, "invalid GET path: %s", apiItems[0])
+			t.writeErrURL(w, r)
 		}
 	case r.Method == http.MethodHead:
 		t.headObjectETL(w, r)
 	case r.Method == http.MethodDelete:
 		t.stopETL(w, r)
 	default:
-		t.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		t.writeErrURL(w, r)
 	}
 }
 
@@ -236,7 +236,7 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.ETLBuild:
 			p.buildETL(w, r)
 		default:
-			p.writeErrf(w, r, "invalid POST path: %s", apiItems[0])
+			p.writeErrURL(w, r)
 		}
 	case r.Method == http.MethodGet:
 		apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathETL.L)
@@ -252,12 +252,12 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.ETLHealth:
 			p.healthETL(w, r)
 		default:
-			p.writeErrf(w, r, "invalid GET path: %s", apiItems[0])
+			p.writeErrURL(w, r)
 		}
 	case r.Method == http.MethodDelete:
 		p.stopETL(w, r)
 	default:
-		p.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		p.writeErrURL(w, r)
 	}
 }
 
@@ -297,7 +297,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		err = res.err
+		err = res._error()
 		glog.Error(err)
 	}
 	freeCallResults(results)
@@ -351,7 +351,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		err = res.err
+		err = res._error()
 		glog.Error(err)
 	}
 	freeCallResults(results)
@@ -398,7 +398,7 @@ func (p *proxyrunner) listETLs() (infoList etl.InfoList, err error) {
 
 	for _, res := range results {
 		if res.err != nil {
-			err = res.err
+			err = res._error()
 			freeCallResults(results)
 			return nil, err
 		}
@@ -471,7 +471,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	logs := make(etl.PodsLogsMsg, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			p.writeErr(w, r, res.err)
+			p.writeErr(w, r, res._error())
 			freeCallResults(results)
 			return
 		}
@@ -508,7 +508,7 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	healths := make(etl.PodsHealthMsg, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			p.writeErr(w, r, res.err)
+			p.writeErr(w, r, res._error())
 			freeCallResults(results)
 			return
 		}
@@ -539,7 +539,7 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res.err)
+		p.writeErr(w, r, res._error())
 		break
 	}
 	freeCallResults(results)

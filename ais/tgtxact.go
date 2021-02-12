@@ -84,7 +84,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			xreg.DoAbort(xactMsg.Kind, bck)
 			return
 		default:
-			t.writeErrf(w, r, fmtUnknownAct, msg)
+			t.writeErrAct(w, r, msg.Action)
 		}
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /xactions path")

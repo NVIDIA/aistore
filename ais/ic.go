@@ -331,7 +331,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		ic.p.writeErrf(w, r, fmtUnknownAct, msg.ActionMsg)
+		ic.p.writeErrAct(w, r, msg.Action)
 	}
 }
 

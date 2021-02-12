@@ -478,7 +478,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		} else if err := cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			t.writeErrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
+			t.writeErrActf(w, r, msg.Action, ", name %s, value %T", msg.Name, msg.Value)
 			return
 		}
 		xact, err := xreg.RenewEvictDelete(t, request.bck, args)
@@ -497,7 +497,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		})
 		go xact.Run()
 	default:
-		t.writeErrf(w, r, fmtUnknownAct, msg)
+		t.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -563,7 +563,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActPrefetch:
 		if !request.bck.IsRemote() {
-			t.writeErrf(w, r, "%s: expecting remote bucket, got %s, action=%s", t.si, request.bck, msg.Action)
+			t.writeErrf(w, r, "%s: expecting remote bucket, got %s, action=%s",
+				t.si, request.bck, msg.Action)
 			return
 		}
 		var (
@@ -577,7 +578,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		} else if err = cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			t.writeErrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
+			t.writeErrActf(w, r, msg.Action, ", name %s, value %T", msg.Name, msg.Value)
 			return
 		}
 		args.UUID = msg.UUID
@@ -599,7 +600,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("LIST: %s, %s", request.bck, delta)
 		}
 	default:
-		t.writeErrf(w, r, fmtUnknownAct, msg)
+		t.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -902,7 +903,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		}
 		t.promoteFQN(w, r, &msg)
 	default:
-		t.writeErrf(w, r, fmtUnknownAct, msg)
+		t.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -1048,7 +1049,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	case ec.URLCT:
 		t.sendECCT(w, r, request.bck, request.items[2])
 	default:
-		t.writeErrf(w, r, "invalid EC URL path %s", request.items[0])
+		t.writeErrURL(w, r)
 	}
 }
 

@@ -74,7 +74,7 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPut && apiItems[0] == cmn.VoteInit:
 		p.httpRequestNewPrimary(w, r)
 	default:
-		p.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		p.writeErrURL(w, r)
 	}
 }
 
@@ -309,14 +309,13 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	switch {
 	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
 		t.httpproxyvote(w, r)
 	case r.Method == http.MethodPut && apiItems[0] == cmn.Voteres:
 		t.httpsetprimaryproxy(w, r)
 	default:
-		t.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		t.writeErrURL(w, r)
 	}
 }
 

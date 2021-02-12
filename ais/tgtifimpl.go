@@ -131,6 +131,7 @@ func (t *targetrunner) PutObject(lom *cluster.LOM, params cluster.PutObjectParam
 }
 
 // PUT(lom) => destination-target
+// NOTE: always closes params.Reader (either explicitly or via Do())
 func (t *targetrunner) _sendPUT(lom *cluster.LOM, params *cluster.SendToParams) error {
 	var (
 		hdr   http.Header

@@ -424,6 +424,8 @@ func PromoteFileOrDir(args *PromoteArgs) error {
 // This function always closes the `reqArgs.BodR`, even in case of error.
 //
 // Should be used for PUT requests as it puts reader into a request.
+//
+// NOTE: always closes request body reader (reqArgs.BodyR) - explicitly or via Do()
 func DoReqWithRetry(client *http.Client, newRequest func(_ cmn.ReqArgs) (*http.Request, error),
 	reqArgs cmn.ReqArgs) (resp *http.Response, err error) {
 	var (

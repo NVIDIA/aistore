@@ -1298,6 +1298,77 @@ func (h *httprunner) writeErrf(w http.ResponseWriter, r *http.Request, format st
 	h.writeErr(w, r, fmt.Errorf(format, a...))
 }
 
+func (h *httprunner) writeErrURL(w http.ResponseWriter, r *http.Request) {
+	err := &cmn.HTTPError{
+		Status:     http.StatusBadRequest,
+		Message:    "invalid URL Path",
+		Method:     r.Method,
+		URLPath:    r.URL.Path,
+		RemoteAddr: r.RemoteAddr,
+	}
+	h.writeErr(w, r, err)
+}
+
+func (h *httprunner) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
+	err := &cmn.HTTPError{
+		Status:     http.StatusBadRequest,
+		Message:    fmt.Sprintf("invalid action %q", action),
+		Method:     r.Method,
+		URLPath:    r.URL.Path,
+		RemoteAddr: r.RemoteAddr,
+	}
+	h.writeErr(w, r, err)
+}
+
+func (h *httprunner) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
+	format string, a ...interface{}) {
+	err := &cmn.HTTPError{
+		Status:     http.StatusBadRequest,
+		Message:    fmt.Sprintf("invalid action %q: %s", action, fmt.Sprintf(format, a...)),
+		Method:     r.Method,
+		URLPath:    r.URL.Path,
+		RemoteAddr: r.RemoteAddr,
+	}
+	h.writeErr(w, r, err)
+}
+
+////////////////
+// callResult //
+////////////////
+
+// error helper for intra-cluster calls
+func (res *callResult) _error() error {
+	if res.err == nil {
+		return nil
+	}
+	// retain status
+	if res.status != 0 && res.status != http.StatusBadRequest {
+		if res.details == "" {
+			return &cmn.HTTPError{
+				Status:  res.status,
+				Message: res.err.Error(),
+			}
+		}
+		// and detail
+		return &cmn.HTTPError{
+			Status:  res.status,
+			Message: fmt.Sprintf("%v[%s]", res.err, res.details),
+		}
+	}
+	if res.details == "" {
+		return res.err
+	}
+	// w/ detail
+	return fmt.Errorf("%v[%s]", res.err, res.details)
+}
+
+func (res *callResult) _errorf(format string, a ...interface{}) error {
+	debug.Assert(res.err != nil)
+	msg := fmt.Sprintf(format, a...)
+	res.err = errors.New(msg + ": " + res.err.Error())
+	return res._error()
+}
+
 ///////////////////
 // health client //
 ///////////////////
@@ -1667,7 +1738,8 @@ func (h *httprunner) join(query url.Values, contactURLs ...string) (res *callRes
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values, keepalive bool) *callResult {
+func (h *httprunner) registerToURL(url string, psi *cluster.Snode, tout time.Duration, query url.Values,
+	keepalive bool) *callResult {
 	var (
 		path   string
 		regReq = nodeRegMeta{SI: h.si}
@@ -1776,14 +1848,12 @@ func (h *httprunner) healthByExternalWD(w http.ResponseWriter, r *http.Request) 
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: external health-ping from %s", h.si, r.RemoteAddr)
 		}
-
+		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
+		// see also:
+		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
 		if !readiness && !h.ClusterStarted() {
-			// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
-			// see also:
-			// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
-
 		// TODO: establish the fact that we are healthy...
 		return true
 	}

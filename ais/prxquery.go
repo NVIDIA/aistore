@@ -69,7 +69,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res.err)
+		p.writeErr(w, r, res._error())
 		freeCallResults(results)
 		return
 	}
@@ -91,14 +91,13 @@ func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	switch apiItems[0] {
 	case cmn.Next:
 		p.httpquerygetnext(w, r)
 	case cmn.WorkerOwner:
 		p.httpquerygetworkertarget(w, r)
 	default:
-		p.writeErrf(w, r, "unknown path /%s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
+		p.writeErrURL(w, r)
 	}
 }
 
@@ -176,7 +175,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 			if res.status == http.StatusNotFound {
 				continue
 			}
-			p.writeErr(w, r, res.err, res.status)
+			p.writeErr(w, r, res._error())
 			freeCallResults(results)
 			return
 		}
@@ -203,7 +202,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		freeBcastArgs(discardArgs)
 		for _, res := range discardResults {
 			if res.err != nil && res.status != http.StatusNotFound {
-				p.writeErr(w, r, res.err)
+				p.writeErr(w, r, res._error())
 				return
 			}
 		}

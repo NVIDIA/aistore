@@ -113,7 +113,7 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		p.delObjS3(w, r, apiItems)
 	default:
-		p.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		p.writeErrURL(w, r)
 	}
 }
 

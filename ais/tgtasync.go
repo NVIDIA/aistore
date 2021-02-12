@@ -107,7 +107,7 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 		case cmn.ActSummaryBck:
 			err = xreg.RenewBckSummary(ctx, t, bck, msg)
 		default:
-			t.writeErrf(w, r, "invalid action: %s", action)
+			t.writeErrAct(w, r, action)
 			return
 		}
 		if err != nil {

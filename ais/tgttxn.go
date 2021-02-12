@@ -111,7 +111,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
 		err = t.destroyBucket(c)
 	default:
-		t.writeErrf(w, r, fmtUnknownAct, msg)
+		t.writeErrAct(w, r, msg.Action)
 	}
 	if err != nil {
 		t.writeErr(w, r, err)

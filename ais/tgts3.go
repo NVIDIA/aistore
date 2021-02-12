@@ -37,7 +37,7 @@ func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.delObjS3(w, r, apiItems)
 	default:
-		t.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		t.writeErrURL(w, r)
 	}
 }
 

@@ -44,7 +44,6 @@ const (
 
 const (
 	fmtNotRemote  = "%q appears to be ais bucket (expecting remote)"
-	fmtUnknownAct = "unexpected action message <- JSON [%v]"
 	fmtUnknownQue = "unexpected query [what=%s]"
 )
 
@@ -496,14 +495,14 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write([]byte(xactID))
 	default:
-		p.writeErrf(w, r, fmtUnknownAct, msg)
+		p.writeErrAct(w, r, msg.Action)
 	}
 }
 
 // PUT /v1/metasync
 func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		p.writeErrf(w, r, "invalid method %s", r.Method)
+		p.writeErrURL(w, r)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -628,7 +627,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		bucket := apiItems[0]
 		p.hpostBucket(w, r, &msg, bucket)
 	default:
-		p.writeErrf(w, r, "URL path %v is too long (action %s)", apiItems, msg.Action)
+		p.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -824,7 +823,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		}
 		w.Write([]byte(xactID))
 	default:
-		p.writeErrf(w, r, fmtUnknownAct, msg)
+		p.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -911,7 +910,7 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 		}
 		p.bucketSummary(w, r, bck, msg)
 	default:
-		p.writeErrf(w, r, "all buckets: invalid action %q", msg.Action)
+		p.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -1079,7 +1078,7 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg *cmn.BucketSumma
 	freeBcastArgs(args)
 	for _, res := range results {
 		if res.err != nil {
-			err = res.err
+			err = res._error()
 			freeCallResults(results)
 			return nil, "", err
 		}
@@ -1119,11 +1118,11 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if bck.IsRemote() {
-			p.writeErrf(w, r, "%q is not supported for remote buckets (%s)", msg.Action, bck)
+			p.writeErrActf(w, r, msg.Action, "not supported for remote buckets (%s)", bck)
 			return
 		}
 		if bck.Props.EC.Enabled {
-			p.writeErrf(w, r, "%q is not supported for erasure-coded buckets: %s", msg.Action, bck)
+			p.writeErrActf(w, r, msg.Action, "not supported for erasure-coded  buckets (%s)", bck)
 			return
 		}
 		p.objRename(w, r, bck, request.items[1], &msg)
@@ -1140,7 +1139,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		p.promoteFQN(w, r, bck, &msg)
 		return
 	default:
-		p.writeErrf(w, r, fmtUnknownAct, msg)
+		p.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -1556,7 +1555,7 @@ func (p *proxyrunner) listObjectsAIS(bck *cluster.Bck, smsg cmn.SelectMsg) (allE
 	freeBcastArgs(args)
 	for _, res := range results {
 		if res.err != nil {
-			err = res.err
+			err = res._error()
 			freeCallResults(results)
 			return nil, err
 		}
@@ -1637,7 +1636,7 @@ func (p *proxyrunner) listObjectsRemote(bck *cluster.Bck, smsg cmn.SelectMsg) (a
 			continue
 		}
 		if res.err != nil {
-			err = res.err
+			err = res._error()
 			freeCallResults(results)
 			return nil, err
 		}
@@ -1731,7 +1730,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		if res.err == nil {
 			continue
 		}
-		p.writeErrf(w, r, res.err.Error())
+		p.writeErr(w, r, res._error())
 		break
 	}
 	freeCallResults(results)
@@ -1758,8 +1757,8 @@ func (p *proxyrunner) doListRange(method, bucket string, msg *cmn.ActionMsg,
 		if res.err == nil {
 			continue
 		}
-		err = fmt.Errorf("%s failed to %s List/Range: %v (%d: %s)",
-			res.si, msg.Action, res.err, res.status, res.details)
+		err = res._errorf("%s failed to %q List/Range", res.si, msg.Action)
+		break
 	}
 	freeCallResults(results)
 	xactID = aisMsg.UUID
@@ -1824,7 +1823,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpdaepost(w, r)
 	default:
-		p.writeErrf(w, r, "invalid method %s for /daemon path", r.Method)
+		p.writeErrURL(w, r)
 	}
 }
 
@@ -1965,7 +1964,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
-		p.writeErrf(w, r, fmtUnknownAct, msg)
+		p.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -2022,7 +2021,7 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		p.keepalive.send(kaUnregisterMsg)
 		return
 	default:
-		p.writeErrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
+		p.writeErrURL(w, r)
 		return
 	}
 }
@@ -2034,7 +2033,7 @@ func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(apiItems) == 0 || apiItems[0] != cmn.UserRegister {
-		p.writeErr(w, r, errors.New("invalid path in /daemon POST"))
+		p.writeErrURL(w, r)
 		return
 	}
 	p.keepalive.send(kaRegisterMsg)
@@ -2062,7 +2061,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 	res := p.call(args)
 	defer _freeCallRes(res)
 	if res.err != nil {
-		err = fmt.Errorf("failed to get Smap from %s: %v", baseURL, res.err)
+		err = res._errorf("failed to get Smap from %s", baseURL)
 		return
 	}
 	smap = res.v.(*smapX)
@@ -2116,7 +2115,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	p.owner.smap.put(newSmap)
 	res := p.registerToURL(primary.IntraControlNet.DirectURL, primary, cmn.DefaultTimeout, nil, false)
 	if res.err != nil {
-		p.writeErr(w, r, res.err)
+		p.writeErr(w, r, res._error())
 	}
 }
 

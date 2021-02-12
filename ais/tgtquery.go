@@ -90,14 +90,13 @@ func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	switch apiItems[0] {
 	case cmn.Next, cmn.Peek:
 		t.httpquerygetobjects(w, r)
 	case cmn.WorkerOwner:
 		t.httpquerygetworkertarget(w, r)
 	default:
-		t.writeErrf(w, r, "unknown path /%s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
+		t.writeErrURL(w, r)
 	}
 }
 

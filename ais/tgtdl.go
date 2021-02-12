@@ -144,11 +144,11 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.Remove:
 			response, statusCode, respErr = downloaderXact.RemoveJob(payload.ID)
 		default:
-			t.writeErrf(w, r, "invalid action for DELETE request %q (expected either %q or %q)", items[0], cmn.Abort, cmn.Remove)
+			t.writeErrAct(w, r, items[0])
 			return
 		}
 	default:
-		t.writeErrf(w, r, "invalid HTTP method %q", r.Method)
+		t.writeErrURL(w, r)
 		return
 	}
 

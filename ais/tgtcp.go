@@ -171,7 +171,7 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
-		t.writeErrf(w, r, fmtUnknownAct, msg)
+		t.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -361,7 +361,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			t.handleMountpathReq(w, r)
 			return
 		default:
-			t.writeErr(w, r, errors.New("invalid path in /daemon POST"))
+			t.writeErrURL(w, r)
 			return
 		}
 	}
@@ -392,7 +392,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.handleUnregisterReq()
 		return
 	default:
-		t.writeErrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
+		t.writeErrURL(w, r)
 		return
 	}
 }
@@ -436,7 +436,7 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	case cmn.ActMountpathRemove:
 		t.handleRemoveMountpathReq(w, r, mountpath)
 	default:
-		t.writeErrf(w, r, fmtUnknownAct, msg)
+		t.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -831,7 +831,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 		time.Sleep(timeout / 2)
 		res = t.call(args)
 		if res.err != nil {
-			err = fmt.Errorf("%s: failed to GET(%q), err: %v", t.si, what, res.err)
+			err = res._errorf("%s: failed to GET(%q)", t.si, what)
 			return
 		}
 	}

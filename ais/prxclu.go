@@ -77,7 +77,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 			timeout: config.Timeout.CplaneOperation,
 		}
 		res := p.call(args)
-		er := res.err
+		er := res._error()
 		_freeCallRes(res)
 		if er != nil {
 			p.writeErr(w, r, er)
@@ -164,7 +164,7 @@ func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int)
 	sysInfoMap := make(cmn.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			err := res.err
+			err := res._error()
 			freeCallResults(results)
 			return nil, err
 		}
@@ -224,7 +224,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 			continue
 		}
 		if res.err != nil {
-			p.writeErr(w, r, res.err)
+			p.writeErr(w, r, res._error())
 			freeCallResults(results)
 			return nil
 		}
@@ -282,7 +282,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		tag = "join"
 		selfRegister = true
 	default:
-		p.writeErrf(w, r, "invalid URL path: %q", apiItems[0])
+		p.writeErrURL(w, r)
 		return
 	}
 	if selfRegister && !p.ClusterStarted() {
@@ -403,7 +403,7 @@ func (p *proxyrunner) userRegisterNode(nsi *cluster.Snode, tag string) (errCode 
 		err = fmt.Errorf("failed to reach %s at %s:%s",
 			nsi, nsi.PublicNet.NodeHostname, nsi.PublicNet.DaemonPort)
 	} else {
-		err = fmt.Errorf("%s: failed to %s %s: %v, %s", p.si, tag, nsi, res.err, res.details)
+		err = res._errorf("%s: failed to %s %s", p.si, tag, nsi)
 	}
 	errCode = res.status
 	return
@@ -662,7 +662,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActStopMaintenance:
 		p.stopMaintenance(w, r, msg)
 	default:
-		p.writeErrf(w, r, fmtUnknownAct, msg)
+		p.writeErrAct(w, r, msg.Action)
 	}
 }
 
@@ -684,7 +684,8 @@ func (p *proxyrunner) setConfig(w http.ResponseWriter, r *http.Request, msg *cmn
 		if res.err == nil {
 			continue
 		}
-		p.writeErrf(w, r, "%s failed, err: %s[%s]", cmn.ActSetConfig, res.err, res.details)
+		err := res._errorf("%s failed", cmn.ActSetConfig)
+		p.writeErr(w, r, err)
 		p.keepalive.onerr(res.err, res.status)
 		freeCallResults(results)
 		return
@@ -721,7 +722,7 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res.err)
+		p.writeErr(w, r, res._error())
 		freeCallResults(results)
 		return
 	}
@@ -772,7 +773,7 @@ func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
 		},
 	)
 	if res.err != nil {
-		p.writeErr(w, r, res.err)
+		p.writeErr(w, r, res._error())
 		return
 	}
 
@@ -818,7 +819,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 		args.si = psi
 		res := p.call(args)
 		if res.err != nil {
-			p.writeErr(w, r, res.err)
+			p.writeErr(w, r, res._error())
 		}
 		_freeCallRes(res)
 		break
@@ -845,23 +846,23 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 		return
 	}
 	if smap.PresentInMaint(si) {
-		p.writeErrf(w, r, "Node %q is already in maintenance", opts.DaemonID)
+		p.writeErrf(w, r, "node %q is already in maintenance", opts.DaemonID)
 		return
 	}
 	if p.si.Equals(si) {
-		p.writeErrf(w, r, "Node %q is primary, cannot perform %q", opts.DaemonID, msg.Action)
+		p.writeErrf(w, r, "node %q is primary, cannot perform %q", opts.DaemonID, msg.Action)
 		return
 	}
 	// proxy
 	if si.IsProxy() {
 		if err := p.markMaintenance(msg, si); err != nil {
-			p.writeErrf(w, r, "Failed to %s %s: %v", msg.Action, si, err)
+			p.writeErrf(w, r, "failed to %s %s: %v", msg.Action, si, err)
 			return
 		}
 		if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 			errCode, err := p.callRmSelf(msg, si, true /*skipReb*/)
 			if err != nil {
-				p.writeErrStatusf(w, r, errCode, "Failed to %s %s: %v", msg.Action, si, err)
+				p.writeErrStatusf(w, r, errCode, "failed to %s %s: %v", msg.Action, si, err)
 			}
 		}
 		return
@@ -869,7 +870,7 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 	// target
 	rebID, err := p.startMaintenance(si, msg, &opts)
 	if err != nil {
-		p.writeErrf(w, r, "Failed to %s %s: %v", msg.Action, si, err)
+		p.writeErrf(w, r, "failed to %s %s: %v", msg.Action, si, err)
 		return
 	}
 	if rebID != 0 {
@@ -936,7 +937,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			if res.err == nil {
 				continue
 			}
-			p.writeErr(w, r, res.err)
+			p.writeErr(w, r, res._error())
 			p.keepalive.onerr(res.err, res.status)
 			freeCallResults(results)
 			return
@@ -1095,8 +1096,8 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.writeErrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase",
-			proxyid, res.err, res.si)
+		err := res._errorf("node %s failed to set primary %s in the prepare phase", res.si, proxyid)
+		p.writeErr(w, r, err)
 		freeCallResults(results)
 		return
 	}
