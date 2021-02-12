@@ -6,6 +6,18 @@ function cleanup() {
   make clean
 }
 
+function docker_login() {
+  if docker -v ; then
+    if [[ -z "$DOCKER_HUB_USER" ]] || [[ -z "$DOCKER_HUB_PASSWORD" ]]; then
+      echo "Docker Hub login or password env variable empty"
+     else
+       docker login -u "$DOCKER_HUB_USER" -p "$DOCKER_HUB_PASSWORD" || echo "Failed to login to Docker Hub"
+    fi
+  else
+    echo "docker binary not found, proceeding without logging in"
+  fi
+}
+
 function post_deploy() {
   echo "sleep 10 seconds before checking AIStore processes"
   sleep 10
@@ -57,6 +69,11 @@ git log | head -5
 pushd deploy/dev/k8s
 echo "Deploying Minikube"
 { echo y; echo y; } | ./utils/deploy_minikube.sh
+
+
+# Login to Docker Hub to avoid pulls rate limiting in ETL tests.
+docker_login
+
 echo "Deploying AIS on Minikube"
 # NOTE: 6 x n (4 remote providers + local registry + datascience stack)
 target_cnt=5
