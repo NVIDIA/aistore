@@ -80,6 +80,9 @@ cat > $AIS_CONF_FILE <<EOL
 		"compression":     "${COMPRESSION:-never}",
 		"multiplier":      ${REBALANCE_MULTIPLIER:-2}
 	},
+	"resilver": {
+		"enabled": true
+	},
 	"checksum": {
 		"type":			"xxhash",
 		"validate_cold_get":	true,

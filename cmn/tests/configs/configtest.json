@@ -70,6 +70,9 @@
     "multiplier": 4,
     "enabled": true
   },
+	"resilver": {
+		"enabled": true
+	},
   "checksum": {
     "type":                       "xxhash",
     "validate_cold_get":          true,

@@ -114,6 +114,7 @@ type (
 		LRU         LRUConf         `json:"lru"`
 		Disk        DiskConf        `json:"disk"`
 		Rebalance   RebalanceConf   `json:"rebalance"`
+		Resilver    ResilverConf    `json:"resilver"`
 		Replication ReplicationConf `json:"replication"`
 		Cksum       CksumConf       `json:"checksum"`
 		Versioning  VersionConf     `json:"versioning"`
@@ -140,6 +141,7 @@ type (
 		LRU         *LRUConfToUpdate         `json:"lru"`
 		Disk        *DiskConfToUpdate        `json:"disk"`
 		Rebalance   *RebalanceConfToUpdate   `json:"rebalance"`
+		Resilver    *ResilverConfToUpdate    `json:"resilver"`
 		Replication *ReplicationConfToUpdate `json:"replication"`
 		Cksum       *CksumConfToUpdate       `json:"checksum"`
 		Versioning  *VersionConfToUpdate     `json:"versioning"`
@@ -358,6 +360,14 @@ type (
 		Compression      *string `json:"compression"`     // see CompressAlways, etc. enum
 		Multiplier       *uint8  `json:"multiplier"`      // stream-bundle-and-jogger multiplier
 		Enabled          *bool   `json:"enabled"`         // true=auto-rebalance | manual rebalancing
+	}
+
+	ResilverConf struct {
+		Enabled bool `json:"enabled"` // true=auto-resilver | manual resilvering
+	}
+
+	ResilverConfToUpdate struct {
+		Enabled *bool `json:"enabled"` // true=auto-resilver | manual resilvering
 	}
 
 	ReplicationConf struct {
@@ -676,6 +686,7 @@ var (
 	_ Validator = (*TimeoutConf)(nil)
 	_ Validator = (*ClientConf)(nil)
 	_ Validator = (*RebalanceConf)(nil)
+	_ Validator = (*ResilverConf)(nil)
 	_ Validator = (*NetConf)(nil)
 	_ Validator = (*DownloaderConf)(nil)
 	_ Validator = (*DSortConf)(nil)
@@ -1000,6 +1011,10 @@ func (c *RebalanceConf) Validate(_ *Config) (err error) {
 		return fmt.Errorf("invalid rebalance.quiesce format %s, err %v", c.QuiesceStr, err)
 	}
 	return nil
+}
+
+func (c *ResilverConf) Validate(_ *Config) (err error) {
+	return nil // no validation required
 }
 
 func (c *PeriodConf) Validate(_ *Config) (err error) {

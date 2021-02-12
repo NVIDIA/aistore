@@ -55,6 +55,7 @@ var (
 		"lru.enabled":                         supportedBool,
 		"mirror.enabled":                      supportedBool,
 		"rebalance.enabled":                   supportedBool,
+		"resilver.enabled":                    supportedBool,
 		"versioning.enabled":                  supportedBool,
 		"replication.on_cold_get":             supportedBool,
 		"replication.on_lru_eviction":         supportedBool,

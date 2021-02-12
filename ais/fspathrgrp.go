@@ -103,7 +103,9 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 func (g *fsprungroup) addMpathEvent(action string, mpath *fs.MountpathInfo) {
 	xreg.AbortAllMountpathsXactions()
 	go func() {
-		g.t.runResilver("", false /*skipGlobMisplaced*/)
+		if cmn.GCO.Get().Resilver.Enabled {
+			g.t.runResilver("", false /*skipGlobMisplaced*/)
+		}
 		xreg.RenewMakeNCopies(g.t, "add-mp")
 	}()
 
@@ -122,7 +124,9 @@ func (g *fsprungroup) delMpathEvent(action string, mpath *fs.MountpathInfo) {
 	}
 
 	go func() {
-		g.t.runResilver("", false /*skipGlobMisplaced*/)
+		if cmn.GCO.Get().Resilver.Enabled {
+			g.t.runResilver("", false /*skipGlobMisplaced*/)
+		}
 		xreg.RenewMakeNCopies(g.t, "del-mp")
 	}()
 }

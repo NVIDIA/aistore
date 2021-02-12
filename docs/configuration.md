@@ -88,11 +88,12 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | `disk.disk_util_high_wm` | `80` | Operations that implement self-throttling mechanism, e.g. LRU, turn on the maximum throttle if disk utilization is higher than `disk_util_high_wm` |
 | `disk.iostat_time_long` | `2s` | The interval that disk utilization is checked when disk utilization is below `disk_util_low_wm`. |
 | `disk.iostat_time_short` | `100ms` | Used instead of `iostat_time_long` when disk utilization reaches `disk_util_high_wm`. If disk utilization is between `disk_util_high_wm` and `disk_util_low_wm`, a proportional value between `iostat_time_short` and `iostat_time_long` is used. |
-| `rebalance.enabled` | `true` | Enables and disables automatic rebalance after a target receives the updated cluster map. If the (automated rebalancing) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "rebalance"}} v1/cluster`) to initiate cluster-wide rebalancing operation |
+| `rebalance.enabled` | `true` | Enables and disables automatic rebalance after a target receives the updated cluster map. If the (automated rebalancing) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "rebalance"}} v1/cluster`) to initiate cluster-wide rebalancing |
 | `rebalance.dont_run_time` | `0m` | Period after start during which we should **not** start rebalance on new target registration |
 | `rebalance.dest_retry_time` | `2m` | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | `rebalance.multiplier` | `4` | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
 | `rebalance.quiescent` | `20s` | Rebalance moves to the next stage or starts the next batch of objects when no objects are received during this time interval |
+| `resilver.enabled` | `true` | Enables and disables automatic reresilver after a mountpath has been added or removed. If the (automated resilvering) option is disabled, you can still use the REST API (`PUT {"action": "start", "value": {"kind": "resilver", "node": targetID}} v1/cluster`) to initiate resilvering |
 | `timeout.send_file_time` | `5m` | Timeout for sending/receiving an object from another target in the same cluster |
 | `timeout.max_host_busy` | `20s` | Maximum latency of control-plane operations that may involve receiving new bucket metadata and associated processing |
 | `client.client_timeout` | `10s` | Default client timeout |

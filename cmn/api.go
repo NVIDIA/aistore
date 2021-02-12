@@ -402,6 +402,13 @@ func (c *RebalanceConf) String() string {
 	return "Disabled"
 }
 
+func (c *ResilverConf) String() string {
+	if c.Enabled {
+		return "Enabled"
+	}
+	return "Disabled"
+}
+
 func (c *ECConf) String() string {
 	if !c.Enabled {
 		return "Disabled"

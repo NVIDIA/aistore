@@ -30,10 +30,10 @@ It might be easier and faster, though, to use [AIS CLI](../cmd/cli/README.md) - 
 1. Disable automated global rebalance (for instance, to perform maintenance or upgrade operations) and show resulting config in JSON on a randomly selected target:
 
 ```console
-# ais set config rebalance.enabled = false
+$ ais set config rebalance.enabled=false
 config successfully updated
 
-# ais show config 361179t8088 --json | grep -A 6  rebalance
+$ ais show config 361179t8088 --json | grep -A 6  rebalance
 
     "rebalance": {
         "dest_retry_time": "2m",
@@ -48,13 +48,13 @@ config successfully updated
 2. Re-enable automated global rebalance and show resulting config section as a simple `name/value` list:
 
 ```console
-# ais set config rebalance.enabled = true
+$ ais set config rebalance.enabled=true
 config successfully updated
 
-# ais show config <TAB-TAB>
+$ ais show config <TAB-TAB>
 125210p8082   181883t8089   249630t8087   361179t8088   477343p8081   675515t8084   70681p8080    782227p8083   840083t8086   911875t8085
 
-# ais show config 840083t8086 rebalance
+$ ais show config 840083t8086 rebalance
 Rebalance Config
  Destination Retry Time:        2m
  Enabled:                       true
@@ -65,7 +65,7 @@ Rebalance Config
 3. Monitoring: notice per-target statistics and the `EndTime` column
 
 ```console
-# ais show rebalance
+$ ais show rebalance
 DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime          Aborted
 ======       ======  ======  ======   ======   ======    ======          ======           ======
 181883t8089  1       0       0B       1058     1.27MiB   04-28 16:05:35  <not completed>  false
@@ -75,7 +75,7 @@ DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime
 840083t8086  1       0       0B       974      1.17MiB   04-28 16:05:35  <not completed>  false
 911875t8085  1       0       0B       1020     1.22MiB   04-28 16:05:35  <not completed>  false
 
-# ais show rebalance
+$ ais show rebalance
 DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime         Aborted
 ======       ======  ======  ======   ======   ======    ======          ======          ======
 181883t8089  1       0       0B       1058     1.27MiB   04-28 16:05:35  04-28 16:05:53  false
@@ -89,7 +89,7 @@ DaemonID     RebID   ObjRcv  SizeRcv  ObjSent  SizeSent  StartTime       EndTime
 4. Since global rebalance is an [extended action (xaction)](/xaction/README.md), it can be also monitored via generic `show xaction` API:
 
 ```console
-# ais show xaction rebalance
+$ ais show xaction rebalance
 DAEMON ID        ID      KIND            BUCKET  OBJECTS         BYTES           START           END     ABORTED
 181883t8089      g2      rebalance       -       1058            1.27MiB         04-28 16:10:14  -       false
 ...
@@ -99,7 +99,7 @@ DAEMON ID        ID      KIND            BUCKET  OBJECTS         BYTES          
 
 
 ```console
-# ais start rebalance
+$ ais start rebalance
 ```
 
 ## Automated Resilvering
@@ -129,6 +129,29 @@ Started resilver "NGxmOthtE", use 'ais show xaction NGxmOthtE' to monitor progre
 
 $ ais start resilver BUQOt8086  # resilver a single node
 Started resilver "NGxmOthtE", use 'ais show xaction NGxmOthtE' to monitor progress
+```
+
+Automated resilvering can also be disabled. Just like with `rebalance`, the resulting config can be viewed through the CLI:
+NOTE: When automated resilvering is disabled, removing a mountpath may result in data loss.
+
+```console
+$ ais set config resilver.enabled=false
+config successfully updated
+
+$ ais show config 361179t8088 resilver --json | grep -A 2 resilver 
+    "resilver": {
+        "enabled": false
+    },
+
+$ ais set config resilver.enabled=true
+config successfully updated
+
+$ ais show config <TAB-TAB>
+125210p8082   181883t8089   249630t8087   361179t8088   477343p8081   675515t8084   70681p8080    782227p8083   840083t8086   911875t8085
+
+$ ais show config 361179t8088 resilver
+PROPERTY                 VALUE
+resilver.enabled         true
 ```
 
 ## IO Performance
