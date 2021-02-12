@@ -192,7 +192,7 @@ func readResp(reqParams ReqParams, resp *http.Response, v interface{}) (*wrapped
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read response, err: %v", err)
+			return nil, fmt.Errorf("failed to read response, err: %w", err)
 		}
 	}
 	return wresp, nil

@@ -5,7 +5,9 @@
 package tutils
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -92,10 +94,11 @@ func init() {
 	}
 }
 
-// InitLocalCluster inits tutils with AIS cluster:
-//  1. deployed locally using `make deploy` command and accessible @ localhost:8080 or
-//  2. cluster deployed on local docker environment or
-//  3. provided as `AIS_ENDPOINT` environment variable
+// InitLocalCluster initializes tutils component with AIS cluster that must be either:
+//  1. the cluster must be deployed locally using `make deploy` command and accessible @ localhost:8080, or
+//  2. cluster deployed on local docker environment, or
+//  3. provided via `AIS_ENDPOINT` environment variable
+// In addition, try to query remote AIS cluster that may or may not be locally deployed as well.
 func InitLocalCluster() {
 	var (
 		// Gets the fields from the .env file from which the docker was deployed
@@ -122,25 +125,27 @@ func InitLocalCluster() {
 	}
 
 	err := InitCluster(proxyURL, clusterType)
-	if err != nil {
-		fmt.Printf("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
-		fmt.Println("Environment variables:")
-		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.Endpoint, os.Getenv(cmn.EnvVars.Endpoint))
-		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.PrimaryID, os.Getenv(cmn.EnvVars.PrimaryID))
-		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.SkipVerifyCrt, os.Getenv(cmn.EnvVars.SkipVerifyCrt))
-		fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.UseHTTPS, os.Getenv(cmn.EnvVars.UseHTTPS))
-		if len(envVars) > 0 {
-			fmt.Println("Docker Environment:")
-			for k, v := range envVars {
-				fmt.Printf("\t%s:\t%s\n", k, v)
-			}
-		}
-		cmn.Exitf("")
+	if err == nil {
+		initRemoteCluster() // remote AIS that optionally may be run locally as well and used for testing
+		return
 	}
+	fmt.Printf("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
+	fmt.Println("Environment variables:")
+	fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.Endpoint, os.Getenv(cmn.EnvVars.Endpoint))
+	fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.PrimaryID, os.Getenv(cmn.EnvVars.PrimaryID))
+	fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.SkipVerifyCrt, os.Getenv(cmn.EnvVars.SkipVerifyCrt))
+	fmt.Printf("\t%s:\t%s\n", cmn.EnvVars.UseHTTPS, os.Getenv(cmn.EnvVars.UseHTTPS))
+	if len(envVars) > 0 {
+		fmt.Println("Docker Environment:")
+		for k, v := range envVars {
+			fmt.Printf("\t%s:\t%s\n", k, v)
+		}
+	}
+	cmn.Exitf("")
 }
 
-// InitCluster initializes the environement necessary for testing against an AIS cluster.
-// IMPORTANT: If cluster is not initialize all the utils requesting the AIS cluster will fail.
+// InitCluster initializes the environment necessary for testing against an AIS cluster.
+// NOTE: the function is also used for testing by NVIDIA/ais-k8s Operator
 func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 	proxyURLReadOnly = proxyURL
 	testClusterType = clusterType
@@ -148,7 +153,6 @@ func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 		return
 	}
 	initPmap()
-	initRemoteCluster()
 	initAuthToken()
 	return
 }
@@ -195,19 +199,21 @@ func initPmap() {
 func initRemoteCluster() {
 	aisInfo, err := api.GetRemoteAIS(BaseAPIParams(proxyURLReadOnly))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to get remote cluster information: %v", err)
-	} else {
-		for _, clusterInfo := range aisInfo {
-			if !clusterInfo.Online {
-				continue
-			}
-			// TODO: use actual UUID (for now it doesn't work correctly as
-			//  proxy may not have full information about the remote cluster)
-			RemoteCluster.UUID = clusterInfo.Alias
-			RemoteCluster.Alias = clusterInfo.Alias
-			RemoteCluster.URL = clusterInfo.URL
-			break
+		if !errors.Is(err, io.EOF) {
+			fmt.Fprintf(os.Stderr, "failed to query remote ais cluster: %v\n", err)
 		}
+		return
+	}
+	for _, clusterInfo := range aisInfo {
+		if !clusterInfo.Online {
+			continue
+		}
+		// TODO: use actual UUID (for now it doesn't work correctly as
+		//  proxy may not have full information about the remote cluster)
+		RemoteCluster.UUID = clusterInfo.Alias
+		RemoteCluster.Alias = clusterInfo.Alias
+		RemoteCluster.URL = clusterInfo.URL
+		break
 	}
 }
 
