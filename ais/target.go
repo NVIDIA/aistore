@@ -70,11 +70,11 @@ type (
 		timedLookup atomic.Bool
 		refCount    uint32
 	}
-	clouds map[string]cluster.BackendProvider
+	backends map[string]cluster.BackendProvider
 	// main
 	targetrunner struct {
 		httprunner
-		cloud        clouds
+		backend      backends
 		fshc         *health.FSHC
 		authn        *authManager
 		fsprg        fsprungroup
@@ -236,8 +236,7 @@ func (t *targetrunner) Run() error {
 
 	t.detectMpathChanges()
 
-	// init cloud
-	t.cloud.init(t)
+	t.backend.init(t)
 
 	t.authn = &authManager{
 		tokens:        make(map[string]*cmn.AuthToken),
@@ -281,35 +280,35 @@ func (t *targetrunner) Run() error {
 	return err
 }
 
-func (c clouds) init(t *targetrunner) {
+func (b backends) init(t *targetrunner) {
 	config := cmn.GCO.Get()
 	ais := backend.NewAIS(t)
-	c[cmn.ProviderAIS] = ais // ais cloud is always present
+	b[cmn.ProviderAIS] = ais // ais cloud is always present
 	if aisConf, ok := config.Backend.ProviderConf(cmn.ProviderAIS); ok {
 		if err := ais.Apply(aisConf, "init"); err != nil {
 			glog.Errorf("%s: %v - proceeding to start anyway...", t.si, err)
 		}
 	}
 
-	c[cmn.ProviderHTTP], _ = backend.NewHTTP(t, config)
-	if err := c.initExt(t); err != nil {
+	b[cmn.ProviderHTTP], _ = backend.NewHTTP(t, config)
+	if err := b.initExt(t); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 }
 
 // 3rd part cloud: empty stubs unless populated via build tags
-func (c clouds) initExt(t *targetrunner) (err error) {
+func (b backends) initExt(t *targetrunner) (err error) {
 	config := cmn.GCO.Get()
 	for provider := range config.Backend.Providers {
 		switch provider {
 		case cmn.ProviderAmazon:
-			c[provider], err = backend.NewAWS(t)
+			b[provider], err = backend.NewAWS(t)
 		case cmn.ProviderAzure:
-			c[provider], err = backend.NewAzure(t)
+			b[provider], err = backend.NewAzure(t)
 		case cmn.ProviderGoogle:
-			c[provider], err = backend.NewGCP(t)
+			b[provider], err = backend.NewGCP(t)
 		case cmn.ProviderHDFS:
-			c[provider], err = backend.NewHDFS(t)
+			b[provider], err = backend.NewHDFS(t)
 		default:
 			err = fmt.Errorf("unknown backend provider: %q", provider)
 		}

@@ -91,11 +91,6 @@ func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
 		return
 	}
 
-	bckType := "cloud"
-	if args.queryBck.IsHTTP() {
-		bckType = "http"
-	}
-
 	if args._requiresPermission(cmn.AccessMoveBucket) {
 		goto retErr
 	}
@@ -121,7 +116,7 @@ retErr:
 	if args.msg != nil {
 		op = fmt.Sprintf("operation %q", args.msg.Action)
 	}
-	err = fmt.Errorf("%s is not supported by %s buckets %q", op, bckType, args.queryBck)
+	err = fmt.Errorf("%s is not supported by %q", op, args.queryBck)
 	return
 }
 

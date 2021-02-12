@@ -259,7 +259,7 @@ func initProxy() cmn.Runner {
 }
 
 func newTarget() *targetrunner {
-	t := &targetrunner{cloud: make(clouds, 8)}
+	t := &targetrunner{backend: make(backends, 8)}
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 	t.owner.bmd = newBMDOwnerTgt()
 	return t

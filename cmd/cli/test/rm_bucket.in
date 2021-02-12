@@ -1,5 +1,5 @@
 ais create bucket $BUCKET_1
 ais rm bucket $BUCKET_1
 
-ais rm bucket aws://$BUCKET_2 // FAIL "is not supported by cloud buckets "aws://$BUCKET_2""
-ais rm bucket gcp://$BUCKET_2 // FAIL "is not supported by cloud buckets "gcp://$BUCKET_2""
+ais rm bucket aws://$BUCKET_2 // FAIL "is not supported by "aws://$BUCKET_2""
+ais rm bucket gcp://$BUCKET_2 // FAIL "is not supported by "gcp://$BUCKET_2""

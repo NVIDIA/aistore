@@ -44,17 +44,17 @@ func (t *targetrunner) DB() dbdriver.Driver         { return t.dbDriver }
 
 func (t *targetrunner) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	if bck.Bck.IsRemoteAIS() {
-		return t.cloud[cmn.ProviderAIS]
+		return t.backend[cmn.ProviderAIS]
 	}
 	if bck.Bck.IsHTTP() {
-		return t.cloud[cmn.ProviderHTTP]
+		return t.backend[cmn.ProviderHTTP]
 	}
 	providerName := bck.Provider
 	if bck.Props != nil {
 		// TODO: simplify logic
 		providerName = bck.RemoteBck().Provider
 	}
-	if ext, ok := t.cloud[providerName]; ok {
+	if ext, ok := t.backend[providerName]; ok {
 		return ext
 	}
 	c, _ := backend.NewDummyBackend(t)

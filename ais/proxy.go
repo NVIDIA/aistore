@@ -43,7 +43,7 @@ const (
 )
 
 const (
-	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
+	fmtNotRemote  = "%q appears to be ais bucket (expecting remote)"
 	fmtUnknownAct = "unexpected action message <- JSON [%v]"
 	fmtUnknownQue = "unexpected query [what=%s]"
 )
@@ -463,7 +463,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActEvictRemoteBck:
 		if bck.IsAIS() {
-			p.writeErrf(w, r, fmtNotCloud, bck.Name)
+			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
 		fallthrough // fallthrough
@@ -486,7 +486,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		var xactID string
 		if msg.Action == cmn.ActEvictObjects && bck.IsAIS() {
-			p.writeErrf(w, r, fmtNotCloud, bck.Name)
+			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
 
@@ -793,7 +793,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	case cmn.ActPrefetch:
 		// TODO: GET vs SYNC?
 		if bck.IsAIS() {
-			p.writeErrf(w, r, fmtNotCloud, bucket)
+			p.writeErrf(w, r, fmtNotRemote, bucket)
 			return
 		}
 		var xactID string
