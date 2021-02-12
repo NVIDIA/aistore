@@ -74,7 +74,7 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPut && apiItems[0] == cmn.VoteInit:
 		p.httpRequestNewPrimary(w, r)
 	default:
-		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		p.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
 }
 
@@ -90,11 +90,11 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	}
 	newsmap := msg.Request.Smap
 	if err := newsmap.validate(); err != nil {
-		p.invalmsghdlrf(w, r, "%s: invalid %s in the Vote Request, err: %v", p.si, newsmap, err)
+		p.writeErrf(w, r, "%s: invalid %s in the Vote Request, err: %v", p.si, newsmap, err)
 		return
 	}
 	if !newsmap.isPresent(p.si) {
-		p.invalmsghdlrf(w, r, "%s: not present in the Vote Request, %s", p.si, newsmap)
+		p.writeErrf(w, r, "%s: not present in the Vote Request, %s", p.si, newsmap)
 		return
 	}
 
@@ -107,7 +107,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 			}
 		}
 		if err != nil {
-			p.invalmsghdlrf(w, r, "%s: failed to synch %s: %v", p.si, newsmap, err)
+			p.writeErrf(w, r, "%s: failed to synch %s: %v", p.si, newsmap, err)
 			return
 		}
 	}
@@ -115,7 +115,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	smap := p.owner.smap.get()
 	psi, err := cluster.HrwProxy(&smap.Smap, smap.Primary.ID())
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -316,7 +316,7 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPut && apiItems[0] == cmn.Voteres:
 		t.httpsetprimaryproxy(w, r)
 	default:
-		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		t.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
 }
 
@@ -390,28 +390,28 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 	candidate := msg.Record.Candidate
 	if candidate == "" {
-		h.invalmsghdlrf(w, r, "%s: unexpected: empty candidate field [%v]", h.si, msg.Record)
+		h.writeErrf(w, r, "%s: unexpected: empty candidate field [%v]", h.si, msg.Record)
 		return
 	}
 	smap := h.owner.smap.get()
 	if smap.Primary == nil {
-		h.invalmsghdlrf(w, r, "%s: current primary undefined, %s", h.si, smap)
+		h.writeErrf(w, r, "%s: current primary undefined, %s", h.si, smap)
 		return
 	}
 	currPrimaryID := smap.Primary.ID()
 	if candidate == currPrimaryID {
-		h.invalmsghdlrf(w, r, "%s: candidate %q _is_ the current primary, %s", h.si, candidate, smap)
+		h.writeErrf(w, r, "%s: candidate %q _is_ the current primary, %s", h.si, candidate, smap)
 		return
 	}
 	newsmap := msg.Record.Smap
 	psi := newsmap.GetProxy(candidate)
 	if psi == nil {
-		h.invalmsghdlrf(w, r, "%s: candidate %q not present in the VoteRecord %s",
+		h.writeErrf(w, r, "%s: candidate %q not present in the VoteRecord %s",
 			h.si, candidate, newsmap)
 		return
 	}
 	if !newsmap.isPresent(h.si) {
-		h.invalmsghdlrf(w, r, "%s: not present in the VoteRecord %s", h.si, newsmap)
+		h.writeErrf(w, r, "%s: not present in the VoteRecord %s", h.si, newsmap)
 		return
 	}
 
@@ -435,7 +435,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 	vote, err := h.voteOnProxy(psi.ID(), currPrimaryID)
 	if err != nil {
-		h.invalmsghdlr(w, r, err.Error())
+		h.writeErr(w, r, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -445,12 +445,12 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	if vote {
 		_, err = w.Write([]byte(VoteYes))
 		if err != nil {
-			h.invalmsghdlrf(w, r, "%s: failed to write Yes vote: %v", h.si, err)
+			h.writeErrf(w, r, "%s: failed to write Yes vote: %v", h.si, err)
 		}
 	} else {
 		_, err = w.Write([]byte(VoteNo))
 		if err != nil {
-			h.invalmsghdlrf(w, r, "%s: failed to write No vote: %v", h.si, err)
+			h.writeErrf(w, r, "%s: failed to write No vote: %v", h.si, err)
 		}
 	}
 }
@@ -474,7 +474,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	}
 	err := h.owner.smap.modify(ctx)
 	if err != nil {
-		h.invalmsghdlr(w, r, err.Error())
+		h.writeErr(w, r, err)
 	}
 }
 

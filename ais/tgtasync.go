@@ -13,9 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/objlist"
-	"github.com/NVIDIA/aistore/xaction"
 	"github.com/NVIDIA/aistore/xaction/xreg"
 )
 
@@ -29,7 +27,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 
 	var msg *cmn.SelectMsg
 	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
-		t.invalmsghdlrf(w, r, "unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
+		t.writeErrf(w, r, "unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		return
 	}
 
@@ -38,7 +36,7 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		if msg.PageSize == 0 {
 			msg.PageSize = maxCloudPageSize
 		} else if msg.PageSize > maxCloudPageSize {
-			t.invalmsghdlrf(w, r, "page size exceeds the maximum value (got: %d, max expected: %d)", msg.PageSize, maxCloudPageSize)
+			t.writeErrf(w, r, "page size exceeds the maximum value (got: %d, max expected: %d)", msg.PageSize, maxCloudPageSize)
 			return false
 		}
 	}
@@ -52,29 +50,17 @@ func (t *targetrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *
 		xact, isNew, err = xreg.RenewObjList(t, bck, msg.UUID, msg)
 	}
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 
 	if isNew {
-		if false {
-			// TODO -- FIXME - enable after fixing #922
-			xact.AddNotif(&xaction.NotifXact{
-				NotifBase: nl.NotifBase{
-					When: cluster.UponTerm,
-					Dsts: []string{equalIC},
-					F:    t.callerNotifyFin,
-				},
-				Xact: xact,
-			})
-		}
-
 		go xact.Run()
 	}
 
 	resp := xact.(*objlist.Xact).Do(msg)
 	if resp.Err != nil {
-		t.invalmsghdlr(w, r, resp.Err.Error(), resp.Status)
+		t.writeErr(w, r, resp.Err, resp.Status)
 		return false
 	}
 
@@ -94,7 +80,7 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 	var msg cmn.BucketSummaryMsg
 	if err := cmn.MorphMarshal(actionMsg.Value, &msg); err != nil {
 		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.BucketSummaryMsg: %v", actionMsg.Value)
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	t.doAsync(w, r, actionMsg.Action, bck, &msg)
@@ -104,7 +90,8 @@ func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck
 // - creates a new task that runs in background
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
-func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck, msg *cmn.BucketSummaryMsg) {
+func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck,
+	msg *cmn.BucketSummaryMsg) {
 	var (
 		query      = r.URL.Query()
 		taskAction = query.Get(cmn.URLParamTaskAction)
@@ -116,20 +103,17 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 			status = http.StatusInternalServerError
 			err    error
 		)
-
 		switch action {
 		case cmn.ActSummaryBck:
 			err = xreg.RenewBckSummary(ctx, t, bck, msg)
 		default:
-			t.invalmsghdlrf(w, r, "invalid action: %s", action)
+			t.writeErrf(w, r, "invalid action: %s", action)
 			return
 		}
-
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error(), status)
+			t.writeErr(w, r, err, status)
 			return
 		}
-
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
@@ -137,11 +121,11 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	xact := xreg.GetXact(msg.UUID)
 	// task never started
 	if xact == nil {
-		s := fmt.Sprintf("Task %s not found", msg.UUID)
+		err := fmt.Errorf("task %q not found", msg.UUID)
 		if silent {
-			t.invalmsghdlrsilent(w, r, s, http.StatusNotFound)
+			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {
-			t.invalmsghdlr(w, r, s, http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound)
 		}
 		return
 	}
@@ -155,9 +139,9 @@ func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action st
 	result, err := xact.Result()
 	if err != nil {
 		if cmn.IsErrBucketNought(err) {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusGone)
+			t.writeErr(w, r, err, http.StatusGone)
 		} else {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 		}
 		return
 	}

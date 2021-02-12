@@ -77,7 +77,7 @@ begin:
 	}
 	if selfIC {
 		if !exists && !retry {
-			ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
+			ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 			return true
 		} else if retry {
 			withRetry(func() bool {
@@ -93,7 +93,7 @@ begin:
 	} else {
 		hrwOwner, err := cluster.HrwIC(&smap.Smap, uuid)
 		if err != nil {
-			ic.p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+			ic.p.writeErr(w, r, err, http.StatusInternalServerError)
 			return true
 		}
 		owner = hrwOwner.ID()
@@ -120,7 +120,7 @@ outer:
 		if psi == nil || !smap.IsIC(psi) {
 			var err error
 			if psi, err = cluster.HrwIC(&smap.Smap, uuid); err != nil {
-				ic.p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+				ic.p.writeErr(w, r, err, http.StatusInternalServerError)
 				return true
 			}
 		}
@@ -160,13 +160,13 @@ func (ic *ic) checkEntry(w http.ResponseWriter, r *http.Request, uuid string) (n
 	nl, exists := ic.p.notifs.entry(uuid)
 	if !exists {
 		smap := ic.p.owner.smap.get()
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
+		ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
 		return
 	}
 	if nl.Finished() {
 		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
 		smap := ic.p.owner.smap.get()
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.StrIC(ic.p.si))
+		ic.p.writeErrStatusf(w, r, http.StatusGone, "%q finished (%s)", uuid, smap.StrIC(ic.p.si))
 		return
 	}
 	return nl, true
@@ -184,7 +184,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg.ID == "" && msg.Kind == "" {
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "invalid %s", msg)
+		ic.p.writeErrStatusf(w, r, http.StatusBadRequest, "invalid %s", msg)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	if msg.Bck.Name != "" {
 		bck = cluster.NewBckEmbed(msg.Bck)
 		if err := bck.Init(ic.p.owner.bmd); err != nil {
-			ic.p.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+			ic.p.writeErrSilent(w, r, err, http.StatusNotFound)
 			return
 		}
 	}
@@ -210,12 +210,12 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	})
 	if !exists {
 		smap := ic.p.owner.smap.get()
-		ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s, %s", smap.StrIC(ic.p.si), msg)
+		ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%s, %s", smap.StrIC(ic.p.si), msg)
 		return
 	}
 
 	if msg.Kind != "" && nl.Kind() != msg.Kind {
-		ic.p.invalmsghdlrf(w, r, "kind mismatch: %s, expected kind=%s", msg, nl.Kind())
+		ic.p.writeErrf(w, r, "kind mismatch: %s, expected kind=%s", msg, nl.Kind())
 		return
 	}
 
@@ -224,7 +224,7 @@ func (ic *ic) writeStatus(w http.ResponseWriter, r *http.Request) {
 	defer nl.RUnlock()
 
 	if err := nl.Err(true); err != nil && !nl.Aborted() {
-		ic.p.invalmsghdlr(w, r, err.Error())
+		ic.p.writeErr(w, r, err)
 		return
 	}
 
@@ -251,7 +251,7 @@ func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 		what = r.URL.Query().Get(cmn.URLParamWhat)
 	)
 	if !smap.IsIC(ic.p.si) {
-		ic.p.invalmsghdlrf(w, r, "%s: not an IC member", ic.p.si)
+		ic.p.writeErrf(w, r, "%s: not an IC member", ic.p.si)
 		return
 	}
 
@@ -260,7 +260,7 @@ func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 		bundle := icBundle{Smap: smap, OwnershipTbl: cmn.MustMarshal(&ic.p.notifs)}
 		ic.p.writeJSON(w, r, bundle, what)
 	default:
-		ic.p.invalmsghdlrf(w, r, fmtUnknownQue, what)
+		ic.p.writeErrf(w, r, fmtUnknownQue, what)
 	}
 }
 
@@ -278,7 +278,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			smap = ic.p.owner.smap.get()
 			return smap.IsIC(ic.p.si)
 		}) {
-			ic.p.invalmsghdlrf(w, r, "%s: not an IC member", ic.p.si)
+			ic.p.writeErrf(w, r, "%s: not an IC member", ic.p.si)
 			return
 		}
 	}
@@ -286,17 +286,17 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActMergeOwnershipTbl:
 		if err := cmn.MorphMarshal(msg.Value, &ic.p.notifs); err != nil {
-			ic.p.invalmsghdlr(w, r, err.Error())
+			ic.p.writeErr(w, r, err)
 			return
 		}
 	case cmn.ActListenToNotif:
 		nlMsg := &notifListenMsg{}
 		if err := cmn.MorphMarshal(msg.Value, nlMsg); err != nil {
-			ic.p.invalmsghdlr(w, r, err.Error())
+			ic.p.writeErr(w, r, err)
 			return
 		}
 		if err := ic.p.notifs.add(nlMsg.nl); err != nil {
-			ic.p.invalmsghdlr(w, r, err.Error())
+			ic.p.writeErr(w, r, err)
 			return
 		}
 	case cmn.ActRegGlobalXaction:
@@ -307,7 +307,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			err    error
 		)
 		if err = cmn.MorphMarshal(msg.Value, regMsg); err != nil {
-			ic.p.invalmsghdlr(w, r, err.Error())
+			ic.p.writeErr(w, r, err)
 			return
 		}
 		debug.Assert(len(regMsg.Srcs) != 0)
@@ -322,16 +322,16 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			return err == nil
 		})
 		if err != nil {
-			ic.p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p.si, msg.Action, err)
+			ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p.si, msg.Action, err)
 			return
 		}
 		nl := xaction.NewXactNL(regMsg.UUID, regMsg.Kind, &smap.Smap, tmap)
 		if err = ic.p.notifs.add(nl); err != nil {
-			ic.p.invalmsghdlr(w, r, err.Error())
+			ic.p.writeErr(w, r, err)
 			return
 		}
 	default:
-		ic.p.invalmsghdlrf(w, r, fmtUnknownAct, msg.ActionMsg)
+		ic.p.writeErrf(w, r, fmtUnknownAct, msg.ActionMsg)
 	}
 }
 

@@ -161,17 +161,17 @@ func (t *targetrunner) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		transient := cmn.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err := cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
-			t.invalmsghdlrf(w, r, "failed to parse configuration to update, err: %v", err)
+			t.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
 		if err := jsp.SetConfig(toUpdate, transient); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 	case cmn.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
-		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		t.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -186,7 +186,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 			return
 		}
 		if err := t.owner.smap.synchronize(t.si, newsmap); err != nil {
-			t.invalmsghdlrf(w, r, "failed to synch %s: %v", newsmap, err)
+			t.writeErrf(w, r, "failed to synch %s: %v", newsmap, err)
 		}
 		glog.Infof("%s: %s %s done", t.si, cmn.SyncSmap, newsmap)
 	case cmn.Mountpaths:
@@ -198,11 +198,11 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 			toUpdate  = &cmn.ConfigToUpdate{}
 		)
 		if err := toUpdate.FillFromQuery(query); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 		if err := jsp.SetConfig(toUpdate, transient); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 	case cmn.ActAttach, cmn.ActDetach:
@@ -215,7 +215,7 @@ func (t *targetrunner) daeputQuery(w http.ResponseWriter, r *http.Request, apiIt
 		cmn.Assert(ok)
 		aisCloud := t.cloud[cmn.ProviderAIS].(*backend.AISBackendProvider)
 		if err := aisCloud.Apply(aisConf, action); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 		}
 	}
 }
@@ -226,7 +226,7 @@ func (t *targetrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request, api
 		prepare bool
 	)
 	if len(apiItems) != 2 {
-		t.invalmsghdlrf(w, r, "Incorrect number of API items: %d, should be: %d", len(apiItems), 2)
+		t.writeErrf(w, r, "Incorrect number of API items: %d, should be: %d", len(apiItems), 2)
 		return
 	}
 
@@ -234,7 +234,7 @@ func (t *targetrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request, api
 	query := r.URL.Query()
 	preparestr := query.Get(cmn.URLParamPrepare)
 	if prepare, err = cmn.ParseBool(preparestr); err != nil {
-		t.invalmsghdlrf(w, r, "Failed to parse %s URL Parameter: %v", cmn.URLParamPrepare, err)
+		t.writeErrf(w, r, "Failed to parse %s URL Parameter: %v", cmn.URLParamPrepare, err)
 		return
 	}
 
@@ -247,7 +247,7 @@ func (t *targetrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request, api
 	ctx := &smapModifier{pre: t._setPrim, sid: proxyID}
 	err = t.owner.smap.modify(ctx)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 	}
 }
 
@@ -349,25 +349,25 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			t.keepalive.send(kaRegisterMsg)
 			body, err := cmn.ReadBytes(r)
 			if err != nil {
-				t.invalmsghdlr(w, r, err.Error())
+				t.writeErr(w, r, err)
 				return
 			}
 			caller := r.Header.Get(cmn.HeaderCallerName)
 			if err := t.applyRegMeta(body, caller); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
+				t.writeErr(w, r, err)
 			}
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
 			return
 		default:
-			t.invalmsghdlr(w, r, "unrecognized path in /daemon POST")
+			t.writeErr(w, r, errors.New("invalid path in /daemon POST"))
 			return
 		}
 	}
 
 	if status, err := t.joinCluster(); err != nil {
-		t.invalmsghdlrf(w, r, "%s: failed to register, status %d, err: %v", t.si, status, err)
+		t.writeErrf(w, r, "%s: failed to register, status %d, err: %v", t.si, status, err)
 		return
 	}
 
@@ -392,7 +392,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.handleUnregisterReq()
 		return
 	default:
-		t.invalmsghdlrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
+		t.writeErrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
 		return
 	}
 }
@@ -417,18 +417,15 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
-
 	mountpath, ok := msg.Value.(string)
 	if !ok {
-		t.invalmsghdlr(w, r, "Invalid value in request")
+		t.writeErr(w, r, errors.New("invalid value in request"))
 		return
 	}
-
 	if mountpath == "" {
-		t.invalmsghdlr(w, r, "Mountpath is not defined")
+		t.writeErr(w, r, errors.New("mountpath is not defined"))
 		return
 	}
-
 	switch msg.Action {
 	case cmn.ActMountpathEnable:
 		t.handleEnableMountpathReq(w, r, mountpath)
@@ -439,7 +436,7 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	case cmn.ActMountpathRemove:
 		t.handleRemoveMountpathReq(w, r, mountpath)
 	default:
-		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		t.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -447,10 +444,10 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 	enabled, err := t.fsprg.enableMountpath(mountpath)
 	if err != nil {
 		if _, ok := err.(cmn.NoMountpathError); ok {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.InvalidMountpathError
-			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			t.writeErr(w, r, err, http.StatusBadRequest)
 		}
 		return
 	}
@@ -470,7 +467,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 		return err != nil // break on error
 	})
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 
@@ -486,10 +483,10 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 	disabled, err := t.fsprg.disableMountpath(mountpath)
 	if err != nil {
 		if _, ok := err.(*cmn.NoMountpathError); ok {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.InvalidMountpathError
-			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			t.writeErr(w, r, err, http.StatusBadRequest)
 		}
 		return
 	}
@@ -505,7 +502,7 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	err := t.fsprg.addMountpath(mountpath)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	var (
@@ -520,7 +517,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 		return err != nil // break on error
 	})
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 
@@ -534,7 +531,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	if err := t.fsprg.removeMountpath(mountpath); err != nil {
-		t.invalmsghdlrf(w, r, err.Error())
+		t.writeErrf(w, r, err.Error())
 		return
 	}
 
@@ -955,7 +952,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	if len(errs) > 0 {
-		t.invalmsghdlrf(w, r, "%v", errs)
+		t.writeErrf(w, r, "%v", errs)
 		return
 	}
 }
@@ -970,7 +967,7 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 	caller := r.Header.Get(cmn.HeaderCallerName)
 	newSmap, msg, err := t.extractSmap(payload, caller)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 

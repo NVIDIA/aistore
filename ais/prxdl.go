@@ -174,7 +174,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := payload.Validate(r.Method == http.MethodDelete); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -201,7 +201,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 	}
 	resp, statusCode, err := p.broadcastDownloadAdminRequest(r.Method, r.URL.Path, payload)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), statusCode)
+		p.writeErr(w, r, err, statusCode)
 		return
 	}
 
@@ -227,7 +227,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if body, err = ioutil.ReadAll(r.Body); err != nil {
-		p.invalmsghdlrstatusf(w, r, http.StatusInternalServerError,
+		p.writeErrStatusf(w, r, http.StatusInternalServerError,
 			"Error starting download: %v.", err.Error())
 		return
 	}
@@ -240,7 +240,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		if dur, err := time.ParseDuration(dlBase.ProgressInterval); err == nil {
 			progressInterval = dur
 		} else {
-			p.invalmsghdlrf(w, r, "%s: invalid progress interval %q, err: %v",
+			p.writeErrf(w, r, "%s: invalid progress interval %q, err: %v",
 				p.si, dlBase.ProgressInterval, err)
 			return
 		}
@@ -250,7 +250,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 
 	if errCode, err := p.broadcastStartDownloadRequest(r, id, body); err != nil {
-		p.invalmsghdlrstatusf(w, r, errCode, "Error starting download: %v.", err.Error())
+		p.writeErrStatusf(w, r, errCode, "Error starting download: %v.", err.Error())
 		return
 	}
 	nl := downloader.NewDownloadNL(id, string(dlb.Type), &smap.Smap, progressInterval)
@@ -265,13 +265,13 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request,
 	body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		p.writeErr(w, r, err, http.StatusBadRequest)
 		return
 	}
 
 	err := jsoniter.Unmarshal(dlb.RawMessage, &dlBase)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		p.writeErr(w, r, err, http.StatusBadRequest)
 		return
 	}
 	bck := cluster.NewBckEmbed(dlBase.Bck)

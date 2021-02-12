@@ -263,7 +263,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if apiItems[0] != cmn.Progress && apiItems[0] != cmn.Finished {
-		n.p.invalmsghdlrf(w, r, "Invalid route /notifs/%s", apiItems[0])
+		n.p.writeErrf(w, r, "Invalid route /notifs/%s", apiItems[0])
 		return
 	}
 	if cmn.ReadJSON(w, r, notifMsg) != nil {
@@ -290,7 +290,8 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	//
 	nl.RLock()
 	if nl.HasFinished(tsi) {
-		n.p.invalmsghdlrsilent(w, r, fmt.Sprintf("%s: duplicate %s from %s, %s", n.p.si, notifMsg, tid, nl))
+		n.p.writeErrSilentf(w, r, http.StatusBadRequest,
+			"%s: duplicate %s from %s, %s", n.p.si, notifMsg, tid, nl)
 		nl.RUnlock()
 		return
 	}
@@ -310,7 +311,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		n.p.invalmsghdlr(w, r, err.Error())
+		n.p.writeErr(w, r, err)
 	}
 }
 

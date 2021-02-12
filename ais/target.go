@@ -436,7 +436,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
 		}
 	default:
-		t.invalmsghdlrf(w, r, "Invalid route /buckets/%s", request.items[0])
+		t.writeErrf(w, r, "Invalid route /buckets/%s", request.items[0])
 	}
 }
 
@@ -445,7 +445,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	msg := aisMsg{}
 	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	request := &apiRequest{after: 1, prefix: cmn.URLPathBuckets.L}
@@ -458,7 +458,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 	}
@@ -479,12 +479,12 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		} else if err := cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
+			t.writeErrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
 			return
 		}
 		xact, err := xreg.RenewEvictDelete(t, request.bck, args)
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 
@@ -498,7 +498,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		})
 		go xact.Run()
 	default:
-		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		t.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -526,7 +526,7 @@ func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, ms
 		}
 	}
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		t.writeErr(w, r, err, http.StatusBadRequest)
 		return
 	}
 	t.bucketSummary(w, r, bck, msg)
@@ -536,7 +536,7 @@ func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, ms
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		t.writeErr(w, r, err, http.StatusBadRequest)
 		return
 	}
 	if msg.Action == cmn.ActSummaryBck {
@@ -557,14 +557,14 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 	}
 	switch msg.Action {
 	case cmn.ActPrefetch:
 		if !request.bck.IsRemote() {
-			t.invalmsghdlrf(w, r, "%s: expecting remote bucket, got %s, action=%s", t.si, request.bck, msg.Action)
+			t.writeErrf(w, r, "%s: expecting remote bucket, got %s, action=%s", t.si, request.bck, msg.Action)
 			return
 		}
 		var (
@@ -578,7 +578,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		} else if err = cmn.MorphMarshal(msg.Value, &listMsg); err == nil {
 			args.ListMsg = listMsg
 		} else {
-			t.invalmsghdlrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
+			t.writeErrf(w, r, "invalid %s action message: %s, %T", msg.Action, msg.Name, msg.Value)
 			return
 		}
 		args.UUID = msg.UUID
@@ -600,7 +600,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("LIST: %s, %s", request.bck, delta)
 		}
 	default:
-		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		t.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -621,7 +621,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = request.bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 		inBMD = false
@@ -638,7 +638,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		ctx = context.WithValue(ctx, cmn.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
 			err = cmn.NewErrorRemoteBucketDoesNotExist(request.bck.Bck)
-			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+			t.writeErrSilent(w, r, err, http.StatusNotFound)
 			return
 		}
 	}
@@ -648,10 +648,10 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		if !inBMD {
 			if code == http.StatusNotFound {
 				err = cmn.NewErrorRemoteBucketDoesNotExist(request.bck.Bck)
-				t.invalmsghdlrsilent(w, r, err.Error(), code)
+				t.writeErrSilent(w, r, err, code)
 			} else {
 				err = fmt.Errorf("%s: bucket %s, err: %v", t.si, request.bck, err)
-				t.invalmsghdlr(w, r, err.Error(), code)
+				t.writeErr(w, r, err, code)
 			}
 			return
 		}
@@ -692,7 +692,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if !isIntraCall(r.Header) && ptime == "" && !features.IsSet(cmn.FeatureDirectAccess) {
-		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 			t.si, r.Method, r.RemoteAddr)
 		return
 	}
@@ -726,7 +726,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 	}
@@ -755,7 +755,7 @@ func (t *targetrunner) getObject(w http.ResponseWriter, r *http.Request, query u
 			// Cannot send error message at this point so we just glog.
 			glog.Errorf("GET %s: %v", lom, err)
 		} else {
-			t.invalmsghdlr(w, r, err.Error(), errCode)
+			t.writeErr(w, r, err, errCode)
 		}
 	}
 	freeGetObjInfo(goi)
@@ -771,7 +771,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	if ptime = isRedirect(query); ptime == "" && !isIntraPut(r.Header) {
 		// TODO: send TCP RST?
-		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
+		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
@@ -788,7 +788,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if cs := fs.GetCapStatus(); cs.Err != nil {
 		go t.RunLRU("" /*uuid*/, false)
 		if cs.OOS {
-			t.invalmsghdlr(w, r, cs.Err.Error())
+			t.writeErr(w, r, cs.Err)
 			return
 		}
 	}
@@ -801,7 +801,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			err = lom.Init(request.bck.Bck)
 		}
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 	}
@@ -810,12 +810,12 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		if hasSrc && srcProvider != cluster.SourceWebObjMD {
 			bck := lom.Bck()
 			if bck.IsAIS() {
-				t.invalmsghdlrf(w, r,
+				t.writeErrf(w, r,
 					"bucket %s: cannot override %s-downloaded object", bck, srcProvider)
 				return
 			}
 			if b := bck.RemoteBck(); b != nil && b.Provider != srcProvider {
-				t.invalmsghdlrf(w, r,
+				t.writeErrf(w, r,
 					"bucket %s: cannot override %s-downloaded object", b, srcProvider)
 				return
 			}
@@ -826,11 +826,11 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if appendTy == "" {
 		if errCode, err := t.doPut(r, lom, started); err != nil {
 			t.fsErr(err, lom.FQN)
-			t.invalmsghdlr(w, r, err.Error(), errCode)
+			t.writeErr(w, r, err, errCode)
 		}
 	} else {
 		if handle, errCode, err := t.doAppend(r, lom, started); err != nil {
-			t.invalmsghdlr(w, r, err.Error(), errCode)
+			t.writeErr(w, r, err, errCode)
 		} else {
 			w.Header().Set(cmn.HeaderAppendHandle, handle)
 		}
@@ -846,11 +846,11 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		request = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 	if err := cmn.ReadJSON(w, r, &msg, true); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	if isRedirect(query) == "" {
-		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
+		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
 		return
 	}
 	if err := t.parseAPIRequest(w, r, request); err != nil {
@@ -861,19 +861,17 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	lom := cluster.AllocLOM(request.items[1])
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(request.bck.Bck); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 
 	errCode, err := t.DeleteObject(context.Background(), lom, evict)
 	if err != nil {
 		if errCode == http.StatusNotFound {
-			t.invalmsghdlrsilent(w, r,
-				fmt.Sprintf("object %s/%s doesn't exist", lom.Bucket(), lom.ObjName),
-				http.StatusNotFound,
-			)
+			t.writeErrSilentf(w, r, http.StatusNotFound, "object %s/%s doesn't exist",
+				lom.Bucket(), lom.ObjName)
 		} else {
-			t.invalmsghdlr(w, r, err.Error(), errCode)
+			t.writeErr(w, r, err, errCode)
 		}
 		return
 	}
@@ -893,19 +891,19 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActRenameObject:
 		if isRedirect(query) == "" {
-			t.invalmsghdlrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
+			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
 			return
 		}
 		t.renameObject(w, r, &msg)
 	case cmn.ActPromote:
 		if isRedirect(query) == "" && !isIntraCall(r.Header) {
-			t.invalmsghdlrf(w, r, "%s: %s-%s(obj) is expected to be redirected or intra-called",
+			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected or intra-called",
 				t.si, r.Method, msg.Action)
 			return
 		}
 		t.promoteFQN(w, r, &msg)
 	default:
-		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		t.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -920,7 +918,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		request  = &apiRequest{after: 2, prefix: cmn.URLPathObjects.L}
 	)
 	if isRedirect(query) == "" && !isIntraCall(r.Header) && !features.IsSet(cmn.FeatureDirectAccess) {
-		t.invalmsghdlrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
+		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 			t.si, r.Method, r.RemoteAddr)
 		return
 	}
@@ -932,30 +930,31 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 
 // headObject is main function to head the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
-func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, objName string) {
+func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck,
+	objName string) {
 	var (
 		err            error
-		invalidHandler = t.invalmsghdlr
+		invalidHandler = t.writeErr
 		hdr            = w.Header()
 		checkExists    = cmn.IsParseBool(query.Get(cmn.URLParamCheckExists))
 		checkExistsAny = cmn.IsParseBool(query.Get(cmn.URLParamCheckExistsAny))
 		silent         = cmn.IsParseBool(query.Get(cmn.URLParamSilent))
 	)
 	if silent {
-		invalidHandler = t.invalmsghdlrsilent
+		invalidHandler = t.writeErrSilent
 	}
 
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err = lom.Init(bck.Bck); err != nil {
-		invalidHandler(w, r, err.Error())
+		invalidHandler(w, r, err)
 		return
 	}
 
 	lom.Lock(false)
 	if err = lom.Load(true); err != nil && !cmn.IsObjNotExist(err) { // (doesnotexist -> ok, other)
 		lom.Unlock(false)
-		invalidHandler(w, r, err.Error())
+		invalidHandler(w, r, err)
 		return
 	}
 	lom.Unlock(false)
@@ -979,14 +978,14 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 
 	if checkExists || checkExistsAny {
 		if !exists {
-			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bck.Name, objName, cmn.DoesNotExist),
+			invalidHandler(w, r, fmt.Errorf("%s/%s %s", bck.Name, objName, cmn.DoesNotExist),
 				http.StatusNotFound)
 		}
 		return
 	}
 	if lom.Bck().IsAIS() || exists { // && !lom.VerConf().Enabled) {
 		if !exists {
-			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bck.Name, objName, cmn.DoesNotExist),
+			invalidHandler(w, r, fmt.Errorf("%s/%s %s", bck.Name, objName, cmn.DoesNotExist),
 				http.StatusNotFound)
 			return
 		}
@@ -994,8 +993,8 @@ func (t *targetrunner) headObject(w http.ResponseWriter, r *http.Request, query 
 	} else {
 		objMeta, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
-			errMsg := fmt.Sprintf("%s: HEAD request failed, err: %v", lom, err)
-			invalidHandler(w, r, errMsg, errCode)
+			err = fmt.Errorf("%s: HEAD request failed, err: %v", lom, err)
+			invalidHandler(w, r, err, errCode)
 			return
 		}
 		for k, v := range objMeta {
@@ -1050,7 +1049,7 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 	case ec.URLCT:
 		t.sendECCT(w, r, request.bck, request.items[2])
 	default:
-		t.invalmsghdlrf(w, r, "invalid EC URL path %s", request.items[0])
+		t.writeErrf(w, r, "invalid EC URL path %s", request.items[0])
 	}
 }
 
@@ -1058,16 +1057,16 @@ func (t *targetrunner) httpecget(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
 	if err := bck.Init(t.owner.bmd); err != nil {
 		if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok { // is ais
-			t.invalmsghdlrsilent(w, r, err.Error())
+			t.writeErrSilent(w, r, err)
 			return
 		}
 	}
 	md, err := ec.ObjectMetadata(bck, objName)
 	if err != nil {
 		if os.IsNotExist(err) {
-			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {
-			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusInternalServerError)
+			t.writeErrSilent(w, r, err, http.StatusInternalServerError)
 		}
 		return
 	}
@@ -1083,20 +1082,20 @@ func (t *targetrunner) sendECCT(w http.ResponseWriter, r *http.Request, bck *clu
 			err = lom.Init(bck.Bck)
 		}
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 	}
 	sliceFQN := lom.MpathInfo().MakePathFQN(bck.Bck, ec.SliceType, objName)
 	finfo, err := os.Stat(sliceFQN)
 	if err != nil {
-		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+		t.writeErrSilent(w, r, err, http.StatusNotFound)
 		return
 	}
 	file, err := os.Open(sliceFQN)
 	if err != nil {
 		t.fsErr(err, sliceFQN)
-		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+		t.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -1142,7 +1141,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 	if query.Provider != "" {
 		bucketNames, code, err = t._listBcks(query, config)
 		if err != nil {
-			t.invalmsghdlrstatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
+			t.writeErrStatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
 			return
 		}
 	} else /* all providers */ {
@@ -1151,7 +1150,7 @@ func (t *targetrunner) listBuckets(w http.ResponseWriter, r *http.Request, query
 			query.Provider = provider
 			buckets, code, err = t._listBcks(query, config)
 			if err != nil {
-				t.invalmsghdlrstatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
+				t.writeErrStatusf(w, r, code, "failed to list buckets for %q, err: %v", query, err)
 				return
 			}
 			bucketNames = append(bucketNames, buckets...)
@@ -1339,20 +1338,20 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	lom := cluster.AllocLOM(request.items[1])
 	defer cluster.FreeLOM(lom)
 	if err := lom.Init(request.bck.Bck); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 
 	if lom.Bck().IsRemote() {
-		t.invalmsghdlrf(w, r, "%s: cannot rename object %s from a remote bucket", t.si, lom)
+		t.writeErrf(w, r, "%s: cannot rename object %s from a remote bucket", t.si, lom)
 		return
 	}
 	if lom.Bck().Props.EC.Enabled {
-		t.invalmsghdlrf(w, r, "%s: cannot rename erasure-coded object %s", t.si, lom)
+		t.writeErrf(w, r, "%s: cannot rename erasure-coded object %s", t.si, lom)
 		return
 	}
 	if msg.Name == lom.ObjName {
-		t.invalmsghdlrf(w, r, "%s: cannot rename/move object %s onto itself", t.si, lom)
+		t.writeErrf(w, r, "%s: cannot rename/move object %s onto itself", t.si, lom)
 		return
 	}
 	buf, slab := t.gmm.Alloc()
@@ -1367,7 +1366,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	slab.Free(buf)
 	freeCopyObjInfo(coi)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	// TODO: combine copy+delete under a single write lock
@@ -1401,18 +1400,17 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	// 2. init & validate
 	srcFQN := msg.Name
 	if srcFQN == "" {
-		t.invalmsghdlrf(w, r, fmtErr+"missing source filename", t.si, msg.Action)
+		t.writeErrf(w, r, fmtErr+"missing source filename", t.si, msg.Action)
 		return
 	}
 
 	finfo, err := os.Stat(srcFQN)
 	if err != nil {
 		if os.IsNotExist(err) {
-			errMsg := fmt.Sprintf("%s: %q %s", t.si.ID(), srcFQN, cmn.DoesNotExist)
-			t.invalmsghdlr(w, r, errMsg, http.StatusNotFound)
+			t.writeErrStatusf(w, r, http.StatusNotFound, "%s: %q %s", t.si, srcFQN, cmn.DoesNotExist)
 			return
 		}
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	if err = request.bck.Init(t.owner.bmd); err != nil {
@@ -1421,7 +1419,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 			err = request.bck.Init(t.owner.bmd)
 		}
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 	}
@@ -1433,7 +1431,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		}
 		xact, err := xreg.RenewDirPromote(t, request.bck, srcFQN, &promoteArgs)
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 		go xact.Run()
@@ -1452,7 +1450,7 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 		KeepOrig:  promoteArgs.KeepOrig,
 	}
 	if _, err = t.PromoteFile(params); err != nil {
-		t.invalmsghdlrf(w, r, fmtErr+" %s", t.si, msg.Action, err.Error())
+		t.writeErrf(w, r, fmtErr+" %v", t.si, msg.Action, err)
 	}
 	// TODO: inc stats
 }

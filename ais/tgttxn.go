@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -82,16 +81,12 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := t.prepTxnServer(r, msg, bucket, phase)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		t.writeErr(w, r, err, http.StatusBadRequest)
 		return
 	}
 	switch msg.Action {
 	case cmn.ActCreateBck, cmn.ActAddRemoteBck:
-		debug.Infof("Starting transaction create-bucket (ts: %d, phase: %s, uuid: %s)",
-			mono.NanoTime(), c.phase, c.uuid)
 		err = t.createBucket(c)
-		debug.Infof("Finished transaction create-bucket (ts: %d, phase: %s, uuid: %s)",
-			mono.NanoTime(), c.phase, c.uuid)
 	case cmn.ActMakeNCopies:
 		err = t.makeNCopies(c)
 	case cmn.ActSetBprops, cmn.ActResetBprops:
@@ -101,7 +96,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActCopyBck, cmn.ActETLBck:
 		bck2BckMsg := &cmn.Bck2BckMsg{}
 		if err := cmn.MorphMarshal(c.msg.Value, bck2BckMsg); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 		if msg.Action == cmn.ActCopyBck {
@@ -114,16 +109,12 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActStartMaintenance, cmn.ActDecommission, cmn.ActShutdownNode:
 		err = t.startMaintenance(c)
 	case cmn.ActDestroyBck, cmn.ActEvictRemoteBck:
-		debug.Infof("Starting transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)",
-			mono.NanoTime(), c.phase, c.uuid)
 		err = t.destroyBucket(c)
-		debug.Infof("Finished transaction destroy-bucket (ts: %d, phase: %s, uuid: %s)",
-			mono.NanoTime(), c.phase, c.uuid)
 	default:
-		t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		t.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 	}
 }
 
@@ -381,7 +372,8 @@ func (t *targetrunner) renameBucket(c *txnServerCtx) error {
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return fmt.Errorf("%s %s: %v", t.si, txn, err)
 		}
-		xact, err := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, cmn.ActCommit)
+		xact, err := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion,
+			cmn.ActCommit)
 		if err != nil {
 			return err // must not happen at commit time
 		}
@@ -720,7 +712,8 @@ func (t *targetrunner) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase
 				bound := cmn.GCO.Get().Timeout.CplaneOperation / 2
 				if delta > int64(bound) || delta < -int64(bound) {
 					glog.Errorf("%s: txn %s[%s] latency=%v(!), caller %s, phase=%s, bucket %q",
-						t.si, msg.Action, c.msg.UUID, time.Duration(delta), c.callerName, phase, bucket)
+						t.si, msg.Action, c.msg.UUID, time.Duration(delta),
+						c.callerName, phase, bucket)
 				}
 			}
 		}

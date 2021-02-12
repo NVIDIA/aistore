@@ -472,7 +472,7 @@ func (h *httprunner) parseAPIRequest(w http.ResponseWriter, r *http.Request, arg
 		err = cmn.ReadJSON(w, r, args.msg)
 	}
 	if err != nil {
-		h.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		h.writeErr(w, r, err, http.StatusBadRequest)
 	}
 	return err
 }
@@ -1153,7 +1153,7 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 	splitAfter bool, items []string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items)
 	if err != nil {
-		h.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		h.writeErr(w, r, err, http.StatusBadRequest)
 		return nil, err
 	}
 
@@ -1261,8 +1261,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSnode:
 		body = h.si
 	default:
-		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", what)
-		h.invalmsghdlr(w, r, s)
+		h.writeErrf(w, r, "invalid GET /daemon request: unrecognized what=%s", what)
 		return
 	}
 	h.writeJSON(w, r, body, "httpdaeget-"+what)
@@ -1272,7 +1271,8 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 // HTTP err + spec message + code + stats //
 ////////////////////////////////////////////
 
-func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
+	msg := err.Error()
 	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
 		msg += " (from " + caller + ")"
 	}
@@ -1280,17 +1280,22 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
-func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	cmn.InvalidHandlerDetailedNoLog(w, r, msg, errCode...)
+func (h *httprunner) writeErrSilent(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
+	cmn.InvalidHandlerDetailedNoLog(w, r, err.Error(), errCode...)
 }
 
-func (h *httprunner) invalmsghdlrstatusf(w http.ResponseWriter, r *http.Request, errCode int,
+func (h *httprunner) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode int,
 	format string, a ...interface{}) {
-	h.invalmsghdlr(w, r, fmt.Sprintf(format, a...), errCode)
+	cmn.InvalidHandlerDetailedNoLog(w, r, fmt.Sprintf(format, a...), errCode)
 }
 
-func (h *httprunner) invalmsghdlrf(w http.ResponseWriter, r *http.Request, format string, a ...interface{}) {
-	h.invalmsghdlr(w, r, fmt.Sprintf(format, a...))
+func (h *httprunner) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
+	format string, a ...interface{}) {
+	h.writeErr(w, r, fmt.Errorf(format, a...), errCode)
+}
+
+func (h *httprunner) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...interface{}) {
+	h.writeErr(w, r, fmt.Errorf(format, a...))
 }
 
 ///////////////////
@@ -1811,7 +1816,7 @@ func (h *httprunner) ensureIntraControl(w http.ResponseWriter, r *http.Request) 
 		return true
 	}
 
-	h.invalmsghdlrf(w, r, "%s: expected %s request", h.si, cmn.NetworkIntraControl)
+	h.writeErrf(w, r, "%s: expected %s request", h.si, cmn.NetworkIntraControl)
 	return
 }
 
@@ -1921,17 +1926,17 @@ func (h *httprunner) attachDetach(w http.ResponseWriter, r *http.Request, action
 	)
 	if what != cmn.GetWhatRemoteAIS {
 		err = fmt.Errorf(fmtUnknownQue, what)
-		h.invalmsghdlr(w, r, err.Error())
+		h.writeErr(w, r, err)
 		return
 	}
 	config := cfgBeginUpdate()
 	if err = h.attachDetachRemoteAIS(query, action, config); err != nil {
 		cfgDiscardUpdate()
-		h.invalmsghdlr(w, r, err.Error())
+		h.writeErr(w, r, err)
 		return
 	}
 	if err = cfgCommitUpdate(config, action+": "+what); err != nil {
-		h.invalmsghdlr(w, r, err.Error())
+		h.writeErr(w, r, err)
 	}
 	return
 }

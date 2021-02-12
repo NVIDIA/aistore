@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"regexp"
 	"time"
@@ -30,7 +31,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	xact, err := xreg.RenewDownloader(t, t.statsT)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+		t.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	downloaderXact := xact.(*downloader.Downloader)
@@ -48,7 +49,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		)
 		if uuid == "" {
 			debug.Assert(false)
-			t.invalmsghdlr(w, r, "expected uuid in query")
+			t.writeErr(w, r, errors.New("expected uuid in query"))
 			return
 		}
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
@@ -64,19 +65,20 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if dur, err := time.ParseDuration(dlBodyBase.ProgressInterval); err == nil {
 				progressInterval = dur
 			} else {
-				t.invalmsghdlrf(w, r, "%s: invalid progress interval %q, err: %v", t.si, dlBodyBase.ProgressInterval, err)
+				t.writeErrf(w, r, "%s: invalid progress interval %q, err: %v",
+					t.si, dlBodyBase.ProgressInterval, err)
 				return
 			}
 		}
 
 		bck := cluster.NewBckEmbed(dlBodyBase.Bck)
 		if err := bck.Init(t.Bowner()); err != nil {
-			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			t.writeErr(w, r, err, http.StatusBadRequest)
 			return
 		}
 		dlJob, err := downloader.ParseStartDownloadRequest(ctx, t, bck, uuid, dlb, downloaderXact)
 		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 		if glog.FastV(4, glog.SmoduleAIS) {
@@ -104,7 +106,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := payload.Validate(false /*requireID*/); err != nil {
 			debug.Assert(false)
-			t.invalmsghdlr(w, r, "message is not valid")
+			t.writeErr(w, r, errors.New("invalid download request payload"))
 			return
 		}
 
@@ -132,7 +134,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if err = payload.Validate(true /*requireID*/); err != nil {
 			debug.Assert(false)
-			t.invalmsghdlr(w, r, "message is not valid")
+			t.writeErr(w, r, errors.New("message is not valid"))
 			return
 		}
 
@@ -142,11 +144,11 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.Remove:
 			response, statusCode, respErr = downloaderXact.RemoveJob(payload.ID)
 		default:
-			t.invalmsghdlrf(w, r, "invalid action for DELETE request %q (expected either %q or %q)", items[0], cmn.Abort, cmn.Remove)
+			t.writeErrf(w, r, "invalid action for DELETE request %q (expected either %q or %q)", items[0], cmn.Abort, cmn.Remove)
 			return
 		}
 	default:
-		t.invalmsghdlrf(w, r, "invalid HTTP method %q", r.Method)
+		t.writeErrf(w, r, "invalid HTTP method %q", r.Method)
 		return
 	}
 

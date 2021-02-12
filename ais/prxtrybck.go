@@ -139,7 +139,7 @@ func (args *bckInitArgs) _checkACL(bck *cluster.Bck) (errCode int, err error) {
 
 // initAndTry initializes bucket and tries to add it if doesn't exist.
 // The method sets and returns err if was not successful and any point (if err
-// is set then `p.invalmsghdlr` is called so caller doesn't need to).
+// is set then `p.writeErr` is called so caller doesn't need to).
 func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *cluster.Bck, err error) {
 	var errCode int
 	bck, errCode, err = args.init(bucket)
@@ -147,13 +147,13 @@ func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *c
 		return
 	}
 	if errCode != http.StatusNotFound {
-		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}
 
 	// Should create only for remote bucket when `tryOnlyRem` flag is set.
 	if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok && args.tryOnlyRem {
-		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+		args.p.writeErr(args.w, args.r, err, errCode)
 		return
 	}
 
@@ -165,7 +165,7 @@ func (args *bckInitArgs) initAndTry(bucket string, origURLBck ...string) (bck *c
 func (args *bckInitArgs) try(origURLBck ...string) (bck *cluster.Bck, err error) {
 	bck, errCode, err := args._try(origURLBck...)
 	if err != nil && err != cmn.ErrForwarded {
-		args.p.invalmsghdlr(args.w, args.r, err.Error(), errCode)
+		args.p.writeErr(args.w, args.r, err, errCode)
 	}
 	return bck, err
 }

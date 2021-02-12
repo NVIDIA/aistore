@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/query"
 )
+
+var errQueryHandle = errors.New("handle cannot be empty")
 
 // Proxy exposes 2 methods:
 // - Init(query) -> handle - initializes a query on proxy and targets
@@ -47,7 +50,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := query.NewQueryFromMsg(p, &msg.QueryMsg); err != nil {
-		p.invalmsghdlr(w, r, "Failed to parse query message: "+err.Error())
+		p.writeErr(w, r, errors.New("Failed to parse query message: "+err.Error()))
 		return
 	}
 	smap := p.owner.smap.get()
@@ -66,7 +69,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.invalmsghdlr(w, r, res.err.Error())
+		p.writeErr(w, r, res.err)
 		freeCallResults(results)
 		return
 	}
@@ -74,7 +77,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 
 	nlq, err := query.NewQueryListener(handle, &smap.Smap, msg)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	nlq.SetHrwOwner(&smap.Smap)
@@ -95,7 +98,7 @@ func (p *proxyrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 	case cmn.WorkerOwner:
 		p.httpquerygetworkertarget(w, r)
 	default:
-		p.invalmsghdlrf(w, r, "unknown path /%s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
+		p.writeErrf(w, r, "unknown path /%s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
 	}
 }
 
@@ -108,7 +111,7 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if msg.Handle == "" {
-		p.invalmsghdlr(w, r, "handle cannot be empty", http.StatusBadRequest)
+		p.writeErr(w, r, errQueryHandle, http.StatusBadRequest)
 		return
 	}
 	if p.ic.reverseToOwner(w, r, msg.Handle, msg) {
@@ -120,13 +123,13 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 	}
 	state := nl.(*query.NotifListenerQuery)
 	if err := state.Err(false); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
 	target, err := state.WorkersTarget(msg.WorkerID)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	url := p.redirectURL(r, target, started, cmn.NetworkIntraControl)
@@ -144,7 +147,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg.Handle == "" {
-		p.invalmsghdlr(w, r, "handle cannot be empty", http.StatusBadRequest)
+		p.writeErr(w, r, errQueryHandle, http.StatusBadRequest)
 		return
 	}
 
@@ -173,7 +176,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 			if res.status == http.StatusNotFound {
 				continue
 			}
-			p.invalmsghdlr(w, r, res.err.Error(), res.status)
+			p.writeErr(w, r, res.err, res.status)
 			freeCallResults(results)
 			return
 		}
@@ -184,7 +187,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 	result := cmn.ConcatObjLists(lists, msg.Size)
 	if len(result.Entries) == 0 {
 		// TODO: Maybe we should just return empty response and `http.StatusNoContent`?
-		p.invalmsghdlrstatusf(w, r, http.StatusGone, "%q finished", msg.Handle)
+		p.writeErrStatusf(w, r, http.StatusGone, "%q finished", msg.Handle)
 		return
 	}
 
@@ -200,7 +203,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		freeBcastArgs(discardArgs)
 		for _, res := range discardResults {
 			if res.err != nil && res.status != http.StatusNotFound {
-				p.invalmsghdlr(w, r, res.err.Error())
+				p.writeErr(w, r, res.err)
 				return
 			}
 		}

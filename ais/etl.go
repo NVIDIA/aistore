@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -17,6 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/etl"
 )
 
+var errETLID = errors.New("ETL ID cannot be empty")
+
 /////////////////
 // ETL: target //
 /////////////////
@@ -24,7 +27,7 @@ import (
 // [METHOD] /v1/etl
 func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if err := k8s.Detect(); err != nil {
-		t.invalmsghdlrsilent(w, r, err.Error())
+		t.writeErrSilent(w, r, err)
 		return
 	}
 	switch {
@@ -40,7 +43,7 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.ETLBuild:
 			t.buildETL(w, r)
 		default:
-			t.invalmsghdlrf(w, r, "invalid POST path: %s", apiItems[0])
+			t.writeErrf(w, r, "invalid POST path: %s", apiItems[0])
 		}
 	case r.Method == http.MethodGet:
 		apiItems, err := t.checkRESTItems(w, r, 1, true, cmn.URLPathETL.L)
@@ -58,14 +61,14 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.ETLHealth:
 			t.healthETL(w, r)
 		default:
-			t.invalmsghdlrf(w, r, "invalid GET path: %s", apiItems[0])
+			t.writeErrf(w, r, "invalid GET path: %s", apiItems[0])
 		}
 	case r.Method == http.MethodHead:
 		t.headObjectETL(w, r)
 	case r.Method == http.MethodDelete:
 		t.stopETL(w, r)
 	default:
-		t.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		t.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
 }
 
@@ -78,7 +81,7 @@ func (t *targetrunner) initETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := etl.Start(t, msg); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 	}
 }
 
@@ -91,7 +94,7 @@ func (t *targetrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := etl.Build(t, msg); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 	}
 }
 
@@ -106,7 +109,7 @@ func (t *targetrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		if _, ok := err.(*cmn.NotFoundError); ok {
 			statusCode = http.StatusNotFound
 		}
-		t.invalmsghdlr(w, r, err.Error(), statusCode)
+		t.writeErr(w, r, err, statusCode)
 	}
 }
 
@@ -119,21 +122,21 @@ func (t *targetrunner) doETL(w http.ResponseWriter, r *http.Request, uuid string
 	if err != nil {
 		if _, ok := err.(*cmn.NotFoundError); ok {
 			smap := t.owner.smap.Get()
-			t.invalmsghdlrstatusf(w, r,
+			t.writeErrStatusf(w, r,
 				http.StatusNotFound,
 				"%v - try starting new ETL with \"%s/v1/etl/init\" endpoint",
 				err.Error(), smap.Primary.URL(cmn.NetworkPublic))
 			return
 		}
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	if err := comm.Do(w, r, bck, objName); err != nil {
-		t.invalmsghdlr(w, r, cmn.NewETLError(&cmn.ETLErrorContext{
+		t.writeErr(w, r, cmn.NewETLError(&cmn.ETLErrorContext{
 			UUID:    uuid,
 			PodName: comm.PodName(),
 			SvcName: comm.SvcName(),
-		}, err.Error()).Error())
+		}, err.Error()))
 	}
 }
 
@@ -153,7 +156,7 @@ func (t *targetrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	uuid := apiItems[0]
 	logs, err := etl.PodLogs(t, uuid)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	t.writeJSON(w, r, logs, "logs-ETL")
@@ -168,9 +171,9 @@ func (t *targetrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	healthMsg, err := etl.PodHealth(t, apiItems[0])
 	if err != nil {
 		if _, ok := err.(*cmn.NotFoundError); ok {
-			t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+			t.writeErrSilent(w, r, err, http.StatusNotFound)
 		} else {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 		}
 		return
 	}
@@ -187,7 +190,7 @@ func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := etl.CheckSecret(request.items[0]); err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		t.writeErr(w, r, err, http.StatusBadRequest)
 		return
 	}
 
@@ -204,7 +207,7 @@ func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := etl.CheckSecret(request.items[0]); err != nil {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		t.writeErr(w, r, err, http.StatusBadRequest)
 		return
 	}
 
@@ -233,7 +236,7 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.ETLBuild:
 			p.buildETL(w, r)
 		default:
-			p.invalmsghdlrf(w, r, "invalid POST path: %s", apiItems[0])
+			p.writeErrf(w, r, "invalid POST path: %s", apiItems[0])
 		}
 	case r.Method == http.MethodGet:
 		apiItems, err := p.checkRESTItems(w, r, 1, true, cmn.URLPathETL.L)
@@ -249,12 +252,12 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 		case cmn.ETLHealth:
 			p.healthETL(w, r)
 		default:
-			p.invalmsghdlrf(w, r, "invalid GET path: %s", apiItems[0])
+			p.writeErrf(w, r, "invalid GET path: %s", apiItems[0])
 		}
 	case r.Method == http.MethodDelete:
 		p.stopETL(w, r)
 	default:
-		p.invalmsghdlrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
+		p.writeErrf(w, r, "Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
 	}
 }
 
@@ -274,14 +277,14 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 
 	spec, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	r.Body.Close()
 
 	msg, err := etl.ValidateSpec(spec)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -312,7 +315,7 @@ func (p *proxyrunner) initETL(w http.ResponseWriter, r *http.Request) {
 	argsTerm.timeout = cmn.LongTimeout
 	p.bcastGroup(argsTerm)
 	freeBcastArgs(argsTerm)
-	p.invalmsghdlr(w, r, err.Error())
+	p.writeErr(w, r, err)
 }
 
 // POST /v1/etl/build
@@ -330,12 +333,12 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	if msg.ID == "" {
 		msg.ID = cmn.GenUUID()
 	} else if err = cmn.ValidateID(msg.ID); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
 	if err := msg.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -366,7 +369,7 @@ func (p *proxyrunner) buildETL(w http.ResponseWriter, r *http.Request) {
 	argsTerm.timeout = cmn.LongTimeout
 	p.bcastGroup(argsTerm)
 	freeBcastArgs(argsTerm)
-	p.invalmsghdlr(w, r, err.Error())
+	p.writeErr(w, r, err)
 }
 
 // GET /v1/etl/list
@@ -376,7 +379,7 @@ func (p *proxyrunner) listETL(w http.ResponseWriter, r *http.Request) {
 	}
 	etls, err := p.listETLs()
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	p.writeJSON(w, r, etls, "list-etl")
@@ -429,7 +432,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	}
 	uuid := apiItems[0]
 	if uuid == "" {
-		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
+		p.writeErr(w, r, errETLID)
 		return
 	}
 	var (
@@ -443,7 +446,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 			si  = p.owner.smap.get().GetTarget(tid)
 		)
 		if si == nil {
-			p.invalmsghdlrf(w, r, "unknown target %q", tid)
+			p.writeErrf(w, r, "unknown target %q", tid)
 			return
 		}
 		results = make(sliceResults, 1)
@@ -468,7 +471,7 @@ func (p *proxyrunner) logsETL(w http.ResponseWriter, r *http.Request) {
 	logs := make(etl.PodsLogsMsg, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			p.invalmsghdlr(w, r, res.err.Error())
+			p.writeErr(w, r, res.err)
 			freeCallResults(results)
 			return
 		}
@@ -487,7 +490,7 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	}
 	uuid := apiItems[0]
 	if uuid == "" {
-		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
+		p.writeErr(w, r, errETLID)
 		return
 	}
 	var (
@@ -505,7 +508,7 @@ func (p *proxyrunner) healthETL(w http.ResponseWriter, r *http.Request) {
 	healths := make(etl.PodsHealthMsg, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			p.invalmsghdlr(w, r, res.err.Error())
+			p.writeErr(w, r, res.err)
 			freeCallResults(results)
 			return
 		}
@@ -524,7 +527,7 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 	}
 	uuid := apiItems[0]
 	if uuid == "" {
-		p.invalmsghdlr(w, r, "ETL ID cannot be empty")
+		p.writeErr(w, r, errETLID)
 		return
 	}
 	args := allocBcastArgs()
@@ -536,7 +539,7 @@ func (p *proxyrunner) stopETL(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.invalmsghdlr(w, r, res.err.Error())
+		p.writeErr(w, r, res.err)
 		break
 	}
 	freeCallResults(results)

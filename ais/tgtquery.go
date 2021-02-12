@@ -51,7 +51,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 
 	q, err := query.NewQueryFromMsg(t, &msg.QueryMsg)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 
@@ -71,7 +71,7 @@ func (t *targetrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 
 	xact, isNew, err := xreg.RenewQuery(ctx, t, q, smsg)
 	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 		return
 	}
 	if !isNew {
@@ -97,7 +97,7 @@ func (t *targetrunner) httpqueryget(w http.ResponseWriter, r *http.Request) {
 	case cmn.WorkerOwner:
 		t.httpquerygetworkertarget(w, r)
 	default:
-		t.invalmsghdlrf(w, r, "unknown path /%s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
+		t.writeErrf(w, r, "unknown path /%s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
 	}
 }
 
@@ -120,7 +120,7 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if msg.Handle == "" {
-		t.invalmsghdlr(w, r, "handle cannot be empty", http.StatusBadRequest)
+		t.writeErr(w, r, errQueryHandle, http.StatusBadRequest)
 		return
 	}
 	resultSet := query.Registry.Get(msg.Handle)
@@ -135,12 +135,12 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 	case cmn.Peek:
 		entries, err = resultSet.PeekN(msg.Size)
 	default:
-		t.invalmsghdlrf(w, r, "invalid %s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
+		t.writeErrf(w, r, "invalid %s/%s/%s", cmn.Version, cmn.Query, apiItems[0])
 		return
 	}
 
 	if err != nil && err != io.EOF {
-		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+		t.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -170,5 +170,5 @@ func (t *targetrunner) httpqueryput(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) queryDoesntExist(w http.ResponseWriter, r *http.Request, handle string) {
-	t.invalmsghdlrsilent(w, r, t.Sname()+" handle "+handle+" not found", http.StatusNotFound)
+	t.writeErrSilentf(w, r, http.StatusNotFound, "%s: handle %q not found", t.Sname(), handle)
 }

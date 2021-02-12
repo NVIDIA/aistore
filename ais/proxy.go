@@ -310,12 +310,12 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	switch request.items[0] {
 	case cmn.AllBuckets:
 		if err := p.checkACL(r.Header, nil, cmn.AccessListBuckets); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+			p.writeErr(w, r, err, http.StatusUnauthorized)
 			return
 		}
 		p.listBuckets(w, r, cmn.QueryBcks(request.bck.Bck))
 	default:
-		p.invalmsghdlrf(w, r, "Invalid route /buckets/%s", request.items[0])
+		p.writeErrf(w, r, "Invalid route /buckets/%s", request.items[0])
 	}
 }
 
@@ -331,7 +331,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request, origURL
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -361,7 +361,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		var hi handleInfo
 		hi, err = parseAppendHandle(query.Get(cmn.URLParamAppendHandle))
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		nodeID = hi.nodeID
@@ -376,14 +376,14 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if nodeID == "" {
 		si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 	} else {
 		si = smap.GetTarget(nodeID)
 		if si == nil {
 			err = &errNodeNotFound{"PUT failure", nodeID, p.si, smap}
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 	}
@@ -413,7 +413,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -454,7 +454,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error(), errCode)
+			p.writeErr(w, r, err, errCode)
 		}
 	} else if bck, err = bckArgs.initAndTry(bck.Name); err != nil {
 		return
@@ -463,7 +463,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActEvictRemoteBck:
 		if bck.IsAIS() {
-			p.invalmsghdlrf(w, r, fmtNotCloud, bck.Name)
+			p.writeErrf(w, r, fmtNotCloud, bck.Name)
 			return
 		}
 		fallthrough // fallthrough
@@ -480,39 +480,39 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok { // race
 				glog.Infof("%s: %s already %q-ed, nothing to do", p.si, bck, msg.Action)
 			} else {
-				p.invalmsghdlr(w, r, err.Error())
+				p.writeErr(w, r, err)
 			}
 		}
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		var xactID string
 		if msg.Action == cmn.ActEvictObjects && bck.IsAIS() {
-			p.invalmsghdlrf(w, r, fmtNotCloud, bck.Name)
+			p.writeErrf(w, r, fmtNotCloud, bck.Name)
 			return
 		}
 
 		if xactID, err = p.doListRange(http.MethodDelete, bck.Name, &msg, query); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		w.Write([]byte(xactID))
 	default:
-		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		p.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
 // PUT /v1/metasync
 func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		p.invalmsghdlrf(w, r, "invalid method %s", r.Method)
+		p.writeErrf(w, r, "invalid method %s", r.Method)
 		return
 	}
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
 		const txt = "is primary, cannot be on the receiving side of metasync"
 		if xact := xreg.GetXactRunning(cmn.ActElection); xact != nil {
-			p.invalmsghdlrf(w, r, "%s: %s [%s, %s]", p.si, txt, smap, xact)
+			p.writeErrf(w, r, "%s: %s [%s, %s]", p.si, txt, smap, xact)
 		} else {
-			p.invalmsghdlrf(w, r, "%s: %s, %s", p.si, txt, smap)
+			p.writeErrf(w, r, "%s: %s, %s", p.si, txt, smap)
 		}
 		return
 	}
@@ -562,7 +562,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(errs) > 0 {
-		p.invalmsghdlrf(w, r, "%v", errs)
+		p.writeErrf(w, r, "%v", errs)
 		return
 	}
 }
@@ -628,7 +628,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		bucket := apiItems[0]
 		p.hpostBucket(w, r, &msg, bucket)
 	default:
-		p.invalmsghdlrf(w, r, "URL path %v is too long (action %s)", apiItems, msg.Action)
+		p.writeErrf(w, r, "URL path %v is too long (action %s)", apiItems, msg.Action)
 	}
 }
 
@@ -636,7 +636,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	query := r.URL.Query()
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		p.writeErr(w, r, err, http.StatusBadRequest)
 		return
 	}
 	if bck.Bck.IsRemoteAIS() {
@@ -675,23 +675,23 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		bckFrom := bck
 		bckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			p.writeErr(w, r, err, http.StatusBadRequest)
 			return
 		}
 		if !bckFrom.IsAIS() && !bckFrom.HasBackendBck() {
-			p.invalmsghdlrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bckFrom)
+			p.writeErrf(w, r, "cannot rename bucket %q, it is not an AIS bucket", bckFrom)
 			return
 		}
 		if err := bckTo.Validate(); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		if bckTo.IsRemote() {
-			p.invalmsghdlrf(w, r, "destination bucket %q must be an AIS bucket", bckTo)
+			p.writeErrf(w, r, "destination bucket %q must be an AIS bucket", bckTo)
 			return
 		}
 		if bckFrom.Name == bckTo.Name {
-			p.invalmsghdlrf(w, r, "cannot rename bucket %q as %q", bckFrom, bckTo)
+			p.writeErrf(w, r, "cannot rename bucket %q as %q", bckFrom, bckTo)
 			return
 		}
 
@@ -700,13 +700,13 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
 			err := cmn.NewErrorBucketAlreadyExists(bckTo.Bck)
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bckTo)
 		var xactID string
 		if xactID, err = p.renameBucket(bckFrom, bckTo, msg); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		w.Write([]byte(xactID))
@@ -718,11 +718,11 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		switch msg.Action {
 		case cmn.ActETLBck:
 			if err := cmn.MorphMarshal(msg.Value, internalMsg); err != nil {
-				p.invalmsghdlr(w, r, "request body can't be empty", http.StatusBadRequest)
+				p.writeErr(w, r, errors.New("request body can't be empty"), http.StatusBadRequest)
 				return
 			}
 			if err := internalMsg.Validate(); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
+				p.writeErr(w, r, err)
 				return
 			}
 		case cmn.ActCopyBck:
@@ -736,11 +736,11 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 		userBckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+			p.writeErr(w, r, err, http.StatusBadRequest)
 			return
 		}
 		if bck.Equal(userBckTo, false, true) {
-			p.invalmsghdlrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bucket)
+			p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bucket)
 			return
 		}
 		var (
@@ -748,7 +748,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			errCode   int
 		)
 		if bckTo, errCode, err = bckToArgs.init(userBckTo.Name); err != nil && errCode != http.StatusNotFound {
-			p.invalmsghdlr(w, r, err.Error(), errCode)
+			p.writeErr(w, r, err, errCode)
 			return
 		}
 		if errCode == http.StatusNotFound && userBckTo.IsCloud() {
@@ -762,7 +762,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			bckTo = userBckTo
 		}
 		if bckTo.IsHTTP() {
-			p.invalmsghdlrf(w, r, "cannot %s HTTP bucket %q - the operation is not supported",
+			p.writeErrf(w, r, "cannot %s HTTP bucket %q - the operation is not supported",
 				msg.Action, bucket)
 			return
 		}
@@ -771,7 +771,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 		var xactID string
 		if xactID, err = p.bucketToBucketTxn(bck, bckTo, msg, internalMsg.DryRun); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 
@@ -779,7 +779,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	case cmn.ActAddRemoteBck:
 		// TODO: choose the best permission
 		if err := p.checkACL(r.Header, nil, cmn.AccessCreateBucket); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+			p.writeErr(w, r, err, http.StatusUnauthorized)
 			return
 		}
 		if err := p.createBucket(msg, bck); err != nil {
@@ -787,18 +787,18 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
 				errCode = http.StatusConflict
 			}
-			p.invalmsghdlr(w, r, err.Error(), errCode)
+			p.writeErr(w, r, err, errCode)
 			return
 		}
 	case cmn.ActPrefetch:
 		// TODO: GET vs SYNC?
 		if bck.IsAIS() {
-			p.invalmsghdlrf(w, r, fmtNotCloud, bucket)
+			p.writeErrf(w, r, fmtNotCloud, bucket)
 			return
 		}
 		var xactID string
 		if xactID, err = p.doListRange(http.MethodPost, bucket, msg, query); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		w.Write([]byte(xactID))
@@ -812,19 +812,19 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	case cmn.ActMakeNCopies:
 		var xactID string
 		if xactID, err = p.makeNCopies(msg, bck); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		w.Write([]byte(xactID))
 	case cmn.ActECEncode:
 		var xactID string
 		if xactID, err = p.ecEncode(bck, msg); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		w.Write([]byte(xactID))
 	default:
-		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		p.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -832,11 +832,11 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 	bucket := bck.Name
 	err := p.checkACL(r.Header, nil, cmn.AccessCreateBucket)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+		p.writeErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 	if err = bck.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	if p.forwardCP(w, r, msg, bucket) {
@@ -846,13 +846,14 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		bck.Provider = cmn.ProviderAIS
 	}
 	if bck.IsHDFS() && msg.Value == nil {
-		p.invalmsghdlr(w, r, "bucket property 'extra.hdfs.ref_directory' must be specified when creating HDFS bucket")
+		p.writeErr(w, r,
+			errors.New("property 'extra.hdfs.ref_directory' must be specified when creating HDFS bucket"))
 		return
 	}
 	if msg.Value != nil {
 		propsToUpdate := cmn.BucketPropsToUpdate{}
 		if err := cmn.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 
@@ -860,7 +861,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		bck.Props = defaultBckProps(bckPropsArgs{bck: bck})
 		bck.Props, err = p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 
@@ -869,7 +870,7 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 			backend := cluster.BackendBck(bck)
 			if err = backend.InitNoBackend(p.owner.bmd); err != nil {
 				if _, ok := err.(*cmn.ErrorRemoteBucketDoesNotExist); !ok {
-					p.invalmsghdlrf(w, r,
+					p.writeErrf(w, r,
 						"cannot create %s: failing to initialize backend %s, err: %v",
 						bck, backend, err)
 					return
@@ -889,13 +890,13 @@ func (p *proxyrunner) hpostCreateBucket(w http.ResponseWriter, r *http.Request, 
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
 			errCode = http.StatusConflict
 		}
-		p.invalmsghdlr(w, r, err.Error(), errCode)
+		p.writeErr(w, r, err, errCode)
 	}
 }
 
 func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	if err := p.checkACL(r.Header, nil, cmn.AccessListBuckets); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+		p.writeErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 
@@ -910,7 +911,7 @@ func (p *proxyrunner) hpostAllBuckets(w http.ResponseWriter, r *http.Request, ms
 		}
 		p.bucketSummary(w, r, bck, msg)
 	default:
-		p.invalmsghdlrf(w, r, "all buckets: invalid action %q", msg.Action)
+		p.writeErrf(w, r, "all buckets: invalid action %q", msg.Action)
 	}
 }
 
@@ -922,11 +923,11 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		smap    = p.owner.smap.get()
 	)
 	if err := cmn.MorphMarshal(amsg.Value, &smsg); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	if smap.CountActiveTargets() < 1 {
-		p.invalmsghdlr(w, r, "No registered targets yet")
+		p.writeErr(w, r, errors.New("no registered targets yet"))
 		return
 	}
 
@@ -971,7 +972,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		//  xaction and return new `UUID`.
 	}
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -1011,7 +1012,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 	)
 	listMsgJSON := cmn.MustMarshal(amsg.Value)
 	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -1021,7 +1022,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 	}
 
 	if summaries, uuid, err = p.gatherBucketSummary(bck, &smsg); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -1108,38 +1109,38 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	// TODO: revisit versus cloud bucket not being present, see p.tryBckInit
 	bck := request.bck
 	if err := bck.Init(p.owner.bmd); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	switch msg.Action {
 	case cmn.ActRenameObject:
 		if err := p.checkACL(r.Header, bck, cmn.AccessObjMOVE); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+			p.writeErr(w, r, err, http.StatusUnauthorized)
 			return
 		}
 		if bck.IsRemote() {
-			p.invalmsghdlrf(w, r, "%q is not supported for remote buckets (%s)", msg.Action, bck)
+			p.writeErrf(w, r, "%q is not supported for remote buckets (%s)", msg.Action, bck)
 			return
 		}
 		if bck.Props.EC.Enabled {
-			p.invalmsghdlrf(w, r, "%q is not supported for erasure-coded buckets: %s", msg.Action, bck)
+			p.writeErrf(w, r, "%q is not supported for erasure-coded buckets: %s", msg.Action, bck)
 			return
 		}
 		p.objRename(w, r, bck, request.items[1], &msg)
 		return
 	case cmn.ActPromote:
 		if err := p.checkACL(r.Header, bck, cmn.AccessPROMOTE); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+			p.writeErr(w, r, err, http.StatusUnauthorized)
 			return
 		}
 		if !filepath.IsAbs(msg.Name) {
-			p.invalmsghdlr(w, r, "source must be an absolute path", http.StatusBadRequest)
+			p.writeErr(w, r, errors.New("source must be an absolute path"), http.StatusBadRequest)
 			return
 		}
 		p.promoteFQN(w, r, bck, &msg)
 		return
 	default:
-		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		p.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -1163,8 +1164,8 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	cloudProps, statusCode, err := p.headRemoteBck(*bck.RemoteBck(), nil)
 	if err != nil {
-		// TODO -- FIXME: decide what needs to be done when HEAD fails - changes to BMD
-		p.invalmsghdlr(w, r, err.Error(), statusCode)
+		// TODO: what if HEAD fails
+		p.writeErr(w, r, err, statusCode)
 		return
 	}
 
@@ -1182,7 +1183,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	_, err = p.owner.bmd.modify(ctx)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
 
@@ -1233,13 +1234,13 @@ func (p *proxyrunner) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = p.checkAction(msg, cmn.ActSetBprops, cmn.ActResetBprops); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
 	var xactID string
 	if xactID, err = p.setBucketProps(w, r, msg, bck, &propsToUpdate); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	w.Write([]byte(xactID))
@@ -1260,7 +1261,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request, origUR
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
+		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1286,14 +1287,14 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	if !smap.isValid() {
 		errmsg := fmt.Sprintf("%s must be starting up: cannot execute", p.si)
 		if msg != nil {
-			p.invalmsghdlrstatusf(w, r, http.StatusServiceUnavailable, "%s %s: %s", errmsg, msg.Action, s)
+			p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s %s: %s", errmsg, msg.Action, s)
 		} else {
-			p.invalmsghdlrstatusf(w, r, http.StatusServiceUnavailable, "%s %q", errmsg, s)
+			p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s %q", errmsg, s)
 		}
 		return true
 	}
 	if p.inPrimaryTransition.Load() {
-		p.invalmsghdlrstatusf(w, r, http.StatusServiceUnavailable,
+		p.writeErrStatusf(w, r, http.StatusServiceUnavailable,
 			"%s is in transition, cannot process the request", p.si)
 		return true
 	}
@@ -1365,7 +1366,7 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 
 	if !configured {
 		err = errors.New("ais remote cloud is not configured")
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return err
 	}
 
@@ -1373,14 +1374,14 @@ func (p *proxyrunner) reverseReqRemote(w http.ResponseWriter, r *http.Request, m
 	urls, exists := aisConf[remoteUUID]
 	if !exists {
 		err = fmt.Errorf("remote UUID/alias (%s) not found", remoteUUID)
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return err
 	}
 
 	cmn.Assert(len(urls) > 0)
 	u, err := url.Parse(urls[0])
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return err
 	}
 	if msg != nil {
@@ -1406,7 +1407,7 @@ func (p *proxyrunner) listBuckets(w http.ResponseWriter, r *http.Request, query 
 	}
 	si, err := p.owner.smap.get().GetRandTarget()
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	p.reverseNodeRequest(w, r, si)
@@ -1667,13 +1668,13 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 	objName string, msg *cmn.ActionMsg) {
 	started := time.Now()
 	if objName == msg.Name {
-		p.invalmsghdlr(w, r, "the new and the current names are the same")
+		p.writeErr(w, r, errors.New("the new and the current names are the same"))
 		return
 	}
 	smap := p.owner.smap.get()
 	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1690,7 +1691,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
 	promoteArgs := cmn.ActValPromote{}
 	if err := cmn.MorphMarshal(msg.Value, &promoteArgs); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	var (
@@ -1702,7 +1703,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		tsi := smap.GetTarget(promoteArgs.Target)
 		if tsi == nil {
 			err := &errNodeNotFound{cmn.ActPromote + " failure", promoteArgs.Target, p.si, smap}
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
@@ -1730,7 +1731,7 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 		if res.err == nil {
 			continue
 		}
-		p.invalmsghdlrf(w, r, res.err.Error())
+		p.writeErrf(w, r, res.err.Error())
 		break
 	}
 	freeCallResults(results)
@@ -1776,7 +1777,7 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 
 	nodeID := r.Header.Get(cmn.HeaderNodeID)
 	if nodeID == "" {
-		p.invalmsghdlr(w, r, "missing node ID")
+		p.writeErr(w, r, errors.New("missing node ID"))
 		return
 	}
 	smap := p.owner.smap.get()
@@ -1793,13 +1794,13 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	nodeURL := r.Header.Get(cmn.HeaderNodeURL)
 	if nodeURL == "" {
 		err = &errNodeNotFound{"cannot rproxy", nodeID, p.si, smap}
-		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
 
 	parsedURL, err := url.Parse(nodeURL)
 	if err != nil {
-		p.invalmsghdlrf(w, r, "%s: invalid URL %q for node %s", p.si, nodeURL, nodeID)
+		p.writeErrf(w, r, "%s: invalid URL %q for node %s", p.si, nodeURL, nodeID)
 		return
 	}
 
@@ -1823,7 +1824,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpdaepost(w, r)
 	default:
-		p.invalmsghdlrf(w, r, "invalid method %s for /daemon path", r.Method)
+		p.writeErrf(w, r, "invalid method %s for /daemon path", r.Method)
 	}
 }
 
@@ -1920,7 +1921,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+		p.writeErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 	// urlpath-based actions
@@ -1942,11 +1943,11 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		transient := cmn.IsParseBool(query.Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err = cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
-			p.invalmsghdlrf(w, r, "failed to parse configuration to update, err: %v", err)
+			p.writeErrf(w, r, "failed to parse configuration to update, err: %v", err)
 			return
 		}
 		if err := jsp.SetConfig(toUpdate, transient); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 	case cmn.ActShutdown:
@@ -1958,13 +1959,13 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 		force := cmn.IsParseBool(query.Get(cmn.URLParamForce))
 		if !force {
-			p.invalmsghdlrf(w, r, "cannot shutdown primary %s (see documentation and consider %s=true option)",
+			p.writeErrf(w, r, "cannot shutdown primary %s (see documentation and consider %s=true option)",
 				p.si, cmn.URLParamForce)
 			return
 		}
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
-		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		p.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -1978,11 +1979,11 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 			return
 		}
 		if err := newsmap.validate(); err != nil {
-			p.invalmsghdlrf(w, r, "%s: invalid %s: %v", p.si, newsmap, err)
+			p.writeErrf(w, r, "%s: invalid %s: %v", p.si, newsmap, err)
 			return
 		}
 		if err := p.owner.smap.synchronize(p.si, newsmap); err != nil {
-			p.invalmsghdlrf(w, r, "failed to synch %s: %v", newsmap, err)
+			p.writeErrf(w, r, "failed to synch %s: %v", newsmap, err)
 			return
 		}
 		glog.Infof("%s: %s %s done", p.si, cmn.SyncSmap, newsmap)
@@ -1993,11 +1994,11 @@ func (p *proxyrunner) daePathAction(w http.ResponseWriter, r *http.Request, acti
 			toUpdate  = &cmn.ConfigToUpdate{}
 		)
 		if err := toUpdate.FillFromQuery(query); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		if err := jsp.SetConfig(toUpdate, transient); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 		}
 	case cmn.ActAttach, cmn.ActDetach:
 		_ = p.attachDetach(w, r, action)
@@ -2021,7 +2022,7 @@ func (p *proxyrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		p.keepalive.send(kaUnregisterMsg)
 		return
 	default:
-		p.invalmsghdlrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
+		p.writeErrf(w, r, "unrecognized path: %q in /daemon DELETE", apiItems[0])
 		return
 	}
 }
@@ -2032,21 +2033,19 @@ func (p *proxyrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	if len(apiItems) == 0 || apiItems[0] != cmn.UserRegister {
-		p.invalmsghdlr(w, r, "unrecognized path in /daemon POST")
+		p.writeErr(w, r, errors.New("invalid path in /daemon POST"))
 		return
 	}
-
 	p.keepalive.send(kaRegisterMsg)
 	body, err := cmn.ReadBytes(r)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	caller := r.Header.Get(cmn.HeaderCallerName)
 	if err := p.applyRegMeta(body, caller); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 	}
 }
 
@@ -2091,7 +2090,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	psi := smap.GetProxy(proxyID)
 	if psi == nil && newPrimaryURL == "" {
 		err := &errNodeNotFound{"failed to find new primary", proxyID, p.si, smap}
-		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	if newPrimaryURL == "" {
@@ -2099,17 +2098,17 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	}
 	if newPrimaryURL == "" {
 		err := &errNodeNotFound{"failed to get new primary's direct URL", proxyID, p.si, smap}
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	newSmap, err := p.smapFromURL(newPrimaryURL)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	primary := newSmap.Primary
 	if proxyID != primary.ID() {
-		p.invalmsghdlrf(w, r, "%s: proxy %s is not the primary, current %s", p.si, proxyID, newSmap.pp())
+		p.writeErrf(w, r, "%s: proxy %s is not the primary, current %s", p.si, proxyID, newSmap.pp())
 		return
 	}
 
@@ -2117,7 +2116,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	p.owner.smap.put(newSmap)
 	res := p.registerToURL(primary.IntraControlNet.DirectURL, primary, cmn.DefaultTimeout, nil, false)
 	if res.err != nil {
-		p.invalmsghdlr(w, r, res.err.Error())
+		p.writeErr(w, r, res.err)
 	}
 }
 
@@ -2135,7 +2134,7 @@ func (p *proxyrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	// forceful primary change
 	if force && apiItems[0] == cmn.Proxy {
 		if !p.owner.smap.get().isPrimary(p.si) {
-			p.invalmsghdlrf(w, r, "%s is not the primary", p.si)
+			p.writeErrf(w, r, "%s is not the primary", p.si)
 		}
 		p.forcefulJoin(w, r, proxyID)
 		return
@@ -2143,30 +2142,27 @@ func (p *proxyrunner) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 
 	preparestr := query.Get(cmn.URLParamPrepare)
 	if prepare, err = cmn.ParseBool(preparestr); err != nil {
-		p.invalmsghdlrf(w, r, "failed to parse %s URL parameter: %v", cmn.URLParamPrepare, err)
+		p.writeErrf(w, r, "failed to parse %s URL parameter: %v", cmn.URLParamPrepare, err)
 		return
 	}
-
 	if p.owner.smap.get().isPrimary(p.si) {
-		p.invalmsghdlr(w, r, "expecting 'cluster' (RESTful) resource when designating primary proxy via API")
+		p.writeErr(w, r,
+			errors.New("expecting 'cluster' (RESTful) resource when designating primary proxy via API"))
 		return
 	}
-
 	if p.si.ID() == proxyID {
 		if !prepare {
 			p.becomeNewPrimary("")
 		}
 		return
 	}
-
 	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil {
 		err := &errNodeNotFound{"cannot set new primary", proxyID, p.si, smap}
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
-
 	if prepare {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
@@ -2215,7 +2211,6 @@ func (p *proxyrunner) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		msg   = p.newAisMsgStr(cmn.ActNewPrimary, clone, bmd)
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
-
 	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p.si, clone, bmd, rmd)
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
@@ -2238,7 +2233,7 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+		p.writeErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 
@@ -2274,14 +2269,13 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Scheme == "" {
-		p.invalmsghdlr(w, r, "invalid request", http.StatusBadRequest)
+		p.writeErr(w, r, errors.New("invalid protocol scheme ''"), http.StatusBadRequest)
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
-
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		// bck.IsHTTP()
 		hbo := cmn.NewHTTPObj(r.URL)
@@ -2297,7 +2291,7 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	p.invalmsghdlrf(w, r, "%q provider doesn't support %q", cmn.ProviderHTTP, r.Method)
+	p.writeErrf(w, r, "%q provider doesn't support %q", cmn.ProviderHTTP, r.Method)
 }
 
 /////////////////

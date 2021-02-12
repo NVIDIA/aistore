@@ -68,7 +68,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		smap := p.owner.smap.get()
 		si, err := smap.GetRandTarget()
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		args := callArgs{
@@ -80,7 +80,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		er := res.err
 		_freeCallRes(res)
 		if er != nil {
-			p.invalmsghdlr(w, r, er.Error())
+			p.writeErr(w, r, er)
 			return
 		}
 		// TODO: switch to writeJSON
@@ -122,7 +122,7 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 		}
 		body = cmn.MustMarshal(xactMsg)
 	default:
-		p.invalmsghdlrstatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
+		p.writeErrStatusf(w, r, http.StatusBadRequest, "invalid `what`: %v", what)
 		return
 	}
 	args := allocBcastArgs()
@@ -139,22 +139,22 @@ func (p *proxyrunner) queryXaction(w http.ResponseWriter, r *http.Request, what 
 func (p *proxyrunner) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string) {
 	timeout := cmn.GCO.Get().Client.Timeout
 	proxyResults, err := p.cluSysinfo(r, timeout, cluster.Proxies)
-	if err != "" {
-		p.invalmsghdlr(w, r, err)
+	if err != nil {
+		p.writeErr(w, r, err)
 		return
 	}
 	out := &cmn.ClusterSysInfoRaw{}
 	out.Proxy = proxyResults
 	targetResults, err := p.cluSysinfo(r, timeout, cluster.Targets)
-	if err != "" {
-		p.invalmsghdlr(w, r, err)
+	if err != nil {
+		p.writeErr(w, r, err)
 		return
 	}
 	out.Target = targetResults
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cmn.JSONRawMsgs, string) {
+func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int) (cmn.JSONRawMsgs, error) {
 	args := allocBcastArgs()
 	args.req = cmn.ReqArgs{Method: r.Method, Path: cmn.URLPathDaemon.S, Query: r.URL.Query()}
 	args.timeout = timeout
@@ -164,14 +164,14 @@ func (p *proxyrunner) cluSysinfo(r *http.Request, timeout time.Duration, to int)
 	sysInfoMap := make(cmn.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			details := res.details
+			err := res.err
 			freeCallResults(results)
-			return nil, details
+			return nil, err
 		}
 		sysInfoMap[res.si.ID()] = res.bytes
 	}
 	freeCallResults(results)
-	return sysInfoMap, ""
+	return sysInfoMap, nil
 }
 
 func (p *proxyrunner) queryClusterStats(w http.ResponseWriter, r *http.Request, what string) {
@@ -205,7 +205,7 @@ func (p *proxyrunner) _queryTargets(w http.ResponseWriter, r *http.Request) cmn.
 	if r.Body != nil {
 		body, err = cmn.ReadBytes(r)
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return nil
 		}
 	}
@@ -224,7 +224,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 			continue
 		}
 		if res.err != nil {
-			p.invalmsghdlr(w, r, res.details)
+			p.writeErr(w, r, res.err)
 			freeCallResults(results)
 			return nil
 		}
@@ -232,7 +232,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 	}
 	freeCallResults(results)
 	if len(targetResults) == 0 {
-		p.invalmsghdlr(w, r, "xaction not found", http.StatusNotFound)
+		p.writeErr(w, r, errors.New("xaction not found"), http.StatusNotFound)
 		return nil
 	}
 	return targetResults
@@ -282,7 +282,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		tag = "join"
 		selfRegister = true
 	default:
-		p.invalmsghdlrf(w, r, "invalid URL path: %q", apiItems[0])
+		p.writeErrf(w, r, "invalid URL path: %q", apiItems[0])
 		return
 	}
 	if selfRegister && !p.ClusterStarted() {
@@ -292,13 +292,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	nsi := regReq.SI
 	if err := nsi.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	if p.NodeStarted() {
 		bmd := p.owner.bmd.get()
 		if err := bmd.validateUUID(regReq.BMD, p.si, nsi, ""); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 	}
@@ -316,7 +316,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validateHostname(nsi.PublicNet.NodeHostname); err != nil {
-		p.invalmsghdlrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, tag, nsi, err)
+		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, tag, nsi, err)
 		return
 	}
 
@@ -329,7 +329,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	if userRegister {
 		if errCode, err := p.userRegisterNode(nsi, tag); err != nil {
-			p.invalmsghdlr(w, r, err.Error(), errCode)
+			p.writeErr(w, r, err, errCode)
 			return
 		}
 	}
@@ -337,7 +337,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		smap := p.owner.smap.get()
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
 			if p.detectDaemonDuplicate(osi, nsi) {
-				p.invalmsghdlrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi, nsi)
+				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi, nsi)
 				return
 			}
 			glog.Warningf("%s: self-registering %s with duplicate node ID %q", p.si, nsi, nsi.ID())
@@ -353,7 +353,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.owner.smap.Unlock()
 
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -609,7 +609,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+		p.writeErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 	if len(apiItems) == 0 {
@@ -634,12 +634,12 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSetConfig:
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err := cmn.MorphMarshal(msg.Value, toUpdate); err != nil {
-			p.invalmsghdlrf(w, r, "%s: failed to parse value, err: %v", cmn.ActSetConfig, err)
+			p.writeErrf(w, r, "%s: failed to parse value, err: %v", cmn.ActSetConfig, err)
 			return
 		}
 		transient := cmn.IsParseBool(r.URL.Query().Get(cmn.ActTransient))
 		if err := jsp.SetConfig(toUpdate, transient); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		p.setConfig(w, r, msg, nil /*from query*/)
@@ -662,7 +662,7 @@ func (p *proxyrunner) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActStopMaintenance:
 		p.stopMaintenance(w, r, msg)
 	default:
-		p.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+		p.writeErrf(w, r, fmtUnknownAct, msg)
 	}
 }
 
@@ -684,7 +684,7 @@ func (p *proxyrunner) setConfig(w http.ResponseWriter, r *http.Request, msg *cmn
 		if res.err == nil {
 			continue
 		}
-		p.invalmsghdlrf(w, r, "%s failed, err: %s[%s]", cmn.ActSetConfig, res.err, res.details)
+		p.writeErrf(w, r, "%s failed, err: %s[%s]", cmn.ActSetConfig, res.err, res.details)
 		p.keepalive.onerr(res.err, res.status)
 		freeCallResults(results)
 		return
@@ -695,7 +695,7 @@ func (p *proxyrunner) setConfig(w http.ResponseWriter, r *http.Request, msg *cmn
 func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	xactMsg := xaction.XactReqMsg{}
 	if err := cmn.MorphMarshal(msg.Value, &xactMsg); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	if msg.Action == cmn.ActXactStart {
@@ -721,7 +721,7 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 		if res.err == nil {
 			continue
 		}
-		p.invalmsghdlr(w, r, res.err.Error())
+		p.writeErr(w, r, res.err)
 		freeCallResults(results)
 		return
 	}
@@ -736,7 +736,7 @@ func (p *proxyrunner) xactStarStop(w http.ResponseWriter, r *http.Request, msg *
 
 func (p *proxyrunner) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 	if err := p.canStartRebalance(true /*skip config*/); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	rmdCtx := &rmdModifier{
@@ -756,7 +756,7 @@ func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
 	smap := p.owner.smap.get()
 	si := smap.GetTarget(xactMsg.Node)
 	if si == nil {
-		p.invalmsghdlrf(w, r, "cannot resilver %v: node must exist and be a target", si)
+		p.writeErrf(w, r, "cannot resilver %v: node must exist and be a target", si)
 		return
 	}
 
@@ -772,7 +772,7 @@ func (p *proxyrunner) resilverOne(w http.ResponseWriter, r *http.Request,
 		},
 	)
 	if res.err != nil {
-		p.invalmsghdlr(w, r, res.err.Error())
+		p.writeErr(w, r, res.err)
 		return
 	}
 
@@ -787,22 +787,22 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 		dstID string
 	)
 	if err := cmn.MorphMarshal(msg.Value, &dstID); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	dst := smap.GetProxy(dstID)
 	if dst == nil {
-		p.invalmsghdlrf(w, r, "%s: unknown proxy node p[%s]", p.si, dstID)
+		p.writeErrf(w, r, "%s: unknown proxy node p[%s]", p.si, dstID)
 		return
 	}
 	if !smap.IsIC(dst) {
-		p.invalmsghdlrf(w, r, "%s: not an IC member", dst)
+		p.writeErrf(w, r, "%s: not an IC member", dst)
 		return
 	}
 	if smap.IsIC(p.si) && !p.si.Equals(dst) {
 		// node has older version than dst node handle locally
 		if err := p.ic.sendOwnershipTbl(dst); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 		}
 		return
 	}
@@ -818,7 +818,7 @@ func (p *proxyrunner) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *cm
 		args.si = psi
 		res := p.call(args)
 		if res.err != nil {
-			p.invalmsghdlr(w, r, res.err.Error())
+			p.writeErr(w, r, res.err)
 		}
 		_freeCallRes(res)
 		break
@@ -832,36 +832,36 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 		smap = p.owner.smap.get()
 	)
 	if err := p.checkACL(r.Header, nil, cmn.AccessAdmin); err != nil {
-		p.invalmsghdlr(w, r, err.Error(), http.StatusUnauthorized)
+		p.writeErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 	if err := cmn.MorphMarshal(msg.Value, &opts); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
+		p.writeErrStatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 		return
 	}
 	if smap.PresentInMaint(si) {
-		p.invalmsghdlrf(w, r, "Node %q is already in maintenance", opts.DaemonID)
+		p.writeErrf(w, r, "Node %q is already in maintenance", opts.DaemonID)
 		return
 	}
 	if p.si.Equals(si) {
-		p.invalmsghdlrf(w, r, "Node %q is primary, cannot perform %q", opts.DaemonID, msg.Action)
+		p.writeErrf(w, r, "Node %q is primary, cannot perform %q", opts.DaemonID, msg.Action)
 		return
 	}
 	// proxy
 	if si.IsProxy() {
 		if err := p.markMaintenance(msg, si); err != nil {
-			p.invalmsghdlrf(w, r, "Failed to %s %s: %v", msg.Action, si, err)
+			p.writeErrf(w, r, "Failed to %s %s: %v", msg.Action, si, err)
 			return
 		}
 		if msg.Action == cmn.ActDecommission || msg.Action == cmn.ActShutdownNode {
 			errCode, err := p.callRmSelf(msg, si, true /*skipReb*/)
 			if err != nil {
-				p.invalmsghdlrstatusf(w, r, errCode, "Failed to %s %s: %v", msg.Action, si, err)
+				p.writeErrStatusf(w, r, errCode, "Failed to %s %s: %v", msg.Action, si, err)
 			}
 		}
 		return
@@ -869,7 +869,7 @@ func (p *proxyrunner) rmNode(w http.ResponseWriter, r *http.Request, msg *cmn.Ac
 	// target
 	rebID, err := p.startMaintenance(si, msg, &opts)
 	if err != nil {
-		p.invalmsghdlrf(w, r, "Failed to %s %s: %v", msg.Action, si, err)
+		p.writeErrf(w, r, "Failed to %s %s: %v", msg.Action, si, err)
 		return
 	}
 	if rebID != 0 {
@@ -883,21 +883,21 @@ func (p *proxyrunner) stopMaintenance(w http.ResponseWriter, r *http.Request, ms
 		smap = p.owner.smap.get()
 	)
 	if err := cmn.MorphMarshal(msg.Value, &opts); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		p.invalmsghdlrstatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
+		p.writeErrStatusf(w, r, http.StatusNotFound, "Node %q %s", opts.DaemonID, cmn.DoesNotExist)
 		return
 	}
 	if !smap.PresentInMaint(si) {
-		p.invalmsghdlrf(w, r, "Node %q is not under maintenance", opts.DaemonID)
+		p.writeErrf(w, r, "Node %q is not under maintenance", opts.DaemonID)
 		return
 	}
 	rebID, err := p.cancelMaintenance(msg, &opts)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 	if rebID != 0 {
@@ -915,11 +915,11 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 		transient := cmn.IsParseBool(query.Get(cmn.ActTransient))
 		toUpdate := &cmn.ConfigToUpdate{}
 		if err := toUpdate.FillFromQuery(query); err != nil {
-			p.invalmsghdlrf(w, r, err.Error())
+			p.writeErrf(w, r, err.Error())
 			return
 		}
 		if err := jsp.SetConfig(toUpdate, transient); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		p.setConfig(w, r, nil, query)
@@ -936,7 +936,7 @@ func (p *proxyrunner) cluputQuery(w http.ResponseWriter, r *http.Request, action
 			if res.err == nil {
 				continue
 			}
-			p.invalmsghdlr(w, r, res.err.Error())
+			p.writeErr(w, r, res.err)
 			p.keepalive.onerr(res.err, res.status)
 			freeCallResults(results)
 			return
@@ -1069,7 +1069,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyid)
 	if psi == nil {
-		p.invalmsghdlrf(w, r, "new primary proxy %s is not present in the %s", proxyid, smap.StringEx())
+		p.writeErrf(w, r, "new primary proxy %s is not present in the %s", proxyid, smap.StringEx())
 		return
 	}
 	if proxyid == p.si.ID() {
@@ -1078,7 +1078,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if smap.PresentInMaint(psi) {
-		p.invalmsghdlrf(w, r, "cannot set new primary: %s is under maintenance", psi)
+		p.writeErrf(w, r, "cannot set new primary: %s is under maintenance", psi)
 		return
 	}
 
@@ -1095,7 +1095,7 @@ func (p *proxyrunner) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.invalmsghdlrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase",
+		p.writeErrf(w, r, "Failed to set primary %s: err %v from %s in the prepare phase",
 			proxyid, res.err, res.si)
 		freeCallResults(results)
 		return
@@ -1152,7 +1152,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	)
 	if node == nil {
 		err = &errNodeNotFound{"cannot remove", sid, p.si, smap}
-		p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
 	if p.forwardCP(w, r, nil, sid) {
@@ -1171,7 +1171,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		errCode, err = p.callRmSelf(&cmn.ActionMsg{Action: testInitiatedRm}, node, false /*skipReb*/)
 	}
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error(), errCode)
+		p.writeErr(w, r, err, errCode)
 	}
 }
 

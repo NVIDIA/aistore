@@ -46,7 +46,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 		if xactMsg.Bck.Name != "" {
 			bck = cluster.NewBckEmbed(xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd); err != nil {
-				t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+				t.writeErrSilent(w, r, err, http.StatusNotFound)
 				return
 			}
 		}
@@ -60,20 +60,20 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := cmn.MorphMarshal(msg.Value, &xactMsg); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
+			t.writeErr(w, r, err)
 			return
 		}
 		if !xactMsg.Bck.IsEmpty() {
 			bck = cluster.NewBckEmbed(xactMsg.Bck)
 			if err := bck.Init(t.owner.bmd); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
+				t.writeErr(w, r, err)
 				return
 			}
 		}
 		switch msg.Action {
 		case cmn.ActXactStart:
 			if err := t.cmdXactStart(&xactMsg, bck); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
+				t.writeErr(w, r, err)
 				return
 			}
 		case cmn.ActXactStop:
@@ -84,7 +84,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			xreg.DoAbort(xactMsg.Kind, bck)
 			return
 		default:
-			t.invalmsghdlrf(w, r, fmtUnknownAct, msg)
+			t.writeErrf(w, r, fmtUnknownAct, msg)
 		}
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /xactions path")
@@ -93,7 +93,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what, uuid string) {
 	if what != cmn.GetWhatXactStats {
-		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
+		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
 	xact := xreg.GetXact(uuid)
@@ -102,13 +102,13 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 		return
 	}
 	err := cmn.NewXactionNotFoundError("ID='" + uuid + "'")
-	t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+	t.writeErrSilent(w, r, err, http.StatusNotFound)
 }
 
 func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request, what string,
 	xactQuery xreg.XactFilter) {
 	if what != cmn.QueryXactStats {
-		t.invalmsghdlrf(w, r, fmtUnknownQue, what)
+		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
 	stats, err := xreg.GetStats(xactQuery)
@@ -117,9 +117,9 @@ func (t *targetrunner) queryMatchingXact(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if _, ok := err.(cmn.XactionNotFoundError); ok {
-		t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+		t.writeErrSilent(w, r, err, http.StatusNotFound)
 	} else {
-		t.invalmsghdlr(w, r, err.Error())
+		t.writeErr(w, r, err)
 	}
 }
 
