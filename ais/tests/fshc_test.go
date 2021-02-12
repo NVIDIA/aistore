@@ -22,10 +22,9 @@ import (
 )
 
 const (
-	fshcDetectTimeMax      = time.Second * 20
-	fshcDetectTimeDisabled = time.Second * 10
-	fshcRunTimeMax         = time.Second * 20
-	fshcDir                = "fschecker"
+	fshcDetectTimeMax = time.Second * 10
+	fshcRunTimeMax    = time.Second * 15
+	fshcDir           = "fschecker"
 )
 
 type checkerMD struct {
@@ -131,7 +130,9 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 				Reader:     r,
 				Size:       uint64(md.fileSize),
 			})
-			tassert.CheckFatal(md.t, err)
+			if err != nil {
+				tutils.Logf("%s: %v\n", objName, err)
+			}
 		}
 	case http.MethodGet:
 		for _, objName := range objList {
@@ -143,25 +144,20 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 		}
 	}
 
-	if detected := waitForMountpathChanges(md.t, target, len(mpathList.Available)-1, len(mpathList.Disabled)+1, false, fshcDetectTimeDisabled); detected {
+	if detected := waitForMountpathChanges(md.t, target, len(mpathList.Available)-1, len(mpathList.Disabled)+1, false); detected {
 		md.t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 	}
 }
 
-func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disabledLen int, failIfDiffer bool, timeout ...time.Duration) bool {
+func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disabledLen int, failIfDiffer bool) bool {
 	var (
 		err        error
 		newMpaths  *cmn.MountpathList
 		baseParams = tutils.BaseAPIParams()
 	)
 
-	maxWaitTime := fshcDetectTimeMax
-	if len(timeout) != 0 && timeout[0] != 0 {
-		maxWaitTime = timeout[0]
-	}
-
 	detectStart := time.Now()
-	detectLimit := time.Now().Add(maxWaitTime)
+	detectLimit := time.Now().Add(fshcDetectTimeMax)
 
 	for detectLimit.After(time.Now()) {
 		newMpaths, err = api.GetMountpaths(baseParams, target)
