@@ -170,7 +170,7 @@ test:cloud:gcp:
     - make test-long
 
 test:cloud:hdfs:
-  image: aistore/ci:1.15-hdfs
+  image: aistore/ci:2.0-hdfs
   <<: *test_long_def
   variables:
     NUM_PROXY: 6
