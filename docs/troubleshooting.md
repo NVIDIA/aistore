@@ -3,7 +3,7 @@
 This text is intended to help troubleshooting AIStore operation. Easy-to-use TAB-completion based [CLI](../cmd/cli/README.md) is one of the first tools to consider, and of the first commands would be the one that shows the state of the cluster:
 
 ```console
-# ais show cluster <TAB>-<TAB>
+$ ais show cluster <TAB>-<TAB>
 ...  proxy         smap          target
 ```
 

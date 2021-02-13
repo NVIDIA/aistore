@@ -67,7 +67,7 @@ To ensure that AIStore works properly you probably need to increase the default 
 Here're the (example) settings that we use for development:
 
 ```
-# tail /etc/security/limits.conf
+$ tail /etc/security/limits.conf
 #ftp             hard    nproc           0
 #ftp             -       chroot          /ftp
 #@student        -       maxlogins       4
