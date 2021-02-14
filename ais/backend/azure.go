@@ -146,10 +146,10 @@ func (ap *azureProvider) azureErrorToAISError(azureError error, bck *cmn.Bck, ob
 		return http.StatusNotFound, cmn.NewErrorRemoteBucketDoesNotExist(*bck)
 	case azblob.ServiceCodeBlobNotFound:
 		msg := fmt.Sprintf("%s/%s not found", bck, objName)
-		return http.StatusNotFound, &cmn.HTTPError{Status: http.StatusNotFound, Message: msg}
+		return http.StatusNotFound, cmn.NewHTTPErr(nil, msg, http.StatusNotFound)
 	case azblob.ServiceCodeInvalidResourceName:
 		msg := fmt.Sprintf("%s/%s not found", bck, objName)
-		return http.StatusNotFound, &cmn.HTTPError{Status: http.StatusNotFound, Message: msg}
+		return http.StatusNotFound, cmn.NewHTTPErr(nil, msg, http.StatusNotFound)
 	default:
 		resp := stgErr.Response()
 		if resp != nil {

@@ -120,8 +120,7 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 	defer cmn.Close(resp.Body)
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		err, _ := cmn.NewHTTPError(req, "", resp.StatusCode)
-		return false, err
+		return false, cmn.NewHTTPErr(req, "", resp.StatusCode)
 	}
 
 	var (
@@ -146,22 +145,25 @@ func (t *singleObjectTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Durat
 
 func (t *singleObjectTask) downloadLocal(lom *cluster.LOM) (err error) {
 	var (
-		fatal   bool
-		httpErr = &cmn.HTTPError{}
 		timeout = t.initialTimeout()
+		fatal   bool
 	)
 	for i := 0; i < retryCnt; i++ {
 		fatal, err = t.tryDownloadLocal(lom, timeout)
 		if err == nil || fatal {
 			return err
-		} else if errors.Is(err, context.Canceled) || errors.Is(err, errThrottlerStopped) {
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, errThrottlerStopped) {
 			// Download was canceled or stopped, so just return.
 			return err
-		} else if errors.Is(err, context.DeadlineExceeded) {
-			glog.Warningf("%s [retries: %d/%d]: context exceeded with timeout (%v), increasing and retrying...", t, i, retryCnt, timeout)
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			glog.Warningf("%s [retries: %d/%d]: timeout (%v) - increasing and retrying...",
+				t, i, retryCnt, timeout)
 			timeout = time.Duration(float64(timeout) * reqTimeoutFactor)
-		} else if errors.As(err, &httpErr) {
-			glog.Warningf("%s [retries: %d/%d]: failed to perform request: %v (code: %d)", t, i, retryCnt, err, httpErr.Status)
+		} else if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
+			glog.Warningf("%s [retries: %d/%d]: failed to perform request: %v (code: %d)", t, i, retryCnt, err,
+				httpErr.Status)
 			if _, exists := terminalStatuses[httpErr.Status]; exists {
 				// Nothing we can do...
 				return err

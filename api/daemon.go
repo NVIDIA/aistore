@@ -100,7 +100,7 @@ func GetDaemonConfig(baseParams BaseParams, nodeID string) (config *cmn.Config, 
 	return config, err
 }
 
-// GetDaemonStatus returns the info of a specific node in the cluster.
+// GetDaemonStatus returns information about specific node in a cluster.
 func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonStatus, err error) {
 	baseParams.Method = http.MethodGet
 	err = DoHTTPRequest(ReqParams{
@@ -112,18 +112,17 @@ func GetDaemonStatus(baseParams BaseParams, node *cluster.Snode) (daeInfo *stats
 	if err == nil {
 		daeInfo.Status = StatusOnline
 	} else {
-		httpErr := &cmn.HTTPError{}
 		daeInfo = &stats.DaemonStatus{Snode: node, Status: StatusOffline}
 		if errors.Is(err, context.DeadlineExceeded) {
 			daeInfo.Status = StatusTimedOut
-		} else if errors.As(err, &httpErr) {
+		} else if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
 			daeInfo.Status = fmt.Sprintf("error: %d", httpErr.Status)
 		}
 	}
 	return daeInfo, err
 }
 
-// SetDaemonConfig given key value pairs sets the configuration accordingly for a specific node.
+// SetDaemonConfig, given key value pairs, sets the configuration accordingly for a specific node.
 func SetDaemonConfig(baseParams BaseParams, nodeID string, nvs cmn.SimpleKVs) error {
 	baseParams.Method = http.MethodPut
 	query := url.Values{}

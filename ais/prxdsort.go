@@ -20,7 +20,7 @@ func (p *proxyrunner) proxyStartSortHandler(w http.ResponseWriter, r *http.Reque
 	}
 	parsedRS, err := rs.Parse()
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		p.writeErr(w, r, err)
 		return
 	}
 

@@ -489,17 +489,16 @@ func (reb *Manager) rebFini(md *rebArgs, err error) {
 
 func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		caller     = r.Header.Get(cmn.HeaderCallerName)
-		query      = r.URL.Query()
-		getRebData = cmn.IsParseBool(query.Get(cmn.URLParamRebData))
+		caller = r.Header.Get(cmn.HeaderCallerName)
+		query  = r.URL.Query()
 	)
-
 	if r.Method != http.MethodGet {
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method "+r.Method)
 		return
 	}
-	if !getRebData {
-		cmn.InvalidHandler(w, r)
+	if !cmn.IsParseBool(query.Get(cmn.URLParamRebData)) {
+		s := fmt.Sprintf("invalid request: %q", cmn.URLParamRebData)
+		cmn.InvalidHandlerWithMsg(w, r, s)
 		return
 	}
 	rebStatus := &Status{}

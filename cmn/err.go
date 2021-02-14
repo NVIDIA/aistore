@@ -5,19 +5,30 @@
 package cmn
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
+
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // This source contains common AIS node inter-module errors -
 // the errors that some AIS packages (within a given running AIS node) return
 // and other AIS packages handle.
+
+const (
+	stackTracePrefix = "stack: ["
+	FromNodePrefix   = " from: ["
+)
 
 type (
 	SignalError struct {
@@ -95,6 +106,16 @@ type (
 	SoftError struct {
 		what string
 	}
+
+	// Error structure for HTTP errors
+	HTTPError struct {
+		Status     int    `json:"status"`
+		Message    string `json:"message"`
+		Method     string `json:"method"`
+		URLPath    string `json:"url_path"`
+		RemoteAddr string `json:"remote_addr"`
+		trace      string
+	}
 )
 
 var (
@@ -111,12 +132,18 @@ func IsEOF(err error) bool {
 }
 
 func IsErrAborted(err error) bool {
+	if _, ok := err.(*AbortedError); ok {
+		return true
+	}
 	return errors.As(err, &AbortedError{})
 }
 
 // IsErrorSoft returns true if the error is not critical and can be
 // ignored in some cases(e.g, when `--force` is set)
 func IsErrSoft(err error) bool {
+	if _, ok := err.(*SoftError); ok {
+		return true
+	}
 	return errors.As(err, &SoftError{})
 }
 
@@ -471,3 +498,140 @@ func IsObjNotExist(err error) bool {
 }
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }
 func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
+
+///////////////
+// HTTPError //
+///////////////
+
+func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *HTTPError) {
+	status := http.StatusBadRequest
+	if len(errCode) > 0 {
+		status = errCode[0]
+	}
+	e = &HTTPError{Status: status, Message: msg}
+	if r != nil {
+		e.Method, e.URLPath, e.RemoteAddr = r.Method, r.URL.Path, r.RemoteAddr
+	}
+	return
+}
+
+func S2HTTPErr(r *http.Request, msg string, status int) *HTTPError {
+	if msg != "" {
+		var httpErr HTTPError
+		if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
+			return &httpErr
+		}
+	}
+	return NewHTTPErr(r, msg, status)
+}
+
+func Err2HTTPErr(err error) (httpErr *HTTPError) {
+	var ok bool
+	if httpErr, ok = err.(*HTTPError); ok {
+		return
+	}
+	httpErr = &HTTPError{}
+	if !errors.As(err, &httpErr) {
+		httpErr = nil
+	}
+	return
+}
+
+// E.g.: Bad Request: Bucket abc does not appear to be local or does not exist:
+// DELETE /v1/buckets/abc from 127.0.0.1:54064 (stack: [httpcommon.go:840 <- proxy.go:484 <- proxy.go:264])
+func (e *HTTPError) String() (s string) {
+	s = http.StatusText(e.Status) + ": " + e.Message
+	if e.Method != "" || e.URLPath != "" {
+		s += ":"
+		if e.Method != "" {
+			s += " " + e.Method
+		}
+		if e.URLPath != "" {
+			s += " " + e.URLPath
+		}
+	}
+	if e.RemoteAddr != "" && !strings.Contains(e.Message, FromNodePrefix) {
+		s += " from " + e.RemoteAddr
+	}
+	return s + " (" + e.trace + ")"
+}
+
+func (e *HTTPError) Error() string {
+	// Stop from escaping <, > ,and &
+	buf := new(bytes.Buffer)
+	enc := jsoniter.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(e); err != nil {
+		return err.Error()
+	}
+	return buf.String()
+}
+
+func (e *HTTPError) write(w http.ResponseWriter, r *http.Request, silent bool) {
+	msg := e.Error()
+	if !strings.Contains(msg, stackTracePrefix) {
+		e.trace = appendStack()
+	}
+	if !silent {
+		glog.Errorln(e.String())
+	}
+	// make sure that the caller is aware that we return JSON error
+	w.Header().Set(HeaderContentType, ContentJSON)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if r.Method == http.MethodHead {
+		w.Header().Set(HeaderError, e.Error())
+		w.WriteHeader(e.Status)
+	} else {
+		w.WriteHeader(e.Status)
+		fmt.Fprintln(w, e.Error())
+	}
+}
+
+//////////////////////////////
+// invalid message handlers //
+//////////////////////////////
+
+// with stack trace
+func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
+	status := http.StatusBadRequest
+	if len(opts) > 0 && opts[0] > http.StatusBadRequest {
+		status = opts[0]
+	}
+	if httpErr := Err2HTTPErr(err); httpErr != nil {
+		if status > http.StatusBadRequest || httpErr.Status == 0 {
+			httpErr.Status = status
+		}
+		httpErr.write(w, r, len(opts) > 1 /*silent*/)
+	} else {
+		InvalidHandlerWithMsg(w, r, err.Error(), opts...)
+	}
+}
+
+func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
+	httpErr := NewHTTPErr(r, msg, opts...)
+	httpErr.write(w, r, len(opts) > 1 /*silent*/)
+}
+
+func appendStack() string {
+	var errMsg bytes.Buffer
+	fmt.Fprint(&errMsg, stackTracePrefix)
+	for i := 1; i < 9; i++ {
+		if _, file, line, ok := runtime.Caller(i); !ok {
+			break
+		} else {
+			if !strings.Contains(file, "aistore") {
+				break
+			}
+			f := filepath.Base(file)
+			if f == "err.go" {
+				continue
+			}
+			if errMsg.Len() > len(stackTracePrefix) {
+				errMsg.WriteString(" <- ")
+			}
+			fmt.Fprintf(&errMsg, "%s:%d", f, line)
+		}
+	}
+	fmt.Fprint(&errMsg, "]")
+	return errMsg.String()
+}

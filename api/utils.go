@@ -54,9 +54,8 @@ func HTTPStatus(err error) int {
 	if err == nil {
 		return http.StatusOK
 	}
-
-	if herr, ok := err.(*cmn.HTTPError); ok && herr != nil {
-		return herr.Status
+	if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
+		return httpErr.Status
 	}
 	return -1 // invalid
 }
@@ -202,6 +201,13 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 	if resp.StatusCode < http.StatusBadRequest {
 		return nil
 	}
+	if reqParams.BaseParams.Method == http.MethodHead {
+		if msg := resp.Header.Get(cmn.HeaderError); msg != "" {
+			httpErr := cmn.NewHTTPErr(nil, msg, resp.StatusCode)
+			httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
+			return httpErr
+		}
+	}
 	var (
 		httpErr *cmn.HTTPError
 		msg, _  = ioutil.ReadAll(resp.Body)
@@ -210,17 +216,7 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 		if jsonErr := jsoniter.Unmarshal(msg, &httpErr); jsonErr == nil {
 			return httpErr
 		}
-	} else if reqParams.BaseParams.Method == http.MethodHead {
-		if msg := resp.Header.Get(cmn.HeaderError); msg != "" {
-			return &cmn.HTTPError{
-				Status:  resp.StatusCode,
-				Method:  reqParams.BaseParams.Method,
-				Message: msg,
-				URLPath: reqParams.Path,
-			}
-		}
 	}
-
 	strMsg := string(msg)
 	if resp.StatusCode == http.StatusServiceUnavailable && strMsg == "" {
 		strMsg = fmt.Sprintf("[%s]: starting up, please try again later...",
@@ -228,12 +224,8 @@ func checkResp(reqParams ReqParams, resp *http.Response) error {
 	}
 	// HEAD request does not return the body - create http error
 	// 503 is also to be preserved
-	httpErr = &cmn.HTTPError{
-		Status:  resp.StatusCode,
-		Method:  reqParams.BaseParams.Method,
-		URLPath: reqParams.Path,
-		Message: strMsg,
-	}
+	httpErr = cmn.NewHTTPErr(nil, strMsg, resp.StatusCode)
+	httpErr.Method, httpErr.URLPath = reqParams.BaseParams.Method, reqParams.Path
 	return httpErr
 }
 

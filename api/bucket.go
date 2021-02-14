@@ -81,11 +81,9 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 	q = cmn.AddBckToQuery(q, bck)
 
 	resp, err := doHTTPRequestGetResp(ReqParams{BaseParams: baseParams, Path: path, Query: q}, nil)
+	// try to fill in error message (HEAD response will never contain one)
 	if err != nil {
-		// Since HEAD request will never contain an error message we must try
-		// to create it here so it could be useful for the caller.
-		httpErr := &cmn.HTTPError{}
-		if errors.As(err, &httpErr) {
+		if httpErr := cmn.Err2HTTPErr(err); httpErr != nil {
 			switch httpErr.Status {
 			case http.StatusUnauthorized:
 				httpErr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)
@@ -94,7 +92,7 @@ func HeadBucket(baseParams BaseParams, bck cmn.Bck, query ...url.Values) (p *cmn
 			case http.StatusNotFound:
 				httpErr.Message = fmt.Sprintf("Bucket %q not found", bck)
 			case http.StatusGone:
-				httpErr.Message = fmt.Sprintf("Bucket %q has been removed from the cloud", bck)
+				httpErr.Message = fmt.Sprintf("Bucket %q has been removed from the backend", bck)
 			default:
 				httpErr.Message = fmt.Sprintf(
 					"Failed to access bucket %q (code: %d)",

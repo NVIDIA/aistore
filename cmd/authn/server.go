@@ -21,7 +21,6 @@ func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, item
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return nil, err
 	}
-
 	return items, err
 }
 

@@ -79,7 +79,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	h, ok := handlers[trname]
 	if !ok {
 		mu.RUnlock()
-		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("transport endpoint %s is unknown", trname))
+		cmn.InvalidHandlerDetailed(w, r, fmt.Errorf("transport endpoint %s is unknown", trname))
 		return
 	}
 	mu.RUnlock()
@@ -92,7 +92,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	// session
 	sessID, err := strconv.ParseInt(r.Header.Get(cmn.HeaderSessID), 10, 64)
 	if err != nil || sessID == 0 {
-		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("%s[:%d]: invalid session ID, err %v", trname, sessID, err))
+		cmn.InvalidHandlerDetailed(w, r, fmt.Errorf("%s[:%d]: invalid session ID, err %v", trname, sessID, err))
 		return
 	}
 	uid := uniqueID(r, sessID)
@@ -164,7 +164,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		}
 		h.oldSessions.Store(uid, time.Now())
 		if err != io.EOF {
-			cmn.InvalidHandlerDetailed(w, r, err.Error())
+			cmn.InvalidHandlerDetailed(w, r, err)
 		}
 		if lz4Reader != nil {
 			lz4Reader.Reset(nil)

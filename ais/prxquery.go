@@ -32,7 +32,7 @@ func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpquerypost(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /query path")
+		p.writeErrURL(w, r)
 	}
 }
 

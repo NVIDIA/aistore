@@ -277,7 +277,7 @@ func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPatch:
 		p.httpbckpatch(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /buckets path")
+		p.writeErrURL(w, r)
 	}
 }
 
@@ -295,7 +295,7 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead:
 		p.httpobjhead(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /objects path")
+		p.writeErrURL(w, r)
 	}
 }
 
@@ -517,7 +517,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	payload := make(msPayload)
 	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err.Error())
+		cmn.InvalidHandlerDetailed(w, r, err)
 		return
 	}
 
@@ -2221,7 +2221,7 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		p.httpTokenDelete(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /token path")
+		p.writeErrURL(w, r)
 	}
 }
 
@@ -2238,7 +2238,7 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 
 	apiItems, err := cmn.MatchRESTItems(r.URL.Path, 0, true, cmn.URLPathdSort.L)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		p.writeErrURL(w, r)
 		return
 	}
 
@@ -2253,10 +2253,10 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		} else if len(apiItems) == 0 {
 			dsort.ProxyRemoveSortHandler(w, r)
 		} else {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid request %s", apiItems[0]))
+			p.writeErrURL(w, r)
 		}
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid request %s", apiItems[0]))
+		p.writeErrURL(w, r)
 	}
 }
 

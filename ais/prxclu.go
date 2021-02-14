@@ -39,7 +39,7 @@ func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		p.httpcludel(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /cluster path")
+		p.writeErrURL(w, r)
 	}
 }
 
@@ -104,8 +104,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write(buf.Bytes())
 	default:
-		s := fmt.Sprintf(fmtUnknownQue, what)
-		cmn.InvalidHandlerWithMsg(w, r, s)
+		p.writeErrf(w, r, fmtUnknownQue, what)
 	}
 }
 

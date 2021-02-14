@@ -299,7 +299,12 @@ func (e errDowngrade) Error() string {
 	return fmt.Sprintf("%s: attempt to downgrade %s to %s", e.si, e.from, e.to)
 }
 
-func isErrDowngrade(err error) bool { return errors.As(err, &errDowngrade{}) }
+func isErrDowngrade(err error) bool {
+	if _, ok := err.(*errDowngrade); ok {
+		return true
+	}
+	return errors.As(err, &errDowngrade{})
+}
 
 /////////////////////////
 // errNotEnoughTargets //
@@ -351,7 +356,7 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO: add support for caching HTTPS requests
 	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
 	if err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err.Error(), http.StatusServiceUnavailable)
+		cmn.InvalidHandlerDetailed(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -359,7 +364,8 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Since this moment this function is responsible of HTTP connection
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		cmn.InvalidHandlerDetailed(w, r, "Client does not support hijacking", http.StatusInternalServerError)
+		cmn.InvalidHandlerDetailed(w, r, errors.New("client does not support hijacking"),
+			http.StatusInternalServerError)
 		return
 	}
 
@@ -928,11 +934,11 @@ func (h *httprunner) call(args callArgs) (res *callResult) {
 	if res.status >= http.StatusBadRequest {
 		if args.req.Method == http.MethodHead {
 			msg := resp.Header.Get(cmn.HeaderError)
-			res.err, _ = cmn.NewHTTPError(req, msg, res.status)
+			res.err = cmn.S2HTTPErr(req, msg, res.status)
 		} else {
 			var b bytes.Buffer
 			b.ReadFrom(resp.Body)
-			res.err, _ = cmn.NewHTTPError(req, b.String(), res.status)
+			res.err = cmn.S2HTTPErr(req, b.String(), res.status)
 		}
 		res.details = res.err.Error()
 		return
@@ -1273,20 +1279,34 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
 	msg := err.Error()
-	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
-		msg += " (from " + caller + ")"
+	if !strings.Contains(msg, cmn.FromNodePrefix) {
+		if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
+			msg += cmn.FromNodePrefix + caller + "]"
+			if e := cmn.Err2HTTPErr(err); e != nil {
+				e.Message = msg
+				err = e
+			} else {
+				err = errors.New(msg)
+			}
+		}
 	}
-	cmn.InvalidHandlerDetailed(w, r, msg, errCode...)
+	cmn.InvalidHandlerDetailed(w, r, err, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
 func (h *httprunner) writeErrSilent(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
-	cmn.InvalidHandlerDetailedNoLog(w, r, err.Error(), errCode...)
+	const _silent = 1
+	if len(errCode) == 0 {
+		h.writeErr(w, r, err, http.StatusBadRequest, _silent)
+	} else {
+		h.writeErr(w, r, err, errCode[0], _silent)
+	}
 }
 
 func (h *httprunner) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode int,
 	format string, a ...interface{}) {
-	cmn.InvalidHandlerDetailedNoLog(w, r, fmt.Sprintf(format, a...), errCode)
+	err := fmt.Errorf(format, a...)
+	h.writeErrSilent(w, r, err, errCode)
 }
 
 func (h *httprunner) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
@@ -1299,36 +1319,19 @@ func (h *httprunner) writeErrf(w http.ResponseWriter, r *http.Request, format st
 }
 
 func (h *httprunner) writeErrURL(w http.ResponseWriter, r *http.Request) {
-	err := &cmn.HTTPError{
-		Status:     http.StatusBadRequest,
-		Message:    "invalid URL Path",
-		Method:     r.Method,
-		URLPath:    r.URL.Path,
-		RemoteAddr: r.RemoteAddr,
-	}
+	err := cmn.NewHTTPErr(r, "invalid URL Method or Path")
 	h.writeErr(w, r, err)
 }
 
 func (h *httprunner) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
-	err := &cmn.HTTPError{
-		Status:     http.StatusBadRequest,
-		Message:    fmt.Sprintf("invalid action %q", action),
-		Method:     r.Method,
-		URLPath:    r.URL.Path,
-		RemoteAddr: r.RemoteAddr,
-	}
+	err := cmn.NewHTTPErr(r, fmt.Sprintf("invalid action %q", action))
 	h.writeErr(w, r, err)
 }
 
 func (h *httprunner) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
 	format string, a ...interface{}) {
-	err := &cmn.HTTPError{
-		Status:     http.StatusBadRequest,
-		Message:    fmt.Sprintf("invalid action %q: %s", action, fmt.Sprintf(format, a...)),
-		Method:     r.Method,
-		URLPath:    r.URL.Path,
-		RemoteAddr: r.RemoteAddr,
-	}
+	detail := fmt.Sprintf(format, a...)
+	err := cmn.NewHTTPErr(r, fmt.Sprintf("invalid action %q: %s", action, detail))
 	h.writeErr(w, r, err)
 }
 
@@ -1341,31 +1344,41 @@ func (res *callResult) _error() error {
 	if res.err == nil {
 		return nil
 	}
-	// retain status
-	if res.status != 0 && res.status != http.StatusBadRequest {
-		if res.details == "" {
-			return &cmn.HTTPError{
-				Status:  res.status,
-				Message: res.err.Error(),
-			}
+	// cmn.HTTPError
+	if httpErr := cmn.Err2HTTPErr(res.err); httpErr != nil {
+		// NOTE: optionally overwrite status, add details
+		if res.status >= http.StatusBadRequest {
+			httpErr.Status = res.status
 		}
-		// and detail
-		return &cmn.HTTPError{
-			Status:  res.status,
-			Message: fmt.Sprintf("%v[%s]", res.err, res.details),
+		if httpErr.Message == "" {
+			httpErr.Message = res.details
 		}
+		return httpErr
+	}
+	// res => cmn.HTTPError
+	if res.status >= http.StatusBadRequest {
+		var detail string
+		if res.details != "" {
+			detail = "[" + res.details + "]"
+		}
+		return cmn.NewHTTPErr(nil, fmt.Sprintf("%v%s", res.err, detail), res.status)
 	}
 	if res.details == "" {
 		return res.err
 	}
-	// w/ detail
 	return fmt.Errorf("%v[%s]", res.err, res.details)
 }
 
 func (res *callResult) _errorf(format string, a ...interface{}) error {
 	debug.Assert(res.err != nil)
+	// add formatted
 	msg := fmt.Sprintf(format, a...)
-	res.err = errors.New(msg + ": " + res.err.Error())
+	if httpErr := cmn.Err2HTTPErr(res.err); httpErr != nil {
+		httpErr.Message = msg + ": " + httpErr.Message
+		res.err = httpErr
+	} else {
+		res.err = errors.New(msg + ": " + res.err.Error())
+	}
 	return res._error()
 }
 

@@ -135,7 +135,7 @@ func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.httpdaedelete(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /daemon path")
+		t.writeErrURL(w, r)
 	}
 }
 
@@ -888,7 +888,7 @@ func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.httpTokenDelete(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /tokens path")
+		t.writeErrURL(w, r)
 	}
 }
 
@@ -900,7 +900,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		t.metasyncHandlerPost(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /metasync path")
+		t.writeErrURL(w, r)
 	}
 }
 
@@ -908,7 +908,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
 	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err.Error())
+		cmn.InvalidHandlerDetailed(w, r, err)
 		return
 	}
 
@@ -961,7 +961,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
 	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync post"); err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err.Error())
+		cmn.InvalidHandlerDetailed(w, r, err)
 		return
 	}
 	caller := r.Header.Get(cmn.HeaderCallerName)

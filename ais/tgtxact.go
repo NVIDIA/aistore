@@ -87,7 +87,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErrAct(w, r, msg.Action)
 		}
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /xactions path")
+		t.writeErrURL(w, r)
 	}
 }
 

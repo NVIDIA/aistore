@@ -255,7 +255,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		exists   bool
 	)
 	if r.Method != http.MethodPost {
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /notifs path")
+		n.p.writeErrURL(w, r)
 		return
 	}
 	apiItems, err := n.p.checkRESTItems(w, r, 1, false, cmn.URLPathNotifs.L)

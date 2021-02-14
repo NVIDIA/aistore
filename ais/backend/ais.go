@@ -6,7 +6,6 @@ package backend
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -294,8 +293,7 @@ func extractErrCode(e error) (int, error) {
 	if e == nil {
 		return http.StatusOK, nil
 	}
-	httpErr := &cmn.HTTPError{}
-	if errors.As(e, &httpErr) {
+	if httpErr := cmn.Err2HTTPErr(e); httpErr != nil {
 		return httpErr.Status, httpErr
 	}
 	return http.StatusInternalServerError, e

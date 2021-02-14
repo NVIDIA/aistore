@@ -58,7 +58,7 @@ type txnServerCtx struct {
 // verb /v1/txn
 func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /txn path")
+		t.writeErrURL(w, r)
 		return
 	}
 	msg := &aisMsg{}
@@ -76,7 +76,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case 2: // Bucket-based transaction.
 		bucket, phase = apiItems[0], apiItems[1]
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid /txn path")
+		t.writeErrURL(w, r)
 		return
 	}
 	c, err := t.prepTxnServer(r, msg, bucket, phase)

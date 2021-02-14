@@ -58,16 +58,6 @@ type (
 		Size  int64
 	}
 
-	// Error structure for HTTP errors
-	HTTPError struct {
-		Status     int    `json:"status"`
-		Message    string `json:"message"`
-		Method     string `json:"method"`
-		URLPath    string `json:"url_path"`
-		RemoteAddr string `json:"remote_addr"`
-		Trace      string `json:"trace"`
-	}
-
 	// ReqArgs specifies http request that we want to send
 	ReqArgs struct {
 		Method string      // GET, POST, ...
@@ -108,43 +98,6 @@ const (
 // ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
 // all of the byte-range-spec values is greater than the content size.
 var ErrNoOverlap = errors.New("invalid range: failed to overlap")
-
-// Eg: Bad Request: Bucket abc does not appear to be local or does not exist:
-//   DELETE /v1/buckets/abc from 127.0.0.1:54064 (stack: [httpcommon.go:840 <- proxy.go:484 <- proxy.go:264])
-func (e *HTTPError) String() string {
-	return http.StatusText(e.Status) + ": " + e.Message + ": " +
-		e.Method + " " + e.URLPath + " from " + e.RemoteAddr + " (" + e.Trace + ")"
-}
-
-// Implements error interface
-func (e *HTTPError) Error() string {
-	// Stop from escaping <, > ,and &
-	buf := new(bytes.Buffer)
-	enc := jsoniter.NewEncoder(buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(e); err != nil {
-		return err.Error()
-	}
-	return buf.String()
-}
-
-// NewHTTPError returns a HTTPError struct. There are cases
-// where the message is already formatted as a HTTPError (from target)
-// in which case returns `true`, otherwise `false`.
-//
-// NOTE: The format of the error message is being used in the CLI.
-//  If there are any changes, please make sure to update `errorHandler`
-//  in the CLI.
-func NewHTTPError(r *http.Request, msg string, status int) (*HTTPError, bool) {
-	var httpErr HTTPError
-	if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
-		return &httpErr, true
-	}
-	return &HTTPError{
-		Status: status, Message: msg, Method: r.Method,
-		URLPath: r.URL.Path, RemoteAddr: r.RemoteAddr,
-	}, false
-}
 
 // PrependProtocol prepends protocol in URL in case it is missing.
 // By default it adds `http://` as prefix to the URL.
@@ -202,88 +155,6 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 	return apiItems, nil
 }
 
-func InvalidHandler(w http.ResponseWriter, r *http.Request) {
-	glog.Errorln("Invalid request: " + r.URL.Path)
-	InvalidHandlerWithMsg(w, r, "invalid request")
-}
-
-// InvalidHandlerWithMsg writes error to response writer.
-func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	status := http.StatusBadRequest
-	if len(errCode) != 0 {
-		status = errCode[0]
-	}
-
-	err, _ := NewHTTPError(r, msg, status)
-	writeError(w, r, err, status)
-}
-
-func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, status int, silent bool) {
-	err, isHTTPError := NewHTTPError(r, msg, status)
-
-	if silent {
-		writeError(w, r, err, status)
-		return
-	}
-	if isHTTPError {
-		glog.Errorln(err.String())
-		writeError(w, r, err, status)
-		return
-	}
-	var errMsg bytes.Buffer
-	if !strings.Contains(msg, "stack: [") {
-		fmt.Fprint(&errMsg, "stack: [")
-		for i := 1; i < 5; i++ {
-			if _, file, line, ok := runtime.Caller(i); ok {
-				f := filepath.Base(file)
-				if i > 1 {
-					errMsg.WriteString(" <- ")
-				}
-				fmt.Fprintf(&errMsg, "%s:%d", f, line)
-			}
-		}
-		fmt.Fprint(&errMsg, "]")
-	}
-	err.Trace = errMsg.String()
-	glog.Errorln(err.String())
-	writeError(w, r, err, status)
-}
-
-// writeError is slightly updated `http.Error` to change `Content-Type` header.
-// Content type was adjusted to make sure that the caller is aware that we return
-// JSON error and not just a regular string message.
-func writeError(w http.ResponseWriter, r *http.Request, err error, status int) {
-	w.Header().Set(HeaderContentType, ContentJSON)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if r.Method == http.MethodHead {
-		w.Header().Set(HeaderError, err.Error())
-		w.WriteHeader(status)
-	} else {
-		w.WriteHeader(status)
-		fmt.Fprintln(w, err.Error())
-	}
-}
-
-// InvalidHandlerDetailed writes detailed error (includes line and file) to response writer.
-func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	status := http.StatusBadRequest
-	if len(errCode) > 0 && errCode[0] >= http.StatusBadRequest {
-		status = errCode[0]
-	}
-
-	invalidHandlerInternal(w, r, msg, status, false /*silent*/)
-}
-
-// InvalidHandlerDetailedNoLog writes detailed error (includes line and file) to response writer. It does not log any error
-func InvalidHandlerDetailedNoLog(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	status := http.StatusBadRequest
-	if len(errCode) > 0 && errCode[0] >= http.StatusBadRequest {
-		status = errCode[0]
-	}
-
-	invalidHandlerInternal(w, r, msg, status, true /*silent*/)
-}
-
 func ReadBytes(r *http.Request) (b []byte, err error) {
 	var e error
 
@@ -313,7 +184,7 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional 
 			f := filepath.Base(file)
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
-		InvalidHandlerDetailed(w, r, s)
+		InvalidHandlerDetailed(w, r, errors.New(s))
 		return err
 	}
 	return nil

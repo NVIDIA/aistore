@@ -33,7 +33,7 @@ func (t *targetrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		t.httpqueryput(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /query path")
+		t.writeErrURL(w, r)
 	}
 }
 

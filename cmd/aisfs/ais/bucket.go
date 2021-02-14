@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"errors"
 	"net/http"
 	"time"
 
@@ -45,8 +44,7 @@ func (bck *bucketAPI) APIParams() api.BaseParams { return bck.apiParams }
 func (bck *bucketAPI) HeadObject(objName string) (obj *Object, exists bool, err error) {
 	objProps, err := api.HeadObject(bck.apiParams, bck.Bck(), objName)
 	if err != nil {
-		httpErr := &cmn.HTTPError{}
-		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
+		if httpErr := cmn.Err2HTTPErr(err); httpErr != nil && httpErr.Status == http.StatusNotFound {
 			return nil, false, nil
 		}
 		return nil, false, newBucketIOError(err, "HeadObject")

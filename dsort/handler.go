@@ -239,7 +239,6 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		path        = cmn.URLPathdSortAbort.Join(managerUUID)
 		responses   = broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
 	)
-
 	allNotFound := true
 	for _, resp := range responses {
 		if resp.statusCode == http.StatusNotFound {
@@ -248,13 +247,13 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		allNotFound = false
 
 		if resp.err != nil {
-			cmn.InvalidHandlerDetailed(w, r, resp.err.Error(), resp.statusCode)
+			cmn.InvalidHandlerDetailed(w, r, resp.err, resp.statusCode)
 			return
 		}
 	}
 	if allNotFound {
-		msg := fmt.Sprintf("%s job %q not found", cmn.DSortName, managerUUID)
-		cmn.InvalidHandlerDetailed(w, r, msg, http.StatusNotFound)
+		err := fmt.Errorf("%s job %q not found", cmn.DSortName, managerUUID)
+		cmn.InvalidHandlerDetailed(w, r, err, http.StatusNotFound)
 		return
 	}
 }

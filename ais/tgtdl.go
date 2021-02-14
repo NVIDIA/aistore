@@ -116,7 +116,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			var regex *regexp.Regexp
 			if payload.Regex != "" {
 				if regex, err = regexp.CompilePOSIX(payload.Regex); err != nil {
-					cmn.InvalidHandlerWithMsg(w, r, err.Error())
+					t.writeErr(w, r, err)
 					return
 				}
 			}
@@ -153,7 +153,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if statusCode >= http.StatusBadRequest {
-		cmn.InvalidHandlerWithMsg(w, r, respErr.Error(), statusCode)
+		t.writeErr(w, r, respErr, statusCode)
 		return
 	}
 

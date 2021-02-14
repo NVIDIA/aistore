@@ -340,7 +340,7 @@ func (t *targetrunner) initRecvHandlers() {
 		{r: cmn.Query, h: t.queryHandler, net: accessNetPublicControl},
 
 		{r: "/" + cmn.S3, h: t.s3Handler, net: accessNetPublicData},
-		{r: "/", h: cmn.InvalidHandler, net: accessNetAll},
+		{r: "/", h: t.writeErrURL, net: accessNetAll},
 	}
 	t.registerNetworkHandlers(networkHandlers)
 }
@@ -380,7 +380,7 @@ func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead:
 		t.httpbckhead(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /buckets path")
+		t.writeErrURL(w, r)
 	}
 }
 
@@ -398,7 +398,7 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		t.httpobjpost(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /objects path")
+		t.writeErrURL(w, r)
 	}
 }
 
@@ -409,7 +409,7 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		t.httpecget(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /slices path")
+		t.writeErrURL(w, r)
 	}
 }
 
