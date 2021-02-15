@@ -103,12 +103,11 @@ type (
 
 	copyObjInfo struct {
 		cluster.CopyObjectParams
-		t         *targetrunner
-		localOnly bool // copy locally with no HRW=>target
-		finalize  bool // copies and EC (as in poi.finalize())
+		t           *targetrunner
+		localOnly   bool // copy locally with no HRW=>target
+		finalize    bool // copies and EC (as in poi.finalize())
+		promoteFile bool // Determines if we are promoting a file.
 	}
-
-	_tylc bool
 )
 
 ////////////////
@@ -983,23 +982,14 @@ func (coi *copyObjInfo) copyObject(src *cluster.LOM, objNameTo string) (size int
 	}
 	// remote copy
 	if si.ID() != coi.t.si.ID() {
-		src.Lock(false)
-		if err = src.Load(false); err != nil {
-			if !cmn.IsObjNotExist(err) {
-				err = fmt.Errorf("%s: err: %v", src, err)
-			}
-			src.Unlock(false)
-			return
-		}
 		params := allocSendParams()
 		{
 			params.ObjNameTo = objNameTo
 			params.Tsi = si
 			params.DM = coi.DM
-			params.RLocked = true
 			params.NoVersion = !src.Bucket().Equal(coi.BckTo.Bck) // no versioning when buckets differ
 		}
-		size, err = coi.putRemote(src, params) // r-unlocks inside
+		size, err = coi.putRemote(src, params)
 		freeSendParams(params)
 		return
 	}
@@ -1080,10 +1070,6 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		return
 	}
 
-	if err = lom.Load(); err != nil {
-		return
-	}
-
 	if si.ID() != coi.t.si.ID() {
 		params := allocSendParams()
 		{
@@ -1094,6 +1080,10 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		}
 		size, err = coi.putRemote(lom, params)
 		freeSendParams(params)
+		return
+	}
+
+	if err = lom.Load(); err != nil {
 		return
 	}
 
@@ -1147,24 +1137,51 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 
 // PUT object onto designated target
 func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams) (size int64, err error) {
+	if coi.DM != nil {
+		// We need to clone the `lom` as we will use in async operation.
+		// The `lom` is freed on callback in `_sendObjDM`.
+		lom = lom.Clone(lom.FQN)
+	}
+
 	if coi.DP == nil {
-		var file *cmn.FileHandle
-		if coi.DryRun {
-			if params.RLocked {
-				defer lom.Unlock(false)
+		// XXX: Kind of hacky way of determining if the `lom` is object or just
+		//  a regular file. Ideally, the parameter shouldn't be `lom` at all
+		//  but rather something more general like `cluster.CT`.
+		var reader cmn.ReadOpenCloser
+		if !coi.promoteFile {
+			lom.Lock(false)
+			if err := lom.Load(false); err != nil {
+				lom.Unlock(false)
+				return 0, nil
 			}
-			return lom.Size(), nil
+			if coi.DryRun {
+				lom.Unlock(false)
+				return lom.Size(), nil
+			}
+			fh, err := cmn.NewFileHandle(lom.FQN)
+			if err != nil {
+				lom.Unlock(false)
+				return 0, fmt.Errorf("failed to open %s: %w", lom.FQN, err)
+			}
+			size = lom.Size()
+			reader = cmn.NewDeferROC(fh, func() { lom.Unlock(false) })
+		} else {
+			debug.Assert(!coi.DryRun)
+			fh, err := cmn.NewFileHandle(lom.FQN)
+			if err != nil {
+				return 0, fmt.Errorf("failed to open %s: %w", lom.FQN, err)
+			}
+			fi, err := fh.Stat()
+			if err != nil {
+				fh.Close()
+				return 0, fmt.Errorf("failed to stat %s: %w", lom.FQN, err)
+			}
+			size = fi.Size()
+			reader = fh
 		}
-		if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
-			return 0, fmt.Errorf("failed to open %s: %w", lom.FQN, err)
-		}
-		fi, err := file.Stat()
-		if err != nil {
-			return 0, fmt.Errorf("failed to stat %s: %w", lom.FQN, err)
-		}
-		params.Reader = file
+
+		params.Reader = reader
 		params.HdrMeta = lom
-		size = fi.Size()
 	} else {
 		if params.Reader, params.HdrMeta, err = coi.DP.Reader(lom); err != nil {
 			return
@@ -1182,15 +1199,10 @@ func (coi *copyObjInfo) putRemote(lom *cluster.LOM, params *cluster.SendToParams
 		params.HdrMeta = cmn.NewHdrMetaCustomVersion(params.HdrMeta, "")
 	}
 	params.BckTo = coi.BckTo
-	// either stream
-	if params.DM != nil {
-		err = _sendObjDM(lom.Clone(lom.FQN), params) // free clone in the lc.cleanup
-		return
-	}
-	// or PUT
-	err = coi.t._sendPUT(lom, params)
-	if params.RLocked {
-		lom.Unlock(false)
+	if params.DM != nil { // Either send via stream...
+		err = _sendObjDM(lom, params)
+	} else { // ... or via remote PUT call.
+		err = coi.t._sendPUT(lom, params)
 	}
 	return
 }
@@ -1209,22 +1221,13 @@ func _sendObjDM(lom *cluster.LOM, params *cluster.SendToParams) (err error) {
 		}
 		hdr.ObjAttrs.Version = meta.Version()
 	}
-	o.CmplPtr = unsafe.Pointer(lom)
-	lc := _tylc(params.RLocked)
-	o.Callback = lc.cleanup
-	err = params.DM.Send(o, params.Reader, params.Tsi)
-	if err != nil {
-		lc.cleanup(transport.ObjHdr{}, nil, unsafe.Pointer(lom), nil)
+	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
+		cluster.FreeLOM(lom)
+	}
+	if err = params.DM.Send(o, params.Reader, params.Tsi); err != nil {
+		o.Callback(transport.ObjHdr{}, nil, nil, nil)
 	}
 	return
-}
-
-func (lc _tylc) cleanup(_ transport.ObjHdr, _ io.ReadCloser, lomptr unsafe.Pointer, _ error) {
-	lom := (*cluster.LOM)(lomptr)
-	if lc {
-		lom.Unlock(false)
-	}
-	cluster.FreeLOM(lom)
 }
 
 ///////////////

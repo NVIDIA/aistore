@@ -103,7 +103,6 @@ type (
 		Tsi       *Snode
 		DM        DataMover
 		HdrMeta   cmn.ObjHeaderMetaProvider
-		RLocked   bool
 		NoVersion bool // whether to reset object's version at the destination
 	}
 	PromoteFileParams struct {

@@ -290,11 +290,16 @@ func (t *targetrunner) PromoteFile(params cluster.PromoteFileParams) (nlom *clus
 		}
 		lom.FQN = params.SrcFQN
 		coi := allocCopyObjInfo()
-		coi.t = t
-		coi.BckTo = lom.Bck()
+		{
+			coi.t = t
+			coi.promoteFile = true
+			coi.BckTo = lom.Bck()
+		}
 		sendParams := allocSendParams()
-		sendParams.ObjNameTo = lom.ObjName
-		sendParams.Tsi = si
+		{
+			sendParams.ObjNameTo = lom.ObjName
+			sendParams.Tsi = si
+		}
 		_, err = coi.putRemote(lom, sendParams)
 		freeSendParams(sendParams)
 		freeCopyObjInfo(coi)

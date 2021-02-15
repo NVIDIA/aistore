@@ -141,6 +141,9 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 		rc = obj.prc.Dec()
 		debug.Assert(rc >= 0)
 	}
+	if obj.Reader != nil {
+		cmn.Close(obj.Reader) // NOTE: always closing
+	}
 	// SCQ completion callback
 	if rc == 0 {
 		if obj.Callback != nil {
@@ -148,9 +151,6 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 		} else if s.callback != nil {
 			s.callback(obj.Hdr, obj.Reader, obj.CmplPtr, err)
 		}
-	}
-	if obj.Reader != nil {
-		cmn.Close(obj.Reader) // NOTE: always closing
 	}
 	FreeSend(obj)
 }
