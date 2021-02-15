@@ -46,9 +46,11 @@ type (
 		err error
 	}
 	ErrorCapacityExceeded struct {
-		high int64
-		used int32
-		oos  bool
+		totalBytes     uint64
+		totalBytesUsed uint64
+		highWM         int64
+		usedPct        int32
+		oos            bool
 	}
 
 	BucketAccessDenied struct{ errAccessDenied }
@@ -283,15 +285,22 @@ func NewBucketAccessDenied(bucket, oper string, aattrs AccessAttrs) *BucketAcces
 	return &BucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
 }
 
-func NewErrorCapacityExceeded(high int64, used int32, oos bool) *ErrorCapacityExceeded {
-	return &ErrorCapacityExceeded{high: high, used: used, oos: oos}
+func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, totalBytes uint64, oos bool) *ErrorCapacityExceeded {
+	return &ErrorCapacityExceeded{
+		highWM:         highWM,
+		usedPct:        usedPct,
+		totalBytes:     totalBytes,
+		totalBytesUsed: totalBytesUsed,
+		oos:            oos,
+	}
 }
 
 func (e *ErrorCapacityExceeded) Error() string {
+	suffix := fmt.Sprintf("total used %s out of %s", B2S(int64(e.totalBytesUsed), 2), B2S(int64(e.totalBytes), 2))
 	if e.oos {
-		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths", e.used)
+		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths (%s)", e.usedPct, suffix)
 	}
-	return fmt.Sprintf("low on free space: used capacity %d%% exceeded high watermark(%d%%)", e.used, e.high)
+	return fmt.Sprintf("low on free space: used capacity %d%% exceeded high watermark(%d%%) (%s)", e.usedPct, e.highWM, suffix)
 }
 
 func (e InvalidCksumError) Error() string {
