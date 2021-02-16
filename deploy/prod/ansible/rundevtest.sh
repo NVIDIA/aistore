@@ -78,7 +78,7 @@ echo "Deploying AIS on Minikube"
 # NOTE: 6 x n (4 remote providers + local registry + datascience stack)
 target_cnt=5
 proxy_cnt=1
-{ echo $target_cnt; echo $proxy_cnt; echo 1; echo 6; echo n; echo n; echo n; echo n; echo y; echo n; } | ./utils/deploy_ais.sh
+{ echo $target_cnt; echo $proxy_cnt; echo 1; echo 6; echo n; echo n; echo n; echo n; echo y; echo n; } | MODE="debug" ./utils/deploy_ais.sh
 echo "AIS on Minikube deployed"
 popd
 

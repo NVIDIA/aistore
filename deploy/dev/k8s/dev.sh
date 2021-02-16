@@ -17,4 +17,5 @@ if [[ "$1" != "redeploy" ]]; then
   source utils/minikube_registry.sh
 fi
 
+export MODE="debug"
 source utils/deploy_ais.sh

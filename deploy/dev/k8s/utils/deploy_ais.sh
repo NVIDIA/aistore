@@ -15,7 +15,6 @@ if [[ ${PROXY_CNT} -lt 1 ]]; then
   print_error "${PROXY_CNT} is less than 1"
 fi
 
-
 source utils/parse_fsparams.sh
 source utils/parse_cld.sh
 
@@ -23,9 +22,9 @@ export DOCKER_IMAGE="aistore/aisnode:minikube"
 echo "Build and push to local registry: (y/n) ?"
 read -r build
 if [[ "$build" == "y" ]]; then
-  echo "Building image..."
+  echo "Building image with mode=${MODE}..."
   export DOCKER_IMAGE="localhost:5000/aisnode:minikube"
-  docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} -f Dockerfile-aisnode-ubuntu
+  docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} --build-arg MODE="${MODE}" -f Dockerfile-aisnode-ubuntu
   docker push ${DOCKER_IMAGE}
 fi
 

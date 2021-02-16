@@ -923,7 +923,7 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 	cs.PctAvg /= int32(len(availablePaths))
 	cs.OOS = int64(cs.PctMax) > oos
 	if cs.OOS || int64(cs.PctMax) > high {
-		cs.Err = cmn.NewErrorCapacityExceeded(high, cs.PctMax, cs.TotalUsed, cs.TotalAvail+cs.TotalAvail, cs.OOS)
+		cs.Err = cmn.NewErrorCapacityExceeded(high, cs.PctMax, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.OOS)
 	}
 	// cached cap state
 	mfs.cmu.Lock()
