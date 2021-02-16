@@ -435,7 +435,7 @@ func WriteSliceAndMeta(t cluster.Target, hdr transport.ObjHdr, args *WriteArgs) 
 	return err
 }
 
-func LomFromHeader(t cluster.Target, hdr transport.ObjHdr) (*cluster.LOM, error) {
+func LomFromHeader(hdr transport.ObjHdr) (*cluster.LOM, error) {
 	lom := cluster.AllocLOM(hdr.ObjName) // NOTE: caller must call freeLOM
 	if err := lom.Init(hdr.Bck); err != nil {
 		return nil, err

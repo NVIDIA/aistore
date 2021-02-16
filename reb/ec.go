@@ -460,7 +460,7 @@ func (reb *Manager) saveCTToDisk(data io.Reader, req *pushReq, hdr transport.Obj
 		err = ec.WriteSliceAndMeta(reb.t, hdr, args)
 	} else {
 		var lom *cluster.LOM
-		lom, err = ec.LomFromHeader(reb.t, hdr)
+		lom, err = ec.LomFromHeader(hdr)
 		if err == nil {
 			args := &ec.WriteArgs{
 				Reader:     data,

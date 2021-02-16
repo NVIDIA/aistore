@@ -625,8 +625,7 @@ func Test_coldgetmd5(t *testing.T) {
 	m.gets(false /*withValidation*/)
 	tutils.Logf("GET %s without MD5 validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
 
-	err = api.EvictRemoteBucket(baseParams, m.bck)
-	tassert.CheckFatal(t, err)
+	m.evict()
 
 	// Enable cold get validation.
 	propsToUpdate = &cmn.BucketPropsToUpdate{
@@ -1298,8 +1297,7 @@ func Test_checksum(t *testing.T) {
 	m.gets(false /*withValidate*/)
 	tutils.Logf("GET %s without any checksum validation: %v\n", cmn.B2S(totalSize, 0), time.Since(start))
 
-	err = api.EvictRemoteBucket(baseParams, m.bck)
-	tassert.CheckFatal(t, err)
+	m.evict()
 
 	propsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{

@@ -197,7 +197,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr transport.ObjHdr, object i
 			err = WriteSliceAndMeta(r.t, hdr, args)
 		} else {
 			var lom *cluster.LOM
-			lom, err = LomFromHeader(r.t, hdr)
+			lom, err = LomFromHeader(hdr)
 			if err == nil {
 				args := &WriteArgs{
 					Reader:     object,

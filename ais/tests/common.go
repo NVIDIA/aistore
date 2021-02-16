@@ -257,7 +257,6 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		baseParams = tutils.BaseAPIParams()
 		errCh      = make(chan error, objCnt)
 		wg         = cmn.NewLimitedWaitGroup(20)
-		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
 	)
 
 	if !m.silent {
@@ -293,7 +292,18 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
-	tutils.Logln("remote PUT done")
+	tutils.Logf("remote bucket %s: %d cached objects\n", m.bck, m.num)
+
+	if evict {
+		m.evict()
+	}
+}
+
+func (m *ioContext) evict() {
+	var (
+		baseParams = tutils.BaseAPIParams()
+		msg        = &cmn.SelectMsg{Prefix: m.prefix, Props: cmn.GetPropsName}
+	)
 
 	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
 	tassert.CheckFatal(m.t, err)
@@ -301,25 +311,23 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
 	}
 
-	tutils.Logf("remote bucket %s: %d cached objects\n", m.bck, m.num)
-
-	if evict {
-		// TODO: This should be just single `EvictRemoteBucket`.
-		if m.bck.IsCloud() {
-			tutils.Logf("evicting cloud bucket %s...\n", m.bck)
-			err := api.EvictRemoteBucket(baseParams, m.bck)
-			tassert.CheckFatal(m.t, err)
-		} else if m.bck.IsHDFS() {
-			objNames := make([]string, 0, len(objList.Entries))
-			for _, obj := range objList.Entries {
-				objNames = append(objNames, obj.Name)
-			}
-			tutils.Logf("evicting HDFS bucket %s...\n", m.bck)
-			xactID, err := api.EvictList(baseParams, m.bck, objNames)
-			tassert.CheckFatal(m.t, err)
-			_, err = api.WaitForXaction(baseParams, api.XactReqArgs{ID: xactID})
-			tassert.CheckFatal(m.t, err)
+	// TODO: This should be just single `EvictRemoteBucket`.
+	if m.bck.IsCloud() {
+		tutils.Logf("evicting cloud bucket %s...\n", m.bck)
+		err := api.EvictRemoteBucket(baseParams, m.bck)
+		tassert.CheckFatal(m.t, err)
+	} else if m.bck.IsHDFS() {
+		objNames := make([]string, 0, len(objList.Entries))
+		for _, obj := range objList.Entries {
+			objNames = append(objNames, obj.Name)
 		}
+		tutils.Logf("evicting HDFS bucket %s...\n", m.bck)
+		xactID, err := api.EvictList(baseParams, m.bck, objNames)
+		tassert.CheckFatal(m.t, err)
+		_, err = api.WaitForXaction(baseParams, api.XactReqArgs{ID: xactID})
+		tassert.CheckFatal(m.t, err)
+	} else {
+		cmn.AssertMsg(false, m.bck.String())
 	}
 }
 
