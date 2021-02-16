@@ -251,13 +251,14 @@ type DlAdminBody struct {
 
 func (b *DlAdminBody) Validate(requireID bool) error {
 	if b.ID != "" && b.Regex != "" {
-		return fmt.Errorf("regex %q defined at the same time as id %q", cmn.URLParamRegex, cmn.URLParamUUID)
+		return fmt.Errorf("regex %q and UUID %q cannot be defined together (choose one or the other)",
+			cmn.URLParamRegex, cmn.URLParamUUID)
 	} else if b.Regex != "" {
 		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
 			return err
 		}
 	} else if b.ID == "" && requireID {
-		return fmt.Errorf("ID not specified")
+		return errors.New("UUID not specified")
 	}
 	return nil
 }

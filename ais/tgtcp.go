@@ -419,11 +419,11 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	}
 	mountpath, ok := msg.Value.(string)
 	if !ok {
-		t.writeErr(w, r, errors.New("invalid value in request"))
+		t.writeErrMsg(w, r, "invalid mountpath value in request")
 		return
 	}
 	if mountpath == "" {
-		t.writeErr(w, r, errors.New("mountpath is not defined"))
+		t.writeErrMsg(w, r, "mountpath is not defined")
 		return
 	}
 	switch msg.Action {
@@ -908,7 +908,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
 	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err)
+		cmn.WriteErr(w, r, err)
 		return
 	}
 
@@ -961,7 +961,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
 	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync post"); err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err)
+		cmn.WriteErr(w, r, err)
 		return
 	}
 	caller := r.Header.Get(cmn.HeaderCallerName)

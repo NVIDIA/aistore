@@ -50,7 +50,7 @@ func (p *proxyrunner) httpquerypost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := query.NewQueryFromMsg(p, &msg.QueryMsg); err != nil {
-		p.writeErr(w, r, errors.New("Failed to parse query message: "+err.Error()))
+		p.writeErrMsg(w, r, "failed to parse query message: "+err.Error())
 		return
 	}
 	smap := p.owner.smap.get()

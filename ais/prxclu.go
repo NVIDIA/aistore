@@ -231,7 +231,7 @@ func (p *proxyrunner) _queryResults(w http.ResponseWriter, r *http.Request, resu
 	}
 	freeCallResults(results)
 	if len(targetResults) == 0 {
-		p.writeErr(w, r, errors.New("xaction not found"), http.StatusNotFound)
+		p.writeErrMsg(w, r, "xaction not found", http.StatusNotFound)
 		return nil
 	}
 	return targetResults

@@ -356,7 +356,7 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO: add support for caching HTTPS requests
 	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
 	if err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err, http.StatusServiceUnavailable)
+		cmn.WriteErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -364,7 +364,7 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Since this moment this function is responsible of HTTP connection
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		cmn.InvalidHandlerDetailed(w, r, errors.New("client does not support hijacking"),
+		cmn.WriteErr(w, r, errors.New("client does not support hijacking"),
 			http.StatusInternalServerError)
 		return
 	}
@@ -1290,8 +1290,12 @@ func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error,
 			}
 		}
 	}
-	cmn.InvalidHandlerDetailed(w, r, err, errCode...)
+	cmn.WriteErr(w, r, err, errCode...)
 	h.statsT.AddErrorHTTP(r.Method, 1)
+}
+
+func (h *httprunner) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+	h.writeErr(w, r, errors.New(msg), errCode...)
 }
 
 func (h *httprunner) writeErrSilent(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
@@ -1321,11 +1325,13 @@ func (h *httprunner) writeErrf(w http.ResponseWriter, r *http.Request, format st
 func (h *httprunner) writeErrURL(w http.ResponseWriter, r *http.Request) {
 	err := cmn.NewHTTPErr(r, "invalid URL Method or Path")
 	h.writeErr(w, r, err)
+	cmn.FreeHTTPErr(err)
 }
 
 func (h *httprunner) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
 	err := cmn.NewHTTPErr(r, fmt.Sprintf("invalid action %q", action))
 	h.writeErr(w, r, err)
+	cmn.FreeHTTPErr(err)
 }
 
 func (h *httprunner) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
@@ -1333,6 +1339,7 @@ func (h *httprunner) writeErrActf(w http.ResponseWriter, r *http.Request, action
 	detail := fmt.Sprintf(format, a...)
 	err := cmn.NewHTTPErr(r, fmt.Sprintf("invalid action %q: %s", action, detail))
 	h.writeErr(w, r, err)
+	cmn.FreeHTTPErr(err)
 }
 
 ////////////////

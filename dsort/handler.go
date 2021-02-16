@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -49,14 +48,14 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 
 	parsedRS.DSorterType, err = determineDSorterType(parsedRS)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 
 	b, err := js.Marshal(parsedRS)
 	if err != nil {
 		s := fmt.Sprintf("unable to marshal RequestSpec: %+v, err: %v", parsedRS, err)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
+		cmn.WriteErrMsg(w, r, s, http.StatusInternalServerError)
 		return
 	}
 
@@ -73,7 +72,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 			broadcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get().Tmap)
 
 			s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d", resp.err.Error(), resp.statusCode)
-			cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
+			cmn.WriteErrMsg(w, r, s, http.StatusInternalServerError)
 			return resp.err
 		}
 
@@ -136,7 +135,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 		regexStr = query.Get(cmn.URLParamRegex)
 	)
 	if _, err := regexp.CompilePOSIX(regexStr); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 
@@ -198,12 +197,12 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if resp.err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, resp.err.Error(), resp.statusCode)
+			cmn.WriteErr(w, r, resp.err, resp.statusCode)
 			return
 		}
 		metrics := &Metrics{}
 		if err := js.Unmarshal(resp.res, &metrics); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
 		allMetrics[resp.si.DaemonID] = metrics
@@ -211,13 +210,13 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	if notFound == len(responses) && notFound > 0 {
 		msg := fmt.Sprintf("%s job %q not found", cmn.DSortName, managerUUID)
-		cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
+		cmn.WriteErrMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
 
 	body, err := js.Marshal(allMetrics)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	w.Write(body)
@@ -247,13 +246,13 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		allNotFound = false
 
 		if resp.err != nil {
-			cmn.InvalidHandlerDetailed(w, r, resp.err, resp.statusCode)
+			cmn.WriteErr(w, r, resp.err, resp.statusCode)
 			return
 		}
 	}
 	if allNotFound {
 		err := fmt.Errorf("%s job %q not found", cmn.DSortName, managerUUID)
-		cmn.InvalidHandlerDetailed(w, r, err, http.StatusNotFound)
+		cmn.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
 }
@@ -284,38 +283,40 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if resp.err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, resp.err.Error(), resp.statusCode)
+			cmn.WriteErr(w, r, resp.err, resp.statusCode)
 			return
 		}
 		metrics := &Metrics{}
 		if err := js.Unmarshal(resp.res, &metrics); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
 		if !metrics.Archived.Load() {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("%s process %s still in progress and cannot be removed", cmn.DSortName, managerUUID))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process %s still in progress and cannot be removed",
+				cmn.DSortName, managerUUID))
 			return
 		}
 		seenOne = true
 	}
 	if !seenOne {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
 	path = cmn.URLPathdSortRemove.Join(managerUUID)
 	responses = broadcast(http.MethodDelete, path, nil, nil, targets)
-	failed := make([]string, 0)
+	var failed []string // nolint:prealloc // will remain not allocated when no errors
 	for _, r := range responses {
-		if r.statusCode != http.StatusOK {
-			failed = append(failed, fmt.Sprintf("%v: (%v) %v", r.si.DaemonID, r.statusCode, string(r.res)))
+		if r.statusCode == http.StatusOK {
+			continue
 		}
+		failed = append(failed, fmt.Sprintf("%v: (%v) %v", r.si.DaemonID, r.statusCode, string(r.res)))
 	}
-
 	if len(failed) != 0 {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Got errors while broadcasting remove: %v", strings.Join(failed, ",")))
+		err := fmt.Errorf("got errors while broadcasting remove: %v", failed)
+		cmn.WriteErr(w, r, err)
 	}
 }
 
@@ -350,7 +351,7 @@ func SortHandler(w http.ResponseWriter, r *http.Request) {
 	case cmn.FinishedAck:
 		finishedAckHandler(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid path")
+		cmn.WriteErrMsg(w, r, "invalid path")
 	}
 }
 
@@ -368,23 +369,23 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 	var rs *ParsedRequestSpec
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not read request body, err: %v", err))
+		cmn.WriteErr(w, r, fmt.Errorf("could not read request body, err: %w", err))
 		return
 	}
 	if err = js.Unmarshal(b, &rs); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err))
+		cmn.WriteErr(w, r, fmt.Errorf("could not unmarshal request body, err: %v", err))
 		return
 	}
 
 	managerUUID := apiItems[0]
 	dsortManager, err := Managers.Add(managerUUID)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 	defer dsortManager.unlock()
 	if err = dsortManager.init(rs); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 }
@@ -407,7 +408,7 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager, exists := Managers.Get(managerUUID)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
@@ -462,16 +463,16 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		dsortManager, exists := managers.Get(managerUUID)
 		if !exists {
 			s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-			cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+			cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 			return
 		}
 
 		if !dsortManager.inProgress() {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
 			return
 		}
 		if dsortManager.aborted() {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
 			return
 		}
 
@@ -482,12 +483,13 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		defer slab.Free(buf)
 
 		if err := tmpMetadata.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
+			cmn.WriteErr(w, r, fmt.Errorf("could not unmarshal request body, err: %v", err),
+				http.StatusInternalServerError)
 			return
 		}
 
 		if !dsortManager.inProgress() || dsortManager.aborted() {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("no %s process", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", cmn.DSortName))
 			return
 		}
 
@@ -512,15 +514,15 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		dsortManager, exists := managers.Get(managerUUID)
 		if !exists {
 			s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-			cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+			cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 			return
 		}
 		if !dsortManager.inProgress() {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
 			return
 		}
 		if dsortManager.aborted() {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
+			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
 			return
 		}
 		var (
@@ -532,20 +534,23 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 
 		compressed, err := strconv.ParseInt(compStr, 10, 64)
 		if err != nil {
-			s := fmt.Sprintf("invalid %s in request to %s, err: %v", cmn.URLParamTotalCompressedSize, r.URL.String(), err)
-			cmn.InvalidHandlerWithMsg(w, r, s)
+			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
+				cmn.URLParamTotalCompressedSize, r.URL.String(), err)
+			cmn.WriteErrMsg(w, r, s)
 			return
 		}
 		uncompressed, err := strconv.ParseInt(uncompStr, 10, 64)
 		if err != nil {
-			s := fmt.Sprintf("invalid %s in request to %s, err: %v", cmn.URLParamTotalUncompressedSize, r.URL.String(), err)
-			cmn.InvalidHandlerWithMsg(w, r, s)
+			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
+				cmn.URLParamTotalUncompressedSize, r.URL.String(), err)
+			cmn.WriteErrMsg(w, r, s)
 			return
 		}
 		d, err := strconv.ParseUint(dStr, 10, 64)
 		if err != nil {
-			s := fmt.Sprintf("invalid %s in request to %s, err: %v", cmn.URLParamTotalInputShardsExtracted, r.URL.String(), err)
-			cmn.InvalidHandlerWithMsg(w, r, s)
+			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
+				cmn.URLParamTotalInputShardsExtracted, r.URL.String(), err)
+			cmn.WriteErrMsg(w, r, s)
 			return
 		}
 
@@ -556,7 +561,8 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		defer slab.Free(buf)
 
 		if err := records.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
+			cmn.WriteErr(w, r, fmt.Errorf("could not unmarshal request body, err: %v", err),
+				http.StatusInternalServerError)
 			return
 		}
 
@@ -585,12 +591,12 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 	if dsortManager.Metrics.Archived.Load() {
 		s := fmt.Sprintf("invalid request: %s job %q has already finished", cmn.DSortName, managerUUID)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusGone)
+		cmn.WriteErrMsg(w, r, s, http.StatusGone)
 		return
 	}
 
@@ -608,7 +614,7 @@ func removeSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	managerUUID := apiItems[0]
 	if err := Managers.Remove(managerUUID); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 }
@@ -624,7 +630,7 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 	if regexStr != "" {
 		var err error
 		if regex, err = regexp.CompilePOSIX(regexStr); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			cmn.WriteErr(w, r, err)
 			return
 		}
 	}
@@ -653,7 +659,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
@@ -682,7 +688,7 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager, exists := Managers.Get(managerUUID)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
@@ -756,7 +762,7 @@ outer:
 func checkHTTPMethod(w http.ResponseWriter, r *http.Request, expected string) bool {
 	if r.Method != expected {
 		s := fmt.Sprintf("invalid method: %s to %s, should be %s", r.Method, r.URL.String(), expected)
-		cmn.InvalidHandlerWithMsg(w, r, s)
+		cmn.WriteErrMsg(w, r, s)
 		return false
 	}
 	return true
@@ -765,7 +771,7 @@ func checkHTTPMethod(w http.ResponseWriter, r *http.Request, expected string) bo
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, true, items)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return nil, err
 	}
 

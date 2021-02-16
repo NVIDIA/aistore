@@ -101,7 +101,7 @@ func (t *targetrunner) getXactByID(w http.ResponseWriter, r *http.Request, what,
 		t.writeJSON(w, r, xact.Stats(), what)
 		return
 	}
-	err := cmn.NewXactionNotFoundError("ID='" + uuid + "'")
+	err := cmn.NewXactionNotFoundError("[" + uuid + "]")
 	t.writeErrSilent(w, r, err, http.StatusNotFound)
 }
 

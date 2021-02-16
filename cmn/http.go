@@ -184,7 +184,7 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}, optional 
 			f := filepath.Base(file)
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
-		InvalidHandlerDetailed(w, r, errors.New(s))
+		WriteErrMsg(w, r, s)
 		return err
 	}
 	return nil

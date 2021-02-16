@@ -15,9 +15,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -116,7 +118,7 @@ type (
 		Method     string `json:"method"`
 		URLPath    string `json:"url_path"`
 		RemoteAddr string `json:"remote_addr"`
-		trace      string
+		trace      []byte
 	}
 )
 
@@ -298,9 +300,11 @@ func NewErrorCapacityExceeded(highWM int64, usedPct int32, totalBytesUsed, total
 func (e *ErrorCapacityExceeded) Error() string {
 	suffix := fmt.Sprintf("total used %s out of %s", B2S(int64(e.totalBytesUsed), 2), B2S(int64(e.totalBytes), 2))
 	if e.oos {
-		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths (%s)", e.usedPct, suffix)
+		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths (%s)",
+			e.usedPct, suffix)
 	}
-	return fmt.Sprintf("low on free space: used capacity %d%% exceeded high watermark(%d%%) (%s)", e.usedPct, e.highWM, suffix)
+	return fmt.Sprintf("low on free space: used capacity %d%% exceeded high watermark(%d%%) (%s)",
+		e.usedPct, e.highWM, suffix)
 }
 
 func (e InvalidCksumError) Error() string {
@@ -335,7 +339,7 @@ func (e *NoNodesError) Error() string {
 	return "no available targets"
 }
 
-func (e XactionNotFoundError) Error() string { return "xaction '" + e.cause + "' not found" }
+func (e XactionNotFoundError) Error() string { return "xaction " + e.cause + " not found" }
 func NewXactionNotFoundError(cause string) XactionNotFoundError {
 	return XactionNotFoundError{cause: cause}
 }
@@ -517,7 +521,8 @@ func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *HTTPError) {
 	if len(errCode) > 0 && errCode[0] > status {
 		status = errCode[0]
 	}
-	e = &HTTPError{Status: status, Message: msg}
+	e = allocHTTPErr()
+	e.Status, e.Message = status, msg
 	if r != nil {
 		e.Method, e.URLPath, e.RemoteAddr = r.Method, r.URL.Path, r.RemoteAddr
 	}
@@ -562,7 +567,7 @@ func (e *HTTPError) String() (s string) {
 	if e.RemoteAddr != "" && !strings.Contains(e.Message, FromNodePrefix) {
 		s += " from " + e.RemoteAddr
 	}
-	return s + " (" + e.trace + ")"
+	return s + " (" + string(e.trace) + ")"
 }
 
 func (e *HTTPError) Error() string {
@@ -578,8 +583,14 @@ func (e *HTTPError) Error() string {
 
 func (e *HTTPError) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	msg := e.Error()
+	if len(msg) > 0 {
+		// error strings should not be capitalized (lint)
+		if c := msg[0]; c >= 'A' && c <= 'Z' {
+			msg = string(c+'a'-'A') + msg[1:]
+		}
+	}
 	if !strings.Contains(msg, stackTracePrefix) {
-		e.trace = appendStack()
+		e.stackTrace()
 	}
 	if !silent {
 		glog.Errorln(e.String())
@@ -596,34 +607,10 @@ func (e *HTTPError) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	}
 }
 
-//////////////////////////////
-// invalid message handlers //
-//////////////////////////////
-
-// with stack trace
-func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
-	status := http.StatusBadRequest
-	if len(opts) > 0 && opts[0] > status {
-		status = opts[0]
-	}
-	if httpErr := Err2HTTPErr(err); httpErr != nil {
-		if status > http.StatusBadRequest || httpErr.Status == 0 {
-			httpErr.Status = status
-		}
-		httpErr.write(w, r, len(opts) > 1 /*silent*/)
-	} else {
-		InvalidHandlerWithMsg(w, r, err.Error(), status)
-	}
-}
-
-func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
-	httpErr := NewHTTPErr(r, msg, opts...)
-	httpErr.write(w, r, len(opts) > 1 /*silent*/)
-}
-
-func appendStack() string {
-	var errMsg bytes.Buffer
-	fmt.Fprint(&errMsg, stackTracePrefix)
+func (e *HTTPError) stackTrace() {
+	debug.Assert(len(e.trace) == 0)
+	buffer := bytes.NewBuffer(e.trace)
+	fmt.Fprint(buffer, stackTracePrefix)
 	for i := 1; i < 9; i++ {
 		if _, file, line, ok := runtime.Caller(i); !ok {
 			break
@@ -635,12 +622,65 @@ func appendStack() string {
 			if f == "err.go" {
 				continue
 			}
-			if errMsg.Len() > len(stackTracePrefix) {
-				errMsg.WriteString(" <- ")
+			if buffer.Len() > len(stackTracePrefix) {
+				buffer.WriteString(" <- ")
 			}
-			fmt.Fprintf(&errMsg, "%s:%d", f, line)
+			fmt.Fprintf(buffer, "%s:%d", f, line)
 		}
 	}
-	fmt.Fprint(&errMsg, "]")
-	return errMsg.String()
+	fmt.Fprint(buffer, "]")
+	e.trace = buffer.Bytes()
+}
+
+//////////////////////////////
+// invalid message handlers //
+//////////////////////////////
+
+// write error into http response
+func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
+	status := http.StatusBadRequest
+	if len(opts) > 0 && opts[0] > status {
+		status = opts[0]
+	}
+	if httpErr := Err2HTTPErr(err); httpErr != nil {
+		if status > http.StatusBadRequest || httpErr.Status == 0 {
+			httpErr.Status = status
+		}
+		httpErr.write(w, r, len(opts) > 1 /*silent*/)
+	} else {
+		WriteErrMsg(w, r, err.Error(), opts...)
+	}
+}
+
+// create HTTPError (based on `msg` and `opts`) and write it into http response
+func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
+	httpErr := NewHTTPErr(r, msg, opts...)
+	httpErr.write(w, r, len(opts) > 1 /*silent*/)
+	FreeHTTPErr(httpErr)
+}
+
+/////////////
+// errPool //
+/////////////
+
+var (
+	errPool sync.Pool
+	err0    HTTPError
+)
+
+func allocHTTPErr() (a *HTTPError) {
+	if v := errPool.Get(); v != nil {
+		a = v.(*HTTPError)
+		return
+	}
+	return &HTTPError{}
+}
+
+func FreeHTTPErr(a *HTTPError) {
+	trace := a.trace
+	*a = err0
+	if trace != nil {
+		a.trace = trace[:0]
+	}
+	errPool.Put(a)
 }

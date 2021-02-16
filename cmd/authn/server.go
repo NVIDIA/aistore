@@ -18,7 +18,7 @@ import (
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, true, items)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return nil, err
 	}
 	return items, err
@@ -97,7 +97,7 @@ func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		a.httpUserGet(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /users handler")
+		cmn.WriteErrMsg(w, r, "Unsupported method for /users handler")
 	}
 }
 
@@ -106,7 +106,7 @@ func (a *authServ) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		a.httpRevokeToken(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /token handler")
+		cmn.WriteErrMsg(w, r, "Unsupported method for /token handler")
 	}
 }
 
@@ -121,7 +121,7 @@ func (a *authServ) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		a.httpSrvDelete(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /cluster handler")
+		cmn.WriteErrMsg(w, r, "Unsupported method for /cluster handler")
 	}
 }
 
@@ -139,7 +139,7 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 
 	_, err := cmn.DecryptToken(msg.Token, conf.Auth.Secret)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 
@@ -158,7 +158,7 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.users.delUser(apiItems[0]); err != nil {
 		glog.Errorf("Failed to delete user: %v\n", err)
-		cmn.InvalidHandlerWithMsg(w, r, "Failed to delete user: "+err.Error())
+		cmn.WriteErrMsg(w, r, "Failed to delete user: "+err.Error())
 	}
 }
 
@@ -187,7 +187,7 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	updateReq := &cmn.AuthUser{}
 	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, "Invalid request")
+		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
 
@@ -195,7 +195,7 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("Received credentials for %s\n", userID)
 	}
 	if err := a.users.updateUser(userID, updateReq); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 }
@@ -214,7 +214,7 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.users.addUser(info); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to add user: %v", err), http.StatusInternalServerError)
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("Failed to add user: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if glog.V(4) {
@@ -230,14 +230,14 @@ func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(items) > 1 {
-		cmn.InvalidHandlerWithMsg(w, r, "invalid request")
+		cmn.WriteErrMsg(w, r, "invalid request")
 		return
 	}
 
 	var users map[string]*cmn.AuthUser
 	if len(items) == 0 {
 		if users, err = a.users.userList(); err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			cmn.WriteErr(w, r, err)
 			return
 		}
 		for _, uInfo := range users {
@@ -249,13 +249,13 @@ func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
 
 	uInfo, err := a.users.lookupUser(items[0])
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 	uInfo.Password = ""
 	clusters, err := a.users.clusterList()
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 	for _, clu := range uInfo.Clusters {
@@ -272,18 +272,18 @@ func (a *authServ) httpUserGet(w http.ResponseWriter, r *http.Request) {
 func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) error {
 	s := strings.SplitN(r.Header.Get(cmn.HeaderAuthorization), " ", 2)
 	if len(s) != 2 {
-		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid header")
 	}
 	secret := conf.Auth.Secret
 	token, err := cmn.DecryptToken(s[1], secret)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return err
 	}
 	if !token.IsAdmin {
 		msg := "insufficient permissions"
-		cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusUnauthorized)
+		cmn.WriteErrMsg(w, r, msg, http.StatusUnauthorized)
 		return errors.New(msg)
 	}
 
@@ -308,7 +308,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if msg.Password == "" {
-		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -321,7 +321,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	tokenString, err := a.users.issueToken(userID, pass, msg.ExpiresIn)
 	if err != nil {
 		glog.Errorf("Failed to generate token: %v\n", err)
-		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -364,7 +364,7 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.users.addCluster(cluConf); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 }
@@ -383,11 +383,11 @@ func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	cluConf := &cmn.AuthCluster{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	if err := a.users.updateCluster(cluID, cluConf); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 	}
 }
 
@@ -402,11 +402,11 @@ func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(apiItems) == 0 {
-		cmn.InvalidHandlerWithMsg(w, r, "Cluster name or ID is not defined", http.StatusInternalServerError)
+		cmn.WriteErrMsg(w, r, "Cluster name or ID is not defined", http.StatusInternalServerError)
 		return
 	}
 	if err := a.users.delCluster(apiItems[0]); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 	}
 }
 
@@ -421,7 +421,7 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 		clu, ok := cluList.Clusters[cid]
 		if !ok {
 			msg := fmt.Sprintf("Cluster %q not found", cid)
-			cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
+			cmn.WriteErrMsg(w, r, msg, http.StatusNotFound)
 			return
 		}
 		cluList = &cmn.AuthClusterList{
@@ -430,7 +430,7 @@ func (a *authServ) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 	} else {
 		clusters, err := a.users.clusterList()
 		if err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
+			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
 		cluList = &cmn.AuthClusterList{Clusters: clusters}
@@ -449,7 +449,7 @@ func (a *authServ) roleHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		a.httpRoleGet(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /roles handler")
+		cmn.WriteErrMsg(w, r, "Unsupported method for /roles handler")
 	}
 }
 
@@ -459,14 +459,14 @@ func (a *authServ) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(apiItems) > 1 {
-		cmn.InvalidHandlerWithMsg(w, r, "invalid request")
+		cmn.WriteErrMsg(w, r, "invalid request")
 		return
 	}
 
 	if len(apiItems) == 0 {
 		roles, err := a.users.roleList()
 		if err != nil {
-			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			cmn.WriteErr(w, r, err)
 			return
 		}
 		a.writeJSON(w, roles, "rolelist")
@@ -475,12 +475,12 @@ func (a *authServ) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 
 	role, err := a.users.lookupRole(apiItems[0])
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 	clusters, err := a.users.clusterList()
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 		return
 	}
 	for _, clu := range role.Clusters {
@@ -503,7 +503,7 @@ func (a *authServ) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 
 	roleID := apiItems[0]
 	if err = a.users.delRole(roleID); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 	}
 }
 
@@ -524,7 +524,7 @@ func (a *authServ) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.users.addRole(info); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to add role: %v", err), http.StatusInternalServerError)
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("Failed to add role: %v", err), http.StatusInternalServerError)
 	}
 }
 
@@ -542,7 +542,7 @@ func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	updateReq := &cmn.AuthRole{}
 	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
 	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, "Invalid request")
+		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
 
@@ -550,6 +550,6 @@ func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("Update role %s\n", role)
 	}
 	if err := a.users.updateRole(role, updateReq); err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.WriteErr(w, r, err)
 	}
 }

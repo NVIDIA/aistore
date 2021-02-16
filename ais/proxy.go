@@ -517,7 +517,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	payload := make(msPayload)
 	if _, err := jsp.Decode(r.Body, &payload, jspMetasyncOpts, "metasync put"); err != nil {
-		cmn.InvalidHandlerDetailed(w, r, err)
+		cmn.WriteErr(w, r, err)
 		return
 	}
 
@@ -717,7 +717,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		switch msg.Action {
 		case cmn.ActETLBck:
 			if err := cmn.MorphMarshal(msg.Value, internalMsg); err != nil {
-				p.writeErr(w, r, errors.New("request body can't be empty"), http.StatusBadRequest)
+				p.writeErrMsg(w, r, "request body can't be empty", http.StatusBadRequest)
 				return
 			}
 			if err := internalMsg.Validate(); err != nil {
@@ -926,7 +926,7 @@ func (p *proxyrunner) listObjects(w http.ResponseWriter, r *http.Request, bck *c
 		return
 	}
 	if smap.CountActiveTargets() < 1 {
-		p.writeErr(w, r, errors.New("no registered targets yet"))
+		p.writeErrMsg(w, r, "no registered targets yet")
 		return
 	}
 
@@ -1133,7 +1133,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !filepath.IsAbs(msg.Name) {
-			p.writeErr(w, r, errors.New("source must be an absolute path"), http.StatusBadRequest)
+			p.writeErrMsg(w, r, "source must be an absolute path", http.StatusBadRequest)
 			return
 		}
 		p.promoteFQN(w, r, bck, &msg)
@@ -1667,7 +1667,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 	objName string, msg *cmn.ActionMsg) {
 	started := time.Now()
 	if objName == msg.Name {
-		p.writeErr(w, r, errors.New("the new and the current names are the same"))
+		p.writeErrMsg(w, r, "the new and the current name are the same")
 		return
 	}
 	smap := p.owner.smap.get()
@@ -1776,7 +1776,7 @@ func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
 
 	nodeID := r.Header.Get(cmn.HeaderNodeID)
 	if nodeID == "" {
-		p.writeErr(w, r, errors.New("missing node ID"))
+		p.writeErrMsg(w, r, "missing node ID")
 		return
 	}
 	smap := p.owner.smap.get()
@@ -2268,7 +2268,7 @@ func (p *proxyrunner) httpCloudHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Scheme == "" {
-		p.writeErr(w, r, errors.New("invalid protocol scheme ''"), http.StatusBadRequest)
+		p.writeErrMsg(w, r, "invalid protocol scheme ''")
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host

@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"regexp"
 	"time"
@@ -49,7 +48,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		)
 		if uuid == "" {
 			debug.Assert(false)
-			t.writeErr(w, r, errors.New("expected uuid in query"))
+			t.writeErrMsg(w, r, "missing UUID in query")
 			return
 		}
 		if err := cmn.ReadJSON(w, r, &dlb); err != nil {
@@ -106,12 +105,13 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := payload.Validate(false /*requireID*/); err != nil {
 			debug.Assert(false)
-			t.writeErr(w, r, errors.New("invalid download request payload"))
+			t.writeErr(w, r, err)
 			return
 		}
 
 		if payload.ID != "" {
-			response, statusCode, respErr = downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
+			response, statusCode, respErr =
+				downloaderXact.JobStatus(payload.ID, payload.OnlyActiveTasks)
 		} else {
 			var regex *regexp.Regexp
 			if payload.Regex != "" {
@@ -134,7 +134,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if err = payload.Validate(true /*requireID*/); err != nil {
 			debug.Assert(false)
-			t.writeErr(w, r, errors.New("message is not valid"))
+			t.writeErr(w, r, err)
 			return
 		}
 

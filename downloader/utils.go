@@ -78,7 +78,8 @@ func NormalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *cluster.Bck, id string, dlb DlBody, dlXact *Downloader) (DlJob, error) {
+func ParseStartDownloadRequest(ctx context.Context, t cluster.Target, bck *cluster.Bck, id string, dlb DlBody,
+	dlXact *Downloader) (DlJob, error) {
 	switch dlb.Type {
 	case DlTypeBackend:
 		dp := &DlBackendBody{}
