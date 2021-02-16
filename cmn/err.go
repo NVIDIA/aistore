@@ -514,7 +514,7 @@ func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 
 func NewHTTPErr(r *http.Request, msg string, errCode ...int) (e *HTTPError) {
 	status := http.StatusBadRequest
-	if len(errCode) > 0 {
+	if len(errCode) > 0 && errCode[0] > status {
 		status = errCode[0]
 	}
 	e = &HTTPError{Status: status, Message: msg}
@@ -603,7 +603,7 @@ func (e *HTTPError) write(w http.ResponseWriter, r *http.Request, silent bool) {
 // with stack trace
 func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, err error, opts ...int) {
 	status := http.StatusBadRequest
-	if len(opts) > 0 && opts[0] > http.StatusBadRequest {
+	if len(opts) > 0 && opts[0] > status {
 		status = opts[0]
 	}
 	if httpErr := Err2HTTPErr(err); httpErr != nil {
@@ -612,7 +612,7 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, err error, o
 		}
 		httpErr.write(w, r, len(opts) > 1 /*silent*/)
 	} else {
-		InvalidHandlerWithMsg(w, r, err.Error(), opts...)
+		InvalidHandlerWithMsg(w, r, err.Error(), status)
 	}
 }
 
