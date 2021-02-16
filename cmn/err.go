@@ -659,6 +659,17 @@ func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int
 	FreeHTTPErr(httpErr)
 }
 
+// 405 Method Not Allowed - see https://tools.ietf.org/html/rfc2616#section-10.4.6
+func WriteErr405(w http.ResponseWriter, r *http.Request, methods ...string) {
+	allowed := strings.Join(methods, ", ")
+	w.Header().Set("Allow", allowed)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 /////////////
 // errPool //
 /////////////

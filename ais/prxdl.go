@@ -154,7 +154,7 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpDownloadPost(w, r)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
 	}
 }
 
@@ -260,13 +260,13 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request,
 	body []byte) (dlb downloader.DlBody, dlBase downloader.DlBase, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
-		p.writeErr(w, r, err, http.StatusBadRequest)
+		p.writeErr(w, r, err)
 		return
 	}
 
 	err := jsoniter.Unmarshal(dlb.RawMessage, &dlBase)
 	if err != nil {
-		p.writeErr(w, r, err, http.StatusBadRequest)
+		p.writeErr(w, r, err)
 		return
 	}
 	bck := cluster.NewBckEmbed(dlBase.Bck)

@@ -493,7 +493,7 @@ func (reb *Manager) RespHandler(w http.ResponseWriter, r *http.Request) {
 		query  = r.URL.Query()
 	)
 	if r.Method != http.MethodGet {
-		cmn.WriteErrMsg(w, r, "invalid method "+r.Method)
+		cmn.WriteErr405(w, r, http.MethodGet)
 		return
 	}
 	if !cmn.IsParseBool(query.Get(cmn.URLParamRebData)) {

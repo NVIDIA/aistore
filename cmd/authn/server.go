@@ -97,7 +97,7 @@ func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		a.httpUserGet(w, r)
 	default:
-		cmn.WriteErrMsg(w, r, "Unsupported method for /users handler")
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
 	}
 }
 
@@ -106,7 +106,7 @@ func (a *authServ) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		a.httpRevokeToken(w, r)
 	default:
-		cmn.WriteErrMsg(w, r, "Unsupported method for /token handler")
+		cmn.WriteErr405(w, r, http.MethodDelete)
 	}
 }
 
@@ -121,7 +121,7 @@ func (a *authServ) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		a.httpSrvDelete(w, r)
 	default:
-		cmn.WriteErrMsg(w, r, "Unsupported method for /cluster handler")
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
 	}
 }
 
@@ -449,7 +449,7 @@ func (a *authServ) roleHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		a.httpRoleGet(w, r)
 	default:
-		cmn.WriteErrMsg(w, r, "Unsupported method for /roles handler")
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
 	}
 }
 

@@ -135,7 +135,7 @@ func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.httpdaedelete(w, r)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
 	}
 }
 
@@ -447,7 +447,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.InvalidMountpathError
-			t.writeErr(w, r, err, http.StatusBadRequest)
+			t.writeErr(w, r, err)
 		}
 		return
 	}
@@ -486,7 +486,7 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.InvalidMountpathError
-			t.writeErr(w, r, err, http.StatusBadRequest)
+			t.writeErr(w, r, err)
 		}
 		return
 	}
@@ -888,7 +888,7 @@ func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.httpTokenDelete(w, r)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete)
 	}
 }
 
@@ -900,7 +900,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		t.metasyncHandlerPost(w, r)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodPost, http.MethodPut)
 	}
 }
 

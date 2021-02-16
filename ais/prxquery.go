@@ -32,7 +32,7 @@ func (p *proxyrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpquerypost(w, r)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPost)
 	}
 }
 
@@ -110,7 +110,7 @@ func (p *proxyrunner) httpquerygetworkertarget(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if msg.Handle == "" {
-		p.writeErr(w, r, errQueryHandle, http.StatusBadRequest)
+		p.writeErr(w, r, errQueryHandle)
 		return
 	}
 	if p.ic.reverseToOwner(w, r, msg.Handle, msg) {
@@ -146,7 +146,7 @@ func (p *proxyrunner) httpquerygetnext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg.Handle == "" {
-		p.writeErr(w, r, errQueryHandle, http.StatusBadRequest)
+		p.writeErr(w, r, errQueryHandle)
 		return
 	}
 

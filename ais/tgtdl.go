@@ -72,7 +72,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		bck := cluster.NewBckEmbed(dlBodyBase.Bck)
 		if err := bck.Init(t.Bowner()); err != nil {
-			t.writeErr(w, r, err, http.StatusBadRequest)
+			t.writeErr(w, r, err)
 			return
 		}
 		dlJob, err := downloader.ParseStartDownloadRequest(ctx, t, bck, uuid, dlb, downloaderXact)
@@ -148,7 +148,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
 		return
 	}
 

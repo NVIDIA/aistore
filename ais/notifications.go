@@ -255,7 +255,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		exists   bool
 	)
 	if r.Method != http.MethodPost {
-		n.p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodPost)
 		return
 	}
 	apiItems, err := n.p.checkRESTItems(w, r, 1, false, cmn.URLPathNotifs.L)

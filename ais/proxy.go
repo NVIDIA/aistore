@@ -277,7 +277,8 @@ func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPatch:
 		p.httpbckpatch(w, r)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
+			http.MethodPatch, http.MethodPost)
 	}
 }
 
@@ -295,7 +296,8 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead:
 		p.httpobjhead(w, r)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
+			http.MethodPost, http.MethodPut)
 	}
 }
 
@@ -449,8 +451,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if msg.Action == cmn.ActEvictRemoteBck {
 		bck, errCode, err = bckArgs.init(bck.Name)
 		if errCode == http.StatusNotFound {
-			// Cloud bucket not in BMD, ignore error
-			return
+			return // remote bucket not in BMD - ignore error
 		}
 		if err != nil {
 			p.writeErr(w, r, err, errCode)
@@ -502,7 +503,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/metasync
 func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodPut)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -635,7 +636,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 	query := r.URL.Query()
 	bck, err := newBckFromQuery(bucket, query)
 	if err != nil {
-		p.writeErr(w, r, err, http.StatusBadRequest)
+		p.writeErr(w, r, err)
 		return
 	}
 	if bck.Bck.IsRemoteAIS() {
@@ -674,7 +675,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		bckFrom := bck
 		bckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
 		if err != nil {
-			p.writeErr(w, r, err, http.StatusBadRequest)
+			p.writeErr(w, r, err)
 			return
 		}
 		if !bckFrom.IsAIS() && !bckFrom.HasBackendBck() {
@@ -717,7 +718,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 		switch msg.Action {
 		case cmn.ActETLBck:
 			if err := cmn.MorphMarshal(msg.Value, internalMsg); err != nil {
-				p.writeErrMsg(w, r, "request body can't be empty", http.StatusBadRequest)
+				p.writeErrMsg(w, r, "request body can't be empty")
 				return
 			}
 			if err := internalMsg.Validate(); err != nil {
@@ -735,7 +736,7 @@ func (p *proxyrunner) hpostBucket(w http.ResponseWriter, r *http.Request, msg *c
 
 		userBckTo, err := newBckFromQueryUname(query, cmn.URLParamBucketTo)
 		if err != nil {
-			p.writeErr(w, r, err, http.StatusBadRequest)
+			p.writeErr(w, r, err)
 			return
 		}
 		if bck.Equal(userBckTo, false, true) {
@@ -1133,7 +1134,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !filepath.IsAbs(msg.Name) {
-			p.writeErrMsg(w, r, "source must be an absolute path", http.StatusBadRequest)
+			p.writeErrMsg(w, r, "source must be an absolute path")
 			return
 		}
 		p.promoteFQN(w, r, bck, &msg)
@@ -1823,7 +1824,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpdaepost(w, r)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
 	}
 }
 
@@ -2221,7 +2222,7 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		p.httpTokenDelete(w, r)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete)
 	}
 }
 
@@ -2256,7 +2257,7 @@ func (p *proxyrunner) dsortHandler(w http.ResponseWriter, r *http.Request) {
 			p.writeErrURL(w, r)
 		}
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
 	}
 }
 

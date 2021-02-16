@@ -380,7 +380,7 @@ func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead:
 		t.httpbckhead(w, r)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPost)
 	}
 }
 
@@ -398,7 +398,8 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		t.httpobjpost(w, r)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
+			http.MethodPost, http.MethodPut)
 	}
 }
 
@@ -409,7 +410,7 @@ func (t *targetrunner) ecHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		t.httpecget(w, r)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodGet)
 	}
 }
 
@@ -525,7 +526,7 @@ func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, ms
 		}
 	}
 	if err != nil {
-		t.writeErr(w, r, err, http.StatusBadRequest)
+		t.writeErr(w, r, err)
 		return
 	}
 	t.bucketSummary(w, r, bck, msg)
@@ -535,7 +536,7 @@ func (t *targetrunner) httpbcksummary(w http.ResponseWriter, r *http.Request, ms
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	msg := &aisMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
-		t.writeErr(w, r, err, http.StatusBadRequest)
+		t.writeErr(w, r, err)
 		return
 	}
 	if msg.Action == cmn.ActSummaryBck {

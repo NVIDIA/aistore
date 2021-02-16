@@ -58,7 +58,7 @@ type txnServerCtx struct {
 // verb /v1/txn
 func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodPost)
 		return
 	}
 	msg := &aisMsg{}
@@ -81,7 +81,7 @@ func (t *targetrunner) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := t.prepTxnServer(r, msg, bucket, phase)
 	if err != nil {
-		t.writeErr(w, r, err, http.StatusBadRequest)
+		t.writeErr(w, r, err)
 		return
 	}
 	switch msg.Action {

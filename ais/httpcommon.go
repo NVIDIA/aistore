@@ -478,7 +478,7 @@ func (h *httprunner) parseAPIRequest(w http.ResponseWriter, r *http.Request, arg
 		err = cmn.ReadJSON(w, r, args.msg)
 	}
 	if err != nil {
-		h.writeErr(w, r, err, http.StatusBadRequest)
+		h.writeErr(w, r, err)
 	}
 	return err
 }
@@ -1159,7 +1159,7 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 	splitAfter bool, items []string) ([]string, error) {
 	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items)
 	if err != nil {
-		h.writeErr(w, r, err, http.StatusBadRequest)
+		h.writeErr(w, r, err)
 		return nil, err
 	}
 
@@ -1277,25 +1277,36 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 // HTTP err + spec message + code + stats //
 ////////////////////////////////////////////
 
-func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
-	msg := err.Error()
-	if !strings.Contains(msg, cmn.FromNodePrefix) {
-		if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
-			msg += cmn.FromNodePrefix + caller + "]"
-			if e := cmn.Err2HTTPErr(err); e != nil {
-				e.Message = msg
-				err = e
-			} else {
-				err = errors.New(msg)
-			}
-		}
+func _addCaller(r *http.Request, omsg string) (nmsg string) {
+	if strings.Contains(omsg, cmn.FromNodePrefix) {
+		return
 	}
-	cmn.WriteErr(w, r, err, errCode...)
+	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
+		nmsg = omsg + cmn.FromNodePrefix + caller + "]"
+	}
+	return
+}
+
+func (h *httprunner) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
+	e, msg := cmn.Err2HTTPErr(err), err.Error()
+	if nmsg := _addCaller(r, msg); nmsg != "" {
+		msg = nmsg
+	}
+	if e != nil {
+		e.Message = msg
+		cmn.WriteErr(w, r, e, errCode...)
+	} else {
+		cmn.WriteErrMsg(w, r, msg, errCode...)
+	}
 	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
 func (h *httprunner) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	h.writeErr(w, r, errors.New(msg), errCode...)
+	if nmsg := _addCaller(r, msg); nmsg != "" {
+		msg = nmsg
+	}
+	cmn.WriteErrMsg(w, r, msg, errCode...)
+	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
 func (h *httprunner) writeErrSilent(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
@@ -1315,15 +1326,15 @@ func (h *httprunner) writeErrSilentf(w http.ResponseWriter, r *http.Request, err
 
 func (h *httprunner) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int,
 	format string, a ...interface{}) {
-	h.writeErr(w, r, fmt.Errorf(format, a...), errCode)
+	h.writeErrMsg(w, r, fmt.Sprintf(format, a...), errCode)
 }
 
 func (h *httprunner) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...interface{}) {
-	h.writeErr(w, r, fmt.Errorf(format, a...))
+	h.writeErrMsg(w, r, fmt.Sprintf(format, a...))
 }
 
 func (h *httprunner) writeErrURL(w http.ResponseWriter, r *http.Request) {
-	err := cmn.NewHTTPErr(r, "invalid URL Method or Path")
+	err := cmn.NewHTTPErr(r, "invalid URL Path")
 	h.writeErr(w, r, err)
 	cmn.FreeHTTPErr(err)
 }

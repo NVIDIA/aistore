@@ -33,7 +33,7 @@ func (t *targetrunner) queryHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		t.httpqueryput(w, r)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPost, http.MethodPut)
 	}
 }
 
@@ -119,7 +119,7 @@ func (t *targetrunner) httpquerygetobjects(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if msg.Handle == "" {
-		t.writeErr(w, r, errQueryHandle, http.StatusBadRequest)
+		t.writeErr(w, r, errQueryHandle)
 		return
 	}
 	resultSet := query.Registry.Get(msg.Handle)

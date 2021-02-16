@@ -87,7 +87,7 @@ func (t *targetrunner) xactHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErrAct(w, r, msg.Action)
 		}
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
 	}
 }
 

@@ -39,7 +39,7 @@ func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		p.httpcludel(w, r)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
 	}
 }
 

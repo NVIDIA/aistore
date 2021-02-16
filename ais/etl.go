@@ -68,7 +68,7 @@ func (t *targetrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodDelete:
 		t.stopETL(w, r)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPost)
 	}
 }
 
@@ -190,7 +190,7 @@ func (t *targetrunner) getObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := etl.CheckSecret(request.items[0]); err != nil {
-		t.writeErr(w, r, err, http.StatusBadRequest)
+		t.writeErr(w, r, err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (t *targetrunner) headObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := etl.CheckSecret(request.items[0]); err != nil {
-		t.writeErr(w, r, err, http.StatusBadRequest)
+		t.writeErr(w, r, err)
 		return
 	}
 
@@ -257,7 +257,7 @@ func (p *proxyrunner) etlHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodDelete:
 		p.stopETL(w, r)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
 	}
 }
 

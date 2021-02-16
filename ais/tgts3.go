@@ -37,7 +37,7 @@ func (t *targetrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.delObjS3(w, r, apiItems)
 	default:
-		t.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPut)
 	}
 }
 

@@ -113,7 +113,8 @@ func (p *proxyrunner) s3Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		p.delObjS3(w, r, apiItems)
 	default:
-		p.writeErrURL(w, r)
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
+			http.MethodPost, http.MethodPut)
 	}
 }
 

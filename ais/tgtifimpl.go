@@ -229,7 +229,8 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 			if err := lom.Load(false); err != nil {
 				if cmn.IsErrObjNought(err) {
 					// Try to get `UpgradeLock` again and retry getting object.
-					glog.Errorf("[get_cold] Object was supposed to be downloaded but doesn't exists, retrying (fqn: %q, err: %v)", lom.FQN, err)
+					glog.Errorf("[get_cold] %s(%q) doesn't exist, err: %v - retrying...",
+						lom, lom.FQN, err)
 					continue
 				}
 				return http.StatusBadRequest, err
@@ -238,7 +239,8 @@ func (t *targetrunner) GetCold(ctx context.Context, lom *cluster.LOM, ty cluster
 				return errCode, err
 			} else if vchanged {
 				// Need to re-download the object as the version has changed.
-				glog.Errorf("[get_cold] Backend provider has newer version of the object (fqn: %q)", lom.FQN)
+				glog.Errorf("[get_cold] Backend provider has newer version of the object (fqn: %q)",
+					lom.FQN)
 				continue
 			}
 			// Object exists and version is up-to-date.

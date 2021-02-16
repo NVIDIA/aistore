@@ -61,11 +61,14 @@ type (
 
 // [METHOD] /v1/vote
 func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPut {
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
+		return
+	}
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.URLPathVote.L)
 	if err != nil {
 		return
 	}
-
 	switch {
 	case r.Method == http.MethodGet && apiItems[0] == cmn.Proxy:
 		p.httpproxyvote(w, r)
@@ -305,6 +308,10 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) cmn.StringSet {
 
 // [METHOD] /v1/vote
 func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPut {
+		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
+		return
+	}
 	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.URLPathVote.L)
 	if err != nil {
 		return
