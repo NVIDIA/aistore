@@ -142,7 +142,7 @@ test:long:
     NUM_PROXY: 6
     BUCKET: "test"
   script:
-    - make cli
+    - make aisfs cli
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo n; echo n; echo n; echo n; })
     - make test-long
 
@@ -153,7 +153,7 @@ test:cloud:aws:
     BUCKET: "aws://ais-ci"
     AWS_REGION: "us-east-2"
   script:
-    - make cli
+    - make aisfs cli
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo y; echo n; echo n; echo n; echo n; })
     - make test-long
 
@@ -164,7 +164,7 @@ test:cloud:gcp:
     BUCKET: "gs://ais-ci"
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
   script:
-    - make cli
+    - make aisfs cli
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - make deploy <<< $({ echo $NUM_TARGET; echo $NUM_PROXY; echo $FS_CNT; echo n; echo y; echo n; echo n; echo n; })
     - make test-long
@@ -177,7 +177,7 @@ test:cloud:hdfs:
     BUCKET: "hdfs://ais-ci"
   script:
     - bash deploy/test/ci/setup_hdfs.sh
-    - make cli
+    - make aisfs cli
     - make deploy < <(printf "${NUM_TARGET}\n${NUM_PROXY}\n${FS_CNT}\nn\nn\nn\ny\nn\n")
     - ais create bucket "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
     - make test-long
