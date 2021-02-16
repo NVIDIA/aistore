@@ -356,6 +356,8 @@ func (m *userManager) issueToken(userID, pwd string, ttl *time.Duration) (string
 	}
 
 	// generate token
+	conf.mtx.RLock()
+	defer conf.mtx.RUnlock()
 	issued := time.Now()
 	expDelta := conf.Auth.ExpirePeriod
 	if ttl != nil {
@@ -415,8 +417,9 @@ func (m *userManager) generateRevokedTokenList() ([]string, error) {
 	}
 	now := time.Now()
 	revokeList := make([]string, 0)
+	secret := conf.secret()
 	for _, t := range tokens {
-		token, err := cmn.DecryptToken(t, conf.Auth.Secret)
+		token, err := cmn.DecryptToken(t, secret)
 		shortInfo := t
 		if len(t) > 32 {
 			shortInfo = t[len(t)-32:]

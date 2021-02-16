@@ -84,6 +84,7 @@ func (a *authServ) registerPublicHandlers() {
 	a.registerHandler(cmn.URLPathTokens.S, a.tokenHandler)
 	a.registerHandler(cmn.URLPathClusters.S, a.clusterHandler)
 	a.registerHandler(cmn.URLPathRoles.S, a.roleHandler)
+	a.registerHandler(cmn.URLPathDaemon.S, a.configHandler)
 }
 
 func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -137,7 +138,8 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := cmn.DecryptToken(msg.Token, conf.Auth.Secret)
+	secret := conf.secret()
+	_, err := cmn.DecryptToken(msg.Token, secret)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
@@ -153,7 +155,6 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v\n", err)
 		return
 	}
 	if err := a.users.delUser(apiItems[0]); err != nil {
@@ -179,7 +180,6 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v\n", err)
 		return
 	}
 
@@ -203,7 +203,6 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 // Adds a new user to user list
 func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 	if err := a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v\n", err)
 		return
 	}
 
@@ -275,7 +274,7 @@ func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) er
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid header")
 	}
-	secret := conf.Auth.Secret
+	secret := conf.secret()
 	token, err := cmn.DecryptToken(s[1], secret)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
@@ -354,7 +353,6 @@ func (a *authServ) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v", err)
 		return
 	}
 
@@ -375,7 +373,6 @@ func (a *authServ) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v", err)
 		return
 	}
 
@@ -397,7 +394,6 @@ func (a *authServ) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v", err)
 		return
 	}
 
@@ -497,7 +493,6 @@ func (a *authServ) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v", err)
 		return
 	}
 
@@ -513,7 +508,6 @@ func (a *authServ) httpRolePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v", err)
 		return
 	}
 
@@ -534,7 +528,6 @@ func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = a.checkAuthorization(w, r); err != nil {
-		glog.Errorf("Not authorized: %v", err)
 		return
 	}
 
@@ -550,6 +543,42 @@ func (a *authServ) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("Update role %s\n", role)
 	}
 	if err := a.users.updateRole(role, updateReq); err != nil {
+		cmn.WriteErr(w, r, err)
+	}
+}
+
+func (a *authServ) configHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPut:
+		a.httpConfigPut(w, r)
+	case http.MethodGet:
+		a.httpConfifGet(w, r)
+	default:
+		cmn.WriteErr405(w, r, http.MethodPut, http.MethodGet)
+	}
+}
+
+func (a *authServ) httpConfifGet(w http.ResponseWriter, r *http.Request) {
+	if err := a.checkAuthorization(w, r); err != nil {
+		return
+	}
+	conf.mtx.RLock()
+	defer conf.mtx.RUnlock()
+	a.writeJSON(w, conf, "config")
+}
+
+func (a *authServ) httpConfigPut(w http.ResponseWriter, r *http.Request) {
+	if err := a.checkAuthorization(w, r); err != nil {
+		return
+	}
+	updateCfg := &configToUpdate{}
+	if err := jsoniter.NewDecoder(r.Body).Decode(updateCfg); err != nil {
+		cmn.WriteErrMsg(w, r, "Invalid request")
+		return
+	}
+	conf.mtx.Lock()
+	defer conf.mtx.Unlock()
+	if err := conf.applyUpdate(updateCfg); err != nil {
 		cmn.WriteErr(w, r, err)
 	}
 }

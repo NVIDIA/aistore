@@ -6,14 +6,14 @@
 	- [AuthN configuration and log](#authn-configuration-and-log)
 	- [How to enable AuthN server after deployment](#how-to-enable-authn-server-after-deployment)
 	- [Using Kubernetes secrets](#using-kubernetes-secrets)
-- [User management](#user-management)
-	- [Superuser](#superuser)
-	- [REST operations](#rest-operations)
-- [Token management](#token-management)
-	- [REST operations](#rest-operations-1)
-- [Interaction with AIStore proxy/gateway](#interaction-with-aistore-proxygateway)
-	- [Calling AIStore proxy API](#calling-aistore-proxy-api)
-	- [AuthN server typical workflow](#authn-server-typical-workflow)
+- [REST API](#rest-api)
+	- [Authorization](#authorization)
+	- [Tokens](#tokens)
+	- [Clusters](#clusters)
+	- [Roles](#roles)
+	- [Users](#users)
+	- [Configuration](#configuration)
+- [AuthN server typical workflow](#authn-server-typical-workflow)
 - [Known limitations](#known-limitations)
 
 ## Overview
@@ -143,11 +143,7 @@ variables that AuthN looks for. All other values are arbitrary.
 When AuthN pod starts, it loads its configuration from the local file, and then
 overrides secret values with ones from the pod's description.
 
-## Rest API
-
-### Notation
-
-> `AUTHSRV` - denotes a (hostname:port) address of AuthN server
+## REST API
 
 ### Authorization
 
@@ -237,6 +233,13 @@ If a cluster does not have an alias, the role names contain cluster ID.
 | Add a user | POST {"id": "username", "password": "pass", "roles": ["CluOne-owner", "CluTwo-readonly"]} /v1/users | curl -X POST AUTHSRV/v1/users -d '{"id": "username", "password":"pass", "roles": ["CluOne-owner", "CluTwo-readonly"]}' -H 'Content-Type: application/json' |
 | Update an existing user| PUT {"password": "pass", "roles": ["CluOne-owner", "CluTwo-readonly"]} /v1/users/user-id | curl -X PUT AUTHSRV/v1/users/user-id -d '{"password":"pass", "roles": ["CluOne-owner", "CluTwo-readonly"]}' -H 'Content-Type: application/json' |
 | Delete a user | DELETE /v1/users/username | curl -X DELETE AUTHSRV/v1/users/username |
+
+### Configuration
+
+| Operation | HTTP Action | Example |
+|---|---|---|
+| Get AuthN configuration | GET /v1/daemon | curl -X GET AUTHSRV/v1/deamon |
+| Update AuthN configuration | PUT /v1/daemon { "auth": { "secret": "new_secret", "expiration_time": "24h"}}  | curl -X PUT AUTHSRV/v1/deamon -d '{"auth": {"secret": "new_secret"}}' -H 'Content-Type: application/json' |
 
 ## AuthN server typical workflow
 
