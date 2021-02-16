@@ -201,7 +201,10 @@ func testETLBucket(t *testing.T, uuid string, bckFrom cmn.Bck, objCnt int, fileS
 	t.Cleanup(func() { tetl.StopETL(t, baseParams, uuid) })
 
 	tutils.Logf("Start offline ETL %q\n", uuid)
-	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, RequestTimeoutStr: requestTimeout.String()})
+	xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
+		ID:             uuid,
+		RequestTimeout: cmn.DurationJSON(requestTimeout),
+	})
 
 	err := tetl.WaitForFinished(baseParams, xactID, timeout)
 	tassert.CheckFatal(t, err)

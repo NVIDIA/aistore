@@ -548,7 +548,7 @@ func (d *DurationJSON) UnmarshalJSON(b []byte) error {
 	}
 	switch value := v.(type) {
 	case float64:
-		*d = DurationJSON(time.Duration(value))
+		*d = DurationJSON(value)
 		return nil
 	case string:
 		tmp, err := time.ParseDuration(value)

@@ -339,7 +339,7 @@ func etlBucketHandler(c *cli.Context) (err error) {
 		msg.Ext = extMap
 	}
 	if flagIsSet(c, etlBucketRequestTimeout) {
-		msg.RequestTimeoutStr = etlBucketRequestTimeout.Value.String()
+		msg.RequestTimeout = cmn.DurationJSON(etlBucketRequestTimeout.Value)
 	}
 
 	xactID, err := api.ETLBucket(defaultAPIParams, fromBck, toBck, msg)

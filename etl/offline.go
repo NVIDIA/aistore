@@ -47,12 +47,8 @@ func NewOfflineDataProvider(msg *cmn.Bck2BckMsg) (*OfflineDataProvider, error) {
 		bckMsg: msg,
 		comm:   comm,
 	}
-
-	if msg.RequestTimeoutStr != "" {
-		pr.requestTimeout, err = time.ParseDuration(msg.RequestTimeoutStr)
-	}
-
-	return pr, err
+	pr.requestTimeout = time.Duration(msg.RequestTimeout)
+	return pr, nil
 }
 
 // Returns reader resulting from lom ETL transformation.

@@ -200,7 +200,10 @@ def transform(input_bytes):
 			})
 
 			tutils.Logf("Start offline ETL %q\n", uuid)
-			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{ID: uuid, RequestTimeoutStr: requestTimeout.String()})
+			xactID := tetl.ETLBucket(t, baseParams, bckFrom, bckTo, &cmn.Bck2BckMsg{
+				ID:             uuid,
+				RequestTimeout: cmn.DurationJSON(requestTimeout),
+			})
 			tetl.ReportXactionStatus(baseParams, xactID, etlDoneCh, 2*time.Minute, m.num)
 
 			tutils.Logln("Waiting for ETL to finish")
